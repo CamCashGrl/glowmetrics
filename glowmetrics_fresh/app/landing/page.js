@@ -3,7 +3,7 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 
 const C = {
-  bg:"#0F172A",bg1:"#131d35",bg2:"#172040",bg3:"#1e2a4a",bg4:"#243055",
+  bg:"#0F172A",bg1:"#131d35",bg2:"#172040",bg3:"#1e2a4a",
   border:"#2d3d6b",border2:"#3d52a0",
   indigo:"#6366F1",indigo2:"#818CF8",indigo3:"#A5B4FC",
   violet:"#7C3AED",cyan:"#22D3EE",teal:"#2DD4BF",
@@ -95,7 +95,6 @@ export default function LandingPage(){
         a{text-decoration:none}
         @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-20px)}}
         @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}
-        @keyframes shimmer{0%{background-position:200% center}100%{background-position:-200% center}}
         .btn-primary{background:linear-gradient(135deg,#6366F1,#7C3AED);border:none;border-radius:12px;padding:14px 28px;color:#F8FAFC;font-weight:700;font-size:15px;transition:all 0.2s;box-shadow:0 4px 24px #6366F140}
         .btn-primary:hover{transform:translateY(-2px);box-shadow:0 8px 32px #6366F160}
         .btn-outline{background:transparent;border:1px solid #2d3d6b;border-radius:12px;padding:14px 28px;color:#CBD5E1;font-weight:600;font-size:15px;transition:all 0.2s}
@@ -124,7 +123,7 @@ export default function LandingPage(){
         </div>
       </nav>
 
-      {/* HERO */}
+      {/* 1. HERO */}
       <section style={{position:"relative",zIndex:1,maxWidth:1200,margin:"0 auto",padding:"100px 40px 80px",textAlign:"center"}}>
         <div style={{display:"inline-flex",alignItems:"center",gap:8,background:`${C.indigo}18`,border:`1px solid ${C.indigo}40`,borderRadius:100,padding:"8px 18px",marginBottom:32,fontSize:13,color:C.indigo3}}>
           <span style={{width:6,height:6,borderRadius:"50%",background:C.indigo,display:"inline-block",animation:"pulse 2s infinite"}}/>
@@ -135,7 +134,7 @@ export default function LandingPage(){
           <span style={{background:"linear-gradient(135deg,#6366F1,#A5B4FC,#22D3EE)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text"}}>Cam Models Deserve</span>
         </h1>
         <p style={{fontSize:"clamp(16px,2vw,20px)",color:C.text,maxWidth:600,margin:"0 auto 40px",lineHeight:1.7}}>
-          Track earnings, analyze performance, and manage VIP fans in one powerful creator dashboard. Turn your cam shows into a data-driven business.
+          Track earnings, analyze performance, and identify your biggest supporters in one powerful creator dashboard. Turn your cam shows into a data-driven business.
         </p>
         <div style={{display:"flex",gap:14,justifyContent:"center",flexWrap:"wrap",marginBottom:20}}>
           <button className="btn-primary" style={{fontSize:16,padding:"16px 32px"}} onClick={()=>go("/login")}>Start Free Trial →</button>
@@ -152,7 +151,170 @@ export default function LandingPage(){
         </div>
       </section>
 
-      {/* DEMO */}
+      {/* 2. FAN CRM FEATURE */}
+      <section style={{position:"relative",zIndex:1,maxWidth:1200,margin:"0 auto",padding:"80px 40px"}}>
+        <div style={{textAlign:"center",marginBottom:56}}>
+          <div style={{fontSize:12,color:C.gold,fontFamily:"'DM Mono',monospace",letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:12}}>👑 #1 Feature</div>
+          <h2 style={{fontSize:"clamp(28px,4vw,48px)",fontWeight:800,color:C.white,letterSpacing:"-0.03em",fontFamily:"'Outfit',sans-serif",marginBottom:16}}>Identify Your VIP Fans Instantly</h2>
+          <p style={{color:C.text,fontSize:17,maxWidth:600,margin:"0 auto",lineHeight:1.7}}>Camlytics automatically analyzes your tip history and categorizes fans so you always know who your biggest supporters are.</p>
+        </div>
+
+        {/* Tier cards */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:16,marginBottom:40}}>
+          {[
+            {icon:"🐋",tier:"Whale",desc:"Your biggest spenders",color:C.gold,bg:"#F59E0B"},
+            {icon:"🦈",tier:"Shark",desc:"High-value repeat fans",color:C.indigo2,bg:"#818CF8"},
+            {icon:"🐟",tier:"Regular",desc:"Consistent supporters",color:C.muted,bg:"#94A3B8"},
+            {icon:"💤",tier:"Dormant",desc:"Fans who haven't tipped recently",color:"#FB923C",bg:"#FB923C"},
+          ].map((t,i)=>(
+            <div key={i} style={{background:"rgba(19,29,53,0.8)",border:`1px solid ${t.bg}30`,borderRadius:20,padding:28,textAlign:"center",transition:"all 0.2s"}}
+              onMouseEnter={e=>{e.currentTarget.style.borderColor=t.bg+"60";e.currentTarget.style.transform="translateY(-4px)"}}
+              onMouseLeave={e=>{e.currentTarget.style.borderColor=t.bg+"30";e.currentTarget.style.transform="translateY(0)"}}>
+              <div style={{fontSize:40,marginBottom:12}}>{t.icon}</div>
+              <div style={{fontSize:16,fontWeight:700,color:t.color,marginBottom:8}}>{t.tier}</div>
+              <div style={{fontSize:13,color:C.muted,lineHeight:1.6}}>{t.desc}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* CRM preview table */}
+        <div style={{background:"rgba(19,29,53,0.8)",border:`1px solid ${C.border}`,borderRadius:20,overflow:"hidden",marginBottom:32}}>
+          <div style={{background:"rgba(15,23,42,0.9)",borderBottom:`1px solid ${C.border}`,padding:"16px 24px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <div style={{display:"flex",alignItems:"center",gap:10}}>
+              <div style={{width:30,height:30,borderRadius:8,background:`${C.gold}20`,border:`1px solid ${C.gold}40`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15}}>👑</div>
+              <span style={{fontSize:14,fontWeight:700,color:C.white}}>Fan CRM Preview</span>
+            </div>
+            <div style={{padding:"4px 12px",borderRadius:100,background:`${C.green}15`,border:`1px solid ${C.green}40`,color:C.green,fontSize:11,fontFamily:"'DM Mono',monospace"}}>● LIVE DATA</div>
+          </div>
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+            <thead>
+              <tr style={{borderBottom:`1px solid ${C.border}`}}>
+                {["Username","Total Tips","Tier","Last Tip"].map(h=>(
+                  <th key={h} style={{padding:"12px 20px",textAlign:"left",color:C.muted,fontSize:11,fontFamily:"'DM Mono',monospace",textTransform:"uppercase",letterSpacing:"0.08em",fontWeight:500}}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {[
+                {name:"vipfan23",usd:"$620",tier:"🐳 WHALE",last:"2 days ago",color:C.gold},
+                {name:"bigspender",usd:"$180",tier:"🦈 SHARK",last:"yesterday",color:C.indigo2},
+                {name:"supporter88",usd:"$45",tier:"🐟 REGULAR",last:"5 days ago",color:C.muted},
+              ].map((f,i)=>(
+                <tr key={i} style={{borderBottom:i<2?`1px solid ${C.border}`:"none"}}>
+                  <td style={{padding:"14px 20px"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:10}}>
+                      <div style={{width:30,height:30,borderRadius:"50%",background:`linear-gradient(135deg,${C.indigo},${C.cyan})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:C.white}}>{f.name[0].toUpperCase()}</div>
+                      <span style={{color:C.white,fontWeight:600}}>{f.name}</span>
+                    </div>
+                  </td>
+                  <td style={{padding:"14px 20px",color:C.green,fontWeight:700,fontFamily:"'DM Mono',monospace"}}>{f.usd}</td>
+                  <td style={{padding:"14px 20px"}}>
+                    <span style={{padding:"3px 10px",borderRadius:100,fontSize:11,fontWeight:700,background:`${f.color}15`,color:f.color,border:`1px solid ${f.color}40`}}>{f.tier}</span>
+                  </td>
+                  <td style={{padding:"14px 20px",color:C.muted,fontSize:12}}>{f.last}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div style={{textAlign:"center"}}>
+          <button className="btn-primary" style={{fontSize:15,padding:"14px 32px"}} onClick={()=>go("/login")}>Track Your VIP Fans →</button>
+        </div>
+      </section>
+
+      {/* 3. MULTI-PLATFORM */}
+      <section style={{position:"relative",zIndex:1,maxWidth:1200,margin:"0 auto",padding:"80px 40px"}}>
+        <div style={{background:"linear-gradient(135deg,rgba(99,102,241,0.08),rgba(34,211,238,0.05))",border:`1px solid ${C.border}`,borderRadius:28,padding:"60px 48px"}}>
+          <div style={{textAlign:"center",marginBottom:48}}>
+            <div style={{fontSize:12,color:C.cyan,fontFamily:"'DM Mono',monospace",letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:12}}>Multi-Platform</div>
+            <h2 style={{fontSize:"clamp(28px,4vw,44px)",fontWeight:800,color:C.white,letterSpacing:"-0.03em",fontFamily:"'Outfit',sans-serif",marginBottom:16}}>Track All Your Cam Platforms<br/>In One Dashboard</h2>
+            <p style={{color:C.text,fontSize:16,maxWidth:560,margin:"0 auto",lineHeight:1.7}}>Import CSV data from multiple cam platforms and combine your earnings, fan insights, and performance analytics into one unified dashboard.</p>
+          </div>
+
+          {/* Platform badges */}
+          <div style={{display:"flex",flexWrap:"wrap",gap:12,justifyContent:"center",marginBottom:48}}>
+            {[
+              {name:"Chaturbate",color:"#F472B6"},
+              {name:"BongaCams",color:"#A78BFA"},
+              {name:"MyFreeCams",color:"#60A5FA"},
+              {name:"Stripchat",color:"#6366F1"},
+              {name:"CamSoda",color:"#22D3EE"},
+              {name:"Cherry.tv",color:"#F87171"},
+              {name:"Streamate",color:"#FBBF24"},
+              {name:"ImLive",color:"#34D399"},
+              {name:"Flirt4Free",color:"#818CF8"},
+              {name:"LiveJasmin",color:"#FB923C"},
+            ].map((p,i)=>(
+              <div key={i} style={{padding:"8px 18px",borderRadius:100,background:`${p.color}15`,border:`1px solid ${p.color}40`,color:p.color,fontSize:13,fontWeight:600}}>{p.name}</div>
+            ))}
+          </div>
+
+          {/* Analytics cards */}
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:16,marginBottom:40}}>
+            {[
+              {icon:"💰",label:"Total Earnings Across Platforms",value:"$2,770",color:C.green},
+              {icon:"👑",label:"Top Fans Across Platforms",value:"342 fans",color:C.gold},
+              {icon:"⏰",label:"Peak Streaming Hours",value:"9PM–11PM",color:C.cyan},
+              {icon:"📈",label:"Monthly Growth",value:"+23%",color:C.indigo2},
+            ].map((k,i)=>(
+              <div key={i} style={{background:"rgba(15,23,42,0.7)",border:`1px solid ${C.border}`,borderRadius:16,padding:"20px 22px"}}>
+                <div style={{fontSize:11,color:C.muted,fontFamily:"'DM Mono',monospace",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:10}}>{k.icon} {k.label}</div>
+                <div style={{fontSize:24,fontWeight:800,color:k.color,fontFamily:"'Outfit',sans-serif"}}>{k.value}</div>
+              </div>
+            ))}
+          </div>
+
+          <div style={{textAlign:"center"}}>
+            <button className="btn-primary" style={{fontSize:15,padding:"14px 32px"}} onClick={()=>go("/login")}>See Cross-Platform Insights →</button>
+          </div>
+        </div>
+      </section>
+
+      {/* 4. HOW IT WORKS */}
+      <section style={{position:"relative",zIndex:1,maxWidth:1200,margin:"0 auto",padding:"80px 40px"}}>
+        <div style={{textAlign:"center",marginBottom:56}}>
+          <div style={{fontSize:12,color:C.indigo,fontFamily:"'DM Mono',monospace",letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:12}}>Simple Setup</div>
+          <h2 style={{fontSize:"clamp(28px,4vw,44px)",fontWeight:800,color:C.white,letterSpacing:"-0.03em",fontFamily:"'Outfit',sans-serif",marginBottom:12}}>How Camlytics Works</h2>
+          <p style={{color:C.muted,fontSize:15}}>Setup takes less than 5 minutes. No technical skills needed.</p>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))",gap:24}}>
+          {[
+            {step:"01",icon:"📥",title:"Export Your Data",desc:"Download your CSV file from your cam platform dashboard. Every major platform is supported."},
+            {step:"02",icon:"⚡",title:"Upload to Camlytics",desc:"Import the file and Camlytics automatically processes the data — no manual setup required."},
+            {step:"03",icon:"👑",title:"Discover Your VIP Fans",desc:"Instantly see your whales, earnings trends, and performance insights. Your dashboard is ready."},
+          ].map((s,i)=>(
+            <div key={i} style={{background:"rgba(19,29,53,0.6)",border:`1px solid ${C.border}`,borderRadius:20,padding:32,position:"relative",overflow:"hidden"}}>
+              <div style={{position:"absolute",top:20,right:20,fontSize:48,fontWeight:800,color:C.indigo,opacity:0.08,fontFamily:"'Outfit',sans-serif",lineHeight:1}}>{s.step}</div>
+              <div style={{width:48,height:48,borderRadius:14,background:`${C.indigo}20`,border:`1px solid ${C.indigo}40`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,marginBottom:20}}>{s.icon}</div>
+              <div style={{fontSize:11,color:C.indigo3,fontFamily:"'DM Mono',monospace",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:10}}>Step {s.step}</div>
+              <div style={{fontSize:18,fontWeight:700,color:C.white,marginBottom:10}}>{s.title}</div>
+              <div style={{fontSize:14,color:C.muted,lineHeight:1.7}}>{s.desc}</div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* 5. FEATURE GRID */}
+      <section style={{position:"relative",zIndex:1,maxWidth:1200,margin:"0 auto",padding:"80px 40px"}}>
+        <div style={{textAlign:"center",marginBottom:56}}>
+          <div style={{fontSize:12,color:C.indigo,fontFamily:"'DM Mono',monospace",letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:12}}>Everything You Need</div>
+          <h2 style={{fontSize:"clamp(28px,4vw,44px)",fontWeight:800,color:C.white,letterSpacing:"-0.03em",fontFamily:"'Outfit',sans-serif"}}>The Creator Intelligence Dashboard</h2>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(320px,1fr))",gap:20}}>
+          {FEATURES.map((f,i)=>(
+            <div key={i} style={{background:"rgba(19,29,53,0.6)",backdropFilter:"blur(16px)",border:`1px solid ${C.border}`,borderRadius:20,padding:28,transition:"all 0.2s"}}
+              onMouseEnter={e=>{e.currentTarget.style.borderColor=f.accent+"60";e.currentTarget.style.transform="translateY(-4px)"}}
+              onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.transform="translateY(0)"}}>
+              <div style={{fontSize:32,marginBottom:16}}>{f.icon}</div>
+              <div style={{fontSize:11,color:f.accent,fontFamily:"'DM Mono',monospace",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:8}}>{f.tag}</div>
+              <h3 style={{fontSize:18,fontWeight:700,color:C.white,marginBottom:10}}>{f.title}</h3>
+              <p style={{fontSize:14,color:C.muted,lineHeight:1.7}}>{f.desc}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* 6. DEMO */}
       <section id="demo" style={{position:"relative",zIndex:1,maxWidth:1200,margin:"0 auto",padding:"80px 40px"}}>
         <div style={{textAlign:"center",marginBottom:48}}>
           <div style={{fontSize:12,color:C.indigo,fontFamily:"'DM Mono',monospace",letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:12}}>Live Demo</div>
@@ -240,27 +402,7 @@ export default function LandingPage(){
         </div>
       </section>
 
-      {/* FEATURES */}
-      <section style={{position:"relative",zIndex:1,maxWidth:1200,margin:"0 auto",padding:"80px 40px"}}>
-        <div style={{textAlign:"center",marginBottom:56}}>
-          <div style={{fontSize:12,color:C.indigo,fontFamily:"'DM Mono',monospace",letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:12}}>Everything You Need</div>
-          <h2 style={{fontSize:"clamp(28px,4vw,44px)",fontWeight:800,color:C.white,letterSpacing:"-0.03em",fontFamily:"'Outfit',sans-serif"}}>The Creator Intelligence Dashboard</h2>
-        </div>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(320px,1fr))",gap:20}}>
-          {FEATURES.map((f,i)=>(
-            <div key={i} style={{background:"rgba(19,29,53,0.6)",backdropFilter:"blur(16px)",border:`1px solid ${C.border}`,borderRadius:20,padding:28,transition:"all 0.2s"}}
-              onMouseEnter={e=>{e.currentTarget.style.borderColor=f.accent+"60";e.currentTarget.style.transform="translateY(-4px)"}}
-              onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.transform="translateY(0)"}}>
-              <div style={{fontSize:32,marginBottom:16}}>{f.icon}</div>
-              <div style={{fontSize:11,color:f.accent,fontFamily:"'DM Mono',monospace",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:8}}>{f.tag}</div>
-              <h3 style={{fontSize:18,fontWeight:700,color:C.white,marginBottom:10}}>{f.title}</h3>
-              <p style={{fontSize:14,color:C.muted,lineHeight:1.7}}>{f.desc}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* TESTIMONIALS */}
+      {/* 7. TESTIMONIALS */}
       <section style={{position:"relative",zIndex:1,maxWidth:1200,margin:"0 auto",padding:"80px 40px"}}>
         <div style={{textAlign:"center",marginBottom:48}}>
           <div style={{fontSize:12,color:C.indigo,fontFamily:"'DM Mono',monospace",letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:12}}>Creators Love It</div>
@@ -280,7 +422,7 @@ export default function LandingPage(){
         </div>
       </section>
 
-      {/* PRICING */}
+      {/* 8. PRICING */}
       <section id="pricing" style={{position:"relative",zIndex:1,maxWidth:1200,margin:"0 auto",padding:"80px 40px"}}>
         <div style={{textAlign:"center",marginBottom:48}}>
           <div style={{fontSize:12,color:C.indigo,fontFamily:"'DM Mono',monospace",letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:12}}>Simple Pricing</div>
@@ -355,7 +497,7 @@ export default function LandingPage(){
 
       {/* FOOTER */}
       <footer style={{position:"relative",zIndex:1,borderTop:`1px solid ${C.border}`,padding:"48px 40px"}}>
-        <div style={{maxWidth:1200,margin:"0 auto",display:"grid",gridTemplateColumns:"2fr 1fr 1fr 1fr",gap:40}}>
+        <div style={{maxWidth:1200,margin:"0 auto",display:"grid",gridTemplateColumns:"2fr 1fr 1fr 1fr",gap:40,flexWrap:"wrap"}}>
           <div>
             <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}>
               <div style={{width:32,height:32,borderRadius:9,background:"linear-gradient(135deg,#6366F1,#7C3AED)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>📊</div>
@@ -369,7 +511,6 @@ export default function LandingPage(){
           </div>
           <div>
             <div style={{color:C.white,fontWeight:700,fontSize:14,marginBottom:16}}>Support</div>
-            <div style={{color:C.muted,fontSize:14,marginBottom:10}}>Help Center</div>
             <a href="mailto:daphneoncam@gmail.com" style={{color:C.muted,fontSize:14,display:"block",marginBottom:10}}>daphneoncam@gmail.com</a>
             <div style={{color:C.muted,fontSize:14}}>Privacy Policy</div>
           </div>
