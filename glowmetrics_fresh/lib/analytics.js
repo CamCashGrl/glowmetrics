@@ -5,12 +5,29 @@ const PLATFORM_TOKEN_RATES = {
   LiveJasmin:0.08,MyFreeCams:0.05,Other:0.05,
 }
 
-// ─── CSV LINE SPLITTER ───────────────────────────────────────────────────────
+// Normalize platform shortcodes
+function normalizePlatform(raw) {
+  if (!raw) return null
+  const r = raw.toString().toLowerCase().trim()
+  if (r==='bc'||r.includes('bonga')) return 'BongaCams'
+  if (r.includes('chaturbate')||r==='cb') return 'Chaturbate'
+  if (r.includes('stripchat')||r==='sc') return 'Stripchat'
+  if (r.includes('camsoda')) return 'CamSoda'
+  if (r.includes('cherry')) return 'Cherry.tv'
+  if (r.includes('streamate')) return 'Streamate'
+  if (r.includes('imlive')) return 'ImLive'
+  if (r.includes('flirt')) return 'Flirt4Free'
+  if (r.includes('jasmin')) return 'LiveJasmin'
+  if (r.includes('myfreecams')||r==='mfc') return 'MyFreeCams'
+  return null
+}
+
+// ─── CSV SPLITTER ────────────────────────────────────────────────────────────
 function splitLine(line, delim) {
   const result=[];let cur='',inQ=false
   for(let i=0;i<line.length;i++){
     const ch=line[i]
-    if((ch==='"'||ch==="'")&&(i===0||line[i-1]===delim)){inQ=!inQ}
+    if(ch==='"'||ch==="'"){inQ=!inQ}
     else if(!inQ&&ch===delim){result.push(cur.trim());cur=''}
     else{cur+=ch}
   }
@@ -20,40 +37,57 @@ function splitLine(line, delim) {
 
 function detectDelimiter(line){
   const c={',':0,'\t':0,';':0,'|':0}
-  let inQ=false
-  for(const ch of line){
-    if(ch==='"')inQ=!inQ
-    else if(!inQ&&c[ch]!==undefined)c[ch]++
-  }
+  for(const ch of line){if(c[ch]!==undefined)c[ch]++}
   return Object.entries(c).sort((a,b)=>b[1]-a[1])[0][0]
+}
+
+function cleanVal(v) {
+  return (v||'').toString().replace(/\\"/g,'"').replace(/^["'\s]+|["'\s]+$/g,'').trim()
 }
 
 // ─── DATE PARSER ─────────────────────────────────────────────────────────────
 function parseDate(raw){
   if(!raw)return null
-  const s=raw.toString().trim().replace(/"/g,'')
+  const s=raw.toString().trim().replace(/^["']+|["']+$/g,'')
   if(!s)return null
 
-  // DD.MM.YYYY HH:MM (BongaCams format)
+  // DD.MM.YYYY HH:MM (BongaCams)
   let m=s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})\s+(\d{1,2}):(\d{2})/)
   if(m){
     const d=new Date(`${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}T${m[4].padStart(2,'0')}:${m[5]}:00`)
     if(!isNaN(d.getTime()))return d
   }
 
-  // DD/MM/YYYY or DD-MM-YYYY
+  // DD.MM.YYYY
+  m=s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/)
+  if(m){
+    const d=new Date(`${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`)
+    if(!isNaN(d.getTime()))return d
+  }
+
+  // "Feb 12, 2026, 5:05 AM" or "Feb 14, 2026, 12:54 PM" (Chaturbate raw export)
+  m=s.match(/^([A-Za-z]+)\s+(\d{1,2}),\s*(\d{4}),\s*(\d{1,2}):(\d{2})\s*(AM|PM)/i)
+  if(m){
+    const d=new Date(`${m[1]} ${m[2]}, ${m[3]} ${m[4]}:${m[5]} ${m[6]}`)
+    if(!isNaN(d.getTime()))return d
+  }
+  m=s.match(/^([A-Za-z]+)\s+(\d{1,2}),\s*(\d{4})\s+(\d{1,2}):(\d{2})\s*(AM|PM)?/i)
+  if(m){
+    const d=new Date(`${m[1]} ${m[2]}, ${m[3]} ${m[4]}:${m[5]} ${m[6]||''}`)
+    if(!isNaN(d.getTime()))return d
+  }
+
+  // DD/MM/YYYY or MM/DD/YYYY
   m=s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/)
   if(m){
     const y=m[3].length===2?'20'+m[3]:m[3]
-    // Try DD/MM/YYYY
     let d=new Date(`${y}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`)
     if(!isNaN(d.getTime()))return d
-    // Try MM/DD/YYYY
     d=new Date(`${y}-${m[1].padStart(2,'0')}-${m[2].padStart(2,'0')}`)
     if(!isNaN(d.getTime()))return d
   }
 
-  // ISO or natural formats
+  // ISO / natural
   const d=new Date(s)
   if(!isNaN(d.getTime()))return d
 
@@ -68,8 +102,8 @@ function parseDate(raw){
 }
 
 // ─── PLATFORM DETECTION ──────────────────────────────────────────────────────
-function detectPlatform(allText){
-  const t=(allText||'').toLowerCase()
+function detectPlatform(text){
+  const t=(text||'').toLowerCase()
   if(t.includes('chaturbate'))return'Chaturbate'
   if(t.includes('bongacams')||t.includes('bonga'))return'BongaCams'
   if(t.includes('stripchat'))return'Stripchat'
@@ -83,110 +117,200 @@ function detectPlatform(allText){
   return null
 }
 
-// ─── HEADER CHECK ────────────────────────────────────────────────────────────
-function isHeaderRow(vals){
-  // If first value looks like a date → no headers
-  if(parseDate(vals[0]))return false
-  // If first value is all letters/spaces → headers
-  if(/^[a-zA-Z_\s\-#]+$/.test(vals[0]))return true
-  return false
-}
-
-// ─── FUZZY FIELD FINDER ──────────────────────────────────────────────────────
-function find(obj,...keys){
-  const lower={}
-  Object.keys(obj).forEach(k=>{lower[k.toLowerCase().replace(/[\s_\-\.]/g,'')]=obj[k]})
-  for(const key of keys){
-    const k=key.toLowerCase().replace(/[\s_\-\.]/g,'')
-    if(lower[k]!==undefined&&lower[k]!=='')return lower[k]
-  }
-  for(const key of keys){
-    const k=key.toLowerCase().replace(/[\s_\-\.]/g,'')
-    for(const ok of Object.keys(lower)){
-      if((ok.includes(k)||k.includes(ok))&&lower[ok]!==undefined&&lower[ok]!=='')return lower[ok]
+// ─── FIND HEADER ROW (skip blank rows at top) ────────────────────────────────
+function findHeaderRow(lines, delimiter) {
+  for (let i=0; i<Math.min(5, lines.length); i++) {
+    const line = lines[i].trim()
+    if (!line) continue
+    const vals = splitLine(line, delimiter).map(cleanVal)
+    // If first col looks like a date → no headers, data starts here
+    if (parseDate(vals[0])) return { headerIdx: -1, dataIdx: i }
+    // If it has text-like headers
+    if (vals.some(v => /^[a-zA-Z_\s\-#"']+$/.test(v) && v.length > 0)) {
+      return { headerIdx: i, dataIdx: i+1 }
     }
   }
-  return''
+  return { headerIdx: -1, dataIdx: 0 }
 }
 
-// ─── ROW PARSERS ─────────────────────────────────────────────────────────────
-function parseWithHeaders(obj,platform){
-  const dateRaw=find(obj,'date_time','datetime','date','timestamp','time','created_at','transaction_date','tip_date','tipped_at','when','date and time')
-  const username=find(obj,'username','user_name','user','tipper','member','viewer','name','display_name','from','fan','sender','nick','handle')
-  const platformRaw=find(obj,'platform','site','source','network')
-  const tokensStr=find(obj,'tokens','token','amount','credits','points','gems','tip_amount','coins','tipped')
-  const usdStr=find(obj,'usd','amount_usd','earnings','revenue','payout','value','dollars','price','income','total','net','amount_usd','usd_amount')
-  const tip_type=find(obj,'tip_type','type','transaction_type','category','kind','event')||'Tip'
+// ─── CHATURBATE SPECIFIC PARSER ──────────────────────────────────────────────
+// Columns: Timestamp, Token change, Token balance, Transaction type, User, Note
+function parseChaturbateRow(obj) {
+  const dateRaw = obj['timestamp'] || obj['date'] || ''
+  const tokenChange = parseInt((obj['token_change']||obj['tokenchange']||obj['tokens']||'0').replace(/[^0-9\-]/g,'')) || 0
+  const txType = (obj['transaction_type']||obj['transactiontype']||obj['action']||'').toLowerCase()
+  const username = obj['user']||obj['username']||''
+  const note = obj['note']||''
 
-  const pl=platform||platformRaw||'Other'
-  const rate=PLATFORM_TOKEN_RATES[pl]||0.05
-  const tokens=parseInt((tokensStr||'').replace(/[^0-9]/g,''))||0
-  const usdRaw=parseFloat((usdStr||'').replace(/[$,\s]/g,''))||0
-  const usd=usdRaw>0?usdRaw:tokens*rate
+  // Skip non-tip rows (cashouts, referrals etc)
+  if (tokenChange <= 0) return null
+  if (txType && !txType.includes('tip') && !txType.includes('token')) return null
 
-  return{dateRaw,username:username||'',platform:pl,tokens:tokens>0?tokens:Math.round(usd/rate),usd:parseFloat(usd.toFixed(2)),tip_type}
+  return {
+    dateRaw,
+    username: username || 'anonymous',
+    platform: 'Chaturbate',
+    tokens: tokenChange,
+    usd: parseFloat((tokenChange * 0.05).toFixed(2)),
+    tip_type: note || txType || 'Tip'
+  }
 }
 
-// BongaCams headerless: DD.MM.YYYY HH:MM, username, type, tokens, $usd
-function parseHeaderless(vals,platform){
-  let dateRaw='',username='',tip_type='Tip',tokens=0,usd=0
+// ─── CHATURBATE RAW FORMAT PARSER ────────────────────────────────────────────
+// Columns: Date, Action, Tokens, Token Balance
+// Action contains "Tip From: username message" or "Transfer tokens..."
+function parseChaturbateRawRow(obj) {
+  const dateRaw = obj['date']||obj['timestamp']||''
+  const action = obj['action']||obj['transaction_type']||''
+  const tokensRaw = parseInt((obj['tokens']||obj['token_change']||'0').replace(/[^0-9\-]/g,'')) || 0
 
-  for(let i=0;i<vals.length;i++){
-    const v=vals[i]
-    if(!dateRaw&&parseDate(v)){dateRaw=v;continue}
-    if(v.includes('$')||(/^\d+\.\d+$/.test(v)&&parseFloat(v)<1000)){
-      usd=parseFloat(v.replace(/[$,]/g,''))||0;continue
-    }
-    if(/^\d+$/.test(v)&&parseInt(v)>0&&!tokens){tokens=parseInt(v);continue}
-    if(/tip|token|gift|purchase|sub|donat/i.test(v)){tip_type=v;continue}
-    if(!username&&v&&v.length>0&&v!=='-')username=v
+  if (tokensRaw <= 0) return null
+  if (!action.toLowerCase().includes('tip')) return null
+
+  // Extract username from "Tip From: username message"
+  let username = 'anonymous'
+  const tipMatch = action.match(/tip from:\s*([^\s,]+)/i)
+  if (tipMatch) username = tipMatch[1]
+
+  return {
+    dateRaw,
+    username,
+    platform: 'Chaturbate',
+    tokens: tokensRaw,
+    usd: parseFloat((tokensRaw * 0.05).toFixed(2)),
+    tip_type: 'Tip'
+  }
+}
+
+// ─── GENERIC ROW PARSER WITH HEADERS ────────────────────────────────────────
+function parseWithHeaders(obj, platform) {
+  // Normalize keys once
+  const norm = {}
+  Object.keys(obj).forEach(k => { norm[k.toLowerCase().replace(/[\s\-]/g,'_')] = obj[k] })
+
+  // Chaturbate raw format: has "action" column (Date, Action, Tokens, Token Balance)
+  if (norm['action'] !== undefined) return parseChaturbateRawRow(norm)
+
+  // Chaturbate standard format: has "token_change" or "transaction_type"
+  if (norm['token_change'] !== undefined || norm['tokenchange'] !== undefined || norm['transaction_type'] !== undefined) {
+    return parseChaturbateRow(norm)
   }
 
-  const pl=platform||'BongaCams'
-  const rate=PLATFORM_TOKEN_RATES[pl]||0.05
-  const finalUsd=usd>0?usd:tokens*rate
-  const finalTokens=tokens>0?tokens:Math.round(finalUsd/rate)
+  // Generic: find fields by fuzzy name match
+  function find(...keys) {
+    const lower = {}
+    Object.keys(obj).forEach(k => { lower[k.toLowerCase().replace(/[\s_\-\.]/g,'')] = obj[k] })
+    for (const key of keys) {
+      const k = key.toLowerCase().replace(/[\s_\-\.]/g,'')
+      if (lower[k] !== undefined && lower[k] !== '') return lower[k]
+    }
+    for (const key of keys) {
+      const k = key.toLowerCase().replace(/[\s_\-\.]/g,'')
+      for (const ok of Object.keys(lower)) {
+        if ((ok.includes(k)||k.includes(ok)) && lower[ok]!==undefined && lower[ok]!=='') return lower[ok]
+      }
+    }
+    return ''
+  }
 
-  return{dateRaw,username,platform:pl,tokens:finalTokens,usd:parseFloat(finalUsd.toFixed(2)),tip_type}
+  const dateRaw = find('date_time','datetime','date','timestamp','time','created_at','tipped_at','when')
+  const username = find('username','user_name','user','tipper','member','viewer','name','display_name','from','fan','nick','handle')
+  const platformRaw = find('platform','site','source','network')
+  const tokensStr = find('tokens','token','amount','credits','points','gems','tip_amount','tipped')
+  const usdStr = find('usd','amount_usd','earnings','revenue','payout','value','dollars','income','total','net')
+  const tip_type = find('tip_type','type','transaction_type','category','tiptype','freechat') || 'Tip'
+
+  const pl = platform || normalizePlatform(platformRaw) || 'Other'
+  const rate = PLATFORM_TOKEN_RATES[pl] || 0.05
+  const tokens = parseInt((tokensStr||'').replace(/[^0-9]/g,'')) || 0
+  const usdRaw = parseFloat((usdStr||'').replace(/[$,\s]/g,'')) || 0
+  const usd = usdRaw > 0 ? usdRaw : tokens * rate
+
+  if (tokens <= 0 && usd <= 0) return null
+
+  return {
+    dateRaw, username: username||'',
+    platform: pl, tokens: tokens>0?tokens:Math.round(usd/rate),
+    usd: parseFloat(usd.toFixed(2)), tip_type
+  }
 }
 
-// ─── MAIN EXPORT ─────────────────────────────────────────────────────────────
-export function parseCSV(text,forcePlatform){
-  const cleaned=text.replace(/^\uFEFF/,'').replace(/\r\n/g,'\n').replace(/\r/g,'\n').trim()
-  const lines=cleaned.split('\n').filter(l=>l.trim())
-  if(lines.length<1)return[]
+// ─── HEADERLESS ROW PARSER (original BongaCams style) ────────────────────────
+function parseHeaderless(vals, platform) {
+  let dateRaw='', username='', tip_type='Tip', tokens=0, usd=0
 
-  const delimiter=detectDelimiter(lines[0])
-  const platform=forcePlatform||detectPlatform(cleaned.slice(0,1000))
-  const firstVals=splitLine(lines[0],delimiter).map(v=>v.replace(/^["']|["']$/g,'').trim())
-  const hasHdrs=isHeaderRow(firstVals)
-  const headers=hasHdrs?firstVals.map(h=>h.toLowerCase().replace(/\s+/g,'_')):null
+  for (let i=0; i<vals.length; i++) {
+    const v = vals[i]
+    if (!dateRaw && parseDate(v)) { dateRaw=v; continue }
+    if (v.includes('$') || (/^\d+\.\d+$/.test(v) && parseFloat(v)<1000)) {
+      usd = parseFloat(v.replace(/[$,]/g,'')) || 0; continue
+    }
+    if (/^\d+$/.test(v) && parseInt(v)>0 && !tokens) { tokens=parseInt(v); continue }
+    if (/tip|token|gift|purchase|sub|donat|freechat/i.test(v)) { tip_type=v; continue }
+    if (!username && v && v.length>0 && v!=='-') username=v
+  }
 
-  const rows=[];let skipped=0
-  for(let i=hasHdrs?1:0;i<lines.length;i++){
-    const line=lines[i].trim()
-    if(!line)continue
-    const vals=splitLine(line,delimiter).map(v=>v.replace(/^["']|["']$/g,'').trim())
+  const pl = platform || 'BongaCams'
+  const rate = PLATFORM_TOKEN_RATES[pl] || 0.05
+  const finalUsd = usd>0 ? usd : tokens*rate
+  const finalTokens = tokens>0 ? tokens : Math.round(finalUsd/rate)
+
+  return { dateRaw, username, platform:pl, tokens:finalTokens, usd:parseFloat(finalUsd.toFixed(2)), tip_type }
+}
+
+// ─── MAIN CSV PARSER ─────────────────────────────────────────────────────────
+export function parseCSV(text, forcePlatform) {
+  const cleaned = text.replace(/^\uFEFF/,'').replace(/\r\n/g,'\n').replace(/\r/g,'\n').trim()
+  const lines = cleaned.split('\n').filter(l => l.trim())
+  if (lines.length < 1) return []
+
+  const delimiter = detectDelimiter(lines[0] || lines[1] || '')
+  const platform = forcePlatform || detectPlatform(cleaned.slice(0,1000))
+
+  const { headerIdx, dataIdx } = findHeaderRow(lines, delimiter)
+  const hasHdrs = headerIdx >= 0
+  const headers = hasHdrs
+    ? splitLine(lines[headerIdx], delimiter).map(h => cleanVal(h).toLowerCase())
+    : null
+
+  const rows = []; let skipped = 0
+
+  for (let i = dataIdx; i < lines.length; i++) {
+    const line = lines[i].trim()
+    if (!line) continue
+
+    const vals = splitLine(line, delimiter).map(cleanVal)
+    if (vals.every(v => !v)) continue // skip fully empty rows
 
     let parsed
-    if(hasHdrs&&headers){
-      const obj={};headers.forEach((h,j)=>{obj[h]=vals[j]||''})
-      parsed=parseWithHeaders(obj,platform)
-    }else{
-      parsed=parseHeaderless(vals,platform)
+    if (hasHdrs && headers) {
+      const obj = {}
+      headers.forEach((h,j) => { obj[h] = vals[j]||'' })
+      parsed = parseWithHeaders(obj, platform)
+    } else {
+      parsed = parseHeaderless(vals, platform)
     }
 
-    if(!parsed){skipped++;continue}
-    const{dateRaw,username,platform:pl,tokens,usd,tip_type}=parsed
-    if(!username||username==='-'||username==='—'){skipped++;continue}
-    if(tokens<=0&&usd<=0){skipped++;continue}
-    const dateObj=parseDate(dateRaw)
-    if(!dateObj){skipped++;continue}
+    if (!parsed) { skipped++; continue }
+    const { dateRaw, username, platform:pl, tokens, usd, tip_type } = parsed
 
-    rows.push({date_time:dateObj.toISOString(),platform:pl||'Other',username,tip_type:tip_type||'Tip',tokens,usd})
+    if (!username || username==='-' || username==='—') { skipped++; continue }
+    if (tokens <= 0 && usd <= 0) { skipped++; continue }
+
+    const dateObj = parseDate(dateRaw)
+    if (!dateObj) { skipped++; continue }
+
+    rows.push({
+      date_time: dateObj.toISOString(),
+      platform: pl || 'Other',
+      username,
+      tip_type: tip_type||'Tip',
+      tokens,
+      usd,
+    })
   }
 
-  console.log(`Parsed ${rows.length} rows (${skipped} skipped) | platform: ${platform} | headers: ${hasHdrs}`)
+  console.log(`Parsed ${rows.length} rows (${skipped} skipped) | platform:${platform} | headers:${hasHdrs}`)
   return rows
 }
 
@@ -239,10 +363,8 @@ export function aggregateRows(rows){
   const monthlyArr=Object.values(monthly).sort((a,b)=>a.month<b.month?-1:1)
   const bestMonth=monthlyArr.reduce((max,m)=>m.usd>max.usd?m:max,{usd:0,month:'—'})
   const platformArr=Object.values(platforms).sort((a,b)=>b.usd-a.usd)
-
   const hourlyArr=Array.from({length:24},(_,h)=>({...hourly[h],label:`${h===0?12:h>12?h-12:h}${h<12?'am':'pm'}`}))
   const peakHour=hourlyArr.reduce((a,b)=>b.usd>a.usd?b:a,hourlyArr[0])
-
   let running=0
   const cumulative=dailyArr.map(d=>{running=+(running+d.usd).toFixed(2);return{...d,cumulative:running}})
 
