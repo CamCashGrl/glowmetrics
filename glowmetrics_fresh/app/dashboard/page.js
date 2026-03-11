@@ -135,7 +135,7 @@ export default function Dashboard() {
       const parsed = parseCSV(text)
       if (!parsed.length) { showToast("❌ No valid rows found"); return }
       const toInsert = parsed.map(r => ({ user_id:user.id, date_time:r.dateRaw||r.date_time, platform:r.platform, username:r.username, tip_type:r.tip_type||"Tip", tokens:r.tokens, usd:r.usd }))
-      const { error } = await supabase.from("tips").upsert(toInsert, { onConflict:"user_id,date_time,username,tokens" })
+      const { error } = await supabase.from("tips").insert(toInsert)
       if (error) { showToast("❌ "+error.message); return }
       showToast(`✅ Imported ${parsed.length} tips!`)
       loadData(user.id)
