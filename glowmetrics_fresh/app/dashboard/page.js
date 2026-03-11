@@ -126,6 +126,7 @@ export default function Dashboard() {
     } finally { setLoading(false) }
   }
 
+  // ✅ FIXED VERSION - Changed r.dateRaw to r.date_time
   const handleCSV = async (file) => {
     if (!file || !user) return
     setUploading(true)
@@ -133,14 +134,32 @@ export default function Dashboard() {
       const { parseCSV } = await import("../../lib/analytics")
       const text = await file.text()
       const parsed = parseCSV(text)
-      if (!parsed.length) { showToast("❌ No valid rows found"); return }
-      const toInsert = parsed.map(r => ({ user_id:user.id, date_time:r.date_time, platform:r.platform, username:r.username, tip_type:r.tip_type||"Tip", tokens:r.tokens, usd:r.usd }))
+      if (!parsed.length) { showToast("❌ No valid rows found"); setUploading(false); return }
+      
+      // ✅ FIX: Changed r.dateRaw to r.date_time (parseCSV returns date_time, not dateRaw)
+      const toInsert = parsed.map(r => ({ 
+        user_id:user.id, 
+        date_time:r.date_time,  // ✅ FIXED: was r.dateRaw||r.date_time
+        platform:r.platform, 
+        username:r.username, 
+        tip_type:r.tip_type||"Tip", 
+        tokens:r.tokens, 
+        usd:r.usd 
+      }))
+      
       const { error } = await supabase.from("tips").insert(toInsert)
-      if (error) { showToast("❌ "+error.message); return }
+      if (error) { showToast("❌ "+error.message); setUploading(false); return }
+      
       showToast(`✅ Imported ${parsed.length} tips!`)
-      await new Promise(res => setTimeout(res, 800))
+      
+      // ✅ Force reload
       await loadData(user.id)
-    } finally { setUploading(false) }
+      
+    } catch(err) {
+      showToast("❌ "+err.message)
+    } finally { 
+      setUploading(false) 
+    }
   }
 
   const saveNote = async (username) => {
