@@ -1,8 +1,8 @@
 import './globals.css'
 
 export const metadata = {
-  title: 'GlowMetrics — Earnings Analytics for Cam Models',
-  description: 'Track your tips, analyze your tippers, and grow your income. Professional analytics built for cam models.',
+  title: 'CamCash — Understand Your Cam Earnings',
+  description: 'Upload your cam platform earnings data and instantly see analytics, trends, and your biggest supporters with CamCash.',
 }
 
 export default function RootLayout({ children }) {

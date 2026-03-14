@@ -1,4 +1,4 @@
-# ✦ GlowMetrics — Setup Guide
+# ✦ CamCash — Setup Guide
 
 ## Project Structure
 
@@ -57,7 +57,7 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:3000 — you'll land on the GlowMetrics marketing page.
+Open http://localhost:3000 — you'll land on the CamCash marketing page.
 
 ---
 

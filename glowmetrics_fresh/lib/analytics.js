@@ -203,16 +203,28 @@ function parseWithHeaders(obj, platform) {
   const tokensStr = find('tokens','token','amount','credits','points','gems','tip_amount','tipped')
   const usdStr = find('usd','amount_usd','earnings','revenue','payout','value','dollars','income','total','net')
   const tip_type = find('tip_type','type','transaction_type','category','tiptype','freechat') || 'Tip'
+  const viewersStr = find('viewers','viewer_count','concurrent_viewers','peak_viewers')
+  const newFollowersStr = find('new_followers','followers_gain','followers_new')
+  const newSubsStr = find('new_subscribers','subs_new','subscribers_new','new_members')
   const pl = platform || normalizePlatform(platformRaw) || 'Other'
   const rate = PLATFORM_TOKEN_RATES[pl] || 0.05
   const tokens = parseInt((tokensStr||'').replace(/[^0-9]/g,'')) || 0
   const usdRaw = parseFloat((usdStr||'').replace(/[$,\s]/g,'')) || 0
   const usd = usdRaw > 0 ? usdRaw : tokens * rate
+  const viewers = parseInt((viewersStr||'').toString().replace(/[^0-9]/g,'')) || 0
+  const new_followers = parseInt((newFollowersStr||'').toString().replace(/[^0-9]/g,'')) || 0
+  const new_subscribers = parseInt((newSubsStr||'').toString().replace(/[^0-9]/g,'')) || 0
   if (tokens <= 0 && usd <= 0) return null
   return {
-    dateRaw, username: username||'',
-    platform: pl, tokens: tokens>0?tokens:Math.round(usd/rate),
-    usd: parseFloat(usd.toFixed(2)), tip_type
+    dateRaw,
+    username: username||'',
+    platform: pl,
+    tokens: tokens>0?tokens:Math.round(usd/rate),
+    usd: parseFloat(usd.toFixed(2)),
+    tip_type,
+    viewers,
+    new_followers,
+    new_subscribers,
   }
 }
 
@@ -282,7 +294,7 @@ export function parseCSV(text, forcePlatform) {
       parsed = parseHeaderless(vals, platform)
     }
     if (!parsed) { skipped++; continue }
-    const { dateRaw, username, platform:pl, tokens, usd, tip_type } = parsed
+    const { dateRaw, username, platform:pl, tokens, usd, tip_type, viewers=0, new_followers=0, new_subscribers=0 } = parsed
     if (!username || username==='-' || username==='—') { skipped++; continue }
     if (tokens <= 0 && usd <= 0) { skipped++; continue }
     const dateObj = parseDate(dateRaw)
@@ -294,6 +306,9 @@ export function parseCSV(text, forcePlatform) {
       tip_type: tip_type||'Tip',
       tokens,
       usd,
+      viewers,
+      new_followers,
+      new_subscribers,
     })
   }
   console.log(`Parsed ${rows.length} rows (${skipped} skipped) | platform:${platform} | headers:${hasHdrs}`)
@@ -301,8 +316,76 @@ export function parseCSV(text, forcePlatform) {
 }
 
 // ─── AGGREGATION ─────────────────────────────────────────────────────────────
+function buildSessions(rows){
+  if(!rows.length) return []
+  const sorted=[...rows].sort((a,b)=>new Date(a.date_time)-new Date(b.date_time))
+  const sessions=[]
+  let current=null
+  const MAX_GAP_MS=2*60*60*1000
+  for(const r of sorted){
+    const t=new Date(r.date_time).getTime()
+    if(!current || current.platform!==r.platform || t-current._lastTime>MAX_GAP_MS){
+      if(current){
+        const durationH=Math.max((current._lastTime-current._firstTime)/3600000,0.25)
+        sessions.push({
+          platform:current.platform,
+          start_time:new Date(current._firstTime).toISOString(),
+          end_time:new Date(current._lastTime).toISOString(),
+          hours: +durationH.toFixed(2),
+          tokens: current.tokens,
+          usd: +current.usd.toFixed(2),
+          tip_count: current.tip_count,
+          viewers: current.viewers,
+          new_followers: current.new_followers,
+          new_subscribers: current.new_subscribers,
+          show_type: current.show_type,
+        })
+      }
+      current={
+        platform:r.platform,
+        _firstTime:t,
+        _lastTime:t,
+        tokens:r.tokens,
+        usd:r.usd,
+        tip_count:1,
+        viewers:r.viewers||0,
+        new_followers:r.new_followers||0,
+        new_subscribers:r.new_subscribers||0,
+        show_type:r.tip_type||'Tip',
+      }
+    }else{
+      current._lastTime=t
+      current.tokens+=r.tokens
+      current.usd+=r.usd
+      current.tip_count++
+      current.viewers+=(r.viewers||0)
+      current.new_followers+=(r.new_followers||0)
+      current.new_subscribers+=(r.new_subscribers||0)
+      if(r.tip_type && current.show_type==='Tip') current.show_type=r.tip_type
+    }
+  }
+  if(current){
+    const durationH=Math.max((current._lastTime-current._firstTime)/3600000,0.25)
+    sessions.push({
+      platform:current.platform,
+      start_time:new Date(current._firstTime).toISOString(),
+      end_time:new Date(current._lastTime).toISOString(),
+      hours:+durationH.toFixed(2),
+      tokens:current.tokens,
+      usd:+current.usd.toFixed(2),
+      tip_count:current.tip_count,
+      viewers:current.viewers,
+      new_followers:current.new_followers,
+      new_subscribers:current.new_subscribers,
+      show_type:current.show_type,
+    })
+  }
+  return sessions
+}
+
 export function aggregateRows(rows){
   const daily={},hourly={},monthly={},tippers={},platforms={},tipTypes={}
+  let totalViewers=0,totalNewFollowers=0,totalNewSubs=0
   for(let h=0;h<24;h++)hourly[h]={h,tokens:0,usd:0,count:0}
   for(const r of rows){
     const date=r.date_time.slice(0,10)
@@ -319,12 +402,19 @@ export function aggregateRows(rows){
     tippers[r.username].platforms.add(r.platform)
     if(date>tippers[r.username].last)tippers[r.username].last=date
     if(date<tippers[r.username].first)tippers[r.username].first=date
-    platforms[r.platform]=platforms[r.platform]||{platform:r.platform,usd:0,tokens:0,count:0}
+    platforms[r.platform]=platforms[r.platform]||{platform:r.platform,usd:0,tokens:0,count:0,viewers:0,new_followers:0,new_subscribers:0}
     platforms[r.platform].usd=+(platforms[r.platform].usd+r.usd).toFixed(2)
     platforms[r.platform].tokens+=r.tokens;platforms[r.platform].count++
+    platforms[r.platform].viewers+=(r.viewers||0)
+    platforms[r.platform].new_followers+=(r.new_followers||0)
+    platforms[r.platform].new_subscribers+=(r.new_subscribers||0)
     tipTypes[r.tip_type]=tipTypes[r.tip_type]||{type:r.tip_type,usd:0,tokens:0,count:0}
     tipTypes[r.tip_type].usd=+(tipTypes[r.tip_type].usd+r.usd).toFixed(2)
     tipTypes[r.tip_type].tokens+=r.tokens;tipTypes[r.tip_type].count++
+
+    totalViewers+=(r.viewers||0)
+    totalNewFollowers+=(r.new_followers||0)
+    totalNewSubs+=(r.new_subscribers||0)
   }
   const now=new Date()
   const topTippers=Object.values(tippers).sort((a,b)=>b.usd-a.usd).slice(0,200).map(t=>{
@@ -344,11 +434,124 @@ export function aggregateRows(rows){
   const peakHour=hourlyArr.reduce((a,b)=>b.usd>a.usd?b:a,hourlyArr[0])
   let running=0
   const cumulative=dailyArr.map(d=>{running=+(running+d.usd).toFixed(2);return{...d,cumulative:running}})
+
+  const sessions=buildSessions(rows)
+  const totalSessionHours=sessions.reduce((s,sn)=>s+sn.hours,0)||1
+
+  const weekdayNames=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
+  const byWeekday={}
+  const hourBuckets={}
+  const dayHourMatrix={}
+  const platformTime={}
+
+  for(const sn of sessions){
+    const start=new Date(sn.start_time)
+    const wd=start.getDay()
+    const h=start.getHours()
+    const wdKey=weekdayNames[wd]
+    byWeekday[wdKey]=byWeekday[wdKey]||{weekday:wdKey,usd:0,hours:0,tokens:0}
+    byWeekday[wdKey].usd+=sn.usd
+    byWeekday[wdKey].tokens+=sn.tokens
+    byWeekday[wdKey].hours+=sn.hours
+
+    const hourLabel=hourlyArr[h]?.label||`${h}:00`
+    hourBuckets[hourLabel]=hourBuckets[hourLabel]||{hourLabel,usd:0,hours:0,tokens:0}
+    hourBuckets[hourLabel].usd+=sn.usd
+    hourBuckets[hourLabel].tokens+=sn.tokens
+    hourBuckets[hourLabel].hours+=sn.hours
+
+    const dhKey=`${wdKey}-${hourLabel}`
+    dayHourMatrix[dhKey]=(dayHourMatrix[dhKey]||0)+sn.usd
+
+    const ptKey=`${sn.platform}__${wdKey}__${hourLabel}`
+    platformTime[ptKey]=(platformTime[ptKey]||0)+sn.usd
+  }
+
+  const bestDays=Object.values(byWeekday).map(d=>({
+    ...d,
+    usdPerHour:d.hours?+(d.usd/d.hours).toFixed(2):0,
+    tokensPerHour:d.hours?+(d.tokens/d.hours).toFixed(1):0,
+  })).sort((a,b)=>b.usdPerHour-a.usdPerHour)
+
+  const bestHours=Object.values(hourBuckets).map(d=>({
+    ...d,
+    usdPerHour:d.hours?+(d.usd/d.hours).toFixed(2):0,
+    tokensPerHour:d.hours?+(d.tokens/d.hours).toFixed(1):0,
+  })).sort((a,b)=>b.usdPerHour-a.usdPerHour)
+
+  const platformArr=Object.values(platforms).sort((a,b)=>b.usd-a.usd).map(p=>{
+    const activeSessions=sessions.filter(sn=>sn.platform===p.platform)
+    const hours=activeSessions.reduce((s,sn)=>s+sn.hours,0)||0
+    const usdPerHour=hours?+(p.usd/hours).toFixed(2):0
+    const tokensPerHour=hours?+(p.tokens/hours).toFixed(1):0
+    const avgTip=p.count?+(p.usd/p.count).toFixed(2):0
+    const fanCount=topTippers.filter(t=>t.platforms.includes(p.platform)).length
+    const whaleCount=topTippers.filter(t=>t.platforms.includes(p.platform)&&t.usd>=50).length
+    const fanConversion=fanCount?+(100*whaleCount/fanCount).toFixed(1):0
+    return{...p,hours,usdPerHour,tokensPerHour,avgTip,fanCount,whaleCount,fanConversion}
+  })
+
+  const platformTimeCombos=Object.entries(platformTime).map(([key,usd])=>{
+    const [platform,weekday,hourLabel]=key.split('__')
+    return{platform,weekday,hourLabel,usd}
+  }).sort((a,b)=>b.usd-a.usd)
+
+  const dayHourHeatmap=weekdayNames.map(wd=>{
+    return{
+      weekday:wd,
+      hours:hourlyArr.map(h=>{
+        const hourLabel=h.label
+        const key=`${wd}-${hourLabel}`
+        return{hourLabel,usd:dayHourMatrix[key]||0}
+      })
+    }
+  })
+
+  const subsRows=rows.filter(r=>/sub/i.test(r.tip_type||'')) 
+  const subsByMonth={}
+  for(const r of subsRows){
+    const m=r.date_time.slice(0,7)
+    subsByMonth[m]=subsByMonth[m]||{month:m,usd:0,count:0}
+    subsByMonth[m].usd+=r.usd
+    subsByMonth[m].count++
+  }
+  const subscriberStats=Object.values(subsByMonth).sort((a,b)=>a.month<b.month?-1:1).map(s=>({
+    ...s,
+    usd:+s.usd.toFixed(2),
+  }))
+
+  const fanTotals={
+    viewers: totalViewers,
+    followers: totalNewFollowers,
+    tippers: Object.keys(tippers).length,
+    whales: topTippers.filter(t=>t.status==='🐳 WHALE').length,
+  }
+
+  const fanFunnel=[
+    {stage:'Viewers',value:fanTotals.viewers},
+    {stage:'Followers',value:fanTotals.followers},
+    {stage:'Tippers',value:fanTotals.tippers},
+    {stage:'Whales',value:fanTotals.whales},
+  ]
+
   return{
-    daily:dailyArr,cumulative,monthly:monthlyArr,monthlyArr,
-    hourly:hourlyArr,hourlyArr,topTippers,platformArr,
-    platforms:platformArr,tipTypes:Object.values(tipTypes).sort((a,b)=>b.usd-a.usd),
+    daily:dailyArr,
+    cumulative,
+    monthly:monthlyArr,monthlyArr,
+    hourly:hourlyArr,hourlyArr,
+    topTippers,
+    platformArr,
+    platforms:platformArr,
+    tipTypes:Object.values(tipTypes).sort((a,b)=>b.usd-a.usd),
     peakHour,bestDay,bestMonth,biggestTip,
+    sessions,
+    bestDays,
+    bestHours,
+    platformTimeCombos,
+    dayHourHeatmap,
+    fanFunnel,
+    subscriberStats,
+    revenuePerHour: +(totalUsd/totalSessionHours).toFixed(2),
     totals:{
       usd:+totalUsd.toFixed(2),tokens:totalTokens,tips:rows.length,
       avgTip:rows.length>0?+(totalUsd/rows.length).toFixed(2):0,

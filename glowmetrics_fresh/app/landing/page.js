@@ -35,12 +35,10 @@ const DEMO_HOURS=[
   {h:"12AM",usd:98},{h:"1AM",usd:54},{h:"2AM",usd:31},
 ]
 const FEATURES=[
-  {icon:"📊",title:"Performance Analytics",tag:"Know your numbers",desc:"Track streaming income, peak hours, and earnings trends. Discover your most profitable shows and time slots with visual dashboards.",accent:C.indigo},
-  {icon:"👑",title:"Fan CRM System",tag:"Most wanted feature",desc:"Manage VIP fans, whales, and repeat tippers in one organized board. Never forget your best supporters — track notes, preferences, and tip history.",accent:C.cyan},
-  {icon:"🎡",title:"Show Strategy Tracking",tag:"Optimize your format",desc:"Compare wheel shows, goal streams, tip menus, and interactive streams. See exactly which formats generate the most income.",accent:C.violet},
-  {icon:"📥",title:"CSV Data Import",tag:"All platforms supported",desc:"Import directly from Chaturbate, BongaCams, MyFreeCams, Stripchat, and 6 more platforms. Your data auto-converts into insights.",accent:C.teal},
-  {icon:"📈",title:"Growth Dashboard",tag:"See your progress",desc:"Monthly earnings trends, follower growth, streaming hours, and avg hourly income. Watch your business grow over time.",accent:C.gold},
-  {icon:"🔒",title:"Private & Secure",tag:"Your data stays yours",desc:"End-to-end privacy. Row-level security means nobody but you can see your data. No sharing, no selling, no exceptions.",accent:C.green},
+  {icon:"👑",title:"Fan Leaderboard",tag:"Your biggest supporters",desc:"See your top 15 fans ranked by total spending so you always know who shows up for you the most.",accent:C.pink},
+  {icon:"📈",title:"Revenue Analytics",tag:"Know where money comes from",desc:"Understand which platforms, nights, and time slots generate the most income across your cam work.",accent:C.indigo},
+  {icon:"🪄",title:"Multi-Platform Tracking",tag:"All your sites together",desc:"Combine earnings from multiple cam sites into one simple view instead of guessing from separate dashboards.",accent:C.teal},
+  {icon:"📥",title:"CSV Upload",tag:"Fast to get started",desc:"Export a CSV from your cam platform, upload to CamCash, and see your trends and top fans in minutes.",accent:C.cyan},
 ]
 const TESTIMONIALS=[
   {quote:"Finally I can see which nights are actually worth streaming. My Thursday 9PM slot earns 3x more than Sunday — I never would have known without this.",name:"Ashley M.",platform:"Chaturbate · 2 yrs"},
@@ -50,10 +48,8 @@ const TESTIMONIALS=[
 const FAQS=[
   {q:"Is my data private?",a:"100%. We use row-level security — only you can see your data. We never share, sell, or analyze your personal information."},
   {q:"Which platforms do you support?",a:"Chaturbate, BongaCams, MyFreeCams, Stripchat, CamSoda, Cherry.tv, Streamate, ImLive, Flirt4Free, and LiveJasmin."},
-  {q:"How do I import my data?",a:"Download your CSV from your cam platform dashboard, then drag and drop it into GlowMetrics. We auto-detect the platform and import everything instantly."},
-  {q:"What's the difference between Free and Pro?",a:"Free lets you track up to 2 platforms with 90 days of history and top 25 fans. Pro unlocks all platforms, unlimited history, complete fan CRM, and all analytics features."},
-  {q:"Can I cancel anytime?",a:"Yes — cancel anytime from your account settings. No questions asked, no cancellation fees."},
-  {q:"Who built this?",a:"GlowMetrics was built by a cam model, for cam models. We know the industry from the inside."},
+  {q:"How do I import my data?",a:"Download your CSV from your cam platform dashboard, then drag and drop it into CamCash. We auto-detect the platform and import everything instantly."},
+  {q:"Who built this?",a:"CamCash was built by a cam model, for cam models. I originally built it to understand my own earnings across platforms."},
 ]
 
 function SimpleBar({data,valueKey,labelKey,color,height=120}){
@@ -73,9 +69,6 @@ function SimpleBar({data,valueKey,labelKey,color,height=120}){
 
 export default function LandingPage(){
   const router=useRouter()
-  const [billing,setBilling]=useState("monthly")
-  const [openFaq,setOpenFaq]=useState(null)
-  const [demoTab,setDemoTab]=useState("earnings")
   const [scrolled,setScrolled]=useState(false)
 
   useEffect(()=>{
@@ -109,184 +102,229 @@ export default function LandingPage(){
       </div>
 
       {/* NAV */}
-      <nav style={{position:"sticky",top:0,zIndex:100,background:scrolled?"rgba(15,23,42,0.95)":"transparent",backdropFilter:scrolled?"blur(20px)":"none",borderBottom:scrolled?`1px solid ${C.border}`:"none",transition:"all 0.3s",padding:"0 40px"}}>
+      <nav style={{position:"sticky",top:0,zIndex:100,background:scrolled?"rgba(12,16,32,0.96)":"transparent",backdropFilter:scrolled?"blur(22px)":"none",borderBottom:scrolled?`1px solid ${C.border}`:"none",transition:"all 0.3s",padding:"0 40px"}}>
         <div style={{maxWidth:1200,margin:"0 auto",display:"flex",alignItems:"center",height:68,gap:32}}>
           <div style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer"}} onClick={()=>go("/landing")}>
-            <div style={{width:36,height:36,borderRadius:10,background:"linear-gradient(135deg,#6366F1,#7C3AED)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,boxShadow:"0 0 20px #6366F140"}}>📊</div>
-            <span style={{fontSize:20,fontWeight:800,color:C.white,letterSpacing:"-0.03em",fontFamily:"'Outfit',sans-serif"}}>Glow<span style={{background:"linear-gradient(90deg,#6366F1,#A5B4FC)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text"}}>Metrics</span></span>
+            <div style={{position:"relative",width:38,height:38,borderRadius:12,background:"radial-gradient(circle at 20% 0%,#22D3EE,#6366F1 45%,#EC4899 80%)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 0 24px #22D3EE55"}}>
+              <div style={{width:22,height:16,borderRadius:5,border:"2px solid #0B1220",background:"rgba(15,23,42,0.9)",position:"relative",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                <span style={{fontSize:11,color:"#22D3EE",fontWeight:700,fontFamily:"'DM Mono',monospace"}}>$</span>
+                <div style={{position:"absolute",top:-5,left:4,width:9,height:5,borderRadius:2,background:"#0B1220",border:"2px solid #0B1220"}}/>
+              </div>
+            </div>
+            <span style={{fontSize:20,fontWeight:800,color:C.white,letterSpacing:"-0.03em",fontFamily:"'Outfit',sans-serif"}}>
+              Cam<span style={{background:"linear-gradient(90deg,#22D3EE,#A855F7,#F973AB)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text"}}>Cash</span>
+            </span>
           </div>
           <div style={{flex:1}}/>
           <div style={{display:"flex",alignItems:"center",gap:12}}>
             <button className="btn-outline" style={{padding:"9px 20px",fontSize:14}} onClick={()=>go("/login")}>Sign in</button>
-            <button className="btn-primary" style={{padding:"9px 20px",fontSize:14}} onClick={()=>go("/login")}>Start Free →</button>
+            <button className="btn-primary" style={{padding:"9px 20px",fontSize:14}} onClick={()=>go("/login")}>Sign Up</button>
           </div>
         </div>
       </nav>
 
-      {/* 1. HERO */}
-      <section style={{position:"relative",zIndex:1,maxWidth:1200,margin:"0 auto",padding:"100px 40px 80px",textAlign:"center"}}>
-        <div style={{display:"inline-flex",alignItems:"center",gap:8,background:`${C.green}18`,border:`1px solid ${C.green}40`,borderRadius:100,padding:"8px 18px",marginBottom:32,fontSize:13,color:C.green}}>
-          <span style={{width:6,height:6,borderRadius:"50%",background:C.green,display:"inline-block",animation:"pulse 2s infinite"}}/>
-          Free Forever Plan Available · No Credit Card Required
+      {/* HERO */}
+      <section style={{position:"relative",zIndex:1,maxWidth:1200,margin:"0 auto",padding:"96px 40px 72px",textAlign:"center"}}>
+        <div style={{display:"inline-flex",alignItems:"center",gap:8,background:`${C.indigo}20`,border:`1px solid ${C.indigo}50`,borderRadius:999,padding:"7px 16px",marginBottom:24,fontSize:12,color:C.indigo2,fontFamily:"'DM Mono',monospace",letterSpacing:"0.12em",textTransform:"uppercase"}}>
+          <span style={{width:7,height:7,borderRadius:"50%",background:C.cyan,boxShadow:`0 0 12px ${C.cyan}`,display:"inline-block",animation:"pulse 2s infinite"}}/>
+          Built by a cam model to understand earnings
         </div>
-        <h1 style={{fontSize:"clamp(36px,5.5vw,68px)",fontWeight:800,color:C.white,lineHeight:1.1,letterSpacing:"-0.03em",marginBottom:24,fontFamily:"'Outfit',sans-serif"}}>
-          Track Your Cam Earnings,<br/>
-          Identify VIP Fans, and<br/>
-          <span style={{background:"linear-gradient(135deg,#6366F1,#A5B4FC,#22D3EE)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text"}}>Grow Your Revenue</span>
+        <h1 style={{fontSize:"clamp(36px,5.5vw,64px)",fontWeight:800,color:C.white,lineHeight:1.05,letterSpacing:"-0.04em",marginBottom:18,fontFamily:"'Outfit',sans-serif"}}>
+          Understand Your Cam Earnings
         </h1>
-        <p style={{fontSize:"clamp(16px,2vw,20px)",color:C.text,maxWidth:600,margin:"0 auto 40px",lineHeight:1.7}}>
-          The complete analytics and CRM platform built specifically for cam models. Start free with 2 platforms — upgrade when you're ready.
+        <p style={{fontSize:"clamp(16px,2vw,20px)",color:C.text,maxWidth:640,margin:"0 auto 12px",lineHeight:1.7}}>
+          I built CamCash to analyze my cam earnings across platforms and identify my top spending fans.
+        </p>
+        <p style={{fontSize:15,color:C.muted,maxWidth:520,margin:"0 auto 32px",lineHeight:1.6}}>
+          Upload your platform earnings data and instantly see analytics, trends, and your biggest supporters in one simple, private dashboard.
         </p>
         <div style={{display:"flex",gap:14,justifyContent:"center",flexWrap:"wrap",marginBottom:20}}>
-          <button className="btn-primary" style={{fontSize:16,padding:"16px 32px"}} onClick={()=>document.getElementById("pricing")?.scrollIntoView({behavior:"smooth"})}>See Pricing →</button>
-          <button className="btn-outline" style={{fontSize:16,padding:"16px 32px"}} onClick={()=>document.getElementById("demo")?.scrollIntoView({behavior:"smooth"})}>See Live Demo</button>
-        </div>
-        <p style={{fontSize:13,color:C.muted}}>✅ Free plan includes 2 platforms · ✅ No credit card required · ✅ Upgrade anytime</p>
-      </section>
-
-      {/* 2. PRICING (MOVED UP!) */}
-      <section id="pricing" style={{position:"relative",zIndex:1,maxWidth:1200,margin:"0 auto",padding:"60px 40px 80px"}}>
-        <div style={{textAlign:"center",marginBottom:48}}>
-          <div style={{fontSize:12,color:C.indigo,fontFamily:"'DM Mono',monospace",letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:12}}>Simple Pricing</div>
-          <h2 style={{fontSize:"clamp(28px,4vw,44px)",fontWeight:800,color:C.white,letterSpacing:"-0.03em",fontFamily:"'Outfit',sans-serif",marginBottom:16}}>Start Free, Upgrade When Ready</h2>
-          <p style={{fontSize:16,color:C.text,marginBottom:24}}>Track up to 2 cam platforms completely free — no credit card required</p>
-          <div style={{display:"inline-flex",background:C.bg2,borderRadius:12,padding:4,border:`1px solid ${C.border}`}}>
-            {["monthly","yearly"].map(b=>(
-              <button key={b} onClick={()=>setBilling(b)} style={{background:billing===b?`linear-gradient(135deg,${C.indigo},${C.violet})`:"transparent",border:"none",borderRadius:9,padding:"8px 20px",color:billing===b?C.white:C.muted,fontWeight:600,fontSize:14,transition:"all 0.2s"}}>
-                {b==="monthly"?"Monthly":"Yearly · Save 60%"}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(300px,1fr))",gap:24,maxWidth:900,margin:"0 auto"}}>
-          {/* FREE PLAN - Now more prominent! */}
-          <div style={{background:"linear-gradient(135deg,rgba(16,185,129,0.12),rgba(34,197,94,0.08))",border:`2px solid ${C.green}50`,borderRadius:24,padding:36,position:"relative"}}>
-            <div style={{position:"absolute",top:16,right:16,background:C.green,borderRadius:100,padding:"5px 14px",fontSize:11,fontWeight:700,color:C.white,letterSpacing:"0.05em"}}>FREE FOREVER</div>
-            <div style={{fontSize:14,color:C.green,fontWeight:700,marginBottom:8,marginTop:8}}>Free Plan</div>
-            <div style={{fontSize:48,fontWeight:800,color:C.white,fontFamily:"'Outfit',sans-serif",marginBottom:4}}>$0</div>
-            <div style={{fontSize:13,color:C.muted,marginBottom:28}}>No credit card needed</div>
-            <button className="btn-primary" style={{width:"100%",marginBottom:28,background:`linear-gradient(135deg,${C.green},#059669)`}} onClick={()=>go("/login")}>Start Free →</button>
-            <div style={{display:"flex",flexDirection:"column",gap:10}}>
-              {["Track up to 2 cam platforms","Last 90 days of data","Top 25 fan tracking","Basic earnings analytics","CSV upload support","Limited dashboard insights"].map(f=>(
-                <div key={f} style={{display:"flex",gap:10,alignItems:"center",fontSize:14,color:C.text}}>
-                  <span style={{color:C.green,fontSize:16}}>✓</span>{f}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* PRO PLAN */}
-          <div style={{background:"linear-gradient(135deg,rgba(99,102,241,0.15),rgba(124,58,237,0.1))",border:`2px solid ${C.indigo}60`,borderRadius:24,padding:36,position:"relative",overflow:"hidden"}}>
-            <div style={{position:"absolute",top:16,right:16,background:`linear-gradient(135deg,${C.indigo},${C.violet})`,borderRadius:100,padding:"5px 14px",fontSize:11,fontWeight:700,color:C.white,letterSpacing:"0.05em"}}>MOST POPULAR</div>
-            <div style={{fontSize:14,color:C.indigo3,fontWeight:700,marginBottom:8,marginTop:8}}>Pro Plan</div>
-            <div style={{fontSize:48,fontWeight:800,color:C.white,fontFamily:"'Outfit',sans-serif",marginBottom:4}}>{billing==="monthly"?"$25.99":"$125"}</div>
-            <div style={{fontSize:13,color:C.muted,marginBottom:28}}>{billing==="monthly"?"per month":"per year · save $186"}</div>
-            <button className="btn-primary" style={{width:"100%",marginBottom:16}} onClick={()=>go("/login")}>Start 14-Day Free Trial</button>
-            <div style={{fontSize:12,color:C.muted,textAlign:"center",marginBottom:28}}>No credit card for trial</div>
-            <div style={{display:"flex",flexDirection:"column",gap:10}}>
-              {["Track ALL cam platforms","Unlimited data history","Complete Fan CRM with notes","Show type analytics","Peak hour intelligence","Monthly growth charts","Top fan leaderboard","Follow-up reminders","Priority support","All future features"].map(f=>(
-                <div key={f} style={{display:"flex",gap:10,alignItems:"center",fontSize:14,color:C.text}}>
-                  <span style={{color:C.indigo2,fontSize:16}}>✦</span>{f}
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-        <div style={{textAlign:"center",marginTop:32}}>
-          <p style={{fontSize:14,color:C.muted}}>💡 Pro tip: Start free and see which features you need before upgrading</p>
+          <button
+            className="btn-primary"
+            style={{fontSize:16,padding:"16px 32px",boxShadow:"0 0 28px #22D3EE55,0 18px 45px #0B112040"}}
+            onClick={()=>go("/login")}
+          >
+            Sign Up and Start Here
+          </button>
+          <button
+            className="btn-outline"
+            style={{fontSize:16,padding:"16px 32px",borderColor:"#38bdf8",color:C.white,background:"linear-gradient(135deg,rgba(56,189,248,0.04),rgba(236,72,153,0.04))"}}
+            onClick={()=>document.getElementById("demo")?.scrollIntoView({behavior:"smooth"})}
+          >
+            View Demo
+          </button>
         </div>
       </section>
 
-      {/* Continue with rest of landing page sections... */}
-      {/* (keeping all other sections the same) */}
-
-      {/* 3. FAN CRM FEATURE */}
-      <section style={{position:"relative",zIndex:1,maxWidth:1200,margin:"0 auto",padding:"80px 40px"}}>
-        <div style={{textAlign:"center",marginBottom:56}}>
-          <div style={{fontSize:12,color:C.gold,fontFamily:"'DM Mono',monospace",letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:12}}>👑 #1 Feature</div>
-          <h2 style={{fontSize:"clamp(28px,4vw,48px)",fontWeight:800,color:C.white,letterSpacing:"-0.03em",fontFamily:"'Outfit',sans-serif",marginBottom:16}}>Identify Your VIP Fans Instantly</h2>
-          <p style={{color:C.text,fontSize:17,maxWidth:600,margin:"0 auto",lineHeight:1.7}}>GlowMetrics automatically analyzes your tip history and categorizes fans so you always know who your biggest supporters are.</p>
+      {/* PRODUCT DEMO */}
+      <section id="demo" style={{position:"relative",zIndex:1,maxWidth:1200,margin:"0 auto",padding:"20px 40px 64px"}}>
+        <div style={{textAlign:"center",marginBottom:40}}>
+          <div style={{fontSize:12,color:C.indigo2,fontFamily:"'DM Mono',monospace",letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:10}}>
+            Product demo
+          </div>
+          <h2 style={{fontSize:"clamp(26px,3.4vw,40px)",fontWeight:800,color:C.white,letterSpacing:"-0.03em",fontFamily:"'Outfit',sans-serif",marginBottom:14}}>
+            See Your Earnings Clearly
+          </h2>
+          <p style={{fontSize:16,color:C.text,maxWidth:560,margin:"0 auto",lineHeight:1.7}}>
+            CamCash turns raw cam platform data into simple analytics so you can understand exactly where your money comes from.
+          </p>
         </div>
 
-        {/* Tier cards */}
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:16,marginBottom:40}}>
+        <div style={{display:"grid",gridTemplateColumns:"minmax(0,1.3fr) minmax(0,1fr)",gap:24,alignItems:"stretch",flexWrap:"wrap"}}>
+          {/* Left: charts */}
+          <div style={{background:"radial-gradient(circle at 0% 0%,#22D3EE11,transparent 55%)",borderRadius:24,padding:22,border:`1px solid ${C.border}`}}>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:14,marginBottom:18}}>
+              <div style={{background:C.bg2,borderRadius:16,padding:16,border:`1px solid ${C.border}`}}>
+                <div style={{fontSize:11,color:C.muted,marginBottom:6}}>Earnings this month</div>
+                <div style={{fontSize:24,color:C.cyan,fontWeight:700,fontFamily:"'DM Mono',monospace"}}>$3,214</div>
+                <div style={{fontSize:11,color:C.green,marginTop:6}}>+18% vs last month</div>
+              </div>
+              <div style={{background:C.bg2,borderRadius:16,padding:16,border:`1px solid ${C.border}`}}>
+                <div style={{fontSize:11,color:C.muted,marginBottom:6}}>Top fan this month</div>
+                <div style={{fontSize:15,color:C.white,fontWeight:600}}>StarGazer99</div>
+                <div style={{fontSize:11,color:C.pink,marginTop:6}}>Whale · $311.25</div>
+              </div>
+            </div>
+
+            <div style={{background:C.bg2,borderRadius:18,padding:18,border:`1px solid ${C.border}`}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                <div style={{fontSize:12,color:C.muted}}>Monthly earnings</div>
+                <div style={{display:"flex",gap:6,fontSize:11,color:C.dim}}>
+                  <span style={{padding:"3px 8px",borderRadius:999,background:`${C.indigo}25`,color:C.indigo2}}>USD</span>
+                  <span style={{padding:"3px 8px",borderRadius:999,background:`${C.bg3}`,border:`1px solid ${C.border}`}}>Tokens</span>
+                </div>
+              </div>
+              <SimpleBar data={DEMO_EARNINGS} valueKey="usd" labelKey="month" color={C.cyan} height={130}/>
+            </div>
+          </div>
+
+          {/* Right: cards list */}
+          <div style={{display:"flex",flexDirection:"column",gap:14}}>
+            <div style={{background:C.bg2,borderRadius:18,padding:18,border:`1px solid ${C.border}`}}>
+              <div style={{fontSize:13,color:C.white,fontWeight:600,marginBottom:6}}>Earnings overview cards</div>
+              <div style={{fontSize:13,color:C.muted,lineHeight:1.6}}>
+                Snapshot cards show lifetime earnings, average tip size, unique fans, and your strongest months at a glance.
+              </div>
+            </div>
+            <div style={{background:C.bg2,borderRadius:18,padding:18,border:`1px solid ${C.border}`}}>
+              <div style={{fontSize:13,color:C.white,fontWeight:600,marginBottom:6}}>Revenue charts</div>
+              <div style={{fontSize:13,color:C.muted,lineHeight:1.6}}>
+                See clean charts of how your income changes over time so you can spot trends without digging through CSVs.
+              </div>
+            </div>
+            <div style={{background:C.bg2,borderRadius:18,padding:18,border:`1px solid ${C.border}`}}>
+              <div style={{fontSize:13,color:C.white,fontWeight:600,marginBottom:6}}>Top fans leaderboard</div>
+              <div style={{fontSize:13,color:C.muted,lineHeight:1.6}}>
+                A simple leaderboard ranks your top supporters by total spend so you always know who to take extra care of.
+              </div>
+            </div>
+            <div style={{background:C.bg2,borderRadius:18,padding:18,border:`1px solid ${C.border}`}}>
+              <div style={{fontSize:13,color:C.white,fontWeight:600,marginBottom:6}}>Platform comparisons</div>
+              <div style={{fontSize:13,color:C.muted,lineHeight:1.6}}>
+                Compare how much you earn on each platform so you can decide where to focus your time.
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* HOW IT WORKS */}
+      <section style={{position:"relative",zIndex:1,maxWidth:1200,margin:"0 auto",padding:"40px 40px 64px"}}>
+        <div style={{textAlign:"center",marginBottom:40}}>
+          <h2 style={{fontSize:"clamp(24px,3vw,34px)",fontWeight:800,color:C.white,letterSpacing:"-0.03em",fontFamily:"'Outfit',sans-serif",marginBottom:10}}>
+            Start Tracking in 3 Steps
+          </h2>
+          <p style={{fontSize:15,color:C.text,maxWidth:520,margin:"0 auto",lineHeight:1.7}}>
+            No complicated setup, no tech skills needed — just export, upload, and see your analytics.
+          </p>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:18}}>
           {[
-            {icon:"🐋",tier:"Whale",desc:"Your biggest spenders",color:C.gold,bg:"#F59E0B"},
-            {icon:"🦈",tier:"Shark",desc:"High-value repeat fans",color:C.indigo2,bg:"#818CF8"},
-            {icon:"🐟",tier:"Regular",desc:"Consistent supporters",color:C.muted,bg:"#94A3B8"},
-            {icon:"💤",tier:"Dormant",desc:"Fans who haven't tipped recently",color:"#FB923C",bg:"#FB923C"},
-          ].map((t,i)=>(
-            <div key={i} style={{background:"rgba(19,29,53,0.8)",border:`1px solid ${t.bg}30`,borderRadius:20,padding:28,textAlign:"center",transition:"all 0.2s"}}
-              onMouseEnter={e=>{e.currentTarget.style.borderColor=t.bg+"60";e.currentTarget.style.transform="translateY(-4px)"}}
-              onMouseLeave={e=>{e.currentTarget.style.borderColor=t.bg+"30";e.currentTarget.style.transform="translateY(0)"}}>
-              <div style={{fontSize:40,marginBottom:12}}>{t.icon}</div>
-              <div style={{fontSize:16,fontWeight:700,color:t.color,marginBottom:8}}>{t.tier}</div>
-              <div style={{fontSize:13,color:C.muted,lineHeight:1.6}}>{t.desc}</div>
+            {step:"Step 1",title:"Export your data",desc:"Export your earnings CSV from your cam platform dashboard."},
+            {step:"Step 2",title:"Upload to CamCash",desc:"Drop the CSV into CamCash — we handle the parsing for you."},
+            {step:"Step 3",title:"See your analytics",desc:"Instantly see your earnings, trends, and top fans in one place."},
+          ].map((s,i)=>(
+            <div key={s.step} style={{background:C.bg2,borderRadius:20,padding:20,border:`1px solid ${C.border}`,position:"relative",overflow:"hidden"}}>
+              <div style={{position:"absolute",inset:0,background:`radial-gradient(circle at ${i===0?"0% 0%":i===1?"50% 0%":"100% 0%"},${C.cyan}10,transparent 60%)`,pointerEvents:"none"}}/>
+              <div style={{fontSize:11,color:C.muted,fontFamily:"'DM Mono',monospace",letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:8}}>{s.step}</div>
+              <div style={{fontSize:17,color:C.white,fontWeight:600,marginBottom:6}}>{s.title}</div>
+              <div style={{fontSize:14,color:C.text,lineHeight:1.6}}>{s.desc}</div>
             </div>
           ))}
         </div>
+      </section>
 
-        {/* CRM preview table */}
-        <div style={{background:"rgba(19,29,53,0.8)",border:`1px solid ${C.border}`,borderRadius:20,overflow:"hidden",marginBottom:32}}>
-          <div style={{background:"rgba(15,23,42,0.9)",borderBottom:`1px solid ${C.border}`,padding:"16px 24px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-            <div style={{display:"flex",alignItems:"center",gap:10}}>
-              <div style={{width:30,height:30,borderRadius:8,background:`${C.gold}20`,border:`1px solid ${C.gold}40`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15}}>👑</div>
-              <span style={{fontSize:14,fontWeight:700,color:C.white}}>Fan CRM Preview</span>
-            </div>
-            <div style={{padding:"4px 12px",borderRadius:100,background:`${C.green}15`,border:`1px solid ${C.green}40`,color:C.green,fontSize:11,fontFamily:"'DM Mono',monospace"}}>● LIVE DATA</div>
-          </div>
-          <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
-            <thead>
-              <tr style={{borderBottom:`1px solid ${C.border}`}}>
-                {["Username","Total Tips","Tier","Last Tip"].map(h=>(
-                  <th key={h} style={{padding:"12px 20px",textAlign:"left",color:C.muted,fontSize:11,fontFamily:"'DM Mono',monospace",textTransform:"uppercase",letterSpacing:"0.08em",fontWeight:500}}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {[
-                {name:"vipfan23",usd:"$620",tier:"🐳 WHALE",last:"2 days ago",color:C.gold},
-                {name:"bigspender",usd:"$180",tier:"🦈 SHARK",last:"yesterday",color:C.indigo2},
-                {name:"supporter88",usd:"$45",tier:"🐟 REGULAR",last:"5 days ago",color:C.muted},
-              ].map((f,i)=>(
-                <tr key={i} style={{borderBottom:i<2?`1px solid ${C.border}`:"none"}}>
-                  <td style={{padding:"14px 20px"}}>
-                    <div style={{display:"flex",alignItems:"center",gap:10}}>
-                      <div style={{width:30,height:30,borderRadius:"50%",background:`linear-gradient(135deg,${C.indigo},${C.cyan})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:C.white}}>{f.name[0].toUpperCase()}</div>
-                      <span style={{color:C.white,fontWeight:600}}>{f.name}</span>
-                    </div>
-                  </td>
-                  <td style={{padding:"14px 20px",color:C.green,fontWeight:700,fontFamily:"'DM Mono',monospace"}}>{f.usd}</td>
-                  <td style={{padding:"14px 20px"}}>
-                    <span style={{padding:"3px 10px",borderRadius:100,fontSize:11,fontWeight:700,background:`${f.color}15`,color:f.color,border:`1px solid ${f.color}40`}}>{f.tier}</span>
-                  </td>
-                  <td style={{padding:"14px 20px",color:C.muted,fontSize:12}}>{f.last}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {/* FEATURES */}
+      <section style={{position:"relative",zIndex:1,maxWidth:1200,margin:"0 auto",padding:"16px 40px 64px"}}>
+        <div style={{textAlign:"center",marginBottom:36}}>
+          <h2 style={{fontSize:"clamp(24px,3vw,34px)",fontWeight:800,color:C.white,letterSpacing:"-0.03em",fontFamily:"'Outfit',sans-serif",marginBottom:10}}>
+            Features made for cam models
+          </h2>
+          <p style={{fontSize:15,color:C.text,maxWidth:520,margin:"0 auto",lineHeight:1.7}}>
+            CamCash focuses on the handful of analytics that actually help you make clearer decisions about your work.
+          </p>
         </div>
-        <div style={{textAlign:"center"}}>
-          <button className="btn-primary" style={{fontSize:15,padding:"14px 32px"}} onClick={()=>go("/login")}>Track Your VIP Fans →</button>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(230px,1fr))",gap:18}}>
+          {FEATURES.map((f)=>(
+            <div key={f.title} style={{background:C.bg2,borderRadius:20,padding:20,border:`1px solid ${C.border}`,position:"relative",overflow:"hidden"}}>
+              <div style={{position:"absolute",inset:0,background:`radial-gradient(circle at 0 0,${f.accent}18,transparent 55%)`,pointerEvents:"none"}}/>
+              <div style={{width:32,height:32,borderRadius:999,background:`${f.accent}26`,border:`1px solid ${f.accent}60`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,marginBottom:10,boxShadow:`0 0 16px ${f.accent}50`}}>
+                {f.icon}
+              </div>
+              <div style={{fontSize:14,color:f.accent,fontWeight:600,marginBottom:4}}>{f.tag}</div>
+              <div style={{fontSize:17,color:C.white,fontWeight:600,marginBottom:6}}>{f.title}</div>
+              <div style={{fontSize:14,color:C.text,lineHeight:1.6}}>{f.desc}</div>
+            </div>
+          ))}
         </div>
       </section>
 
-      {/* REST OF SECTIONS - keeping them all the same */}
-      {/* Continue with Multi-Platform, How It Works, Features, Demo, Testimonials, FAQ, Final CTA, Footer */}
+      {/* FINAL CTA */}
+      <section style={{position:"relative",zIndex:1,maxWidth:1200,margin:"0 auto",padding:"8px 40px 72px"}}>
+        <div style={{background:"radial-gradient(circle at 0 0,#22D3EE1a,transparent 60%)",borderRadius:28,border:`1px solid ${C.border2||C.border}`,padding:"32px 22px",overflow:"hidden"}}>
+          <div style={{position:"absolute",inset:0,background:"radial-gradient(circle at 100% 0%,rgba(236,72,153,0.25),transparent 55%)",pointerEvents:"none"}}/>
+          <div style={{maxWidth:640,margin:"0 auto",textAlign:"center",position:"relative",zIndex:1}}>
+            <h2 style={{fontSize:"clamp(24px,3vw,34px)",fontWeight:800,color:C.white,letterSpacing:"-0.03em",fontFamily:"'Outfit',sans-serif",marginBottom:10}}>
+              Try CamCash With Your Data
+            </h2>
+            <p style={{fontSize:15,color:C.text,maxWidth:520,margin:"0 auto 22px",lineHeight:1.7}}>
+              Create an account, upload a CSV from your cam platform, and see your earnings laid out in a way that finally makes sense.
+            </p>
+            <button
+              className="btn-primary"
+              style={{fontSize:16,padding:"15px 30px",boxShadow:"0 0 28px #22D3EE66"}}
+              onClick={()=>go("/login")}
+            >
+              Create Account
+            </button>
+          </div>
+        </div>
+      </section>
       
       {/* FOOTER */}
-      <footer style={{position:"relative",zIndex:1,borderTop:`1px solid ${C.border}`,padding:"48px 40px"}}>
+      <footer style={{position:"relative",zIndex:1,borderTop:`1px solid ${C.border}`,padding:"40px 40px 32px"}}>
         <div style={{maxWidth:1200,margin:"0 auto",display:"grid",gridTemplateColumns:"2fr 1fr 1fr 1fr",gap:40,flexWrap:"wrap"}}>
           <div>
             <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}>
-              <div style={{width:32,height:32,borderRadius:9,background:"linear-gradient(135deg,#6366F1,#7C3AED)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>📊</div>
-              <span style={{fontSize:18,fontWeight:800,color:C.white,fontFamily:"'Outfit',sans-serif"}}>Glow<span style={{background:"linear-gradient(90deg,#6366F1,#A5B4FC)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text"}}>Metrics</span></span>
+              <div style={{position:"relative",width:32,height:32,borderRadius:10,background:"radial-gradient(circle at 20% 0%,#22D3EE,#6366F1 45%,#EC4899 80%)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 0 20px #22D3EE55"}}>
+                <div style={{width:19,height:14,borderRadius:4,border:"2px solid #020617",background:"rgba(15,23,42,0.95)",position:"relative",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                  <span style={{fontSize:10,color:"#22D3EE",fontWeight:700,fontFamily:"'DM Mono',monospace"}}>$</span>
+                  <div style={{position:"absolute",top:-4,left:4,width:8,height:4,borderRadius:2,background:"#020617",border:"2px solid #020617"}}/>
+                </div>
+              </div>
+              <span style={{fontSize:18,fontWeight:800,color:C.white,fontFamily:"'Outfit',sans-serif"}}>
+                Cam<span style={{background:"linear-gradient(90deg,#22D3EE,#A855F7,#F973AB)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text"}}>Cash</span>
+              </span>
             </div>
-            <p style={{color:C.muted,fontSize:14,lineHeight:1.7,maxWidth:260}}>The analytics and fan CRM dashboard built specifically for cam models.</p>
+            <p style={{color:C.muted,fontSize:14,lineHeight:1.7,maxWidth:260}}>
+              A simple earnings analytics tool built to help cam models understand their income and their biggest supporters.
+            </p>
           </div>
           <div>
             <div style={{color:C.white,fontWeight:700,fontSize:14,marginBottom:16}}>Product</div>
-            {["Features","Pricing","Demo","FAQ"].map(l=><div key={l} style={{color:C.muted,fontSize:14,marginBottom:10,cursor:"pointer"}}>{l}</div>)}
+            {["Features","Demo","FAQ"].map(l=>(
+              <div key={l} style={{color:C.muted,fontSize:14,marginBottom:10,cursor:"pointer"}}>{l}</div>
+            ))}
           </div>
           <div>
             <div style={{color:C.white,fontWeight:700,fontSize:14,marginBottom:16}}>Support</div>
@@ -295,11 +333,13 @@ export default function LandingPage(){
           </div>
           <div>
             <div style={{color:C.white,fontWeight:700,fontSize:14,marginBottom:16}}>Account</div>
-            {["Sign Up","Sign In","Dashboard"].map(l=><div key={l} style={{color:C.muted,fontSize:14,marginBottom:10,cursor:"pointer"}} onClick={()=>go("/login")}>{l}</div>)}
+            {["Create account","Sign in","Dashboard"].map(l=>(
+              <div key={l} style={{color:C.muted,fontSize:14,marginBottom:10,cursor:"pointer"}} onClick={()=>go("/login")}>{l}</div>
+            ))}
           </div>
         </div>
-        <div style={{maxWidth:1200,margin:"32px auto 0",paddingTop:24,borderTop:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:12}}>
-          <div style={{fontSize:12,color:C.muted}}>© 2025 GlowMetrics · Built for cam models · By someone who gets it</div>
+        <div style={{maxWidth:1200,margin:"24px auto 0",paddingTop:18,borderTop:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:12}}>
+          <div style={{fontSize:12,color:C.muted}}>© 2025 CamCash · Built for cam models, by a cam model</div>
           <div style={{fontSize:12,color:C.muted}}>Questions? <a href="mailto:daphneoncam@gmail.com" style={{color:C.indigo3}}>daphneoncam@gmail.com</a></div>
         </div>
       </footer>

@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
 import { aggregateRows } from "../../lib/analytics"
 import {
-  AreaChart, Area, BarChart, Bar,
+  AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts"
 
@@ -210,6 +210,12 @@ export default function Dashboard() {
 
   const monthlyArr = agg?.monthlyArr || []
   const hourlyArr = agg?.hourlyArr || []
+  const bestDays = agg?.bestDays || []
+  const bestHours = agg?.bestHours || []
+  const platformPerf = agg?.platforms || []
+  const heatmap = agg?.dayHourHeatmap || []
+  const fanFunnel = agg?.fanFunnel || []
+  const subscriberStats = agg?.subscriberStats || []
 
   return (
     <div style={{ minHeight:"100vh", background:C.bg, fontFamily:"'Inter','Plus Jakarta Sans',sans-serif", color:C.text }}>
@@ -231,7 +237,7 @@ export default function Dashboard() {
         <div style={{ padding:"24px 20px 20px", borderBottom:`1px solid ${C.border}` }}>
           <div style={{ display:"flex", alignItems:"center", gap:10 }}>
             <div style={{ width:34, height:34, borderRadius:9, background:"linear-gradient(135deg,#7C5CFF,#22D3EE)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:17, boxShadow:"0 0 20px #7C5CFF30" }}>📊</div>
-            <span style={{ fontSize:17, fontWeight:800, color:C.white, letterSpacing:"-0.02em" }}>Cam<span style={{ background:"linear-gradient(90deg,#7C5CFF,#22D3EE)", WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent", backgroundClip:"text" }}>lytics</span></span>
+            <span style={{ fontSize:17, fontWeight:800, color:C.white, letterSpacing:"-0.02em" }}>Cam<span style={{ background:"linear-gradient(90deg,#7C5CFF,#22D3EE)", WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent", backgroundClip:"text" }}>Cash</span></span>
           </div>
           {user && <div style={{ fontSize:11, color:C.muted, marginTop:10, fontFamily:"'DM Mono',monospace", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{user.email}</div>}
         </div>
@@ -569,24 +575,180 @@ export default function Dashboard() {
                   </Card>
                 </div>
 
-                {/* Platform breakdown */}
-                {agg?.platformArr?.length > 0 && (
-                  <Card>
-                    <div style={{ fontSize:13, fontWeight:600, color:C.white, marginBottom:4 }}>Revenue by Platform</div>
-                    <div style={{ fontSize:11, color:C.muted, marginBottom:20 }}>Which site pays most</div>
-                    <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-                      {agg.platformArr.sort((a,b)=>b.usd-a.usd).map((p,i) => {
-                        const max = agg.platformArr.reduce((m,x)=>x.usd>m?x.usd:m,0)
-                        return (
-                          <div key={i} style={{ display:"flex", alignItems:"center", gap:12 }}>
-                            <div style={{ width:100, fontSize:13, color:C.white, flexShrink:0 }}>{p.platform}</div>
-                            <div style={{ flex:1, height:8, background:C.border, borderRadius:4, overflow:"hidden" }}>
-                              <div style={{ height:"100%", width:`${(p.usd/max)*100}%`, background:PLATFORM_COLORS[p.platform]||C.indigo, borderRadius:4, transition:"width 0.5s" }}/>
+                {/* Platform breakdown & performance */}
+                {platformPerf.length > 0 && (
+                  <div style={{ display:"grid", gridTemplateColumns:"1.2fr 1fr", gap:20 }}>
+                    <Card>
+                      <div style={{ fontSize:13, fontWeight:600, color:C.white, marginBottom:4 }}>Platform Performance</div>
+                      <div style={{ fontSize:11, color:C.muted, marginBottom:20 }}>Where your earnings come from</div>
+                      <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                        {platformPerf.sort((a,b)=>b.usd-a.usd).map((p,i) => {
+                          const max = platformPerf.reduce((m,x)=>x.usd>m?x.usd:m,0)
+                          return (
+                            <div key={i} style={{ display:"flex", alignItems:"center", gap:12 }}>
+                              <div style={{ width:90, fontSize:13, color:C.white, flexShrink:0 }}>{p.platform}</div>
+                              <div style={{ flex:1 }}>
+                                <div style={{ height:8, background:C.border, borderRadius:4, overflow:"hidden", marginBottom:4 }}>
+                                  <div style={{ height:"100%", width:`${(p.usd/max)*100}%`, background:PLATFORM_COLORS[p.platform]||C.indigo, borderRadius:4, transition:"width 0.5s" }}/>
+                                </div>
+                                <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, color:C.muted }}>
+                                  <span>${p.usd.toFixed(0)} total</span>
+                                  <span>{p.hours>0?`$${p.usdPerHour.toFixed(2)}/hr · ${p.tokensPerHour.toFixed(1)} tokens/hr`:""}</span>
+                                </div>
+                              </div>
                             </div>
-                            <div style={{ width:70, textAlign:"right", color:C.green, fontFamily:"'DM Mono',monospace", fontSize:13, fontWeight:600 }}>${p.usd.toFixed(0)}</div>
+                          )
+                        })}
+                      </div>
+                    </Card>
+
+                    <Card>
+                      <div style={{ fontSize:13, fontWeight:600, color:C.white, marginBottom:4 }}>Best Streaming Times</div>
+                      <div style={{ fontSize:11, color:C.muted, marginBottom:12 }}>Days and hours that earn most per hour</div>
+                      <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                        <div>
+                          <div style={{ fontSize:11, textTransform:"uppercase", letterSpacing:"0.08em", color:C.muted, marginBottom:6 }}>Best Days</div>
+                          {bestDays.slice(0,3).map((d)=>(
+                            <div key={d.weekday} style={{ display:"flex", justifyContent:"space-between", fontSize:12, marginBottom:2 }}>
+                              <span style={{ color:C.white }}>{d.weekday}</span>
+                              <span style={{ color:C.green, fontFamily:"'DM Mono',monospace" }}>${d.usdPerHour.toFixed(2)}/hr</span>
+                            </div>
+                          ))}
+                        </div>
+                        <div>
+                          <div style={{ fontSize:11, textTransform:"uppercase", letterSpacing:"0.08em", color:C.muted, marginTop:10, marginBottom:6 }}>Best Hours</div>
+                          {bestHours.slice(0,3).map((h)=>(
+                            <div key={h.hourLabel} style={{ display:"flex", justifyContent:"space-between", fontSize:12, marginBottom:2 }}>
+                              <span style={{ color:C.white }}>{h.hourLabel}</span>
+                              <span style={{ color:C.cyan, fontFamily:"'DM Mono',monospace" }}>${h.usdPerHour.toFixed(2)}/hr</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </Card>
+                  </div>
+                )}
+
+                {/* Show performance & revenue by show type (from tip types) */}
+                {agg?.tipTypes?.length > 0 && (
+                  <div style={{ display:"grid", gridTemplateColumns:"1.2fr 1fr", gap:20 }}>
+                    <Card>
+                      <div style={{ fontSize:13, fontWeight:600, color:C.white, marginBottom:4 }}>Show Performance</div>
+                      <div style={{ fontSize:11, color:C.muted, marginBottom:16 }}>Which show types bring in the most</div>
+                      <div style={{ overflowX:"auto" }}>
+                        <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
+                          <thead>
+                            <tr style={{ borderBottom:`1px solid ${C.border}` }}>
+                              {["Show Type","Revenue","Tokens","Tips"].map(h=>(
+                                <th key={h} style={{ padding:"8px 10px", textAlign:"left", color:C.muted, fontSize:11, textTransform:"uppercase", letterSpacing:"0.08em", fontFamily:"'DM Mono',monospace" }}>{h}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {agg.tipTypes.slice(0,8).map(t=>(
+                              <tr key={t.type} style={{ borderBottom:`1px solid ${C.border}` }}>
+                                <td style={{ padding:"8px 10px", color:C.white }}>{t.type}</td>
+                                <td style={{ padding:"8px 10px", color:C.green, fontFamily:"'DM Mono',monospace" }}>${t.usd.toFixed(2)}</td>
+                                <td style={{ padding:"8px 10px", color:C.indigo, fontFamily:"'DM Mono',monospace" }}>{t.tokens.toLocaleString()}</td>
+                                <td style={{ padding:"8px 10px", color:C.muted, fontFamily:"'DM Mono',monospace" }}>{t.count}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </Card>
+
+                    <Card>
+                      <div style={{ fontSize:13, fontWeight:600, color:C.white, marginBottom:4 }}>Revenue by Show Type</div>
+                      <div style={{ fontSize:11, color:C.muted, marginBottom:12 }}>Visual breakdown of earnings</div>
+                      <ResponsiveContainer width="100%" height={220}>
+                        <PieChart>
+                          <Tooltip content={<ChartTip/>}/>
+                          <Pie
+                            data={agg.tipTypes}
+                            dataKey="usd"
+                            nameKey="type"
+                            innerRadius={50}
+                            outerRadius={80}
+                            paddingAngle={2}
+                          >
+                            {agg.tipTypes.map((t,i)=>(
+                              <Cell key={t.type} fill={i%2===0?C.indigo:C.cyan} />
+                            ))}
+                          </Pie>
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </Card>
+                  </div>
+                )}
+
+                {/* Fan conversion & subscriber growth */}
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:20 }}>
+                  <Card>
+                    <div style={{ fontSize:13, fontWeight:600, color:C.white, marginBottom:4 }}>Fan Conversion Funnel</div>
+                    <div style={{ fontSize:11, color:C.muted, marginBottom:16 }}>From viewers to whales (where data is available)</div>
+                    <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                      {fanFunnel.map(step=>(
+                        <div key={step.stage} style={{ display:"flex", alignItems:"center", gap:10 }}>
+                          <div style={{ width:90, fontSize:12, color:C.white }}>{step.stage}</div>
+                          <div style={{ flex:1, height:10, background:C.border, borderRadius:6, overflow:"hidden" }}>
+                            <div style={{ height:"100%", width:`${step.value && fanFunnel[0]?.value ? (step.value/fanFunnel[0].value)*100 : 0}%`, background:C.indigo, borderRadius:6, transition:"width 0.4s" }}/>
                           </div>
-                        )
-                      })}
+                          <div style={{ width:70, textAlign:"right", fontSize:12, color:C.muted, fontFamily:"'DM Mono',monospace" }}>{step.value.toLocaleString()}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </Card>
+
+                  <Card>
+                    <div style={{ fontSize:13, fontWeight:600, color:C.white, marginBottom:4 }}>Subscriber Growth</div>
+                    <div style={{ fontSize:11, color:C.muted, marginBottom:16 }}>Subscription revenue over time (from sub-type transactions)</div>
+                    {subscriberStats.length===0 ? (
+                      <div style={{ fontSize:12, color:C.muted }}>No subscription-type rows detected yet.</div>
+                    ) : (
+                      <ResponsiveContainer width="100%" height={220}>
+                        <AreaChart data={subscriberStats}>
+                          <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false}/>
+                          <XAxis dataKey="month" stroke={C.muted} tick={{ fontSize:11, fill:C.muted }} tickLine={false} axisLine={false}/>
+                          <YAxis stroke={C.muted} tick={{ fontSize:11, fill:C.muted }} tickLine={false} axisLine={false} tickFormatter={v=>`$${v}`}/>
+                          <Tooltip content={<ChartTip/>}/>
+                          <Area type="monotone" dataKey="usd" name="Subscriber $" stroke={C.gold} strokeWidth={2} fillOpacity={0.2} fill={C.gold}/>
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    )}
+                  </Card>
+                </div>
+
+                {/* Day vs hour heatmap */}
+                {heatmap.length>0 && (
+                  <Card>
+                    <div style={{ fontSize:13, fontWeight:600, color:C.white, marginBottom:4 }}>Earnings Heatmap</div>
+                    <div style={{ fontSize:11, color:C.muted, marginBottom:16 }}>Day of week vs hour of day</div>
+                    <div style={{ overflowX:"auto" }}>
+                      <div style={{ minWidth:600 }}>
+                        <div style={{ display:"grid", gridTemplateColumns:`80px repeat(12,1fr)`, gap:4, fontSize:10 }}>
+                          <div></div>
+                          {heatmap[0].hours.filter((_,i)=>i%2===0).map(h=>(
+                            <div key={h.hourLabel} style={{ textAlign:"center", color:C.muted }}>{h.hourLabel}</div>
+                          ))}
+                          {heatmap.map(row=>(
+                            <React.Fragment key={row.weekday}>
+                              <div style={{ color:C.muted, fontSize:11 }}>{row.weekday}</div>
+                              {row.hours.filter((_,i)=>i%2===0).map(h=>{
+                                const intensity = h.usd>0 ? Math.min(1, h.usd / (monthlyArr[monthlyArr.length-1]?.usd || h.usd)) : 0
+                                return (
+                                  <div key={row.weekday+"-"+h.hourLabel} style={{
+                                    height:22,
+                                    borderRadius:4,
+                                    background:intensity?`rgba(34,211,238,${0.15+0.55*intensity})`:"rgba(15,23,42,1)",
+                                    border:`1px solid ${C.border}`,
+                                  }}/>
+                                )
+                              })}
+                            </React.Fragment>
+                          ))}
+                        </div>
+                      </div>
                     </div>
                   </Card>
                 )}
