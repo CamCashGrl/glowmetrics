@@ -1,15 +1,18 @@
-// Analytics and CSV parsing utilities for GlowMetrics
+// ============================================
+// GLOWMETRICS CSV-BASED ANALYTICS ENGINE
+// ============================================
+// Session detection and engagement metrics
+// calculated ONLY from CSV tip data
+// ============================================
 
 export function parseCSV(text, platform = null) {
   const lines = text.trim().split('\n').filter(l => l.trim())
   if (lines.length === 0) return []
 
-  // Auto-detect platform if not specified
   if (!platform) {
     platform = detectPlatform(text)
   }
 
-  // Check if it has headers
   const firstLine = lines[0].toLowerCase()
   const hasHeaders = firstLine.includes('date') || firstLine.includes('username') || firstLine.includes('amount') || firstLine.includes('tokens')
 
@@ -57,7 +60,6 @@ function parseHeaderless(lines, platform) {
     const vals = parseCSVLine(line)
     if (vals.length === 0) continue
 
-    // Chaturbate raw format: Date, "Tip From: username", tokens, empty
     if (vals.length === 4 && vals[1] && vals[1].toLowerCase().includes('tip from:')) {
       const dateRaw = vals[0]
       const actionMatch = vals[1].match(/tip from:\s*([^\s,]+)/i)
@@ -75,7 +77,6 @@ function parseHeaderless(lines, platform) {
       continue
     }
 
-    // Generic fallback for other headerless formats
     const parsed = extractTipDataFromArray(vals, platform)
     if (parsed) results.push(parsed)
   }
@@ -105,13 +106,11 @@ function extractTipData(row, platform) {
 function extractTipDataFromArray(vals, platform) {
   if (vals.length < 2) return null
 
-  // Try to find date, username, and amount
   let dateRaw = vals[0]
   let username = vals[1] || 'anonymous'
   let tokens = 0
   let usd = 0
 
-  // Look for numbers in the array
   for (let i = 2; i < vals.length; i++) {
     const num = parseFloat(vals[i])
     if (!isNaN(num) && num > 0) {
@@ -157,128 +156,221 @@ function parseCSVLine(line) {
   return result.filter(v => v !== '')
 }
 
-// Convert raw tips data to dashboard analytics
-export function buildAnalytics(tips) {
+// ============================================
+// SESSION DETECTION FROM CSV TIP DATA
+// ============================================
+// 3-hour gap threshold
+// ONLY uses tip timestamps - no external data
+// ============================================
+
+export function detectSessions(tips, platformId = null) {
+  if (!tips || tips.length === 0) return []
+
+  // Parse dates and sort chronologically
+  const parsed = tips
+    .map(t => ({
+      ...t,
+      timestamp: new Date(t.dateRaw || t.date_time)
+    }))
+    .filter(t => !isNaN(t.timestamp.getTime()))
+    .sort((a, b) => a.timestamp - b.timestamp)
+
+  if (parsed.length === 0) return []
+
+  const SESSION_GAP_MS = 3 * 60 * 60 * 1000 // 3 hours in milliseconds
+  const sessions = []
+  let currentSession = null
+
+  parsed.forEach(tip => {
+    if (!currentSession) {
+      // Start first session
+      currentSession = {
+        tips: [tip],
+        platform: tip.platform,
+        startTime: tip.timestamp,
+        endTime: tip.timestamp,
+        fans: new Set([tip.username.toLowerCase()])
+      }
+    } else {
+      const timeSinceLastTip = tip.timestamp - currentSession.endTime
+
+      // Check if tip belongs to current session (within 3 hours)
+      if (timeSinceLastTip <= SESSION_GAP_MS && tip.platform === currentSession.platform) {
+        // Add to current session
+        currentSession.tips.push(tip)
+        currentSession.endTime = tip.timestamp
+        currentSession.fans.add(tip.username.toLowerCase())
+      } else {
+        // Save completed session and start new one
+        sessions.push(finalizeSession(currentSession, platformId))
+        currentSession = {
+          tips: [tip],
+          platform: tip.platform,
+          startTime: tip.timestamp,
+          endTime: tip.timestamp,
+          fans: new Set([tip.username.toLowerCase()])
+        }
+      }
+    }
+  })
+
+  // Don't forget last session
+  if (currentSession && currentSession.tips.length > 0) {
+    sessions.push(finalizeSession(currentSession, platformId))
+  }
+
+  return sessions
+}
+
+function finalizeSession(session, platformId) {
+  const durationMs = session.endTime - session.startTime
+  const durationMinutes = Math.max(Math.round(durationMs / (1000 * 60)), 30) // Min 30 minutes
+  const durationHours = durationMinutes / 60
+  
+  const totalTokens = session.tips.reduce((sum, t) => sum + (t.tokens || 0), 0)
+  const totalUSD = session.tips.reduce((sum, t) => sum + (t.usd || 0), 0)
+  const tipCount = session.tips.length
+  const uniqueFans = session.fans.size
+
+  // Engagement metrics from tip data only
+  const tokensPerHour = durationHours > 0 ? Math.round(totalTokens / durationHours) : 0
+  const avgTipSize = tipCount > 0 ? parseFloat((totalUSD / tipCount).toFixed(2)) : 0
+  const tipFrequency = durationMinutes > 0 ? parseFloat((tipCount / durationMinutes).toFixed(3)) : 0
+
+  return {
+    platform: session.platform,
+    platform_id: platformId,
+    session_start_time: session.startTime.toISOString(),
+    session_end_time: session.endTime.toISOString(),
+    duration_minutes: durationMinutes,
+    total_tokens: totalTokens,
+    total_usd: parseFloat(totalUSD.toFixed(2)),
+    tip_count: tipCount,
+    unique_fans: uniqueFans,
+    tokens_per_hour: tokensPerHour,
+    average_tip_size: avgTipSize,
+    tip_frequency: tipFrequency,
+    show_type: null, // User can add manually
+    notes: null
+  }
+}
+
+// ============================================
+// ANALYTICS FROM CSV DATA ONLY
+// ============================================
+// All metrics calculated from tip timestamps
+// No external data sources
+// ============================================
+
+export function buildAnalytics(tips, sessions = null) {
   if (!tips || tips.length === 0) {
     return {
       totalUSD: 0,
       totalTips: 0,
+      totalTokens: 0,
       uniqueFans: 0,
-      platforms: [],
+      totalSessions: 0,
+      totalMinutesStreamed: 0,
+      avgSessionLength: 0,
+      avgEarningsPerSession: 0,
+      avgTokensPerHour: 0,
+      sessions: [],
       topFans: [],
-      dailyData: [],
-      monthlyData: [],
-      hourlyData: [],
-      platformBreakdown: []
+      platforms: []
     }
+  }
+
+  // Auto-detect sessions if not provided
+  if (!sessions || sessions.length === 0) {
+    sessions = detectSessions(tips)
   }
 
   // Parse dates
   const parsed = tips.map(t => ({
     ...t,
-    date: new Date(t.dateRaw || t.date_time)
-  })).filter(t => !isNaN(t.date.getTime()))
+    timestamp: new Date(t.dateRaw || t.date_time)
+  })).filter(t => !isNaN(t.timestamp.getTime()))
 
-  // Calculate totals
+  // Basic totals
   const totalUSD = parsed.reduce((sum, t) => sum + (t.usd || 0), 0)
+  const totalTokens = parsed.reduce((sum, t) => sum + (t.tokens || 0), 0)
   const totalTips = parsed.length
   const uniqueFans = new Set(parsed.map(t => t.username.toLowerCase())).size
+
+  // Session analytics
+  const totalMinutes = sessions.reduce((sum, s) => sum + s.duration_minutes, 0)
+  const totalSessionEarnings = sessions.reduce((sum, s) => sum + s.total_usd, 0)
+  const avgSessionLength = sessions.length > 0 ? Math.round(totalMinutes / sessions.length) : 0
+  const avgEarningsPerSession = sessions.length > 0 ? parseFloat((totalSessionEarnings / sessions.length).toFixed(2)) : 0
+  const avgTokensPerHour = totalMinutes > 0 ? Math.round((totalTokens / totalMinutes) * 60) : 0
 
   // Top fans
   const fanMap = {}
   parsed.forEach(t => {
     const key = t.username.toLowerCase()
     if (!fanMap[key]) {
-      fanMap[key] = { username: t.username, totalUSD: 0, totalTokens: 0, tips: 0, platform: t.platform }
+      fanMap[key] = {
+        username: t.username,
+        totalUSD: 0,
+        totalTokens: 0,
+        tipCount: 0,
+        platform: t.platform
+      }
     }
     fanMap[key].totalUSD += t.usd || 0
     fanMap[key].totalTokens += t.tokens || 0
-    fanMap[key].tips += 1
+    fanMap[key].tipCount += 1
   })
 
   const topFans = Object.values(fanMap)
-    .sort((a, b) => b.totalUSD - a.totalUSD)
-    .slice(0, 100)
     .map((f, idx) => ({
       rank: idx + 1,
       username: f.username,
       totalUSD: parseFloat(f.totalUSD.toFixed(2)),
       totalTokens: f.totalTokens,
-      tips: f.tips,
-      platform: f.platform
+      tipCount: f.tipCount,
+      avgTipSize: parseFloat((f.totalUSD / f.tipCount).toFixed(2)),
+      platform: f.platform,
+      tier: f.totalUSD >= 500 ? 'Whale' : f.totalUSD >= 100 ? 'Shark' : 'Regular'
     }))
-
-  // Daily data
-  const dailyMap = {}
-  parsed.forEach(t => {
-    const dateKey = t.date.toISOString().split('T')[0]
-    if (!dailyMap[dateKey]) {
-      dailyMap[dateKey] = { date: dateKey, usd: 0, tips: 0, tokens: 0 }
-    }
-    dailyMap[dateKey].usd += t.usd || 0
-    dailyMap[dateKey].tips += 1
-    dailyMap[dateKey].tokens += t.tokens || 0
-  })
-
-  const dailyData = Object.values(dailyMap).sort((a, b) => a.date.localeCompare(b.date))
-
-  // Monthly data
-  const monthlyMap = {}
-  parsed.forEach(t => {
-    const month = t.date.toISOString().substring(0, 7) // YYYY-MM
-    if (!monthlyMap[month]) {
-      monthlyMap[month] = { month, usd: 0, tips: 0, tokens: 0 }
-    }
-    monthlyMap[month].usd += t.usd || 0
-    monthlyMap[month].tips += 1
-    monthlyMap[month].tokens += t.tokens || 0
-  })
-
-  const monthlyData = Object.values(monthlyMap).sort((a, b) => a.month.localeCompare(b.month))
-
-  // Hourly data
-  const hourlyMap = {}
-  parsed.forEach(t => {
-    const hour = t.date.getHours()
-    if (!hourlyMap[hour]) {
-      hourlyMap[hour] = { hour, usd: 0, tips: 0, tokens: 0 }
-    }
-    hourlyMap[hour].usd += t.usd || 0
-    hourlyMap[hour].tips += 1
-    hourlyMap[hour].tokens += t.tokens || 0
-  })
-
-  const hourlyData = Array.from({ length: 24 }, (_, h) => ({
-    hour: h,
-    label: `${h === 0 ? 12 : h > 12 ? h - 12 : h}${h < 12 ? 'AM' : 'PM'}`,
-    usd: hourlyMap[h]?.usd || 0,
-    tips: hourlyMap[h]?.tips || 0,
-    tokens: hourlyMap[h]?.tokens || 0
-  }))
+    .sort((a, b) => b.totalUSD - a.totalUSD)
 
   // Platform breakdown
   const platformMap = {}
-  parsed.forEach(t => {
-    const p = t.platform || 'Unknown'
+  sessions.forEach(s => {
+    const p = s.platform
     if (!platformMap[p]) {
-      platformMap[p] = { platform: p, usd: 0, tips: 0, tokens: 0 }
+      platformMap[p] = {
+        platform: p,
+        totalUSD: 0,
+        totalTokens: 0,
+        sessions: 0,
+        minutes: 0
+      }
     }
-    platformMap[p].usd += t.usd || 0
-    platformMap[p].tips += 1
-    platformMap[p].tokens += t.tokens || 0
+    platformMap[p].totalUSD += s.total_usd
+    platformMap[p].totalTokens += s.total_tokens
+    platformMap[p].sessions += 1
+    platformMap[p].minutes += s.duration_minutes
   })
 
-  const platformBreakdown = Object.values(platformMap).sort((a, b) => b.usd - a.usd)
+  const platforms = Object.values(platformMap).map(p => ({
+    ...p,
+    avgPerHour: p.minutes > 0 ? parseFloat(((p.totalUSD / p.minutes) * 60).toFixed(2)) : 0
+  }))
 
   return {
     totalUSD: parseFloat(totalUSD.toFixed(2)),
     totalTips,
+    totalTokens,
     uniqueFans,
-    platforms: platformBreakdown.map(p => p.platform),
+    totalSessions: sessions.length,
+    totalMinutesStreamed: totalMinutes,
+    avgSessionLength,
+    avgEarningsPerSession,
+    avgTokensPerHour,
+    sessions: sessions.sort((a, b) => new Date(b.session_start_time) - new Date(a.session_start_time)),
     topFans,
-    dailyData,
-    monthlyData,
-    hourlyData,
-    platformBreakdown
+    platforms
   }
 }
