@@ -126,7 +126,7 @@ export default function Dashboard() {
     } finally { setLoading(false) }
   }
 
-  // ✅ FIXED VERSION - Changed r.dateRaw to r.date_time
+  // ✅ FIXED VERSION - Changed r.date_time to r.dateRaw || r.date_time
   const handleCSV = async (file) => {
     if (!file || !user) return
     setUploading(true)
@@ -136,10 +136,10 @@ export default function Dashboard() {
       const parsed = parseCSV(text)
       if (!parsed.length) { showToast("❌ No valid rows found"); setUploading(false); return }
       
-      // ✅ FIX: Changed r.dateRaw to r.date_time (parseCSV returns date_time, not dateRaw)
+      // ✅ FIX: Use r.dateRaw (which is what parseCSV returns) with fallback to r.date_time
       const toInsert = parsed.map(r => ({ 
         user_id:user.id, 
-        date_time:r.date_time,  // ✅ FIXED: was r.dateRaw||r.date_time
+        date_time: r.dateRaw || r.date_time,  // ✅ FIXED!
         platform:r.platform, 
         username:r.username, 
         tip_type:r.tip_type||"Tip", 
