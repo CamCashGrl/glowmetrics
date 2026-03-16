@@ -66,22 +66,25 @@ function parseHeaderless(lines, platform) {
     const vals = parseCSVLine(line)
     if (vals.length === 0) continue
 
-    // Chaturbate "Tip From:" format
-    if (vals.length >= 3 && vals[1] && vals[1].toLowerCase().includes('tip from:')) {
-      const dateRaw = vals[0]
-      const actionMatch = vals[1].match(/tip from:\s*([^\s,]+)/i)
-      const username = actionMatch ? actionMatch[1] : 'anonymous'
-      const tokens = parseInt(vals[2]) || 0
-      if (tokens <= 0) continue
-      results.push({
-        dateRaw,
-        username,
-        platform: 'Chaturbate',
-        tokens,
-        usd: parseFloat((tokens * 0.05).toFixed(2)),
-        tip_type: 'Tip'
-      })
-      continue
+    // Chaturbate "Tip From:" format (case insensitive)
+    if (vals.length >= 3 && vals[1]) {
+      const val1Lower = vals[1].toLowerCase()
+      if (val1Lower.includes('tip from:') || val1Lower.includes('tip from ')) {
+        const dateRaw = vals[0].replace(/"/g, '')
+        const actionMatch = vals[1].match(/tip from[:\s]+([^\s,]+)/i)
+        const username = actionMatch ? actionMatch[1] : 'anonymous'
+        const tokens = parseInt(vals[2]) || 0
+        if (tokens <= 0) continue
+        results.push({
+          dateRaw,
+          username,
+          platform: 'Chaturbate',
+          tokens,
+          usd: parseFloat((tokens * 0.05).toFixed(2)),
+          tip_type: 'Tip'
+        })
+        continue
+      }
     }
 
     // BongaCams DD.MM.YYYY format
