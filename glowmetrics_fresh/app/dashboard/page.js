@@ -1,110 +1,43 @@
 "use client"
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
-import { aggregateRows } from "../../lib/analytics"
-import {
-  AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-} from "recharts"
+import { parseCSV, detectSessions, identifyWhales, generateInsights, aggregateRows } from "../../lib/analytics"
 
 const C = {
-  bg:     "#0B0F1A",
-  card:   "#121826",
-  card2:  "#161e2e",
+  bg: "#0B0F1A",
+  card: "#121826",
+  card2: "#161e2e",
   border: "#1e2d45",
-  border2:"#2a3f5f",
+  border2: "#2a3f5f",
   indigo: "#7C5CFF",
-  cyan:   "#22D3EE",
-  gold:   "#F59E0B",
-  blue:   "#60A5FA",
-  green:  "#10B981",
-  red:    "#F87171",
+  cyan: "#22D3EE",
+  pink: "#EC4899",
+  gold: "#F59E0B",
+  blue: "#60A5FA",
+  green: "#10B981",
+  red: "#F87171",
   orange: "#FB923C",
-  white:  "#F1F5F9",
-  text:   "#94A3B8",
-  muted:  "#475569",
-  dim:    "#1e2d45",
+  white: "#F1F5F9",
+  text: "#94A3B8",
+  muted: "#475569",
 }
-
-const TIER = {
-  "🐳 WHALE":   { color:C.gold,   bg:"#F59E0B12", border:"#F59E0B35", label:"WHALE" },
-  "🦈 SHARK":   { color:C.blue,   bg:"#60A5FA12", border:"#60A5FA35", label:"SHARK" },
-  "🐟 REGULAR": { color:C.muted,  bg:"#47556912", border:"#47556935", label:"REGULAR" },
-  "💤 DORMANT": { color:C.orange, bg:"#FB923C12", border:"#FB923C35", label:"DORMANT" },
-}
-
-const PLATFORM_COLORS = {
-  Chaturbate:"#F472B6", BongaCams:"#A78BFA", Stripchat:"#7C5CFF",
-  CamSoda:"#22D3EE", "Cherry.tv":"#F87171", Streamate:"#FBBF24",
-  ImLive:"#34D399", Flirt4Free:"#818CF8", LiveJasmin:"#FB923C",
-  MyFreeCams:"#60A5FA", Other:"#475569",
-}
-
-// ── UI PRIMITIVES ────────────────────────────────────────────────────────────
-
-const Card = ({ children, style={}, glow, onClick }) => (
-  <div onClick={onClick} style={{
-    background:C.card, border:`1px solid ${glow?glow+"30":C.border}`,
-    borderRadius:14, padding:24, position:"relative", overflow:"hidden",
-    boxShadow: glow ? `0 0 0 1px ${glow}15, 0 4px 24px #00000050` : "0 2px 12px #00000040",
-    transition:"all 0.2s", cursor:onClick?"pointer":"default", ...style,
-  }}
-    onMouseEnter={e=>{ if(onClick){ e.currentTarget.style.borderColor=(glow||C.indigo)+"60"; e.currentTarget.style.transform="translateY(-1px)" }}}
-    onMouseLeave={e=>{ if(onClick){ e.currentTarget.style.borderColor=(glow||C.indigo)+"30"; e.currentTarget.style.transform="translateY(0)" }}}>
-    {children}
-  </div>
-)
-
-const Badge = ({ tier }) => {
-  const t = TIER[tier] || TIER["🐟 REGULAR"]
-  return (
-    <span style={{ padding:"3px 10px", borderRadius:100, fontSize:11, fontWeight:700,
-      background:t.bg, color:t.color, border:`1px solid ${t.border}`, letterSpacing:"0.05em",
-      fontFamily:"'DM Mono',monospace" }}>
-      {tier?.split(" ")[0]} {t.label}
-    </span>
-  )
-}
-
-const ChartTip = ({ active, payload, label }) => {
-  if (!active||!payload?.length) return null
-  return (
-    <div style={{ background:"#0d1424", border:`1px solid ${C.border2}`, borderRadius:10,
-      padding:"10px 14px", fontSize:12, boxShadow:"0 8px 24px #00000080" }}>
-      <div style={{ color:C.muted, marginBottom:6, fontSize:11 }}>{label}</div>
-      {payload.map((p,i) => (
-        <div key={i} style={{ color:p.color||C.white, fontWeight:600 }}>
-          {p.name}: {p.name?.includes("$")||p.name==="Earnings" ? "$" : ""}{typeof p.value==="number"?p.value.toFixed(2):p.value}
-        </div>
-      ))}
-    </div>
-  )
-}
-
-// ── MAIN DASHBOARD ───────────────────────────────────────────────────────────
 
 export default function Dashboard() {
   const router = useRouter()
   const [user, setUser] = useState(null)
-  const [rows, setRows] = useState([])
-  const [agg, setAgg] = useState(null)
+  const [tips, setTips] = useState([])
+  const [analytics, setAnalytics] = useState(null)
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
+  const [activeTab, setActiveTab] = useState("overview")
   const [toast, setToast] = useState("")
-  const [activeNav, setActiveNav] = useState("dashboard")
-  const [crmSearch, setCrmSearch] = useState("")
-  const [crmFilter, setCrmFilter] = useState("ALL")
-  const [crmSort, setCrmSort] = useState("usd")
-  const [noteModal, setNoteModal] = useState(null)
-  const [noteText, setNoteText] = useState("")
-  const [notes, setNotes] = useState({})
-  const [followUps, setFollowUps] = useState({})
+  const [uploadCount, setUploadCount] = useState(0)
 
-  const showToast = (msg) => { setToast(msg); setTimeout(()=>setToast(""),3500) }
+  const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(""), 3500) }
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data:{ user } }) => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) { router.replace("/login"); return }
       setUser(user)
       loadData(user.id)
@@ -114,690 +47,401 @@ export default function Dashboard() {
   const loadData = async (uid) => {
     setLoading(true)
     try {
-      const { data } = await supabase.from("tips").select("*").eq("user_id", uid).order("date_time", { ascending:true })
-      if (data?.length) { setRows(data); setAgg(aggregateRows(data)) }
-      // Load notes
-      const { data: noteData } = await supabase.from("tipper_notes").select("*").eq("user_id", uid)
-      if (noteData) {
-        const n = {}, f = {}
-        noteData.forEach(r => { n[r.tipper_username] = r.note; f[r.tipper_username] = r.follow_up })
-        setNotes(n); setFollowUps(f)
+      const { data } = await supabase.from("tips").select("*").eq("user_id", uid).order("date_time", { ascending: true })
+      if (data?.length) {
+        setTips(data)
+        setAnalytics(aggregateRows(data))
       }
-    } finally { setLoading(false) }
-  }
-
-  // ✅ FIXED VERSION - Changed r.date_time to r.dateRaw || r.date_time
-  const handleCSV = async (file) => {
-    if (!file || !user) return
-    setUploading(true)
-    try {
-      const { parseCSV } = await import("../../lib/analytics")
-      const text = await file.text()
-      const parsed = parseCSV(text)
-      if (!parsed.length) { showToast("❌ No valid rows found"); setUploading(false); return }
-      
-      // ✅ FIX: Use r.dateRaw (which is what parseCSV returns) with fallback to r.date_time
-      const toInsert = parsed.map(r => ({ 
-        user_id:user.id, 
-        date_time: r.dateRaw || r.date_time,  // ✅ FIXED!
-        platform:r.platform, 
-        username:r.username, 
-        tip_type:r.tip_type||"Tip", 
-        tokens:r.tokens, 
-        usd:r.usd 
-      }))
-      
-      const { error } = await supabase.from("tips").insert(toInsert)
-      if (error) { showToast("❌ "+error.message); setUploading(false); return }
-      
-      showToast(`✅ Imported ${parsed.length} tips!`)
-      
-      // ✅ Force reload
-      await loadData(user.id)
-      
-    } catch(err) {
-      showToast("❌ "+err.message)
-    } finally { 
-      setUploading(false) 
+    } finally {
+      setLoading(false)
     }
   }
 
-  const saveNote = async (username) => {
-    if (!user) return
-    await supabase.from("tipper_notes").upsert({ user_id:user.id, tipper_username:username, note:noteText, follow_up:followUps[username]||false }, { onConflict:"user_id,tipper_username" })
-    setNotes(n => ({...n, [username]:noteText}))
-    setNoteModal(null)
-    showToast("✅ Note saved!")
+  const handleCSV = async (file) => {
+    if (!file || !user) return
+    
+    // FREE TIER LIMIT: 3 uploads per month
+    if (uploadCount >= 3) {
+      showToast("🔒 Free tier: 3 uploads/month. Upgrade for unlimited imports!")
+      return
+    }
+    
+    setUploading(true)
+    try {
+      const text = await file.text()
+      const parsed = parseCSV(text)
+      if (!parsed.length) {
+        showToast("❌ No valid rows found")
+        setUploading(false)
+        return
+      }
+
+      const toInsert = parsed.map(r => ({
+        user_id: user.id,
+        date_time: r.dateRaw || r.date_time,
+        platform: r.platform,
+        username: r.username,
+        tip_type: r.tip_type || "Tip",
+        tokens: r.tokens,
+        usd: r.usd
+      }))
+
+      const { error } = await supabase.from("tips").insert(toInsert)
+      if (error) {
+        showToast("❌ " + error.message)
+        setUploading(false)
+        return
+      }
+
+      setUploadCount(uploadCount + 1)
+      showToast(`✅ Imported ${parsed.length} tips!`)
+      await loadData(user.id)
+    } catch (err) {
+      showToast("❌ " + err.message)
+    } finally {
+      setUploading(false)
+    }
   }
 
-  const toggleFollowUp = async (username) => {
-    const newVal = !followUps[username]
-    setFollowUps(f => ({...f, [username]:newVal}))
-    if (user) await supabase.from("tipper_notes").upsert({ user_id:user.id, tipper_username:username, note:notes[username]||"", follow_up:newVal }, { onConflict:"user_id,tipper_username" })
+  const signOut = async () => {
+    await supabase.auth.signOut()
+    router.replace("/login")
   }
 
-  const signOut = async () => { await supabase.auth.signOut(); router.replace("/login") }
-
-  if (loading) return (
-    <div style={{ minHeight:"100vh", background:C.bg, display:"flex", alignItems:"center", justifyContent:"center" }}>
-      <div style={{ textAlign:"center" }}>
-        <div style={{ width:40, height:40, border:`2px solid ${C.border}`, borderTop:`2px solid ${C.indigo}`, borderRadius:"50%", animation:"spin 0.8s linear infinite", margin:"0 auto 16px" }}/>
-        <div style={{ color:C.muted, fontSize:14 }}>Loading your dashboard...</div>
-        <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+  if (loading) {
+    return (
+      <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ width: 40, height: 40, border: `2px solid ${C.border}`, borderTop: `2px solid ${C.cyan}`, borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto 16px" }} />
+          <div style={{ color: C.muted, fontSize: 14 }}>Loading dashboard...</div>
+          <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+        </div>
       </div>
-    </div>
-  )
+    )
+  }
 
-  const totalUsd = agg ? rows.reduce((s,r)=>s+r.usd,0) : 0
-  const totalTokens = agg ? rows.reduce((s,r)=>s+r.tokens,0) : 0
-  const uniqueTippers = agg ? agg.topTippers.length : 0
-  const avgTip = rows.length ? totalUsd/rows.length : 0
-  const topTippers = agg?.topTippers || []
+  const sessions = analytics?.sessions || []
+  const whales = identifyWhales(tips)
+  const insights = analytics?.insights || []
+  
+  // Stats
+  const totalRevenue = analytics?.totalUSD || 0
+  const revenueToday = tips.filter(t => {
+    const d = new Date(t.date_time)
+    const today = new Date()
+    return d.toDateString() === today.toDateString()
+  }).reduce((sum, t) => sum + t.usd, 0)
+  
+  const avgEarningsPerHour = sessions.length > 0 ? 
+    sessions.reduce((sum, s) => sum + s.usdPerHour, 0) / sessions.length : 0
 
-  const whales  = topTippers.filter(t=>t.status==="🐳 WHALE")
-  const sharks  = topTippers.filter(t=>t.status==="🦈 SHARK")
-  const regular = topTippers.filter(t=>t.status==="🐟 REGULAR")
-  const dormant = topTippers.filter(t=>t.status==="💤 DORMANT")
-
-  // CRM filtered list
-  const crmList = topTippers
-    .filter(t => {
-      if (crmFilter!=="ALL" && !t.status.includes(crmFilter)) return false
-      if (crmSearch && !t.username.toLowerCase().includes(crmSearch.toLowerCase())) return false
-      return true
-    })
-    .sort((a,b) => crmSort==="usd"?b.usd-a.usd:crmSort==="tokens"?b.tokens-a.tokens:crmSort==="count"?b.count-a.count:crmSort==="last"?b.last.localeCompare(a.last):b.daysSince-a.daysSince)
-
-  const monthlyArr = agg?.monthlyArr || []
-  const hourlyArr = agg?.hourlyArr || []
-  const bestDays = agg?.bestDays || []
-  const bestHours = agg?.bestHours || []
-  const platformPerf = agg?.platforms || []
-  const heatmap = agg?.dayHourHeatmap || []
-  const fanFunnel = agg?.fanFunnel || []
-  const subscriberStats = agg?.subscriberStats || []
+  const topSession = sessions.length > 0 ? 
+    sessions.sort((a, b) => b.totalUSD - a.totalUSD)[0] : null
 
   return (
-    <div style={{ minHeight:"100vh", background:C.bg, fontFamily:"'Inter','Plus Jakarta Sans',sans-serif", color:C.text }}>
+    <div style={{ minHeight: "100vh", background: C.bg, fontFamily: "'Inter', sans-serif", color: C.text }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap');
-        *{box-sizing:border-box;margin:0;padding:0}
-        ::-webkit-scrollbar{width:5px;height:5px}
-        ::-webkit-scrollbar-track{background:${C.bg}}
-        ::-webkit-scrollbar-thumb{background:${C.border2};border-radius:3px}
-        input,select,textarea{outline:none;font-family:inherit}
-        @keyframes spin{to{transform:rotate(360deg)}}
-        @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
-        .fade{animation:fadeIn 0.3s ease}
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        ::-webkit-scrollbar { width: 5px; height: 5px; }
+        ::-webkit-scrollbar-track { background: ${C.bg}; }
+        ::-webkit-scrollbar-thumb { background: ${C.border2}; border-radius: 3px; }
       `}</style>
 
       {/* SIDEBAR */}
-      <div style={{ position:"fixed", left:0, top:0, bottom:0, width:220, background:C.card, borderRight:`1px solid ${C.border}`, display:"flex", flexDirection:"column", zIndex:50 }}>
-        {/* Logo */}
-        <div style={{ padding:"24px 20px 20px", borderBottom:`1px solid ${C.border}` }}>
-          <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-            <div style={{ width:34, height:34, borderRadius:9, background:"linear-gradient(135deg,#7C5CFF,#22D3EE)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:17, boxShadow:"0 0 20px #7C5CFF30" }}>📊</div>
-            <span style={{ fontSize:17, fontWeight:800, color:C.white, letterSpacing:"-0.02em" }}>Cam<span style={{ background:"linear-gradient(90deg,#7C5CFF,#22D3EE)", WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent", backgroundClip:"text" }}>Cash</span></span>
+      <div style={{ position: "fixed", left: 0, top: 0, bottom: 0, width: 240, background: C.card, borderRight: `1px solid ${C.border}`, display: "flex", flexDirection: "column", zIndex: 50 }}>
+        <div style={{ padding: "24px 20px", borderBottom: `1px solid ${C.border}` }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ width: 40, height: 40, borderRadius: 10, background: `linear-gradient(135deg, ${C.cyan}, ${C.pink})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, fontWeight: 700, color: C.white }}>$</div>
+            <span style={{ fontSize: 20, fontWeight: 800, color: C.white }}>
+              Cam<span style={{ background: `linear-gradient(90deg, ${C.cyan}, ${C.pink})`, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Cash</span>
+            </span>
           </div>
-          {user && <div style={{ fontSize:11, color:C.muted, marginTop:10, fontFamily:"'DM Mono',monospace", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{user.email}</div>}
+          {user && <div style={{ fontSize: 11, color: C.muted, marginTop: 10, overflow: "hidden", textOverflow: "ellipsis" }}>{user.email}</div>}
         </div>
 
-        {/* Nav */}
-        <nav style={{ flex:1, padding:"16px 12px", display:"flex", flexDirection:"column", gap:4 }}>
+        <nav style={{ flex: 1, padding: "16px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
           {[
-            ["dashboard","📊","Overview"],
-            ["crm","👑","Fan CRM"],
-            ["analytics","📈","Analytics"],
-            ["upload","📥","Import CSV"],
-          ].map(([id,icon,label]) => (
-            <button key={id} onClick={()=>setActiveNav(id)} style={{
-              display:"flex", alignItems:"center", gap:10, padding:"10px 12px", borderRadius:10,
-              background:activeNav===id?`${C.indigo}18`:"transparent",
-              border:activeNav===id?`1px solid ${C.indigo}30`:"1px solid transparent",
-              color:activeNav===id?C.white:C.muted, fontSize:14, fontWeight:activeNav===id?600:400,
-              cursor:"pointer", transition:"all 0.15s", textAlign:"left",
+            ["overview", "📊", "Overview"],
+            ["analytics", "📈", "Analytics"],
+            ["whales", "🐳", "Whale Tracker"],
+            ["sessions", "🎥", "Sessions"],
+            ["upload", "📥", "Import CSV"]
+          ].map(([id, icon, label]) => (
+            <button key={id} onClick={() => setActiveTab(id)} style={{
+              display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 10,
+              background: activeTab === id ? `${C.cyan}15` : "transparent",
+              border: activeTab === id ? `1px solid ${C.cyan}30` : "1px solid transparent",
+              color: activeTab === id ? C.white : C.muted, fontSize: 14, fontWeight: activeTab === id ? 600 : 400,
+              cursor: "pointer", transition: "all 0.15s", textAlign: "left"
             }}>
-              <span style={{ fontSize:16 }}>{icon}</span>{label}
-              {id==="crm" && topTippers.length>0 && <span style={{ marginLeft:"auto", background:`${C.indigo}25`, color:C.indigo, fontSize:11, fontWeight:700, padding:"2px 7px", borderRadius:100 }}>{topTippers.length}</span>}
+              <span style={{ fontSize: 18 }}>{icon}</span>{label}
             </button>
           ))}
         </nav>
 
-        {/* Bottom */}
-        <div style={{ padding:"12px", borderTop:`1px solid ${C.border}` }}>
-          <button onClick={signOut} style={{ width:"100%", padding:"10px 12px", borderRadius:10, background:"transparent", border:`1px solid ${C.border}`, color:C.muted, fontSize:13, cursor:"pointer", transition:"all 0.15s", textAlign:"left" }}
-            onMouseEnter={e=>{e.currentTarget.style.borderColor=C.red+"50";e.currentTarget.style.color=C.red}}
-            onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.color=C.muted}}>
+        <div style={{ padding: "12px", borderTop: `1px solid ${C.border}` }}>
+          <button onClick={signOut} style={{ width: "100%", padding: "10px", borderRadius: 10, background: "transparent", border: `1px solid ${C.border}`, color: C.muted, fontSize: 13, cursor: "pointer" }}>
             ↩ Sign Out
           </button>
         </div>
       </div>
 
-      {/* MAIN */}
-      <div style={{ marginLeft:220, minHeight:"100vh" }}>
-        {/* Top bar */}
-        <div style={{ position:"sticky", top:0, zIndex:40, background:"rgba(11,15,26,0.95)", backdropFilter:"blur(12px)", borderBottom:`1px solid ${C.border}`, padding:"0 32px", height:60, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+      {/* MAIN CONTENT */}
+      <div style={{ marginLeft: 240, minHeight: "100vh", padding: 32 }}>
+        
+        {/* OVERVIEW TAB */}
+        {activeTab === "overview" && (
           <div>
-            <span style={{ fontSize:16, fontWeight:700, color:C.white }}>
-              {activeNav==="dashboard"?"Overview":activeNav==="crm"?"Fan CRM":activeNav==="analytics"?"Analytics":"Import CSV"}
-            </span>
-            {rows.length>0 && <span style={{ fontSize:12, color:C.muted, marginLeft:12 }}>{rows.length.toLocaleString()} tips · {uniqueTippers} fans</span>}
-          </div>
-          <div style={{ display:"flex", gap:10 }}>
-            <label style={{ padding:"8px 16px", borderRadius:9, background:`${C.indigo}18`, border:`1px solid ${C.indigo}30`, color:C.indigo, fontSize:13, fontWeight:600, cursor:"pointer", transition:"all 0.2s" }}>
-              {uploading?"Importing...":"+ Import CSV"}
-              <input type="file" accept=".csv" style={{ display:"none" }} onChange={e=>handleCSV(e.target.files[0])} disabled={uploading}/>
-            </label>
-          </div>
-        </div>
+            <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 8 }}>Overview</h1>
+            <p style={{ fontSize: 14, color: C.muted, marginBottom: 32 }}>{tips.length.toLocaleString()} tips · {whales.length} fans</p>
 
-        <div style={{ padding:32 }} className="fade">
-
-          {/* ── OVERVIEW ─────────────────────────────── */}
-          {activeNav==="dashboard" && <>
-
-            {/* KPI Cards */}
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:16, marginBottom:28 }}>
+            {/* KPI CARDS */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 32 }}>
               {[
-                { label:"Lifetime Earnings", value:`$${totalUsd.toFixed(2)}`, icon:"💰", color:C.green, sub:`${rows.length} total tips` },
-                { label:"Total Tokens", value:totalTokens.toLocaleString(), icon:"🎫", color:C.indigo, sub:"across all platforms" },
-                { label:"Avg Tip Value", value:`$${avgTip.toFixed(2)}`, icon:"⭐", color:C.gold, sub:"per tip" },
-                { label:"Unique Fans", value:uniqueTippers.toLocaleString(), icon:"👥", color:C.cyan, sub:`${whales.length} whales · ${sharks.length} sharks` },
-              ].map((k,i) => (
-                <Card key={i} glow={k.color}>
-                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:16 }}>
-                    <div style={{ fontSize:12, color:C.muted, fontWeight:500, textTransform:"uppercase", letterSpacing:"0.06em" }}>{k.label}</div>
-                    <div style={{ width:32, height:32, borderRadius:8, background:`${k.color}15`, border:`1px solid ${k.color}30`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:15 }}>{k.icon}</div>
+                { label: "Total Revenue", value: `$${totalRevenue.toFixed(2)}`, icon: "💰", color: C.green },
+                { label: "Revenue Today", value: `$${revenueToday.toFixed(2)}`, icon: "📅", color: C.cyan },
+                { label: "Avg Tip Value", value: `$${analytics?.avgTipSize?.toFixed(2) || 0}`, icon: "⭐", color: C.gold },
+                { label: "Avg $/Hour", value: `$${avgEarningsPerHour.toFixed(2)}`, icon: "⏱️", color: C.pink }
+              ].map((stat, i) => (
+                <div key={i} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 24 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
+                    <span style={{ fontSize: 12, color: C.muted, textTransform: "uppercase", letterSpacing: "0.05em" }}>{stat.label}</span>
+                    <span style={{ fontSize: 20 }}>{stat.icon}</span>
                   </div>
-                  <div style={{ fontSize:28, fontWeight:800, color:k.color, letterSpacing:"-0.02em", marginBottom:6 }}>{k.value}</div>
-                  <div style={{ fontSize:12, color:C.muted }}>{k.sub}</div>
-                </Card>
+                  <div style={{ fontSize: 32, fontWeight: 800, color: stat.color }}>{stat.value}</div>
+                </div>
               ))}
             </div>
 
-            {/* Fan CRM Preview — HERO SECTION */}
-            <Card glow={C.indigo} style={{ marginBottom:28 }}>
-              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:20 }}>
-                <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-                  <div style={{ width:36, height:36, borderRadius:10, background:`${C.indigo}20`, border:`1px solid ${C.indigo}40`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>👑</div>
-                  <div>
-                    <div style={{ fontSize:15, fontWeight:700, color:C.white }}>Fan CRM — Top Supporters</div>
-                    <div style={{ fontSize:12, color:C.muted, marginTop:2 }}>Your highest-value fans ranked by earnings</div>
+            {/* SMART INSIGHTS */}
+            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 24, marginBottom: 32 }}>
+              <h2 style={{ fontSize: 18, fontWeight: 700, color: C.white, marginBottom: 16 }}>💡 Smart Insights</h2>
+              {insights.length > 0 ? (
+                <>
+                  <div style={{ background: `${C.cyan}10`, border: `1px solid ${C.cyan}30`, borderRadius: 10, padding: 16, marginBottom: 16 }}>
+                    <div style={{ fontSize: 14, color: C.white }}>{insights[0].icon} {insights[0].text}</div>
                   </div>
-                </div>
-                <button onClick={()=>setActiveNav("crm")} style={{ padding:"8px 18px", borderRadius:9, background:`${C.indigo}20`, border:`1px solid ${C.indigo}40`, color:C.indigo, fontSize:13, fontWeight:600, cursor:"pointer", transition:"all 0.2s" }}
-                  onMouseEnter={e=>{e.currentTarget.style.background=`${C.indigo}35`}}
-                  onMouseLeave={e=>{e.currentTarget.style.background=`${C.indigo}20`}}>
-                  View Full CRM →
-                </button>
-              </div>
-
-              {topTippers.length === 0 ? (
-                <div style={{ textAlign:"center", padding:"40px 20px", color:C.muted }}>
-                  <div style={{ fontSize:32, marginBottom:12 }}>📥</div>
-                  <div style={{ fontSize:14 }}>Import a CSV to see your fans here</div>
-                </div>
+                  <div style={{ background: `${C.muted}10`, border: `1px solid ${C.border}`, borderRadius: 10, padding: 16, position: "relative", overflow: "hidden" }}>
+                    <div style={{ filter: "blur(3px)", opacity: 0.4 }}>
+                      <div style={{ fontSize: 14, color: C.white, marginBottom: 8 }}>📈 Your best earning hour is 9 PM - 11 PM</div>
+                      <div style={{ fontSize: 14, color: C.white, marginBottom: 8 }}>🎯 Weekend streams earn 45% more</div>
+                      <div style={{ fontSize: 14, color: C.white }}>⏰ Your whales are most active at night</div>
+                    </div>
+                    <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 12 }}>
+                      <div style={{ fontSize: 28 }}>🔒</div>
+                      <div style={{ fontSize: 16, fontWeight: 600, color: C.white }}>Unlock 15 more insights</div>
+                      <button style={{ padding: "10px 24px", borderRadius: 10, background: `linear-gradient(135deg, ${C.cyan}, ${C.pink})`, border: "none", color: C.white, fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+                        Upgrade to Pro
+                      </button>
+                    </div>
+                  </div>
+                </>
               ) : (
-                <div style={{ overflowX:"auto" }}>
-                  <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
-                    <thead>
-                      <tr style={{ borderBottom:`1px solid ${C.border}` }}>
-                        {["#","Username","Total $","Tokens","Tips","Tier","Last Tip","Note"].map(h => (
-                          <th key={h} style={{ padding:"8px 14px", textAlign:"left", color:C.muted, fontSize:11, fontWeight:500, textTransform:"uppercase", letterSpacing:"0.07em", fontFamily:"'DM Mono',monospace", whiteSpace:"nowrap" }}>{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {topTippers.slice(0,5).map((t,i) => (
-                        <tr key={i} style={{ borderBottom:`1px solid ${C.border}`, transition:"background 0.15s" }}
-                          onMouseEnter={e=>e.currentTarget.style.background=C.card2}
-                          onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-                          <td style={{ padding:"12px 14px", color:C.muted, fontFamily:"'DM Mono',monospace", fontSize:12 }}>#{i+1}</td>
-                          <td style={{ padding:"12px 14px", color:C.white, fontWeight:600 }}>
-                            <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                              <div style={{ width:28, height:28, borderRadius:"50%", background:`linear-gradient(135deg,${C.indigo},${C.cyan})`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:700, color:C.white, flexShrink:0 }}>{t.username[0]?.toUpperCase()}</div>
-                              {t.username}
-                            </div>
-                          </td>
-                          <td style={{ padding:"12px 14px", color:C.green, fontWeight:700, fontFamily:"'DM Mono',monospace" }}>${t.usd.toFixed(2)}</td>
-                          <td style={{ padding:"12px 14px", color:C.indigo, fontFamily:"'DM Mono',monospace" }}>{t.tokens.toLocaleString()}</td>
-                          <td style={{ padding:"12px 14px", color:C.muted, fontFamily:"'DM Mono',monospace" }}>{t.count}</td>
-                          <td style={{ padding:"12px 14px" }}><Badge tier={t.status}/></td>
-                          <td style={{ padding:"12px 14px", color:C.muted, fontSize:12, fontFamily:"'DM Mono',monospace" }}>{t.last||"—"}</td>
-                          <td style={{ padding:"12px 14px" }}>
-                            <button onClick={()=>{setNoteModal(t.username);setNoteText(notes[t.username]||"")}} style={{ padding:"4px 10px", borderRadius:7, background:notes[t.username]?`${C.cyan}15`:`${C.border}30`, border:`1px solid ${notes[t.username]?C.cyan+"40":C.border}`, color:notes[t.username]?C.cyan:C.muted, fontSize:11, cursor:"pointer" }}>
-                              {notes[t.username]?"📝 Edit":"+ Note"}
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div style={{ textAlign: "center", padding: 40, color: C.muted }}>
+                  <div style={{ fontSize: 32, marginBottom: 12 }}>📥</div>
+                  <div>Import CSV data to unlock insights</div>
                 </div>
               )}
-            </Card>
-
-            {/* Tier Overview */}
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:16, marginBottom:28 }}>
-              {[
-                { icon:"🐳", label:"Whales", count:whales.length, sub:"$50+ total", color:C.gold, list:whales },
-                { icon:"🦈", label:"Sharks", count:sharks.length, sub:"$20–$49", color:C.blue, list:sharks },
-                { icon:"🐟", label:"Regulars", count:regular.length, sub:"Active fans", color:C.muted, list:regular },
-                { icon:"💤", label:"Dormant", count:dormant.length, sub:"60+ days gone", color:C.orange, list:dormant },
-              ].map((seg,i) => (
-                <Card key={i} glow={seg.color} onClick={()=>{setCrmFilter(seg.label.toUpperCase().replace("REGULARS","REGULAR").replace("WHALES","WHALE").replace("SHARKS","SHARK"));setActiveNav("crm")}}>
-                  <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }}>
-                    <span style={{ fontSize:24 }}>{seg.icon}</span>
-                    <span style={{ fontSize:26, fontWeight:800, color:seg.color, fontFamily:"'DM Mono',monospace" }}>{seg.count}</span>
-                  </div>
-                  <div style={{ fontSize:14, fontWeight:600, color:C.white, marginBottom:4 }}>{seg.label}</div>
-                  <div style={{ fontSize:12, color:C.muted }}>{seg.sub}</div>
-                  {seg.list.length>0 && <div style={{ marginTop:12, fontSize:11, color:seg.color, fontWeight:500 }}>Top: {seg.list[0]?.username}</div>}
-                </Card>
-              ))}
             </div>
 
-            {/* Charts */}
-            {monthlyArr.length > 0 && (
-              <div style={{ display:"grid", gridTemplateColumns:"2fr 1fr", gap:20, marginBottom:28 }}>
-                <Card>
-                  <div style={{ fontSize:13, fontWeight:600, color:C.white, marginBottom:4 }}>Earnings Over Time</div>
-                  <div style={{ fontSize:11, color:C.muted, marginBottom:20 }}>Monthly revenue</div>
-                  <ResponsiveContainer width="100%" height={200}>
-                    <AreaChart data={monthlyArr}>
-                      <defs>
-                        <linearGradient id="eg" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor={C.indigo} stopOpacity={0.3}/>
-                          <stop offset="100%" stopColor={C.indigo} stopOpacity={0}/>
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false}/>
-                      <XAxis dataKey="month" stroke={C.muted} tick={{ fontSize:11, fill:C.muted }} tickLine={false} axisLine={false}/>
-                      <YAxis stroke={C.muted} tick={{ fontSize:11, fill:C.muted }} tickLine={false} axisLine={false} tickFormatter={v=>`$${v}`}/>
-                      <Tooltip content={<ChartTip/>}/>
-                      <Area type="monotone" dataKey="usd" name="Earnings" stroke={C.indigo} strokeWidth={2} fill="url(#eg)"/>
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </Card>
-
-                <Card>
-                  <div style={{ fontSize:13, fontWeight:600, color:C.white, marginBottom:4 }}>Peak Hours</div>
-                  <div style={{ fontSize:11, color:C.muted, marginBottom:20 }}>Best streaming times</div>
-                  <ResponsiveContainer width="100%" height={200}>
-                    <BarChart data={hourlyArr.filter((_,i)=>i%2===0)} barSize={8}>
-                      <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false}/>
-                      <XAxis dataKey="label" stroke={C.muted} tick={{ fontSize:10, fill:C.muted }} tickLine={false} axisLine={false}/>
-                      <YAxis hide/>
-                      <Tooltip content={<ChartTip/>}/>
-                      <Bar dataKey="usd" name="Earnings" fill={C.cyan} radius={[4,4,0,0]}/>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </Card>
+            {/* TOP SESSION */}
+            {topSession && (
+              <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 24 }}>
+                <h2 style={{ fontSize: 18, fontWeight: 700, color: C.white, marginBottom: 16 }}>🏆 Top Earning Stream</h2>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }}>
+                  <div>
+                    <div style={{ fontSize: 12, color: C.muted, marginBottom: 4 }}>Earnings</div>
+                    <div style={{ fontSize: 20, fontWeight: 700, color: C.green }}>${topSession.totalUSD}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 12, color: C.muted, marginBottom: 4 }}>Duration</div>
+                    <div style={{ fontSize: 20, fontWeight: 700, color: C.cyan }}>{topSession.durationHours.toFixed(1)}h</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 12, color: C.muted, marginBottom: 4 }}>$/Hour</div>
+                    <div style={{ fontSize: 20, fontWeight: 700, color: C.pink }}>${topSession.usdPerHour}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 12, color: C.muted, marginBottom: 4 }}>Fans</div>
+                    <div style={{ fontSize: 20, fontWeight: 700, color: C.gold }}>{topSession.uniqueFans}</div>
+                  </div>
+                </div>
               </div>
             )}
+          </div>
+        )}
 
-            {/* Empty state */}
-            {rows.length === 0 && (
-              <Card style={{ textAlign:"center", padding:"60px 40px" }}>
-                <div style={{ fontSize:48, marginBottom:16 }}>📥</div>
-                <div style={{ fontSize:20, fontWeight:700, color:C.white, marginBottom:8 }}>Import your first CSV</div>
-                <div style={{ fontSize:14, color:C.muted, marginBottom:28, maxWidth:400, margin:"0 auto 28px" }}>Upload a tip export from Chaturbate, BongaCams, MyFreeCams, or any supported platform to get started.</div>
-                <label style={{ padding:"12px 28px", borderRadius:10, background:`linear-gradient(135deg,${C.indigo},${C.cyan}40)`, border:`1px solid ${C.indigo}50`, color:C.white, fontSize:14, fontWeight:600, cursor:"pointer" }}>
-                  Choose CSV File
-                  <input type="file" accept=".csv" style={{ display:"none" }} onChange={e=>handleCSV(e.target.files[0])}/>
-                </label>
-              </Card>
-            )}
-          </>}
+        {/* WHALE TRACKER TAB */}
+        {activeTab === "whales" && (
+          <div>
+            <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 8 }}>🐳 Whale Tracker</h1>
+            <p style={{ fontSize: 14, color: C.muted, marginBottom: 32 }}>Your highest-value supporters</p>
 
-          {/* ── FULL CRM ─────────────────────────────── */}
-          {activeNav==="crm" && (
-            <div className="fade">
-              <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:24, flexWrap:"wrap" }}>
-                {/* Search */}
-                <div style={{ position:"relative", flex:1, minWidth:220 }}>
-                  <span style={{ position:"absolute", left:12, top:"50%", transform:"translateY(-50%)", color:C.muted, fontSize:14 }}>🔍</span>
-                  <input value={crmSearch} onChange={e=>setCrmSearch(e.target.value)} placeholder="Search fans..." style={{ width:"100%", padding:"10px 12px 10px 36px", background:C.card, border:`1px solid ${C.border}`, borderRadius:10, color:C.white, fontSize:14 }}
-                    onFocus={e=>e.target.style.borderColor=C.indigo} onBlur={e=>e.target.style.borderColor=C.border}/>
-                </div>
-                {/* Tier filters */}
-                <div style={{ display:"flex", gap:6 }}>
-                  {[["ALL","All"],["WHALE","🐳 Whales"],["SHARK","🦈 Sharks"],["REGULAR","🐟 Regulars"],["DORMANT","💤 Dormant"]].map(([val,label]) => (
-                    <button key={val} onClick={()=>setCrmFilter(val)} style={{ padding:"9px 14px", borderRadius:9, border:`1px solid ${crmFilter===val?C.indigo+"60":C.border}`, background:crmFilter===val?`${C.indigo}20`:"transparent", color:crmFilter===val?C.white:C.muted, fontSize:12, fontWeight:crmFilter===val?600:400, cursor:"pointer", whiteSpace:"nowrap", transition:"all 0.15s" }}>
-                      {label}
-                    </button>
-                  ))}
-                </div>
-                {/* Sort */}
-                <select value={crmSort} onChange={e=>setCrmSort(e.target.value)} style={{ padding:"9px 14px", background:C.card, border:`1px solid ${C.border}`, borderRadius:9, color:C.white, fontSize:13, cursor:"pointer" }}>
-                  <option value="usd">Sort: Top Earners</option>
-                  <option value="tokens">Sort: Most Tokens</option>
-                  <option value="count">Sort: Most Tips</option>
-                  <option value="last">Sort: Most Recent</option>
-                </select>
-                <div style={{ fontSize:12, color:C.muted, fontFamily:"'DM Mono',monospace", whiteSpace:"nowrap" }}>{crmList.length} fans</div>
-              </div>
-
-              <Card style={{ padding:0, overflow:"hidden" }}>
-                <div style={{ overflowX:"auto" }}>
-                  <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
-                    <thead>
-                      <tr style={{ background:C.card2, borderBottom:`1px solid ${C.border}` }}>
-                        {["#","Fan","Total $","Tokens","Tips","Avg Tip","Best Tip","First Tip","Last Tip","Days","Tier","Follow Up","Note"].map(h => (
-                          <th key={h} style={{ padding:"12px 14px", textAlign:"left", color:C.muted, fontSize:11, fontWeight:500, textTransform:"uppercase", letterSpacing:"0.07em", fontFamily:"'DM Mono',monospace", whiteSpace:"nowrap" }}>{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {crmList.length===0 ? (
-                        <tr><td colSpan={13} style={{ padding:"48px 20px", textAlign:"center", color:C.muted }}>No fans found. Import a CSV to get started.</td></tr>
-                      ) : crmList.map((t,i) => (
-                        <tr key={i} style={{ borderBottom:`1px solid ${C.border}`, transition:"background 0.15s" }}
-                          onMouseEnter={e=>e.currentTarget.style.background=C.card2}
-                          onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-                          <td style={{ padding:"12px 14px", color:C.muted, fontFamily:"'DM Mono',monospace", fontSize:11 }}>#{i+1}</td>
-                          <td style={{ padding:"12px 14px" }}>
-                            <div style={{ display:"flex", alignItems:"center", gap:8, minWidth:120 }}>
-                              <div style={{ width:30, height:30, borderRadius:"50%", background:`linear-gradient(135deg,${C.indigo},${C.cyan})`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, fontWeight:700, color:C.white, flexShrink:0 }}>{t.username[0]?.toUpperCase()}</div>
-                              <span style={{ color:C.white, fontWeight:600 }}>{t.username}</span>
-                            </div>
-                          </td>
-                          <td style={{ padding:"12px 14px", color:C.green, fontWeight:700, fontFamily:"'DM Mono',monospace" }}>${t.usd.toFixed(2)}</td>
-                          <td style={{ padding:"12px 14px", color:C.indigo, fontFamily:"'DM Mono',monospace" }}>{t.tokens.toLocaleString()}</td>
-                          <td style={{ padding:"12px 14px", color:C.muted, fontFamily:"'DM Mono',monospace" }}>{t.count}</td>
-                          <td style={{ padding:"12px 14px", color:C.muted, fontFamily:"'DM Mono',monospace" }}>${(t.usd/t.count).toFixed(2)}</td>
-                          <td style={{ padding:"12px 14px", color:C.gold, fontFamily:"'DM Mono',monospace" }}>${(t.usd).toFixed(2)}</td>
-                          <td style={{ padding:"12px 14px", color:C.muted, fontSize:12, fontFamily:"'DM Mono',monospace", whiteSpace:"nowrap" }}>{t.first||"—"}</td>
-                          <td style={{ padding:"12px 14px", color:C.muted, fontSize:12, fontFamily:"'DM Mono',monospace", whiteSpace:"nowrap" }}>{t.last||"—"}</td>
-                          <td style={{ padding:"12px 14px", fontFamily:"'DM Mono',monospace", fontSize:12 }}>
-                            <span style={{ color:t.daysSince>60?C.orange:t.daysSince>30?C.gold:C.green }}>{t.daysSince}d</span>
-                          </td>
-                          <td style={{ padding:"12px 14px" }}><Badge tier={t.status}/></td>
-                          <td style={{ padding:"12px 14px", textAlign:"center" }}>
-                            <button onClick={()=>toggleFollowUp(t.username)} style={{ background:"none", border:"none", fontSize:18, cursor:"pointer", opacity:followUps[t.username]?1:0.3, transition:"opacity 0.15s" }} title="Toggle follow-up flag">🔔</button>
-                          </td>
-                          <td style={{ padding:"12px 14px" }}>
-                            <button onClick={()=>{setNoteModal(t.username);setNoteText(notes[t.username]||"")}} style={{ padding:"4px 10px", borderRadius:7, background:notes[t.username]?`${C.cyan}15`:`${C.border}20`, border:`1px solid ${notes[t.username]?C.cyan+"40":C.border}`, color:notes[t.username]?C.cyan:C.muted, fontSize:11, cursor:"pointer", whiteSpace:"nowrap" }}>
-                              {notes[t.username]?"📝 Edit":"+ Add"}
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </Card>
-            </div>
-          )}
-
-          {/* ── ANALYTICS ───────────────────────────── */}
-          {activeNav==="analytics" && (
-            <div className="fade" style={{ display:"flex", flexDirection:"column", gap:24 }}>
-              {rows.length===0 ? (
-                <Card style={{ textAlign:"center", padding:"60px" }}>
-                  <div style={{ fontSize:32, marginBottom:12 }}>📈</div>
-                  <div style={{ color:C.muted }}>Import a CSV to see analytics</div>
-                </Card>
-              ) : <>
-                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:20 }}>
-                  <Card>
-                    <div style={{ fontSize:13, fontWeight:600, color:C.white, marginBottom:4 }}>Monthly Revenue</div>
-                    <div style={{ fontSize:11, color:C.muted, marginBottom:20 }}>Earnings per month</div>
-                    <ResponsiveContainer width="100%" height={220}>
-                      <AreaChart data={monthlyArr}>
-                        <defs>
-                          <linearGradient id="mg" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor={C.indigo} stopOpacity={0.3}/>
-                            <stop offset="100%" stopColor={C.indigo} stopOpacity={0}/>
-                          </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false}/>
-                        <XAxis dataKey="month" stroke={C.muted} tick={{ fontSize:11, fill:C.muted }} tickLine={false} axisLine={false}/>
-                        <YAxis stroke={C.muted} tick={{ fontSize:11, fill:C.muted }} tickLine={false} axisLine={false} tickFormatter={v=>`$${v}`}/>
-                        <Tooltip content={<ChartTip/>}/>
-                        <Area type="monotone" dataKey="usd" name="Earnings" stroke={C.indigo} strokeWidth={2} fill="url(#mg)"/>
-                      </AreaChart>
-                    </ResponsiveContainer>
-                  </Card>
-
-                  <Card>
-                    <div style={{ fontSize:13, fontWeight:600, color:C.white, marginBottom:4 }}>Peak Streaming Hours</div>
-                    <div style={{ fontSize:11, color:C.muted, marginBottom:20 }}>Best time to go live</div>
-                    <ResponsiveContainer width="100%" height={220}>
-                      <BarChart data={hourlyArr} barSize={10}>
-                        <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false}/>
-                        <XAxis dataKey="label" stroke={C.muted} tick={{ fontSize:10, fill:C.muted }} tickLine={false} axisLine={false} interval={1}/>
-                        <YAxis hide/>
-                        <Tooltip content={<ChartTip/>}/>
-                        <Bar dataKey="usd" name="Earnings" fill={C.cyan} radius={[4,4,0,0]}/>
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </Card>
-                </div>
-
-                {/* Platform breakdown & performance */}
-                {platformPerf.length > 0 && (
-                  <div style={{ display:"grid", gridTemplateColumns:"1.2fr 1fr", gap:20 }}>
-                    <Card>
-                      <div style={{ fontSize:13, fontWeight:600, color:C.white, marginBottom:4 }}>Platform Performance</div>
-                      <div style={{ fontSize:11, color:C.muted, marginBottom:20 }}>Where your earnings come from</div>
-                      <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-                        {platformPerf.sort((a,b)=>b.usd-a.usd).map((p,i) => {
-                          const max = platformPerf.reduce((m,x)=>x.usd>m?x.usd:m,0)
-                          return (
-                            <div key={i} style={{ display:"flex", alignItems:"center", gap:12 }}>
-                              <div style={{ width:90, fontSize:13, color:C.white, flexShrink:0 }}>{p.platform}</div>
-                              <div style={{ flex:1 }}>
-                                <div style={{ height:8, background:C.border, borderRadius:4, overflow:"hidden", marginBottom:4 }}>
-                                  <div style={{ height:"100%", width:`${(p.usd/max)*100}%`, background:PLATFORM_COLORS[p.platform]||C.indigo, borderRadius:4, transition:"width 0.5s" }}/>
-                                </div>
-                                <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, color:C.muted }}>
-                                  <span>${p.usd.toFixed(0)} total</span>
-                                  <span>{p.hours>0?`$${p.usdPerHour.toFixed(2)}/hr · ${p.tokensPerHour.toFixed(1)} tokens/hr`:""}</span>
-                                </div>
-                              </div>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </Card>
-
-                    <Card>
-                      <div style={{ fontSize:13, fontWeight:600, color:C.white, marginBottom:4 }}>Best Streaming Times</div>
-                      <div style={{ fontSize:11, color:C.muted, marginBottom:12 }}>Days and hours that earn most per hour</div>
-                      <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-                        <div>
-                          <div style={{ fontSize:11, textTransform:"uppercase", letterSpacing:"0.08em", color:C.muted, marginBottom:6 }}>Best Days</div>
-                          {bestDays.slice(0,3).map((d)=>(
-                            <div key={d.weekday} style={{ display:"flex", justifyContent:"space-between", fontSize:12, marginBottom:2 }}>
-                              <span style={{ color:C.white }}>{d.weekday}</span>
-                              <span style={{ color:C.green, fontFamily:"'DM Mono',monospace" }}>${d.usdPerHour.toFixed(2)}/hr</span>
-                            </div>
-                          ))}
-                        </div>
-                        <div>
-                          <div style={{ fontSize:11, textTransform:"uppercase", letterSpacing:"0.08em", color:C.muted, marginTop:10, marginBottom:6 }}>Best Hours</div>
-                          {bestHours.slice(0,3).map((h)=>(
-                            <div key={h.hourLabel} style={{ display:"flex", justifyContent:"space-between", fontSize:12, marginBottom:2 }}>
-                              <span style={{ color:C.white }}>{h.hourLabel}</span>
-                              <span style={{ color:C.cyan, fontFamily:"'DM Mono',monospace" }}>${h.usdPerHour.toFixed(2)}/hr</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </Card>
+            {whales.length > 0 ? (
+              <>
+                {/* TOP WHALE - FREE */}
+                <div style={{ background: C.card, border: `1px solid ${C.gold}50`, borderRadius: 14, padding: 24, marginBottom: 20 }}>
+                  <div style={{ fontSize: 14, color: C.gold, fontWeight: 600, marginBottom: 12 }}>👑 TOP SPENDER</div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div>
+                      <div style={{ fontSize: 24, fontWeight: 700, color: C.white, marginBottom: 4 }}>{whales[0].username}</div>
+                      <div style={{ fontSize: 14, color: C.muted }}>Last tip: {new Date(whales[0].lastTipDate).toLocaleDateString()}</div>
+                    </div>
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{ fontSize: 32, fontWeight: 800, color: C.gold }}>${whales[0].totalUSD.toFixed(2)}</div>
+                      <div style={{ fontSize: 12, color: C.muted }}>{whales[0].tipCount} tips</div>
+                    </div>
                   </div>
-                )}
+                </div>
 
-                {/* Show performance & revenue by show type (from tip types) */}
-                {agg?.tipTypes?.length > 0 && (
-                  <div style={{ display:"grid", gridTemplateColumns:"1.2fr 1fr", gap:20 }}>
-                    <Card>
-                      <div style={{ fontSize:13, fontWeight:600, color:C.white, marginBottom:4 }}>Show Performance</div>
-                      <div style={{ fontSize:11, color:C.muted, marginBottom:16 }}>Which show types bring in the most</div>
-                      <div style={{ overflowX:"auto" }}>
-                        <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
-                          <thead>
-                            <tr style={{ borderBottom:`1px solid ${C.border}` }}>
-                              {["Show Type","Revenue","Tokens","Tips"].map(h=>(
-                                <th key={h} style={{ padding:"8px 10px", textAlign:"left", color:C.muted, fontSize:11, textTransform:"uppercase", letterSpacing:"0.08em", fontFamily:"'DM Mono',monospace" }}>{h}</th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {agg.tipTypes.slice(0,8).map(t=>(
-                              <tr key={t.type} style={{ borderBottom:`1px solid ${C.border}` }}>
-                                <td style={{ padding:"8px 10px", color:C.white }}>{t.type}</td>
-                                <td style={{ padding:"8px 10px", color:C.green, fontFamily:"'DM Mono',monospace" }}>${t.usd.toFixed(2)}</td>
-                                <td style={{ padding:"8px 10px", color:C.indigo, fontFamily:"'DM Mono',monospace" }}>{t.tokens.toLocaleString()}</td>
-                                <td style={{ padding:"8px 10px", color:C.muted, fontFamily:"'DM Mono',monospace" }}>{t.count}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </Card>
-
-                    <Card>
-                      <div style={{ fontSize:13, fontWeight:600, color:C.white, marginBottom:4 }}>Revenue by Show Type</div>
-                      <div style={{ fontSize:11, color:C.muted, marginBottom:12 }}>Visual breakdown of earnings</div>
-                      <ResponsiveContainer width="100%" height={220}>
-                        <PieChart>
-                          <Tooltip content={<ChartTip/>}/>
-                          <Pie
-                            data={agg.tipTypes}
-                            dataKey="usd"
-                            nameKey="type"
-                            innerRadius={50}
-                            outerRadius={80}
-                            paddingAngle={2}
-                          >
-                            {agg.tipTypes.map((t,i)=>(
-                              <Cell key={t.type} fill={i%2===0?C.indigo:C.cyan} />
-                            ))}
-                          </Pie>
-                        </PieChart>
-                      </ResponsiveContainer>
-                    </Card>
-                  </div>
-                )}
-
-                {/* Fan conversion & subscriber growth */}
-                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:20 }}>
-                  <Card>
-                    <div style={{ fontSize:13, fontWeight:600, color:C.white, marginBottom:4 }}>Fan Conversion Funnel</div>
-                    <div style={{ fontSize:11, color:C.muted, marginBottom:16 }}>From viewers to whales (where data is available)</div>
-                    <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-                      {fanFunnel.map(step=>(
-                        <div key={step.stage} style={{ display:"flex", alignItems:"center", gap:10 }}>
-                          <div style={{ width:90, fontSize:12, color:C.white }}>{step.stage}</div>
-                          <div style={{ flex:1, height:10, background:C.border, borderRadius:6, overflow:"hidden" }}>
-                            <div style={{ height:"100%", width:`${step.value && fanFunnel[0]?.value ? (step.value/fanFunnel[0].value)*100 : 0}%`, background:C.indigo, borderRadius:6, transition:"width 0.4s" }}/>
+                {/* LOCKED WHALE PROFILES */}
+                <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 24, position: "relative", overflow: "hidden" }}>
+                  <div style={{ filter: "blur(4px)", opacity: 0.3 }}>
+                    <div style={{ fontSize: 16, fontWeight: 600, color: C.white, marginBottom: 16 }}>Full Whale Profiles</div>
+                    {whales.slice(1, 5).map((w, i) => (
+                      <div key={i} style={{ background: C.card2, borderRadius: 10, padding: 16, marginBottom: 12 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between" }}>
+                          <div>
+                            <div style={{ fontSize: 16, fontWeight: 600, color: C.white }}>{w.username}</div>
+                            <div style={{ fontSize: 12, color: C.muted }}>Spending pattern: Peak 9-11 PM</div>
+                            <div style={{ fontSize: 12, color: C.muted }}>Re-engagement probability: High</div>
                           </div>
-                          <div style={{ width:70, textAlign:"right", fontSize:12, color:C.muted, fontFamily:"'DM Mono',monospace" }}>{step.value.toLocaleString()}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </Card>
-
-                  <Card>
-                    <div style={{ fontSize:13, fontWeight:600, color:C.white, marginBottom:4 }}>Subscriber Growth</div>
-                    <div style={{ fontSize:11, color:C.muted, marginBottom:16 }}>Subscription revenue over time (from sub-type transactions)</div>
-                    {subscriberStats.length===0 ? (
-                      <div style={{ fontSize:12, color:C.muted }}>No subscription-type rows detected yet.</div>
-                    ) : (
-                      <ResponsiveContainer width="100%" height={220}>
-                        <AreaChart data={subscriberStats}>
-                          <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false}/>
-                          <XAxis dataKey="month" stroke={C.muted} tick={{ fontSize:11, fill:C.muted }} tickLine={false} axisLine={false}/>
-                          <YAxis stroke={C.muted} tick={{ fontSize:11, fill:C.muted }} tickLine={false} axisLine={false} tickFormatter={v=>`$${v}`}/>
-                          <Tooltip content={<ChartTip/>}/>
-                          <Area type="monotone" dataKey="usd" name="Subscriber $" stroke={C.gold} strokeWidth={2} fillOpacity={0.2} fill={C.gold}/>
-                        </AreaChart>
-                      </ResponsiveContainer>
-                    )}
-                  </Card>
-                </div>
-
-                {/* Day vs hour heatmap */}
-                {heatmap.length>0 && (
-                  <Card>
-                    <div style={{ fontSize:13, fontWeight:600, color:C.white, marginBottom:4 }}>Earnings Heatmap</div>
-                    <div style={{ fontSize:11, color:C.muted, marginBottom:16 }}>Day of week vs hour of day</div>
-                    <div style={{ overflowX:"auto" }}>
-                      <div style={{ minWidth:600 }}>
-                        <div style={{ display:"grid", gridTemplateColumns:`80px repeat(12,1fr)`, gap:4, fontSize:10 }}>
-                          <div></div>
-                          {heatmap[0].hours.filter((_,i)=>i%2===0).map(h=>(
-                            <div key={h.hourLabel} style={{ textAlign:"center", color:C.muted }}>{h.hourLabel}</div>
-                          ))}
-                          {heatmap.map(row=>(
-                            <React.Fragment key={row.weekday}>
-                              <div style={{ color:C.muted, fontSize:11 }}>{row.weekday}</div>
-                              {row.hours.filter((_,i)=>i%2===0).map(h=>{
-                                const intensity = h.usd>0 ? Math.min(1, h.usd / (monthlyArr[monthlyArr.length-1]?.usd || h.usd)) : 0
-                                return (
-                                  <div key={row.weekday+"-"+h.hourLabel} style={{
-                                    height:22,
-                                    borderRadius:4,
-                                    background:intensity?`rgba(34,211,238,${0.15+0.55*intensity})`:"rgba(15,23,42,1)",
-                                    border:`1px solid ${C.border}`,
-                                  }}/>
-                                )
-                              })}
-                            </React.Fragment>
-                          ))}
+                          <div style={{ textAlign: "right" }}>
+                            <div style={{ fontSize: 20, fontWeight: 700, color: C.cyan }}>${w.totalUSD}</div>
+                            <div style={{ fontSize: 11, color: C.muted }}>{w.tipCount} tips</div>
+                          </div>
                         </div>
                       </div>
+                    ))}
+                  </div>
+                  <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 16, background: "rgba(11, 15, 26, 0.9)" }}>
+                    <div style={{ fontSize: 40 }}>🔒</div>
+                    <div style={{ fontSize: 20, fontWeight: 700, color: C.white }}>Unlock Full Whale Profiles</div>
+                    <div style={{ fontSize: 14, color: C.muted, textAlign: "center", maxWidth: 400 }}>
+                      • Spending patterns & timing<br />
+                      • Best show time predictions<br />
+                      • Private show probability<br />
+                      • Re-engagement alerts
                     </div>
-                  </Card>
-                )}
-              </>}
-            </div>
-          )}
-
-          {/* ── UPLOAD ───────────────────────────────── */}
-          {activeNav==="upload" && (
-            <div className="fade">
-              <Card style={{ maxWidth:600, margin:"0 auto", textAlign:"center", padding:"52px 40px" }}>
-                <div style={{ fontSize:48, marginBottom:16 }}>📥</div>
-                <div style={{ fontSize:20, fontWeight:700, color:C.white, marginBottom:8 }}>Import Your Tip Data</div>
-                <div style={{ fontSize:14, color:C.muted, marginBottom:8, lineHeight:1.7 }}>
-                  Supported: Chaturbate, BongaCams, MyFreeCams, Stripchat, CamSoda, Cherry.tv, Streamate, ImLive, Flirt4Free, LiveJasmin
+                    <button style={{ padding: "12px 32px", borderRadius: 10, background: `linear-gradient(135deg, ${C.cyan}, ${C.pink})`, border: "none", color: C.white, fontSize: 15, fontWeight: 600, cursor: "pointer", marginTop: 8 }}>
+                      Unlock Whale Analytics
+                    </button>
+                  </div>
                 </div>
-                <div style={{ fontSize:12, color:C.muted, marginBottom:32 }}>New data is merged — no duplicates</div>
-                <label style={{ display:"inline-block", padding:"14px 32px", borderRadius:10, background:`linear-gradient(135deg,${C.indigo},${C.cyan}60)`, border:`1px solid ${C.indigo}60`, color:C.white, fontSize:15, fontWeight:600, cursor:"pointer", transition:"all 0.2s", boxShadow:`0 4px 20px ${C.indigo}30` }}>
-                  {uploading ? "Importing..." : "Choose CSV File"}
-                  <input type="file" accept=".csv" style={{ display:"none" }} onChange={e=>handleCSV(e.target.files[0])} disabled={uploading}/>
-                </label>
-                {rows.length>0 && <div style={{ marginTop:20, fontSize:13, color:C.green }}>✅ {rows.length.toLocaleString()} tips already imported</div>}
-              </Card>
-            </div>
-          )}
+              </>
+            ) : (
+              <div style={{ background: C.card, borderRadius: 14, padding: 60, textAlign: "center" }}>
+                <div style={{ fontSize: 48, marginBottom: 16 }}>📥</div>
+                <div style={{ fontSize: 16, color: C.muted }}>Import CSV to track your whales</div>
+              </div>
+            )}
+          </div>
+        )}
 
-        </div>
-      </div>
+        {/* SESSIONS TAB */}
+        {activeTab === "sessions" && (
+          <div>
+            <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 8 }}>🎥 Stream Sessions</h1>
+            <p style={{ fontSize: 14, color: C.muted, marginBottom: 32 }}>{sessions.length} sessions detected</p>
 
-      {/* NOTE MODAL */}
-      {noteModal && (
-        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", backdropFilter:"blur(8px)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:200 }}>
-          <div style={{ background:C.card, border:`1px solid ${C.border2}`, borderRadius:16, padding:28, width:400, boxShadow:"0 24px 60px #00000080" }}>
-            <div style={{ fontSize:15, fontWeight:700, color:C.white, marginBottom:4 }}>Note for {noteModal}</div>
-            <div style={{ fontSize:12, color:C.muted, marginBottom:16 }}>Private — only you can see this</div>
-            <textarea value={noteText} onChange={e=>setNoteText(e.target.value)} placeholder="Add a note about this fan..." rows={4}
-              style={{ width:"100%", background:C.bg, border:`1px solid ${C.border}`, borderRadius:10, padding:"12px 14px", color:C.white, fontSize:14, resize:"vertical", fontFamily:"inherit" }}
-              onFocus={e=>e.target.style.borderColor=C.indigo} onBlur={e=>e.target.style.borderColor=C.border}/>
-            <div style={{ display:"flex", gap:10, marginTop:16, justifyContent:"flex-end" }}>
-              <button onClick={()=>setNoteModal(null)} style={{ padding:"9px 18px", borderRadius:9, background:"transparent", border:`1px solid ${C.border}`, color:C.muted, fontSize:13, cursor:"pointer" }}>Cancel</button>
-              <button onClick={()=>saveNote(noteModal)} style={{ padding:"9px 18px", borderRadius:9, background:`linear-gradient(135deg,${C.indigo},${C.cyan}60)`, border:"none", color:C.white, fontSize:13, fontWeight:600, cursor:"pointer" }}>Save Note</button>
+            {sessions.length > 0 ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                {sessions.slice(0, 10).map((session, i) => (
+                  <div key={i} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 20 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", marginBottom: 12 }}>
+                      <div>
+                        <div style={{ fontSize: 16, fontWeight: 600, color: C.white, marginBottom: 4 }}>
+                          {new Date(session.startTime).toLocaleDateString()} • {new Date(session.startTime).toLocaleTimeString()}
+                        </div>
+                        <div style={{ fontSize: 13, color: C.muted }}>{session.platform}</div>
+                      </div>
+                      <div style={{ textAlign: "right" }}>
+                        <div style={{ fontSize: 24, fontWeight: 700, color: C.green }}>${session.totalUSD}</div>
+                        <div style={{ fontSize: 12, color: C.cyan }}>{session.durationHours.toFixed(1)} hours</div>
+                      </div>
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
+                      <div>
+                        <div style={{ fontSize: 11, color: C.muted }}>$/Hour</div>
+                        <div style={{ fontSize: 15, fontWeight: 600, color: C.white }}>${session.usdPerHour}</div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 11, color: C.muted }}>Tips</div>
+                        <div style={{ fontSize: 15, fontWeight: 600, color: C.white }}>{session.tipCount}</div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 11, color: C.muted }}>Avg Tip</div>
+                        <div style={{ fontSize: 15, fontWeight: 600, color: C.white }}>${session.avgTipSize}</div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 11, color: C.muted }}>Fans</div>
+                        <div style={{ fontSize: 15, fontWeight: 600, color: C.white }}>{session.uniqueFans}</div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+
+                {/* ADVANCED SESSION ANALYTICS LOCK */}
+                {sessions.length > 10 && (
+                  <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 32, textAlign: "center", position: "relative", overflow: "hidden" }}>
+                    <div style={{ filter: "blur(2px)", opacity: 0.3 }}>
+                      <div style={{ fontSize: 16, color: C.white, marginBottom: 8 }}>Advanced Session Breakdown</div>
+                      <div style={{ fontSize: 13, color: C.muted }}>Earnings per minute • Tip timing heatmaps • Viewer retention curves</div>
+                    </div>
+                    <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 12 }}>
+                      <div style={{ fontSize: 32 }}>🔒</div>
+                      <div style={{ fontSize: 18, fontWeight: 600, color: C.white }}>Unlock Advanced Analytics</div>
+                      <button style={{ padding: "10px 28px", borderRadius: 10, background: `linear-gradient(135deg, ${C.cyan}, ${C.pink})`, border: "none", color: C.white, fontSize: 14, fontWeight: 600, cursor: "pointer", marginTop: 8 }}>
+                        Upgrade to Pro
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div style={{ background: C.card, borderRadius: 14, padding: 60, textAlign: "center" }}>
+                <div style={{ fontSize: 48, marginBottom: 16 }}>📥</div>
+                <div style={{ fontSize: 16, color: C.muted }}>Import CSV to see sessions</div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* UPLOAD TAB */}
+        {activeTab === "upload" && (
+          <div>
+            <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 8 }}>📥 Import CSV Data</h1>
+            <p style={{ fontSize: 14, color: C.muted, marginBottom: 32 }}>Supported: Chaturbate, BongaCams, MyFreeCams, all formats</p>
+
+            <div style={{ background: C.card, borderRadius: 14, padding: 40, textAlign: "center", maxWidth: 600, margin: "0 auto" }}>
+              <div style={{ fontSize: 48, marginBottom: 16 }}>📁</div>
+              <div style={{ fontSize: 20, fontWeight: 700, color: C.white, marginBottom: 8 }}>Upload Your Tip Data</div>
+              <div style={{ fontSize: 14, color: C.muted, marginBottom: 24 }}>
+                CSV Uploads: {uploadCount}/3 per month (Free tier)
+              </div>
+              <label style={{ display: "inline-block", padding: "14px 32px", borderRadius: 10, background: uploadCount >= 3 ? C.muted : `linear-gradient(135deg, ${C.cyan}, ${C.pink})`, border: "none", color: C.white, fontSize: 15, fontWeight: 600, cursor: uploadCount >= 3 ? "not-allowed" : "pointer" }}>
+                {uploading ? "Importing..." : uploadCount >= 3 ? "🔒 Limit Reached" : "Choose CSV File"}
+                <input type="file" accept=".csv" style={{ display: "none" }} onChange={e => handleCSV(e.target.files[0])} disabled={uploading || uploadCount >= 3} />
+              </label>
+              {tips.length > 0 && <div style={{ marginTop: 20, fontSize: 13, color: C.green }}>✅ {tips.length.toLocaleString()} tips imported</div>}
+              
+              {uploadCount >= 3 && (
+                <div style={{ marginTop: 24, padding: 20, background: `${C.pink}10`, border: `1px solid ${C.pink}30`, borderRadius: 10 }}>
+                  <div style={{ fontSize: 14, color: C.white, marginBottom: 12 }}>Need unlimited data imports?</div>
+                  <button style={{ padding: "10px 24px", borderRadius: 10, background: `linear-gradient(135deg, ${C.cyan}, ${C.pink})`, border: "none", color: C.white, fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+                    Upgrade for Unlimited Analytics
+                  </button>
+                </div>
+              )}
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* TOAST */}
       {toast && (
-        <div style={{ position:"fixed", bottom:24, right:24, background:C.card2, border:`1px solid ${C.border2}`, borderRadius:12, padding:"14px 20px", color:C.white, fontSize:14, fontWeight:500, zIndex:300, boxShadow:"0 8px 32px #00000080", animation:"fadeIn 0.3s ease" }}>
+        <div style={{ position: "fixed", bottom: 24, right: 24, background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "14px 20px", color: C.white, fontSize: 14, zIndex: 999, boxShadow: "0 8px 32px rgba(0,0,0,0.8)" }}>
           {toast}
         </div>
       )}
