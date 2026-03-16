@@ -5,22 +5,13 @@ import { supabase } from "../../lib/supabase"
 import { parseCSV, detectSessions, identifyWhales, generateInsights, aggregateRows } from "../../lib/analytics"
 
 const C = {
-  bg: "#0B0F1A",
-  card: "#121826",
-  card2: "#161e2e",
-  border: "#1e2d45",
-  border2: "#2a3f5f",
-  indigo: "#7C5CFF",
-  cyan: "#22D3EE",
-  pink: "#EC4899",
-  gold: "#F59E0B",
-  blue: "#60A5FA",
-  green: "#10B981",
-  red: "#F87171",
-  orange: "#FB923C",
-  white: "#F1F5F9",
-  text: "#94A3B8",
-  muted: "#475569",
+  bg: "#0B0F1A", card: "#121826", card2: "#161e2e", border: "#1e2d45", border2: "#2a3f5f",
+  indigo: "#7C5CFF", cyan: "#22D3EE", pink: "#EC4899", gold: "#F59E0B", blue: "#60A5FA",
+  green: "#10B981", red: "#F87171", orange: "#FB923C", white: "#F1F5F9", text: "#94A3B8", muted: "#475569"
+}
+
+const TIER_COLORS = {
+  "Whale": C.gold, "Shark": C.blue, "Regular": C.cyan, "Dormant": C.orange
 }
 
 export default function Dashboard() {
@@ -33,6 +24,8 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState("overview")
   const [toast, setToast] = useState("")
   const [uploadCount, setUploadCount] = useState(0)
+  const [whaleFilter, setWhaleFilter] = useState("ALL")
+  const [platformFilter, setPlatformFilter] = useState("ALL")
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(""), 3500) }
 
@@ -52,30 +45,21 @@ export default function Dashboard() {
         setTips(data)
         setAnalytics(aggregateRows(data))
       }
-    } finally {
-      setLoading(false)
-    }
+    } finally { setLoading(false) }
   }
 
   const handleCSV = async (file) => {
     if (!file || !user) return
-    
-    // FREE TIER LIMIT: 3 uploads per month
     if (uploadCount >= 3) {
-      showToast("🔒 Free tier: 3 uploads/month. Upgrade for unlimited imports!")
+      showToast("🔒 Free tier: 3 uploads/month. Upgrade for unlimited!")
       return
     }
-    
     setUploading(true)
     try {
       const text = await file.text()
       const parsed = parseCSV(text)
-      if (!parsed.length) {
-        showToast("❌ No valid rows found")
-        setUploading(false)
-        return
-      }
-
+      if (!parsed.length) { showToast("❌ No valid rows found"); setUploading(false); return }
+      
       const toInsert = parsed.map(r => ({
         user_id: user.id,
         date_time: r.dateRaw || r.date_time,
@@ -85,27 +69,16 @@ export default function Dashboard() {
         tokens: r.tokens,
         usd: r.usd
       }))
-
+      
       const { error } = await supabase.from("tips").insert(toInsert)
-      if (error) {
-        showToast("❌ " + error.message)
-        setUploading(false)
-        return
-      }
-
+      if (error) { showToast("❌ " + error.message); setUploading(false); return }
+      
       setUploadCount(uploadCount + 1)
       showToast(`✅ Imported ${parsed.length} tips!`)
       await loadData(user.id)
     } catch (err) {
       showToast("❌ " + err.message)
-    } finally {
-      setUploading(false)
-    }
-  }
-
-  const signOut = async () => {
-    await supabase.auth.signOut()
-    router.replace("/login")
+    } finally { setUploading(false) }
   }
 
   if (loading) {
@@ -113,7 +86,7 @@ export default function Dashboard() {
       <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
         <div style={{ textAlign: "center" }}>
           <div style={{ width: 40, height: 40, border: `2px solid ${C.border}`, borderTop: `2px solid ${C.cyan}`, borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto 16px" }} />
-          <div style={{ color: C.muted, fontSize: 14 }}>Loading dashboard...</div>
+          <div style={{ color: C.muted, fontSize: 14 }}>Loading...</div>
           <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
         </div>
       </div>
@@ -123,27 +96,35 @@ export default function Dashboard() {
   const sessions = analytics?.sessions || []
   const whales = identifyWhales(tips)
   const insights = analytics?.insights || []
+  const platforms = analytics?.platforms || []
   
-  // Stats
   const totalRevenue = analytics?.totalUSD || 0
-  const revenueToday = tips.filter(t => {
-    const d = new Date(t.date_time)
-    const today = new Date()
-    return d.toDateString() === today.toDateString()
-  }).reduce((sum, t) => sum + t.usd, 0)
-  
-  const avgEarningsPerHour = sessions.length > 0 ? 
-    sessions.reduce((sum, s) => sum + s.usdPerHour, 0) / sessions.length : 0
+  const avgPerHour = sessions.reduce((sum, s) => sum + s.usdPerHour, 0) / (sessions.length || 1)
 
-  const topSession = sessions.length > 0 ? 
-    sessions.sort((a, b) => b.totalUSD - a.totalUSD)[0] : null
+  // Platform best times
+  const platformTimes = {}
+  sessions.forEach(s => {
+    if (!platformTimes[s.platform]) platformTimes[s.platform] = { hours: {}, days: {} }
+    const hour = new Date(s.startTime).getHours()
+    const day = new Date(s.startTime).toLocaleDateString('en-US', { weekday: 'long' })
+    platformTimes[s.platform].hours[hour] = (platformTimes[s.platform].hours[hour] || 0) + s.totalUSD
+    platformTimes[s.platform].days[day] = (platformTimes[s.platform].days[day] || 0) + s.totalUSD
+  })
+
+  const filteredWhales = whales.filter(w => {
+    if (whaleFilter !== "ALL" && w.tier !== whaleFilter) return false
+    if (platformFilter !== "ALL" && w.platform !== platformFilter) return false
+    return true
+  })
+
+  const allPlatforms = [...new Set(tips.map(t => t.platform))]
 
   return (
     <div style={{ minHeight: "100vh", background: C.bg, fontFamily: "'Inter', sans-serif", color: C.text }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        ::-webkit-scrollbar { width: 5px; height: 5px; }
+        ::-webkit-scrollbar { width: 5px; }
         ::-webkit-scrollbar-track { background: ${C.bg}; }
         ::-webkit-scrollbar-thumb { background: ${C.border2}; border-radius: 3px; }
       `}</style>
@@ -153,21 +134,13 @@ export default function Dashboard() {
         <div style={{ padding: "24px 20px", borderBottom: `1px solid ${C.border}` }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <div style={{ width: 40, height: 40, borderRadius: 10, background: `linear-gradient(135deg, ${C.cyan}, ${C.pink})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, fontWeight: 700, color: C.white }}>$</div>
-            <span style={{ fontSize: 20, fontWeight: 800, color: C.white }}>
-              Cam<span style={{ background: `linear-gradient(90deg, ${C.cyan}, ${C.pink})`, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Cash</span>
-            </span>
+            <span style={{ fontSize: 20, fontWeight: 800, color: C.white }}>Cam<span style={{ background: `linear-gradient(90deg, ${C.cyan}, ${C.pink})`, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Cash</span></span>
           </div>
-          {user && <div style={{ fontSize: 11, color: C.muted, marginTop: 10, overflow: "hidden", textOverflow: "ellipsis" }}>{user.email}</div>}
+          {user && <div style={{ fontSize: 11, color: C.muted, marginTop: 10 }}>{user.email}</div>}
         </div>
 
         <nav style={{ flex: 1, padding: "16px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
-          {[
-            ["overview", "📊", "Overview"],
-            ["analytics", "📈", "Analytics"],
-            ["whales", "🐳", "Whale Tracker"],
-            ["sessions", "🎥", "Sessions"],
-            ["upload", "📥", "Import CSV"]
-          ].map(([id, icon, label]) => (
+          {[["overview", "📊", "Overview"], ["platforms", "🎯", "Platforms"], ["whales", "🐳", "Top Fans"], ["sessions", "🎥", "Sessions"], ["upload", "📥", "Import"]].map(([id, icon, label]) => (
             <button key={id} onClick={() => setActiveTab(id)} style={{
               display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 10,
               background: activeTab === id ? `${C.cyan}15` : "transparent",
@@ -181,257 +154,185 @@ export default function Dashboard() {
         </nav>
 
         <div style={{ padding: "12px", borderTop: `1px solid ${C.border}` }}>
-          <button onClick={signOut} style={{ width: "100%", padding: "10px", borderRadius: 10, background: "transparent", border: `1px solid ${C.border}`, color: C.muted, fontSize: 13, cursor: "pointer" }}>
+          <button onClick={() => supabase.auth.signOut().then(() => router.replace("/login"))} style={{ width: "100%", padding: "10px", borderRadius: 10, background: "transparent", border: `1px solid ${C.border}`, color: C.muted, fontSize: 13, cursor: "pointer" }}>
             ↩ Sign Out
           </button>
         </div>
       </div>
 
-      {/* MAIN CONTENT */}
+      {/* MAIN */}
       <div style={{ marginLeft: 240, minHeight: "100vh", padding: 32 }}>
         
-        {/* OVERVIEW TAB */}
         {activeTab === "overview" && (
           <div>
-            <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 8 }}>Overview</h1>
-            <p style={{ fontSize: 14, color: C.muted, marginBottom: 32 }}>{tips.length.toLocaleString()} tips · {whales.length} fans</p>
-
-            {/* KPI CARDS */}
+            <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 32 }}>Overview</h1>
+            
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 32 }}>
               {[
                 { label: "Total Revenue", value: `$${totalRevenue.toFixed(2)}`, icon: "💰", color: C.green },
-                { label: "Revenue Today", value: `$${revenueToday.toFixed(2)}`, icon: "📅", color: C.cyan },
-                { label: "Avg Tip Value", value: `$${analytics?.avgTipSize?.toFixed(2) || 0}`, icon: "⭐", color: C.gold },
-                { label: "Avg $/Hour", value: `$${avgEarningsPerHour.toFixed(2)}`, icon: "⏱️", color: C.pink }
-              ].map((stat, i) => (
+                { label: "Avg $/Hour", value: `$${avgPerHour.toFixed(2)}`, icon: "⏱️", color: C.cyan },
+                { label: "Total Fans", value: whales.length, icon: "👥", color: C.pink },
+                { label: "Sessions", value: sessions.length, icon: "🎥", color: C.gold }
+              ].map((s, i) => (
                 <div key={i} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 24 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
-                    <span style={{ fontSize: 12, color: C.muted, textTransform: "uppercase", letterSpacing: "0.05em" }}>{stat.label}</span>
-                    <span style={{ fontSize: 20 }}>{stat.icon}</span>
+                    <span style={{ fontSize: 12, color: C.muted, textTransform: "uppercase" }}>{s.label}</span>
+                    <span style={{ fontSize: 20 }}>{s.icon}</span>
                   </div>
-                  <div style={{ fontSize: 32, fontWeight: 800, color: stat.color }}>{stat.value}</div>
+                  <div style={{ fontSize: 32, fontWeight: 800, color: s.color }}>{s.value}</div>
                 </div>
               ))}
             </div>
 
-            {/* SMART INSIGHTS */}
+            {/* INSIGHTS */}
             <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 24, marginBottom: 32 }}>
               <h2 style={{ fontSize: 18, fontWeight: 700, color: C.white, marginBottom: 16 }}>💡 Smart Insights</h2>
-              {insights.length > 0 ? (
-                <>
-                  <div style={{ background: `${C.cyan}10`, border: `1px solid ${C.cyan}30`, borderRadius: 10, padding: 16, marginBottom: 16 }}>
-                    <div style={{ fontSize: 14, color: C.white }}>{insights[0].icon} {insights[0].text}</div>
-                  </div>
-                  <div style={{ background: `${C.muted}10`, border: `1px solid ${C.border}`, borderRadius: 10, padding: 16, position: "relative", overflow: "hidden" }}>
-                    <div style={{ filter: "blur(3px)", opacity: 0.4 }}>
-                      <div style={{ fontSize: 14, color: C.white, marginBottom: 8 }}>📈 Your best earning hour is 9 PM - 11 PM</div>
-                      <div style={{ fontSize: 14, color: C.white, marginBottom: 8 }}>🎯 Weekend streams earn 45% more</div>
-                      <div style={{ fontSize: 14, color: C.white }}>⏰ Your whales are most active at night</div>
-                    </div>
-                    <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 12 }}>
-                      <div style={{ fontSize: 28 }}>🔒</div>
-                      <div style={{ fontSize: 16, fontWeight: 600, color: C.white }}>Unlock 15 more insights</div>
-                      <button style={{ padding: "10px 24px", borderRadius: 10, background: `linear-gradient(135deg, ${C.cyan}, ${C.pink})`, border: "none", color: C.white, fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
-                        Upgrade to Pro
-                      </button>
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <div style={{ textAlign: "center", padding: 40, color: C.muted }}>
-                  <div style={{ fontSize: 32, marginBottom: 12 }}>📥</div>
-                  <div>Import CSV data to unlock insights</div>
+              {insights.slice(0, 5).map((ins, i) => (
+                <div key={i} style={{ background: `${C.cyan}10`, border: `1px solid ${C.cyan}30`, borderRadius: 10, padding: 16, marginBottom: 12 }}>
+                  <div style={{ fontSize: 14, color: C.white }}>{ins.icon} {ins.text}</div>
                 </div>
-              )}
-            </div>
-
-            {/* TOP SESSION */}
-            {topSession && (
-              <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 24 }}>
-                <h2 style={{ fontSize: 18, fontWeight: 700, color: C.white, marginBottom: 16 }}>🏆 Top Earning Stream</h2>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }}>
-                  <div>
-                    <div style={{ fontSize: 12, color: C.muted, marginBottom: 4 }}>Earnings</div>
-                    <div style={{ fontSize: 20, fontWeight: 700, color: C.green }}>${topSession.totalUSD}</div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 12, color: C.muted, marginBottom: 4 }}>Duration</div>
-                    <div style={{ fontSize: 20, fontWeight: 700, color: C.cyan }}>{topSession.durationHours.toFixed(1)}h</div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 12, color: C.muted, marginBottom: 4 }}>$/Hour</div>
-                    <div style={{ fontSize: 20, fontWeight: 700, color: C.pink }}>${topSession.usdPerHour}</div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 12, color: C.muted, marginBottom: 4 }}>Fans</div>
-                    <div style={{ fontSize: 20, fontWeight: 700, color: C.gold }}>{topSession.uniqueFans}</div>
-                  </div>
-                </div>
+              ))}
+              <div style={{ marginTop: 16, padding: 16, background: `${C.pink}10`, border: `1px solid ${C.pink}30`, borderRadius: 10, textAlign: "center" }}>
+                <div style={{ fontSize: 14, color: C.white, marginBottom: 8 }}>🔒 Unlock 10+ more AI-powered insights</div>
+                <button style={{ padding: "8px 20px", borderRadius: 8, background: `linear-gradient(135deg, ${C.cyan}, ${C.pink})`, border: "none", color: C.white, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Upgrade to Pro</button>
               </div>
-            )}
+            </div>
           </div>
         )}
 
-        {/* WHALE TRACKER TAB */}
+        {activeTab === "platforms" && (
+          <div>
+            <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 32 }}>Platform Analytics</h1>
+            
+            {platforms.map((p, i) => {
+              const bestHour = Object.entries(platformTimes[p.platform]?.hours || {}).sort((a, b) => b[1] - a[1])[0]
+              const bestDay = Object.entries(platformTimes[p.platform]?.days || {}).sort((a, b) => b[1] - a[1])[0]
+              
+              return (
+                <div key={i} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 24, marginBottom: 20 }}>
+                  <h3 style={{ fontSize: 20, fontWeight: 700, color: C.white, marginBottom: 16 }}>{p.platform}</h3>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 16 }}>
+                    <div>
+                      <div style={{ fontSize: 12, color: C.muted }}>Total Revenue</div>
+                      <div style={{ fontSize: 24, fontWeight: 700, color: C.green }}>${p.totalUSD.toFixed(2)}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 12, color: C.muted }}>$/Hour</div>
+                      <div style={{ fontSize: 24, fontWeight: 700, color: C.cyan }}>${p.usdPerHour.toFixed(2)}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 12, color: C.muted }}>Sessions</div>
+                      <div style={{ fontSize: 24, fontWeight: 700, color: C.pink }}>{p.sessions}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 12, color: C.muted }}>Total Hours</div>
+                      <div style={{ fontSize: 24, fontWeight: 700, color: C.gold }}>{p.hours.toFixed(1)}h</div>
+                    </div>
+                  </div>
+                  {bestHour && bestDay && (
+                    <div style={{ padding: 16, background: C.card2, borderRadius: 10 }}>
+                      <div style={{ fontSize: 14, color: C.white, marginBottom: 4 }}>🕐 Best Hour: {bestHour[0]}:00 - ${(bestHour[1] / (platformTimes[p.platform].hours[bestHour[0]] || 1)).toFixed(2)}/hr</div>
+                      <div style={{ fontSize: 14, color: C.white }}>📅 Best Day: {bestDay[0]}</div>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+
         {activeTab === "whales" && (
           <div>
-            <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 8 }}>🐳 Whale Tracker</h1>
-            <p style={{ fontSize: 14, color: C.muted, marginBottom: 32 }}>Your highest-value supporters</p>
-
-            {whales.length > 0 ? (
-              <>
-                {/* TOP WHALE - FREE */}
-                <div style={{ background: C.card, border: `1px solid ${C.gold}50`, borderRadius: 14, padding: 24, marginBottom: 20 }}>
-                  <div style={{ fontSize: 14, color: C.gold, fontWeight: 600, marginBottom: 12 }}>👑 TOP SPENDER</div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <div>
-                      <div style={{ fontSize: 24, fontWeight: 700, color: C.white, marginBottom: 4 }}>{whales[0].username}</div>
-                      <div style={{ fontSize: 14, color: C.muted }}>Last tip: {new Date(whales[0].lastTipDate).toLocaleDateString()}</div>
-                    </div>
-                    <div style={{ textAlign: "right" }}>
-                      <div style={{ fontSize: 32, fontWeight: 800, color: C.gold }}>${whales[0].totalUSD.toFixed(2)}</div>
-                      <div style={{ fontSize: 12, color: C.muted }}>{whales[0].tipCount} tips</div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* LOCKED WHALE PROFILES */}
-                <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 24, position: "relative", overflow: "hidden" }}>
-                  <div style={{ filter: "blur(4px)", opacity: 0.3 }}>
-                    <div style={{ fontSize: 16, fontWeight: 600, color: C.white, marginBottom: 16 }}>Full Whale Profiles</div>
-                    {whales.slice(1, 5).map((w, i) => (
-                      <div key={i} style={{ background: C.card2, borderRadius: 10, padding: 16, marginBottom: 12 }}>
-                        <div style={{ display: "flex", justifyContent: "space-between" }}>
-                          <div>
-                            <div style={{ fontSize: 16, fontWeight: 600, color: C.white }}>{w.username}</div>
-                            <div style={{ fontSize: 12, color: C.muted }}>Spending pattern: Peak 9-11 PM</div>
-                            <div style={{ fontSize: 12, color: C.muted }}>Re-engagement probability: High</div>
-                          </div>
-                          <div style={{ textAlign: "right" }}>
-                            <div style={{ fontSize: 20, fontWeight: 700, color: C.cyan }}>${w.totalUSD}</div>
-                            <div style={{ fontSize: 11, color: C.muted }}>{w.tipCount} tips</div>
-                          </div>
-                        </div>
-                      </div>
+            <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 16 }}>🐳 Top Fans</h1>
+            <div style={{ display: "flex", gap: 12, marginBottom: 24 }}>
+              <select value={whaleFilter} onChange={e => setWhaleFilter(e.target.value)} style={{ padding: "8px 12px", background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, color: C.white, fontSize: 13 }}>
+                <option value="ALL">All Tiers</option>
+                <option value="Whale">🐳 Whales</option>
+                <option value="Shark">🦈 Sharks</option>
+                <option value="Regular">🐟 Regular</option>
+                <option value="Dormant">💤 Dormant</option>
+              </select>
+              <select value={platformFilter} onChange={e => setPlatformFilter(e.target.value)} style={{ padding: "8px 12px", background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, color: C.white, fontSize: 13 }}>
+                <option value="ALL">All Platforms</option>
+                {allPlatforms.map(p => <option key={p} value={p}>{p}</option>)}
+              </select>
+            </div>
+            
+            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, overflow: "hidden" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                <thead>
+                  <tr style={{ background: C.card2, borderBottom: `1px solid ${C.border}` }}>
+                    {["#", "Username", "Total $", "Tips", "Avg Tip", "Platform", "Tier", "Last Tip", "Profile"].map(h => (
+                      <th key={h} style={{ padding: "12px 16px", textAlign: "left", color: C.muted, fontSize: 11, textTransform: "uppercase", fontWeight: 500 }}>{h}</th>
                     ))}
-                  </div>
-                  <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 16, background: "rgba(11, 15, 26, 0.9)" }}>
-                    <div style={{ fontSize: 40 }}>🔒</div>
-                    <div style={{ fontSize: 20, fontWeight: 700, color: C.white }}>Unlock Full Whale Profiles</div>
-                    <div style={{ fontSize: 14, color: C.muted, textAlign: "center", maxWidth: 400 }}>
-                      • Spending patterns & timing<br />
-                      • Best show time predictions<br />
-                      • Private show probability<br />
-                      • Re-engagement alerts
-                    </div>
-                    <button style={{ padding: "12px 32px", borderRadius: 10, background: `linear-gradient(135deg, ${C.cyan}, ${C.pink})`, border: "none", color: C.white, fontSize: 15, fontWeight: 600, cursor: "pointer", marginTop: 8 }}>
-                      Unlock Whale Analytics
-                    </button>
-                  </div>
-                </div>
-              </>
-            ) : (
-              <div style={{ background: C.card, borderRadius: 14, padding: 60, textAlign: "center" }}>
-                <div style={{ fontSize: 48, marginBottom: 16 }}>📥</div>
-                <div style={{ fontSize: 16, color: C.muted }}>Import CSV to track your whales</div>
-              </div>
-            )}
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredWhales.map((w, i) => (
+                    <tr key={i} style={{ borderBottom: `1px solid ${C.border}` }}>
+                      <td style={{ padding: "12px 16px", color: C.muted }}>#{i + 1}</td>
+                      <td style={{ padding: "12px 16px", color: C.white, fontWeight: 600 }}>{w.username}</td>
+                      <td style={{ padding: "12px 16px", color: C.green, fontWeight: 700 }}>${w.totalUSD.toFixed(2)}</td>
+                      <td style={{ padding: "12px 16px", color: C.muted }}>{w.tipCount}</td>
+                      <td style={{ padding: "12px 16px", color: C.cyan }}>${w.avgTipSize.toFixed(2)}</td>
+                      <td style={{ padding: "12px 16px", color: C.muted }}>{w.platform}</td>
+                      <td style={{ padding: "12px 16px" }}>
+                        <span style={{ padding: "4px 10px", borderRadius: 100, background: `${TIER_COLORS[w.tier]}15`, color: TIER_COLORS[w.tier], fontSize: 11, fontWeight: 600 }}>
+                          {w.tier}
+                        </span>
+                      </td>
+                      <td style={{ padding: "12px 16px", color: C.muted, fontSize: 12 }}>{new Date(w.lastTipDate).toLocaleDateString()}</td>
+                      <td style={{ padding: "12px 16px" }}>
+                        <button style={{ padding: "4px 12px", borderRadius: 6, background: `${C.pink}15`, border: `1px solid ${C.pink}30`, color: C.pink, fontSize: 11, cursor: "pointer" }}>🔒 View</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
 
-        {/* SESSIONS TAB */}
         {activeTab === "sessions" && (
           <div>
-            <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 8 }}>🎥 Stream Sessions</h1>
-            <p style={{ fontSize: 14, color: C.muted, marginBottom: 32 }}>{sessions.length} sessions detected</p>
-
-            {sessions.length > 0 ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                {sessions.slice(0, 10).map((session, i) => (
-                  <div key={i} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 20 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", marginBottom: 12 }}>
-                      <div>
-                        <div style={{ fontSize: 16, fontWeight: 600, color: C.white, marginBottom: 4 }}>
-                          {new Date(session.startTime).toLocaleDateString()} • {new Date(session.startTime).toLocaleTimeString()}
-                        </div>
-                        <div style={{ fontSize: 13, color: C.muted }}>{session.platform}</div>
-                      </div>
-                      <div style={{ textAlign: "right" }}>
-                        <div style={{ fontSize: 24, fontWeight: 700, color: C.green }}>${session.totalUSD}</div>
-                        <div style={{ fontSize: 12, color: C.cyan }}>{session.durationHours.toFixed(1)} hours</div>
-                      </div>
-                    </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
-                      <div>
-                        <div style={{ fontSize: 11, color: C.muted }}>$/Hour</div>
-                        <div style={{ fontSize: 15, fontWeight: 600, color: C.white }}>${session.usdPerHour}</div>
-                      </div>
-                      <div>
-                        <div style={{ fontSize: 11, color: C.muted }}>Tips</div>
-                        <div style={{ fontSize: 15, fontWeight: 600, color: C.white }}>{session.tipCount}</div>
-                      </div>
-                      <div>
-                        <div style={{ fontSize: 11, color: C.muted }}>Avg Tip</div>
-                        <div style={{ fontSize: 15, fontWeight: 600, color: C.white }}>${session.avgTipSize}</div>
-                      </div>
-                      <div>
-                        <div style={{ fontSize: 11, color: C.muted }}>Fans</div>
-                        <div style={{ fontSize: 15, fontWeight: 600, color: C.white }}>{session.uniqueFans}</div>
-                      </div>
-                    </div>
+            <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 32 }}>🎥 Stream Sessions</h1>
+            {sessions.map((s, i) => (
+              <div key={i} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 20, marginBottom: 16 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
+                  <div>
+                    <div style={{ fontSize: 16, fontWeight: 600, color: C.white }}>{new Date(s.startTime).toLocaleDateString()} • {s.platform}</div>
+                    <div style={{ fontSize: 13, color: C.muted }}>{new Date(s.startTime).toLocaleTimeString()}</div>
                   </div>
-                ))}
-
-                {/* ADVANCED SESSION ANALYTICS LOCK */}
-                {sessions.length > 10 && (
-                  <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 32, textAlign: "center", position: "relative", overflow: "hidden" }}>
-                    <div style={{ filter: "blur(2px)", opacity: 0.3 }}>
-                      <div style={{ fontSize: 16, color: C.white, marginBottom: 8 }}>Advanced Session Breakdown</div>
-                      <div style={{ fontSize: 13, color: C.muted }}>Earnings per minute • Tip timing heatmaps • Viewer retention curves</div>
-                    </div>
-                    <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 12 }}>
-                      <div style={{ fontSize: 32 }}>🔒</div>
-                      <div style={{ fontSize: 18, fontWeight: 600, color: C.white }}>Unlock Advanced Analytics</div>
-                      <button style={{ padding: "10px 28px", borderRadius: 10, background: `linear-gradient(135deg, ${C.cyan}, ${C.pink})`, border: "none", color: C.white, fontSize: 14, fontWeight: 600, cursor: "pointer", marginTop: 8 }}>
-                        Upgrade to Pro
-                      </button>
-                    </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: 24, fontWeight: 700, color: C.green }}>${s.totalUSD}</div>
+                    <div style={{ fontSize: 12, color: C.cyan }}>{s.durationHours.toFixed(1)}h</div>
                   </div>
-                )}
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
+                  <div><div style={{ fontSize: 11, color: C.muted }}>$/Hour</div><div style={{ fontSize: 15, fontWeight: 600, color: C.white }}>${s.usdPerHour}</div></div>
+                  <div><div style={{ fontSize: 11, color: C.muted }}>Tips</div><div style={{ fontSize: 15, fontWeight: 600, color: C.white }}>{s.tipCount}</div></div>
+                  <div><div style={{ fontSize: 11, color: C.muted }}>Avg Tip</div><div style={{ fontSize: 15, fontWeight: 600, color: C.white }}>${s.avgTipSize}</div></div>
+                  <div><div style={{ fontSize: 11, color: C.muted }}>Fans</div><div style={{ fontSize: 15, fontWeight: 600, color: C.white }}>{s.uniqueFans}</div></div>
+                </div>
               </div>
-            ) : (
-              <div style={{ background: C.card, borderRadius: 14, padding: 60, textAlign: "center" }}>
-                <div style={{ fontSize: 48, marginBottom: 16 }}>📥</div>
-                <div style={{ fontSize: 16, color: C.muted }}>Import CSV to see sessions</div>
-              </div>
-            )}
+            ))}
           </div>
         )}
 
-        {/* UPLOAD TAB */}
         {activeTab === "upload" && (
-          <div>
-            <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 8 }}>📥 Import CSV Data</h1>
-            <p style={{ fontSize: 14, color: C.muted, marginBottom: 32 }}>Supported: Chaturbate, BongaCams, MyFreeCams, all formats</p>
-
-            <div style={{ background: C.card, borderRadius: 14, padding: 40, textAlign: "center", maxWidth: 600, margin: "0 auto" }}>
+          <div style={{ maxWidth: 600, margin: "0 auto" }}>
+            <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 8 }}>📥 Import CSV</h1>
+            <p style={{ fontSize: 14, color: C.muted, marginBottom: 32 }}>Uploads: {uploadCount}/3 per month</p>
+            <div style={{ background: C.card, borderRadius: 14, padding: 40, textAlign: "center" }}>
               <div style={{ fontSize: 48, marginBottom: 16 }}>📁</div>
-              <div style={{ fontSize: 20, fontWeight: 700, color: C.white, marginBottom: 8 }}>Upload Your Tip Data</div>
-              <div style={{ fontSize: 14, color: C.muted, marginBottom: 24 }}>
-                CSV Uploads: {uploadCount}/3 per month (Free tier)
-              </div>
-              <label style={{ display: "inline-block", padding: "14px 32px", borderRadius: 10, background: uploadCount >= 3 ? C.muted : `linear-gradient(135deg, ${C.cyan}, ${C.pink})`, border: "none", color: C.white, fontSize: 15, fontWeight: 600, cursor: uploadCount >= 3 ? "not-allowed" : "pointer" }}>
+              <label style={{ display: "inline-block", padding: "14px 32px", borderRadius: 10, background: uploadCount >= 3 ? C.muted : `linear-gradient(135deg, ${C.cyan}, ${C.pink})`, color: C.white, fontSize: 15, fontWeight: 600, cursor: uploadCount >= 3 ? "not-allowed" : "pointer" }}>
                 {uploading ? "Importing..." : uploadCount >= 3 ? "🔒 Limit Reached" : "Choose CSV File"}
                 <input type="file" accept=".csv" style={{ display: "none" }} onChange={e => handleCSV(e.target.files[0])} disabled={uploading || uploadCount >= 3} />
               </label>
-              {tips.length > 0 && <div style={{ marginTop: 20, fontSize: 13, color: C.green }}>✅ {tips.length.toLocaleString()} tips imported</div>}
-              
               {uploadCount >= 3 && (
-                <div style={{ marginTop: 24, padding: 20, background: `${C.pink}10`, border: `1px solid ${C.pink}30`, borderRadius: 10 }}>
-                  <div style={{ fontSize: 14, color: C.white, marginBottom: 12 }}>Need unlimited data imports?</div>
-                  <button style={{ padding: "10px 24px", borderRadius: 10, background: `linear-gradient(135deg, ${C.cyan}, ${C.pink})`, border: "none", color: C.white, fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
-                    Upgrade for Unlimited Analytics
-                  </button>
+                <div style={{ marginTop: 24, padding: 16, background: `${C.pink}15`, border: `1px solid ${C.pink}30`, borderRadius: 10 }}>
+                  <div style={{ fontSize: 14, color: C.white, marginBottom: 12 }}>Upgrade for unlimited imports</div>
+                  <button style={{ padding: "10px 24px", borderRadius: 8, background: `linear-gradient(135deg, ${C.cyan}, ${C.pink})`, border: "none", color: C.white, fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Go Pro</button>
                 </div>
               )}
             </div>
@@ -439,7 +340,6 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* TOAST */}
       {toast && (
         <div style={{ position: "fixed", bottom: 24, right: 24, background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "14px 20px", color: C.white, fontSize: 14, zIndex: 999, boxShadow: "0 8px 32px rgba(0,0,0,0.8)" }}>
           {toast}
