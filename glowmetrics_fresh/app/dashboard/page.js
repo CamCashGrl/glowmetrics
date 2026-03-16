@@ -26,16 +26,53 @@ export default function Dashboard() {
   const [uploadCount, setUploadCount] = useState(0)
   const [whaleFilter, setWhaleFilter] = useState("ALL")
   const [platformFilter, setPlatformFilter] = useState("ALL")
+  const [isPro, setIsPro] = useState(false)
+  const [upgrading, setUpgrading] = useState(false)
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(""), 3500) }
+
+  const handleUpgrade = async () => {
+    setUpgrading(true)
+    try {
+      const res = await fetch('/api/stripe/checkout', { method: 'POST' })
+      const { url, error } = await res.json()
+      if (error) throw new Error(error)
+      if (url) window.location.href = url
+    } catch (err) {
+      showToast("❌ " + err.message)
+    } finally {
+      setUpgrading(false)
+    }
+  }
+
+  const handleManageBilling = async () => {
+    try {
+      const res = await fetch('/api/stripe/portal', { method: 'POST' })
+      const { url } = await res.json()
+      if (url) window.location.href = url
+    } catch (err) {
+      showToast("❌ " + err.message)
+    }
+  }
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) { router.replace("/login"); return }
       setUser(user)
       loadData(user.id)
+      checkSubscription(user.id)
     })
   }, [])
+
+  const checkSubscription = async (uid) => {
+    const { data } = await supabase
+      .from('subscriptions')
+      .select('status')
+      .eq('user_id', uid)
+      .single()
+    
+    setIsPro(data?.status === 'active')
+  }
 
   const loadData = async (uid) => {
     setLoading(true)
@@ -50,7 +87,7 @@ export default function Dashboard() {
 
   const handleCSV = async (file) => {
     if (!file || !user) return
-    if (uploadCount >= 3) {
+    if (!isPro && uploadCount >= 3) {
       showToast("🔒 Free tier: 3 uploads/month. Upgrade for unlimited!")
       return
     }
@@ -137,6 +174,11 @@ export default function Dashboard() {
             <span style={{ fontSize: 20, fontWeight: 800, color: C.white }}>Cam<span style={{ background: `linear-gradient(90deg, ${C.cyan}, ${C.pink})`, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Cash</span></span>
           </div>
           {user && <div style={{ fontSize: 11, color: C.muted, marginTop: 10 }}>{user.email}</div>}
+          {isPro && (
+            <div style={{ marginTop: 10, padding: "6px 12px", borderRadius: 100, background: `linear-gradient(135deg, ${C.cyan}, ${C.pink})`, display: "inline-block" }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: C.white }}>✨ PRO</span>
+            </div>
+          )}
         </div>
 
         <nav style={{ flex: 1, padding: "16px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
@@ -154,6 +196,11 @@ export default function Dashboard() {
         </nav>
 
         <div style={{ padding: "12px", borderTop: `1px solid ${C.border}` }}>
+          {isPro && (
+            <button onClick={handleManageBilling} style={{ width: "100%", padding: "10px", borderRadius: 10, background: "transparent", border: `1px solid ${C.border}`, color: C.white, fontSize: 13, cursor: "pointer", marginBottom: 8 }}>
+              💳 Manage Billing
+            </button>
+          )}
           <button onClick={() => supabase.auth.signOut().then(() => router.replace("/login"))} style={{ width: "100%", padding: "10px", borderRadius: 10, background: "transparent", border: `1px solid ${C.border}`, color: C.muted, fontSize: 13, cursor: "pointer" }}>
             ↩ Sign Out
           </button>
@@ -194,7 +241,9 @@ export default function Dashboard() {
               ))}
               <div style={{ marginTop: 16, padding: 16, background: `${C.pink}10`, border: `1px solid ${C.pink}30`, borderRadius: 10, textAlign: "center" }}>
                 <div style={{ fontSize: 14, color: C.white, marginBottom: 8 }}>🔒 Unlock 10+ more AI-powered insights</div>
-                <button style={{ padding: "8px 20px", borderRadius: 8, background: `linear-gradient(135deg, ${C.cyan}, ${C.pink})`, border: "none", color: C.white, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Upgrade to Pro</button>
+                <button onClick={handleUpgrade} disabled={upgrading} style={{ padding: "8px 20px", borderRadius: 8, background: `linear-gradient(135deg, ${C.cyan}, ${C.pink})`, border: "none", color: C.white, fontSize: 13, fontWeight: 600, cursor: upgrading ? "not-allowed" : "pointer", opacity: upgrading ? 0.7 : 1 }}>
+                  {upgrading ? "Loading..." : "Upgrade to Pro"}
+                </button>
               </div>
             </div>
           </div>
@@ -332,7 +381,9 @@ export default function Dashboard() {
               {uploadCount >= 3 && (
                 <div style={{ marginTop: 24, padding: 16, background: `${C.pink}15`, border: `1px solid ${C.pink}30`, borderRadius: 10 }}>
                   <div style={{ fontSize: 14, color: C.white, marginBottom: 12 }}>Upgrade for unlimited imports</div>
-                  <button style={{ padding: "10px 24px", borderRadius: 8, background: `linear-gradient(135deg, ${C.cyan}, ${C.pink})`, border: "none", color: C.white, fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Go Pro</button>
+                  <button onClick={handleUpgrade} disabled={upgrading} style={{ padding: "10px 24px", borderRadius: 8, background: `linear-gradient(135deg, ${C.cyan}, ${C.pink})`, border: "none", color: C.white, fontSize: 14, fontWeight: 600, cursor: upgrading ? "not-allowed" : "pointer", opacity: upgrading ? 0.7 : 1 }}>
+                    {upgrading ? "Loading..." : `Upgrade - $19.99/mo`}
+                  </button>
                 </div>
               )}
             </div>
