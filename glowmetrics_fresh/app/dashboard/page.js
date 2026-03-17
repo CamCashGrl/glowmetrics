@@ -2,17 +2,15 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
-import { parseCSV, detectSessions, identifyWhales, generateInsights, aggregateRows } from "../../lib/analytics"
+import { parseCSV, detectSessions, identifyWhales, generateInsights, aggregateRows, generateAIPredictions } from "../../lib/analytics"
 
 const C = {
   bg: "#0B0F1A", card: "#121826", card2: "#161e2e", border: "#1e2d45", border2: "#2a3f5f",
-  indigo: "#7C5CFF", cyan: "#22D3EE", pink: "#EC4899", gold: "#F59E0B", blue: "#60A5FA",
+  cyan: "#22D3EE", pink: "#EC4899", gold: "#F59E0B", blue: "#60A5FA",
   green: "#10B981", red: "#F87171", orange: "#FB923C", white: "#F1F5F9", text: "#94A3B8", muted: "#475569"
 }
 
-const TIER_COLORS = {
-  "Whale": C.gold, "Shark": C.blue, "Regular": C.cyan, "Dormant": C.orange
-}
+const TIER_COLORS = { "Whale": C.gold, "Shark": C.blue, "Regular": C.cyan, "Dormant": C.orange }
 
 export default function Dashboard() {
   const router = useRouter()
@@ -65,12 +63,7 @@ export default function Dashboard() {
   }, [])
 
   const checkSubscription = async (uid) => {
-    const { data } = await supabase
-      .from('subscriptions')
-      .select('status')
-      .eq('user_id', uid)
-      .single()
-    
+    const { data } = await supabase.from('subscriptions').select('status').eq('user_id', uid).single()
     setIsPro(data?.status === 'active')
   }
 
@@ -133,6 +126,7 @@ export default function Dashboard() {
   const sessions = analytics?.sessions || []
   const whales = identifyWhales(tips)
   const insights = analytics?.insights || []
+  const predictions = analytics?.predictions || []
   const platforms = analytics?.platforms || []
   
   const totalRevenue = analytics?.totalUSD || 0
@@ -155,6 +149,14 @@ export default function Dashboard() {
   })
 
   const allPlatforms = [...new Set(tips.map(t => t.platform))]
+
+  // Revenue by month
+  const monthlyRevenue = {}
+  tips.forEach(t => {
+    const date = new Date(t.date_time)
+    const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+    monthlyRevenue[monthKey] = (monthlyRevenue[monthKey] || 0) + t.usd
+  })
 
   return (
     <div style={{ minHeight: "100vh", background: C.bg, fontFamily: "'Inter', sans-serif", color: C.text }}>
@@ -182,7 +184,15 @@ export default function Dashboard() {
         </div>
 
         <nav style={{ flex: 1, padding: "16px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
-          {[["overview", "📊", "Overview"], ["platforms", "🎯", "Platforms"], ["whales", "🐳", "Top Fans"], ["sessions", "🎥", "Sessions"], ["upload", "📥", "Import"]].map(([id, icon, label]) => (
+          {[
+            ["overview", "📊", "Overview"],
+            ["revenue", "💰", "Revenue"],
+            ["platforms", "🎯", "Platforms"],
+            ["whales", "🐳", "Top Fans"],
+            ["predictions", "🔮", "AI Predictions"],
+            ["sessions", "🎥", "Sessions"],
+            ["upload", "📥", "Import"]
+          ].map(([id, icon, label]) => (
             <button key={id} onClick={() => setActiveTab(id)} style={{
               display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 10,
               background: activeTab === id ? `${C.cyan}15` : "transparent",
@@ -191,6 +201,7 @@ export default function Dashboard() {
               cursor: "pointer", transition: "all 0.15s", textAlign: "left"
             }}>
               <span style={{ fontSize: 18 }}>{icon}</span>{label}
+              {id === "predictions" && !isPro && <span style={{ fontSize: 10, marginLeft: "auto" }}>🔒</span>}
             </button>
           ))}
         </nav>
@@ -207,9 +218,10 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* MAIN */}
+      {/* MAIN CONTENT */}
       <div style={{ marginLeft: 240, minHeight: "100vh", padding: 32 }}>
         
+        {/* OVERVIEW TAB */}
         {activeTab === "overview" && (
           <div>
             <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 32 }}>Overview</h1>
@@ -231,7 +243,7 @@ export default function Dashboard() {
               ))}
             </div>
 
-            {/* INSIGHTS */}
+            {/* SMART INSIGHTS */}
             <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 24, marginBottom: 32 }}>
               <h2 style={{ fontSize: 18, fontWeight: 700, color: C.white, marginBottom: 16 }}>💡 Smart Insights</h2>
               {insights.slice(0, 5).map((ins, i) => (
@@ -239,19 +251,59 @@ export default function Dashboard() {
                   <div style={{ fontSize: 14, color: C.white }}>{ins.icon} {ins.text}</div>
                 </div>
               ))}
-              <div style={{ marginTop: 16, padding: 16, background: `${C.pink}10`, border: `1px solid ${C.pink}30`, borderRadius: 10, textAlign: "center" }}>
-                <div style={{ fontSize: 14, color: C.white, marginBottom: 8 }}>🔒 Unlock 10+ more AI-powered insights</div>
-                <button onClick={handleUpgrade} disabled={upgrading} style={{ padding: "8px 20px", borderRadius: 8, background: `linear-gradient(135deg, ${C.cyan}, ${C.pink})`, border: "none", color: C.white, fontSize: 13, fontWeight: 600, cursor: upgrading ? "not-allowed" : "pointer", opacity: upgrading ? 0.7 : 1 }}>
-                  {upgrading ? "Loading..." : "Upgrade to Pro"}
-                </button>
+              {!isPro && (
+                <div style={{ marginTop: 16, padding: 16, background: `${C.pink}10`, border: `1px solid ${C.pink}30`, borderRadius: 10, textAlign: "center" }}>
+                  <div style={{ fontSize: 14, color: C.white, marginBottom: 8 }}>🔒 Unlock 10+ more AI-powered insights</div>
+                  <button onClick={handleUpgrade} disabled={upgrading} style={{ padding: "8px 20px", borderRadius: 8, background: `linear-gradient(135deg, ${C.cyan}, ${C.pink})`, border: "none", color: C.white, fontSize: 13, fontWeight: 600, cursor: upgrading ? "not-allowed" : "pointer", opacity: upgrading ? 0.7 : 1 }}>
+                    {upgrading ? "Loading..." : "Upgrade to Pro"}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* REVENUE TAB */}
+        {activeTab === "revenue" && (
+          <div>
+            <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 32 }}>Revenue Analytics</h1>
+            
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 32 }}>
+              {[
+                { label: "Last 7 Days", value: `$${tips.filter(t => (Date.now() - new Date(t.date_time)) / (1000 * 60 * 60 * 24) <= 7).reduce((sum, t) => sum + t.usd, 0).toFixed(2)}`, icon: "📅" },
+                { label: "Last 30 Days", value: `$${tips.filter(t => (Date.now() - new Date(t.date_time)) / (1000 * 60 * 60 * 24) <= 30).reduce((sum, t) => sum + t.usd, 0).toFixed(2)}`, icon: "📊" },
+                { label: "All Time", value: `$${totalRevenue.toFixed(2)}`, icon: "💎" }
+              ].map((s, i) => (
+                <div key={i} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 24 }}>
+                  <div style={{ fontSize: 12, color: C.muted, marginBottom: 8 }}>{s.icon} {s.label}</div>
+                  <div style={{ fontSize: 28, fontWeight: 700, color: C.green }}>{s.value}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* MONTHLY BREAKDOWN */}
+            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 24 }}>
+              <h2 style={{ fontSize: 18, fontWeight: 700, color: C.white, marginBottom: 20 }}>Monthly Revenue</h2>
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                {Object.entries(monthlyRevenue).reverse().slice(0, 6).map(([month, revenue]) => (
+                  <div key={month} style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                    <div style={{ fontSize: 14, color: C.white, width: 100 }}>{month}</div>
+                    <div style={{ flex: 1, height: 32, background: C.card2, borderRadius: 8, overflow: "hidden", position: "relative" }}>
+                      <div style={{ height: "100%", width: `${(revenue / Math.max(...Object.values(monthlyRevenue))) * 100}%`, background: `linear-gradient(90deg, ${C.cyan}, ${C.pink})`, display: "flex", alignItems: "center", paddingLeft: 12 }}>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: C.white }}>${revenue.toFixed(2)}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
         )}
 
+        {/* PLATFORMS TAB */}
         {activeTab === "platforms" && (
           <div>
-            <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 32 }}>Platform Analytics</h1>
+            <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 32 }}>Platform Performance</h1>
             
             {platforms.map((p, i) => {
               const bestHour = Object.entries(platformTimes[p.platform]?.hours || {}).sort((a, b) => b[1] - a[1])[0]
@@ -260,7 +312,7 @@ export default function Dashboard() {
               return (
                 <div key={i} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 24, marginBottom: 20 }}>
                   <h3 style={{ fontSize: 20, fontWeight: 700, color: C.white, marginBottom: 16 }}>{p.platform}</h3>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 16 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 16, marginBottom: 16 }}>
                     <div>
                       <div style={{ fontSize: 12, color: C.muted }}>Total Revenue</div>
                       <div style={{ fontSize: 24, fontWeight: 700, color: C.green }}>${p.totalUSD.toFixed(2)}</div>
@@ -277,10 +329,14 @@ export default function Dashboard() {
                       <div style={{ fontSize: 12, color: C.muted }}>Total Hours</div>
                       <div style={{ fontSize: 24, fontWeight: 700, color: C.gold }}>{p.hours.toFixed(1)}h</div>
                     </div>
+                    <div>
+                      <div style={{ fontSize: 12, color: C.muted }}>Avg Tip</div>
+                      <div style={{ fontSize: 24, fontWeight: 700, color: C.blue }}>${p.avgTipSize.toFixed(2)}</div>
+                    </div>
                   </div>
                   {bestHour && bestDay && (
                     <div style={{ padding: 16, background: C.card2, borderRadius: 10 }}>
-                      <div style={{ fontSize: 14, color: C.white, marginBottom: 4 }}>🕐 Best Hour: {bestHour[0]}:00 - ${(bestHour[1] / (platformTimes[p.platform].hours[bestHour[0]] || 1)).toFixed(2)}/hr</div>
+                      <div style={{ fontSize: 14, color: C.white, marginBottom: 4 }}>🕐 Best Hour: {bestHour[0]}:00 - ${(bestHour[1] / (Object.keys(platformTimes[p.platform].hours).length || 1)).toFixed(2)}/session</div>
                       <div style={{ fontSize: 14, color: C.white }}>📅 Best Day: {bestDay[0]}</div>
                     </div>
                   )}
@@ -290,6 +346,7 @@ export default function Dashboard() {
           </div>
         )}
 
+        {/* WHALES TAB */}
         {activeTab === "whales" && (
           <div>
             <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 16 }}>🐳 Top Fans</h1>
@@ -332,7 +389,9 @@ export default function Dashboard() {
                       </td>
                       <td style={{ padding: "12px 16px", color: C.muted, fontSize: 12 }}>{new Date(w.lastTipDate).toLocaleDateString()}</td>
                       <td style={{ padding: "12px 16px" }}>
-                        <button style={{ padding: "4px 12px", borderRadius: 6, background: `${C.pink}15`, border: `1px solid ${C.pink}30`, color: C.pink, fontSize: 11, cursor: "pointer" }}>🔒 View</button>
+                        <button onClick={() => !isPro && handleUpgrade()} style={{ padding: "4px 12px", borderRadius: 6, background: `${C.pink}15`, border: `1px solid ${C.pink}30`, color: C.pink, fontSize: 11, cursor: "pointer" }}>
+                          {isPro ? "View" : "🔒 Unlock"}
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -342,6 +401,38 @@ export default function Dashboard() {
           </div>
         )}
 
+        {/* AI PREDICTIONS TAB */}
+        {activeTab === "predictions" && (
+          <div>
+            <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 32 }}>🔮 AI Predictions</h1>
+            
+            {isPro ? (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 20 }}>
+                {predictions.map((pred, i) => (
+                  <div key={i} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 24 }}>
+                    <div style={{ fontSize: 32, marginBottom: 12 }}>{pred.icon}</div>
+                    <div style={{ fontSize: 16, fontWeight: 600, color: C.white, marginBottom: 8 }}>{pred.title}</div>
+                    <div style={{ fontSize: 28, fontWeight: 800, color: C.cyan, marginBottom: 8 }}>{pred.value}</div>
+                    <div style={{ fontSize: 13, color: C.muted }}>{pred.confidence}</div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 60, textAlign: "center" }}>
+                <div style={{ fontSize: 48, marginBottom: 16 }}>🔒</div>
+                <div style={{ fontSize: 20, fontWeight: 700, color: C.white, marginBottom: 12 }}>AI Predictions are a Pro Feature</div>
+                <div style={{ fontSize: 14, color: C.muted, marginBottom: 24, maxWidth: 400, margin: "0 auto 24px" }}>
+                  Get revenue forecasts, whale re-engagement predictions, and optimal streaming time recommendations
+                </div>
+                <button onClick={handleUpgrade} disabled={upgrading} style={{ padding: "12px 32px", borderRadius: 10, background: `linear-gradient(135deg, ${C.cyan}, ${C.pink})`, border: "none", color: C.white, fontSize: 15, fontWeight: 600, cursor: upgrading ? "not-allowed" : "pointer", opacity: upgrading ? 0.7 : 1 }}>
+                  {upgrading ? "Loading..." : "Upgrade to Pro - $19.99/mo"}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* SESSIONS TAB */}
         {activeTab === "sessions" && (
           <div>
             <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 32 }}>🎥 Stream Sessions</h1>
@@ -368,21 +459,22 @@ export default function Dashboard() {
           </div>
         )}
 
+        {/* UPLOAD TAB */}
         {activeTab === "upload" && (
           <div style={{ maxWidth: 600, margin: "0 auto" }}>
             <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 8 }}>📥 Import CSV</h1>
-            <p style={{ fontSize: 14, color: C.muted, marginBottom: 32 }}>Uploads: {uploadCount}/3 per month</p>
+            <p style={{ fontSize: 14, color: C.muted, marginBottom: 32 }}>Uploads: {isPro ? "∞ Unlimited" : `${uploadCount}/3`} per month</p>
             <div style={{ background: C.card, borderRadius: 14, padding: 40, textAlign: "center" }}>
               <div style={{ fontSize: 48, marginBottom: 16 }}>📁</div>
-              <label style={{ display: "inline-block", padding: "14px 32px", borderRadius: 10, background: uploadCount >= 3 ? C.muted : `linear-gradient(135deg, ${C.cyan}, ${C.pink})`, color: C.white, fontSize: 15, fontWeight: 600, cursor: uploadCount >= 3 ? "not-allowed" : "pointer" }}>
-                {uploading ? "Importing..." : uploadCount >= 3 ? "🔒 Limit Reached" : "Choose CSV File"}
-                <input type="file" accept=".csv" style={{ display: "none" }} onChange={e => handleCSV(e.target.files[0])} disabled={uploading || uploadCount >= 3} />
+              <label style={{ display: "inline-block", padding: "14px 32px", borderRadius: 10, background: (!isPro && uploadCount >= 3) ? C.muted : `linear-gradient(135deg, ${C.cyan}, ${C.pink})`, color: C.white, fontSize: 15, fontWeight: 600, cursor: (!isPro && uploadCount >= 3) ? "not-allowed" : "pointer" }}>
+                {uploading ? "Importing..." : (!isPro && uploadCount >= 3) ? "🔒 Limit Reached" : "Choose CSV File"}
+                <input type="file" accept=".csv" style={{ display: "none" }} onChange={e => handleCSV(e.target.files[0])} disabled={uploading || (!isPro && uploadCount >= 3)} />
               </label>
-              {uploadCount >= 3 && (
+              {!isPro && uploadCount >= 3 && (
                 <div style={{ marginTop: 24, padding: 16, background: `${C.pink}15`, border: `1px solid ${C.pink}30`, borderRadius: 10 }}>
                   <div style={{ fontSize: 14, color: C.white, marginBottom: 12 }}>Upgrade for unlimited imports</div>
                   <button onClick={handleUpgrade} disabled={upgrading} style={{ padding: "10px 24px", borderRadius: 8, background: `linear-gradient(135deg, ${C.cyan}, ${C.pink})`, border: "none", color: C.white, fontSize: 14, fontWeight: 600, cursor: upgrading ? "not-allowed" : "pointer", opacity: upgrading ? 0.7 : 1 }}>
-                    {upgrading ? "Loading..." : `Upgrade - $19.99/mo`}
+                    {upgrading ? "Loading..." : "Upgrade - $19.99/mo"}
                   </button>
                 </div>
               )}
@@ -391,6 +483,7 @@ export default function Dashboard() {
         )}
       </div>
 
+      {/* TOAST */}
       {toast && (
         <div style={{ position: "fixed", bottom: 24, right: 24, background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "14px 20px", color: C.white, fontSize: 14, zIndex: 999, boxShadow: "0 8px 32px rgba(0,0,0,0.8)" }}>
           {toast}
