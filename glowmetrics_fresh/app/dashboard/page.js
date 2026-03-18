@@ -2,15 +2,7 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
-import { parseCSV, detectSessions, identifyWhales, generateInsights, aggregateRows, generateAIPredictions } from "../../lib/analytics"
-
-const C = {
-  bg: "#0B0F1A", card: "#121826", card2: "#161e2e", border: "#1e2d45", border2: "#2a3f5f",
-  cyan: "#22D3EE", pink: "#EC4899", gold: "#F59E0B", blue: "#60A5FA",
-  green: "#10B981", red: "#F87171", orange: "#FB923C", white: "#F1F5F9", text: "#94A3B8", muted: "#475569"
-}
-
-const TIER_COLORS = { "Whale": C.gold, "Shark": C.blue, "Regular": C.cyan, "Dormant": C.orange }
+import { parseCSV, aggregateRows } from "../../lib/analytics"
 
 export default function Dashboard() {
   const router = useRouter()
@@ -22,10 +14,13 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState("overview")
   const [toast, setToast] = useState("")
   const [uploadCount, setUploadCount] = useState(0)
-  const [whaleFilter, setWhaleFilter] = useState("ALL")
-  const [platformFilter, setPlatformFilter] = useState("ALL")
   const [isPro, setIsPro] = useState(false)
   const [upgrading, setUpgrading] = useState(false)
+  const [selectedWhale, setSelectedWhale] = useState(null)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [whaleNotes, setWhaleNotes] = useState({})
+  const [editingNotes, setEditingNotes] = useState("")
+  const [savingNotes, setSavingNotes] = useState(false)
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(""), 3500) }
 
@@ -59,6 +54,7 @@ export default function Dashboard() {
       setUser(user)
       loadData(user.id)
       checkSubscription(user.id)
+      loadWhaleNotes(user.id)
     })
   }, [])
 
@@ -73,9 +69,41 @@ export default function Dashboard() {
       const { data } = await supabase.from("tips").select("*").eq("user_id", uid).order("date_time", { ascending: true })
       if (data?.length) {
         setTips(data)
-        setAnalytics(aggregateRows(data))
+        const analyzed = aggregateRows(data)
+        setAnalytics(analyzed)
       }
     } finally { setLoading(false) }
+  }
+
+  const loadWhaleNotes = async (uid) => {
+    const { data } = await supabase.from("tipper_notes").select("*").eq("user_id", uid)
+    if (data) {
+      const notesMap = {}
+      data.forEach(n => { notesMap[n.username.toLowerCase()] = n.notes })
+      setWhaleNotes(notesMap)
+    }
+  }
+
+  const saveWhaleNotes = async (username) => {
+    if (!user || !selectedWhale) return
+    setSavingNotes(true)
+    try {
+      const { error } = await supabase.from("tipper_notes").upsert({
+        user_id: user.id,
+        username: username,
+        notes: editingNotes,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'user_id,username' })
+      
+      if (error) throw error
+      
+      setWhaleNotes({ ...whaleNotes, [username.toLowerCase()]: editingNotes })
+      showToast("✅ Notes saved!")
+    } catch (err) {
+      showToast("❌ " + err.message)
+    } finally {
+      setSavingNotes(false)
+    }
   }
 
   const handleCSV = async (file) => {
@@ -111,381 +139,724 @@ export default function Dashboard() {
     } finally { setUploading(false) }
   }
 
+  const openWhaleProfile = (whale) => {
+    setSelectedWhale(whale)
+    setEditingNotes(whaleNotes[whale.username.toLowerCase()] || "")
+  }
+
+  const closeWhaleProfile = () => {
+    setSelectedWhale(null)
+    setEditingNotes("")
+  }
+
   if (loading) {
     return (
-      <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ textAlign: "center" }}>
-          <div style={{ width: 40, height: 40, border: `2px solid ${C.border}`, borderTop: `2px solid ${C.cyan}`, borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto 16px" }} />
-          <div style={{ color: C.muted, fontSize: 14 }}>Loading...</div>
-          <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+      <div className="min-h-screen bg-[#0B0F2A] flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-10 h-10 border-2 border-gray-700 border-t-cyan-400 rounded-full animate-spin mx-auto mb-4" />
+          <div className="text-gray-500 text-sm">Loading analytics...</div>
         </div>
       </div>
     )
   }
 
   const sessions = analytics?.sessions || []
-  const whales = identifyWhales(tips)
+  const whales = analytics?.whales || []
   const insights = analytics?.insights || []
-  const predictions = analytics?.predictions || []
   const platforms = analytics?.platforms || []
+  const predictions = analytics?.predictions || {}
+  const whaleAlerts = analytics?.whaleAlerts || []
   
   const totalRevenue = analytics?.totalUSD || 0
-  const avgPerHour = sessions.reduce((sum, s) => sum + s.usdPerHour, 0) / (sessions.length || 1)
+  const totalFans = whales.length
+  const avgPerHour = sessions.length > 0 ? sessions.reduce((sum, s) => sum + s.usdPerHour, 0) / sessions.length : 0
 
-  // Platform best times
-  const platformTimes = {}
-  sessions.forEach(s => {
-    if (!platformTimes[s.platform]) platformTimes[s.platform] = { hours: {}, days: {} }
-    const hour = new Date(s.startTime).getHours()
-    const day = new Date(s.startTime).toLocaleDateString('en-US', { weekday: 'long' })
-    platformTimes[s.platform].hours[hour] = (platformTimes[s.platform].hours[hour] || 0) + s.totalUSD
-    platformTimes[s.platform].days[day] = (platformTimes[s.platform].days[day] || 0) + s.totalUSD
-  })
-
-  const filteredWhales = whales.filter(w => {
-    if (whaleFilter !== "ALL" && w.tier !== whaleFilter) return false
-    if (platformFilter !== "ALL" && w.platform !== platformFilter) return false
-    return true
-  })
-
-  const allPlatforms = [...new Set(tips.map(t => t.platform))]
-
-  // Revenue by month
-  const monthlyRevenue = {}
-  tips.forEach(t => {
-    const date = new Date(t.date_time)
-    const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
-    monthlyRevenue[monthKey] = (monthlyRevenue[monthKey] || 0) + t.usd
-  })
+  // Filter whales by search
+  const filteredWhales = searchQuery.trim() === "" 
+    ? whales 
+    : whales.filter(w => w.username.toLowerCase().includes(searchQuery.toLowerCase()))
 
   return (
-    <div style={{ minHeight: "100vh", background: C.bg, fontFamily: "'Inter', sans-serif", color: C.text }}>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        ::-webkit-scrollbar { width: 5px; }
-        ::-webkit-scrollbar-track { background: ${C.bg}; }
-        ::-webkit-scrollbar-thumb { background: ${C.border2}; border-radius: 3px; }
-      `}</style>
-
+    <div className="min-h-screen bg-[#0B0F2A] text-gray-100 font-['Inter']">
+      
       {/* SIDEBAR */}
-      <div style={{ position: "fixed", left: 0, top: 0, bottom: 0, width: 240, background: C.card, borderRight: `1px solid ${C.border}`, display: "flex", flexDirection: "column", zIndex: 50 }}>
-        <div style={{ padding: "24px 20px", borderBottom: `1px solid ${C.border}` }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <div style={{ width: 40, height: 40, borderRadius: 10, background: `linear-gradient(135deg, ${C.cyan}, ${C.pink})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, fontWeight: 700, color: C.white }}>$</div>
-            <span style={{ fontSize: 20, fontWeight: 800, color: C.white }}>Cam<span style={{ background: `linear-gradient(90deg, ${C.cyan}, ${C.pink})`, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Cash</span></span>
+      <div className="fixed left-0 top-0 bottom-0 w-60 bg-[#121826] border-r border-gray-800 flex flex-col z-40">
+        
+        {/* Logo Section */}
+        <div className="p-6 border-b border-gray-800">
+          <div className="flex items-center gap-3 mb-3">
+            <svg className="w-10 h-10" viewBox="0 0 50 50" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <linearGradient id="logoGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" style={{stopColor:"#00E5FF"}} />
+                  <stop offset="50%" style={{stopColor:"#7B61FF"}} />
+                  <stop offset="100%" style={{stopColor:"#FF4DCE"}} />
+                </linearGradient>
+              </defs>
+              <rect x="5" y="12" width="40" height="30" rx="6" fill="none" stroke="url(#logoGrad)" strokeWidth="2.5"/>
+              <path d="M 18 12 L 18 8 Q 18 6 20 6 L 30 6 Q 32 6 32 8 L 32 12" fill="none" stroke="url(#logoGrad)" strokeWidth="2.2"/>
+              <circle cx="25" cy="27" r="9" fill="none" stroke="url(#logoGrad)" strokeWidth="2.8"/>
+              <text x="25" y="32" fontFamily="Inter" fontSize="14" fontWeight="900" fill="url(#logoGrad)" textAnchor="middle">$</text>
+              <circle cx="40" cy="17" r="2.5" fill="url(#logoGrad)"/>
+            </svg>
+            <div className="text-xl font-extrabold">
+              <span className="text-white">Cash</span>
+              <span className="bg-gradient-to-r from-cyan-400 to-pink-500 bg-clip-text text-transparent">Cam</span>
+            </div>
           </div>
-          {user && <div style={{ fontSize: 11, color: C.muted, marginTop: 10 }}>{user.email}</div>}
+          {user && <div className="text-xs text-gray-500 mb-2">{user.email}</div>}
           {isPro && (
-            <div style={{ marginTop: 10, padding: "6px 12px", borderRadius: 100, background: `linear-gradient(135deg, ${C.cyan}, ${C.pink})`, display: "inline-block" }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: C.white }}>✨ PRO</span>
+            <div className="inline-block px-3 py-1 rounded-full bg-gradient-to-r from-cyan-400 to-pink-500 text-white text-xs font-bold">
+              ✨ PRO
             </div>
           )}
         </div>
 
-        <nav style={{ flex: 1, padding: "16px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
-          {[
-            ["overview", "📊", "Overview"],
-            ["revenue", "💰", "Revenue"],
-            ["platforms", "🎯", "Platforms"],
-            ["whales", "🐳", "Top Fans"],
-            ["predictions", "🔮", "AI Predictions"],
-            ["sessions", "🎥", "Sessions"],
-            ["upload", "📥", "Import"]
-          ].map(([id, icon, label]) => (
-            <button key={id} onClick={() => setActiveTab(id)} style={{
-              display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 10,
-              background: activeTab === id ? `${C.cyan}15` : "transparent",
-              border: activeTab === id ? `1px solid ${C.cyan}30` : "1px solid transparent",
-              color: activeTab === id ? C.white : C.muted, fontSize: 14, fontWeight: activeTab === id ? 600 : 400,
-              cursor: "pointer", transition: "all 0.15s", textAlign: "left"
-            }}>
-              <span style={{ fontSize: 18 }}>{icon}</span>{label}
-              {id === "predictions" && !isPro && <span style={{ fontSize: 10, marginLeft: "auto" }}>🔒</span>}
-            </button>
-          ))}
+        {/* Navigation */}
+        <nav className="flex-1 p-3 space-y-1">
+          <button 
+            onClick={() => setActiveTab("overview")}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm ${
+              activeTab === "overview" 
+                ? "bg-cyan-500/10 border border-cyan-500/30 text-white font-medium" 
+                : "text-gray-400 hover:text-white"
+            }`}
+          >
+            <span className="text-lg">📊</span> Overview
+          </button>
+          <button 
+            onClick={() => setActiveTab("platforms")}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm ${
+              activeTab === "platforms" 
+                ? "bg-cyan-500/10 border border-cyan-500/30 text-white font-medium" 
+                : "text-gray-400 hover:text-white"
+            }`}
+          >
+            <span className="text-lg">🎯</span> Platforms
+          </button>
+          <button 
+            onClick={() => setActiveTab("fans")}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm ${
+              activeTab === "fans" 
+                ? "bg-cyan-500/10 border border-cyan-500/30 text-white font-medium" 
+                : "text-gray-400 hover:text-white"
+            }`}
+          >
+            <span className="text-lg">🐳</span> Top Fans
+          </button>
+          <button 
+            onClick={() => setActiveTab("predictions")}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm ${
+              activeTab === "predictions" 
+                ? "bg-cyan-500/10 border border-cyan-500/30 text-white font-medium" 
+                : "text-gray-400 hover:text-white"
+            }`}
+          >
+            <span className="text-lg">🔮</span> AI Predictions
+          </button>
+          <button 
+            onClick={() => setActiveTab("sessions")}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm ${
+              activeTab === "sessions" 
+                ? "bg-cyan-500/10 border border-cyan-500/30 text-white font-medium" 
+                : "text-gray-400 hover:text-white"
+            }`}
+          >
+            <span className="text-lg">🎥</span> Sessions
+          </button>
+          <button 
+            onClick={() => setActiveTab("import")}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm ${
+              activeTab === "import" 
+                ? "bg-cyan-500/10 border border-cyan-500/30 text-white font-medium" 
+                : "text-gray-400 hover:text-white"
+            }`}
+          >
+            <span className="text-lg">📥</span> Import
+          </button>
         </nav>
 
-        <div style={{ padding: "12px", borderTop: `1px solid ${C.border}` }}>
+        {/* Bottom Section */}
+        <div className="p-3 border-t border-gray-800 space-y-2">
           {isPro && (
-            <button onClick={handleManageBilling} style={{ width: "100%", padding: "10px", borderRadius: 10, background: "transparent", border: `1px solid ${C.border}`, color: C.white, fontSize: 13, cursor: "pointer", marginBottom: 8 }}>
+            <button 
+              onClick={handleManageBilling}
+              className="w-full px-3 py-2.5 rounded-lg border border-gray-700 text-white text-sm hover:bg-gray-800"
+            >
               💳 Manage Billing
             </button>
           )}
-          <button onClick={() => supabase.auth.signOut().then(() => router.replace("/login"))} style={{ width: "100%", padding: "10px", borderRadius: 10, background: "transparent", border: `1px solid ${C.border}`, color: C.muted, fontSize: 13, cursor: "pointer" }}>
+          <button 
+            onClick={() => supabase.auth.signOut().then(() => router.replace("/login"))}
+            className="w-full px-3 py-2.5 rounded-lg border border-gray-700 text-gray-400 text-sm hover:bg-gray-800"
+          >
             ↩ Sign Out
           </button>
         </div>
       </div>
 
       {/* MAIN CONTENT */}
-      <div style={{ marginLeft: 240, minHeight: "100vh", padding: 32 }}>
+      <div className="ml-60 p-8">
         
         {/* OVERVIEW TAB */}
         {activeTab === "overview" && (
-          <div>
-            <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 32 }}>Overview</h1>
-            
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 32 }}>
-              {[
-                { label: "Total Revenue", value: `$${totalRevenue.toFixed(2)}`, icon: "💰", color: C.green },
-                { label: "Avg $/Hour", value: `$${avgPerHour.toFixed(2)}`, icon: "⏱️", color: C.cyan },
-                { label: "Total Fans", value: whales.length, icon: "👥", color: C.pink },
-                { label: "Sessions", value: sessions.length, icon: "🎥", color: C.gold }
-              ].map((s, i) => (
-                <div key={i} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 24 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
-                    <span style={{ fontSize: 12, color: C.muted, textTransform: "uppercase" }}>{s.label}</span>
-                    <span style={{ fontSize: 20 }}>{s.icon}</span>
+          <>
+            <h1 className="text-3xl font-extrabold text-white mb-8">Overview</h1>
+
+            {/* Metric Cards */}
+            <div className="grid grid-cols-4 gap-4 mb-8">
+              <div className="bg-gray-900/40 backdrop-blur-sm border border-gray-800/50 rounded-2xl p-6 relative overflow-hidden">
+                <div className="absolute inset-0 bg-gradient-to-br from-green-500/5 to-transparent" />
+                <div className="relative">
+                  <div className="flex justify-between items-start mb-4">
+                    <div className="text-xs uppercase tracking-wider text-gray-500 font-medium">Total Revenue</div>
+                    <div className="text-2xl">💰</div>
                   </div>
-                  <div style={{ fontSize: 32, fontWeight: 800, color: s.color }}>{s.value}</div>
+                  <div className="text-4xl font-extrabold text-green-400">${totalRevenue.toFixed(2)}</div>
                 </div>
-              ))}
+              </div>
+
+              <div className="bg-gray-900/40 backdrop-blur-sm border border-gray-800/50 rounded-2xl p-6 relative overflow-hidden">
+                <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent" />
+                <div className="relative">
+                  <div className="flex justify-between items-start mb-4">
+                    <div className="text-xs uppercase tracking-wider text-gray-500 font-medium">Avg $/Hour</div>
+                    <div className="text-2xl">⏱️</div>
+                  </div>
+                  <div className="text-4xl font-extrabold text-blue-400">${avgPerHour.toFixed(2)}</div>
+                </div>
+              </div>
+
+              <div className="bg-gray-900/40 backdrop-blur-sm border border-gray-800/50 rounded-2xl p-6 relative overflow-hidden">
+                <div className="absolute inset-0 bg-gradient-to-br from-pink-500/5 to-transparent" />
+                <div className="relative">
+                  <div className="flex justify-between items-start mb-4">
+                    <div className="text-xs uppercase tracking-wider text-gray-500 font-medium">Total Fans</div>
+                    <div className="text-2xl">👥</div>
+                  </div>
+                  <div className="text-4xl font-extrabold text-pink-400">{totalFans}</div>
+                </div>
+              </div>
+
+              <div className="bg-gray-900/40 backdrop-blur-sm border border-gray-800/50 rounded-2xl p-6 relative overflow-hidden">
+                <div className="absolute inset-0 bg-gradient-to-br from-yellow-500/5 to-transparent" />
+                <div className="relative">
+                  <div className="flex justify-between items-start mb-4">
+                    <div className="text-xs uppercase tracking-wider text-gray-500 font-medium">Sessions</div>
+                    <div className="text-2xl">🎥</div>
+                  </div>
+                  <div className="text-4xl font-extrabold text-yellow-400">{sessions.length}</div>
+                </div>
+              </div>
             </div>
 
-            {/* SMART INSIGHTS */}
-            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 24, marginBottom: 32 }}>
-              <h2 style={{ fontSize: 18, fontWeight: 700, color: C.white, marginBottom: 16 }}>💡 Smart Insights</h2>
-              {insights.slice(0, 5).map((ins, i) => (
-                <div key={i} style={{ background: `${C.cyan}10`, border: `1px solid ${C.cyan}30`, borderRadius: 10, padding: 16, marginBottom: 12 }}>
-                  <div style={{ fontSize: 14, color: C.white }}>{ins.icon} {ins.text}</div>
+            {/* Whale Alerts */}
+            {whaleAlerts.length > 0 && (
+              <div className="bg-gray-900/40 backdrop-blur-sm border border-gray-800/50 rounded-2xl p-6 mb-8">
+                <h2 className="text-xl font-bold text-white mb-6">🚨 Whale Alerts</h2>
+                <div className="space-y-3">
+                  {whaleAlerts.slice(0, 5).map((alert, i) => (
+                    <div 
+                      key={i}
+                      className={`p-4 rounded-xl border flex items-start gap-4 ${
+                        alert.severity === 'warning' ? 'bg-yellow-500/10 border-yellow-500/30' :
+                        alert.severity === 'success' ? 'bg-green-500/10 border-green-500/30' :
+                        'bg-cyan-500/10 border-cyan-500/20'
+                      }`}
+                    >
+                      <span className="text-2xl">{alert.icon}</span>
+                      <div className="flex-1">
+                        <div className="text-sm text-gray-200">{alert.message}</div>
+                        {alert.action && (
+                          <div className="text-xs text-gray-400 mt-1">💡 {alert.action}</div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-              {!isPro && (
-                <div style={{ marginTop: 16, padding: 16, background: `${C.pink}10`, border: `1px solid ${C.pink}30`, borderRadius: 10, textAlign: "center" }}>
-                  <div style={{ fontSize: 14, color: C.white, marginBottom: 8 }}>🔒 Unlock 10+ more AI-powered insights</div>
-                  <button onClick={handleUpgrade} disabled={upgrading} style={{ padding: "8px 20px", borderRadius: 8, background: `linear-gradient(135deg, ${C.cyan}, ${C.pink})`, border: "none", color: C.white, fontSize: 13, fontWeight: 600, cursor: upgrading ? "not-allowed" : "pointer", opacity: upgrading ? 0.7 : 1 }}>
-                    {upgrading ? "Loading..." : "Upgrade to Pro"}
+              </div>
+            )}
+
+            {/* Smart Insights */}
+            <div className="bg-gray-900/40 backdrop-blur-sm border border-gray-800/50 rounded-2xl p-6">
+              <h2 className="text-xl font-bold text-white mb-6">💡 Smart Insights</h2>
+              <div className="space-y-3">
+                {insights.slice(0, isPro ? insights.length : 5).map((insight, i) => (
+                  <div 
+                    key={i}
+                    className="bg-cyan-500/10 border border-cyan-500/20 rounded-xl p-4 flex items-center gap-4"
+                  >
+                    <span className="text-2xl">{insight.icon}</span>
+                    <span className="text-sm text-gray-200">{insight.text}</span>
+                  </div>
+                ))}
+              </div>
+
+              {!isPro && insights.length > 5 && (
+                <div className="mt-6 bg-gradient-to-r from-purple-900/30 to-pink-900/30 border border-purple-500/20 rounded-xl p-8 text-center">
+                  <div className="text-4xl mb-4">🔒</div>
+                  <div className="text-base text-gray-200 mb-6">Unlock {insights.length - 5}+ more AI-powered insights</div>
+                  <button 
+                    onClick={handleUpgrade}
+                    disabled={upgrading}
+                    className="px-8 py-3 rounded-lg bg-gradient-to-r from-cyan-500 to-pink-500 text-white font-semibold text-sm hover:opacity-90 transition disabled:opacity-50"
+                  >
+                    {upgrading ? "Loading..." : "Upgrade to Pro - $19.99/mo"}
                   </button>
                 </div>
               )}
             </div>
-          </div>
-        )}
-
-        {/* REVENUE TAB */}
-        {activeTab === "revenue" && (
-          <div>
-            <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 32 }}>Revenue Analytics</h1>
-            
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 32 }}>
-              {[
-                { label: "Last 7 Days", value: `$${tips.filter(t => (Date.now() - new Date(t.date_time)) / (1000 * 60 * 60 * 24) <= 7).reduce((sum, t) => sum + t.usd, 0).toFixed(2)}`, icon: "📅" },
-                { label: "Last 30 Days", value: `$${tips.filter(t => (Date.now() - new Date(t.date_time)) / (1000 * 60 * 60 * 24) <= 30).reduce((sum, t) => sum + t.usd, 0).toFixed(2)}`, icon: "📊" },
-                { label: "All Time", value: `$${totalRevenue.toFixed(2)}`, icon: "💎" }
-              ].map((s, i) => (
-                <div key={i} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 24 }}>
-                  <div style={{ fontSize: 12, color: C.muted, marginBottom: 8 }}>{s.icon} {s.label}</div>
-                  <div style={{ fontSize: 28, fontWeight: 700, color: C.green }}>{s.value}</div>
-                </div>
-              ))}
-            </div>
-
-            {/* MONTHLY BREAKDOWN */}
-            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 24 }}>
-              <h2 style={{ fontSize: 18, fontWeight: 700, color: C.white, marginBottom: 20 }}>Monthly Revenue</h2>
-              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                {Object.entries(monthlyRevenue).reverse().slice(0, 6).map(([month, revenue]) => (
-                  <div key={month} style={{ display: "flex", alignItems: "center", gap: 16 }}>
-                    <div style={{ fontSize: 14, color: C.white, width: 100 }}>{month}</div>
-                    <div style={{ flex: 1, height: 32, background: C.card2, borderRadius: 8, overflow: "hidden", position: "relative" }}>
-                      <div style={{ height: "100%", width: `${(revenue / Math.max(...Object.values(monthlyRevenue))) * 100}%`, background: `linear-gradient(90deg, ${C.cyan}, ${C.pink})`, display: "flex", alignItems: "center", paddingLeft: 12 }}>
-                        <span style={{ fontSize: 13, fontWeight: 600, color: C.white }}>${revenue.toFixed(2)}</span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
+          </>
         )}
 
         {/* PLATFORMS TAB */}
         {activeTab === "platforms" && (
-          <div>
-            <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 32 }}>Platform Performance</h1>
+          <>
+            <h1 className="text-3xl font-extrabold text-white mb-8">Platform Performance</h1>
             
-            {platforms.map((p, i) => {
-              const bestHour = Object.entries(platformTimes[p.platform]?.hours || {}).sort((a, b) => b[1] - a[1])[0]
-              const bestDay = Object.entries(platformTimes[p.platform]?.days || {}).sort((a, b) => b[1] - a[1])[0]
-              
-              return (
-                <div key={i} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 24, marginBottom: 20 }}>
-                  <h3 style={{ fontSize: 20, fontWeight: 700, color: C.white, marginBottom: 16 }}>{p.platform}</h3>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 16, marginBottom: 16 }}>
-                    <div>
-                      <div style={{ fontSize: 12, color: C.muted }}>Total Revenue</div>
-                      <div style={{ fontSize: 24, fontWeight: 700, color: C.green }}>${p.totalUSD.toFixed(2)}</div>
-                    </div>
-                    <div>
-                      <div style={{ fontSize: 12, color: C.muted }}>$/Hour</div>
-                      <div style={{ fontSize: 24, fontWeight: 700, color: C.cyan }}>${p.usdPerHour.toFixed(2)}</div>
-                    </div>
-                    <div>
-                      <div style={{ fontSize: 12, color: C.muted }}>Sessions</div>
-                      <div style={{ fontSize: 24, fontWeight: 700, color: C.pink }}>{p.sessions}</div>
-                    </div>
-                    <div>
-                      <div style={{ fontSize: 12, color: C.muted }}>Total Hours</div>
-                      <div style={{ fontSize: 24, fontWeight: 700, color: C.gold }}>{p.hours.toFixed(1)}h</div>
-                    </div>
-                    <div>
-                      <div style={{ fontSize: 12, color: C.muted }}>Avg Tip</div>
-                      <div style={{ fontSize: 24, fontWeight: 700, color: C.blue }}>${p.avgTipSize.toFixed(2)}</div>
-                    </div>
+            {platforms.map((platform, i) => (
+              <div key={i} className="bg-gray-900/40 backdrop-blur-sm border border-gray-800/50 rounded-2xl p-6 mb-6">
+                <h2 className="text-2xl font-bold text-white mb-6">{platform.platform}</h2>
+                
+                <div className="grid grid-cols-5 gap-4 mb-6">
+                  <div>
+                    <div className="text-xs text-gray-500 mb-2">Total Revenue</div>
+                    <div className="text-2xl font-bold text-green-400">${platform.totalUSD.toFixed(2)}</div>
                   </div>
-                  {bestHour && bestDay && (
-                    <div style={{ padding: 16, background: C.card2, borderRadius: 10 }}>
-                      <div style={{ fontSize: 14, color: C.white, marginBottom: 4 }}>🕐 Best Hour: {bestHour[0]}:00 - ${(bestHour[1] / (Object.keys(platformTimes[p.platform].hours).length || 1)).toFixed(2)}/session</div>
-                      <div style={{ fontSize: 14, color: C.white }}>📅 Best Day: {bestDay[0]}</div>
-                    </div>
-                  )}
+                  <div>
+                    <div className="text-xs text-gray-500 mb-2">$/Hour</div>
+                    <div className="text-2xl font-bold text-cyan-400">${platform.usdPerHour}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-gray-500 mb-2">Sessions</div>
+                    <div className="text-2xl font-bold text-pink-400">{platform.sessions}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-gray-500 mb-2">Total Hours</div>
+                    <div className="text-2xl font-bold text-yellow-400">{platform.hours.toFixed(1)}h</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-gray-500 mb-2">Avg Tip</div>
+                    <div className="text-2xl font-bold text-blue-400">${platform.avgTipSize}</div>
+                  </div>
                 </div>
-              )
-            })}
-          </div>
+
+                <div className="bg-gray-800/30 rounded-xl p-4">
+                  <div className="text-sm text-gray-300">
+                    💡 Best performance on this platform during peak hours
+                  </div>
+                </div>
+              </div>
+            ))}
+          </>
         )}
 
-        {/* WHALES TAB */}
-        {activeTab === "whales" && (
-          <div>
-            <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 16 }}>🐳 Top Fans</h1>
-            <div style={{ display: "flex", gap: 12, marginBottom: 24 }}>
-              <select value={whaleFilter} onChange={e => setWhaleFilter(e.target.value)} style={{ padding: "8px 12px", background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, color: C.white, fontSize: 13 }}>
-                <option value="ALL">All Tiers</option>
-                <option value="Whale">🐳 Whales</option>
-                <option value="Shark">🦈 Sharks</option>
-                <option value="Regular">🐟 Regular</option>
-                <option value="Dormant">💤 Dormant</option>
-              </select>
-              <select value={platformFilter} onChange={e => setPlatformFilter(e.target.value)} style={{ padding: "8px 12px", background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, color: C.white, fontSize: 13 }}>
-                <option value="ALL">All Platforms</option>
-                {allPlatforms.map(p => <option key={p} value={p}>{p}</option>)}
-              </select>
+        {/* TOP FANS TAB */}
+        {activeTab === "fans" && (
+          <>
+            <div className="flex justify-between items-center mb-8">
+              <h1 className="text-3xl font-extrabold text-white">🐳 Top Fans Deep Dive</h1>
+              
+              {/* Search Bar */}
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Search username..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="px-4 py-2 pl-10 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500 w-64"
+                />
+                <svg className="w-5 h-5 absolute left-3 top-2.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                {searchQuery && (
+                  <button 
+                    onClick={() => setSearchQuery("")}
+                    className="absolute right-3 top-2.5 text-gray-500 hover:text-white"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
             </div>
             
-            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, overflow: "hidden" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                <thead>
-                  <tr style={{ background: C.card2, borderBottom: `1px solid ${C.border}` }}>
-                    {["#", "Username", "Total $", "Tips", "Avg Tip", "Platform", "Tier", "Last Tip", "Profile"].map(h => (
-                      <th key={h} style={{ padding: "12px 16px", textAlign: "left", color: C.muted, fontSize: 11, textTransform: "uppercase", fontWeight: 500 }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredWhales.map((w, i) => (
-                    <tr key={i} style={{ borderBottom: `1px solid ${C.border}` }}>
-                      <td style={{ padding: "12px 16px", color: C.muted }}>#{i + 1}</td>
-                      <td style={{ padding: "12px 16px", color: C.white, fontWeight: 600 }}>{w.username}</td>
-                      <td style={{ padding: "12px 16px", color: C.green, fontWeight: 700 }}>${w.totalUSD.toFixed(2)}</td>
-                      <td style={{ padding: "12px 16px", color: C.muted }}>{w.tipCount}</td>
-                      <td style={{ padding: "12px 16px", color: C.cyan }}>${w.avgTipSize.toFixed(2)}</td>
-                      <td style={{ padding: "12px 16px", color: C.muted }}>{w.platform}</td>
-                      <td style={{ padding: "12px 16px" }}>
-                        <span style={{ padding: "4px 10px", borderRadius: 100, background: `${TIER_COLORS[w.tier]}15`, color: TIER_COLORS[w.tier], fontSize: 11, fontWeight: 600 }}>
-                          {w.tier}
-                        </span>
-                      </td>
-                      <td style={{ padding: "12px 16px", color: C.muted, fontSize: 12 }}>{new Date(w.lastTipDate).toLocaleDateString()}</td>
-                      <td style={{ padding: "12px 16px" }}>
-                        <button onClick={() => !isPro && handleUpgrade()} style={{ padding: "4px 12px", borderRadius: 6, background: `${C.pink}15`, border: `1px solid ${C.pink}30`, color: C.pink, fontSize: 11, cursor: "pointer" }}>
-                          {isPro ? "View" : "🔒 Unlock"}
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+            {searchQuery && filteredWhales.length === 0 && (
+              <div className="bg-gray-900/40 backdrop-blur-sm border border-gray-800/50 rounded-2xl p-8 text-center">
+                <div className="text-4xl mb-4">🔍</div>
+                <div className="text-lg text-gray-400">No fans found matching "{searchQuery}"</div>
+              </div>
+            )}
+
+            {filteredWhales.length > 0 && (
+              <div className="bg-gray-900/40 backdrop-blur-sm border border-gray-800/50 rounded-2xl overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-gray-800/50 border-b border-gray-700">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs text-gray-400 uppercase">#</th>
+                        <th className="px-4 py-3 text-left text-xs text-gray-400 uppercase">Username</th>
+                        <th className="px-4 py-3 text-left text-xs text-gray-400 uppercase">Total $</th>
+                        <th className="px-4 py-3 text-left text-xs text-gray-400 uppercase">Tips</th>
+                        <th className="px-4 py-3 text-left text-xs text-gray-400 uppercase">Avg Tip</th>
+                        <th className="px-4 py-3 text-left text-xs text-gray-400 uppercase">Platform</th>
+                        <th className="px-4 py-3 text-left text-xs text-gray-400 uppercase">Tier</th>
+                        <th className="px-4 py-3 text-left text-xs text-gray-400 uppercase">Last Tip</th>
+                        <th className="px-4 py-3 text-left text-xs text-gray-400 uppercase">Profile</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredWhales.map((whale, i) => (
+                        <tr key={i} className="border-b border-gray-800/50 hover:bg-gray-800/30">
+                          <td className="px-4 py-4 text-gray-400">#{whales.indexOf(whale)+1}</td>
+                          <td className="px-4 py-4 text-white font-semibold">{whale.username}</td>
+                          <td className="px-4 py-4 text-green-400 font-bold">${whale.totalUSD.toFixed(2)}</td>
+                          <td className="px-4 py-4 text-gray-300">{whale.tipCount}</td>
+                          <td className="px-4 py-4 text-cyan-400">${whale.avgTipSize.toFixed(2)}</td>
+                          <td className="px-4 py-4 text-gray-300">{whale.platform}</td>
+                          <td className="px-4 py-4">
+                            <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                              whale.tier === 'Whale' ? 'bg-yellow-500/20 text-yellow-400' :
+                              whale.tier === 'Shark' ? 'bg-blue-500/20 text-blue-400' :
+                              whale.tier === 'Dormant' ? 'bg-gray-500/20 text-gray-400' :
+                              'bg-green-500/20 text-green-400'
+                            }`}>
+                              {whale.tier === 'Whale' ? '🐳 Whale' :
+                               whale.tier === 'Shark' ? '🦈 Shark' :
+                               whale.tier === 'Dormant' ? '💤 Dormant' : '🐟 Regular'}
+                            </span>
+                          </td>
+                          <td className="px-4 py-4 text-gray-400 text-sm">
+                            {whale.daysSinceLastTip}d ago
+                          </td>
+                          <td className="px-4 py-4">
+                            {isPro ? (
+                              <button 
+                                onClick={() => openWhaleProfile(whale)}
+                                className="px-3 py-1 rounded-lg bg-cyan-500/20 border border-cyan-500/30 text-cyan-400 text-xs hover:bg-cyan-500/30"
+                              >
+                                View Profile
+                              </button>
+                            ) : (
+                              <button 
+                                onClick={handleUpgrade}
+                                className="px-3 py-1 rounded-lg bg-pink-500/20 border border-pink-500/30 text-pink-400 text-xs"
+                              >
+                                🔒 Unlock
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </>
         )}
 
         {/* AI PREDICTIONS TAB */}
         {activeTab === "predictions" && (
-          <div>
-            <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 32 }}>🔮 AI Predictions</h1>
-            
-            {isPro ? (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 20 }}>
-                {predictions.map((pred, i) => (
-                  <div key={i} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 24 }}>
-                    <div style={{ fontSize: 32, marginBottom: 12 }}>{pred.icon}</div>
-                    <div style={{ fontSize: 16, fontWeight: 600, color: C.white, marginBottom: 8 }}>{pred.title}</div>
-                    <div style={{ fontSize: 28, fontWeight: 800, color: C.cyan, marginBottom: 8 }}>{pred.value}</div>
-                    <div style={{ fontSize: 13, color: C.muted }}>{pred.confidence}</div>
+          <>
+            <h1 className="text-3xl font-extrabold text-white mb-8">🔮 AI Predictions</h1>
+
+            {predictions.next7Days && (
+              <div className="grid grid-cols-2 gap-6 mb-8">
+                <div className="bg-gray-900/40 backdrop-blur-sm border border-gray-800/50 rounded-2xl p-8">
+                  <div className="text-5xl mb-4">📈</div>
+                  <div className="text-lg font-semibold text-gray-300 mb-3">Next 7 Days Revenue Forecast</div>
+                  <div className="text-4xl font-extrabold text-cyan-400 mb-2">
+                    ${predictions.next7Days.amount.toFixed(2)}
                   </div>
-                ))}
-              </div>
-            ) : (
-              <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 60, textAlign: "center" }}>
-                <div style={{ fontSize: 48, marginBottom: 16 }}>🔒</div>
-                <div style={{ fontSize: 20, fontWeight: 700, color: C.white, marginBottom: 12 }}>AI Predictions are a Pro Feature</div>
-                <div style={{ fontSize: 14, color: C.muted, marginBottom: 24, maxWidth: 400, margin: "0 auto 24px" }}>
-                  Get revenue forecasts, whale re-engagement predictions, and optimal streaming time recommendations
+                  <div className="text-sm text-gray-400">
+                    {predictions.next7Days.confidence} confidence
+                  </div>
                 </div>
-                <button onClick={handleUpgrade} disabled={upgrading} style={{ padding: "12px 32px", borderRadius: 10, background: `linear-gradient(135deg, ${C.cyan}, ${C.pink})`, border: "none", color: C.white, fontSize: 15, fontWeight: 600, cursor: upgrading ? "not-allowed" : "pointer", opacity: upgrading ? 0.7 : 1 }}>
+
+                <div className="bg-gray-900/40 backdrop-blur-sm border border-gray-800/50 rounded-2xl p-8">
+                  <div className="text-5xl mb-4">📊</div>
+                  <div className="text-lg font-semibold text-gray-300 mb-3">Next 30 Days Revenue Forecast</div>
+                  <div className="text-4xl font-extrabold text-pink-400 mb-2">
+                    ${predictions.next30Days.amount.toFixed(2)}
+                  </div>
+                  <div className="text-sm text-gray-400">
+                    {predictions.next30Days.confidence} confidence
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {predictions.tonightStream && (
+              <div className="bg-gradient-to-br from-purple-900/40 to-pink-900/40 border border-purple-500/30 rounded-2xl p-8 mb-8">
+                <div className="text-5xl mb-4">🎥</div>
+                <div className="text-2xl font-bold text-white mb-3">Tonight's Stream Prediction</div>
+                <div className="text-5xl font-extrabold text-cyan-400 mb-4">
+                  ${predictions.tonightStream.expected.toFixed(2)}
+                </div>
+                <div className="text-lg text-gray-300 mb-2">
+                  Expected range: ${predictions.tonightStream.range.min.toFixed(2)} - ${predictions.tonightStream.range.max.toFixed(2)}
+                </div>
+                <div className="text-sm text-gray-400">
+                  Based on {predictions.tonightStream.confidence} confidence from historical data
+                </div>
+              </div>
+            )}
+
+            {!isPro && (
+              <div className="bg-gradient-to-r from-purple-900/30 to-pink-900/30 border border-purple-500/20 rounded-xl p-8 text-center">
+                <div className="text-4xl mb-4">🔒</div>
+                <div className="text-base text-gray-200 mb-6">Unlock advanced AI predictions and whale behavior analysis</div>
+                <button 
+                  onClick={handleUpgrade}
+                  disabled={upgrading}
+                  className="px-8 py-3 rounded-lg bg-gradient-to-r from-cyan-500 to-pink-500 text-white font-semibold text-sm hover:opacity-90 transition disabled:opacity-50"
+                >
                   {upgrading ? "Loading..." : "Upgrade to Pro - $19.99/mo"}
                 </button>
               </div>
             )}
-          </div>
+          </>
         )}
 
         {/* SESSIONS TAB */}
         {activeTab === "sessions" && (
-          <div>
-            <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 32 }}>🎥 Stream Sessions</h1>
-            {sessions.map((s, i) => (
-              <div key={i} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 20, marginBottom: 16 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
+          <>
+            <h1 className="text-3xl font-extrabold text-white mb-8">🎥 Stream Sessions</h1>
+            
+            {sessions.map((session, i) => (
+              <div key={i} className="bg-gray-900/40 backdrop-blur-sm border border-gray-800/50 rounded-2xl p-6 mb-4">
+                <div className="flex justify-between items-start mb-4">
                   <div>
-                    <div style={{ fontSize: 16, fontWeight: 600, color: C.white }}>{new Date(s.startTime).toLocaleDateString()} • {s.platform}</div>
-                    <div style={{ fontSize: 13, color: C.muted }}>{new Date(s.startTime).toLocaleTimeString()}</div>
+                    <div className="text-lg font-semibold text-white">
+                      {new Date(session.startTime).toLocaleDateString()} • {session.platform}
+                    </div>
+                    <div className="text-sm text-gray-400">
+                      {new Date(session.startTime).toLocaleTimeString()}
+                    </div>
                   </div>
-                  <div style={{ textAlign: "right" }}>
-                    <div style={{ fontSize: 24, fontWeight: 700, color: C.green }}>${s.totalUSD}</div>
-                    <div style={{ fontSize: 12, color: C.cyan }}>{s.durationHours.toFixed(1)}h</div>
+                  <div className="text-right">
+                    <div className="text-2xl font-bold text-green-400">${session.totalUSD.toFixed(2)}</div>
+                    <div className="text-sm text-cyan-400">{session.durationHours.toFixed(1)}h</div>
                   </div>
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
-                  <div><div style={{ fontSize: 11, color: C.muted }}>$/Hour</div><div style={{ fontSize: 15, fontWeight: 600, color: C.white }}>${s.usdPerHour}</div></div>
-                  <div><div style={{ fontSize: 11, color: C.muted }}>Tips</div><div style={{ fontSize: 15, fontWeight: 600, color: C.white }}>{s.tipCount}</div></div>
-                  <div><div style={{ fontSize: 11, color: C.muted }}>Avg Tip</div><div style={{ fontSize: 15, fontWeight: 600, color: C.white }}>${s.avgTipSize}</div></div>
-                  <div><div style={{ fontSize: 11, color: C.muted }}>Fans</div><div style={{ fontSize: 15, fontWeight: 600, color: C.white }}>{s.uniqueFans}</div></div>
+
+                <div className="grid grid-cols-4 gap-4 pt-4 border-t border-gray-700">
+                  <div>
+                    <div className="text-xs text-gray-400">$/Hour</div>
+                    <div className="text-lg font-semibold text-white">${session.usdPerHour.toFixed(2)}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-gray-400">Tips</div>
+                    <div className="text-lg font-semibold text-white">{session.tipCount}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-gray-400">Avg Tip</div>
+                    <div className="text-lg font-semibold text-white">${session.avgTipSize.toFixed(2)}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-gray-400">Unique Fans</div>
+                    <div className="text-lg font-semibold text-white">{session.uniqueFans}</div>
+                  </div>
                 </div>
               </div>
             ))}
-          </div>
+          </>
         )}
 
-        {/* UPLOAD TAB */}
-        {activeTab === "upload" && (
-          <div style={{ maxWidth: 600, margin: "0 auto" }}>
-            <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 8 }}>📥 Import CSV</h1>
-            <p style={{ fontSize: 14, color: C.muted, marginBottom: 32 }}>Uploads: {isPro ? "∞ Unlimited" : `${uploadCount}/3`} per month</p>
-            <div style={{ background: C.card, borderRadius: 14, padding: 40, textAlign: "center" }}>
-              <div style={{ fontSize: 48, marginBottom: 16 }}>📁</div>
-              <label style={{ display: "inline-block", padding: "14px 32px", borderRadius: 10, background: (!isPro && uploadCount >= 3) ? C.muted : `linear-gradient(135deg, ${C.cyan}, ${C.pink})`, color: C.white, fontSize: 15, fontWeight: 600, cursor: (!isPro && uploadCount >= 3) ? "not-allowed" : "pointer" }}>
-                {uploading ? "Importing..." : (!isPro && uploadCount >= 3) ? "🔒 Limit Reached" : "Choose CSV File"}
-                <input type="file" accept=".csv" style={{ display: "none" }} onChange={e => handleCSV(e.target.files[0])} disabled={uploading || (!isPro && uploadCount >= 3)} />
+        {/* IMPORT TAB */}
+        {activeTab === "import" && (
+          <>
+            <h1 className="text-3xl font-extrabold text-white mb-8">📥 Import CSV Data</h1>
+            
+            <div className="bg-gray-900/40 backdrop-blur-sm border border-gray-800/50 rounded-2xl p-8 text-center">
+              <div className="text-6xl mb-6">📊</div>
+              <h2 className="text-2xl font-bold text-white mb-4">Upload Your Tips CSV</h2>
+              <p className="text-gray-400 mb-8">
+                Supports Chaturbate, BongaCams, and all major platforms
+              </p>
+              
+              <input
+                type="file"
+                accept=".csv"
+                onChange={e => e.target.files?.[0] && handleCSV(e.target.files[0])}
+                className="hidden"
+                id="csv-upload"
+                disabled={uploading}
+              />
+              <label
+                htmlFor="csv-upload"
+                className={`inline-block px-8 py-4 rounded-xl bg-gradient-to-r from-cyan-500 to-pink-500 text-white font-semibold cursor-pointer hover:opacity-90 transition ${
+                  uploading ? 'opacity-50 cursor-not-allowed' : ''
+                }`}
+              >
+                {uploading ? "Uploading..." : "Choose CSV File"}
               </label>
-              {!isPro && uploadCount >= 3 && (
-                <div style={{ marginTop: 24, padding: 16, background: `${C.pink}15`, border: `1px solid ${C.pink}30`, borderRadius: 10 }}>
-                  <div style={{ fontSize: 14, color: C.white, marginBottom: 12 }}>Upgrade for unlimited imports</div>
-                  <button onClick={handleUpgrade} disabled={upgrading} style={{ padding: "10px 24px", borderRadius: 8, background: `linear-gradient(135deg, ${C.cyan}, ${C.pink})`, border: "none", color: C.white, fontSize: 14, fontWeight: 600, cursor: upgrading ? "not-allowed" : "pointer", opacity: upgrading ? 0.7 : 1 }}>
-                    {upgrading ? "Loading..." : "Upgrade - $19.99/mo"}
-                  </button>
+
+              {!isPro && (
+                <div className="mt-6 text-sm text-gray-400">
+                  Free tier: {uploadCount}/3 uploads this month
                 </div>
               )}
             </div>
-          </div>
+          </>
         )}
       </div>
 
-      {/* TOAST */}
+      {/* WHALE PROFILE MODAL */}
+      {selectedWhale && isPro && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-8" onClick={closeWhaleProfile}>
+          <div className="bg-[#121826] border border-gray-700 rounded-2xl p-8 max-w-4xl w-full max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            
+            {/* Header */}
+            <div className="flex justify-between items-start mb-6">
+              <div>
+                <h2 className="text-3xl font-bold text-white mb-2">🐳 {selectedWhale.username}</h2>
+                <div className="text-sm text-gray-400">{selectedWhale.platform}</div>
+              </div>
+              <button onClick={closeWhaleProfile} className="text-gray-400 hover:text-white text-3xl leading-none">×</button>
+            </div>
+
+            {/* Basic Stats */}
+            <div className="grid grid-cols-3 gap-4 mb-6">
+              <div className="bg-gray-900/50 rounded-xl p-4">
+                <div className="text-xs text-gray-400 mb-2">Lifetime Value</div>
+                <div className="text-3xl font-bold text-green-400">${selectedWhale.totalUSD.toFixed(2)}</div>
+              </div>
+              <div className="bg-gray-900/50 rounded-xl p-4">
+                <div className="text-xs text-gray-400 mb-2">Total Tips</div>
+                <div className="text-3xl font-bold text-cyan-400">{selectedWhale.tipCount}</div>
+              </div>
+              <div className="bg-gray-900/50 rounded-xl p-4">
+                <div className="text-xs text-gray-400 mb-2">Biggest Tip</div>
+                <div className="text-3xl font-bold text-pink-400">${selectedWhale.biggestTip.toFixed(2)}</div>
+              </div>
+            </div>
+
+            {/* AI Predictions */}
+            <div className="bg-cyan-500/10 border border-cyan-500/30 rounded-xl p-6 mb-6">
+              <h3 className="text-lg font-bold text-white mb-4">🔮 AI Predictions</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <div className="text-xs text-gray-400 mb-1">Next Tip Probability</div>
+                  <div className={`text-2xl font-bold ${
+                    selectedWhale.tipProbability?.level === 'High' ? 'text-green-400' :
+                    selectedWhale.tipProbability?.level.includes('Medium') ? 'text-yellow-400' :
+                    'text-red-400'
+                  }`}>
+                    {selectedWhale.tipProbability?.level} ({selectedWhale.tipProbability?.percentage}%)
+                  </div>
+                  <div className="text-xs text-gray-400 mt-1">Expected: {selectedWhale.expectedNextTip}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-gray-400 mb-1">Churn Risk</div>
+                  <div className={`text-2xl font-bold ${
+                    selectedWhale.churnRisk?.level === 'Low' ? 'text-green-400' :
+                    selectedWhale.churnRisk?.level === 'Medium' ? 'text-yellow-400' :
+                    'text-red-400'
+                  }`}>
+                    {selectedWhale.churnRisk?.level}
+                  </div>
+                  <div className="text-xs text-gray-400 mt-1">{selectedWhale.churnRisk?.risk}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-gray-400 mb-1">Predicted LTV (1 year)</div>
+                  <div className="text-2xl font-bold text-cyan-400">
+                    ${selectedWhale.lifetimeValue?.prediction?.toFixed(2) || '0.00'}
+                  </div>
+                  <div className="text-xs text-gray-400 mt-1">
+                    {selectedWhale.lifetimeValue?.confidence} confidence
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs text-gray-400 mb-1">Typical Online Hours</div>
+                  <div className="text-2xl font-bold text-pink-400">
+                    {selectedWhale.typicalOnlineHours}
+                  </div>
+                  <div className="text-xs text-gray-400 mt-1">Best contact time</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Activity Details */}
+            <div className="grid grid-cols-2 gap-4 mb-6">
+              <div className="bg-gray-900/50 rounded-xl p-4">
+                <div className="text-sm text-gray-400 mb-2">First Tip</div>
+                <div className="text-lg font-semibold text-white">
+                  {new Date(selectedWhale.firstTipDate).toLocaleDateString()}
+                </div>
+              </div>
+              <div className="bg-gray-900/50 rounded-xl p-4">
+                <div className="text-sm text-gray-400 mb-2">Last Tip</div>
+                <div className="text-lg font-semibold text-white">
+                  {selectedWhale.daysSinceLastTip} days ago
+                </div>
+              </div>
+              <div className="bg-gray-900/50 rounded-xl p-4">
+                <div className="text-sm text-gray-400 mb-2">Avg Tip Amount</div>
+                <div className="text-lg font-semibold text-white">
+                  ${selectedWhale.avgTipSize.toFixed(2)}
+                </div>
+              </div>
+              <div className="bg-gray-900/50 rounded-xl p-4">
+                <div className="text-sm text-gray-400 mb-2">Tipping Frequency</div>
+                <div className="text-lg font-semibold text-white">
+                  Every {selectedWhale.avgDaysBetweenTips.toFixed(0)} days
+                </div>
+              </div>
+            </div>
+
+            {/* Private Shows */}
+            {selectedWhale.hasPrivates && (
+              <div className="bg-purple-500/10 border border-purple-500/30 rounded-xl p-4 mb-6">
+                <div className="flex items-center gap-3 mb-2">
+                  <span className="text-2xl">🔒</span>
+                  <div className="text-lg font-bold text-white">Private Shows</div>
+                </div>
+                <div className="text-sm text-gray-300">
+                  {selectedWhale.privateCount} private session{selectedWhale.privateCount !== 1 ? 's' : ''} • 
+                  Total spent: ${selectedWhale.privateSpent.toFixed(2)}
+                </div>
+              </div>
+            )}
+
+            {/* Tip Notes */}
+            {selectedWhale.tipNotes && selectedWhale.tipNotes.length > 0 && (
+              <div className="bg-gray-900/50 rounded-xl p-4 mb-6">
+                <div className="text-lg font-bold text-white mb-3">💬 Tip Notes</div>
+                <div className="space-y-2 max-h-40 overflow-y-auto">
+                  {selectedWhale.tipNotes.slice(0, 10).map((note, i) => (
+                    <div key={i} className="text-sm text-gray-300 bg-gray-800/50 rounded p-2">
+                      "{note}"
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Custom Notes */}
+            <div className="bg-gray-900/50 rounded-xl p-4">
+              <div className="text-lg font-bold text-white mb-3">📝 Your Notes</div>
+              <textarea
+                value={editingNotes}
+                onChange={(e) => setEditingNotes(e.target.value)}
+                placeholder="Add your own notes about this fan (preferences, favorites, special requests, etc.)"
+                className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500 min-h-[120px]"
+              />
+              <button
+                onClick={() => saveWhaleNotes(selectedWhale.username)}
+                disabled={savingNotes}
+                className="mt-3 px-6 py-2 bg-cyan-500 hover:bg-cyan-600 rounded-lg text-white font-semibold disabled:opacity-50"
+              >
+                {savingNotes ? "Saving..." : "Save Notes"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toast */}
       {toast && (
-        <div style={{ position: "fixed", bottom: 24, right: 24, background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "14px 20px", color: C.white, fontSize: 14, zIndex: 999, boxShadow: "0 8px 32px rgba(0,0,0,0.8)" }}>
+        <div className="fixed bottom-6 right-6 bg-gray-900 border border-gray-700 rounded-xl px-5 py-3 text-white text-sm shadow-2xl z-50">
           {toast}
         </div>
       )}
