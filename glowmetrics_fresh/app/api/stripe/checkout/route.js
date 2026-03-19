@@ -8,11 +8,11 @@ export async function POST(request) {
   try {
     const supabase = createRouteHandlerClient({ cookies })
     const { data: { user } } = await supabase.auth.getUser()
-
+    
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
-
+    
     // Get or create customer
     let customerId
     const { data: subscription } = await supabase
@@ -20,7 +20,7 @@ export async function POST(request) {
       .select('stripe_customer_id')
       .eq('user_id', user.id)
       .single()
-
+    
     if (subscription?.stripe_customer_id) {
       customerId = subscription.stripe_customer_id
     } else {
@@ -36,12 +36,12 @@ export async function POST(request) {
         status: 'free'
       })
     }
-
+    
     // Create checkout session
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       mode: 'subscription',
-      payment_method_types: ['card'],
+payment_method_types: ['card'],
       line_items: [{
         price: process.env.NEXT_PUBLIC_STRIPE_PRICE_ID,
         quantity: 1,
@@ -52,7 +52,7 @@ export async function POST(request) {
         userId: user.id
       }
     })
-
+    
     return NextResponse.json({ url: session.url })
   } catch (error) {
     console.error('Stripe checkout error:', error)
