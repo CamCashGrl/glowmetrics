@@ -97,7 +97,8 @@ export default function Dashboard() {
   const whales = analytics?.whales || []
   const insights = analytics?.insights || []
   const platforms = analytics?.platforms || []
-  
+  const alerts = analytics?.whaleAlerts || []
+
   const totalRevenue = analytics?.totalUSD || 0
   const avgPerHour = sessions.reduce((sum, s) => sum + s.usdPerHour, 0) / (sessions.length || 1)
 
