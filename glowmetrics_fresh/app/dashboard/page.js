@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
-import { parseCSV, detectSessions, identifyWhales, generateInsights, aggregateRows } from "../../lib/analytics"
+import { parseCSV, aggregateRows } from "../../lib/analytics"
 
 const C = {
   bg: "#0B0F1A", card: "#121826", card2: "#161e2e", border: "#1e2d45", border2: "#2a3f5f",
@@ -151,7 +151,7 @@ export default function Dashboard() {
               <span style={{ fontSize: 18 }}>{icon}</span>{label}
             </button>
           ))}
-       </nav>
+        </nav>
       </div>
 
       {/* MAIN CONTENT */}
@@ -165,51 +165,44 @@ export default function Dashboard() {
               gap: 20,
               marginBottom: 36
             }}>
-  display: "grid",
-  gridTemplateColumns: "repeat(4, 1fr)",
-  gap: 20,
-  marginBottom: 36
-}}>
-  {[
-    { label: "Total Revenue", value: `$${totalRevenue.toFixed(2)}`, icon: "💰", color: C.green },
-    { label: "Avg $/Hour", value: `$${avgPerHour.toFixed(2)}`, icon: "⏱️", color: C.cyan },
-    { label: "Total Fans", value: whales.length, icon: "👥", color: C.pink },
-    { label: "Sessions", value: sessions.length, icon: "🎥", color: C.gold }
-  ].map((s, i) => (
-    <div key={i} style={{
-      background: `linear-gradient(145deg, ${C.card}, ${C.card2})`,
-      border: `1px solid ${C.border}`,
-      borderRadius: 18,
-      padding: 22,
-      position: "relative",
-      overflow: "hidden",
-      boxShadow: "0 10px 30px rgba(0,0,0,0.4)"
-    }}>
-      
-      <div style={{
-        position: "absolute",
-        top: -40,
-        right: -40,
-        width: 120,
-        height: 120,
-        background: s.color,
-        opacity: 0.08,
-        filter: "blur(40px)"
-      }} />
+              {[
+                { label: "Total Revenue", value: `$${totalRevenue.toFixed(2)}`, icon: "💰", color: C.green },
+                { label: "Avg $/Hour", value: `$${avgPerHour.toFixed(2)}`, icon: "⏱️", color: C.cyan },
+                { label: "Total Fans", value: whales.length, icon: "👥", color: C.pink },
+                { label: "Sessions", value: sessions.length, icon: "🎥", color: C.gold }
+              ].map((s, i) => (
+                <div key={i} style={{
+                  background: `linear-gradient(145deg, ${C.card}, ${C.card2})`,
+                  border: `1px solid ${C.border}`,
+                  borderRadius: 18,
+                  padding: 22,
+                  position: "relative",
+                  overflow: "hidden",
+                  boxShadow: "0 10px 30px rgba(0,0,0,0.4)"
+                }}>
+                  <div style={{
+                    position: "absolute",
+                    top: -40,
+                    right: -40,
+                    width: 120,
+                    height: 120,
+                    background: s.color,
+                    opacity: 0.08,
+                    filter: "blur(40px)"
+                  }} />
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
+                    <span style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: 1 }}>
+                      {s.label}
+                    </span>
+                    <span style={{ fontSize: 20 }}>{s.icon}</span>
+                  </div>
+                  <div style={{ fontSize: 34, fontWeight: 800, color: s.color }}>
+                    {s.value}
+                  </div>
+                </div>
+              ))}
+            </div>
 
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
-        <span style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: 1 }}>
-          {s.label}
-        </span>
-        <span style={{ fontSize: 20 }}>{s.icon}</span>
-      </div>
-
-      <div style={{ fontSize: 34, fontWeight: 800, color: s.color }}>
-        {s.value}
-      </div>
-    </div>
-  ))}
-</div>
             {/* INSIGHTS */}
             <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 24, marginBottom: 32 }}>
               <h2 style={{ fontSize: 18, fontWeight: 700, color: C.white, marginBottom: 16 }}>💡 Smart Insights</h2>
