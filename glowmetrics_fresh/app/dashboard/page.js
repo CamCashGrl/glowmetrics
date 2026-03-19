@@ -151,10 +151,20 @@ export default function Dashboard() {
               <span style={{ fontSize: 18 }}>{icon}</span>{label}
             </button>
           ))}
-        </nav>
-            </div>
-<div style={{ marginLeft: 240, padding: 32 }}>
-      <div style={{ 
+       </nav>
+      </div>
+
+      {/* MAIN CONTENT */}
+      <div style={{ marginLeft: 240, padding: 32 }}>
+        
+        {activeTab === "overview" && (
+          <div>
+            <div style={{ 
+              display: "grid",
+              gridTemplateColumns: "repeat(4, 1fr)",
+              gap: 20,
+              marginBottom: 36
+            }}>
   display: "grid",
   gridTemplateColumns: "repeat(4, 1fr)",
   gap: 20,
