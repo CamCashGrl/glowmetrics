@@ -94,7 +94,7 @@ export default function Dashboard() {
   }
 
   const sessions = analytics?.sessions || []
-  const whales = identifyWhales(tips)
+  const whales = analytics?.whales || []
   const insights = analytics?.insights || []
   const platforms = analytics?.platforms || []
   
