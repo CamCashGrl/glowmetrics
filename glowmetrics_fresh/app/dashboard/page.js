@@ -152,38 +152,54 @@ export default function Dashboard() {
             </button>
           ))}
         </nav>
+            </div>
+<div style={{ marginLeft: 240, padding: 32 }}>
+      <div style={{ 
+  display: "grid",
+  gridTemplateColumns: "repeat(4, 1fr)",
+  gap: 20,
+  marginBottom: 36
+}}>
+  {[
+    { label: "Total Revenue", value: `$${totalRevenue.toFixed(2)}`, icon: "💰", color: C.green },
+    { label: "Avg $/Hour", value: `$${avgPerHour.toFixed(2)}`, icon: "⏱️", color: C.cyan },
+    { label: "Total Fans", value: whales.length, icon: "👥", color: C.pink },
+    { label: "Sessions", value: sessions.length, icon: "🎥", color: C.gold }
+  ].map((s, i) => (
+    <div key={i} style={{
+      background: `linear-gradient(145deg, ${C.card}, ${C.card2})`,
+      border: `1px solid ${C.border}`,
+      borderRadius: 18,
+      padding: 22,
+      position: "relative",
+      overflow: "hidden",
+      boxShadow: "0 10px 30px rgba(0,0,0,0.4)"
+    }}>
+      
+      <div style={{
+        position: "absolute",
+        top: -40,
+        right: -40,
+        width: 120,
+        height: 120,
+        background: s.color,
+        opacity: 0.08,
+        filter: "blur(40px)"
+      }} />
 
-        <div style={{ padding: "12px", borderTop: `1px solid ${C.border}` }}>
-          <button onClick={() => supabase.auth.signOut().then(() => router.replace("/login"))} style={{ width: "100%", padding: "10px", borderRadius: 10, background: "transparent", border: `1px solid ${C.border}`, color: C.muted, fontSize: 13, cursor: "pointer" }}>
-            ↩ Sign Out
-          </button>
-        </div>
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
+        <span style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: 1 }}>
+          {s.label}
+        </span>
+        <span style={{ fontSize: 20 }}>{s.icon}</span>
       </div>
 
-      {/* MAIN */}
-      <div style={{ marginLeft: 240, minHeight: "100vh", padding: 32 }}>
-        
-        {activeTab === "overview" && (
-          <div>
-            <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 32 }}>Overview</h1>
-            
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 32 }}>
-              {[
-                { label: "Total Revenue", value: `$${totalRevenue.toFixed(2)}`, icon: "💰", color: C.green },
-                { label: "Avg $/Hour", value: `$${avgPerHour.toFixed(2)}`, icon: "⏱️", color: C.cyan },
-                { label: "Total Fans", value: whales.length, icon: "👥", color: C.pink },
-                { label: "Sessions", value: sessions.length, icon: "🎥", color: C.gold }
-              ].map((s, i) => (
-                <div key={i} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 24 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
-                    <span style={{ fontSize: 12, color: C.muted, textTransform: "uppercase" }}>{s.label}</span>
-                    <span style={{ fontSize: 20 }}>{s.icon}</span>
-                  </div>
-                  <div style={{ fontSize: 32, fontWeight: 800, color: s.color }}>{s.value}</div>
-                </div>
-              ))}
-            </div>
-
+      <div style={{ fontSize: 34, fontWeight: 800, color: s.color }}>
+        {s.value}
+      </div>
+    </div>
+  ))}
+</div>
             {/* INSIGHTS */}
             <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 24, marginBottom: 32 }}>
               <h2 style={{ fontSize: 18, fontWeight: 700, color: C.white, marginBottom: 16 }}>💡 Smart Insights</h2>
