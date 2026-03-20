@@ -1,33 +1,18 @@
 // ============================================
-// ENHANCED WHALE DEEP DIVE ANALYTICS
-// With search, profiles, AI predictions, notes
+// CAMCASH COMPLETE ANALYTICS ENGINE
 // ============================================
 
 export function parseCSV(text, platform = null) {
-  if (!text || !text.trim()) return []
-
-  // Strip BOM and normalize line endings
-  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1)
-  text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
-
-  const allLines = text.split('\n')
-  if (!platform) platform = detectPlatform(text)
-
-  // Skip leading junk/blank rows — find first line with 2+ non-empty columns
-  let headerLineIdx = 0
-  for (let i = 0; i < Math.min(5, allLines.length); i++) {
-    const cols = parseCSVLine(allLines[i])
-    if (cols.filter(c => c.trim()).length >= 2) { headerLineIdx = i; break }
-  }
-
-  const lines = allLines.slice(headerLineIdx).filter(l => l.trim())
+  const lines = text.trim().split('\n').filter(l => l.trim())
   if (lines.length === 0) return []
 
-  const firstLineLower = lines[0].toLowerCase()
-  const hasHeaders = firstLineLower.includes('date') || firstLineLower.includes('username') ||
-                     firstLineLower.includes('member') || firstLineLower.includes('amount') ||
-                     firstLineLower.includes('tokens') || firstLineLower.includes('timestamp') ||
-                     firstLineLower.includes('tip') || firstLineLower.includes('payout')
+  if (!platform) platform = detectPlatform(text)
+
+  const firstLine = lines[0].toLowerCase()
+  const hasHeaders = firstLine.includes('date') || firstLine.includes('username') || 
+                     firstLine.includes('amount') || firstLine.includes('tokens') ||
+                     firstLine.includes('timestamp') || firstLine.includes('tip') ||
+                     firstLine.includes('member') || firstLine.includes('payout')
 
   if (hasHeaders) return parseWithHeaders(lines, platform)
   else return parseHeaderless(lines, platform)
@@ -43,7 +28,6 @@ function detectPlatform(text) {
   return 'Unknown'
 }
 
-// Convert European DD.MM.YYYY HH:MM to a JS-parseable string
 function normalizeDate(raw) {
   if (!raw) return raw
   const euro = raw.match(/^(\d{2})\.(\d{2})\.(\d{4})(?:\s+(\d{2}:\d{2}))?/)
@@ -54,10 +38,8 @@ function normalizeDate(raw) {
   return raw
 }
 
-// Map raw header names to standard keys
 function normalizeHeaderName(h) {
   const clean = h.toLowerCase().trim().replace(/[^a-z0-9]/g, '_')
-  // token_balance must be checked before 'token' to avoid false match
   if (['token_balance', 'balance', 'running_balance'].includes(clean)) return 'token_balance'
   if (['tokens_earned', 'tokens', 'token', 'token_change', 'credits'].includes(clean)) return 'tokens'
   if (['your_payout', 'payout', 'usd', 'usd_amount', 'earnings', 'amount_usd'].includes(clean)) return 'usd'
@@ -69,27 +51,32 @@ function normalizeHeaderName(h) {
 }
 
 function parseWithHeaders(lines, platform) {
-  const rawHeaders = parseCSVLine(lines[0])
+  // Skip leading junk rows
+  let headerIdx = 0
+  for (let i = 0; i < Math.min(5, lines.length); i++) {
+    const cols = parseCSVLine(lines[i])
+    if (cols.filter(c => c.trim()).length >= 2) { headerIdx = i; break }
+  }
+  const effectiveLines = lines.slice(headerIdx)
+  const rawHeaders = parseCSVLine(effectiveLines[0])
   const headers = rawHeaders.map(normalizeHeaderName)
   const results = []
 
-  for (let i = 1; i < lines.length; i++) {
-    const line = lines[i].trim()
+  for (let i = 1; i < effectiveLines.length; i++) {
+    const line = effectiveLines[i].trim()
     if (!line) continue
     const vals = parseCSVLine(line)
     const row = {}
     headers.forEach((h, idx) => { row[h] = (vals[idx] || '').trim() })
 
-    // Skip cashouts, transfers, outbound tips
+    // Skip cashouts/transfers
     const action = (row.action || '').toLowerCase()
     const tipType = (row.tip_type || '').toLowerCase()
-    if (
-      action.includes('transfer') || action.includes('outbound tip') ||
-      action.includes('promoted room') || action.includes('referral') ||
-      tipType.includes('cash') || tipType.includes('transfer')
-    ) continue
+    if (action.includes('transfer') || action.includes('outbound tip') ||
+        action.includes('promoted room') || action.includes('referral') ||
+        tipType.includes('cash') || tipType.includes('transfer')) continue
 
-    // Chaturbate: extract username from Action column when no username column
+    // Extract username from Chaturbate Action column
     if (!row.username && row.action) {
       const m = row.action.match(/^[^:]+:\s*(\S+)/i)
       if (m) {
@@ -117,7 +104,6 @@ function parseHeaderless(lines, platform) {
     const vals = parseCSVLine(line)
     if (vals.length === 0) continue
 
-    // Chaturbate "Tip From: username message" format
     if (vals.length >= 3 && vals[1] && vals[1].toLowerCase().includes('tip from')) {
       const dateRaw = normalizeDate(vals[0].replace(/"/g, ''))
       const m = vals[1].match(/tip from[:\s]*(\S+)/i)
@@ -125,26 +111,17 @@ function parseHeaderless(lines, platform) {
       const tokens = parseInt(vals[2]) || 0
       if (!username || tokens <= 0) continue
       if (vals[1].toLowerCase().includes('transfer') || vals[1].toLowerCase().includes('cash')) continue
-      results.push({
-        dateRaw, date_time: dateRaw, username, platform: 'Chaturbate',
-        tokens, usd: parseFloat((tokens * 0.05).toFixed(2)), tip_type: 'Tip'
-      })
+      results.push({ dateRaw, date_time: dateRaw, username, platform: 'Chaturbate', tokens, usd: parseFloat((tokens * 0.05).toFixed(2)), tip_type: 'Tip' })
       continue
     }
 
-    // European date format DD.MM.YYYY (BongaCams headerless)
     if (vals.length >= 4 && /^\d{2}\.\d{2}\.\d{4}/.test(vals[0])) {
       const dateRaw = normalizeDate(vals[0])
       const username = vals[1] || null
       const tokens = parseInt(vals[3]) || 0
       const usd = parseFloat((vals[4] || '').replace(/[$,]/g, '')) || 0
       if (!username || (tokens <= 0 && usd <= 0)) continue
-      results.push({
-        dateRaw, date_time: dateRaw, username, platform: platform || 'BongaCams',
-        tokens: tokens || Math.round(usd / 0.05),
-        usd: usd || parseFloat((tokens * 0.05).toFixed(2)),
-        tip_type: vals[2] || 'Tip'
-      })
+      results.push({ dateRaw, date_time: dateRaw, username, platform: platform || 'BongaCams', tokens: tokens || Math.round(usd / 0.05), usd: usd || parseFloat((tokens * 0.05).toFixed(2)), tip_type: vals[2] || 'Tip' })
       continue
     }
 
@@ -157,23 +134,16 @@ function parseHeaderless(lines, platform) {
 function extractTipData(row, platform) {
   const username = (row.username || row.user || row.tipper || row.from || '').trim()
   if (!username) return null
-
   let tokens = parseInt(row.tokens || row.credits || 0) || 0
   if (tokens < 0) tokens = 0
-
   const rawUsd = (row.usd || row.your_payout || row.earnings || '0').toString().replace(/[$,\s]/g, '')
   let usd = parseFloat(rawUsd) || 0
   if (usd < 0) usd = 0
-
   if (tokens <= 0 && usd <= 0) return null
-
   const rawDate = row.date_time || row.date || row.timestamp || ''
   const dateRaw = normalizeDate(rawDate) || new Date().toISOString()
-
   return {
-    dateRaw,
-    date_time: dateRaw,
-    username,
+    dateRaw, date_time: dateRaw, username,
     platform: platform || 'Unknown',
     tokens: tokens || Math.round(usd / 0.05),
     usd: usd || parseFloat((tokens * 0.05).toFixed(2)),
@@ -196,12 +166,7 @@ function extractTipDataFromArray(vals, platform) {
     }
   }
   if (tokens === 0 && usd === 0) return null
-  return {
-    dateRaw, date_time: dateRaw, username, platform: platform || 'Unknown',
-    tokens: tokens || Math.round(usd / 0.05),
-    usd: usd || parseFloat((tokens * 0.05).toFixed(2)),
-    tip_type: 'Tip', tip_note: ''
-  }
+  return { dateRaw, date_time: dateRaw, username, platform: platform || 'Unknown', tokens: tokens || Math.round(usd / 0.05), usd: usd || parseFloat((tokens * 0.05).toFixed(2)), tip_type: 'Tip', tip_note: '' }
 }
 
 function parseCSVLine(line) {
@@ -228,22 +193,14 @@ export function detectSessions(tips) {
   let currentSession = null
   parsed.forEach(tip => {
     if (!currentSession) {
-      currentSession = {
-        tips: [tip], platform: tip.platform, startTime: tip.timestamp,
-        endTime: tip.timestamp, fans: new Set([tip.username.toLowerCase()])
-      }
+      currentSession = { tips: [tip], platform: tip.platform, startTime: tip.timestamp, endTime: tip.timestamp, fans: new Set([tip.username.toLowerCase()]) }
     } else {
       const timeSinceLastTip = tip.timestamp - currentSession.endTime
       if (timeSinceLastTip <= SESSION_GAP_MS && tip.platform === currentSession.platform) {
-        currentSession.tips.push(tip)
-        currentSession.endTime = tip.timestamp
-        currentSession.fans.add(tip.username.toLowerCase())
+        currentSession.tips.push(tip); currentSession.endTime = tip.timestamp; currentSession.fans.add(tip.username.toLowerCase())
       } else {
         sessions.push(finalizeSession(currentSession))
-        currentSession = {
-          tips: [tip], platform: tip.platform, startTime: tip.timestamp,
-          endTime: tip.timestamp, fans: new Set([tip.username.toLowerCase()])
-        }
+        currentSession = { tips: [tip], platform: tip.platform, startTime: tip.timestamp, endTime: tip.timestamp, fans: new Set([tip.username.toLowerCase()]) }
       }
     }
   })
@@ -263,38 +220,25 @@ function finalizeSession(session) {
   const usdPerHour = durationHours > 0 ? parseFloat((totalUSD / durationHours).toFixed(2)) : 0
   const avgTipSize = tipCount > 0 ? parseFloat((totalUSD / tipCount).toFixed(2)) : 0
   return {
-    id: `session_${session.startTime.getTime()}`,
-    platform: session.platform,
-    startTime: session.startTime.toISOString(),
-    endTime: session.endTime.toISOString(),
+    id: `session_${session.startTime.getTime()}`, platform: session.platform,
+    startTime: session.startTime.toISOString(), endTime: session.endTime.toISOString(),
     durationMinutes, durationHours: parseFloat(durationHours.toFixed(2)),
     totalTokens, totalUSD: parseFloat(totalUSD.toFixed(2)),
-    tipCount, uniqueFans, tokensPerHour, usdPerHour, avgTipSize,
-    tips: session.tips
+    tipCount, uniqueFans, tokensPerHour, usdPerHour, avgTipSize, tips: session.tips
   }
 }
-
-// ============================================
-// ENHANCED WHALE IDENTIFICATION
-// ============================================
 
 export function identifyWhales(tips) {
   const fanMap = {}
   tips.forEach(t => {
     const key = t.username.toLowerCase()
-    if (!fanMap[key]) {
-      fanMap[key] = {
-        username: t.username, totalUSD: 0, totalTokens: 0,
-        tipCount: 0, tips: [], platform: t.platform, tipNotes: []
-      }
-    }
+    if (!fanMap[key]) fanMap[key] = { username: t.username, totalUSD: 0, totalTokens: 0, tipCount: 0, tips: [], platform: t.platform, tipNotes: [] }
     fanMap[key].totalUSD += t.usd || 0
     fanMap[key].totalTokens += t.tokens || 0
     fanMap[key].tipCount += 1
     fanMap[key].tips.push(t)
     if (t.tip_note) fanMap[key].tipNotes.push(t.tip_note)
   })
-
   return Object.values(fanMap).map(f => {
     const sortedTips = f.tips.sort((a, b) => new Date(b.dateRaw || b.date_time) - new Date(a.dateRaw || a.date_time))
     const lastTip = sortedTips[0]
@@ -304,51 +248,29 @@ export function identifyWhales(tips) {
     const daysSinceLastTip = Math.floor((Date.now() - lastTipDate) / (1000 * 60 * 60 * 24))
     const lifetimeDays = Math.max(Math.floor((lastTipDate - firstTipDate) / (1000 * 60 * 60 * 24)), 1)
     const avgDaysBetweenTips = f.tipCount > 1 ? lifetimeDays / (f.tipCount - 1) : 30
-
-    const privateTips = f.tips.filter(t =>
-      t.tip_type?.toLowerCase().includes('private') ||
-      t.tip_note?.toLowerCase().includes('private')
-    )
-    const hasPrivates = privateTips.length > 0
-    const privateCount = privateTips.length
-    const privateSpent = privateTips.reduce((sum, t) => sum + t.usd, 0)
-
-    const hourCounts = {}
-    f.tips.forEach(t => {
-      const hour = new Date(t.dateRaw || t.date_time).getHours()
-      hourCounts[hour] = (hourCounts[hour] || 0) + 1
-    })
-    const mostActiveHour = Object.entries(hourCounts).sort((a, b) => b[1] - a[1])[0]
-    const typicalOnlineHours = mostActiveHour ? `${mostActiveHour[0]}:00 - ${parseInt(mostActiveHour[0]) + 2}:00` : 'Unknown'
     const biggestTip = Math.max(...f.tips.map(t => t.usd))
-
     let tier = 'Regular'
     if (f.totalUSD >= 500) tier = 'Whale'
     else if (f.totalUSD >= 100) tier = 'Shark'
     else if (daysSinceLastTip > 60) tier = 'Dormant'
-
-    const tipProbability = calculateTipProbability(daysSinceLastTip, avgDaysBetweenTips)
-    const churnRisk = calculateChurnRisk(daysSinceLastTip, avgDaysBetweenTips, f.tipCount)
-    const lifetimeValue = predictLifetimeValue(f.totalUSD, lifetimeDays, f.tipCount)
-    const expectedNextTip = calculateExpectedNextTip(daysSinceLastTip, avgDaysBetweenTips)
-
+    const privateTips = f.tips.filter(t => t.tip_type?.toLowerCase().includes('private') || t.tip_note?.toLowerCase().includes('private'))
+    const hourCounts = {}
+    f.tips.forEach(t => { const hour = new Date(t.dateRaw || t.date_time).getHours(); hourCounts[hour] = (hourCounts[hour] || 0) + 1 })
+    const mostActiveHour = Object.entries(hourCounts).sort((a, b) => b[1] - a[1])[0]
     return {
-      username: f.username,
-      totalUSD: parseFloat(f.totalUSD.toFixed(2)),
-      totalTokens: f.totalTokens,
-      tipCount: f.tipCount,
-      avgTipSize: parseFloat((f.totalUSD / f.tipCount).toFixed(2)),
-      biggestTip: parseFloat(biggestTip.toFixed(2)),
-      platform: f.platform,
-      tier,
-      lastTipDate: lastTipDate.toISOString(),
-      firstTipDate: firstTipDate.toISOString(),
-      daysSinceLastTip,
-      avgDaysBetweenTips: parseFloat(avgDaysBetweenTips.toFixed(1)),
-      tipProbability, churnRisk, lifetimeValue, expectedNextTip,
-      hasPrivates, privateCount,
-      privateSpent: parseFloat(privateSpent.toFixed(2)),
-      typicalOnlineHours, tipNotes: f.tipNotes, tips: f.tips
+      username: f.username, totalUSD: parseFloat(f.totalUSD.toFixed(2)), totalTokens: f.totalTokens,
+      tipCount: f.tipCount, avgTipSize: parseFloat((f.totalUSD / f.tipCount).toFixed(2)),
+      biggestTip: parseFloat(biggestTip.toFixed(2)), platform: f.platform, tier,
+      lastTipDate: lastTipDate.toISOString(), firstTipDate: firstTipDate.toISOString(),
+      daysSinceLastTip, avgDaysBetweenTips: parseFloat(avgDaysBetweenTips.toFixed(1)),
+      tipProbability: calculateTipProbability(daysSinceLastTip, avgDaysBetweenTips),
+      churnRisk: calculateChurnRisk(daysSinceLastTip, avgDaysBetweenTips, f.tipCount),
+      lifetimeValue: predictLifetimeValue(f.totalUSD, lifetimeDays, f.tipCount),
+      expectedNextTip: calculateExpectedNextTip(daysSinceLastTip, avgDaysBetweenTips),
+      hasPrivates: privateTips.length > 0, privateCount: privateTips.length,
+      privateSpent: parseFloat(privateTips.reduce((sum, t) => sum + t.usd, 0).toFixed(2)),
+      typicalOnlineHours: mostActiveHour ? `${mostActiveHour[0]}:00 - ${parseInt(mostActiveHour[0]) + 2}:00` : 'Unknown',
+      tipNotes: f.tipNotes, tips: f.tips
     }
   }).sort((a, b) => b.totalUSD - a.totalUSD)
 }
@@ -375,11 +297,7 @@ function predictLifetimeValue(totalSpent, days, tipCount) {
   const dailyRate = totalSpent / days
   const projected365 = dailyRate * 365
   const confidence = tipCount > 10 ? 'High' : tipCount > 5 ? 'Medium' : 'Low'
-  return {
-    prediction: parseFloat(projected365.toFixed(2)),
-    confidence,
-    monthly: parseFloat((projected365 / 12).toFixed(2))
-  }
+  return { prediction: parseFloat(projected365.toFixed(2)), confidence, monthly: parseFloat((projected365 / 12).toFixed(2)) }
 }
 
 function calculateExpectedNextTip(daysSince, avgDays) {
@@ -394,66 +312,27 @@ function calculateExpectedNextTip(daysSince, avgDays) {
 export function generateWhaleAlerts(whales) {
   const alerts = []
   whales.forEach(whale => {
-    if (whale.tier === 'Whale' && whale.daysSinceLastTip < 7) {
-      if (whale.totalUSD >= 500 && whale.totalUSD < 600) {
-        alerts.push({
-          type: 'new_whale', severity: 'success', icon: '🐳',
-          whale: whale.username,
-          message: `${whale.username} just became a whale! ($${whale.totalUSD} lifetime)`,
-          action: 'Send thank you message'
-        })
-      }
-    }
-    if (whale.churnRisk.level === 'High' || whale.churnRisk.level === 'Critical') {
-      if (whale.totalUSD >= 100) {
-        alerts.push({
-          type: 'churn_risk', severity: 'warning', icon: '⚠️',
-          whale: whale.username,
-          message: `${whale.username} hasn't tipped in ${whale.daysSinceLastTip} days (usually tips every ${whale.avgDaysBetweenTips.toFixed(0)} days)`,
-          action: 'Re-engage now'
-        })
-      }
-    }
-    if (whale.tipProbability.level === 'High' && whale.totalUSD >= 200) {
-      alerts.push({
-        type: 'tip_likely', severity: 'info', icon: '💰',
-        whale: whale.username,
-        message: `${whale.username} likely to tip soon (${whale.tipProbability.percentage}% probability)`,
-        action: 'Go live during their active hours'
-      })
-    }
+    if (whale.tier === 'Whale' && whale.daysSinceLastTip < 7 && whale.totalUSD >= 500 && whale.totalUSD < 600)
+      alerts.push({ type: 'new_whale', severity: 'success', icon: '🐳', whale: whale.username, message: `${whale.username} just became a whale! ($${whale.totalUSD} lifetime)`, action: 'Send thank you message' })
+    if ((whale.churnRisk.level === 'High' || whale.churnRisk.level === 'Critical') && whale.totalUSD >= 100)
+      alerts.push({ type: 'churn_risk', severity: 'warning', icon: '⚠️', whale: whale.username, message: `${whale.username} hasn't tipped in ${whale.daysSinceLastTip} days (usually every ${whale.avgDaysBetweenTips.toFixed(0)} days)`, action: 'Re-engage now' })
+    if (whale.tipProbability.level === 'High' && whale.totalUSD >= 200)
+      alerts.push({ type: 'tip_likely', severity: 'info', icon: '💰', whale: whale.username, message: `${whale.username} likely to tip soon (${whale.tipProbability.percentage}% probability)`, action: 'Go live during their active hours' })
   })
-  return alerts.sort((a, b) => {
-    const severityOrder = { critical: 0, warning: 1, info: 2, success: 3 }
-    return severityOrder[a.severity] - severityOrder[b.severity]
-  })
+  return alerts.sort((a, b) => ({ critical: 0, warning: 1, info: 2, success: 3 }[a.severity] - { critical: 0, warning: 1, info: 2, success: 3 }[b.severity]))
 }
 
 export function predictRevenue(tips, sessions) {
   if (!sessions.length) return null
   const predictions = {}
-  const last7Days = tips.filter(t => (Date.now() - new Date(t.dateRaw || t.date_time)) / (1000 * 60 * 60 * 24) <= 7)
-  predictions.next7Days = {
-    amount: parseFloat(last7Days.reduce((sum, t) => sum + t.usd, 0).toFixed(2)),
-    confidence: last7Days.length > 20 ? 'High' : last7Days.length > 10 ? 'Medium' : 'Low'
-  }
-  const last30Days = tips.filter(t => (Date.now() - new Date(t.dateRaw || t.date_time)) / (1000 * 60 * 60 * 24) <= 30)
-  predictions.next30Days = {
-    amount: parseFloat(last30Days.reduce((sum, t) => sum + t.usd, 0).toFixed(2)),
-    confidence: last30Days.length > 50 ? 'High' : last30Days.length > 25 ? 'Medium' : 'Low'
-  }
-  const dayOfWeek = new Date().getDay()
-  const sameDaySessions = sessions.filter(s => new Date(s.startTime).getDay() === dayOfWeek)
-  if (sameDaySessions.length > 2) {
-    const avgRevenue = sameDaySessions.reduce((sum, s) => sum + s.totalUSD, 0) / sameDaySessions.length
-    predictions.tonightStream = {
-      expected: parseFloat(avgRevenue.toFixed(2)),
-      range: {
-        min: parseFloat(Math.min(...sameDaySessions.map(s => s.totalUSD)).toFixed(2)),
-        max: parseFloat(Math.max(...sameDaySessions.map(s => s.totalUSD)).toFixed(2))
-      },
-      confidence: sameDaySessions.length > 5 ? 'High' : 'Medium'
-    }
+  const last7 = tips.filter(t => (Date.now() - new Date(t.dateRaw || t.date_time)) / 86400000 <= 7)
+  predictions.next7Days = { amount: parseFloat(last7.reduce((s, t) => s + t.usd, 0).toFixed(2)), confidence: last7.length > 20 ? 'High' : last7.length > 10 ? 'Medium' : 'Low' }
+  const last30 = tips.filter(t => (Date.now() - new Date(t.dateRaw || t.date_time)) / 86400000 <= 30)
+  predictions.next30Days = { amount: parseFloat(last30.reduce((s, t) => s + t.usd, 0).toFixed(2)), confidence: last30.length > 50 ? 'High' : last30.length > 25 ? 'Medium' : 'Low' }
+  const same = sessions.filter(s => new Date(s.startTime).getDay() === new Date().getDay())
+  if (same.length > 2) {
+    const avg = same.reduce((s, x) => s + x.totalUSD, 0) / same.length
+    predictions.tonightStream = { expected: parseFloat(avg.toFixed(2)), range: { min: parseFloat(Math.min(...same.map(s => s.totalUSD)).toFixed(2)), max: parseFloat(Math.max(...same.map(s => s.totalUSD)).toFixed(2)) }, confidence: same.length > 5 ? 'High' : 'Medium' }
   }
   return predictions
 }
@@ -462,21 +341,15 @@ export function generateInsights(tips, sessions) {
   const insights = []
   if (!tips.length || !sessions.length) return insights
   const dayEarnings = {}
-  sessions.forEach(s => {
-    const day = new Date(s.startTime).toLocaleDateString('en-US', { weekday: 'long' })
-    dayEarnings[day] = (dayEarnings[day] || 0) + s.totalUSD
-  })
+  sessions.forEach(s => { const day = new Date(s.startTime).toLocaleDateString('en-US', { weekday: 'long' }); dayEarnings[day] = (dayEarnings[day] || 0) + s.totalUSD })
   const bestDay = Object.entries(dayEarnings).sort((a, b) => b[1] - a[1])[0]
   if (bestDay) {
-    const avgDay = Object.values(dayEarnings).reduce((a, b) => a + b, 0) / Object.keys(dayEarnings).length
-    const percentBetter = Math.round(((bestDay[1] - avgDay) / avgDay) * 100)
-    if (percentBetter > 10) insights.push({ icon: '📅', text: `${bestDay[0]}s earn ${percentBetter}% more than average`, type: 'day' })
+    const avg = Object.values(dayEarnings).reduce((a, b) => a + b, 0) / Object.keys(dayEarnings).length
+    const pct = Math.round(((bestDay[1] - avg) / avg) * 100)
+    if (pct > 10) insights.push({ icon: '📅', text: `${bestDay[0]}s earn ${pct}% more than average`, type: 'day' })
   }
   const hourEarnings = {}
-  sessions.forEach(s => {
-    const hour = new Date(s.startTime).getHours()
-    hourEarnings[hour] = (hourEarnings[hour] || 0) + s.totalUSD
-  })
+  sessions.forEach(s => { const h = new Date(s.startTime).getHours(); hourEarnings[h] = (hourEarnings[h] || 0) + s.totalUSD })
   const bestHour = Object.entries(hourEarnings).sort((a, b) => b[1] - a[1])[0]
   if (bestHour) {
     const h = parseInt(bestHour[0])
@@ -495,11 +368,7 @@ export function generateInsights(tips, sessions) {
 
 export function aggregateRows(tips) {
   if (!tips || tips.length === 0) {
-    return {
-      totalUSD: 0, totalTokens: 0, totalTips: 0, avgTipSize: 0,
-      topTippers: [], platforms: [], sessions: [], insights: [],
-      predictions: null, whaleAlerts: []
-    }
+    return { totalUSD: 0, totalTokens: 0, totalTips: 0, avgTipSize: 0, topTippers: [], platforms: [], sessions: [], insights: [], predictions: null, whaleAlerts: [] }
   }
   const sessions = detectSessions(tips)
   const whales = identifyWhales(tips)
@@ -508,38 +377,25 @@ export function aggregateRows(tips) {
   const whaleAlerts = generateWhaleAlerts(whales)
   const totalUSD = tips.reduce((sum, t) => sum + (t.usd || 0), 0)
   const totalTokens = tips.reduce((sum, t) => sum + (t.tokens || 0), 0)
-  const avgTipSize = tips.length > 0 ? totalUSD / tips.length : 0
   const platformMap = {}
   sessions.forEach(s => {
-    if (!platformMap[s.platform]) {
-      platformMap[s.platform] = { platform: s.platform, totalUSD: 0, totalTokens: 0, sessions: 0, hours: 0, tips: 0 }
-    }
+    if (!platformMap[s.platform]) platformMap[s.platform] = { platform: s.platform, totalUSD: 0, totalTokens: 0, sessions: 0, hours: 0, tips: 0 }
     platformMap[s.platform].totalUSD += s.totalUSD
     platformMap[s.platform].totalTokens += s.totalTokens
     platformMap[s.platform].sessions += 1
     platformMap[s.platform].hours += s.durationHours
     platformMap[s.platform].tips += s.tipCount
   })
-  const platforms = Object.values(platformMap).map(p => ({
-    ...p,
-    usdPerHour: p.hours > 0 ? parseFloat((p.totalUSD / p.hours).toFixed(2)) : 0,
-    tokensPerHour: p.hours > 0 ? Math.round(p.totalTokens / p.hours) : 0,
-    avgTipSize: p.tips > 0 ? parseFloat((p.totalUSD / p.tips).toFixed(2)) : 0
-  }))
+  const platforms = Object.values(platformMap).map(p => ({ ...p, usdPerHour: p.hours > 0 ? parseFloat((p.totalUSD / p.hours).toFixed(2)) : 0, tokensPerHour: p.hours > 0 ? Math.round(p.totalTokens / p.hours) : 0, avgTipSize: p.tips > 0 ? parseFloat((p.totalUSD / p.tips).toFixed(2)) : 0 }))
   const topTippers = whales.map((w, i) => ({
-    rank: i + 1, username: w.username, usd: w.totalUSD,
-    tokens: w.totalTokens, count: w.tipCount,
+    rank: i + 1, username: w.username, usd: w.totalUSD, tokens: w.totalTokens, count: w.tipCount,
     status: w.tier === 'Whale' ? '🐳 WHALE' : w.tier === 'Shark' ? '🦈 SHARK' : w.tier === 'Dormant' ? '💤 DORMANT' : '🐟 REGULAR',
-    last: new Date(w.lastTipDate).toLocaleDateString(),
-    first: new Date(w.firstTipDate).toLocaleDateString(),
-    daysSince: w.daysSinceLastTip,
-    tipProbability: w.tipProbability,
-    churnRisk: w.churnRisk
+    last: new Date(w.lastTipDate).toLocaleDateString(), first: new Date(w.firstTipDate).toLocaleDateString(),
+    daysSince: w.daysSinceLastTip, tipProbability: w.tipProbability, churnRisk: w.churnRisk
   }))
   return {
-    totalUSD: parseFloat(totalUSD.toFixed(2)), totalTokens,
-    totalTips: tips.length, avgTipSize: parseFloat(avgTipSize.toFixed(2)),
-    topTippers, platforms, sessions, insights,
-    predictions, whaleAlerts, whales
+    totalUSD: parseFloat(totalUSD.toFixed(2)), totalTokens, totalTips: tips.length,
+    avgTipSize: parseFloat((tips.length > 0 ? totalUSD / tips.length : 0).toFixed(2)),
+    topTippers, platforms, sessions, insights, predictions, whaleAlerts, whales
   }
 }
