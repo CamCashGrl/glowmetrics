@@ -3,132 +3,448 @@
 // With search, profiles, AI predictions, notes
 // ============================================
 
-// ... [Previous parseCSV, detectSessions functions remain the same] ...
+// ============================================
+// BULLETPROOF CSV PARSER - ZERO TOLERANCE
+// ============================================
+
 export function parseCSV(text, platform = null) {
-  const lines = text.trim().split('\n').filter(l => l.trim())
-  if (lines.length === 0) return []
-  if (!platform) platform = detectPlatform(text)
-  const firstLine = lines[0].toLowerCase()
-  const hasHeaders = firstLine.includes('date') || firstLine.includes('username') || 
-                     firstLine.includes('amount') || firstLine.includes('tokens') ||
-                     firstLine.includes('timestamp') || firstLine.includes('tip')
-  if (hasHeaders) return parseWithHeaders(lines, platform)
-  else return parseHeaderless(lines, platform)
+  if (!text || text.trim().length === 0) {
+    return {
+      success: false,
+      error: {
+        type: 'empty_file',
+        message: "Empty file uploaded",
+        fix: "Please upload a CSV file with your tip data"
+      }
+    }
+  }
+
+  const cleaned = cleanCSVText(text)
+  const detectedPlatform = platform || detectPlatform(cleaned)
+  const lines = cleaned.split('\n').filter(l => l.trim())
+  
+  if (lines.length === 0) {
+    return {
+      success: false,
+      error: {
+        type: 'no_data',
+        message: "No valid data rows found",
+        fix: "Your CSV appears empty. Check the file and try again."
+      }
+    }
+  }
+
+  const headerValidation = validateHeaders(lines[0])
+  
+  if (!headerValidation.valid) {
+    return {
+      success: false,
+      needsConfirmation: true,
+      error: headerValidation.error,
+      suggestions: headerValidation.suggestions,
+      detectedPlatform
+    }
+  }
+
+  const hasHeaders = headerValidation.hasHeaders
+  let parseResult
+  
+  if (hasHeaders) {
+    parseResult = parseWithHeaders(lines, detectedPlatform, headerValidation.normalizedHeaders)
+  } else {
+    parseResult = parseHeaderless(lines, detectedPlatform)
+  }
+
+  const validation = strictValidate(parseResult.data, detectedPlatform)
+  
+  if (!validation.valid) {
+    return {
+      success: false,
+      needsConfirmation: false,
+      error: validation.error,
+      issues: validation.issues,
+      sampleRows: parseResult.data.slice(0, 3),
+      detectedPlatform
+    }
+  }
+
+  const confirmationData = buildConfirmationData(validation.data, detectedPlatform)
+  
+  return {
+    success: true,
+    needsConfirmation: true,
+    data: validation.data,
+    platform: detectedPlatform,
+    confirmation: confirmationData,
+    warnings: validation.needsWarning ? validation.warningMessage : null,
+    skipped: validation.skipped || [],
+    stats: {
+      total: validation.data.length,
+      dateRange: {
+        earliest: confirmationData.dateRange.earliest,
+        latest: confirmationData.dateRange.latest
+      },
+      totalRevenue: confirmationData.totalRevenue,
+      topTipper: confirmationData.topTipper
+    }
+  }
+}
+
+// ============================================
+// HELPER FUNCTIONS
+// ============================================
+
+function cleanCSVText(text) {
+  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1)
+  text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+  text = text.split('\n').filter(l => l.trim()).join('\n')
+  text = text.replace(/=""(.*?)""/g, '$1')
+  return text
 }
 
 function detectPlatform(text) {
   const lower = text.toLowerCase()
-  if (lower.includes('chaturbate') || lower.includes('tip from:')) return 'Chaturbate'
-  if (lower.includes('bongacams') || lower.includes('bonga')) return 'BongaCams'
-  if (lower.includes('myfreecams') || lower.includes('mfc')) return 'MyFreeCams'
-  if (lower.includes('stripchat')) return 'Stripchat'
-  if (lower.includes('camsoda')) return 'CamSoda'
+  const markers = {
+    'Chaturbate': ['chaturbate', 'tip from:', 'tokens received'],
+    'BongaCams': ['bongacams', 'bonga', 'credits earned'],
+    'MyFreeCams': ['myfreecams', 'mfc', 'tokens earned'],
+    'Stripchat': ['stripchat'],
+    'CamSoda': ['camsoda']
+  }
+  
+  for (const [platform, keywords] of Object.entries(markers)) {
+    if (keywords.some(k => lower.includes(k))) return platform
+  }
+  
+  if (lower.includes('username') && lower.includes('tokens')) return 'Chaturbate'
   return 'Unknown'
 }
 
-function parseWithHeaders(lines, platform) {
-  const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/"/g, ''))
-  const results = []
+function validateHeaders(firstLine) {
+  const lower = firstLine.toLowerCase()
+  const cols = parseCSVLine(firstLine)
+  
+  const required = {
+    date: ['date', 'time', 'datetime', 'timestamp', 'date_time'],
+    username: ['username', 'user', 'tipper', 'from', 'sender', 'nickname'],
+    amount: ['tokens', 'credits', 'amount', 'usd', 'earnings', 'dollars']
+  }
+  
+  const found = { date: false, username: false, amount: false }
+  const suggestions = []
+  
+  cols.forEach(col => {
+    const colLower = col.toLowerCase().trim()
+    if (required.date.some(v => colLower.includes(v))) found.date = true
+    if (required.username.some(v => colLower.includes(v))) found.username = true
+    if (required.amount.some(v => colLower.includes(v))) found.amount = true
+    
+    if (colLower === 'site' || colLower === 'source') {
+      suggestions.push({
+        found: col,
+        suggest: 'platform',
+        reason: 'Platform/site column detected but not named "platform"'
+      })
+    }
+    if (colLower === 'name' || colLower === 'member') {
+      suggestions.push({
+        found: col,
+        suggest: 'username',
+        reason: 'User column detected but should be "username"'
+      })
+    }
+  })
+  
+  const hasHeaderKeywords = required.date.concat(required.username, required.amount)
+    .some(keyword => lower.includes(keyword))
+  
+  if (!hasHeaderKeywords && /\d{1,2}[\/\-\.]\d{1,2}/.test(firstLine)) {
+    return { valid: true, hasHeaders: false, normalizedHeaders: [] }
+  }
+  
+  const missing = []
+  if (!found.date) missing.push('date/time')
+  if (!found.username) missing.push('username')
+  if (!found.amount) missing.push('tokens or USD amount')
+  
+  if (missing.length > 0) {
+    return {
+      valid: false,
+      error: {
+        type: 'missing_columns',
+        message: `❌ Missing required column${missing.length > 1 ? 's' : ''}: ${missing.join(', ')}`,
+        fix: `Your CSV must have these columns:\n• Date or DateTime\n• Username or User\n• Tokens or USD amount`
+      },
+      suggestions,
+      hasHeaders: true
+    }
+  }
+  
+  const normalized = normalizeHeaders(cols)
+  return { valid: true, hasHeaders: true, normalizedHeaders: normalized, suggestions }
+}
+
+function normalizeHeaders(headers) {
+  return headers.map(h => {
+    const clean = h.toLowerCase().trim().replace(/[^a-z0-9_]/g, '_')
+    const mappings = {
+      'date_time': ['datetime', 'timestamp', 'date', 'time'],
+      'username': ['username', 'user', 'tipper', 'from', 'sender'],
+      'tokens': ['tokens', 'credits', 'amount', 'quantity'],
+      'usd': ['usd', 'dollars', 'earnings', 'revenue'],
+      'tip_type': ['type', 'category'],
+      'platform': ['platform', 'site', 'source']
+    }
+    
+    for (const [standard, variations] of Object.entries(mappings)) {
+      if (variations.some(v => clean.includes(v))) return standard
+    }
+    return clean
+  })
+}
+
+function parseWithHeaders(lines, platform, normalizedHeaders) {
+  const data = []
   for (let i = 1; i < lines.length; i++) {
     const vals = parseCSVLine(lines[i])
-    if (vals.length === 0) continue
     const row = {}
-    headers.forEach((h, idx) => { row[h] = vals[idx] || '' })
+    normalizedHeaders.forEach((h, idx) => {
+      row[h] = vals[idx] || ''
+    })
     const parsed = extractTipData(row, platform)
-    if (parsed) results.push(parsed)
+    if (parsed) data.push(parsed)
   }
-  return results
+  return { data }
 }
 
 function parseHeaderless(lines, platform) {
-  const results = []
+  const data = []
   for (const line of lines) {
     const vals = parseCSVLine(line)
-    if (vals.length === 0) continue
-    if (vals.length >= 3 && vals[1]) {
-      const val1Lower = vals[1].toLowerCase()
-      if (val1Lower.includes('tip from:') || val1Lower.includes('tip from ')) {
-        const dateRaw = vals[0].replace(/"/g, '')
-        const actionMatch = vals[1].match(/tip from[:\s]+([^\s,]+)/i)
-        const username = actionMatch ? actionMatch[1] : 'anonymous'
-        const tokens = parseInt(vals[2]) || 0
-        if (tokens <= 0) continue
-        results.push({
-          dateRaw, username, platform: 'Chaturbate', tokens,
-          usd: parseFloat((tokens * 0.05).toFixed(2)), tip_type: 'Tip'
-        })
-        continue
-      }
+    let parsed = null
+    
+    if (vals.length >= 3 && vals[1]?.toLowerCase().includes('tip from')) {
+      parsed = parseChaturbateTipFrom(vals)
+    } else if (vals.length >= 3 && isDate(vals[0])) {
+      parsed = parseStandardFormat(vals, platform)
     }
-    if (vals.length >= 4 && vals[0].match(/\d{2}\.\d{2}\.\d{4}/)) {
-      const dateRaw = vals[0]
-      const username = vals[1] || 'anonymous'
-      const tokens = parseInt(vals[3]) || 0
-      const usd = parseFloat(vals[4]?.replace('$', '')) || 0
-      if (tokens <= 0 && usd <= 0) continue
-      results.push({
-        dateRaw, username, platform: platform || 'BongaCams',
-        tokens: tokens || Math.round(usd / 0.05),
-        usd: usd || parseFloat((tokens * 0.05).toFixed(2)),
-        tip_type: vals[2] || 'Tip'
-      })
-      continue
-    }
-    const parsed = extractTipDataFromArray(vals, platform)
-    if (parsed) results.push(parsed)
+    
+    if (parsed) data.push(parsed)
   }
-  return results
+  return { data }
 }
 
 function extractTipData(row, platform) {
-  const username = row.username || row.user || row.tipper || row.from || 'anonymous'
-  const tokens = parseInt(row.tokens || row['token change'] || row.amount || row.credits || 0)
-  const usd = parseFloat(row.usd || row.usd_amount || row.amount_usd || row.earnings || 0)
-  const dateRaw = row.date_time || row['date_time'] || row.date || row.Date || row.timestamp || row.Timestamp || new Date().toISOString()
-  const tipType = row.tip_type || row.type || row['transaction type'] || 'Tip'
-  const tipNote = row.note || row.message || row.tip_note || ''
-  if (tokens <= 0 && usd <= 0) return null
+  const username = row.username || row.user || row.tipper
+  const tokens = parseInt(row.tokens || row.credits || 0)
+  const usd = parseFloat(row.usd || row.earnings || 0)
+  const dateRaw = row.date_time || row.date || row.timestamp
+  
+  if (!username || !dateRaw || (tokens <= 0 && usd <= 0)) return null
+  
   return {
-    dateRaw, username: username.trim(), platform: platform || 'Unknown',
+    dateRaw,
+    username: username.trim(),
+    platform: platform || 'Unknown',
     tokens: tokens || Math.round(usd / 0.05),
-    usd: usd || parseFloat((tokens * 0.05).toFixed(2)), 
-    tip_type: tipType,
-    tip_note: tipNote
+    usd: usd || parseFloat((tokens * 0.05).toFixed(2)),
+    tip_type: row.tip_type || 'Tip',
+    tip_note: row.tip_note || ''
   }
 }
 
-function extractTipDataFromArray(vals, platform) {
-  if (vals.length < 2) return null
-  let dateRaw = vals[0], username = vals[1] || 'anonymous', tokens = 0, usd = 0
-  for (let i = 2; i < vals.length; i++) {
-    const num = parseFloat(vals[i])
-    if (!isNaN(num) && num > 0) {
-      if (num > 100) tokens = num
-      else usd = num
+function parseChaturbateTipFrom(vals) {
+  const dateRaw = vals[0].replace(/"/g, '')
+  const match = vals[1].match(/tip from[:\s]+([^\s,]+)/i)
+  const username = match ? match[1] : null
+  const tokens = parseInt(vals[2]) || 0
+  
+  if (!username || tokens <= 0) return null
+  
+  return {
+    dateRaw,
+    username,
+    platform: 'Chaturbate',
+    tokens,
+    usd: parseFloat((tokens * 0.05).toFixed(2)),
+    tip_type: 'Tip',
+    tip_note: ''
+  }
+}
+
+function parseStandardFormat(vals, platform) {
+  const dateRaw = vals[0]
+  const username = vals[1]
+  const tokens = parseInt(vals[2]) || 0
+  const usd = parseFloat(vals[3]?.replace('$', '')) || 0
+  
+  if (!username || (tokens <= 0 && usd <= 0)) return null
+  
+  return {
+    dateRaw,
+    username: username.trim(),
+    platform: platform || 'Unknown',
+    tokens: tokens || Math.round(usd / 0.05),
+    usd: usd || parseFloat((tokens * 0.05).toFixed(2)),
+    tip_type: 'Tip',
+    tip_note: ''
+  }
+}
+
+function strictValidate(data, platform) {
+  const validated = []
+  const issues = []
+  
+  if (data.length === 0) {
+    return {
+      valid: false,
+      error: {
+        type: 'no_valid_rows',
+        message: "❌ Could not parse any valid tips",
+        fix: "Check your CSV format. Required: Date, Username, Amount"
+      }
     }
   }
-  if (tokens === 0 && usd === 0) return null
+  
+  data.forEach((item, i) => {
+    const rowNum = i + 1
+    const rowIssues = []
+    
+    if (!isValidDate(item.dateRaw)) {
+      rowIssues.push(`Invalid date: "${item.dateRaw}"`)
+    } else {
+      const tipDate = new Date(item.dateRaw)
+      if (tipDate > new Date()) {
+        rowIssues.push(`Date is in the future: ${item.dateRaw}`)
+      }
+      if (tipDate.getFullYear() < 2010) {
+        rowIssues.push(`Date seems too old: ${item.dateRaw}`)
+      }
+    }
+    
+    if (!item.username || item.username.trim() === '') {
+      rowIssues.push("Missing username")
+    }
+    
+    const hasTokens = item.tokens && item.tokens > 0
+    const hasUSD = item.usd && item.usd > 0
+    
+    if (!hasTokens && !hasUSD) {
+      rowIssues.push("No valid tip amount")
+    } else {
+      if (item.tokens < 0 || item.tokens > 1000000) {
+        rowIssues.push(`Unrealistic tokens: ${item.tokens}`)
+      }
+      if (item.usd < 0 || item.usd > 50000) {
+        rowIssues.push(`Unrealistic USD: $${item.usd}`)
+      }
+      
+      if (hasTokens && hasUSD) {
+        const ratio = item.usd / item.tokens
+        if (ratio < 0.03 || ratio > 0.10) {
+          rowIssues.push(`Suspicious token/USD ratio: ${ratio.toFixed(4)}`)
+        }
+      }
+    }
+    
+    if (rowIssues.length > 0) {
+      issues.push({ row: rowNum, data: item, problems: rowIssues })
+    } else {
+      validated.push(item)
+    }
+  })
+  
+  const errorRate = issues.length / data.length
+  if (errorRate > 0.2) {
+    return {
+      valid: false,
+      error: {
+        type: 'too_many_errors',
+        message: `❌ ${issues.length} of ${data.length} rows have errors (${(errorRate * 100).toFixed(0)}%)`,
+        fix: "Please fix your CSV file. Too many rows have problems to safely import."
+      },
+      issues: issues.slice(0, 10)
+    }
+  }
+  
+  if (issues.length > 0) {
+    return {
+      valid: true,
+      needsWarning: true,
+      data: validated,
+      skipped: issues,
+      warningMessage: `⚠️ ${issues.length} row${issues.length > 1 ? 's' : ''} will be skipped due to errors`
+    }
+  }
+  
+  return { valid: true, data: validated }
+}
+
+function buildConfirmationData(data, platform) {
+  const dates = data.map(d => new Date(d.dateRaw)).sort((a, b) => a - b)
+  const totalRevenue = data.reduce((sum, d) => sum + d.usd, 0)
+  
+  const userTotals = {}
+  data.forEach(d => {
+    userTotals[d.username] = (userTotals[d.username] || 0) + d.usd
+  })
+  const topTipper = Object.entries(userTotals).sort((a, b) => b[1] - a[1])[0]
+  
+  const sampleRows = data.slice(0, 5).map(d => ({
+    date: new Date(d.dateRaw).toLocaleDateString(),
+    username: d.username,
+    amount: `${d.tokens} tokens ($${d.usd.toFixed(2)})`
+  }))
+  
   return {
-    dateRaw, username: username.trim(), platform: platform || 'Unknown',
-    tokens: tokens || Math.round(usd / 0.05),
-    usd: usd || parseFloat((tokens * 0.05).toFixed(2)), tip_type: 'Tip', tip_note: ''
+    totalTips: data.length,
+    totalRevenue: totalRevenue.toFixed(2),
+    dateRange: {
+      earliest: dates[0].toLocaleDateString(),
+      latest: dates[dates.length - 1].toLocaleDateString()
+    },
+    topTipper: topTipper ? {
+      username: topTipper[0],
+      amount: topTipper[1].toFixed(2)
+    } : null,
+    sampleRows,
+    platform
   }
 }
 
 function parseCSVLine(line) {
   const result = []
-  let current = '', inQuotes = false
+  let current = ''
+  let inQuotes = false
+  
   for (let i = 0; i < line.length; i++) {
     const char = line[i]
-    if (char === '"') inQuotes = !inQuotes
-    else if (char === ',' && !inQuotes) {
+    if (char === '"') {
+      inQuotes = !inQuotes
+    } else if (char === ',' && !inQuotes) {
       result.push(current.trim())
       current = ''
-    } else current += char
+    } else {
+      current += char
+    }
   }
   result.push(current.trim())
   return result.filter(v => v !== '')
 }
+
+function isDate(str) {
+  return /^\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}/.test(str) ||
+         /^\d{4}[\/\-\.]\d{1,2}[\/\-\.]\d{1,2}/.test(str)
+}
+
+function isValidDate(dateStr) {
+  const date = new Date(dateStr)
+  return date instanceof Date && !isNaN(date.getTime()) && date.getFullYear() > 2000
+}
+
+// ============================================
+// END OF NEW PARSER CODE
+// ============================================
 
 export function detectSessions(tips) {
   if (!tips || tips.length === 0) return []
@@ -316,7 +632,6 @@ function calculateExpectedNextTip(daysSince, avgDays) {
   return `In ~${Math.round(daysUntilNext / 7)} weeks`
 }
 
-// Whale alerts, predictions, insights remain the same...
 export function generateWhaleAlerts(whales) {
   const alerts = []
   whales.forEach(whale => {
