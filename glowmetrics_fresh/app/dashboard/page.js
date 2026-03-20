@@ -49,8 +49,8 @@ export default function Dashboard() {
   const [selectedWhale, setSelectedWhale] = useState(null)
   // ──────────────────────────────────────────────────────────────────────────
 
-  const isBetaUser = false // flip to true for beta/pro users
-  const uploadLimit = 3
+  const isBetaUser = true // all features unlocked during free beta
+  const uploadLimit = Infinity // unlimited uploads during beta
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(""), 3500) }
 
@@ -286,7 +286,29 @@ export default function Dashboard() {
             <span style={{ fontSize: 20, fontWeight: 800, color: C.white }}>Cam<span style={{ background: `linear-gradient(90deg, ${C.cyan}, ${C.pink})`, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Cash</span></span>
           </div>
           {user && <div style={{ fontSize: 11, color: C.muted, marginTop: 10 }}>{user.email}</div>}
+
+          {/* FREE BETA BADGE */}
+          <div style={{ marginTop: 12, padding: "6px 10px", borderRadius: 8, background: `linear-gradient(135deg, ${C.gold}20, ${C.orange}20)`, border: `1px solid ${C.gold}40`, display: "flex", alignItems: "center", gap: 6 }}>
+            <div style={{ width: 6, height: 6, borderRadius: "50%", background: C.gold, flexShrink: 0, boxShadow: `0 0 6px ${C.gold}` }} />
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: C.gold, letterSpacing: 0.5 }}>FREE BETA</div>
+              <div style={{ fontSize: 9, color: C.orange }}>All features unlocked</div>
+            </div>
+          </div>
         </div>
+
+        {/* SIDEBAR BOTTOM — spots left */}
+        <div style={{ padding: "16px 20px", borderTop: `1px solid ${C.border}` }}>
+          <div style={{ padding: 12, borderRadius: 10, background: `linear-gradient(135deg, ${C.pink}15, ${C.indigo}15)`, border: `1px solid ${C.pink}30`, textAlign: "center" }}>
+            <div style={{ fontSize: 18, marginBottom: 4 }}>🎉</div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: C.white, marginBottom: 2 }}>Free for first 100 users</div>
+            <div style={{ fontSize: 10, color: C.muted, marginBottom: 8 }}>Spots filling up fast</div>
+            {/* simple progress bar */}
+            <div style={{ height: 4, borderRadius: 4, background: C.border, overflow: "hidden" }}>
+              <div style={{ height: "100%", width: "63%", borderRadius: 4, background: `linear-gradient(90deg, ${C.cyan}, ${C.pink})` }} />
+            </div>
+            <div style={{ fontSize: 10, color: C.muted, marginTop: 4 }}>63 / 100 spots taken</div>
+          </div>
 
         <nav style={{ flex: 1, padding: "16px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
           {[["overview", "📊", "Overview"], ["platforms", "🎯", "Platforms"], ["whales", "🐳", "Top Fans"], ["sessions", "🎥", "Sessions"], ["data", "📝", "Edit Data"], ["help", "❓", "CSV Help"], ["upload", "📥", "Import"]].map(([id, icon, label]) => (
@@ -308,6 +330,22 @@ export default function Dashboard() {
 
         {activeTab === "overview" && (
           <div>
+            {/* 🎉 BETA BANNER */}
+            <div style={{ marginBottom: 24, padding: "14px 20px", borderRadius: 12, background: `linear-gradient(135deg, ${C.gold}15, ${C.orange}10)`, border: `1px solid ${C.gold}40`, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <div style={{ fontSize: 24 }}>🎉</div>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: C.white }}>You're one of our first 100 beta users — everything is free!</div>
+                  <div style={{ fontSize: 12, color: C.muted }}>All Pro features unlocked. No credit card. No limits. Just good vibes.</div>
+                </div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+                <div style={{ fontSize: 12, color: C.gold, fontWeight: 600 }}>63/100 spots taken</div>
+                <div style={{ width: 80, height: 6, borderRadius: 4, background: C.border, overflow: "hidden" }}>
+                  <div style={{ height: "100%", width: "63%", borderRadius: 4, background: `linear-gradient(90deg, ${C.gold}, ${C.orange})` }} />
+                </div>
+              </div>
+            </div>
             <div style={{
               display: "grid",
               gridTemplateColumns: "repeat(4, 1fr)",
@@ -350,9 +388,8 @@ export default function Dashboard() {
                   <div style={{ fontSize: 14, color: C.white }}>{ins.icon} {ins.text}</div>
                 </div>
               ))}
-              <div style={{ marginTop: 16, padding: 16, background: `${C.pink}10`, border: `1px solid ${C.pink}30`, borderRadius: 10, textAlign: "center" }}>
-                <div style={{ fontSize: 14, color: C.white, marginBottom: 8 }}>🔒 Unlock 10+ more AI-powered insights</div>
-                <button style={{ padding: "8px 20px", borderRadius: 8, background: `linear-gradient(135deg, ${C.cyan}, ${C.pink})`, border: "none", color: C.white, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Upgrade to Pro</button>
+              <div style={{ marginTop: 16, padding: 16, background: `${C.cyan}10`, border: `1px solid ${C.cyan}30`, borderRadius: 10, textAlign: "center" }}>
+                <div style={{ fontSize: 14, color: C.white }}>🎉 All insights unlocked — you're on the free beta!</div>
               </div>
             </div>
 
@@ -527,7 +564,7 @@ export default function Dashboard() {
         {activeTab === "upload" && (
           <div style={{ maxWidth: 600, margin: "0 auto" }}>
             <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 8 }}>📥 Import CSV</h1>
-            <p style={{ fontSize: 14, color: C.muted, marginBottom: 32 }}>Uploads: {uploadCount}/3 per month • Auto-removes duplicates</p>
+            <p style={{ fontSize: 14, color: C.muted, marginBottom: 32 }}>Unlimited uploads during free beta • Auto-removes duplicates</p>
             <div style={{ background: C.card, borderRadius: 14, padding: 40, textAlign: "center" }}>
               <div style={{ fontSize: 48, marginBottom: 16 }}>📁</div>
               <label style={{ display: "inline-block", padding: "14px 32px", borderRadius: 10, background: uploadCount >= uploadLimit ? C.muted : `linear-gradient(135deg, ${C.cyan}, ${C.pink})`, color: C.white, fontSize: 15, fontWeight: 600, cursor: uploadCount >= uploadLimit ? "not-allowed" : "pointer" }}>
