@@ -124,10 +124,15 @@ function validateHeaders(firstLine) {
   const lower = firstLine.toLowerCase()
   const cols = parseCSVLine(firstLine)
   
+  // Special case: If first data column contains "tip from:", it's headerless Chaturbate data
+  if (cols.length >= 2 && cols[1].toLowerCase().includes('tip from')) {
+    return { valid: true, hasHeaders: false, normalizedHeaders: [] }
+  }
+  
   const required = {
     date: ['date', 'time', 'datetime', 'timestamp', 'date_time'],
     username: ['username', 'user', 'tipper', 'from', 'sender', 'nickname'],
-    amount: ['tokens', 'credits', 'amount', 'usd', 'earnings', 'dollars']
+    amount: ['token', 'tokens', 'credits', 'amount', 'usd', 'earnings', 'dollars']
   }
   
   const found = { date: false, username: false, amount: false }
@@ -158,6 +163,7 @@ function validateHeaders(firstLine) {
   const hasHeaderKeywords = required.date.concat(required.username, required.amount)
     .some(keyword => lower.includes(keyword))
   
+  // If looks like data (has date pattern), not headers
   if (!hasHeaderKeywords && /\d{1,2}[\/\-\.]\d{1,2}/.test(firstLine)) {
     return { valid: true, hasHeaders: false, normalizedHeaders: [] }
   }
@@ -191,7 +197,7 @@ function normalizeHeaders(headers) {
       'date_time': ['datetime', 'timestamp', 'date', 'time'],
       'username': ['username', 'user', 'tipper', 'from', 'sender'],
       'tokens': ['tokens', 'token_change', 'token', 'credits', 'amount', 'quantity'],
-      'usd': ['usd', 'usd_amount', 'dollars', 'earnings', 'revenue'],
+      'usd': ['usd', 'usd_amount', 'amount_usd', 'dollars', 'earnings', 'revenue'],
       'tip_type': ['type', 'transaction_type', 'category'],
       'platform': ['platform', 'site', 'source']
     }
@@ -246,8 +252,8 @@ function parseHeaderless(lines, platform) {
 
 function extractTipData(row, platform) {
   const username = row.username || row.user || row.tipper
-  let tokens = parseInt(row.tokens || row.credits || 0)
-  let usd = parseFloat(row.usd || row.earnings || 0)
+  let tokens = parseInt(row.tokens || row.credits || '0') || 0
+  let usd = parseFloat(row.usd || row.usd_amount || row.earnings || '0') || 0
   const dateRaw = row.date_time || row.date || row.timestamp
   
   // Skip negative tokens (cashouts)
@@ -458,11 +464,27 @@ function parseCSVLine(line) {
 
 function isDate(str) {
   return /^\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}/.test(str) ||
-         /^\d{4}[\/\-\.]\d{1,2}[\/\-\.]\d{1,2}/.test(str)
+         /^\d{4}[\/\-\.]\d{1,2}[\/\-\.]\d{1,2}/.test(str) ||
+         /^\d{2}\.\d{2}\.\d{4}/.test(str)  // European format DD.MM.YYYY
 }
 
 function isValidDate(dateStr) {
-  const date = new Date(dateStr)
+  // Try parsing as-is first
+  let date = new Date(dateStr)
+  
+  // If invalid, try converting European format DD.MM.YYYY to MM/DD/YYYY
+  if (isNaN(date.getTime()) && /^\d{2}\.\d{2}\.\d{4}/.test(dateStr)) {
+    const parts = dateStr.split(/[\s\.]+/)
+    const day = parts[0]
+    const month = parts[1]
+    const year = parts[2]
+    const time = parts[3] || ''
+    
+    // Convert to MM/DD/YYYY format
+    const converted = `${month}/${day}/${year} ${time}`.trim()
+    date = new Date(converted)
+  }
+  
   return date instanceof Date && !isNaN(date.getTime()) && date.getFullYear() > 2000
 }
 
