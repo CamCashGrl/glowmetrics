@@ -3,7 +3,10 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
 import { parseCSV, aggregateRows } from "../../lib/analytics"
-import { track } from "@vercel/analytics"
+
+// Analytics tracking — works whether or not @vercel/analytics is installed
+let track = (event, props) => {}
+try { track = require("@vercel/analytics").track } catch (e) {}
 
 const C = {
   bg: "#05070f", card: "#121826", card2: "#161e2e", border: "#1e2d45", border2: "#2a3f5f",
@@ -118,15 +121,19 @@ export default function Dashboard() {
         return
       }
 
-      const toInsert = unique.map(r => ({
-        user_id: user.id,
-        date_time: r.dateRaw || r.date_time,
-        platform: r.platform,
-        username: r.username,
-        tip_type: r.tip_type || "Tip",
-        tokens: r.tokens,
-        usd: r.usd
-      }))
+      const toInsert = unique.map(r => {
+        const tokens = r.tokens || 0
+        const usd = (r.usd && r.usd > 0) ? r.usd : parseFloat((tokens * 0.05).toFixed(2))
+        return {
+          user_id: user.id,
+          date_time: r.dateRaw || r.date_time,
+          platform: r.platform,
+          username: r.username,
+          tip_type: r.tip_type || "Tip",
+          tokens,
+          usd
+        }
+      })
 
       const { error } = await supabase.from("tips").insert(toInsert)
       if (error) { showToast("❌ " + error.message); setUploading(false); return }
