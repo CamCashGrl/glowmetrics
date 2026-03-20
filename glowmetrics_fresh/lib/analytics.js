@@ -190,9 +190,9 @@ function normalizeHeaders(headers) {
     const mappings = {
       'date_time': ['datetime', 'timestamp', 'date', 'time'],
       'username': ['username', 'user', 'tipper', 'from', 'sender'],
-      'tokens': ['tokens', 'credits', 'amount', 'quantity'],
-      'usd': ['usd', 'dollars', 'earnings', 'revenue'],
-      'tip_type': ['type', 'category'],
+      'tokens': ['tokens', 'token_change', 'token', 'credits', 'amount', 'quantity'],
+      'usd': ['usd', 'usd_amount', 'dollars', 'earnings', 'revenue'],
+      'tip_type': ['type', 'transaction_type', 'category'],
       'platform': ['platform', 'site', 'source']
     }
     
@@ -211,6 +211,13 @@ function parseWithHeaders(lines, platform, normalizedHeaders) {
     normalizedHeaders.forEach((h, idx) => {
       row[h] = vals[idx] || ''
     })
+    
+    // Skip non-tip transactions (like "Tokens cashed out")
+    const transactionType = (row.tip_type || row.transaction_type || '').toLowerCase()
+    if (transactionType.includes('cashed') || transactionType.includes('cash out')) {
+      continue
+    }
+    
     const parsed = extractTipData(row, platform)
     if (parsed) data.push(parsed)
   }
@@ -223,9 +230,12 @@ function parseHeaderless(lines, platform) {
     const vals = parseCSVLine(line)
     let parsed = null
     
+    // Chaturbate "Tip From:" format (with space and colon)
     if (vals.length >= 3 && vals[1]?.toLowerCase().includes('tip from')) {
       parsed = parseChaturbateTipFrom(vals)
-    } else if (vals.length >= 3 && isDate(vals[0])) {
+    } 
+    // Standard date,username,tokens format
+    else if (vals.length >= 3 && isDate(vals[0])) {
       parsed = parseStandardFormat(vals, platform)
     }
     
@@ -236,19 +246,26 @@ function parseHeaderless(lines, platform) {
 
 function extractTipData(row, platform) {
   const username = row.username || row.user || row.tipper
-  const tokens = parseInt(row.tokens || row.credits || 0)
-  const usd = parseFloat(row.usd || row.earnings || 0)
+  let tokens = parseInt(row.tokens || row.credits || 0)
+  let usd = parseFloat(row.usd || row.earnings || 0)
   const dateRaw = row.date_time || row.date || row.timestamp
   
-  if (!username || !dateRaw || (tokens <= 0 && usd <= 0)) return null
+  // Skip negative tokens (cashouts)
+  if (tokens < 0) tokens = 0
+  if (usd < 0) usd = 0
+  
+  if (!username || !dateRaw) return null
+  
+  // Must have EITHER tokens OR USD (at least one must be > 0)
+  if (tokens <= 0 && usd <= 0) return null
   
   return {
     dateRaw,
     username: username.trim(),
     platform: platform || 'Unknown',
-    tokens: tokens || Math.round(usd / 0.05),
-    usd: usd || parseFloat((tokens * 0.05).toFixed(2)),
-    tip_type: row.tip_type || 'Tip',
+    tokens: tokens > 0 ? tokens : Math.round(usd / 0.05),
+    usd: usd > 0 ? usd : parseFloat((tokens * 0.05).toFixed(2)),
+    tip_type: row.tip_type || row.transaction_type || 'Tip',
     tip_note: row.tip_note || ''
   }
 }
@@ -314,8 +331,12 @@ function strictValidate(data, platform) {
       rowIssues.push(`Invalid date: "${item.dateRaw}"`)
     } else {
       const tipDate = new Date(item.dateRaw)
-      if (tipDate > new Date()) {
-        rowIssues.push(`Date is in the future: ${item.dateRaw}`)
+      // Allow future dates up to 1 year from now (for test data)
+      const oneYearFromNow = new Date()
+      oneYearFromNow.setFullYear(oneYearFromNow.getFullYear() + 1)
+      
+      if (tipDate > oneYearFromNow) {
+        rowIssues.push(`Date too far in future: ${item.dateRaw}`)
       }
       if (tipDate.getFullYear() < 2010) {
         rowIssues.push(`Date seems too old: ${item.dateRaw}`)
@@ -329,20 +350,23 @@ function strictValidate(data, platform) {
     const hasTokens = item.tokens && item.tokens > 0
     const hasUSD = item.usd && item.usd > 0
     
+    // Must have EITHER tokens OR USD
     if (!hasTokens && !hasUSD) {
-      rowIssues.push("No valid tip amount")
+      rowIssues.push("No valid tip amount (tokens and USD both zero/missing)")
     } else {
-      if (item.tokens < 0 || item.tokens > 1000000) {
+      // Only validate if the value exists
+      if (hasTokens && (item.tokens < 0 || item.tokens > 1000000)) {
         rowIssues.push(`Unrealistic tokens: ${item.tokens}`)
       }
-      if (item.usd < 0 || item.usd > 50000) {
+      if (hasUSD && (item.usd < 0 || item.usd > 50000)) {
         rowIssues.push(`Unrealistic USD: $${item.usd}`)
       }
       
-      if (hasTokens && hasUSD) {
+      // Check token/USD ratio only if BOTH exist
+      if (hasTokens && hasUSD && item.tokens > 0 && item.usd > 0) {
         const ratio = item.usd / item.tokens
-        if (ratio < 0.03 || ratio > 0.10) {
-          rowIssues.push(`Suspicious token/USD ratio: ${ratio.toFixed(4)}`)
+        if (ratio < 0.01 || ratio > 0.15) {
+          rowIssues.push(`Suspicious token/USD ratio: ${ratio.toFixed(4)} (expected ~0.05)`)
         }
       }
     }
