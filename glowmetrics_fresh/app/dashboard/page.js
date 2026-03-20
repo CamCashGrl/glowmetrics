@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
 import { parseCSV, aggregateRows } from "../../lib/analytics"
 import { ConfirmationModal, ErrorModal } from './ConfirmationModal'
+import { track } from '@vercel/analytics'
 
 const C = {
   bg: "#05070f", card: "#121826", card2: "#161e2e", border: "#1e2d45", border2: "#2a3f5f",
@@ -45,12 +46,17 @@ export default function Dashboard() {
   const [messageTarget, setMessageTarget] = useState(null)
   const [messageIndex, setMessageIndex] = useState(0)
   const [messageCopied, setMessageCopied] = useState(false)
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false)
 
   const isBetaUser = true
-  const isPro = false  // flip to true when user has paid — controls locks
+  const isPro = false
   const uploadLimit = Infinity
 
-  const [showUpgradeModal, setShowUpgradeModal] = useState(false)
+  // Tracks WHERE the click came from, then opens modal
+  const openUpgradeModal = (source) => {
+    track('upgrade_click', { source })
+    setShowUpgradeModal(true)
+  }
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(""), 3500) }
 
@@ -184,7 +190,6 @@ export default function Dashboard() {
         .whale-row:hover { background: rgba(59,130,246,0.08) !important; }
       `}</style>
 
-      {/* COSMIC GLOW LAYER */}
       <div style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 0 }}>
         <div style={{ position: "absolute", width: 900, height: 900, top: "-20%", left: "-10%", background: "radial-gradient(circle, rgba(59,130,246,0.35), transparent 60%)", filter: "blur(120px)" }} />
         <div style={{ position: "absolute", width: 900, height: 900, bottom: "-20%", right: "-10%", background: "radial-gradient(circle, rgba(236,72,153,0.35), transparent 60%)", filter: "blur(120px)" }} />
@@ -240,7 +245,6 @@ export default function Dashboard() {
 
         {activeTab === "overview" && (
           <div>
-            {/* BETA BANNER */}
             <div style={{ marginBottom: 24, padding: "14px 20px", borderRadius: 12, background: "linear-gradient(135deg, rgba(245,158,11,0.15), rgba(251,146,60,0.1))", border: "1px solid rgba(245,158,11,0.4)", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                 <div style={{ fontSize: 24 }}>🎉</div>
@@ -257,7 +261,6 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* STATS CARDS */}
             {(() => {
               const recentSessions = sessions.filter(s => new Date(s.startTime) > new Date(Date.now() - 30 * 86400000))
               const prevSessions = sessions.filter(s => { const d = new Date(s.startTime); return d > new Date(Date.now() - 60 * 86400000) && d <= new Date(Date.now() - 30 * 86400000) })
@@ -288,7 +291,6 @@ export default function Dashboard() {
               )
             })()}
 
-            {/* WHAT SHOULD I DO RIGHT NOW */}
             {(() => {
               const currentHour = new Date().getHours()
               const allHourEarnings = {}
@@ -334,7 +336,6 @@ export default function Dashboard() {
               )
             })()}
 
-            {/* INSIGHTS */}
             <div style={{ ...glassCard, borderRadius: 14, padding: 24, marginBottom: 28 }}>
               <h2 style={{ fontSize: 18, fontWeight: 700, color: C.white, marginBottom: 16 }}>💡 Smart Insights</h2>
               {insights.slice(0, 3).map((ins, i) => (
@@ -342,7 +343,6 @@ export default function Dashboard() {
                   <div style={{ fontSize: 14, color: C.white }}>{ins.icon} {ins.text}</div>
                 </div>
               ))}
-              {/* locked preview */}
               <div style={{ position: "relative", borderRadius: 10, overflow: "hidden", marginTop: 8 }}>
                 <div style={{ filter: isPro ? "none" : "blur(3px)", pointerEvents: "none" }}>
                   {insights.slice(3, 8).map((ins, i) => (
@@ -360,7 +360,7 @@ export default function Dashboard() {
                   <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "rgba(5,7,15,0.75)", backdropFilter: "blur(2px)", borderRadius: 10 }}>
                     <div style={{ fontSize: 13, fontWeight: 700, color: C.white, marginBottom: 4 }}>🔒 {Math.max(0, insights.length - 3)} more insights hidden</div>
                     <div style={{ fontSize: 12, color: C.muted, marginBottom: 12 }}>Timing patterns, predictions & advanced strategy</div>
-                    <button onClick={() => setShowUpgradeModal(true)} style={{ padding: "8px 20px", borderRadius: 8, background: "linear-gradient(135deg,#3b82f6,#ec4899)", border: "none", color: C.white, fontSize: 12, fontWeight: 700, cursor: "pointer", boxShadow: "0 0 20px rgba(59,130,246,0.4)" }}>
+                    <button onClick={() => openUpgradeModal('insights')} style={{ padding: "8px 20px", borderRadius: 8, background: "linear-gradient(135deg,#3b82f6,#ec4899)", border: "none", color: C.white, fontSize: 12, fontWeight: 700, cursor: "pointer", boxShadow: "0 0 20px rgba(59,130,246,0.4)" }}>
                       🔓 Unlock All Insights
                     </button>
                   </div>
@@ -368,7 +368,6 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* AI ALERTS */}
             <div style={{ ...glassCard, borderRadius: 14, padding: 24, marginBottom: 28 }}>
               <h2 style={{ fontSize: 18, fontWeight: 700, color: C.white, marginBottom: 16 }}>🚨 Live AI Alerts</h2>
               {alerts.length === 0 && <div style={{ color: C.muted, fontSize: 13 }}>No active alerts</div>}
@@ -405,7 +404,7 @@ export default function Dashboard() {
                       </div>
                       {!isPro && (
                         <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(5,7,15,0.6)", borderRadius: 10, backdropFilter: "blur(1px)" }}>
-                          <button onClick={() => setShowUpgradeModal(true)} style={{ padding: "7px 18px", borderRadius: 8, background: "linear-gradient(135deg,#3b82f6,#ec4899)", border: "none", color: C.white, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                          <button onClick={() => openUpgradeModal('platform_timing')} style={{ padding: "7px 18px", borderRadius: 8, background: "linear-gradient(135deg,#3b82f6,#ec4899)", border: "none", color: C.white, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
                             🔒 Unlock Timing Data
                           </button>
                         </div>
@@ -422,8 +421,6 @@ export default function Dashboard() {
           <div>
             <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 8 }}>🐳 Top Fans</h1>
             <p style={{ fontSize: 13, color: C.muted, marginBottom: 24 }}>Your highest-value supporters ranked by total spend</p>
-
-            {/* FREE: top 3 always visible */}
             <div style={{ ...glassCard, borderRadius: 14, overflow: "hidden", marginBottom: 16 }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                 <thead>
@@ -458,10 +455,8 @@ export default function Dashboard() {
               </table>
             </div>
 
-            {/* LOCKED: rest of whales */}
             {filteredWhales.length > 3 && (
               <div style={{ position: "relative", borderRadius: 14, overflow: "hidden" }}>
-                {/* blurred rows */}
                 <div style={{ filter: isPro ? "none" : "blur(4px)", pointerEvents: isPro ? "auto" : "none" }}>
                   <div style={{ ...glassCard, borderRadius: 14, overflow: "hidden" }}>
                     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
@@ -481,19 +476,13 @@ export default function Dashboard() {
                     </table>
                   </div>
                 </div>
-
-                {/* lock overlay */}
                 {!isPro && (
                   <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "rgba(5,7,15,0.7)", backdropFilter: "blur(2px)", borderRadius: 14 }}>
                     <div style={{ textAlign: "center", padding: 24 }}>
                       <div style={{ fontSize: 28, marginBottom: 8 }}>🔒</div>
-                      <div style={{ fontSize: 16, fontWeight: 700, color: C.white, marginBottom: 4 }}>
-                        +{filteredWhales.length - 3} more high-value fans hidden
-                      </div>
-                      <div style={{ fontSize: 13, color: C.muted, marginBottom: 16 }}>
-                        Including fans spending ${filteredWhales[3] ? filteredWhales[3].totalUSD.toFixed(0) : "???"} and more
-                      </div>
-                      <button onClick={() => setShowUpgradeModal(true)} style={{ padding: "10px 28px", borderRadius: 10, background: "linear-gradient(135deg, #3b82f6, #ec4899)", border: "none", color: C.white, fontSize: 14, fontWeight: 700, cursor: "pointer", boxShadow: "0 0 30px rgba(59,130,246,0.4)" }}>
+                      <div style={{ fontSize: 16, fontWeight: 700, color: C.white, marginBottom: 4 }}>+{filteredWhales.length - 3} more high-value fans hidden</div>
+                      <div style={{ fontSize: 13, color: C.muted, marginBottom: 16 }}>Including fans spending ${filteredWhales[3] ? filteredWhales[3].totalUSD.toFixed(0) : "???"} and more</div>
+                      <button onClick={() => openUpgradeModal('whales')} style={{ padding: "10px 28px", borderRadius: 10, background: "linear-gradient(135deg, #3b82f6, #ec4899)", border: "none", color: C.white, fontSize: 14, fontWeight: 700, cursor: "pointer", boxShadow: "0 0 30px rgba(59,130,246,0.4)" }}>
                         🔓 Unlock All Fans
                       </button>
                     </div>
@@ -502,11 +491,10 @@ export default function Dashboard() {
               </div>
             )}
 
-            {/* if fewer than 4 fans, show upgrade teaser anyway */}
             {filteredWhales.length <= 3 && (
               <div style={{ ...glassCard, borderRadius: 14, padding: 20, textAlign: "center", border: "1px solid rgba(59,130,246,0.2)" }}>
                 <div style={{ fontSize: 13, color: C.muted, marginBottom: 12 }}>Upload more data to discover more fans • Pro unlocks full profiles & behavior patterns</div>
-                <button onClick={() => setShowUpgradeModal(true)} style={{ padding: "8px 20px", borderRadius: 8, background: "linear-gradient(135deg,rgba(59,130,246,0.3),rgba(236,72,153,0.3))", border: "1px solid rgba(59,130,246,0.4)", color: C.white, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                <button onClick={() => openUpgradeModal('whales_empty')} style={{ padding: "8px 20px", borderRadius: 8, background: "linear-gradient(135deg,rgba(59,130,246,0.3),rgba(236,72,153,0.3))", border: "1px solid rgba(59,130,246,0.4)", color: C.white, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
                   🔓 See What Pro Unlocks
                 </button>
               </div>
@@ -537,8 +525,6 @@ export default function Dashboard() {
                 </div>
               </div>
             ))}
-
-            {/* LOCKED: sessions beyond 3 */}
             {sessions.length > 3 && (
               <div style={{ position: "relative", borderRadius: 14, overflow: "hidden" }}>
                 <div style={{ filter: isPro ? "none" : "blur(4px)", pointerEvents: "none" }}>
@@ -559,7 +545,7 @@ export default function Dashboard() {
                     <div style={{ fontSize: 28, marginBottom: 8 }}>🔒</div>
                     <div style={{ fontSize: 15, fontWeight: 700, color: C.white, marginBottom: 4 }}>+{sessions.length - 3} more sessions locked</div>
                     <div style={{ fontSize: 12, color: C.muted, marginBottom: 16 }}>Full session history, deep analytics & trends</div>
-                    <button onClick={() => setShowUpgradeModal(true)} style={{ padding: "10px 28px", borderRadius: 10, background: "linear-gradient(135deg,#3b82f6,#ec4899)", border: "none", color: C.white, fontSize: 14, fontWeight: 700, cursor: "pointer", boxShadow: "0 0 30px rgba(59,130,246,0.4)" }}>
+                    <button onClick={() => openUpgradeModal('sessions')} style={{ padding: "10px 28px", borderRadius: 10, background: "linear-gradient(135deg,#3b82f6,#ec4899)", border: "none", color: C.white, fontSize: 14, fontWeight: 700, cursor: "pointer", boxShadow: "0 0 30px rgba(59,130,246,0.4)" }}>
                       🔓 Unlock Full History
                     </button>
                   </div>
@@ -832,7 +818,7 @@ export default function Dashboard() {
               <div style={{ padding: "20px 24px", background: "linear-gradient(135deg, rgba(236,72,153,0.2), rgba(124,92,255,0.15))", borderBottom: "1px solid rgba(255,255,255,0.08)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
                   <div style={{ fontSize: 17, fontWeight: 800, color: C.white }}>💌 Message Generator</div>
-                  <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>For <span style={{ color: C.pink, fontWeight: 600 }}>{name}</span> · {days === 0 ? "tipped today" : `${days} days since last tip`}</div>
+                  <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>For <span style={{ color: C.pink, fontWeight: 600 }}>{name}</span> · <span style={{ color: C.cyan, fontWeight: 600 }}>{w.platform}</span> · {days === 0 ? "tipped today" : `${days} days since last tip`}</div>
                 </div>
                 <button onClick={() => setMessageTarget(null)} style={{ width: 30, height: 30, borderRadius: "50%", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.1)", color: C.muted, fontSize: 15, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
               </div>
@@ -856,28 +842,17 @@ export default function Dashboard() {
         )
       })()}
 
-      {/* ── UPGRADE MODAL ─────────────────────────────────────────────────── */}
+      {/* UPGRADE MODAL */}
       {showUpgradeModal && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.88)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1002, padding: 20 }}>
           <div style={{ width: 480, background: "rgba(15,20,32,0.97)", backdropFilter: "blur(24px)", borderRadius: 24, border: "1px solid rgba(255,255,255,0.1)", boxShadow: "0 0 80px rgba(59,130,246,0.2), 0 0 160px rgba(236,72,153,0.1)", overflow: "hidden" }}>
-
-            {/* top glow bar */}
             <div style={{ height: 4, background: "linear-gradient(90deg, #3b82f6, #a855f7, #ec4899)" }} />
-
             <div style={{ padding: 36 }}>
-              {/* header */}
               <div style={{ textAlign: "center", marginBottom: 28 }}>
                 <div style={{ fontSize: 44, marginBottom: 12 }}>🚀</div>
-                <h2 style={{ fontSize: 24, fontWeight: 800, color: C.white, marginBottom: 8 }}>
-                  Unlock Your Full Earning Potential
-                </h2>
-                <p style={{ fontSize: 14, color: C.muted, lineHeight: 1.6 }}>
-                  You're only seeing a preview of your data.<br/>
-                  Here's what's waiting for you inside:
-                </p>
+                <h2 style={{ fontSize: 24, fontWeight: 800, color: C.white, marginBottom: 8 }}>Unlock Your Full Earning Potential</h2>
+                <p style={{ fontSize: 14, color: C.muted, lineHeight: 1.6 }}>You're only seeing a preview of your data.<br/>Here's what's waiting for you inside:</p>
               </div>
-
-              {/* benefits list */}
               <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 28 }}>
                 {[
                   { icon: "🐳", text: "See ALL your top spenders — not just the top 3" },
@@ -893,24 +868,15 @@ export default function Dashboard() {
                   </div>
                 ))}
               </div>
-
-              {/* urgency line */}
               <div style={{ textAlign: "center", padding: "12px 16px", background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.25)", borderRadius: 10, marginBottom: 24 }}>
-                <div style={{ fontSize: 13, color: C.gold, fontWeight: 600 }}>
-                  💡 Most creators miss 30–60% of their earning potential without this
-                </div>
+                <div style={{ fontSize: 13, color: C.gold, fontWeight: 600 }}>💡 Most creators miss 30–60% of their earning potential without this</div>
               </div>
-
-              {/* CTA */}
               <button
-                onClick={() => { setShowUpgradeModal(false); showToast("🎉 Thanks for your interest! We'll notify you when Pro launches.") }}
+                onClick={() => { track('upgrade_cta_clicked'); setShowUpgradeModal(false); showToast("🎉 Thanks for your interest! We'll notify you when Pro launches.") }}
                 style={{ width: "100%", padding: "16px", borderRadius: 14, background: "linear-gradient(135deg, #3b82f6, #ec4899)", border: "none", color: C.white, fontSize: 16, fontWeight: 800, cursor: "pointer", boxShadow: "0 0 30px rgba(59,130,246,0.5), 0 0 60px rgba(236,72,153,0.3)", marginBottom: 12 }}>
                 🔓 Get Early Access
               </button>
-              <div style={{ textAlign: "center", fontSize: 12, color: C.muted, marginBottom: 20 }}>
-                Launching soon • Founding users get lifetime discount
-              </div>
-
+              <div style={{ textAlign: "center", fontSize: 12, color: C.muted, marginBottom: 20 }}>Launching soon • Founding users get lifetime discount</div>
               <button onClick={() => setShowUpgradeModal(false)} style={{ width: "100%", padding: "11px", borderRadius: 10, background: "transparent", border: "1px solid rgba(255,255,255,0.1)", color: C.muted, fontSize: 13, cursor: "pointer" }}>
                 Maybe later
               </button>
@@ -918,7 +884,6 @@ export default function Dashboard() {
           </div>
         </div>
       )}
-      {/* ──────────────────────────────────────────────────────────────────── */}
 
       {toast && (
         <div style={{ position: "fixed", bottom: 24, right: 24, background: "rgba(15,20,32,0.95)", backdropFilter: "blur(20px)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 12, padding: "14px 20px", color: C.white, fontSize: 14, zIndex: 9999, boxShadow: "0 8px 32px rgba(0,0,0,0.8)" }}>
