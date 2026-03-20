@@ -1,360 +1,221 @@
 // ============================================
-// CAMCASH ANALYTICS
-// Original parser + enhanced whale/session/insights
+// ENHANCED WHALE DEEP DIVE ANALYTICS
+// With search, profiles, AI predictions, notes
 // ============================================
 
 export function parseCSV(text, platform = null) {
-  if (!text || text.trim().length === 0) {
-    return { success: false, error: { type: 'empty_file', message: "Empty file uploaded", fix: "Please upload a CSV file with your tip data" } }
-  }
-  const cleaned = cleanCSVText(text)
-  const detectedPlatform = platform || detectPlatform(cleaned)
-  const lines = cleaned.split('\n').filter(l => l.trim())
-  if (lines.length === 0) {
-    return { success: false, error: { type: 'no_data', message: "No valid data rows found", fix: "Your CSV appears empty. Check the file and try again." } }
-  }
-  const headerValidation = validateHeaders(lines[0])
-  if (!headerValidation.valid) {
-    return { success: false, needsConfirmation: true, error: headerValidation.error, suggestions: headerValidation.suggestions, detectedPlatform }
-  }
-  const hasHeaders = headerValidation.hasHeaders
-  let parseResult
-  if (hasHeaders) {
-    parseResult = parseWithHeaders(lines, detectedPlatform, headerValidation.normalizedHeaders)
-  } else {
-    parseResult = parseHeaderless(lines, detectedPlatform)
-  }
-  const validation = strictValidate(parseResult.data, detectedPlatform)
-  if (!validation.valid) {
-    return { success: false, needsConfirmation: false, error: validation.error, issues: validation.issues, sampleRows: parseResult.data.slice(0, 3), detectedPlatform }
-  }
-  const confirmationData = buildConfirmationData(validation.data, detectedPlatform)
-  return {
-    success: true,
-    needsConfirmation: true,
-    data: validation.data,
-    platform: detectedPlatform,
-    confirmation: confirmationData,
-    warnings: validation.needsWarning ? validation.warningMessage : null,
-    skipped: validation.skipped || [],
-    stats: {
-      total: validation.data.length,
-      dateRange: { earliest: confirmationData.dateRange.earliest, latest: confirmationData.dateRange.latest },
-      totalRevenue: confirmationData.totalRevenue,
-      topTipper: confirmationData.topTipper
-    }
-  }
-}
+  if (!text || !text.trim()) return []
 
-function cleanCSVText(text) {
+  // Strip BOM and normalize line endings
   if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1)
   text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
-  text = text.split('\n').filter(l => l.trim()).join('\n')
-  text = text.replace(/=""(.*?)""/g, '$1')
-  return text
+
+  const allLines = text.split('\n')
+  if (!platform) platform = detectPlatform(text)
+
+  // Skip leading junk/blank rows — find first line with 2+ non-empty columns
+  let headerLineIdx = 0
+  for (let i = 0; i < Math.min(5, allLines.length); i++) {
+    const cols = parseCSVLine(allLines[i])
+    if (cols.filter(c => c.trim()).length >= 2) { headerLineIdx = i; break }
+  }
+
+  const lines = allLines.slice(headerLineIdx).filter(l => l.trim())
+  if (lines.length === 0) return []
+
+  const firstLineLower = lines[0].toLowerCase()
+  const hasHeaders = firstLineLower.includes('date') || firstLineLower.includes('username') ||
+                     firstLineLower.includes('member') || firstLineLower.includes('amount') ||
+                     firstLineLower.includes('tokens') || firstLineLower.includes('timestamp') ||
+                     firstLineLower.includes('tip') || firstLineLower.includes('payout')
+
+  if (hasHeaders) return parseWithHeaders(lines, platform)
+  else return parseHeaderless(lines, platform)
 }
 
 function detectPlatform(text) {
   const lower = text.toLowerCase()
-  const markers = {
-    'Chaturbate': ['chaturbate', 'tip from:', 'tokens received'],
-    'BongaCams': ['bongacams', 'bonga', 'credits earned'],
-    'MyFreeCams': ['myfreecams', 'mfc', 'tokens earned'],
-    'Stripchat': ['stripchat'],
-    'CamSoda': ['camsoda']
-  }
-  for (const [platform, keywords] of Object.entries(markers)) {
-    if (keywords.some(k => lower.includes(k))) return platform
-  }
-  if (lower.includes('username') && lower.includes('tokens')) return 'Chaturbate'
+  if (lower.includes('chaturbate') || lower.includes('tip from:') || lower.includes('token balance')) return 'Chaturbate'
+  if (lower.includes('bongacams') || lower.includes('bonga') || lower.includes('your payout')) return 'BongaCams'
+  if (lower.includes('myfreecams') || lower.includes('mfc')) return 'MyFreeCams'
+  if (lower.includes('stripchat')) return 'Stripchat'
+  if (lower.includes('camsoda')) return 'CamSoda'
   return 'Unknown'
 }
 
-function validateHeaders(firstLine) {
-  const lower = firstLine.toLowerCase()
-  const cols = parseCSVLine(firstLine)
-  if (cols.length >= 2 && cols[1].toLowerCase().includes('tip from')) {
-    return { valid: true, hasHeaders: false, normalizedHeaders: [] }
+// Convert European DD.MM.YYYY HH:MM to a JS-parseable string
+function normalizeDate(raw) {
+  if (!raw) return raw
+  const euro = raw.match(/^(\d{2})\.(\d{2})\.(\d{4})(?:\s+(\d{2}:\d{2}))?/)
+  if (euro) {
+    const [, day, month, year, time] = euro
+    return `${month}/${day}/${year}${time ? ' ' + time : ''}`
   }
-  const required = {
-    date: ['date', 'time', 'datetime', 'timestamp', 'date_time'],
-    username: ['username', 'user', 'tipper', 'from', 'sender', 'nickname', 'member'],
-    amount: ['token', 'tokens', 'credits', 'amount', 'usd', 'earnings', 'dollars', 'payout']
-  }
-  const found = { date: false, username: false, amount: false }
-  const suggestions = []
-  cols.forEach(col => {
-    const colLower = col.toLowerCase().trim()
-    if (required.date.some(v => colLower.includes(v))) found.date = true
-    if (required.username.some(v => colLower.includes(v))) found.username = true
-    if (required.amount.some(v => colLower.includes(v))) found.amount = true
-    if (colLower === 'site' || colLower === 'source') suggestions.push({ found: col, suggest: 'platform', reason: 'Platform/site column detected' })
-    if (colLower === 'name') suggestions.push({ found: col, suggest: 'username', reason: 'User column detected' })
-  })
-  const hasHeaderKeywords = required.date.concat(required.username, required.amount).some(keyword => lower.includes(keyword))
-  if (!hasHeaderKeywords && /\d{1,2}[\/\-\.]\d{1,2}/.test(firstLine)) {
-    return { valid: true, hasHeaders: false, normalizedHeaders: [] }
-  }
-  const missing = []
-  if (!found.date) missing.push('date/time')
-  if (!found.username) missing.push('username')
-  if (!found.amount) missing.push('tokens or USD amount')
-  if (missing.length > 0) {
-    return {
-      valid: false,
-      error: {
-        type: 'missing_columns',
-        message: `❌ Missing required column${missing.length > 1 ? 's' : ''}: ${missing.join(', ')}`,
-        fix: `Your CSV must have these columns:\n• Date or DateTime\n• Username, User, or Member\n• Tokens, USD amount, or Payout`
-      },
-      suggestions,
-      hasHeaders: true
-    }
-  }
-  const normalized = normalizeHeaders(cols)
-  return { valid: true, hasHeaders: true, normalizedHeaders: normalized, suggestions }
+  return raw
 }
 
-function normalizeHeaders(headers) {
-  return headers.map(h => {
-    const clean = h.toLowerCase().trim().replace(/[^a-z0-9_]/g, '_')
-
-    // Exact matches first to avoid token_balance matching 'token'
-    const exact = {
-      'date_time':     ['date_and_time', 'datetime', 'timestamp', 'date', 'time'],
-      'username':      ['username', 'user', 'tipper', 'from', 'sender', 'member', 'nickname'],
-      'tokens':        ['tokens_earned', 'tokens', 'token_change', 'token', 'credits', 'quantity'],
-      'usd':           ['your_payout', 'usd', 'usd_amount', 'amount_usd', 'dollars', 'earnings', 'revenue', 'payout', 'amount'],
-      'tip_type':      ['type', 'transaction_type', 'chat_type', 'category'],
-      'platform':      ['platform', 'site', 'source'],
-      'action':        ['action'],
-      'token_balance': ['token_balance', 'balance', 'running_balance'],
-    }
-
-    // Check exact match first
-    for (const [standard, variations] of Object.entries(exact)) {
-      if (variations.includes(clean)) return standard
-    }
-    // Then partial match (but NOT for token_balance which would catch 'token')
-    for (const [standard, variations] of Object.entries(exact)) {
-      if (standard === 'token_balance') continue
-      if (variations.some(v => clean.includes(v))) return standard
-    }
-    return clean
-  })
+// Map raw header names to standard keys
+function normalizeHeaderName(h) {
+  const clean = h.toLowerCase().trim().replace(/[^a-z0-9]/g, '_')
+  // token_balance must be checked before 'token' to avoid false match
+  if (['token_balance', 'balance', 'running_balance'].includes(clean)) return 'token_balance'
+  if (['tokens_earned', 'tokens', 'token', 'token_change', 'credits'].includes(clean)) return 'tokens'
+  if (['your_payout', 'payout', 'usd', 'usd_amount', 'earnings', 'amount_usd'].includes(clean)) return 'usd'
+  if (['date_and_time', 'datetime', 'timestamp', 'date', 'time', 'date_time'].includes(clean)) return 'date_time'
+  if (['member', 'username', 'user', 'tipper', 'sender', 'nickname', 'from'].includes(clean)) return 'username'
+  if (['chat_type', 'transaction_type', 'type'].includes(clean)) return 'tip_type'
+  if (clean === 'action') return 'action'
+  return clean
 }
 
-function parseWithHeaders(lines, platform, normalizedHeaders) {
-  const data = []
+function parseWithHeaders(lines, platform) {
+  const rawHeaders = parseCSVLine(lines[0])
+  const headers = rawHeaders.map(normalizeHeaderName)
+  const results = []
+
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i].trim()
     if (!line) continue
-
     const vals = parseCSVLine(line)
     const row = {}
-    normalizedHeaders.forEach((h, idx) => { row[h] = vals[idx] || '' })
+    headers.forEach((h, idx) => { row[h] = (vals[idx] || '').trim() })
 
-    // Skip cashouts and transfers
-    const action = (row.action || '').trim()
-    const actionLower = action.toLowerCase()
+    // Skip cashouts, transfers, outbound tips
+    const action = (row.action || '').toLowerCase()
     const tipType = (row.tip_type || '').toLowerCase()
-
     if (
-      actionLower.includes('transfer') ||
-      actionLower.startsWith('outbound tip') ||
-      actionLower.includes('promoted room') ||
-      actionLower.includes('referral') ||
-      tipType.includes('cashed') ||
-      tipType.includes('cash out')
+      action.includes('transfer') || action.includes('outbound tip') ||
+      action.includes('promoted room') || action.includes('referral') ||
+      tipType.includes('cash') || tipType.includes('transfer')
     ) continue
 
-    // For Chaturbate Action column — extract username from all revenue action types:
-    // "Tip From: username", "Private Show: username", "Spy Show: username",
-    // "Premium Private Show: username", "Sell Social media: username" etc.
-    if (!row.username && action) {
-      const match = action.match(/^[^:]+:\s*(\S+)/i)
-      if (match) {
-        row.username = match[1]
-        // Determine tip type from action label
-        if (!row.tip_type || row.tip_type === '') {
-          if (actionLower.includes('private show')) row.tip_type = 'Private Show'
-          else if (actionLower.includes('spy show')) row.tip_type = 'Spy Show'
-          else if (actionLower.includes('tip from')) row.tip_type = 'Tip'
-          else if (actionLower.includes('sell')) row.tip_type = 'Media Sale'
+    // Chaturbate: extract username from Action column when no username column
+    if (!row.username && row.action) {
+      const m = row.action.match(/^[^:]+:\s*(\S+)/i)
+      if (m) {
+        row.username = m[1]
+        if (!row.tip_type) {
+          const al = row.action.toLowerCase()
+          if (al.includes('private show')) row.tip_type = 'Private Show'
+          else if (al.includes('spy show')) row.tip_type = 'Spy Show'
+          else if (al.includes('tip from')) row.tip_type = 'Tip'
           else row.tip_type = 'Other'
         }
-      } else {
-        continue // can't identify a username, skip
-      }
+      } else continue
     }
 
     const parsed = extractTipData(row, platform)
-    if (parsed) data.push(parsed)
+    if (parsed) results.push(parsed)
   }
-  return { data }
+  return results
 }
 
 function parseHeaderless(lines, platform) {
-  const data = []
+  const results = []
   for (const line of lines) {
+    if (!line.trim()) continue
     const vals = parseCSVLine(line)
-    let parsed = null
-    if (vals.length >= 3 && vals[1]?.toLowerCase().includes('tip from')) {
-      parsed = parseChaturbateTipFrom(vals)
-    } else if (vals.length >= 3 && isDate(vals[0])) {
-      parsed = parseStandardFormat(vals, platform)
+    if (vals.length === 0) continue
+
+    // Chaturbate "Tip From: username message" format
+    if (vals.length >= 3 && vals[1] && vals[1].toLowerCase().includes('tip from')) {
+      const dateRaw = normalizeDate(vals[0].replace(/"/g, ''))
+      const m = vals[1].match(/tip from[:\s]*(\S+)/i)
+      const username = m ? m[1] : null
+      const tokens = parseInt(vals[2]) || 0
+      if (!username || tokens <= 0) continue
+      if (vals[1].toLowerCase().includes('transfer') || vals[1].toLowerCase().includes('cash')) continue
+      results.push({
+        dateRaw, date_time: dateRaw, username, platform: 'Chaturbate',
+        tokens, usd: parseFloat((tokens * 0.05).toFixed(2)), tip_type: 'Tip'
+      })
+      continue
     }
-    if (parsed) data.push(parsed)
+
+    // European date format DD.MM.YYYY (BongaCams headerless)
+    if (vals.length >= 4 && /^\d{2}\.\d{2}\.\d{4}/.test(vals[0])) {
+      const dateRaw = normalizeDate(vals[0])
+      const username = vals[1] || null
+      const tokens = parseInt(vals[3]) || 0
+      const usd = parseFloat((vals[4] || '').replace(/[$,]/g, '')) || 0
+      if (!username || (tokens <= 0 && usd <= 0)) continue
+      results.push({
+        dateRaw, date_time: dateRaw, username, platform: platform || 'BongaCams',
+        tokens: tokens || Math.round(usd / 0.05),
+        usd: usd || parseFloat((tokens * 0.05).toFixed(2)),
+        tip_type: vals[2] || 'Tip'
+      })
+      continue
+    }
+
+    const parsed = extractTipDataFromArray(vals, platform)
+    if (parsed) results.push(parsed)
   }
-  return { data }
+  return results
 }
 
 function extractTipData(row, platform) {
-  const username = row.username || row.user || row.tipper
-  let tokens = parseInt(row.tokens || row.credits || '0') || 0
-  // Strip $ and commas from USD values
-  const rawUsd = (row.usd || row.usd_amount || row.earnings || row.your_payout || '0')
-    .toString().replace(/[$,\s]/g, '')
-  let usd = parseFloat(rawUsd) || 0
-  const dateRaw = row.date_time || row.date || row.timestamp
+  const username = (row.username || row.user || row.tipper || row.from || '').trim()
+  if (!username) return null
+
+  let tokens = parseInt(row.tokens || row.credits || 0) || 0
   if (tokens < 0) tokens = 0
+
+  const rawUsd = (row.usd || row.your_payout || row.earnings || '0').toString().replace(/[$,\s]/g, '')
+  let usd = parseFloat(rawUsd) || 0
   if (usd < 0) usd = 0
-  if (!username || !dateRaw) return null
+
   if (tokens <= 0 && usd <= 0) return null
+
+  const rawDate = row.date_time || row.date || row.timestamp || ''
+  const dateRaw = normalizeDate(rawDate) || new Date().toISOString()
+
   return {
     dateRaw,
-    username: username.trim(),
+    date_time: dateRaw,
+    username,
     platform: platform || 'Unknown',
-    tokens: tokens > 0 ? tokens : Math.round(usd / 0.05),
-    usd: usd > 0 ? usd : parseFloat((tokens * 0.05).toFixed(2)),
-    tip_type: row.tip_type || row.transaction_type || 'Tip',
-    tip_note: row.tip_note || ''
+    tokens: tokens || Math.round(usd / 0.05),
+    usd: usd || parseFloat((tokens * 0.05).toFixed(2)),
+    tip_type: row.tip_type || row.type || 'Tip',
+    tip_note: row.tip_note || row.note || ''
   }
 }
 
-function parseChaturbateTipFrom(vals) {
-  const dateRaw = vals[0].replace(/"/g, '')
-  const match = vals[1].match(/tip from[:\s]+([^\s,]+)/i)
-  const username = match ? match[1] : null
-  const tokens = parseInt(vals[2]) || 0
-  if (!username || tokens <= 0) return null
-  return { dateRaw, username, platform: 'Chaturbate', tokens, usd: parseFloat((tokens * 0.05).toFixed(2)), tip_type: 'Tip', tip_note: '' }
-}
-
-function parseStandardFormat(vals, platform) {
-  const dateRaw = vals[0]
-  const username = vals[1]
-  const tokens = parseInt(vals[2]) || 0
-  const usd = parseFloat(vals[3]?.replace('$', '')) || 0
-  if (!username || (tokens <= 0 && usd <= 0)) return null
+function extractTipDataFromArray(vals, platform) {
+  if (vals.length < 2) return null
+  const dateRaw = normalizeDate(vals[0]) || vals[0]
+  const username = (vals[1] || '').trim()
+  if (!username) return null
+  let tokens = 0, usd = 0
+  for (let i = 2; i < vals.length; i++) {
+    const num = parseFloat(vals[i].replace(/[$,]/g, ''))
+    if (!isNaN(num) && num > 0) {
+      if (num > 100) tokens = Math.round(num)
+      else usd = num
+    }
+  }
+  if (tokens === 0 && usd === 0) return null
   return {
-    dateRaw, username: username.trim(), platform: platform || 'Unknown',
+    dateRaw, date_time: dateRaw, username, platform: platform || 'Unknown',
     tokens: tokens || Math.round(usd / 0.05),
     usd: usd || parseFloat((tokens * 0.05).toFixed(2)),
     tip_type: 'Tip', tip_note: ''
   }
 }
 
-function strictValidate(data, platform) {
-  const validated = []
-  const issues = []
-  if (data.length === 0) {
-    return { valid: false, error: { type: 'no_valid_rows', message: "❌ Could not parse any valid tips", fix: "Check your CSV format. Required: Date, Username, Amount" } }
-  }
-  data.forEach((item, i) => {
-    const rowNum = i + 1
-    const rowIssues = []
-    if (!isValidDate(item.dateRaw)) {
-      rowIssues.push(`Invalid date: "${item.dateRaw}"`)
-    } else {
-      const tipDate = new Date(item.dateRaw)
-      const oneYearFromNow = new Date()
-      oneYearFromNow.setFullYear(oneYearFromNow.getFullYear() + 1)
-      if (tipDate > oneYearFromNow) rowIssues.push(`Date too far in future: ${item.dateRaw}`)
-      if (tipDate.getFullYear() < 2010) rowIssues.push(`Date seems too old: ${item.dateRaw}`)
-    }
-    if (!item.username || item.username.trim() === '') rowIssues.push("Missing username")
-    const hasTokens = item.tokens && item.tokens > 0
-    const hasUSD = item.usd && item.usd > 0
-    if (!hasTokens && !hasUSD) {
-      rowIssues.push("No valid tip amount")
-    } else {
-      if (hasTokens && (item.tokens < 0 || item.tokens > 1000000)) rowIssues.push(`Unrealistic tokens: ${item.tokens}`)
-      if (hasUSD && (item.usd < 0 || item.usd > 50000)) rowIssues.push(`Unrealistic USD: $${item.usd}`)
-      if (hasTokens && hasUSD && item.tokens > 0 && item.usd > 0) {
-        const ratio = item.usd / item.tokens
-        if (ratio < 0.01 || ratio > 0.15) rowIssues.push(`Suspicious token/USD ratio: ${ratio.toFixed(4)}`)
-      }
-    }
-    if (rowIssues.length > 0) { issues.push({ row: rowNum, data: item, problems: rowIssues }) } else { validated.push(item) }
-  })
-  const errorRate = issues.length / data.length
-  if (errorRate > 0.2) {
-    return {
-      valid: false,
-      error: { type: 'too_many_errors', message: `❌ ${issues.length} of ${data.length} rows have errors (${(errorRate * 100).toFixed(0)}%)`, fix: "Please fix your CSV file. Too many rows have problems to safely import." },
-      issues: issues.slice(0, 10)
-    }
-  }
-  if (issues.length > 0) {
-    return { valid: true, needsWarning: true, data: validated, skipped: issues, warningMessage: `⚠️ ${issues.length} row${issues.length > 1 ? 's' : ''} will be skipped` }
-  }
-  return { valid: true, data: validated }
-}
-
-function buildConfirmationData(data, platform) {
-  const dates = data.map(d => new Date(d.dateRaw)).sort((a, b) => a - b)
-  const totalRevenue = data.reduce((sum, d) => sum + d.usd, 0)
-  const userTotals = {}
-  data.forEach(d => { userTotals[d.username] = (userTotals[d.username] || 0) + d.usd })
-  const topTipper = Object.entries(userTotals).sort((a, b) => b[1] - a[1])[0]
-  const sampleRows = data.slice(0, 5).map(d => ({
-    date: new Date(d.dateRaw).toLocaleDateString(),
-    username: d.username,
-    amount: `${d.tokens} tokens ($${d.usd.toFixed(2)})`
-  }))
-  return {
-    totalTips: data.length,
-    totalRevenue: totalRevenue.toFixed(2),
-    dateRange: { earliest: dates[0].toLocaleDateString(), latest: dates[dates.length - 1].toLocaleDateString() },
-    topTipper: topTipper ? { username: topTipper[0], amount: topTipper[1].toFixed(2) } : null,
-    sampleRows, platform
-  }
-}
-
 function parseCSVLine(line) {
   const result = []
-  let current = ''
-  let inQuotes = false
+  let current = '', inQuotes = false
   for (let i = 0; i < line.length; i++) {
     const char = line[i]
-    if (char === '"') { inQuotes = !inQuotes }
+    if (char === '"') inQuotes = !inQuotes
     else if (char === ',' && !inQuotes) { result.push(current.trim()); current = '' }
-    else { current += char }
+    else current += char
   }
   result.push(current.trim())
   return result.filter(v => v !== '')
 }
-
-function isDate(str) {
-  return /^\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}/.test(str) ||
-         /^\d{4}[\/\-\.]\d{1,2}[\/\-\.]\d{1,2}/.test(str) ||
-         /^\d{2}\.\d{2}\.\d{4}/.test(str)
-}
-
-function isValidDate(dateStr) {
-  let date = new Date(dateStr)
-  if (isNaN(date.getTime()) && /^\d{2}\.\d{2}\.\d{4}/.test(dateStr)) {
-    const parts = dateStr.split(/[\s\.]+/)
-    const converted = `${parts[1]}/${parts[0]}/${parts[2]} ${parts[3] || ''}`.trim()
-    date = new Date(converted)
-  }
-  return date instanceof Date && !isNaN(date.getTime()) && date.getFullYear() > 2000
-}
-
-// ============================================
-// SESSION DETECTION
-// ============================================
 
 export function detectSessions(tips) {
   if (!tips || tips.length === 0) return []
@@ -367,7 +228,10 @@ export function detectSessions(tips) {
   let currentSession = null
   parsed.forEach(tip => {
     if (!currentSession) {
-      currentSession = { tips: [tip], platform: tip.platform, startTime: tip.timestamp, endTime: tip.timestamp, fans: new Set([tip.username.toLowerCase()]) }
+      currentSession = {
+        tips: [tip], platform: tip.platform, startTime: tip.timestamp,
+        endTime: tip.timestamp, fans: new Set([tip.username.toLowerCase()])
+      }
     } else {
       const timeSinceLastTip = tip.timestamp - currentSession.endTime
       if (timeSinceLastTip <= SESSION_GAP_MS && tip.platform === currentSession.platform) {
@@ -376,7 +240,10 @@ export function detectSessions(tips) {
         currentSession.fans.add(tip.username.toLowerCase())
       } else {
         sessions.push(finalizeSession(currentSession))
-        currentSession = { tips: [tip], platform: tip.platform, startTime: tip.timestamp, endTime: tip.timestamp, fans: new Set([tip.username.toLowerCase()]) }
+        currentSession = {
+          tips: [tip], platform: tip.platform, startTime: tip.timestamp,
+          endTime: tip.timestamp, fans: new Set([tip.username.toLowerCase()])
+        }
       }
     }
   })
@@ -392,6 +259,7 @@ function finalizeSession(session) {
   const totalUSD = session.tips.reduce((sum, t) => sum + (t.usd || 0), 0)
   const tipCount = session.tips.length
   const uniqueFans = session.fans.size
+  const tokensPerHour = durationHours > 0 ? Math.round(totalTokens / durationHours) : 0
   const usdPerHour = durationHours > 0 ? parseFloat((totalUSD / durationHours).toFixed(2)) : 0
   const avgTipSize = tipCount > 0 ? parseFloat((totalUSD / tipCount).toFixed(2)) : 0
   return {
@@ -401,15 +269,13 @@ function finalizeSession(session) {
     endTime: session.endTime.toISOString(),
     durationMinutes, durationHours: parseFloat(durationHours.toFixed(2)),
     totalTokens, totalUSD: parseFloat(totalUSD.toFixed(2)),
-    tipCount, uniqueFans,
-    tokensPerHour: durationHours > 0 ? Math.round(totalTokens / durationHours) : 0,
-    usdPerHour, avgTipSize,
+    tipCount, uniqueFans, tokensPerHour, usdPerHour, avgTipSize,
     tips: session.tips
   }
 }
 
 // ============================================
-// WHALE IDENTIFICATION
+// ENHANCED WHALE IDENTIFICATION
 // ============================================
 
 export function identifyWhales(tips) {
@@ -417,7 +283,10 @@ export function identifyWhales(tips) {
   tips.forEach(t => {
     const key = t.username.toLowerCase()
     if (!fanMap[key]) {
-      fanMap[key] = { username: t.username, totalUSD: 0, totalTokens: 0, tipCount: 0, tips: [], platform: t.platform, tipNotes: [] }
+      fanMap[key] = {
+        username: t.username, totalUSD: 0, totalTokens: 0,
+        tipCount: 0, tips: [], platform: t.platform, tipNotes: []
+      }
     }
     fanMap[key].totalUSD += t.usd || 0
     fanMap[key].totalTokens += t.tokens || 0
@@ -425,6 +294,7 @@ export function identifyWhales(tips) {
     fanMap[key].tips.push(t)
     if (t.tip_note) fanMap[key].tipNotes.push(t.tip_note)
   })
+
   return Object.values(fanMap).map(f => {
     const sortedTips = f.tips.sort((a, b) => new Date(b.dateRaw || b.date_time) - new Date(a.dateRaw || a.date_time))
     const lastTip = sortedTips[0]
@@ -434,15 +304,34 @@ export function identifyWhales(tips) {
     const daysSinceLastTip = Math.floor((Date.now() - lastTipDate) / (1000 * 60 * 60 * 24))
     const lifetimeDays = Math.max(Math.floor((lastTipDate - firstTipDate) / (1000 * 60 * 60 * 24)), 1)
     const avgDaysBetweenTips = f.tipCount > 1 ? lifetimeDays / (f.tipCount - 1) : 30
-    const privateTips = f.tips.filter(t => t.tip_type?.toLowerCase().includes('private') || t.tip_note?.toLowerCase().includes('private'))
+
+    const privateTips = f.tips.filter(t =>
+      t.tip_type?.toLowerCase().includes('private') ||
+      t.tip_note?.toLowerCase().includes('private')
+    )
+    const hasPrivates = privateTips.length > 0
+    const privateCount = privateTips.length
+    const privateSpent = privateTips.reduce((sum, t) => sum + t.usd, 0)
+
     const hourCounts = {}
-    f.tips.forEach(t => { const hour = new Date(t.dateRaw || t.date_time).getHours(); hourCounts[hour] = (hourCounts[hour] || 0) + 1 })
+    f.tips.forEach(t => {
+      const hour = new Date(t.dateRaw || t.date_time).getHours()
+      hourCounts[hour] = (hourCounts[hour] || 0) + 1
+    })
     const mostActiveHour = Object.entries(hourCounts).sort((a, b) => b[1] - a[1])[0]
+    const typicalOnlineHours = mostActiveHour ? `${mostActiveHour[0]}:00 - ${parseInt(mostActiveHour[0]) + 2}:00` : 'Unknown'
     const biggestTip = Math.max(...f.tips.map(t => t.usd))
+
     let tier = 'Regular'
     if (f.totalUSD >= 500) tier = 'Whale'
     else if (f.totalUSD >= 100) tier = 'Shark'
     else if (daysSinceLastTip > 60) tier = 'Dormant'
+
+    const tipProbability = calculateTipProbability(daysSinceLastTip, avgDaysBetweenTips)
+    const churnRisk = calculateChurnRisk(daysSinceLastTip, avgDaysBetweenTips, f.tipCount)
+    const lifetimeValue = predictLifetimeValue(f.totalUSD, lifetimeDays, f.tipCount)
+    const expectedNextTip = calculateExpectedNextTip(daysSinceLastTip, avgDaysBetweenTips)
+
     return {
       username: f.username,
       totalUSD: parseFloat(f.totalUSD.toFixed(2)),
@@ -456,16 +345,10 @@ export function identifyWhales(tips) {
       firstTipDate: firstTipDate.toISOString(),
       daysSinceLastTip,
       avgDaysBetweenTips: parseFloat(avgDaysBetweenTips.toFixed(1)),
-      tipProbability: calculateTipProbability(daysSinceLastTip, avgDaysBetweenTips),
-      churnRisk: calculateChurnRisk(daysSinceLastTip, avgDaysBetweenTips, f.tipCount),
-      lifetimeValue: predictLifetimeValue(f.totalUSD, lifetimeDays, f.tipCount),
-      expectedNextTip: calculateExpectedNextTip(daysSinceLastTip, avgDaysBetweenTips),
-      hasPrivates: privateTips.length > 0,
-      privateCount: privateTips.length,
-      privateSpent: parseFloat(privateTips.reduce((sum, t) => sum + t.usd, 0).toFixed(2)),
-      typicalOnlineHours: mostActiveHour ? `${mostActiveHour[0]}:00 - ${parseInt(mostActiveHour[0]) + 2}:00` : 'Unknown',
-      tipNotes: f.tipNotes,
-      tips: f.tips
+      tipProbability, churnRisk, lifetimeValue, expectedNextTip,
+      hasPrivates, privateCount,
+      privateSpent: parseFloat(privateSpent.toFixed(2)),
+      typicalOnlineHours, tipNotes: f.tipNotes, tips: f.tips
     }
   }).sort((a, b) => b.totalUSD - a.totalUSD)
 }
@@ -492,7 +375,11 @@ function predictLifetimeValue(totalSpent, days, tipCount) {
   const dailyRate = totalSpent / days
   const projected365 = dailyRate * 365
   const confidence = tipCount > 10 ? 'High' : tipCount > 5 ? 'Medium' : 'Low'
-  return { prediction: parseFloat(projected365.toFixed(2)), confidence, monthly: parseFloat((projected365 / 12).toFixed(2)) }
+  return {
+    prediction: parseFloat(projected365.toFixed(2)),
+    confidence,
+    monthly: parseFloat((projected365 / 12).toFixed(2))
+  }
 }
 
 function calculateExpectedNextTip(daysSince, avgDays) {
@@ -507,33 +394,64 @@ function calculateExpectedNextTip(daysSince, avgDays) {
 export function generateWhaleAlerts(whales) {
   const alerts = []
   whales.forEach(whale => {
-    if (whale.tier === 'Whale' && whale.daysSinceLastTip < 7 && whale.totalUSD >= 500 && whale.totalUSD < 600) {
-      alerts.push({ type: 'new_whale', severity: 'success', icon: '🐳', whale: whale.username, message: `${whale.username} just became a whale! ($${whale.totalUSD} lifetime)`, action: 'Send thank you message' })
+    if (whale.tier === 'Whale' && whale.daysSinceLastTip < 7) {
+      if (whale.totalUSD >= 500 && whale.totalUSD < 600) {
+        alerts.push({
+          type: 'new_whale', severity: 'success', icon: '🐳',
+          whale: whale.username,
+          message: `${whale.username} just became a whale! ($${whale.totalUSD} lifetime)`,
+          action: 'Send thank you message'
+        })
+      }
     }
-    if ((whale.churnRisk.level === 'High' || whale.churnRisk.level === 'Critical') && whale.totalUSD >= 100) {
-      alerts.push({ type: 'churn_risk', severity: 'warning', icon: '⚠️', whale: whale.username, message: `${whale.username} hasn't tipped in ${whale.daysSinceLastTip} days (usually tips every ${whale.avgDaysBetweenTips.toFixed(0)} days)`, action: 'Re-engage now' })
+    if (whale.churnRisk.level === 'High' || whale.churnRisk.level === 'Critical') {
+      if (whale.totalUSD >= 100) {
+        alerts.push({
+          type: 'churn_risk', severity: 'warning', icon: '⚠️',
+          whale: whale.username,
+          message: `${whale.username} hasn't tipped in ${whale.daysSinceLastTip} days (usually tips every ${whale.avgDaysBetweenTips.toFixed(0)} days)`,
+          action: 'Re-engage now'
+        })
+      }
     }
     if (whale.tipProbability.level === 'High' && whale.totalUSD >= 200) {
-      alerts.push({ type: 'tip_likely', severity: 'info', icon: '💰', whale: whale.username, message: `${whale.username} likely to tip soon (${whale.tipProbability.percentage}% probability)`, action: 'Go live during their active hours' })
+      alerts.push({
+        type: 'tip_likely', severity: 'info', icon: '💰',
+        whale: whale.username,
+        message: `${whale.username} likely to tip soon (${whale.tipProbability.percentage}% probability)`,
+        action: 'Go live during their active hours'
+      })
     }
   })
-  return alerts.sort((a, b) => { const o = { critical: 0, warning: 1, info: 2, success: 3 }; return o[a.severity] - o[b.severity] })
+  return alerts.sort((a, b) => {
+    const severityOrder = { critical: 0, warning: 1, info: 2, success: 3 }
+    return severityOrder[a.severity] - severityOrder[b.severity]
+  })
 }
 
 export function predictRevenue(tips, sessions) {
   if (!sessions.length) return null
   const predictions = {}
-  const last7Days = tips.filter(t => (Date.now() - new Date(t.dateRaw || t.date_time)) / 86400000 <= 7)
-  predictions.next7Days = { amount: parseFloat(last7Days.reduce((s, t) => s + t.usd, 0).toFixed(2)), confidence: last7Days.length > 20 ? 'High' : last7Days.length > 10 ? 'Medium' : 'Low' }
-  const last30Days = tips.filter(t => (Date.now() - new Date(t.dateRaw || t.date_time)) / 86400000 <= 30)
-  predictions.next30Days = { amount: parseFloat(last30Days.reduce((s, t) => s + t.usd, 0).toFixed(2)), confidence: last30Days.length > 50 ? 'High' : last30Days.length > 25 ? 'Medium' : 'Low' }
+  const last7Days = tips.filter(t => (Date.now() - new Date(t.dateRaw || t.date_time)) / (1000 * 60 * 60 * 24) <= 7)
+  predictions.next7Days = {
+    amount: parseFloat(last7Days.reduce((sum, t) => sum + t.usd, 0).toFixed(2)),
+    confidence: last7Days.length > 20 ? 'High' : last7Days.length > 10 ? 'Medium' : 'Low'
+  }
+  const last30Days = tips.filter(t => (Date.now() - new Date(t.dateRaw || t.date_time)) / (1000 * 60 * 60 * 24) <= 30)
+  predictions.next30Days = {
+    amount: parseFloat(last30Days.reduce((sum, t) => sum + t.usd, 0).toFixed(2)),
+    confidence: last30Days.length > 50 ? 'High' : last30Days.length > 25 ? 'Medium' : 'Low'
+  }
   const dayOfWeek = new Date().getDay()
   const sameDaySessions = sessions.filter(s => new Date(s.startTime).getDay() === dayOfWeek)
   if (sameDaySessions.length > 2) {
-    const avg = sameDaySessions.reduce((s, r) => s + r.totalUSD, 0) / sameDaySessions.length
+    const avgRevenue = sameDaySessions.reduce((sum, s) => sum + s.totalUSD, 0) / sameDaySessions.length
     predictions.tonightStream = {
-      expected: parseFloat(avg.toFixed(2)),
-      range: { min: parseFloat(Math.min(...sameDaySessions.map(s => s.totalUSD)).toFixed(2)), max: parseFloat(Math.max(...sameDaySessions.map(s => s.totalUSD)).toFixed(2)) },
+      expected: parseFloat(avgRevenue.toFixed(2)),
+      range: {
+        min: parseFloat(Math.min(...sameDaySessions.map(s => s.totalUSD)).toFixed(2)),
+        max: parseFloat(Math.max(...sameDaySessions.map(s => s.totalUSD)).toFixed(2))
+      },
       confidence: sameDaySessions.length > 5 ? 'High' : 'Medium'
     }
   }
@@ -544,15 +462,21 @@ export function generateInsights(tips, sessions) {
   const insights = []
   if (!tips.length || !sessions.length) return insights
   const dayEarnings = {}
-  sessions.forEach(s => { const day = new Date(s.startTime).toLocaleDateString('en-US', { weekday: 'long' }); dayEarnings[day] = (dayEarnings[day] || 0) + s.totalUSD })
+  sessions.forEach(s => {
+    const day = new Date(s.startTime).toLocaleDateString('en-US', { weekday: 'long' })
+    dayEarnings[day] = (dayEarnings[day] || 0) + s.totalUSD
+  })
   const bestDay = Object.entries(dayEarnings).sort((a, b) => b[1] - a[1])[0]
   if (bestDay) {
     const avgDay = Object.values(dayEarnings).reduce((a, b) => a + b, 0) / Object.keys(dayEarnings).length
-    const pct = Math.round(((bestDay[1] - avgDay) / avgDay) * 100)
-    if (pct > 10) insights.push({ icon: '📅', text: `${bestDay[0]}s earn ${pct}% more than average`, type: 'day' })
+    const percentBetter = Math.round(((bestDay[1] - avgDay) / avgDay) * 100)
+    if (percentBetter > 10) insights.push({ icon: '📅', text: `${bestDay[0]}s earn ${percentBetter}% more than average`, type: 'day' })
   }
   const hourEarnings = {}
-  sessions.forEach(s => { const h = new Date(s.startTime).getHours(); hourEarnings[h] = (hourEarnings[h] || 0) + s.totalUSD })
+  sessions.forEach(s => {
+    const hour = new Date(s.startTime).getHours()
+    hourEarnings[hour] = (hourEarnings[hour] || 0) + s.totalUSD
+  })
   const bestHour = Object.entries(hourEarnings).sort((a, b) => b[1] - a[1])[0]
   if (bestHour) {
     const h = parseInt(bestHour[0])
@@ -571,7 +495,11 @@ export function generateInsights(tips, sessions) {
 
 export function aggregateRows(tips) {
   if (!tips || tips.length === 0) {
-    return { totalUSD: 0, totalTokens: 0, totalTips: 0, avgTipSize: 0, topTippers: [], platforms: [], sessions: [], insights: [], predictions: null, whaleAlerts: [] }
+    return {
+      totalUSD: 0, totalTokens: 0, totalTips: 0, avgTipSize: 0,
+      topTippers: [], platforms: [], sessions: [], insights: [],
+      predictions: null, whaleAlerts: []
+    }
   }
   const sessions = detectSessions(tips)
   const whales = identifyWhales(tips)
@@ -583,7 +511,9 @@ export function aggregateRows(tips) {
   const avgTipSize = tips.length > 0 ? totalUSD / tips.length : 0
   const platformMap = {}
   sessions.forEach(s => {
-    if (!platformMap[s.platform]) platformMap[s.platform] = { platform: s.platform, totalUSD: 0, totalTokens: 0, sessions: 0, hours: 0, tips: 0 }
+    if (!platformMap[s.platform]) {
+      platformMap[s.platform] = { platform: s.platform, totalUSD: 0, totalTokens: 0, sessions: 0, hours: 0, tips: 0 }
+    }
     platformMap[s.platform].totalUSD += s.totalUSD
     platformMap[s.platform].totalTokens += s.totalTokens
     platformMap[s.platform].sessions += 1
@@ -597,7 +527,8 @@ export function aggregateRows(tips) {
     avgTipSize: p.tips > 0 ? parseFloat((p.totalUSD / p.tips).toFixed(2)) : 0
   }))
   const topTippers = whales.map((w, i) => ({
-    rank: i + 1, username: w.username, usd: w.totalUSD, tokens: w.totalTokens, count: w.tipCount,
+    rank: i + 1, username: w.username, usd: w.totalUSD,
+    tokens: w.totalTokens, count: w.tipCount,
     status: w.tier === 'Whale' ? '🐳 WHALE' : w.tier === 'Shark' ? '🦈 SHARK' : w.tier === 'Dormant' ? '💤 DORMANT' : '🐟 REGULAR',
     last: new Date(w.lastTipDate).toLocaleDateString(),
     first: new Date(w.firstTipDate).toLocaleDateString(),
@@ -608,6 +539,7 @@ export function aggregateRows(tips) {
   return {
     totalUSD: parseFloat(totalUSD.toFixed(2)), totalTokens,
     totalTips: tips.length, avgTipSize: parseFloat(avgTipSize.toFixed(2)),
-    topTippers, platforms, sessions, insights, predictions, whaleAlerts, whales
+    topTippers, platforms, sessions, insights,
+    predictions, whaleAlerts, whales
   }
 }
