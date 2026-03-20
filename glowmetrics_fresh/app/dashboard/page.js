@@ -27,6 +27,7 @@ export default function Dashboard() {
   const [uploadCount, setUploadCount] = useState(0)
   const [whaleFilter, setWhaleFilter] = useState("ALL")
   const [platformFilter, setPlatformFilter] = useState("ALL")
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(""), 3500) }
 
@@ -60,6 +61,19 @@ export default function Dashboard() {
     } finally { setLoading(false) }
   }
 
+  const removeDuplicates = (existingTips, newTips) => {
+    const existingKeys = new Set(
+      existingTips.map(t => `${t.date_time}_${t.username}_${t.tokens}_${t.platform}`)
+    )
+    
+    const unique = newTips.filter(t => {
+      const key = `${t.dateRaw || t.date_time}_${t.username}_${t.tokens}_${t.platform}`
+      return !existingKeys.has(key)
+    })
+
+    return unique
+  }
+
   const handleCSV = async (file) => {
     if (!file || !user) return
     if (uploadCount >= 3) {
@@ -72,7 +86,17 @@ export default function Dashboard() {
       const parsed = parseCSV(text)
       if (!parsed.length) { showToast("❌ No valid rows found"); setUploading(false); return }
       
-      const toInsert = parsed.map(r => ({
+      // Remove duplicates
+      const unique = removeDuplicates(tips, parsed)
+      const duplicateCount = parsed.length - unique.length
+
+      if (unique.length === 0) {
+        showToast(`⚠️ All ${parsed.length} tips are duplicates!`)
+        setUploading(false)
+        return
+      }
+      
+      const toInsert = unique.map(r => ({
         user_id: user.id,
         date_time: r.dateRaw || r.date_time,
         platform: r.platform,
@@ -86,11 +110,39 @@ export default function Dashboard() {
       if (error) { showToast("❌ " + error.message); setUploading(false); return }
       
       setUploadCount(uploadCount + 1)
-      showToast(`✅ Imported ${parsed.length} tips!`)
+      const msg = duplicateCount > 0 
+        ? `✅ Imported ${unique.length} tips (${duplicateCount} duplicates removed)`
+        : `✅ Imported ${unique.length} tips!`
+      showToast(msg)
       await loadData(user.id)
     } catch (err) {
       showToast("❌ " + err.message)
     } finally { setUploading(false) }
+  }
+
+  const deleteTip = async (tipId) => {
+    if (!confirm("Delete this tip?")) return
+    try {
+      const { error } = await supabase.from("tips").delete().eq("id", tipId)
+      if (error) throw error
+      showToast("✅ Tip deleted")
+      await loadData(user.id)
+    } catch (err) {
+      showToast("❌ " + err.message)
+    }
+  }
+
+  const deleteAllTips = async () => {
+    if (!user) return
+    try {
+      const { error } = await supabase.from("tips").delete().eq("user_id", user.id)
+      if (error) throw error
+      showToast("✅ All tips deleted")
+      setShowDeleteConfirm(false)
+      await loadData(user.id)
+    } catch (err) {
+      showToast("❌ " + err.message)
+    }
   }
 
   if (loading) {
@@ -153,7 +205,7 @@ export default function Dashboard() {
         </div>
 
         <nav style={{ flex: 1, padding: "16px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
-          {[["overview", "📊", "Overview"], ["platforms", "🎯", "Platforms"], ["whales", "🐳", "Top Fans"], ["sessions", "🎥", "Sessions"], ["upload", "📥", "Import"]].map(([id, icon, label]) => (
+          {[["overview", "📊", "Overview"], ["platforms", "🎯", "Platforms"], ["whales", "🐳", "Top Fans"], ["sessions", "🎥", "Sessions"], ["data", "📝", "Edit Data"], ["upload", "📥", "Import"]].map(([id, icon, label]) => (
             <button key={id} onClick={() => setActiveTab(id)} style={{
               display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 10,
               background: activeTab === id ? `${C.cyan}15` : "transparent",
@@ -390,10 +442,61 @@ export default function Dashboard() {
           </div>
         )}
 
+        {/* EDIT DATA TAB */}
+        {activeTab === "data" && (
+          <div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 32 }}>
+              <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white }}>📝 Edit Data</h1>
+              <button onClick={() => setShowDeleteConfirm(true)} style={{ padding: "10px 20px", borderRadius: 8, background: `${C.red}15`, border: `1px solid ${C.red}30`, color: C.red, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                🗑️ Delete All Tips
+              </button>
+            </div>
+
+            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 20, marginBottom: 24 }}>
+              <div style={{ fontSize: 14, color: C.muted, marginBottom: 8 }}>Total Tips: {tips.length}</div>
+              <div style={{ fontSize: 14, color: C.muted }}>Total Revenue: ${totalRevenue.toFixed(2)}</div>
+            </div>
+
+            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, overflow: "hidden" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                <thead>
+                  <tr style={{ background: C.card2, borderBottom: `1px solid ${C.border}` }}>
+                    {["Date", "Username", "Platform", "Amount", "Tokens", "Type", "Actions"].map(h => (
+                      <th key={h} style={{ padding: "12px 16px", textAlign: "left", color: C.muted, fontSize: 11, textTransform: "uppercase", fontWeight: 500 }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {tips.slice(0, 100).map((t, i) => (
+                    <tr key={t.id || i} style={{ borderBottom: `1px solid ${C.border}` }}>
+                      <td style={{ padding: "12px 16px", color: C.white, fontSize: 12 }}>{new Date(t.date_time).toLocaleDateString()}</td>
+                      <td style={{ padding: "12px 16px", color: C.white, fontWeight: 600 }}>{t.username}</td>
+                      <td style={{ padding: "12px 16px", color: C.muted }}>{t.platform}</td>
+                      <td style={{ padding: "12px 16px", color: C.green, fontWeight: 700 }}>${t.usd.toFixed(2)}</td>
+                      <td style={{ padding: "12px 16px", color: C.cyan }}>{t.tokens}</td>
+                      <td style={{ padding: "12px 16px", color: C.muted, fontSize: 12 }}>{t.tip_type}</td>
+                      <td style={{ padding: "12px 16px" }}>
+                        <button onClick={() => deleteTip(t.id)} style={{ padding: "4px 12px", borderRadius: 6, background: `${C.red}15`, border: `1px solid ${C.red}30`, color: C.red, fontSize: 11, cursor: "pointer" }}>
+                          Delete
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {tips.length > 100 && (
+                <div style={{ padding: 20, textAlign: "center", background: C.card2, borderTop: `1px solid ${C.border}` }}>
+                  <div style={{ fontSize: 13, color: C.muted }}>Showing first 100 of {tips.length} tips</div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {activeTab === "upload" && (
           <div style={{ maxWidth: 600, margin: "0 auto" }}>
             <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 8 }}>📥 Import CSV</h1>
-            <p style={{ fontSize: 14, color: C.muted, marginBottom: 32 }}>Uploads: {uploadCount}/3 per month</p>
+            <p style={{ fontSize: 14, color: C.muted, marginBottom: 32 }}>Uploads: {uploadCount}/3 per month • Auto-removes duplicates</p>
             <div style={{ background: C.card, borderRadius: 14, padding: 40, textAlign: "center" }}>
               <div style={{ fontSize: 48, marginBottom: 16 }}>📁</div>
               <label style={{ display: "inline-block", padding: "14px 32px", borderRadius: 10, background: uploadCount >= 3 ? C.muted : `linear-gradient(135deg, ${C.cyan}, ${C.pink})`, color: C.white, fontSize: 15, fontWeight: 600, cursor: uploadCount >= 3 ? "not-allowed" : "pointer" }}>
@@ -410,6 +513,25 @@ export default function Dashboard() {
           </div>
         )}
       </div>
+
+      {/* DELETE CONFIRMATION MODAL */}
+      {showDeleteConfirm && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 999 }}>
+          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 32, maxWidth: 400, textAlign: "center" }}>
+            <div style={{ fontSize: 48, marginBottom: 16 }}>⚠️</div>
+            <h2 style={{ fontSize: 20, fontWeight: 700, color: C.white, marginBottom: 12 }}>Delete All Tips?</h2>
+            <p style={{ fontSize: 14, color: C.muted, marginBottom: 24 }}>This will permanently delete all {tips.length} tips. This cannot be undone!</p>
+            <div style={{ display: "flex", gap: 12 }}>
+              <button onClick={() => setShowDeleteConfirm(false)} style={{ flex: 1, padding: "10px 20px", borderRadius: 8, background: C.card2, border: `1px solid ${C.border}`, color: C.white, fontSize: 14, cursor: "pointer" }}>
+                Cancel
+              </button>
+              <button onClick={deleteAllTips} style={{ flex: 1, padding: "10px 20px", borderRadius: 8, background: `linear-gradient(135deg, ${C.red}, ${C.orange})`, border: "none", color: C.white, fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+                Delete All
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {toast && (
         <div style={{ position: "fixed", bottom: 24, right: 24, background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "14px 20px", color: C.white, fontSize: 14, zIndex: 999, boxShadow: "0 8px 32px rgba(0,0,0,0.8)" }}>
