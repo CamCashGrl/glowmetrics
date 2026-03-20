@@ -297,19 +297,6 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* SIDEBAR BOTTOM — spots left */}
-        <div style={{ padding: "16px 20px", borderTop: `1px solid ${C.border}` }}>
-          <div style={{ padding: 12, borderRadius: 10, background: `linear-gradient(135deg, ${C.pink}15, ${C.indigo}15)`, border: `1px solid ${C.pink}30`, textAlign: "center" }}>
-            <div style={{ fontSize: 18, marginBottom: 4 }}>🎉</div>
-            <div style={{ fontSize: 12, fontWeight: 700, color: C.white, marginBottom: 2 }}>Free for first 100 users</div>
-            <div style={{ fontSize: 10, color: C.muted, marginBottom: 8 }}>Spots filling up fast</div>
-            {/* simple progress bar */}
-            <div style={{ height: 4, borderRadius: 4, background: C.border, overflow: "hidden" }}>
-              <div style={{ height: "100%", width: "63%", borderRadius: 4, background: `linear-gradient(90deg, ${C.cyan}, ${C.pink})` }} />
-            </div>
-            <div style={{ fontSize: 10, color: C.muted, marginTop: 4 }}>63 / 100 spots taken</div>
-          </div>
-
         <nav style={{ flex: 1, padding: "16px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
           {[["overview", "📊", "Overview"], ["platforms", "🎯", "Platforms"], ["whales", "🐳", "Top Fans"], ["sessions", "🎥", "Sessions"], ["data", "📝", "Edit Data"], ["help", "❓", "CSV Help"], ["upload", "📥", "Import"]].map(([id, icon, label]) => (
             <button key={id} onClick={() => setActiveTab(id)} style={{
@@ -323,6 +310,19 @@ export default function Dashboard() {
             </button>
           ))}
         </nav>
+
+        {/* SIDEBAR BOTTOM — spots left */}
+        <div style={{ padding: "16px 20px", borderTop: `1px solid ${C.border}` }}>
+          <div style={{ padding: 12, borderRadius: 10, background: `linear-gradient(135deg, ${C.pink}15, ${C.indigo}15)`, border: `1px solid ${C.pink}30`, textAlign: "center" }}>
+            <div style={{ fontSize: 18, marginBottom: 4 }}>🎉</div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: C.white, marginBottom: 2 }}>Free for first 100 users</div>
+            <div style={{ fontSize: 10, color: C.muted, marginBottom: 8 }}>Spots filling up fast</div>
+            <div style={{ height: 4, borderRadius: 4, background: C.border, overflow: "hidden" }}>
+              <div style={{ height: "100%", width: "63%", borderRadius: 4, background: `linear-gradient(90deg, ${C.cyan}, ${C.pink})` }} />
+            </div>
+            <div style={{ fontSize: 10, color: C.muted, marginTop: 4 }}>63 / 100 spots taken</div>
+          </div>
+        </div>
       </div>
 
       {/* MAIN CONTENT */}
