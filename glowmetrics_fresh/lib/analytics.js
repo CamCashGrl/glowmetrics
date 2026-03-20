@@ -51,29 +51,36 @@ function detectPlatform(text) {
 
 function normalizeDate(raw) {
   if (!raw) return raw
-  // European DD.MM.YYYY HH:MM
+  // European DD.MM.YYYY
   const euro = raw.match(/^(\d{2})\.(\d{2})\.(\d{4})(?:\s+(\d{2}:\d{2}))?/)
-  if (euro) {
-    const [, day, month, year, time] = euro
-    return `${month}/${day}/${year}${time ? ' ' + time : ''}`
-  }
-  return raw
+  if (euro) return `${euro[2]}/${euro[1]}/${euro[3]}${euro[4] ? ' ' + euro[4] : ''}`
+  // YYYY/MM/DD
+  const slash = raw.match(/^(\d{4})\/(\d{2})\/(\d{2})(.*)/)
+  if (slash) return `${slash[1]}-${slash[2]}-${slash[3]}${slash[4]}`
+  // ISO with Z: 2026-03-01T22:14:03Z
+  return raw.replace('T', ' ').replace('Z', '')
 }
 
 function normalizeHeaderName(h) {
-  const clean = h.toLowerCase().trim().replace(/[^a-z0-9]/g, '_')
-  // Must check token_balance BEFORE tokens to avoid false match
-  if (['token_balance', 'balance', 'running_balance'].includes(clean)) return 'token_balance'
-  if (['token_change', 'tokens_earned', 'tokens', 'token', 'credits'].includes(clean)) return 'tokens'
-  if (['your_payout', 'usd_amount', 'payout', 'usd', 'earnings', 'amount_usd'].includes(clean)) return 'usd'
-  if (['date_and_time', 'date_time', 'datetime', 'timestamp', 'date', 'time'].includes(clean)) return 'date_time'
-  if (['member', 'username', 'user', 'tipper', 'sender', 'nickname', 'from'].includes(clean)) return 'username'
-  if (['transaction_type', 'chat_type', 'tip_type', 'type'].includes(clean)) return 'tip_type'
+  const clean = re_clean(h)
+  if (['token_balance','balance','running_balance'].includes(clean)) return 'token_balance'
+  // Amount (tokens), Amount (USD) style headers
+  if (clean.includes('amount') && clean.includes('token')) return 'tokens'
+  if (clean.includes('amount') && (clean.includes('usd') || clean.includes('dollar'))) return 'usd'
+  if (['token_change','tokens_earned','tokens','token','credits'].includes(clean)) return 'tokens'
+  if (['your_payout','usd_amount','payout','usd','earnings','amount_usd'].includes(clean)) return 'usd'
+  if (['date_and_time','date_time','datetime','timestamp','date','time'].includes(clean)) return 'date_time'
+  if (['member','username','user','tipper','sender','nickname','from'].includes(clean)) return 'username'
+  if (['transaction_type','chat_type','tip_type','type'].includes(clean)) return 'tip_type'
   if (clean === 'action') return 'action'
   if (clean === 'note') return 'note'
   if (clean === 'platform') return 'platform'
   if (clean === 'session_id') return 'session_id'
   return clean
+}
+
+function re_clean(h) {
+  return h.toLowerCase().trim().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '')
 }
 
 function parseWithHeaders(lines, platform) {
@@ -233,6 +240,11 @@ function parseHeaderless(lines, platform) {
 }
 
 function parseCSVLine(line) {
+  // Handle case where entire row is wrapped in quotes: "col1,col2,col3"
+  const trimmed = line.trim()
+  if (trimmed.startsWith('"') && trimmed.endsWith('"') && !trimmed.slice(1, -1).includes('"')) {
+    return trimmed.slice(1, -1).split(',').map(v => v.trim()).filter(v => v !== '')
+  }
   const result = []
   let current = '', inQuotes = false
   for (let i = 0; i < line.length; i++) {
