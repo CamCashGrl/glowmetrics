@@ -6,7 +6,7 @@ import { parseCSV, aggregateRows } from "../../lib/analytics"
 import { ConfirmationModal, ErrorModal } from './ConfirmationModal'
 
 const C = {
-  bg: "#0B0F1A", card: "#121826", card2: "#161e2e", border: "#1e2d45", border2: "#2a3f5f",
+  bg: "#05070f", card: "#121826", card2: "#161e2e", border: "#1e2d45", border2: "#2a3f5f",
   indigo: "#7C5CFF", cyan: "#22D3EE", pink: "#EC4899", gold: "#F59E0B", blue: "#60A5FA",
   green: "#10B981", red: "#F87171", orange: "#FB923C", white: "#F1F5F9", text: "#94A3B8", muted: "#475569"
 }
@@ -37,26 +37,20 @@ export default function Dashboard() {
   const [whaleFilter, setWhaleFilter] = useState("ALL")
   const [platformFilter, setPlatformFilter] = useState("ALL")
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
-
-  // ── NEW: Confirmation & Error modal state ──────────────────────────────────
   const [showConfirmation, setShowConfirmation] = useState(false)
   const [showError, setShowError] = useState(false)
   const [parseResult, setParseResult] = useState(null)
   const [pendingData, setPendingData] = useState(null)
-  // ──────────────────────────────────────────────────────────────────────────
-
-  // ── Whale profile modal ────────────────────────────────────────────────────
   const [selectedWhale, setSelectedWhale] = useState(null)
-  // ──────────────────────────────────────────────────────────────────────────
-
-  // ── Message generator modal ───────────────────────────────────────────────
   const [messageTarget, setMessageTarget] = useState(null)
   const [messageIndex, setMessageIndex] = useState(0)
   const [messageCopied, setMessageCopied] = useState(false)
-  // ──────────────────────────────────────────────────────────────────────────
 
-  const isBetaUser = true // all features unlocked during free beta
-  const uploadLimit = Infinity // unlimited uploads during beta
+  const isBetaUser = true
+  const isPro = false  // flip to true when user has paid — controls locks
+  const uploadLimit = Infinity
+
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false)
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(""), 3500) }
 
@@ -70,12 +64,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (!tips.length) return
-
-    const interval = setInterval(() => {
-      const updated = aggregateRows(tips)
-      setLiveAnalytics(updated)
-    }, 5000)
-
+    const interval = setInterval(() => { const updated = aggregateRows(tips); setLiveAnalytics(updated) }, 5000)
     return () => clearInterval(interval)
   }, [tips])
 
@@ -83,164 +72,61 @@ export default function Dashboard() {
     setLoading(true)
     try {
       const { data } = await supabase.from("tips").select("*").eq("user_id", uid).order("date_time", { ascending: true })
-      if (data?.length) {
-        setTips(data)
-        setAnalytics(aggregateRows(data))
-      }
+      if (data?.length) { setTips(data); setAnalytics(aggregateRows(data)) }
     } finally { setLoading(false) }
   }
 
   const removeDuplicates = (existingTips, newTips) => {
-    const existingKeys = new Set(
-      existingTips.map(t => `${t.date_time}_${t.username}_${t.tokens}_${t.platform}`)
-    )
-    const unique = newTips.filter(t => {
-      const key = `${t.dateRaw || t.date_time}_${t.username}_${t.tokens}_${t.platform}`
-      return !existingKeys.has(key)
-    })
-    return unique
+    const existingKeys = new Set(existingTips.map(t => `${t.date_time}_${t.username}_${t.tokens}_${t.platform}`))
+    return newTips.filter(t => !existingKeys.has(`${t.dateRaw || t.date_time}_${t.username}_${t.tokens}_${t.platform}`))
   }
 
-  // ── UPDATED: handleCSV with zero-tolerance parser + modal flow ─────────────
   const handleCSV = async (file) => {
     if (!file || !user) return
-    if (uploadCount >= uploadLimit && !isBetaUser) {
-      showToast("🔒 Free tier: 3 uploads/month. Upgrade for unlimited!")
-      return
-    }
-
-    setUploading(true)
-    setShowError(false)
-    setShowConfirmation(false)
-
+    setUploading(true); setShowError(false); setShowConfirmation(false)
     try {
       const text = await file.text()
-      const result = parseCSV(text)  // NEW zero-tolerance parser
-
-      // Hard failure – no confirmation possible
-      if (!result.success && !result.needsConfirmation) {
-        setParseResult(result)
-        setShowError(true)
-        setUploading(false)
-        return
-      }
-
-      // Successful parse – show confirmation modal
-      if (result.success && result.needsConfirmation) {
-        setPendingData(result.data)
-        setParseResult(result)
-        setShowConfirmation(true)
-        setUploading(false)
-        return
-      }
-
-      // Header / structural issues – show error
-      if (!result.success && result.needsConfirmation) {
-        setParseResult(result)
-        setShowError(true)
-        setUploading(false)
-        return
-      }
-
-    } catch (err) {
-      setParseResult({
-        error: {
-          message: "Upload failed",
-          fix: err.message
-        }
-      })
-      setShowError(true)
-      setUploading(false)
-    }
+      const result = parseCSV(text)
+      if (!result.success && !result.needsConfirmation) { setParseResult(result); setShowError(true); setUploading(false); return }
+      if (result.success && result.needsConfirmation) { setPendingData(result.data); setParseResult(result); setShowConfirmation(true); setUploading(false); return }
+      if (!result.success && result.needsConfirmation) { setParseResult(result); setShowError(true); setUploading(false); return }
+    } catch (err) { setParseResult({ error: { message: "Upload failed", fix: err.message } }); setShowError(true); setUploading(false) }
   }
-  // ──────────────────────────────────────────────────────────────────────────
 
-  // ── NEW: confirmImport – called when user clicks "Confirm & Import" ────────
   const confirmImport = async (data) => {
-    setUploading(true)
-    setShowConfirmation(false)
-
+    setUploading(true); setShowConfirmation(false)
     try {
       const unique = removeDuplicates(tips, data)
       const duplicateCount = data.length - unique.length
-
-      if (unique.length === 0) {
-        showToast(`⚠️ All ${data.length} tips are duplicates!`)
-        setUploading(false)
-        setPendingData(null)
-        setParseResult(null)
-        return
-      }
-
-      const toInsert = unique.map(r => ({
-        user_id: user.id,
-        date_time: r.dateRaw || r.date_time,
-        platform: r.platform,
-        username: r.username,
-        tip_type: r.tip_type || "Tip",
-        tokens: r.tokens,
-        usd: r.usd
-      }))
-
+      if (unique.length === 0) { showToast(`⚠️ All ${data.length} tips are duplicates!`); setUploading(false); setPendingData(null); setParseResult(null); return }
+      const toInsert = unique.map(r => ({ user_id: user.id, date_time: r.dateRaw || r.date_time, platform: r.platform, username: r.username, tip_type: r.tip_type || "Tip", tokens: r.tokens, usd: r.usd }))
       const { error } = await supabase.from("tips").insert(toInsert)
-      if (error) {
-        showToast("❌ " + error.message)
-        setUploading(false)
-        return
-      }
-
+      if (error) { showToast("❌ " + error.message); setUploading(false); return }
       setUploadCount(uploadCount + 1)
-
-      let msg = duplicateCount > 0
-        ? `✅ Imported ${unique.length} tips (${duplicateCount} duplicates removed)`
-        : `✅ Imported ${unique.length} tips from ${parseResult?.platform || "CSV"}!`
-
-      if (parseResult?.warnings) {
-        msg += ` (${parseResult.skipped?.length ?? 0} rows skipped)`
-      }
-
-      showToast(msg)
-      await loadData(user.id)
-      setPendingData(null)
-      setParseResult(null)
-    } catch (err) {
-      showToast("❌ " + err.message)
-    } finally {
-      setUploading(false)
-    }
+      let msg = duplicateCount > 0 ? `✅ Imported ${unique.length} tips (${duplicateCount} duplicates removed)` : `✅ Imported ${unique.length} tips from ${parseResult?.platform || "CSV"}!`
+      if (parseResult?.warnings) msg += ` (${parseResult.skipped?.length ?? 0} rows skipped)`
+      showToast(msg); await loadData(user.id); setPendingData(null); setParseResult(null)
+    } catch (err) { showToast("❌ " + err.message) }
+    finally { setUploading(false) }
   }
-  // ──────────────────────────────────────────────────────────────────────────
 
   const deleteTip = async (tipId) => {
     if (!confirm("Delete this tip?")) return
-    try {
-      const { error } = await supabase.from("tips").delete().eq("id", tipId)
-      if (error) throw error
-      showToast("✅ Tip deleted")
-      await loadData(user.id)
-    } catch (err) {
-      showToast("❌ " + err.message)
-    }
+    try { const { error } = await supabase.from("tips").delete().eq("id", tipId); if (error) throw error; showToast("✅ Tip deleted"); await loadData(user.id) }
+    catch (err) { showToast("❌ " + err.message) }
   }
 
   const deleteAllTips = async () => {
     if (!user) return
-    try {
-      const { error } = await supabase.from("tips").delete().eq("user_id", user.id)
-      if (error) throw error
-      showToast("✅ All tips deleted")
-      setShowDeleteConfirm(false)
-      await loadData(user.id)
-    } catch (err) {
-      showToast("❌ " + err.message)
-    }
+    try { const { error } = await supabase.from("tips").delete().eq("user_id", user.id); if (error) throw error; showToast("✅ All tips deleted"); setShowDeleteConfirm(false); await loadData(user.id) }
+    catch (err) { showToast("❌ " + err.message) }
   }
 
   if (loading) {
     return (
-      <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ minHeight: "100vh", background: "#05070f", display: "flex", alignItems: "center", justifyContent: "center" }}>
         <div style={{ textAlign: "center" }}>
-          <div style={{ width: 40, height: 40, border: `2px solid ${C.border}`, borderTop: `2px solid ${C.cyan}`, borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto 16px" }} />
+          <div style={{ width: 40, height: 40, border: "2px solid #1e2d45", borderTop: "2px solid #22D3EE", borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto 16px" }} />
           <div style={{ color: C.muted, fontSize: 14 }}>Loading...</div>
           <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
         </div>
@@ -253,7 +139,6 @@ export default function Dashboard() {
   const insights = analytics?.insights || []
   const platforms = analytics?.platforms || []
   const alerts = liveAnalytics?.whaleAlerts || analytics?.whaleAlerts || []
-
   const totalRevenue = analytics?.totalUSD || 0
   const avgPerHour = sessions.reduce((sum, s) => sum + s.usdPerHour, 0) / (sessions.length || 1)
 
@@ -274,27 +159,46 @@ export default function Dashboard() {
 
   const allPlatforms = [...new Set(tips.map(t => t.platform))]
 
+  const glassCard = {
+    background: "rgba(15,20,32,0.75)",
+    border: "1px solid rgba(255,255,255,0.08)",
+    backdropFilter: "blur(20px)",
+    boxShadow: "0 0 40px rgba(59,130,246,0.15), 0 0 80px rgba(236,72,153,0.08)",
+  }
+
   return (
-    <div style={{ minHeight: "100vh", background: C.bg, fontFamily: "'Inter', sans-serif", color: C.text }}>
+    <div style={{
+      minHeight: "100vh",
+      background: `radial-gradient(circle at 20% 30%, rgba(59,130,246,0.25), transparent 40%), radial-gradient(circle at 80% 70%, rgba(236,72,153,0.25), transparent 40%), radial-gradient(circle at 50% 50%, rgba(168,85,247,0.15), transparent 60%), #05070f`,
+      fontFamily: "'Inter', sans-serif", color: C.text
+    }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
         * { box-sizing: border-box; margin: 0; padding: 0; }
         ::-webkit-scrollbar { width: 5px; }
-        ::-webkit-scrollbar-track { background: ${C.bg}; }
-        ::-webkit-scrollbar-thumb { background: ${C.border2}; border-radius: 3px; }
+        ::-webkit-scrollbar-track { background: #05070f; }
+        ::-webkit-scrollbar-thumb { background: #2a3f5f; border-radius: 3px; }
+        .dash-card { transition: transform 0.2s ease, box-shadow 0.2s ease; }
+        .dash-card:hover { transform: translateY(-2px); }
+        .whale-row { transition: background 0.15s; }
+        .whale-row:hover { background: rgba(59,130,246,0.08) !important; }
       `}</style>
 
+      {/* COSMIC GLOW LAYER */}
+      <div style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 0 }}>
+        <div style={{ position: "absolute", width: 900, height: 900, top: "-20%", left: "-10%", background: "radial-gradient(circle, rgba(59,130,246,0.35), transparent 60%)", filter: "blur(120px)" }} />
+        <div style={{ position: "absolute", width: 900, height: 900, bottom: "-20%", right: "-10%", background: "radial-gradient(circle, rgba(236,72,153,0.35), transparent 60%)", filter: "blur(120px)" }} />
+      </div>
+
       {/* SIDEBAR */}
-      <div style={{ position: "fixed", left: 0, top: 0, bottom: 0, width: 240, background: C.card, borderRight: `1px solid ${C.border}`, display: "flex", flexDirection: "column", zIndex: 50 }}>
-        <div style={{ padding: "24px 20px", borderBottom: `1px solid ${C.border}` }}>
+      <div style={{ position: "fixed", left: 0, top: 0, bottom: 0, width: 240, background: "rgba(15,20,32,0.85)", backdropFilter: "blur(20px)", borderRight: "1px solid rgba(255,255,255,0.08)", display: "flex", flexDirection: "column", zIndex: 50 }}>
+        <div style={{ padding: "24px 20px", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <div style={{ width: 40, height: 40, borderRadius: 10, background: `linear-gradient(135deg, ${C.cyan}, ${C.pink})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, fontWeight: 700, color: C.white }}>$</div>
-            <span style={{ fontSize: 20, fontWeight: 800, color: C.white }}>Cam<span style={{ background: `linear-gradient(90deg, ${C.cyan}, ${C.pink})`, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Cash</span></span>
+            <div style={{ width: 40, height: 40, borderRadius: 10, background: "linear-gradient(135deg, #22D3EE, #EC4899)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, fontWeight: 700, color: C.white, boxShadow: "0 0 20px rgba(34,211,238,0.4)" }}>$</div>
+            <span style={{ fontSize: 20, fontWeight: 800, color: C.white }}>Cam<span style={{ background: "linear-gradient(90deg, #22D3EE, #EC4899)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Cash</span></span>
           </div>
           {user && <div style={{ fontSize: 11, color: C.muted, marginTop: 10 }}>{user.email}</div>}
-
-          {/* FREE BETA BADGE */}
-          <div style={{ marginTop: 12, padding: "6px 10px", borderRadius: 8, background: `linear-gradient(135deg, ${C.gold}20, ${C.orange}20)`, border: `1px solid ${C.gold}40`, display: "flex", alignItems: "center", gap: 6 }}>
+          <div style={{ marginTop: 12, padding: "6px 10px", borderRadius: 8, background: "linear-gradient(135deg, rgba(245,158,11,0.2), rgba(251,146,60,0.2))", border: "1px solid rgba(245,158,11,0.4)", display: "flex", alignItems: "center", gap: 6 }}>
             <div style={{ width: 6, height: 6, borderRadius: "50%", background: C.gold, flexShrink: 0, boxShadow: `0 0 6px ${C.gold}` }} />
             <div>
               <div style={{ fontSize: 10, fontWeight: 700, color: C.gold, letterSpacing: 0.5 }}>FREE BETA</div>
@@ -307,8 +211,9 @@ export default function Dashboard() {
           {[["overview", "📊", "Overview"], ["platforms", "🎯", "Platforms"], ["whales", "🐳", "Top Fans"], ["sessions", "🎥", "Sessions"], ["data", "📝", "Edit Data"], ["help", "❓", "CSV Help"], ["upload", "📥", "Import"]].map(([id, icon, label]) => (
             <button key={id} onClick={() => setActiveTab(id)} style={{
               display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 10,
-              background: activeTab === id ? `${C.cyan}15` : "transparent",
-              border: activeTab === id ? `1px solid ${C.cyan}30` : "1px solid transparent",
+              background: activeTab === id ? "linear-gradient(135deg, rgba(59,130,246,0.2), rgba(236,72,153,0.2))" : "transparent",
+              border: activeTab === id ? "1px solid rgba(59,130,246,0.4)" : "1px solid transparent",
+              boxShadow: activeTab === id ? "0 0 20px rgba(59,130,246,0.3)" : "none",
               color: activeTab === id ? C.white : C.muted, fontSize: 14, fontWeight: activeTab === id ? 600 : 400,
               cursor: "pointer", transition: "all 0.15s", textAlign: "left"
             }}>
@@ -317,14 +222,13 @@ export default function Dashboard() {
           ))}
         </nav>
 
-        {/* SIDEBAR BOTTOM — spots left */}
-        <div style={{ padding: "16px 20px", borderTop: `1px solid ${C.border}` }}>
-          <div style={{ padding: 12, borderRadius: 10, background: `linear-gradient(135deg, ${C.pink}15, ${C.indigo}15)`, border: `1px solid ${C.pink}30`, textAlign: "center" }}>
+        <div style={{ padding: "16px 20px", borderTop: "1px solid rgba(255,255,255,0.08)" }}>
+          <div style={{ padding: 12, borderRadius: 10, background: "linear-gradient(135deg, rgba(236,72,153,0.15), rgba(124,92,255,0.15))", border: "1px solid rgba(236,72,153,0.3)", textAlign: "center" }}>
             <div style={{ fontSize: 18, marginBottom: 4 }}>🎉</div>
             <div style={{ fontSize: 12, fontWeight: 700, color: C.white, marginBottom: 2 }}>Free for first 100 users</div>
             <div style={{ fontSize: 10, color: C.muted, marginBottom: 8 }}>Spots filling up fast</div>
-            <div style={{ height: 4, borderRadius: 4, background: C.border, overflow: "hidden" }}>
-              <div style={{ height: "100%", width: "63%", borderRadius: 4, background: `linear-gradient(90deg, ${C.cyan}, ${C.pink})` }} />
+            <div style={{ height: 4, borderRadius: 4, background: "rgba(255,255,255,0.1)", overflow: "hidden" }}>
+              <div style={{ height: "100%", width: "63%", borderRadius: 4, background: "linear-gradient(90deg, #22D3EE, #EC4899)" }} />
             </div>
             <div style={{ fontSize: 10, color: C.muted, marginTop: 4 }}>63 / 100 spots taken</div>
           </div>
@@ -332,12 +236,12 @@ export default function Dashboard() {
       </div>
 
       {/* MAIN CONTENT */}
-      <div style={{ marginLeft: 240, padding: 32 }}>
+      <div style={{ marginLeft: 240, padding: 32, position: "relative", zIndex: 1 }}>
 
         {activeTab === "overview" && (
           <div>
-            {/* 🎉 BETA BANNER */}
-            <div style={{ marginBottom: 24, padding: "14px 20px", borderRadius: 12, background: `linear-gradient(135deg, ${C.gold}15, ${C.orange}10)`, border: `1px solid ${C.gold}40`, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+            {/* BETA BANNER */}
+            <div style={{ marginBottom: 24, padding: "14px 20px", borderRadius: 12, background: "linear-gradient(135deg, rgba(245,158,11,0.15), rgba(251,146,60,0.1))", border: "1px solid rgba(245,158,11,0.4)", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                 <div style={{ fontSize: 24 }}>🎉</div>
                 <div>
@@ -347,139 +251,64 @@ export default function Dashboard() {
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
                 <div style={{ fontSize: 12, color: C.gold, fontWeight: 600 }}>63/100 spots taken</div>
-                <div style={{ width: 80, height: 6, borderRadius: 4, background: C.border, overflow: "hidden" }}>
-                  <div style={{ height: "100%", width: "63%", borderRadius: 4, background: `linear-gradient(90deg, ${C.gold}, ${C.orange})` }} />
+                <div style={{ width: 80, height: 6, borderRadius: 4, background: "rgba(255,255,255,0.1)", overflow: "hidden" }}>
+                  <div style={{ height: "100%", width: "63%", borderRadius: 4, background: "linear-gradient(90deg, #F59E0B, #FB923C)" }} />
                 </div>
               </div>
             </div>
-            {/* EMOTIONAL STATS CARDS */}
+
+            {/* STATS CARDS */}
             {(() => {
-              const firstSession = sessions.length ? new Date(sessions[0].startTime) : null
-              const daysSinceStart = firstSession ? Math.floor((Date.now() - firstSession) / 86400000) : 0
               const recentSessions = sessions.filter(s => new Date(s.startTime) > new Date(Date.now() - 30 * 86400000))
-              const prevSessions = sessions.filter(s => {
-                const d = new Date(s.startTime)
-                return d > new Date(Date.now() - 60 * 86400000) && d <= new Date(Date.now() - 30 * 86400000)
-              })
+              const prevSessions = sessions.filter(s => { const d = new Date(s.startTime); return d > new Date(Date.now() - 60 * 86400000) && d <= new Date(Date.now() - 30 * 86400000) })
               const recentRev = recentSessions.reduce((s, r) => s + r.totalUSD, 0)
               const prevRev = prevSessions.reduce((s, r) => s + r.totalUSD, 0)
               const growthPct = prevRev > 0 ? Math.round(((recentRev - prevRev) / prevRev) * 100) : null
               const topPct = Math.max(1, Math.min(25, Math.round(100 - (totalRevenue / 50))))
               const streak = recentSessions.length
-
               return (
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 20, marginBottom: 28 }}>
                   {[
-                    {
-                      label: "Total Earned",
-                      value: `$${totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-                      sub: `Top ${topPct}% of models on this platform`,
-                      icon: "💰", color: C.green,
-                      badge: growthPct !== null ? (growthPct >= 0 ? `↑ ${growthPct}% vs last month` : `↓ ${Math.abs(growthPct)}% vs last month`) : null,
-                      badgeColor: growthPct >= 0 ? C.green : C.red
-                    },
-                    {
-                      label: "Avg $/Hour",
-                      value: `$${avgPerHour.toFixed(2)}`,
-                      sub: avgPerHour > 20 ? "Above average — keep it up!" : "Tip: stream at peak hours to boost this",
-                      icon: "⏱️", color: C.cyan,
-                      badge: null
-                    },
-                    {
-                      label: "Total Fans",
-                      value: whales.length,
-                      sub: `${whales.filter(w => Math.floor((Date.now() - new Date(w.lastTipDate)) / 86400000) <= 30).length} active in last 30 days`,
-                      icon: "👥", color: C.pink,
-                      badge: null
-                    },
-                    {
-                      label: "Sessions",
-                      value: sessions.length,
-                      sub: `${streak} in last 30 days${streak >= 3 ? " 🔥" : ""}`,
-                      icon: "🎥", color: C.gold,
-                      badge: streak >= 5 ? "🔥 On a streak!" : null,
-                      badgeColor: C.gold
-                    }
+                    { label: "Total Earned", value: `$${totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, sub: `Top ${topPct}% of models on this platform`, icon: "💰", badge: growthPct !== null ? (growthPct >= 0 ? `↑ ${growthPct}% vs last month` : `↓ ${Math.abs(growthPct)}% vs last month`) : null, badgeColor: growthPct !== null && growthPct >= 0 ? C.green : C.red },
+                    { label: "Avg $/Hour", value: `$${avgPerHour.toFixed(2)}`, sub: avgPerHour > 20 ? "Above average — keep it up!" : "Tip: stream at peak hours", icon: "⏱️", badge: null },
+                    { label: "Total Fans", value: whales.length, sub: `${whales.filter(w => Math.floor((Date.now() - new Date(w.lastTipDate)) / 86400000) <= 30).length} active in last 30 days`, icon: "👥", badge: null },
+                    { label: "Sessions", value: sessions.length, sub: `${streak} in last 30 days${streak >= 3 ? " 🔥" : ""}`, icon: "🎥", badge: streak >= 5 ? "🔥 On a streak!" : null, badgeColor: C.gold }
                   ].map((s, i) => (
-                    <div key={i} style={{ background: `linear-gradient(145deg, ${C.card}, ${C.card2})`, border: `1px solid ${C.border}`, borderRadius: 18, padding: 22, position: "relative", overflow: "hidden", boxShadow: "0 10px 30px rgba(0,0,0,0.4)" }}>
-                      <div style={{ position: "absolute", top: -40, right: -40, width: 120, height: 120, background: s.color, opacity: 0.08, filter: "blur(40px)" }} />
+                    <div key={i} className="dash-card" style={{ ...glassCard, borderRadius: 18, padding: 22, position: "relative", overflow: "hidden" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
                         <span style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: 1 }}>{s.label}</span>
                         <span style={{ fontSize: 20 }}>{s.icon}</span>
                       </div>
-                      <div style={{ fontSize: 30, fontWeight: 800, color: s.color, marginBottom: 6 }}>{s.value}</div>
+                      <div style={{ fontSize: 36, fontWeight: 900, background: "linear-gradient(135deg,#60a5fa,#f472b6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", marginBottom: 6 }}>{s.value}</div>
                       <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.4 }}>{s.sub}</div>
-                      {s.badge && (
-                        <div style={{ marginTop: 8, display: "inline-block", padding: "2px 8px", borderRadius: 6, background: `${s.badgeColor}20`, border: `1px solid ${s.badgeColor}40`, fontSize: 10, fontWeight: 700, color: s.badgeColor }}>
-                          {s.badge}
-                        </div>
-                      )}
+                      {s.badge && <div style={{ marginTop: 8, display: "inline-block", padding: "2px 8px", borderRadius: 6, background: `${s.badgeColor}20`, border: `1px solid ${s.badgeColor}40`, fontSize: 10, fontWeight: 700, color: s.badgeColor }}>{s.badge}</div>}
                     </div>
                   ))}
                 </div>
               )
             })()}
 
-            {/* 🔥 WHAT SHOULD I DO RIGHT NOW */}
+            {/* WHAT SHOULD I DO RIGHT NOW */}
             {(() => {
-              const now = new Date()
-              const currentHour = now.getHours()
-              const currentDay = now.toLocaleDateString('en-US', { weekday: 'long' })
-
-              // Best hour from real data
+              const currentHour = new Date().getHours()
               const allHourEarnings = {}
-              sessions.forEach(s => {
-                const h = new Date(s.startTime).getHours()
-                allHourEarnings[h] = (allHourEarnings[h] || 0) + s.totalUSD
-              })
+              sessions.forEach(s => { const h = new Date(s.startTime).getHours(); allHourEarnings[h] = (allHourEarnings[h] || 0) + s.totalUSD })
               const bestHourEntry = Object.entries(allHourEarnings).sort((a, b) => b[1] - a[1])[0]
               const bestHour = bestHourEntry ? parseInt(bestHourEntry[0]) : null
               const isNowBestTime = bestHour !== null && Math.abs(currentHour - bestHour) <= 1
-
-              // Dormant high-value fans
-              const dormantWhales = whales
-                .filter(w => {
-                  const days = Math.floor((Date.now() - new Date(w.lastTipDate)) / 86400000)
-                  return days >= 3 && days <= 30 && w.totalUSD > 10
-                })
-                .sort((a, b) => b.totalUSD - a.totalUSD)
-                .slice(0, 3)
-
-              // Session goal
+              const dormantWhales = whales.filter(w => { const days = Math.floor((Date.now() - new Date(w.lastTipDate)) / 86400000); return days >= 3 && days <= 30 && w.totalUSD > 10 }).sort((a, b) => b.totalUSD - a.totalUSD).slice(0, 3)
               const avgSessionRevenue = sessions.length ? (totalRevenue / sessions.length) : 0
               const goalSuggestion = Math.round(avgSessionRevenue * 1.2 / 10) * 10
-
               const actions = []
-
-              if (isNowBestTime) {
-                actions.push({ icon: "🔥", color: C.orange, text: `Go live NOW — your data shows ${formatHour(currentHour)} is your highest-earning time`, cta: null })
-              } else if (bestHour !== null) {
-                actions.push({ icon: "🕐", color: C.cyan, text: `Your best earning time is ${formatHour(bestHour)} — plan your next stream around it`, cta: null })
-              }
-
-              dormantWhales.forEach(w => {
-                const days = Math.floor((Date.now() - new Date(w.lastTipDate)) / 86400000)
-                actions.push({
-                  icon: "💸", color: C.pink,
-                  text: `Message ${w.username} — spent $${w.totalUSD.toFixed(0)} total, hasn't tipped in ${days} days`,
-                  cta: `Hey babe, I was just thinking about you 💕 I'm going live soon — hope to see you there! 🔥`,
-                  ctaLabel: "📋 Copy Message",
-                  username: w.username
-                })
-              })
-
-              if (goalSuggestion > 0) {
-                actions.push({ icon: "🎯", color: C.gold, text: `Set a goal of $${goalSuggestion} for your next session — your average session earns $${avgSessionRevenue.toFixed(0)}`, cta: null })
-              }
-
-              if (actions.length === 0) {
-                actions.push({ icon: "📊", color: C.cyan, text: "Import your first CSV to unlock personalized action recommendations", cta: null })
-              }
-
+              if (isNowBestTime) actions.push({ icon: "🔥", color: C.orange, text: `Go live NOW — your data shows ${formatHour(currentHour)} is your highest-earning time`, cta: null })
+              else if (bestHour !== null) actions.push({ icon: "🕐", color: C.cyan, text: `Your best earning time is ${formatHour(bestHour)} — plan your next stream around it`, cta: null })
+              dormantWhales.forEach(w => { const days = Math.floor((Date.now() - new Date(w.lastTipDate)) / 86400000); actions.push({ icon: "💸", color: C.pink, text: `Message ${w.username} — spent $${w.totalUSD.toFixed(0)} total, hasn't tipped in ${days} days`, cta: true, username: w.username }) })
+              if (goalSuggestion > 0) actions.push({ icon: "🎯", color: C.gold, text: `Set a goal of $${goalSuggestion} for your next session — your average earns $${avgSessionRevenue.toFixed(0)}`, cta: null })
+              if (actions.length === 0) actions.push({ icon: "📊", color: C.cyan, text: "Import your first CSV to unlock personalized action recommendations", cta: null })
               return (
-                <div style={{ background: `linear-gradient(135deg, ${C.card}, ${C.card2})`, border: `1px solid ${C.cyan}40`, borderRadius: 16, padding: 24, marginBottom: 28, boxShadow: `0 0 40px ${C.cyan}10` }}>
+                <div style={{ ...glassCard, borderRadius: 16, padding: 24, marginBottom: 28 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
-                    <div style={{ width: 36, height: 36, borderRadius: 10, background: `linear-gradient(135deg, ${C.cyan}, ${C.indigo})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>⚡</div>
+                    <div style={{ width: 36, height: 36, borderRadius: 10, background: "linear-gradient(135deg, #22D3EE, #7C5CFF)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>⚡</div>
                     <div>
                       <div style={{ fontSize: 18, fontWeight: 800, color: C.white }}>What Should I Do Right Now?</div>
                       <div style={{ fontSize: 12, color: C.muted }}>Personalized actions based on your data</div>
@@ -493,10 +322,9 @@ export default function Dashboard() {
                           <div style={{ fontSize: 14, color: C.white, lineHeight: 1.5 }}>{a.text}</div>
                         </div>
                         {a.cta && (
-                          <button
-                            onClick={() => { const w = whales.find(wh => wh.username === a.username); if (w) { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) } }}
-                            style={{ flexShrink: 0, padding: "6px 14px", borderRadius: 8, background: `${C.pink}20`, border: `1px solid ${C.pink}40`, color: C.pink, fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
-                            {a.ctaLabel}
+                          <button onClick={() => { const w = whales.find(wh => wh.username === a.username); if (w) { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) } }}
+                            style={{ flexShrink: 0, padding: "6px 14px", borderRadius: 8, background: "linear-gradient(135deg, #EC4899, #7C5CFF)", boxShadow: "0 0 20px rgba(236,72,153,0.4)", border: "none", color: C.white, fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
+                            📋 Copy Message
                           </button>
                         )}
                       </div>
@@ -507,30 +335,45 @@ export default function Dashboard() {
             })()}
 
             {/* INSIGHTS */}
-            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 24, marginBottom: 32 }}>
+            <div style={{ ...glassCard, borderRadius: 14, padding: 24, marginBottom: 28 }}>
               <h2 style={{ fontSize: 18, fontWeight: 700, color: C.white, marginBottom: 16 }}>💡 Smart Insights</h2>
-              {insights.slice(0, 5).map((ins, i) => (
-                <div key={i} style={{ background: `${C.cyan}10`, border: `1px solid ${C.cyan}30`, borderRadius: 10, padding: 16, marginBottom: 12 }}>
+              {insights.slice(0, 3).map((ins, i) => (
+                <div key={i} style={{ background: "rgba(34,211,238,0.08)", border: "1px solid rgba(34,211,238,0.2)", borderRadius: 10, padding: 16, marginBottom: 12 }}>
                   <div style={{ fontSize: 14, color: C.white }}>{ins.icon} {ins.text}</div>
                 </div>
               ))}
-              <div style={{ marginTop: 16, padding: 16, background: `${C.cyan}10`, border: `1px solid ${C.cyan}30`, borderRadius: 10, textAlign: "center" }}>
-                <div style={{ fontSize: 14, color: C.white }}>🎉 All insights unlocked — you're on the free beta!</div>
+              {/* locked preview */}
+              <div style={{ position: "relative", borderRadius: 10, overflow: "hidden", marginTop: 8 }}>
+                <div style={{ filter: isPro ? "none" : "blur(3px)", pointerEvents: "none" }}>
+                  {insights.slice(3, 8).map((ins, i) => (
+                    <div key={i} style={{ background: "rgba(34,211,238,0.05)", border: "1px solid rgba(34,211,238,0.1)", borderRadius: 10, padding: 16, marginBottom: 8 }}>
+                      <div style={{ fontSize: 14, color: C.white }}>{ins.icon} {ins.text}</div>
+                    </div>
+                  ))}
+                  {insights.length < 5 && [1,2].map(i => (
+                    <div key={i} style={{ background: "rgba(34,211,238,0.05)", border: "1px solid rgba(34,211,238,0.1)", borderRadius: 10, padding: 16, marginBottom: 8 }}>
+                      <div style={{ fontSize: 14, color: C.muted }}>📈 Advanced timing insight #{i + 3}...</div>
+                    </div>
+                  ))}
+                </div>
+                {!isPro && (
+                  <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "rgba(5,7,15,0.75)", backdropFilter: "blur(2px)", borderRadius: 10 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: C.white, marginBottom: 4 }}>🔒 {Math.max(0, insights.length - 3)} more insights hidden</div>
+                    <div style={{ fontSize: 12, color: C.muted, marginBottom: 12 }}>Timing patterns, predictions & advanced strategy</div>
+                    <button onClick={() => setShowUpgradeModal(true)} style={{ padding: "8px 20px", borderRadius: 8, background: "linear-gradient(135deg,#3b82f6,#ec4899)", border: "none", color: C.white, fontSize: 12, fontWeight: 700, cursor: "pointer", boxShadow: "0 0 20px rgba(59,130,246,0.4)" }}>
+                      🔓 Unlock All Insights
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
 
             {/* AI ALERTS */}
-            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 24, marginBottom: 32 }}>
+            <div style={{ ...glassCard, borderRadius: 14, padding: 24, marginBottom: 28 }}>
               <h2 style={{ fontSize: 18, fontWeight: 700, color: C.white, marginBottom: 16 }}>🚨 Live AI Alerts</h2>
-              {alerts.length === 0 && (
-                <div style={{ color: C.muted, fontSize: 13 }}>No active alerts</div>
-              )}
+              {alerts.length === 0 && <div style={{ color: C.muted, fontSize: 13 }}>No active alerts</div>}
               {alerts.slice(0, 5).map((a, i) => (
-                <div key={i} style={{
-                  padding: 14, borderRadius: 10, marginBottom: 10,
-                  background: a.severity === "critical" ? `${C.red}20` : a.severity === "warning" ? `${C.orange}20` : a.severity === "success" ? `${C.green}20` : `${C.cyan}15`,
-                  border: `1px solid ${a.severity === "critical" ? C.red : a.severity === "warning" ? C.orange : a.severity === "success" ? C.green : C.cyan}30`
-                }}>
+                <div key={i} style={{ padding: 14, borderRadius: 10, marginBottom: 10, background: a.severity === "critical" ? "rgba(248,113,113,0.15)" : a.severity === "warning" ? "rgba(251,146,60,0.15)" : a.severity === "success" ? "rgba(16,185,129,0.15)" : "rgba(34,211,238,0.1)", border: `1px solid ${a.severity === "critical" ? C.red : a.severity === "warning" ? C.orange : a.severity === "success" ? C.green : C.cyan}30` }}>
                   <div style={{ fontSize: 14, color: C.white }}>{a.icon} {a.message}</div>
                   <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>👉 {a.action}</div>
                 </div>
@@ -541,12 +384,12 @@ export default function Dashboard() {
 
         {activeTab === "platforms" && (
           <div>
-            <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 32 }}>Platform Analytics</h1>
+            <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 32 }}>🎯 Platform Analytics</h1>
             {platforms.map((p, i) => {
               const bestHour = Object.entries(platformTimes[p.platform]?.hours || {}).sort((a, b) => b[1] - a[1])[0]
               const bestDay = Object.entries(platformTimes[p.platform]?.days || {}).sort((a, b) => b[1] - a[1])[0]
               return (
-                <div key={i} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 24, marginBottom: 20 }}>
+                <div key={i} className="dash-card" style={{ ...glassCard, borderRadius: 14, padding: 24, marginBottom: 20 }}>
                   <h3 style={{ fontSize: 20, fontWeight: 700, color: C.white, marginBottom: 16 }}>{p.platform}</h3>
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 16 }}>
                     <div><div style={{ fontSize: 12, color: C.muted }}>Total Revenue</div><div style={{ fontSize: 24, fontWeight: 700, color: C.green }}>${p.totalUSD.toFixed(2)}</div></div>
@@ -555,9 +398,18 @@ export default function Dashboard() {
                     <div><div style={{ fontSize: 12, color: C.muted }}>Total Hours</div><div style={{ fontSize: 24, fontWeight: 700, color: C.gold }}>{p.hours.toFixed(1)}h</div></div>
                   </div>
                   {bestHour && bestDay && (
-                    <div style={{ padding: 16, background: C.card2, borderRadius: 10 }}>
-                      <div style={{ fontSize: 14, color: C.white, marginBottom: 4 }}>🕐 Best Hour: {formatHour(bestHour[0])} - ${bestHour[1].toFixed(2)} total</div>
-                      <div style={{ fontSize: 14, color: C.white }}>📅 Best Day: {bestDay[0]} - ${bestDay[1].toFixed(2)} total</div>
+                    <div style={{ position: "relative" }}>
+                      <div style={{ padding: 16, background: "rgba(255,255,255,0.04)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.08)", filter: isPro ? "none" : "blur(3px)" }}>
+                        <div style={{ fontSize: 14, color: C.white, marginBottom: 4 }}>🕐 Best Hour: {formatHour(bestHour[0])} — ${bestHour[1].toFixed(2)} total</div>
+                        <div style={{ fontSize: 14, color: C.white }}>📅 Best Day: {bestDay[0]} — ${bestDay[1].toFixed(2)} total</div>
+                      </div>
+                      {!isPro && (
+                        <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(5,7,15,0.6)", borderRadius: 10, backdropFilter: "blur(1px)" }}>
+                          <button onClick={() => setShowUpgradeModal(true)} style={{ padding: "7px 18px", borderRadius: 8, background: "linear-gradient(135deg,#3b82f6,#ec4899)", border: "none", color: C.white, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                            🔒 Unlock Timing Data
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -568,33 +420,23 @@ export default function Dashboard() {
 
         {activeTab === "whales" && (
           <div>
-            <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 16 }}>🐳 Top Fans</h1>
-            <div style={{ display: "flex", gap: 12, marginBottom: 24 }}>
-              <select value={whaleFilter} onChange={e => setWhaleFilter(e.target.value)} style={{ padding: "8px 12px", background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, color: C.white, fontSize: 13 }}>
-                <option value="ALL">All Tiers</option>
-                <option value="Whale">🐳 Whales</option>
-                <option value="Shark">🦈 Sharks</option>
-                <option value="Regular">🐟 Regular</option>
-                <option value="Dormant">💤 Dormant</option>
-              </select>
-              <select value={platformFilter} onChange={e => setPlatformFilter(e.target.value)} style={{ padding: "8px 12px", background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, color: C.white, fontSize: 13 }}>
-                <option value="ALL">All Platforms</option>
-                {allPlatforms.map(p => <option key={p} value={p}>{p}</option>)}
-              </select>
-            </div>
-            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, overflow: "hidden" }}>
+            <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 8 }}>🐳 Top Fans</h1>
+            <p style={{ fontSize: 13, color: C.muted, marginBottom: 24 }}>Your highest-value supporters ranked by total spend</p>
+
+            {/* FREE: top 3 always visible */}
+            <div style={{ ...glassCard, borderRadius: 14, overflow: "hidden", marginBottom: 16 }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                 <thead>
-                  <tr style={{ background: C.card2, borderBottom: `1px solid ${C.border}` }}>
+                  <tr style={{ background: "rgba(255,255,255,0.04)", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
                     {["#", "Username", "Total $", "Tips", "Avg Tip", "Platform", "Tier", "Last Tip", "Actions"].map(h => (
                       <th key={h} style={{ padding: "12px 16px", textAlign: "left", color: C.muted, fontSize: 11, textTransform: "uppercase", fontWeight: 500 }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredWhales.map((w, i) => (
-                    <tr key={i} style={{ borderBottom: `1px solid ${C.border}` }}>
-                      <td style={{ padding: "12px 16px", color: C.muted }}>#{i + 1}</td>
+                  {filteredWhales.slice(0, 3).map((w, i) => (
+                    <tr key={i} className="whale-row" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+                      <td style={{ padding: "12px 16px", color: C.gold, fontWeight: 700 }}>#{i + 1}</td>
                       <td style={{ padding: "12px 16px", color: C.white, fontWeight: 600 }}>{w.username}</td>
                       <td style={{ padding: "12px 16px", color: C.green, fontWeight: 700 }}>${w.totalUSD.toFixed(2)}</td>
                       <td style={{ padding: "12px 16px", color: C.muted }}>{w.tipCount}</td>
@@ -606,8 +448,8 @@ export default function Dashboard() {
                       <td style={{ padding: "12px 16px", color: C.muted, fontSize: 12 }}>{new Date(w.lastTipDate).toLocaleDateString()}</td>
                       <td style={{ padding: "12px 16px" }}>
                         <div style={{ display: "flex", gap: 6 }}>
-                          <button onClick={() => setSelectedWhale(w)} style={{ padding: "4px 10px", borderRadius: 6, background: `${C.cyan}15`, border: `1px solid ${C.cyan}30`, color: C.cyan, fontSize: 11, cursor: "pointer" }}>🔍 View</button>
-                          <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }} style={{ padding: "4px 10px", borderRadius: 6, background: `${C.pink}15`, border: `1px solid ${C.pink}30`, color: C.pink, fontSize: 11, cursor: "pointer" }}>💌 Message</button>
+                          <button onClick={() => setSelectedWhale(w)} style={{ padding: "4px 10px", borderRadius: 6, background: "rgba(34,211,238,0.15)", border: "1px solid rgba(34,211,238,0.3)", color: C.cyan, fontSize: 11, cursor: "pointer" }}>🔍 View</button>
+                          <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }} style={{ padding: "4px 10px", borderRadius: 6, background: "linear-gradient(135deg, rgba(236,72,153,0.3), rgba(124,92,255,0.3))", border: "1px solid rgba(236,72,153,0.4)", color: C.pink, fontSize: 11, cursor: "pointer" }}>💌 Message</button>
                         </div>
                       </td>
                     </tr>
@@ -615,14 +457,68 @@ export default function Dashboard() {
                 </tbody>
               </table>
             </div>
+
+            {/* LOCKED: rest of whales */}
+            {filteredWhales.length > 3 && (
+              <div style={{ position: "relative", borderRadius: 14, overflow: "hidden" }}>
+                {/* blurred rows */}
+                <div style={{ filter: isPro ? "none" : "blur(4px)", pointerEvents: isPro ? "auto" : "none" }}>
+                  <div style={{ ...glassCard, borderRadius: 14, overflow: "hidden" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                      <tbody>
+                        {filteredWhales.slice(3, 8).map((w, i) => (
+                          <tr key={i} style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+                            <td style={{ padding: "12px 16px", color: C.muted, width: 40 }}>#{i + 4}</td>
+                            <td style={{ padding: "12px 16px", color: C.white, fontWeight: 600 }}>{w.username}</td>
+                            <td style={{ padding: "12px 16px", color: C.green, fontWeight: 700 }}>${w.totalUSD.toFixed(2)}</td>
+                            <td style={{ padding: "12px 16px", color: C.muted }}>{w.tipCount} tips</td>
+                            <td style={{ padding: "12px 16px" }}>
+                              <span style={{ padding: "4px 10px", borderRadius: 100, background: `${TIER_COLORS[w.tier]}15`, color: TIER_COLORS[w.tier], fontSize: 11, fontWeight: 600 }}>{w.tier}</span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* lock overlay */}
+                {!isPro && (
+                  <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "rgba(5,7,15,0.7)", backdropFilter: "blur(2px)", borderRadius: 14 }}>
+                    <div style={{ textAlign: "center", padding: 24 }}>
+                      <div style={{ fontSize: 28, marginBottom: 8 }}>🔒</div>
+                      <div style={{ fontSize: 16, fontWeight: 700, color: C.white, marginBottom: 4 }}>
+                        +{filteredWhales.length - 3} more high-value fans hidden
+                      </div>
+                      <div style={{ fontSize: 13, color: C.muted, marginBottom: 16 }}>
+                        Including fans spending ${filteredWhales[3] ? filteredWhales[3].totalUSD.toFixed(0) : "???"} and more
+                      </div>
+                      <button onClick={() => setShowUpgradeModal(true)} style={{ padding: "10px 28px", borderRadius: 10, background: "linear-gradient(135deg, #3b82f6, #ec4899)", border: "none", color: C.white, fontSize: 14, fontWeight: 700, cursor: "pointer", boxShadow: "0 0 30px rgba(59,130,246,0.4)" }}>
+                        🔓 Unlock All Fans
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* if fewer than 4 fans, show upgrade teaser anyway */}
+            {filteredWhales.length <= 3 && (
+              <div style={{ ...glassCard, borderRadius: 14, padding: 20, textAlign: "center", border: "1px solid rgba(59,130,246,0.2)" }}>
+                <div style={{ fontSize: 13, color: C.muted, marginBottom: 12 }}>Upload more data to discover more fans • Pro unlocks full profiles & behavior patterns</div>
+                <button onClick={() => setShowUpgradeModal(true)} style={{ padding: "8px 20px", borderRadius: 8, background: "linear-gradient(135deg,rgba(59,130,246,0.3),rgba(236,72,153,0.3))", border: "1px solid rgba(59,130,246,0.4)", color: C.white, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                  🔓 See What Pro Unlocks
+                </button>
+              </div>
+            )}
           </div>
         )}
 
         {activeTab === "sessions" && (
           <div>
             <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 32 }}>🎥 Stream Sessions</h1>
-            {sessions.map((s, i) => (
-              <div key={i} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 20, marginBottom: 16 }}>
+            {sessions.slice(0, 3).map((s, i) => (
+              <div key={i} className="dash-card" style={{ ...glassCard, borderRadius: 14, padding: 20, marginBottom: 16 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
                   <div>
                     <div style={{ fontSize: 16, fontWeight: 600, color: C.white }}>{new Date(s.startTime).toLocaleDateString()} • {s.platform}</div>
@@ -633,7 +529,7 @@ export default function Dashboard() {
                     <div style={{ fontSize: 12, color: C.cyan }}>{s.durationHours.toFixed(1)}h</div>
                   </div>
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
                   <div><div style={{ fontSize: 11, color: C.muted }}>$/Hour</div><div style={{ fontSize: 15, fontWeight: 600, color: C.white }}>${s.usdPerHour}</div></div>
                   <div><div style={{ fontSize: 11, color: C.muted }}>Tips</div><div style={{ fontSize: 15, fontWeight: 600, color: C.white }}>{s.tipCount}</div></div>
                   <div><div style={{ fontSize: 11, color: C.muted }}>Avg Tip</div><div style={{ fontSize: 15, fontWeight: 600, color: C.white }}>${s.avgTipSize}</div></div>
@@ -641,6 +537,35 @@ export default function Dashboard() {
                 </div>
               </div>
             ))}
+
+            {/* LOCKED: sessions beyond 3 */}
+            {sessions.length > 3 && (
+              <div style={{ position: "relative", borderRadius: 14, overflow: "hidden" }}>
+                <div style={{ filter: isPro ? "none" : "blur(4px)", pointerEvents: "none" }}>
+                  {sessions.slice(3, 7).map((s, i) => (
+                    <div key={i} style={{ ...glassCard, borderRadius: 14, padding: 20, marginBottom: 16 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between" }}>
+                        <div>
+                          <div style={{ fontSize: 15, fontWeight: 600, color: C.white }}>{new Date(s.startTime).toLocaleDateString()} • {s.platform}</div>
+                          <div style={{ fontSize: 13, color: C.muted }}>{s.durationHours.toFixed(1)}h • {s.tipCount} tips</div>
+                        </div>
+                        <div style={{ fontSize: 22, fontWeight: 700, color: C.green }}>${s.totalUSD}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {!isPro && (
+                  <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "rgba(5,7,15,0.75)", backdropFilter: "blur(2px)", borderRadius: 14 }}>
+                    <div style={{ fontSize: 28, marginBottom: 8 }}>🔒</div>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: C.white, marginBottom: 4 }}>+{sessions.length - 3} more sessions locked</div>
+                    <div style={{ fontSize: 12, color: C.muted, marginBottom: 16 }}>Full session history, deep analytics & trends</div>
+                    <button onClick={() => setShowUpgradeModal(true)} style={{ padding: "10px 28px", borderRadius: 10, background: "linear-gradient(135deg,#3b82f6,#ec4899)", border: "none", color: C.white, fontSize: 14, fontWeight: 700, cursor: "pointer", boxShadow: "0 0 30px rgba(59,130,246,0.4)" }}>
+                      🔓 Unlock Full History
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -648,18 +573,16 @@ export default function Dashboard() {
           <div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 32 }}>
               <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white }}>📝 Edit Data</h1>
-              <button onClick={() => setShowDeleteConfirm(true)} style={{ padding: "10px 20px", borderRadius: 8, background: `${C.red}15`, border: `1px solid ${C.red}30`, color: C.red, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-                🗑️ Delete All Tips
-              </button>
+              <button onClick={() => setShowDeleteConfirm(true)} style={{ padding: "10px 20px", borderRadius: 8, background: "rgba(248,113,113,0.15)", border: "1px solid rgba(248,113,113,0.3)", color: C.red, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>🗑️ Delete All Tips</button>
             </div>
-            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 20, marginBottom: 24 }}>
+            <div style={{ ...glassCard, borderRadius: 14, padding: 20, marginBottom: 24 }}>
               <div style={{ fontSize: 14, color: C.muted, marginBottom: 8 }}>Total Tips: {tips.length}</div>
               <div style={{ fontSize: 14, color: C.muted }}>Total Revenue: ${totalRevenue.toFixed(2)}</div>
             </div>
-            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, overflow: "hidden" }}>
+            <div style={{ ...glassCard, borderRadius: 14, overflow: "hidden" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                 <thead>
-                  <tr style={{ background: C.card2, borderBottom: `1px solid ${C.border}` }}>
+                  <tr style={{ background: "rgba(255,255,255,0.04)", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
                     {["Date", "Username", "Platform", "Amount", "Tokens", "Type", "Actions"].map(h => (
                       <th key={h} style={{ padding: "12px 16px", textAlign: "left", color: C.muted, fontSize: 11, textTransform: "uppercase", fontWeight: 500 }}>{h}</th>
                     ))}
@@ -667,7 +590,7 @@ export default function Dashboard() {
                 </thead>
                 <tbody>
                   {tips.slice(0, 100).map((t, i) => (
-                    <tr key={t.id || i} style={{ borderBottom: `1px solid ${C.border}` }}>
+                    <tr key={t.id || i} className="whale-row" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
                       <td style={{ padding: "12px 16px", color: C.white, fontSize: 12 }}>{new Date(t.date_time).toLocaleDateString()}</td>
                       <td style={{ padding: "12px 16px", color: C.white, fontWeight: 600 }}>{t.username}</td>
                       <td style={{ padding: "12px 16px", color: C.muted }}>{t.platform}</td>
@@ -675,14 +598,14 @@ export default function Dashboard() {
                       <td style={{ padding: "12px 16px", color: C.cyan }}>{t.tokens}</td>
                       <td style={{ padding: "12px 16px", color: C.muted, fontSize: 12 }}>{t.tip_type}</td>
                       <td style={{ padding: "12px 16px" }}>
-                        <button onClick={() => deleteTip(t.id)} style={{ padding: "4px 12px", borderRadius: 6, background: `${C.red}15`, border: `1px solid ${C.red}30`, color: C.red, fontSize: 11, cursor: "pointer" }}>Delete</button>
+                        <button onClick={() => deleteTip(t.id)} style={{ padding: "4px 12px", borderRadius: 6, background: "rgba(248,113,113,0.15)", border: "1px solid rgba(248,113,113,0.3)", color: C.red, fontSize: 11, cursor: "pointer" }}>Delete</button>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
               {tips.length > 100 && (
-                <div style={{ padding: 20, textAlign: "center", background: C.card2, borderTop: `1px solid ${C.border}` }}>
+                <div style={{ padding: 20, textAlign: "center", background: "rgba(255,255,255,0.02)", borderTop: "1px solid rgba(255,255,255,0.06)" }}>
                   <div style={{ fontSize: 13, color: C.muted }}>Showing first 100 of {tips.length} tips</div>
                 </div>
               )}
@@ -694,18 +617,12 @@ export default function Dashboard() {
           <div style={{ maxWidth: 600, margin: "0 auto" }}>
             <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 8 }}>📥 Import CSV</h1>
             <p style={{ fontSize: 14, color: C.muted, marginBottom: 32 }}>Unlimited uploads during free beta • Auto-removes duplicates</p>
-            <div style={{ background: C.card, borderRadius: 14, padding: 40, textAlign: "center" }}>
+            <div style={{ ...glassCard, borderRadius: 14, padding: 40, textAlign: "center" }}>
               <div style={{ fontSize: 48, marginBottom: 16 }}>📁</div>
-              <label style={{ display: "inline-block", padding: "14px 32px", borderRadius: 10, background: uploadCount >= uploadLimit ? C.muted : `linear-gradient(135deg, ${C.cyan}, ${C.pink})`, color: C.white, fontSize: 15, fontWeight: 600, cursor: uploadCount >= uploadLimit ? "not-allowed" : "pointer" }}>
-                {uploading ? "Processing..." : uploadCount >= uploadLimit ? "🔒 Limit Reached" : "Choose CSV File"}
-                <input type="file" accept=".csv" style={{ display: "none" }} onChange={e => handleCSV(e.target.files[0])} disabled={uploading || uploadCount >= uploadLimit} />
+              <label style={{ display: "inline-block", padding: "14px 32px", borderRadius: 10, background: "linear-gradient(135deg, #22D3EE, #EC4899)", boxShadow: "0 0 20px rgba(34,211,238,0.4), 0 0 40px rgba(236,72,153,0.3)", color: C.white, fontSize: 15, fontWeight: 600, cursor: "pointer" }}>
+                {uploading ? "Processing..." : "Choose CSV File"}
+                <input type="file" accept=".csv" style={{ display: "none" }} onChange={e => handleCSV(e.target.files[0])} disabled={uploading} />
               </label>
-              {uploadCount >= uploadLimit && (
-                <div style={{ marginTop: 24, padding: 16, background: `${C.pink}15`, border: `1px solid ${C.pink}30`, borderRadius: 10 }}>
-                  <div style={{ fontSize: 14, color: C.white, marginBottom: 12 }}>Upgrade for unlimited imports</div>
-                  <button style={{ padding: "10px 24px", borderRadius: 8, background: `linear-gradient(135deg, ${C.cyan}, ${C.pink})`, border: "none", color: C.white, fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Go Pro</button>
-                </div>
-              )}
             </div>
           </div>
         )}
@@ -714,169 +631,62 @@ export default function Dashboard() {
           <div style={{ maxWidth: 900 }}>
             <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 8 }}>❓ How to Import Your Tips</h1>
             <p style={{ fontSize: 14, color: C.muted, marginBottom: 32 }}>Follow these steps to get your tip data into CamCash in under 2 minutes</p>
-
-            {/* HOW IT WORKS - UNIVERSAL METHOD */}
-            <div style={{ background: `linear-gradient(135deg, ${C.indigo}20, ${C.cyan}10)`, border: `1px solid ${C.cyan}40`, borderRadius: 16, padding: 28, marginBottom: 32 }}>
+            <div style={{ ...glassCard, borderRadius: 16, padding: 28, marginBottom: 32 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
-                <div style={{ width: 36, height: 36, borderRadius: 10, background: `linear-gradient(135deg, ${C.cyan}, ${C.indigo})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>⚡</div>
+                <div style={{ width: 36, height: 36, borderRadius: 10, background: "linear-gradient(135deg, #22D3EE, #7C5CFF)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>⚡</div>
                 <h2 style={{ fontSize: 22, fontWeight: 800, color: C.white }}>The Easiest Way — Works on Every Platform</h2>
               </div>
-
               <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 24 }}>
-                {[
-                  { step: "1", icon: "🖱️", title: "Go to your platform", desc: "Log in to Chaturbate, BongaCams, MFC, or any other cam site and navigate to your earnings or tip history page" },
-                  { step: "2", icon: "📋", title: "Select & copy the data", desc: "Choose your date range, then highlight all the tip rows on screen and copy them (Ctrl+C / Cmd+C)" },
-                  { step: "3", icon: "📄", title: "Paste into Google Sheets", desc: 'Open Google Sheets (sheets.google.com), create a new sheet, and paste your data (Ctrl+V / Cmd+V)' },
-                  { step: "4", icon: "⬇️", title: "Save as CSV & import", desc: 'Click File in the top left → Download → "Comma Separated Values (.csv)" — then upload that file here' },
-                ].map(({ step, icon, title, desc }) => (
-                  <div key={step} style={{ background: "rgba(0,0,0,0.25)", borderRadius: 12, padding: 18, position: "relative", border: `1px solid ${C.border}` }}>
-                    <div style={{ position: "absolute", top: 14, right: 14, width: 24, height: 24, borderRadius: "50%", background: `${C.cyan}25`, border: `1px solid ${C.cyan}50`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: C.cyan }}>
-                      {step}
-                    </div>
+                {[{ step: "1", icon: "🖱️", title: "Go to your platform", desc: "Log in and navigate to your earnings or tip history page" }, { step: "2", icon: "📋", title: "Select & copy the data", desc: "Choose your date range, highlight all tip rows and copy (Ctrl+C)" }, { step: "3", icon: "📄", title: "Paste into Google Sheets", desc: "Go to sheets.new and paste your data (Ctrl+V)" }, { step: "4", icon: "⬇️", title: "Save as CSV & import", desc: 'File → Download → "Comma Separated Values (.csv)" — then upload here' }].map(({ step, icon, title, desc }) => (
+                  <div key={step} style={{ background: "rgba(0,0,0,0.3)", borderRadius: 12, padding: 18, position: "relative", border: "1px solid rgba(255,255,255,0.07)" }}>
+                    <div style={{ position: "absolute", top: 14, right: 14, width: 24, height: 24, borderRadius: "50%", background: "rgba(34,211,238,0.2)", border: "1px solid rgba(34,211,238,0.4)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: C.cyan }}>{step}</div>
                     <div style={{ fontSize: 28, marginBottom: 10 }}>{icon}</div>
                     <div style={{ fontSize: 13, fontWeight: 700, color: C.white, marginBottom: 6 }}>{title}</div>
                     <div style={{ fontSize: 12, color: C.text, lineHeight: 1.6 }}>{desc}</div>
                   </div>
                 ))}
               </div>
-
-              {/* Google Sheets callout */}
-              <div style={{ display: "flex", alignItems: "flex-start", gap: 14, padding: 16, background: "rgba(0,0,0,0.3)", borderRadius: 12, border: `1px solid ${C.border}` }}>
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 14, padding: 16, background: "rgba(0,0,0,0.3)", borderRadius: 12, border: "1px solid rgba(255,255,255,0.07)" }}>
                 <div style={{ fontSize: 28, flexShrink: 0 }}>💡</div>
                 <div>
                   <div style={{ fontSize: 14, fontWeight: 700, color: C.white, marginBottom: 4 }}>Why Google Sheets?</div>
-                  <div style={{ fontSize: 13, color: C.text, lineHeight: 1.6 }}>
-                    Most cam platforms don't have a direct "Download CSV" button — but they all let you view your data on screen.
-                    Google Sheets is a free, instant way to turn any copied table into a proper CSV file.
-                    You don't need an account — just go to <span style={{ color: C.cyan, fontWeight: 600 }}>sheets.new</span> in your browser and it opens a blank sheet instantly.
-                  </div>
+                  <div style={{ fontSize: 13, color: C.text, lineHeight: 1.6 }}>Most cam platforms don't have a direct "Download CSV" button. Go to <span style={{ color: C.cyan, fontWeight: 600 }}>sheets.new</span> — opens instantly, no sign-in needed.</div>
                 </div>
               </div>
             </div>
-
-            {/* QUICK VISUAL STEPS for Google Sheets */}
-            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 24, marginBottom: 32 }}>
+            <div style={{ ...glassCard, borderRadius: 14, padding: 24, marginBottom: 32 }}>
               <h2 style={{ fontSize: 18, fontWeight: 700, color: C.white, marginBottom: 20 }}>🎬 Step-by-Step: Copy → Sheets → CSV</h2>
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                {[
-                  { num: "01", color: C.cyan,  text: "On your cam platform, find your tip/earnings history and set the date range you want" },
-                  { num: "02", color: C.cyan,  text: "Click the first row of data, scroll to the last row, hold Shift and click — then press Ctrl+C (or Cmd+C on Mac)" },
-                  { num: "03", color: C.indigo, text: 'Open a new tab and go to sheets.new — a blank Google Sheet opens immediately, no sign-in needed' },
-                  { num: "04", color: C.indigo, text: "Click cell A1 and press Ctrl+V — your data pastes in with columns already separated" },
-                  { num: "05", color: C.pink,   text: 'Click "File" in the top-left menu → hover "Download" → click "Comma Separated Values (.csv)"' },
-                  { num: "06", color: C.green,  text: 'A .csv file downloads to your computer — come back here, click "Import CSV", and select that file. Done! ✅' },
-                ].map(({ num, color, text }) => (
-                  <div key={num} style={{ display: "flex", alignItems: "flex-start", gap: 16, padding: "14px 16px", background: C.card2, borderRadius: 10, border: `1px solid ${C.border}` }}>
-                    <div style={{ fontSize: 13, fontWeight: 800, color, minWidth: 28, paddingTop: 1, fontVariantNumeric: "tabular-nums" }}>{num}</div>
+                {[{ num: "01", color: C.cyan, text: "On your cam platform, find your tip/earnings history and set the date range you want" }, { num: "02", color: C.cyan, text: "Click the first row, scroll to the last row, hold Shift and click — then press Ctrl+C (Cmd+C on Mac)" }, { num: "03", color: C.indigo, text: "Open a new tab and go to sheets.new — a blank Google Sheet opens immediately" }, { num: "04", color: C.indigo, text: "Click cell A1 and press Ctrl+V — your data pastes in with columns already separated" }, { num: "05", color: C.pink, text: 'Click "File" → hover "Download" → click "Comma Separated Values (.csv)"' }, { num: "06", color: C.green, text: 'A .csv file downloads — come back here, click "Import CSV", and select that file. Done! ✅' }].map(({ num, color, text }) => (
+                  <div key={num} style={{ display: "flex", alignItems: "flex-start", gap: 16, padding: "14px 16px", background: "rgba(255,255,255,0.03)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.07)" }}>
+                    <div style={{ fontSize: 13, fontWeight: 800, color, minWidth: 28, paddingTop: 1 }}>{num}</div>
                     <div style={{ fontSize: 14, color: C.text, lineHeight: 1.6 }}>{text}</div>
                   </div>
                 ))}
               </div>
             </div>
-
             <h2 style={{ fontSize: 20, fontWeight: 700, color: C.white, marginBottom: 16 }}>📖 Platform-Specific Tips</h2>
             <p style={{ fontSize: 13, color: C.muted, marginBottom: 24 }}>Where to find the earnings data on each site before you copy it</p>
-
-            {/* CHATURBATE */}
-            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 24, marginBottom: 20 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
-                <div style={{ fontSize: 32 }}>🟣</div>
-                <h2 style={{ fontSize: 22, fontWeight: 700, color: C.white }}>Chaturbate</h2>
-              </div>
-              <div style={{ fontSize: 14, color: C.text, lineHeight: 1.6 }}>
-                <p style={{ marginBottom: 12 }}><strong style={{ color: C.white }}>Step 1:</strong> Log into your Chaturbate broadcaster account</p>
-                <p style={{ marginBottom: 12 }}><strong style={{ color: C.white }}>Step 2:</strong> Go to <span style={{ color: C.cyan }}>Stats & Data → Token Stats</span></p>
-                <p style={{ marginBottom: 12 }}><strong style={{ color: C.white }}>Step 3:</strong> Select your date range (last 30 days, 90 days, or custom)</p>
-                <p style={{ marginBottom: 12 }}><strong style={{ color: C.white }}>Step 4:</strong> Click <span style={{ color: C.cyan }}>"Download CSV"</span> or <span style={{ color: C.cyan }}>"Export"</span></p>
-                <p style={{ marginBottom: 16 }}><strong style={{ color: C.white }}>Step 5:</strong> Upload the CSV file to CamCash</p>
-                <div style={{ padding: 16, background: C.card2, borderRadius: 10, marginTop: 16 }}>
-                  <div style={{ fontSize: 13, color: C.muted, marginBottom: 8 }}>✅ What we need from the CSV:</div>
-                  <div style={{ fontSize: 13, color: C.text }}>• Date/Time of tip</div>
-                  <div style={{ fontSize: 13, color: C.text }}>• Username (tipper)</div>
-                  <div style={{ fontSize: 13, color: C.text }}>• Token amount</div>
-                  <div style={{ fontSize: 13, color: C.text, marginTop: 8 }}>💡 Chaturbate CSVs usually have "Tip from:" format</div>
+            {[{ emoji: "🟣", name: "Chaturbate", steps: ["Log into your Chaturbate broadcaster account", "Go to Stats & Data → Token Stats", "Select your date range (last 30 days, 90 days, or custom)", "Click \"Download CSV\" or \"Export\"", "Upload the CSV file to CamCash"], tip: "Chaturbate CSVs usually have \"Tip from:\" format" }, { emoji: "🔴", name: "BongaCams", steps: ["Log into your BongaCams model account", "Navigate to Statistics → Earnings History", "Select date range and filter by \"Tips\" or \"All Transactions\"", "Look for \"Export to Excel\" or \"Download CSV\" button", "Save the file and upload to CamCash"], tip: "BongaCams format: Date, Username, Type, Tokens, USD" }, { emoji: "🟠", name: "MyFreeCams (MFC)", steps: ["Log into your MFC model account at wiki.myfreecams.com", "Go to Model Admin → Token Stats", "Click \"Transaction History\" or \"Detailed Stats\"", "Select date range and click \"Export CSV\"", "Upload the exported file to CamCash"], tip: "MFC CSVs are usually very detailed with all transaction types" }, { emoji: "🟢", name: "CamSoda", steps: ["Log into your CamSoda broadcaster dashboard", "Navigate to Earnings → Transaction History", "Choose your date range (last week, month, or custom dates)", "Click \"Download\" or \"Export to CSV\"", "Save and upload to CamCash"], tip: "CamSoda exports include both tokens and USD amounts" }].map(({ emoji, name, steps, tip }) => (
+              <div key={name} className="dash-card" style={{ ...glassCard, borderRadius: 14, padding: 24, marginBottom: 20 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+                  <div style={{ fontSize: 32 }}>{emoji}</div>
+                  <h2 style={{ fontSize: 22, fontWeight: 700, color: C.white }}>{name}</h2>
+                </div>
+                <div style={{ fontSize: 14, color: C.text, lineHeight: 1.6 }}>
+                  {steps.map((step, i) => <p key={i} style={{ marginBottom: 12 }}><strong style={{ color: C.white }}>Step {i + 1}:</strong> {step}</p>)}
+                  <div style={{ padding: 16, background: "rgba(255,255,255,0.04)", borderRadius: 10, marginTop: 8 }}>
+                    <div style={{ fontSize: 13, color: C.text }}>💡 {tip}</div>
+                  </div>
                 </div>
               </div>
-            </div>
-
-            {/* BONGACAMS */}
-            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 24, marginBottom: 20 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
-                <div style={{ fontSize: 32 }}>🔴</div>
-                <h2 style={{ fontSize: 22, fontWeight: 700, color: C.white }}>BongaCams</h2>
-              </div>
-              <div style={{ fontSize: 14, color: C.text, lineHeight: 1.6 }}>
-                <p style={{ marginBottom: 12 }}><strong style={{ color: C.white }}>Step 1:</strong> Log into your BongaCams model account</p>
-                <p style={{ marginBottom: 12 }}><strong style={{ color: C.white }}>Step 2:</strong> Navigate to <span style={{ color: C.cyan }}>Statistics → Earnings History</span></p>
-                <p style={{ marginBottom: 12 }}><strong style={{ color: C.white }}>Step 3:</strong> Select date range and filter by "Tips" or "All Transactions"</p>
-                <p style={{ marginBottom: 12 }}><strong style={{ color: C.white }}>Step 4:</strong> Look for <span style={{ color: C.cyan }}>"Export to Excel"</span> or <span style={{ color: C.cyan }}>"Download CSV"</span> button</p>
-                <p style={{ marginBottom: 12 }}><strong style={{ color: C.white }}>Step 5:</strong> Save the file and upload to CamCash</p>
-                <div style={{ padding: 16, background: C.card2, borderRadius: 10, marginTop: 16 }}>
-                  <div style={{ fontSize: 13, color: C.muted, marginBottom: 8 }}>✅ Required columns:</div>
-                  <div style={{ fontSize: 13, color: C.text }}>• Date (format: DD.MM.YYYY)</div>
-                  <div style={{ fontSize: 13, color: C.text }}>• Username/Nickname</div>
-                  <div style={{ fontSize: 13, color: C.text }}>• Amount (tokens or USD)</div>
-                  <div style={{ fontSize: 13, color: C.text }}>• Transaction type (tip/private/etc)</div>
-                  <div style={{ fontSize: 13, color: C.text, marginTop: 8 }}>💡 BongaCams format: Date, Username, Type, Tokens, USD</div>
-                </div>
-              </div>
-            </div>
-
-            {/* MYFREECAMS */}
-            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 24, marginBottom: 20 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
-                <div style={{ fontSize: 32 }}>🟠</div>
-                <h2 style={{ fontSize: 22, fontWeight: 700, color: C.white }}>MyFreeCams (MFC)</h2>
-              </div>
-              <div style={{ fontSize: 14, color: C.text, lineHeight: 1.6 }}>
-                <p style={{ marginBottom: 12 }}><strong style={{ color: C.white }}>Step 1:</strong> Log into your MFC model account at wiki.myfreecams.com</p>
-                <p style={{ marginBottom: 12 }}><strong style={{ color: C.white }}>Step 2:</strong> Go to <span style={{ color: C.cyan }}>Model Admin → Token Stats</span></p>
-                <p style={{ marginBottom: 12 }}><strong style={{ color: C.white }}>Step 3:</strong> Click on <span style={{ color: C.cyan }}>"Transaction History"</span> or <span style={{ color: C.cyan }}>"Detailed Stats"</span></p>
-                <p style={{ marginBottom: 12 }}><strong style={{ color: C.white }}>Step 4:</strong> Select date range and click <span style={{ color: C.cyan }}>"Export CSV"</span></p>
-                <p style={{ marginBottom: 16 }}><strong style={{ color: C.white }}>Step 5:</strong> Upload the exported file to CamCash</p>
-                <div style={{ padding: 16, background: C.card2, borderRadius: 10, marginTop: 16 }}>
-                  <div style={{ fontSize: 13, color: C.muted, marginBottom: 8 }}>✅ CSV should include:</div>
-                  <div style={{ fontSize: 13, color: C.text }}>• Timestamp/Date</div>
-                  <div style={{ fontSize: 13, color: C.text }}>• Member username</div>
-                  <div style={{ fontSize: 13, color: C.text }}>• Token amount</div>
-                  <div style={{ fontSize: 13, color: C.text }}>• Tip type (public tip, group show, private, etc)</div>
-                  <div style={{ fontSize: 13, color: C.text, marginTop: 8 }}>💡 MFC CSVs usually very detailed with all transaction types</div>
-                </div>
-              </div>
-            </div>
-
-            {/* CAMSODA */}
-            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 24, marginBottom: 20 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
-                <div style={{ fontSize: 32 }}>🟢</div>
-                <h2 style={{ fontSize: 22, fontWeight: 700, color: C.white }}>CamSoda</h2>
-              </div>
-              <div style={{ fontSize: 14, color: C.text, lineHeight: 1.6 }}>
-                <p style={{ marginBottom: 12 }}><strong style={{ color: C.white }}>Step 1:</strong> Log into your CamSoda broadcaster dashboard</p>
-                <p style={{ marginBottom: 12 }}><strong style={{ color: C.white }}>Step 2:</strong> Navigate to <span style={{ color: C.cyan }}>Earnings → Transaction History</span></p>
-                <p style={{ marginBottom: 12 }}><strong style={{ color: C.white }}>Step 3:</strong> Choose your date range (last week, month, or custom dates)</p>
-                <p style={{ marginBottom: 12 }}><strong style={{ color: C.white }}>Step 4:</strong> Click <span style={{ color: C.cyan }}>"Download"</span> or <span style={{ color: C.cyan }}>"Export to CSV"</span></p>
-                <p style={{ marginBottom: 16 }}><strong style={{ color: C.white }}>Step 5:</strong> Save and upload to CamCash</p>
-                <div style={{ padding: 16, background: C.card2, borderRadius: 10, marginTop: 16 }}>
-                  <div style={{ fontSize: 13, color: C.muted, marginBottom: 8 }}>✅ Required data:</div>
-                  <div style={{ fontSize: 13, color: C.text }}>• Date and time of transaction</div>
-                  <div style={{ fontSize: 13, color: C.text }}>• Username/Member name</div>
-                  <div style={{ fontSize: 13, color: C.text }}>• Token amount</div>
-                  <div style={{ fontSize: 13, color: C.text }}>• Earnings in USD (optional)</div>
-                  <div style={{ fontSize: 13, color: C.text, marginTop: 8 }}>💡 CamSoda exports include both tokens and USD amounts</div>
-                </div>
-              </div>
-            </div>
-
-            {/* GENERAL TIPS */}
-            <div style={{ background: `linear-gradient(135deg, ${C.indigo}15, ${C.pink}15)`, border: `1px solid ${C.pink}30`, borderRadius: 14, padding: 24 }}>
+            ))}
+            <div style={{ background: "linear-gradient(135deg, rgba(124,92,255,0.15), rgba(236,72,153,0.15))", border: "1px solid rgba(236,72,153,0.3)", borderRadius: 14, padding: 24 }}>
               <h2 style={{ fontSize: 20, fontWeight: 700, color: C.white, marginBottom: 16 }}>💡 General Tips</h2>
               <div style={{ fontSize: 14, color: C.text, lineHeight: 1.6 }}>
-                <p style={{ marginBottom: 12 }}>✅ <strong style={{ color: C.white }}>Export regularly:</strong> Download your data weekly or monthly</p>
-                <p style={{ marginBottom: 12 }}>✅ <strong style={{ color: C.white }}>Don't edit CSVs:</strong> Upload the original file - we handle the formatting</p>
-                <p style={{ marginBottom: 12 }}>✅ <strong style={{ color: C.white }}>Multiple platforms:</strong> You can upload CSVs from different sites - we'll combine them</p>
-                <p style={{ marginBottom: 12 }}>✅ <strong style={{ color: C.white }}>Duplicates removed:</strong> Don't worry about re-uploading the same data</p>
-                <p style={{ marginBottom: 12 }}>✅ <strong style={{ color: C.white }}>File size:</strong> Most CSVs are under 5MB and upload instantly</p>
+                {[["Export regularly", "Download your data weekly or monthly"], ["Don't edit CSVs", "Upload the original file — we handle the formatting"], ["Multiple platforms", "Upload CSVs from different sites — we'll combine them"], ["Duplicates removed", "Don't worry about re-uploading the same data"], ["File size", "Most CSVs are under 5MB and upload instantly"]].map(([title, desc]) => (
+                  <p key={title} style={{ marginBottom: 12 }}>✅ <strong style={{ color: C.white }}>{title}:</strong> {desc}</p>
+                ))}
                 <p>⚠️ <strong style={{ color: C.white }}>Privacy:</strong> Your data is encrypted and never shared</p>
               </div>
             </div>
@@ -884,80 +694,44 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* DELETE CONFIRMATION MODAL */}
+      {/* DELETE MODAL */}
       {showDeleteConfirm && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 999 }}>
-          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 32, maxWidth: 400, textAlign: "center" }}>
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 999 }}>
+          <div style={{ ...glassCard, borderRadius: 14, padding: 32, maxWidth: 400, textAlign: "center" }}>
             <div style={{ fontSize: 48, marginBottom: 16 }}>⚠️</div>
             <h2 style={{ fontSize: 20, fontWeight: 700, color: C.white, marginBottom: 12 }}>Delete All Tips?</h2>
             <p style={{ fontSize: 14, color: C.muted, marginBottom: 24 }}>This will permanently delete all {tips.length} tips. This cannot be undone!</p>
             <div style={{ display: "flex", gap: 12 }}>
-              <button onClick={() => setShowDeleteConfirm(false)} style={{ flex: 1, padding: "10px 20px", borderRadius: 8, background: C.card2, border: `1px solid ${C.border}`, color: C.white, fontSize: 14, cursor: "pointer" }}>Cancel</button>
-              <button onClick={deleteAllTips} style={{ flex: 1, padding: "10px 20px", borderRadius: 8, background: `linear-gradient(135deg, ${C.red}, ${C.orange})`, border: "none", color: C.white, fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Delete All</button>
+              <button onClick={() => setShowDeleteConfirm(false)} style={{ flex: 1, padding: "10px 20px", borderRadius: 8, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: C.white, fontSize: 14, cursor: "pointer" }}>Cancel</button>
+              <button onClick={deleteAllTips} style={{ flex: 1, padding: "10px 20px", borderRadius: 8, background: "linear-gradient(135deg, #F87171, #FB923C)", boxShadow: "0 0 20px rgba(248,113,113,0.4)", border: "none", color: C.white, fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Delete All</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ── CSV CONFIRMATION MODAL ─────────────────────────────────────────── */}
-      {showConfirmation && parseResult && (
-        <ConfirmationModal
-          result={parseResult}
-          onConfirm={confirmImport}
-          onCancel={() => {
-            setShowConfirmation(false)
-            setPendingData(null)
-            setParseResult(null)
-            setUploading(false)
-          }}
-        />
-      )}
+      {showConfirmation && parseResult && <ConfirmationModal result={parseResult} onConfirm={confirmImport} onCancel={() => { setShowConfirmation(false); setPendingData(null); setParseResult(null); setUploading(false) }} />}
+      {showError && parseResult && <ErrorModal error={parseResult.error} suggestions={parseResult.suggestions} issues={parseResult.issues} onClose={() => { setShowError(false); setParseResult(null); setUploading(false) }} />}
 
-      {/* ── CSV ERROR MODAL ────────────────────────────────────────────────── */}
-      {showError && parseResult && (
-        <ErrorModal
-          error={parseResult.error}
-          suggestions={parseResult.suggestions}
-          issues={parseResult.issues}
-          onClose={() => {
-            setShowError(false)
-            setParseResult(null)
-            setUploading(false)
-          }}
-        />
-      )}
-
-      {/* ── WHALE PROFILE MODAL ───────────────────────────────────────────── */}
+      {/* WHALE PROFILE MODAL */}
       {selectedWhale && (() => {
         const w = selectedWhale
         const whaleTips = tips.filter(t => t.username === w.username && t.platform === w.platform)
         const sortedTips = [...whaleTips].sort((a, b) => new Date(b.date_time) - new Date(a.date_time))
-        const firstTip = whaleTips.reduce((a, b) => new Date(a.date_time) < new Date(b.date_time) ? a : b, whaleTips[0])
+        const firstTip = whaleTips.length ? whaleTips.reduce((a, b) => new Date(a.date_time) < new Date(b.date_time) ? a : b) : null
         const daysSinceLastTip = Math.floor((Date.now() - new Date(w.lastTipDate)) / 86400000)
         const tierColor = TIER_COLORS[w.tier] || C.cyan
-
-        // AI predictions (simple logic, feels smart)
-        const avgDaysBetweenTips = whaleTips.length > 1
-          ? Math.floor((new Date(w.lastTipDate) - new Date(firstTip?.date_time)) / 86400000 / (whaleTips.length - 1))
-          : 7
+        const avgDaysBetweenTips = whaleTips.length > 1 ? Math.floor((new Date(w.lastTipDate) - new Date(firstTip?.date_time)) / 86400000 / (whaleTips.length - 1)) : 7
         const likelyReturnDays = Math.max(0, avgDaysBetweenTips - daysSinceLastTip)
         const churnRisk = daysSinceLastTip > avgDaysBetweenTips * 2 ? "High" : daysSinceLastTip > avgDaysBetweenTips ? "Medium" : "Low"
         const churnColor = churnRisk === "High" ? C.red : churnRisk === "Medium" ? C.orange : C.green
-        const biggestTip = Math.max(...whaleTips.map(t => t.usd))
-        const recentTips = sortedTips.slice(0, 5)
-
+        const biggestTip = whaleTips.length ? Math.max(...whaleTips.map(t => t.usd)) : 0
         return (
           <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 20 }}>
-            <div style={{ width: 560, maxHeight: "90vh", overflowY: "auto", background: C.card, borderRadius: 20, border: `1px solid ${C.border}`, boxShadow: "0 24px 80px rgba(0,0,0,0.9)" }}>
-              
-              {/* HEADER */}
-              <div style={{ padding: "24px 24px 0", background: `linear-gradient(135deg, ${tierColor}15, transparent)`, borderBottom: `1px solid ${C.border}`, paddingBottom: 20 }}>
+            <div style={{ width: 560, maxHeight: "90vh", overflowY: "auto", ...glassCard, borderRadius: 20 }}>
+              <div style={{ padding: "24px 24px 20px", background: `linear-gradient(135deg, ${tierColor}15, transparent)`, borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                    {/* Avatar */}
-                    <div style={{ width: 52, height: 52, borderRadius: 14, background: `linear-gradient(135deg, ${tierColor}, ${tierColor}80)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, fontWeight: 800, color: "#fff", flexShrink: 0 }}>
-                      {w.username.charAt(0).toUpperCase()}
-                    </div>
+                    <div style={{ width: 52, height: 52, borderRadius: 14, background: `linear-gradient(135deg, ${tierColor}, ${tierColor}80)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, fontWeight: 800, color: "#fff" }}>{w.username.charAt(0).toUpperCase()}</div>
                     <div>
                       <div style={{ fontSize: 20, fontWeight: 800, color: C.white }}>{w.username}</div>
                       <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
@@ -966,212 +740,188 @@ export default function Dashboard() {
                       </div>
                     </div>
                   </div>
-                  <button onClick={() => setSelectedWhale(null)} style={{ width: 32, height: 32, borderRadius: "50%", background: C.card2, border: `1px solid ${C.border}`, color: C.muted, fontSize: 16, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>✕</button>
+                  <button onClick={() => setSelectedWhale(null)} style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.1)", color: C.muted, fontSize: 16, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
                 </div>
-
-                {/* KEY STATS ROW */}
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
-                  {[
-                    { label: "Total Spent", value: `$${w.totalUSD.toFixed(2)}`, color: C.green },
-                    { label: "Tips Given", value: w.tipCount, color: C.cyan },
-                    { label: "Avg Tip", value: `$${w.avgTipSize.toFixed(2)}`, color: C.gold },
-                    { label: "Biggest Tip", value: `$${biggestTip.toFixed(2)}`, color: C.pink },
-                  ].map(({ label, value, color }) => (
-                    <div key={label} style={{ background: C.card2, borderRadius: 10, padding: 12, textAlign: "center" }}>
+                  {[{ label: "Total Spent", value: `$${w.totalUSD.toFixed(2)}`, color: C.green }, { label: "Tips Given", value: w.tipCount, color: C.cyan }, { label: "Avg Tip", value: `$${w.avgTipSize.toFixed(2)}`, color: C.gold }, { label: "Biggest Tip", value: `$${biggestTip.toFixed(2)}`, color: C.pink }].map(({ label, value, color }) => (
+                    <div key={label} style={{ background: "rgba(255,255,255,0.05)", borderRadius: 10, padding: 12, textAlign: "center" }}>
                       <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>{label}</div>
                       <div style={{ fontSize: 16, fontWeight: 800, color }}>{value}</div>
                     </div>
                   ))}
                 </div>
               </div>
-
               <div style={{ padding: 24, display: "flex", flexDirection: "column", gap: 20 }}>
-
-                {/* FAN INTELLIGENCE (free) */}
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>📊 Fan Intelligence</div>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                    <div style={{ padding: 14, background: C.card2, borderRadius: 10, border: `1px solid ${C.border}` }}>
-                      <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>First tip</div>
-                      <div style={{ fontSize: 14, fontWeight: 600, color: C.white }}>{firstTip ? new Date(firstTip.date_time).toLocaleDateString() : "—"}</div>
-                    </div>
-                    <div style={{ padding: 14, background: C.card2, borderRadius: 10, border: `1px solid ${C.border}` }}>
-                      <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>Last tip</div>
-                      <div style={{ fontSize: 14, fontWeight: 600, color: C.white }}>{new Date(w.lastTipDate).toLocaleDateString()} <span style={{ fontSize: 11, color: C.muted }}>({daysSinceLastTip}d ago)</span></div>
-                    </div>
-                    <div style={{ padding: 14, background: C.card2, borderRadius: 10, border: `1px solid ${C.border}` }}>
-                      <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>Avg days between tips</div>
-                      <div style={{ fontSize: 14, fontWeight: 600, color: C.white }}>{avgDaysBetweenTips} days</div>
-                    </div>
-                    <div style={{ padding: 14, background: C.card2, borderRadius: 10, border: `1px solid ${C.border}` }}>
-                      <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>Churn risk</div>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: churnColor }}>{churnRisk}</div>
-                    </div>
+                    {[{ label: "First tip", value: firstTip ? new Date(firstTip.date_time).toLocaleDateString() : "—" }, { label: "Last tip", value: `${new Date(w.lastTipDate).toLocaleDateString()} (${daysSinceLastTip}d ago)` }, { label: "Avg days between tips", value: `${avgDaysBetweenTips} days` }, { label: "Churn risk", value: churnRisk, color: churnColor }].map(({ label, value, color }) => (
+                      <div key={label} style={{ padding: 14, background: "rgba(255,255,255,0.04)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.07)" }}>
+                        <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>{label}</div>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: color || C.white }}>{value}</div>
+                      </div>
+                    ))}
                   </div>
                 </div>
-
-                {/* RECENT TIP HISTORY (free) */}
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>🕐 Recent Tips</div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                    {recentTips.map((t, i) => (
-                      <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: C.card2, borderRadius: 8, border: `1px solid ${C.border}` }}>
+                    {sortedTips.slice(0, 5).map((t, i) => (
+                      <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: "rgba(255,255,255,0.04)", borderRadius: 8, border: "1px solid rgba(255,255,255,0.07)" }}>
                         <div style={{ fontSize: 12, color: C.muted }}>{new Date(t.date_time).toLocaleDateString()} at {new Date(t.date_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</div>
                         <div style={{ fontSize: 14, fontWeight: 700, color: C.green }}>${t.usd.toFixed(2)}</div>
                       </div>
                     ))}
                   </div>
                 </div>
-
-                {/* AI PREDICTIONS (Pro locked) */}
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>🤖 AI Predictions</div>
-                  <div style={{ position: "relative", borderRadius: 12, overflow: "hidden", border: `1px solid ${C.border}` }}>
-                    {/* blurred preview */}
-                    <div style={{ filter: isBetaUser ? "none" : "blur(3px)", pointerEvents: isBetaUser ? "auto" : "none", padding: 16, background: C.card2, display: "flex", flexDirection: "column", gap: 10 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 14px", background: C.card, borderRadius: 8 }}>
-                        <div style={{ fontSize: 13, color: C.text }}>📅 Likely to tip again in</div>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: C.cyan }}>{likelyReturnDays === 0 ? "Overdue!" : `~${likelyReturnDays} days`}</div>
+                  <div style={{ padding: 16, background: "rgba(255,255,255,0.04)", borderRadius: 12, border: "1px solid rgba(255,255,255,0.07)", display: "flex", flexDirection: "column", gap: 10 }}>
+                    {[{ label: "📅 Likely to tip again in", value: likelyReturnDays === 0 ? "Overdue!" : `~${likelyReturnDays} days`, color: C.cyan }, { label: "💸 Predicted next tip size", value: `$${(w.avgTipSize * 1.1).toFixed(2)}`, color: C.gold }, { label: "🎯 Engagement score", value: `${Math.min(99, Math.round((w.tipCount / 10) * 20 + (w.totalUSD / 100) * 10))} / 100`, color: C.pink }, { label: "📈 30-day revenue forecast", value: `$${((w.totalUSD / Math.max(1, Math.floor((Date.now() - new Date(firstTip?.date_time)) / 2592000000))) * 1.05).toFixed(2)}`, color: C.green }].map(({ label, value, color }) => (
+                      <div key={label} style={{ display: "flex", justifyContent: "space-between", padding: "10px 14px", background: "rgba(255,255,255,0.04)", borderRadius: 8 }}>
+                        <div style={{ fontSize: 13, color: C.text }}>{label}</div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color }}>{value}</div>
                       </div>
-                      <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 14px", background: C.card, borderRadius: 8 }}>
-                        <div style={{ fontSize: 13, color: C.text }}>💸 Predicted next tip size</div>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: C.gold }}>${(w.avgTipSize * 1.1).toFixed(2)}</div>
-                      </div>
-                      <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 14px", background: C.card, borderRadius: 8 }}>
-                        <div style={{ fontSize: 13, color: C.text }}>🎯 Engagement score</div>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: C.pink }}>{Math.min(99, Math.round((w.tipCount / 10) * 20 + (w.totalUSD / 100) * 10))} / 100</div>
-                      </div>
-                      <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 14px", background: C.card, borderRadius: 8 }}>
-                        <div style={{ fontSize: 13, color: C.text }}>📈 30-day revenue forecast</div>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: C.green }}>${((w.totalUSD / Math.max(1, Math.floor((Date.now() - new Date(firstTip?.date_time)) / 2592000000))) * 1.05).toFixed(2)}</div>
-                      </div>
-                    </div>
-
-                    {/* Pro overlay */}
-                    {!isBetaUser && (
-                      <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "rgba(11,15,26,0.6)", backdropFilter: "blur(2px)" }}>
-                        <div style={{ fontSize: 28, marginBottom: 8 }}>🔒</div>
-                        <div style={{ fontSize: 15, fontWeight: 700, color: C.white, marginBottom: 4 }}>Pro Feature</div>
-                        <div style={{ fontSize: 12, color: C.muted, marginBottom: 16, textAlign: "center" }}>AI-powered return predictions & fan scoring</div>
-                        <button style={{ padding: "9px 22px", borderRadius: 8, background: `linear-gradient(135deg, ${C.cyan}, ${C.pink})`, border: "none", color: C.white, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
-                          Upgrade to Pro
-                        </button>
-                      </div>
-                    )}
+                    ))}
                   </div>
                 </div>
-
-                {/* CLOSE */}
-                <button onClick={() => setSelectedWhale(null)} style={{ width: "100%", padding: "12px", borderRadius: 10, background: C.card2, border: `1px solid ${C.border}`, color: C.muted, fontSize: 14, cursor: "pointer", marginTop: 4 }}>
-                  Close Profile
-                </button>
+                <button onClick={() => setSelectedWhale(null)} style={{ width: "100%", padding: "12px", borderRadius: 10, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: C.muted, fontSize: 14, cursor: "pointer" }}>Close Profile</button>
               </div>
             </div>
           </div>
         )
       })()}
-      {/* ──────────────────────────────────────────────────────────────────── */}
 
-      {/* ── MESSAGE GENERATOR MODAL ───────────────────────────────────────── */}
+      {/* MESSAGE GENERATOR MODAL */}
       {messageTarget && (() => {
         const w = messageTarget
         const days = Math.floor((Date.now() - new Date(w.lastTipDate)) / 86400000)
         const name = w.username
-
         const messages = [
-          // Reconnect — gone a while
           `Hey ${name}! I've been thinking about you lately 💕 I'm going live tonight and would love to see your name in the chat 🔥`,
           `${name}! It's been a minute and honestly I miss you 😊 Jumping on soon — come say hi? 💋`,
           `Hey love 💕 Just wanted to reach out because I was literally just thinking about you. I go live tonight — hope to see you there!`,
           `${name}! You crossed my mind today 🥺 I'm streaming soon and it's always better when you're around 💗`,
           `Hey babe! I haven't seen you in a bit and I miss your energy 💕 Going live tonight — don't be a stranger! 😘`,
-          // Hype / going live soon
           `${name}! Going live in a bit and I'm SO excited 🔥 Wanted to make sure you knew because it's always more fun with you there 💕`,
           `Hey! I'm about to go live and literally thought of you first 😍 Come through, it's gonna be a good one tonight 🎉`,
           `${name}! Live stream starting soon 🎥 You're one of my favorites and I'd love to see you tonight 💗`,
           `Hey gorgeous 💕 Going live soon — I've got some fun things planned and thought of you immediately. See you there? 🔥`,
           `${name}! Stream is happening tonight and it won't be the same without you 😘 Come hang with me 💋`,
-          // Appreciation
           `Hey ${name}! I just wanted to say your support genuinely means the world to me 💕 Streaming tonight and hoping to see your face 😊`,
           `${name}! You're honestly one of the sweetest people I get to talk to 🥺 Going live soon — come say hi! 💗`,
           `Hey love! I was looking back at my favorites and you came to mind immediately 💕 I stream tonight, would mean a lot to see you 🔥`,
           `${name}! Just wanted to send some love your way 💋 I'm going live soon and you're always one of my favorite people to have around 😍`,
           `Hey babe 💕 Thinking about my favorite fans tonight and you're at the top of the list 🥰 Going live — hope to see you!`,
-          // Playful / flirty
           `${name}! Okay don't judge me but I may have been thinking about you today 😂💕 Going live tonight — come flirt with me 😘`,
           `Hey you 👀 I see you haven't come to visit lately… I'm going live tonight and I'll be a little sad if you don't show up 😢💗`,
           `${name}! I was literally just telling someone about my favorite fans and your name came up 🔥 Going live soon, don't miss it 😘`,
           `Hey babe! Fair warning: I'm going live tonight and I may or may not be extra flirty 😏💕 Thought you'd want to know 😘`,
           `${name}! Missing your energy lately 😩 I go live tonight — come remind me why you're one of my faves 💗🔥`,
-          // FOMO
           `Hey ${name}! Last stream was SO fun and I don't want you to miss tonight's 🎉 Going live soon — get ready 💕`,
           `${name}! I have something special planned for tonight's stream 👀🔥 Didn't want you to miss out — going live soon 💋`,
           `Hey love! Tonight's stream is going to be one of my best ones 🔥 Saving a spot for you 💕 See you soon?`,
           `${name}! Streaming tonight and I promise it'll be worth it 😍 I've been planning something fun and thought of you 💗`,
           `Hey babe 💕 I know you've been busy but I really hope you can make tonight's stream — I have a feeling it's going to be special 🔥😘`,
         ]
-
         const currentMsg = messages[messageIndex % messages.length]
-
+        const vibes = ["💕 Reconnect", "🔥 Going Live", "🥰 Appreciation", "😘 Flirty", "👀 FOMO"]
         return (
           <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1001, padding: 20 }}>
-            <div style={{ width: 520, background: C.card, borderRadius: 20, border: `1px solid ${C.border}`, boxShadow: "0 24px 80px rgba(0,0,0,0.9)", overflow: "hidden" }}>
-
-              {/* HEADER */}
-              <div style={{ padding: "20px 24px", background: `linear-gradient(135deg, ${C.pink}15, ${C.indigo}10)`, borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ width: 520, ...glassCard, borderRadius: 20, overflow: "hidden" }}>
+              <div style={{ padding: "20px 24px", background: "linear-gradient(135deg, rgba(236,72,153,0.2), rgba(124,92,255,0.15))", borderBottom: "1px solid rgba(255,255,255,0.08)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
                   <div style={{ fontSize: 17, fontWeight: 800, color: C.white }}>💌 Message Generator</div>
                   <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>For <span style={{ color: C.pink, fontWeight: 600 }}>{name}</span> · {days === 0 ? "tipped today" : `${days} days since last tip`}</div>
                 </div>
-                <button onClick={() => setMessageTarget(null)} style={{ width: 30, height: 30, borderRadius: "50%", background: C.card2, border: `1px solid ${C.border}`, color: C.muted, fontSize: 15, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+                <button onClick={() => setMessageTarget(null)} style={{ width: 30, height: 30, borderRadius: "50%", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.1)", color: C.muted, fontSize: 15, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
               </div>
-
               <div style={{ padding: 24 }}>
-                {/* MESSAGE DISPLAY */}
                 <div style={{ position: "relative", marginBottom: 16 }}>
-                  <div style={{ padding: 20, background: C.card2, borderRadius: 14, border: `1px solid ${C.border}`, fontSize: 15, color: C.white, lineHeight: 1.7, minHeight: 100 }}>
-                    {currentMsg}
-                  </div>
-                  {/* message counter */}
-                  <div style={{ position: "absolute", top: 12, right: 12, fontSize: 10, color: C.muted, background: C.card, padding: "2px 8px", borderRadius: 10, border: `1px solid ${C.border}` }}>
-                    {(messageIndex % messages.length) + 1} / {messages.length}
-                  </div>
+                  <div style={{ padding: 20, background: "rgba(255,255,255,0.04)", borderRadius: 14, border: "1px solid rgba(255,255,255,0.08)", fontSize: 15, color: C.white, lineHeight: 1.7, minHeight: 100 }}>{currentMsg}</div>
+                  <div style={{ position: "absolute", top: 12, right: 12, fontSize: 10, color: C.muted, background: "rgba(0,0,0,0.5)", padding: "2px 8px", borderRadius: 10, border: "1px solid rgba(255,255,255,0.1)" }}>{(messageIndex % messages.length) + 1} / {messages.length}</div>
                 </div>
-
-                {/* TONE LABEL */}
                 <div style={{ marginBottom: 20, display: "flex", alignItems: "center", gap: 8 }}>
                   <div style={{ fontSize: 11, color: C.muted }}>Vibe:</div>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: C.pink, padding: "2px 10px", background: `${C.pink}15`, border: `1px solid ${C.pink}30`, borderRadius: 20 }}>
-                    {messageIndex % 5 === 0 ? "💕 Reconnect" : messageIndex % 5 === 1 ? "🔥 Going Live" : messageIndex % 5 === 2 ? "🥰 Appreciation" : messageIndex % 5 === 3 ? "😘 Flirty" : "👀 FOMO"}
-                  </div>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: C.pink, padding: "2px 10px", background: "rgba(236,72,153,0.15)", border: "1px solid rgba(236,72,153,0.3)", borderRadius: 20 }}>{vibes[messageIndex % 5]}</div>
                 </div>
-
-                {/* BUTTONS */}
                 <div style={{ display: "flex", gap: 10 }}>
-                  <button
-                    onClick={() => { setMessageIndex(i => i + 1); setMessageCopied(false) }}
-                    style={{ flex: 1, padding: "12px", borderRadius: 10, background: C.card2, border: `1px solid ${C.border}`, color: C.white, fontSize: 14, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
-                    🔄 Generate Another
-                  </button>
-                  <button
-                    onClick={() => { navigator.clipboard.writeText(currentMsg); setMessageCopied(true); setTimeout(() => setMessageCopied(false), 2500) }}
-                    style={{ flex: 1, padding: "12px", borderRadius: 10, background: messageCopied ? `${C.green}20` : `linear-gradient(135deg, ${C.cyan}, ${C.pink})`, border: messageCopied ? `1px solid ${C.green}50` : "none", color: C.white, fontSize: 14, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, transition: "all 0.2s" }}>
-                    {messageCopied ? "✅ Copied!" : "📋 Copy Message"}
-                  </button>
+                  <button onClick={() => { setMessageIndex(i => i + 1); setMessageCopied(false) }} style={{ flex: 1, padding: "12px", borderRadius: 10, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: C.white, fontSize: 14, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>🔄 Generate Another</button>
+                  <button onClick={() => { navigator.clipboard.writeText(currentMsg); setMessageCopied(true); setTimeout(() => setMessageCopied(false), 2500) }} style={{ flex: 1, padding: "12px", borderRadius: 10, background: messageCopied ? "rgba(16,185,129,0.2)" : "linear-gradient(135deg, #22D3EE, #EC4899)", boxShadow: messageCopied ? "none" : "0 0 20px rgba(34,211,238,0.3), 0 0 40px rgba(236,72,153,0.2)", border: messageCopied ? "1px solid rgba(16,185,129,0.4)" : "none", color: C.white, fontSize: 14, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, transition: "all 0.2s" }}>{messageCopied ? "✅ Copied!" : "📋 Copy Message"}</button>
                 </div>
-
-                <div style={{ marginTop: 12, fontSize: 11, color: C.muted, textAlign: "center" }}>
-                  Tip: paste directly into Chaturbate, BongaCams, or your DM platform
-                </div>
+                <div style={{ marginTop: 12, fontSize: 11, color: C.muted, textAlign: "center" }}>Tip: paste directly into Chaturbate, BongaCams, or your DM platform</div>
               </div>
             </div>
           </div>
         )
       })()}
+
+      {/* ── UPGRADE MODAL ─────────────────────────────────────────────────── */}
+      {showUpgradeModal && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.88)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1002, padding: 20 }}>
+          <div style={{ width: 480, background: "rgba(15,20,32,0.97)", backdropFilter: "blur(24px)", borderRadius: 24, border: "1px solid rgba(255,255,255,0.1)", boxShadow: "0 0 80px rgba(59,130,246,0.2), 0 0 160px rgba(236,72,153,0.1)", overflow: "hidden" }}>
+
+            {/* top glow bar */}
+            <div style={{ height: 4, background: "linear-gradient(90deg, #3b82f6, #a855f7, #ec4899)" }} />
+
+            <div style={{ padding: 36 }}>
+              {/* header */}
+              <div style={{ textAlign: "center", marginBottom: 28 }}>
+                <div style={{ fontSize: 44, marginBottom: 12 }}>🚀</div>
+                <h2 style={{ fontSize: 24, fontWeight: 800, color: C.white, marginBottom: 8 }}>
+                  Unlock Your Full Earning Potential
+                </h2>
+                <p style={{ fontSize: 14, color: C.muted, lineHeight: 1.6 }}>
+                  You're only seeing a preview of your data.<br/>
+                  Here's what's waiting for you inside:
+                </p>
+              </div>
+
+              {/* benefits list */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 28 }}>
+                {[
+                  { icon: "🐳", text: "See ALL your top spenders — not just the top 3" },
+                  { icon: "⏰", text: "Discover your exact highest-earning hours & days" },
+                  { icon: "💡", text: "Unlock 15+ advanced insights & strategy tips" },
+                  { icon: "📈", text: "Full session history with trend analysis" },
+                  { icon: "🤖", text: "AI fan behavior predictions & return forecasts" },
+                  { icon: "💌", text: "Unlimited re-engagement scripts & fan tracking" },
+                ].map(({ icon, text }) => (
+                  <div key={text} style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 14px", background: "rgba(59,130,246,0.08)", border: "1px solid rgba(59,130,246,0.15)", borderRadius: 10 }}>
+                    <span style={{ fontSize: 18 }}>{icon}</span>
+                    <span style={{ fontSize: 13, color: C.white }}>{text}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* urgency line */}
+              <div style={{ textAlign: "center", padding: "12px 16px", background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.25)", borderRadius: 10, marginBottom: 24 }}>
+                <div style={{ fontSize: 13, color: C.gold, fontWeight: 600 }}>
+                  💡 Most creators miss 30–60% of their earning potential without this
+                </div>
+              </div>
+
+              {/* CTA */}
+              <button
+                onClick={() => { setShowUpgradeModal(false); showToast("🎉 Thanks for your interest! We'll notify you when Pro launches.") }}
+                style={{ width: "100%", padding: "16px", borderRadius: 14, background: "linear-gradient(135deg, #3b82f6, #ec4899)", border: "none", color: C.white, fontSize: 16, fontWeight: 800, cursor: "pointer", boxShadow: "0 0 30px rgba(59,130,246,0.5), 0 0 60px rgba(236,72,153,0.3)", marginBottom: 12 }}>
+                🔓 Get Early Access
+              </button>
+              <div style={{ textAlign: "center", fontSize: 12, color: C.muted, marginBottom: 20 }}>
+                Launching soon • Founding users get lifetime discount
+              </div>
+
+              <button onClick={() => setShowUpgradeModal(false)} style={{ width: "100%", padding: "11px", borderRadius: 10, background: "transparent", border: "1px solid rgba(255,255,255,0.1)", color: C.muted, fontSize: 13, cursor: "pointer" }}>
+                Maybe later
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* ──────────────────────────────────────────────────────────────────── */}
 
       {toast && (
-        <div style={{ position: "fixed", bottom: 24, right: 24, background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "14px 20px", color: C.white, fontSize: 14, zIndex: 999, boxShadow: "0 8px 32px rgba(0,0,0,0.8)" }}>
+        <div style={{ position: "fixed", bottom: 24, right: 24, background: "rgba(15,20,32,0.95)", backdropFilter: "blur(20px)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 12, padding: "14px 20px", color: C.white, fontSize: 14, zIndex: 9999, boxShadow: "0 8px 32px rgba(0,0,0,0.8)" }}>
           {toast}
         </div>
       )}
