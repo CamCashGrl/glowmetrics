@@ -761,6 +761,151 @@ export default function Dashboard() {
         />
       )}
 
+      {/* ── WHALE PROFILE MODAL ───────────────────────────────────────────── */}
+      {selectedWhale && (() => {
+        const w = selectedWhale
+        const whaleTips = tips.filter(t => t.username === w.username && t.platform === w.platform)
+        const sortedTips = [...whaleTips].sort((a, b) => new Date(b.date_time) - new Date(a.date_time))
+        const firstTip = whaleTips.reduce((a, b) => new Date(a.date_time) < new Date(b.date_time) ? a : b, whaleTips[0])
+        const daysSinceLastTip = Math.floor((Date.now() - new Date(w.lastTipDate)) / 86400000)
+        const tierColor = TIER_COLORS[w.tier] || C.cyan
+
+        // AI predictions (simple logic, feels smart)
+        const avgDaysBetweenTips = whaleTips.length > 1
+          ? Math.floor((new Date(w.lastTipDate) - new Date(firstTip?.date_time)) / 86400000 / (whaleTips.length - 1))
+          : 7
+        const likelyReturnDays = Math.max(0, avgDaysBetweenTips - daysSinceLastTip)
+        const churnRisk = daysSinceLastTip > avgDaysBetweenTips * 2 ? "High" : daysSinceLastTip > avgDaysBetweenTips ? "Medium" : "Low"
+        const churnColor = churnRisk === "High" ? C.red : churnRisk === "Medium" ? C.orange : C.green
+        const biggestTip = Math.max(...whaleTips.map(t => t.usd))
+        const recentTips = sortedTips.slice(0, 5)
+
+        return (
+          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 20 }}>
+            <div style={{ width: 560, maxHeight: "90vh", overflowY: "auto", background: C.card, borderRadius: 20, border: `1px solid ${C.border}`, boxShadow: "0 24px 80px rgba(0,0,0,0.9)" }}>
+              
+              {/* HEADER */}
+              <div style={{ padding: "24px 24px 0", background: `linear-gradient(135deg, ${tierColor}15, transparent)`, borderBottom: `1px solid ${C.border}`, paddingBottom: 20 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                    {/* Avatar */}
+                    <div style={{ width: 52, height: 52, borderRadius: 14, background: `linear-gradient(135deg, ${tierColor}, ${tierColor}80)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, fontWeight: 800, color: "#fff", flexShrink: 0 }}>
+                      {w.username.charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 20, fontWeight: 800, color: C.white }}>{w.username}</div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
+                        <span style={{ padding: "2px 10px", borderRadius: 100, background: `${tierColor}20`, border: `1px solid ${tierColor}50`, color: tierColor, fontSize: 11, fontWeight: 700 }}>{w.tier}</span>
+                        <span style={{ fontSize: 12, color: C.muted }}>{w.platform}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <button onClick={() => setSelectedWhale(null)} style={{ width: 32, height: 32, borderRadius: "50%", background: C.card2, border: `1px solid ${C.border}`, color: C.muted, fontSize: 16, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>✕</button>
+                </div>
+
+                {/* KEY STATS ROW */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
+                  {[
+                    { label: "Total Spent", value: `$${w.totalUSD.toFixed(2)}`, color: C.green },
+                    { label: "Tips Given", value: w.tipCount, color: C.cyan },
+                    { label: "Avg Tip", value: `$${w.avgTipSize.toFixed(2)}`, color: C.gold },
+                    { label: "Biggest Tip", value: `$${biggestTip.toFixed(2)}`, color: C.pink },
+                  ].map(({ label, value, color }) => (
+                    <div key={label} style={{ background: C.card2, borderRadius: 10, padding: 12, textAlign: "center" }}>
+                      <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>{label}</div>
+                      <div style={{ fontSize: 16, fontWeight: 800, color }}>{value}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ padding: 24, display: "flex", flexDirection: "column", gap: 20 }}>
+
+                {/* FAN INTELLIGENCE (free) */}
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>📊 Fan Intelligence</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                    <div style={{ padding: 14, background: C.card2, borderRadius: 10, border: `1px solid ${C.border}` }}>
+                      <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>First tip</div>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: C.white }}>{firstTip ? new Date(firstTip.date_time).toLocaleDateString() : "—"}</div>
+                    </div>
+                    <div style={{ padding: 14, background: C.card2, borderRadius: 10, border: `1px solid ${C.border}` }}>
+                      <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>Last tip</div>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: C.white }}>{new Date(w.lastTipDate).toLocaleDateString()} <span style={{ fontSize: 11, color: C.muted }}>({daysSinceLastTip}d ago)</span></div>
+                    </div>
+                    <div style={{ padding: 14, background: C.card2, borderRadius: 10, border: `1px solid ${C.border}` }}>
+                      <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>Avg days between tips</div>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: C.white }}>{avgDaysBetweenTips} days</div>
+                    </div>
+                    <div style={{ padding: 14, background: C.card2, borderRadius: 10, border: `1px solid ${C.border}` }}>
+                      <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>Churn risk</div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: churnColor }}>{churnRisk}</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* RECENT TIP HISTORY (free) */}
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>🕐 Recent Tips</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {recentTips.map((t, i) => (
+                      <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: C.card2, borderRadius: 8, border: `1px solid ${C.border}` }}>
+                        <div style={{ fontSize: 12, color: C.muted }}>{new Date(t.date_time).toLocaleDateString()} at {new Date(t.date_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</div>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: C.green }}>${t.usd.toFixed(2)}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* AI PREDICTIONS (Pro locked) */}
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>🤖 AI Predictions</div>
+                  <div style={{ position: "relative", borderRadius: 12, overflow: "hidden", border: `1px solid ${C.border}` }}>
+                    {/* blurred preview */}
+                    <div style={{ filter: isBetaUser ? "none" : "blur(3px)", pointerEvents: isBetaUser ? "auto" : "none", padding: 16, background: C.card2, display: "flex", flexDirection: "column", gap: 10 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 14px", background: C.card, borderRadius: 8 }}>
+                        <div style={{ fontSize: 13, color: C.text }}>📅 Likely to tip again in</div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: C.cyan }}>{likelyReturnDays === 0 ? "Overdue!" : `~${likelyReturnDays} days`}</div>
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 14px", background: C.card, borderRadius: 8 }}>
+                        <div style={{ fontSize: 13, color: C.text }}>💸 Predicted next tip size</div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: C.gold }}>${(w.avgTipSize * 1.1).toFixed(2)}</div>
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 14px", background: C.card, borderRadius: 8 }}>
+                        <div style={{ fontSize: 13, color: C.text }}>🎯 Engagement score</div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: C.pink }}>{Math.min(99, Math.round((w.tipCount / 10) * 20 + (w.totalUSD / 100) * 10))} / 100</div>
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 14px", background: C.card, borderRadius: 8 }}>
+                        <div style={{ fontSize: 13, color: C.text }}>📈 30-day revenue forecast</div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: C.green }}>${((w.totalUSD / Math.max(1, Math.floor((Date.now() - new Date(firstTip?.date_time)) / 2592000000))) * 1.05).toFixed(2)}</div>
+                      </div>
+                    </div>
+
+                    {/* Pro overlay */}
+                    {!isBetaUser && (
+                      <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "rgba(11,15,26,0.6)", backdropFilter: "blur(2px)" }}>
+                        <div style={{ fontSize: 28, marginBottom: 8 }}>🔒</div>
+                        <div style={{ fontSize: 15, fontWeight: 700, color: C.white, marginBottom: 4 }}>Pro Feature</div>
+                        <div style={{ fontSize: 12, color: C.muted, marginBottom: 16, textAlign: "center" }}>AI-powered return predictions & fan scoring</div>
+                        <button style={{ padding: "9px 22px", borderRadius: 8, background: `linear-gradient(135deg, ${C.cyan}, ${C.pink})`, border: "none", color: C.white, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                          Upgrade to Pro
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* CLOSE */}
+                <button onClick={() => setSelectedWhale(null)} style={{ width: "100%", padding: "12px", borderRadius: 10, background: C.card2, border: `1px solid ${C.border}`, color: C.muted, fontSize: 14, cursor: "pointer", marginTop: 4 }}>
+                  Close Profile
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+      {/* ──────────────────────────────────────────────────────────────────── */}
+
       {toast && (
         <div style={{ position: "fixed", bottom: 24, right: 24, background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "14px 20px", color: C.white, fontSize: 14, zIndex: 999, boxShadow: "0 8px 32px rgba(0,0,0,0.8)" }}>
           {toast}
