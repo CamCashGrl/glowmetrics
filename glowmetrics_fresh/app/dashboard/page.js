@@ -49,6 +49,12 @@ export default function Dashboard() {
   const [selectedWhale, setSelectedWhale] = useState(null)
   // ──────────────────────────────────────────────────────────────────────────
 
+  // ── Message generator modal ───────────────────────────────────────────────
+  const [messageTarget, setMessageTarget] = useState(null)
+  const [messageIndex, setMessageIndex] = useState(0)
+  const [messageCopied, setMessageCopied] = useState(false)
+  // ──────────────────────────────────────────────────────────────────────────
+
   const isBetaUser = true // all features unlocked during free beta
   const uploadLimit = Infinity // unlimited uploads during beta
 
@@ -488,7 +494,7 @@ export default function Dashboard() {
                         </div>
                         {a.cta && (
                           <button
-                            onClick={() => { navigator.clipboard.writeText(a.cta); showToast(`📋 Message copied for ${a.username}!`) }}
+                            onClick={() => { const w = whales.find(wh => wh.username === a.username); if (w) { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) } }}
                             style={{ flexShrink: 0, padding: "6px 14px", borderRadius: 8, background: `${C.pink}20`, border: `1px solid ${C.pink}40`, color: C.pink, fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
                             {a.ctaLabel}
                           </button>
@@ -601,14 +607,7 @@ export default function Dashboard() {
                       <td style={{ padding: "12px 16px" }}>
                         <div style={{ display: "flex", gap: 6 }}>
                           <button onClick={() => setSelectedWhale(w)} style={{ padding: "4px 10px", borderRadius: 6, background: `${C.cyan}15`, border: `1px solid ${C.cyan}30`, color: C.cyan, fontSize: 11, cursor: "pointer" }}>🔍 View</button>
-                          <button onClick={() => {
-                            const days = Math.floor((Date.now() - new Date(w.lastTipDate)) / 86400000)
-                            const msg = days > 7
-                              ? `Hey ${w.username}! I've been missing you 💕 I'm going live soon and was thinking about you — hope to see you there! 🔥`
-                              : `Hey ${w.username}! Thanks so much for your support 💕 I'm going live soon — come hang out! 🎉`
-                            navigator.clipboard.writeText(msg)
-                            showToast(`📋 Message copied for ${w.username}!`)
-                          }} style={{ padding: "4px 10px", borderRadius: 6, background: `${C.pink}15`, border: `1px solid ${C.pink}30`, color: C.pink, fontSize: 11, cursor: "pointer" }}>💌 Message</button>
+                          <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }} style={{ padding: "4px 10px", borderRadius: 6, background: `${C.pink}15`, border: `1px solid ${C.pink}30`, color: C.pink, fontSize: 11, cursor: "pointer" }}>💌 Message</button>
                         </div>
                       </td>
                     </tr>
@@ -1066,6 +1065,104 @@ export default function Dashboard() {
                 <button onClick={() => setSelectedWhale(null)} style={{ width: "100%", padding: "12px", borderRadius: 10, background: C.card2, border: `1px solid ${C.border}`, color: C.muted, fontSize: 14, cursor: "pointer", marginTop: 4 }}>
                   Close Profile
                 </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+      {/* ──────────────────────────────────────────────────────────────────── */}
+
+      {/* ── MESSAGE GENERATOR MODAL ───────────────────────────────────────── */}
+      {messageTarget && (() => {
+        const w = messageTarget
+        const days = Math.floor((Date.now() - new Date(w.lastTipDate)) / 86400000)
+        const name = w.username
+
+        const messages = [
+          // Reconnect — gone a while
+          `Hey ${name}! I've been thinking about you lately 💕 I'm going live tonight and would love to see your name in the chat 🔥`,
+          `${name}! It's been a minute and honestly I miss you 😊 Jumping on soon — come say hi? 💋`,
+          `Hey love 💕 Just wanted to reach out because I was literally just thinking about you. I go live tonight — hope to see you there!`,
+          `${name}! You crossed my mind today 🥺 I'm streaming soon and it's always better when you're around 💗`,
+          `Hey babe! I haven't seen you in a bit and I miss your energy 💕 Going live tonight — don't be a stranger! 😘`,
+          // Hype / going live soon
+          `${name}! Going live in a bit and I'm SO excited 🔥 Wanted to make sure you knew because it's always more fun with you there 💕`,
+          `Hey! I'm about to go live and literally thought of you first 😍 Come through, it's gonna be a good one tonight 🎉`,
+          `${name}! Live stream starting soon 🎥 You're one of my favorites and I'd love to see you tonight 💗`,
+          `Hey gorgeous 💕 Going live soon — I've got some fun things planned and thought of you immediately. See you there? 🔥`,
+          `${name}! Stream is happening tonight and it won't be the same without you 😘 Come hang with me 💋`,
+          // Appreciation
+          `Hey ${name}! I just wanted to say your support genuinely means the world to me 💕 Streaming tonight and hoping to see your face 😊`,
+          `${name}! You're honestly one of the sweetest people I get to talk to 🥺 Going live soon — come say hi! 💗`,
+          `Hey love! I was looking back at my favorites and you came to mind immediately 💕 I stream tonight, would mean a lot to see you 🔥`,
+          `${name}! Just wanted to send some love your way 💋 I'm going live soon and you're always one of my favorite people to have around 😍`,
+          `Hey babe 💕 Thinking about my favorite fans tonight and you're at the top of the list 🥰 Going live — hope to see you!`,
+          // Playful / flirty
+          `${name}! Okay don't judge me but I may have been thinking about you today 😂💕 Going live tonight — come flirt with me 😘`,
+          `Hey you 👀 I see you haven't come to visit lately… I'm going live tonight and I'll be a little sad if you don't show up 😢💗`,
+          `${name}! I was literally just telling someone about my favorite fans and your name came up 🔥 Going live soon, don't miss it 😘`,
+          `Hey babe! Fair warning: I'm going live tonight and I may or may not be extra flirty 😏💕 Thought you'd want to know 😘`,
+          `${name}! Missing your energy lately 😩 I go live tonight — come remind me why you're one of my faves 💗🔥`,
+          // FOMO
+          `Hey ${name}! Last stream was SO fun and I don't want you to miss tonight's 🎉 Going live soon — get ready 💕`,
+          `${name}! I have something special planned for tonight's stream 👀🔥 Didn't want you to miss out — going live soon 💋`,
+          `Hey love! Tonight's stream is going to be one of my best ones 🔥 Saving a spot for you 💕 See you soon?`,
+          `${name}! Streaming tonight and I promise it'll be worth it 😍 I've been planning something fun and thought of you 💗`,
+          `Hey babe 💕 I know you've been busy but I really hope you can make tonight's stream — I have a feeling it's going to be special 🔥😘`,
+        ]
+
+        const currentMsg = messages[messageIndex % messages.length]
+
+        return (
+          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1001, padding: 20 }}>
+            <div style={{ width: 520, background: C.card, borderRadius: 20, border: `1px solid ${C.border}`, boxShadow: "0 24px 80px rgba(0,0,0,0.9)", overflow: "hidden" }}>
+
+              {/* HEADER */}
+              <div style={{ padding: "20px 24px", background: `linear-gradient(135deg, ${C.pink}15, ${C.indigo}10)`, borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <div style={{ fontSize: 17, fontWeight: 800, color: C.white }}>💌 Message Generator</div>
+                  <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>For <span style={{ color: C.pink, fontWeight: 600 }}>{name}</span> · {days === 0 ? "tipped today" : `${days} days since last tip`}</div>
+                </div>
+                <button onClick={() => setMessageTarget(null)} style={{ width: 30, height: 30, borderRadius: "50%", background: C.card2, border: `1px solid ${C.border}`, color: C.muted, fontSize: 15, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+              </div>
+
+              <div style={{ padding: 24 }}>
+                {/* MESSAGE DISPLAY */}
+                <div style={{ position: "relative", marginBottom: 16 }}>
+                  <div style={{ padding: 20, background: C.card2, borderRadius: 14, border: `1px solid ${C.border}`, fontSize: 15, color: C.white, lineHeight: 1.7, minHeight: 100 }}>
+                    {currentMsg}
+                  </div>
+                  {/* message counter */}
+                  <div style={{ position: "absolute", top: 12, right: 12, fontSize: 10, color: C.muted, background: C.card, padding: "2px 8px", borderRadius: 10, border: `1px solid ${C.border}` }}>
+                    {(messageIndex % messages.length) + 1} / {messages.length}
+                  </div>
+                </div>
+
+                {/* TONE LABEL */}
+                <div style={{ marginBottom: 20, display: "flex", alignItems: "center", gap: 8 }}>
+                  <div style={{ fontSize: 11, color: C.muted }}>Vibe:</div>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: C.pink, padding: "2px 10px", background: `${C.pink}15`, border: `1px solid ${C.pink}30`, borderRadius: 20 }}>
+                    {messageIndex % 5 === 0 ? "💕 Reconnect" : messageIndex % 5 === 1 ? "🔥 Going Live" : messageIndex % 5 === 2 ? "🥰 Appreciation" : messageIndex % 5 === 3 ? "😘 Flirty" : "👀 FOMO"}
+                  </div>
+                </div>
+
+                {/* BUTTONS */}
+                <div style={{ display: "flex", gap: 10 }}>
+                  <button
+                    onClick={() => { setMessageIndex(i => i + 1); setMessageCopied(false) }}
+                    style={{ flex: 1, padding: "12px", borderRadius: 10, background: C.card2, border: `1px solid ${C.border}`, color: C.white, fontSize: 14, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                    🔄 Generate Another
+                  </button>
+                  <button
+                    onClick={() => { navigator.clipboard.writeText(currentMsg); setMessageCopied(true); setTimeout(() => setMessageCopied(false), 2500) }}
+                    style={{ flex: 1, padding: "12px", borderRadius: 10, background: messageCopied ? `${C.green}20` : `linear-gradient(135deg, ${C.cyan}, ${C.pink})`, border: messageCopied ? `1px solid ${C.green}50` : "none", color: C.white, fontSize: 14, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, transition: "all 0.2s" }}>
+                    {messageCopied ? "✅ Copied!" : "📋 Copy Message"}
+                  </button>
+                </div>
+
+                <div style={{ marginTop: 12, fontSize: 11, color: C.muted, textAlign: "center" }}>
+                  Tip: paste directly into Chaturbate, BongaCams, or your DM platform
+                </div>
               </div>
             </div>
           </div>
