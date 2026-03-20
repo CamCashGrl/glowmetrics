@@ -1,4 +1,5 @@
 import './globals.css'
+import { Analytics } from '@vercel/analytics/react'
 
 export const metadata = {
   title: 'CamCash — Understand Your Cam Earnings',
@@ -13,7 +14,10 @@ export default function RootLayout({ children }) {
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="true" />
         <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:wght@300;400;500&family=Space+Grotesk:wght@300;400;500;600&display=swap" rel="stylesheet" />
       </head>
-      <body>{children}</body>
+      <body>
+        {children}
+        <Analytics />
+      </body>
     </html>
   )
 }
