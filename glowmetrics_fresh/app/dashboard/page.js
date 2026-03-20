@@ -5,12 +5,7 @@ import { supabase } from "../../lib/supabase"
 import { parseCSV, aggregateRows } from "../../lib/analytics"
 import { ConfirmationModal, ErrorModal } from './ConfirmationModal'
 
-// Safe analytics import — won't crash if package not yet installed
-let track = () => {}
-try {
-  const analytics = require('@vercel/analytics')
-  if (analytics?.track) track = analytics.track
-} catch (e) {}
+const track = (event, props) => {} // analytics placeholder
 
 const C = {
   bg: "#05070f", card: "#121826", card2: "#161e2e", border: "#1e2d45", border2: "#2a3f5f",
