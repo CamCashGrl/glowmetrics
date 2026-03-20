@@ -204,6 +204,88 @@ export default function Dashboard() {
               ))}
             </div>
 
+            {/* 💰 AI Revenue Prediction */}
+            <div style={{
+              background: C.card,
+              border: `1px solid ${C.border}`,
+              borderRadius: 14,
+              padding: 24,
+              marginBottom: 32
+            }}>
+              <h2 style={{ fontSize: 18, fontWeight: 700, color: C.white, marginBottom: 16 }}>
+                💰 Revenue Prediction
+              </h2>
+
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+                
+                <div>
+                  <div style={{ fontSize: 12, color: C.muted }}>Tonight (Expected)</div>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: C.green }}>
+                    ${analytics?.predictions?.tonightStream?.expected || "--"}
+                  </div>
+                  <div style={{ fontSize: 11, color: C.muted }}>
+                    {analytics?.predictions?.tonightStream?.confidence || ""}
+                  </div>
+                </div>
+
+                <div>
+                  <div style={{ fontSize: 12, color: C.muted }}>Next 7 Days</div>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: C.cyan }}>
+                    ${analytics?.predictions?.next7Days?.amount || "--"}
+                  </div>
+                </div>
+
+                <div>
+                  <div style={{ fontSize: 12, color: C.muted }}>Next 30 Days</div>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: C.pink }}>
+                    ${analytics?.predictions?.next30Days?.amount || "--"}
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
+            {/* 💰 AI Revenue Prediction */}
+            <div style={{
+              background: C.card,
+              border: `1px solid ${C.border}`,
+              borderRadius: 14,
+              padding: 24,
+              marginBottom: 32
+            }}>
+              <h2 style={{ fontSize: 18, fontWeight: 700, color: C.white, marginBottom: 16 }}>
+                💰 Revenue Prediction
+              </h2>
+
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+                
+                <div>
+                  <div style={{ fontSize: 12, color: C.muted }}>Tonight (Expected)</div>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: C.green }}>
+                    ${analytics?.predictions?.tonightStream?.expected || "--"}
+                  </div>
+                  <div style={{ fontSize: 11, color: C.muted }}>
+                    {analytics?.predictions?.tonightStream?.confidence || ""}
+                  </div>
+                </div>
+
+                <div>
+                  <div style={{ fontSize: 12, color: C.muted }}>Next 7 Days</div>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: C.cyan }}>
+                    ${analytics?.predictions?.next7Days?.amount || "--"}
+                  </div>
+                </div>
+
+                <div>
+                  <div style={{ fontSize: 12, color: C.muted }}>Next 30 Days</div>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: C.pink }}>
+                    ${analytics?.predictions?.next30Days?.amount || "--"}
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
             {/* INSIGHTS */}
             <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 24, marginBottom: 32 }}>
               <h2 style={{ fontSize: 18, fontWeight: 700, color: C.white, marginBottom: 16 }}>💡 Smart Insights</h2>
