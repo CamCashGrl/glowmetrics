@@ -53,43 +53,72 @@ export default function LoginPage() {
       alignItems: "center",
       justifyContent: "center",
       fontFamily: "'Inter', sans-serif",
-      padding: 20
+      padding: 20,
+      position: "relative",
+      overflow: "hidden"
     }}>
+
+      {/* 🔥 BACKGROUND GLOW */}
+      <div style={{
+        position: "absolute",
+        width: 600,
+        height: 600,
+        background: C.cyan,
+        opacity: 0.15,
+        filter: "blur(120px)",
+        top: -150,
+        left: -150
+      }} />
+      <div style={{
+        position: "absolute",
+        width: 500,
+        height: 500,
+        background: C.pink,
+        opacity: 0.15,
+        filter: "blur(120px)",
+        bottom: -150,
+        right: -150
+      }} />
+
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
         * { box-sizing: border-box; margin: 0; padding: 0; }
       `}</style>
 
       <div style={{
-        background: C.card,
+        position: "relative",
+        zIndex: 10,
+        background: "rgba(18, 24, 38, 0.8)",
+        backdropFilter: "blur(16px)",
         border: `1px solid ${C.border}`,
-        borderRadius: 20,
-        padding: "48px 40px",
+        borderRadius: 24,
+        padding: "52px 44px",
         width: "100%",
-        maxWidth: 440,
-        boxShadow: "0 20px 60px rgba(0,0,0,0.5)"
+        maxWidth: 460,
+        boxShadow: "0 0 80px rgba(168,85,247,0.15)"
       }}>
-        
-        {/* Logo */}
-        <div style={{ textAlign: "center", marginBottom: 40 }}>
+
+        {/* LOGO */}
+        <div style={{ textAlign: "center", marginBottom: 36 }}>
           <div style={{
-            width: 64,
-            height: 64,
-            borderRadius: 16,
+            width: 70,
+            height: 70,
+            borderRadius: 18,
             background: `linear-gradient(135deg, ${C.cyan}, ${C.pink})`,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            fontSize: 32,
+            fontSize: 34,
             fontWeight: 800,
             color: C.white,
-            margin: "0 auto 16px",
-            boxShadow: `0 8px 24px ${C.cyan}40`
+            margin: "0 auto 18px",
+            boxShadow: `0 12px 30px ${C.cyan}40`
           }}>
             $
           </div>
+
           <h1 style={{
-            fontSize: 32,
+            fontSize: 34,
             fontWeight: 800,
             color: C.white,
             marginBottom: 8
@@ -100,15 +129,22 @@ export default function LoginPage() {
               WebkitTextFillColor: "transparent"
             }}>Cash</span>
           </h1>
+
+          {/* POWER COPY */}
           <p style={{ fontSize: 15, color: C.muted }}>
-            {mode === "signup" ? "Create your account" : "Welcome back"}
+            Know exactly when, how, and who to stream for 💰
+          </p>
+
+          {/* TRUST BOOST */}
+          <p style={{ fontSize: 12, color: "#22c55e", marginTop: 6 }}>
+            🔥 Increase earnings with data-driven insights
           </p>
         </div>
 
-        {/* Form */}
+        {/* FORM */}
         <form onSubmit={handleAuth}>
           <div style={{ marginBottom: 20 }}>
-            <label style={{ display: "block", fontSize: 14, fontWeight: 500, color: C.white, marginBottom: 8 }}>
+            <label style={{ fontSize: 14, color: C.white, marginBottom: 6, display: "block" }}>
               Email
             </label>
             <input
@@ -118,22 +154,21 @@ export default function LoginPage() {
               required
               style={{
                 width: "100%",
-                padding: "12px 16px",
-                background: C.bg,
+                padding: "14px 16px",
+                background: "#020617",
                 border: `1px solid ${C.border}`,
-                borderRadius: 10,
+                borderRadius: 12,
                 color: C.white,
                 fontSize: 15,
-                outline: "none",
-                transition: "border-color 0.2s"
+                outline: "none"
               }}
-              onFocus={(e) => e.target.style.borderColor = C.cyan}
+              onFocus={(e) => e.target.style.borderColor = C.pink}
               onBlur={(e) => e.target.style.borderColor = C.border}
             />
           </div>
 
           <div style={{ marginBottom: 24 }}>
-            <label style={{ display: "block", fontSize: 14, fontWeight: 500, color: C.white, marginBottom: 8 }}>
+            <label style={{ fontSize: 14, color: C.white, marginBottom: 6, display: "block" }}>
               Password
             </label>
             <input
@@ -144,14 +179,13 @@ export default function LoginPage() {
               minLength={6}
               style={{
                 width: "100%",
-                padding: "12px 16px",
-                background: C.bg,
+                padding: "14px 16px",
+                background: "#020617",
                 border: `1px solid ${C.border}`,
-                borderRadius: 10,
+                borderRadius: 12,
                 color: C.white,
                 fontSize: 15,
-                outline: "none",
-                transition: "border-color 0.2s"
+                outline: "none"
               }}
               onFocus={(e) => e.target.style.borderColor = C.cyan}
               onBlur={(e) => e.target.style.borderColor = C.border}
@@ -177,23 +211,27 @@ export default function LoginPage() {
             disabled={loading}
             style={{
               width: "100%",
-              padding: "14px",
+              padding: "15px",
               background: `linear-gradient(135deg, ${C.cyan}, ${C.pink})`,
               border: "none",
-              borderRadius: 10,
+              borderRadius: 12,
               color: C.white,
               fontSize: 16,
               fontWeight: 700,
               cursor: loading ? "not-allowed" : "pointer",
               opacity: loading ? 0.7 : 1,
-              transition: "opacity 0.2s"
+              boxShadow: `0 8px 25px ${C.pink}40`
             }}
           >
-            {loading ? "Loading..." : mode === "signup" ? "Create Account" : "Sign In"}
+            {loading
+              ? "Entering..."
+              : mode === "signup"
+              ? "Create Account"
+              : "Enter Dashboard"}
           </button>
         </form>
 
-        {/* Toggle Mode */}
+        {/* TOGGLE */}
         <div style={{ marginTop: 24, textAlign: "center" }}>
           <button
             onClick={() => {
@@ -205,11 +243,12 @@ export default function LoginPage() {
               border: "none",
               color: C.cyan,
               fontSize: 14,
-              cursor: "pointer",
-              textDecoration: "underline"
+              cursor: "pointer"
             }}
           >
-            {mode === "login" ? "Don't have an account? Sign up" : "Already have an account? Sign in"}
+            {mode === "login"
+              ? "Don't have an account? Sign up"
+              : "Already have an account? Sign in"}
           </button>
         </div>
       </div>
