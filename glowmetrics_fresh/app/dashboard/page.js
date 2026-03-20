@@ -3,9 +3,7 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
 import { parseCSV, aggregateRows } from "../../lib/analytics"
-import { ConfirmationModal, ErrorModal } from './ConfirmationModal'
-
-const track = (event, props) => {} // analytics placeholder
+import { track } from "@vercel/analytics"
 
 const C = {
   bg: "#05070f", card: "#121826", card2: "#161e2e", border: "#1e2d45", border2: "#2a3f5f",
@@ -46,10 +44,6 @@ export default function Dashboard() {
   const [whaleFilter, setWhaleFilter] = useState("ALL")
   const [platformFilter, setPlatformFilter] = useState("ALL")
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
-  const [showConfirmation, setShowConfirmation] = useState(false)
-  const [showError, setShowError] = useState(false)
-  const [parseResult, setParseResult] = useState(null)
-  const [pendingData, setPendingData] = useState(null)
   const [selectedWhale, setSelectedWhale] = useState(null)
   const [messageTarget, setMessageTarget] = useState(null)
   const [messageIndex, setMessageIndex] = useState(0)
@@ -64,7 +58,6 @@ export default function Dashboard() {
   const isPro = false
   const uploadLimit = Infinity
 
-  // Tracks WHERE the click came from, then opens modal
   const openUpgradeModal = (source) => {
     track('upgrade_click', { source })
     setShowUpgradeModal(true)
@@ -99,33 +92,56 @@ export default function Dashboard() {
     return newTips.filter(t => !existingKeys.has(`${t.dateRaw || t.date_time}_${t.username}_${t.tokens}_${t.platform}`))
   }
 
+  // parseCSV now returns a plain array — no { success, needsConfirmation } object
   const handleCSV = async (file) => {
     if (!file || !user) return
-    setUploading(true); setShowError(false); setShowConfirmation(false)
+    setUploading(true)
     try {
       const text = await file.text()
-      const result = parseCSV(text)
-      if (!result.success && !result.needsConfirmation) { setParseResult(result); setShowError(true); setUploading(false); return }
-      if (result.success && result.needsConfirmation) { setPendingData(result.data); setParseResult(result); setShowConfirmation(true); setUploading(false); return }
-      if (!result.success && result.needsConfirmation) { setParseResult(result); setShowError(true); setUploading(false); return }
-    } catch (err) { setParseResult({ error: { message: "Upload failed", fix: err.message } }); setShowError(true); setUploading(false) }
-  }
+      const parsed = parseCSV(text)
 
-  const confirmImport = async (data) => {
-    setUploading(true); setShowConfirmation(false)
-    try {
-      const unique = removeDuplicates(tips, data)
-      const duplicateCount = data.length - unique.length
-      if (unique.length === 0) { showToast(`⚠️ All ${data.length} tips are duplicates!`); setUploading(false); setPendingData(null); setParseResult(null); return }
-      const toInsert = unique.map(r => ({ user_id: user.id, date_time: r.dateRaw || r.date_time, platform: r.platform, username: r.username, tip_type: r.tip_type || "Tip", tokens: r.tokens, usd: r.usd }))
+      if (!parsed.length) {
+        showToast("❌ No valid rows found in this file")
+        setUploading(false)
+        return
+      }
+
+      // Track successful parse
+      track('csv_imported', { rows: parsed.length, platform: parsed[0]?.platform || 'Unknown' })
+
+      const unique = removeDuplicates(tips, parsed)
+      const duplicateCount = parsed.length - unique.length
+
+      if (unique.length === 0) {
+        showToast(`⚠️ All ${parsed.length} tips are already imported!`)
+        setUploading(false)
+        return
+      }
+
+      const toInsert = unique.map(r => ({
+        user_id: user.id,
+        date_time: r.dateRaw || r.date_time,
+        platform: r.platform,
+        username: r.username,
+        tip_type: r.tip_type || "Tip",
+        tokens: r.tokens,
+        usd: r.usd
+      }))
+
       const { error } = await supabase.from("tips").insert(toInsert)
       if (error) { showToast("❌ " + error.message); setUploading(false); return }
+
       setUploadCount(uploadCount + 1)
-      let msg = duplicateCount > 0 ? `✅ Imported ${unique.length} tips (${duplicateCount} duplicates removed)` : `✅ Imported ${unique.length} tips from ${parseResult?.platform || "CSV"}!`
-      if (parseResult?.warnings) msg += ` (${parseResult.skipped?.length ?? 0} rows skipped)`
-      showToast(msg); await loadData(user.id); setPendingData(null); setParseResult(null)
-    } catch (err) { showToast("❌ " + err.message) }
-    finally { setUploading(false) }
+      const msg = duplicateCount > 0
+        ? `✅ Imported ${unique.length} tips (${duplicateCount} duplicates skipped)`
+        : `✅ Imported ${unique.length} tips from ${parsed[0]?.platform || "CSV"}!`
+      showToast(msg)
+      await loadData(user.id)
+    } catch (err) {
+      showToast("❌ " + err.message)
+    } finally {
+      setUploading(false)
+    }
   }
 
   const deleteTip = async (tipId) => {
@@ -700,9 +716,6 @@ export default function Dashboard() {
         </div>
       )}
 
-      {showConfirmation && parseResult && <ConfirmationModal result={parseResult} onConfirm={confirmImport} onCancel={() => { setShowConfirmation(false); setPendingData(null); setParseResult(null); setUploading(false) }} />}
-      {showError && parseResult && <ErrorModal error={parseResult.error} suggestions={parseResult.suggestions} issues={parseResult.issues} onClose={() => { setShowError(false); setParseResult(null); setUploading(false) }} />}
-
       {/* WHALE PROFILE MODAL */}
       {selectedWhale && (() => {
         const w = selectedWhale
@@ -890,7 +903,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* ── FLOATING FEEDBACK BUTTON ──────────────────────────────────────── */}
+      {/* FLOATING FEEDBACK BUTTON */}
       <button
         onClick={() => { setShowFeedback(true); setFeedbackSent(false); setFeedbackText('') }}
         style={{
@@ -900,8 +913,7 @@ export default function Dashboard() {
           background: "rgba(15,20,32,0.95)", backdropFilter: "blur(20px)",
           border: "1px solid rgba(255,255,255,0.12)",
           color: C.text, fontSize: 13, fontWeight: 600, cursor: "pointer",
-          boxShadow: "0 4px 24px rgba(0,0,0,0.5)",
-          transition: "all 0.2s"
+          boxShadow: "0 4px 24px rgba(0,0,0,0.5)", transition: "all 0.2s"
         }}
         onMouseEnter={e => { e.currentTarget.style.borderColor = "rgba(34,211,238,0.4)"; e.currentTarget.style.color = C.white }}
         onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.12)"; e.currentTarget.style.color = C.text }}
@@ -909,12 +921,10 @@ export default function Dashboard() {
         <span style={{ fontSize: 16 }}>💬</span> Feedback
       </button>
 
-      {/* ── FEEDBACK MODAL ────────────────────────────────────────────────── */}
+      {/* FEEDBACK MODAL */}
       {showFeedback && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "flex-end", justifyContent: "flex-start", zIndex: 1003, padding: 24, paddingBottom: 80 }}>
           <div style={{ width: 400, background: "rgba(15,20,32,0.98)", backdropFilter: "blur(24px)", borderRadius: 20, border: "1px solid rgba(255,255,255,0.1)", boxShadow: "0 0 60px rgba(59,130,246,0.15)", overflow: "hidden" }}>
-
-            {/* header */}
             <div style={{ padding: "18px 20px", borderBottom: "1px solid rgba(255,255,255,0.08)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div>
                 <div style={{ fontSize: 15, fontWeight: 800, color: C.white }}>Share Feedback 💬</div>
@@ -922,81 +932,37 @@ export default function Dashboard() {
               </div>
               <button onClick={() => setShowFeedback(false)} style={{ width: 28, height: 28, borderRadius: "50%", background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.1)", color: C.muted, fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
             </div>
-
             <div style={{ padding: 20 }}>
               {feedbackSent ? (
                 <div style={{ textAlign: "center", padding: "20px 0" }}>
                   <div style={{ fontSize: 40, marginBottom: 12 }}>🙏</div>
                   <div style={{ fontSize: 15, fontWeight: 700, color: C.white, marginBottom: 6 }}>Thank you!</div>
                   <div style={{ fontSize: 13, color: C.muted, marginBottom: 20 }}>Your feedback helps us build better features for you.</div>
-                  <button onClick={() => setShowFeedback(false)} style={{ padding: "9px 24px", borderRadius: 10, background: "linear-gradient(135deg, #22D3EE, #EC4899)", border: "none", color: C.white, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
-                    Close
-                  </button>
+                  <button onClick={() => setShowFeedback(false)} style={{ padding: "9px 24px", borderRadius: 10, background: "linear-gradient(135deg, #22D3EE, #EC4899)", border: "none", color: C.white, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Close</button>
                 </div>
               ) : (
                 <>
-                  {/* type toggle */}
                   <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-                    {[
-                      { id: 'feature', label: '✨ Feature Request', color: C.cyan },
-                      { id: 'bug', label: '🐛 Bug Report', color: C.red },
-                    ].map(({ id, label, color }) => (
-                      <button
-                        key={id}
-                        onClick={() => setFeedbackType(id)}
-                        style={{
-                          flex: 1, padding: "9px 12px", borderRadius: 10, fontSize: 12, fontWeight: 600,
-                          cursor: "pointer", transition: "all 0.15s",
-                          background: feedbackType === id ? `${color}20` : "rgba(255,255,255,0.04)",
-                          border: feedbackType === id ? `1px solid ${color}50` : "1px solid rgba(255,255,255,0.08)",
-                          color: feedbackType === id ? color : C.muted,
-                        }}>
-                        {label}
-                      </button>
+                    {[{ id: 'feature', label: '✨ Feature Request', color: C.cyan }, { id: 'bug', label: '🐛 Bug Report', color: C.red }].map(({ id, label, color }) => (
+                      <button key={id} onClick={() => setFeedbackType(id)} style={{ flex: 1, padding: "9px 12px", borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "all 0.15s", background: feedbackType === id ? `${color}20` : "rgba(255,255,255,0.04)", border: feedbackType === id ? `1px solid ${color}50` : "1px solid rgba(255,255,255,0.08)", color: feedbackType === id ? color : C.muted }}>{label}</button>
                     ))}
                   </div>
-
-                  {/* prompt text */}
                   <div style={{ fontSize: 12, color: C.muted, marginBottom: 8 }}>
-                    {feedbackType === 'feature'
-                      ? "What feature would make CamCash more useful for you?"
-                      : "What's broken or not working as expected?"}
+                    {feedbackType === 'feature' ? "What feature would make CamCash more useful for you?" : "What's broken or not working as expected?"}
                   </div>
-
-                  {/* textarea */}
                   <textarea
                     value={feedbackText}
                     onChange={e => setFeedbackText(e.target.value)}
-                    placeholder={feedbackType === 'feature'
-                      ? "e.g. I wish I could see my earnings by day of week..."
-                      : "e.g. When I upload a CSV from Chaturbate, it shows an error..."}
+                    placeholder={feedbackType === 'feature' ? "e.g. I wish I could see my earnings by day of week..." : "e.g. When I upload a CSV from Chaturbate, it shows an error..."}
                     rows={4}
-                    style={{
-                      width: "100%", padding: "12px 14px", borderRadius: 10,
-                      background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)",
-                      color: C.white, fontSize: 13, lineHeight: 1.6, resize: "none", outline: "none",
-                      fontFamily: "inherit", marginBottom: 14
-                    }}
+                    style={{ width: "100%", padding: "12px 14px", borderRadius: 10, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: C.white, fontSize: 13, lineHeight: 1.6, resize: "none", outline: "none", fontFamily: "inherit", marginBottom: 14 }}
                     onFocus={e => e.target.style.borderColor = "rgba(34,211,238,0.4)"}
                     onBlur={e => e.target.style.borderColor = "rgba(255,255,255,0.1)"}
                   />
-
                   <button
                     disabled={!feedbackText.trim()}
-                    onClick={() => {
-                      track('feedback_submitted', { type: feedbackType, length: feedbackText.length })
-                      setFeedbackSent(true)
-                    }}
-                    style={{
-                      width: "100%", padding: "12px", borderRadius: 10,
-                      background: feedbackText.trim()
-                        ? "linear-gradient(135deg, #22D3EE, #EC4899)"
-                        : "rgba(255,255,255,0.08)",
-                      border: "none", color: feedbackText.trim() ? C.white : C.muted,
-                      fontSize: 14, fontWeight: 700, cursor: feedbackText.trim() ? "pointer" : "not-allowed",
-                      boxShadow: feedbackText.trim() ? "0 0 20px rgba(34,211,238,0.3)" : "none",
-                      transition: "all 0.2s"
-                    }}>
+                    onClick={() => { track('feedback_submitted', { type: feedbackType, length: feedbackText.length }); setFeedbackSent(true) }}
+                    style={{ width: "100%", padding: "12px", borderRadius: 10, background: feedbackText.trim() ? "linear-gradient(135deg, #22D3EE, #EC4899)" : "rgba(255,255,255,0.08)", border: "none", color: feedbackText.trim() ? C.white : C.muted, fontSize: 14, fontWeight: 700, cursor: feedbackText.trim() ? "pointer" : "not-allowed", boxShadow: feedbackText.trim() ? "0 0 20px rgba(34,211,238,0.3)" : "none", transition: "all 0.2s" }}>
                     {feedbackType === 'feature' ? '✨ Submit Feature Request' : '🐛 Submit Bug Report'}
                   </button>
                 </>
@@ -1005,7 +971,6 @@ export default function Dashboard() {
           </div>
         </div>
       )}
-      {/* ──────────────────────────────────────────────────────────────────── */}
 
       {toast && (
         <div style={{ position: "fixed", bottom: 24, right: 24, background: "rgba(15,20,32,0.95)", backdropFilter: "blur(20px)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 12, padding: "14px 20px", color: C.white, fontSize: 14, zIndex: 9999, boxShadow: "0 8px 32px rgba(0,0,0,0.8)" }}>
