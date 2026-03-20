@@ -14,6 +14,14 @@ const TIER_COLORS = {
   "Whale": C.gold, "Shark": C.blue, "Regular": C.cyan, "Dormant": C.orange
 }
 
+const formatHour = (hour) => {
+  const h = parseInt(hour)
+  if (h === 0) return "12 AM"
+  if (h < 12) return `${h} AM`
+  if (h === 12) return "12 PM"
+  return `${h - 12} PM`
+}
+
 export default function Dashboard() {
   const router = useRouter()
   const [user, setUser] = useState(null)
@@ -205,7 +213,7 @@ export default function Dashboard() {
         </div>
 
         <nav style={{ flex: 1, padding: "16px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
-          {[["overview", "📊", "Overview"], ["platforms", "🎯", "Platforms"], ["whales", "🐳", "Top Fans"], ["sessions", "🎥", "Sessions"], ["data", "📝", "Edit Data"], ["upload", "📥", "Import"]].map(([id, icon, label]) => (
+          {[["overview", "📊", "Overview"], ["platforms", "🎯", "Platforms"], ["whales", "🐳", "Top Fans"], ["sessions", "🎥", "Sessions"], ["data", "📝", "Edit Data"], ["help", "❓", "CSV Help"], ["upload", "📥", "Import"]].map(([id, icon, label]) => (
             <button key={id} onClick={() => setActiveTab(id)} style={{
               display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 10,
               background: activeTab === id ? `${C.cyan}15` : "transparent",
@@ -355,7 +363,7 @@ export default function Dashboard() {
                   {bestHour && bestDay && (
                     <div style={{ padding: 16, background: C.card2, borderRadius: 10 }}>
                       <div style={{ fontSize: 14, color: C.white, marginBottom: 4 }}>
-                        🕐 Best Hour: {bestHour[0]}:00 - ${bestHour[1].toFixed(2)} total
+                        🕐 Best Hour: {formatHour(bestHour[0])} - ${bestHour[1].toFixed(2)} total
                       </div>
                       <div style={{ fontSize: 14, color: C.white }}>📅 Best Day: {bestDay[0]} - ${bestDay[1].toFixed(2)} total</div>
                     </div>
@@ -511,6 +519,126 @@ export default function Dashboard() {
                   <button style={{ padding: "10px 24px", borderRadius: 8, background: `linear-gradient(135deg, ${C.cyan}, ${C.pink})`, border: "none", color: C.white, fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Go Pro</button>
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* CSV HELP TAB */}
+        {activeTab === "help" && (
+          <div style={{ maxWidth: 900 }}>
+            <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 8 }}>❓ CSV Export Guide</h1>
+            <p style={{ fontSize: 14, color: C.muted, marginBottom: 32 }}>Learn how to export your tip data from each cam site</p>
+
+            {/* CHATURBATE */}
+            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 24, marginBottom: 20 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+                <div style={{ fontSize: 32 }}>🟣</div>
+                <h2 style={{ fontSize: 22, fontWeight: 700, color: C.white }}>Chaturbate</h2>
+              </div>
+              
+              <div style={{ fontSize: 14, color: C.text, lineHeight: 1.6 }}>
+                <p style={{ marginBottom: 12 }}><strong style={{ color: C.white }}>Step 1:</strong> Log into your Chaturbate broadcaster account</p>
+                <p style={{ marginBottom: 12 }}><strong style={{ color: C.white }}>Step 2:</strong> Go to <span style={{ color: C.cyan }}>Stats & Data → Token Stats</span></p>
+                <p style={{ marginBottom: 12 }}><strong style={{ color: C.white }}>Step 3:</strong> Select your date range (last 30 days, 90 days, or custom)</p>
+                <p style={{ marginBottom: 12 }}><strong style={{ color: C.white }}>Step 4:</strong> Click <span style={{ color: C.cyan }}>"Download CSV"</span> or <span style={{ color: C.cyan }}>"Export"</span></p>
+                <p style={{ marginBottom: 16 }}><strong style={{ color: C.white }}>Step 5:</strong> Upload the CSV file to CamCash</p>
+                
+                <div style={{ padding: 16, background: C.card2, borderRadius: 10, marginTop: 16 }}>
+                  <div style={{ fontSize: 13, color: C.muted, marginBottom: 8 }}>✅ What we need from the CSV:</div>
+                  <div style={{ fontSize: 13, color: C.text }}>• Date/Time of tip</div>
+                  <div style={{ fontSize: 13, color: C.text }}>• Username (tipper)</div>
+                  <div style={{ fontSize: 13, color: C.text }}>• Token amount</div>
+                  <div style={{ fontSize: 13, color: C.text, marginTop: 8 }}>💡 Chaturbate CSVs usually have "Tip from:" format</div>
+                </div>
+              </div>
+            </div>
+
+            {/* BONGACAMS */}
+            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 24, marginBottom: 20 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+                <div style={{ fontSize: 32 }}>🔴</div>
+                <h2 style={{ fontSize: 22, fontWeight: 700, color: C.white }}>BongaCams</h2>
+              </div>
+              
+              <div style={{ fontSize: 14, color: C.text, lineHeight: 1.6 }}>
+                <p style={{ marginBottom: 12 }}><strong style={{ color: C.white }}>Step 1:</strong> Log into your BongaCams model account</p>
+                <p style={{ marginBottom: 12 }}><strong style={{ color: C.white }}>Step 2:</strong> Navigate to <span style={{ color: C.cyan }}>Statistics → Earnings History</span></p>
+                <p style={{ marginBottom: 12 }}><strong style={{ color: C.white }}>Step 3:</strong> Select date range and filter by "Tips" or "All Transactions"</p>
+                <p style={{ marginBottom: 12 }}><strong style={{ color: C.white }}>Step 4:</strong> Look for <span style={{ color: C.cyan }}>"Export to Excel"</span> or <span style={{ color: C.cyan }}>"Download CSV"</span> button</p>
+                <p style={{ marginBottom: 12 }}><strong style={{ color: C.white }}>Step 5:</strong> Save the file and upload to CamCash</p>
+                
+                <div style={{ padding: 16, background: C.card2, borderRadius: 10, marginTop: 16 }}>
+                  <div style={{ fontSize: 13, color: C.muted, marginBottom: 8 }}>✅ Required columns:</div>
+                  <div style={{ fontSize: 13, color: C.text }}>• Date (format: DD.MM.YYYY)</div>
+                  <div style={{ fontSize: 13, color: C.text }}>• Username/Nickname</div>
+                  <div style={{ fontSize: 13, color: C.text }}>• Amount (tokens or USD)</div>
+                  <div style={{ fontSize: 13, color: C.text }}>• Transaction type (tip/private/etc)</div>
+                  <div style={{ fontSize: 13, color: C.text, marginTop: 8 }}>💡 BongaCams format: Date, Username, Type, Tokens, USD</div>
+                </div>
+              </div>
+            </div>
+
+            {/* MYFREECAMS */}
+            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 24, marginBottom: 20 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+                <div style={{ fontSize: 32 }}>🟠</div>
+                <h2 style={{ fontSize: 22, fontWeight: 700, color: C.white }}>MyFreeCams (MFC)</h2>
+              </div>
+              
+              <div style={{ fontSize: 14, color: C.text, lineHeight: 1.6 }}>
+                <p style={{ marginBottom: 12 }}><strong style={{ color: C.white }}>Step 1:</strong> Log into your MFC model account at wiki.myfreecams.com</p>
+                <p style={{ marginBottom: 12 }}><strong style={{ color: C.white }}>Step 2:</strong> Go to <span style={{ color: C.cyan }}>Model Admin → Token Stats</span></p>
+                <p style={{ marginBottom: 12 }}><strong style={{ color: C.white }}>Step 3:</strong> Click on <span style={{ color: C.cyan }}>"Transaction History"</span> or <span style={{ color: C.cyan }}>"Detailed Stats"</span></p>
+                <p style={{ marginBottom: 12 }}><strong style={{ color: C.white }}>Step 4:</strong> Select date range and click <span style={{ color: C.cyan }}>"Export CSV"</span></p>
+                <p style={{ marginBottom: 16 }}><strong style={{ color: C.white }}>Step 5:</strong> Upload the exported file to CamCash</p>
+                
+                <div style={{ padding: 16, background: C.card2, borderRadius: 10, marginTop: 16 }}>
+                  <div style={{ fontSize: 13, color: C.muted, marginBottom: 8 }}>✅ CSV should include:</div>
+                  <div style={{ fontSize: 13, color: C.text }}>• Timestamp/Date</div>
+                  <div style={{ fontSize: 13, color: C.text }}>• Member username</div>
+                  <div style={{ fontSize: 13, color: C.text }}>• Token amount</div>
+                  <div style={{ fontSize: 13, color: C.text }}>• Tip type (public tip, group show, private, etc)</div>
+                  <div style={{ fontSize: 13, color: C.text, marginTop: 8 }}>💡 MFC CSVs usually very detailed with all transaction types</div>
+                </div>
+              </div>
+            </div>
+
+            {/* CAMSODA */}
+            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 24, marginBottom: 20 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+                <div style={{ fontSize: 32 }}>🟢</div>
+                <h2 style={{ fontSize: 22, fontWeight: 700, color: C.white }}>CamSoda</h2>
+              </div>
+              
+              <div style={{ fontSize: 14, color: C.text, lineHeight: 1.6 }}>
+                <p style={{ marginBottom: 12 }}><strong style={{ color: C.white }}>Step 1:</strong> Log into your CamSoda broadcaster dashboard</p>
+                <p style={{ marginBottom: 12 }}><strong style={{ color: C.white }}>Step 2:</strong> Navigate to <span style={{ color: C.cyan }}>Earnings → Transaction History</span></p>
+                <p style={{ marginBottom: 12 }}><strong style={{ color: C.white }}>Step 3:</strong> Choose your date range (last week, month, or custom dates)</p>
+                <p style={{ marginBottom: 12 }}><strong style={{ color: C.white }}>Step 4:</strong> Click <span style={{ color: C.cyan }}>"Download"</span> or <span style={{ color: C.cyan }}>"Export to CSV"</span></p>
+                <p style={{ marginBottom: 16 }}><strong style={{ color: C.white }}>Step 5:</strong> Save and upload to CamCash</p>
+                
+                <div style={{ padding: 16, background: C.card2, borderRadius: 10, marginTop: 16 }}>
+                  <div style={{ fontSize: 13, color: C.muted, marginBottom: 8 }}>✅ Required data:</div>
+                  <div style={{ fontSize: 13, color: C.text }}>• Date and time of transaction</div>
+                  <div style={{ fontSize: 13, color: C.text }}>• Username/Member name</div>
+                  <div style={{ fontSize: 13, color: C.text }}>• Token amount</div>
+                  <div style={{ fontSize: 13, color: C.text }}>• Earnings in USD (optional)</div>
+                  <div style={{ fontSize: 13, color: C.text, marginTop: 8 }}>💡 CamSoda exports include both tokens and USD amounts</div>
+                </div>
+              </div>
+            </div>
+
+            {/* GENERAL TIPS */}
+            <div style={{ background: `linear-gradient(135deg, ${C.indigo}15, ${C.pink}15)`, border: `1px solid ${C.pink}30`, borderRadius: 14, padding: 24 }}>
+              <h2 style={{ fontSize: 20, fontWeight: 700, color: C.white, marginBottom: 16 }}>💡 General Tips</h2>
+              <div style={{ fontSize: 14, color: C.text, lineHeight: 1.6 }}>
+                <p style={{ marginBottom: 12 }}>✅ <strong style={{ color: C.white }}>Export regularly:</strong> Download your data weekly or monthly</p>
+                <p style={{ marginBottom: 12 }}>✅ <strong style={{ color: C.white }}>Don't edit CSVs:</strong> Upload the original file - we handle the formatting</p>
+                <p style={{ marginBottom: 12 }}>✅ <strong style={{ color: C.white }}>Multiple platforms:</strong> You can upload CSVs from different sites - we'll combine them</p>
+                <p style={{ marginBottom: 12 }}>✅ <strong style={{ color: C.white }}>Duplicates removed:</strong> Don't worry about re-uploading the same data</p>
+                <p style={{ marginBottom: 12 }}>✅ <strong style={{ color: C.white }}>File size:</strong> Most CSVs are under 5MB and upload instantly</p>
+                <p>⚠️ <strong style={{ color: C.white }}>Privacy:</strong> Your data is encrypted and never shared</p>
+              </div>
             </div>
           </div>
         )}
