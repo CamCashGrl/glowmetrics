@@ -19,6 +19,7 @@ export default function Dashboard() {
   const [user, setUser] = useState(null)
   const [tips, setTips] = useState([])
   const [analytics, setAnalytics] = useState(null)
+  const [liveAnalytics, setLiveAnalytics] = useState(null)
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [activeTab, setActiveTab] = useState("overview")
@@ -36,6 +37,17 @@ export default function Dashboard() {
       loadData(user.id)
     })
   }, [])
+
+  useEffect(() => {
+    if (!tips.length) return
+
+    const interval = setInterval(() => {
+      const updated = aggregateRows(tips)
+      setLiveAnalytics(updated)
+    }, 5000) // every 5 seconds
+
+    return () => clearInterval(interval)
+  }, [tips])
 
   const loadData = async (uid) => {
     setLoading(true)
@@ -97,7 +109,7 @@ export default function Dashboard() {
   const whales = analytics?.whales || []
   const insights = analytics?.insights || []
   const platforms = analytics?.platforms || []
-  const alerts = analytics?.whaleAlerts || []
+  const alerts = liveAnalytics?.whaleAlerts || analytics?.whaleAlerts || []
   
   const totalRevenue = analytics?.totalUSD || 0
   const avgPerHour = sessions.reduce((sum, s) => sum + s.usdPerHour, 0) / (sessions.length || 1)
@@ -255,54 +267,6 @@ export default function Dashboard() {
                   </div>
                 </div>
               ))}
-            </div>
-
-            {/* 🐳 WHALE INTELLIGENCE */}
-            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 24, marginBottom: 32 }}>
-              <h2 style={{ fontSize: 18, fontWeight: 700, color: C.white, marginBottom: 16 }}>
-                🐳 Whale Intelligence
-              </h2>
-              {whales.slice(0, 5).map((w, i) => (
-                <div key={i} style={{
-                  padding: 14,
-                  borderRadius: 10,
-                  marginBottom: 10,
-                  background: C.card2,
-                  border: `1px solid ${C.border}`
-                }}>
-                  <div style={{ display: "flex", justifyContent: "space-between" }}>
-                    <div style={{ fontSize: 14, color: C.white, fontWeight: 600 }}>
-                      {w.username}
-                    </div>
-                    <div style={{
-                      fontSize: 12,
-                      color:
-                        w.tipProbability?.level === "High" ? C.green :
-                        w.tipProbability?.level?.includes("Medium") ? C.cyan :
-                        C.muted
-                    }}>
-                      {w.tipProbability?.percentage || 0}% likely
-                    </div>
-                  </div>
-                  <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>
-                    ⏰ {w.typicalOnlineHours || "Unknown"}
-                  </div>
-                  <div style={{ fontSize: 12, marginTop: 6 }}>
-                    {w.churnRisk?.level === "High" || w.churnRisk?.level === "Critical" ? (
-                      <span style={{ color: C.red }}>⚠️ At risk — re-engage</span>
-                    ) : (
-                      <span style={{ color: C.green }}>
-                        💰 {w.expectedNextTip || "Active"}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              ))}
-              {whales.length === 0 && (
-                <div style={{ fontSize: 13, color: C.muted }}>
-                  No whale data yet
-                </div>
-              )}
             </div>
           </div>
         )}
