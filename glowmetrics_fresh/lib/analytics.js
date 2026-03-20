@@ -34,20 +34,7 @@ export function parseCSV(text, platform = null) {
     }
   }
 
-  // FIX 1: Skip leading junk/blank rows to find real headers
-  // e.g. Chaturbate exports have ",,,\n" as first row before real headers
-  let headerLineIndex = 0
-  for (let i = 0; i < Math.min(5, lines.length); i++) {
-    const cols = parseCSVLine(lines[i])
-    const nonEmpty = cols.filter(c => c.trim().length > 0)
-    if (nonEmpty.length >= 2) {
-      headerLineIndex = i
-      break
-    }
-  }
-  const effectiveLines = lines.slice(headerLineIndex)
-
-  const headerValidation = validateHeaders(effectiveLines[0])
+  const headerValidation = validateHeaders(lines[0])
   
   if (!headerValidation.valid) {
     return {
@@ -63,9 +50,9 @@ export function parseCSV(text, platform = null) {
   let parseResult
   
   if (hasHeaders) {
-    parseResult = parseWithHeaders(effectiveLines, detectedPlatform, headerValidation.normalizedHeaders)
+    parseResult = parseWithHeaders(lines, detectedPlatform, headerValidation.normalizedHeaders)
   } else {
-    parseResult = parseHeaderless(effectiveLines, detectedPlatform)
+    parseResult = parseHeaderless(lines, detectedPlatform)
   }
 
   const validation = strictValidate(parseResult.data, detectedPlatform)
@@ -118,8 +105,8 @@ function cleanCSVText(text) {
 function detectPlatform(text) {
   const lower = text.toLowerCase()
   const markers = {
-    'Chaturbate': ['chaturbate', 'tip from:', 'tokens received', 'token balance'],
-    'BongaCams': ['bongacams', 'bonga', 'credits earned', 'your payout', 'tokens earned'],
+    'Chaturbate': ['chaturbate', 'tip from:', 'tokens received'],
+    'BongaCams': ['bongacams', 'bonga', 'credits earned'],
     'MyFreeCams': ['myfreecams', 'mfc', 'tokens earned'],
     'Stripchat': ['stripchat'],
     'CamSoda': ['camsoda']
@@ -137,15 +124,10 @@ function validateHeaders(firstLine) {
   const lower = firstLine.toLowerCase()
   const cols = parseCSVLine(firstLine)
   
-  // Special case: headerless Chaturbate data (second col contains "tip from:")
-  if (cols.length >= 2 && cols[1].toLowerCase().includes('tip from')) {
-    return { valid: true, hasHeaders: false, normalizedHeaders: [] }
-  }
-  
   const required = {
     date: ['date', 'time', 'datetime', 'timestamp', 'date_time'],
-    username: ['username', 'user', 'tipper', 'from', 'sender', 'nickname', 'member'],
-    amount: ['token', 'tokens', 'credits', 'amount', 'usd', 'earnings', 'dollars', 'payout']
+    username: ['username', 'user', 'tipper', 'from', 'sender', 'nickname'],
+    amount: ['tokens', 'credits', 'amount', 'usd', 'earnings', 'dollars']
   }
   
   const found = { date: false, username: false, amount: false }
@@ -164,7 +146,7 @@ function validateHeaders(firstLine) {
         reason: 'Platform/site column detected but not named "platform"'
       })
     }
-    if (colLower === 'name') {
+    if (colLower === 'name' || colLower === 'member') {
       suggestions.push({
         found: col,
         suggest: 'username',
@@ -176,7 +158,6 @@ function validateHeaders(firstLine) {
   const hasHeaderKeywords = required.date.concat(required.username, required.amount)
     .some(keyword => lower.includes(keyword))
   
-  // If looks like data (has date pattern), not headers
   if (!hasHeaderKeywords && /\d{1,2}[\/\-\.]\d{1,2}/.test(firstLine)) {
     return { valid: true, hasHeaders: false, normalizedHeaders: [] }
   }
@@ -192,7 +173,7 @@ function validateHeaders(firstLine) {
       error: {
         type: 'missing_columns',
         message: `❌ Missing required column${missing.length > 1 ? 's' : ''}: ${missing.join(', ')}`,
-        fix: `Your CSV must have these columns:\n• Date or DateTime\n• Username, User, or Member\n• Tokens, USD amount, or Payout`
+        fix: `Your CSV must have these columns:\n• Date or DateTime\n• Username or User\n• Tokens or USD amount`
       },
       suggestions,
       hasHeaders: true
@@ -208,9 +189,9 @@ function normalizeHeaders(headers) {
     const clean = h.toLowerCase().trim().replace(/[^a-z0-9_]/g, '_')
     const mappings = {
       'date_time': ['datetime', 'timestamp', 'date', 'time'],
-      'username': ['username', 'user', 'tipper', 'from', 'sender', 'member', 'nickname'],
-      'tokens': ['tokens_earned', 'tokens', 'token_change', 'token', 'credits', 'amount', 'quantity'],
-      'usd': ['your_payout', 'usd', 'usd_amount', 'amount_usd', 'dollars', 'earnings', 'revenue', 'payout'],
+      'username': ['username', 'user', 'tipper', 'from', 'sender'],
+      'tokens': ['tokens', 'token_change', 'token', 'credits', 'amount', 'quantity'],
+      'usd': ['usd', 'usd_amount', 'dollars', 'earnings', 'revenue'],
       'tip_type': ['type', 'transaction_type', 'category'],
       'platform': ['platform', 'site', 'source']
     }
@@ -225,35 +206,16 @@ function normalizeHeaders(headers) {
 function parseWithHeaders(lines, platform, normalizedHeaders) {
   const data = []
   for (let i = 1; i < lines.length; i++) {
-    const line = lines[i].trim()
-    if (!line) continue  // FIX 2: skip blank rows inside data (BongaCams has blank row after headers)
-
-    const vals = parseCSVLine(line)
+    const vals = parseCSVLine(lines[i])
     const row = {}
     normalizedHeaders.forEach((h, idx) => {
       row[h] = vals[idx] || ''
     })
     
-    // Skip non-tip transactions (cashouts, transfers)
+    // Skip non-tip transactions (like "Tokens cashed out")
     const transactionType = (row.tip_type || row.transaction_type || '').toLowerCase()
-    const action = (row.action || '').toLowerCase()
-    if (
-      transactionType.includes('cashed') || 
-      transactionType.includes('cash out') ||
-      action.includes('transfer') ||
-      action.includes('cash')
-    ) {
+    if (transactionType.includes('cashed') || transactionType.includes('cash out')) {
       continue
-    }
-
-    // FIX 3: Handle Chaturbate "Action" column — extract username from "Tip From: username message"
-    if (!row.username && row.action) {
-      const match = row.action.match(/tip from[:\s]*(\S+)/i)
-      if (match) {
-        row.username = match[1]
-      } else {
-        continue  // Not a tip row, skip
-      }
     }
     
     const parsed = extractTipData(row, platform)
@@ -265,11 +227,10 @@ function parseWithHeaders(lines, platform, normalizedHeaders) {
 function parseHeaderless(lines, platform) {
   const data = []
   for (const line of lines) {
-    if (!line.trim()) continue
     const vals = parseCSVLine(line)
     let parsed = null
     
-    // Chaturbate "Tip From:" format
+    // Chaturbate "Tip From:" format (with space and colon)
     if (vals.length >= 3 && vals[1]?.toLowerCase().includes('tip from')) {
       parsed = parseChaturbateTipFrom(vals)
     } 
@@ -285,14 +246,8 @@ function parseHeaderless(lines, platform) {
 
 function extractTipData(row, platform) {
   const username = row.username || row.user || row.tipper
-  let tokens = parseInt(row.tokens || row.credits || '0') || 0
-  
-  // FIX 4: Strip $ sign from USD/payout values before parsing
-  const rawUsd = (row.usd || row.usd_amount || row.earnings || row.your_payout || '0')
-    .toString()
-    .replace(/[$,\s]/g, '')
-  let usd = parseFloat(rawUsd) || 0
-
+  let tokens = parseInt(row.tokens || row.credits || 0)
+  let usd = parseFloat(row.usd || row.earnings || 0)
   const dateRaw = row.date_time || row.date || row.timestamp
   
   // Skip negative tokens (cashouts)
@@ -301,7 +256,7 @@ function extractTipData(row, platform) {
   
   if (!username || !dateRaw) return null
   
-  // Must have EITHER tokens OR USD
+  // Must have EITHER tokens OR USD (at least one must be > 0)
   if (tokens <= 0 && usd <= 0) return null
   
   return {
@@ -317,16 +272,9 @@ function extractTipData(row, platform) {
 
 function parseChaturbateTipFrom(vals) {
   const dateRaw = vals[0].replace(/"/g, '')
-  // FIX: Use \S+ (non-whitespace) instead of [^\s,]+ to correctly grab username
-  // even when the message is jammed directly onto the username with no space
-  const match = vals[1].match(/tip from[:\s]*(\S+)/i)
+  const match = vals[1].match(/tip from[:\s]+([^\s,]+)/i)
   const username = match ? match[1] : null
   const tokens = parseInt(vals[2]) || 0
-
-  // Skip cashout/transfer rows
-  if (vals[1].toLowerCase().includes('transfer') || vals[1].toLowerCase().includes('cash')) {
-    return null
-  }
   
   if (!username || tokens <= 0) return null
   
@@ -345,8 +293,7 @@ function parseStandardFormat(vals, platform) {
   const dateRaw = vals[0]
   const username = vals[1]
   const tokens = parseInt(vals[2]) || 0
-  // Strip $ from usd value
-  const usd = parseFloat((vals[3] || '').toString().replace(/[$,\s]/g, '')) || 0
+  const usd = parseFloat(vals[3]?.replace('$', '')) || 0
   
   if (!username || (tokens <= 0 && usd <= 0)) return null
   
@@ -384,6 +331,7 @@ function strictValidate(data, platform) {
       rowIssues.push(`Invalid date: "${item.dateRaw}"`)
     } else {
       const tipDate = new Date(item.dateRaw)
+      // Allow future dates up to 1 year from now (for test data)
       const oneYearFromNow = new Date()
       oneYearFromNow.setFullYear(oneYearFromNow.getFullYear() + 1)
       
@@ -402,9 +350,11 @@ function strictValidate(data, platform) {
     const hasTokens = item.tokens && item.tokens > 0
     const hasUSD = item.usd && item.usd > 0
     
+    // Must have EITHER tokens OR USD
     if (!hasTokens && !hasUSD) {
       rowIssues.push("No valid tip amount (tokens and USD both zero/missing)")
     } else {
+      // Only validate if the value exists
       if (hasTokens && (item.tokens < 0 || item.tokens > 1000000)) {
         rowIssues.push(`Unrealistic tokens: ${item.tokens}`)
       }
@@ -412,12 +362,11 @@ function strictValidate(data, platform) {
         rowIssues.push(`Unrealistic USD: $${item.usd}`)
       }
       
-      // Check ratio only if both exist
+      // Check token/USD ratio only if BOTH exist
       if (hasTokens && hasUSD && item.tokens > 0 && item.usd > 0) {
         const ratio = item.usd / item.tokens
         if (ratio < 0.01 || ratio > 0.15) {
-          // Don't reject — BongaCams uses different token values, just skip ratio check
-          // rowIssues.push(`Suspicious token/USD ratio`)
+          rowIssues.push(`Suspicious token/USD ratio: ${ratio.toFixed(4)} (expected ~0.05)`)
         }
       }
     }
@@ -436,7 +385,7 @@ function strictValidate(data, platform) {
       error: {
         type: 'too_many_errors',
         message: `❌ ${issues.length} of ${data.length} rows have errors (${(errorRate * 100).toFixed(0)}%)`,
-        fix: "Please check your CSV file format. Too many rows have problems to safely import."
+        fix: "Please fix your CSV file. Too many rows have problems to safely import."
       },
       issues: issues.slice(0, 10)
     }
@@ -475,8 +424,8 @@ function buildConfirmationData(data, platform) {
     totalTips: data.length,
     totalRevenue: totalRevenue.toFixed(2),
     dateRange: {
-      earliest: dates[0]?.toLocaleDateString() || '?',
-      latest: dates[dates.length - 1]?.toLocaleDateString() || '?'
+      earliest: dates[0].toLocaleDateString(),
+      latest: dates[dates.length - 1].toLocaleDateString()
     },
     topTipper: topTipper ? {
       username: topTipper[0],
@@ -509,36 +458,16 @@ function parseCSVLine(line) {
 
 function isDate(str) {
   return /^\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}/.test(str) ||
-         /^\d{4}[\/\-\.]\d{1,2}[\/\-\.]\d{1,2}/.test(str) ||
-         /^\d{2}\.\d{2}\.\d{4}/.test(str)
+         /^\d{4}[\/\-\.]\d{1,2}[\/\-\.]\d{1,2}/.test(str)
 }
 
 function isValidDate(dateStr) {
-  if (!dateStr) return false
-  
-  let date = new Date(dateStr)
-  
-  // Try European format DD.MM.YYYY HH:MM
-  if (isNaN(date.getTime()) && /^\d{2}\.\d{2}\.\d{4}/.test(dateStr)) {
-    const parts = dateStr.split(/[\s\.]+/)
-    const day = parts[0]
-    const month = parts[1]
-    const year = parts[2]
-    const time = parts[3] || ''
-    const converted = `${month}/${day}/${year} ${time}`.trim()
-    date = new Date(converted)
-  }
-
-  // Try "Mar 19, 2026, 4:54 AM" format (Chaturbate)
-  if (isNaN(date.getTime())) {
-    date = new Date(dateStr.replace(/,(\s*\d{1,2}:\d{2}\s*[AP]M)/, ' $1'))
-  }
-  
+  const date = new Date(dateStr)
   return date instanceof Date && !isNaN(date.getTime()) && date.getFullYear() > 2000
 }
 
 // ============================================
-// END OF PARSER CODE
+// END OF NEW PARSER CODE
 // ============================================
 
 export function detectSessions(tips) {
@@ -631,6 +560,7 @@ export function identifyWhales(tips) {
     const lifetimeDays = Math.max(Math.floor((lastTipDate - firstTipDate) / (1000 * 60 * 60 * 24)), 1)
     const avgDaysBetweenTips = f.tipCount > 1 ? lifetimeDays / (f.tipCount - 1) : 30
 
+    // Detect privates (tips with "private" keyword)
     const privateTips = f.tips.filter(t => 
       t.tip_type?.toLowerCase().includes('private') || 
       t.tip_note?.toLowerCase().includes('private')
@@ -639,6 +569,7 @@ export function identifyWhales(tips) {
     const privateCount = privateTips.length
     const privateSpent = privateTips.reduce((sum, t) => sum + t.usd, 0)
 
+    // Activity hours analysis
     const hourCounts = {}
     f.tips.forEach(t => {
       const hour = new Date(t.dateRaw || t.date_time).getHours()
@@ -647,6 +578,7 @@ export function identifyWhales(tips) {
     const mostActiveHour = Object.entries(hourCounts).sort((a, b) => b[1] - a[1])[0]
     const typicalOnlineHours = mostActiveHour ? `${mostActiveHour[0]}:00 - ${parseInt(mostActiveHour[0]) + 2}:00` : 'Unknown'
 
+    // Biggest single tip
     const biggestTip = Math.max(...f.tips.map(t => t.usd))
 
     let tier = 'Regular'
