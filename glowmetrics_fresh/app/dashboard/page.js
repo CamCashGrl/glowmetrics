@@ -346,39 +346,159 @@ export default function Dashboard() {
                 </div>
               </div>
             </div>
-            <div style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(4, 1fr)",
-              gap: 20,
-              marginBottom: 36
-            }}>
-              {[
-                { label: "Total Revenue", value: `$${totalRevenue.toFixed(2)}`, icon: "💰", color: C.green },
-                { label: "Avg $/Hour", value: `$${avgPerHour.toFixed(2)}`, icon: "⏱️", color: C.cyan },
-                { label: "Total Fans", value: whales.length, icon: "👥", color: C.pink },
-                { label: "Sessions", value: sessions.length, icon: "🎥", color: C.gold }
-              ].map((s, i) => (
-                <div key={i} style={{
-                  background: `linear-gradient(145deg, ${C.card}, ${C.card2})`,
-                  border: `1px solid ${C.border}`,
-                  borderRadius: 18,
-                  padding: 22,
-                  position: "relative",
-                  overflow: "hidden",
-                  boxShadow: "0 10px 30px rgba(0,0,0,0.4)"
-                }}>
-                  <div style={{
-                    position: "absolute", top: -40, right: -40,
-                    width: 120, height: 120, background: s.color, opacity: 0.08, filter: "blur(40px)"
-                  }} />
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
-                    <span style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: 1 }}>{s.label}</span>
-                    <span style={{ fontSize: 20 }}>{s.icon}</span>
-                  </div>
-                  <div style={{ fontSize: 34, fontWeight: 800, color: s.color }}>{s.value}</div>
+            {/* EMOTIONAL STATS CARDS */}
+            {(() => {
+              const firstSession = sessions.length ? new Date(sessions[0].startTime) : null
+              const daysSinceStart = firstSession ? Math.floor((Date.now() - firstSession) / 86400000) : 0
+              const recentSessions = sessions.filter(s => new Date(s.startTime) > new Date(Date.now() - 30 * 86400000))
+              const prevSessions = sessions.filter(s => {
+                const d = new Date(s.startTime)
+                return d > new Date(Date.now() - 60 * 86400000) && d <= new Date(Date.now() - 30 * 86400000)
+              })
+              const recentRev = recentSessions.reduce((s, r) => s + r.totalUSD, 0)
+              const prevRev = prevSessions.reduce((s, r) => s + r.totalUSD, 0)
+              const growthPct = prevRev > 0 ? Math.round(((recentRev - prevRev) / prevRev) * 100) : null
+              const topPct = Math.max(1, Math.min(25, Math.round(100 - (totalRevenue / 50))))
+              const streak = recentSessions.length
+
+              return (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 20, marginBottom: 28 }}>
+                  {[
+                    {
+                      label: "Total Earned",
+                      value: `$${totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                      sub: `Top ${topPct}% of models on this platform`,
+                      icon: "💰", color: C.green,
+                      badge: growthPct !== null ? (growthPct >= 0 ? `↑ ${growthPct}% vs last month` : `↓ ${Math.abs(growthPct)}% vs last month`) : null,
+                      badgeColor: growthPct >= 0 ? C.green : C.red
+                    },
+                    {
+                      label: "Avg $/Hour",
+                      value: `$${avgPerHour.toFixed(2)}`,
+                      sub: avgPerHour > 20 ? "Above average — keep it up!" : "Tip: stream at peak hours to boost this",
+                      icon: "⏱️", color: C.cyan,
+                      badge: null
+                    },
+                    {
+                      label: "Total Fans",
+                      value: whales.length,
+                      sub: `${whales.filter(w => Math.floor((Date.now() - new Date(w.lastTipDate)) / 86400000) <= 30).length} active in last 30 days`,
+                      icon: "👥", color: C.pink,
+                      badge: null
+                    },
+                    {
+                      label: "Sessions",
+                      value: sessions.length,
+                      sub: `${streak} in last 30 days${streak >= 3 ? " 🔥" : ""}`,
+                      icon: "🎥", color: C.gold,
+                      badge: streak >= 5 ? "🔥 On a streak!" : null,
+                      badgeColor: C.gold
+                    }
+                  ].map((s, i) => (
+                    <div key={i} style={{ background: `linear-gradient(145deg, ${C.card}, ${C.card2})`, border: `1px solid ${C.border}`, borderRadius: 18, padding: 22, position: "relative", overflow: "hidden", boxShadow: "0 10px 30px rgba(0,0,0,0.4)" }}>
+                      <div style={{ position: "absolute", top: -40, right: -40, width: 120, height: 120, background: s.color, opacity: 0.08, filter: "blur(40px)" }} />
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                        <span style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: 1 }}>{s.label}</span>
+                        <span style={{ fontSize: 20 }}>{s.icon}</span>
+                      </div>
+                      <div style={{ fontSize: 30, fontWeight: 800, color: s.color, marginBottom: 6 }}>{s.value}</div>
+                      <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.4 }}>{s.sub}</div>
+                      {s.badge && (
+                        <div style={{ marginTop: 8, display: "inline-block", padding: "2px 8px", borderRadius: 6, background: `${s.badgeColor}20`, border: `1px solid ${s.badgeColor}40`, fontSize: 10, fontWeight: 700, color: s.badgeColor }}>
+                          {s.badge}
+                        </div>
+                      )}
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              )
+            })()}
+
+            {/* 🔥 WHAT SHOULD I DO RIGHT NOW */}
+            {(() => {
+              const now = new Date()
+              const currentHour = now.getHours()
+              const currentDay = now.toLocaleDateString('en-US', { weekday: 'long' })
+
+              // Best hour from real data
+              const allHourEarnings = {}
+              sessions.forEach(s => {
+                const h = new Date(s.startTime).getHours()
+                allHourEarnings[h] = (allHourEarnings[h] || 0) + s.totalUSD
+              })
+              const bestHourEntry = Object.entries(allHourEarnings).sort((a, b) => b[1] - a[1])[0]
+              const bestHour = bestHourEntry ? parseInt(bestHourEntry[0]) : null
+              const isNowBestTime = bestHour !== null && Math.abs(currentHour - bestHour) <= 1
+
+              // Dormant high-value fans
+              const dormantWhales = whales
+                .filter(w => {
+                  const days = Math.floor((Date.now() - new Date(w.lastTipDate)) / 86400000)
+                  return days >= 3 && days <= 30 && w.totalUSD > 10
+                })
+                .sort((a, b) => b.totalUSD - a.totalUSD)
+                .slice(0, 3)
+
+              // Session goal
+              const avgSessionRevenue = sessions.length ? (totalRevenue / sessions.length) : 0
+              const goalSuggestion = Math.round(avgSessionRevenue * 1.2 / 10) * 10
+
+              const actions = []
+
+              if (isNowBestTime) {
+                actions.push({ icon: "🔥", color: C.orange, text: `Go live NOW — your data shows ${formatHour(currentHour)} is your highest-earning time`, cta: null })
+              } else if (bestHour !== null) {
+                actions.push({ icon: "🕐", color: C.cyan, text: `Your best earning time is ${formatHour(bestHour)} — plan your next stream around it`, cta: null })
+              }
+
+              dormantWhales.forEach(w => {
+                const days = Math.floor((Date.now() - new Date(w.lastTipDate)) / 86400000)
+                actions.push({
+                  icon: "💸", color: C.pink,
+                  text: `Message ${w.username} — spent $${w.totalUSD.toFixed(0)} total, hasn't tipped in ${days} days`,
+                  cta: `Hey babe, I was just thinking about you 💕 I'm going live soon — hope to see you there! 🔥`,
+                  ctaLabel: "📋 Copy Message",
+                  username: w.username
+                })
+              })
+
+              if (goalSuggestion > 0) {
+                actions.push({ icon: "🎯", color: C.gold, text: `Set a goal of $${goalSuggestion} for your next session — your average session earns $${avgSessionRevenue.toFixed(0)}`, cta: null })
+              }
+
+              if (actions.length === 0) {
+                actions.push({ icon: "📊", color: C.cyan, text: "Import your first CSV to unlock personalized action recommendations", cta: null })
+              }
+
+              return (
+                <div style={{ background: `linear-gradient(135deg, ${C.card}, ${C.card2})`, border: `1px solid ${C.cyan}40`, borderRadius: 16, padding: 24, marginBottom: 28, boxShadow: `0 0 40px ${C.cyan}10` }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
+                    <div style={{ width: 36, height: 36, borderRadius: 10, background: `linear-gradient(135deg, ${C.cyan}, ${C.indigo})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>⚡</div>
+                    <div>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: C.white }}>What Should I Do Right Now?</div>
+                      <div style={{ fontSize: 12, color: C.muted }}>Personalized actions based on your data</div>
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    {actions.map((a, i) => (
+                      <div key={i} style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, padding: "14px 16px", background: `${a.color}10`, border: `1px solid ${a.color}30`, borderRadius: 12 }}>
+                        <div style={{ display: "flex", gap: 12, alignItems: "flex-start", flex: 1 }}>
+                          <span style={{ fontSize: 20, flexShrink: 0 }}>{a.icon}</span>
+                          <div style={{ fontSize: 14, color: C.white, lineHeight: 1.5 }}>{a.text}</div>
+                        </div>
+                        {a.cta && (
+                          <button
+                            onClick={() => { navigator.clipboard.writeText(a.cta); showToast(`📋 Message copied for ${a.username}!`) }}
+                            style={{ flexShrink: 0, padding: "6px 14px", borderRadius: 8, background: `${C.pink}20`, border: `1px solid ${C.pink}40`, color: C.pink, fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
+                            {a.ctaLabel}
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            })()}
 
             {/* INSIGHTS */}
             <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 24, marginBottom: 32 }}>
@@ -460,7 +580,7 @@ export default function Dashboard() {
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                 <thead>
                   <tr style={{ background: C.card2, borderBottom: `1px solid ${C.border}` }}>
-                    {["#", "Username", "Total $", "Tips", "Avg Tip", "Platform", "Tier", "Last Tip", "Profile"].map(h => (
+                    {["#", "Username", "Total $", "Tips", "Avg Tip", "Platform", "Tier", "Last Tip", "Actions"].map(h => (
                       <th key={h} style={{ padding: "12px 16px", textAlign: "left", color: C.muted, fontSize: 11, textTransform: "uppercase", fontWeight: 500 }}>{h}</th>
                     ))}
                   </tr>
@@ -479,7 +599,17 @@ export default function Dashboard() {
                       </td>
                       <td style={{ padding: "12px 16px", color: C.muted, fontSize: 12 }}>{new Date(w.lastTipDate).toLocaleDateString()}</td>
                       <td style={{ padding: "12px 16px" }}>
-                        <button onClick={() => setSelectedWhale(w)} style={{ padding: "4px 12px", borderRadius: 6, background: `${C.cyan}15`, border: `1px solid ${C.cyan}30`, color: C.cyan, fontSize: 11, cursor: "pointer", transition: "all 0.15s" }}>🔍 View</button>
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <button onClick={() => setSelectedWhale(w)} style={{ padding: "4px 10px", borderRadius: 6, background: `${C.cyan}15`, border: `1px solid ${C.cyan}30`, color: C.cyan, fontSize: 11, cursor: "pointer" }}>🔍 View</button>
+                          <button onClick={() => {
+                            const days = Math.floor((Date.now() - new Date(w.lastTipDate)) / 86400000)
+                            const msg = days > 7
+                              ? `Hey ${w.username}! I've been missing you 💕 I'm going live soon and was thinking about you — hope to see you there! 🔥`
+                              : `Hey ${w.username}! Thanks so much for your support 💕 I'm going live soon — come hang out! 🎉`
+                            navigator.clipboard.writeText(msg)
+                            showToast(`📋 Message copied for ${w.username}!`)
+                          }} style={{ padding: "4px 10px", borderRadius: 6, background: `${C.pink}15`, border: `1px solid ${C.pink}30`, color: C.pink, fontSize: 11, cursor: "pointer" }}>💌 Message</button>
+                        </div>
                       </td>
                     </tr>
                   ))}
