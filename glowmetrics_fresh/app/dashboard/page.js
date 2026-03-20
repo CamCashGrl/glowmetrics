@@ -354,8 +354,10 @@ export default function Dashboard() {
                   </div>
                   {bestHour && bestDay && (
                     <div style={{ padding: 16, background: C.card2, borderRadius: 10 }}>
-                      <div style={{ fontSize: 14, color: C.white, marginBottom: 4 }}>🕐 Best Hour: {bestHour[0]}:00 - ${(bestHour[1] / (platformTimes[p.platform].hours[bestHour[0]] || 1)).toFixed(2)}/hr</div>
-                      <div style={{ fontSize: 14, color: C.white }}>📅 Best Day: {bestDay[0]}</div>
+                      <div style={{ fontSize: 14, color: C.white, marginBottom: 4 }}>
+                        🕐 Best Hour: {bestHour[0]}:00 - ${bestHour[1].toFixed(2)} total
+                      </div>
+                      <div style={{ fontSize: 14, color: C.white }}>📅 Best Day: {bestDay[0]} - ${bestDay[1].toFixed(2)} total</div>
                     </div>
                   )}
                 </div>
