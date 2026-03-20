@@ -98,7 +98,7 @@ export default function Dashboard() {
   const insights = analytics?.insights || []
   const platforms = analytics?.platforms || []
   const alerts = analytics?.whaleAlerts || []
-
+  
   const totalRevenue = analytics?.totalUSD || 0
   const avgPerHour = sessions.reduce((sum, s) => sum + s.usdPerHour, 0) / (sessions.length || 1)
 
@@ -216,6 +216,45 @@ export default function Dashboard() {
                 <div style={{ fontSize: 14, color: C.white, marginBottom: 8 }}>🔒 Unlock 10+ more AI-powered insights</div>
                 <button style={{ padding: "8px 20px", borderRadius: 8, background: `linear-gradient(135deg, ${C.cyan}, ${C.pink})`, border: "none", color: C.white, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Upgrade to Pro</button>
               </div>
+            </div>
+
+            {/* 🚨 AI ALERTS */}
+            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 24, marginBottom: 32 }}>
+              <h2 style={{ fontSize: 18, fontWeight: 700, color: C.white, marginBottom: 16 }}>
+                🚨 Live AI Alerts
+              </h2>
+
+              {alerts.length === 0 && (
+                <div style={{ color: C.muted, fontSize: 13 }}>
+                  No active alerts
+                </div>
+              )}
+
+              {alerts.slice(0, 5).map((a, i) => (
+                <div key={i} style={{
+                  padding: 14,
+                  borderRadius: 10,
+                  marginBottom: 10,
+                  background:
+                    a.severity === "critical" ? `${C.red}20` :
+                    a.severity === "warning" ? `${C.orange}20` :
+                    a.severity === "success" ? `${C.green}20` :
+                    `${C.cyan}15`,
+                  border: `1px solid ${
+                    a.severity === "critical" ? C.red :
+                    a.severity === "warning" ? C.orange :
+                    a.severity === "success" ? C.green :
+                    C.cyan
+                  }30`
+                }}>
+                  <div style={{ fontSize: 14, color: C.white }}>
+                    {a.icon} {a.message}
+                  </div>
+                  <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>
+                    👉 {a.action}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         )}
