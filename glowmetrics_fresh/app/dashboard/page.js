@@ -3,6 +3,7 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
 import { parseCSV, aggregateRows } from "../../lib/analytics"
+import { ConfirmationModal, ErrorModal } from './ConfirmationModal'
 
 const C = {
   bg: "#0B0F1A", card: "#121826", card2: "#161e2e", border: "#1e2d45", border2: "#2a3f5f",
@@ -37,6 +38,16 @@ export default function Dashboard() {
   const [platformFilter, setPlatformFilter] = useState("ALL")
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
+  // ── NEW: Confirmation & Error modal state ──────────────────────────────────
+  const [showConfirmation, setShowConfirmation] = useState(false)
+  const [showError, setShowError] = useState(false)
+  const [parseResult, setParseResult] = useState(null)
+  const [pendingData, setPendingData] = useState(null)
+  // ──────────────────────────────────────────────────────────────────────────
+
+  const isBetaUser = false // flip to true for beta/pro users
+  const uploadLimit = 3
+
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(""), 3500) }
 
   useEffect(() => {
@@ -53,7 +64,7 @@ export default function Dashboard() {
     const interval = setInterval(() => {
       const updated = aggregateRows(tips)
       setLiveAnalytics(updated)
-    }, 5000) // every 5 seconds
+    }, 5000)
 
     return () => clearInterval(interval)
   }, [tips])
@@ -73,37 +84,84 @@ export default function Dashboard() {
     const existingKeys = new Set(
       existingTips.map(t => `${t.date_time}_${t.username}_${t.tokens}_${t.platform}`)
     )
-    
     const unique = newTips.filter(t => {
       const key = `${t.dateRaw || t.date_time}_${t.username}_${t.tokens}_${t.platform}`
       return !existingKeys.has(key)
     })
-
     return unique
   }
 
+  // ── UPDATED: handleCSV with zero-tolerance parser + modal flow ─────────────
   const handleCSV = async (file) => {
     if (!file || !user) return
-    if (uploadCount >= 3) {
+    if (uploadCount >= uploadLimit && !isBetaUser) {
       showToast("🔒 Free tier: 3 uploads/month. Upgrade for unlimited!")
       return
     }
+
     setUploading(true)
+    setShowError(false)
+    setShowConfirmation(false)
+
     try {
       const text = await file.text()
-      const parsed = parseCSV(text)
-      if (!parsed.length) { showToast("❌ No valid rows found"); setUploading(false); return }
-      
-      // Remove duplicates
-      const unique = removeDuplicates(tips, parsed)
-      const duplicateCount = parsed.length - unique.length
+      const result = parseCSV(text)  // NEW zero-tolerance parser
 
-      if (unique.length === 0) {
-        showToast(`⚠️ All ${parsed.length} tips are duplicates!`)
+      // Hard failure – no confirmation possible
+      if (!result.success && !result.needsConfirmation) {
+        setParseResult(result)
+        setShowError(true)
         setUploading(false)
         return
       }
-      
+
+      // Successful parse – show confirmation modal
+      if (result.success && result.needsConfirmation) {
+        setPendingData(result.data)
+        setParseResult(result)
+        setShowConfirmation(true)
+        setUploading(false)
+        return
+      }
+
+      // Header / structural issues – show error
+      if (!result.success && result.needsConfirmation) {
+        setParseResult(result)
+        setShowError(true)
+        setUploading(false)
+        return
+      }
+
+    } catch (err) {
+      setParseResult({
+        error: {
+          message: "Upload failed",
+          fix: err.message
+        }
+      })
+      setShowError(true)
+      setUploading(false)
+    }
+  }
+  // ──────────────────────────────────────────────────────────────────────────
+
+  // ── NEW: confirmImport – called when user clicks "Confirm & Import" ────────
+  const confirmImport = async (data) => {
+    setUploading(true)
+    setShowConfirmation(false)
+
+    try {
+      const unique = removeDuplicates(tips, data)
+      const duplicateCount = data.length - unique.length
+
+      if (unique.length === 0) {
+        showToast(`⚠️ All ${data.length} tips are duplicates!`)
+        setUploading(false)
+        setPendingData(null)
+        setParseResult(null)
+        return
+      }
+
       const toInsert = unique.map(r => ({
         user_id: user.id,
         date_time: r.dateRaw || r.date_time,
@@ -113,20 +171,35 @@ export default function Dashboard() {
         tokens: r.tokens,
         usd: r.usd
       }))
-      
+
       const { error } = await supabase.from("tips").insert(toInsert)
-      if (error) { showToast("❌ " + error.message); setUploading(false); return }
-      
+      if (error) {
+        showToast("❌ " + error.message)
+        setUploading(false)
+        return
+      }
+
       setUploadCount(uploadCount + 1)
-      const msg = duplicateCount > 0 
+
+      let msg = duplicateCount > 0
         ? `✅ Imported ${unique.length} tips (${duplicateCount} duplicates removed)`
-        : `✅ Imported ${unique.length} tips!`
+        : `✅ Imported ${unique.length} tips from ${parseResult?.platform || "CSV"}!`
+
+      if (parseResult?.warnings) {
+        msg += ` (${parseResult.skipped?.length ?? 0} rows skipped)`
+      }
+
       showToast(msg)
       await loadData(user.id)
+      setPendingData(null)
+      setParseResult(null)
     } catch (err) {
       showToast("❌ " + err.message)
-    } finally { setUploading(false) }
+    } finally {
+      setUploading(false)
+    }
   }
+  // ──────────────────────────────────────────────────────────────────────────
 
   const deleteTip = async (tipId) => {
     if (!confirm("Delete this tip?")) return
@@ -170,11 +243,10 @@ export default function Dashboard() {
   const insights = analytics?.insights || []
   const platforms = analytics?.platforms || []
   const alerts = liveAnalytics?.whaleAlerts || analytics?.whaleAlerts || []
-  
+
   const totalRevenue = analytics?.totalUSD || 0
   const avgPerHour = sessions.reduce((sum, s) => sum + s.usdPerHour, 0) / (sessions.length || 1)
 
-  // Platform best times
   const platformTimes = {}
   sessions.forEach(s => {
     if (!platformTimes[s.platform]) platformTimes[s.platform] = { hours: {}, days: {} }
@@ -229,10 +301,10 @@ export default function Dashboard() {
 
       {/* MAIN CONTENT */}
       <div style={{ marginLeft: 240, padding: 32 }}>
-        
+
         {activeTab === "overview" && (
           <div>
-            <div style={{ 
+            <div style={{
               display: "grid",
               gridTemplateColumns: "repeat(4, 1fr)",
               gap: 20,
@@ -254,24 +326,14 @@ export default function Dashboard() {
                   boxShadow: "0 10px 30px rgba(0,0,0,0.4)"
                 }}>
                   <div style={{
-                    position: "absolute",
-                    top: -40,
-                    right: -40,
-                    width: 120,
-                    height: 120,
-                    background: s.color,
-                    opacity: 0.08,
-                    filter: "blur(40px)"
+                    position: "absolute", top: -40, right: -40,
+                    width: 120, height: 120, background: s.color, opacity: 0.08, filter: "blur(40px)"
                   }} />
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
-                    <span style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: 1 }}>
-                      {s.label}
-                    </span>
+                    <span style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: 1 }}>{s.label}</span>
                     <span style={{ fontSize: 20 }}>{s.icon}</span>
                   </div>
-                  <div style={{ fontSize: 34, fontWeight: 800, color: s.color }}>
-                    {s.value}
-                  </div>
+                  <div style={{ fontSize: 34, fontWeight: 800, color: s.color }}>{s.value}</div>
                 </div>
               ))}
             </div>
@@ -290,41 +352,20 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* 🚨 AI ALERTS */}
+            {/* AI ALERTS */}
             <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 24, marginBottom: 32 }}>
-              <h2 style={{ fontSize: 18, fontWeight: 700, color: C.white, marginBottom: 16 }}>
-                🚨 Live AI Alerts
-              </h2>
-
+              <h2 style={{ fontSize: 18, fontWeight: 700, color: C.white, marginBottom: 16 }}>🚨 Live AI Alerts</h2>
               {alerts.length === 0 && (
-                <div style={{ color: C.muted, fontSize: 13 }}>
-                  No active alerts
-                </div>
+                <div style={{ color: C.muted, fontSize: 13 }}>No active alerts</div>
               )}
-
               {alerts.slice(0, 5).map((a, i) => (
                 <div key={i} style={{
-                  padding: 14,
-                  borderRadius: 10,
-                  marginBottom: 10,
-                  background:
-                    a.severity === "critical" ? `${C.red}20` :
-                    a.severity === "warning" ? `${C.orange}20` :
-                    a.severity === "success" ? `${C.green}20` :
-                    `${C.cyan}15`,
-                  border: `1px solid ${
-                    a.severity === "critical" ? C.red :
-                    a.severity === "warning" ? C.orange :
-                    a.severity === "success" ? C.green :
-                    C.cyan
-                  }30`
+                  padding: 14, borderRadius: 10, marginBottom: 10,
+                  background: a.severity === "critical" ? `${C.red}20` : a.severity === "warning" ? `${C.orange}20` : a.severity === "success" ? `${C.green}20` : `${C.cyan}15`,
+                  border: `1px solid ${a.severity === "critical" ? C.red : a.severity === "warning" ? C.orange : a.severity === "success" ? C.green : C.cyan}30`
                 }}>
-                  <div style={{ fontSize: 14, color: C.white }}>
-                    {a.icon} {a.message}
-                  </div>
-                  <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>
-                    👉 {a.action}
-                  </div>
+                  <div style={{ fontSize: 14, color: C.white }}>{a.icon} {a.message}</div>
+                  <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>👉 {a.action}</div>
                 </div>
               ))}
             </div>
@@ -334,37 +375,21 @@ export default function Dashboard() {
         {activeTab === "platforms" && (
           <div>
             <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 32 }}>Platform Analytics</h1>
-            
             {platforms.map((p, i) => {
               const bestHour = Object.entries(platformTimes[p.platform]?.hours || {}).sort((a, b) => b[1] - a[1])[0]
               const bestDay = Object.entries(platformTimes[p.platform]?.days || {}).sort((a, b) => b[1] - a[1])[0]
-              
               return (
                 <div key={i} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 24, marginBottom: 20 }}>
                   <h3 style={{ fontSize: 20, fontWeight: 700, color: C.white, marginBottom: 16 }}>{p.platform}</h3>
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 16 }}>
-                    <div>
-                      <div style={{ fontSize: 12, color: C.muted }}>Total Revenue</div>
-                      <div style={{ fontSize: 24, fontWeight: 700, color: C.green }}>${p.totalUSD.toFixed(2)}</div>
-                    </div>
-                    <div>
-                      <div style={{ fontSize: 12, color: C.muted }}>$/Hour</div>
-                      <div style={{ fontSize: 24, fontWeight: 700, color: C.cyan }}>${p.usdPerHour.toFixed(2)}</div>
-                    </div>
-                    <div>
-                      <div style={{ fontSize: 12, color: C.muted }}>Sessions</div>
-                      <div style={{ fontSize: 24, fontWeight: 700, color: C.pink }}>{p.sessions}</div>
-                    </div>
-                    <div>
-                      <div style={{ fontSize: 12, color: C.muted }}>Total Hours</div>
-                      <div style={{ fontSize: 24, fontWeight: 700, color: C.gold }}>{p.hours.toFixed(1)}h</div>
-                    </div>
+                    <div><div style={{ fontSize: 12, color: C.muted }}>Total Revenue</div><div style={{ fontSize: 24, fontWeight: 700, color: C.green }}>${p.totalUSD.toFixed(2)}</div></div>
+                    <div><div style={{ fontSize: 12, color: C.muted }}>$/Hour</div><div style={{ fontSize: 24, fontWeight: 700, color: C.cyan }}>${p.usdPerHour.toFixed(2)}</div></div>
+                    <div><div style={{ fontSize: 12, color: C.muted }}>Sessions</div><div style={{ fontSize: 24, fontWeight: 700, color: C.pink }}>{p.sessions}</div></div>
+                    <div><div style={{ fontSize: 12, color: C.muted }}>Total Hours</div><div style={{ fontSize: 24, fontWeight: 700, color: C.gold }}>{p.hours.toFixed(1)}h</div></div>
                   </div>
                   {bestHour && bestDay && (
                     <div style={{ padding: 16, background: C.card2, borderRadius: 10 }}>
-                      <div style={{ fontSize: 14, color: C.white, marginBottom: 4 }}>
-                        🕐 Best Hour: {formatHour(bestHour[0])} - ${bestHour[1].toFixed(2)} total
-                      </div>
+                      <div style={{ fontSize: 14, color: C.white, marginBottom: 4 }}>🕐 Best Hour: {formatHour(bestHour[0])} - ${bestHour[1].toFixed(2)} total</div>
                       <div style={{ fontSize: 14, color: C.white }}>📅 Best Day: {bestDay[0]} - ${bestDay[1].toFixed(2)} total</div>
                     </div>
                   )}
@@ -390,7 +415,6 @@ export default function Dashboard() {
                 {allPlatforms.map(p => <option key={p} value={p}>{p}</option>)}
               </select>
             </div>
-            
             <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, overflow: "hidden" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                 <thead>
@@ -410,9 +434,7 @@ export default function Dashboard() {
                       <td style={{ padding: "12px 16px", color: C.cyan }}>${w.avgTipSize.toFixed(2)}</td>
                       <td style={{ padding: "12px 16px", color: C.muted }}>{w.platform}</td>
                       <td style={{ padding: "12px 16px" }}>
-                        <span style={{ padding: "4px 10px", borderRadius: 100, background: `${TIER_COLORS[w.tier]}15`, color: TIER_COLORS[w.tier], fontSize: 11, fontWeight: 600 }}>
-                          {w.tier}
-                        </span>
+                        <span style={{ padding: "4px 10px", borderRadius: 100, background: `${TIER_COLORS[w.tier]}15`, color: TIER_COLORS[w.tier], fontSize: 11, fontWeight: 600 }}>{w.tier}</span>
                       </td>
                       <td style={{ padding: "12px 16px", color: C.muted, fontSize: 12 }}>{new Date(w.lastTipDate).toLocaleDateString()}</td>
                       <td style={{ padding: "12px 16px" }}>
@@ -452,7 +474,6 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* EDIT DATA TAB */}
         {activeTab === "data" && (
           <div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 32 }}>
@@ -461,12 +482,10 @@ export default function Dashboard() {
                 🗑️ Delete All Tips
               </button>
             </div>
-
             <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 20, marginBottom: 24 }}>
               <div style={{ fontSize: 14, color: C.muted, marginBottom: 8 }}>Total Tips: {tips.length}</div>
               <div style={{ fontSize: 14, color: C.muted }}>Total Revenue: ${totalRevenue.toFixed(2)}</div>
             </div>
-
             <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, overflow: "hidden" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                 <thead>
@@ -486,9 +505,7 @@ export default function Dashboard() {
                       <td style={{ padding: "12px 16px", color: C.cyan }}>{t.tokens}</td>
                       <td style={{ padding: "12px 16px", color: C.muted, fontSize: 12 }}>{t.tip_type}</td>
                       <td style={{ padding: "12px 16px" }}>
-                        <button onClick={() => deleteTip(t.id)} style={{ padding: "4px 12px", borderRadius: 6, background: `${C.red}15`, border: `1px solid ${C.red}30`, color: C.red, fontSize: 11, cursor: "pointer" }}>
-                          Delete
-                        </button>
+                        <button onClick={() => deleteTip(t.id)} style={{ padding: "4px 12px", borderRadius: 6, background: `${C.red}15`, border: `1px solid ${C.red}30`, color: C.red, fontSize: 11, cursor: "pointer" }}>Delete</button>
                       </td>
                     </tr>
                   ))}
@@ -509,11 +526,11 @@ export default function Dashboard() {
             <p style={{ fontSize: 14, color: C.muted, marginBottom: 32 }}>Uploads: {uploadCount}/3 per month • Auto-removes duplicates</p>
             <div style={{ background: C.card, borderRadius: 14, padding: 40, textAlign: "center" }}>
               <div style={{ fontSize: 48, marginBottom: 16 }}>📁</div>
-              <label style={{ display: "inline-block", padding: "14px 32px", borderRadius: 10, background: uploadCount >= 3 ? C.muted : `linear-gradient(135deg, ${C.cyan}, ${C.pink})`, color: C.white, fontSize: 15, fontWeight: 600, cursor: uploadCount >= 3 ? "not-allowed" : "pointer" }}>
-                {uploading ? "Importing..." : uploadCount >= 3 ? "🔒 Limit Reached" : "Choose CSV File"}
-                <input type="file" accept=".csv" style={{ display: "none" }} onChange={e => handleCSV(e.target.files[0])} disabled={uploading || uploadCount >= 3} />
+              <label style={{ display: "inline-block", padding: "14px 32px", borderRadius: 10, background: uploadCount >= uploadLimit ? C.muted : `linear-gradient(135deg, ${C.cyan}, ${C.pink})`, color: C.white, fontSize: 15, fontWeight: 600, cursor: uploadCount >= uploadLimit ? "not-allowed" : "pointer" }}>
+                {uploading ? "Processing..." : uploadCount >= uploadLimit ? "🔒 Limit Reached" : "Choose CSV File"}
+                <input type="file" accept=".csv" style={{ display: "none" }} onChange={e => handleCSV(e.target.files[0])} disabled={uploading || uploadCount >= uploadLimit} />
               </label>
-              {uploadCount >= 3 && (
+              {uploadCount >= uploadLimit && (
                 <div style={{ marginTop: 24, padding: 16, background: `${C.pink}15`, border: `1px solid ${C.pink}30`, borderRadius: 10 }}>
                   <div style={{ fontSize: 14, color: C.white, marginBottom: 12 }}>Upgrade for unlimited imports</div>
                   <button style={{ padding: "10px 24px", borderRadius: 8, background: `linear-gradient(135deg, ${C.cyan}, ${C.pink})`, border: "none", color: C.white, fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Go Pro</button>
@@ -523,7 +540,6 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* CSV HELP TAB */}
         {activeTab === "help" && (
           <div style={{ maxWidth: 900 }}>
             <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 8 }}>❓ CSV Export Guide</h1>
@@ -535,14 +551,12 @@ export default function Dashboard() {
                 <div style={{ fontSize: 32 }}>🟣</div>
                 <h2 style={{ fontSize: 22, fontWeight: 700, color: C.white }}>Chaturbate</h2>
               </div>
-              
               <div style={{ fontSize: 14, color: C.text, lineHeight: 1.6 }}>
                 <p style={{ marginBottom: 12 }}><strong style={{ color: C.white }}>Step 1:</strong> Log into your Chaturbate broadcaster account</p>
                 <p style={{ marginBottom: 12 }}><strong style={{ color: C.white }}>Step 2:</strong> Go to <span style={{ color: C.cyan }}>Stats & Data → Token Stats</span></p>
                 <p style={{ marginBottom: 12 }}><strong style={{ color: C.white }}>Step 3:</strong> Select your date range (last 30 days, 90 days, or custom)</p>
                 <p style={{ marginBottom: 12 }}><strong style={{ color: C.white }}>Step 4:</strong> Click <span style={{ color: C.cyan }}>"Download CSV"</span> or <span style={{ color: C.cyan }}>"Export"</span></p>
                 <p style={{ marginBottom: 16 }}><strong style={{ color: C.white }}>Step 5:</strong> Upload the CSV file to CamCash</p>
-                
                 <div style={{ padding: 16, background: C.card2, borderRadius: 10, marginTop: 16 }}>
                   <div style={{ fontSize: 13, color: C.muted, marginBottom: 8 }}>✅ What we need from the CSV:</div>
                   <div style={{ fontSize: 13, color: C.text }}>• Date/Time of tip</div>
@@ -559,14 +573,12 @@ export default function Dashboard() {
                 <div style={{ fontSize: 32 }}>🔴</div>
                 <h2 style={{ fontSize: 22, fontWeight: 700, color: C.white }}>BongaCams</h2>
               </div>
-              
               <div style={{ fontSize: 14, color: C.text, lineHeight: 1.6 }}>
                 <p style={{ marginBottom: 12 }}><strong style={{ color: C.white }}>Step 1:</strong> Log into your BongaCams model account</p>
                 <p style={{ marginBottom: 12 }}><strong style={{ color: C.white }}>Step 2:</strong> Navigate to <span style={{ color: C.cyan }}>Statistics → Earnings History</span></p>
                 <p style={{ marginBottom: 12 }}><strong style={{ color: C.white }}>Step 3:</strong> Select date range and filter by "Tips" or "All Transactions"</p>
                 <p style={{ marginBottom: 12 }}><strong style={{ color: C.white }}>Step 4:</strong> Look for <span style={{ color: C.cyan }}>"Export to Excel"</span> or <span style={{ color: C.cyan }}>"Download CSV"</span> button</p>
                 <p style={{ marginBottom: 12 }}><strong style={{ color: C.white }}>Step 5:</strong> Save the file and upload to CamCash</p>
-                
                 <div style={{ padding: 16, background: C.card2, borderRadius: 10, marginTop: 16 }}>
                   <div style={{ fontSize: 13, color: C.muted, marginBottom: 8 }}>✅ Required columns:</div>
                   <div style={{ fontSize: 13, color: C.text }}>• Date (format: DD.MM.YYYY)</div>
@@ -584,14 +596,12 @@ export default function Dashboard() {
                 <div style={{ fontSize: 32 }}>🟠</div>
                 <h2 style={{ fontSize: 22, fontWeight: 700, color: C.white }}>MyFreeCams (MFC)</h2>
               </div>
-              
               <div style={{ fontSize: 14, color: C.text, lineHeight: 1.6 }}>
                 <p style={{ marginBottom: 12 }}><strong style={{ color: C.white }}>Step 1:</strong> Log into your MFC model account at wiki.myfreecams.com</p>
                 <p style={{ marginBottom: 12 }}><strong style={{ color: C.white }}>Step 2:</strong> Go to <span style={{ color: C.cyan }}>Model Admin → Token Stats</span></p>
                 <p style={{ marginBottom: 12 }}><strong style={{ color: C.white }}>Step 3:</strong> Click on <span style={{ color: C.cyan }}>"Transaction History"</span> or <span style={{ color: C.cyan }}>"Detailed Stats"</span></p>
                 <p style={{ marginBottom: 12 }}><strong style={{ color: C.white }}>Step 4:</strong> Select date range and click <span style={{ color: C.cyan }}>"Export CSV"</span></p>
                 <p style={{ marginBottom: 16 }}><strong style={{ color: C.white }}>Step 5:</strong> Upload the exported file to CamCash</p>
-                
                 <div style={{ padding: 16, background: C.card2, borderRadius: 10, marginTop: 16 }}>
                   <div style={{ fontSize: 13, color: C.muted, marginBottom: 8 }}>✅ CSV should include:</div>
                   <div style={{ fontSize: 13, color: C.text }}>• Timestamp/Date</div>
@@ -609,14 +619,12 @@ export default function Dashboard() {
                 <div style={{ fontSize: 32 }}>🟢</div>
                 <h2 style={{ fontSize: 22, fontWeight: 700, color: C.white }}>CamSoda</h2>
               </div>
-              
               <div style={{ fontSize: 14, color: C.text, lineHeight: 1.6 }}>
                 <p style={{ marginBottom: 12 }}><strong style={{ color: C.white }}>Step 1:</strong> Log into your CamSoda broadcaster dashboard</p>
                 <p style={{ marginBottom: 12 }}><strong style={{ color: C.white }}>Step 2:</strong> Navigate to <span style={{ color: C.cyan }}>Earnings → Transaction History</span></p>
                 <p style={{ marginBottom: 12 }}><strong style={{ color: C.white }}>Step 3:</strong> Choose your date range (last week, month, or custom dates)</p>
                 <p style={{ marginBottom: 12 }}><strong style={{ color: C.white }}>Step 4:</strong> Click <span style={{ color: C.cyan }}>"Download"</span> or <span style={{ color: C.cyan }}>"Export to CSV"</span></p>
                 <p style={{ marginBottom: 16 }}><strong style={{ color: C.white }}>Step 5:</strong> Save and upload to CamCash</p>
-                
                 <div style={{ padding: 16, background: C.card2, borderRadius: 10, marginTop: 16 }}>
                   <div style={{ fontSize: 13, color: C.muted, marginBottom: 8 }}>✅ Required data:</div>
                   <div style={{ fontSize: 13, color: C.text }}>• Date and time of transaction</div>
@@ -652,15 +660,39 @@ export default function Dashboard() {
             <h2 style={{ fontSize: 20, fontWeight: 700, color: C.white, marginBottom: 12 }}>Delete All Tips?</h2>
             <p style={{ fontSize: 14, color: C.muted, marginBottom: 24 }}>This will permanently delete all {tips.length} tips. This cannot be undone!</p>
             <div style={{ display: "flex", gap: 12 }}>
-              <button onClick={() => setShowDeleteConfirm(false)} style={{ flex: 1, padding: "10px 20px", borderRadius: 8, background: C.card2, border: `1px solid ${C.border}`, color: C.white, fontSize: 14, cursor: "pointer" }}>
-                Cancel
-              </button>
-              <button onClick={deleteAllTips} style={{ flex: 1, padding: "10px 20px", borderRadius: 8, background: `linear-gradient(135deg, ${C.red}, ${C.orange})`, border: "none", color: C.white, fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
-                Delete All
-              </button>
+              <button onClick={() => setShowDeleteConfirm(false)} style={{ flex: 1, padding: "10px 20px", borderRadius: 8, background: C.card2, border: `1px solid ${C.border}`, color: C.white, fontSize: 14, cursor: "pointer" }}>Cancel</button>
+              <button onClick={deleteAllTips} style={{ flex: 1, padding: "10px 20px", borderRadius: 8, background: `linear-gradient(135deg, ${C.red}, ${C.orange})`, border: "none", color: C.white, fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Delete All</button>
             </div>
           </div>
         </div>
+      )}
+
+      {/* ── CSV CONFIRMATION MODAL ─────────────────────────────────────────── */}
+      {showConfirmation && parseResult && (
+        <ConfirmationModal
+          result={parseResult}
+          onConfirm={confirmImport}
+          onCancel={() => {
+            setShowConfirmation(false)
+            setPendingData(null)
+            setParseResult(null)
+            setUploading(false)
+          }}
+        />
+      )}
+
+      {/* ── CSV ERROR MODAL ────────────────────────────────────────────────── */}
+      {showError && parseResult && (
+        <ErrorModal
+          error={parseResult.error}
+          suggestions={parseResult.suggestions}
+          issues={parseResult.issues}
+          onClose={() => {
+            setShowError(false)
+            setParseResult(null)
+            setUploading(false)
+          }}
+        />
       )}
 
       {toast && (
