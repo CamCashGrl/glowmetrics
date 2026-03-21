@@ -85,8 +85,18 @@ export default function Dashboard() {
   const loadData = async (uid) => {
     setLoading(true)
     try {
-      const { data } = await supabase.from("tips").select("*").eq("user_id", uid).order("date_time", { ascending: true })
-      if (data?.length) { setTips(data); setAnalytics(aggregateRows(data)) }
+      // Fetch all rows in pages of 1000 to bypass Supabase default limit
+      let allData = []
+      let from = 0
+      const PAGE = 1000
+      while (true) {
+        const { data, error } = await supabase.from("tips").select("*").eq("user_id", uid).order("date_time", { ascending: true }).range(from, from + PAGE - 1)
+        if (error) break
+        if (data?.length) allData = [...allData, ...data]
+        if (!data || data.length < PAGE) break
+        from += PAGE
+      }
+      if (allData.length) { setTips(allData); setAnalytics(aggregateRows(allData)) }
     } finally { setLoading(false) }
   }
 
