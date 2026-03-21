@@ -135,8 +135,13 @@ export default function Dashboard() {
         }
       })
 
-      const { error } = await supabase.from("tips").insert(toInsert)
-      if (error) { showToast("❌ " + error.message); setUploading(false); return }
+      // Insert in batches of 500 to avoid Supabase limits
+      const BATCH_SIZE = 500
+      for (let i = 0; i < toInsert.length; i += BATCH_SIZE) {
+        const batch = toInsert.slice(i, i + BATCH_SIZE)
+        const { error } = await supabase.from("tips").insert(batch)
+        if (error) { showToast("❌ " + error.message); setUploading(false); return }
+      }
 
       setUploadCount(uploadCount + 1)
       const msg = duplicateCount > 0
