@@ -1,5 +1,5 @@
 "use client"
-import { useState, useEffect } from "react"
+import React, { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
 import { parseCSV, aggregateRows } from "../../lib/analytics"
@@ -198,6 +198,8 @@ export default function Dashboard() {
   const insights = analytics?.insights || []
   const platforms = analytics?.platforms || []
   const alerts = liveAnalytics?.whaleAlerts || analytics?.whaleAlerts || []
+  const lossAlerts = liveAnalytics?.lossAlerts || analytics?.lossAlerts || []
+  const nextMoves = liveAnalytics?.nextMoves || analytics?.nextMoves || []
   const totalRevenue = analytics?.totalUSD || 0
   const avgPerHour = sessions.reduce((sum, s) => sum + s.usdPerHour, 0) / (sessions.length || 1)
 
@@ -259,7 +261,7 @@ export default function Dashboard() {
         </div>
 
         <nav style={{ flex: 1, padding: "16px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
-          {[["overview", "📊", "Overview"], ["platforms", "🎯", "Platforms"], ["whales", "🐳", "Top Fans"], ["sessions", "🎥", "Sessions"], ["data", "📝", "Edit Data"], ["help", "❓", "CSV Help"], ["upload", "📥", "Import"]].map(([id, icon, label]) => (
+          {[["overview", "📊", "Overview"], ["platforms", "🎯", "Platforms"], ["whales", "🐳", "Top Fans"], ["sessions", "🎥", "Sessions"], ["data", "📝", "Edit Data"], ["titles", "🎬", "Room Titles"], ["help", "❓", "CSV Help"], ["upload", "📥", "Import"]].map(([id, icon, label]) => (
             <button key={id} onClick={() => setActiveTab(id)} style={{
               display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 10,
               background: activeTab === id ? "linear-gradient(135deg, rgba(59,130,246,0.2), rgba(236,72,153,0.2))" : "transparent",
@@ -338,28 +340,14 @@ export default function Dashboard() {
             })()}
 
             {(() => {
-              const currentHour = new Date().getHours()
-              const allHourEarnings = {}
-              sessions.forEach(s => { const h = new Date(s.startTime).getHours(); allHourEarnings[h] = (allHourEarnings[h] || 0) + s.totalUSD })
-              const bestHourEntry = Object.entries(allHourEarnings).sort((a, b) => b[1] - a[1])[0]
-              const bestHour = bestHourEntry ? parseInt(bestHourEntry[0]) : null
-              const isNowBestTime = bestHour !== null && Math.abs(currentHour - bestHour) <= 1
-              const dormantWhales = whales.filter(w => { const days = Math.floor((Date.now() - new Date(w.lastTipDate)) / 86400000); return days >= 3 && days <= 30 && w.totalUSD > 10 }).sort((a, b) => b.totalUSD - a.totalUSD).slice(0, 3)
-              const avgSessionRevenue = sessions.length ? (totalRevenue / sessions.length) : 0
-              const goalSuggestion = Math.round(avgSessionRevenue * 1.2 / 10) * 10
-              const actions = []
-              if (isNowBestTime) actions.push({ icon: "🔥", color: C.orange, text: `Go live NOW — your data shows ${formatHour(currentHour)} is your highest-earning time`, cta: null })
-              else if (bestHour !== null) actions.push({ icon: "🕐", color: C.cyan, text: `Your best earning time is ${formatHour(bestHour)} — plan your next stream around it`, cta: null })
-              dormantWhales.forEach(w => { const days = Math.floor((Date.now() - new Date(w.lastTipDate)) / 86400000); actions.push({ icon: "💸", color: C.pink, text: `Message ${w.username} — spent $${w.totalUSD.toFixed(0)} total, hasn't tipped in ${days} days`, cta: true, username: w.username }) })
-              if (goalSuggestion > 0) actions.push({ icon: "🎯", color: C.gold, text: `Set a goal of $${goalSuggestion} for your next session — your average earns $${avgSessionRevenue.toFixed(0)}`, cta: null })
-              if (actions.length === 0) actions.push({ icon: "📊", color: C.cyan, text: "Import your first CSV to unlock personalized action recommendations", cta: null })
+              const actions = nextMoves.length > 0 ? nextMoves : [{ icon: "📊", color: C.cyan, text: "Import your first CSV to unlock personalized action recommendations", cta: null }]
               return (
                 <div style={{ ...glassCard, borderRadius: 16, padding: 24, marginBottom: 28 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
                     <div style={{ width: 36, height: 36, borderRadius: 10, background: "linear-gradient(135deg, #22D3EE, #7C5CFF)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>⚡</div>
                     <div>
                       <div style={{ fontSize: 18, fontWeight: 800, color: C.white }}>What Should I Do Right Now?</div>
-                      <div style={{ fontSize: 12, color: C.muted }}>Personalized actions based on your data</div>
+                      <div style={{ fontSize: 12, color: C.muted }}>Live coaching based on your actual data</div>
                     </div>
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -372,7 +360,7 @@ export default function Dashboard() {
                         {a.cta && (
                           <button onClick={() => { const w = whales.find(wh => wh.username === a.username); if (w) { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) } }}
                             style={{ flexShrink: 0, padding: "6px 14px", borderRadius: 8, background: "linear-gradient(135deg, #EC4899, #7C5CFF)", boxShadow: "0 0 20px rgba(236,72,153,0.4)", border: "none", color: C.white, fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
-                            📋 Copy Message
+                            💌 Message
                           </button>
                         )}
                       </div>
@@ -412,6 +400,17 @@ export default function Dashboard() {
                   </div>
                 )}
               </div>
+            </div>
+
+            <div style={{ ...glassCard, borderRadius: 14, padding: 24, marginBottom: 28 }}>
+              <h2 style={{ fontSize: 18, fontWeight: 700, color: C.white, marginBottom: 16 }}>🚨 Loss Alerts</h2>
+              {lossAlerts.length === 0 && <div style={{ color: C.muted, fontSize: 13 }}>No active alerts — you're on track! 🎉</div>}
+              {lossAlerts.map((a, i) => (
+                <div key={i} style={{ padding: 14, borderRadius: 10, marginBottom: 10, background: a.severity === 'critical' ? "rgba(248,113,113,0.15)" : a.severity === 'warning' ? "rgba(251,146,60,0.15)" : "rgba(34,211,238,0.1)", border: `1px solid ${a.severity === 'critical' ? C.red : a.severity === 'warning' ? C.orange : C.cyan}30` }}>
+                  <div style={{ fontSize: 14, color: C.white, marginBottom: 4 }}>{a.icon} {a.message}</div>
+                  <div style={{ fontSize: 12, color: C.muted }}>👉 {a.action}</div>
+                </div>
+              ))}
             </div>
 
             <div style={{ ...glassCard, borderRadius: 14, padding: 24, marginBottom: 28 }}>
@@ -712,6 +711,168 @@ export default function Dashboard() {
             </div>
           </div>
         )}
+
+        {activeTab === "titles" && (() => {
+          const [titleVibe, setTitleVibe] = React.useState("flirty")
+          const [titleGoal, setTitleGoal] = React.useState("")
+          const [titlePlatform, setTitlePlatform] = React.useState("Chaturbate")
+          const [titleTime, setTitleTime] = React.useState("night")
+          const [titleOccasion, setTitleOccasion] = React.useState("")
+          const [generatedTitles, setGeneratedTitles] = React.useState([])
+          const [copiedIdx, setCopiedIdx] = React.useState(null)
+
+          const allTemplates = {
+            flirty: [
+              `{time} vibes only 💋 tip {goal} to play`,
+              `feeling dangerous tonight 😈 {goal} tip menu open`,
+              `your fav girl is back 💕 tip {goal} for anything you want`,
+              `come flirt with me {time} 😘 tip {goal} to control the show`,
+              `dress code: tips only 💄 {goal} goal tonight`,
+              `butterflies & bad decisions {time} 🦋 {goal} tip menu`,
+              `soft girl energy… until you tip {goal} 😈`,
+              `i missed you 😘 prove it — tip {goal}`,
+              `attention: tips only 👀 {goal} = instant attention`,
+              `angel face devil energy 😇😈 tip {goal} for private`,
+            ],
+            wild: [
+              `NO LIMITS {time} 🔥 tip {goal} and anything goes`,
+              `wildest show on {platform} tonight 🔥 tip {goal}`,
+              `chaos mode activated 🔥 {goal} tip goal`,
+              `WARNING: addictive content 🚨 {goal} to start`,
+              `unhinged {time} energy 🔥 {goal} tip menu OPEN`,
+              `breaking all the rules {time} 😈 tip {goal}`,
+              `hottest room on {platform} rn 🔥 {goal} goal`,
+              `you won't believe what happens at {goal} 👀`,
+              `tip {goal} and find out 😈🔥`,
+              `out of control {time} 🔥 {goal} = full send`,
+            ],
+            chill: [
+              `cozy {time} hangout 💕 tip {goal} to vibe with me`,
+              `chill {time} stream 🌙 {goal} goal tonight`,
+              `just relaxing {time} 💕 come hang — tip {goal}`,
+              `soft {time} energy ✨ {goal} tip menu`,
+              `good music good vibes {time} 🎵 tip {goal}`,
+              `lazy {time} stream 🌙 {goal} = private time`,
+              `comfort zone unlocked {time} 💕 {goal} goal`,
+              `slow burn {time} 🕯️ tip {goal} to speed things up`,
+              `no rush {time} vibes 🌙 {goal} gets you close`,
+              `✨ {time} glow up stream — tip {goal}`,
+            ],
+            teasing: [
+              `you want it? tip {goal} 👀`,
+              `almost there… {goal} tip goal 👀`,
+              `i know what you want 😏 {goal} tips only`,
+              `tip {goal} and maybe i'll let you 😈`,
+              `not telling you what happens at {goal}… yet 👀`,
+              `patience is a virtue… tip {goal} to skip the line 😏`,
+              `you're one tip away from everything 😘 {goal} goal`,
+              `🔐 unlocked at {goal} — what's inside?`,
+              `tip {goal}… i dare you 😈`,
+              `{time} secrets only 🤫 {goal} to get in`,
+            ],
+          }
+
+          const timeLabels = { morning: "morning ☀️", afternoon: "afternoon ☀️", night: "late night 🌙", latenight: "3AM 🌑" }
+          const occasionLabels = { payday: "💰 payday", friday: "🎉 Friday", weekend: "🎊 weekend", special: "✨ special night" }
+
+          const generateTitles = () => {
+            const templates = allTemplates[titleVibe] || allTemplates.flirty
+            const shuffled = [...templates].sort(() => Math.random() - 0.5)
+            const titles = shuffled.slice(0, 10).map(t => {
+              let title = t
+              title = title.replace(/{goal}/g, titleGoal ? `$${titleGoal}` : "💎")
+              title = title.replace(/{platform}/g, titlePlatform)
+              title = title.replace(/{time}/g, titleOccasion ? (occasionLabels[titleOccasion] || timeLabels[titleTime]) : timeLabels[titleTime])
+              return title
+            })
+            setGeneratedTitles(titles)
+            setCopiedIdx(null)
+          }
+
+          const copyTitle = (title, idx) => {
+            navigator.clipboard.writeText(title)
+            setCopiedIdx(idx)
+            setTimeout(() => setCopiedIdx(null), 2000)
+          }
+
+          return (
+            <div style={{ maxWidth: 700 }}>
+              <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 8 }}>🎬 Room Title Generator</h1>
+              <p style={{ fontSize: 14, color: C.muted, marginBottom: 32 }}>Generate 10 ready-to-use room titles — click any to copy, then paste straight into your platform</p>
+
+              <div style={{ ...glassCard, borderRadius: 16, padding: 24, marginBottom: 24 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 20 }}>
+                  <div>
+                    <div style={{ fontSize: 12, color: C.muted, fontWeight: 600, marginBottom: 10, textTransform: "uppercase", letterSpacing: 1 }}>Vibe</div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                      {[["flirty","💋 Flirty"], ["wild","🔥 Wild"], ["chill","🌙 Chill"], ["teasing","😈 Teasing"]].map(([v, label]) => (
+                        <button key={v} onClick={() => setTitleVibe(v)} style={{ padding: "7px 14px", borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: "pointer", background: titleVibe === v ? "rgba(236,72,153,0.25)" : "rgba(255,255,255,0.05)", border: titleVibe === v ? "1px solid rgba(236,72,153,0.5)" : "1px solid rgba(255,255,255,0.08)", color: titleVibe === v ? C.pink : C.muted }}>{label}</button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 12, color: C.muted, fontWeight: 600, marginBottom: 10, textTransform: "uppercase", letterSpacing: 1 }}>Time of Day</div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                      {[["morning","🌅 Morning"], ["afternoon","☀️ Afternoon"], ["night","🌙 Night"], ["latenight","🌑 Late Night"]].map(([v, label]) => (
+                        <button key={v} onClick={() => setTitleTime(v)} style={{ padding: "7px 14px", borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: "pointer", background: titleTime === v ? "rgba(34,211,238,0.2)" : "rgba(255,255,255,0.05)", border: titleTime === v ? "1px solid rgba(34,211,238,0.4)" : "1px solid rgba(255,255,255,0.08)", color: titleTime === v ? C.cyan : C.muted }}>{label}</button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 12, color: C.muted, fontWeight: 600, marginBottom: 10, textTransform: "uppercase", letterSpacing: 1 }}>Tip Goal (optional)</div>
+                    <input type="number" value={titleGoal} onChange={e => setTitleGoal(e.target.value)} placeholder="e.g. 50"
+                      style={{ width: "100%", padding: "10px 14px", borderRadius: 10, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: C.white, fontSize: 14, outline: "none" }}
+                      onFocus={e => e.target.style.borderColor = "rgba(236,72,153,0.4)"}
+                      onBlur={e => e.target.style.borderColor = "rgba(255,255,255,0.1)"} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 12, color: C.muted, fontWeight: 600, marginBottom: 10, textTransform: "uppercase", letterSpacing: 1 }}>Platform</div>
+                    <select value={titlePlatform} onChange={e => setTitlePlatform(e.target.value)}
+                      style={{ width: "100%", padding: "10px 14px", borderRadius: 10, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: C.white, fontSize: 14, outline: "none" }}>
+                      {["Chaturbate","BongaCams","MyFreeCams","Stripchat","CamSoda"].map(p => <option key={p} value={p} style={{ background: "#121826" }}>{p}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div style={{ marginBottom: 20 }}>
+                  <div style={{ fontSize: 12, color: C.muted, fontWeight: 600, marginBottom: 10, textTransform: "uppercase", letterSpacing: 1 }}>Special Occasion (optional)</div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    {[["","None"], ["payday","💰 Payday"], ["friday","🎉 Friday"], ["weekend","🎊 Weekend"], ["special","✨ Special Event"]].map(([v, label]) => (
+                      <button key={v} onClick={() => setTitleOccasion(v)} style={{ padding: "7px 14px", borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: "pointer", background: titleOccasion === v ? "rgba(245,158,11,0.2)" : "rgba(255,255,255,0.05)", border: titleOccasion === v ? "1px solid rgba(245,158,11,0.4)" : "1px solid rgba(255,255,255,0.08)", color: titleOccasion === v ? C.gold : C.muted }}>{label}</button>
+                    ))}
+                  </div>
+                </div>
+                <button onClick={generateTitles} style={{ width: "100%", padding: "14px", borderRadius: 12, background: "linear-gradient(135deg, #22D3EE, #EC4899)", border: "none", color: C.white, fontSize: 15, fontWeight: 700, cursor: "pointer", boxShadow: "0 0 24px rgba(34,211,238,0.3)" }}>
+                  ✨ Generate 10 Room Titles
+                </button>
+              </div>
+
+              {generatedTitles.length > 0 ? (
+                <div style={{ ...glassCard, borderRadius: 16, overflow: "hidden" }}>
+                  <div style={{ padding: "16px 20px", borderBottom: "1px solid rgba(255,255,255,0.08)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: C.white }}>Click any title to copy it ✨</div>
+                    <button onClick={generateTitles} style={{ padding: "6px 14px", borderRadius: 8, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: C.muted, fontSize: 12, cursor: "pointer" }}>🔄 Regenerate</button>
+                  </div>
+                  {generatedTitles.map((title, i) => (
+                    <div key={i} onClick={() => copyTitle(title, i)}
+                      style={{ padding: "16px 20px", borderBottom: i < 9 ? "1px solid rgba(255,255,255,0.05)" : "none", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", background: copiedIdx === i ? "rgba(16,185,129,0.1)" : "transparent", transition: "background 0.15s" }}
+                      onMouseEnter={e => { if (copiedIdx !== i) e.currentTarget.style.background = "rgba(255,255,255,0.04)" }}
+                      onMouseLeave={e => { if (copiedIdx !== i) e.currentTarget.style.background = "transparent" }}>
+                      <div style={{ fontSize: 14, color: C.white, lineHeight: 1.5, flex: 1 }}>{title}</div>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: copiedIdx === i ? C.green : C.muted, marginLeft: 16, flexShrink: 0, minWidth: 50, textAlign: "right" }}>
+                        {copiedIdx === i ? "✅ Copied!" : "📋 Copy"}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ ...glassCard, borderRadius: 16, padding: 48, textAlign: "center" }}>
+                  <div style={{ fontSize: 48, marginBottom: 16 }}>🎬</div>
+                  <div style={{ fontSize: 15, color: C.muted }}>Pick your vibe and hit Generate</div>
+                </div>
+              )}
+            </div>
+          )
+        })()}
 
         {activeTab === "help" && (
           <div style={{ maxWidth: 900 }}>
