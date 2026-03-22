@@ -412,46 +412,242 @@ export function generateWhaleAlerts(whales) {
 export function predictRevenue(tips, sessions) {
   if (!sessions.length) return null
   const predictions = {}
-  const last7 = tips.filter(t => (Date.now() - new Date(t.dateRaw || t.date_time)) / 86400000 <= 7)
-  predictions.next7Days = { amount: parseFloat(last7.reduce((s, t) => s + t.usd, 0).toFixed(2)), confidence: last7.length > 20 ? 'High' : last7.length > 10 ? 'Medium' : 'Low' }
-  const last30 = tips.filter(t => (Date.now() - new Date(t.dateRaw || t.date_time)) / 86400000 <= 30)
-  predictions.next30Days = { amount: parseFloat(last30.reduce((s, t) => s + t.usd, 0).toFixed(2)), confidence: last30.length > 50 ? 'High' : last30.length > 25 ? 'Medium' : 'Low' }
-  const same = sessions.filter(s => new Date(s.startTime).getDay() === new Date().getDay())
-  if (same.length > 2) {
-    const avg = same.reduce((s, x) => s + x.totalUSD, 0) / same.length
-    predictions.tonightStream = { expected: parseFloat(avg.toFixed(2)), range: { min: parseFloat(Math.min(...same.map(s => s.totalUSD)).toFixed(2)), max: parseFloat(Math.max(...same.map(s => s.totalUSD)).toFixed(2)) }, confidence: same.length > 5 ? 'High' : 'Medium' }
+  const now = Date.now()
+
+  const last7 = tips.filter(t => (now - new Date(t.dateRaw || t.date_time)) / 86400000 <= 7)
+  const last7Rev = last7.reduce((s, t) => s + t.usd, 0)
+  predictions.next7Days = { amount: parseFloat(last7Rev.toFixed(2)), confidence: last7.length > 20 ? 'High' : last7.length > 10 ? 'Medium' : 'Low' }
+
+  const last30 = tips.filter(t => (now - new Date(t.dateRaw || t.date_time)) / 86400000 <= 30)
+  const last30Rev = last30.reduce((s, t) => s + t.usd, 0)
+  const prev30 = tips.filter(t => { const d = (now - new Date(t.dateRaw || t.date_time)) / 86400000; return d > 30 && d <= 60 })
+  const prev30Rev = prev30.reduce((s, t) => s + t.usd, 0)
+  const weeklyTrend = prev30Rev > 0 ? ((last30Rev - prev30Rev) / prev30Rev) * 100 : null
+  predictions.next30Days = { amount: parseFloat(last30Rev.toFixed(2)), confidence: last30.length > 50 ? 'High' : last30.length > 25 ? 'Medium' : 'Low', trend: weeklyTrend !== null ? parseFloat(weeklyTrend.toFixed(1)) : null }
+
+  // Tonight prediction based on same day of week history
+  const todayDow = new Date().getDay()
+  const sameDaySessions = sessions.filter(s => new Date(s.startTime).getDay() === todayDow)
+  if (sameDaySessions.length > 2) {
+    const avg = sameDaySessions.reduce((s, x) => s + x.totalUSD, 0) / sameDaySessions.length
+    const min = Math.min(...sameDaySessions.map(s => s.totalUSD))
+    const max = Math.max(...sameDaySessions.map(s => s.totalUSD))
+    predictions.tonightStream = {
+      expected: parseFloat(avg.toFixed(2)),
+      range: { min: parseFloat(min.toFixed(2)), max: parseFloat(max.toFixed(2)) },
+      confidence: sameDaySessions.length > 5 ? 'High' : 'Medium',
+      returningTippers: Math.round(sameDaySessions.reduce((s, x) => s + x.uniqueFans, 0) / sameDaySessions.length * 0.4)
+    }
   }
+
   return predictions
 }
 
 // ============================================
-// INSIGHTS
+// LOSS ALERTS
+// ============================================
+
+export function generateLossAlerts(tips, sessions, whales) {
+  const alerts = []
+  const now = Date.now()
+
+  // Peak window missed
+  const hourE = {}
+  sessions.forEach(s => { const h = new Date(s.startTime).getHours(); hourE[h] = (hourE[h] || 0) + s.totalUSD })
+  const bestHourEntry = Object.entries(hourE).sort((a, b) => b[1] - a[1])[0]
+  if (bestHourEntry) {
+    const bestHour = parseInt(bestHourEntry[0])
+    const avgAtPeak = bestHourEntry[1] / sessions.filter(s => new Date(s.startTime).getHours() === bestHour).length
+    const recentSessions = sessions.filter(s => (now - new Date(s.startTime)) / 86400000 <= 3)
+    const recentAtPeak = recentSessions.filter(s => Math.abs(new Date(s.startTime).getHours() - bestHour) <= 1)
+    if (recentSessions.length > 0 && recentAtPeak.length === 0) {
+      const daysMissed = 3
+      const estLoss = parseFloat((avgAtPeak * daysMissed).toFixed(2))
+      const label = bestHour === 0 ? '12 AM' : bestHour < 12 ? `${bestHour} AM` : bestHour === 12 ? '12 PM' : `${bestHour - 12} PM`
+      alerts.push({ type: 'peak_missed', severity: 'warning', icon: '🚨', message: `You haven't streamed during your peak window (${label}) in ${daysMissed} days — estimated loss: $${estLoss}`, action: `Go live at ${label} to recover this` })
+    }
+  }
+
+  // Avg tip drop this week vs last week
+  const thisWeek = tips.filter(t => (now - new Date(t.dateRaw || t.date_time)) / 86400000 <= 7)
+  const lastWeek = tips.filter(t => { const d = (now - new Date(t.dateRaw || t.date_time)) / 86400000; return d > 7 && d <= 14 })
+  if (thisWeek.length >= 5 && lastWeek.length >= 5) {
+    const thisAvg = thisWeek.reduce((s, t) => s + t.usd, 0) / thisWeek.length
+    const lastAvg = lastWeek.reduce((s, t) => s + t.usd, 0) / lastWeek.length
+    const drop = Math.round(((lastAvg - thisAvg) / lastAvg) * 100)
+    if (drop >= 15) alerts.push({ type: 'tip_drop', severity: 'warning', icon: '📉', message: `Your avg tip dropped ${drop}% this week ($${lastAvg.toFixed(2)} → $${thisAvg.toFixed(2)})`, action: 'Focus on high-value fans during your next stream' })
+  }
+
+  // High-value fan churn risk
+  whales.filter(w => w.totalUSD >= 50 && w.daysSinceLastTip >= 5 && w.daysSinceLastTip < 30).slice(0, 2).forEach(w => {
+    alerts.push({ type: 'fan_churn', severity: 'critical', icon: '🚨', message: `${w.username} hasn't tipped in ${w.daysSinceLastTip} days — high churn risk ($${w.totalUSD.toFixed(0)} lifetime value)`, action: 'Send a re-engagement message now' })
+  })
+
+  // Streak broken
+  const daySet = new Set(sessions.map(s => new Date(s.startTime).toDateString()))
+  let streak = 0
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(now - i * 86400000).toDateString()
+    if (daySet.has(d)) streak++
+    else if (i > 0) break
+  }
+  const lastStreamed = sessions.length ? (now - new Date(sessions[sessions.length - 1].startTime)) / 86400000 : 999
+  if (lastStreamed > 2 && sessions.length > 5) {
+    alerts.push({ type: 'streak_broken', severity: 'info', icon: '⏸️', message: `You haven't streamed in ${Math.floor(lastStreamed)} days — your audience engagement drops after 3 days off`, action: 'Get back live — consistency is your #1 growth tool' })
+  }
+
+  return alerts
+}
+
+// ============================================
+// INSIGHTS (ACTION-ORIENTED)
 // ============================================
 
 export function generateInsights(tips, sessions) {
   const insights = []
   if (!tips.length || !sessions.length) return insights
-  const dayE = {}
-  sessions.forEach(s => { const d = new Date(s.startTime).toLocaleDateString('en-US', { weekday: 'long' }); dayE[d] = (dayE[d] || 0) + s.totalUSD })
+  const now = Date.now()
+
+  // Best day → action + cost of missing it
+  const dayE = {}; const dayCount = {}
+  sessions.forEach(s => {
+    const d = new Date(s.startTime).toLocaleDateString('en-US', { weekday: 'long' })
+    dayE[d] = (dayE[d] || 0) + s.totalUSD
+    dayCount[d] = (dayCount[d] || 0) + 1
+  })
   const bestDay = Object.entries(dayE).sort((a, b) => b[1] - a[1])[0]
-  if (bestDay) {
-    const avg = Object.values(dayE).reduce((a, b) => a + b, 0) / Object.keys(dayE).length
-    const pct = Math.round(((bestDay[1] - avg) / avg) * 100)
-    if (pct > 10) insights.push({ icon: '📅', text: `${bestDay[0]}s earn ${pct}% more than average`, type: 'day' })
+  const worstDay = Object.entries(dayE).sort((a, b) => a[1] - b[1])[0]
+  if (bestDay && worstDay && bestDay[0] !== worstDay[0]) {
+    const avgPerSession = dayE[bestDay[0]] / dayCount[bestDay[0]]
+    const avgOverall = Object.values(dayE).reduce((a, b) => a + b, 0) / sessions.length
+    const mult = (avgPerSession / avgOverall).toFixed(1)
+    const costOfMissing = parseFloat((avgPerSession - avgOverall).toFixed(2))
+    insights.push({ icon: '📅', text: `${bestDay[0]}s are your highest-earning day — your avg session earns ${mult}x more. Missing one ${bestDay[0]} costs you ~$${costOfMissing}`, type: 'day', priority: 1 })
   }
-  const hourE = {}
-  sessions.forEach(s => { const h = new Date(s.startTime).getHours(); hourE[h] = (hourE[h] || 0) + s.totalUSD })
+
+  // Best hour → go live action
+  const hourE = {}; const hourCount = {}
+  sessions.forEach(s => {
+    const h = new Date(s.startTime).getHours()
+    hourE[h] = (hourE[h] || 0) + s.totalUSD
+    hourCount[h] = (hourCount[h] || 0) + 1
+  })
   const bestHour = Object.entries(hourE).sort((a, b) => b[1] - a[1])[0]
+  const worstHour = Object.entries(hourE).sort((a, b) => a[1] - b[1])[0]
   if (bestHour) {
     const h = parseInt(bestHour[0])
     const label = h === 0 ? '12 AM' : h < 12 ? `${h} AM` : h === 12 ? '12 PM' : `${h - 12} PM`
-    insights.push({ icon: '⏰', text: `Peak earnings around ${label}`, type: 'time' })
+    const avgAtBest = bestHour[1] / hourCount[bestHour[0]]
+    const avgAtWorst = worstHour ? worstHour[1] / hourCount[worstHour[0]] : 0
+    const multiplier = avgAtWorst > 0 ? (avgAtBest / avgAtWorst).toFixed(1) : null
+    insights.push({ icon: '⏰', text: `Go live at ${label} — your earnings are ${multiplier ? `${multiplier}x higher` : 'at their peak'} at this time. Missing this window costs you real money every session`, type: 'time', priority: 1 })
   }
+
+  // Whale concentration
   const whales = identifyWhales(tips)
-  const wE = whales.filter(w => w.tier === 'Whale').reduce((s, w) => s + w.totalUSD, 0)
+  const topWhales = whales.filter(w => w.tier === 'Whale' || w.tier === 'Shark')
+  const wE = topWhales.reduce((s, w) => s + w.totalUSD, 0)
   const tE = tips.reduce((s, t) => s + t.usd, 0)
-  if (wE > 0) insights.push({ icon: '🐳', text: `Top ${whales.filter(w => w.tier === 'Whale').length} whales generate ${Math.round((wE / tE) * 100)}% of revenue`, type: 'whales' })
-  return insights
+  if (wE > 0 && tE > 0) {
+    const pct = Math.round((wE / tE) * 100)
+    insights.push({ icon: '🐳', text: `Your top ${topWhales.length} fans generate ${pct}% of your revenue. Losing even one of them would cost you $${(wE / topWhales.length).toFixed(0)} on average — keep them engaged`, type: 'whales', priority: 2 })
+  }
+
+  // Session length vs earnings
+  const longSessions = sessions.filter(s => s.durationMinutes > 60)
+  const shortSessions = sessions.filter(s => s.durationMinutes <= 60)
+  if (longSessions.length >= 3 && shortSessions.length >= 3) {
+    const longAvg = longSessions.reduce((s, x) => s + x.totalUSD, 0) / longSessions.length
+    const shortAvg = shortSessions.reduce((s, x) => s + x.totalUSD, 0) / shortSessions.length
+    if (longAvg > shortAvg * 1.2) {
+      const pct = Math.round(((longAvg - shortAvg) / shortAvg) * 100)
+      insights.push({ icon: '⏱️', text: `Streams over 60 min earn ${pct}% more than short ones ($${longAvg.toFixed(0)} vs $${shortAvg.toFixed(0)}). Every extra 30 minutes adds ~$${((longAvg - shortAvg) / 2).toFixed(0)} on average`, type: 'duration', priority: 2 })
+    }
+  }
+
+  // Returning vs new tippers
+  const fanTipCounts = {}
+  tips.forEach(t => { fanTipCounts[t.username.toLowerCase()] = (fanTipCounts[t.username.toLowerCase()] || 0) + 1 })
+  const returning = Object.values(fanTipCounts).filter(c => c > 1).length
+  const total = Object.keys(fanTipCounts).length
+  if (total > 10) {
+    const pct = Math.round((returning / total) * 100)
+    insights.push({ icon: '🔁', text: `${pct}% of your fans are returning tippers — loyalty is your strongest asset. Each returning fan is worth ${(tE / tips.length * 3).toFixed(0)}x more than a first-timer`, type: 'retention', priority: 3 })
+  }
+
+  // Weekly momentum
+  const thisWeek = tips.filter(t => (now - new Date(t.dateRaw || t.date_time)) / 86400000 <= 7)
+  const lastWeek = tips.filter(t => { const d = (now - new Date(t.dateRaw || t.date_time)) / 86400000; return d > 7 && d <= 14 })
+  if (thisWeek.length > 0 && lastWeek.length > 0) {
+    const thisRev = thisWeek.reduce((s, t) => s + t.usd, 0)
+    const lastRev = lastWeek.reduce((s, t) => s + t.usd, 0)
+    const change = Math.round(((thisRev - lastRev) / lastRev) * 100)
+    if (Math.abs(change) >= 10) {
+      insights.push({
+        icon: change >= 0 ? '📈' : '📉',
+        text: change >= 0
+          ? `You're up ${change}% this week vs last week ($${thisRev.toFixed(0)} vs $${lastRev.toFixed(0)}) — keep the momentum going`
+          : `You're down ${Math.abs(change)}% this week vs last ($${thisRev.toFixed(0)} vs $${lastRev.toFixed(0)}) — increase stream frequency to recover`,
+        type: 'momentum', priority: 2
+      })
+    }
+  }
+
+  return insights.sort((a, b) => a.priority - b.priority)
+}
+
+// ============================================
+// NEXT MOVE ENGINE
+// ============================================
+
+export function generateNextMoves(tips, sessions, whales, predictions) {
+  const moves = []
+  const now = Date.now()
+
+  // Best hour coaching
+  const hourE = {}; const hourCount = {}
+  sessions.forEach(s => {
+    const h = new Date(s.startTime).getHours()
+    hourE[h] = (hourE[h] || 0) + s.totalUSD
+    hourCount[h] = (hourCount[h] || 0) + 1
+  })
+  const bestHourEntry = Object.entries(hourE).sort((a, b) => b[1] - a[1])[0]
+  if (bestHourEntry) {
+    const bestHour = parseInt(bestHourEntry[0])
+    const currentHour = new Date().getHours()
+    const hoursUntil = ((bestHour - currentHour + 24) % 24)
+    const avgAtPeak = bestHourEntry[1] / hourCount[bestHourEntry[0]]
+    const label = bestHour === 0 ? '12 AM' : bestHour < 12 ? `${bestHour} AM` : bestHour === 12 ? '12 PM' : `${bestHour - 12} PM`
+    if (hoursUntil === 0 || hoursUntil === 1) {
+      moves.push({ icon: '🔥', color: '#FB923C', text: `Go live NOW — ${label} is your peak earning time. Your data shows you average $${avgAtPeak.toFixed(0)}/session at this hour`, priority: 0 })
+    } else if (hoursUntil <= 2) {
+      moves.push({ icon: '⏰', color: '#22D3EE', text: `You're ${hoursUntil} hour${hoursUntil > 1 ? 's' : ''} away from your peak time (${label}). Prep your room title and get ready — you avg $${avgAtPeak.toFixed(0)} at this hour`, priority: 1 })
+    } else {
+      moves.push({ icon: '🕐', color: '#22D3EE', text: `Your best earning time is ${label} — plan your next stream around it. Your data shows $${avgAtPeak.toFixed(0)} avg per session at this hour`, priority: 2 })
+    }
+  }
+
+  // Tonight prediction
+  if (predictions?.tonightStream) {
+    const { expected, range, returningTippers } = predictions.tonightStream
+    moves.push({ icon: '🎯', color: '#F59E0B', text: `Set a goal of $${Math.round(expected * 1.2)} for tonight — your data predicts $${range.min}–$${range.max} and ~${returningTippers} returning tippers`, priority: 1 })
+  }
+
+  // Dormant high-value fans to re-engage
+  const dormant = whales.filter(w => { const days = Math.floor((now - new Date(w.lastTipDate)) / 86400000); return days >= 3 && days <= 45 && w.totalUSD >= 20 }).sort((a, b) => b.totalUSD - a.totalUSD).slice(0, 3)
+  dormant.forEach(w => {
+    const days = Math.floor((now - new Date(w.lastTipDate)) / 86400000)
+    moves.push({ icon: '💸', color: '#EC4899', text: `Message ${w.username} — they've spent $${w.totalUSD.toFixed(0)} total but haven't tipped in ${days} days. One message could recover $${(w.avgTipSize * 2).toFixed(0)}+`, cta: true, username: w.username, priority: 1 })
+  })
+
+  // Session goal based on avg
+  const avgSession = sessions.length ? sessions.reduce((s, x) => s + x.totalUSD, 0) / sessions.length : 0
+  if (avgSession > 0) {
+    const goal = Math.round(avgSession * 1.2 / 5) * 5
+    moves.push({ icon: '🏆', color: '#F59E0B', text: `Your sessions average $${avgSession.toFixed(0)} — aim for $${goal} next stream. You've already hit this ${sessions.filter(s => s.totalUSD >= goal).length} times`, priority: 3 })
+  }
+
+  return moves.sort((a, b) => a.priority - b.priority).slice(0, 5)
 }
 
 // ============================================
@@ -460,13 +656,15 @@ export function generateInsights(tips, sessions) {
 
 export function aggregateRows(tips) {
   if (!tips || tips.length === 0) {
-    return { totalUSD: 0, totalTokens: 0, totalTips: 0, avgTipSize: 0, topTippers: [], platforms: [], sessions: [], insights: [], predictions: null, whaleAlerts: [] }
+    return { totalUSD: 0, totalTokens: 0, totalTips: 0, avgTipSize: 0, topTippers: [], platforms: [], sessions: [], insights: [], predictions: null, whaleAlerts: [], lossAlerts: [], nextMoves: [] }
   }
   const sessions = detectSessions(tips)
   const whales = identifyWhales(tips)
   const insights = generateInsights(tips, sessions)
   const predictions = predictRevenue(tips, sessions)
   const whaleAlerts = generateWhaleAlerts(whales)
+  const lossAlerts = generateLossAlerts(tips, sessions, whales)
+  const nextMoves = generateNextMoves(tips, sessions, whales, predictions)
   const totalUSD = tips.reduce((s, t) => s + (t.usd || 0), 0)
   const totalTokens = tips.reduce((s, t) => s + (t.tokens || 0), 0)
   const platformMap = {}
@@ -493,6 +691,6 @@ export function aggregateRows(tips) {
   return {
     totalUSD: parseFloat(totalUSD.toFixed(2)), totalTokens, totalTips: tips.length,
     avgTipSize: parseFloat((tips.length > 0 ? totalUSD / tips.length : 0).toFixed(2)),
-    topTippers, platforms, sessions, insights, predictions, whaleAlerts, whales
+    topTippers, platforms, sessions, insights, predictions, whaleAlerts, lossAlerts, nextMoves, whales
   }
 }
