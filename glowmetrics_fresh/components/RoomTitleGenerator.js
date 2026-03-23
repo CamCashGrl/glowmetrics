@@ -117,7 +117,6 @@ export default function TitleGeneratorUI() {
     <div className="p-6 max-w-5xl mx-auto text-white">
       <h1 className="text-2xl font-bold mb-4">🔥 Elite AI Title Generator</h1>
 
-      {/* INPUTS */}
       <div className="grid grid-cols-2 gap-3 mb-6">
         <label>
           <input type="checkbox" checked={tokensEnabled} onChange={()=>setTokensEnabled(!tokensEnabled)} /> Token Goal
@@ -166,7 +165,6 @@ export default function TitleGeneratorUI() {
         </label>
       </div>
 
-      {/* BUTTONS */}
       <div className="flex gap-3 mb-6">
         <button onClick={generate} className="bg-pink-500 px-4 py-2 rounded">
           Generate
@@ -176,7 +174,6 @@ export default function TitleGeneratorUI() {
         </button>
       </div>
 
-      {/* TITLES */}
       <div className="grid gap-2">
         {titles.map((t,i)=>(
           <div
@@ -207,7 +204,6 @@ export default function TitleGeneratorUI() {
         ))}
       </div>
 
-      {/* SELECTED */}
       {selected && (
         <div className="mt-6">
           <p className="text-pink-400">{selected.text}</p>
@@ -223,14 +219,12 @@ export default function TitleGeneratorUI() {
         </div>
       )}
 
-      {/* HASHTAGS */}
       {hashtags.length > 0 && (
         <div className="mt-4 text-blue-300">
           {hashtags.join(" ")}
         </div>
       )}
 
-      {/* SAVED PERFORMANCE (SESSION ONLY) */}
       {saved.length > 0 && (
         <div className="mt-10">
           <h2 className="text-lg mb-2">🏆 Top Performing Titles</h2>
@@ -245,7 +239,6 @@ export default function TitleGeneratorUI() {
         </div>
       )}
 
-      {/* INSIGHT */}
       <div className="mt-8 p-4 bg-yellow-500/10 rounded text-sm">
         💡 Refreshing your title every 20–30 minutes increases ranking frequency and visibility by ~30–50%.
       </div>
