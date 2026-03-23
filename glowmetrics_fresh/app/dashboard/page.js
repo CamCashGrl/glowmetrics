@@ -718,6 +718,7 @@ export default function Dashboard() {
         {activeTab === "titles" && (() => {
           const [titles, setTitles] = React.useState([])
           const [selected, setSelected] = React.useState(null)
+          const [hashtags, setHashtags] = React.useState([])
           const [tokensEnabled, setTokensEnabled] = React.useState(false)
           const [tokenGoal, setTokenGoal] = React.useState(500)
           const [action, setAction] = React.useState("")
@@ -738,6 +739,15 @@ export default function Dashboard() {
             return score
           }
 
+          const generateHashtags = title => {
+            const base = ["#camgirl","#livecam","#tipmenu","#fyp"]
+            let extra = []
+            if (title.includes("Control")) extra = ["#controlme","#tiptovibe","#lovense"]
+            else if (title.includes("Tip")) extra = ["#tips","#spoilme","#paytoplay"]
+            else extra = ["#sexy","#flirty","#livefun"]
+            setHashtags([...base, ...extra])
+          }
+
           const copyToClipboard = (text, index = null) => {
             navigator.clipboard.writeText(text)
             if (index !== null) {
@@ -747,6 +757,13 @@ export default function Dashboard() {
               setCopiedSelected(true)
               setTimeout(() => setCopiedSelected(false), 1500)
             }
+          }
+
+          const copyFull = (selectedText, hashtagsArray) => {
+            const fullText = `${selectedText}\n\n${hashtagsArray.join(" ")}`
+            navigator.clipboard.writeText(fullText)
+            setCopiedSelected(true)
+            setTimeout(() => setCopiedSelected(false), 1500)
           }
 
           const generate = () => {
@@ -772,6 +789,7 @@ export default function Dashboard() {
             }
             setTitles(results.sort((a,b) => b.score - a.score))
             setSelected(null)
+            setHashtags([])
             setCopiedIndex(null)
             setCopiedSelected(false)
           }
@@ -819,7 +837,7 @@ export default function Dashboard() {
 
               <div style={{ display: "grid", gap: 8 }}>
                 {titles.map((t, i) => (
-                  <div key={i} onClick={() => setSelected(t)}
+                  <div key={i} onClick={() => { setSelected(t); generateHashtags(t.text) }}
                     style={{ padding: 10, borderRadius: 10, cursor: "pointer", background: selected?.text === t.text ? C.indigo : C.card, border: `1px solid ${C.border}` }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                       <span style={{ flex: 1, color: C.white, fontSize: 13 }}>{t.text}</span>
@@ -840,10 +858,21 @@ export default function Dashboard() {
               {selected && (
                 <div style={{ marginTop: 12, color: C.cyan }}>
                   <div style={{ marginBottom: 6 }}>{selected.text}</div>
-                  <button onClick={() => copyToClipboard(selected.text)}
-                    style={{ background: C.pink, padding: "6px 12px", borderRadius: 8, border: "none", cursor: "pointer", color: C.white, fontWeight: 600 }}>
-                    {copiedSelected ? "Copied!" : "Copy Title"}
-                  </button>
+                  {hashtags.length > 0 && (
+                    <div style={{ marginBottom: 10, fontSize: 13, color: C.text }}>
+                      {hashtags.join(" ")}
+                    </div>
+                  )}
+                  <div style={{ display: "flex", gap: 10 }}>
+                    <button onClick={() => copyFull(selected.text, hashtags)}
+                      style={{ background: C.pink, padding: "6px 12px", borderRadius: 8, border: "none", cursor: "pointer", color: C.white, fontWeight: 600 }}>
+                      {copiedSelected ? "Copied!" : "Copy Title + Tags"}
+                    </button>
+                    <button onClick={() => navigator.clipboard.writeText(hashtags.join(" "))}
+                      style={{ background: C.card2, padding: "6px 12px", borderRadius: 8, border: `1px solid ${C.border}`, cursor: "pointer", color: C.white }}>
+                      Copy Tags
+                    </button>
+                  </div>
                 </div>
               )}
 
