@@ -726,6 +726,8 @@ export default function Dashboard() {
           const [toy, setToy] = React.useState("")
           const [game, setGame] = React.useState("")
           const [emojis, setEmojis] = React.useState(true)
+          const [hashtagsEnabled, setHashtagsEnabled] = React.useState(true)
+          const [autoCopy, setAutoCopy] = React.useState(true)
           const [copiedIndex, setCopiedIndex] = React.useState(null)
           const [copiedSelected, setCopiedSelected] = React.useState(false)
 
@@ -737,26 +739,6 @@ export default function Dashboard() {
             if (title.length < 90) score += 1
             if (/🔥|💦|😈|👑/.test(title)) score += 1
             return score
-          }
-
-          const generateHashtags = title => {
-            const base = ["#camgirl","#livecam","#tipmenu","#fyp"]
-            let extra = []
-            if (title.includes("Control")) extra = ["#controlme","#tiptovibe","#lovense"]
-            else if (title.includes("Tip")) extra = ["#tips","#spoilme","#paytoplay"]
-            else extra = ["#sexy","#flirty","#livefun"]
-            setHashtags([...base, ...extra])
-          }
-
-          const copyToClipboard = (text, index = null) => {
-            navigator.clipboard.writeText(text)
-            if (index !== null) {
-              setCopiedIndex(index)
-              setTimeout(() => setCopiedIndex(null), 1500)
-            } else {
-              setCopiedSelected(true)
-              setTimeout(() => setCopiedSelected(false), 1500)
-            }
           }
 
           const copyFull = (selectedText, hashtagsArray) => {
@@ -794,6 +776,12 @@ export default function Dashboard() {
             setCopiedSelected(false)
           }
 
+          const toggleBtn = (val, label, onToggle) => (
+            <label style={{ color: C.text, display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+              <input type="checkbox" checked={val} onChange={onToggle} style={{ accentColor: C.pink }} /> {label}
+            </label>
+          )
+
           const inpStyle = { background: C.card2, border: `1px solid ${C.border2}`, padding: 8, borderRadius: 8, color: C.white, outline: "none", width: "100%" }
 
           return (
@@ -801,27 +789,23 @@ export default function Dashboard() {
               <h2 style={{ fontSize: 18, marginBottom: 12, color: C.white, fontWeight: 700 }}>🔥 Viral Title Generator</h2>
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 15 }}>
-                <label style={{ color: C.text, display: "flex", alignItems: "center", gap: 8 }}>
-                  <input type="checkbox" checked={tokensEnabled} onChange={() => setTokensEnabled(!tokensEnabled)} style={{ accentColor: C.pink }} /> Token Goal
-                </label>
+                {toggleBtn(tokensEnabled, "Token Goal", () => setTokensEnabled(!tokensEnabled))}
                 {tokensEnabled && (
                   <>
                     <input value={tokenGoal} onChange={e => setTokenGoal(Number(e.target.value))} style={inpStyle} placeholder="Token Goal" />
                     <input value={action} onChange={e => setAction(e.target.value)} placeholder="Action" style={inpStyle} />
                   </>
                 )}
-                <label style={{ color: C.text, display: "flex", alignItems: "center", gap: 8 }}>
-                  <input type="checkbox" checked={interactive} onChange={() => setInteractive(!interactive)} style={{ accentColor: C.pink }} /> Interactive
-                </label>
+                {toggleBtn(interactive, "Interactive", () => setInteractive(!interactive))}
                 {interactive && (
                   <>
                     <input value={toy} onChange={e => setToy(e.target.value)} placeholder="Toy" style={inpStyle} />
                     <input value={game} onChange={e => setGame(e.target.value)} placeholder="Game" style={inpStyle} />
                   </>
                 )}
-                <label style={{ color: C.text, display: "flex", alignItems: "center", gap: 8 }}>
-                  <input type="checkbox" checked={emojis} onChange={() => setEmojis(!emojis)} style={{ accentColor: C.pink }} /> Emojis
-                </label>
+                {toggleBtn(emojis, "Emojis", () => setEmojis(!emojis))}
+                {toggleBtn(hashtagsEnabled, "Hashtags", () => setHashtagsEnabled(!hashtagsEnabled))}
+                {toggleBtn(autoCopy, "Auto Copy", () => setAutoCopy(!autoCopy))}
               </div>
 
               <div style={{ display: "flex", gap: 10, marginBottom: 15 }}>
@@ -837,17 +821,38 @@ export default function Dashboard() {
 
               <div style={{ display: "grid", gap: 8 }}>
                 {titles.map((t, i) => (
-                  <div key={i} onClick={() => { setSelected(t); generateHashtags(t.text) }}
+                  <div key={i} onClick={() => {
+                    setSelected(t)
+                    let tags = []
+                    if (hashtagsEnabled) {
+                      const base = ["#camgirl","#livecam","#fyp"]
+                      if (t.text.includes("Control")) tags = ["#controlme","#lovense"]
+                      else if (t.text.includes("Tip")) tags = ["#tips","#paytoplay"]
+                      else tags = ["#sexy","#flirty"]
+                      tags = [...base, ...tags]
+                      setHashtags(tags)
+                    }
+                    if (autoCopy) {
+                      const full = hashtagsEnabled ? `${t.text}\n\n${tags.join(" ")}` : t.text
+                      navigator.clipboard.writeText(full)
+                      setCopiedIndex(i)
+                      setTimeout(() => setCopiedIndex(null), 1200)
+                    }
+                  }}
                     style={{ padding: 10, borderRadius: 10, cursor: "pointer", background: selected?.text === t.text ? C.indigo : C.card, border: `1px solid ${C.border}` }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                       <span style={{ flex: 1, color: C.white, fontSize: 13 }}>{t.text}</span>
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                         <span style={{ fontSize: 12, color: C.text }}>
-                          {copiedIndex === i ? "Copied!" : `Score: ${t.score}`}
+                          {copiedIndex === i ? "✔ Copied" : `Score: ${t.score}`}
                         </span>
-                        <button onClick={e => { e.stopPropagation(); copyToClipboard(t.text, i) }}
-                          style={{ background: C.cyan, border: "none", padding: "4px 8px", borderRadius: 6, cursor: "pointer", fontSize: 12 }}>
-                          📋
+                        <button onClick={e => {
+                          e.stopPropagation()
+                          navigator.clipboard.writeText(t.text)
+                          setCopiedIndex(i)
+                          setTimeout(() => setCopiedIndex(null), 1200)
+                        }} style={{ background: C.cyan, border: "none", padding: "4px 8px", borderRadius: 6, cursor: "pointer", fontSize: 12 }}>
+                          {copiedIndex === i ? "✔" : "📋"}
                         </button>
                       </div>
                     </div>
@@ -859,14 +864,12 @@ export default function Dashboard() {
                 <div style={{ marginTop: 12, color: C.cyan }}>
                   <div style={{ marginBottom: 6 }}>{selected.text}</div>
                   {hashtags.length > 0 && (
-                    <div style={{ marginBottom: 10, fontSize: 13, color: C.text }}>
-                      {hashtags.join(" ")}
-                    </div>
+                    <div style={{ marginBottom: 10, fontSize: 13, color: C.text }}>{hashtags.join(" ")}</div>
                   )}
                   <div style={{ display: "flex", gap: 10 }}>
                     <button onClick={() => copyFull(selected.text, hashtags)}
                       style={{ background: C.pink, padding: "6px 12px", borderRadius: 8, border: "none", cursor: "pointer", color: C.white, fontWeight: 600 }}>
-                      {copiedSelected ? "Copied!" : "Copy Title + Tags"}
+                      {copiedSelected ? "✔ Copied!" : "Copy Title + Tags"}
                     </button>
                     <button onClick={() => navigator.clipboard.writeText(hashtags.join(" "))}
                       style={{ background: C.card2, padding: "6px 12px", borderRadius: 8, border: `1px solid ${C.border}`, cursor: "pointer", color: C.white }}>
