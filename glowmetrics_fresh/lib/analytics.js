@@ -320,22 +320,36 @@ export function identifyWhales(tips) {
     fanMap[key].tips.push(t)
     if (t.tip_note) fanMap[key].tipNotes.push(t.tip_note)
   })
-  return Object.values(fanMap).map(f => {
-    const sorted = f.tips.sort((a, b) => new Date(b.dateRaw || b.date_time) - new Date(a.dateRaw || a.date_time))
-    const lastTipDate = new Date(sorted[0].dateRaw || sorted[0].date_time)
-    const firstTipDate = new Date(sorted[sorted.length - 1].dateRaw || sorted[sorted.length - 1].date_time)
+
+  const allFans = Object.values(fanMap)
+  const sorted = [...allFans].sort((a, b) => b.totalUSD - a.totalUSD)
+  const totalFans = sorted.length
+
+  // Dynamic thresholds based on THIS user's actual data
+  const whaleThreshold = totalFans >= 10 ? sorted[Math.floor(totalFans * 0.05)].totalUSD : (sorted[0]?.totalUSD || 0) * 0.7
+  const sharkThreshold = totalFans >= 5 ? sorted[Math.floor(totalFans * 0.15)].totalUSD : (sorted[0]?.totalUSD || 0) * 0.3
+  const avgSpend = allFans.reduce((s, f) => s + f.totalUSD, 0) / (allFans.length || 1)
+
+  return allFans.map(f => {
+    const fanSorted = f.tips.sort((a, b) => new Date(b.dateRaw || b.date_time) - new Date(a.dateRaw || a.date_time))
+    const lastTipDate = new Date(fanSorted[0].dateRaw || fanSorted[0].date_time)
+    const firstTipDate = new Date(fanSorted[fanSorted.length - 1].dateRaw || fanSorted[fanSorted.length - 1].date_time)
     const daysSinceLastTip = Math.floor((Date.now() - lastTipDate) / 86400000)
     const lifetimeDays = Math.max(Math.floor((lastTipDate - firstTipDate) / 86400000), 1)
     const avgDaysBetweenTips = f.tipCount > 1 ? lifetimeDays / (f.tipCount - 1) : 30
     const biggestTip = Math.max(...f.tips.map(t => t.usd))
+
+    // Dynamic tier assignment
     let tier = 'Regular'
-    if (f.totalUSD >= 500) tier = 'Whale'
-    else if (f.totalUSD >= 100) tier = 'Shark'
-    else if (daysSinceLastTip > 60) tier = 'Dormant'
+    if (f.totalUSD >= whaleThreshold && f.totalUSD >= avgSpend * 3) tier = 'Whale'
+    else if (f.totalUSD >= sharkThreshold && f.totalUSD >= avgSpend * 1.5) tier = 'Shark'
+    else if (daysSinceLastTip > Math.max(60, avgDaysBetweenTips * 3)) tier = 'Dormant'
+
     const privateTips = f.tips.filter(t => t.tip_type?.toLowerCase().includes('private') || t.tip_note?.toLowerCase().includes('private'))
     const hourCounts = {}
     f.tips.forEach(t => { const h = new Date(t.dateRaw || t.date_time).getHours(); hourCounts[h] = (hourCounts[h] || 0) + 1 })
     const mostActiveHour = Object.entries(hourCounts).sort((a, b) => b[1] - a[1])[0]
+
     return {
       username: f.username, totalUSD: parseFloat(f.totalUSD.toFixed(2)),
       totalTokens: f.totalTokens, tipCount: f.tipCount,
@@ -350,7 +364,10 @@ export function identifyWhales(tips) {
       hasPrivates: privateTips.length > 0, privateCount: privateTips.length,
       privateSpent: parseFloat(privateTips.reduce((s, t) => s + t.usd, 0).toFixed(2)),
       typicalOnlineHours: mostActiveHour ? `${mostActiveHour[0]}:00 - ${parseInt(mostActiveHour[0]) + 2}:00` : 'Unknown',
-      tipNotes: f.tipNotes, tips: f.tips
+      tipNotes: f.tipNotes, tips: f.tips,
+      // Expose thresholds for UI context
+      isTopSpender: f.totalUSD >= whaleThreshold,
+      spendPercentile: Math.round((1 - sorted.findIndex(s => s.username === f.username) / totalFans) * 100)
     }
   }).sort((a, b) => b.totalUSD - a.totalUSD)
 }
@@ -393,14 +410,36 @@ function calcExpectedNextTip(d, avg) {
 
 export function generateWhaleAlerts(whales) {
   const alerts = []
+  if (!whales.length) return alerts
+
+  // Dynamic thresholds from this user's actual data
+  const totalSpend = whales.reduce((s, w) => s + w.totalUSD, 0)
+  const avgSpend = totalSpend / whales.length
+  const topSpenders = whales.filter(w => w.tier === 'Whale' || w.tier === 'Shark')
+  const churnThreshold = avgSpend * 0.5 // anyone above half the avg spend matters
+  const tipLikelyThreshold = avgSpend * 0.8
+
   whales.forEach(w => {
-    if (w.tier === 'Whale' && w.daysSinceLastTip < 7 && w.totalUSD >= 500 && w.totalUSD < 600)
-      alerts.push({ type: 'new_whale', severity: 'success', icon: '🐳', whale: w.username, message: `${w.username} just became a whale! ($${w.totalUSD} lifetime)`, action: 'Send thank you message' })
-    if ((w.churnRisk.level === 'High' || w.churnRisk.level === 'Critical') && w.totalUSD >= 100)
-      alerts.push({ type: 'churn_risk', severity: 'warning', icon: '⚠️', whale: w.username, message: `${w.username} hasn't tipped in ${w.daysSinceLastTip} days (usually every ${w.avgDaysBetweenTips.toFixed(0)} days)`, action: 'Re-engage now' })
-    if (w.tipProbability.level === 'High' && w.totalUSD >= 200)
-      alerts.push({ type: 'tip_likely', severity: 'info', icon: '💰', whale: w.username, message: `${w.username} likely to tip soon (${w.tipProbability.percentage}% probability)`, action: 'Go live during their active hours' })
+    // New top tipper crossed into Whale tier recently
+    if (w.tier === 'Whale' && w.daysSinceLastTip < 7 && w.isTopSpender)
+      alerts.push({ type: 'new_whale', severity: 'success', icon: '🐳', whale: w.username, message: `${w.username} just became your top tipper! ($${w.totalUSD.toFixed(0)} lifetime)`, action: 'Send a thank you message' })
+
+    // Churn risk — scaled to their data
+    if ((w.churnRisk.level === 'High' || w.churnRisk.level === 'Critical') && w.totalUSD >= churnThreshold)
+      alerts.push({ type: 'churn_risk', severity: 'warning', icon: '⚠️', whale: w.username, message: `${w.username} hasn't tipped in ${w.daysSinceLastTip} days — they usually tip every ${w.avgDaysBetweenTips.toFixed(0)} days`, action: 'Re-engage now before they go cold' })
+
+    // High tip probability — scaled to their data
+    if (w.tipProbability.level === 'High' && w.totalUSD >= tipLikelyThreshold)
+      alerts.push({ type: 'tip_likely', severity: 'info', icon: '💰', whale: w.username, message: `${w.username} is likely to tip soon (${w.tipProbability.percentage}% probability based on their pattern)`, action: 'Go live during their active hours' })
+
+    // Returning after long absence
+    if (w.daysSinceLastTip > 0 && w.daysSinceLastTip <= 3 && w.tipCount > 5) {
+      const prevGap = w.avgDaysBetweenTips
+      if (w.daysSinceLastTip > prevGap * 1.5)
+        alerts.push({ type: 'returned', severity: 'success', icon: '🎉', whale: w.username, message: `${w.username} just tipped again after ${w.daysSinceLastTip} days away — welcome them back!`, action: 'Send a thank you message' })
+    }
   })
+
   const order = { critical: 0, warning: 1, info: 2, success: 3 }
   return alerts.sort((a, b) => order[a.severity] - order[b.severity])
 }
