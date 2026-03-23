@@ -3,6 +3,7 @@ import React, { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
 import { parseCSV, aggregateRows } from "../../lib/analytics"
+import TitleGeneratorUI from "@/components/TitleGenerator"
 
 // Analytics tracking — works whether or not @vercel/analytics is installed
 let track = (event, props) => {}
@@ -715,147 +716,13 @@ export default function Dashboard() {
           </div>
         )}
 
-        {activeTab === "titles" && (() => {
-          const [goalEnabled, setGoalEnabled] = React.useState(false)
-          const [goalTokens, setGoalTokens] = React.useState("")
-          const [goalAction, setGoalAction] = React.useState("")
-          const [interactive, setInteractive] = React.useState(false)
-          const [toy, setToy] = React.useState("")
-          const [game, setGame] = React.useState("")
-          const [niche, setNiche] = React.useState("")
-          const [useEmojis, setUseEmojis] = React.useState(true)
-          const [genTitles, setGenTitles] = React.useState([])
-          const [savedTitles, setSavedTitles] = React.useState([])
-          const [copiedIdx, setCopiedIdx] = React.useState(null)
+        {activeTab === "titles" && (
+          <div style={{ padding: "8px 0" }}>
+            <TitleGeneratorUI />
+          </div>
+        )}
 
-          const rnd = arr => arr[Math.floor(Math.random() * arr.length)]
-          const shuf = arr => [...arr].sort(() => Math.random() - 0.5)
-
-          const cleanToken = n => {
-            if (!n) return null
-            if (n <= 200) return Math.round(n / 25) * 25
-            if (n <= 1000) return Math.round(n / 50) * 50
-            return Math.round(n / 100) * 100
-          }
-
-          const getGoalFormats = (tokens, action) => {
-            if (!tokens) return null
-            const c = cleanToken(parseInt(tokens))
-            return [`${c} tokens`, `Goal: ${c} tokens`, `Help me reach ${c} tokens`, `${c} tokens goal`, `Next goal: ${c} tokens`, `Hit ${c} tokens`, `${c} tokens → ${action || "surprise"}`, `${action || "Fun unlock"} at ${c} tokens`]
-          }
-
-          const doGenerate = () => {
-            const emojiSet = useEmojis ? ["🔥","💦","😈","💋","👑","⚡","🎮","💕"] : [""]
-            const interactionPhrases = ["Tip to control","You control me","Make me lose control","Tip to vibe","Control my toy","Every tip hits me","You run the show","Turn me on"]
-            const basePhrases = ["Come play with me","Let's have some fun","Who's feeling naughty?","Let's get wild tonight","Good vibes only","Come make me blush","Let's see what happens","Play with me tonight"]
-            const whalePhrases = ["Top tipper gets all my attention","VIP energy only","Big tippers run this room","Who's taking control tonight?","Only the best get me","High rollers welcome"]
-            const goalFormats = goalEnabled ? getGoalFormats(goalTokens, goalAction) : null
-            const result = new Set()
-            let attempts = 0
-            while (result.size < 25 && attempts < 300) {
-              attempts++
-              let parts = [interactive ? rnd(interactionPhrases) : rnd(basePhrases)]
-              if (interactive) { const extras = [toy, game].filter(Boolean); if (extras.length && Math.random() > 0.4) parts.push(rnd(extras)) }
-              if (Math.random() > 0.6) parts.push(rnd(whalePhrases))
-              if (goalEnabled && goalFormats) parts.push(rnd(goalFormats))
-              if (niche && Math.random() > 0.5) parts.push(`#${niche.replace(/\s+/g, "")}`)
-              if (useEmojis) parts.push(rnd(emojiSet))
-              result.add(parts.join(" "))
-            }
-            setGenTitles(shuf([...result]))
-            setCopiedIdx(null)
-          }
-
-          const saveTitle = t => setSavedTitles(s => [{ text: t, earnings: "", rating: "" }, ...s])
-          const updateSaved = (i, field, val) => setSavedTitles(s => { const u = [...s]; u[i][field] = val; return u })
-          const copyTitle = (t, i) => { navigator.clipboard.writeText(t); setCopiedIdx(i); setTimeout(() => setCopiedIdx(null), 2000) }
-          const checkboxStyle = { accentColor: C.pink, width: 16, height: 16, cursor: "pointer" }
-          const inputStyle = { flex: 1, padding: "8px 12px", borderRadius: 8, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: C.white, fontSize: 13, outline: "none" }
-
-          return (
-            <div style={{ maxWidth: 700 }}>
-              <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 8 }}>🔥 Room Title Generator</h1>
-              <p style={{ fontSize: 14, color: C.muted, marginBottom: 28 }}>Generate 25 ready-to-use room titles — copy or save your favorites</p>
-              <div style={{ ...glassCard, borderRadius: 16, padding: 24, marginBottom: 24 }}>
-                <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-                  <div>
-                    <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", fontSize: 14, color: C.white, fontWeight: 600 }}>
-                      <input type="checkbox" style={checkboxStyle} onChange={() => setGoalEnabled(g => !g)} /> Add a goal?
-                    </label>
-                    {goalEnabled && (
-                      <div style={{ display: "flex", gap: 10, marginTop: 10 }}>
-                        <input style={inputStyle} type="number" placeholder="Token amount (e.g. 500)" onChange={e => setGoalTokens(e.target.value)} />
-                        <input style={inputStyle} placeholder="Action (e.g. flash, strip)" onChange={e => setGoalAction(e.target.value)} />
-                      </div>
-                    )}
-                  </div>
-                  <div>
-                    <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", fontSize: 14, color: C.white, fontWeight: 600 }}>
-                      <input type="checkbox" style={checkboxStyle} onChange={() => setInteractive(v => !v)} /> Interactive toy / game?
-                    </label>
-                    {interactive && (
-                      <div style={{ display: "flex", gap: 10, marginTop: 10 }}>
-                        <input style={inputStyle} placeholder="Toy (e.g. Lovense Lush)" onChange={e => setToy(e.target.value)} />
-                        <input style={inputStyle} placeholder="Game (e.g. Wheel Spin)" onChange={e => setGame(e.target.value)} />
-                      </div>
-                    )}
-                  </div>
-                  <div>
-                    <label style={{ fontSize: 12, color: C.muted, fontWeight: 600, marginBottom: 8, display: "block", textTransform: "uppercase", letterSpacing: 1 }}>Niche tag (optional)</label>
-                    <input style={{ ...inputStyle, flex: "none", width: "100%", boxSizing: "border-box" }} placeholder="e.g. lovense, latina, bbw, petite" onChange={e => setNiche(e.target.value)} />
-                  </div>
-                  <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", fontSize: 14, color: C.white, fontWeight: 600 }}>
-                    <input type="checkbox" style={checkboxStyle} checked={useEmojis} onChange={() => setUseEmojis(v => !v)} /> Include emojis
-                  </label>
-                  <button onClick={doGenerate} style={{ padding: "13px", borderRadius: 12, background: "linear-gradient(135deg, #22D3EE, #EC4899)", border: "none", color: C.white, fontSize: 15, fontWeight: 700, cursor: "pointer", boxShadow: "0 0 24px rgba(34,211,238,0.3)" }}>
-                    ✨ Generate 25 Titles
-                  </button>
-                </div>
-              </div>
-              {genTitles.length > 0 && (
-                <div style={{ ...glassCard, borderRadius: 16, overflow: "hidden", marginBottom: 24 }}>
-                  <div style={{ padding: "14px 20px", borderBottom: "1px solid rgba(255,255,255,0.08)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: C.white }}>Your Titles — click to copy</div>
-                    <button onClick={doGenerate} style={{ padding: "6px 14px", borderRadius: 8, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: C.muted, fontSize: 12, cursor: "pointer" }}>🔁 Regenerate</button>
-                  </div>
-                  {genTitles.map((t, i) => (
-                    <div key={i} style={{ padding: "13px 20px", borderBottom: "1px solid rgba(255,255,255,0.05)", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, background: copiedIdx === i ? "rgba(16,185,129,0.1)" : "transparent", transition: "background 0.15s", cursor: "pointer" }}
-                      onClick={() => copyTitle(t, i)}>
-                      <span style={{ fontSize: 13, color: C.white, flex: 1, lineHeight: 1.5 }}>{t}</span>
-                      <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-                        <span style={{ padding: "4px 10px", borderRadius: 6, background: copiedIdx === i ? "rgba(16,185,129,0.2)" : "rgba(255,255,255,0.06)", border: `1px solid ${copiedIdx === i ? "rgba(16,185,129,0.4)" : "rgba(255,255,255,0.1)"}`, color: copiedIdx === i ? C.green : C.muted, fontSize: 11 }}>
-                          {copiedIdx === i ? "✅" : "📋"}
-                        </span>
-                        <span onClick={e => { e.stopPropagation(); saveTitle(t) }} style={{ padding: "4px 10px", borderRadius: 6, background: "rgba(124,92,255,0.15)", border: "1px solid rgba(124,92,255,0.3)", color: C.indigo, fontSize: 11, cursor: "pointer" }}>💾</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {savedTitles.length > 0 && (
-                <div style={{ ...glassCard, borderRadius: 16, overflow: "hidden" }}>
-                  <div style={{ padding: "14px 20px", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: C.white }}>💾 Saved & Performance Tracking</div>
-                    <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>Track which titles earned the most</div>
-                  </div>
-                  {savedTitles.map((item, i) => (
-                    <div key={i} style={{ padding: "14px 20px", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
-                      <div style={{ fontSize: 13, color: C.white, marginBottom: 10, lineHeight: 1.5 }}>{item.text}</div>
-                      <div style={{ display: "flex", gap: 10 }}>
-                        <input value={item.earnings} onChange={e => updateSaved(i, "earnings", e.target.value)} placeholder="Earnings (tokens)" style={{ ...inputStyle, flex: 1 }} />
-                        <input value={item.rating} onChange={e => updateSaved(i, "rating", e.target.value)} placeholder="Rating (1-5)" style={{ ...inputStyle, flex: 1 }} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )
-        })()}
-
-        {activeTab === "help"
-
-        {activeTab === "help" && (
+                {activeTab === "help" && (
           <div style={{ maxWidth: 900 }}>
             <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 8 }}>❓ How to Import Your Tips</h1>
             <p style={{ fontSize: 14, color: C.muted, marginBottom: 32 }}>Follow these steps to get your tip data into CamCash in under 2 minutes</p>
