@@ -3,7 +3,6 @@ import React, { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
 import { parseCSV, aggregateRows } from "../../lib/analytics"
-import TitleGeneratorUI from "@/components/RoomTitleGenerator"
 
 // Analytics tracking — works whether or not @vercel/analytics is installed
 let track = (event, props) => {}
@@ -716,11 +715,144 @@ export default function Dashboard() {
           </div>
         )}
 
-        {activeTab === "titles" && (
-          <div style={{ padding: "8px 0" }}>
-            <TitleGeneratorUI />
-          </div>
-        )}
+        {activeTab === "titles" && (() => {
+          const [titles, setTitles] = React.useState([])
+          const [selected, setSelected] = React.useState(null)
+          const [tokensEnabled, setTokensEnabled] = React.useState(false)
+          const [tokenGoal, setTokenGoal] = React.useState(500)
+          const [action, setAction] = React.useState("")
+          const [interactive, setInteractive] = React.useState(false)
+          const [toy, setToy] = React.useState("")
+          const [game, setGame] = React.useState("")
+          const [emojis, setEmojis] = React.useState(true)
+          const [copiedIndex, setCopiedIndex] = React.useState(null)
+          const [copiedSelected, setCopiedSelected] = React.useState(false)
+
+          const scoreTitle = title => {
+            let score = 0
+            if (title.includes("Tip")) score += 2
+            if (title.includes("Control")) score += 2
+            if (title.includes("Top")) score += 1
+            if (title.length < 90) score += 1
+            if (/🔥|💦|😈|👑/.test(title)) score += 1
+            return score
+          }
+
+          const copyToClipboard = (text, index = null) => {
+            navigator.clipboard.writeText(text)
+            if (index !== null) {
+              setCopiedIndex(index)
+              setTimeout(() => setCopiedIndex(null), 1500)
+            } else {
+              setCopiedSelected(true)
+              setTimeout(() => setCopiedSelected(false), 1500)
+            }
+          }
+
+          const generate = () => {
+            const results = []
+            let attempts = 0
+            const emojisSet = emojis ? ["🔥","💦","😈","👑"] : [""]
+            while (results.length < 25 && attempts < 100) {
+              attempts++
+              const e = emojisSet[Math.floor(Math.random() * emojisSet.length)]
+              const structures = [
+                `Tip ${Math.floor(Math.random()*20)+5} → ${action || "Make Me React"} ${e}`,
+                `Top Tipper Controls Me ${e}`,
+                `You Control Everything • Tip To Play ${e}`,
+                `Hit ${tokenGoal} → ${action || "Special Reward"} ${e}`,
+                `Tip = ${action || "Reaction"} • Don't Stop ${e}`,
+                `Control My ${toy || "Toy"} • Tip To Activate ${e}`,
+                `${game || "Game Mode"} • Winner Gets Control ${e}`
+              ]
+              let title = structures[Math.floor(Math.random() * structures.length)]
+              if (interactive) title += " • Interactive ON"
+              if (tokensEnabled) title += ` • Goal: ${tokenGoal}`
+              if (!results.find(r => r.text === title)) results.push({ text: title, score: scoreTitle(title) })
+            }
+            setTitles(results.sort((a,b) => b.score - a.score))
+            setSelected(null)
+            setCopiedIndex(null)
+            setCopiedSelected(false)
+          }
+
+          const inpStyle = { background: C.card2, border: `1px solid ${C.border2}`, padding: 8, borderRadius: 8, color: C.white, outline: "none", width: "100%" }
+
+          return (
+            <div style={{ ...glassCard, padding: 20, borderRadius: 16, marginTop: 20, maxWidth: 700 }}>
+              <h2 style={{ fontSize: 18, marginBottom: 12, color: C.white, fontWeight: 700 }}>🔥 Viral Title Generator</h2>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 15 }}>
+                <label style={{ color: C.text, display: "flex", alignItems: "center", gap: 8 }}>
+                  <input type="checkbox" checked={tokensEnabled} onChange={() => setTokensEnabled(!tokensEnabled)} style={{ accentColor: C.pink }} /> Token Goal
+                </label>
+                {tokensEnabled && (
+                  <>
+                    <input value={tokenGoal} onChange={e => setTokenGoal(Number(e.target.value))} style={inpStyle} placeholder="Token Goal" />
+                    <input value={action} onChange={e => setAction(e.target.value)} placeholder="Action" style={inpStyle} />
+                  </>
+                )}
+                <label style={{ color: C.text, display: "flex", alignItems: "center", gap: 8 }}>
+                  <input type="checkbox" checked={interactive} onChange={() => setInteractive(!interactive)} style={{ accentColor: C.pink }} /> Interactive
+                </label>
+                {interactive && (
+                  <>
+                    <input value={toy} onChange={e => setToy(e.target.value)} placeholder="Toy" style={inpStyle} />
+                    <input value={game} onChange={e => setGame(e.target.value)} placeholder="Game" style={inpStyle} />
+                  </>
+                )}
+                <label style={{ color: C.text, display: "flex", alignItems: "center", gap: 8 }}>
+                  <input type="checkbox" checked={emojis} onChange={() => setEmojis(!emojis)} style={{ accentColor: C.pink }} /> Emojis
+                </label>
+              </div>
+
+              <div style={{ display: "flex", gap: 10, marginBottom: 15 }}>
+                <button onClick={generate} style={{ background: C.pink, padding: "10px 16px", borderRadius: 10, color: C.white, border: "none", fontWeight: 700, cursor: "pointer" }}>
+                  ✨ Generate Titles
+                </button>
+                {titles.length > 0 && (
+                  <button onClick={generate} style={{ background: "rgba(255,255,255,0.06)", padding: "10px 16px", borderRadius: 10, color: C.muted, border: `1px solid ${C.border}`, cursor: "pointer" }}>
+                    🔁 Regenerate
+                  </button>
+                )}
+              </div>
+
+              <div style={{ display: "grid", gap: 8 }}>
+                {titles.map((t, i) => (
+                  <div key={i} onClick={() => setSelected(t)}
+                    style={{ padding: 10, borderRadius: 10, cursor: "pointer", background: selected?.text === t.text ? C.indigo : C.card, border: `1px solid ${C.border}` }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ flex: 1, color: C.white, fontSize: 13 }}>{t.text}</span>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{ fontSize: 12, color: C.text }}>
+                          {copiedIndex === i ? "Copied!" : `Score: ${t.score}`}
+                        </span>
+                        <button onClick={e => { e.stopPropagation(); copyToClipboard(t.text, i) }}
+                          style={{ background: C.cyan, border: "none", padding: "4px 8px", borderRadius: 6, cursor: "pointer", fontSize: 12 }}>
+                          📋
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {selected && (
+                <div style={{ marginTop: 12, color: C.cyan }}>
+                  <div style={{ marginBottom: 6 }}>{selected.text}</div>
+                  <button onClick={() => copyToClipboard(selected.text)}
+                    style={{ background: C.pink, padding: "6px 12px", borderRadius: 8, border: "none", cursor: "pointer", color: C.white, fontWeight: 600 }}>
+                    {copiedSelected ? "Copied!" : "Copy Title"}
+                  </button>
+                </div>
+              )}
+
+              <div style={{ marginTop: 16, padding: 14, background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.25)", borderRadius: 10 }}>
+                <div style={{ fontSize: 13, color: C.gold }}>💡 Refreshing your title every 20–30 minutes increases ranking frequency and visibility by ~30–50%.</div>
+              </div>
+            </div>
+          )
+        })()}
 
                 {activeTab === "help" && (
           <div style={{ maxWidth: 900 }}>
