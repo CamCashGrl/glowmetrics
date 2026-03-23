@@ -3,7 +3,7 @@ import React, { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
 import { parseCSV, aggregateRows } from "../../lib/analytics"
-import TitleGeneratorUI from "@/components/TitleGenerator"
+import TitleGeneratorUI from "@/components/RoomTitleGenerator"
 
 // Analytics tracking — works whether or not @vercel/analytics is installed
 let track = (event, props) => {}
