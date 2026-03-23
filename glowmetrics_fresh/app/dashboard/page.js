@@ -52,6 +52,7 @@ export default function Dashboard() {
   const [messageIndex, setMessageIndex] = useState(0)
   const [messageCopied, setMessageCopied] = useState(false)
   const [showUpgradeModal, setShowUpgradeModal] = useState(false)
+  const [showBetaPrompt, setShowBetaPrompt] = useState(false)
   const [earlyAccessEmail, setEarlyAccessEmail] = useState('')
   const [earlyAccessSubmitted, setEarlyAccessSubmitted] = useState(false)
   const [earlyAccessSubmitting, setEarlyAccessSubmitting] = useState(false)
@@ -160,6 +161,13 @@ export default function Dashboard() {
       }
 
       setUploadCount(uploadCount + 1)
+      const newCount = uploadCount + 1
+      if (newCount === 2 || newCount === 3) setShowBetaPrompt(true)
+      // Track upload event
+      try {
+        await supabase.from('analytics_events').insert({ user_id: user.id, event_name: 'csv_uploaded', properties: { count: newCount, platform: parsed[0]?.platform || 'Unknown', rows: unique.length } })
+        await supabase.from('beta_users').upsert({ user_id: user.id, email: user.email, csv_upload_count: newCount }, { onConflict: 'user_id' })
+      } catch(e) {}
       const msg = duplicateCount > 0
         ? `✅ Imported ${unique.length} tips (${duplicateCount} duplicates skipped)`
         : `✅ Imported ${unique.length} tips from ${parsed[0]?.platform || "CSV"}!`
@@ -1216,7 +1224,85 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* FLOATING FEEDBACK BUTTON */}
+      {/* BETA PROMPT MODAL */}
+      {showBetaPrompt && !earlyAccessSubmitted && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.88)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1002, padding: 20 }}>
+          <div style={{ width: 460, background: "rgba(15,20,32,0.97)", backdropFilter: "blur(24px)", borderRadius: 24, border: "1px solid rgba(255,255,255,0.1)", boxShadow: "0 0 80px rgba(59,130,246,0.2), 0 0 160px rgba(236,72,153,0.1)", overflow: "hidden" }}>
+            <div style={{ height: 4, background: "linear-gradient(90deg, #22D3EE, #7C5CFF, #EC4899)" }} />
+            <div style={{ padding: 32 }}>
+
+              <div style={{ textAlign: "center", marginBottom: 22 }}>
+                <div style={{ fontSize: 36, marginBottom: 10 }}>💰</div>
+                <div style={{ fontSize: 20, fontWeight: 800, color: C.white, marginBottom: 10 }}>Your data found missed earnings</div>
+                <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.7 }}>You're using features that will become premium. We built this to help you:</div>
+                <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 6, textAlign: "left" }}>
+                  {[["🐳","Identify your highest paying viewers"], ["⏰","Stream at your most profitable times"], ["📈","Increase tips without more hours"]].map(([icon, text]) => (
+                    <div key={text} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, color: C.white }}>
+                      <span style={{ fontSize: 14 }}>{icon}</span> {text}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ padding: 16, background: "rgba(124,92,255,0.1)", border: "1px solid rgba(124,92,255,0.25)", borderRadius: 12, marginBottom: 18 }}>
+                <div style={{ fontSize: 14, color: C.indigo, fontWeight: 700, marginBottom: 8 }}>🚀 Early Access Offer</div>
+                <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.7, marginBottom: 10 }}>Right now everything is free during beta. But early users can:</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                  {["Lock in lifetime pricing before it increases", "Get every future premium feature included", "Keep full access as we expand the product"].map(t => (
+                    <div key={t} style={{ fontSize: 12, color: C.white }}>• {t}</div>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ textAlign: "center", padding: "12px 14px", background: "rgba(236,72,153,0.1)", border: "1px solid rgba(236,72,153,0.25)", borderRadius: 10, marginBottom: 16 }}>
+                <div style={{ fontSize: 18, color: C.pink, fontWeight: 800 }}>🔥 Lock in $9.99/mo for life</div>
+                <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>Launch price will be $29/mo — this offer won't last</div>
+              </div>
+
+              <input
+                type="email"
+                value={earlyAccessEmail}
+                onChange={e => setEarlyAccessEmail(e.target.value)}
+                placeholder="your@email.com"
+                style={{ width: "100%", padding: "12px 14px", borderRadius: 10, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.15)", color: C.white, fontSize: 13, outline: "none", marginBottom: 8, boxSizing: "border-box" }}
+                onFocus={e => e.target.style.borderColor = "rgba(34,211,238,0.5)"}
+                onBlur={e => e.target.style.borderColor = "rgba(255,255,255,0.15)"}
+              />
+
+              <button
+                disabled={!earlyAccessEmail.trim() || earlyAccessSubmitting}
+                onClick={async () => {
+                  if (!earlyAccessEmail.trim()) return
+                  setEarlyAccessSubmitting(true)
+                  track('beta_checkout_clicked', { email: earlyAccessEmail, uploadCount })
+                  try {
+                    await supabase.from('early_access').insert({ email: earlyAccessEmail.trim(), user_id: user?.id || null, signed_up_at: new Date().toISOString() })
+                    await supabase.from('beta_users').upsert({ user_id: user?.id, email: earlyAccessEmail.trim(), submitted_early_access: true, saw_beta_prompt: true }, { onConflict: 'user_id' })
+                    await supabase.from('analytics_events').insert({ user_id: user?.id, event_name: 'beta_checkout_clicked', properties: { email: earlyAccessEmail.trim() } })
+                  } catch(e) {}
+                  setEarlyAccessSubmitting(false)
+                  setEarlyAccessSubmitted(true)
+                  setShowBetaPrompt(false)
+                  showToast("🎉 Redirecting to checkout...")
+                  setTimeout(() => window.open("https://buy.stripe.com/8x228r3Qu8dj7zQ1F5f7i01", "_blank"), 500)
+                }}
+                style={{ width: "100%", padding: "14px", borderRadius: 12, background: earlyAccessEmail.trim() ? "linear-gradient(135deg, #22D3EE, #EC4899)" : "rgba(255,255,255,0.08)", border: "none", color: earlyAccessEmail.trim() ? C.white : C.muted, fontSize: 14, fontWeight: 800, cursor: earlyAccessEmail.trim() ? "pointer" : "not-allowed", boxShadow: earlyAccessEmail.trim() ? "0 0 30px rgba(34,211,238,0.4)" : "none", marginBottom: 8, transition: "all 0.2s" }}>
+                {earlyAccessSubmitting ? "Saving..." : "🔒 Lock In My Early Access"}
+              </button>
+
+              <div style={{ fontSize: 11, color: C.muted, textAlign: "center", marginBottom: 10 }}>Secure Stripe checkout — cancel anytime</div>
+
+              <button onClick={() => { setShowBetaPrompt(false); track('beta_prompt_dismissed', { uploadCount }) }}
+                style={{ width: "100%", padding: "10px", borderRadius: 10, background: "transparent", border: "1px solid rgba(255,255,255,0.08)", color: C.muted, fontSize: 13, cursor: "pointer" }}>
+                Keep using free beta
+              </button>
+
+            </div>
+          </div>
+        </div>
+      )}
+
+            {/* FLOATING FEEDBACK BUTTON */}
       <button
         onClick={() => { setShowFeedback(true); setFeedbackSent(false); setFeedbackText('') }}
         style={{
