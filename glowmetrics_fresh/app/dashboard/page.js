@@ -80,6 +80,19 @@ export default function Dashboard() {
       if (!user) { router.replace("/login"); return }
       setUser(user)
       loadData(user.id)
+      // Track user login + create beta_users row if not exists
+      try {
+        supabase.from('beta_users').upsert({
+          user_id: user.id,
+          email: user.email,
+          signed_up_at: user.created_at
+        }, { onConflict: 'user_id', ignoreDuplicates: true })
+        supabase.from('analytics_events').insert({
+          user_id: user.id,
+          event_name: 'dashboard_opened',
+          properties: { email: user.email }
+        })
+      } catch(e) {}
     })
   }, [])
 
@@ -148,7 +161,8 @@ export default function Dashboard() {
           username: r.username,
           tip_type: r.tip_type || "Tip",
           tokens,
-          usd
+          usd,
+          tip_note: r.tip_note || r.note || ""
         }
       })
 
@@ -247,6 +261,7 @@ export default function Dashboard() {
         .dash-card:hover { transform: translateY(-2px); }
         .whale-row { transition: background 0.15s; }
         .whale-row:hover { background: rgba(59,130,246,0.08) !important; }
+        @keyframes pulse-msg { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.25); } }
       `}</style>
 
       <div style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 0 }}>
@@ -414,6 +429,246 @@ export default function Dashboard() {
             </div>
 
             <div style={{ ...glassCard, borderRadius: 14, padding: 24, marginBottom: 28 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
+                <div style={{ width: 36, height: 36, borderRadius: 10, background: "linear-gradient(135deg, #F59E0B, #EC4899)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>🧭</div>
+                <div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: C.white }}>What's Next</div>
+                  <div style={{ fontSize: 12, color: C.muted }}>Personalized alerts based on your tippers' real behavior</div>
+                </div>
+              </div>
+              {(() => {
+                const now = Date.now()
+                const alerts = []
+
+                // 1. Social platform mentions in tip notes
+                const SOCIAL_KEYWORDS = {
+                  snapchat: /snap\s?chat|snapchat|snap/i,
+                  instagram: /instagram|insta|ig\b/i,
+                  twitter: /twitter|x\.com|\bx\b/i,
+                  onlyfans: /onlyfans|only fans|of\b/i,
+                }
+                whales.forEach(w => {
+                  if (!w.tipNotes || w.tipNotes.length === 0) return
+                  Object.entries(SOCIAL_KEYWORDS).forEach(([platform, regex]) => {
+                    const matchingNote = w.tipNotes.find(n => regex.test(n))
+                    if (matchingNote) {
+                      // Try to extract a username from the note
+                      const usernameMatch = matchingNote.match(/@[\w.]+|(?:my|is|:)\s*([\w.@]+)/i)
+                      const extractedUser = usernameMatch ? usernameMatch[1] || usernameMatch[0] : null
+                      alerts.push({
+                        type: 'social_mention',
+                        icon: '📱',
+                        color: C.cyan,
+                        severity: 'info',
+                        title: `${w.username} mentioned ${platform.charAt(0).toUpperCase() + platform.slice(1)}`,
+                        message: extractedUser
+                          ? `They left their ${platform} as "${extractedUser}" in a tip note — add them before you forget!`
+                          : `They mentioned ${platform} in a tip note — ask them for their handle next time they're in chat`,
+                        cta: 'Copy Message',
+                        username: w.username,
+                        whale: w
+                      })
+                    }
+                  })
+                })
+
+                // 2. Affiliate link opportunity — top tippers on multiple platforms
+                const topFans = whales.filter(w => w.totalUSD >= 50 && w.tipCount >= 5)
+                topFans.slice(0, 2).forEach(w => {
+                  const otherPlatforms = [...new Set(tips.filter(t => t.username.toLowerCase() === w.username.toLowerCase()).map(t => t.platform))]
+                  const streamingPlatforms = platforms.map(p => p.platform).filter(p => p !== w.platform)
+                  if (streamingPlatforms.length > 0) {
+                    alerts.push({
+                      type: 'affiliate',
+                      icon: '🔗',
+                      color: C.indigo,
+                      severity: 'info',
+                      title: `Share your ${streamingPlatforms[0]} affiliate link with ${w.username}`,
+                      message: `${w.username} has been one of your strongest supporters. Share your affiliate link on Snapchat or X — never directly on stream (against TOS)`,
+                      cta: 'Copy Message',
+                      username: w.username,
+                      whale: w
+                    })
+                  }
+                })
+
+                // 3. "They might be online now" — based on historical tip hours
+                whales.slice(0, 5).forEach(w => {
+                  if (w.tipCount < 5) return
+                  const hourCounts = {}
+                  w.tips.forEach(t => {
+                    const h = new Date(t.date_time || t.dateRaw).getHours()
+                    hourCounts[h] = (hourCounts[h] || 0) + 1
+                  })
+                  const bestHour = Object.entries(hourCounts).sort((a, b) => b[1] - a[1])[0]
+                  if (!bestHour) return
+                  const peakHour = parseInt(bestHour[0])
+                  const currentHour = new Date().getHours()
+                  const hoursAway = Math.abs(currentHour - peakHour)
+                  const totalTipsAtHour = bestHour[1]
+                  const probability = Math.min(95, Math.round((totalTipsAtHour / w.tipCount) * 100 * 2.5))
+                  const label = peakHour === 0 ? '12 AM' : peakHour < 12 ? `${peakHour} AM` : peakHour === 12 ? '12 PM' : `${peakHour - 12} PM`
+
+                  if (hoursAway <= 2 && probability >= 40) {
+                    alerts.push({
+                      type: 'online_now',
+                      icon: '🟢',
+                      color: C.green,
+                      severity: 'success',
+                      title: `${w.username} is probably online right now`,
+                      message: `They usually tip around ${label} — there's a ~${probability}% chance they're active. Go live or send a message now!`,
+                      cta: 'Copy Message',
+                      username: w.username,
+                      whale: w
+                    })
+                  } else if (hoursAway <= 10 && probability >= 40) {
+                    alerts.push({
+                      type: 'online_soon',
+                      icon: '⏰',
+                      color: C.gold,
+                      severity: 'warning',
+                      title: `${w.username} is likely online in ~${hoursAway}h`,
+                      message: `They typically tip around ${label} (${probability}% probability). Plan to go live or reach out before then`,
+                      cta: null,
+                      username: w.username,
+                      whale: w
+                    })
+                  }
+                })
+
+                // 4. Haven't heard from top tipper
+                whales.filter(w => w.totalUSD >= 20).slice(0, 3).forEach(w => {
+                  const days = Math.floor((now - new Date(w.lastTipDate)) / 86400000)
+                  if (days >= 7 && days <= 90) {
+                    const timeStr = days >= 30 ? `${Math.round(days / 30)} month${days >= 60 ? 's' : ''}` : `${days} days`
+                    alerts.push({
+                      type: 'dormant',
+                      icon: '💤',
+                      color: C.orange,
+                      severity: 'warning',
+                      title: `You haven't heard from ${w.username} in ${timeStr}`,
+                      message: `They've spent $${w.totalUSD.toFixed(0)} total — send them a message so they know you're thinking of them`,
+                      cta: 'Copy Message',
+                      username: w.username,
+                      whale: w
+                    })
+                  }
+                })
+
+                // 5. Performance tips based on data
+                const avgSession = sessions.length ? sessions.reduce((s, x) => s + x.totalUSD, 0) / sessions.length : 0
+                const bestSessions = sessions.filter(s => s.totalUSD >= avgSession * 1.5)
+                if (bestSessions.length >= 3) {
+                  const bestDow = {}
+                  bestSessions.forEach(s => { const d = new Date(s.startTime).toLocaleDateString('en-US', { weekday: 'long' }); bestDow[d] = (bestDow[d] || 0) + 1 })
+                  const bestDay = Object.entries(bestDow).sort((a, b) => b[1] - a[1])[0]
+                  if (bestDay) alerts.push({
+                    type: 'performance',
+                    icon: '📈',
+                    color: C.pink,
+                    severity: 'info',
+                    title: `Your best sessions happen on ${bestDay[0]}s`,
+                    message: `${bestDay[1]} of your top-earning streams were on ${bestDay[0]}s. Plan your next high-effort stream for this day`,
+                    cta: null
+                  })
+                }
+
+                if (alerts.length === 0) return (
+                  <div style={{ fontSize: 13, color: C.muted }}>Import more CSV data to unlock personalized alerts based on your tippers' behavior.</div>
+                )
+
+                return alerts.slice(0, 8).map((a, i) => {
+                  const [copied, setCopied] = React.useState(false)
+                  const reengageMsg = a.whale ? `Hey ${a.username}! I've been thinking about you lately 💕 I'm going live soon and would love to see you there 🔥` : ''
+
+                  return (
+                    <div key={i} style={{ padding: 16, borderRadius: 12, marginBottom: 10, background: `${a.color}08`, border: `1px solid ${a.color}25`, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+                      <div style={{ display: "flex", gap: 12, flex: 1, minWidth: 200 }}>
+                        <span style={{ fontSize: 22, flexShrink: 0 }}>{a.icon}</span>
+                        <div>
+                          <div style={{ fontSize: 14, fontWeight: 700, color: C.white, marginBottom: 4 }}>{a.title}</div>
+                          <div style={{ fontSize: 13, color: C.text, lineHeight: 1.6 }}>{a.message}</div>
+                        </div>
+                      </div>
+                      {a.cta && (
+                        <div style={{ display: "flex", gap: 8, flexShrink: 0, alignItems: "center" }}>
+                          <button onClick={() => { navigator.clipboard.writeText(reengageMsg); setCopied(true); setTimeout(() => setCopied(false), 2000) }}
+                            style={{ padding: "7px 14px", borderRadius: 8, background: copied ? "rgba(16,185,129,0.2)" : "rgba(255,255,255,0.06)", border: `1px solid ${copied ? "rgba(16,185,129,0.4)" : "rgba(255,255,255,0.1)"}`, color: copied ? C.green : C.muted, fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "all 0.15s" }}>
+                            {copied ? "✅ Copied!" : "📋 Copy"}
+                          </button>
+                          <button onClick={() => { if (a.whale) { setMessageTarget(a.whale); setMessageIndex(0); setMessageCopied(false) } }}
+                            style={{ fontSize: 20, background: "none", border: "none", cursor: "pointer", animation: "pulse-msg 2s infinite" }}>
+                            💌
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })
+              })()}
+            </div>
+
+            <div style={{ ...glassCard, borderRadius: 14, padding: 24, marginBottom: 28 }}>
+              <h2 style={{ fontSize: 18, fontWeight: 700, color: C.white, marginBottom: 6 }}>💌 Re-engage Now</h2>
+              <p style={{ fontSize: 13, color: C.muted, marginBottom: 16 }}>Top spenders who haven't tipped recently — reach out before they go cold</p>
+              {(() => {
+                const now = Date.now()
+                const toReengage = whales
+                  .filter(w => {
+                    const days = Math.floor((now - new Date(w.lastTipDate)) / 86400000)
+                    return days >= 3 && days <= 60 && w.totalUSD >= 10
+                  })
+                  .sort((a, b) => b.totalUSD - a.totalUSD)
+                  .slice(0, 5)
+
+                if (toReengage.length === 0) return (
+                  <div style={{ fontSize: 13, color: C.muted }}>No dormant fans right now — your audience is active! 🎉</div>
+                )
+
+                return toReengage.map((w, i) => {
+                  const days = Math.floor((now - new Date(w.lastTipDate)) / 86400000)
+                  const urgency = days > 30 ? C.red : days > 14 ? C.orange : C.gold
+                  const messages = [
+                    `Hey ${w.username}! I've been thinking about you lately 💕 I'm going live tonight and would love to see your name in the chat 🔥`,
+                    `${w.username}! It's been a minute and honestly I miss you 😊 Jumping on soon — come say hi? 💋`,
+                    `Hey love 💕 Just wanted to reach out because I was literally just thinking about you. Going live tonight — hope to see you there!`,
+                  ]
+                  const msg = messages[i % messages.length]
+                  const [copied, setCopied] = React.useState(false)
+
+                  return (
+                    <div key={i} style={{ padding: 16, borderRadius: 12, marginBottom: 10, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 12, flex: 1, minWidth: 200 }}>
+                        <div style={{ width: 40, height: 40, borderRadius: 10, background: `${urgency}20`, border: `1px solid ${urgency}40`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 800, color: urgency, flexShrink: 0 }}>
+                          {w.username.charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <span style={{ fontSize: 14, fontWeight: 700, color: C.white }}>{w.username}</span>
+                            <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 20, background: `${urgency}20`, color: urgency, fontWeight: 600 }}>{days}d ago</span>
+                          </div>
+                          <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>${w.totalUSD.toFixed(0)} lifetime · {w.tipCount} tips · {w.platform}</div>
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                        <button
+                          onClick={() => { navigator.clipboard.writeText(msg); setCopied(true); setTimeout(() => setCopied(false), 2000) }}
+                          style={{ padding: "8px 14px", borderRadius: 8, background: copied ? "rgba(16,185,129,0.2)" : "rgba(255,255,255,0.06)", border: `1px solid ${copied ? "rgba(16,185,129,0.4)" : "rgba(255,255,255,0.1)"}`, color: copied ? C.green : C.muted, fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "all 0.15s" }}>
+                          {copied ? "✅ Copied!" : "📋 Copy Message"}
+                        </button>
+                        <button
+                          onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }}
+                          style={{ padding: "8px 14px", borderRadius: 8, background: "linear-gradient(135deg, rgba(236,72,153,0.3), rgba(124,92,255,0.3))", border: "1px solid rgba(236,72,153,0.4)", color: C.pink, fontSize: 12, fontWeight: 600, cursor: "pointer", animation: "pulse-msg 2s infinite" }}>
+                          💌
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })
+              })()}
+            </div>
+
+            <div style={{ ...glassCard, borderRadius: 14, padding: 24, marginBottom: 28 }}>
               <h2 style={{ fontSize: 18, fontWeight: 700, color: C.white, marginBottom: 16 }}>🚨 Loss Alerts</h2>
               {lossAlerts.length === 0 && <div style={{ color: C.muted, fontSize: 13 }}>No active alerts — you're on track! 🎉</div>}
               {lossAlerts.map((a, i) => (
@@ -490,7 +745,16 @@ export default function Dashboard() {
                   {filteredWhales.slice(0, 3).map((w, i) => (
                     <tr key={i} className="whale-row" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
                       <td style={{ padding: "12px 16px", color: C.gold, fontWeight: 700 }}>#{i + 1}</td>
-                      <td style={{ padding: "12px 16px", color: C.white, fontWeight: 600 }}>{w.username}</td>
+                      <td style={{ padding: "12px 16px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <span style={{ color: C.white, fontWeight: 600 }}>{w.username}</span>
+                          <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }}
+                            style={{ fontSize: 20, background: "none", border: "none", cursor: "pointer", lineHeight: 1, animation: "pulse-msg 2s infinite", padding: 0 }}
+                            title="Send re-engagement message">
+                            💌
+                          </button>
+                        </div>
+                      </td>
                       <td style={{ padding: "12px 16px", color: C.green, fontWeight: 700 }}>${w.totalUSD.toFixed(2)}</td>
                       <td style={{ padding: "12px 16px", color: C.muted }}>{w.tipCount}</td>
                       <td style={{ padding: "12px 16px", color: C.cyan }}>${w.avgTipSize.toFixed(2)}</td>
@@ -500,10 +764,7 @@ export default function Dashboard() {
                       </td>
                       <td style={{ padding: "12px 16px", color: C.muted, fontSize: 12 }}>{new Date(w.lastTipDate).toLocaleDateString()}</td>
                       <td style={{ padding: "12px 16px" }}>
-                        <div style={{ display: "flex", gap: 6 }}>
-                          <button onClick={() => setSelectedWhale(w)} style={{ padding: "4px 10px", borderRadius: 6, background: "rgba(34,211,238,0.15)", border: "1px solid rgba(34,211,238,0.3)", color: C.cyan, fontSize: 11, cursor: "pointer" }}>🔍 View</button>
-                          <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }} style={{ padding: "4px 10px", borderRadius: 6, background: "linear-gradient(135deg, rgba(236,72,153,0.3), rgba(124,92,255,0.3))", border: "1px solid rgba(236,72,153,0.4)", color: C.pink, fontSize: 11, cursor: "pointer" }}>💌 Message</button>
-                        </div>
+                        <button onClick={() => setSelectedWhale(w)} style={{ padding: "4px 10px", borderRadius: 6, background: "rgba(34,211,238,0.15)", border: "1px solid rgba(34,211,238,0.3)", color: C.cyan, fontSize: 11, cursor: "pointer" }}>🔍 View</button>
                       </td>
                     </tr>
                   ))}
