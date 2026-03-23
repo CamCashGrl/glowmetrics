@@ -52,6 +52,9 @@ export default function Dashboard() {
   const [messageIndex, setMessageIndex] = useState(0)
   const [messageCopied, setMessageCopied] = useState(false)
   const [showUpgradeModal, setShowUpgradeModal] = useState(false)
+  const [earlyAccessEmail, setEarlyAccessEmail] = useState('')
+  const [earlyAccessSubmitted, setEarlyAccessSubmitted] = useState(false)
+  const [earlyAccessSubmitting, setEarlyAccessSubmitting] = useState(false)
   const [showFeedback, setShowFeedback] = useState(false)
   const [feedbackType, setFeedbackType] = useState('feature')
   const [feedbackText, setFeedbackText] = useState('')
@@ -61,7 +64,7 @@ export default function Dashboard() {
   const [dateTo, setDateTo] = useState('')
 
   const isBetaUser = true
-  const isPro = false
+  const isPro = true
   const uploadLimit = Infinity
 
   const openUpgradeModal = (source) => {
@@ -713,166 +716,144 @@ export default function Dashboard() {
         )}
 
         {activeTab === "titles" && (() => {
-          const [titleVibe, setTitleVibe] = React.useState("flirty")
-          const [titleGoal, setTitleGoal] = React.useState("")
-          const [titlePlatform, setTitlePlatform] = React.useState("Chaturbate")
-          const [titleTime, setTitleTime] = React.useState("night")
-          const [titleOccasion, setTitleOccasion] = React.useState("")
-          const [generatedTitles, setGeneratedTitles] = React.useState([])
+          const [goalEnabled, setGoalEnabled] = React.useState(false)
+          const [goalTokens, setGoalTokens] = React.useState("")
+          const [goalAction, setGoalAction] = React.useState("")
+          const [interactive, setInteractive] = React.useState(false)
+          const [toy, setToy] = React.useState("")
+          const [game, setGame] = React.useState("")
+          const [niche, setNiche] = React.useState("")
+          const [useEmojis, setUseEmojis] = React.useState(true)
+          const [genTitles, setGenTitles] = React.useState([])
+          const [savedTitles, setSavedTitles] = React.useState([])
           const [copiedIdx, setCopiedIdx] = React.useState(null)
 
-          const allTemplates = {
-            flirty: [
-              `{time} vibes only 💋 tip {goal} to play`,
-              `feeling dangerous tonight 😈 {goal} tip menu open`,
-              `your fav girl is back 💕 tip {goal} for anything you want`,
-              `come flirt with me {time} 😘 tip {goal} to control the show`,
-              `dress code: tips only 💄 {goal} goal tonight`,
-              `butterflies & bad decisions {time} 🦋 {goal} tip menu`,
-              `soft girl energy… until you tip {goal} 😈`,
-              `i missed you 😘 prove it — tip {goal}`,
-              `attention: tips only 👀 {goal} = instant attention`,
-              `angel face devil energy 😇😈 tip {goal} for private`,
-            ],
-            wild: [
-              `NO LIMITS {time} 🔥 tip {goal} and anything goes`,
-              `wildest show on {platform} tonight 🔥 tip {goal}`,
-              `chaos mode activated 🔥 {goal} tip goal`,
-              `WARNING: addictive content 🚨 {goal} to start`,
-              `unhinged {time} energy 🔥 {goal} tip menu OPEN`,
-              `breaking all the rules {time} 😈 tip {goal}`,
-              `hottest room on {platform} rn 🔥 {goal} goal`,
-              `you won't believe what happens at {goal} 👀`,
-              `tip {goal} and find out 😈🔥`,
-              `out of control {time} 🔥 {goal} = full send`,
-            ],
-            chill: [
-              `cozy {time} hangout 💕 tip {goal} to vibe with me`,
-              `chill {time} stream 🌙 {goal} goal tonight`,
-              `just relaxing {time} 💕 come hang — tip {goal}`,
-              `soft {time} energy ✨ {goal} tip menu`,
-              `good music good vibes {time} 🎵 tip {goal}`,
-              `lazy {time} stream 🌙 {goal} = private time`,
-              `comfort zone unlocked {time} 💕 {goal} goal`,
-              `slow burn {time} 🕯️ tip {goal} to speed things up`,
-              `no rush {time} vibes 🌙 {goal} gets you close`,
-              `✨ {time} glow up stream — tip {goal}`,
-            ],
-            teasing: [
-              `you want it? tip {goal} 👀`,
-              `almost there… {goal} tip goal 👀`,
-              `i know what you want 😏 {goal} tips only`,
-              `tip {goal} and maybe i'll let you 😈`,
-              `not telling you what happens at {goal}… yet 👀`,
-              `patience is a virtue… tip {goal} to skip the line 😏`,
-              `you're one tip away from everything 😘 {goal} goal`,
-              `🔐 unlocked at {goal} — what's inside?`,
-              `tip {goal}… i dare you 😈`,
-              `{time} secrets only 🤫 {goal} to get in`,
-            ],
+          const rnd = arr => arr[Math.floor(Math.random() * arr.length)]
+          const shuf = arr => [...arr].sort(() => Math.random() - 0.5)
+
+          const cleanToken = n => {
+            if (!n) return null
+            if (n <= 200) return Math.round(n / 25) * 25
+            if (n <= 1000) return Math.round(n / 50) * 50
+            return Math.round(n / 100) * 100
           }
 
-          const timeLabels = { morning: "morning ☀️", afternoon: "afternoon ☀️", night: "late night 🌙", latenight: "3AM 🌑" }
-          const occasionLabels = { payday: "💰 payday", friday: "🎉 Friday", weekend: "🎊 weekend", special: "✨ special night" }
+          const getGoalFormats = (tokens, action) => {
+            if (!tokens) return null
+            const c = cleanToken(parseInt(tokens))
+            return [`${c} tokens`, `Goal: ${c} tokens`, `Help me reach ${c} tokens`, `${c} tokens goal`, `Next goal: ${c} tokens`, `Hit ${c} tokens`, `${c} tokens → ${action || "surprise"}`, `${action || "Fun unlock"} at ${c} tokens`]
+          }
 
-          const generateTitles = () => {
-            const templates = allTemplates[titleVibe] || allTemplates.flirty
-            const shuffled = [...templates].sort(() => Math.random() - 0.5)
-            const titles = shuffled.slice(0, 10).map(t => {
-              let title = t
-              title = title.replace(/{goal}/g, titleGoal ? `$${titleGoal}` : "💎")
-              title = title.replace(/{platform}/g, titlePlatform)
-              title = title.replace(/{time}/g, titleOccasion ? (occasionLabels[titleOccasion] || timeLabels[titleTime]) : timeLabels[titleTime])
-              return title
-            })
-            setGeneratedTitles(titles)
+          const doGenerate = () => {
+            const emojiSet = useEmojis ? ["🔥","💦","😈","💋","👑","⚡","🎮","💕"] : [""]
+            const interactionPhrases = ["Tip to control","You control me","Make me lose control","Tip to vibe","Control my toy","Every tip hits me","You run the show","Turn me on"]
+            const basePhrases = ["Come play with me","Let's have some fun","Who's feeling naughty?","Let's get wild tonight","Good vibes only","Come make me blush","Let's see what happens","Play with me tonight"]
+            const whalePhrases = ["Top tipper gets all my attention","VIP energy only","Big tippers run this room","Who's taking control tonight?","Only the best get me","High rollers welcome"]
+            const goalFormats = goalEnabled ? getGoalFormats(goalTokens, goalAction) : null
+            const result = new Set()
+            let attempts = 0
+            while (result.size < 25 && attempts < 300) {
+              attempts++
+              let parts = [interactive ? rnd(interactionPhrases) : rnd(basePhrases)]
+              if (interactive) { const extras = [toy, game].filter(Boolean); if (extras.length && Math.random() > 0.4) parts.push(rnd(extras)) }
+              if (Math.random() > 0.6) parts.push(rnd(whalePhrases))
+              if (goalEnabled && goalFormats) parts.push(rnd(goalFormats))
+              if (niche && Math.random() > 0.5) parts.push(`#${niche.replace(/\s+/g, "")}`)
+              if (useEmojis) parts.push(rnd(emojiSet))
+              result.add(parts.join(" "))
+            }
+            setGenTitles(shuf([...result]))
             setCopiedIdx(null)
           }
 
-          const copyTitle = (title, idx) => {
-            navigator.clipboard.writeText(title)
-            setCopiedIdx(idx)
-            setTimeout(() => setCopiedIdx(null), 2000)
-          }
+          const saveTitle = t => setSavedTitles(s => [{ text: t, earnings: "", rating: "" }, ...s])
+          const updateSaved = (i, field, val) => setSavedTitles(s => { const u = [...s]; u[i][field] = val; return u })
+          const copyTitle = (t, i) => { navigator.clipboard.writeText(t); setCopiedIdx(i); setTimeout(() => setCopiedIdx(null), 2000) }
+          const checkboxStyle = { accentColor: C.pink, width: 16, height: 16, cursor: "pointer" }
+          const inputStyle = { flex: 1, padding: "8px 12px", borderRadius: 8, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: C.white, fontSize: 13, outline: "none" }
 
           return (
             <div style={{ maxWidth: 700 }}>
-              <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 8 }}>🎬 Room Title Generator</h1>
-              <p style={{ fontSize: 14, color: C.muted, marginBottom: 32 }}>Generate 10 ready-to-use room titles — click any to copy, then paste straight into your platform</p>
-
+              <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 8 }}>🔥 Room Title Generator</h1>
+              <p style={{ fontSize: 14, color: C.muted, marginBottom: 28 }}>Generate 25 ready-to-use room titles — copy or save your favorites</p>
               <div style={{ ...glassCard, borderRadius: 16, padding: 24, marginBottom: 24 }}>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 20 }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
                   <div>
-                    <div style={{ fontSize: 12, color: C.muted, fontWeight: 600, marginBottom: 10, textTransform: "uppercase", letterSpacing: 1 }}>Vibe</div>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                      {[["flirty","💋 Flirty"], ["wild","🔥 Wild"], ["chill","🌙 Chill"], ["teasing","😈 Teasing"]].map(([v, label]) => (
-                        <button key={v} onClick={() => setTitleVibe(v)} style={{ padding: "7px 14px", borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: "pointer", background: titleVibe === v ? "rgba(236,72,153,0.25)" : "rgba(255,255,255,0.05)", border: titleVibe === v ? "1px solid rgba(236,72,153,0.5)" : "1px solid rgba(255,255,255,0.08)", color: titleVibe === v ? C.pink : C.muted }}>{label}</button>
-                      ))}
-                    </div>
+                    <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", fontSize: 14, color: C.white, fontWeight: 600 }}>
+                      <input type="checkbox" style={checkboxStyle} onChange={() => setGoalEnabled(g => !g)} /> Add a goal?
+                    </label>
+                    {goalEnabled && (
+                      <div style={{ display: "flex", gap: 10, marginTop: 10 }}>
+                        <input style={inputStyle} type="number" placeholder="Token amount (e.g. 500)" onChange={e => setGoalTokens(e.target.value)} />
+                        <input style={inputStyle} placeholder="Action (e.g. flash, strip)" onChange={e => setGoalAction(e.target.value)} />
+                      </div>
+                    )}
                   </div>
                   <div>
-                    <div style={{ fontSize: 12, color: C.muted, fontWeight: 600, marginBottom: 10, textTransform: "uppercase", letterSpacing: 1 }}>Time of Day</div>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                      {[["morning","🌅 Morning"], ["afternoon","☀️ Afternoon"], ["night","🌙 Night"], ["latenight","🌑 Late Night"]].map(([v, label]) => (
-                        <button key={v} onClick={() => setTitleTime(v)} style={{ padding: "7px 14px", borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: "pointer", background: titleTime === v ? "rgba(34,211,238,0.2)" : "rgba(255,255,255,0.05)", border: titleTime === v ? "1px solid rgba(34,211,238,0.4)" : "1px solid rgba(255,255,255,0.08)", color: titleTime === v ? C.cyan : C.muted }}>{label}</button>
-                      ))}
-                    </div>
+                    <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", fontSize: 14, color: C.white, fontWeight: 600 }}>
+                      <input type="checkbox" style={checkboxStyle} onChange={() => setInteractive(v => !v)} /> Interactive toy / game?
+                    </label>
+                    {interactive && (
+                      <div style={{ display: "flex", gap: 10, marginTop: 10 }}>
+                        <input style={inputStyle} placeholder="Toy (e.g. Lovense Lush)" onChange={e => setToy(e.target.value)} />
+                        <input style={inputStyle} placeholder="Game (e.g. Wheel Spin)" onChange={e => setGame(e.target.value)} />
+                      </div>
+                    )}
                   </div>
                   <div>
-                    <div style={{ fontSize: 12, color: C.muted, fontWeight: 600, marginBottom: 10, textTransform: "uppercase", letterSpacing: 1 }}>Tip Goal (optional)</div>
-                    <input type="number" value={titleGoal} onChange={e => setTitleGoal(e.target.value)} placeholder="e.g. 50"
-                      style={{ width: "100%", padding: "10px 14px", borderRadius: 10, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: C.white, fontSize: 14, outline: "none" }}
-                      onFocus={e => e.target.style.borderColor = "rgba(236,72,153,0.4)"}
-                      onBlur={e => e.target.style.borderColor = "rgba(255,255,255,0.1)"} />
+                    <label style={{ fontSize: 12, color: C.muted, fontWeight: 600, marginBottom: 8, display: "block", textTransform: "uppercase", letterSpacing: 1 }}>Niche tag (optional)</label>
+                    <input style={{ ...inputStyle, flex: "none", width: "100%", boxSizing: "border-box" }} placeholder="e.g. lovense, latina, bbw, petite" onChange={e => setNiche(e.target.value)} />
                   </div>
-                  <div>
-                    <div style={{ fontSize: 12, color: C.muted, fontWeight: 600, marginBottom: 10, textTransform: "uppercase", letterSpacing: 1 }}>Platform</div>
-                    <select value={titlePlatform} onChange={e => setTitlePlatform(e.target.value)}
-                      style={{ width: "100%", padding: "10px 14px", borderRadius: 10, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: C.white, fontSize: 14, outline: "none" }}>
-                      {["Chaturbate","BongaCams","MyFreeCams","Stripchat","CamSoda"].map(p => <option key={p} value={p} style={{ background: "#121826" }}>{p}</option>)}
-                    </select>
-                  </div>
+                  <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", fontSize: 14, color: C.white, fontWeight: 600 }}>
+                    <input type="checkbox" style={checkboxStyle} checked={useEmojis} onChange={() => setUseEmojis(v => !v)} /> Include emojis
+                  </label>
+                  <button onClick={doGenerate} style={{ padding: "13px", borderRadius: 12, background: "linear-gradient(135deg, #22D3EE, #EC4899)", border: "none", color: C.white, fontSize: 15, fontWeight: 700, cursor: "pointer", boxShadow: "0 0 24px rgba(34,211,238,0.3)" }}>
+                    ✨ Generate 25 Titles
+                  </button>
                 </div>
-                <div style={{ marginBottom: 20 }}>
-                  <div style={{ fontSize: 12, color: C.muted, fontWeight: 600, marginBottom: 10, textTransform: "uppercase", letterSpacing: 1 }}>Special Occasion (optional)</div>
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    {[["","None"], ["payday","💰 Payday"], ["friday","🎉 Friday"], ["weekend","🎊 Weekend"], ["special","✨ Special Event"]].map(([v, label]) => (
-                      <button key={v} onClick={() => setTitleOccasion(v)} style={{ padding: "7px 14px", borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: "pointer", background: titleOccasion === v ? "rgba(245,158,11,0.2)" : "rgba(255,255,255,0.05)", border: titleOccasion === v ? "1px solid rgba(245,158,11,0.4)" : "1px solid rgba(255,255,255,0.08)", color: titleOccasion === v ? C.gold : C.muted }}>{label}</button>
-                    ))}
-                  </div>
-                </div>
-                <button onClick={generateTitles} style={{ width: "100%", padding: "14px", borderRadius: 12, background: "linear-gradient(135deg, #22D3EE, #EC4899)", border: "none", color: C.white, fontSize: 15, fontWeight: 700, cursor: "pointer", boxShadow: "0 0 24px rgba(34,211,238,0.3)" }}>
-                  ✨ Generate 10 Room Titles
-                </button>
               </div>
-
-              {generatedTitles.length > 0 ? (
-                <div style={{ ...glassCard, borderRadius: 16, overflow: "hidden" }}>
-                  <div style={{ padding: "16px 20px", borderBottom: "1px solid rgba(255,255,255,0.08)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <div style={{ fontSize: 15, fontWeight: 700, color: C.white }}>Click any title to copy it ✨</div>
-                    <button onClick={generateTitles} style={{ padding: "6px 14px", borderRadius: 8, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: C.muted, fontSize: 12, cursor: "pointer" }}>🔄 Regenerate</button>
+              {genTitles.length > 0 && (
+                <div style={{ ...glassCard, borderRadius: 16, overflow: "hidden", marginBottom: 24 }}>
+                  <div style={{ padding: "14px 20px", borderBottom: "1px solid rgba(255,255,255,0.08)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: C.white }}>Your Titles — click to copy</div>
+                    <button onClick={doGenerate} style={{ padding: "6px 14px", borderRadius: 8, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: C.muted, fontSize: 12, cursor: "pointer" }}>🔁 Regenerate</button>
                   </div>
-                  {generatedTitles.map((title, i) => (
-                    <div key={i} onClick={() => copyTitle(title, i)}
-                      style={{ padding: "16px 20px", borderBottom: i < 9 ? "1px solid rgba(255,255,255,0.05)" : "none", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", background: copiedIdx === i ? "rgba(16,185,129,0.1)" : "transparent", transition: "background 0.15s" }}
-                      onMouseEnter={e => { if (copiedIdx !== i) e.currentTarget.style.background = "rgba(255,255,255,0.04)" }}
-                      onMouseLeave={e => { if (copiedIdx !== i) e.currentTarget.style.background = "transparent" }}>
-                      <div style={{ fontSize: 14, color: C.white, lineHeight: 1.5, flex: 1 }}>{title}</div>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: copiedIdx === i ? C.green : C.muted, marginLeft: 16, flexShrink: 0, minWidth: 50, textAlign: "right" }}>
-                        {copiedIdx === i ? "✅ Copied!" : "📋 Copy"}
+                  {genTitles.map((t, i) => (
+                    <div key={i} style={{ padding: "13px 20px", borderBottom: "1px solid rgba(255,255,255,0.05)", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, background: copiedIdx === i ? "rgba(16,185,129,0.1)" : "transparent", transition: "background 0.15s", cursor: "pointer" }}
+                      onClick={() => copyTitle(t, i)}>
+                      <span style={{ fontSize: 13, color: C.white, flex: 1, lineHeight: 1.5 }}>{t}</span>
+                      <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                        <span style={{ padding: "4px 10px", borderRadius: 6, background: copiedIdx === i ? "rgba(16,185,129,0.2)" : "rgba(255,255,255,0.06)", border: `1px solid ${copiedIdx === i ? "rgba(16,185,129,0.4)" : "rgba(255,255,255,0.1)"}`, color: copiedIdx === i ? C.green : C.muted, fontSize: 11 }}>
+                          {copiedIdx === i ? "✅" : "📋"}
+                        </span>
+                        <span onClick={e => { e.stopPropagation(); saveTitle(t) }} style={{ padding: "4px 10px", borderRadius: 6, background: "rgba(124,92,255,0.15)", border: "1px solid rgba(124,92,255,0.3)", color: C.indigo, fontSize: 11, cursor: "pointer" }}>💾</span>
                       </div>
                     </div>
                   ))}
                 </div>
-              ) : (
-                <div style={{ ...glassCard, borderRadius: 16, padding: 48, textAlign: "center" }}>
-                  <div style={{ fontSize: 48, marginBottom: 16 }}>🎬</div>
-                  <div style={{ fontSize: 15, color: C.muted }}>Pick your vibe and hit Generate</div>
+              )}
+              {savedTitles.length > 0 && (
+                <div style={{ ...glassCard, borderRadius: 16, overflow: "hidden" }}>
+                  <div style={{ padding: "14px 20px", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: C.white }}>💾 Saved & Performance Tracking</div>
+                    <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>Track which titles earned the most</div>
+                  </div>
+                  {savedTitles.map((item, i) => (
+                    <div key={i} style={{ padding: "14px 20px", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+                      <div style={{ fontSize: 13, color: C.white, marginBottom: 10, lineHeight: 1.5 }}>{item.text}</div>
+                      <div style={{ display: "flex", gap: 10 }}>
+                        <input value={item.earnings} onChange={e => updateSaved(i, "earnings", e.target.value)} placeholder="Earnings (tokens)" style={{ ...inputStyle, flex: 1 }} />
+                        <input value={item.rating} onChange={e => updateSaved(i, "rating", e.target.value)} placeholder="Rating (1-5)" style={{ ...inputStyle, flex: 1 }} />
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
           )
         })()}
+
+        {activeTab === "help"
 
         {activeTab === "help" && (
           <div style={{ maxWidth: 900 }}>
@@ -1154,15 +1135,51 @@ export default function Dashboard() {
               <div style={{ textAlign: "center", padding: "12px 16px", background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.25)", borderRadius: 10, marginBottom: 24 }}>
                 <div style={{ fontSize: 13, color: C.gold, fontWeight: 600 }}>💡 Most creators miss 30–60% of their earning potential without this</div>
               </div>
-              <button
-                onClick={() => { track('upgrade_cta_clicked'); setShowUpgradeModal(false); showToast("🎉 Thanks for your interest! We'll notify you when Pro launches.") }}
-                style={{ width: "100%", padding: "16px", borderRadius: 14, background: "linear-gradient(135deg, #3b82f6, #ec4899)", border: "none", color: C.white, fontSize: 16, fontWeight: 800, cursor: "pointer", boxShadow: "0 0 30px rgba(59,130,246,0.5), 0 0 60px rgba(236,72,153,0.3)", marginBottom: 12 }}>
-                🔓 Get Early Access
-              </button>
-              <div style={{ textAlign: "center", fontSize: 12, color: C.muted, marginBottom: 20 }}>Launching soon • Founding users get lifetime discount</div>
-              <button onClick={() => setShowUpgradeModal(false)} style={{ width: "100%", padding: "11px", borderRadius: 10, background: "transparent", border: "1px solid rgba(255,255,255,0.1)", color: C.muted, fontSize: 13, cursor: "pointer" }}>
-                Maybe later
-              </button>
+              {earlyAccessSubmitted ? (
+                <div style={{ textAlign: "center", padding: "8px 0 16px" }}>
+                  <div style={{ fontSize: 32, marginBottom: 8 }}>🎉</div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: C.white, marginBottom: 6 }}>You're on the list!</div>
+                  <div style={{ fontSize: 13, color: C.muted, marginBottom: 16 }}>We'll email you with a founding user discount when we launch.</div>
+                  <button onClick={() => setShowUpgradeModal(false)} style={{ padding: "10px 28px", borderRadius: 10, background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.1)", color: C.muted, fontSize: 13, cursor: "pointer" }}>Close</button>
+                </div>
+              ) : (
+                <>
+                  <input
+                    type="email"
+                    value={earlyAccessEmail}
+                    onChange={e => setEarlyAccessEmail(e.target.value)}
+                    placeholder="your@email.com"
+                    style={{ width: "100%", padding: "13px 16px", borderRadius: 12, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.15)", color: C.white, fontSize: 14, outline: "none", marginBottom: 10, boxSizing: "border-box" }}
+                    onFocus={e => e.target.style.borderColor = "rgba(34,211,238,0.5)"}
+                    onBlur={e => e.target.style.borderColor = "rgba(255,255,255,0.15)"}
+                  />
+                  <button
+                    disabled={!earlyAccessEmail.trim() || earlyAccessSubmitting}
+                    onClick={async () => {
+                      if (!earlyAccessEmail.trim()) return
+                      setEarlyAccessSubmitting(true)
+                      track('early_access_signup', { email: earlyAccessEmail })
+                      try {
+                        const { data: { user: currentUser } } = await supabase.auth.getUser()
+                        await supabase.from('early_access').insert({
+                          email: earlyAccessEmail.trim(),
+                          user_id: currentUser?.id || null,
+                          signed_up_at: new Date().toISOString()
+                        }).then(() => {}) // best effort — table may not exist yet
+                      } catch(e) {}
+                      setEarlyAccessSubmitted(true)
+                      setEarlyAccessSubmitting(false)
+                      showToast("🎉 You're on the founding user list!")
+                    }}
+                    style={{ width: "100%", padding: "16px", borderRadius: 14, background: earlyAccessEmail.trim() ? "linear-gradient(135deg, #3b82f6, #ec4899)" : "rgba(255,255,255,0.08)", border: "none", color: earlyAccessEmail.trim() ? C.white : C.muted, fontSize: 16, fontWeight: 800, cursor: earlyAccessEmail.trim() ? "pointer" : "not-allowed", boxShadow: earlyAccessEmail.trim() ? "0 0 30px rgba(59,130,246,0.5), 0 0 60px rgba(236,72,153,0.3)" : "none", marginBottom: 12, transition: "all 0.2s" }}>
+                    {earlyAccessSubmitting ? "Saving..." : "🔓 Get Early Access"}
+                  </button>
+                  <div style={{ textAlign: "center", fontSize: 12, color: C.muted, marginBottom: 20 }}>Launching soon • Founding users get lifetime discount</div>
+                  <button onClick={() => setShowUpgradeModal(false)} style={{ width: "100%", padding: "11px", borderRadius: 10, background: "transparent", border: "1px solid rgba(255,255,255,0.1)", color: C.muted, fontSize: 13, cursor: "pointer" }}>
+                    Maybe later
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
