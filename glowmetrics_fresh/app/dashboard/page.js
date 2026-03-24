@@ -415,6 +415,9 @@ export default function Dashboard() {
   const nextMoves = liveAnalytics?.nextMoves || analytics?.nextMoves || []
   const totalRevenue = analytics?.totalUSD || 0
   const avgPerHour = sessions.reduce((sum, s) => sum + s.usdPerHour, 0) / (sessions.length || 1)
+  // Single source of truth — pre-computed in aggregateRows, same values used everywhere
+  const analyticsbestDay  = analytics?.bestDay  || null
+  const analyticsBestHour = analytics?.bestHour || null
 
   const platformTimes = {}
   sessions.forEach(s => {
@@ -480,8 +483,6 @@ export default function Dashboard() {
 
     whales.slice(0, 5).forEach(w => {
       if (w.tipCount < 5) return
-      // Use the full tips array filtered by username — w.tips may be undefined
-      // when data comes from Supabase (rows don't embed child arrays)
       const fanTips = (w.tips && w.tips.length > 0)
         ? w.tips
         : tips.filter(t => t.username.toLowerCase() === w.username.toLowerCase())
@@ -531,18 +532,23 @@ export default function Dashboard() {
       }
     })
 
-    const avgSession = sessions.length ? sessions.reduce((s, x) => s + x.totalUSD, 0) / sessions.length : 0
-    const bestSessions = sessions.filter(s => s.totalUSD >= avgSession * 1.5)
-    if (bestSessions.length >= 3) {
-      const bestDow = {}
-      bestSessions.forEach(s => { const d = new Date(s.startTime).toLocaleDateString('en-US', { weekday: 'long' }); bestDow[d] = (bestDow[d] || 0) + 1 })
-      const bestDay = Object.entries(bestDow).sort((a, b) => b[1] - a[1])[0]
-      if (bestDay) result.push({
-        type: 'performance', icon: '📈', color: C.pink, severity: 'info',
-        title: `Your best sessions happen on ${bestDay[0]}s`,
-        message: `${bestDay[1]} of your top-earning streams were on ${bestDay[0]}s. Plan your next high-effort stream for this day`,
-        cta: null, reengageMsg: ''
-      })
+    // FIX: Use analytics.bestDay (pre-computed, same source as insights)
+    // instead of recalculating best day independently here
+    const analyticsbestDay = analytics?.bestDay
+    if (analyticsbestDay) {
+      const avgSession = sessions.length ? sessions.reduce((s, x) => s + x.totalUSD, 0) / sessions.length : 0
+      const bestSessions = sessions.filter(s => s.totalUSD >= avgSession * 1.5)
+      const bestDayCount = bestSessions.filter(s =>
+        new Date(s.startTime).toLocaleDateString('en-US', { weekday: 'long' }) === analyticsbestDay.day
+      ).length
+      if (bestDayCount >= 2) {
+        result.push({
+          type: 'performance', icon: '📈', color: C.pink, severity: 'info',
+          title: `Your best sessions happen on ${analyticsbestDay.day}s`,
+          message: `${bestDayCount} of your top-earning streams were on ${analyticsbestDay.day}s ($${analyticsbestDay.avg.toFixed(0)} avg). Plan your next high-effort stream for this day`,
+          cta: null, reengageMsg: ''
+        })
+      }
     }
 
     return result
