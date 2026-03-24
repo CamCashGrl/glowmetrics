@@ -1,5 +1,5 @@
 "use client"
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
 import { parseCSV, aggregateRows } from "../../lib/analytics"
@@ -33,133 +33,197 @@ const formatHour = (hour) => {
   return `${h - 12} PM`
 }
 
-// ─── FIX: Extracted AlertItem so useState is not called inside a .map() loop ───
-function AlertItem({ a, setMessageTarget, setMessageIndex, setMessageCopied }) {
-  const [copied, setCopied] = useState(false)
-  const reengageMsg = a.whale
-    ? `Hey ${a.username}! I've been thinking about you lately 💕 I'm going live soon and would love to see you there 🔥`
-    : ''
+// ── FIX: Standalone copy button component so each item can have its own
+// copied state WITHOUT calling useState inside a .map() callback.
+// Rules of Hooks require hooks to only be called at the top level of a
+// React function component — never inside loops, conditions, or callbacks.
+// ── Title Generator extracted as a proper component so useState calls are legal
+function TitleGenerator({ C, glassCard }) {
+  const [titles, setTitles] = useState([])
+  const [selected, setSelected] = useState(null)
+  const [hashtags, setHashtags] = useState([])
+  const [tokensEnabled, setTokensEnabled] = useState(false)
+  const [tokenGoal, setTokenGoal] = useState(500)
+  const [action, setAction] = useState("")
+  const [interactive, setInteractive] = useState(false)
+  const [toy, setToy] = useState("")
+  const [game, setGame] = useState("")
+  const [emojis, setEmojis] = useState(true)
+  const [hashtagsEnabled, setHashtagsEnabled] = useState(true)
+  const [autoCopy, setAutoCopy] = useState(true)
+  const [copiedIndex, setCopiedIndex] = useState(null)
+  const [copiedSelected, setCopiedSelected] = useState(false)
+
+  const scoreTitle = title => {
+    let score = 0
+    if (title.includes("Tip")) score += 2
+    if (title.includes("Control")) score += 2
+    if (title.includes("Top")) score += 1
+    if (title.length < 90) score += 1
+    if (/🔥|💦|😈|👑/.test(title)) score += 1
+    return score
+  }
+
+  const copyFull = (selectedText, hashtagsArray) => {
+    const fullText = `${selectedText}\n\n${hashtagsArray.join(" ")}`
+    navigator.clipboard.writeText(fullText)
+    setCopiedSelected(true)
+    setTimeout(() => setCopiedSelected(false), 1500)
+  }
+
+  const generate = () => {
+    const results = []
+    let attempts = 0
+    const emojisSet = emojis ? ["🔥","💦","😈","👑"] : [""]
+    while (results.length < 25 && attempts < 100) {
+      attempts++
+      const e = emojisSet[Math.floor(Math.random() * emojisSet.length)]
+      const structures = [
+        `Tip ${Math.floor(Math.random()*20)+5} → ${action || "Make Me React"} ${e}`,
+        `Top Tipper Controls Me ${e}`,
+        `You Control Everything • Tip To Play ${e}`,
+        `Hit ${tokenGoal} → ${action || "Special Reward"} ${e}`,
+        `Tip = ${action || "Reaction"} • Don't Stop ${e}`,
+        `Control My ${toy || "Toy"} • Tip To Activate ${e}`,
+        `${game || "Game Mode"} • Winner Gets Control ${e}`
+      ]
+      let title = structures[Math.floor(Math.random() * structures.length)]
+      if (interactive) title += " • Interactive ON"
+      if (tokensEnabled) title += ` • Goal: ${tokenGoal}`
+      if (!results.find(r => r.text === title)) results.push({ text: title, score: scoreTitle(title) })
+    }
+    setTitles(results.sort((a,b) => b.score - a.score))
+    setSelected(null)
+    setHashtags([])
+    setCopiedIndex(null)
+    setCopiedSelected(false)
+  }
+
+  const toggleBtn = (val, label, onToggle) => (
+    <label style={{ color: C.text, display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+      <input type="checkbox" checked={val} onChange={onToggle} style={{ accentColor: C.pink }} /> {label}
+    </label>
+  )
+
+  const inpStyle = { background: C.card2, border: `1px solid ${C.border2}`, padding: 8, borderRadius: 8, color: C.white, outline: "none", width: "100%" }
 
   return (
-    <div style={{
-      padding: 16, borderRadius: 12, marginBottom: 10,
-      background: `${a.color}08`, border: `1px solid ${a.color}25`,
-      display: "flex", alignItems: "flex-start", justifyContent: "space-between",
-      gap: 16, flexWrap: "wrap"
-    }}>
-      <div style={{ display: "flex", gap: 12, flex: 1, minWidth: 200 }}>
-        <span style={{ fontSize: 22, flexShrink: 0 }}>{a.icon}</span>
-        <div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: C.white, marginBottom: 4 }}>{a.title}</div>
-          <div style={{ fontSize: 13, color: C.text, lineHeight: 1.6 }}>{a.message}</div>
-        </div>
+    <div style={{ ...glassCard, padding: 20, borderRadius: 16, marginTop: 20, maxWidth: 700 }}>
+      <h2 style={{ fontSize: 18, marginBottom: 12, color: C.white, fontWeight: 700 }}>🔥 Viral Title Generator</h2>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 15 }}>
+        {toggleBtn(tokensEnabled, "Token Goal", () => setTokensEnabled(!tokensEnabled))}
+        {tokensEnabled && (
+          <>
+            <input value={tokenGoal} onChange={e => setTokenGoal(Number(e.target.value))} style={inpStyle} placeholder="Token Goal" />
+            <input value={action} onChange={e => setAction(e.target.value)} placeholder="Action" style={inpStyle} />
+          </>
+        )}
+        {toggleBtn(interactive, "Interactive", () => setInteractive(!interactive))}
+        {interactive && (
+          <>
+            <input value={toy} onChange={e => setToy(e.target.value)} placeholder="Toy" style={inpStyle} />
+            <input value={game} onChange={e => setGame(e.target.value)} placeholder="Game" style={inpStyle} />
+          </>
+        )}
+        {toggleBtn(emojis, "Emojis", () => setEmojis(!emojis))}
+        {toggleBtn(hashtagsEnabled, "Hashtags", () => setHashtagsEnabled(!hashtagsEnabled))}
+        {toggleBtn(autoCopy, "Auto Copy", () => setAutoCopy(!autoCopy))}
       </div>
-      {a.cta && (
-        <div style={{ display: "flex", gap: 8, flexShrink: 0, alignItems: "center" }}>
-          <button
-            onClick={() => {
-              navigator.clipboard.writeText(reengageMsg)
-              setCopied(true)
-              setTimeout(() => setCopied(false), 2000)
-            }}
-            style={{
-              padding: "7px 14px", borderRadius: 8,
-              background: copied ? "rgba(16,185,129,0.2)" : "rgba(255,255,255,0.06)",
-              border: `1px solid ${copied ? "rgba(16,185,129,0.4)" : "rgba(255,255,255,0.1)"}`,
-              color: copied ? C.green : C.muted,
-              fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "all 0.15s"
-            }}>
-            {copied ? "✅ Copied!" : "📋 Copy"}
+      <div style={{ display: "flex", gap: 10, marginBottom: 15 }}>
+        <button onClick={generate} style={{ background: C.pink, padding: "10px 16px", borderRadius: 10, color: C.white, border: "none", fontWeight: 700, cursor: "pointer" }}>
+          ✨ Generate Titles
+        </button>
+        {titles.length > 0 && (
+          <button onClick={generate} style={{ background: "rgba(255,255,255,0.06)", padding: "10px 16px", borderRadius: 10, color: C.muted, border: `1px solid ${C.border}`, cursor: "pointer" }}>
+            🔁 Regenerate
           </button>
-          <button
-            onClick={() => {
-              if (a.whale) {
-                setMessageTarget(a.whale)
-                setMessageIndex(0)
-                setMessageCopied(false)
-              }
-            }}
-            style={{ fontSize: 20, background: "none", border: "none", cursor: "pointer", animation: "pulse-msg 2s infinite" }}>
-            💌
-          </button>
+        )}
+      </div>
+      <div style={{ display: "grid", gap: 8 }}>
+        {titles.map((t, i) => (
+          <div key={i} onClick={() => {
+            setSelected(t)
+            let tags = []
+            if (hashtagsEnabled) {
+              const base = ["#camgirl","#livecam","#fyp"]
+              if (t.text.includes("Control")) tags = ["#controlme","#lovense"]
+              else if (t.text.includes("Tip")) tags = ["#tips","#paytoplay"]
+              else tags = ["#sexy","#flirty"]
+              tags = [...base, ...tags]
+              setHashtags(tags)
+            }
+            if (autoCopy) {
+              const full = hashtagsEnabled ? `${t.text}\n\n${tags.join(" ")}` : t.text
+              navigator.clipboard.writeText(full)
+              setCopiedIndex(i)
+              setTimeout(() => setCopiedIndex(null), 1200)
+            }
+          }}
+            style={{ padding: 10, borderRadius: 10, cursor: "pointer", background: selected?.text === t.text ? C.indigo : C.card, border: `1px solid ${C.border}` }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ flex: 1, color: C.white, fontSize: 13 }}>{t.text}</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 12, color: C.text }}>
+                  {copiedIndex === i ? "✔ Copied" : `Score: ${t.score}`}
+                </span>
+                <button onClick={e => {
+                  e.stopPropagation()
+                  navigator.clipboard.writeText(t.text)
+                  setCopiedIndex(i)
+                  setTimeout(() => setCopiedIndex(null), 1200)
+                }} style={{ background: C.cyan, border: "none", padding: "4px 8px", borderRadius: 6, cursor: "pointer", fontSize: 12 }}>
+                  {copiedIndex === i ? "✔" : "📋"}
+                </button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+      {selected && (
+        <div style={{ marginTop: 12, color: C.cyan }}>
+          <div style={{ marginBottom: 6 }}>{selected.text}</div>
+          {hashtags.length > 0 && (
+            <div style={{ marginBottom: 10, fontSize: 13, color: C.text }}>{hashtags.join(" ")}</div>
+          )}
+          <div style={{ display: "flex", gap: 10 }}>
+            <button onClick={() => copyFull(selected.text, hashtags)}
+              style={{ background: C.pink, padding: "6px 12px", borderRadius: 8, border: "none", cursor: "pointer", color: C.white, fontWeight: 600 }}>
+              {copiedSelected ? "✔ Copied!" : "Copy Title + Tags"}
+            </button>
+            <button onClick={() => navigator.clipboard.writeText(hashtags.join(" "))}
+              style={{ background: C.card2, padding: "6px 12px", borderRadius: 8, border: `1px solid ${C.border}`, cursor: "pointer", color: C.white }}>
+              Copy Tags
+            </button>
+          </div>
         </div>
       )}
+      <div style={{ marginTop: 16, padding: 14, background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.25)", borderRadius: 10 }}>
+        <div style={{ fontSize: 13, color: C.gold }}>💡 Refreshing your title every 20–30 minutes increases ranking frequency and visibility by ~30–50%.</div>
+      </div>
     </div>
   )
 }
 
-// ─── FIX: Extracted ReengageItem so useState is not called inside a .map() loop ───
-function ReengageItem({ w, index, setMessageTarget, setMessageIndex, setMessageCopied }) {
+function CopyButton({ text, label = "📋 Copy", copiedLabel = "✅ Copied!", style = {} }) {
   const [copied, setCopied] = useState(false)
-  const now = Date.now()
-  const days = Math.floor((now - new Date(w.lastTipDate)) / 86400000)
-  const urgency = days > 30 ? C.red : days > 14 ? C.orange : C.gold
-
-  const messages = [
-    `Hey ${w.username}! I've been thinking about you lately 💕 I'm going live tonight and would love to see your name in the chat 🔥`,
-    `${w.username}! It's been a minute and honestly I miss you 😊 Jumping on soon — come say hi? 💋`,
-    `Hey love 💕 Just wanted to reach out because I was literally just thinking about you. Going live tonight — hope to see you there!`,
-  ]
-  const msg = messages[index % messages.length]
-
   return (
-    <div style={{
-      padding: 16, borderRadius: 12, marginBottom: 10,
-      background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)",
-      display: "flex", alignItems: "center", justifyContent: "space-between",
-      gap: 16, flexWrap: "wrap"
-    }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, flex: 1, minWidth: 200 }}>
-        <div style={{
-          width: 40, height: 40, borderRadius: 10,
-          background: `${urgency}20`, border: `1px solid ${urgency}40`,
-          display: "flex", alignItems: "center", justifyContent: "center",
-          fontSize: 18, fontWeight: 800, color: urgency, flexShrink: 0
-        }}>
-          {w.username.charAt(0).toUpperCase()}
-        </div>
-        <div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ fontSize: 14, fontWeight: 700, color: C.white }}>{w.username}</span>
-            <span style={{
-              fontSize: 11, padding: "2px 8px", borderRadius: 20,
-              background: `${urgency}20`, color: urgency, fontWeight: 600
-            }}>{days}d ago</span>
-          </div>
-          <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>
-            ${w.totalUSD.toFixed(0)} lifetime · {w.tipCount} tips · {w.platform}
-          </div>
-        </div>
-      </div>
-      <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-        <button
-          onClick={() => {
-            navigator.clipboard.writeText(msg)
-            setCopied(true)
-            setTimeout(() => setCopied(false), 2000)
-          }}
-          style={{
-            padding: "8px 14px", borderRadius: 8,
-            background: copied ? "rgba(16,185,129,0.2)" : "rgba(255,255,255,0.06)",
-            border: `1px solid ${copied ? "rgba(16,185,129,0.4)" : "rgba(255,255,255,0.1)"}`,
-            color: copied ? C.green : C.muted,
-            fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "all 0.15s"
-          }}>
-          {copied ? "✅ Copied!" : "📋 Copy Message"}
-        </button>
-        <button
-          onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }}
-          style={{
-            padding: "8px 14px", borderRadius: 8,
-            background: "linear-gradient(135deg, rgba(236,72,153,0.3), rgba(124,92,255,0.3))",
-            border: "1px solid rgba(236,72,153,0.4)",
-            color: C.pink, fontSize: 12, fontWeight: 600, cursor: "pointer",
-            animation: "pulse-msg 2s infinite"
-          }}>
-          💌
-        </button>
-      </div>
-    </div>
+    <button
+      onClick={() => {
+        navigator.clipboard.writeText(text)
+        setCopied(true)
+        setTimeout(() => setCopied(false), 2000)
+      }}
+      style={{
+        padding: "7px 14px", borderRadius: 8,
+        background: copied ? "rgba(16,185,129,0.2)" : "rgba(255,255,255,0.06)",
+        border: `1px solid ${copied ? "rgba(16,185,129,0.4)" : "rgba(255,255,255,0.1)"}`,
+        color: copied ? C.green : C.muted,
+        fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "all 0.15s",
+        ...style
+      }}
+    >
+      {copied ? copiedLabel : label}
+    </button>
   )
 }
 
@@ -369,7 +433,7 @@ export default function Dashboard() {
 
   const allPlatforms = [...new Set(tips.map(t => t.platform))]
 
-  // Build "What's Next" alerts list (pure data, no hooks)
+  // ── Build "What's Next" alerts outside JSX so we never call hooks in a map
   const buildWhatsNextAlerts = () => {
     const now = Date.now()
     const result = []
@@ -393,7 +457,8 @@ export default function Dashboard() {
             message: extractedUser
               ? `They left their ${platform} as "${extractedUser}" in a tip note — add them before you forget!`
               : `They mentioned ${platform} in a tip note — ask them for their handle next time they're in chat`,
-            cta: 'Copy Message', username: w.username, whale: w
+            cta: 'Copy Message', username: w.username, whale: w,
+            reengageMsg: `Hey ${w.username}! I've been thinking about you lately 💕 I'm going live soon and would love to see you there 🔥`
           })
         }
       })
@@ -407,15 +472,22 @@ export default function Dashboard() {
           type: 'affiliate', icon: '🔗', color: C.indigo, severity: 'info',
           title: `Share your ${streamingPlatforms[0]} affiliate link with ${w.username}`,
           message: `${w.username} has been one of your strongest supporters. Share your affiliate link on Snapchat or X — never directly on stream (against TOS)`,
-          cta: 'Copy Message', username: w.username, whale: w
+          cta: 'Copy Message', username: w.username, whale: w,
+          reengageMsg: `Hey ${w.username}! I've been thinking about you lately 💕 I'm going live soon and would love to see you there 🔥`
         })
       }
     })
 
     whales.slice(0, 5).forEach(w => {
       if (w.tipCount < 5) return
+      // Use the full tips array filtered by username — w.tips may be undefined
+      // when data comes from Supabase (rows don't embed child arrays)
+      const fanTips = (w.tips && w.tips.length > 0)
+        ? w.tips
+        : tips.filter(t => t.username.toLowerCase() === w.username.toLowerCase())
+      if (fanTips.length < 5) return
       const hourCounts = {}
-      w.tips.forEach(t => {
+      fanTips.forEach(t => {
         const h = new Date(t.date_time || t.dateRaw).getHours()
         hourCounts[h] = (hourCounts[h] || 0) + 1
       })
@@ -424,8 +496,7 @@ export default function Dashboard() {
       const peakHour = parseInt(bestHour[0])
       const currentHour = new Date().getHours()
       const hoursAway = Math.abs(currentHour - peakHour)
-      const totalTipsAtHour = bestHour[1]
-      const probability = Math.min(95, Math.round((totalTipsAtHour / w.tipCount) * 100 * 2.5))
+      const probability = Math.min(95, Math.round((bestHour[1] / fanTips.length) * 100 * 2.5))
       const label = peakHour === 0 ? '12 AM' : peakHour < 12 ? `${peakHour} AM` : peakHour === 12 ? '12 PM' : `${peakHour - 12} PM`
 
       if (hoursAway <= 2 && probability >= 40) {
@@ -433,14 +504,15 @@ export default function Dashboard() {
           type: 'online_now', icon: '🟢', color: C.green, severity: 'success',
           title: `${w.username} is probably online right now`,
           message: `They usually tip around ${label} — there's a ~${probability}% chance they're active. Go live or send a message now!`,
-          cta: 'Copy Message', username: w.username, whale: w
+          cta: 'Copy Message', username: w.username, whale: w,
+          reengageMsg: `Hey ${w.username}! I've been thinking about you lately 💕 I'm going live soon and would love to see you there 🔥`
         })
       } else if (hoursAway <= 10 && probability >= 40) {
         result.push({
           type: 'online_soon', icon: '⏰', color: C.gold, severity: 'warning',
           title: `${w.username} is likely online in ~${hoursAway}h`,
           message: `They typically tip around ${label} (${probability}% probability). Plan to go live or reach out before then`,
-          cta: null, username: w.username, whale: w
+          cta: null, username: w.username, whale: w, reengageMsg: ''
         })
       }
     })
@@ -453,7 +525,8 @@ export default function Dashboard() {
           type: 'dormant', icon: '💤', color: C.orange, severity: 'warning',
           title: `You haven't heard from ${w.username} in ${timeStr}`,
           message: `They've spent $${w.totalUSD.toFixed(0)} total — send them a message so they know you're thinking of them`,
-          cta: 'Copy Message', username: w.username, whale: w
+          cta: 'Copy Message', username: w.username, whale: w,
+          reengageMsg: `Hey ${w.username}! I've been thinking about you lately 💕 I'm going live soon and would love to see you there 🔥`
         })
       }
     })
@@ -468,14 +541,41 @@ export default function Dashboard() {
         type: 'performance', icon: '📈', color: C.pink, severity: 'info',
         title: `Your best sessions happen on ${bestDay[0]}s`,
         message: `${bestDay[1]} of your top-earning streams were on ${bestDay[0]}s. Plan your next high-effort stream for this day`,
-        cta: null
+        cta: null, reengageMsg: ''
       })
     }
 
     return result
   }
 
+  // ── Build re-engage list outside JSX for the same reason
+  const buildReengageList = () => {
+    const now = Date.now()
+    const messageSets = [
+      (name) => `Hey ${name}! I've been thinking about you lately 💕 I'm going live tonight and would love to see your name in the chat 🔥`,
+      (name) => `${name}! It's been a minute and honestly I miss you 😊 Jumping on soon — come say hi? 💋`,
+      (name) => `Hey love 💕 Just wanted to reach out because I was literally just thinking about you. Going live tonight — hope to see you there!`,
+    ]
+    return whales
+      .filter(w => {
+        const days = Math.floor((now - new Date(w.lastTipDate)) / 86400000)
+        return days >= 3 && days <= 60 && w.totalUSD >= 10
+      })
+      .sort((a, b) => b.totalUSD - a.totalUSD)
+      .slice(0, 5)
+      .map((w, i) => {
+        const days = Math.floor((now - new Date(w.lastTipDate)) / 86400000)
+        return {
+          whale: w,
+          days,
+          urgency: days > 30 ? C.red : days > 14 ? C.orange : C.gold,
+          msg: messageSets[i % messageSets.length](w.username)
+        }
+      })
+  }
+
   const whatsNextAlerts = buildWhatsNextAlerts()
+  const reengageList = buildReengageList()
 
   return (
     <div style={{
@@ -597,6 +697,7 @@ export default function Dashboard() {
               )
             })()}
 
+            {/* WHAT SHOULD I DO RIGHT NOW */}
             {(() => {
               const actions = nextMoves.length > 0 ? nextMoves : [{ icon: "📊", color: C.cyan, text: "Import your first CSV to unlock personalized action recommendations", cta: null }]
               return (
@@ -628,6 +729,7 @@ export default function Dashboard() {
               )
             })()}
 
+            {/* SMART INSIGHTS */}
             <div style={{ ...glassCard, borderRadius: 14, padding: 24, marginBottom: 28 }}>
               <h2 style={{ fontSize: 18, fontWeight: 700, color: C.white, marginBottom: 16 }}>💡 Smart Insights</h2>
               {insights.slice(0, 3).map((ins, i) => (
@@ -640,11 +742,6 @@ export default function Dashboard() {
                   {insights.slice(3, 8).map((ins, i) => (
                     <div key={i} style={{ background: "rgba(34,211,238,0.05)", border: "1px solid rgba(34,211,238,0.1)", borderRadius: 10, padding: 16, marginBottom: 8 }}>
                       <div style={{ fontSize: 14, color: C.white }}>{ins.icon} {ins.text}</div>
-                    </div>
-                  ))}
-                  {insights.length < 5 && [1,2].map(i => (
-                    <div key={i} style={{ background: "rgba(34,211,238,0.05)", border: "1px solid rgba(34,211,238,0.1)", borderRadius: 10, padding: 16, marginBottom: 8 }}>
-                      <div style={{ fontSize: 14, color: C.muted }}>📈 Advanced timing insight #{i + 3}...</div>
                     </div>
                   ))}
                 </div>
@@ -660,7 +757,7 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* WHAT'S NEXT — now uses AlertItem component, no hooks in loops */}
+            {/* WHAT'S NEXT — FIX: alerts built outside JSX, CopyButton component handles per-item state */}
             <div style={{ ...glassCard, borderRadius: 14, padding: 24, marginBottom: 28 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
                 <div style={{ width: 36, height: 36, borderRadius: 10, background: "linear-gradient(135deg, #F59E0B, #EC4899)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>🧭</div>
@@ -669,52 +766,77 @@ export default function Dashboard() {
                   <div style={{ fontSize: 12, color: C.muted }}>Personalized alerts based on your tippers' real behavior</div>
                 </div>
               </div>
+
               {whatsNextAlerts.length === 0 ? (
                 <div style={{ fontSize: 13, color: C.muted }}>Import more CSV data to unlock personalized alerts based on your tippers' behavior.</div>
               ) : (
                 whatsNextAlerts.slice(0, 8).map((a, i) => (
-                  <AlertItem
-                    key={i}
-                    a={a}
-                    setMessageTarget={setMessageTarget}
-                    setMessageIndex={setMessageIndex}
-                    setMessageCopied={setMessageCopied}
-                  />
+                  <div key={i} style={{ padding: 16, borderRadius: 12, marginBottom: 10, background: `${a.color}08`, border: `1px solid ${a.color}25`, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+                    <div style={{ display: "flex", gap: 12, flex: 1, minWidth: 200 }}>
+                      <span style={{ fontSize: 22, flexShrink: 0 }}>{a.icon}</span>
+                      <div>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: C.white, marginBottom: 4 }}>{a.title}</div>
+                        <div style={{ fontSize: 13, color: C.text, lineHeight: 1.6 }}>{a.message}</div>
+                      </div>
+                    </div>
+                    {a.cta && (
+                      <div style={{ display: "flex", gap: 8, flexShrink: 0, alignItems: "center" }}>
+                        {/* FIX: CopyButton is a proper component — each instance has its own state */}
+                        <CopyButton text={a.reengageMsg} />
+                        <button
+                          onClick={() => { if (a.whale) { setMessageTarget(a.whale); setMessageIndex(0); setMessageCopied(false) } }}
+                          style={{ fontSize: 20, background: "none", border: "none", cursor: "pointer", animation: "pulse-msg 2s infinite" }}>
+                          💌
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 ))
               )}
             </div>
 
-            {/* RE-ENGAGE NOW — now uses ReengageItem component, no hooks in loops */}
+            {/* RE-ENGAGE NOW — FIX: same pattern, CopyButton handles per-row state */}
             <div style={{ ...glassCard, borderRadius: 14, padding: 24, marginBottom: 28 }}>
               <h2 style={{ fontSize: 18, fontWeight: 700, color: C.white, marginBottom: 6 }}>💌 Re-engage Now</h2>
               <p style={{ fontSize: 13, color: C.muted, marginBottom: 16 }}>Top spenders who haven't tipped recently — reach out before they go cold</p>
-              {(() => {
-                const now = Date.now()
-                const toReengage = whales
-                  .filter(w => {
-                    const days = Math.floor((now - new Date(w.lastTipDate)) / 86400000)
-                    return days >= 3 && days <= 60 && w.totalUSD >= 10
-                  })
-                  .sort((a, b) => b.totalUSD - a.totalUSD)
-                  .slice(0, 5)
 
-                if (toReengage.length === 0) return (
-                  <div style={{ fontSize: 13, color: C.muted }}>No dormant fans right now — your audience is active! 🎉</div>
-                )
-
-                return toReengage.map((w, i) => (
-                  <ReengageItem
-                    key={`${w.username}-${w.platform}`}
-                    w={w}
-                    index={i}
-                    setMessageTarget={setMessageTarget}
-                    setMessageIndex={setMessageIndex}
-                    setMessageCopied={setMessageCopied}
-                  />
+              {reengageList.length === 0 ? (
+                <div style={{ fontSize: 13, color: C.muted }}>No dormant fans right now — your audience is active! 🎉</div>
+              ) : (
+                reengageList.map(({ whale: w, days, urgency, msg }, i) => (
+                  <div key={i} style={{ padding: 16, borderRadius: 12, marginBottom: 10, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12, flex: 1, minWidth: 200 }}>
+                      <div style={{ width: 40, height: 40, borderRadius: 10, background: `${urgency}20`, border: `1px solid ${urgency}40`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 800, color: urgency, flexShrink: 0 }}>
+                        {w.username.charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <span style={{ fontSize: 14, fontWeight: 700, color: C.white }}>{w.username}</span>
+                          <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 20, background: `${urgency}20`, color: urgency, fontWeight: 600 }}>{days}d ago</span>
+                        </div>
+                        <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>${w.totalUSD.toFixed(0)} lifetime · {w.tipCount} tips · {w.platform}</div>
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                      {/* FIX: CopyButton component — no useState inside map */}
+                      <CopyButton
+                        text={msg}
+                        label="📋 Copy Message"
+                        copiedLabel="✅ Copied!"
+                        style={{ padding: "8px 14px" }}
+                      />
+                      <button
+                        onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }}
+                        style={{ padding: "8px 14px", borderRadius: 8, background: "linear-gradient(135deg, rgba(236,72,153,0.3), rgba(124,92,255,0.3))", border: "1px solid rgba(236,72,153,0.4)", color: C.pink, fontSize: 12, fontWeight: 600, cursor: "pointer", animation: "pulse-msg 2s infinite" }}>
+                        💌
+                      </button>
+                    </div>
+                  </div>
                 ))
-              })()}
+              )}
             </div>
 
+            {/* LOSS ALERTS */}
             <div style={{ ...glassCard, borderRadius: 14, padding: 24, marginBottom: 28 }}>
               <h2 style={{ fontSize: 18, fontWeight: 700, color: C.white, marginBottom: 16 }}>🚨 Loss Alerts</h2>
               {lossAlerts.length === 0 && <div style={{ color: C.muted, fontSize: 13 }}>No active alerts — you're on track! 🎉</div>}
@@ -726,6 +848,7 @@ export default function Dashboard() {
               ))}
             </div>
 
+            {/* LIVE AI ALERTS */}
             <div style={{ ...glassCard, borderRadius: 14, padding: 24, marginBottom: 28 }}>
               <h2 style={{ fontSize: 18, fontWeight: 700, color: C.white, marginBottom: 16 }}>🚨 Live AI Alerts</h2>
               {alerts.length === 0 && <div style={{ color: C.muted, fontSize: 13 }}>No active alerts</div>}
@@ -1029,176 +1152,7 @@ export default function Dashboard() {
           </div>
         )}
 
-        {activeTab === "titles" && (() => {
-          const [titles, setTitles] = React.useState([])
-          const [selected, setSelected] = React.useState(null)
-          const [hashtags, setHashtags] = React.useState([])
-          const [tokensEnabled, setTokensEnabled] = React.useState(false)
-          const [tokenGoal, setTokenGoal] = React.useState(500)
-          const [action, setAction] = React.useState("")
-          const [interactive, setInteractive] = React.useState(false)
-          const [toy, setToy] = React.useState("")
-          const [game, setGame] = React.useState("")
-          const [emojis, setEmojis] = React.useState(true)
-          const [hashtagsEnabled, setHashtagsEnabled] = React.useState(true)
-          const [autoCopy, setAutoCopy] = React.useState(true)
-          const [copiedIndex, setCopiedIndex] = React.useState(null)
-          const [copiedSelected, setCopiedSelected] = React.useState(false)
-
-          const scoreTitle = title => {
-            let score = 0
-            if (title.includes("Tip")) score += 2
-            if (title.includes("Control")) score += 2
-            if (title.includes("Top")) score += 1
-            if (title.length < 90) score += 1
-            if (/🔥|💦|😈|👑/.test(title)) score += 1
-            return score
-          }
-
-          const copyFull = (selectedText, hashtagsArray) => {
-            const fullText = `${selectedText}\n\n${hashtagsArray.join(" ")}`
-            navigator.clipboard.writeText(fullText)
-            setCopiedSelected(true)
-            setTimeout(() => setCopiedSelected(false), 1500)
-          }
-
-          const generate = () => {
-            const results = []
-            let attempts = 0
-            const emojisSet = emojis ? ["🔥","💦","😈","👑"] : [""]
-            while (results.length < 25 && attempts < 100) {
-              attempts++
-              const e = emojisSet[Math.floor(Math.random() * emojisSet.length)]
-              const structures = [
-                `Tip ${Math.floor(Math.random()*20)+5} → ${action || "Make Me React"} ${e}`,
-                `Top Tipper Controls Me ${e}`,
-                `You Control Everything • Tip To Play ${e}`,
-                `Hit ${tokenGoal} → ${action || "Special Reward"} ${e}`,
-                `Tip = ${action || "Reaction"} • Don't Stop ${e}`,
-                `Control My ${toy || "Toy"} • Tip To Activate ${e}`,
-                `${game || "Game Mode"} • Winner Gets Control ${e}`
-              ]
-              let title = structures[Math.floor(Math.random() * structures.length)]
-              if (interactive) title += " • Interactive ON"
-              if (tokensEnabled) title += ` • Goal: ${tokenGoal}`
-              if (!results.find(r => r.text === title)) results.push({ text: title, score: scoreTitle(title) })
-            }
-            setTitles(results.sort((a,b) => b.score - a.score))
-            setSelected(null)
-            setHashtags([])
-            setCopiedIndex(null)
-            setCopiedSelected(false)
-          }
-
-          const toggleBtn = (val, label, onToggle) => (
-            <label style={{ color: C.text, display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
-              <input type="checkbox" checked={val} onChange={onToggle} style={{ accentColor: C.pink }} /> {label}
-            </label>
-          )
-
-          const inpStyle = { background: C.card2, border: `1px solid ${C.border2}`, padding: 8, borderRadius: 8, color: C.white, outline: "none", width: "100%" }
-
-          return (
-            <div style={{ ...glassCard, padding: 20, borderRadius: 16, marginTop: 20, maxWidth: 700 }}>
-              <h2 style={{ fontSize: 18, marginBottom: 12, color: C.white, fontWeight: 700 }}>🔥 Viral Title Generator</h2>
-
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 15 }}>
-                {toggleBtn(tokensEnabled, "Token Goal", () => setTokensEnabled(!tokensEnabled))}
-                {tokensEnabled && (
-                  <>
-                    <input value={tokenGoal} onChange={e => setTokenGoal(Number(e.target.value))} style={inpStyle} placeholder="Token Goal" />
-                    <input value={action} onChange={e => setAction(e.target.value)} placeholder="Action" style={inpStyle} />
-                  </>
-                )}
-                {toggleBtn(interactive, "Interactive", () => setInteractive(!interactive))}
-                {interactive && (
-                  <>
-                    <input value={toy} onChange={e => setToy(e.target.value)} placeholder="Toy" style={inpStyle} />
-                    <input value={game} onChange={e => setGame(e.target.value)} placeholder="Game" style={inpStyle} />
-                  </>
-                )}
-                {toggleBtn(emojis, "Emojis", () => setEmojis(!emojis))}
-                {toggleBtn(hashtagsEnabled, "Hashtags", () => setHashtagsEnabled(!hashtagsEnabled))}
-                {toggleBtn(autoCopy, "Auto Copy", () => setAutoCopy(!autoCopy))}
-              </div>
-
-              <div style={{ display: "flex", gap: 10, marginBottom: 15 }}>
-                <button onClick={generate} style={{ background: C.pink, padding: "10px 16px", borderRadius: 10, color: C.white, border: "none", fontWeight: 700, cursor: "pointer" }}>
-                  ✨ Generate Titles
-                </button>
-                {titles.length > 0 && (
-                  <button onClick={generate} style={{ background: "rgba(255,255,255,0.06)", padding: "10px 16px", borderRadius: 10, color: C.muted, border: `1px solid ${C.border}`, cursor: "pointer" }}>
-                    🔁 Regenerate
-                  </button>
-                )}
-              </div>
-
-              <div style={{ display: "grid", gap: 8 }}>
-                {titles.map((t, i) => (
-                  <div key={i} onClick={() => {
-                    setSelected(t)
-                    let tags = []
-                    if (hashtagsEnabled) {
-                      const base = ["#camgirl","#livecam","#fyp"]
-                      if (t.text.includes("Control")) tags = ["#controlme","#lovense"]
-                      else if (t.text.includes("Tip")) tags = ["#tips","#paytoplay"]
-                      else tags = ["#sexy","#flirty"]
-                      tags = [...base, ...tags]
-                      setHashtags(tags)
-                    }
-                    if (autoCopy) {
-                      const full = hashtagsEnabled ? `${t.text}\n\n${tags.join(" ")}` : t.text
-                      navigator.clipboard.writeText(full)
-                      setCopiedIndex(i)
-                      setTimeout(() => setCopiedIndex(null), 1200)
-                    }
-                  }}
-                    style={{ padding: 10, borderRadius: 10, cursor: "pointer", background: selected?.text === t.text ? C.indigo : C.card, border: `1px solid ${C.border}` }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <span style={{ flex: 1, color: C.white, fontSize: 13 }}>{t.text}</span>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <span style={{ fontSize: 12, color: C.text }}>
-                          {copiedIndex === i ? "✔ Copied" : `Score: ${t.score}`}
-                        </span>
-                        <button onClick={e => {
-                          e.stopPropagation()
-                          navigator.clipboard.writeText(t.text)
-                          setCopiedIndex(i)
-                          setTimeout(() => setCopiedIndex(null), 1200)
-                        }} style={{ background: C.cyan, border: "none", padding: "4px 8px", borderRadius: 6, cursor: "pointer", fontSize: 12 }}>
-                          {copiedIndex === i ? "✔" : "📋"}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {selected && (
-                <div style={{ marginTop: 12, color: C.cyan }}>
-                  <div style={{ marginBottom: 6 }}>{selected.text}</div>
-                  {hashtags.length > 0 && (
-                    <div style={{ marginBottom: 10, fontSize: 13, color: C.text }}>{hashtags.join(" ")}</div>
-                  )}
-                  <div style={{ display: "flex", gap: 10 }}>
-                    <button onClick={() => copyFull(selected.text, hashtags)}
-                      style={{ background: C.pink, padding: "6px 12px", borderRadius: 8, border: "none", cursor: "pointer", color: C.white, fontWeight: 600 }}>
-                      {copiedSelected ? "✔ Copied!" : "Copy Title + Tags"}
-                    </button>
-                    <button onClick={() => navigator.clipboard.writeText(hashtags.join(" "))}
-                      style={{ background: C.card2, padding: "6px 12px", borderRadius: 8, border: `1px solid ${C.border}`, cursor: "pointer", color: C.white }}>
-                      Copy Tags
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              <div style={{ marginTop: 16, padding: 14, background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.25)", borderRadius: 10 }}>
-                <div style={{ fontSize: 13, color: C.gold }}>💡 Refreshing your title every 20–30 minutes increases ranking frequency and visibility by ~30–50%.</div>
-              </div>
-            </div>
-          )
-        })()}
+        {activeTab === "titles" && <TitleGenerator C={C} glassCard={glassCard} />}
 
         {activeTab === "help" && (
           <div style={{ maxWidth: 900 }}>
@@ -1551,7 +1505,6 @@ export default function Dashboard() {
                   ))}
                 </div>
               </div>
-
               <div style={{ padding: 16, background: "rgba(124,92,255,0.1)", border: "1px solid rgba(124,92,255,0.25)", borderRadius: 12, marginBottom: 18 }}>
                 <div style={{ fontSize: 14, color: C.indigo, fontWeight: 700, marginBottom: 8 }}>🚀 Early Access Offer</div>
                 <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.7, marginBottom: 10 }}>Right now everything is free during beta. But early users can:</div>
@@ -1561,12 +1514,10 @@ export default function Dashboard() {
                   ))}
                 </div>
               </div>
-
               <div style={{ textAlign: "center", padding: "12px 14px", background: "rgba(236,72,153,0.1)", border: "1px solid rgba(236,72,153,0.25)", borderRadius: 10, marginBottom: 16 }}>
                 <div style={{ fontSize: 18, color: C.pink, fontWeight: 800 }}>🔥 Lock in $9.99/mo for life</div>
                 <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>Launch price will be $29/mo — this offer won't last</div>
               </div>
-
               <input
                 type="email"
                 value={earlyAccessEmail}
@@ -1576,7 +1527,6 @@ export default function Dashboard() {
                 onFocus={e => e.target.style.borderColor = "rgba(34,211,238,0.5)"}
                 onBlur={e => e.target.style.borderColor = "rgba(255,255,255,0.15)"}
               />
-
               <button
                 disabled={!earlyAccessEmail.trim() || earlyAccessSubmitting}
                 onClick={async () => {
@@ -1597,9 +1547,7 @@ export default function Dashboard() {
                 style={{ width: "100%", padding: "14px", borderRadius: 12, background: earlyAccessEmail.trim() ? "linear-gradient(135deg, #22D3EE, #EC4899)" : "rgba(255,255,255,0.08)", border: "none", color: earlyAccessEmail.trim() ? C.white : C.muted, fontSize: 14, fontWeight: 800, cursor: earlyAccessEmail.trim() ? "pointer" : "not-allowed", boxShadow: earlyAccessEmail.trim() ? "0 0 30px rgba(34,211,238,0.4)" : "none", marginBottom: 8, transition: "all 0.2s" }}>
                 {earlyAccessSubmitting ? "Saving..." : "🔒 Lock In My Early Access"}
               </button>
-
               <div style={{ fontSize: 11, color: C.muted, textAlign: "center", marginBottom: 10 }}>Secure Stripe checkout — cancel anytime</div>
-
               <button onClick={() => { setShowBetaPrompt(false); track('beta_prompt_dismissed', { uploadCount }) }}
                 style={{ width: "100%", padding: "10px", borderRadius: 10, background: "transparent", border: "1px solid rgba(255,255,255,0.08)", color: C.muted, fontSize: 13, cursor: "pointer" }}>
                 Keep using free beta
@@ -1680,7 +1628,7 @@ export default function Dashboard() {
 
       {toast && (
         <div style={{ position: "fixed", bottom: 24, left: 272, background: "rgba(15,20,32,0.95)", backdropFilter: "blur(20px)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 12, padding: "14px 20px", color: C.white, fontSize: 14, zIndex: 9999, boxShadow: "0 8px 32px rgba(0,0,0,0.8)" }}>
-          {toast}
+        {toast}
         </div>
       )}
     </div>
