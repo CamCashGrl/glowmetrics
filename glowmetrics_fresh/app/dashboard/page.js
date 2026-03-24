@@ -64,6 +64,22 @@ export default function Dashboard() {
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
 
+  // Title generator state (must be at top level — React rules of hooks)
+  const [ttTitles, setTtTitles] = useState([])
+  const [ttSelected, setTtSelected] = useState(null)
+  const [ttHashtags, setTtHashtags] = useState([])
+  const [ttTokensEnabled, setTtTokensEnabled] = useState(false)
+  const [ttTokenGoal, setTtTokenGoal] = useState(500)
+  const [ttAction, setTtAction] = useState("")
+  const [ttInteractive, setTtInteractive] = useState(false)
+  const [ttToy, setTtToy] = useState("")
+  const [ttGame, setTtGame] = useState("")
+  const [ttEmojis, setTtEmojis] = useState(true)
+  const [ttHashtagsEnabled, setTtHashtagsEnabled] = useState(true)
+  const [ttAutoCopy, setTtAutoCopy] = useState(true)
+  const [ttCopiedIndex, setTtCopiedIndex] = useState(null)
+  const [ttCopiedSelected, setTtCopiedSelected] = useState(false)
+
   const isBetaUser = true
   const isPro = true
   const uploadLimit = Infinity
@@ -438,7 +454,7 @@ export default function Dashboard() {
               </div>
               {(() => {
                 const now = Date.now()
-                const alerts = []
+                const nextAlerts = []
 
                 // 1. Social platform mentions in tip notes
                 const SOCIAL_KEYWORDS = {
@@ -455,7 +471,7 @@ export default function Dashboard() {
                       // Try to extract a username from the note
                       const usernameMatch = matchingNote.match(/@[\w.]+|(?:my|is|:)\s*([\w.@]+)/i)
                       const extractedUser = usernameMatch ? usernameMatch[1] || usernameMatch[0] : null
-                      alerts.push({
+                      const nextAlerts = []
                         type: 'social_mention',
                         icon: '📱',
                         color: C.cyan,
@@ -478,7 +494,7 @@ export default function Dashboard() {
                   const otherPlatforms = [...new Set(tips.filter(t => t.username.toLowerCase() === w.username.toLowerCase()).map(t => t.platform))]
                   const streamingPlatforms = platforms.map(p => p.platform).filter(p => p !== w.platform)
                   if (streamingPlatforms.length > 0) {
-                    alerts.push({
+                    nextAlerts.push({
                       type: 'affiliate',
                       icon: '🔗',
                       color: C.indigo,
@@ -578,9 +594,7 @@ export default function Dashboard() {
                 )
 
                 return alerts.slice(0, 8).map((a, i) => {
-                  const [copied, setCopied] = React.useState(false)
                   const reengageMsg = a.whale ? `Hey ${a.username}! I've been thinking about you lately 💕 I'm going live soon and would love to see you there 🔥` : ''
-
                   return (
                     <div key={i} style={{ padding: 16, borderRadius: 12, marginBottom: 10, background: `${a.color}08`, border: `1px solid ${a.color}25`, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
                       <div style={{ display: "flex", gap: 12, flex: 1, minWidth: 200 }}>
@@ -592,9 +606,9 @@ export default function Dashboard() {
                       </div>
                       {a.cta && (
                         <div style={{ display: "flex", gap: 8, flexShrink: 0, alignItems: "center" }}>
-                          <button onClick={() => { navigator.clipboard.writeText(reengageMsg); setCopied(true); setTimeout(() => setCopied(false), 2000) }}
-                            style={{ padding: "7px 14px", borderRadius: 8, background: copied ? "rgba(16,185,129,0.2)" : "rgba(255,255,255,0.06)", border: `1px solid ${copied ? "rgba(16,185,129,0.4)" : "rgba(255,255,255,0.1)"}`, color: copied ? C.green : C.muted, fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "all 0.15s" }}>
-                            {copied ? "✅ Copied!" : "📋 Copy"}
+                          <button onClick={() => { navigator.clipboard.writeText(reengageMsg); showToast("✅ Copied!") }}
+                            style={{ padding: "7px 14px", borderRadius: 8, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: C.muted, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                            📋 Copy
                           </button>
                           <button onClick={() => { if (a.whale) { setMessageTarget(a.whale); setMessageIndex(0); setMessageCopied(false) } }}
                             style={{ fontSize: 20, background: "none", border: "none", cursor: "pointer", animation: "pulse-msg 2s infinite" }}>
@@ -634,7 +648,6 @@ export default function Dashboard() {
                     `Hey love 💕 Just wanted to reach out because I was literally just thinking about you. Going live tonight — hope to see you there!`,
                   ]
                   const msg = messages[i % messages.length]
-                  const [copied, setCopied] = React.useState(false)
 
                   return (
                     <div key={i} style={{ padding: 16, borderRadius: 12, marginBottom: 10, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
@@ -652,9 +665,9 @@ export default function Dashboard() {
                       </div>
                       <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
                         <button
-                          onClick={() => { navigator.clipboard.writeText(msg); setCopied(true); setTimeout(() => setCopied(false), 2000) }}
-                          style={{ padding: "8px 14px", borderRadius: 8, background: copied ? "rgba(16,185,129,0.2)" : "rgba(255,255,255,0.06)", border: `1px solid ${copied ? "rgba(16,185,129,0.4)" : "rgba(255,255,255,0.1)"}`, color: copied ? C.green : C.muted, fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "all 0.15s" }}>
-                          {copied ? "✅ Copied!" : "📋 Copy Message"}
+                          onClick={() => { navigator.clipboard.writeText(msg); showToast("✅ Copied!") }}
+                          style={{ padding: "8px 14px", borderRadius: 8, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: C.muted, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                          📋 Copy Message
                         </button>
                         <button
                           onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }}
@@ -985,20 +998,20 @@ export default function Dashboard() {
         )}
 
         {activeTab === "titles" && (() => {
-          const [titles, setTitles] = React.useState([])
-          const [selected, setSelected] = React.useState(null)
-          const [hashtags, setHashtags] = React.useState([])
-          const [tokensEnabled, setTokensEnabled] = React.useState(false)
-          const [tokenGoal, setTokenGoal] = React.useState(500)
-          const [action, setAction] = React.useState("")
-          const [interactive, setInteractive] = React.useState(false)
-          const [toy, setToy] = React.useState("")
-          const [game, setGame] = React.useState("")
-          const [emojis, setEmojis] = React.useState(true)
-          const [hashtagsEnabled, setHashtagsEnabled] = React.useState(true)
-          const [autoCopy, setAutoCopy] = React.useState(true)
-          const [copiedIndex, setCopiedIndex] = React.useState(null)
-          const [copiedSelected, setCopiedSelected] = React.useState(false)
+          const titles = ttTitles, setTitles = setTtTitles
+          const selected = ttSelected, setSelected = setTtSelected
+          const hashtags = ttHashtags, setHashtags = setTtHashtags
+          const tokensEnabled = ttTokensEnabled, setTokensEnabled = setTtTokensEnabled
+          const tokenGoal = ttTokenGoal, setTokenGoal = setTtTokenGoal
+          const action = ttAction, setAction = setTtAction
+          const interactive = ttInteractive, setInteractive = setTtInteractive
+          const toy = ttToy, setToy = setTtToy
+          const game = ttGame, setGame = setTtGame
+          const emojis = ttEmojis, setEmojis = setTtEmojis
+          const hashtagsEnabled = ttHashtagsEnabled, setHashtagsEnabled = setTtHashtagsEnabled
+          const autoCopy = ttAutoCopy, setAutoCopy = setTtAutoCopy
+          const copiedIndex = ttCopiedIndex, setCopiedIndex = setTtCopiedIndex
+          const copiedSelected = ttCopiedSelected, setCopiedSelected = setTtCopiedSelected
 
           const scoreTitle = title => {
             let score = 0
