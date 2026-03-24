@@ -33,6 +33,136 @@ const formatHour = (hour) => {
   return `${h - 12} PM`
 }
 
+// ─── FIX: Extracted AlertItem so useState is not called inside a .map() loop ───
+function AlertItem({ a, setMessageTarget, setMessageIndex, setMessageCopied }) {
+  const [copied, setCopied] = useState(false)
+  const reengageMsg = a.whale
+    ? `Hey ${a.username}! I've been thinking about you lately 💕 I'm going live soon and would love to see you there 🔥`
+    : ''
+
+  return (
+    <div style={{
+      padding: 16, borderRadius: 12, marginBottom: 10,
+      background: `${a.color}08`, border: `1px solid ${a.color}25`,
+      display: "flex", alignItems: "flex-start", justifyContent: "space-between",
+      gap: 16, flexWrap: "wrap"
+    }}>
+      <div style={{ display: "flex", gap: 12, flex: 1, minWidth: 200 }}>
+        <span style={{ fontSize: 22, flexShrink: 0 }}>{a.icon}</span>
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: C.white, marginBottom: 4 }}>{a.title}</div>
+          <div style={{ fontSize: 13, color: C.text, lineHeight: 1.6 }}>{a.message}</div>
+        </div>
+      </div>
+      {a.cta && (
+        <div style={{ display: "flex", gap: 8, flexShrink: 0, alignItems: "center" }}>
+          <button
+            onClick={() => {
+              navigator.clipboard.writeText(reengageMsg)
+              setCopied(true)
+              setTimeout(() => setCopied(false), 2000)
+            }}
+            style={{
+              padding: "7px 14px", borderRadius: 8,
+              background: copied ? "rgba(16,185,129,0.2)" : "rgba(255,255,255,0.06)",
+              border: `1px solid ${copied ? "rgba(16,185,129,0.4)" : "rgba(255,255,255,0.1)"}`,
+              color: copied ? C.green : C.muted,
+              fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "all 0.15s"
+            }}>
+            {copied ? "✅ Copied!" : "📋 Copy"}
+          </button>
+          <button
+            onClick={() => {
+              if (a.whale) {
+                setMessageTarget(a.whale)
+                setMessageIndex(0)
+                setMessageCopied(false)
+              }
+            }}
+            style={{ fontSize: 20, background: "none", border: "none", cursor: "pointer", animation: "pulse-msg 2s infinite" }}>
+            💌
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── FIX: Extracted ReengageItem so useState is not called inside a .map() loop ───
+function ReengageItem({ w, index, setMessageTarget, setMessageIndex, setMessageCopied }) {
+  const [copied, setCopied] = useState(false)
+  const now = Date.now()
+  const days = Math.floor((now - new Date(w.lastTipDate)) / 86400000)
+  const urgency = days > 30 ? C.red : days > 14 ? C.orange : C.gold
+
+  const messages = [
+    `Hey ${w.username}! I've been thinking about you lately 💕 I'm going live tonight and would love to see your name in the chat 🔥`,
+    `${w.username}! It's been a minute and honestly I miss you 😊 Jumping on soon — come say hi? 💋`,
+    `Hey love 💕 Just wanted to reach out because I was literally just thinking about you. Going live tonight — hope to see you there!`,
+  ]
+  const msg = messages[index % messages.length]
+
+  return (
+    <div style={{
+      padding: 16, borderRadius: 12, marginBottom: 10,
+      background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)",
+      display: "flex", alignItems: "center", justifyContent: "space-between",
+      gap: 16, flexWrap: "wrap"
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, flex: 1, minWidth: 200 }}>
+        <div style={{
+          width: 40, height: 40, borderRadius: 10,
+          background: `${urgency}20`, border: `1px solid ${urgency}40`,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: 18, fontWeight: 800, color: urgency, flexShrink: 0
+        }}>
+          {w.username.charAt(0).toUpperCase()}
+        </div>
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 14, fontWeight: 700, color: C.white }}>{w.username}</span>
+            <span style={{
+              fontSize: 11, padding: "2px 8px", borderRadius: 20,
+              background: `${urgency}20`, color: urgency, fontWeight: 600
+            }}>{days}d ago</span>
+          </div>
+          <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>
+            ${w.totalUSD.toFixed(0)} lifetime · {w.tipCount} tips · {w.platform}
+          </div>
+        </div>
+      </div>
+      <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+        <button
+          onClick={() => {
+            navigator.clipboard.writeText(msg)
+            setCopied(true)
+            setTimeout(() => setCopied(false), 2000)
+          }}
+          style={{
+            padding: "8px 14px", borderRadius: 8,
+            background: copied ? "rgba(16,185,129,0.2)" : "rgba(255,255,255,0.06)",
+            border: `1px solid ${copied ? "rgba(16,185,129,0.4)" : "rgba(255,255,255,0.1)"}`,
+            color: copied ? C.green : C.muted,
+            fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "all 0.15s"
+          }}>
+          {copied ? "✅ Copied!" : "📋 Copy Message"}
+        </button>
+        <button
+          onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }}
+          style={{
+            padding: "8px 14px", borderRadius: 8,
+            background: "linear-gradient(135deg, rgba(236,72,153,0.3), rgba(124,92,255,0.3))",
+            border: "1px solid rgba(236,72,153,0.4)",
+            color: C.pink, fontSize: 12, fontWeight: 600, cursor: "pointer",
+            animation: "pulse-msg 2s infinite"
+          }}>
+          💌
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export default function Dashboard() {
   const router = useRouter()
   const [user, setUser] = useState(null)
@@ -64,22 +194,6 @@ export default function Dashboard() {
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
 
-  // Title generator state (must be at top level — React rules of hooks)
-  const [ttTitles, setTtTitles] = useState([])
-  const [ttSelected, setTtSelected] = useState(null)
-  const [ttHashtags, setTtHashtags] = useState([])
-  const [ttTokensEnabled, setTtTokensEnabled] = useState(false)
-  const [ttTokenGoal, setTtTokenGoal] = useState(500)
-  const [ttAction, setTtAction] = useState("")
-  const [ttInteractive, setTtInteractive] = useState(false)
-  const [ttToy, setTtToy] = useState("")
-  const [ttGame, setTtGame] = useState("")
-  const [ttEmojis, setTtEmojis] = useState(true)
-  const [ttHashtagsEnabled, setTtHashtagsEnabled] = useState(true)
-  const [ttAutoCopy, setTtAutoCopy] = useState(true)
-  const [ttCopiedIndex, setTtCopiedIndex] = useState(null)
-  const [ttCopiedSelected, setTtCopiedSelected] = useState(false)
-
   const isBetaUser = true
   const isPro = true
   const uploadLimit = Infinity
@@ -96,7 +210,6 @@ export default function Dashboard() {
       if (!user) { router.replace("/login"); return }
       setUser(user)
       loadData(user.id)
-      // Track user login + create beta_users row if not exists
       try {
         supabase.from('beta_users').upsert({
           user_id: user.id,
@@ -121,7 +234,6 @@ export default function Dashboard() {
   const loadData = async (uid) => {
     setLoading(true)
     try {
-      // Fetch all rows in pages of 1000 to bypass Supabase default limit
       let allData = []
       let from = 0
       const PAGE = 1000
@@ -141,7 +253,6 @@ export default function Dashboard() {
     return newTips.filter(t => !existingKeys.has(`${t.dateRaw || t.date_time}_${t.username}_${t.tokens}_${t.platform}`))
   }
 
-  // parseCSV now returns a plain array — no { success, needsConfirmation } object
   const handleCSV = async (file) => {
     if (!file || !user) return
     setUploading(true)
@@ -155,7 +266,6 @@ export default function Dashboard() {
         return
       }
 
-      // Track successful parse
       track('csv_imported', { rows: parsed.length, platform: parsed[0]?.platform || 'Unknown' })
 
       const unique = removeDuplicates(tips, parsed)
@@ -182,7 +292,6 @@ export default function Dashboard() {
         }
       })
 
-      // Insert in batches of 500 to avoid Supabase limits
       const BATCH_SIZE = 500
       for (let i = 0; i < toInsert.length; i += BATCH_SIZE) {
         const batch = toInsert.slice(i, i + BATCH_SIZE)
@@ -193,7 +302,6 @@ export default function Dashboard() {
       setUploadCount(uploadCount + 1)
       const newCount = uploadCount + 1
       if (newCount === 2 || newCount === 3) setShowBetaPrompt(true)
-      // Track upload event
       try {
         await supabase.from('analytics_events').insert({ user_id: user.id, event_name: 'csv_uploaded', properties: { count: newCount, platform: parsed[0]?.platform || 'Unknown', rows: unique.length } })
         await supabase.from('beta_users').upsert({ user_id: user.id, email: user.email, csv_upload_count: newCount }, { onConflict: 'user_id' })
@@ -260,6 +368,114 @@ export default function Dashboard() {
   })
 
   const allPlatforms = [...new Set(tips.map(t => t.platform))]
+
+  // Build "What's Next" alerts list (pure data, no hooks)
+  const buildWhatsNextAlerts = () => {
+    const now = Date.now()
+    const result = []
+
+    const SOCIAL_KEYWORDS = {
+      snapchat: /snap\s?chat|snapchat|snap/i,
+      instagram: /instagram|insta|ig\b/i,
+      twitter: /twitter|x\.com|\bx\b/i,
+      onlyfans: /onlyfans|only fans|of\b/i,
+    }
+    whales.forEach(w => {
+      if (!w.tipNotes || w.tipNotes.length === 0) return
+      Object.entries(SOCIAL_KEYWORDS).forEach(([platform, regex]) => {
+        const matchingNote = w.tipNotes.find(n => regex.test(n))
+        if (matchingNote) {
+          const usernameMatch = matchingNote.match(/@[\w.]+|(?:my|is|:)\s*([\w.@]+)/i)
+          const extractedUser = usernameMatch ? usernameMatch[1] || usernameMatch[0] : null
+          result.push({
+            type: 'social_mention', icon: '📱', color: C.cyan, severity: 'info',
+            title: `${w.username} mentioned ${platform.charAt(0).toUpperCase() + platform.slice(1)}`,
+            message: extractedUser
+              ? `They left their ${platform} as "${extractedUser}" in a tip note — add them before you forget!`
+              : `They mentioned ${platform} in a tip note — ask them for their handle next time they're in chat`,
+            cta: 'Copy Message', username: w.username, whale: w
+          })
+        }
+      })
+    })
+
+    const topFans = whales.filter(w => w.totalUSD >= 50 && w.tipCount >= 5)
+    topFans.slice(0, 2).forEach(w => {
+      const streamingPlatforms = platforms.map(p => p.platform).filter(p => p !== w.platform)
+      if (streamingPlatforms.length > 0) {
+        result.push({
+          type: 'affiliate', icon: '🔗', color: C.indigo, severity: 'info',
+          title: `Share your ${streamingPlatforms[0]} affiliate link with ${w.username}`,
+          message: `${w.username} has been one of your strongest supporters. Share your affiliate link on Snapchat or X — never directly on stream (against TOS)`,
+          cta: 'Copy Message', username: w.username, whale: w
+        })
+      }
+    })
+
+    whales.slice(0, 5).forEach(w => {
+      if (w.tipCount < 5) return
+      const hourCounts = {}
+      w.tips.forEach(t => {
+        const h = new Date(t.date_time || t.dateRaw).getHours()
+        hourCounts[h] = (hourCounts[h] || 0) + 1
+      })
+      const bestHour = Object.entries(hourCounts).sort((a, b) => b[1] - a[1])[0]
+      if (!bestHour) return
+      const peakHour = parseInt(bestHour[0])
+      const currentHour = new Date().getHours()
+      const hoursAway = Math.abs(currentHour - peakHour)
+      const totalTipsAtHour = bestHour[1]
+      const probability = Math.min(95, Math.round((totalTipsAtHour / w.tipCount) * 100 * 2.5))
+      const label = peakHour === 0 ? '12 AM' : peakHour < 12 ? `${peakHour} AM` : peakHour === 12 ? '12 PM' : `${peakHour - 12} PM`
+
+      if (hoursAway <= 2 && probability >= 40) {
+        result.push({
+          type: 'online_now', icon: '🟢', color: C.green, severity: 'success',
+          title: `${w.username} is probably online right now`,
+          message: `They usually tip around ${label} — there's a ~${probability}% chance they're active. Go live or send a message now!`,
+          cta: 'Copy Message', username: w.username, whale: w
+        })
+      } else if (hoursAway <= 10 && probability >= 40) {
+        result.push({
+          type: 'online_soon', icon: '⏰', color: C.gold, severity: 'warning',
+          title: `${w.username} is likely online in ~${hoursAway}h`,
+          message: `They typically tip around ${label} (${probability}% probability). Plan to go live or reach out before then`,
+          cta: null, username: w.username, whale: w
+        })
+      }
+    })
+
+    whales.filter(w => w.totalUSD >= 20).slice(0, 3).forEach(w => {
+      const days = Math.floor((now - new Date(w.lastTipDate)) / 86400000)
+      if (days >= 7 && days <= 90) {
+        const timeStr = days >= 30 ? `${Math.round(days / 30)} month${days >= 60 ? 's' : ''}` : `${days} days`
+        result.push({
+          type: 'dormant', icon: '💤', color: C.orange, severity: 'warning',
+          title: `You haven't heard from ${w.username} in ${timeStr}`,
+          message: `They've spent $${w.totalUSD.toFixed(0)} total — send them a message so they know you're thinking of them`,
+          cta: 'Copy Message', username: w.username, whale: w
+        })
+      }
+    })
+
+    const avgSession = sessions.length ? sessions.reduce((s, x) => s + x.totalUSD, 0) / sessions.length : 0
+    const bestSessions = sessions.filter(s => s.totalUSD >= avgSession * 1.5)
+    if (bestSessions.length >= 3) {
+      const bestDow = {}
+      bestSessions.forEach(s => { const d = new Date(s.startTime).toLocaleDateString('en-US', { weekday: 'long' }); bestDow[d] = (bestDow[d] || 0) + 1 })
+      const bestDay = Object.entries(bestDow).sort((a, b) => b[1] - a[1])[0]
+      if (bestDay) result.push({
+        type: 'performance', icon: '📈', color: C.pink, severity: 'info',
+        title: `Your best sessions happen on ${bestDay[0]}s`,
+        message: `${bestDay[1]} of your top-earning streams were on ${bestDay[0]}s. Plan your next high-effort stream for this day`,
+        cta: null
+      })
+    }
+
+    return result
+  }
+
+  const whatsNextAlerts = buildWhatsNextAlerts()
 
   return (
     <div style={{
@@ -444,6 +660,7 @@ export default function Dashboard() {
               </div>
             </div>
 
+            {/* WHAT'S NEXT — now uses AlertItem component, no hooks in loops */}
             <div style={{ ...glassCard, borderRadius: 14, padding: 24, marginBottom: 28 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
                 <div style={{ width: 36, height: 36, borderRadius: 10, background: "linear-gradient(135deg, #F59E0B, #EC4899)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>🧭</div>
@@ -452,176 +669,22 @@ export default function Dashboard() {
                   <div style={{ fontSize: 12, color: C.muted }}>Personalized alerts based on your tippers' real behavior</div>
                 </div>
               </div>
-              {(() => {
-                const now = Date.now()
-                const nextAlerts = []
-
-                // 1. Social platform mentions in tip notes
-                const SOCIAL_KEYWORDS = {
-                  snapchat: /snap\s?chat|snapchat|snap/i,
-                  instagram: /instagram|insta|ig\b/i,
-                  twitter: /twitter|x\.com|\bx\b/i,
-                  onlyfans: /onlyfans|only fans|of\b/i,
-                }
-                whales.forEach(w => {
-                  if (!w.tipNotes || w.tipNotes.length === 0) return
-                  Object.entries(SOCIAL_KEYWORDS).forEach(([platform, regex]) => {
-                    const matchingNote = w.tipNotes.find(n => regex.test(n))
-                    if (matchingNote) {
-                      // Try to extract a username from the note
-                      const usernameMatch = matchingNote.match(/@[\w.]+|(?:my|is|:)\s*([\w.@]+)/i)
-                      const extractedUser = usernameMatch ? usernameMatch[1] || usernameMatch[0] : null
-                      const nextAlerts = []
-                        type: 'social_mention',
-                        icon: '📱',
-                        color: C.cyan,
-                        severity: 'info',
-                        title: `${w.username} mentioned ${platform.charAt(0).toUpperCase() + platform.slice(1)}`,
-                        message: extractedUser
-                          ? `They left their ${platform} as "${extractedUser}" in a tip note — add them before you forget!`
-                          : `They mentioned ${platform} in a tip note — ask them for their handle next time they're in chat`,
-                        cta: 'Copy Message',
-                        username: w.username,
-                        whale: w
-                      })
-                    }
-                  })
-                })
-
-                // 2. Affiliate link opportunity — top tippers on multiple platforms
-                const topFans = whales.filter(w => w.totalUSD >= 50 && w.tipCount >= 5)
-                topFans.slice(0, 2).forEach(w => {
-                  const otherPlatforms = [...new Set(tips.filter(t => t.username.toLowerCase() === w.username.toLowerCase()).map(t => t.platform))]
-                  const streamingPlatforms = platforms.map(p => p.platform).filter(p => p !== w.platform)
-                  if (streamingPlatforms.length > 0) {
-                    nextAlerts.push({
-                      type: 'affiliate',
-                      icon: '🔗',
-                      color: C.indigo,
-                      severity: 'info',
-                      title: `Share your ${streamingPlatforms[0]} affiliate link with ${w.username}`,
-                      message: `${w.username} has been one of your strongest supporters. Share your affiliate link on Snapchat or X — never directly on stream (against TOS)`,
-                      cta: 'Copy Message',
-                      username: w.username,
-                      whale: w
-                    })
-                  }
-                })
-
-                // 3. "They might be online now" — based on historical tip hours
-                whales.slice(0, 5).forEach(w => {
-                  if (w.tipCount < 5) return
-                  const hourCounts = {}
-                  w.tips.forEach(t => {
-                    const h = new Date(t.date_time || t.dateRaw).getHours()
-                    hourCounts[h] = (hourCounts[h] || 0) + 1
-                  })
-                  const bestHour = Object.entries(hourCounts).sort((a, b) => b[1] - a[1])[0]
-                  if (!bestHour) return
-                  const peakHour = parseInt(bestHour[0])
-                  const currentHour = new Date().getHours()
-                  const hoursAway = Math.abs(currentHour - peakHour)
-                  const totalTipsAtHour = bestHour[1]
-                  const probability = Math.min(95, Math.round((totalTipsAtHour / w.tipCount) * 100 * 2.5))
-                  const label = peakHour === 0 ? '12 AM' : peakHour < 12 ? `${peakHour} AM` : peakHour === 12 ? '12 PM' : `${peakHour - 12} PM`
-
-                  if (hoursAway <= 2 && probability >= 40) {
-                    alerts.push({
-                      type: 'online_now',
-                      icon: '🟢',
-                      color: C.green,
-                      severity: 'success',
-                      title: `${w.username} is probably online right now`,
-                      message: `They usually tip around ${label} — there's a ~${probability}% chance they're active. Go live or send a message now!`,
-                      cta: 'Copy Message',
-                      username: w.username,
-                      whale: w
-                    })
-                  } else if (hoursAway <= 10 && probability >= 40) {
-                    alerts.push({
-                      type: 'online_soon',
-                      icon: '⏰',
-                      color: C.gold,
-                      severity: 'warning',
-                      title: `${w.username} is likely online in ~${hoursAway}h`,
-                      message: `They typically tip around ${label} (${probability}% probability). Plan to go live or reach out before then`,
-                      cta: null,
-                      username: w.username,
-                      whale: w
-                    })
-                  }
-                })
-
-                // 4. Haven't heard from top tipper
-                whales.filter(w => w.totalUSD >= 20).slice(0, 3).forEach(w => {
-                  const days = Math.floor((now - new Date(w.lastTipDate)) / 86400000)
-                  if (days >= 7 && days <= 90) {
-                    const timeStr = days >= 30 ? `${Math.round(days / 30)} month${days >= 60 ? 's' : ''}` : `${days} days`
-                    alerts.push({
-                      type: 'dormant',
-                      icon: '💤',
-                      color: C.orange,
-                      severity: 'warning',
-                      title: `You haven't heard from ${w.username} in ${timeStr}`,
-                      message: `They've spent $${w.totalUSD.toFixed(0)} total — send them a message so they know you're thinking of them`,
-                      cta: 'Copy Message',
-                      username: w.username,
-                      whale: w
-                    })
-                  }
-                })
-
-                // 5. Performance tips based on data
-                const avgSession = sessions.length ? sessions.reduce((s, x) => s + x.totalUSD, 0) / sessions.length : 0
-                const bestSessions = sessions.filter(s => s.totalUSD >= avgSession * 1.5)
-                if (bestSessions.length >= 3) {
-                  const bestDow = {}
-                  bestSessions.forEach(s => { const d = new Date(s.startTime).toLocaleDateString('en-US', { weekday: 'long' }); bestDow[d] = (bestDow[d] || 0) + 1 })
-                  const bestDay = Object.entries(bestDow).sort((a, b) => b[1] - a[1])[0]
-                  if (bestDay) alerts.push({
-                    type: 'performance',
-                    icon: '📈',
-                    color: C.pink,
-                    severity: 'info',
-                    title: `Your best sessions happen on ${bestDay[0]}s`,
-                    message: `${bestDay[1]} of your top-earning streams were on ${bestDay[0]}s. Plan your next high-effort stream for this day`,
-                    cta: null
-                  })
-                }
-
-                if (alerts.length === 0) return (
-                  <div style={{ fontSize: 13, color: C.muted }}>Import more CSV data to unlock personalized alerts based on your tippers' behavior.</div>
-                )
-
-                return alerts.slice(0, 8).map((a, i) => {
-                  const reengageMsg = a.whale ? `Hey ${a.username}! I've been thinking about you lately 💕 I'm going live soon and would love to see you there 🔥` : ''
-                  return (
-                    <div key={i} style={{ padding: 16, borderRadius: 12, marginBottom: 10, background: `${a.color}08`, border: `1px solid ${a.color}25`, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
-                      <div style={{ display: "flex", gap: 12, flex: 1, minWidth: 200 }}>
-                        <span style={{ fontSize: 22, flexShrink: 0 }}>{a.icon}</span>
-                        <div>
-                          <div style={{ fontSize: 14, fontWeight: 700, color: C.white, marginBottom: 4 }}>{a.title}</div>
-                          <div style={{ fontSize: 13, color: C.text, lineHeight: 1.6 }}>{a.message}</div>
-                        </div>
-                      </div>
-                      {a.cta && (
-                        <div style={{ display: "flex", gap: 8, flexShrink: 0, alignItems: "center" }}>
-                          <button onClick={() => { navigator.clipboard.writeText(reengageMsg); showToast("✅ Copied!") }}
-                            style={{ padding: "7px 14px", borderRadius: 8, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: C.muted, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
-                            📋 Copy
-                          </button>
-                          <button onClick={() => { if (a.whale) { setMessageTarget(a.whale); setMessageIndex(0); setMessageCopied(false) } }}
-                            style={{ fontSize: 20, background: "none", border: "none", cursor: "pointer", animation: "pulse-msg 2s infinite" }}>
-                            💌
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  )
-                })
-              })()}
+              {whatsNextAlerts.length === 0 ? (
+                <div style={{ fontSize: 13, color: C.muted }}>Import more CSV data to unlock personalized alerts based on your tippers' behavior.</div>
+              ) : (
+                whatsNextAlerts.slice(0, 8).map((a, i) => (
+                  <AlertItem
+                    key={i}
+                    a={a}
+                    setMessageTarget={setMessageTarget}
+                    setMessageIndex={setMessageIndex}
+                    setMessageCopied={setMessageCopied}
+                  />
+                ))
+              )}
             </div>
 
+            {/* RE-ENGAGE NOW — now uses ReengageItem component, no hooks in loops */}
             <div style={{ ...glassCard, borderRadius: 14, padding: 24, marginBottom: 28 }}>
               <h2 style={{ fontSize: 18, fontWeight: 700, color: C.white, marginBottom: 6 }}>💌 Re-engage Now</h2>
               <p style={{ fontSize: 13, color: C.muted, marginBottom: 16 }}>Top spenders who haven't tipped recently — reach out before they go cold</p>
@@ -639,45 +702,16 @@ export default function Dashboard() {
                   <div style={{ fontSize: 13, color: C.muted }}>No dormant fans right now — your audience is active! 🎉</div>
                 )
 
-                return toReengage.map((w, i) => {
-                  const days = Math.floor((now - new Date(w.lastTipDate)) / 86400000)
-                  const urgency = days > 30 ? C.red : days > 14 ? C.orange : C.gold
-                  const messages = [
-                    `Hey ${w.username}! I've been thinking about you lately 💕 I'm going live tonight and would love to see your name in the chat 🔥`,
-                    `${w.username}! It's been a minute and honestly I miss you 😊 Jumping on soon — come say hi? 💋`,
-                    `Hey love 💕 Just wanted to reach out because I was literally just thinking about you. Going live tonight — hope to see you there!`,
-                  ]
-                  const msg = messages[i % messages.length]
-
-                  return (
-                    <div key={i} style={{ padding: 16, borderRadius: 12, marginBottom: 10, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 12, flex: 1, minWidth: 200 }}>
-                        <div style={{ width: 40, height: 40, borderRadius: 10, background: `${urgency}20`, border: `1px solid ${urgency}40`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 800, color: urgency, flexShrink: 0 }}>
-                          {w.username.charAt(0).toUpperCase()}
-                        </div>
-                        <div>
-                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            <span style={{ fontSize: 14, fontWeight: 700, color: C.white }}>{w.username}</span>
-                            <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 20, background: `${urgency}20`, color: urgency, fontWeight: 600 }}>{days}d ago</span>
-                          </div>
-                          <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>${w.totalUSD.toFixed(0)} lifetime · {w.tipCount} tips · {w.platform}</div>
-                        </div>
-                      </div>
-                      <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-                        <button
-                          onClick={() => { navigator.clipboard.writeText(msg); showToast("✅ Copied!") }}
-                          style={{ padding: "8px 14px", borderRadius: 8, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: C.muted, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
-                          📋 Copy Message
-                        </button>
-                        <button
-                          onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }}
-                          style={{ padding: "8px 14px", borderRadius: 8, background: "linear-gradient(135deg, rgba(236,72,153,0.3), rgba(124,92,255,0.3))", border: "1px solid rgba(236,72,153,0.4)", color: C.pink, fontSize: 12, fontWeight: 600, cursor: "pointer", animation: "pulse-msg 2s infinite" }}>
-                          💌
-                        </button>
-                      </div>
-                    </div>
-                  )
-                })
+                return toReengage.map((w, i) => (
+                  <ReengageItem
+                    key={`${w.username}-${w.platform}`}
+                    w={w}
+                    index={i}
+                    setMessageTarget={setMessageTarget}
+                    setMessageIndex={setMessageIndex}
+                    setMessageCopied={setMessageCopied}
+                  />
+                ))
               })()}
             </div>
 
@@ -892,7 +926,6 @@ export default function Dashboard() {
               <button onClick={() => setShowDeleteConfirm(true)} style={{ padding: "10px 20px", borderRadius: 8, background: "rgba(248,113,113,0.15)", border: "1px solid rgba(248,113,113,0.3)", color: C.red, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>🗑️ Delete All Tips</button>
             </div>
 
-            {/* Date filter bar */}
             <div style={{ ...glassCard, borderRadius: 14, padding: 16, marginBottom: 16, display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
               <div style={{ fontSize: 13, color: C.muted, fontWeight: 600 }}>Filter by date:</div>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -959,7 +992,6 @@ export default function Dashboard() {
                       </tbody>
                     </table>
 
-                    {/* Pagination */}
                     {totalPages > 1 && (
                       <div style={{ padding: "16px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", background: "rgba(255,255,255,0.02)", borderTop: "1px solid rgba(255,255,255,0.06)" }}>
                         <button onClick={() => setTipPage(p => Math.max(0, p - 1))} disabled={tipPage === 0}
@@ -998,20 +1030,20 @@ export default function Dashboard() {
         )}
 
         {activeTab === "titles" && (() => {
-          const titles = ttTitles, setTitles = setTtTitles
-          const selected = ttSelected, setSelected = setTtSelected
-          const hashtags = ttHashtags, setHashtags = setTtHashtags
-          const tokensEnabled = ttTokensEnabled, setTokensEnabled = setTtTokensEnabled
-          const tokenGoal = ttTokenGoal, setTokenGoal = setTtTokenGoal
-          const action = ttAction, setAction = setTtAction
-          const interactive = ttInteractive, setInteractive = setTtInteractive
-          const toy = ttToy, setToy = setTtToy
-          const game = ttGame, setGame = setTtGame
-          const emojis = ttEmojis, setEmojis = setTtEmojis
-          const hashtagsEnabled = ttHashtagsEnabled, setHashtagsEnabled = setTtHashtagsEnabled
-          const autoCopy = ttAutoCopy, setAutoCopy = setTtAutoCopy
-          const copiedIndex = ttCopiedIndex, setCopiedIndex = setTtCopiedIndex
-          const copiedSelected = ttCopiedSelected, setCopiedSelected = setTtCopiedSelected
+          const [titles, setTitles] = React.useState([])
+          const [selected, setSelected] = React.useState(null)
+          const [hashtags, setHashtags] = React.useState([])
+          const [tokensEnabled, setTokensEnabled] = React.useState(false)
+          const [tokenGoal, setTokenGoal] = React.useState(500)
+          const [action, setAction] = React.useState("")
+          const [interactive, setInteractive] = React.useState(false)
+          const [toy, setToy] = React.useState("")
+          const [game, setGame] = React.useState("")
+          const [emojis, setEmojis] = React.useState(true)
+          const [hashtagsEnabled, setHashtagsEnabled] = React.useState(true)
+          const [autoCopy, setAutoCopy] = React.useState(true)
+          const [copiedIndex, setCopiedIndex] = React.useState(null)
+          const [copiedSelected, setCopiedSelected] = React.useState(false)
 
           const scoreTitle = title => {
             let score = 0
@@ -1168,12 +1200,11 @@ export default function Dashboard() {
           )
         })()}
 
-                {activeTab === "help" && (
+        {activeTab === "help" && (
           <div style={{ maxWidth: 900 }}>
             <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 8 }}>❓ How to Import Your Tips</h1>
             <p style={{ fontSize: 14, color: C.muted, marginBottom: 32 }}>Follow these steps to get your tip data into CamCash in under 2 minutes</p>
 
-            {/* HOW IT WORKS */}
             <div style={{ ...glassCard, borderRadius: 16, padding: 28, marginBottom: 32, border: "1px solid rgba(34,211,238,0.2)" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
                 <div style={{ width: 36, height: 36, borderRadius: 10, background: "linear-gradient(135deg, #10B981, #22D3EE)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>🔍</div>
@@ -1197,6 +1228,7 @@ export default function Dashboard() {
                 ))}
               </div>
             </div>
+
             <div style={{ ...glassCard, borderRadius: 16, padding: 28, marginBottom: 32 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
                 <div style={{ width: 36, height: 36, borderRadius: 10, background: "linear-gradient(135deg, #22D3EE, #7C5CFF)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>⚡</div>
@@ -1220,6 +1252,7 @@ export default function Dashboard() {
                 </div>
               </div>
             </div>
+
             <div style={{ ...glassCard, borderRadius: 14, padding: 24, marginBottom: 32 }}>
               <h2 style={{ fontSize: 18, fontWeight: 700, color: C.white, marginBottom: 20 }}>🎬 Step-by-Step: Copy → Sheets → Download CSV</h2>
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -1231,6 +1264,7 @@ export default function Dashboard() {
                 ))}
               </div>
             </div>
+
             <h2 style={{ fontSize: 20, fontWeight: 700, color: C.white, marginBottom: 16 }}>📖 Platform-Specific Tips</h2>
             <p style={{ fontSize: 13, color: C.muted, marginBottom: 24 }}>Where to find the earnings data on each site before you copy it</p>
             {[{ emoji: "🟣", name: "Chaturbate", steps: ["Log into your Chaturbate broadcaster account", "Go to Stats & Data → Token Stats", "Select your date range (last 30 days, 90 days, or custom)", "Click \"Download CSV\" or \"Export\"", "Upload the CSV file to CamCash"], tip: "Chaturbate CSVs usually have \"Tip from:\" format" }, { emoji: "🔴", name: "BongaCams", steps: ["Log into your BongaCams model account", "Navigate to Statistics → Earnings History", "Select date range and filter by \"Tips\" or \"All Transactions\"", "Look for \"Export to Excel\" or \"Download CSV\" button", "Save the file and upload to CamCash"], tip: "BongaCams format: Date, Username, Type, Tokens, USD" }, { emoji: "🟠", name: "MyFreeCams (MFC)", steps: ["Log into your MFC model account at wiki.myfreecams.com", "Go to Model Admin → Token Stats", "Click \"Transaction History\" or \"Detailed Stats\"", "Select date range and click \"Export CSV\"", "Upload the exported file to CamCash"], tip: "MFC CSVs are usually very detailed with all transaction types" }, { emoji: "🟢", name: "CamSoda", steps: ["Log into your CamSoda broadcaster dashboard", "Navigate to Earnings → Transaction History", "Choose your date range (last week, month, or custom dates)", "Click \"Download\" or \"Export to CSV\"", "Save and upload to CamCash"], tip: "CamSoda exports include both tokens and USD amounts" }].map(({ emoji, name, steps, tip }) => (
@@ -1247,6 +1281,7 @@ export default function Dashboard() {
                 </div>
               </div>
             ))}
+
             <div style={{ background: "linear-gradient(135deg, rgba(124,92,255,0.15), rgba(236,72,153,0.15))", border: "1px solid rgba(236,72,153,0.3)", borderRadius: 14, padding: 24 }}>
               <h2 style={{ fontSize: 20, fontWeight: 700, color: C.white, marginBottom: 16 }}>💡 General Tips</h2>
               <div style={{ fontSize: 14, color: C.text, lineHeight: 1.6 }}>
@@ -1478,7 +1513,7 @@ export default function Dashboard() {
                           email: earlyAccessEmail.trim(),
                           user_id: currentUser?.id || null,
                           signed_up_at: new Date().toISOString()
-                        }).then(() => {}) // best effort — table may not exist yet
+                        }).then(() => {})
                       } catch(e) {}
                       setEarlyAccessSubmitted(true)
                       setEarlyAccessSubmitting(false)
@@ -1504,7 +1539,6 @@ export default function Dashboard() {
           <div style={{ width: 460, background: "rgba(15,20,32,0.97)", backdropFilter: "blur(24px)", borderRadius: 24, border: "1px solid rgba(255,255,255,0.1)", boxShadow: "0 0 80px rgba(59,130,246,0.2), 0 0 160px rgba(236,72,153,0.1)", overflow: "hidden" }}>
             <div style={{ height: 4, background: "linear-gradient(90deg, #22D3EE, #7C5CFF, #EC4899)" }} />
             <div style={{ padding: 32 }}>
-
               <div style={{ textAlign: "center", marginBottom: 22 }}>
                 <div style={{ fontSize: 36, marginBottom: 10 }}>💰</div>
                 <div style={{ fontSize: 20, fontWeight: 800, color: C.white, marginBottom: 10 }}>Your data found missed earnings</div>
@@ -1570,13 +1604,12 @@ export default function Dashboard() {
                 style={{ width: "100%", padding: "10px", borderRadius: 10, background: "transparent", border: "1px solid rgba(255,255,255,0.08)", color: C.muted, fontSize: 13, cursor: "pointer" }}>
                 Keep using free beta
               </button>
-
             </div>
           </div>
         </div>
       )}
 
-            {/* FLOATING FEEDBACK BUTTON */}
+      {/* FLOATING FEEDBACK BUTTON */}
       <button
         onClick={() => { setShowFeedback(true); setFeedbackSent(false); setFeedbackText('') }}
         style={{
