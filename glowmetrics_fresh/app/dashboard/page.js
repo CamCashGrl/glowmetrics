@@ -1,8 +1,9 @@
 "use client"
 import React, { useState, useEffect, useCallback } from "react"
+import { runEngine } from "@/lib/engine";
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
-import { parseCSV, aggregateRows } from "../../lib/analytics"
+import { parseCSV } from "../../lib/analytics"
 
 // Analytics tracking — works whether or not @vercel/analytics is installed
 let track = (event, props) => {}
@@ -323,14 +324,22 @@ export default function Dashboard() {
     try {
       const text = await file.text()
       const parsed = parseCSV(text)
+      
 
       if (!parsed.length) {
         showToast("❌ No valid rows found in this file")
         setUploading(false)
         return
       }
-
-      track('csv_imported', { rows: parsed.length, platform: parsed[0]?.platform || 'Unknown' })
+     const analytics = runEngine(parsed);
+      const whales = analytics?.whales || [];
+const topUsers = analytics?.topUsers || [];
+const totals = analytics?.totals || {};
+const hourly = analytics?.hourly || [];
+      track('csv_imported', { 
+        rows: parsed.length,
+        platform: parsed[0]?.platform || 'Unknown' 
+      })
 
       const unique = removeDuplicates(tips, parsed)
       const duplicateCount = parsed.length - unique.length
@@ -413,7 +422,7 @@ export default function Dashboard() {
   const alerts = liveAnalytics?.whaleAlerts || analytics?.whaleAlerts || []
   const lossAlerts = liveAnalytics?.lossAlerts || analytics?.lossAlerts || []
   const nextMoves = liveAnalytics?.nextMoves || analytics?.nextMoves || []
-  const totalRevenue = analytics?.totalUSD || 0
+  const totalRevenue = analytics?.totals.usd || 0
   const avgPerHour = sessions.reduce((sum, s) => sum + s.usdPerHour, 0) / (sessions.length || 1)
   // Single source of truth — pre-computed in aggregateRows, same values used everywhere
   const analyticsbestDay  = analytics?.bestDay  || null
@@ -424,8 +433,8 @@ export default function Dashboard() {
     if (!platformTimes[s.platform]) platformTimes[s.platform] = { hours: {}, days: {} }
     const hour = new Date(s.startTime).getHours()
     const day = new Date(s.startTime).toLocaleDateString('en-US', { weekday: 'long' })
-    platformTimes[s.platform].hours[hour] = (platformTimes[s.platform].hours[hour] || 0) + s.totalUSD
-    platformTimes[s.platform].days[day] = (platformTimes[s.platform].days[day] || 0) + s.totalUSD
+    platformTimes[s.platform].hours[hour] = (platformTimes[s.platform].hours[hour] || 0) + s.totals.usd
+    platformTimes[s.platform].days[day] = (platformTimes[s.platform].days[day] || 0) + s.totals.usd
   })
 
   const filteredWhales = whales.filter(w => {
@@ -467,7 +476,7 @@ export default function Dashboard() {
       })
     })
 
-    const topFans = whales.filter(w => w.totalUSD >= 50 && w.tipCount >= 5)
+    const topFans = whales.filter(w => w.totals.usd >= 50 && w.tipCount >= 5)
     topFans.slice(0, 2).forEach(w => {
       const streamingPlatforms = platforms.map(p => p.platform).filter(p => p !== w.platform)
       if (streamingPlatforms.length > 0) {
@@ -518,14 +527,14 @@ export default function Dashboard() {
       }
     })
 
-    whales.filter(w => w.totalUSD >= 20).slice(0, 3).forEach(w => {
+    whales.filter(w => w.totals.usd >= 20).slice(0, 3).forEach(w => {
       const days = Math.floor((now - new Date(w.lastTipDate)) / 86400000)
       if (days >= 7 && days <= 90) {
         const timeStr = days >= 30 ? `${Math.round(days / 30)} month${days >= 60 ? 's' : ''}` : `${days} days`
         result.push({
           type: 'dormant', icon: '💤', color: C.orange, severity: 'warning',
           title: `You haven't heard from ${w.username} in ${timeStr}`,
-          message: `They've spent $${w.totalUSD.toFixed(0)} total — send them a message so they know you're thinking of them`,
+          message: `They've spent $${w.totals.usd.toFixed(0)} total — send them a message so they know you're thinking of them`,
           cta: 'Copy Message', username: w.username, whale: w,
           reengageMsg: `Hey ${w.username}! I've been thinking about you lately 💕 I'm going live soon and would love to see you there 🔥`
         })
@@ -536,8 +545,8 @@ export default function Dashboard() {
     // instead of recalculating best day independently here
     const analyticsbestDay = analytics?.bestDay
     if (analyticsbestDay) {
-      const avgSession = sessions.length ? sessions.reduce((s, x) => s + x.totalUSD, 0) / sessions.length : 0
-      const bestSessions = sessions.filter(s => s.totalUSD >= avgSession * 1.5)
+      const avgSession = sessions.length ? sessions.reduce((s, x) => s + x.totals.usd, 0) / sessions.length : 0
+      const bestSessions = sessions.filter(s => s.totals.usd >= avgSession * 1.5)
       const bestDayCount = bestSessions.filter(s =>
         new Date(s.startTime).toLocaleDateString('en-US', { weekday: 'long' }) === analyticsbestDay.day
       ).length
@@ -565,9 +574,9 @@ export default function Dashboard() {
     return whales
       .filter(w => {
         const days = Math.floor((now - new Date(w.lastTipDate)) / 86400000)
-        return days >= 3 && days <= 60 && w.totalUSD >= 10
+        return days >= 3 && days <= 60 && w.totals.usd >= 10
       })
-      .sort((a, b) => b.totalUSD - a.totalUSD)
+      .sort((a, b) => b.totals.usd - a.totals.usd)
       .slice(0, 5)
       .map((w, i) => {
         const days = Math.floor((now - new Date(w.lastTipDate)) / 86400000)
@@ -676,8 +685,8 @@ export default function Dashboard() {
             {(() => {
               const recentSessions = sessions.filter(s => new Date(s.startTime) > new Date(Date.now() - 30 * 86400000))
               const prevSessions = sessions.filter(s => { const d = new Date(s.startTime); return d > new Date(Date.now() - 60 * 86400000) && d <= new Date(Date.now() - 30 * 86400000) })
-              const recentRev = recentSessions.reduce((s, r) => s + r.totalUSD, 0)
-              const prevRev = prevSessions.reduce((s, r) => s + r.totalUSD, 0)
+              const recentRev = recentSessions.reduce((s, r) => s + r.totals.usd, 0)
+              const prevRev = prevSessions.reduce((s, r) => s + r.totals.usd, 0)
               const growthPct = prevRev > 0 ? Math.round(((recentRev - prevRev) / prevRev) * 100) : null
               const topPct = Math.max(1, Math.min(25, Math.round(100 - (totalRevenue / 50))))
               const streak = recentSessions.length
@@ -820,7 +829,7 @@ export default function Dashboard() {
                           <span style={{ fontSize: 14, fontWeight: 700, color: C.white }}>{w.username}</span>
                           <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 20, background: `${urgency}20`, color: urgency, fontWeight: 600 }}>{days}d ago</span>
                         </div>
-                        <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>${w.totalUSD.toFixed(0)} lifetime · {w.tipCount} tips · {w.platform}</div>
+                        <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>${w.totals.usd.toFixed(0)} lifetime · {w.tipCount} tips · {w.platform}</div>
                       </div>
                     </div>
                     <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
@@ -878,7 +887,7 @@ export default function Dashboard() {
                 <div key={i} className="dash-card" style={{ ...glassCard, borderRadius: 14, padding: 24, marginBottom: 20 }}>
                   <h3 style={{ fontSize: 20, fontWeight: 700, color: C.white, marginBottom: 16 }}>{p.platform}</h3>
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 16 }}>
-                    <div><div style={{ fontSize: 12, color: C.muted }}>Total Revenue</div><div style={{ fontSize: 24, fontWeight: 700, color: C.green }}>${p.totalUSD.toFixed(2)}</div></div>
+                    <div><div style={{ fontSize: 12, color: C.muted }}>Total Revenue</div><div style={{ fontSize: 24, fontWeight: 700, color: C.green }}>${p.totals.usd.toFixed(2)}</div></div>
                     <div><div style={{ fontSize: 12, color: C.muted }}>$/Hour</div><div style={{ fontSize: 24, fontWeight: 700, color: C.cyan }}>${p.usdPerHour.toFixed(2)}</div></div>
                     <div><div style={{ fontSize: 12, color: C.muted }}>Sessions</div><div style={{ fontSize: 24, fontWeight: 700, color: C.pink }}>{p.sessions}</div></div>
                     <div><div style={{ fontSize: 12, color: C.muted }}>Total Hours</div><div style={{ fontSize: 24, fontWeight: 700, color: C.gold }}>{p.hours.toFixed(1)}h</div></div>
@@ -931,7 +940,7 @@ export default function Dashboard() {
                           </button>
                         </div>
                       </td>
-                      <td style={{ padding: "12px 16px", color: C.green, fontWeight: 700 }}>${w.totalUSD.toFixed(2)}</td>
+                      <td style={{ padding: "12px 16px", color: C.green, fontWeight: 700 }}>${w.totals.usd.toFixed(2)}</td>
                       <td style={{ padding: "12px 16px", color: C.muted }}>{w.tipCount}</td>
                       <td style={{ padding: "12px 16px", color: C.cyan }}>${w.avgTipSize.toFixed(2)}</td>
                       <td style={{ padding: "12px 16px", color: C.muted }}>{w.platform}</td>
@@ -958,7 +967,7 @@ export default function Dashboard() {
                           <tr key={i} style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
                             <td style={{ padding: "12px 16px", color: C.muted, width: 40 }}>#{i + 4}</td>
                             <td style={{ padding: "12px 16px", color: C.white, fontWeight: 600 }}>{w.username}</td>
-                            <td style={{ padding: "12px 16px", color: C.green, fontWeight: 700 }}>${w.totalUSD.toFixed(2)}</td>
+                            <td style={{ padding: "12px 16px", color: C.green, fontWeight: 700 }}>${w.totals.usd.toFixed(2)}</td>
                             <td style={{ padding: "12px 16px", color: C.muted }}>{w.tipCount} tips</td>
                             <td style={{ padding: "12px 16px" }}>
                               <span style={{ padding: "4px 10px", borderRadius: 100, background: `${TIER_COLORS[w.tier]}15`, color: TIER_COLORS[w.tier], fontSize: 11, fontWeight: 600 }}>{w.tier}</span>
@@ -974,7 +983,7 @@ export default function Dashboard() {
                     <div style={{ textAlign: "center", padding: 24 }}>
                       <div style={{ fontSize: 28, marginBottom: 8 }}>🔒</div>
                       <div style={{ fontSize: 16, fontWeight: 700, color: C.white, marginBottom: 4 }}>+{filteredWhales.length - 3} more high-value fans hidden</div>
-                      <div style={{ fontSize: 13, color: C.muted, marginBottom: 16 }}>Including fans spending ${filteredWhales[3] ? filteredWhales[3].totalUSD.toFixed(0) : "???"} and more</div>
+                      <div style={{ fontSize: 13, color: C.muted, marginBottom: 16 }}>Including fans spending ${filteredWhales[3] ? filteredWhales[3].totals.usd.toFixed(0) : "???"} and more</div>
                       <button onClick={() => openUpgradeModal('whales')} style={{ padding: "10px 28px", borderRadius: 10, background: "linear-gradient(135deg, #3b82f6, #ec4899)", border: "none", color: C.white, fontSize: 14, fontWeight: 700, cursor: "pointer", boxShadow: "0 0 30px rgba(59,130,246,0.4)" }}>
                         🔓 Unlock All Fans
                       </button>
@@ -1006,7 +1015,7 @@ export default function Dashboard() {
                     <div style={{ fontSize: 13, color: C.muted }}>{new Date(s.startTime).toLocaleTimeString()}</div>
                   </div>
                   <div style={{ textAlign: "right" }}>
-                    <div style={{ fontSize: 24, fontWeight: 700, color: C.green }}>${s.totalUSD}</div>
+                    <div style={{ fontSize: 24, fontWeight: 700, color: C.green }}>${s.totals.usd}</div>
                     <div style={{ fontSize: 12, color: C.cyan }}>{s.durationHours.toFixed(1)}h</div>
                   </div>
                 </div>
@@ -1028,7 +1037,7 @@ export default function Dashboard() {
                           <div style={{ fontSize: 15, fontWeight: 600, color: C.white }}>{new Date(s.startTime).toLocaleDateString()} • {s.platform}</div>
                           <div style={{ fontSize: 13, color: C.muted }}>{s.durationHours.toFixed(1)}h • {s.tipCount} tips</div>
                         </div>
-                        <div style={{ fontSize: 22, fontWeight: 700, color: C.green }}>${s.totalUSD}</div>
+                        <div style={{ fontSize: 22, fontWeight: 700, color: C.green }}>${s.totals.usd}</div>
                       </div>
                     </div>
                   ))}
@@ -1301,7 +1310,7 @@ export default function Dashboard() {
                   <button onClick={() => setSelectedWhale(null)} style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.1)", color: C.muted, fontSize: 16, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
-                  {[{ label: "Total Spent", value: `$${w.totalUSD.toFixed(2)}`, color: C.green }, { label: "Tips Given", value: w.tipCount, color: C.cyan }, { label: "Avg Tip", value: `$${w.avgTipSize.toFixed(2)}`, color: C.gold }, { label: "Biggest Tip", value: `$${biggestTip.toFixed(2)}`, color: C.pink }].map(({ label, value, color }) => (
+                  {[{ label: "Total Spent", value: `$${w.totals.usd.toFixed(2)}`, color: C.green }, { label: "Tips Given", value: w.tipCount, color: C.cyan }, { label: "Avg Tip", value: `$${w.avgTipSize.toFixed(2)}`, color: C.gold }, { label: "Biggest Tip", value: `$${biggestTip.toFixed(2)}`, color: C.pink }].map(({ label, value, color }) => (
                     <div key={label} style={{ background: "rgba(255,255,255,0.05)", borderRadius: 10, padding: 12, textAlign: "center" }}>
                       <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>{label}</div>
                       <div style={{ fontSize: 16, fontWeight: 800, color }}>{value}</div>
@@ -1335,7 +1344,7 @@ export default function Dashboard() {
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>🤖 AI Predictions</div>
                   <div style={{ padding: 16, background: "rgba(255,255,255,0.04)", borderRadius: 12, border: "1px solid rgba(255,255,255,0.07)", display: "flex", flexDirection: "column", gap: 10 }}>
-                    {[{ label: "📅 Likely to tip again in", value: likelyReturnDays === 0 ? "Overdue!" : `~${likelyReturnDays} days`, color: C.cyan }, { label: "💸 Predicted next tip size", value: `$${(w.avgTipSize * 1.1).toFixed(2)}`, color: C.gold }, { label: "🎯 Engagement score", value: `${Math.min(99, Math.round((w.tipCount / 10) * 20 + (w.totalUSD / 100) * 10))} / 100`, color: C.pink }, { label: "📈 30-day revenue forecast", value: `$${((w.totalUSD / Math.max(1, Math.floor((Date.now() - new Date(firstTip?.date_time)) / 2592000000))) * 1.05).toFixed(2)}`, color: C.green }].map(({ label, value, color }) => (
+                    {[{ label: "📅 Likely to tip again in", value: likelyReturnDays === 0 ? "Overdue!" : `~${likelyReturnDays} days`, color: C.cyan }, { label: "💸 Predicted next tip size", value: `$${(w.avgTipSize * 1.1).toFixed(2)}`, color: C.gold }, { label: "🎯 Engagement score", value: `${Math.min(99, Math.round((w.tipCount / 10) * 20 + (w.totals.usd / 100) * 10))} / 100`, color: C.pink }, { label: "📈 30-day revenue forecast", value: `$${((w.totals.usd / Math.max(1, Math.floor((Date.now() - new Date(firstTip?.date_time)) / 2592000000))) * 1.05).toFixed(2)}`, color: C.green }].map(({ label, value, color }) => (
                       <div key={label} style={{ display: "flex", justifyContent: "space-between", padding: "10px 14px", background: "rgba(255,255,255,0.04)", borderRadius: 8 }}>
                         <div style={{ fontSize: 13, color: C.text }}>{label}</div>
                         <div style={{ fontSize: 13, fontWeight: 700, color }}>{value}</div>
