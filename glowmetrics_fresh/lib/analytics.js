@@ -21,7 +21,6 @@ export function parseCSV(text, platform = null) {
   const firstLower = lines[0].toLowerCase()
   const firstCols = parseCSVLine(lines[0])
 
-  // If first column looks like a date value, it's a data row (not headers)
   const firstColIsDate = /^\d{2}[.\-/]\d{2}[.\-/]\d{4}/.test(firstCols[0]) ||
                          /^\d{4}[.\-/]\d{2}[.\-/]\d{2}/.test(firstCols[0]) ||
                          /^(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i.test(firstCols[0])
@@ -36,9 +35,26 @@ export function parseCSV(text, platform = null) {
   )
 
   const raw = hasHeaders ? parseWithHeaders(lines, platform) : parseHeaderless(lines, platform)
-
-  // ── Normalize + validate every row before it leaves the parser ──────
   return raw.map(normalizeTip).filter(isValidTip)
+}
+
+export function dedupeTips(rows = []) {
+  const seen = new Set()
+  return rows.filter((row) => {
+    const key = [
+      String(row.date_time || row.dateRaw || '').trim().toLowerCase(),
+      String(row.username || '').trim().toLowerCase(),
+      String(row.platform || '').trim().toLowerCase(),
+      String(row.tip_type || 'tip').trim().toLowerCase(),
+      Number(row.tokens || 0),
+      Number(row.usd || 0).toFixed(2),
+      String(row.tip_note || '').trim().toLowerCase(),
+    ].join('|')
+
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
 }
 
 // ============================================
@@ -62,6 +78,7 @@ function normalizeTip(row) {
     username: (row.username || '').toLowerCase().trim(),
     tokens,
     usd: parseFloat(usd.toFixed(2)),
+    tip_note: row.tip_note || '',
     dateRaw,
     date_time: dateRaw,
   }
@@ -991,3 +1008,4 @@ export function aggregateRows(tips) {
     bestDay, bestHour   // ← single source of truth, consumed by dashboard
   }
 }
+
