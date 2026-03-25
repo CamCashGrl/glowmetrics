@@ -19,20 +19,25 @@ function normalizeRow(row) {
     toNumber(row.tip_amount) ||
     0;
 
-  const username =
-    row.username ||
-    row.user ||
-    row.member ||
-    "anonymous";
+  const username = (
+    row.username || row.user || row.member || "anonymous"
+  ).toLowerCase().trim();
 
-  const timestamp =
-    new Date(row.timestamp || row.date || Date.now());
+  const rawDate =
+    row.date_time || row.dateRaw || row.timestamp || row.date || null;
+  const dateRaw = rawDate
+    ? new Date(rawDate).toISOString()
+    : new Date().toISOString();
 
   return {
     username,
     tokens,
-    usd: tokens * TOKEN_VALUE,
-    timestamp,
+    usd: parseFloat((tokens * TOKEN_VALUE).toFixed(2)),
+    dateRaw,
+    date_time: dateRaw,
+    platform: row.platform || "Unknown",
+    tip_type: row.tip_type || "Tip",
+    tip_note: row.note || row.tip_note || "",
   };
 }
 
@@ -41,10 +46,8 @@ function normalizeRow(row) {
 // -------------------------------
 export function runEngine(rawRows = []) {
   const rows = rawRows.map(normalizeRow);
-
   let totalTokens = 0;
   let totalUSD = 0;
-
   const userMap = {};
   const hourlyMap = {};
 
@@ -59,43 +62,34 @@ export function runEngine(rawRows = []) {
         tokens: 0,
         usd: 0,
         tips: 0,
-        firstSeen: row.timestamp,
-        lastSeen: row.timestamp,
+        firstSeen: row.date_time,
+        lastSeen: row.date_time,
       };
     }
-
     const user = userMap[row.username];
     user.tokens += row.tokens;
     user.usd += row.usd;
     user.tips += 1;
-    user.lastSeen = row.timestamp;
+    user.lastSeen = row.date_time;
 
     // HOURLY
-    const hour = row.timestamp.getHours();
+    const hour = new Date(row.date_time).getHours();
     if (!hourlyMap[hour]) {
       hourlyMap[hour] = { hour, tokens: 0, usd: 0 };
     }
-
     hourlyMap[hour].tokens += row.tokens;
     hourlyMap[hour].usd += row.usd;
   });
 
   const users = Object.values(userMap);
-
   const whales = users
     .filter((u) => u.tokens >= 1000)
     .sort((a, b) => b.tokens - a.tokens);
-
   const topUsers = users
     .sort((a, b) => b.tokens - a.tokens)
     .slice(0, 10);
-
-  const hourly = Object.values(hourlyMap).sort(
-    (a, b) => a.hour - b.hour
-  );
-
-  const avgTip =
-    rows.length > 0 ? totalTokens / rows.length : 0;
+  const hourly = Object.values(hourlyMap).sort((a, b) => a.hour - b.hour);
+  const avgTip = rows.length > 0 ? totalTokens / rows.length : 0;
 
   return {
     totals: {
