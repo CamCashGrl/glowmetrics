@@ -25,24 +25,7 @@ export async function POST(req) {
     const tokens = row.tokens || 0
     const usd = row.usd && row.usd > 0 ? row.usd : parseFloat((tokens * 0.05).toFixed(2))
     return {
-      const rawDate = row.dateRaw || row.date_time
-
-let parsedDate = null
-if (rawDate) {
-  const parts = rawDate.split(/[\s:.]/)
-
-  // handles format like 21.03.2024 16:01
-  if (rawDate.includes('.')) {
-    parsedDate = new Date(
-      `${parts[2]}-${parts[1]}-${parts[0]}T${parts[3] || '00'}:${parts[4] || '00'}:00`
-    )
-  } else {
-    parsedDate = new Date(rawDate)
-  }
-}
-
-return {
-  date_time: parsedDate ? parsedDate.toISOString() : null,
+      date_time: row.dateRaw || row.date_time,
       platform: row.platform || 'Unknown',
       username: row.username,
       tip_type: row.tip_type || 'Tip',
