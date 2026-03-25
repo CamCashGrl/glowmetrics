@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
-import { dedupeTips, parseCSV, aggregateRows as runEngine } from "../../lib/analytics"
+import { parseCSV, aggregateRows as runEngine } from "../../lib/analytics"
 
 // Analytics tracking — works whether or not @vercel/analytics is installed
 let track = (event, props) => {}
@@ -232,6 +232,7 @@ export default function Dashboard() {
   const [user, setUser] = useState(null)
   const [tips, setTips] = useState([])
   const [analytics, setAnalytics] = useState(null)
+  const [liveAnalytics, setLiveAnalytics] = useState(null)
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [activeTab, setActiveTab] = useState("overview")
@@ -269,29 +270,6 @@ export default function Dashboard() {
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(""), 3500) }
 
-  const syncAnalytics = useCallback((rows = []) => {
-    const uniqueRows = dedupeTips(rows)
-    setTips(uniqueRows)
-    setAnalytics(runEngine(uniqueRows))
-    return uniqueRows
-  }, [])
-
-  const loadData = useCallback(async (uid) => {
-    setLoading(true)
-    try {
-      let allData = []
-      let from = 0
-      const PAGE = 1000
-      while (true) {
-        const { data, error } = await supabase.from("tips").select("*").eq("user_id", uid).order("date_time", { ascending: true }).range(from, from + PAGE - 1)
-        if (error) break
-        if (data?.length) allData = [...allData, ...data]
-        if (!data || data.length < PAGE) break
-        from += PAGE
-      }
-      syncAnalytics(allData)
-    } finally { setLoading(false) }
-  }, [syncAnalytics])
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) { router.replace("/login"); return }
@@ -310,18 +288,36 @@ export default function Dashboard() {
         })
       } catch(e) {}
     })
-  }, [loadData, router])
+  }, [])
 
+  useEffect(() => {
+    if (!tips.length) return
+    const interval = setInterval(() => { setLiveAnalytics(analytics) }, 5000)
+    return () => clearInterval(interval)
+  }, [tips])
+
+  const loadData = async (uid) => {
+    setLoading(true)
+    try {
+      let allData = []
+      let from = 0
+      const PAGE = 1000
+      while (true) {
+        const { data, error } = await supabase.from("tips").select("*").eq("user_id", uid).order("date_time", { ascending: true }).range(from, from + PAGE - 1)
+        if (error) break
+        if (data?.length) allData = [...allData, ...data]
+        if (!data || data.length < PAGE) break
+        from += PAGE
+      }
+      if (allData.length) { setTips(allData); const result = runEngine(allData); setAnalytics(result) }
+    } finally { setLoading(false) }
+  }
 
   const removeDuplicates = (existingTips, newTips) => {
     const existingKeys = new Set(existingTips.map(t => `${t.date_time}_${t.username}_${t.tokens}_${t.platform}`))
-    return dedupeTips(newTips).filter(t => {
-      const key = `${t.dateRaw || t.date_time}_${t.username}_${t.tokens}_${t.platform}`
-      if (existingKeys.has(key)) return false
-      existingKeys.add(key)
-      return true
-    })
+    return newTips.filter(t => !existingKeys.has(`${t.dateRaw || t.date_time}_${t.username}_${t.tokens}_${t.platform}`))
   }
+
   const handleCSV = async (file) => {
     if (!file || !user) return
     setUploading(true)
@@ -411,22 +407,18 @@ export default function Dashboard() {
     )
   }
 
-  const analyticsData = analytics || {}
-  const totals = analyticsData?.totals || {}
-  const whales = analyticsData?.whales || []
-  const topUsers = analyticsData?.topUsers || []
-  const hourly = analyticsData?.hourly || []
-  const predictions = analyticsData?.predictions || null
-  const sessions = analyticsData?.sessions || []
-  const insights = analyticsData?.insights || []
-  const platforms = analyticsData?.platforms || []
-  const alerts = analyticsData?.whaleAlerts || []
-  const lossAlerts = analyticsData?.lossAlerts || []
-  const nextMoves = analyticsData?.nextMoves || []
-  const totalRevenue = totals?.usd || 0
-  const avgPerHour = hourly.length ? hourly.reduce((sum, h) => sum + (h?.usd || 0), 0) / (hourly.filter(h => (h?.usd || 0) > 0).length || 1) : 0
-  const analyticsbestDay  = analyticsData?.bestDay  || null
-  const analyticsBestHour = analyticsData?.bestHour || null
+  const sessions = analytics?.sessions || []
+  const whales = analytics?.whales || []
+  const insights = analytics?.insights || []
+  const platforms = analytics?.platforms || []
+  const alerts = liveAnalytics?.whaleAlerts || analytics?.whaleAlerts || []
+  const lossAlerts = liveAnalytics?.lossAlerts || analytics?.lossAlerts || []
+  const nextMoves = liveAnalytics?.nextMoves || analytics?.nextMoves || []
+  const totalRevenue = analytics?.totalUSD || 0
+  const avgPerHour = sessions.length ? sessions.reduce((sum, s) => sum + (s.usdPerHour || 0), 0) / sessions.length : 0
+  // Single source of truth — pre-computed in aggregateRows, same values used everywhere
+  const analyticsbestDay  = analytics?.bestDay  || null
+  const analyticsBestHour = analytics?.bestHour || null
 
   const platformTimes = {}
   sessions.forEach(s => {
@@ -1904,6 +1896,3 @@ export default function Dashboard() {
     </div>
   )
 }
-
-
-
