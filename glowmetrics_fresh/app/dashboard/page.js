@@ -240,6 +240,7 @@ export default function Dashboard() {
   const [uploadCount, setUploadCount] = useState(0)
   const [whaleFilter, setWhaleFilter] = useState("ALL")
   const [platformFilter, setPlatformFilter] = useState("ALL")
+  const [platformTimeFilter, setPlatformTimeFilter] = useState("ALL")
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [selectedWhale, setSelectedWhale] = useState(null)
   const [messageTarget, setMessageTarget] = useState(null)
@@ -868,46 +869,226 @@ export default function Dashboard() {
           </div>
         )}
 
-        {activeTab === "platforms" && (
-          <div>
-            <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 32 }}>🎯 Platform Analytics</h1>
-            {platforms.map((p, i) => {
-              const bestHour = Object.entries(platformTimes[p.platform]?.hours || {}).sort((a, b) => b[1] - a[1])[0]
-              const bestDay = Object.entries(platformTimes[p.platform]?.days || {}).sort((a, b) => b[1] - a[1])[0]
-              return (
-                <div key={i} className="dash-card" style={{ ...glassCard, borderRadius: 14, padding: 24, marginBottom: 20 }}>
-                  <h3 style={{ fontSize: 20, fontWeight: 700, color: C.white, marginBottom: 16 }}>{p.platform}</h3>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 16 }}>
-                    <div><div style={{ fontSize: 12, color: C.muted }}>Total Revenue</div><div style={{ fontSize: 24, fontWeight: 700, color: C.green }}>${p.totalUSD.toFixed(2)}</div></div>
-                    <div><div style={{ fontSize: 12, color: C.muted }}>$/Hour</div><div style={{ fontSize: 24, fontWeight: 700, color: C.cyan }}>${p.usdPerHour.toFixed(2)}</div></div>
-                    <div><div style={{ fontSize: 12, color: C.muted }}>Sessions</div><div style={{ fontSize: 24, fontWeight: 700, color: C.pink }}>{p.sessions}</div></div>
-                    <div><div style={{ fontSize: 12, color: C.muted }}>Total Hours</div><div style={{ fontSize: 24, fontWeight: 700, color: C.gold }}>{p.hours.toFixed(1)}h</div></div>
-                  </div>
-                  {bestHour && bestDay && (
-                    <div style={{ position: "relative" }}>
-                      <div style={{ padding: 16, background: "rgba(255,255,255,0.04)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.08)", filter: isPro ? "none" : "blur(3px)" }}>
-                        <div style={{ fontSize: 14, color: C.white, marginBottom: 4 }}>🕐 Best Hour: {formatHour(bestHour[0])} — ${bestHour[1].toFixed(2)} total</div>
-                        <div style={{ fontSize: 14, color: C.white }}>📅 Best Day: {bestDay[0]} — ${bestDay[1].toFixed(2)} total</div>
-                      </div>
-                      {!isPro && (
-                        <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(5,7,15,0.6)", borderRadius: 10, backdropFilter: "blur(1px)" }}>
-                          <button onClick={() => openUpgradeModal('platform_timing')} style={{ padding: "7px 18px", borderRadius: 8, background: "linear-gradient(135deg,#3b82f6,#ec4899)", border: "none", color: C.white, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-                            🔒 Unlock Timing Data
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  )}
+        {activeTab === "platforms" && (() => {
+          // ── Time filter
+          const now = Date.now()
+          const filterMs = platformTimeFilter === "7D" ? 7 * 86400000
+                         : platformTimeFilter === "30D" ? 30 * 86400000
+                         : platformTimeFilter === "90D" ? 90 * 86400000
+                         : null
+
+          const filteredTips = filterMs
+            ? tips.filter(t => now - new Date(t.date_time).getTime() <= filterMs)
+            : tips
+
+          // Rebuild platform stats from filtered tips using same logic as engine
+          const pfMap = {}
+          filteredTips.forEach(t => {
+            const k = t.platform || "Unknown"
+            if (!pfMap[k]) pfMap[k] = { platform: k, totalUSD: 0, tips: 0, sessions: new Set(), hours: 0 }
+            pfMap[k].totalUSD += t.usd || 0
+            pfMap[k].tips += 1
+          })
+          // Overlay session data for hour counts
+          const filteredSessions = filterMs
+            ? sessions.filter(s => now - new Date(s.startTime).getTime() <= filterMs)
+            : sessions
+          filteredSessions.forEach(s => {
+            if (!pfMap[s.platform]) pfMap[s.platform] = { platform: s.platform, totalUSD: 0, tips: 0, sessions: new Set(), hours: 0 }
+            pfMap[s.platform].sessions.add(s.id || s.startTime)
+            pfMap[s.platform].hours += s.durationHours || 0
+          })
+          const filteredPlatforms = Object.values(pfMap).map(p => ({
+            platform: p.platform,
+            totalUSD: parseFloat(p.totalUSD.toFixed(2)),
+            sessions: p.sessions.size,
+            hours: parseFloat(p.hours.toFixed(1)),
+            usdPerHour: p.hours > 0 ? parseFloat((p.totalUSD / p.hours).toFixed(2)) : 0,
+            avgTipSize: p.tips > 0 ? parseFloat((p.totalUSD / p.tips).toFixed(2)) : 0,
+            tipCount: p.tips
+          })).sort((a, b) => b.totalUSD - a.totalUSD)
+
+          const displayPlatforms = filteredPlatforms.length > 0 ? filteredPlatforms : platforms
+          const maxUSD = Math.max(...displayPlatforms.map(p => p.totalUSD), 1)
+          const maxUPH = Math.max(...displayPlatforms.map(p => p.usdPerHour), 1)
+
+          const getPlatformInsights = (p) => {
+            const insights = []
+            const avgUPH = displayPlatforms.reduce((s, x) => s + x.usdPerHour, 0) / (displayPlatforms.length || 1)
+            const pctAbove = displayPlatforms.length > 1 ? Math.round(((p.usdPerHour - avgUPH) / avgUPH) * 100) : null
+            const bHour = Object.entries(platformTimes[p.platform]?.hours || {}).sort((a, b) => b[1] - a[1])[0]
+            const bDay  = Object.entries(platformTimes[p.platform]?.days  || {}).sort((a, b) => b[1] - a[1])[0]
+            const isTop = displayPlatforms.length > 1 && p.totalUSD === maxUSD
+            const isTopUPH = displayPlatforms.length > 1 && p.usdPerHour === maxUPH
+            if (isTop)    insights.push({ icon: "🏆", text: "Your highest revenue platform", color: C.gold })
+            if (isTopUPH && !isTop) insights.push({ icon: "⚡", text: "Most efficient — highest $/hour", color: C.cyan })
+            if (pctAbove !== null && pctAbove >= 20)  insights.push({ icon: "🔥", text: `Earns ${pctAbove}% more per hour than your average`, color: C.green })
+            if (pctAbove !== null && pctAbove <= -20) insights.push({ icon: "📉", text: `${Math.abs(pctAbove)}% below your avg $/hour — consider shifting time`, color: C.orange })
+            if (bDay)  insights.push({ icon: "📅", text: `Best day: ${bDay[0]} ($${parseFloat(bDay[1]).toFixed(0)} avg)`, color: C.white })
+            if (bHour) insights.push({ icon: "🕐", text: `Peak time: ${formatHour(bHour[0])} ($${parseFloat(bHour[1]).toFixed(0)} earned)`, color: C.white })
+            if (p.sessions >= 5 && p.hours / p.sessions < 1) insights.push({ icon: "⏱️", text: "Short sessions — try streaming longer to boost earnings", color: C.muted })
+            return insights
+          }
+
+          const PLATFORM_EMOJI = { Chaturbate: "🟣", BongaCams: "🔴", MyFreeCams: "🟠", CamSoda: "🟢", Stripchat: "🔵", Flirt4Free: "💜" }
+
+          return (
+            <div>
+              {/* HEADER + TIME FILTER */}
+              <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 28, flexWrap: "wrap", gap: 16 }}>
+                <div>
+                  <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 6 }}>🎯 Platform Comparison</h1>
+                  <p style={{ fontSize: 13, color: C.muted }}>See exactly where your time is most valuable</p>
                 </div>
-              )
-            })}
-          </div>
-        )}
+                <div style={{ display: "flex", gap: 6, background: "rgba(255,255,255,0.04)", padding: 4, borderRadius: 10, border: "1px solid rgba(255,255,255,0.08)" }}>
+                  {[["ALL","All Time"],["7D","7 Days"],["30D","30 Days"],["90D","90 Days"]].map(([val, label]) => (
+                    <button key={val} onClick={() => setPlatformTimeFilter(val)} style={{
+                      padding: "6px 14px", borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: "pointer", border: "none", transition: "all 0.15s",
+                      background: platformTimeFilter === val ? "linear-gradient(135deg, #3b82f6, #ec4899)" : "transparent",
+                      color: platformTimeFilter === val ? C.white : C.muted,
+                      boxShadow: platformTimeFilter === val ? "0 0 12px rgba(59,130,246,0.4)" : "none"
+                    }}>{label}</button>
+                  ))}
+                </div>
+              </div>
+
+              {/* SUMMARY ROW — only when 2+ platforms */}
+              {displayPlatforms.length >= 2 && (() => {
+                const topRev = [...displayPlatforms].sort((a, b) => b.totalUSD - a.totalUSD)[0]
+                const topEff = [...displayPlatforms].sort((a, b) => b.usdPerHour - a.usdPerHour)[0]
+                const totalHours = displayPlatforms.reduce((s, p) => s + p.hours, 0)
+                const totalEarned = displayPlatforms.reduce((s, p) => s + p.totalUSD, 0)
+                return (
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 28 }}>
+                    {[
+                      { icon: "💰", label: "Top Revenue", value: topRev.platform, sub: `$${topRev.totalUSD.toFixed(2)} total`, color: C.gold },
+                      { icon: "⚡", label: "Most Efficient", value: topEff.platform, sub: `$${topEff.usdPerHour.toFixed(2)}/hour`, color: C.cyan },
+                      { icon: "🕒", label: "Total Hours", value: `${totalHours.toFixed(1)}h`, sub: `across ${displayPlatforms.length} platforms`, color: C.pink },
+                      { icon: "💵", label: "Combined Earned", value: `$${totalEarned.toFixed(2)}`, sub: platformTimeFilter === "ALL" ? "all time" : `last ${platformTimeFilter}`, color: C.green },
+                    ].map(({ icon, label, value, sub, color }) => (
+                      <div key={label} className="dash-card" style={{ ...glassCard, borderRadius: 14, padding: 20 }}>
+                        <div style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>{icon} {label}</div>
+                        <div style={{ fontSize: 20, fontWeight: 800, color, marginBottom: 4 }}>{value}</div>
+                        <div style={{ fontSize: 12, color: C.muted }}>{sub}</div>
+                      </div>
+                    ))}
+                  </div>
+                )
+              })()}
+
+              {/* PLATFORM CARDS */}
+              {displayPlatforms.map((p, i) => {
+                const insights = getPlatformInsights(p)
+                const revenueBarPct = Math.round((p.totalUSD / maxUSD) * 100)
+                const uphBarPct     = Math.round((p.usdPerHour / maxUPH) * 100)
+                const isTop = p.totalUSD === maxUSD && displayPlatforms.length > 1
+                const avgSessionUSD = p.sessions > 0 ? (p.totalUSD / p.sessions) : 0
+                const emoji = PLATFORM_EMOJI[p.platform] || "🎥"
+
+                return (
+                  <div key={i} className="dash-card" style={{
+                    ...glassCard, borderRadius: 16, padding: 28, marginBottom: 20,
+                    border: isTop ? "1px solid rgba(245,158,11,0.4)" : "1px solid rgba(255,255,255,0.08)",
+                    boxShadow: isTop ? "0 0 30px rgba(245,158,11,0.1), 0 0 60px rgba(236,72,153,0.08)" : glassCard.boxShadow
+                  }}>
+                    {/* HEADER */}
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                        <div style={{ width: 44, height: 44, borderRadius: 12, background: isTop ? "linear-gradient(135deg, rgba(245,158,11,0.3), rgba(251,146,60,0.2))" : "rgba(255,255,255,0.06)", border: isTop ? "1px solid rgba(245,158,11,0.4)" : "1px solid rgba(255,255,255,0.1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>
+                          {emoji}
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 20, fontWeight: 800, color: C.white }}>{p.platform}</div>
+                          <div style={{ fontSize: 12, color: C.muted }}>{p.sessions} sessions · {p.hours.toFixed(1)}h streamed</div>
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                        {isTop && <div style={{ padding: "4px 12px", borderRadius: 20, background: "rgba(245,158,11,0.2)", border: "1px solid rgba(245,158,11,0.4)", fontSize: 11, fontWeight: 700, color: C.gold }}>🏆 Top Platform</div>}
+                        <div style={{ fontSize: 11, color: C.muted, padding: "4px 10px", background: "rgba(255,255,255,0.04)", borderRadius: 8, border: "1px solid rgba(255,255,255,0.06)" }}>#{i + 1} of {displayPlatforms.length}</div>
+                      </div>
+                    </div>
+
+                    {/* STAT GRID */}
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 20 }}>
+                      {[
+                        { label: "Total Revenue", value: `$${p.totalUSD.toFixed(2)}`, color: C.green },
+                        { label: "$/Hour", value: `$${p.usdPerHour.toFixed(2)}`, color: C.cyan },
+                        { label: "Avg Session", value: `$${avgSessionUSD.toFixed(2)}`, color: C.pink },
+                        { label: "Avg Tip Size", value: `$${p.avgTipSize.toFixed(2)}`, color: C.gold },
+                      ].map(({ label, value, color }) => (
+                        <div key={label} style={{ background: "rgba(255,255,255,0.04)", borderRadius: 10, padding: "14px 16px", border: "1px solid rgba(255,255,255,0.06)" }}>
+                          <div style={{ fontSize: 11, color: C.muted, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>{label}</div>
+                          <div style={{ fontSize: 20, fontWeight: 800, color }}>{value}</div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* PERFORMANCE BARS */}
+                    <div style={{ marginBottom: 20, display: "flex", flexDirection: "column", gap: 10 }}>
+                      {[
+                        { label: "Revenue share", pct: revenueBarPct, color: C.green },
+                        { label: "$/Hour efficiency", pct: uphBarPct, color: C.cyan },
+                      ].map(({ label, pct, color }) => (
+                        <div key={label}>
+                          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                            <span style={{ fontSize: 11, color: C.muted }}>{label}</span>
+                            <span style={{ fontSize: 11, fontWeight: 600, color }}>{pct}%</span>
+                          </div>
+                          <div style={{ height: 6, borderRadius: 4, background: "rgba(255,255,255,0.06)", overflow: "hidden" }}>
+                            <div style={{ height: "100%", width: `${pct}%`, borderRadius: 4, background: `linear-gradient(90deg, ${color}, ${color}80)`, transition: "width 0.6s ease" }} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* INSIGHTS */}
+                    {insights.length > 0 && (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        {insights.map((ins, j) => (
+                          <div key={j} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: "rgba(255,255,255,0.03)", borderRadius: 8, border: "1px solid rgba(255,255,255,0.06)" }}>
+                            <span style={{ fontSize: 16, flexShrink: 0 }}>{ins.icon}</span>
+                            <span style={{ fontSize: 13, color: ins.color || C.text }}>{ins.text}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+
+              {displayPlatforms.length === 0 && (
+                <div style={{ ...glassCard, borderRadius: 14, padding: 40, textAlign: "center" }}>
+                  <div style={{ fontSize: 40, marginBottom: 12 }}>📊</div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: C.white, marginBottom: 8 }}>No platform data yet</div>
+                  <div style={{ fontSize: 13, color: C.muted }}>Import your CSV files to see how your platforms compare</div>
+                </div>
+              )}
+            </div>
+          )
+        })()}
 
         {activeTab === "whales" && (
           <div>
             <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 8 }}>🐳 Top Fans</h1>
             <p style={{ fontSize: 13, color: C.muted, marginBottom: 24 }}>Your highest-value supporters ranked by total spend</p>
+
+            {/* FILTERS */}
+            <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
+              <div style={{ display: "flex", gap: 6, background: "rgba(255,255,255,0.04)", padding: 4, borderRadius: 10, border: "1px solid rgba(255,255,255,0.08)" }}>
+                {["ALL","Whale","Shark","Regular","Dormant"].map(t => (
+                  <button key={t} onClick={() => setWhaleFilter(t)} style={{ padding: "5px 12px", borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: "pointer", border: "none", transition: "all 0.15s", background: whaleFilter === t ? "linear-gradient(135deg, #3b82f6, #ec4899)" : "transparent", color: whaleFilter === t ? C.white : C.muted }}>{t}</button>
+                ))}
+              </div>
+              {allPlatforms.length > 1 && (
+                <div style={{ display: "flex", gap: 6, background: "rgba(255,255,255,0.04)", padding: 4, borderRadius: 10, border: "1px solid rgba(255,255,255,0.08)" }}>
+                  {["ALL", ...allPlatforms].map(p => (
+                    <button key={p} onClick={() => setPlatformFilter(p)} style={{ padding: "5px 12px", borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: "pointer", border: "none", transition: "all 0.15s", background: platformFilter === p ? "rgba(34,211,238,0.2)" : "transparent", color: platformFilter === p ? C.cyan : C.muted }}>{p}</button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* TOP 3 TABLE */}
             <div style={{ ...glassCard, borderRadius: 14, overflow: "hidden", marginBottom: 16 }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                 <thead>
@@ -926,9 +1107,7 @@ export default function Dashboard() {
                           <span style={{ color: C.white, fontWeight: 600 }}>{w.username}</span>
                           <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }}
                             style={{ fontSize: 20, background: "none", border: "none", cursor: "pointer", lineHeight: 1, animation: "pulse-msg 2s infinite", padding: 0 }}
-                            title="Send re-engagement message">
-                            💌
-                          </button>
+                            title="Send re-engagement message">💌</button>
                         </div>
                       </td>
                       <td style={{ padding: "12px 16px", color: C.green, fontWeight: 700 }}>${w.totalUSD.toFixed(2)}</td>
@@ -948,8 +1127,9 @@ export default function Dashboard() {
               </table>
             </div>
 
+            {/* ROWS 4+ with paywall */}
             {filteredWhales.length > 3 && (
-              <div style={{ position: "relative", borderRadius: 14, overflow: "hidden" }}>
+              <div style={{ position: "relative", borderRadius: 14, overflow: "hidden", marginBottom: 28 }}>
                 <div style={{ filter: isPro ? "none" : "blur(4px)", pointerEvents: isPro ? "auto" : "none" }}>
                   <div style={{ ...glassCard, borderRadius: 14, overflow: "hidden" }}>
                     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
@@ -975,7 +1155,7 @@ export default function Dashboard() {
                       <div style={{ fontSize: 28, marginBottom: 8 }}>🔒</div>
                       <div style={{ fontSize: 16, fontWeight: 700, color: C.white, marginBottom: 4 }}>+{filteredWhales.length - 3} more high-value fans hidden</div>
                       <div style={{ fontSize: 13, color: C.muted, marginBottom: 16 }}>Including fans spending ${filteredWhales[3] ? filteredWhales[3].totalUSD.toFixed(0) : "???"} and more</div>
-                      <button onClick={() => openUpgradeModal('whales')} style={{ padding: "10px 28px", borderRadius: 10, background: "linear-gradient(135deg, #3b82f6, #ec4899)", border: "none", color: C.white, fontSize: 14, fontWeight: 700, cursor: "pointer", boxShadow: "0 0 30px rgba(59,130,246,0.4)" }}>
+                      <button onClick={() => openUpgradeModal("whales")} style={{ padding: "10px 28px", borderRadius: 10, background: "linear-gradient(135deg, #3b82f6, #ec4899)", border: "none", color: C.white, fontSize: 14, fontWeight: 700, cursor: "pointer", boxShadow: "0 0 30px rgba(59,130,246,0.4)" }}>
                         🔓 Unlock All Fans
                       </button>
                     </div>
@@ -984,10 +1164,86 @@ export default function Dashboard() {
               </div>
             )}
 
+            {/* 💎 WHALE INTELLIGENCE PANEL */}
+            {filteredWhales.length > 0 && (
+              <div style={{ ...glassCard, borderRadius: 16, padding: 24, marginBottom: 16 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 10, background: "linear-gradient(135deg, #F59E0B, #EC4899)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>🧠</div>
+                  <div>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: C.white }}>Fan Intelligence</div>
+                    <div style={{ fontSize: 12, color: C.muted }}>Behavior patterns & how to engage each fan</div>
+                  </div>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  {filteredWhales.slice(0, isPro ? 5 : 3).map((w, i) => {
+                    // Build personality tags from engine data
+                    const tags = []
+                    if (w.hasPrivates && w.privateCount >= 2) tags.push({ label: "📷 Cam2Cam spender", color: C.pink })
+                    if (w.avgTipSize >= 20) tags.push({ label: "💸 Big tipper", color: C.gold })
+                    if (w.tipCount >= 20 && w.avgTipSize < 5) tags.push({ label: "🎯 Micro-tipper — loves frequency", color: C.cyan })
+                    if (w.tipProbability?.level === "High") tags.push({ label: "🟢 Likely to tip soon", color: C.green })
+                    if (w.churnRisk?.level === "High" || w.churnRisk?.level === "Critical") tags.push({ label: "🚨 At churn risk", color: C.red })
+                    if (w.daysSinceLastTip <= 3) tags.push({ label: "🔥 Recently active", color: C.orange })
+                    if (w.tipNotes && w.tipNotes.length > 0) tags.push({ label: "💬 Leaves tip notes", color: C.indigo })
+                    if (w.avgDaysBetweenTips <= 3) tags.push({ label: "🔁 High-frequency tipper", color: C.cyan })
+                    if (w.spendPercentile >= 90) tags.push({ label: `👑 Top ${100 - w.spendPercentile}% spender`, color: C.gold })
+
+                    // Actionable coaching line
+                    const getCoaching = () => {
+                      if (w.churnRisk?.level === "Critical") return { text: "Send a message today — they may not come back", color: C.red }
+                      if (w.churnRisk?.level === "High") return { text: "Re-engage soon — offer something special to bring them back", color: C.orange }
+                      if (w.tipProbability?.level === "High") return { text: "Go live soon — high chance they'll tip in the next session", color: C.green }
+                      if (w.hasPrivates) return { text: "Offer a private show — they've already paid for one before", color: C.pink }
+                      if (w.avgTipSize >= 20) return { text: "Give them VIP attention during streams — they notice and tip more", color: C.gold }
+                      if (w.tipCount >= 20) return { text: "Thank them publicly — frequent tippers respond to recognition", color: C.cyan }
+                      return { text: "Keep them warm — consistent engagement builds loyalty", color: C.muted }
+                    }
+                    const coaching = getCoaching()
+                    const tierColor = TIER_COLORS[w.tier] || C.cyan
+
+                    return (
+                      <div key={i} style={{ padding: 16, borderRadius: 12, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)" }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, flexWrap: "wrap", gap: 8 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                            <div style={{ width: 34, height: 34, borderRadius: 8, background: `${tierColor}20`, border: `1px solid ${tierColor}40`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 800, color: tierColor }}>
+                              {w.username.charAt(0).toUpperCase()}
+                            </div>
+                            <div>
+                              <span style={{ fontSize: 14, fontWeight: 700, color: C.white }}>{w.username}</span>
+                              <span style={{ marginLeft: 8, fontSize: 11, color: C.muted }}>${w.totalUSD.toFixed(0)} lifetime · {w.tipCount} tips</span>
+                            </div>
+                          </div>
+                          <div style={{ display: "flex", gap: 6 }}>
+                            <button onClick={() => setSelectedWhale(w)} style={{ padding: "4px 10px", borderRadius: 6, background: "rgba(34,211,238,0.12)", border: "1px solid rgba(34,211,238,0.25)", color: C.cyan, fontSize: 11, cursor: "pointer" }}>🔍 Profile</button>
+                            <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }} style={{ padding: "4px 10px", borderRadius: 6, background: "rgba(236,72,153,0.12)", border: "1px solid rgba(236,72,153,0.25)", color: C.pink, fontSize: 11, cursor: "pointer" }}>💌 Message</button>
+                          </div>
+                        </div>
+
+                        {/* PERSONALITY TAGS */}
+                        {tags.length > 0 && (
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
+                            {tags.map((tag, j) => (
+                              <span key={j} style={{ padding: "3px 10px", borderRadius: 20, background: `${tag.color}15`, border: `1px solid ${tag.color}30`, fontSize: 11, fontWeight: 600, color: tag.color }}>{tag.label}</span>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* COACHING LINE */}
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: `${coaching.color}08`, border: `1px solid ${coaching.color}20`, borderRadius: 8 }}>
+                          <span style={{ fontSize: 13 }}>💡</span>
+                          <span style={{ fontSize: 12, color: coaching.color, fontWeight: 500 }}>{coaching.text}</span>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
             {filteredWhales.length <= 3 && (
               <div style={{ ...glassCard, borderRadius: 14, padding: 20, textAlign: "center", border: "1px solid rgba(59,130,246,0.2)" }}>
                 <div style={{ fontSize: 13, color: C.muted, marginBottom: 12 }}>Upload more data to discover more fans • Pro unlocks full profiles & behavior patterns</div>
-                <button onClick={() => openUpgradeModal('whales_empty')} style={{ padding: "8px 20px", borderRadius: 8, background: "linear-gradient(135deg,rgba(59,130,246,0.3),rgba(236,72,153,0.3))", border: "1px solid rgba(59,130,246,0.4)", color: C.white, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                <button onClick={() => openUpgradeModal("whales_empty")} style={{ padding: "8px 20px", borderRadius: 8, background: "linear-gradient(135deg,rgba(59,130,246,0.3),rgba(236,72,153,0.3))", border: "1px solid rgba(59,130,246,0.4)", color: C.white, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
                   🔓 See What Pro Unlocks
                 </button>
               </div>
