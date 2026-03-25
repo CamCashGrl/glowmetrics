@@ -1,246 +1,123 @@
 "use client"
-import { useState } from "react"
+import React, { useState } from "react"
 
-// ============================================
-// ELITE PRO GENERATOR (NO STORAGE - STABLE)
-// ============================================
+const moods = ["Flirty", "Dominant", "Playful", "Shy", "Tease"]
+const goals = ["Make Tips", "Private Shows", "Whales", "Engagement"]
+const platforms = ["Chaturbate", "Stripchat", "OnlyFans"]
 
-function scoreTitle(title) {
-  let score = 0
-  if (title.toLowerCase().includes("control")) score += 2
-  if (title.toLowerCase().includes("tip")) score += 2
-  if (title.toLowerCase().includes("tokens")) score += 2
-  if (title.length < 90) score += 1
-  if (/🔥|💦|😈|👑/.test(title)) score += 1
-  return score
+const templates = {
+  Flirty: [
+    "come play with me 💕 let's have some fun tonight",
+    "feeling extra naughty tonight... join me 😈",
+    "i've been thinking about you all day 💋"
+  ],
+  Dominant: [
+    "who's going to control me tonight? 🎮",
+    "big tippers run the show tonight 💰",
+    "you don’t watch… you participate 😈"
+  ],
+  Playful: [
+    "spin the wheel 🎡 let’s see what happens",
+    "games, vibes, and surprises tonight 🎁",
+    "let’s get a little crazy tonight 😜"
+  ],
+  Shy: [
+    "be gentle with me tonight 🥺",
+    "i need someone to warm me up 💕",
+    "i might be shy… but not for long"
+  ],
+  Tease: [
+    "you can look… but can you handle it? 👀",
+    "closer… just a little closer 😏",
+    "i’ll show more if you behave"
+  ]
 }
 
-function buildTitles({ tokensEnabled, tokenGoal, action, interactive, toy, game, emojis }) {
-  const base = [
-    "Control Me",
-    "You Run The Show",
-    "Make Me Lose Control",
-    "Tip To Vibe",
-    "You Control Everything",
-    "Push Me Further",
-    "Let’s Get Naughty",
-    "VIP Energy Only",
-    "Top Tipper Gets Me",
-    "Make Me React"
-  ]
-
-  const inter = [
-    "Tip to Vibrate",
-    "You Control My Toy",
-    "Interactive ON",
-    "Tip = Reaction",
-    "Make Me Lose Control"
-  ]
-
-  const emojiSet = emojis ? ["🔥","💦","😈","💗","⚡","🎮","👑"] : [""]
-
-  const results = []
-  let attempts = 0
-
-  while (results.length < 25 && attempts < 100) {
-    attempts++
-
-    const e = emojiSet[Math.floor(Math.random() * emojiSet.length)]
-    const b = base[Math.floor(Math.random() * base.length)]
-    const i = interactive ? inter[Math.floor(Math.random() * inter.length)] : ""
-
-    const goal = tokensEnabled && tokenGoal
-      ? `Hit ${tokenGoal} tokens${action ? ` → ${action}` : ""}`
-      : ""
-
-    const extra = [toy, game].filter(Boolean).join(" • ")
-
-    let title = [b, i, goal, extra].filter(Boolean).join(" • ")
-    if (emojis && e) title += ` ${e}`
-
-    if (!results.includes(title)) results.push(title)
+function enhanceTitle(base, goal) {
+  switch (goal) {
+    case "Whales":
+      return `${base} 💎 top tippers get special treatment`
+    case "Private Shows":
+      return `${base} 🔒 private show menu is OPEN`
+    case "Engagement":
+      return `${base} 💬 talk to me, i don’t bite`
+    default:
+      return `${base} 💰 tip to unlock more`
   }
-
-  return results.map(t => ({ text: t, score: scoreTitle(t) }))
 }
 
-export default function TitleGeneratorUI() {
-  const [titles, setTitles] = useState([])
-  const [selected, setSelected] = useState(null)
-  const [saved, setSaved] = useState([])
-  const [hashtags, setHashtags] = useState([])
+export default function TitleGenerator() {
+  const [mood, setMood] = useState("Flirty")
+  const [goal, setGoal] = useState("Make Tips")
+  const [platform, setPlatform] = useState("Chaturbate")
+  const [currentTitle, setCurrentTitle] = useState("")
+  const [index, setIndex] = useState(0)
 
-  const [tokensEnabled, setTokensEnabled] = useState(false)
-  const [tokenGoal, setTokenGoal] = useState(500)
-  const [action, setAction] = useState("")
-  const [interactive, setInteractive] = useState(false)
-  const [toy, setToy] = useState("")
-  const [game, setGame] = useState("")
-  const [emojis, setEmojis] = useState(true)
+  const generateTitle = () => {
+    const pool = templates[mood]
+    const nextIndex = (index + 1) % pool.length
+    setIndex(nextIndex)
 
-  function generate() {
-    const data = buildTitles({ tokensEnabled, tokenGoal, action, interactive, toy, game, emojis })
-    setTitles(data.sort((a,b)=>b.score-a.score))
-    setSelected(null)
-    setHashtags([])
+    let base = pool[nextIndex]
+
+    // platform tweaks
+    if (platform === "Chaturbate") {
+      base += " 🔥"
+    } else if (platform === "Stripchat") {
+      base += " 💋"
+    } else if (platform === "OnlyFans") {
+      base += " 📸"
+    }
+
+    const finalTitle = enhanceTitle(base, goal)
+    setCurrentTitle(finalTitle)
   }
 
-  function regenerate() {
-    generate()
-  }
-
-  function saveTitle(t) {
-    if (saved.find(s => s.text === t.text)) return
-    setSaved(prev => [{ ...t, used: 0 }, ...prev].slice(0, 50))
-  }
-
-  function markUsed(t) {
-    setSaved(prev =>
-      prev.map(s =>
-        s.text === t.text
-          ? { ...s, used: (s.used || 0) + 1 }
-          : s
-      )
-    )
-  }
-
-  function generateHashtags() {
-    if (!selected) return
-    const base = ["#camgirl","#livecam","#tipmenu"]
-    const extra = selected.text.includes("Control")
-      ? ["#controlme","#tiptovibe","#lovense"]
-      : ["#sexy","#flirty"]
-    setHashtags([...base,...extra])
+  const copyTitle = () => {
+    navigator.clipboard.writeText(currentTitle)
   }
 
   return (
-    <div className="p-6 max-w-5xl mx-auto text-white">
-      <h1 className="text-2xl font-bold mb-4">🔥 Elite AI Title Generator</h1>
+    <div style={{
+      padding: 24,
+      borderRadius: 16,
+      background: "rgba(255,255,255,0.05)",
+      border: "1px solid rgba(255,255,255,0.1)"
+    }}>
+      
+      <h2 style={{ marginBottom: 16 }}>🎯 Smart Title Generator</h2>
 
-      <div className="grid grid-cols-2 gap-3 mb-6">
-        <label>
-          <input type="checkbox" checked={tokensEnabled} onChange={()=>setTokensEnabled(!tokensEnabled)} /> Token Goal
-        </label>
+      {/* Controls */}
+      <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
+        <select value={mood} onChange={e => setMood(e.target.value)}>
+          {moods.map(m => <option key={m}>{m}</option>)}
+        </select>
 
-        {tokensEnabled && (
-          <>
-            <input
-              type="number"
-              value={tokenGoal}
-              onChange={e=>setTokenGoal(Number(e.target.value))}
-              className="bg-white/10 p-2 rounded"
-            />
-            <input
-              value={action}
-              onChange={e=>setAction(e.target.value)}
-              placeholder="Action"
-              className="bg-white/10 p-2 rounded"
-            />
-          </>
-        )}
+        <select value={goal} onChange={e => setGoal(e.target.value)}>
+          {goals.map(g => <option key={g}>{g}</option>)}
+        </select>
 
-        <label>
-          <input type="checkbox" checked={interactive} onChange={()=>setInteractive(!interactive)} /> Interactive
-        </label>
-
-        {interactive && (
-          <>
-            <input
-              value={toy}
-              onChange={e=>setToy(e.target.value)}
-              placeholder="Toy"
-              className="bg-white/10 p-2 rounded"
-            />
-            <input
-              value={game}
-              onChange={e=>setGame(e.target.value)}
-              placeholder="Game"
-              className="bg-white/10 p-2 rounded"
-            />
-          </>
-        )}
-
-        <label>
-          <input type="checkbox" checked={emojis} onChange={()=>setEmojis(!emojis)} /> Emojis
-        </label>
+        <select value={platform} onChange={e => setPlatform(e.target.value)}>
+          {platforms.map(p => <option key={p}>{p}</option>)}
+        </select>
       </div>
 
-      <div className="flex gap-3 mb-6">
-        <button onClick={generate} className="bg-pink-500 px-4 py-2 rounded">
-          Generate
-        </button>
-        <button onClick={regenerate} className="bg-purple-500 px-4 py-2 rounded">
-          Regenerate
-        </button>
+      {/* Output */}
+      <div style={{
+        padding: 16,
+        borderRadius: 12,
+        background: "rgba(0,0,0,0.4)",
+        marginBottom: 12,
+        fontSize: 16,
+        minHeight: 50
+      }}>
+        {currentTitle || "Click generate to get a high-converting title..."}
       </div>
 
-      <div className="grid gap-2">
-        {titles.map((t,i)=>(
-          <div
-            key={i}
-            onClick={()=>setSelected(t)}
-            className={`p-3 rounded cursor-pointer border ${
-              selected?.text===t.text
-                ? "border-pink-500 bg-pink-500/20"
-                : "border-white/10"
-            }`}
-          >
-            <div className="flex justify-between">
-              <span>{t.text}</span>
-              <div className="flex gap-2">
-                <span className="text-xs opacity-60">Score: {t.score}</span>
-                <button
-                  onClick={(e)=>{
-                    e.stopPropagation()
-                    saveTitle(t)
-                  }}
-                  className="text-xs"
-                >
-                  💾
-                </button>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {selected && (
-        <div className="mt-6">
-          <p className="text-pink-400">{selected.text}</p>
-          <button
-            onClick={()=>{
-              markUsed(selected)
-              generateHashtags()
-            }}
-            className="mt-2 bg-blue-500 px-3 py-2 rounded"
-          >
-            Use + Hashtags
-          </button>
-        </div>
-      )}
-
-      {hashtags.length > 0 && (
-        <div className="mt-4 text-blue-300">
-          {hashtags.join(" ")}
-        </div>
-      )}
-
-      {saved.length > 0 && (
-        <div className="mt-10">
-          <h2 className="text-lg mb-2">🏆 Top Performing Titles</h2>
-          {saved
-            .sort((a,b)=>(b.used||0)-(a.used||0))
-            .map((s,i)=>(
-              <div key={i} className="bg-white/5 p-2 rounded flex justify-between">
-                <span>{s.text}</span>
-                <span className="text-xs">Used: {s.used||0}</span>
-              </div>
-            ))}
-        </div>
-      )}
-
-      <div className="mt-8 p-4 bg-yellow-500/10 rounded text-sm">
-        💡 Refreshing your title every 20–30 minutes increases ranking frequency and visibility by ~30–50%.
+      {/* Buttons */}
+      <div style={{ display: "flex", gap: 10 }}>
+        <button onClick={generateTitle}>✨ Generate</button>
+        <button onClick={copyTitle}>📋 Copy</button>
       </div>
     </div>
   )
