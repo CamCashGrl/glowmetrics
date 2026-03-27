@@ -83,11 +83,13 @@ export function parseCSV(text, platform = null) {
 // ============================================
 
 // FIX #2 (high-level): Normalize everything in one place, applied to ALL paths
-function normalizeTip(row) {
+function normalizeTip(row, userRates = {}) {
   const tokens = parseInt(row.tokens) || 0
-  // If usd is missing, derive from tokens at the standard 0.05 rate
   const rawUsd = parseFloat(row.usd) || 0
-  const usd = rawUsd > 0 ? rawUsd : parseFloat((tokens * 0.05).toFixed(2))
+  // Use platform-specific rate if USD is missing
+  const platform = row.platform || 'Unknown'
+  const rate = getTokenRate(platform, userRates)
+  const usd = rawUsd > 0 ? rawUsd : parseFloat((tokens * rate).toFixed(2))
 
   // FIX #3: Validate date and discard rows with unparseable dates
   const dateRaw = normalizeDate(row.dateRaw || row.date_time || '')
@@ -122,6 +124,25 @@ function isValidTip(t) {
 // ============================================
 // PLATFORM DETECTION
 // ============================================
+
+// ============================================
+// TOKEN RATE CONFIG — configurable per platform
+// These are defaults. Users can override via settings.
+// Sources: platform payout pages (2024–2025 rates)
+// ============================================
+export const TOKEN_RATES = {
+  Chaturbate:  0.05,   // $0.05/token (standard broadcast rate)
+  BongaCams:   0.05,   // BongaCams pays in USD directly — tokens map ~0.05
+  MyFreeCams:  0.05,   // MFC tokens = $0.05 at standard rate
+  Stripchat:   0.05,   // Stripchat tokens vary; 0.05 is safe default
+  CamSoda:     0.05,   // CamSoda tips in USD, no token conversion needed
+  Unknown:     0.05,
+}
+
+// Get rate for a platform — falls back to 0.05 if unknown
+export function getTokenRate(platform, userRates = {}) {
+  return userRates[platform] ?? TOKEN_RATES[platform] ?? 0.05
+}
 
 function detectPlatform(text) {
   const lower = text.toLowerCase()
@@ -299,8 +320,8 @@ function parseWithHeaders(lines, platform) {
       username,
       platform: rowPlatform || 'Unknown',
       // Derive missing value from the other — never guess from magnitude
-      tokens: tokens > 0 ? tokens : Math.round(usd / 0.05),
-      usd: usd > 0 ? parseFloat(usd.toFixed(2)) : parseFloat((tokens * 0.05).toFixed(2)),
+      tokens: tokens > 0 ? tokens : Math.round(usd / getTokenRate(platform)),
+      usd: usd > 0 ? parseFloat(usd.toFixed(2)) : parseFloat((tokens * getTokenRate(platform)).toFixed(2)),
       tip_type: row.tip_type || 'Tip',
       tip_note: row.note || row.tip_note || ''
     })
@@ -335,7 +356,7 @@ function parseHeaderless(lines, platform) {
       results.push({
         dateRaw, date_time: dateRaw, username,
         platform: 'Chaturbate', tokens,
-        usd: parseFloat((tokens * 0.05).toFixed(2)),
+        usd: parseFloat((tokens * getTokenRate(platform)).toFixed(2)),
         tip_type: 'Tip', tip_note: ''
       })
       continue
@@ -355,8 +376,8 @@ function parseHeaderless(lines, platform) {
       results.push({
         dateRaw, date_time: dateRaw, username,
         platform: platform || 'BongaCams',
-        tokens: tokens > 0 ? tokens : Math.round(usd / 0.05),
-        usd: usd > 0 ? parseFloat(usd.toFixed(2)) : parseFloat((tokens * 0.05).toFixed(2)),
+        tokens: tokens > 0 ? tokens : Math.round(usd / getTokenRate(platform)),
+        usd: usd > 0 ? parseFloat(usd.toFixed(2)) : parseFloat((tokens * getTokenRate(platform)).toFixed(2)),
         tip_type: vals[2] || 'Tip', tip_note: ''
       })
       continue
@@ -393,8 +414,8 @@ function parseHeaderless(lines, platform) {
       }
 
       // Derive missing value from the known one
-      if (tokens === 0 && usd > 0) tokens = Math.round(usd / 0.05)
-      if (usd === 0 && tokens > 0) usd = parseFloat((tokens * 0.05).toFixed(2))
+      if (tokens === 0 && usd > 0) tokens = usd > 0 ? Math.round(usd / getTokenRate(platform)) : 0
+      if (usd === 0 && tokens > 0) usd = parseFloat((tokens * getTokenRate(platform)).toFixed(2))
 
       if (tokens === 0 && usd === 0) continue
 
@@ -481,6 +502,34 @@ function finalizeSession(s) {
   const tipCount = s.tips.length
   const uniqueFans = s.fans.size
 
+  // ── REVENUE VELOCITY: compare first-half vs second-half $/min
+  // Detects if stream is growing, dying, or flat
+  const sortedTips = [...s.tips].sort((a, b) => a.timestamp - b.timestamp)
+  let velocityTrend = 'unknown'
+  let firstHalfUPM = null
+  let secondHalfUPM = null
+  if (effectiveMinutes && effectiveMinutes >= 10 && sortedTips.length >= 4) {
+    const midMs = s.startTime.getTime() + (s.endTime.getTime() - s.startTime.getTime()) / 2
+    const firstHalf  = sortedTips.filter(t => t.timestamp <= midMs)
+    const secondHalf = sortedTips.filter(t => t.timestamp > midMs)
+    const halfMins = effectiveMinutes / 2
+    firstHalfUPM  = firstHalf.reduce((a, t) => a + (t.usd || 0), 0) / halfMins
+    secondHalfUPM = secondHalf.reduce((a, t) => a + (t.usd || 0), 0) / halfMins
+    if (secondHalfUPM > firstHalfUPM * 1.2)       velocityTrend = 'growing'
+    else if (secondHalfUPM < firstHalfUPM * 0.75)  velocityTrend = 'dying'
+    else                                            velocityTrend = 'steady'
+  }
+
+  // ── WHALE CONCENTRATION for this session ────────────────────────────────
+  const tipperMap = {}
+  sortedTips.forEach(t => {
+    tipperMap[t.username] = (tipperMap[t.username] || 0) + (t.usd || 0)
+  })
+  const topContributor = Object.entries(tipperMap).sort((a, b) => b[1] - a[1])[0]
+  const topContributorPct = topContributor && totalUSD > 0
+    ? Math.round((topContributor[1] / totalUSD) * 100)
+    : 0
+
   return {
     id: `session_${s.startTime.getTime()}`,
     platform: s.platform,
@@ -493,10 +542,15 @@ function finalizeSession(s) {
     totalUSD: parseFloat(totalUSD.toFixed(2)),
     tipCount,
     uniqueFans,
-    // Only compute $/hour when we have real duration data — never divide by fake floor
     tokensPerHour: durationHours ? Math.round(totalTokens / durationHours) : null,
     usdPerHour: durationHours ? parseFloat((totalUSD / durationHours).toFixed(2)) : null,
+    usdPerMinute: effectiveMinutes ? parseFloat((totalUSD / effectiveMinutes).toFixed(3)) : null,
     avgTipSize: tipCount > 0 ? parseFloat((totalUSD / tipCount).toFixed(2)) : 0,
+    velocityTrend,
+    firstHalfUPM: firstHalfUPM ? parseFloat(firstHalfUPM.toFixed(3)) : null,
+    secondHalfUPM: secondHalfUPM ? parseFloat(secondHalfUPM.toFixed(3)) : null,
+    topContributor: topContributor ? topContributor[0] : null,
+    topContributorPct,
     tips: s.tips
   }
 }
@@ -974,18 +1028,33 @@ export function aggregateRows(tips) {
   // ── SINGLE SOURCE OF TRUTH for best day and best hour ──────────────────
   // Every insight, alert, and next-move reads from these — never recalculates.
   // Method: avg USD per session per day/hour (fairest — not skewed by session count)
-  const dayTotals = {}; const daySessionCount = {}
+  // Use individual TIP timestamps in UTC — not session startTime
+  // Session startTime reflects only the first tip, not where earnings happened
+  const UTC_DAYS_LONG = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
+  const dayTotals = {}; const dayActiveDates = {}
   const hourTotals = {}; const hourSessionCount = {}
-  sessions.forEach(s => {
-    const d = new Date(s.startTime).toLocaleDateString('en-US', { weekday: 'long' })
-    const h = new Date(s.startTime).getHours()
-    dayTotals[d]  = (dayTotals[d]  || 0) + s.totalUSD
-    daySessionCount[d]  = (daySessionCount[d]  || 0) + 1
-    hourTotals[h] = (hourTotals[h] || 0) + s.totalUSD
+  tips.forEach(t => {
+    const dt = new Date(t.dateRaw || t.date_time)
+    const d = UTC_DAYS_LONG[dt.getUTCDay()]
+    const h = dt.getUTCHours()
+    dayTotals[d] = (dayTotals[d] || 0) + (t.usd || 0)
+    if (!dayActiveDates[d]) dayActiveDates[d] = new Set()
+    dayActiveDates[d].add(dt.toISOString().slice(0, 10))
+    hourTotals[h] = (hourTotals[h] || 0) + (t.usd || 0)
     hourSessionCount[h] = (hourSessionCount[h] || 0) + 1
   })
-  const dayAvgs  = Object.keys(dayTotals).map(d  => ({ day:  d,  avg: dayTotals[d]  / daySessionCount[d],  total: dayTotals[d],  count: daySessionCount[d]  }))
-  const hourAvgs = Object.keys(hourTotals).map(h => ({ hour: h,  avg: hourTotals[h] / hourSessionCount[h], total: hourTotals[h], count: hourSessionCount[h] }))
+  const dayAvgs  = Object.keys(dayTotals).map(d => ({
+    day: d,
+    avg: dayTotals[d] / (dayActiveDates[d]?.size || 1),
+    total: dayTotals[d],
+    count: dayActiveDates[d]?.size || 1
+  }))
+  const hourAvgs = Object.keys(hourTotals).map(h => ({
+    hour: h,
+    avg: hourTotals[h] / (hourSessionCount[h] || 1),
+    total: hourTotals[h],
+    count: hourSessionCount[h] || 1
+  }))
   const bestDay  = dayAvgs.sort((a, b)  => b.avg - a.avg)[0]  || null
   const worstDay = dayAvgs.sort((a, b)  => a.avg - b.avg)[0]  || null
   const bestHour = hourAvgs.sort((a, b) => b.avg - a.avg)[0]  || null
