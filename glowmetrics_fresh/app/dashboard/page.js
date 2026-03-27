@@ -568,7 +568,9 @@ export default function Dashboard() {
   const lossAlerts = liveAnalytics?.lossAlerts || analytics?.lossAlerts || []
   const nextMoves = liveAnalytics?.nextMoves || analytics?.nextMoves || []
   const totalRevenue = analytics?.totalUSD || 0
-  const avgPerHour = sessions.length ? sessions.reduce((sum, s) => sum + (s.usdPerHour || 0), 0) / sessions.length : 0
+  // Only average sessions with real duration (exclude zero-timestamp BongaCams exports)
+  const timedSessions = sessions.filter(s => !s.durationUnknown && s.usdPerHour !== null)
+  const avgPerHour = timedSessions.length ? timedSessions.reduce((sum, s) => sum + (s.usdPerHour || 0), 0) / timedSessions.length : 0
   // Single source of truth — pre-computed in aggregateRows, same values used everywhere
   const analyticsbestDay  = analytics?.bestDay  || null
   const analyticsBestHour = analytics?.bestHour || null
@@ -2104,7 +2106,7 @@ export default function Dashboard() {
                           { label: "Tips",        value: s.tipCount,                    color: C.cyan  },
                           { label: "Unique Fans", value: s.uniqueFans,                  color: C.pink  },
                           { label: "Avg Tip",     value: `$${s.avgTipSize}`,            color: C.gold  },
-                          { label: "$/Hour",      value: `$${s.usdPerHour}`,            color: C.green },
+                          { label: "$/Hour",      value: s.usdPerHour !== null ? `$${s.usdPerHour}` : "—",  color: C.green },
                           { label: "Spikes",      value: bd.spikes.length,              color: C.orange },
                         ].map(({ label, value, color }) => (
                           <div key={label} style={{ padding: "12px 14px", background: "rgba(255,255,255,0.04)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.06)" }}>
