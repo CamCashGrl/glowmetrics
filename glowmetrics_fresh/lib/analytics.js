@@ -429,7 +429,8 @@ export function detectSessions(tips) {
 
   if (parsed.length === 0) return []
 
-  const SESSION_GAP_MS = 3 * 60 * 60 * 1000
+  // 60-minute gap = new session (was 3h — too loose, caused BongaCams all-day merges)
+  const SESSION_GAP_MS = 60 * 60 * 1000
   const sessions = []
   let cur = null
 
@@ -460,8 +461,14 @@ export function detectSessions(tips) {
 
 function finalizeSession(s) {
   const durationMs = s.endTime - s.startTime
-  const durationMinutes = Math.max(Math.round(durationMs / 60000), 30)
-  const durationHours = durationMinutes / 60
+  const durationMinutes = Math.round(durationMs / 60000)
+
+  // If all tips landed at the same timestamp (e.g. BongaCams midnight exports with
+  // no real time data), duration is 0 — mark session as durationUnknown and exclude
+  // it from $/hour calculations rather than faking a 30-min floor that tanks averages.
+  const durationUnknown = durationMinutes === 0
+  const effectiveMinutes = durationUnknown ? null : Math.max(durationMinutes, 5)
+  const durationHours = effectiveMinutes ? effectiveMinutes / 60 : null
 
   // FIX performance: single-pass totals instead of multiple .reduce()
   let totalTokens = 0
@@ -479,14 +486,16 @@ function finalizeSession(s) {
     platform: s.platform,
     startTime: s.startTime.toISOString(),
     endTime: s.endTime.toISOString(),
-    durationMinutes,
-    durationHours: parseFloat(durationHours.toFixed(2)),
+    durationMinutes: effectiveMinutes || 0,
+    durationHours: durationHours ? parseFloat(durationHours.toFixed(2)) : 0,
+    durationUnknown,
     totalTokens,
     totalUSD: parseFloat(totalUSD.toFixed(2)),
     tipCount,
     uniqueFans,
-    tokensPerHour: durationHours > 0 ? Math.round(totalTokens / durationHours) : 0,
-    usdPerHour: durationHours > 0 ? parseFloat((totalUSD / durationHours).toFixed(2)) : 0,
+    // Only compute $/hour when we have real duration data — never divide by fake floor
+    tokensPerHour: durationHours ? Math.round(totalTokens / durationHours) : null,
+    usdPerHour: durationHours ? parseFloat((totalUSD / durationHours).toFixed(2)) : null,
     avgTipSize: tipCount > 0 ? parseFloat((totalUSD / tipCount).toFixed(2)) : 0,
     tips: s.tips
   }
@@ -1007,7 +1016,8 @@ export function aggregateRows(tips) {
     platformMap[s.platform].totalUSD    += s.totalUSD
     platformMap[s.platform].totalTokens += s.totalTokens
     platformMap[s.platform].sessions    += 1
-    platformMap[s.platform].hours       += s.durationHours
+    // Only accumulate hours from sessions with real duration data
+    if (!s.durationUnknown) platformMap[s.platform].hours += s.durationHours
     platformMap[s.platform].tips        += s.tipCount
   })
 
