@@ -575,13 +575,18 @@ export default function Dashboard() {
   const analyticsbestDay  = analytics?.bestDay  || null
   const analyticsBestHour = analytics?.bestHour || null
 
+  // Build platformTimes from INDIVIDUAL TIPS (not session start time)
+  // so hour/day reflects when money actually came in, not when the session started
+  // Use UTC to match the database timestamps
+  const UTC_DAYS_LONG = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
   const platformTimes = {}
-  sessions.forEach(s => {
-    if (!platformTimes[s.platform]) platformTimes[s.platform] = { hours: {}, days: {} }
-    const hour = new Date(s.startTime).getHours()
-    const day = new Date(s.startTime).toLocaleDateString('en-US', { weekday: 'long' })
-    platformTimes[s.platform].hours[hour] = (platformTimes[s.platform].hours[hour] || 0) + s.totalUSD
-    platformTimes[s.platform].days[day] = (platformTimes[s.platform].days[day] || 0) + s.totalUSD
+  tips.forEach(t => {
+    if (!platformTimes[t.platform]) platformTimes[t.platform] = { hours: {}, days: {} }
+    const dt = new Date(t.date_time || t.dateRaw)
+    const hour = dt.getUTCHours()
+    const day = UTC_DAYS_LONG[dt.getUTCDay()]
+    platformTimes[t.platform].hours[hour] = (platformTimes[t.platform].hours[hour] || 0) + (t.usd || 0)
+    platformTimes[t.platform].days[day]   = (platformTimes[t.platform].days[day]   || 0) + (t.usd || 0)
   })
 
   const filteredWhales = whales.filter(w => {
@@ -1427,15 +1432,30 @@ export default function Dashboard() {
             const avgUPH = displayPlatforms.reduce((s, x) => s + x.usdPerHour, 0) / (displayPlatforms.length || 1)
             const pctAbove = displayPlatforms.length > 1 ? Math.round(((p.usdPerHour - avgUPH) / avgUPH) * 100) : null
             const bHour = Object.entries(platformTimes[p.platform]?.hours || {}).sort((a, b) => b[1] - a[1])[0]
-            const bDay  = Object.entries(platformTimes[p.platform]?.days  || {}).sort((a, b) => b[1] - a[1])[0]
+
+            // For best day: compute avg per active day (not raw total which is misleading)
+            const dayData = platformTimes[p.platform]?.days || {}
+            const dayAvgs = Object.entries(dayData).map(([day, total]) => {
+              // Count distinct calendar dates for this platform+day combo
+              const activeDates = new Set(
+                tips.filter(t => {
+                  if (t.platform !== p.platform) return false
+                  const dt = new Date(t.date_time || t.dateRaw)
+                  return UTC_DAYS_LONG[dt.getUTCDay()] === day
+                }).map(t => new Date(t.date_time || t.dateRaw).toISOString().slice(0,10))
+              ).size
+              return [day, activeDates > 0 ? total / activeDates : 0]
+            })
+            const bDay = dayAvgs.sort((a, b) => b[1] - a[1])[0]
+
             const isTop = displayPlatforms.length > 1 && p.totalUSD === maxUSD
             const isTopUPH = displayPlatforms.length > 1 && p.usdPerHour === maxUPH
             if (isTop)    insights.push({ icon: "🏆", text: "Your highest revenue platform", color: C.gold })
             if (isTopUPH && !isTop) insights.push({ icon: "⚡", text: "Most efficient — highest $/hour", color: C.cyan })
             if (pctAbove !== null && pctAbove >= 20)  insights.push({ icon: "🔥", text: `Earns ${pctAbove}% more per hour than your average`, color: C.green })
             if (pctAbove !== null && pctAbove <= -20) insights.push({ icon: "📉", text: `${Math.abs(pctAbove)}% below your avg $/hour — consider shifting time`, color: C.orange })
-            if (bDay)  insights.push({ icon: "📅", text: `Best day: ${bDay[0]} ($${parseFloat(bDay[1]).toFixed(0)} avg)`, color: C.white })
-            if (bHour) insights.push({ icon: "🕐", text: `Peak time: ${formatHour(bHour[0])} ($${parseFloat(bHour[1]).toFixed(0)} earned)`, color: C.white })
+            if (bDay)  insights.push({ icon: "📅", text: `Best day: ${bDay[0]} ($${parseFloat(bDay[1]).toFixed(0)} avg/stream day)`, color: C.white })
+            if (bHour) insights.push({ icon: "🕐", text: `Peak time: ${formatHour(bHour[0])} ($${parseFloat(bHour[1]).toFixed(0)} total earned)`, color: C.white })
             if (p.sessions >= 5 && p.hours / p.sessions < 1) insights.push({ icon: "⏱️", text: "Short sessions — try streaming longer to boost earnings", color: C.muted })
             return insights
           }
