@@ -37,7 +37,7 @@ function getTipFrequency(daysBetweenTips) {
 function isUserRelevant(user) {
   if (!user) return false;
   if (user.daysSinceLastTip > 90) return false;
-  if (user.tokens < 100) return false;
+  if ((user.totalTokens || 0) < 100) return false;
   return true;
 }
 
