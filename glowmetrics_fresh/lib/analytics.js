@@ -2,6 +2,43 @@
 // CAMCASH COMPLETE ANALYTICS ENGINE
 // ============================================
 
+// ===============================
+// SANITY + FILTER HELPERS
+// ===============================
+
+function clampPrediction(min, max) {
+  const MAX_SPREAD = 3;
+  if (max / Math.max(min, 1) > MAX_SPREAD) {
+    return { min: Math.round(min), max: Math.round(min * MAX_SPREAD), confidence: "low" };
+  }
+  return { min: Math.round(min), max: Math.round(max), confidence: "high" };
+}
+
+function getTipFrequency(daysBetweenTips) {
+  if (!daysBetweenTips || daysBetweenTips.length < 2) return null;
+  const avg = daysBetweenTips.reduce((a, b) => a + b, 0) / daysBetweenTips.length;
+  if (avg < 1.5) return "daily";
+  if (avg < 3) return "every few days";
+  if (avg < 7) return "weekly";
+  return null;
+}
+
+function isUserRelevant(user) {
+  if (!user) return false;
+  if (user.daysSinceLastTip > 90) return false;
+  if (user.tokens < 100) return false;
+  return true;
+}
+
+function validateInsights(insights = []) {
+  return insights.filter(i => {
+    if (!i?.text) return false;
+    if (i.text.includes("$0")) return false;
+    if (i.text.includes("100%") && i.text.includes("returning")) return false;
+    return true;
+  });
+}
+
 export function parseCSV(text, platform = null) {
   const allLines = text.trim().split('\n')
   if (allLines.length === 0) return []
@@ -21,6 +58,7 @@ export function parseCSV(text, platform = null) {
   const firstLower = lines[0].toLowerCase()
   const firstCols = parseCSVLine(lines[0])
 
+  // If first column looks like a date value, it's a data row (not headers)
   const firstColIsDate = /^\d{2}[.\-/]\d{2}[.\-/]\d{4}/.test(firstCols[0]) ||
                          /^\d{4}[.\-/]\d{2}[.\-/]\d{2}/.test(firstCols[0]) ||
                          /^(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i.test(firstCols[0])
@@ -35,26 +73,9 @@ export function parseCSV(text, platform = null) {
   )
 
   const raw = hasHeaders ? parseWithHeaders(lines, platform) : parseHeaderless(lines, platform)
+
+  // ── Normalize + validate every row before it leaves the parser ──────
   return raw.map(normalizeTip).filter(isValidTip)
-}
-
-export function dedupeTips(rows = []) {
-  const seen = new Set()
-  return rows.filter((row) => {
-    const key = [
-      String(row.date_time || row.dateRaw || '').trim().toLowerCase(),
-      String(row.username || '').trim().toLowerCase(),
-      String(row.platform || '').trim().toLowerCase(),
-      String(row.tip_type || 'tip').trim().toLowerCase(),
-      Number(row.tokens || 0),
-      Number(row.usd || 0).toFixed(2),
-      String(row.tip_note || '').trim().toLowerCase(),
-    ].join('|')
-
-    if (seen.has(key)) return false
-    seen.add(key)
-    return true
-  })
 }
 
 // ============================================
@@ -78,7 +99,6 @@ function normalizeTip(row) {
     username: (row.username || '').toLowerCase().trim(),
     tokens,
     usd: parseFloat(usd.toFixed(2)),
-    tip_note: row.tip_note || '',
     dateRaw,
     date_time: dateRaw,
   }
@@ -540,6 +560,15 @@ export function identifyWhales(tips) {
 
     const spendPercentile = Math.round((1 - percentileRank) * 100)
 
+    // Build daysBetweenTips array for getTipFrequency
+    const tipDates = [...f.tips]
+      .sort((a, b) => new Date(a.dateRaw || a.date_time) - new Date(b.dateRaw || b.date_time))
+      .map(t => new Date(t.dateRaw || t.date_time))
+    const daysBetweenTipsArr = []
+    for (let i = 1; i < tipDates.length; i++) {
+      daysBetweenTipsArr.push((tipDates[i] - tipDates[i - 1]) / 86400000)
+    }
+
     return {
       username: f.username,
       totalUSD: parseFloat(f.totalUSD.toFixed(2)),
@@ -553,6 +582,7 @@ export function identifyWhales(tips) {
       firstTipDate: firstTipDate.toISOString(),
       daysSinceLastTip,
       avgDaysBetweenTips: parseFloat(avgDaysBetweenTips.toFixed(1)),
+      daysBetweenTipsArr,
       tipProbability: calcTipProbability(daysSinceLastTip, avgDaysBetweenTips),
       churnRisk: calcChurnRisk(daysSinceLastTip, avgDaysBetweenTips, f.tipCount),
       lifetimeValue: calcLifetimeValue(f.totalUSD, lifetimeDays, f.tipCount),
@@ -612,7 +642,7 @@ function calcExpectedNextTip(d, avg) {
 // ============================================
 
 export function generateWhaleAlerts(whales) {
-  const alerts = []
+  let alerts = []
   if (!whales.length) return alerts
 
   const totalSpend = whales.reduce((s, w) => s + w.totalUSD, 0)
@@ -622,28 +652,31 @@ export function generateWhaleAlerts(whales) {
 
   whales.forEach(w => {
     if (w.tier === 'Whale' && w.daysSinceLastTip < 7 && w.isTopSpender)
-      alerts.push({ type: 'new_whale', severity: 'success', icon: '🐳', whale: w.username, message: `${w.username} just became your top tipper! ($${w.totalUSD.toFixed(0)} lifetime)`, action: 'Send a thank you message' })
+      alerts.push({ type: 'new_whale', severity: 'success', icon: '🐳', whale: w, message: `${w.username} just became your top tipper! ($${w.totalUSD.toFixed(0)} lifetime)`, action: 'Send a thank you message' })
 
-    // Only fire churn alerts for fans with enough tip history to make the pattern meaningful
     if (
       (w.churnRisk.level === 'High' || w.churnRisk.level === 'Critical') &&
       w.totalUSD >= churnThreshold &&
-      w.tipCount >= 3  // need at least 3 tips to have a real pattern
+      w.tipCount >= 3
     ) {
-      const avgDaysDisplay = w.avgDaysBetweenTips >= 1
-        ? `every ${w.avgDaysBetweenTips.toFixed(0)} days`
-        : 'infrequently'
-      alerts.push({ type: 'churn_risk', severity: 'warning', icon: '⚠️', whale: w.username, message: `${w.username} hasn't tipped in ${w.daysSinceLastTip} days — they usually tip ${avgDaysDisplay}`, action: 'Re-engage now before they go cold' })
+      const freq = getTipFrequency(w.daysBetweenTipsArr)
+      const freqText = freq
+        ? `they typically tip ${freq}`
+        : `they usually tip every ${w.avgDaysBetweenTips.toFixed(0)} days`
+      alerts.push({ type: 'churn_risk', severity: 'warning', icon: '⚠️', whale: w, message: `${w.username} hasn't tipped in ${w.daysSinceLastTip} days — ${freqText}`, action: 'Re-engage now before they go cold' })
     }
 
     if (w.tipProbability.level === 'High' && w.totalUSD >= tipLikelyThreshold)
-      alerts.push({ type: 'tip_likely', severity: 'info', icon: '💰', whale: w.username, message: `${w.username} is likely to tip soon (${w.tipProbability.percentage}% probability based on their pattern)`, action: 'Go live during their active hours' })
+      alerts.push({ type: 'tip_likely', severity: 'info', icon: '💰', whale: w, message: `${w.username} is likely to tip soon (${w.tipProbability.percentage}% probability based on their pattern)`, action: 'Go live during their active hours' })
 
     if (w.daysSinceLastTip > 0 && w.daysSinceLastTip <= 3 && w.tipCount > 5) {
       if (w.daysSinceLastTip > w.avgDaysBetweenTips * 1.5)
-        alerts.push({ type: 'returned', severity: 'success', icon: '🎉', whale: w.username, message: `${w.username} just tipped again after ${w.daysSinceLastTip} days away — welcome them back!`, action: 'Send a thank you message' })
+        alerts.push({ type: 'returned', severity: 'success', icon: '🎉', whale: w, message: `${w.username} just tipped again after ${w.daysSinceLastTip} days away — welcome them back!`, action: 'Send a thank you message' })
     }
   })
+
+  // Filter out alerts for irrelevant/stale users
+  alerts = alerts.filter(a => isUserRelevant(a.whale))
 
   const order = { critical: 0, warning: 1, info: 2, success: 3 }
   return alerts.sort((a, b) => order[a.severity] - order[b.severity])
@@ -689,10 +722,11 @@ export function predictRevenue(tips, sessions) {
     // so one outlier session doesn't make the range look absurd
     const p10 = amounts[Math.floor(amounts.length * 0.10)]
     const p90 = amounts[Math.floor(amounts.length * 0.90)]
+    const fixedRange = clampPrediction(p10, p90)
     predictions.tonightStream = {
       expected: parseFloat(avg.toFixed(2)),
-      range: { min: parseFloat(p10.toFixed(2)), max: parseFloat(p90.toFixed(2)) },
-      confidence: sameDaySessions.length > 5 ? 'High' : 'Medium',
+      range: { min: fixedRange.min, max: fixedRange.max },
+      confidence: fixedRange.confidence === 'high' && sameDaySessions.length > 5 ? 'High' : 'Medium',
       returningTippers: Math.round(
         sameDaySessions.reduce((s, x) => s + x.uniqueFans, 0) / sameDaySessions.length * 0.4
       )
@@ -1003,9 +1037,8 @@ export function aggregateRows(tips) {
     totalTokens,
     totalTips: tips.length,
     avgTipSize: parseFloat((tips.length > 0 ? totalUSD / tips.length : 0).toFixed(2)),
-    topTippers, platforms, sessions, insights, predictions,
+    topTippers, platforms, sessions, insights: validateInsights(insights), predictions,
     whaleAlerts, lossAlerts, nextMoves, whales,
     bestDay, bestHour   // ← single source of truth, consumed by dashboard
   }
 }
-
