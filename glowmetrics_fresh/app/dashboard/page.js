@@ -411,6 +411,8 @@ export default function Dashboard() {
   const [tipPage, setTipPage] = useState(0)
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
+  const [tokenRates, setTokenRates] = useState({ Chaturbate: 0.05, BongaCams: 0.05, MyFreeCams: 0.05, Stripchat: 0.05, CamSoda: 0.05 })
+  const [showRateEditor, setShowRateEditor] = useState(false)
 
   const isBetaUser = true
   const isPro = true
@@ -2121,13 +2123,13 @@ export default function Dashboard() {
                     <div style={{ padding: 24 }}>
 
                       {/* CORE METRICS */}
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 10, marginBottom: 24 }}>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 10, marginBottom: 16 }}>
                         {[
                           { label: "Tips",        value: s.tipCount,                    color: C.cyan  },
                           { label: "Unique Fans", value: s.uniqueFans,                  color: C.pink  },
                           { label: "Avg Tip",     value: `$${s.avgTipSize}`,            color: C.gold  },
                           { label: "$/Hour",      value: s.usdPerHour !== null ? `$${s.usdPerHour}` : "—",  color: C.green },
-                          { label: "Spikes",      value: bd.spikes.length,              color: C.orange },
+                          { label: "$/Min",       value: s.usdPerMinute !== null ? `$${s.usdPerMinute}` : "—", color: C.cyan },
                         ].map(({ label, value, color }) => (
                           <div key={label} style={{ padding: "12px 14px", background: "rgba(255,255,255,0.04)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.06)" }}>
                             <div style={{ fontSize: 10, color: C.muted, marginBottom: 4, textTransform: "uppercase" }}>{label}</div>
@@ -2135,6 +2137,45 @@ export default function Dashboard() {
                           </div>
                         ))}
                       </div>
+
+                      {/* VELOCITY + CONCENTRATION ROW */}
+                      {(s.velocityTrend !== 'unknown' || s.topContributorPct >= 40) && (
+                        <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
+                          {s.velocityTrend !== 'unknown' && (() => {
+                            const vConfig = {
+                              growing: { icon: "📈", label: "Momentum building", color: C.green, bg: "rgba(16,185,129,0.08)", border: "rgba(16,185,129,0.25)" },
+                              dying:   { icon: "📉", label: "Earnings slowing", color: C.red,   bg: "rgba(248,113,113,0.08)", border: "rgba(248,113,113,0.25)" },
+                              steady:  { icon: "➡️", label: "Steady pace",       color: C.muted, bg: "rgba(255,255,255,0.04)", border: "rgba(255,255,255,0.1)" },
+                            }
+                            const v = vConfig[s.velocityTrend]
+                            const pctChange = s.firstHalfUPM && s.secondHalfUPM
+                              ? Math.round(Math.abs((s.secondHalfUPM - s.firstHalfUPM) / s.firstHalfUPM) * 100)
+                              : null
+                            return (
+                              <div style={{ flex: 1, minWidth: 180, padding: "10px 14px", borderRadius: 10, background: v.bg, border: `1px solid ${v.border}`, display: "flex", alignItems: "center", gap: 8 }}>
+                                <span style={{ fontSize: 16 }}>{v.icon}</span>
+                                <div>
+                                  <div style={{ fontSize: 12, fontWeight: 700, color: v.color }}>{v.label}</div>
+                                  {pctChange !== null && (
+                                    <div style={{ fontSize: 11, color: C.muted }}>
+                                      {s.velocityTrend === 'growing' ? `+${pctChange}%` : s.velocityTrend === 'dying' ? `-${pctChange}%` : '~0%'} vs first half
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )
+                          })()}
+                          {s.topContributorPct >= 40 && (
+                            <div style={{ flex: 1, minWidth: 200, padding: "10px 14px", borderRadius: 10, background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.25)", display: "flex", alignItems: "center", gap: 8 }}>
+                              <span style={{ fontSize: 16 }}>⚠️</span>
+                              <div>
+                                <div style={{ fontSize: 12, fontWeight: 700, color: C.gold }}>{s.topContributorPct}% from one fan</div>
+                                <div style={{ fontSize: 11, color: C.muted }}>{s.topContributor} drove most of this session</div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
 
                       {/* TIMELINE CHART */}
                       {bd.buckets.length > 1 && (
@@ -2233,6 +2274,43 @@ export default function Dashboard() {
           <div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
               <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white }}>📝 Edit Data</h1>
+
+            {/* TOKEN RATE CONFIGURATOR */}
+            <div style={{ ...glassCard, borderRadius: 14, padding: 20, marginBottom: 20 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: showRateEditor ? 16 : 0 }}>
+                <div>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: C.white }}>⚙️ Token → USD Rates</div>
+                  <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>Configurable per platform. Default is $0.05/token (Chaturbate standard)</div>
+                </div>
+                <button onClick={() => setShowRateEditor(v => !v)} style={{ padding: "6px 14px", borderRadius: 8, background: "rgba(34,211,238,0.12)", border: "1px solid rgba(34,211,238,0.3)", color: C.cyan, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                  {showRateEditor ? "▲ Close" : "✏️ Edit Rates"}
+                </button>
+              </div>
+              {showRateEditor && (
+                <div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: 12 }}>
+                    {Object.entries(tokenRates).map(([plat, rate]) => (
+                      <div key={plat} style={{ padding: "12px 14px", background: "rgba(255,255,255,0.04)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.08)" }}>
+                        <div style={{ fontSize: 11, color: C.muted, marginBottom: 6, textTransform: "uppercase" }}>{plat}</div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <span style={{ fontSize: 13, color: C.muted }}>$</span>
+                          <input
+                            type="number" step="0.001" min="0.001" max="1"
+                            value={rate}
+                            onChange={e => setTokenRates(r => ({ ...r, [plat]: parseFloat(e.target.value) || 0.05 }))}
+                            style={{ flex: 1, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 6, padding: "6px 8px", color: C.white, fontSize: 13, outline: "none" }}
+                          />
+                          <span style={{ fontSize: 11, color: C.muted }}>/token</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ fontSize: 11, color: C.muted, padding: "8px 12px", background: "rgba(245,158,11,0.06)", border: "1px solid rgba(245,158,11,0.15)", borderRadius: 8 }}>
+                    💡 Chaturbate pays $0.05/token to broadcasters. BongaCams, Stripchat, and others vary — check your payout page. Changes apply to new uploads only.
+                  </div>
+                </div>
+              )}
+            </div>
               <button onClick={() => setShowDeleteConfirm(true)} style={{ padding: "10px 20px", borderRadius: 8, background: "rgba(248,113,113,0.15)", border: "1px solid rgba(248,113,113,0.3)", color: C.red, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>🗑️ Delete All Tips</button>
             </div>
 
