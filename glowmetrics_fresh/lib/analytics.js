@@ -1010,6 +1010,291 @@ export function generateNextMoves(tips, sessions, whales, predictions, bestHour)
 }
 
 // ============================================
+// DECISION ENGINE — FUNCTIONS 1–5
+// ============================================
+
+// 1. LIVE SESSION STATE
+// Call this mid-stream with tips collected so far + context about the session.
+// Returns pace status, projection, and warning flags.
+export function computeLiveSession(sessionTips, expectedDurationMins = 60, historicalSessions = []) {
+  if (!sessionTips || sessionTips.length === 0) {
+    return { pace: 'no_data', projection: 0, warningFlags: [], elapsedMins: 0, currentUPM: 0, avgUPM: 0 }
+  }
+
+  const sorted = [...sessionTips].sort((a, b) =>
+    new Date(a.dateRaw || a.date_time) - new Date(b.dateRaw || b.date_time)
+  )
+  const startMs = new Date(sorted[0].dateRaw || sorted[0].date_time).getTime()
+  const lastMs  = new Date(sorted[sorted.length - 1].dateRaw || sorted[sorted.length - 1].date_time).getTime()
+  const elapsedMins = Math.max((lastMs - startMs) / 60000, 1)
+  const currentUSD = sessionTips.reduce((s, t) => s + (t.usd || 0), 0)
+  const currentUPM = currentUSD / elapsedMins
+
+  // Compare against last 5 timed sessions
+  const recentSessions = historicalSessions
+    .filter(s => !s.durationUnknown && s.usdPerMinute !== null)
+    .slice(-5)
+  const avgUPM = recentSessions.length
+    ? recentSessions.reduce((s, x) => s + (x.usdPerMinute || 0), 0) / recentSessions.length
+    : 0
+
+  // Projection based on current pace
+  const projectedFinalUSD = parseFloat((currentUPM * expectedDurationMins).toFixed(2))
+  const expectedUSD = avgUPM > 0 ? parseFloat((avgUPM * expectedDurationMins).toFixed(2)) : null
+
+  // Pace classification
+  const ratio = avgUPM > 0 ? currentUPM / avgUPM : null
+  let pace = 'unknown'
+  if (ratio !== null) {
+    if (ratio >= 1.2)       pace = 'above'
+    else if (ratio >= 0.8)  pace = 'on_track'
+    else                    pace = 'below'
+  }
+
+  // Warning flags
+  const warningFlags = []
+  if (ratio !== null && ratio < 0.8) {
+    warningFlags.push({
+      flag: 'performance_drop',
+      message: `Your pace is ${Math.round((1 - ratio) * 100)}% below your avg — change strategy NOW`,
+      severity: ratio < 0.6 ? 'high' : 'medium'
+    })
+  }
+  if (expectedUSD !== null && projectedFinalUSD < expectedUSD * 0.8) {
+    warningFlags.push({
+      flag: 'underperforming',
+      message: `At this pace you'll earn $${projectedFinalUSD} — $${(expectedUSD - projectedFinalUSD).toFixed(0)} below your normal $${expectedUSD}`,
+      severity: 'high'
+    })
+  }
+
+  // Check inactivity (time since last tip)
+  const nowMs = Date.now()
+  const inactivityMins = (nowMs - lastMs) / 60000
+  const avgGapMins = elapsedMins / Math.max(sessionTips.length, 1)
+  if (inactivityMins > avgGapMins * 1.5 && inactivityMins > 5) {
+    const sessionHealth = inactivityMins > avgGapMins * 3 ? 'stalled' : 'slowing'
+    warningFlags.push({
+      flag: 'engagement_drop',
+      message: `No tips in ${Math.round(inactivityMins)} min — your room is ${sessionHealth}`,
+      severity: sessionHealth === 'stalled' ? 'high' : 'medium',
+      sessionHealth
+    })
+  }
+
+  return {
+    elapsedMins: parseFloat(elapsedMins.toFixed(1)),
+    currentUSD: parseFloat(currentUSD.toFixed(2)),
+    currentUPM: parseFloat(currentUPM.toFixed(3)),
+    avgUPM: parseFloat(avgUPM.toFixed(3)),
+    pace,
+    paceRatio: ratio ? parseFloat(ratio.toFixed(2)) : null,
+    projectedFinalUSD,
+    expectedUSD,
+    warningFlags,
+    sessionHealth: warningFlags.find(f => f.flag === 'engagement_drop')?.sessionHealth || 'active'
+  }
+}
+
+// 2. REVENUE GAP — per session or aggregate
+// Given a session and historical context, compute missed money
+export function computeRevenueGap(session, historicalSessions) {
+  if (!session || !historicalSessions || historicalSessions.length < 3) {
+    return { revenueGap: 0, revenueGapPct: 0, severity: 'unknown', missedRevenue: 0 }
+  }
+
+  // Expected = avg of last 5 comparable sessions (same platform if possible)
+  const comparable = historicalSessions
+    .filter(s => s.id !== session.id && s.platform === session.platform && !s.durationUnknown)
+    .slice(-5)
+  const fallback = historicalSessions
+    .filter(s => s.id !== session.id && !s.durationUnknown)
+    .slice(-5)
+  const base = comparable.length >= 3 ? comparable : fallback
+  if (base.length < 2) return { revenueGap: 0, revenueGapPct: 0, severity: 'unknown', missedRevenue: 0 }
+
+  const expected = base.reduce((s, x) => s + x.totalUSD, 0) / base.length
+  const actual   = session.totalUSD
+  const gap      = parseFloat((expected - actual).toFixed(2))
+  const gapPct   = expected > 0 ? Math.round((gap / expected) * 100) : 0
+  const missed   = Math.max(0, gap)
+
+  let severity = 'low'
+  if (gapPct > 40) severity = 'high'
+  else if (gapPct > 20) severity = 'medium'
+
+  return {
+    expectedUSD: parseFloat(expected.toFixed(2)),
+    actualUSD: actual,
+    revenueGap: gap,
+    revenueGapPct: gapPct,
+    missedRevenue: parseFloat(missed.toFixed(2)),
+    severity,
+    // Human-readable insight
+    insight: gap > 0
+      ? `You earned $${actual.toFixed(0)} — $${missed.toFixed(0)} below your typical $${expected.toFixed(0)}. That's a ${gapPct}% shortfall.`
+      : `You outperformed your avg by $${Math.abs(gap).toFixed(0)} — great session.`
+  }
+}
+
+// 3. PRE-TIP BEHAVIOR — tip timing patterns within sessions
+// Tells you when in a session tips cluster, and gap patterns
+export function computePreTipBehavior(sessions) {
+  if (!sessions || sessions.length === 0) return null
+
+  const allGapsMinutes = []
+  const sessionTimeAtTip = []   // how many minutes into the stream each tip arrived
+  const clusterSessions = []    // sessions with tip clusters
+
+  sessions.forEach(s => {
+    if (!s.tips || s.tips.length < 3 || s.durationUnknown) return
+    const sorted = [...s.tips].sort((a, b) =>
+      new Date(a.dateRaw || a.date_time) - new Date(b.dateRaw || b.date_time)
+    )
+    const startMs = new Date(sorted[0].dateRaw || sorted[0].date_time).getTime()
+
+    // Gaps between tips
+    for (let i = 1; i < sorted.length; i++) {
+      const prevMs = new Date(sorted[i-1].dateRaw || sorted[i-1].date_time).getTime()
+      const currMs = new Date(sorted[i].dateRaw || sorted[i].date_time).getTime()
+      const gapMins = (currMs - prevMs) / 60000
+      if (gapMins > 0 && gapMins < 60) allGapsMinutes.push(gapMins)
+    }
+
+    // Session time at each tip
+    sorted.forEach(t => {
+      const minsIn = (new Date(t.dateRaw || t.date_time).getTime() - startMs) / 60000
+      sessionTimeAtTip.push({ minsIn: parseFloat(minsIn.toFixed(1)), usd: t.usd || 0 })
+    })
+
+    // Detect tip clusters: 3+ tips within a 2-minute window
+    for (let i = 0; i < sorted.length - 2; i++) {
+      const t0 = new Date(sorted[i].dateRaw || sorted[i].date_time).getTime()
+      const t2 = new Date(sorted[i+2].dateRaw || sorted[i+2].date_time).getTime()
+      if ((t2 - t0) / 60000 <= 2) {
+        clusterSessions.push(s.id)
+        break
+      }
+    }
+  })
+
+  if (allGapsMinutes.length === 0) return null
+
+  const avgGap = allGapsMinutes.reduce((a, b) => a + b, 0) / allGapsMinutes.length
+
+  // Find peak tipping window — bucket into 10-min intervals, find where most USD lands
+  const windowBuckets = {}
+  sessionTimeAtTip.forEach(({ minsIn, usd }) => {
+    const bucket = Math.floor(minsIn / 10) * 10
+    windowBuckets[bucket] = (windowBuckets[bucket] || 0) + usd
+  })
+  const peakWindow = Object.entries(windowBuckets).sort((a, b) => b[1] - a[1])[0]
+  const peakWindowStart = peakWindow ? parseInt(peakWindow[0]) : null
+  const peakWindowEnd   = peakWindowStart !== null ? peakWindowStart + 10 : null
+
+  // Big tips after silence: check if large tips (>2x avg) happen after gaps > 2x avg gap
+  const bigTipAfterSilence = { count: 0, avgGapBefore: 0 }
+  const avgTipUSD = sessionTimeAtTip.length
+    ? sessionTimeAtTip.reduce((s, t) => s + t.usd, 0) / sessionTimeAtTip.length
+    : 0
+
+  return {
+    avgGapMinutes: parseFloat(avgGap.toFixed(1)),
+    peakTippingWindow: peakWindowStart !== null
+      ? { from: peakWindowStart, to: peakWindowEnd, label: `${peakWindowStart}–${peakWindowEnd} min into stream` }
+      : null,
+    clusteringDetected: clusterSessions.length > 0,
+    clusterRate: sessions.length > 0
+      ? parseFloat((clusterSessions.length / sessions.length).toFixed(2))
+      : 0,
+    // Insight text
+    insight: peakWindowStart !== null
+      ? `Most tips come ${peakWindowStart}–${peakWindowEnd} min into your stream — don't end before this window`
+      : `Avg gap between tips is ${avgGap.toFixed(0)} min`,
+    recommendation: peakWindowStart !== null && peakWindowStart > 20
+      ? `Your earnings peak after ${peakWindowStart} min — don't end early. Viewers need time to warm up.`
+      : `Your audience tips early and consistently — open strong every time.`
+  }
+}
+
+// 4. DEPENDENCY RISK
+// How exposed are you if your top fan leaves?
+export function computeDependencyRisk(tips) {
+  if (!tips || tips.length === 0) return null
+
+  const fanUSD = {}
+  const totalUSD = tips.reduce((s, t) => {
+    fanUSD[t.username] = (fanUSD[t.username] || 0) + (t.usd || 0)
+    return s + (t.usd || 0)
+  }, 0)
+
+  if (totalUSD === 0) return null
+
+  const sorted = Object.entries(fanUSD).sort((a, b) => b[1] - a[1])
+  const top1Pct  = Math.round((sorted[0]?.[1] || 0) / totalUSD * 100)
+  const top3Pct  = Math.round(sorted.slice(0, 3).reduce((s, [, v]) => s + v, 0) / totalUSD * 100)
+  const top5Pct  = Math.round(sorted.slice(0, 5).reduce((s, [, v]) => s + v, 0) / totalUSD * 100)
+
+  let level = 'low'
+  let message = ''
+  if (top1Pct > 50) {
+    level = 'high'
+    message = `${sorted[0][0]} accounts for ${top1Pct}% of your total income — if they leave, you lose half your revenue`
+  } else if (top3Pct > 70) {
+    level = 'high'
+    message = `Your top 3 fans drive ${top3Pct}% of revenue — you have high concentration risk`
+  } else if (top3Pct > 50) {
+    level = 'medium'
+    message = `Top 3 fans = ${top3Pct}% of revenue — strong core, but growing your base reduces risk`
+  } else {
+    level = 'low'
+    message = `Revenue is spread across your fanbase — healthy diversity`
+  }
+
+  return {
+    top1Pct,
+    top3Pct,
+    top5Pct,
+    level,
+    message,
+    topFan: sorted[0] ? { username: sorted[0][0], usd: parseFloat(sorted[0][1].toFixed(2)), pct: top1Pct } : null,
+    lossIfTopFanLeaves: parseFloat((sorted[0]?.[1] || 0).toFixed(2))
+  }
+}
+
+// 5. TRUE HOURLY DISTRIBUTION
+// Avg earnings per ACTIVE hour — not divided by tip count, not skewed by session count
+// Uses UTC hours from individual tips
+export function computeTrueHourlyAvg(tips) {
+  if (!tips || tips.length === 0) return []
+
+  // Group total USD and count distinct active dates per hour
+  const hourUSD   = {}
+  const hourDates = {}
+  tips.forEach(t => {
+    const dt = new Date(t.dateRaw || t.date_time)
+    const h  = dt.getUTCHours()
+    const dateKey = dt.toISOString().slice(0, 10)
+    hourUSD[h]   = (hourUSD[h]   || 0) + (t.usd || 0)
+    if (!hourDates[h]) hourDates[h] = new Set()
+    hourDates[h].add(dateKey)
+  })
+
+  return Array.from({ length: 24 }, (_, h) => {
+    const total = hourUSD[h] || 0
+    const activeDays = hourDates[h]?.size || 0
+    const label = h === 0 ? '12 AM' : h < 12 ? `${h} AM` : h === 12 ? '12 PM' : `${h-12} PM`
+    return {
+      hour: h,
+      label,
+      totalUSD: parseFloat(total.toFixed(2)),
+      activeDays,
+      avgPerActiveDay: activeDays > 0 ? parseFloat((total / activeDays).toFixed(2)) : 0
+    }
+  })
+}
+
+// ============================================
 // AGGREGATE
 // ============================================
 
@@ -1114,6 +1399,10 @@ export function aggregateRows(tips) {
     churnRisk: w.churnRisk
   }))
 
+  const dependencyRisk  = computeDependencyRisk(tips)
+  const preTipBehavior  = computePreTipBehavior(sessions)
+  const trueHourlyAvg   = computeTrueHourlyAvg(tips)
+
   return {
     totalUSD: parseFloat(totalUSD.toFixed(2)),
     totalTokens,
@@ -1121,6 +1410,9 @@ export function aggregateRows(tips) {
     avgTipSize: parseFloat((tips.length > 0 ? totalUSD / tips.length : 0).toFixed(2)),
     topTippers, platforms, sessions, insights: validateInsights(insights), predictions,
     whaleAlerts, lossAlerts, nextMoves, whales,
-    bestDay, bestHour   // ← single source of truth, consumed by dashboard
+    bestDay, bestHour,
+    dependencyRisk,   // top1/3/5 pct + risk level
+    preTipBehavior,   // peak tipping window + avg gap
+    trueHourlyAvg,    // 24-slot array: avgPerActiveDay per UTC hour
   }
 }
