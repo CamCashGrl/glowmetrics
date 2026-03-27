@@ -437,51 +437,76 @@ export default function Dashboard() {
 
   const allPlatforms = [...new Set(tips.map(t => t.platform))]
 
-  // ── Build "What's Next" alerts outside JSX so we never call hooks in a map
+  // ── Build "What's Next" alerts — smarter, personalized, prioritized
   const buildWhatsNextAlerts = () => {
     const now = Date.now()
-    const result = []
+    const strikeHot = []
+    const winBack = []
+    const milestone = []
+    const onlineNow = []
+    const dormant = []
+    const performance = []
 
-    const SOCIAL_KEYWORDS = {
-      snapchat: /snap\s?chat|snapchat|snap/i,
-      instagram: /instagram|insta|ig\b/i,
-      twitter: /twitter|x\.com|\bx\b/i,
-      onlyfans: /onlyfans|only fans|of\b/i,
+    // Helper: get personalized re-engage message based on fan behavior
+    const getPersonalMsg = (w) => {
+      const name = w.username
+      if (w.hasPrivates && w.privateCount >= 2)
+        return `Hey ${name}! Been thinking about doing more privates lately 👀 You always make them so fun 💕`
+      if (w.tipCount >= 20 && w.avgTipSize < 5)
+        return `Hey ${name}! I always love seeing your name pop up in chat 💕 Going live soon — come say hi!`
+      if (w.avgTipSize >= 20)
+        return `Hey ${name}! I was literally just thinking about that amazing tip you sent 🥺 Going live tonight 🔥`
+      return `Hey ${name}! I've been thinking about you lately 💕 I'm going live soon and would love to see you there 🔥`
     }
-    whales.forEach(w => {
-      if (!w.tipNotes || w.tipNotes.length === 0) return
-      Object.entries(SOCIAL_KEYWORDS).forEach(([platform, regex]) => {
-        const matchingNote = w.tipNotes.find(n => regex.test(n))
-        if (matchingNote) {
-          const usernameMatch = matchingNote.match(/@[\w.]+|(?:my|is|:)\s*([\w.@]+)/i)
-          const extractedUser = usernameMatch ? usernameMatch[1] || usernameMatch[0] : null
-          result.push({
-            type: 'social_mention', icon: '📱', color: C.cyan, severity: 'info',
-            title: `${w.username} mentioned ${platform.charAt(0).toUpperCase() + platform.slice(1)}`,
-            message: extractedUser
-              ? `They left their ${platform} as "${extractedUser}" in a tip note — add them before you forget!`
-              : `They mentioned ${platform} in a tip note — ask them for their handle next time they're in chat`,
-            cta: 'Copy Message', username: w.username, whale: w,
-            reengageMsg: `Hey ${w.username}! I've been thinking about you lately 💕 I'm going live soon and would love to see you there 🔥`
-          })
-        }
-      })
-    })
 
-    const topFans = whales.filter(w => w.totalUSD >= 50 && w.tipCount >= 5)
-    topFans.slice(0, 2).forEach(w => {
-      const streamingPlatforms = platforms.map(p => p.platform).filter(p => p !== w.platform)
-      if (streamingPlatforms.length > 0) {
-        result.push({
-          type: 'affiliate', icon: '🔗', color: C.indigo, severity: 'info',
-          title: `Share your ${streamingPlatforms[0]} affiliate link with ${w.username}`,
-          message: `${w.username} has been one of your strongest supporters. Share your affiliate link on Snapchat or X — never directly on stream (against TOS)`,
+    // 1. STRIKE WHILE HOT — tipped in last 24h AND high tip probability
+    whales.forEach(w => {
+      const hrs = (now - new Date(w.lastTipDate)) / 3600000
+      if (hrs <= 24 && w.tipProbability?.level === 'High') {
+        strikeHot.push({
+          type: 'strike_hot', icon: '🔥', color: C.orange, severity: 'success',
+          title: `Strike while ${w.username} is hot`,
+          message: `They tipped in the last 24 hours and their tip probability is high — go live NOW while they're warm`,
           cta: 'Copy Message', username: w.username, whale: w,
-          reengageMsg: `Hey ${w.username}! I've been thinking about you lately 💕 I'm going live soon and would love to see you there 🔥`
+          reengageMsg: getPersonalMsg(w)
         })
       }
     })
 
+    // 2. WIN BACK — $50+ lifetime, 45–90 days gone
+    whales.filter(w => w.totalUSD >= 50).forEach(w => {
+      const days = Math.floor((now - new Date(w.lastTipDate)) / 86400000)
+      if (days >= 45 && days <= 90) {
+        const name = w.username
+        winBack.push({
+          type: 'win_back', icon: '💔', color: C.pink, severity: 'warning',
+          title: `Win back ${name} — $${w.totalUSD.toFixed(0)} lifetime fan`,
+          message: `They spent $${w.totalUSD.toFixed(0)} total but haven't tipped in ${days} days. A personal message could bring them back.`,
+          cta: 'Copy Message', username: name, whale: w,
+          reengageMsg: `Hey ${name}! I miss you — it's been a while and I just wanted to check in 💕 I'm going live tonight and it would mean a lot to see you there`
+        })
+      }
+    })
+
+    // 3. MILESTONE — within 10% of $50 / $100 / $200 / $500
+    const milestones = [50, 100, 200, 500]
+    whales.forEach(w => {
+      for (const m of milestones) {
+        const remaining = m - w.totalUSD
+        if (remaining > 0 && remaining <= m * 0.10) {
+          milestone.push({
+            type: 'milestone', icon: '💰', color: C.gold, severity: 'info',
+            title: `${w.username} is $${remaining.toFixed(0)} away from $${m}`,
+            message: `They've spent $${w.totalUSD.toFixed(0)} lifetime — a little encouragement could push them to the $${m} milestone`,
+            cta: 'Copy Message', username: w.username, whale: w,
+            reengageMsg: getPersonalMsg(w)
+          })
+          break
+        }
+      }
+    })
+
+    // 4. ONLINE NOW / ONLINE SOON
     whales.slice(0, 5).forEach(w => {
       if (w.tipCount < 5) return
       const fanTips = (w.tips && w.tips.length > 0)
@@ -500,41 +525,40 @@ export default function Dashboard() {
       const hoursAway = Math.abs(currentHour - peakHour)
       const probability = Math.min(95, Math.round((bestHour[1] / fanTips.length) * 100 * 2.5))
       const label = peakHour === 0 ? '12 AM' : peakHour < 12 ? `${peakHour} AM` : peakHour === 12 ? '12 PM' : `${peakHour - 12} PM`
-
       if (hoursAway <= 2 && probability >= 40) {
-        result.push({
+        onlineNow.push({
           type: 'online_now', icon: '🟢', color: C.green, severity: 'success',
           title: `${w.username} is probably online right now`,
-          message: `They usually tip around ${label} — there's a ~${probability}% chance they're active. Go live or send a message now!`,
+          message: `They usually tip around ${label} — ~${probability}% chance they're active. Go live or message now!`,
           cta: 'Copy Message', username: w.username, whale: w,
-          reengageMsg: `Hey ${w.username}! I've been thinking about you lately 💕 I'm going live soon and would love to see you there 🔥`
+          reengageMsg: getPersonalMsg(w)
         })
       } else if (hoursAway <= 10 && probability >= 40) {
-        result.push({
+        onlineNow.push({
           type: 'online_soon', icon: '⏰', color: C.gold, severity: 'warning',
           title: `${w.username} is likely online in ~${hoursAway}h`,
-          message: `They typically tip around ${label} (${probability}% probability). Plan to go live or reach out before then`,
+          message: `They typically tip around ${label} (${probability}% probability). Plan your stream around it.`,
           cta: null, username: w.username, whale: w, reengageMsg: ''
         })
       }
     })
 
+    // 5. DORMANT
     whales.filter(w => w.totalUSD >= 20).slice(0, 3).forEach(w => {
       const days = Math.floor((now - new Date(w.lastTipDate)) / 86400000)
-      if (days >= 7 && days <= 90) {
+      if (days >= 7 && days <= 44) {
         const timeStr = days >= 30 ? `${Math.round(days / 30)} month${days >= 60 ? 's' : ''}` : `${days} days`
-        result.push({
+        dormant.push({
           type: 'dormant', icon: '💤', color: C.orange, severity: 'warning',
           title: `You haven't heard from ${w.username} in ${timeStr}`,
           message: `They've spent $${w.totalUSD.toFixed(0)} total — send them a message so they know you're thinking of them`,
           cta: 'Copy Message', username: w.username, whale: w,
-          reengageMsg: `Hey ${w.username}! I've been thinking about you lately 💕 I'm going live soon and would love to see you there 🔥`
+          reengageMsg: getPersonalMsg(w)
         })
       }
     })
 
-    // FIX: Use analytics.bestDay (pre-computed, same source as insights)
-    // instead of recalculating best day independently here
+    // 6. PERFORMANCE — best day insight
     const analyticsbestDay = analytics?.bestDay
     if (analyticsbestDay) {
       const avgSession = sessions.length ? sessions.reduce((s, x) => s + x.totalUSD, 0) / sessions.length : 0
@@ -543,7 +567,7 @@ export default function Dashboard() {
         new Date(s.startTime).toLocaleDateString('en-US', { weekday: 'long' }) === analyticsbestDay.day
       ).length
       if (bestDayCount >= 2) {
-        result.push({
+        performance.push({
           type: 'performance', icon: '📈', color: C.pink, severity: 'info',
           title: `Your best sessions happen on ${analyticsbestDay.day}s`,
           message: `${bestDayCount} of your top-earning streams were on ${analyticsbestDay.day}s ($${analyticsbestDay.avg.toFixed(0)} avg). Plan your next high-effort stream for this day`,
@@ -552,7 +576,44 @@ export default function Dashboard() {
       }
     }
 
-    return result
+    // Social mention alerts (keep, they're genuinely useful)
+    const socialAlerts = []
+    const SOCIAL_KEYWORDS = {
+      snapchat: /snap\s?chat|snapchat|snap/i,
+      instagram: /instagram|insta|ig\b/i,
+      twitter: /twitter|x\.com|\bx\b/i,
+      onlyfans: /onlyfans|only fans|of\b/i,
+    }
+    whales.forEach(w => {
+      if (!w.tipNotes || w.tipNotes.length === 0) return
+      Object.entries(SOCIAL_KEYWORDS).forEach(([platform, regex]) => {
+        const matchingNote = w.tipNotes.find(n => regex.test(n))
+        if (matchingNote) {
+          const usernameMatch = matchingNote.match(/@[\w.]+|(?:my|is|:)\s*([\w.@]+)/i)
+          const extractedUser = usernameMatch ? usernameMatch[1] || usernameMatch[0] : null
+          socialAlerts.push({
+            type: 'social_mention', icon: '📱', color: C.cyan, severity: 'info',
+            title: `${w.username} mentioned ${platform.charAt(0).toUpperCase() + platform.slice(1)}`,
+            message: extractedUser
+              ? `They left their ${platform} as "${extractedUser}" in a tip note — add them before you forget!`
+              : `They mentioned ${platform} in a tip note — ask them for their handle next time`,
+            cta: 'Copy Message', username: w.username, whale: w,
+            reengageMsg: getPersonalMsg(w)
+          })
+        }
+      })
+    })
+
+    // Merge in priority order, cap at 6
+    return [
+      ...strikeHot,
+      ...winBack,
+      ...milestone,
+      ...onlineNow,
+      ...dormant,
+      ...performance,
+      ...socialAlerts,
+    ].slice(0, 6)
   }
 
   // ── Build re-engage list outside JSX for the same reason
@@ -952,6 +1013,26 @@ export default function Dashboard() {
                 </div>
               </div>
 
+              {/* PLATFORM RECOMMENDATION BANNER */}
+              {displayPlatforms.length >= 2 && (() => {
+                const sorted = [...displayPlatforms].sort((a, b) => b.usdPerHour - a.usdPerHour)
+                const top = sorted[0]
+                const bottom = sorted[sorted.length - 1]
+                if (top.usdPerHour > 0 && bottom.usdPerHour > 0 && top.usdPerHour >= bottom.usdPerHour * 2) {
+                  const mult = (top.usdPerHour / bottom.usdPerHour).toFixed(1)
+                  return (
+                    <div style={{ padding: "14px 18px", borderRadius: 12, background: "linear-gradient(135deg, rgba(34,211,238,0.1), rgba(124,92,255,0.1))", border: "1px solid rgba(34,211,238,0.3)", marginBottom: 20, display: "flex", alignItems: "center", gap: 12 }}>
+                      <span style={{ fontSize: 20 }}>⚡</span>
+                      <div>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: C.white }}>You earn {mult}x more per hour on {top.platform} than {bottom.platform}</div>
+                        <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>${top.usdPerHour.toFixed(2)}/hr vs ${bottom.usdPerHour.toFixed(2)}/hr — consider shifting more time to {top.platform}</div>
+                      </div>
+                    </div>
+                  )
+                }
+                return null
+              })()}
+
               {/* SUMMARY ROW — only when 2+ platforms */}
               {displayPlatforms.length >= 2 && (() => {
                 const topRev = [...displayPlatforms].sort((a, b) => b.totalUSD - a.totalUSD)[0]
@@ -1040,6 +1121,75 @@ export default function Dashboard() {
                         </div>
                       ))}
                     </div>
+
+                    {/* HOURLY HEATMAP */}
+                    {(() => {
+                      const hourData = platformTimes[p.platform]?.hours || {}
+                      const maxEarning = Math.max(...Object.values(hourData), 1)
+                      return (
+                        <div style={{ marginBottom: 20 }}>
+                          <div style={{ fontSize: 11, color: C.muted, marginBottom: 8 }}>⏰ Earnings by hour of day</div>
+                          <div style={{ display: "flex", gap: 2, flexWrap: "nowrap", overflowX: "auto" }}>
+                            {Array.from({ length: 24 }, (_, h) => {
+                              const val = hourData[h] || 0
+                              const intensity = val / maxEarning
+                              const bg = intensity === 0
+                                ? "rgba(255,255,255,0.04)"
+                                : intensity < 0.33
+                                ? "rgba(34,211,238,0.2)"
+                                : intensity < 0.66
+                                ? "rgba(34,211,238,0.55)"
+                                : "rgba(34,211,238,0.95)"
+                              const label = h === 0 ? "12a" : h < 12 ? `${h}a` : h === 12 ? "12p" : `${h-12}p`
+                              return (
+                                <div key={h} title={`${label}: $${val.toFixed(0)}`} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, flex: "0 0 auto" }}>
+                                  <div style={{ width: 18, height: 24, borderRadius: 3, background: bg, border: "1px solid rgba(255,255,255,0.06)" }} />
+                                  {h % 6 === 0 && <div style={{ fontSize: 8, color: C.muted }}>{label}</div>}
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )
+                    })()}
+
+                    {/* FAN LOYALTY + BEST STREAM LENGTH */}
+                    {(() => {
+                      const platTips = tips.filter(t => t.platform === p.platform)
+                      const fanCounts = {}
+                      platTips.forEach(t => { fanCounts[t.username] = (fanCounts[t.username] || 0) + 1 })
+                      const loyalFans = Object.values(fanCounts).filter(c => c >= 3).length
+
+                      const platSessions = sessions.filter(s => s.platform === p.platform)
+                      const longS = platSessions.filter(s => s.durationMinutes > 60)
+                      const shortS = platSessions.filter(s => s.durationMinutes <= 60)
+                      const longAvg = longS.length ? longS.reduce((s, x) => s + x.totalUSD, 0) / longS.length : 0
+                      const shortAvg = shortS.length ? shortS.reduce((s, x) => s + x.totalUSD, 0) / shortS.length : 0
+                      const streamLengthPct = shortAvg > 0 && longAvg > shortAvg ? Math.round(((longAvg - shortAvg) / shortAvg) * 100) : 0
+
+                      return (
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
+                          <div style={{ padding: "12px 14px", background: "rgba(255,255,255,0.03)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.06)" }}>
+                            <div style={{ fontSize: 10, color: C.muted, marginBottom: 4, textTransform: "uppercase" }}>👥 Fan Loyalty</div>
+                            <div style={{ fontSize: 18, fontWeight: 800, color: C.pink }}>{loyalFans}</div>
+                            <div style={{ fontSize: 11, color: C.muted }}>fans tipped 3+ times</div>
+                          </div>
+                          {streamLengthPct >= 10 && longS.length >= 2 && shortS.length >= 2 ? (
+                            <div style={{ padding: "12px 14px", background: "rgba(255,255,255,0.03)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.06)" }}>
+                              <div style={{ fontSize: 10, color: C.muted, marginBottom: 4, textTransform: "uppercase" }}>⏱️ Stream Length</div>
+                              <div style={{ fontSize: 18, fontWeight: 800, color: C.green }}>+{streamLengthPct}%</div>
+                              <div style={{ fontSize: 11, color: C.muted }}>more earned over 60 min</div>
+                            </div>
+                          ) : (
+                            <div style={{ padding: "12px 14px", background: "rgba(255,255,255,0.03)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.06)" }}>
+                              <div style={{ fontSize: 10, color: C.muted, marginBottom: 4, textTransform: "uppercase" }}>📊 Sessions</div>
+                              <div style={{ fontSize: 18, fontWeight: 800, color: C.cyan }}>{p.sessions}</div>
+                              <div style={{ fontSize: 11, color: C.muted }}>total streams</div>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })()}
 
                     {/* INSIGHTS */}
                     {insights.length > 0 && (
@@ -1171,46 +1321,86 @@ export default function Dashboard() {
                   <div style={{ width: 36, height: 36, borderRadius: 10, background: "linear-gradient(135deg, #F59E0B, #EC4899)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>🧠</div>
                   <div>
                     <div style={{ fontSize: 18, fontWeight: 800, color: C.white }}>Fan Intelligence</div>
-                    <div style={{ fontSize: 12, color: C.muted }}>Behavior patterns & how to engage each fan</div>
+                    <div style={{ fontSize: 12, color: C.muted }}>Deep behavior patterns, projections & how to engage each fan</div>
                   </div>
                 </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                   {filteredWhales.slice(0, isPro ? 5 : 3).map((w, i) => {
-                    // Build personality tags from engine data
                     const tags = []
                     if (w.hasPrivates && w.privateCount >= 2) tags.push({ label: "📷 Cam2Cam spender", color: C.pink })
                     if (w.avgTipSize >= 20) tags.push({ label: "💸 Big tipper", color: C.gold })
-                    if (w.tipCount >= 20 && w.avgTipSize < 5) tags.push({ label: "🎯 Micro-tipper — loves frequency", color: C.cyan })
+                    if (w.tipCount >= 20 && w.avgTipSize < 5) tags.push({ label: "🎯 Micro-tipper", color: C.cyan })
                     if (w.tipProbability?.level === "High") tags.push({ label: "🟢 Likely to tip soon", color: C.green })
                     if (w.churnRisk?.level === "High" || w.churnRisk?.level === "Critical") tags.push({ label: "🚨 At churn risk", color: C.red })
                     if (w.daysSinceLastTip <= 3) tags.push({ label: "🔥 Recently active", color: C.orange })
                     if (w.tipNotes && w.tipNotes.length > 0) tags.push({ label: "💬 Leaves tip notes", color: C.indigo })
-                    if (w.avgDaysBetweenTips <= 3) tags.push({ label: "🔁 High-frequency tipper", color: C.cyan })
                     if (w.spendPercentile >= 90) tags.push({ label: `👑 Top ${100 - w.spendPercentile}% spender`, color: C.gold })
 
-                    // Actionable coaching line
-                    const getCoaching = () => {
-                      if (w.churnRisk?.level === "Critical") return { text: "Send a message today — they may not come back", color: C.red }
-                      if (w.churnRisk?.level === "High") return { text: "Re-engage soon — offer something special to bring them back", color: C.orange }
-                      if (w.tipProbability?.level === "High") return { text: "Go live soon — high chance they'll tip in the next session", color: C.green }
-                      if (w.hasPrivates) return { text: "Offer a private show — they've already paid for one before", color: C.pink }
-                      if (w.avgTipSize >= 20) return { text: "Give them VIP attention during streams — they notice and tip more", color: C.gold }
-                      if (w.tipCount >= 20) return { text: "Thank them publicly — frequent tippers respond to recognition", color: C.cyan }
-                      return { text: "Keep them warm — consistent engagement builds loyalty", color: C.muted }
+                    // Relationship status
+                    const relStatus = w.daysSinceLastTip <= 7
+                      ? { label: "🔥 Hot", color: C.orange }
+                      : w.daysSinceLastTip <= 30
+                      ? { label: "👀 Watching", color: C.cyan }
+                      : w.daysSinceLastTip <= 60
+                      ? { label: "❄️ Cooling", color: C.blue }
+                      : { label: "💀 At Risk", color: C.red }
+
+                    // Spending velocity vs avg fan
+                    const avgFanUSD = whales.length > 0 ? whales.reduce((s, ww) => s + ww.totalUSD, 0) / whales.length : 1
+                    const velocity = avgFanUSD > 0 ? (w.totalUSD / avgFanUSD).toFixed(1) : "1.0"
+                    const velocityPct = Math.min(100, Math.round((w.totalUSD / Math.max(...whales.map(ww => ww.totalUSD))) * 100))
+
+                    // Coaching bullets
+                    const getCoachingBullets = () => {
+                      const bullets = []
+                      if (w.churnRisk?.level === "Critical") {
+                        bullets.push({ text: "Send a personal message today — they may not return without one", color: C.red })
+                        bullets.push({ text: "Reference something specific — their username, a past tip, or a show they loved", color: C.red })
+                        bullets.push({ text: "Offer something exclusive to bring them back (early access, private goal)", color: C.orange })
+                      } else if (w.churnRisk?.level === "High") {
+                        bullets.push({ text: "Re-engage this week — their pattern shows they go cold fast without contact", color: C.orange })
+                        bullets.push({ text: "Offer something special: a goal just for them or a shoutout next stream", color: C.gold })
+                        bullets.push({ text: "Keep the message short and warm — don't make it feel like a sales pitch", color: C.muted })
+                      } else if (w.tipProbability?.level === "High") {
+                        bullets.push({ text: "Go live during their active window — they're very likely to tip", color: C.green })
+                        bullets.push({ text: "Set a tip goal that matches their avg ($" + w.avgTipSize.toFixed(0) + ") — it feels achievable to them", color: C.cyan })
+                        bullets.push({ text: "Acknowledge them by name in stream — they respond to direct recognition", color: C.muted })
+                      } else if (w.hasPrivates) {
+                        bullets.push({ text: "Offer a private show — they've already bought one before", color: C.pink })
+                        bullets.push({ text: "Mention privates casually in stream — a soft reminder works well with this fan type", color: C.muted })
+                        bullets.push({ text: "They respond to exclusivity — make them feel like a VIP", color: C.gold })
+                      } else if (w.avgTipSize >= 20) {
+                        bullets.push({ text: "Give them VIP attention in stream — big tippers notice when they're seen", color: C.gold })
+                        bullets.push({ text: "Set a goal around their avg tip size ($" + w.avgTipSize.toFixed(0) + ") — they enjoy being the hero", color: C.cyan })
+                        bullets.push({ text: "Thank them publicly and specifically — it reinforces the behavior", color: C.muted })
+                      } else if (w.tipCount >= 20) {
+                        bullets.push({ text: "Thank them publicly — frequent tippers love recognition in front of the room", color: C.cyan })
+                        bullets.push({ text: "Small goals and countdowns keep micro-tippers engaged and clicking", color: C.muted })
+                        bullets.push({ text: "Consistency is their love language — show up regularly and they will too", color: C.muted })
+                      } else {
+                        bullets.push({ text: "Keep them warm — consistent presence builds loyalty over time", color: C.muted })
+                        bullets.push({ text: "Greet them by name next time they appear in chat", color: C.muted })
+                        bullets.push({ text: "They have potential — early engagement now converts them to regulars", color: C.cyan })
+                      }
+                      return bullets
                     }
-                    const coaching = getCoaching()
+                    const coachingBullets = getCoachingBullets()
                     const tierColor = TIER_COLORS[w.tier] || C.cyan
 
                     return (
-                      <div key={i} style={{ padding: 16, borderRadius: 12, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)" }}>
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, flexWrap: "wrap", gap: 8 }}>
+                      <div key={i} style={{ padding: 18, borderRadius: 14, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)" }}>
+                        {/* HEADER ROW */}
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                            <div style={{ width: 34, height: 34, borderRadius: 8, background: `${tierColor}20`, border: `1px solid ${tierColor}40`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 800, color: tierColor }}>
+                            <div style={{ width: 36, height: 36, borderRadius: 9, background: `${tierColor}20`, border: `1px solid ${tierColor}40`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 800, color: tierColor }}>
                               {w.username.charAt(0).toUpperCase()}
                             </div>
                             <div>
-                              <span style={{ fontSize: 14, fontWeight: 700, color: C.white }}>{w.username}</span>
-                              <span style={{ marginLeft: 8, fontSize: 11, color: C.muted }}>${w.totalUSD.toFixed(0)} lifetime · {w.tipCount} tips</span>
+                              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                <span style={{ fontSize: 14, fontWeight: 700, color: C.white }}>{w.username}</span>
+                                <span style={{ padding: "2px 8px", borderRadius: 20, background: `${relStatus.color}15`, border: `1px solid ${relStatus.color}30`, fontSize: 10, fontWeight: 700, color: relStatus.color }}>{relStatus.label}</span>
+                              </div>
+                              <span style={{ fontSize: 11, color: C.muted }}>${w.totalUSD.toFixed(0)} lifetime · {w.tipCount} tips · {w.platform}</span>
                             </div>
                           </div>
                           <div style={{ display: "flex", gap: 6 }}>
@@ -1221,17 +1411,60 @@ export default function Dashboard() {
 
                         {/* PERSONALITY TAGS */}
                         {tags.length > 0 && (
-                          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
                             {tags.map((tag, j) => (
                               <span key={j} style={{ padding: "3px 10px", borderRadius: 20, background: `${tag.color}15`, border: `1px solid ${tag.color}30`, fontSize: 11, fontWeight: 600, color: tag.color }}>{tag.label}</span>
                             ))}
                           </div>
                         )}
 
-                        {/* COACHING LINE */}
-                        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: `${coaching.color}08`, border: `1px solid ${coaching.color}20`, borderRadius: 8 }}>
-                          <span style={{ fontSize: 13 }}>💡</span>
-                          <span style={{ fontSize: 12, color: coaching.color, fontWeight: 500 }}>{coaching.text}</span>
+                        {/* METRICS ROW */}
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 12 }}>
+                          {/* Spending velocity */}
+                          <div style={{ padding: "10px 12px", background: "rgba(255,255,255,0.04)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.06)" }}>
+                            <div style={{ fontSize: 10, color: C.muted, marginBottom: 4 }}>SPENDING VELOCITY</div>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: C.gold, marginBottom: 6 }}>{velocity}x avg fan</div>
+                            <div style={{ height: 4, borderRadius: 2, background: "rgba(255,255,255,0.06)" }}>
+                              <div style={{ height: "100%", width: `${velocityPct}%`, borderRadius: 2, background: `linear-gradient(90deg, ${C.gold}, ${C.orange})` }} />
+                            </div>
+                          </div>
+                          {/* Visit pattern */}
+                          <div style={{ padding: "10px 12px", background: "rgba(255,255,255,0.04)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.06)" }}>
+                            <div style={{ fontSize: 10, color: C.muted, marginBottom: 4 }}>ACTIVE WINDOW</div>
+                            <div style={{ fontSize: 12, fontWeight: 600, color: C.cyan }}>{w.typicalOnlineHours !== 'Unknown' ? w.typicalOnlineHours : '—'}</div>
+                          </div>
+                          {/* Monthly projection */}
+                          <div style={{ padding: "10px 12px", background: "rgba(255,255,255,0.04)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.06)" }}>
+                            <div style={{ fontSize: 10, color: C.muted, marginBottom: 4 }}>MONTHLY VALUE</div>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: C.green }}>${w.lifetimeValue?.monthly > 0 ? w.lifetimeValue.monthly.toFixed(0) : '—'}</div>
+                          </div>
+                        </div>
+
+                        {/* TIP NOTES */}
+                        {w.tipNotes && w.tipNotes.length > 0 && (
+                          <div style={{ marginBottom: 12 }}>
+                            <div style={{ fontSize: 10, color: C.muted, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>Recent Tip Notes</div>
+                            <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 64, overflowY: "auto" }}>
+                              {w.tipNotes.slice(-2).reverse().map((note, j) => (
+                                <div key={j} style={{ padding: "6px 10px", background: `${C.indigo}10`, border: `1px solid ${C.indigo}20`, borderRadius: 6, fontSize: 11, color: C.text, fontStyle: "italic" }}>
+                                  "{note}"
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* COACHING BULLETS */}
+                        <div style={{ padding: "10px 14px", background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 10 }}>
+                          <div style={{ fontSize: 10, color: C.muted, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 }}>💡 Action Plan</div>
+                          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                            {coachingBullets.map((b, j) => (
+                              <div key={j} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                                <span style={{ color: b.color, fontSize: 12, flexShrink: 0, marginTop: 1 }}>•</span>
+                                <span style={{ fontSize: 12, color: b.color, lineHeight: 1.4 }}>{b.text}</span>
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       </div>
                     )
@@ -1568,11 +1801,60 @@ export default function Dashboard() {
               <div style={{ padding: 24, display: "flex", flexDirection: "column", gap: 20 }}>
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>📊 Fan Intelligence</div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
                     {[{ label: "First tip", value: firstTip ? new Date(firstTip.date_time).toLocaleDateString() : "—" }, { label: "Last tip", value: `${new Date(w.lastTipDate).toLocaleDateString()} (${daysSinceLastTip}d ago)` }, { label: "Avg days between tips", value: `${avgDaysBetweenTips} days` }, { label: "Churn risk", value: churnRisk, color: churnColor }].map(({ label, value, color }) => (
                       <div key={label} style={{ padding: 14, background: "rgba(255,255,255,0.04)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.07)" }}>
                         <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>{label}</div>
                         <div style={{ fontSize: 14, fontWeight: 600, color: color || C.white }}>{value}</div>
+                      </div>
+                    ))}
+                  </div>
+                  {w.typicalOnlineHours && w.typicalOnlineHours !== "Unknown" && (
+                    <div style={{ padding: "9px 14px", background: `${C.cyan}10`, border: `1px solid ${C.cyan}25`, borderRadius: 9, marginBottom: 12 }}>
+                      <span style={{ fontSize: 12, color: C.cyan }}>🕐 Best time to reach: <strong>{w.typicalOnlineHours}</strong></span>
+                    </div>
+                  )}
+                  {(() => {
+                    const dayKeys = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]
+                    const dayCounts = { Mon:0,Tue:0,Wed:0,Thu:0,Fri:0,Sat:0,Sun:0 }
+                    whaleTips.forEach(t => {
+                      const d = new Date(t.date_time).getDay()
+                      const key = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][d]
+                      if (key in dayCounts) dayCounts[key]++
+                    })
+                    const maxCount = Math.max(...Object.values(dayCounts), 1)
+                    return (
+                      <div>
+                        <div style={{ fontSize: 11, color: C.muted, marginBottom: 8 }}>📅 Tips by day of week</div>
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4 }}>
+                          {dayKeys.map(d => {
+                            const count = dayCounts[d]
+                            const intensity = count / maxCount
+                            const bg = intensity === 0 ? "rgba(255,255,255,0.04)" : intensity < 0.33 ? "rgba(124,92,255,0.2)" : intensity < 0.66 ? "rgba(124,92,255,0.5)" : "rgba(124,92,255,0.9)"
+                            return (
+                              <div key={d} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+                                <div style={{ width: "100%", height: 30, borderRadius: 6, background: bg, border: "1px solid rgba(255,255,255,0.06)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                  <span style={{ fontSize: 10, fontWeight: 700, color: count > 0 ? C.white : C.muted }}>{count || ""}</span>
+                                </div>
+                                <span style={{ fontSize: 9, color: C.muted }}>{d}</span>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )
+                  })()}
+                </div>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>🏆 Top 3 Tips</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {[...whaleTips].sort((a,b) => b.usd - a.usd).slice(0,3).map((t, i) => (
+                      <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: "rgba(255,255,255,0.04)", borderRadius: 8, border: "1px solid rgba(255,255,255,0.07)" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <span style={{ fontSize: 14 }}>{["🥇","🥈","🥉"][i]}</span>
+                          <span style={{ fontSize: 12, color: C.muted }}>{new Date(t.date_time).toLocaleDateString()}</span>
+                        </div>
+                        <div style={{ fontSize: 15, fontWeight: 800, color: C.gold }}>${t.usd.toFixed(2)}</div>
                       </div>
                     ))}
                   </div>
