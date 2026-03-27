@@ -806,11 +806,13 @@ export default function Dashboard() {
     const alerts = []
 
     // --- PLATFORM DAY-OF-WEEK PERFORMANCE ---
-    // Computed from actual tip data per platform per day
+    // Use UTC day to avoid timezone shifts (DB stores UTC timestamps)
+    const UTC_DAYS_LONG = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
     const platDayMap = {}
     tips.forEach(t => {
       const p = t.platform
-      const day = new Date(t.date_time || t.dateRaw).toLocaleDateString('en-US', { weekday: 'long' })
+      const d = new Date(t.date_time || t.dateRaw)
+      const day = UTC_DAYS_LONG[d.getUTCDay()]
       if (!platDayMap[p]) platDayMap[p] = {}
       if (!platDayMap[p][day]) platDayMap[p][day] = 0
       platDayMap[p][day] += t.usd || 0
@@ -1108,46 +1110,85 @@ export default function Dashboard() {
 
             {/* PLATFORM DAY PERFORMANCE GRID */}
             {(() => {
-              const platDayData = {}
+              // UTC day extraction — avoids timezone drift on stored timestamps
+              const UTC_DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
+              const UTC_DAYS_LONG = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
+
+              // Accumulate total USD and count unique calendar-dates per platform+day
+              // so we can show avg per active day, not inflated totals
+              const platDayUSD = {}   // platform -> short-day -> total $
+              const platDayDates = {} // platform -> short-day -> Set of 'YYYY-MM-DD'
               tips.forEach(t => {
                 const p = t.platform
-                const day = new Date(t.date_time || t.dateRaw).toLocaleDateString('en-US', { weekday: 'short' })
-                if (!platDayData[p]) platDayData[p] = {}
-                platDayData[p][day] = (platDayData[p][day] || 0) + (t.usd || 0)
+                const dt = new Date(t.date_time || t.dateRaw)
+                const shortDay = UTC_DAYS[dt.getUTCDay()]
+                const dateKey = dt.toISOString().slice(0, 10) // 'YYYY-MM-DD'
+                if (!platDayUSD[p]) platDayUSD[p] = {}
+                if (!platDayDates[p]) platDayDates[p] = {}
+                platDayUSD[p][shortDay] = (platDayUSD[p][shortDay] || 0) + (t.usd || 0)
+                if (!platDayDates[p][shortDay]) platDayDates[p][shortDay] = new Set()
+                platDayDates[p][shortDay].add(dateKey)
               })
-              const platList = Object.keys(platDayData)
+
+              // Build avg-per-active-day for each cell
+              const platDayAvg = {}
+              Object.keys(platDayUSD).forEach(p => {
+                platDayAvg[p] = {}
+                UTC_DAYS.forEach(d => {
+                  const total = platDayUSD[p][d] || 0
+                  const activeDays = platDayDates[p]?.[d]?.size || 1
+                  platDayAvg[p][d] = total > 0 ? parseFloat((total / activeDays).toFixed(2)) : 0
+                })
+              })
+
+              const platList = Object.keys(platDayAvg)
               if (platList.length < 1) return null
-              const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
-              const todayShort = new Date().toLocaleDateString('en-US', { weekday: 'short' })
+
+              // Today's UTC day
+              const nowUTC = new Date()
+              const todayShort = UTC_DAYS[nowUTC.getUTCDay()]
+              const todayLong = UTC_DAYS_LONG[nowUTC.getUTCDay()]
+
               return (
                 <div style={{ ...glassCard, borderRadius: 16, padding: 24, marginBottom: 28 }}>
-                  <h2 style={{ fontSize: 18, fontWeight: 700, color: C.white, marginBottom: 4 }}>📅 Platform Performance by Day</h2>
-                  <p style={{ fontSize: 12, color: C.muted, marginBottom: 16 }}>Which platform earns most on each day — your real data</p>
-                  <div style={{ display: "grid", gridTemplateColumns: `80px repeat(7, 1fr)`, gap: 4 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4, flexWrap: "wrap", gap: 8 }}>
+                    <h2 style={{ fontSize: 18, fontWeight: 700, color: C.white }}>📅 Platform Performance by Day</h2>
+                    <span style={{ fontSize: 11, color: C.muted, padding: "3px 10px", borderRadius: 20, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}>avg $/active day</span>
+                  </div>
+                  <p style={{ fontSize: 12, color: C.muted, marginBottom: 16 }}>Which platform earns more on each day of the week — based on your real data</p>
+                  <div style={{ display: "grid", gridTemplateColumns: `90px repeat(7, 1fr)`, gap: 4 }}>
                     <div />
-                    {days.map(d => (
+                    {UTC_DAYS.map(d => (
                       <div key={d} style={{ textAlign: "center", fontSize: 11, fontWeight: 700, color: d === todayShort ? C.cyan : C.muted, paddingBottom: 6 }}>{d}</div>
                     ))}
                     {platList.map(plat => {
-                      const dayVals = days.map(d => platDayData[plat][d] || 0)
-                      const maxVal = Math.max(...dayVals, 1)
+                      const dayVals = UTC_DAYS.map(d => platDayAvg[plat][d] || 0)
+                      const maxVal = Math.max(...dayVals, 0.01)
                       return [
-                        <div key={plat + '_label'} style={{ fontSize: 11, fontWeight: 700, color: C.text, display: "flex", alignItems: "center", paddingRight: 8 }}>{plat.replace('BongaCams','Bonga')}</div>,
-                        ...days.map((d, di) => {
-                          const val = platDayData[plat][d] || 0
-                          const intensity = val / maxVal
+                        <div key={plat + '_label'} style={{ fontSize: 10, fontWeight: 700, color: C.text, display: "flex", alignItems: "center", paddingRight: 6, lineHeight: 1.3 }}>{plat.replace('BongaCams','Bonga').replace('Chaturbate','CB')}</div>,
+                        ...UTC_DAYS.map(d => {
+                          const val = platDayAvg[plat][d] || 0
+                          const intensity = maxVal > 0 ? val / maxVal : 0
                           const isToday = d === todayShort
-                          const bg = val === 0 ? "rgba(255,255,255,0.03)" : intensity < 0.3 ? "rgba(34,211,238,0.15)" : intensity < 0.6 ? "rgba(34,211,238,0.4)" : "rgba(34,211,238,0.85)"
+                          const bg = val === 0
+                            ? "rgba(255,255,255,0.03)"
+                            : intensity < 0.25 ? "rgba(34,211,238,0.12)"
+                            : intensity < 0.5  ? "rgba(34,211,238,0.30)"
+                            : intensity < 0.75 ? "rgba(34,211,238,0.60)"
+                            : "rgba(34,211,238,0.90)"
                           return (
-                            <div key={d} title={`${plat} ${d}: $${val.toFixed(0)}`} style={{ height: 32, borderRadius: 6, background: bg, border: isToday ? "2px solid rgba(34,211,238,0.6)" : "1px solid rgba(255,255,255,0.06)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                              {val > 0 && <span style={{ fontSize: 9, fontWeight: 700, color: intensity > 0.4 ? "#fff" : C.muted }}>${val.toFixed(0)}</span>}
+                            <div key={d} title={`${plat} ${d}: avg $${val.toFixed(2)}/day`}
+                              style={{ height: 36, borderRadius: 6, background: bg, border: isToday ? "2px solid rgba(34,211,238,0.7)" : "1px solid rgba(255,255,255,0.06)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                              {val > 0 && <span style={{ fontSize: 9, fontWeight: 700, color: intensity > 0.45 ? "#fff" : C.muted }}>${val >= 100 ? Math.round(val) : val.toFixed(0)}</span>}
                             </div>
                           )
                         })
                       ]
                     })}
                   </div>
-                  <div style={{ marginTop: 10, fontSize: 11, color: C.muted }}>Today ({todayShort}) is highlighted. Darker = more earnings.</div>
+                  <div style={{ marginTop: 10, fontSize: 11, color: C.muted }}>
+                    Today ({todayLong}) is highlighted in cyan. Values = avg earnings per active stream day. Darker = more.
+                  </div>
                 </div>
               )
             })()}
