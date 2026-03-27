@@ -566,6 +566,9 @@ export default function Dashboard() {
   const whales = analytics?.whales || []
   const insights = analytics?.insights || []
   const platforms = analytics?.platforms || []
+  const dependencyRisk = analytics?.dependencyRisk || null
+  const preTipBehavior = analytics?.preTipBehavior || null
+  const trueHourlyAvg  = analytics?.trueHourlyAvg  || []
   const alerts = liveAnalytics?.whaleAlerts || analytics?.whaleAlerts || []
   const lossAlerts = liveAnalytics?.lossAlerts || analytics?.lossAlerts || []
   const nextMoves = liveAnalytics?.nextMoves || analytics?.nextMoves || []
@@ -1253,6 +1256,64 @@ export default function Dashboard() {
               )
             })()}
 
+            {/* DEPENDENCY RISK */}
+            {dependencyRisk && dependencyRisk.level !== 'low' && (
+              <div style={{ ...glassCard, borderRadius: 14, padding: 20, marginBottom: 20, border: `1px solid ${dependencyRisk.level === 'high' ? 'rgba(248,113,113,0.3)' : 'rgba(245,158,11,0.3)'}` }}>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 9, background: dependencyRisk.level === 'high' ? "rgba(248,113,113,0.15)" : "rgba(245,158,11,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>
+                    {dependencyRisk.level === 'high' ? '🚨' : '⚠️'}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: C.white, marginBottom: 4 }}>Revenue Dependency Risk — {dependencyRisk.level === 'high' ? 'High' : 'Medium'}</div>
+                    <div style={{ fontSize: 13, color: C.text, marginBottom: 10 }}>{dependencyRisk.message}</div>
+                    <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                      {[
+                        { label: "Top fan", value: `${dependencyRisk.top1Pct}%` },
+                        { label: "Top 3 fans", value: `${dependencyRisk.top3Pct}%` },
+                        { label: "Top 5 fans", value: `${dependencyRisk.top5Pct}%` },
+                        { label: "Loss if #1 leaves", value: `$${dependencyRisk.lossIfTopFanLeaves}` },
+                      ].map(({ label, value }) => (
+                        <div key={label} style={{ padding: "6px 12px", borderRadius: 8, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}>
+                          <div style={{ fontSize: 10, color: C.muted }}>{label}</div>
+                          <div style={{ fontSize: 14, fontWeight: 700, color: C.white }}>{value}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* PRE-TIP BEHAVIOR */}
+            {preTipBehavior && (
+              <div style={{ ...glassCard, borderRadius: 14, padding: 20, marginBottom: 20 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+                  <div style={{ fontSize: 20 }}>🧠</div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: C.white }}>Tip Behavior Patterns</div>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+                  <div style={{ padding: "12px 14px", background: "rgba(255,255,255,0.04)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.06)" }}>
+                    <div style={{ fontSize: 10, color: C.muted, marginBottom: 4, textTransform: "uppercase" }}>Avg gap between tips</div>
+                    <div style={{ fontSize: 20, fontWeight: 800, color: C.cyan }}>{preTipBehavior.avgGapMinutes} min</div>
+                  </div>
+                  {preTipBehavior.peakTippingWindow && (
+                    <div style={{ padding: "12px 14px", background: "rgba(255,255,255,0.04)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.06)" }}>
+                      <div style={{ fontSize: 10, color: C.muted, marginBottom: 4, textTransform: "uppercase" }}>Peak tipping window</div>
+                      <div style={{ fontSize: 20, fontWeight: 800, color: C.gold }}>{preTipBehavior.peakTippingWindow.label}</div>
+                    </div>
+                  )}
+                </div>
+                <div style={{ padding: "10px 14px", background: "rgba(236,72,153,0.06)", border: "1px solid rgba(236,72,153,0.2)", borderRadius: 9, fontSize: 13, color: C.text }}>
+                  💡 {preTipBehavior.recommendation}
+                </div>
+                {preTipBehavior.clusteringDetected && (
+                  <div style={{ marginTop: 8, padding: "8px 12px", background: "rgba(34,211,238,0.06)", border: "1px solid rgba(34,211,238,0.2)", borderRadius: 8, fontSize: 12, color: C.cyan }}>
+                    🔥 Tip clustering detected — fans tip in bursts. Use momentum: acknowledge tips publicly to trigger more.
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* SMART INSIGHTS */}
             <div style={{ ...glassCard, borderRadius: 14, padding: 24, marginBottom: 28 }}>
               <h2 style={{ fontSize: 18, fontWeight: 700, color: C.white, marginBottom: 16 }}>💡 Smart Insights</h2>
@@ -1593,13 +1654,14 @@ export default function Dashboard() {
                       ))}
                     </div>
 
-                    {/* HOURLY HEATMAP */}
+                    {/* HOURLY HEATMAP — uses trueHourlyAvg (avg per active day per UTC hour) */}
                     {(() => {
+                      // Filter trueHourlyAvg to this platform using platformTimes for totals
                       const hourData = platformTimes[p.platform]?.hours || {}
                       const maxEarning = Math.max(...Object.values(hourData), 1)
                       return (
                         <div style={{ marginBottom: 20 }}>
-                          <div style={{ fontSize: 11, color: C.muted, marginBottom: 8 }}>⏰ Earnings by hour of day</div>
+                          <div style={{ fontSize: 11, color: C.muted, marginBottom: 8 }}>⏰ Earnings by hour of day (UTC total)</div>
                           <div style={{ display: "flex", gap: 2, flexWrap: "nowrap", overflowX: "auto" }}>
                             {Array.from({ length: 24 }, (_, h) => {
                               const val = hourData[h] || 0
@@ -2121,6 +2183,29 @@ export default function Dashboard() {
                     </div>
 
                     <div style={{ padding: 24 }}>
+
+                      {/* REVENUE GAP — vs last 5 sessions */}
+                      {(() => {
+                        const recentSessions = sessions.filter(x => x.id !== s.id && !x.durationUnknown)
+                        const comparable = recentSessions.filter(x => x.platform === s.platform).slice(-5)
+                        const base = comparable.length >= 3 ? comparable : recentSessions.slice(-5)
+                        if (base.length < 2 || s.durationUnknown) return null
+                        const expected = base.reduce((a, x) => a + x.totalUSD, 0) / base.length
+                        const gap = expected - s.totalUSD
+                        const gapPct = expected > 0 ? Math.round((gap / expected) * 100) : 0
+                        if (Math.abs(gapPct) < 10) return null
+                        const isUnder = gap > 0
+                        const color = isUnder ? C.red : C.green
+                        const bg    = isUnder ? "rgba(248,113,113,0.06)" : "rgba(16,185,129,0.06)"
+                        const bdr   = isUnder ? "rgba(248,113,113,0.25)" : "rgba(16,185,129,0.25)"
+                        return (
+                          <div style={{ padding: "10px 14px", borderRadius: 10, background: bg, border: `1px solid ${bdr}`, marginBottom: 14, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <span style={{ fontSize: 13, color, fontWeight: 600 }}>
+                              {isUnder ? `⚠️ $${gap.toFixed(0)} below your avg session ($${expected.toFixed(0)}) — ${gapPct}% shortfall` : `✅ $${Math.abs(gap).toFixed(0)} above your avg session — top ${Math.abs(gapPct)}% performance`}
+                            </span>
+                          </div>
+                        )
+                      })()}
 
                       {/* CORE METRICS */}
                       <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 10, marginBottom: 16 }}>
