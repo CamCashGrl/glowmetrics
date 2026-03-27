@@ -24,9 +24,9 @@ function getTipFrequency(daysBetweenTips) {
 }
 
 function isUserRelevant(user) {
-  if (!user) return false;
+  if (!user || typeof user !== 'object') return false;
   if (user.daysSinceLastTip > 90) return false;
-  if (user.tokens < 100) return false;
+  if ((user.totalTokens || 0) < 100) return false;
   return true;
 }
 
@@ -718,11 +718,14 @@ export function predictRevenue(tips, sessions) {
   if (sameDaySessions.length >= 3) {
     const amounts = sameDaySessions.map(s => s.totalUSD).sort((a, b) => a - b)
     const avg = amounts.reduce((s, x) => s + x, 0) / amounts.length
-    // Use 10th and 90th percentile for range instead of raw min/max
-    // so one outlier session doesn't make the range look absurd
-    const p10 = amounts[Math.floor(amounts.length * 0.10)]
-    const p90 = amounts[Math.floor(amounts.length * 0.90)]
+    // For small samples use actual min/max; for larger use percentiles
+    const p10idx = Math.max(0, Math.floor(amounts.length * 0.10))
+    const p90idx = Math.min(amounts.length - 1, Math.floor(amounts.length * 0.90))
+    const p10 = amounts[p10idx] || amounts[0]
+    const p90 = amounts[p90idx] || amounts[amounts.length - 1]
     const fixedRange = clampPrediction(p10, p90)
+    // Don't show tonightStream if both min and max are 0
+    if (fixedRange.min === 0 && fixedRange.max === 0) return predictions
     predictions.tonightStream = {
       expected: parseFloat(avg.toFixed(2)),
       range: { min: fixedRange.min, max: fixedRange.max },
@@ -821,7 +824,7 @@ export function generateInsights(tips, sessions, bestDay, worstDay, bestHour) {
   // Sharks are included in revenue share but the headline should reflect your real top spenders
   const whales = identifyWhales(tips)
   const trueWhales = whales.filter(w => w.tier === 'Whale')
-  const topWhales  = trueWhales.length > 0 ? trueWhales : whales.slice(0, Math.max(1, Math.ceil(whales.length * 0.05)))
+  const topWhales = (trueWhales.length > 0 ? trueWhales : whales.filter(w => w.tier === 'Shark')).slice(0, 5)
   const wE = topWhales.reduce((s, w) => s + w.totalUSD, 0)
   const tE = tips.reduce((s, t) => s + t.usd, 0)
   if (wE > 0 && tE > 0 && topWhales.length > 0) {
