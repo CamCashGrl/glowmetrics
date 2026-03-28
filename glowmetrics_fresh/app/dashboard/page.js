@@ -43,114 +43,258 @@ const formatHour = (hour) => {
 // Formula: HOOK + TARGET + ACTION + REWARD + URGENCY
 // ============================================================
 
+// ── TOY CATEGORY LIBRARY ────────────────────────────────────────────────────
+// Each category has its own language — sensation, power, intensity, etc.
+// Extend by adding new keys. Matched by detecting keywords in toy name.
+const TOY_CATEGORIES = {
+  lush: {
+    sensation: ["I feel every tip inside me", "every vibration takes me higher", "I feel it deep with every tip"],
+    control:   ["you control what I feel", "tip to decide my intensity", "you're inside my head right now"],
+    buildup:   ["so close… keep going", "don't stop — I'm almost there", "one more tip and I lose it"],
+  },
+  domi: {
+    sensation: ["the power hits different with every tip", "Domi doesn't hold back", "full intensity on command"],
+    control:   ["you set the power level", "tip to push it harder", "Domi obeys you"],
+    buildup:   ["turning it up with every tip", "building to max — don't stop", "almost at full power"],
+  },
+  edge: {
+    sensation: ["edging myself with every tip", "tip to push me further", "so close to the edge"],
+    control:   ["you decide when I fall", "tip to keep me on the edge", "you control the limit"],
+    buildup:   ["closer… and closer…", "don't let me fall yet", "holding on as long as you tip"],
+  },
+  hush: {
+    sensation: ["wearing it in public… tip to activate", "you have no idea what this does to me", "shh… I feel every one"],
+    control:   ["secret control in your hands", "tip and watch my reaction", "nobody knows but you"],
+    buildup:   ["getting harder to stay quiet", "one more tip and I can't hide it", "you're making this impossible"],
+  },
+  // Generic fallback for any other toy
+  default: {
+    sensation: ["I feel every tip", "tip = instant reaction", "every one hits harder"],
+    control:   ["you decide what happens", "you run this room", "tip to take control"],
+    buildup:   ["getting closer with every tip", "almost there — keep going", "don't stop now"],
+  }
+}
+
+function getToyCategory(toyName) {
+  if (!toyName) return null
+  const t = toyName.toLowerCase()
+  if (t.includes("lush"))  return TOY_CATEGORIES.lush
+  if (t.includes("domi"))  return TOY_CATEGORIES.domi
+  if (t.includes("edge"))  return TOY_CATEGORIES.edge
+  if (t.includes("hush"))  return TOY_CATEGORIES.hush
+  return TOY_CATEGORIES.default
+}
+
+// ── MOOD LIBRARY ─────────────────────────────────────────────────────────────
+// Mood shapes the emotional tone of hooks and closers
+const MOOD_HOOKS = {
+  tease: [
+    "let's see how far you take me",
+    "I'm not giving it up that easy",
+    "you have to earn it tonight",
+    "almost… not yet",
+    "make me want to",
+  ],
+  dominant: [
+    "top tipper owns this room",
+    "you earn what I give you",
+    "prove you deserve it",
+    "this is my show — tip to play",
+    "I decide — you tip",
+  ],
+  submissive: [
+    "I do what you say tonight",
+    "you're in charge — tip to command me",
+    "whatever you want, tip for it",
+    "your wish is my reaction",
+    "tell me what to do",
+  ],
+  hype: [
+    "WE ARE SO CLOSE",
+    "the energy in here is insane right now",
+    "LET'S GOOO — tip to push it",
+    "this room is on fire",
+    "we're making history tonight",
+  ],
+  mystery: [
+    "you won't believe what happens at goal",
+    "something big is coming… tip to find out",
+    "I have a surprise — help me get there",
+    "you're not ready for what's next",
+    "curious? tip to unlock it",
+  ],
+}
+
 function buildOneTitle(ctx) {
   const {
     isPeakNow, peakSoon, bestHourLabel, hoursUntilPeak,
     hasWhales, topWhaleName, whaleCount,
     hasReturners, returningPct,
     lowActivity, todayIsBestDay, todayDay,
-    tokenGoal, action, toy,
+    tokenGoal, action, toy, mood,
     useEmojis, avgSessionUSD,
   } = ctx
 
   const e = (emoji) => useEmojis ? emoji : ""
   const pick = (arr) => arr[Math.floor(Math.random() * arr.length)]
 
-  // ── HOOKS: stop-the-scroll openers ────────────────────────
-  // Toy active → bias toward control language
-  const toyHooks = toy ? [
+  const hasToy  = Boolean(toy && toy.trim())
+  const hasMood = Boolean(mood && mood !== "none")
+  const toyLib  = getToyCategory(toy)
+
+  // ── HOOKS ─────────────────────────────────────────────────────────────────
+  // Priority: mood hooks > toy hooks > data hooks > evergreen
+  const moodHooks   = hasMood ? (MOOD_HOOKS[mood] || []) : []
+  const toyHooks    = hasToy ? [
     `tip to control my ${toy} ${e("🎮")}`,
     `you control my ${toy} ${e("⚡")}`,
-    `every tip I feel in my ${toy}`,
-    `activate my ${toy} right now ${e("😈")}`,
-    `my ${toy} is on — you're in charge ${e("⚡")}`,
+    `my ${toy} is on — you decide ${e("😈")}`,
+    `${toy} is live and waiting`,
+    toyLib ? pick(toyLib.control) : `tip to run my ${toy}`,
   ] : []
 
-  // Data-driven hooks
   const dataHooks = [
     ...(isPeakNow      ? [`live right now ${e("🔴")}`, `going live this second`] : []),
     ...(peakSoon       ? [`going live in ${hoursUntilPeak}h — don't miss it`] : []),
     ...(lowActivity    ? [`miss me? ${e("👀")}`, `been a minute ${e("💭")}`] : []),
-    ...(todayIsBestDay ? [`${todayDay}s are my best night ${e("🔥")}`] : []),
-    ...(hasWhales      ? [`VIPs run the show tonight ${e("💎")}`, `top tippers decide everything`] : []),
+    ...(todayIsBestDay ? [`${todayDay}s hit different ${e("🔥")}`] : []),
+    ...(hasWhales      ? [`VIPs run the show tonight ${e("💎")}`] : []),
   ]
 
-  // Always-on variety hooks — 6 distinct psychological angles
   const evergreen = [
-    // Control
     `you decide what I do ${e("👑")}`,
-    `top tipper controls the room`,
-    `you run the show tonight ${e("🎬")}`,
-    // Tease / mystery
+    `top tipper controls everything`,
     `feeling dangerous tonight ${e("😈")}`,
-    `you won't believe what happens at goal ${e("👀")}`,
     `not holding back tonight ${e("🔥")}`,
-    // Playful
     `bad girl energy ${e("😈")}`,
-    `naughty mode activated ${e("💋")}`,
-    // Challenge
-    `make me ${e("😏")}`,
-    `prove you want it ${e("👀")}`,
-    // Scarcity
-    `this won't happen again ${e("⏳")}`,
     `catching me in a mood ${e("🌙")}`,
+    `prove you want it ${e("👀")}`,
+    `make me ${e("😏")}`,
   ]
 
-  const hooks = [...toyHooks, ...dataHooks, ...evergreen]
+  // Weight: if mood+toy both set, 50% mood, 50% toy; otherwise bias toward what's set
+  let hookPool
+  if (moodHooks.length && toyHooks.length) {
+    hookPool = Math.random() < 0.5 ? moodHooks : toyHooks
+  } else if (moodHooks.length) {
+    hookPool = [...moodHooks, ...dataHooks, ...evergreen.slice(0, 4)]
+  } else if (toyHooks.length) {
+    hookPool = [...toyHooks, ...dataHooks.slice(0, 2), ...evergreen.slice(0, 3)]
+  } else {
+    hookPool = [...dataHooks, ...evergreen]
+  }
 
-  // ── GOAL TEXT: clear CTA ───────────────────────────────────
+  // ── GOAL TEXT ─────────────────────────────────────────────────────────────
   let goalText
-  if (tokenGoal && action) {
+  if (hasToy && tokenGoal && action) {
+    goalText = pick([
+      `hit ${tokenGoal} → ${action} + ${toy} reacts`,
+      `${tokenGoal} tokens = ${action} & full ${toy} control`,
+      `tip to reach ${tokenGoal} — ${toy} goes wild & you get ${action}`,
+    ])
+  } else if (hasToy && tokenGoal) {
+    goalText = pick([
+      `hit ${tokenGoal} → my ${toy} reacts`,
+      `${tokenGoal} = full ${toy} control`,
+      `tip to ${tokenGoal} — ${toy} goes crazy`,
+      `get me to ${tokenGoal} and feel what happens`,
+    ])
+  } else if (hasToy && action) {
+    goalText = pick([
+      `tip → ${action} + ${toy} control`,
+      `tip = ${action} & ${toy} reaction`,
+      `unlock ${action} — ${toy} goes with it`,
+    ])
+  } else if (hasToy) {
+    // Toy only — use toy library sensations
+    goalText = toyLib
+      ? pick([...toyLib.sensation, ...toyLib.control])
+      : pick([`tip to control my ${toy}`, `tip = ${toy} reacts`, `tip to push my ${toy}`])
+  } else if (tokenGoal && action) {
     goalText = pick([
       `hit ${tokenGoal} → ${action}`,
       `${tokenGoal} tokens = ${action}`,
-      `tip to reach ${tokenGoal} & unlock ${action}`,
+      `tip to reach ${tokenGoal} & get ${action}`,
       `${tokenGoal} gets you ${action}`,
     ])
   } else if (tokenGoal) {
     goalText = pick([
-      `hit ${tokenGoal} tokens`,
-      `tip to reach ${tokenGoal}`,
       `help me hit ${tokenGoal}`,
-      `${tokenGoal} is the goal — tip now`,
+      `tip to reach ${tokenGoal}`,
+      `${tokenGoal} is the goal — push me there`,
+      `so close to ${tokenGoal} — don't stop`,
     ])
   } else if (action) {
     goalText = pick([
       `tip → ${action}`,
       `tip = ${action}`,
       `unlock ${action}`,
-      `earn ${action}`,
+      `tip and I ${action}`,
+    ])
+  } else if (hasMood) {
+    // Mood only — use buildup or mystery phrasing
+    goalText = pick([
+      "tip to decide what happens next",
+      "tip to take this further",
+      "tip = reaction",
+      "tip and see what I do",
     ])
   } else {
     goalText = pick([
       "tip to take control",
       "tip = instant reaction",
-      "tip to run this room",
       "tip to decide what happens",
-      "tip to make me",
+      "tip to run this room",
     ])
   }
 
-  // ── REWARDS: payoff — NO generic or cringe phrases ─────────
-  const rewards = [
-    ...(action ? [`${action} ${e("😏")}`, `you pick — I do ${action}`, `${action} for you`] : []),
-    ...(toy    ? [`I lose control ${e("😈")}`, `full toy control ${e("⚡")}`, `I feel every one`] : []),
-    // Specific, varied, no "I'll do anything"
-    `full access ${e("🔓")}`,
-    `private show ${e("💎")}`,
-    `special reaction ${e("🔥")}`,
-    `you choose everything ${e("👑")}`,
-    `I react to every tip ${e("⚡")}`,
-    `exclusive content ${e("🔒")}`,
-    `I lose control ${e("😈")}`,
-    `your wish = my command`,
-    `big surprise ${e("🎁")}`,
-  ]
+  // ── REWARDS ───────────────────────────────────────────────────────────────
+  // Toy → sensation rewards; Mood → mood-matched rewards; fallback → general
+  let rewards
+  if (hasToy && toyLib) {
+    rewards = [
+      ...toyLib.sensation,
+      ...toyLib.buildup,
+      `${toy} goes full power ${e("⚡")}`,
+      `full ${toy} control ${e("👑")}`,
+      ...(action ? [`${action} + ${toy} reaction`] : []),
+    ]
+  } else if (hasMood && mood === "tease") {
+    rewards = [
+      `and maybe I give you what you want ${e("😏")}`,
+      `but you have to earn it first`,
+      `if you're lucky tonight ${e("👀")}`,
+      `I might just let go ${e("💋")}`,
+    ]
+  } else if (hasMood && mood === "dominant") {
+    rewards = [
+      `you earn your reward ${e("👑")}`,
+      `top earner gets access ${e("🔒")}`,
+      `I reward the ones who prove it`,
+      `exclusive access for top tipper`,
+    ]
+  } else if (hasMood && mood === "hype") {
+    rewards = [
+      `something HUGE happens at goal ${e("🔥")}`,
+      `biggest reaction of the night ${e("⚡")}`,
+      `I go all out ${e("🔥")}`,
+    ]
+  } else {
+    rewards = [
+      ...(action ? [`${action} ${e("😏")}`, `you get ${action}`] : []),
+      `special reaction ${e("🔥")}`,
+      `private show ${e("💎")}`,
+      `you choose everything ${e("👑")}`,
+      `I react to every tip ${e("⚡")}`,
+      `exclusive content ${e("🔒")}`,
+      `big surprise ${e("🎁")}`,
+    ]
+  }
 
-  // ── URGENCY: FOMO, time pressure ─────────────────────────
+  // ── URGENCY ───────────────────────────────────────────────────────────────
   const urgencies = [
-    ...(isPeakNow ? ["live now", "right now only", "happening now"] : []),
-    ...(peakSoon  ? [`${hoursUntilPeak}h left`, "starting very soon"] : []),
+    ...(isPeakNow ? ["live now", "happening right now"] : []),
+    ...(peakSoon  ? [`${hoursUntilPeak}h left`, "starting soon"] : []),
     "tonight only",
     "this hour only",
     "now or never",
@@ -161,50 +305,58 @@ function buildOneTitle(ctx) {
     "live now",
   ]
 
-  const hook    = pick(hooks)
+  const hook    = pick(hookPool)
   const reward  = pick(rewards)
   const urgency = pick(urgencies)
 
-  // ── 7 DISTINCT STRUCTURE TYPES — each a different pattern ──
-  // Prevents repetitive sentence structure on every refresh
-  const structureType = Math.floor(Math.random() * 7)
+  // ── 9 DISTINCT STRUCTURES — varied rhythm, length, tone ──────────────────
+  // Includes short punchy, mid-length emotional, and longer descriptive forms
+  const n = Math.floor(Math.random() * 9)
   let title
 
-  if (structureType === 0) {
-    // Direct control: hook + goal → reward
+  if (n === 0) {
+    // Classic formula — mid length
     title = `${hook} ${e("💦")} ${goalText} → ${reward} (${urgency})`
-  } else if (structureType === 1) {
-    // Tease / reward-first: reward revealed, then CTA
+  } else if (n === 1) {
+    // Reward-first — payoff leads
     title = `${reward} ${e("🔥")} — ${goalText} • ${urgency}`
-  } else if (structureType === 2) {
-    // Goal = reward, short and punchy
+  } else if (n === 2) {
+    // Short punchy — goal = reward only
     title = `${goalText} = ${reward} ${e("🔥")} • ${urgency}`
-  } else if (structureType === 3) {
-    // Mystery / curiosity gap
-    title = `${hook} ${e("👀")} → ${goalText} (${urgency})`
-  } else if (structureType === 4) {
-    // Urgency forward — FOMO first
-    title = `${urgency.toUpperCase()} ${e("⚡")} ${hook} — ${goalText} = ${reward}`
-  } else if (structureType === 5) {
-    // Power dynamic: who's in charge
+  } else if (n === 3) {
+    // Mystery — hook leads with curiosity gap
+    title = `${hook}… ${goalText} (${urgency}) ${e("👀")}`
+  } else if (n === 4) {
+    // FOMO urgency first — time pressure leads
+    title = `${urgency.toUpperCase()} ${e("⚡")} ${hook} — ${goalText}`
+  } else if (n === 5) {
+    // Power dynamic — three-beat structure
     title = `${hook} • ${goalText} • ${reward} (${urgency})`
-  } else {
-    // Clean CTA: goal → reward, minimal noise
+  } else if (n === 6) {
+    // Clean CTA — minimal noise
     title = `${goalText} ${e("→")} ${reward} ${e("💋")} ${urgency}`
+  } else if (n === 7) {
+    // Emotional / tease — conversational, no formula markers
+    title = `${hook}… ${reward} ${e("😈")} (${urgency})`
+  } else {
+    // Buildup — toyLib.buildup or mood closer if available
+    const closer = hasToy && toyLib ? pick(toyLib.buildup) : (hasMood ? pick(MOOD_HOOKS[mood] || [reward]) : reward)
+    title = `${hook} ${e("💦")} ${goalText} — ${closer} (${urgency})`
   }
 
   // Sanitize
   title = title.replace(/\s{2,}/g, " ").replace(/→\s*→/g, "→").trim()
   if (title.length > 100) title = title.slice(0, 97) + "..."
 
-  // ── DRIVERS — what shaped this title ─────────────────────
+  // ── DRIVERS ───────────────────────────────────────────────────────────────
   const drivers = []
   if (isPeakNow || peakSoon) drivers.push("peak hour timing")
-  if (hasWhales)             drivers.push(`${whaleCount} high-value fans`)
+  if (hasWhales)             drivers.push(`${whaleCount} VIP fans`)
   if (todayIsBestDay)        drivers.push(`${todayDay} is your best day`)
   if (lowActivity)           drivers.push("low recent activity")
   if (tokenGoal)             drivers.push(`${tokenGoal} token goal`)
-  if (toy)                   drivers.push(`${toy} toy active`)
+  if (hasToy)                drivers.push(`${toy} (${getToyCategory(toy) === TOY_CATEGORIES.lush ? "wearable" : toy.toLowerCase().includes("domi") ? "wand" : "toy"})`)
+  if (hasMood && mood !== "none") drivers.push(`${mood} mood`)
   if (action)                drivers.push(`reward: ${action}`)
   if (hasReturners)          drivers.push(`${returningPct}% returning fans`)
   if (drivers.length === 0)  drivers.push("general engagement")
@@ -217,9 +369,10 @@ function TitleGenerator({ C, glassCard, analytics, tips, sessions, whales }) {
   const [history, setHistory] = useState([])      // last 5 titles
   const [copiedCurrent, setCopiedCurrent] = useState(false)
   const [copiedIdx, setCopiedIdx] = useState(null)
-  const [tokenGoal, setTokenGoal] = useState(500)
+  const [tokenGoal, setTokenGoal] = useState(0)
   const [action, setAction] = useState("")
   const [toy, setToy] = useState("")
+  const [mood, setMood] = useState("none")
   const [useEmojis, setUseEmojis] = useState(true)
 
   const buildCtx = () => {
@@ -277,7 +430,7 @@ function TitleGenerator({ C, glassCard, analytics, tips, sessions, whales }) {
       hasWhales, topWhaleName, whaleCount,
       hasReturners, returningPct,
       lowActivity, todayIsBestDay, todayDay,
-      tokenGoal, action, toy, useEmojis, avgSessionUSD,
+      tokenGoal, action, toy, mood, useEmojis, avgSessionUSD,
     }
   }
 
@@ -312,6 +465,7 @@ function TitleGenerator({ C, glassCard, analytics, tips, sessions, whales }) {
   if (ctx.hasReturners) badges.push({ label: `🔁 ${ctx.returningPct}% return rate`, color: C.cyan })
   if (ctx.lowActivity)  badges.push({ label: `💤 Low recent activity`, color: C.orange })
   if (ctx.tokenGoal)    badges.push({ label: `🎯 Goal: ${ctx.tokenGoal} tokens`, color: C.pink })
+  if (ctx.mood && ctx.mood !== "none") badges.push({ label: `🎭 Mood: ${ctx.mood}`, color: C.indigo })
 
   const inp = { background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", padding: "10px 14px", borderRadius: 10, color: C.white, outline: "none", width: "100%", fontSize: 13 }
 
@@ -336,18 +490,38 @@ function TitleGenerator({ C, glassCard, analytics, tips, sessions, whales }) {
 
       {/* INPUTS */}
       <div style={{ ...glassCard, borderRadius: 14, padding: 18, marginBottom: 20 }}>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 14 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
           <div>
             <div style={{ fontSize: 10, color: C.muted, marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.5 }}>Token Goal</div>
-            <input type="number" value={tokenGoal} onChange={e => setTokenGoal(Number(e.target.value))} style={inp} placeholder="e.g. 500" />
+            <input type="number" value={tokenGoal || ""} onChange={e => setTokenGoal(Number(e.target.value) || 0)} style={inp} placeholder="e.g. 500 (leave blank to skip)" />
           </div>
           <div>
             <div style={{ fontSize: 10, color: C.muted, marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.5 }}>Reward / Action</div>
-            <input value={action} onChange={e => setAction(e.target.value)} style={inp} placeholder="e.g. flash, dance" />
+            <input value={action} onChange={e => setAction(e.target.value)} style={inp} placeholder="e.g. flash, dance, strip" />
+          </div>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
+          <div>
+            <div style={{ fontSize: 10, color: C.muted, marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.5 }}>Toy</div>
+            <select value={toy} onChange={e => setToy(e.target.value)} style={{ ...inp, cursor: "pointer" }}>
+              <option value="">No toy</option>
+              <option value="Lush">Lovense Lush (wearable)</option>
+              <option value="Domi">Lovense Domi (wand)</option>
+              <option value="Edge">Lovense Edge (prostate)</option>
+              <option value="Hush">Lovense Hush (plug)</option>
+              <option value="interactive toy">Interactive toy (generic)</option>
+            </select>
           </div>
           <div>
-            <div style={{ fontSize: 10, color: C.muted, marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.5 }}>Toy (optional)</div>
-            <input value={toy} onChange={e => setToy(e.target.value)} style={inp} placeholder="e.g. Lush, Domi" />
+            <div style={{ fontSize: 10, color: C.muted, marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.5 }}>Vibe / Mood</div>
+            <select value={mood} onChange={e => setMood(e.target.value)} style={{ ...inp, cursor: "pointer" }}>
+              <option value="none">No mood (auto)</option>
+              <option value="tease">Tease / buildup</option>
+              <option value="dominant">Dominant / in charge</option>
+              <option value="submissive">Submissive / playful</option>
+              <option value="hype">High energy / hype</option>
+              <option value="mystery">Mystery / curiosity</option>
+            </select>
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -463,6 +637,7 @@ export default function Dashboard() {
   const [messageCopied, setMessageCopied] = useState(false)
   const [showUpgradeModal, setShowUpgradeModal] = useState(false)
   const [showBetaPrompt, setShowBetaPrompt] = useState(false)
+  const [betaCount, setBetaCount] = useState(null)
   const [earlyAccessEmail, setEarlyAccessEmail] = useState('')
   const [earlyAccessSubmitted, setEarlyAccessSubmitted] = useState(false)
   const [earlyAccessSubmitting, setEarlyAccessSubmitting] = useState(false)
@@ -492,6 +667,9 @@ export default function Dashboard() {
       if (!user) { router.replace("/login"); return }
       setUser(user)
       loadData(user.id)
+      // Fetch real beta user count for the progress bar
+      supabase.from('beta_users').select('id', { count: 'exact', head: true })
+        .then(({ count }) => { if (count !== null) setBetaCount(count) })
       try {
         supabase.from('beta_users').upsert({
           user_id: user.id,
@@ -1070,9 +1248,9 @@ export default function Dashboard() {
             <div style={{ fontSize: 12, fontWeight: 700, color: C.white, marginBottom: 2 }}>Free for first 100 users</div>
             <div style={{ fontSize: 10, color: C.muted, marginBottom: 8 }}>Spots filling up fast</div>
             <div style={{ height: 4, borderRadius: 4, background: "rgba(255,255,255,0.1)", overflow: "hidden" }}>
-              <div style={{ height: "100%", width: "63%", borderRadius: 4, background: "linear-gradient(90deg, #22D3EE, #EC4899)" }} />
+              <div style={{ height: "100%", width: `${Math.min((betaCount ?? 63) / 100 * 100, 100)}%`, borderRadius: 4, background: "linear-gradient(90deg, #22D3EE, #EC4899)", transition: "width 0.6s ease" }} />
             </div>
-            <div style={{ fontSize: 10, color: C.muted, marginTop: 4 }}>63 / 100 spots taken</div>
+            <div style={{ fontSize: 10, color: C.muted, marginTop: 4 }}>{betaCount ?? "..."} / 100 spots taken</div>
           </div>
         </div>
       </div>
@@ -1091,9 +1269,9 @@ export default function Dashboard() {
                 </div>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-                <div style={{ fontSize: 12, color: C.gold, fontWeight: 600 }}>63/100 spots taken</div>
+                <div style={{ fontSize: 12, color: C.gold, fontWeight: 600 }}>{betaCount ?? "..."}/100 spots taken</div>
                 <div style={{ width: 80, height: 6, borderRadius: 4, background: "rgba(255,255,255,0.1)", overflow: "hidden" }}>
-                  <div style={{ height: "100%", width: "63%", borderRadius: 4, background: "linear-gradient(90deg, #F59E0B, #FB923C)" }} />
+                  <div style={{ height: "100%", width: `${Math.min((betaCount ?? 63) / 100 * 100, 100)}%`, borderRadius: 4, background: "linear-gradient(90deg, #F59E0B, #FB923C)", transition: "width 0.6s ease" }} />
                 </div>
               </div>
             </div>
