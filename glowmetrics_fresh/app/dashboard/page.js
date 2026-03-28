@@ -54,98 +54,160 @@ function buildOneTitle(ctx) {
   } = ctx
 
   const e = (emoji) => useEmojis ? emoji : ""
-
-  // ── POOLS for each formula component ──────────────────────
-
-  const hooks = []
-  if (isPeakNow)        hooks.push("going live NOW", `it's my best hour ${e("⏰")}`, `live right now ${e("🔴")}`)
-  if (peakSoon)         hooks.push(`going hard for ${hoursUntilPeak}h then I'm done`, `starting soon ${e("⏳")}`, "catch me before I'm gone")
-  if (lowActivity)      hooks.push(`miss me? ${e("👀")}`, "been a minute", `I've been thinking about you ${e("💭")}`)
-  if (todayIsBestDay)   hooks.push(`${todayDay}s are my best ${e("🔥")}`, "tonight hits different", `peak night ${e("🌙")}`)
-  hooks.push(
-    `bad girl tonight ${e("😈")}`, `you won't behave… ${e("😏")}`,
-    `naughty energy rn ${e("💋")}`, `feeling extra tonight ${e("🔥")}`,
-    `the vibe is different ${e("👀")}`, `not holding back tonight ${e("😈")}`,
-    `late night mode ${e("🌙")}`, `let's get into it ${e("💕")}`,
-  )
-
-  const targets = []
-  if (hasWhales)   targets.push("my top tippers", "VIPs", `my ${e("💎")} fans`, "high rollers", "my favorites")
-  if (hasReturners) targets.push("my regulars", "my favorites", "the ones who know")
-  targets.push("good boys only", "the right ones", "you", "whoever wants in")
-
-  const actions = []
-  if (toy)        actions.push(`tip to control my ${toy}`, `control my ${toy} ${e("🎮")}`, `activate my ${toy}`)
-  if (tokenGoal)  actions.push(`help me hit ${tokenGoal}`, `tip to reach ${tokenGoal}`, `get me to ${tokenGoal}`)
-  if (action)     actions.push(`tip → ${action}`, `earn ${action}`, `unlock ${action}`)
-  actions.push(
-    "tip to control me", "decide what happens", "tip to run the show",
-    "join now", "tip fast", "make it happen"
-  )
-
-  const rewards = []
-  if (action)     rewards.push(`${action} ${e("😏")}`, `you pick what I do ${e("💋")}`, action)
-  if (toy)        rewards.push(`I feel every tip ${e("⚡")}`, "I react to everything")
-  if (tokenGoal)  rewards.push(`I'll make it worth it ${e("😏")}`, "special surprise at goal", `something special ${e("💕")}`)
-  rewards.push(
-    `private show ${e("💎")}`, `exclusive content ${e("🔒")}`,
-    `I'll do anything ${e("😏")}`, `special surprise ${e("🎁")}`,
-    `you choose everything ${e("👑")}`, `I react to every tip ${e("⚡")}`,
-    `full attention ${e("💕")}`, `I'm all yours ${e("💋")}`,
-  )
-
-  const urgencies = []
-  if (isPeakNow)  urgencies.push("starting now", "live now", "right now only")
-  if (peakSoon)   urgencies.push(`${hoursUntilPeak}h left`, "for a limited time", "before I slow down")
-  urgencies.push(
-    "tonight only", "before I log off", "limited time",
-    "now or never", "don't wait", "this hour only",
-    "while I'm in this mood", "for the next hour",
-  )
-
-  // ── Pick components, weighted toward data context ──────────
   const pick = (arr) => arr[Math.floor(Math.random() * arr.length)]
 
+  // ── HOOKS: stop-the-scroll openers ────────────────────────
+  // Toy active → bias toward control language
+  const toyHooks = toy ? [
+    `tip to control my ${toy} ${e("🎮")}`,
+    `you control my ${toy} ${e("⚡")}`,
+    `every tip I feel in my ${toy}`,
+    `activate my ${toy} right now ${e("😈")}`,
+    `my ${toy} is on — you're in charge ${e("⚡")}`,
+  ] : []
+
+  // Data-driven hooks
+  const dataHooks = [
+    ...(isPeakNow      ? [`live right now ${e("🔴")}`, `going live this second`] : []),
+    ...(peakSoon       ? [`going live in ${hoursUntilPeak}h — don't miss it`] : []),
+    ...(lowActivity    ? [`miss me? ${e("👀")}`, `been a minute ${e("💭")}`] : []),
+    ...(todayIsBestDay ? [`${todayDay}s are my best night ${e("🔥")}`] : []),
+    ...(hasWhales      ? [`VIPs run the show tonight ${e("💎")}`, `top tippers decide everything`] : []),
+  ]
+
+  // Always-on variety hooks — 6 distinct psychological angles
+  const evergreen = [
+    // Control
+    `you decide what I do ${e("👑")}`,
+    `top tipper controls the room`,
+    `you run the show tonight ${e("🎬")}`,
+    // Tease / mystery
+    `feeling dangerous tonight ${e("😈")}`,
+    `you won't believe what happens at goal ${e("👀")}`,
+    `not holding back tonight ${e("🔥")}`,
+    // Playful
+    `bad girl energy ${e("😈")}`,
+    `naughty mode activated ${e("💋")}`,
+    // Challenge
+    `make me ${e("😏")}`,
+    `prove you want it ${e("👀")}`,
+    // Scarcity
+    `this won't happen again ${e("⏳")}`,
+    `catching me in a mood ${e("🌙")}`,
+  ]
+
+  const hooks = [...toyHooks, ...dataHooks, ...evergreen]
+
+  // ── GOAL TEXT: clear CTA ───────────────────────────────────
+  let goalText
+  if (tokenGoal && action) {
+    goalText = pick([
+      `hit ${tokenGoal} → ${action}`,
+      `${tokenGoal} tokens = ${action}`,
+      `tip to reach ${tokenGoal} & unlock ${action}`,
+      `${tokenGoal} gets you ${action}`,
+    ])
+  } else if (tokenGoal) {
+    goalText = pick([
+      `hit ${tokenGoal} tokens`,
+      `tip to reach ${tokenGoal}`,
+      `help me hit ${tokenGoal}`,
+      `${tokenGoal} is the goal — tip now`,
+    ])
+  } else if (action) {
+    goalText = pick([
+      `tip → ${action}`,
+      `tip = ${action}`,
+      `unlock ${action}`,
+      `earn ${action}`,
+    ])
+  } else {
+    goalText = pick([
+      "tip to take control",
+      "tip = instant reaction",
+      "tip to run this room",
+      "tip to decide what happens",
+      "tip to make me",
+    ])
+  }
+
+  // ── REWARDS: payoff — NO generic or cringe phrases ─────────
+  const rewards = [
+    ...(action ? [`${action} ${e("😏")}`, `you pick — I do ${action}`, `${action} for you`] : []),
+    ...(toy    ? [`I lose control ${e("😈")}`, `full toy control ${e("⚡")}`, `I feel every one`] : []),
+    // Specific, varied, no "I'll do anything"
+    `full access ${e("🔓")}`,
+    `private show ${e("💎")}`,
+    `special reaction ${e("🔥")}`,
+    `you choose everything ${e("👑")}`,
+    `I react to every tip ${e("⚡")}`,
+    `exclusive content ${e("🔒")}`,
+    `I lose control ${e("😈")}`,
+    `your wish = my command`,
+    `big surprise ${e("🎁")}`,
+  ]
+
+  // ── URGENCY: FOMO, time pressure ─────────────────────────
+  const urgencies = [
+    ...(isPeakNow ? ["live now", "right now only", "happening now"] : []),
+    ...(peakSoon  ? [`${hoursUntilPeak}h left`, "starting very soon"] : []),
+    "tonight only",
+    "this hour only",
+    "now or never",
+    "before I log off",
+    "don't miss it",
+    "limited time",
+    "while I'm in this mood",
+    "live now",
+  ]
+
   const hook    = pick(hooks)
-  const target  = pick(targets)
-  const act     = pick(actions)
   const reward  = pick(rewards)
   const urgency = pick(urgencies)
 
-  // ── Assemble using formula variations ─────────────────────
-  // Mix up the structure so it doesn't feel templated
-  const structures = [
-    // Full formula
-    `${hook} • ${target} ${act} → ${reward} (${urgency})`,
-    // Hook + target + action + reward
-    `${hook} ${target} ${act} ${reward}`,
-    // Hook + action + reward + urgency
-    `${hook} ${act} → ${reward} ${urgency}`,
-    // Target + action + reward + urgency
-    `${target} ${act} • ${reward} • ${urgency}`,
-    // Hook + target + reward
-    `${hook} ${target} get ${reward}`,
-    // Action + reward + urgency (clean/short)
-    `${act} → ${reward} (${urgency})`,
-  ]
+  // ── 7 DISTINCT STRUCTURE TYPES — each a different pattern ──
+  // Prevents repetitive sentence structure on every refresh
+  const structureType = Math.floor(Math.random() * 7)
+  let title
 
-  // Pick a structure, clean it up
-  let title = pick(structures)
+  if (structureType === 0) {
+    // Direct control: hook + goal → reward
+    title = `${hook} ${e("💦")} ${goalText} → ${reward} (${urgency})`
+  } else if (structureType === 1) {
+    // Tease / reward-first: reward revealed, then CTA
+    title = `${reward} ${e("🔥")} — ${goalText} • ${urgency}`
+  } else if (structureType === 2) {
+    // Goal = reward, short and punchy
+    title = `${goalText} = ${reward} ${e("🔥")} • ${urgency}`
+  } else if (structureType === 3) {
+    // Mystery / curiosity gap
+    title = `${hook} ${e("👀")} → ${goalText} (${urgency})`
+  } else if (structureType === 4) {
+    // Urgency forward — FOMO first
+    title = `${urgency.toUpperCase()} ${e("⚡")} ${hook} — ${goalText} = ${reward}`
+  } else if (structureType === 5) {
+    // Power dynamic: who's in charge
+    title = `${hook} • ${goalText} • ${reward} (${urgency})`
+  } else {
+    // Clean CTA: goal → reward, minimal noise
+    title = `${goalText} ${e("→")} ${reward} ${e("💋")} ${urgency}`
+  }
 
-  // Clean: collapse multiple spaces, trim, cap at 100 chars
-  title = title.replace(/\s{2,}/g, " ").trim()
+  // Sanitize
+  title = title.replace(/\s{2,}/g, " ").replace(/→\s*→/g, "→").trim()
   if (title.length > 100) title = title.slice(0, 97) + "..."
 
-  // Determine which formula components drove this title
+  // ── DRIVERS — what shaped this title ─────────────────────
   const drivers = []
-  if (isPeakNow || peakSoon)   drivers.push("peak hour timing")
-  if (hasWhales)               drivers.push(`${whaleCount} high-value fans`)
-  if (todayIsBestDay)          drivers.push(`${todayDay} is your best day`)
-  if (lowActivity)             drivers.push("low recent activity")
-  if (tokenGoal)               drivers.push(`${tokenGoal} token goal`)
-  if (toy)                     drivers.push(`${toy} toy active`)
-  if (hasReturners)            drivers.push(`${returningPct}% returning fans`)
-  if (drivers.length === 0)    drivers.push("general engagement")
+  if (isPeakNow || peakSoon) drivers.push("peak hour timing")
+  if (hasWhales)             drivers.push(`${whaleCount} high-value fans`)
+  if (todayIsBestDay)        drivers.push(`${todayDay} is your best day`)
+  if (lowActivity)           drivers.push("low recent activity")
+  if (tokenGoal)             drivers.push(`${tokenGoal} token goal`)
+  if (toy)                   drivers.push(`${toy} toy active`)
+  if (action)                drivers.push(`reward: ${action}`)
+  if (hasReturners)          drivers.push(`${returningPct}% returning fans`)
+  if (drivers.length === 0)  drivers.push("general engagement")
 
   return { title, drivers }
 }
