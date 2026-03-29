@@ -18,10 +18,22 @@ export default function sitemap() {
     'chaturbate-best-hours',
   ]
 
+  const blogs = [
+    'how-to-increase-cam-earnings',
+    'why-cam-streams-arent-making-money',
+    'best-cam-model-tools',
+  ]
+
   return [
     { url: base,              lastModified: now, changeFrequency: 'weekly',  priority: 1.0 },
     { url: `${base}/landing`, lastModified: now, changeFrequency: 'weekly',  priority: 0.9 },
     { url: `${base}/login`,   lastModified: now, changeFrequency: 'monthly', priority: 0.4 },
+    ...blogs.map(slug => ({
+      url: `${base}/blog/${slug}`,
+      lastModified: now,
+      changeFrequency: 'monthly',
+      priority: 0.85,
+    })),
     ...guides.map(slug => ({
       url: `${base}/guides/${slug}`,
       lastModified: now,
