@@ -9,7 +9,7 @@ export const metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
     default: TITLE,
-    template: '%s | CamCash',
+    template: '%s | CamCash',  // Blog posts just set their title WITHOUT "| CamCash"
   },
   description: DESC,
   keywords: [
