@@ -1,4 +1,4 @@
-// app/sitemap.js — Next.js auto-generates /sitemap.xml from this file
+// app/sitemap.js
 export default function sitemap() {
   const base = 'https://www.camcashgrl.com'
   const now = new Date()
@@ -19,9 +19,15 @@ export default function sitemap() {
   ]
 
   const blogs = [
+    // Existing
     'how-to-increase-cam-earnings',
     'why-cam-streams-arent-making-money',
     'best-cam-model-tools',
+    // Cluster 1 — Cam Model Earnings
+    'cam-model-earnings',
+    'how-much-do-chaturbate-models-make',
+    'how-to-make-more-money-on-chaturbate',
+    'why-cam-income-is-inconsistent',
   ]
 
   return [
