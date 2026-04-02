@@ -18,17 +18,32 @@ const C = {
 export default function LandingPage(){
   const router=useRouter()
   const [scrolled,setScrolled]=useState(false)
+  const [msgIndex,setMsgIndex]=useState(0)
+
+  const messages = [
+    "Hey 😘 I've been thinking about you... I'm going live tonight and I want YOU there ❤️",
+    "Miss you 💕 come see me tonight... I’ve got something special for you 🔥",
+    "It’s been a while… come make tonight worth it 😈"
+  ]
 
   useEffect(()=>{
     const onScroll=()=>setScrolled(window.scrollY>40)
     window.addEventListener("scroll",onScroll)
-    return()=>window.removeEventListener("scroll",onScroll)
+
+    const interval = setInterval(()=>{
+      setMsgIndex((prev)=>(prev+1)%messages.length)
+    },3000)
+
+    return()=>{
+      window.removeEventListener("scroll",onScroll)
+      clearInterval(interval)
+    }
   },[])
 
   const go=(path)=>router.push(path)
 
   return(
-    <div style={{minHeight:"100vh",background:"#05070f",color:C.text,fontFamily:"Inter, sans-serif"}}>
+    <div style={{minHeight:"100vh",background:C.bg,color:C.text,fontFamily:"Inter, sans-serif"}}>
 
       {/* NAV */}
       <nav style={{
@@ -47,11 +62,14 @@ export default function LandingPage(){
       {/* HERO */}
       <section style={{textAlign:"center",padding:"100px 20px 60px"}}>
         <h1 style={{fontSize:48,color:C.white,fontWeight:900}}>
-          Cam Model Analytics That<br/>Actually Makes You More Money
+          You’re Already Making Money —<br/>Now Make More of It
         </h1>
 
         <p style={{maxWidth:600,margin:"20px auto",fontSize:18}}>
-          Upload your CSV and instantly see your top tippers, best stream times, and exactly what to do next.
+          Upload your stream data and instantly see:
+          <br/>• Who spends the most
+          <br/>• When you earn the most
+          <br/>• How to increase your next stream income
         </p>
 
         <button onClick={()=>go("/login")} style={{
@@ -62,15 +80,103 @@ export default function LandingPage(){
           color:"white",
           fontWeight:700
         }}>
-          Start Free
+          Get Free Access
         </button>
+
+        <p style={{marginTop:10,fontSize:13,color:C.muted}}>
+          🔒 Free during early access — limited spots available
+        </p>
+
+        <p style={{marginTop:6,fontSize:13,color:"#ec4899"}}>
+          37 / 100 early access spots taken
+        </p>
       </section>
 
-      {/* DASHBOARD PREVIEW */}
+      {/* PAIN SECTION */}
+      <section style={{maxWidth:900,margin:"40px auto",padding:"0 20px",textAlign:"center"}}>
+        <h2 style={{color:C.white,fontSize:28,fontWeight:800,marginBottom:20}}>
+          You’re Probably Leaving Money On The Table
+        </h2>
+
+        <div style={{color:C.muted,fontSize:16,lineHeight:1.8}}>
+          <div>You don’t know who your biggest spenders are</div>
+          <div>You miss high tippers when they enter</div>
+          <div>You don’t know your most profitable times</div>
+          <div>You’re guessing instead of optimizing</div>
+        </div>
+      </section>
+
+      {/* 🔥 VIRAL MESSAGE GENERATOR */}
+      <section style={{textAlign:"center",padding:"60px 20px"}}>
+        <h2 style={{fontSize:32,fontWeight:800,color:C.white}}>
+          Bring Back Your Biggest Spenders Instantly
+        </h2>
+
+        <p style={{color:C.muted,marginTop:10}}>
+          Turn past tippers into tonight’s income
+        </p>
+
+        <div style={{
+          margin:"40px auto",
+          maxWidth:700,
+          borderRadius:20,
+          padding:20,
+          background:"linear-gradient(135deg,#1e293b,#020617)",
+          border:"1px solid rgba(255,255,255,0.1)",
+          boxShadow:"0 0 40px rgba(236,72,153,0.25)"
+        }}>
+
+          <div style={{textAlign:"left",marginBottom:10,color:"#a855f7",fontWeight:600}}>
+            ❤️ Message Generator
+          </div>
+
+          <div style={{textAlign:"left",fontSize:13,color:C.muted,marginBottom:15}}>
+            user_ULTIMATEWHALE999999 • 842 days since last tip • $12,480 lifetime
+          </div>
+
+          <div style={{
+            background:"rgba(255,255,255,0.05)",
+            padding:20,
+            borderRadius:12,
+            minHeight:80
+          }}>
+            {messages[msgIndex]}
+          </div>
+
+          <div style={{display:"flex",gap:10,marginTop:20}}>
+            <button style={{
+              flex:1,
+              padding:14,
+              borderRadius:10,
+              background:"#0f172a",
+              color:"white"
+            }}>
+              Generate Another
+            </button>
+
+            <button style={{
+              flex:1,
+              padding:14,
+              borderRadius:10,
+              background:"linear-gradient(135deg,#3b82f6,#ec4899)",
+              color:"white",
+              fontWeight:700
+            }}>
+              Copy Message
+            </button>
+          </div>
+        </div>
+
+        <div style={{marginTop:10,color:"#ec4899",fontSize:14}}>
+          🔥 127 creators used this today to bring back high spenders
+        </div>
+      </section>
+
+      {/* DASHBOARD */}
       <section style={{textAlign:"center",padding:"40px 20px"}}>
         <img
           src="/dashboard-preview.png"
-          alt="Cam model analytics dashboard showing earnings, top tippers, and peak hours"
+          alt="analytics dashboard"
           style={{
             width:"100%",
             maxWidth:900,
@@ -79,34 +185,8 @@ export default function LandingPage(){
           }}
         />
         <p style={{marginTop:10,color:C.muted}}>
-          Real insights from your actual earnings data — not estimates
+          See exactly where your money comes from — and how to increase it
         </p>
-      </section>
-
-      {/* FEATURES */}
-      <section style={{maxWidth:1000,margin:"60px auto",padding:"0 20px"}}>
-        <h2 style={{color:C.white,fontSize:32,fontWeight:800,textAlign:"center",marginBottom:40}}>
-          What You Get
-        </h2>
-
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(250px,1fr))",gap:20}}>
-          {[
-            ["🐳 Top Tippers","Know exactly who spends the most"],
-            ["⚡ Best Hours","See when you make the most money"],
-            ["💌 Re-engagement","Message fans before they disappear"],
-            ["📈 Growth Insights","Understand what increases income"],
-          ].map(([title,desc])=>(
-            <div key={title} style={{
-              background:C.card,
-              padding:20,
-              borderRadius:16,
-              border:"1px solid rgba(255,255,255,0.05)"
-            }}>
-              <div style={{fontWeight:700,color:C.white}}>{title}</div>
-              <div style={{fontSize:14,color:C.muted,marginTop:6}}>{desc}</div>
-            </div>
-          ))}
-        </div>
       </section>
 
       {/* CTA */}
@@ -123,50 +203,19 @@ export default function LandingPage(){
           color:"white",
           fontWeight:700
         }}>
-          Upload Your CSV
+          See My Earnings Insights
         </button>
       </section>
 
-      {/* 🔥 SEO FOOTER (VERY IMPORTANT) */}
+      {/* FOOTER */}
       <footer style={{
         borderTop:"1px solid rgba(255,255,255,0.08)",
         padding:"40px 20px",
         maxWidth:1100,
         margin:"0 auto"
       }}>
-
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:20}}>
-
-          {/* BRAND */}
-          <div>
-            <div style={{fontWeight:800,color:C.white,marginBottom:10}}>CamCash</div>
-            <p style={{fontSize:13,color:C.muted}}>
-              Cam model analytics tool for tracking earnings, fans, and growth.
-            </p>
-          </div>
-
-          {/* SEO LINKS */}
-          <div>
-            <div style={{color:C.white,fontWeight:600,marginBottom:10}}>Guides</div>
-            <a href="/guides/best-time-guide-chaturbate">Best time to stream (Chaturbate)</a><br/>
-            <a href="/guides/more-tips-guide-chaturbate">How to get more tips</a><br/>
-            <a href="/guides/top-tippers-guide-camsoda">Top tippers strategy</a><br/>
-            <a href="/guides/increase-income-guide-myfreecams">Increase cam income</a>
-          </div>
-
-          {/* KEYWORDS */}
-          <div>
-            <div style={{color:C.white,fontWeight:600,marginBottom:10}}>Platform Tools</div>
-            <a href="/guides/best-time-guide-chaturbate">Chaturbate analytics</a><br/>
-            <a href="/guides/best-time-guide-camsoda">CamSoda analytics</a><br/>
-            <a href="/guides/best-time-guide-bongacams">BongaCams analytics</a><br/>
-            <a href="/guides/best-time-guide-stripchat">Stripchat analytics</a>
-          </div>
-
-        </div>
-
-        <div style={{marginTop:30,fontSize:12,color:C.muted}}>
-          © 2026 CamCash — Built for cam models who want to grow
+        <div style={{fontSize:12,color:C.muted}}>
+          © 2026 CamCash — Built to help you earn more
         </div>
       </footer>
 
