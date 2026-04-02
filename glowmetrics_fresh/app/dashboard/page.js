@@ -934,15 +934,15 @@ export default function Dashboard() {
     return newTips.filter(t => !existingKeys.has(`${t.dateRaw || t.date_time}_${t.username}_${t.tokens}_${t.platform}`))
   }
 
-  const handleCSV = async (file) => {
+  const handleCSV = async (file, forcePlatform = null) => {
     if (!file || !user) return
     setUploading(true)
     try {
       const text = await file.text()
-      const parsed = parseCSV(text)
+      const parsed = parseCSV(text, forcePlatform)
 
       if (!parsed.length) {
-        showToast("❌ No valid rows found in this file")
+        showToast("❌ No valid rows found — try selecting your platform from the dropdown and re-uploading")
         setUploading(false)
         return
       }
@@ -3289,19 +3289,40 @@ export default function Dashboard() {
           </div>
         )}
 
-        {activeTab === "upload" && (
+        {activeTab === "upload" && (() => {
+          const [uploadPlatform, setUploadPlatform] = React.useState("")
+          return (
           <div style={{ maxWidth: 600, margin: "0 auto" }}>
             <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 8 }}>📥 Import CSV</h1>
             <p style={{ fontSize: 14, color: C.muted, marginBottom: 32 }}>Unlimited uploads during free beta • Auto-removes duplicates</p>
-            <div style={{ ...glassCard, borderRadius: 14, padding: 40, textAlign: "center" }}>
-              <div style={{ fontSize: 48, marginBottom: 16 }}>📁</div>
-              <label style={{ display: "inline-block", padding: "14px 32px", borderRadius: 10, background: "linear-gradient(135deg, #22D3EE, #EC4899)", boxShadow: "0 0 20px rgba(34,211,238,0.4), 0 0 40px rgba(236,72,153,0.3)", color: C.white, fontSize: 15, fontWeight: 600, cursor: "pointer" }}>
-                {uploading ? "Processing..." : "Choose CSV File"}
-                <input type="file" accept=".csv" style={{ display: "none" }} onChange={e => handleCSV(e.target.files[0])} disabled={uploading} />
-              </label>
+            <div style={{ ...glassCard, borderRadius: 14, padding: 32, marginBottom: 16 }}>
+              <div style={{ marginBottom: 20 }}>
+                <label style={{ fontSize: 12, color: C.muted, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8, display: "block" }}>Platform (optional — helps if auto-detect fails)</label>
+                <select value={uploadPlatform} onChange={e => setUploadPlatform(e.target.value)}
+                  style={{ width: "100%", padding: "10px 14px", borderRadius: 9, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: C.white, fontSize: 14, outline: "none" }}>
+                  <option value="">Auto-detect (recommended)</option>
+                  <option value="Chaturbate">Chaturbate</option>
+                  <option value="BongaCams">BongaCams</option>
+                  <option value="MyFreeCams">MyFreeCams</option>
+                  <option value="Stripchat">Stripchat</option>
+                  <option value="CamSoda">CamSoda</option>
+                </select>
+              </div>
+              <div style={{ textAlign: "center" }}>
+                <div style={{ fontSize: 40, marginBottom: 12 }}>📁</div>
+                <label style={{ display: "inline-block", padding: "14px 32px", borderRadius: 10, background: "linear-gradient(135deg, #22D3EE, #EC4899)", boxShadow: "0 0 20px rgba(34,211,238,0.4), 0 0 40px rgba(236,72,153,0.3)", color: C.white, fontSize: 15, fontWeight: 600, cursor: "pointer" }}>
+                  {uploading ? "Processing..." : "Choose CSV File"}
+                  <input type="file" accept=".csv,.txt" style={{ display: "none" }} onChange={e => handleCSV(e.target.files[0], uploadPlatform || null)} disabled={uploading} />
+                </label>
+                <p style={{ fontSize: 12, color: C.muted, marginTop: 12 }}>Supports Chaturbate, BongaCams, MyFreeCams, Stripchat, CamSoda</p>
+              </div>
+            </div>
+            <div style={{ padding: "12px 16px", borderRadius: 10, background: "rgba(34,211,238,0.05)", border: "1px solid rgba(34,211,238,0.15)", fontSize: 12, color: C.muted }}>
+              <strong style={{ color: C.cyan }}>CSV not loading?</strong> Try selecting your platform from the dropdown above, then re-upload. For Chaturbate: export from Stats & Data → Token Stats. For BongaCams: export from Reports.
             </div>
           </div>
-        )}
+          )
+        })()}
 
         {activeTab === "titles" && (
           <div>
