@@ -182,4 +182,10 @@ export default function ChaturbateEarningsPost() {
       </footer>
     </div>
   )
-}
+}<h2>Want the Full Strategy?</h2>
+<p>
+If you want to maximize your earnings, read the full guide:
+<a href="/blog/how-to-make-more-money-on-chaturbate">
+How to Make More Money on Chaturbate
+</a>
+</p>
