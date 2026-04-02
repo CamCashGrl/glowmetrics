@@ -813,6 +813,10 @@ export default function Dashboard() {
   const [messageCopied, setMessageCopied] = useState(false)
   const [showUpgradeModal, setShowUpgradeModal] = useState(false)
   const [showBetaPrompt, setShowBetaPrompt] = useState(false)
+  const [fanSearchOpen, setFanSearchOpen] = useState(false)
+  const [fanSearchQuery, setFanSearchQuery] = useState("")
+  const [shareModalOpen, setShareModalOpen] = useState(false)
+  const [chartDrillDay, setChartDrillDay] = useState(null)
   // ── LIVE MODE STATE ───────────────────────────────────────
   const [liveActive, setLiveActive] = useState(false)
   const [liveStartTime, setLiveStartTime] = useState(null)
@@ -1059,6 +1063,14 @@ export default function Dashboard() {
   const filteredWhales = whales.filter(w => {
     if (whaleFilter !== "ALL" && w.tier !== whaleFilter) return false
     if (platformFilter !== "ALL" && w.platform !== platformFilter) return false
+    if (chartDrillDay) {
+      const fanTips = (w.tips && w.tips.length > 0) ? w.tips : tips.filter(t => t.username?.toLowerCase() === w.username?.toLowerCase())
+      const tippedOnDay = fanTips.some(t => {
+        const dayShort = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][new Date(t.date_time || t.dateRaw).getUTCDay()]
+        return dayShort === chartDrillDay
+      })
+      if (!tippedOnDay) return false
+    }
     return true
   })
 
@@ -1512,6 +1524,13 @@ export default function Dashboard() {
               </div>
             </div>
 
+            {/* SHARE MY STATS */}
+            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 16 }}>
+              <button onClick={() => setShareModalOpen(true)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 10, background: "linear-gradient(135deg, rgba(236,72,153,0.15), rgba(168,85,247,0.15))", border: "1px solid rgba(236,72,153,0.35)", color: C.white, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                📤 Share My Stats
+              </button>
+            </div>
+
             {(() => {
               const recentSessions = sessions.filter(s => new Date(s.startTime) > new Date(Date.now() - 30 * 86400000))
               const prevSessions = sessions.filter(s => { const d = new Date(s.startTime); return d > new Date(Date.now() - 60 * 86400000) && d <= new Date(Date.now() - 30 * 86400000) })
@@ -1665,8 +1684,11 @@ export default function Dashboard() {
                             : intensity < 0.75 ? "rgba(34,211,238,0.60)"
                             : "rgba(34,211,238,0.90)"
                           return (
-                            <div key={d} title={`${plat} ${d}: avg $${val.toFixed(2)}/day`}
-                              style={{ height: 36, borderRadius: 6, background: bg, border: isToday ? "2px solid rgba(34,211,238,0.7)" : "1px solid rgba(255,255,255,0.06)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            <div key={d} title={`${plat} ${d}: avg $${val.toFixed(2)}/day — click to see fans active on ${d}s`}
+                              onClick={() => { setChartDrillDay(d); setActiveTab("whales") }}
+                              style={{ height: 36, borderRadius: 6, background: bg, border: isToday ? "2px solid rgba(34,211,238,0.7)" : "1px solid rgba(255,255,255,0.06)", display: "flex", alignItems: "center", justifyContent: "center", cursor: val > 0 ? "pointer" : "default", transition: "transform 0.1s, opacity 0.1s" }}
+                              onMouseEnter={e => { if (val > 0) e.currentTarget.style.opacity = "0.8" }}
+                              onMouseLeave={e => { e.currentTarget.style.opacity = "1" }}>
                               {val > 0 && <span style={{ fontSize: 9, fontWeight: 700, color: intensity > 0.45 ? "#fff" : C.muted }}>${val >= 100 ? Math.round(val) : val.toFixed(0)}</span>}
                             </div>
                           )
@@ -2228,7 +2250,20 @@ export default function Dashboard() {
 
         {activeTab === "whales" && (
           <div>
-            <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 8 }}>🐳 Top Fans</h1>
+            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 12, marginBottom: 8 }}>
+              <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, margin: 0 }}>🐳 Top Fans</h1>
+              <div style={{ display: "flex", gap: 8 }}>
+                {chartDrillDay && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", borderRadius: 10, background: "rgba(34,211,238,0.1)", border: "1px solid rgba(34,211,238,0.35)", fontSize: 13, color: C.cyan, fontWeight: 600 }}>
+                    📅 {chartDrillDay}s only
+                    <button onClick={() => setChartDrillDay(null)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 14, padding: 0, lineHeight: 1 }}>✕</button>
+                  </div>
+                )}
+                <button onClick={() => setFanSearchOpen(true)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 10, background: "linear-gradient(135deg, rgba(59,130,246,0.15), rgba(236,72,153,0.15))", border: "1px solid rgba(59,130,246,0.35)", color: C.white, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                  🔍 Search Fan
+                </button>
+              </div>
+            </div>
             <p style={{ fontSize: 13, color: C.muted, marginBottom: 24 }}>Your highest-value supporters ranked by total spend</p>
 
             {/* FILTERS */}
@@ -3851,6 +3886,118 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+
+      {/* FAN SEARCH MODAL */}
+      {fanSearchOpen && (() => {
+        const q = fanSearchQuery.toLowerCase().trim()
+        const results = q.length < 1 ? [] : whales.filter(w => w.username?.toLowerCase().includes(q)).slice(0, 8)
+        return (
+          <div onClick={() => { setFanSearchOpen(false); setFanSearchQuery("") }} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 1010, padding: "80px 20px 20px" }}>
+            <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 540, background: "rgba(15,20,32,0.98)", backdropFilter: "blur(24px)", borderRadius: 20, border: "1px solid rgba(255,255,255,0.1)", boxShadow: "0 0 80px rgba(59,130,246,0.2)", overflow: "hidden" }}>
+              <div style={{ height: 3, background: "linear-gradient(90deg, #3b82f6, #a855f7, #ec4899)" }} />
+              <div style={{ padding: 24 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16, background: "rgba(255,255,255,0.05)", borderRadius: 12, border: "1px solid rgba(255,255,255,0.1)", padding: "10px 14px" }}>
+                  <span style={{ fontSize: 16, flexShrink: 0 }}>🔍</span>
+                  <input
+                    autoFocus
+                    value={fanSearchQuery}
+                    onChange={e => setFanSearchQuery(e.target.value)}
+                    placeholder="Search by username..."
+                    style={{ flex: 1, background: "none", border: "none", outline: "none", color: C.white, fontSize: 15, fontFamily: "inherit" }}
+                  />
+                  {fanSearchQuery && (
+                    <button onClick={() => setFanSearchQuery("")} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 16, padding: 0, lineHeight: 1 }}>✕</button>
+                  )}
+                </div>
+
+                {q.length < 1 && (
+                  <p style={{ textAlign: "center", color: C.muted, fontSize: 13, padding: "20px 0" }}>Type a username to search your fans</p>
+                )}
+
+                {q.length >= 1 && results.length === 0 && (
+                  <p style={{ textAlign: "center", color: C.muted, fontSize: 13, padding: "20px 0" }}>No fans found matching "{fanSearchQuery}"</p>
+                )}
+
+                {results.map((w, i) => (
+                  <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px", borderRadius: 12, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", marginBottom: 8 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                      <div style={{ width: 36, height: 36, borderRadius: "50%", background: "linear-gradient(135deg, rgba(59,130,246,0.3), rgba(236,72,153,0.3))", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 700, color: C.white, flexShrink: 0 }}>
+                        {w.username?.[0]?.toUpperCase() || "?"}
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: C.white }}>{w.username}</div>
+                        <div style={{ fontSize: 11, color: C.muted }}>{w.platform} · {w.tipCount} tips · last {new Date(w.lastTipDate).toLocaleDateString()}</div>
+                      </div>
+                    </div>
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{ fontSize: 15, fontWeight: 700, color: C.green }}>${w.totalUSD.toFixed(2)}</div>
+                      <span style={{ padding: "3px 8px", borderRadius: 100, background: `${TIER_COLORS[w.tier]}20`, color: TIER_COLORS[w.tier], fontSize: 10, fontWeight: 600 }}>{w.tier}</span>
+                    </div>
+                  </div>
+                ))}
+
+                <div style={{ marginTop: 16, textAlign: "center" }}>
+                  <button onClick={() => { setFanSearchOpen(false); setFanSearchQuery("") }} style={{ padding: "8px 20px", borderRadius: 10, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: C.muted, fontSize: 13, cursor: "pointer" }}>
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* SHARE MY STATS MODAL */}
+      {shareModalOpen && (() => {
+        const topFan = whales[0]
+        const bestDayLabel = analyticsbestDay?.day || null
+        const platforms = [...new Set(tips.map(t => t.platform))].join(" & ")
+        const oneTimerPct = whales.length > 0 ? Math.round((whales.filter(w => w.tipCount === 1).length / whales.length) * 100) : 0
+        const cardLines = [
+          `💰 Total Earned: $${totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+          topFan ? `🏆 Top Fan: ${topFan.username} ($${topFan.totalUSD.toFixed(2)})` : null,
+          bestDayLabel ? `📅 Best Day: ${bestDayLabel}s` : null,
+          `👥 ${whales.length} total fans across ${platforms}`,
+          `🔁 ${oneTimerPct}% one-time tippers — that many to win back!`,
+          `\nAnalytics by CamCash → camcashgrl.com`,
+        ].filter(Boolean).join("\n")
+
+        return (
+          <div onClick={() => setShareModalOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.88)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1010, padding: 20 }}>
+            <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 480, background: "rgba(15,20,32,0.98)", backdropFilter: "blur(24px)", borderRadius: 24, border: "1px solid rgba(255,255,255,0.1)", boxShadow: "0 0 80px rgba(236,72,153,0.2)", overflow: "hidden" }}>
+              <div style={{ height: 4, background: "linear-gradient(90deg, #ec4899, #a855f7, #3b82f6)" }} />
+              <div style={{ padding: 32 }}>
+                <h2 style={{ fontSize: 22, fontWeight: 800, color: C.white, marginBottom: 6 }}>📤 Share My Stats</h2>
+                <p style={{ fontSize: 13, color: C.muted, marginBottom: 24 }}>Copy your earnings snapshot to flex on Twitter or in cam communities</p>
+
+                {/* Stats card preview */}
+                <div style={{ background: "linear-gradient(135deg, rgba(59,130,246,0.1), rgba(236,72,153,0.1))", borderRadius: 16, border: "1px solid rgba(255,255,255,0.1)", padding: 20, marginBottom: 20, fontFamily: "monospace" }}>
+                  {cardLines.split("\n").map((line, i) => (
+                    <div key={i} style={{ fontSize: 13, color: line.startsWith("Analytics") ? C.cyan : C.white, lineHeight: 1.9, fontWeight: line.startsWith("Analytics") ? 600 : 400 }}>{line}</div>
+                  ))}
+                </div>
+
+                <div style={{ display: "flex", gap: 10 }}>
+                  <button
+                    onClick={() => { navigator.clipboard.writeText(cardLines); setShareModalOpen(false); setToast("Copied to clipboard! 🎉") }}
+                    style={{ flex: 1, padding: "12px", borderRadius: 12, background: "linear-gradient(135deg, #ec4899, #a855f7)", border: "none", color: C.white, fontSize: 14, fontWeight: 700, cursor: "pointer", boxShadow: "0 0 20px rgba(236,72,153,0.3)" }}>
+                    📋 Copy to Clipboard
+                  </button>
+                  <button
+                    onClick={() => { const encoded = encodeURIComponent(cardLines); window.open(`https://twitter.com/intent/tweet?text=${encoded}`, "_blank") }}
+                    style={{ flex: 1, padding: "12px", borderRadius: 12, background: "rgba(29,161,242,0.15)", border: "1px solid rgba(29,161,242,0.4)", color: "#1DA1F2", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+                    𝕏 Post to Twitter
+                  </button>
+                </div>
+
+                <button onClick={() => setShareModalOpen(false)} style={{ width: "100%", marginTop: 12, padding: "10px", borderRadius: 10, background: "transparent", border: "none", color: C.muted, fontSize: 13, cursor: "pointer" }}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {toast && (
         <div style={{ position: "fixed", bottom: 24, left: 272, background: "rgba(15,20,32,0.95)", backdropFilter: "blur(20px)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 12, padding: "14px 20px", color: C.white, fontSize: 14, zIndex: 9999, boxShadow: "0 8px 32px rgba(0,0,0,0.8)" }}>
