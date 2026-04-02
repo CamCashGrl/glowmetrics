@@ -5,49 +5,45 @@ import { useRouter } from "next/navigation"
 export default function LandingPage(){
   const router = useRouter()
 
-  const fullMessages = [
+  const [msgIndex,setMsgIndex] = useState(0)
+  const [copied,setCopied] = useState(false)
+  const [whaleIndex,setWhaleIndex] = useState(0)
+  const [alertIndex,setAlertIndex] = useState(0)
+
+  const messages = [
     "Hey 😘 I’ve been thinking about you... I’m live tonight ❤️",
     "Miss you 💕 come make tonight fun 🔥",
     "It’s been a while… come back 😈"
   ]
 
-  const [displayed,setDisplayed] = useState("")
-  const [msgIndex,setMsgIndex] = useState(0)
-  const [copied,setCopied] = useState(false)
-
   const whales = [
-    { name:"user_SUPREMEVIP888", spent:"$31,920", inactive:"380 days" },
-    { name:"user_HIGHROLLERX", spent:"$22,410", inactive:"210 days" }
+    { name:"user_ULTRAVIP999", spent:"$41,820", inactive:"520 days" },
+    { name:"user_TOPSPENDERX", spent:"$33,140", inactive:"300 days" }
   ]
 
-  const [whaleIndex,setWhaleIndex] = useState(0)
+  const alerts = [
+    "You have top spenders you’re not tracking.",
+    "You’re missing your highest earning hours.",
+    "You have inactive whales worth thousands.",
+    "You could be earning more on a different platform."
+  ]
 
-  // typing effect
+  // rotate data
   useEffect(()=>{
-    let i = 0
-    setDisplayed("")
-    const text = fullMessages[msgIndex]
-
-    const interval = setInterval(()=>{
-      setDisplayed(text.slice(0,i))
-      i++
-      if(i > text.length) clearInterval(interval)
-    },20)
-
-    return ()=>clearInterval(interval)
-  },[msgIndex])
-
-  // rotate whale + message
-  useEffect(()=>{
-    const interval = setInterval(()=>{
-      setMsgIndex(p=>(p+1)%fullMessages.length)
+    const a = setInterval(()=>{
+      setMsgIndex(p=>(p+1)%messages.length)
       setWhaleIndex(p=>(p+1)%whales.length)
     },5000)
-    return ()=>clearInterval(interval)
+
+    const b = setInterval(()=>{
+      setAlertIndex(p=>(p+1)%alerts.length)
+    },4000)
+
+    return ()=>{clearInterval(a);clearInterval(b)}
   },[])
 
   const handleCopy = ()=>{
-    navigator.clipboard.writeText(fullMessages[msgIndex])
+    navigator.clipboard.writeText(messages[msgIndex])
     setCopied(true)
     setTimeout(()=>setCopied(false),1200)
   }
@@ -62,53 +58,71 @@ export default function LandingPage(){
     }}>
 
       {/* HERO */}
-      <div style={{textAlign:"center"}}>
-        <h1 style={{fontSize:42,color:"white",fontWeight:900}}>
-          Cam Model Analytics That Makes You More Money
+      <div style={{textAlign:"center",maxWidth:780,margin:"0 auto"}}>
+        <h1 style={{
+          fontSize:52,
+          color:"white",
+          fontWeight:900,
+          lineHeight:1.1
+        }}>
+          Turn Your Fans Into<br/>More Money — Automatically
         </h1>
 
-        <p style={{marginTop:10}}>
-          Find your biggest tippers. Bring them back. Earn more every stream.
+        <p style={{marginTop:16,fontSize:18}}>
+          See your biggest spenders, when you earn most, and exactly what to do next.
         </p>
 
         <button onClick={()=>router.push("/login")} style={{
-          marginTop:20,
-          padding:"14px 36px",
+          marginTop:24,
+          padding:"16px 44px",
           borderRadius:12,
           background:"linear-gradient(135deg,#3b82f6,#ec4899)",
           color:"white",
-          fontWeight:700
+          fontWeight:700,
+          fontSize:16
         }}>
           Sign Up
         </button>
 
-        <p style={{marginTop:8,color:"#ec4899"}}>
+        <p style={{marginTop:10,color:"#ec4899",fontWeight:600}}>
           63 / 100 spots left
         </p>
       </div>
 
-      {/* MAIN GRID */}
+      {/* AI ALERT */}
+      <div style={{
+        maxWidth:780,
+        margin:"28px auto",
+        padding:"14px 18px",
+        borderRadius:12,
+        background:"rgba(168,85,247,0.08)",
+        border:"1px solid rgba(168,85,247,0.25)",
+        fontSize:14
+      }}>
+        🤖 <strong>AI Insight:</strong> {alerts[alertIndex]}
+      </div>
+
+      {/* MAIN FEATURE */}
       <div style={{
         display:"grid",
-        gridTemplateColumns:"1.5fr 1fr",
-        gap:20,
+        gridTemplateColumns:"1.4fr 1fr",
+        gap:18,
         maxWidth:900,
         margin:"40px auto"
       }}>
 
-        {/* MESSAGE */}
+        {/* GENERATOR */}
         <div className="card">
           <div className="title">
-            <span className="pulse">💌</span> Re-engage
+            <span className="pulse">💌</span> Message a High Spender
           </div>
 
           <div className="box">
-            {displayed}
-            <span className="cursor">|</span>
+            {messages[msgIndex]}
           </div>
 
           <div style={{display:"flex",gap:10,marginTop:12}}>
-            <button onClick={()=>setMsgIndex(p=>(p+1)%fullMessages.length)} className="btn2">
+            <button onClick={()=>setMsgIndex(p=>(p+1)%messages.length)} className="btn2">
               Generate
             </button>
 
@@ -120,24 +134,70 @@ export default function LandingPage(){
 
         {/* WHALE */}
         <div className="card">
-          <div className="title">🐳 Whale Profile</div>
+          <div className="title">🐳 High Spender</div>
 
           <div style={{marginTop:10}}>
-            <div>{whales[whaleIndex].name}</div>
-            <div style={{color:"#ec4899",marginTop:6}}>
-              {whales[whaleIndex].spent} spent
+            <div style={{fontWeight:600}}>
+              {whales[whaleIndex].name}
             </div>
+
+            <div style={{color:"#ec4899",marginTop:6,fontSize:18}}>
+              {whales[whaleIndex].spent}
+            </div>
+
             <div style={{color:"#64748b"}}>
-              {whales[whaleIndex].inactive} inactive
+              inactive {whales[whaleIndex].inactive}
             </div>
           </div>
         </div>
       </div>
 
-      {/* CTA */}
-      <div style={{textAlign:"center",marginTop:40}}>
+      {/* DASHBOARD */}
+      <div style={{textAlign:"center"}}>
+        <img
+          src="/dashboard-preview.png"
+          style={{
+            width:"100%",
+            maxWidth:900,
+            borderRadius:14,
+            border:"1px solid rgba(255,255,255,0.08)"
+          }}
+        />
+        <p style={{marginTop:10,color:"#64748b"}}>
+          Instant breakdown of your earnings, fans, and peak times
+        </p>
+      </div>
+
+      {/* PLATFORM EDGE */}
+      <div style={{
+        maxWidth:900,
+        margin:"40px auto",
+        display:"grid",
+        gridTemplateColumns:"1fr 1fr",
+        gap:18
+      }}>
+        <div className="card">
+          <div className="title">📊 Platform Comparison</div>
+          <div style={{marginTop:10}}>
+            Chaturbate — $520 avg<br/>
+            Stripchat — $340 avg<br/>
+            CamSoda — $290 avg
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="title">💡 What This Means</div>
+          <div style={{marginTop:10}}>
+            You’re making ~35% more on Chaturbate.  
+            Stream there more often.
+          </div>
+        </div>
+      </div>
+
+      {/* FINAL CTA */}
+      <div style={{textAlign:"center",marginTop:30}}>
         <button onClick={()=>router.push("/login")} className="btn1 big">
-          Start Earning More
+          Start Making More Per Stream
         </button>
       </div>
 
@@ -146,36 +206,27 @@ export default function LandingPage(){
         .card {
           background: linear-gradient(135deg,#1e293b,#020617);
           padding:20px;
-          border-radius:16px;
-          border:1px solid rgba(255,255,255,0.08);
-          transition:0.3s;
+          border-radius:14px;
+          border:1px solid rgba(255,255,255,0.06);
+          transition:0.25s;
         }
 
         .card:hover {
-          box-shadow:0 0 25px rgba(236,72,153,0.3);
+          box-shadow:0 0 20px rgba(236,72,153,0.25);
           transform:translateY(-2px);
         }
 
         .title {
           color:#a855f7;
           font-weight:600;
-          margin-bottom:10px;
         }
 
         .box {
           background:rgba(255,255,255,0.05);
-          padding:15px;
+          padding:14px;
           border-radius:10px;
-          min-height:70px;
-        }
-
-        .cursor {
-          animation:blink 1s infinite;
-        }
-
-        @keyframes blink {
-          0%,100%{opacity:1}
-          50%{opacity:0}
+          margin-top:10px;
+          min-height:65px;
         }
 
         .pulse {
