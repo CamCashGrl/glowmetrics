@@ -925,7 +925,17 @@ export default function Dashboard() {
         if (!data || data.length < PAGE) break
         from += PAGE
       }
-      if (allData.length) { setTips(allData); const result = runEngine(allData); setAnalytics(result) }
+      if (allData.length) {
+        setTips(allData)
+        setTimeout(() => {
+          try {
+            const result = runEngine(allData)
+            setAnalytics(result)
+          } catch (e) {
+            console.error('[analytics engine error]', e)
+          }
+        }, 0)
+      }
     } finally { setLoading(false) }
   }
 
