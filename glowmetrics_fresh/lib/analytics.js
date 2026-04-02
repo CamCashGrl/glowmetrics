@@ -2170,7 +2170,7 @@ export function aggregateRows(tips) {
     preTipBehavior,   // peak tipping window + avg gap
     trueHourlyAvg,    // 24-slot array: avgPerActiveDay per UTC hour
   }
-  return verifyConsistency(rawResult, tips)
+  return verifyConsistency(rawResult, cleanTips)
 }
 
 // ============================================
