@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { dedupeTips, parseCSV } from '../../../lib/analytics'
+import { parseCSV } from '../../../lib/analytics'
 
 export async function POST(req) {
   const auth = req.headers.get('Authorization')
@@ -34,9 +34,7 @@ export async function POST(req) {
   const raw = await file.text()
   const parsed = parseCSV(raw)
 
-  const deduped = dedupeTips(parsed)
-
-  const rows = deduped.map((row) => {
+  const rows = parsed.map((row) => {
     const tokens = Number(row.tokens) || 0
 
     // SINGLE SOURCE OF TRUTH
@@ -103,7 +101,6 @@ export async function POST(req) {
   }
 
   console.log('[upload] parsed rows:', parsed.length)
-  console.log('[upload] deduped rows:', deduped.length)
   console.log('[upload] inserted rows:', inserted)
 
   return NextResponse.json({
