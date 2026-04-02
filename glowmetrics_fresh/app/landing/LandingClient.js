@@ -16,19 +16,44 @@ const C = {
 
 export default function LandingPage(){
   const router=useRouter()
+
   const [msgIndex,setMsgIndex]=useState(0)
+  const [slide,setSlide]=useState(0)
 
   const messages = [
-    "Hey 😘 I've been thinking about you... I'm live tonight and want YOU there ❤️",
-    "Miss you 💕 come see me tonight... I’ve got something special 🔥",
+    "Hey 😘 I've been thinking about you... I'm live tonight ❤️",
+    "Miss you 💕 come see me tonight 🔥",
     "It’s been a while… come make tonight worth it 😈"
   ]
 
+  const slides = [
+    {
+      title:"Top Tipper Found",
+      desc:"You made $3,240 from one user last week"
+    },
+    {
+      title:"Best Time Identified",
+      desc:"You earn 2.3x more at 11PM"
+    },
+    {
+      title:"Lost Whale Detected",
+      desc:"$18,940 spender hasn’t tipped in 600 days"
+    }
+  ]
+
   useEffect(()=>{
-    const interval = setInterval(()=>{
+    const msgInterval = setInterval(()=>{
       setMsgIndex((prev)=>(prev+1)%messages.length)
     },3000)
-    return ()=>clearInterval(interval)
+
+    const slideInterval = setInterval(()=>{
+      setSlide((prev)=>(prev+1)%slides.length)
+    },4000)
+
+    return ()=>{
+      clearInterval(msgInterval)
+      clearInterval(slideInterval)
+    }
   },[])
 
   const go=(path)=>router.push(path)
@@ -47,18 +72,17 @@ export default function LandingPage(){
       </nav>
 
       {/* HERO */}
-      <section style={{textAlign:"center",padding:"40px 20px"}}>
-        <h1 style={{fontSize:42,color:C.white,fontWeight:900}}>
-          Find Your Biggest Tippers.<br/>Make More Every Stream.
+      <section style={{textAlign:"center",padding:"80px 20px 40px"}}>
+        <h1 style={{fontSize:48,color:C.white,fontWeight:900}}>
+          Cam Model Analytics That<br/>Actually Makes You More Money
         </h1>
 
-        <p style={{marginTop:10,color:C.muted}}>
-          Cam model analytics + AI tools to increase tips, re-engage fans, and grow income
+        <p style={{maxWidth:600,margin:"20px auto",fontSize:18}}>
+          Track your tips, find your biggest spenders, and increase your earnings every stream.
         </p>
 
         <button onClick={()=>go("/login")} style={{
-          marginTop:20,
-          padding:"14px 36px",
+          padding:"16px 40px",
           borderRadius:12,
           background:"linear-gradient(135deg,#3b82f6,#ec4899)",
           color:"white",
@@ -67,121 +91,88 @@ export default function LandingPage(){
           Sign Up
         </button>
 
-        <p style={{marginTop:8,fontSize:12,color:"#ec4899"}}>
-          Free early access • Limited spots
+        <p style={{marginTop:10,color:"#ec4899",fontSize:13}}>
+          63 / 100 spots left
         </p>
       </section>
 
-      {/* 🔥 FEATURE GRID */}
-      <section style={{maxWidth:1100,margin:"0 auto",padding:"20px"}}>
-
-        {/* TOP ROW */}
+      {/* 🔥 SLIDING DEMO */}
+      <section style={{textAlign:"center",padding:"20px"}}>
         <div style={{
-          display:"grid",
-          gridTemplateColumns:"2fr 1fr",
-          gap:20
-        }}>
-
-          {/* 🐳 MESSAGE GENERATOR (MAIN) */}
-          <div style={{
-            background:"linear-gradient(135deg,#1e293b,#020617)",
-            padding:20,
-            borderRadius:20,
-            border:"1px solid rgba(255,255,255,0.1)"
-          }}>
-            <div style={{color:"#a855f7",fontWeight:600}}>💌 Re-engage a Whale</div>
-
-            <div style={{fontSize:13,color:C.muted,margin:"10px 0"}}>
-              user_BIGGESTWHALE999 • 600 days inactive • $18,940 lifetime
-            </div>
-
-            <div style={{
-              background:"rgba(255,255,255,0.05)",
-              padding:16,
-              borderRadius:12,
-              minHeight:70
-            }}>
-              {messages[msgIndex]}
-            </div>
-
-            <div style={{display:"flex",gap:10,marginTop:15}}>
-              <button style={{
-                flex:1,
-                padding:12,
-                borderRadius:10,
-                background:"#0f172a",
-                color:"white"
-              }}>
-                Generate
-              </button>
-
-              <button style={{
-                flex:1,
-                padding:12,
-                borderRadius:10,
-                background:"linear-gradient(135deg,#3b82f6,#ec4899)",
-                color:"white",
-                fontWeight:700
-              }}>
-                Copy
-              </button>
-            </div>
-          </div>
-
-          {/* 📊 PROFILE INSIGHTS */}
-          <div style={{
-            background:C.card,
-            padding:20,
-            borderRadius:20,
-            border:"1px solid rgba(255,255,255,0.05)"
-          }}>
-            <div style={{color:C.white,fontWeight:700}}>📊 Profile Insights</div>
-
-            <div style={{marginTop:10,fontSize:14,color:C.muted}}>
-              Top tipper: $3,240<br/>
-              Best hour: 11PM<br/>
-              Avg session: $420<br/>
-              Peak day: Friday
-            </div>
-          </div>
-        </div>
-
-        {/* 🔥 ROOM TITLE GENERATOR */}
-        <div style={{
-          marginTop:20,
-          background:C.card,
+          maxWidth:700,
+          margin:"0 auto",
           padding:20,
-          borderRadius:20,
-          border:"1px solid rgba(255,255,255,0.05)"
+          borderRadius:16,
+          background:C.card,
+          border:"1px solid rgba(255,255,255,0.08)"
         }}>
-          <div style={{color:C.white,fontWeight:700}}>
-            🔥 Room Title Generator
-          </div>
+          <h3 style={{color:C.white,fontSize:20}}>
+            {slides[slide].title}
+          </h3>
 
-          <div style={{
-            marginTop:10,
-            background:"rgba(255,255,255,0.05)",
-            padding:14,
-            borderRadius:10
-          }}>
-            “Naughty late night show 😈 tip to control me”
-          </div>
-
-          <button style={{
-            marginTop:12,
-            padding:"10px 20px",
-            borderRadius:10,
-            background:"linear-gradient(135deg,#3b82f6,#ec4899)",
-            color:"white"
-          }}>
-            Generate New Title
-          </button>
+          <p style={{marginTop:10,color:C.muted}}>
+            {slides[slide].desc}
+          </p>
         </div>
-
       </section>
 
-      {/* CTA */}
+      {/* 🐳 MESSAGE GENERATOR */}
       <section style={{textAlign:"center",padding:"40px 20px"}}>
+        <h2 style={{color:C.white,fontSize:28,fontWeight:800}}>
+          Reconnect With Your Biggest Tippers
+        </h2>
+
+        <div style={{
+          margin:"30px auto",
+          maxWidth:600,
+          padding:20,
+          borderRadius:16,
+          background:"linear-gradient(135deg,#1e293b,#020617)",
+          cursor:"pointer"
+        }}
+        onClick={()=>setMsgIndex((prev)=>(prev+1)%messages.length)}
+        >
+          <div style={{fontSize:13,color:C.muted,marginBottom:10}}>
+            user_BIGGESTWHALE999 • $18,940 lifetime
+          </div>
+
+          <div style={{
+            background:"rgba(255,255,255,0.05)",
+            padding:15,
+            borderRadius:10
+          }}>
+            {messages[msgIndex]}
+          </div>
+
+          <p style={{marginTop:10,fontSize:12,color:"#ec4899"}}>
+            Click to generate another
+          </p>
+        </div>
+      </section>
+
+      {/* FEATURES */}
+      <section style={{maxWidth:1000,margin:"40px auto",padding:"0 20px"}}>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(250px,1fr))",gap:20}}>
+          {[
+            ["🐳 Top Tippers","Know exactly who spends the most"],
+            ["⚡ Best Hours","See when you make the most money"],
+            ["💌 Re-engagement","Bring back old spenders"],
+            ["📈 Growth Insights","Understand what increases income"],
+          ].map(([title,desc])=>(
+            <div key={title} style={{
+              background:C.card,
+              padding:20,
+              borderRadius:16
+            }}>
+              <div style={{color:C.white,fontWeight:700}}>{title}</div>
+              <div style={{fontSize:14,color:C.muted,marginTop:6}}>{desc}</div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* FINAL CTA */}
+      <section style={{textAlign:"center",padding:"60px 20px"}}>
         <button onClick={()=>go("/login")} style={{
           padding:"16px 40px",
           borderRadius:12,
