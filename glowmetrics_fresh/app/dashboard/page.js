@@ -1449,7 +1449,7 @@ export default function Dashboard() {
         </div>
 
         <nav style={{ flex: 1, padding: "16px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
-          {[["overview", "📊", "Overview"], ["platforms", "🎯", "Platforms"], ["whales", "🐳", "Top Fans"], ["sessions", "🎥", "Sessions"], ["live", "🔴", "Live Mode"], ["data", "📝", "Edit Data"], ["titles", "🎬", "Room Titles"], ["hashtags", "#", "Hashtags"], ["help", "❓", "CSV Help"], ["upload", "📥", "Import"]].map(([id, icon, label]) => (
+          {[["overview", "📊", "Overview"], ["platforms", "🎯", "Platforms"], ["whales", "🐳", "Top Fans"], ["sessions", "🎥", "Sessions"], ["live", "🔴", "Live Mode"], ["data", "📝", "Edit Data"], ["titles", "🎬", "Room Titles"], ["help", "❓", "CSV Help"], ["upload", "📥", "Import"]].map(([id, icon, label]) => (
             <button key={id} onClick={() => setActiveTab(id)} style={{
               display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 10,
               background: activeTab === id ? "linear-gradient(135deg, rgba(59,130,246,0.2), rgba(236,72,153,0.2))" : "transparent",
@@ -3303,9 +3303,14 @@ export default function Dashboard() {
           </div>
         )}
 
-        {activeTab === "titles" && <TitleGenerator C={C} glassCard={glassCard} analytics={analytics} tips={tips} sessions={sessions} whales={whales} />}
-
-        {activeTab === "hashtags" && <HashtagGenerator C={C} glassCard={glassCard} />}
+        {activeTab === "titles" && (
+          <div>
+            <TitleGenerator C={C} glassCard={glassCard} analytics={analytics} tips={tips} sessions={sessions} whales={whales} />
+            <div style={{ marginTop: 40, paddingTop: 32, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+              <HashtagGenerator C={C} glassCard={glassCard} />
+            </div>
+          </div>
+        )}
 
         {activeTab === "help" && (
           <div style={{ maxWidth: 900 }}>
