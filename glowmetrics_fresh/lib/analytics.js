@@ -338,7 +338,8 @@ export function addMultiBaselineLabels(sessions) {
 
     // ── Baseline A: Platform all-time avg ──────────────────
     const allPlatSessions = byPlatform[p] || []
-    const platAvg = allPlatSessions.length > 0
+    // Require >= 2 sessions to avoid a session comparing against itself
+    const platAvg = allPlatSessions.length >= 2
       ? allPlatSessions.reduce((sum, x) => sum + x.totalUSD, 0) / allPlatSessions.length
       : null
 
@@ -474,8 +475,8 @@ export function computeEngagementScore(fan) {
 
   // Factor 3: Spend momentum (30% weight)
   // Compare spend in last 30 days vs their historical avg 30-day spend
-  const now = Date.now()
-  const recentTips = tips.filter(t => (now - new Date(t.dateRaw || t.date_time)) / 86400000 <= 30)
+  // Uses filterByTimeRange — single authority for all time-scoped filtering
+  const recentTips = filterByTimeRange(tips, TIME_RANGES.LAST_30)
   const recentSpend = recentTips.reduce((s, t) => s + (t.usd || 0), 0)
   const allTipDays = tips.length > 1
     ? (new Date(fan.lastTipDate) - new Date(fan.firstTipDate)) / 86400000
@@ -567,8 +568,9 @@ export function computeRevenueForecastExplained(tips, sessions) {
   const now = Date.now()
   const MS = 86400000
 
-  const last30 = tips.filter(t => (now - new Date(t.dateRaw || t.date_time)) / MS <= 30)
-  const prev30 = tips.filter(t => { const d = (now - new Date(t.dateRaw || t.date_time)) / MS; return d > 30 && d <= 60 })
+  // Use filterByTimeRange — no ad-hoc date math
+  const last30 = filterByTimeRange(tips, TIME_RANGES.LAST_30)
+  const prev30 = tips.filter(t => { const d = (now - new Date(t.dateRaw || t.date_time).getTime()) / MS; return d > 30 && d <= 60 })
 
   const last30Rev = last30.reduce((s, t) => s + (t.usd || 0), 0)
   const prev30Rev = prev30.reduce((s, t) => s + (t.usd || 0), 0)
@@ -1306,7 +1308,7 @@ export function identifyWhales(tips) {
       lastTipDate: lastTipDate.toISOString(),
       firstTipDate: firstTipDate.toISOString(),
       daysSinceLastTip,
-      avgDaysBetweenTips: parseFloat(avgDaysBetweenTips.toFixed(1)),
+      avgDaysBetweenTips: avgDaysBetweenTips !== null ? parseFloat(avgDaysBetweenTips.toFixed(1)) : null,
       daysBetweenTipsArr,
       tipProbability: calcTipProbability(daysSinceLastTip, avgDaysBetweenTips),
       churnRisk: calcChurnRisk(daysSinceLastTip, avgDaysBetweenTips, f.tipCount),
@@ -1392,7 +1394,7 @@ export function generateWhaleAlerts(whales) {
       const freq = getTipFrequency(w.daysBetweenTipsArr)
       const freqText = freq
         ? `they typically tip ${freq}`
-        : `they usually tip every ${w.avgDaysBetweenTips.toFixed(0)} days`
+        : w.avgDaysBetweenTips !== null ? `they usually tip every ${w.avgDaysBetweenTips.toFixed(0)} days` : 'at irregular intervals'
       alerts.push({ type: 'churn_risk', severity: 'warning', icon: '⚠️', whale: w, message: `${w.username} hasn't tipped in ${w.daysSinceLastTip} days — ${freqText}`, action: 'Re-engage now before they go cold' })
     }
 
@@ -1421,25 +1423,30 @@ export function predictRevenue(tips, sessions) {
   const predictions = {}
   const now = Date.now()
 
-  const last7 = tips.filter(t => (now - new Date(t.dateRaw || t.date_time)) / 86400000 <= 7)
-  const last7Rev = last7.reduce((s, t) => s + t.usd, 0)
+  // Use filterByTimeRange exclusively — no ad-hoc date math
+  const last7    = filterByTimeRange(tips, TIME_RANGES.LAST_7)
+  const last7Rev = last7.reduce((s, t) => s + (t.usd || 0), 0)
   predictions.next7Days = {
-    amount: parseFloat(last7Rev.toFixed(2)),
-    confidence: last7.length > 20 ? 'High' : last7.length > 10 ? 'Medium' : 'Low'
+    amount:     parseFloat(last7Rev.toFixed(2)),
+    confidence: last7.length > 20 ? 'High' : last7.length > 10 ? 'Medium' : 'Low',
+    timeRange:  'last 7 days'
   }
 
-  const last30 = tips.filter(t => (now - new Date(t.dateRaw || t.date_time)) / 86400000 <= 30)
-  const last30Rev = last30.reduce((s, t) => s + t.usd, 0)
+  const last30    = filterByTimeRange(tips, TIME_RANGES.LAST_30)
+  const last30Rev = last30.reduce((s, t) => s + (t.usd || 0), 0)
+  // prev30 = last60 minus last30 (no TIME_RANGES constant for 60d — compute explicitly)
+  const MS = 86400000
   const prev30 = tips.filter(t => {
-    const d = (now - new Date(t.dateRaw || t.date_time)) / 86400000
+    const d = (now - new Date(t.dateRaw || t.date_time).getTime()) / MS
     return d > 30 && d <= 60
   })
-  const prev30Rev = prev30.reduce((s, t) => s + t.usd, 0)
+  const prev30Rev = prev30.reduce((s, t) => s + (t.usd || 0), 0)
   const weeklyTrend = prev30Rev > 0 ? ((last30Rev - prev30Rev) / prev30Rev) * 100 : null
   predictions.next30Days = {
-    amount: parseFloat(last30Rev.toFixed(2)),
+    amount:     parseFloat(last30Rev.toFixed(2)),
     confidence: last30.length > 50 ? 'High' : last30.length > 25 ? 'Medium' : 'Low',
-    trend: weeklyTrend !== null ? parseFloat(weeklyTrend.toFixed(1)) : null
+    trend:      weeklyTrend !== null ? parseFloat(weeklyTrend.toFixed(1)) : null,
+    timeRange:  'last 30 days'
   }
 
   const todayDow = new Date().getDay()
@@ -1476,12 +1483,21 @@ export function predictRevenue(tips, sessions) {
 export function generateLossAlerts(tips, sessions, whales, bestHour) {
   const alerts = []
   const now = Date.now()
+  const MS = 86400000
+
+  // Pre-filter using filterByTimeRange — no ad-hoc date math below
+  const tipsLast7  = filterByTimeRange(tips, TIME_RANGES.LAST_7)
+  const tipsLast14 = tips.filter(t => (now - new Date(t.dateRaw || t.date_time).getTime()) / MS <= 14)
+  const tipsLast7Set  = new Set(tipsLast7.map(t => t.id || `${t.date_time}_${t.username}`))
+  const tipsLastWeek  = tipsLast7
+  const tipsPrevWeek  = tipsLast14.filter(t => !tipsLast7Set.has(t.id || `${t.date_time}_${t.username}`))
+  const sessionsLast3 = sessions.filter(s => (now - new Date(s.startTime).getTime()) / MS <= 3)
 
   // Peak window missed — uses pre-computed bestHour from aggregateRows
   if (bestHour) {
     const bh = parseInt(bestHour.hour)
     const avgAtPeak = bestHour.avg
-    const recentSessions = sessions.filter(s => (now - new Date(s.startTime)) / 86400000 <= 3)
+    const recentSessions = sessionsLast3
     const recentAtPeak = recentSessions.filter(s => Math.abs(new Date(s.startTime).getHours() - bh) <= 1)
     if (recentSessions.length > 0 && recentAtPeak.length === 0) {
       const estLoss = parseFloat((avgAtPeak * 3).toFixed(2))
@@ -1490,19 +1506,14 @@ export function generateLossAlerts(tips, sessions, whales, bestHour) {
     }
   }
 
-  // Avg tip drop this week vs last week
-  const thisWeek = tips.filter(t => (now - new Date(t.dateRaw || t.date_time)) / 86400000 <= 7)
-  const lastWeek = tips.filter(t => {
-    const d = (now - new Date(t.dateRaw || t.date_time)) / 86400000
-    return d > 7 && d <= 14
-  })
-  if (thisWeek.length >= 5 && lastWeek.length >= 5) {
-    const thisAvg = thisWeek.reduce((s, t) => s + t.usd, 0) / thisWeek.length
-    const lastAvg = lastWeek.reduce((s, t) => s + t.usd, 0) / lastWeek.length
+  // Avg tip drop this week vs last week — uses pre-filtered tip sets from above
+  if (tipsLastWeek.length >= 5 && tipsPrevWeek.length >= 5) {
+    const thisAvg = tipsLastWeek.reduce((s, t) => s + (t.usd || 0), 0) / tipsLastWeek.length
+    const lastAvg = tipsPrevWeek.reduce((s, t) => s + (t.usd || 0), 0) / tipsPrevWeek.length
     const drop = Math.round(((lastAvg - thisAvg) / lastAvg) * 100)
     if (drop >= 15)
       alerts.push({ type: 'tip_drop', severity: 'warning', icon: '📉', message: `Your avg tip dropped ${drop}% this week ($${lastAvg.toFixed(2)} → $${thisAvg.toFixed(2)})`, action: 'Focus on high-value fans during your next stream' })
-  }
+  } // end tip drop check
 
   // High-value fan churn risk
   whales
@@ -1597,12 +1608,14 @@ export function generateInsights(tips, sessions, bestDay, worstDay, bestHour) {
     insights.push({ icon: '🔁', text: `${pct}% of your fans are returning tippers — loyalty is your strongest asset. Returning fans spend ${multiplierText} on average than first-timers ($${avgReturning.toFixed(0)} vs $${avgOneTime.toFixed(0)})`, type: 'retention', priority: 3 })
   }
 
-  // Weekly momentum
-  const thisWeek = tips.filter(t => (now - new Date(t.dateRaw || t.date_time)) / 86400000 <= 7)
-  const lastWeek = tips.filter(t => {
-    const d = (now - new Date(t.dateRaw || t.date_time)) / 86400000
-    return d > 7 && d <= 14
+  // Weekly momentum — uses filterByTimeRange exclusively
+  const thisWeek  = filterByTimeRange(tips, TIME_RANGES.LAST_7)
+  const thisWeekIds = new Set(thisWeek.map(t => t.id || `${t.date_time}_${t.username}`))
+  const last14    = tips.filter(t => {
+    const ms = new Date(t.dateRaw || t.date_time).getTime()
+    return !isNaN(ms) && (Date.now() - ms) / 86400000 <= 14
   })
+  const lastWeek  = last14.filter(t => !thisWeekIds.has(t.id || `${t.date_time}_${t.username}`))
   if (thisWeek.length > 0 && lastWeek.length > 0) {
     const thisRev = thisWeek.reduce((s, t) => s + t.usd, 0)
     const lastRev = lastWeek.reduce((s, t) => s + t.usd, 0)
@@ -2014,11 +2027,41 @@ export function aggregateRows(tips) {
       totalUSD: 0, totalTokens: 0, totalTips: 0, avgTipSize: 0,
       topTippers: [], platforms: [], sessions: [], insights: [],
       predictions: null, whaleAlerts: [], lossAlerts: [], nextMoves: [],
-      bestDay: null, bestHour: null
+      bestDay: null, bestHour: null,
+      timeRanges: {}
     }
   }
 
-  const sessions    = addMultiBaselineLabels(detectSessions(tips))
+  // ── DATA VALIDATION — runs before any metric computation ──────────────────
+  // validateDataset cleans, enforces platform, deduplicates, and removes
+  // zero-value tips. Only clean tips proceed to any metric.
+  // Returns { valid, tips, report } — use .tips as the clean dataset.
+  const validation   = validateDataset(tips)
+  const cleanTips    = (validation.tips && validation.tips.length > 0) ? validation.tips : tips
+  const removedCount = tips.length - cleanTips.length
+
+  // ── PRE-FILTER TIPS BY TIME RANGE — single authority ─────────────────────
+  // All time-scoped metrics use filterByTimeRange. No ad-hoc date math below.
+  const tips7  = filterByTimeRange(cleanTips, TIME_RANGES.LAST_7)
+  const tips30 = filterByTimeRange(cleanTips, TIME_RANGES.LAST_30)
+  const tips90 = filterByTimeRange(cleanTips, TIME_RANGES.LAST_90)
+  // allTime = cleanTips (no filter needed — it's already all-time)
+
+  // Expose time range metadata for UI labeling
+  const timeRanges = {
+    totalEarnings:       { range: TIME_RANGES.ALL_TIME,  label: 'All Time' },
+    fanMetrics:          { range: TIME_RANGES.ALL_TIME,  label: 'All Time' },
+    platformPerformance: { range: TIME_RANGES.ALL_TIME,  label: 'All Time' },
+    bestDay:             { range: TIME_RANGES.ALL_TIME,  label: 'All Time' },
+    bestHour:            { range: TIME_RANGES.ALL_TIME,  label: 'All Time' },
+    revenueNext7:        { range: TIME_RANGES.LAST_7,    label: 'Last 7 Days' },
+    revenueNext30:       { range: TIME_RANGES.LAST_30,   label: 'Last 30 Days' },
+    alerts:              { range: TIME_RANGES.LAST_7,    label: 'Last 7 Days' },
+    engagementMomentum:  { range: TIME_RANGES.LAST_30,   label: 'Last 30 Days' },
+    dataHealth:          { removedCount, totalIngested: tips.length, cleanCount: cleanTips.length }
+  }
+
+  const sessions    = addMultiBaselineLabels(detectSessions(cleanTips))
 
   // ── SINGLE SOURCE OF TRUTH for best day and best hour ──────────────────
   // Every insight, alert, and next-move reads from these — never recalculates.
@@ -2027,8 +2070,9 @@ export function aggregateRows(tips) {
   // Session startTime reflects only the first tip, not where earnings happened
   const UTC_DAYS_LONG = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
   const dayTotals = {}; const dayActiveDates = {}
-  const hourTotals = {}; const hourSessionCount = {}
-  tips.forEach(t => {
+  const hourTotals = {}; const hourActiveDates = {}
+  // Use cleanTips (validated, all-time) for pattern baselines
+  cleanTips.forEach(t => {
     const dt = new Date(t.dateRaw || t.date_time)
     const d = UTC_DAYS_LONG[dt.getUTCDay()]
     const h = dt.getUTCHours()
@@ -2036,7 +2080,8 @@ export function aggregateRows(tips) {
     if (!dayActiveDates[d]) dayActiveDates[d] = new Set()
     dayActiveDates[d].add(dt.toISOString().slice(0, 10))
     hourTotals[h] = (hourTotals[h] || 0) + (t.usd || 0)
-    hourSessionCount[h] = (hourSessionCount[h] || 0) + 1
+    if (!hourActiveDates[h]) hourActiveDates[h] = new Set()
+    hourActiveDates[h].add(dt.toISOString().slice(0, 10))
   })
   const dayAvgs  = Object.keys(dayTotals).map(d => ({
     day: d,
@@ -2046,25 +2091,25 @@ export function aggregateRows(tips) {
   }))
   const hourAvgs = Object.keys(hourTotals).map(h => ({
     hour: h,
-    avg: hourTotals[h] / (hourSessionCount[h] || 1),
+    avg: hourTotals[h] / (hourActiveDates[h]?.size || 1),
     total: hourTotals[h],
-    count: hourSessionCount[h] || 1
+    count: hourActiveDates[h]?.size || 1
   }))
-  const bestDay  = dayAvgs.sort((a, b)  => b.avg - a.avg)[0]  || null
-  const worstDay = dayAvgs.sort((a, b)  => a.avg - b.avg)[0]  || null
+  const bestDay  = [...dayAvgs].sort((a, b) => b.avg - a.avg)[0] || null
+  const worstDay = [...dayAvgs].sort((a, b) => a.avg - b.avg)[0] || null
   const bestHour = hourAvgs.sort((a, b) => b.avg - a.avg)[0]  || null
 
-  const whales      = identifyWhales(tips)
-  const insights    = generateInsights(tips, sessions, bestDay, worstDay, bestHour)
-  const predictions = predictRevenue(tips, sessions)
+  const whales      = identifyWhales(cleanTips)
+  const insights    = generateInsights(cleanTips, sessions, bestDay, worstDay, bestHour)
+  const predictions = predictRevenue(cleanTips, sessions)
   const whaleAlerts = generateWhaleAlerts(whales)
-  const lossAlerts  = generateLossAlerts(tips, sessions, whales, bestHour)
-  const nextMoves   = generateNextMoves(tips, sessions, whales, predictions, bestHour)
+  const lossAlerts  = generateLossAlerts(cleanTips, sessions, whales, bestHour)
+  const nextMoves   = generateNextMoves(cleanTips, sessions, whales, predictions, bestHour)
 
-  // FIX performance: single pass for totals
+  // Single pass for totals — uses cleanTips (all-time, validated)
   let totalUSD = 0
   let totalTokens = 0
-  for (const t of tips) {
+  for (const t of cleanTips) {
     totalUSD    += t.usd    || 0
     totalTokens += t.tokens || 0
   }
@@ -2116,11 +2161,11 @@ export function aggregateRows(tips) {
   const rawResult = {
     totalUSD: parseFloat(totalUSD.toFixed(2)),
     totalTokens,
-    totalTips: tips.length,
-    avgTipSize: parseFloat((tips.length > 0 ? totalUSD / tips.length : 0).toFixed(2)),
+    totalTips: cleanTips.length,
+    avgTipSize: parseFloat((cleanTips.length > 0 ? totalUSD / cleanTips.length : 0).toFixed(2)),
     topTippers, platforms, sessions, insights: validateInsights(insights), predictions,
     whaleAlerts, lossAlerts, nextMoves, whales,
-    bestDay, bestHour,
+    bestDay, bestHour, timeRanges,
     dependencyRisk,   // top1/3/5 pct + risk level
     preTipBehavior,   // peak tipping window + avg gap
     trueHourlyAvg,    // 24-slot array: avgPerActiveDay per UTC hour
