@@ -799,6 +799,7 @@ export default function Dashboard() {
   const [liveAnalytics, setLiveAnalytics] = useState(null)
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
+  const [uploadPlatform, setUploadPlatform] = useState("")
   const [activeTab, setActiveTab] = useState("overview")
   const [toast, setToast] = useState("")
   const [uploadCount, setUploadCount] = useState(0)
@@ -925,17 +926,7 @@ export default function Dashboard() {
         if (!data || data.length < PAGE) break
         from += PAGE
       }
-      if (allData.length) {
-        setTips(allData)
-        setTimeout(() => {
-          try {
-            const result = runEngine(allData)
-            setAnalytics(result)
-          } catch (e) {
-            console.error('[analytics engine error]', e)
-          }
-        }, 0)
-      }
+      if (allData.length) { setTips(allData); const result = runEngine(allData); setAnalytics(result) }
     } finally { setLoading(false) }
   }
 
@@ -3299,9 +3290,7 @@ export default function Dashboard() {
           </div>
         )}
 
-        {activeTab === "upload" && (() => {
-          const [uploadPlatform, setUploadPlatform] = React.useState("")
-          return (
+        {activeTab === "upload" && (
           <div style={{ maxWidth: 600, margin: "0 auto" }}>
             <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 8 }}>📥 Import CSV</h1>
             <p style={{ fontSize: 14, color: C.muted, marginBottom: 32 }}>Unlimited uploads during free beta • Auto-removes duplicates</p>
@@ -3331,8 +3320,7 @@ export default function Dashboard() {
               <strong style={{ color: C.cyan }}>CSV not loading?</strong> Try selecting your platform from the dropdown above, then re-upload. For Chaturbate: export from Stats & Data → Token Stats. For BongaCams: export from Reports.
             </div>
           </div>
-          )
-        })()}
+        )}
 
         {activeTab === "titles" && (
           <div>
