@@ -2,87 +2,78 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 
-const C = {
-  bg:"#05070f",
-  card:"rgba(15,20,32,0.7)",
-  border:"#1e2842",
-  blue:"#3b82f6",
-  purple:"#a855f7",
-  pink:"#ec4899",
-  white:"#f8fafc",
-  text:"#cbd5e1",
-  muted:"#64748b",
-}
-
 export default function LandingPage(){
-  const router=useRouter()
+  const router = useRouter()
 
-  const [msgIndex,setMsgIndex]=useState(0)
-  const [slide,setSlide]=useState(0)
-
-  const messages = [
-    "Hey 😘 I've been thinking about you... I'm live tonight ❤️",
-    "Miss you 💕 come see me tonight 🔥",
-    "It’s been a while… come make tonight worth it 😈"
+  const fullMessages = [
+    "Hey 😘 I’ve been thinking about you... I’m live tonight ❤️",
+    "Miss you 💕 come make tonight fun 🔥",
+    "It’s been a while… come back 😈"
   ]
 
-  const slides = [
-    {
-      title:"Top Tipper Found",
-      desc:"You made $3,240 from one user last week"
-    },
-    {
-      title:"Best Time Identified",
-      desc:"You earn 2.3x more at 11PM"
-    },
-    {
-      title:"Lost Whale Detected",
-      desc:"$18,940 spender hasn’t tipped in 600 days"
-    }
+  const [displayed,setDisplayed] = useState("")
+  const [msgIndex,setMsgIndex] = useState(0)
+  const [copied,setCopied] = useState(false)
+
+  const whales = [
+    { name:"user_SUPREMEVIP888", spent:"$31,920", inactive:"380 days" },
+    { name:"user_HIGHROLLERX", spent:"$22,410", inactive:"210 days" }
   ]
 
+  const [whaleIndex,setWhaleIndex] = useState(0)
+
+  // typing effect
   useEffect(()=>{
-    const msgInterval = setInterval(()=>{
-      setMsgIndex((prev)=>(prev+1)%messages.length)
-    },3000)
+    let i = 0
+    setDisplayed("")
+    const text = fullMessages[msgIndex]
 
-    const slideInterval = setInterval(()=>{
-      setSlide((prev)=>(prev+1)%slides.length)
-    },4000)
+    const interval = setInterval(()=>{
+      setDisplayed(text.slice(0,i))
+      i++
+      if(i > text.length) clearInterval(interval)
+    },20)
 
-    return ()=>{
-      clearInterval(msgInterval)
-      clearInterval(slideInterval)
-    }
+    return ()=>clearInterval(interval)
+  },[msgIndex])
+
+  // rotate whale + message
+  useEffect(()=>{
+    const interval = setInterval(()=>{
+      setMsgIndex(p=>(p+1)%fullMessages.length)
+      setWhaleIndex(p=>(p+1)%whales.length)
+    },5000)
+    return ()=>clearInterval(interval)
   },[])
 
-  const go=(path)=>router.push(path)
+  const handleCopy = ()=>{
+    navigator.clipboard.writeText(fullMessages[msgIndex])
+    setCopied(true)
+    setTimeout(()=>setCopied(false),1200)
+  }
 
   return(
-    <div style={{minHeight:"100vh",background:C.bg,color:C.text,fontFamily:"Inter, sans-serif"}}>
-
-      {/* NAV */}
-      <nav style={{padding:"20px 40px"}}>
-        <div style={{maxWidth:1100,margin:"0 auto",display:"flex"}}>
-          <div style={{fontWeight:800,fontSize:22,color:C.white}}>CamCash</div>
-          <div style={{marginLeft:"auto"}}>
-            <button onClick={()=>go("/login")} style={{color:C.text}}>Login</button>
-          </div>
-        </div>
-      </nav>
+    <div style={{
+      minHeight:"100vh",
+      background:"#05070f",
+      color:"#cbd5e1",
+      fontFamily:"Inter, sans-serif",
+      padding:"40px 20px"
+    }}>
 
       {/* HERO */}
-      <section style={{textAlign:"center",padding:"80px 20px 40px"}}>
-        <h1 style={{fontSize:48,color:C.white,fontWeight:900}}>
-          Cam Model Analytics That<br/>Actually Makes You More Money
+      <div style={{textAlign:"center"}}>
+        <h1 style={{fontSize:42,color:"white",fontWeight:900}}>
+          Cam Model Analytics That Makes You More Money
         </h1>
 
-        <p style={{maxWidth:600,margin:"20px auto",fontSize:18}}>
-          Track your tips, find your biggest spenders, and increase your earnings every stream.
+        <p style={{marginTop:10}}>
+          Find your biggest tippers. Bring them back. Earn more every stream.
         </p>
 
-        <button onClick={()=>go("/login")} style={{
-          padding:"16px 40px",
+        <button onClick={()=>router.push("/login")} style={{
+          marginTop:20,
+          padding:"14px 36px",
           borderRadius:12,
           background:"linear-gradient(135deg,#3b82f6,#ec4899)",
           color:"white",
@@ -91,98 +82,134 @@ export default function LandingPage(){
           Sign Up
         </button>
 
-        <p style={{marginTop:10,color:"#ec4899",fontSize:13}}>
+        <p style={{marginTop:8,color:"#ec4899"}}>
           63 / 100 spots left
         </p>
-      </section>
+      </div>
 
-      {/* 🔥 SLIDING DEMO */}
-      <section style={{textAlign:"center",padding:"20px"}}>
-        <div style={{
-          maxWidth:700,
-          margin:"0 auto",
-          padding:20,
-          borderRadius:16,
-          background:C.card,
-          border:"1px solid rgba(255,255,255,0.08)"
-        }}>
-          <h3 style={{color:C.white,fontSize:20}}>
-            {slides[slide].title}
-          </h3>
+      {/* MAIN GRID */}
+      <div style={{
+        display:"grid",
+        gridTemplateColumns:"1.5fr 1fr",
+        gap:20,
+        maxWidth:900,
+        margin:"40px auto"
+      }}>
 
-          <p style={{marginTop:10,color:C.muted}}>
-            {slides[slide].desc}
-          </p>
-        </div>
-      </section>
-
-      {/* 🐳 MESSAGE GENERATOR */}
-      <section style={{textAlign:"center",padding:"40px 20px"}}>
-        <h2 style={{color:C.white,fontSize:28,fontWeight:800}}>
-          Reconnect With Your Biggest Tippers
-        </h2>
-
-        <div style={{
-          margin:"30px auto",
-          maxWidth:600,
-          padding:20,
-          borderRadius:16,
-          background:"linear-gradient(135deg,#1e293b,#020617)",
-          cursor:"pointer"
-        }}
-        onClick={()=>setMsgIndex((prev)=>(prev+1)%messages.length)}
-        >
-          <div style={{fontSize:13,color:C.muted,marginBottom:10}}>
-            user_BIGGESTWHALE999 • $18,940 lifetime
+        {/* MESSAGE */}
+        <div className="card">
+          <div className="title">
+            <span className="pulse">💌</span> Re-engage
           </div>
 
-          <div style={{
-            background:"rgba(255,255,255,0.05)",
-            padding:15,
-            borderRadius:10
-          }}>
-            {messages[msgIndex]}
+          <div className="box">
+            {displayed}
+            <span className="cursor">|</span>
           </div>
 
-          <p style={{marginTop:10,fontSize:12,color:"#ec4899"}}>
-            Click to generate another
-          </p>
-        </div>
-      </section>
+          <div style={{display:"flex",gap:10,marginTop:12}}>
+            <button onClick={()=>setMsgIndex(p=>(p+1)%fullMessages.length)} className="btn2">
+              Generate
+            </button>
 
-      {/* FEATURES */}
-      <section style={{maxWidth:1000,margin:"40px auto",padding:"0 20px"}}>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(250px,1fr))",gap:20}}>
-          {[
-            ["🐳 Top Tippers","Know exactly who spends the most"],
-            ["⚡ Best Hours","See when you make the most money"],
-            ["💌 Re-engagement","Bring back old spenders"],
-            ["📈 Growth Insights","Understand what increases income"],
-          ].map(([title,desc])=>(
-            <div key={title} style={{
-              background:C.card,
-              padding:20,
-              borderRadius:16
-            }}>
-              <div style={{color:C.white,fontWeight:700}}>{title}</div>
-              <div style={{fontSize:14,color:C.muted,marginTop:6}}>{desc}</div>
+            <button onClick={handleCopy} className="btn1">
+              {copied ? "Copied!" : "Copy"}
+            </button>
+          </div>
+        </div>
+
+        {/* WHALE */}
+        <div className="card">
+          <div className="title">🐳 Whale Profile</div>
+
+          <div style={{marginTop:10}}>
+            <div>{whales[whaleIndex].name}</div>
+            <div style={{color:"#ec4899",marginTop:6}}>
+              {whales[whaleIndex].spent} spent
             </div>
-          ))}
+            <div style={{color:"#64748b"}}>
+              {whales[whaleIndex].inactive} inactive
+            </div>
+          </div>
         </div>
-      </section>
+      </div>
 
-      {/* FINAL CTA */}
-      <section style={{textAlign:"center",padding:"60px 20px"}}>
-        <button onClick={()=>go("/login")} style={{
-          padding:"16px 40px",
-          borderRadius:12,
-          background:"linear-gradient(135deg,#3b82f6,#ec4899)",
-          color:"white",
-          fontWeight:800
-        }}>
-          Sign Up & Start Earning More
+      {/* CTA */}
+      <div style={{textAlign:"center",marginTop:40}}>
+        <button onClick={()=>router.push("/login")} className="btn1 big">
+          Start Earning More
         </button>
-      </section>
+      </div>
+
+      {/* STYLES */}
+      <style jsx>{`
+        .card {
+          background: linear-gradient(135deg,#1e293b,#020617);
+          padding:20px;
+          border-radius:16px;
+          border:1px solid rgba(255,255,255,0.08);
+          transition:0.3s;
+        }
+
+        .card:hover {
+          box-shadow:0 0 25px rgba(236,72,153,0.3);
+          transform:translateY(-2px);
+        }
+
+        .title {
+          color:#a855f7;
+          font-weight:600;
+          margin-bottom:10px;
+        }
+
+        .box {
+          background:rgba(255,255,255,0.05);
+          padding:15px;
+          border-radius:10px;
+          min-height:70px;
+        }
+
+        .cursor {
+          animation:blink 1s infinite;
+        }
+
+        @keyframes blink {
+          0%,100%{opacity:1}
+          50%{opacity:0}
+        }
+
+        .pulse {
+          animation:pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+          0%{transform:scale(1)}
+          50%{transform:scale(1.2)}
+          100%{transform:scale(1)}
+        }
+
+        .btn1 {
+          flex:1;
+          padding:10px;
+          border-radius:8px;
+          background:linear-gradient(135deg,#3b82f6,#ec4899);
+          color:white;
+          font-weight:700;
+        }
+
+        .btn2 {
+          flex:1;
+          padding:10px;
+          border-radius:8px;
+          background:#0f172a;
+          color:white;
+        }
+
+        .big {
+          padding:16px 40px;
+          font-size:16px;
+        }
+      `}</style>
 
     </div>
   )
