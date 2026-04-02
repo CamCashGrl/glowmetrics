@@ -4,30 +4,30 @@ export default function sitemap() {
   const now = new Date()
 
   const guides = [
-    'chaturbate-earnings-tracker',
-    'cam-model-analytics',
-    'how-to-increase-cam-tips',
-    'bongacams-analytics',
-    'cam-model-top-tippers',
-    'best-time-to-stream-chaturbate',
-    'cam-model-income-tracker',
-    'myfreecams-analytics',
-    'chaturbate-token-tracker',
-    'cam-model-revenue-dashboard',
-    'cam-model-session-breakdown',
-    'chaturbate-best-hours',
+    'chaturbate-earnings-tracker','cam-model-analytics','how-to-increase-cam-tips',
+    'bongacams-analytics','cam-model-top-tippers','best-time-to-stream-chaturbate',
+    'cam-model-income-tracker','myfreecams-analytics','chaturbate-token-tracker',
+    'cam-model-revenue-dashboard','cam-model-session-breakdown','chaturbate-best-hours',
   ]
 
   const blogs = [
-    // Existing
+    // Original 3
     'how-to-increase-cam-earnings',
     'why-cam-streams-arent-making-money',
     'best-cam-model-tools',
-    // Cluster 1 — Cam Model Earnings
+    // Cluster 1 pillar + supporting
     'cam-model-earnings',
     'how-much-do-chaturbate-models-make',
     'how-to-make-more-money-on-chaturbate',
     'why-cam-income-is-inconsistent',
+    // New batch
+    'cam-model-taxes',
+    'how-to-build-loyal-fans',
+    'how-to-stay-anonymous-as-a-cam-model',
+    'cam-model-room-titles',
+    'chaturbate-token-goals',
+    'bongacams-vs-chaturbate',
+    'cam-model-income-tracking',
   ]
 
   return [
