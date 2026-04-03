@@ -1477,14 +1477,14 @@ export default function Dashboard() {
         </nav>
 
         <div style={{ padding: "16px 20px", borderTop: "1px solid rgba(255,255,255,0.08)", display: "flex", flexDirection: "column", gap: 10 }}>
-          <div style={{ padding: 12, borderRadius: 10, background: "linear-gradient(135deg, rgba(236,72,153,0.15), rgba(124,92,255,0.15))", border: "1px solid rgba(236,72,153,0.3)", textAlign: "center" }}>
+          <div style={{ padding: 12, borderRadius: 10, background: "linear-gradient(135deg, rgba(59,130,246,0.1), rgba(236,72,153,0.1))", border: "1px solid rgba(236,72,153,0.3)", textAlign: "center" }}>
             <div style={{ fontSize: 18, marginBottom: 4 }}>🎉</div>
             <div style={{ fontSize: 12, fontWeight: 700, color: C.white, marginBottom: 2 }}>Free for first 100 users</div>
             <div style={{ fontSize: 10, color: C.muted, marginBottom: 8 }}>Spots filling up fast</div>
             <div style={{ height: 4, borderRadius: 4, background: "rgba(255,255,255,0.1)", overflow: "hidden" }}>
-              <div style={{ height: "100%", width: `${Math.min((betaCount ?? 63) / 100 * 100, 100)}%`, borderRadius: 4, background: "linear-gradient(90deg, #22D3EE, #EC4899)", transition: "width 0.6s ease" }} />
+              <div style={{ height: "100%", width: "63%", borderRadius: 4, background: "linear-gradient(90deg, #3b82f6, #ec4899)", transition: "width 0.6s ease" }} />
             </div>
-            <div style={{ fontSize: 10, color: C.muted, marginTop: 4 }}>{betaCount ?? "..."} / 100 spots taken</div>
+            <div style={{ fontSize: 10, color: C.pink, fontWeight: 600, marginTop: 4 }}>63 / 100 spots left</div>
           </div>
           <button
             onClick={handleSignOut}
@@ -1508,7 +1508,7 @@ export default function Dashboard() {
 
         {activeTab === "overview" && (
           <div>
-            <div style={{ marginBottom: 24, padding: "14px 20px", borderRadius: 12, background: "linear-gradient(135deg, rgba(245,158,11,0.15), rgba(251,146,60,0.1))", border: "1px solid rgba(245,158,11,0.4)", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+            <div style={{ marginBottom: 24, padding: "14px 20px", borderRadius: 12, background: "linear-gradient(135deg, rgba(59,130,246,0.1), rgba(236,72,153,0.1))", border: "1px solid rgba(236,72,153,0.3)", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                 <div style={{ fontSize: 24 }}>🎉</div>
                 <div>
@@ -1517,9 +1517,9 @@ export default function Dashboard() {
                 </div>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-                <div style={{ fontSize: 12, color: C.gold, fontWeight: 600 }}>{betaCount ?? "..."}/100 spots taken</div>
+                <div style={{ fontSize: 12, color: C.pink, fontWeight: 600 }}>63 / 100 spots left</div>
                 <div style={{ width: 80, height: 6, borderRadius: 4, background: "rgba(255,255,255,0.1)", overflow: "hidden" }}>
-                  <div style={{ height: "100%", width: `${Math.min((betaCount ?? 63) / 100 * 100, 100)}%`, borderRadius: 4, background: "linear-gradient(90deg, #F59E0B, #FB923C)", transition: "width 0.6s ease" }} />
+                  <div style={{ height: "100%", width: "37%", borderRadius: 4, background: "linear-gradient(90deg, #3b82f6, #ec4899)", transition: "width 0.6s ease" }} />
                 </div>
               </div>
             </div>
