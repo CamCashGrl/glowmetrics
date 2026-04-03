@@ -2170,9 +2170,9 @@ export default function Dashboard() {
               ))}
             </div>
 
-            )} {/* end data-loaded conditional */}
+            )}
           </div>
-        )} {/* end overview tab */}
+        )}
 
         {activeTab === "platforms" && (() => {
           // ── Time filter
