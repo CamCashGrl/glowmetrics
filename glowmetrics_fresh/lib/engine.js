@@ -141,6 +141,8 @@ function detectPlatform(text) {
   if (lower.includes('myfreecams') || lower.includes('mfc')) return 'MyFreeCams'
   if (lower.includes('stripchat')) return 'Stripchat'
   if (lower.includes('camsoda')) return 'CamSoda'
+  // Headerless BongaCams: DD.MM.YYYY dates with $ payout column — no platform keyword in file
+  if (/^\d{2}\.\d{2}\.\d{4}/m.test(text) && text.includes('$')) return 'BongaCams'
   return 'Unknown'
 }
 
