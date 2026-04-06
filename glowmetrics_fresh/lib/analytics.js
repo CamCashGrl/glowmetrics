@@ -1074,11 +1074,13 @@ function parseHeaderless(lines, platform) {
       const dateRaw = normalizeDate(vals[0].replace(/"/g, ''))
       // Skip transfers/cashouts
       if (vals[1].toLowerCase().includes('transfer') || vals[1].toLowerCase().includes('cash')) continue
-      // Username is the first word after "Tip From: ", everything after is the note
+      // Username is the first alphanumeric/underscore run after "Tip From: "
+      // Everything after the username (even without a space) is the note.
+      // Chaturbate usernames: letters, numbers, underscores only.
       const afterFrom = vals[1].replace(/tip from[:\s]*/i, '').trim()
-      const spaceIdx = afterFrom.indexOf(' ')
-      const username = spaceIdx > 0 ? afterFrom.slice(0, spaceIdx) : afterFrom
-      const tip_note = spaceIdx > 0 ? afterFrom.slice(spaceIdx + 1).trim() : ''
+      const userMatch = afterFrom.match(/^([\w]+)(.*)$/)
+      const username = userMatch ? userMatch[1] : afterFrom.split(' ')[0]
+      const tip_note = userMatch ? userMatch[2].trim() : ''
       const tokens = parseInt(vals[2]) || 0
       if (!username || tokens <= 0) continue
 
@@ -1579,7 +1581,7 @@ export function predictRevenue(tips, sessions) {
 // LOSS ALERTS
 // ============================================
 
-export function generateLossAlerts(tips, sessions, whales, bestHour) {
+export function generateLossAlerts(tips, sessions, whales, bestHour, bestHourByPlatform = {}) {
   const alerts = []
   const now = Date.now()
   const MS = 86400000
@@ -1592,13 +1594,24 @@ export function generateLossAlerts(tips, sessions, whales, bestHour) {
   const tipsPrevWeek  = tipsLast14.filter(t => !tipsLast7Set.has(t.id || `${t.date_time}_${t.username}`))
   const sessionsLast3 = sessions.filter(s => (now - new Date(s.startTime).getTime()) / MS <= 3)
 
-  // Peak window missed — uses pre-computed bestHour from aggregateRows
-  if (bestHour) {
+  // Peak window missed — per platform so the alert specifies where to stream
+  const platHours = Object.entries(bestHourByPlatform).filter(([, bh]) => bh)
+  if (platHours.length > 0) {
+    platHours.forEach(([plat, platBH]) => {
+      const bh = parseInt(platBH.hour)
+      const platSessions = sessionsLast3.filter(s => s.platform === plat)
+      const recentAtPeak = platSessions.filter(s => Math.abs(new Date(s.startTime).getHours() - bh) <= 1)
+      if (platSessions.length > 0 && recentAtPeak.length === 0) {
+        const estLoss = parseFloat((platBH.avg * 3).toFixed(2))
+        const label = bh === 0 ? '12 AM' : bh < 12 ? `${bh} AM` : bh === 12 ? '12 PM' : `${bh - 12} PM`
+        alerts.push({ type: 'peak_missed', severity: 'warning', icon: '🚨', message: `You haven't streamed ${plat} during your peak window (${label}) in 3 days — estimated loss: $${estLoss}`, action: `Go live on ${plat} at ${label} to recover this` })
+      }
+    })
+  } else if (bestHour) {
     const bh = parseInt(bestHour.hour)
     const avgAtPeak = bestHour.avg
-    const recentSessions = sessionsLast3
-    const recentAtPeak = recentSessions.filter(s => Math.abs(new Date(s.startTime).getHours() - bh) <= 1)
-    if (recentSessions.length > 0 && recentAtPeak.length === 0) {
+    const recentAtPeak = sessionsLast3.filter(s => Math.abs(new Date(s.startTime).getHours() - bh) <= 1)
+    if (sessionsLast3.length > 0 && recentAtPeak.length === 0) {
       const estLoss = parseFloat((avgAtPeak * 3).toFixed(2))
       const label = bh === 0 ? '12 AM' : bh < 12 ? `${bh} AM` : bh === 12 ? '12 PM' : `${bh - 12} PM`
       alerts.push({ type: 'peak_missed', severity: 'warning', icon: '🚨', message: `You haven't streamed during your peak window (${label}) in 3 days — estimated loss: $${estLoss}`, action: `Go live at ${label} to recover this` })
@@ -1638,26 +1651,51 @@ export function generateLossAlerts(tips, sessions, whales, bestHour) {
 // INSIGHTS (ACTION-ORIENTED)
 // ============================================
 
-export function generateInsights(tips, sessions, bestDay, worstDay, bestHour) {
+export function generateInsights(tips, sessions, bestDay, worstDay, bestHour, bestDayByPlatform = {}, bestHourByPlatform = {}) {
   const insights = []
   if (!tips.length || !sessions.length) return insights
   const now = Date.now()
 
-  // Best day — uses pre-computed avg-per-session value passed in from aggregateRows
-  if (bestDay && worstDay && bestDay.day !== worstDay.day) {
+  // Best day per platform — specific so you know WHICH platform to prioritize
+  const platformsWithDay = Object.entries(bestDayByPlatform)
+  if (platformsWithDay.length > 0) {
+    platformsWithDay.forEach(([plat, bd]) => {
+      if (!bd) return
+      const platSessions = sessions.filter(s => s.platform === plat)
+      if (platSessions.length < 2) return
+      const avgOverall = platSessions.reduce((s, x) => s + x.totalUSD, 0) / platSessions.length
+      const mult = avgOverall > 0 ? (bd.avg / avgOverall).toFixed(1) : null
+      const costOfMissing = parseFloat((bd.avg - avgOverall).toFixed(2))
+      insights.push({ icon: '📅', text: `${bd.day}s are your best day on ${plat}${mult && mult !== '1.0' ? ` — ${mult}x your avg session ($${bd.avg.toFixed(0)} avg)` : ` ($${bd.avg.toFixed(0)} avg)`}. Missing one ${bd.day} costs ~$${Math.max(0, costOfMissing).toFixed(0)}`, type: 'day', priority: 1 })
+    })
+  } else if (bestDay && worstDay && bestDay.day !== worstDay.day) {
+    // Fallback to overall if no platform breakdown available
     const avgOverall = sessions.reduce((s, x) => s + x.totalUSD, 0) / sessions.length
     const mult = (bestDay.avg / avgOverall).toFixed(1)
     const costOfMissing = parseFloat((bestDay.avg - avgOverall).toFixed(2))
-    insights.push({ icon: '📅', text: `${bestDay.day}s are your highest-earning day — your avg session earns ${mult}x more ($${bestDay.avg.toFixed(0)} avg). Missing one ${bestDay.day} costs you ~$${costOfMissing}`, type: 'day', priority: 1 })
+    insights.push({ icon: '📅', text: `${bestDay.day}s are your highest-earning day overall — your avg session earns ${mult}x more ($${bestDay.avg.toFixed(0)} avg). Missing one ${bestDay.day} costs you ~$${costOfMissing}`, type: 'day', priority: 1 })
   }
 
-  // Best hour — uses pre-computed value
-  if (bestHour) {
+  // Best hour per platform
+  const platformsWithHour = Object.entries(bestHourByPlatform)
+  if (platformsWithHour.length > 0) {
+    platformsWithHour.forEach(([plat, bh]) => {
+      if (!bh) return
+      const platSessions = sessions.filter(s => s.platform === plat)
+      if (platSessions.length < 2) return
+      const h = parseInt(bh.hour)
+      const label = h === 0 ? '12 AM' : h < 12 ? `${h} AM` : h === 12 ? '12 PM' : `${h - 12} PM`
+      const avgOverall = platSessions.reduce((s, x) => s + x.totalUSD, 0) / platSessions.length
+      const multiplier = avgOverall > 0 ? (bh.avg / avgOverall).toFixed(1) : null
+      insights.push({ icon: '⏰', text: `Go live at ${label} on ${plat}${multiplier && multiplier !== '1.0' ? ` — your earnings are ${multiplier}x higher at this hour` : ''} ($${bh.avg.toFixed(0)} avg/active day)`, type: 'time', priority: 1 })
+    })
+  } else if (bestHour) {
+    // Fallback
     const h = parseInt(bestHour.hour)
     const label = h === 0 ? '12 AM' : h < 12 ? `${h} AM` : h === 12 ? '12 PM' : `${h - 12} PM`
     const avgOverall = sessions.reduce((s, x) => s + x.totalUSD, 0) / sessions.length
     const multiplier = avgOverall > 0 ? (bestHour.avg / avgOverall).toFixed(1) : null
-    insights.push({ icon: '⏰', text: `Go live at ${label} — your avg session earnings are ${multiplier ? `${multiplier}x higher` : 'at their peak'} at this hour ($${bestHour.avg.toFixed(0)} avg). Missing this window costs you real money every session`, type: 'time', priority: 1 })
+    insights.push({ icon: '⏰', text: `Go live at ${label} overall${multiplier ? ` — ${multiplier}x higher earnings` : ''} ($${bestHour.avg.toFixed(0)} avg). Missing this window costs you real money every session`, type: 'time', priority: 1 })
   }
 
   // Whale concentration — use only true Whales (top 5%) for this insight
@@ -1737,23 +1775,46 @@ export function generateInsights(tips, sessions, bestDay, worstDay, bestHour) {
 // NEXT MOVE ENGINE
 // ============================================
 
-export function generateNextMoves(tips, sessions, whales, predictions, bestHour) {
+export function generateNextMoves(tips, sessions, whales, predictions, bestHour, bestHourByPlatform = {}) {
   const moves = []
   const now = Date.now()
 
-  // Best hour coaching — uses pre-computed bestHour from aggregateRows
-  if (bestHour) {
+  // Best hour coaching — per platform so you know WHERE to stream, not just when
+  const currentHour = new Date().getHours()
+  const platHourEntries = Object.entries(bestHourByPlatform).filter(([, bh]) => bh)
+  if (platHourEntries.length > 0) {
+    // Find the single best platform+hour combo right now or coming up
+    let bestCombo = null
+    platHourEntries.forEach(([plat, bh]) => {
+      const bhInt = parseInt(bh.hour)
+      const hoursUntil = (bhInt - currentHour + 24) % 24
+      if (!bestCombo || hoursUntil < bestCombo.hoursUntil) {
+        bestCombo = { plat, bh, bhInt, hoursUntil }
+      }
+    })
+    if (bestCombo) {
+      const { plat, bh, bhInt, hoursUntil } = bestCombo
+      const label = bhInt === 0 ? '12 AM' : bhInt < 12 ? `${bhInt} AM` : bhInt === 12 ? '12 PM' : `${bhInt - 12} PM`
+      const avg = bh.avg
+      if (hoursUntil === 0 || hoursUntil === 1) {
+        moves.push({ icon: '🔥', color: '#FB923C', text: `Go live on ${plat} NOW — ${label} is your peak ${plat} hour ($${avg.toFixed(0)} avg/active day)`, priority: 0 })
+      } else if (hoursUntil <= 2) {
+        moves.push({ icon: '⏰', color: '#22D3EE', text: `${hoursUntil}h until your peak ${plat} window (${label}). Prep your room and get ready — $${avg.toFixed(0)} avg/active day at this hour`, priority: 1 })
+      } else {
+        moves.push({ icon: '🕐', color: '#22D3EE', text: `Your best time on ${plat} is ${label} — plan your next stream around it ($${avg.toFixed(0)} avg/active day)`, priority: 2 })
+      }
+    }
+  } else if (bestHour) {
+    // Fallback to overall if no platform breakdown
     const bh = parseInt(bestHour.hour)
-    const currentHour = new Date().getHours()
     const hoursUntil = (bh - currentHour + 24) % 24
-    const avgAtPeak = bestHour.avg
     const label = bh === 0 ? '12 AM' : bh < 12 ? `${bh} AM` : bh === 12 ? '12 PM' : `${bh - 12} PM`
     if (hoursUntil === 0 || hoursUntil === 1) {
-      moves.push({ icon: '🔥', color: '#FB923C', text: `Go live NOW — ${label} is your peak earning time. Your data shows you average $${avgAtPeak.toFixed(0)}/session at this hour`, priority: 0 })
+      moves.push({ icon: '🔥', color: '#FB923C', text: `Go live NOW — ${label} is your peak earning hour ($${bestHour.avg.toFixed(0)} avg/active day)`, priority: 0 })
     } else if (hoursUntil <= 2) {
-      moves.push({ icon: '⏰', color: '#22D3EE', text: `You're ${hoursUntil} hour${hoursUntil > 1 ? 's' : ''} away from your peak time (${label}). Prep your room title and get ready — you avg $${avgAtPeak.toFixed(0)} at this hour`, priority: 1 })
+      moves.push({ icon: '⏰', color: '#22D3EE', text: `${hoursUntil}h until your peak window (${label}). Prep your room and get ready — $${bestHour.avg.toFixed(0)} avg/active day`, priority: 1 })
     } else {
-      moves.push({ icon: '🕐', color: '#22D3EE', text: `Your best earning time is ${label} — plan your next stream around it. Your data shows $${avgAtPeak.toFixed(0)} avg per session at this hour`, priority: 2 })
+      moves.push({ icon: '🕐', color: '#22D3EE', text: `Your best earning time is ${label} — plan your next stream around it ($${bestHour.avg.toFixed(0)} avg/active day)`, priority: 2 })
     }
   }
 
@@ -2198,12 +2259,36 @@ export function aggregateRows(tips) {
   const worstDay = [...dayAvgs].sort((a, b) => a.avg - b.avg)[0] || null
   const bestHour = hourAvgs.sort((a, b) => b.avg - a.avg)[0]  || null
 
+  // Per-platform best day + best hour — used for platform-specific insights
+  const platforms = [...new Set(cleanTips.map(t => t.platform))]
+  const bestDayByPlatform = {}
+  const bestHourByPlatform = {}
+  platforms.forEach(plat => {
+    const platTips = cleanTips.filter(t => t.platform === plat)
+    const pDayTotals = {}, pDayDates = {}, pHourTotals = {}, pHourDates = {}
+    platTips.forEach(t => {
+      const dt = new Date(t.dateRaw || t.date_time)
+      const d = UTC_DAYS_LONG[dt.getUTCDay()]
+      const h = dt.getUTCHours()
+      pDayTotals[d] = (pDayTotals[d] || 0) + (t.usd || 0)
+      if (!pDayDates[d]) pDayDates[d] = new Set()
+      pDayDates[d].add(dt.toISOString().slice(0, 10))
+      pHourTotals[h] = (pHourTotals[h] || 0) + (t.usd || 0)
+      if (!pHourDates[h]) pHourDates[h] = new Set()
+      pHourDates[h].add(dt.toISOString().slice(0, 10))
+    })
+    const pDayAvgs = Object.keys(pDayTotals).map(d => ({ day: d, avg: pDayTotals[d] / (pDayDates[d]?.size || 1) }))
+    const pHourAvgs = Object.keys(pHourTotals).map(h => ({ hour: h, avg: pHourTotals[h] / (pHourDates[h]?.size || 1) }))
+    bestDayByPlatform[plat] = pDayAvgs.sort((a, b) => b.avg - a.avg)[0] || null
+    bestHourByPlatform[plat] = pHourAvgs.sort((a, b) => b.avg - a.avg)[0] || null
+  })
+
   const whales      = identifyWhales(cleanTips)
-  const insights    = generateInsights(cleanTips, sessions, bestDay, worstDay, bestHour)
+  const insights    = generateInsights(cleanTips, sessions, bestDay, worstDay, bestHour, bestDayByPlatform, bestHourByPlatform)
   const predictions = predictRevenue(cleanTips, sessions)
   const whaleAlerts = generateWhaleAlerts(whales)
-  const lossAlerts  = generateLossAlerts(cleanTips, sessions, whales, bestHour)
-  const nextMoves   = generateNextMoves(cleanTips, sessions, whales, predictions, bestHour)
+  const lossAlerts  = generateLossAlerts(cleanTips, sessions, whales, bestHour, bestHourByPlatform)
+  const nextMoves   = generateNextMoves(cleanTips, sessions, whales, predictions, bestHour, bestHourByPlatform)
 
   // Single pass for totals — uses cleanTips (all-time, validated)
   let totalUSD = 0
@@ -2264,7 +2349,7 @@ export function aggregateRows(tips) {
     avgTipSize: parseFloat((cleanTips.length > 0 ? totalUSD / cleanTips.length : 0).toFixed(2)),
     topTippers, platforms, sessions, insights: validateInsights(insights), predictions,
     whaleAlerts, lossAlerts, nextMoves, whales,
-    bestDay, bestHour, timeRanges,
+    bestDay, bestHour, bestDayByPlatform, bestHourByPlatform, timeRanges,
     dependencyRisk,   // top1/3/5 pct + risk level
     preTipBehavior,   // peak tipping window + avg gap
     trueHourlyAvg,    // 24-slot array: avgPerActiveDay per UTC hour
