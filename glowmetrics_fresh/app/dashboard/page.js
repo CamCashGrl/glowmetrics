@@ -817,6 +817,14 @@ export default function Dashboard() {
   const [fanSearchQuery, setFanSearchQuery] = useState("")
   const [shareModalOpen, setShareModalOpen] = useState(false)
   const [chartDrillDay, setChartDrillDay] = useState(null)
+  // ── NOTIFICATIONS ─────────────────────────────────────────
+  const [notifOpen, setNotifOpen] = useState(false)
+  const [notifications, setNotifications] = useState([])
+  // ── GUIDED WALKTHROUGH ────────────────────────────────────
+  const [walkthroughStep, setWalkthroughStep] = useState(null) // null = off, 1-4 = active step
+  // ── DATA CONFIRMATION ─────────────────────────────────────
+  const [confirmData, setConfirmData] = useState(null) // null = no pending confirmation
+  const [uploadProcessing, setUploadProcessing] = useState(false)
   // ── LIVE MODE STATE ───────────────────────────────────────
   const [liveActive, setLiveActive] = useState(false)
   const [liveStartTime, setLiveStartTime] = useState(null)
@@ -935,13 +943,19 @@ export default function Dashboard() {
   }
 
   const removeDuplicates = (existingTips, newTips) => {
-    const existingKeys = new Set(existingTips.map(t => `${t.date_time}_${t.username}_${t.tokens}_${t.platform}`))
-    return newTips.filter(t => !existingKeys.has(`${t.dateRaw || t.date_time}_${t.username}_${t.tokens}_${t.platform}`))
+    // Normalize dates to YYYY-MM-DDTHH:MM for comparison (strips seconds/timezone differences)
+    const normalize = (d) => {
+      try { return new Date(d).toISOString().slice(0, 16) } catch { return d }
+    }
+    const existingKeys = new Set(existingTips.map(t => `${normalize(t.date_time)}_${t.username?.toLowerCase()}_${t.tokens}_${t.platform}`))
+    return newTips.filter(t => !existingKeys.has(`${normalize(t.dateRaw || t.date_time)}_${t.username?.toLowerCase()}_${t.tokens}_${t.platform}`))
   }
 
   const handleCSV = async (file, forcePlatform = null) => {
     if (!file || !user) return
     setUploading(true)
+    setUploadProcessing(true)
+    setActiveTab("overview") // jump to overview to show processing state
     try {
       const text = await file.text()
       const parsed = parseCSV(text, forcePlatform)
@@ -949,6 +963,7 @@ export default function Dashboard() {
       if (!parsed.length) {
         showToast("❌ No valid rows found — try selecting your platform from the dropdown and re-uploading")
         setUploading(false)
+        setUploadProcessing(false)
         return
       }
 
@@ -960,6 +975,7 @@ export default function Dashboard() {
       if (unique.length === 0) {
         showToast(`⚠️ All ${parsed.length} tips are already imported!`)
         setUploading(false)
+        setUploadProcessing(false)
         return
       }
 
@@ -978,12 +994,18 @@ export default function Dashboard() {
         }
       })
 
-      const BATCH_SIZE = 500
+      const BATCH_SIZE = 200
+      let totalInserted = 0
+      let totalSkipped = 0
       for (let i = 0; i < toInsert.length; i += BATCH_SIZE) {
         const batch = toInsert.slice(i, i + BATCH_SIZE)
-        const { error } = await supabase.from("tips").insert(batch)
-        if (error) { showToast("❌ " + error.message); setUploading(false); return }
+        const { data, error } = await supabase.rpc('insert_tips_dedup', { tips: batch })
+        if (error) { showToast("❌ " + error.message); setUploading(false); setUploadProcessing(false); return }
+        totalInserted += data?.inserted || 0
+        totalSkipped += data?.skipped || 0
       }
+      // Override unique count with what DB actually inserted
+      const actualInserted = totalInserted || unique.length
 
       setUploadCount(uploadCount + 1)
       const newCount = uploadCount + 1
@@ -992,13 +1014,43 @@ export default function Dashboard() {
         await supabase.from('analytics_events').insert({ user_id: user.id, event_name: 'csv_uploaded', properties: { count: newCount, platform: parsed[0]?.platform || 'Unknown', rows: unique.length } })
         await supabase.from('beta_users').upsert({ user_id: user.id, email: user.email, csv_upload_count: newCount }, { onConflict: 'user_id' })
       } catch(e) {}
-      const msg = duplicateCount > 0
-        ? `✅ Imported ${unique.length} tips (${duplicateCount} duplicates skipped)`
-        : `✅ Imported ${unique.length} tips from ${parsed[0]?.platform || "CSV"}!`
-      showToast(msg)
+
       await loadData(user.id)
+
+      // Build platforms list and date range for confirmation
+      const platforms = [...new Set(unique.map(r => r.platform).filter(Boolean))]
+      const dates = unique.map(r => new Date(r.dateRaw || r.date_time)).filter(d => !isNaN(d))
+      const minDate = dates.length ? new Date(Math.min(...dates)).toLocaleDateString() : null
+      const maxDate = dates.length ? new Date(Math.max(...dates)).toLocaleDateString() : null
+
+      setUploadProcessing(false)
+
+      // Show data confirmation instead of just a toast
+      setConfirmData({
+        count: actualInserted,
+        platforms,
+        dateRange: minDate && maxDate ? `${minDate} → ${maxDate}` : null,
+        dupes: duplicateCount + totalSkipped
+      })
+
+      // Fire notification
+      const isFirst = newCount === 1
+      setNotifications(prev => [{
+        icon: isFirst ? "🎉" : "📥",
+        title: isFirst
+          ? "Congrats — you just uploaded your first CSV!"
+          : `${actualInserted} new tips imported`,
+        body: `We found ${actualInserted} tips across ${platforms.join(", ")}${(duplicateCount + totalSkipped) > 0 ? ` (${duplicateCount + totalSkipped} duplicates removed)` : ""}.`,
+        time: "Just now"
+      }, ...prev])
+      setNotifOpen(true)
+
+      // Start walkthrough on first upload
+      if (isFirst) setWalkthroughStep(1)
+
     } catch (err) {
       showToast("❌ " + err.message)
+      setUploadProcessing(false)
     } finally {
       setUploading(false)
     }
@@ -1436,7 +1488,11 @@ export default function Dashboard() {
         .dash-card:hover { transform: translateY(-2px); }
         .whale-row { transition: background 0.15s; }
         .whale-row:hover { background: rgba(59,130,246,0.08) !important; }
-        @keyframes pulse-msg { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.25); } }
+        @keyframes pulse-msg { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.3); opacity: 0.85; } }
+        @keyframes float-msg { 0%, 100% { transform: translateY(0px) scale(1); } 25% { transform: translateY(-4px) scale(1.15); } 50% { transform: translateY(-2px) scale(1.25); } 75% { transform: translateY(-5px) scale(1.1); } }
+        @keyframes heartbeat { 0%, 100% { transform: scale(1); } 14% { transform: scale(1.3); } 28% { transform: scale(1); } 42% { transform: scale(1.2); } 70% { transform: scale(1); } }
+        @keyframes notif-bounce { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.2); } }
+        @keyframes walkthrough-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(34,211,238,0.4); } 50% { box-shadow: 0 0 0 12px rgba(34,211,238,0); } }
       `}</style>
 
       <div style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 0 }}>
@@ -1506,9 +1562,180 @@ export default function Dashboard() {
       {/* MAIN CONTENT */}
       <div style={{ marginLeft: 240, padding: 32, position: "relative", zIndex: 1 }}>
 
+        {/* TOP HEADER BAR */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 28, padding: "12px 20px", borderRadius: 14, background: "rgba(15,20,32,0.7)", backdropFilter: "blur(16px)", border: "1px solid rgba(255,255,255,0.07)", gap: 12 }}>
+          <div style={{ fontSize: 13, color: C.muted, fontWeight: 500 }}>
+            {user?.email && <span>👤 {user.email}</span>}
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            {/* Fan Search */}
+            <button onClick={() => setFanSearchOpen(true)} title="Search fans" style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 9, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: C.muted, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+              🔍 Search Fan
+            </button>
+            {/* Share My Stats */}
+            <button onClick={() => setShareModalOpen(true)} title="Share your stats" style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 9, background: "rgba(236,72,153,0.08)", border: "1px solid rgba(236,72,153,0.25)", color: C.pink, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+              📤 Share Stats
+            </button>
+            {/* Notifications Bell */}
+            <button onClick={() => setNotifOpen(v => !v)} title="Notifications" style={{ position: "relative", padding: "7px 10px", borderRadius: 9, background: notifications.length > 0 ? "rgba(34,211,238,0.08)" : "rgba(255,255,255,0.05)", border: `1px solid ${notifications.length > 0 ? "rgba(34,211,238,0.3)" : "rgba(255,255,255,0.1)"}`, color: notifications.length > 0 ? C.cyan : C.muted, fontSize: 16, cursor: "pointer", animation: notifications.length > 0 ? "notif-bounce 2s ease-in-out infinite" : "none" }}>
+              🔔
+              {notifications.length > 0 && (
+                <span style={{ position: "absolute", top: 4, right: 4, width: 8, height: 8, borderRadius: "50%", background: C.pink, border: "1.5px solid #05070f" }} />
+              )}
+            </button>
+            {/* Sign Out */}
+            <button onClick={handleSignOut} title="Sign out" style={{ padding: "7px 14px", borderRadius: 9, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", color: C.muted, fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+              onMouseEnter={e => { e.currentTarget.style.background = "rgba(248,113,113,0.1)"; e.currentTarget.style.color = "#F87171"; e.currentTarget.style.borderColor = "rgba(248,113,113,0.3)" }}
+              onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,255,255,0.04)"; e.currentTarget.style.color = C.muted; e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)" }}>
+              → Sign Out
+            </button>
+          </div>
+        </div>
+
+        {/* NOTIFICATIONS DROPDOWN */}
+        {notifOpen && (
+          <div style={{ position: "fixed", top: 80, right: 32, width: 360, background: "rgba(15,20,32,0.98)", backdropFilter: "blur(24px)", borderRadius: 16, border: "1px solid rgba(255,255,255,0.1)", boxShadow: "0 8px 40px rgba(0,0,0,0.6)", zIndex: 200, overflow: "hidden" }}>
+            <div style={{ padding: "16px 20px", borderBottom: "1px solid rgba(255,255,255,0.07)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: 14, fontWeight: 700, color: C.white }}>🔔 Notifications</span>
+              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                {notifications.length > 0 && <button onClick={() => setNotifications([])} style={{ fontSize: 11, color: C.muted, background: "none", border: "none", cursor: "pointer" }}>Clear all</button>}
+                <button onClick={() => setNotifOpen(false)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 16 }}>✕</button>
+              </div>
+            </div>
+            <div style={{ maxHeight: 400, overflowY: "auto" }}>
+              {notifications.length === 0 ? (
+                <div style={{ padding: 24, textAlign: "center", color: C.muted, fontSize: 13 }}>
+                  <div style={{ fontSize: 32, marginBottom: 8 }}>🔕</div>
+                  No notifications yet — upload a CSV to get started!
+                </div>
+              ) : (
+                notifications.map((n, i) => (
+                  <div key={i} style={{ padding: "14px 20px", borderBottom: "1px solid rgba(255,255,255,0.05)", display: "flex", gap: 12, alignItems: "flex-start" }}>
+                    <span style={{ fontSize: 20, flexShrink: 0 }}>{n.icon}</span>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: C.white, marginBottom: 2 }}>{n.title}</div>
+                      <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.5 }}>{n.body}</div>
+                      <div style={{ fontSize: 10, color: C.muted, marginTop: 4 }}>{n.time}</div>
+                    </div>
+                    <button onClick={() => setNotifications(prev => prev.filter((_, j) => j !== i))} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 12, flexShrink: 0 }}>✕</button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+        {/* ── OVERVIEW TAB ─────────────────────────────────── */}
         {activeTab === "overview" && (
           <div>
-            <div style={{ marginBottom: 24, padding: "14px 20px", borderRadius: 12, background: "linear-gradient(135deg, rgba(59,130,246,0.1), rgba(236,72,153,0.1))", border: "1px solid rgba(236,72,153,0.3)", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+            {/* STATE 1: NO DATA — Empty state */}
+            {!loading && tips.length === 0 && !confirmData && (
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "60vh", textAlign: "center" }}>
+                <div style={{ fontSize: 64, marginBottom: 20 }}>📂</div>
+                <h2 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 12 }}>Upload your data to get started</h2>
+                <p style={{ fontSize: 15, color: C.muted, maxWidth: 420, lineHeight: 1.7, marginBottom: 32 }}>
+                  To see your insights and earnings, upload your CSV from Chaturbate, BongaCams, or MyFreeCams.
+                </p>
+                <button onClick={() => setActiveTab("upload")} style={{ padding: "14px 40px", borderRadius: 12, background: "linear-gradient(135deg, #3b82f6, #ec4899)", color: C.white, fontWeight: 700, fontSize: 16, border: "none", cursor: "pointer", boxShadow: "0 8px 30px rgba(236,72,153,0.35)", animation: "walkthrough-pulse 2s infinite" }}>
+                  📥 Upload CSV
+                </button>
+                <p style={{ marginTop: 16, fontSize: 12, color: C.muted }}>Supports Chaturbate, BongaCams, MyFreeCams · Auto removes duplicates</p>
+
+                {/* Guided walkthrough step 1 overlay hint */}
+                {walkthroughStep === 1 && (
+                  <div style={{ marginTop: 24, padding: "16px 24px", borderRadius: 14, background: "rgba(34,211,238,0.1)", border: "1px solid rgba(34,211,238,0.4)", maxWidth: 420 }}>
+                    <div style={{ fontSize: 13, color: C.cyan, fontWeight: 600, marginBottom: 6 }}>👆 Step 1 of 4</div>
+                    <div style={{ fontSize: 14, color: C.white }}>Click <strong>Upload CSV</strong> to unlock your insights and earnings dashboard.</div>
+                    <button onClick={() => setWalkthroughStep(null)} style={{ marginTop: 12, fontSize: 12, color: C.muted, background: "none", border: "none", cursor: "pointer" }}>Skip tour</button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* STATE 2: PROCESSING */}
+            {uploadProcessing && (
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "60vh", textAlign: "center" }}>
+                <div style={{ width: 56, height: 56, borderRadius: "50%", border: "3px solid rgba(255,255,255,0.08)", borderTopColor: C.pink, animation: "spin 0.8s linear infinite", marginBottom: 24 }} />
+                <h2 style={{ fontSize: 22, fontWeight: 700, color: C.white, marginBottom: 8 }}>Processing your data…</h2>
+                <p style={{ color: C.muted, fontSize: 14 }}>Hang tight, this only takes a second</p>
+                <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
+              </div>
+            )}
+
+            {/* STATE 3: DATA CONFIRMATION after upload */}
+            {confirmData && !uploadProcessing && (
+              <div style={{ maxWidth: 560, margin: "60px auto", textAlign: "center" }}>
+                <div style={{ fontSize: 48, marginBottom: 16 }}>✅</div>
+                <h2 style={{ fontSize: 24, fontWeight: 800, color: C.white, marginBottom: 8 }}>We processed your data!</h2>
+                <p style={{ color: C.muted, fontSize: 14, marginBottom: 28 }}>Does everything look correct?</p>
+                <div style={{ ...glassCard, borderRadius: 16, padding: 24, marginBottom: 24, textAlign: "left" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                    {[
+                      { label: "Tips imported", value: confirmData.count },
+                      { label: "Platforms", value: confirmData.platforms?.join(", ") || "—" },
+                      { label: "Date range", value: confirmData.dateRange || "—" },
+                      { label: "Duplicates removed", value: confirmData.dupes ?? 0 },
+                    ].map(({ label, value }) => (
+                      <div key={label} style={{ padding: "12px 16px", borderRadius: 10, background: "rgba(255,255,255,0.04)" }}>
+                        <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>{label}</div>
+                        <div style={{ fontSize: 18, fontWeight: 700, color: C.white }}>{value}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
+                  <button onClick={() => { setConfirmData(null); if (walkthroughStep === 1) setWalkthroughStep(2) }} style={{ padding: "12px 28px", borderRadius: 10, background: "linear-gradient(135deg, #10B981, #3b82f6)", color: C.white, fontWeight: 700, border: "none", cursor: "pointer", fontSize: 14 }}>
+                    ✔ Looks good!
+                  </button>
+                  <button onClick={() => { setConfirmData(null); setActiveTab("upload") }} style={{ padding: "12px 28px", borderRadius: 10, background: "rgba(248,113,113,0.15)", color: "#F87171", fontWeight: 700, border: "1px solid rgba(248,113,113,0.3)", cursor: "pointer", fontSize: 14 }}>
+                    ✖ Something's wrong
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* STATE 3: DATA LOADED — full dashboard */}
+            {tips.length > 0 && !confirmData && !uploadProcessing && (
+              <div>
+                {/* Walkthrough step 2 */}
+                {walkthroughStep === 2 && (
+                  <div style={{ marginBottom: 20, padding: "16px 20px", borderRadius: 14, background: "rgba(34,211,238,0.08)", border: "1px solid rgba(34,211,238,0.4)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div>
+                      <div style={{ fontSize: 12, color: C.cyan, fontWeight: 600, marginBottom: 4 }}>📊 Step 2 of 4 — Your Stats</div>
+                      <div style={{ fontSize: 14, color: C.white }}>These cards show your real earnings — total made, avg per hour, total fans, and your best day.</div>
+                    </div>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button onClick={() => setWalkthroughStep(3)} style={{ padding: "8px 16px", borderRadius: 8, background: C.cyan, color: "#05070f", fontWeight: 700, border: "none", cursor: "pointer", fontSize: 13 }}>Next →</button>
+                      <button onClick={() => setWalkthroughStep(null)} style={{ fontSize: 12, color: C.muted, background: "none", border: "none", cursor: "pointer" }}>Skip</button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Walkthrough step 3 */}
+                {walkthroughStep === 3 && (
+                  <div style={{ marginBottom: 20, padding: "16px 20px", borderRadius: 14, background: "rgba(168,85,247,0.08)", border: "1px solid rgba(168,85,247,0.4)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div>
+                      <div style={{ fontSize: 12, color: "#a855f7", fontWeight: 600, marginBottom: 4 }}>🔔 Step 3 of 4 — Notifications</div>
+                      <div style={{ fontSize: 14, color: C.white }}>Click the 🔔 bell in the top bar to see alerts — like when a big spender goes quiet.</div>
+                    </div>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button onClick={() => setWalkthroughStep(4)} style={{ padding: "8px 16px", borderRadius: 8, background: "#a855f7", color: C.white, fontWeight: 700, border: "none", cursor: "pointer", fontSize: 13 }}>Next →</button>
+                      <button onClick={() => setWalkthroughStep(null)} style={{ fontSize: 12, color: C.muted, background: "none", border: "none", cursor: "pointer" }}>Skip</button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Walkthrough step 4 */}
+                {walkthroughStep === 4 && (
+                  <div style={{ marginBottom: 20, padding: "16px 20px", borderRadius: 14, background: "rgba(16,185,129,0.08)", border: "1px solid rgba(16,185,129,0.4)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div>
+                      <div style={{ fontSize: 12, color: C.green, fontWeight: 600, marginBottom: 4 }}>🎉 Step 4 of 4 — You're all set!</div>
+                      <div style={{ fontSize: 14, color: C.white }}>Explore your Top Fans, Platform stats, and Live Mode. You've got everything you need.</div>
+                    </div>
+                    <button onClick={() => setWalkthroughStep(null)} style={{ padding: "8px 20px", borderRadius: 8, background: C.green, color: "#05070f", fontWeight: 700, border: "none", cursor: "pointer", fontSize: 13 }}>Done ✓</button>
+                  </div>
+                )}
+
+          <div style={{ marginBottom: 24, padding: "14px 20px", borderRadius: 12, background: "linear-gradient(135deg, rgba(59,130,246,0.1), rgba(236,72,153,0.1))", border: "1px solid rgba(236,72,153,0.3)", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                 <div style={{ fontSize: 24 }}>🎉</div>
                 <div>
@@ -1868,7 +2095,7 @@ export default function Dashboard() {
                         <CopyButton text={a.reengageMsg} />
                         <button
                           onClick={() => { if (a.whale) { setMessageTarget(a.whale); setMessageIndex(0); setMessageCopied(false) } }}
-                          style={{ fontSize: 20, background: "none", border: "none", cursor: "pointer", animation: "pulse-msg 2s infinite" }}>
+                          style={{ fontSize: 20, background: "none", border: "none", cursor: "pointer", animation: "float-msg 2.5s ease-in-out infinite", display: "inline-block" }}>
                           💌
                         </button>
                       </div>
@@ -1910,7 +2137,7 @@ export default function Dashboard() {
                       />
                       <button
                         onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }}
-                        style={{ padding: "8px 14px", borderRadius: 8, background: "linear-gradient(135deg, rgba(236,72,153,0.3), rgba(124,92,255,0.3))", border: "1px solid rgba(236,72,153,0.4)", color: C.pink, fontSize: 12, fontWeight: 600, cursor: "pointer", animation: "pulse-msg 2s infinite" }}>
+                        style={{ padding: "8px 14px", borderRadius: 8, background: "linear-gradient(135deg, rgba(236,72,153,0.3), rgba(124,92,255,0.3))", border: "1px solid rgba(236,72,153,0.4)", color: C.pink, fontSize: 14, fontWeight: 600, cursor: "pointer", animation: "heartbeat 1.8s ease-in-out infinite", display: "inline-block" }}>
                         💌
                       </button>
                     </div>
@@ -1942,8 +2169,10 @@ export default function Dashboard() {
                 </div>
               ))}
             </div>
+
+            )} {/* end data-loaded conditional */}
           </div>
-        )}
+        )} {/* end overview tab */}
 
         {activeTab === "platforms" && (() => {
           // ── Time filter
