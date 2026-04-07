@@ -791,521 +791,6 @@ function CopyButton({ text, label = "📋 Copy", copiedLabel = "✅ Copied!", st
   )
 }
 
-// FAN SEARCH MODAL
-
-const PLATFORMS_WITH_NOTES = ['Chaturbate', 'MyFreeCams']
-
-// ── MAIN COMPONENT ────────────────────────────────────────────────────────────
-export function FanSearchModal({ userId, allTips = [], onClose }) {
-  const supabase = createClientComponentClient()
-  const [query, setQuery] = useState('')
-  const [results, setResults] = useState([])
-  const [selectedFan, setSelectedFan] = useState(null)
-  const [fanTips, setFanTips] = useState([])
-  const [fanNote, setFanNote] = useState('')
-  const [savedNote, setSavedNote] = useState('')
-  const [noteSaving, setNoteSaving] = useState(false)
-  const [noteSaved, setNoteSaved] = useState(false)
-  const [view, setView] = useState('search') // 'search' | 'profile' | 'notes'
-  const [loading, setLoading] = useState(false)
-  const inputRef = useRef(null)
-
-  // Focus input on open
-  useEffect(() => {
-    setTimeout(() => inputRef.current?.focus(), 100)
-  }, [])
-
-  // Build fan list from allTips (passed from parent)
-  const fanList = useCallback(() => {
-    const map = {}
-    allTips.forEach(tip => {
-      const u = tip.username?.toLowerCase()
-      if (!u) return
-      if (!map[u]) {
-        map[u] = {
-          username: tip.username,
-          totalUsd: 0,
-          totalTokens: 0,
-          tipCount: 0,
-          lastTip: null,
-          platforms: new Set(),
-        }
-      }
-      map[u].totalUsd += parseFloat(tip.usd || 0)
-      map[u].totalTokens += parseInt(tip.tokens || 0)
-      map[u].tipCount++
-      map[u].platforms.add(tip.platform)
-      const d = new Date(tip.date_time)
-      if (!map[u].lastTip || d > new Date(map[u].lastTip)) map[u].lastTip = tip.date_time
-    })
-    return Object.values(map).sort((a, b) => b.totalUsd - a.totalUsd)
-  }, [allTips])
-
-  // Search
-  useEffect(() => {
-    if (!query.trim()) {
-      setResults(fanList().slice(0, 8))
-      return
-    }
-    const q = query.toLowerCase()
-    const filtered = fanList().filter(f => f.username.toLowerCase().includes(q))
-    setResults(filtered.slice(0, 12))
-  }, [query, fanList])
-
-  // Load fan profile
-  const openFan = async (fan) => {
-    setSelectedFan(fan)
-    setView('profile')
-    setLoading(true)
-
-    // Get all tips for this fan
-    const tips = allTips
-      .filter(t => t.username?.toLowerCase() === fan.username.toLowerCase())
-      .sort((a, b) => new Date(b.date_time) - new Date(a.date_time))
-    setFanTips(tips)
-
-    // Load saved note from tipper_notes
-    const { data } = await supabase
-      .from('tipper_notes')
-      .select('notes')
-      .eq('user_id', userId)
-      .eq('username', fan.username.toLowerCase())
-      .maybeSingle()
-
-    setSavedNote(data?.notes || '')
-    setFanNote(data?.notes || '')
-    setLoading(false)
-  }
-
-  // Save note
-  const saveNote = async () => {
-    setNoteSaving(true)
-    const { error } = await supabase
-      .from('tipper_notes')
-      .upsert({
-        user_id: userId,
-        username: selectedFan.username.toLowerCase(),
-        notes: fanNote,
-        total_usd: selectedFan.totalUsd,
-        total_tokens: selectedFan.totalTokens,
-        tip_count: selectedFan.tipCount,
-        last_tip_date: selectedFan.lastTip,
-        updated_at: new Date().toISOString(),
-      }, { onConflict: 'user_id,username' })
-
-    setNoteSaving(false)
-    if (!error) {
-      setSavedNote(fanNote)
-      setNoteSaved(true)
-      setTimeout(() => setNoteSaved(false), 2000)
-    }
-  }
-
-  // Tier logic
-  const getTier = (usd) => {
-    if (usd >= 100) return { label: '🐳 WHALE', color: '#22D3EE' }
-    if (usd >= 50)  return { label: '🦈 SHARK', color: '#EC4899' }
-    return { label: '🐟 REGULAR', color: '#94A3B8' }
-  }
-
-  // Days since last tip
-  const daysSince = (dateStr) => {
-    if (!dateStr) return null
-    const diff = Date.now() - new Date(dateStr).getTime()
-    return Math.floor(diff / (1000 * 60 * 60 * 24))
-  }
-
-  // Tip notes — only from platforms that include notes in CSV exports
-  const tipsWithNotes = fanTips.filter(t =>
-    t.tip_note && t.tip_note.trim() &&
-    PLATFORMS_WITH_NOTES.includes(t.platform)
-  )
-
-  // Does this fan have ANY tips from a notes-supported platform?
-  const fanHasNotesPlatform = fanTips.some(t => PLATFORMS_WITH_NOTES.includes(t.platform))
-
-  const C = {
-    bg: '#05070f',
-    surface: 'rgba(15,20,32,0.98)',
-    card: 'rgba(255,255,255,0.03)',
-    border: 'rgba(255,255,255,0.08)',
-    cyan: '#22D3EE',
-    pink: '#EC4899',
-    green: '#10B981',
-    text: '#CBD5E1',
-    muted: '#475569',
-    white: '#f8fafc',
-  }
-
-  return (
-    <div style={{
-      position: 'fixed', inset: 0, zIndex: 9999,
-      background: 'rgba(0,0,0,0.85)',
-      backdropFilter: 'blur(8px)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      padding: 20,
-    }}
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <div style={{
-        width: '100%', maxWidth: 680,
-        background: C.surface,
-        border: `1px solid ${C.border}`,
-        borderRadius: 20,
-        boxShadow: '0 40px 120px rgba(0,0,0,0.8)',
-        overflow: 'hidden',
-        maxHeight: '90vh',
-        display: 'flex', flexDirection: 'column',
-      }}>
-
-        {/* ── HEADER ── */}
-        <div style={{
-          padding: '20px 24px',
-          borderBottom: `1px solid ${C.border}`,
-          display: 'flex', alignItems: 'center', gap: 12,
-        }}>
-          {view !== 'search' && (
-            <button
-              onClick={() => { setView('search'); setSelectedFan(null) }}
-              style={{ background: 'none', border: 'none', color: C.cyan, cursor: 'pointer', fontSize: 18, padding: '0 4px 0 0' }}
-            >←</button>
-          )}
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 16, fontWeight: 800, color: C.white }}>
-              {view === 'search' ? '🔍 Search Fans' : view === 'profile' ? `@${selectedFan?.username}` : '📝 Tip Notes'}
-            </div>
-            {view === 'search' && (
-              <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>
-                {fanList().length} fans in your history
-              </div>
-            )}
-          </div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer', fontSize: 20 }}>×</button>
-        </div>
-
-        {/* ── SEARCH VIEW ── */}
-        {view === 'search' && (
-          <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
-            {/* Search input */}
-            <div style={{ position: 'relative', marginBottom: 16 }}>
-              <input
-                ref={inputRef}
-                value={query}
-                onChange={e => setQuery(e.target.value)}
-                placeholder="Type a username..."
-                style={{
-                  width: '100%', padding: '12px 16px 12px 44px',
-                  background: 'rgba(255,255,255,0.05)',
-                  border: `1px solid ${query ? C.cyan : C.border}`,
-                  borderRadius: 12, color: C.white, fontSize: 15,
-                  outline: 'none', boxSizing: 'border-box',
-                  transition: 'border-color 0.2s',
-                }}
-              />
-              <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', fontSize: 18 }}>🔍</span>
-            </div>
-
-            {/* Results */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {results.length === 0 && (
-                <div style={{ textAlign: 'center', color: C.muted, padding: '32px 0', fontSize: 14 }}>
-                  No fans found matching "{query}"
-                </div>
-              )}
-              {results.map((fan, i) => {
-                const tier = getTier(fan.totalUsd)
-                const days = daysSince(fan.lastTip)
-                return (
-                  <button
-                    key={fan.username}
-                    onClick={() => openFan(fan)}
-                    style={{
-                      width: '100%', padding: '14px 16px',
-                      background: C.card,
-                      border: `1px solid ${C.border}`,
-                      borderRadius: 12, cursor: 'pointer',
-                      display: 'flex', alignItems: 'center', gap: 14,
-                      textAlign: 'left',
-                      transition: 'all 0.2s',
-                    }}
-                    onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(34,211,238,0.3)'; e.currentTarget.style.background = 'rgba(34,211,238,0.04)' }}
-                    onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.background = C.card }}
-                  >
-                    {/* Rank */}
-                    <div style={{ fontSize: 11, color: C.muted, fontWeight: 700, minWidth: 24, textAlign: 'center' }}>
-                      {i + 1}
-                    </div>
-                    {/* Avatar */}
-                    <div style={{
-                      width: 40, height: 40, borderRadius: 10,
-                      background: `${tier.color}15`,
-                      border: `1px solid ${tier.color}30`,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: 18, flexShrink: 0,
-                    }}>
-                      {tier.label.split(' ')[0]}
-                    </div>
-                    {/* Info */}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: C.white, marginBottom: 2 }}>
-                        {fan.username}
-                      </div>
-                      <div style={{ fontSize: 12, color: C.muted }}>
-                        {fan.tipCount} tips · {Array.from(fan.platforms).join(', ')}
-                        {days !== null && <span style={{ marginLeft: 8, color: days > 30 ? '#F87171' : C.muted }}>· {days}d ago</span>}
-                      </div>
-                    </div>
-                    {/* Stats */}
-                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                      <div style={{ fontSize: 16, fontWeight: 900, color: C.green }}>${fan.totalUsd.toFixed(2)}</div>
-                      <div style={{ fontSize: 10, color: tier.color, fontWeight: 700 }}>{tier.label.split(' ')[1]}</div>
-                    </div>
-                    <div style={{ color: C.muted, fontSize: 16 }}>›</div>
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* ── PROFILE VIEW ── */}
-        {view === 'profile' && selectedFan && (
-          <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
-            {loading ? (
-              <div style={{ textAlign: 'center', color: C.muted, padding: '48px 0' }}>Loading...</div>
-            ) : (
-              <>
-                {/* Fan stats header */}
-                <div style={{
-                  padding: '18px 20px',
-                  background: 'linear-gradient(135deg, rgba(34,211,238,0.06), rgba(236,72,153,0.06))',
-                  border: `1px solid rgba(34,211,238,0.15)`,
-                  borderRadius: 14, marginBottom: 16,
-                }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
-                    {[
-                      { label: 'Total Spent', value: `$${selectedFan.totalUsd.toFixed(2)}`, color: C.green },
-                      { label: 'Total Tokens', value: selectedFan.totalTokens.toLocaleString(), color: C.cyan },
-                      { label: 'Tip Count', value: selectedFan.tipCount, color: C.pink },
-                      { label: 'Last Tip', value: daysSince(selectedFan.lastTip) !== null ? `${daysSince(selectedFan.lastTip)}d ago` : 'N/A', color: C.muted },
-                    ].map(({ label, value, color }) => (
-                      <div key={label} style={{ textAlign: 'center', flex: 1, minWidth: 80 }}>
-                        <div style={{ fontSize: 20, fontWeight: 900, color }}>{value}</div>
-                        <div style={{ fontSize: 10, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 2 }}>{label}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Action buttons */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 20 }}>
-                  <button
-                    onClick={() => fanHasNotesPlatform ? setView('notes') : null}
-                    style={{
-                      padding: '13px 16px',
-                      background: fanHasNotesPlatform ? 'rgba(34,211,238,0.08)' : 'rgba(255,255,255,0.02)',
-                      border: `1px solid ${fanHasNotesPlatform ? 'rgba(34,211,238,0.25)' : 'rgba(255,255,255,0.06)'}`,
-                      borderRadius: 11,
-                      cursor: fanHasNotesPlatform ? 'pointer' : 'default',
-                      color: fanHasNotesPlatform ? C.cyan : C.muted,
-                      fontWeight: 700, fontSize: 14, textAlign: 'center',
-                      opacity: fanHasNotesPlatform ? 1 : 0.5,
-                    }}
-                  >
-                    📝 View All Tip Notes
-                    <div style={{ fontSize: 11, color: C.muted, fontWeight: 400, marginTop: 2 }}>
-                      {fanHasNotesPlatform
-                        ? `${tipsWithNotes.length} notes found`
-                        : 'Chaturbate / MFC only'}
-                    </div>
-                  </button>
-                  <button
-                    onClick={() => setView('addnote')}
-                    style={{
-                      padding: '13px 16px',
-                      background: 'rgba(236,72,153,0.08)', border: `1px solid rgba(236,72,153,0.25)`,
-                      borderRadius: 11, cursor: 'pointer', color: C.pink,
-                      fontWeight: 700, fontSize: 14, textAlign: 'center',
-                    }}
-                  >
-                    ✍️ My Notes on Fan
-                    <div style={{ fontSize: 11, color: C.muted, fontWeight: 400, marginTop: 2 }}>
-                      {savedNote ? 'Edit existing note' : 'Add a note'}
-                    </div>
-                  </button>
-                </div>
-
-                {/* Recent tip history */}
-                <div style={{ marginBottom: 4 }}>
-                  <div style={{ fontSize: 12, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10 }}>
-                    Recent Tips ({fanTips.length} total)
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    {fanTips.slice(0, 10).map((tip, i) => (
-                      <div key={i} style={{
-                        padding: '10px 14px',
-                        background: C.card, border: `1px solid ${C.border}`,
-                        borderRadius: 9,
-                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                        gap: 12,
-                      }}>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontSize: 12, color: C.text }}>
-                            {new Date(tip.date_time).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                            <span style={{ marginLeft: 8, fontSize: 11, color: C.muted }}>
-                              {new Date(tip.date_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-                            </span>
-                          </div>
-                          {tip.tip_note && tip.tip_note.trim() && (
-                            <div style={{
-                              fontSize: 12, color: '#A78BFA', fontStyle: 'italic',
-                              marginTop: 4, padding: '4px 8px',
-                              background: 'rgba(167,139,250,0.08)',
-                              borderRadius: 6, borderLeft: '2px solid rgba(167,139,250,0.4)',
-                            }}>
-                              💬 "{tip.tip_note}"
-                            </div>
-                          )}
-                        </div>
-                        <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                          <div style={{ fontSize: 14, fontWeight: 800, color: C.green }}>${parseFloat(tip.usd || 0).toFixed(2)}</div>
-                          <div style={{ fontSize: 10, color: C.muted }}>{tip.tokens}tk · {tip.platform}</div>
-                        </div>
-                      </div>
-                    ))}
-                    {fanTips.length > 10 && (
-                      <div style={{ textAlign: 'center', fontSize: 12, color: C.muted, padding: 8 }}>
-                        + {fanTips.length - 10} more tips
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-        )}
-
-        {/* ── TIP NOTES VIEW — all tip messages from this fan ── */}
-        {view === 'notes' && selectedFan && (
-          <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
-            <div style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: C.white, marginBottom: 4 }}>
-                All Tip Notes from @{selectedFan.username}
-              </div>
-              <div style={{ fontSize: 12, color: C.muted }}>
-                Messages they sent along with their tips
-              </div>
-            </div>
-
-            {tipsWithNotes.length === 0 ? (
-              <div style={{
-                padding: '40px 24px', textAlign: 'center',
-                background: C.card, border: `1px solid ${C.border}`,
-                borderRadius: 14,
-              }}>
-                <div style={{ fontSize: 32, marginBottom: 12 }}>💬</div>
-                <div style={{ fontSize: 15, fontWeight: 700, color: C.white, marginBottom: 8 }}>No tip notes found</div>
-                <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.6 }}>
-                  Tip notes are available for <strong style={{ color: '#22D3EE' }}>Chaturbate</strong> and <strong style={{ color: '#22D3EE' }}>MyFreeCams</strong> only
-                  — these platforms include the fan's message in the CSV export.<br /><br />
-                  If you've uploaded a Chaturbate CSV and see no notes, this fan
-                  tipped without including a message.
-                </div>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {tipsWithNotes.map((tip, i) => (
-                  <div key={i} style={{
-                    padding: '14px 16px',
-                    background: 'rgba(167,139,250,0.06)',
-                    border: '1px solid rgba(167,139,250,0.2)',
-                    borderRadius: 12,
-                  }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                      <div style={{ fontSize: 12, color: C.muted }}>
-                        {new Date(tip.date_time).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
-                        <span style={{ marginLeft: 6 }}>
-                          {new Date(tip.date_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-                        </span>
-                      </div>
-                      <div style={{ fontSize: 14, fontWeight: 800, color: C.green }}>${parseFloat(tip.usd || 0).toFixed(2)}</div>
-                    </div>
-                    <div style={{ fontSize: 14, color: '#C4B5FD', lineHeight: 1.6 }}>
-                      💬 "{tip.tip_note}"
-                    </div>
-                    <div style={{ fontSize: 11, color: C.muted, marginTop: 6 }}>
-                      {tip.tokens} tokens · {tip.platform}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ── MY NOTES VIEW — your own private notes about the fan ── */}
-        {view === 'addnote' && selectedFan && (
-          <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
-            <div style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: C.white, marginBottom: 4 }}>
-                My Notes on @{selectedFan.username}
-              </div>
-              <div style={{ fontSize: 12, color: C.muted }}>
-                Private notes only you can see — preferences, details, re-engagement ideas
-              </div>
-            </div>
-
-            <textarea
-              value={fanNote}
-              onChange={e => setFanNote(e.target.value)}
-              placeholder={`What do you know about ${selectedFan.username}?\n\nExamples:\n- Loves Lush shows, always tips during toy activations\n- Prefers evening streams\n- Mentioned he's from Germany\n- Good for re-engagement around the 7-day mark`}
-              style={{
-                width: '100%', minHeight: 200,
-                background: 'rgba(255,255,255,0.04)',
-                border: `1px solid ${fanNote !== savedNote ? C.pink : C.border}`,
-                borderRadius: 12, color: C.white, fontSize: 14,
-                padding: '14px 16px', outline: 'none', resize: 'vertical',
-                lineHeight: 1.65, boxSizing: 'border-box',
-                transition: 'border-color 0.2s',
-                fontFamily: 'inherit',
-              }}
-            />
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }}>
-              <div style={{ fontSize: 12, color: C.muted }}>
-                {fanNote.length} characters
-                {savedNote && fanNote === savedNote && <span style={{ color: C.green, marginLeft: 8 }}>✓ Saved</span>}
-              </div>
-              <button
-                onClick={saveNote}
-                disabled={noteSaving || fanNote === savedNote}
-                style={{
-                  padding: '10px 28px',
-                  background: noteSaved
-                    ? 'rgba(16,185,129,0.2)'
-                    : fanNote === savedNote
-                      ? 'rgba(255,255,255,0.05)'
-                      : `linear-gradient(135deg, ${C.cyan}, ${C.pink})`,
-                  border: noteSaved ? `1px solid rgba(16,185,129,0.4)` : 'none',
-                  borderRadius: 9, color: 'white',
-                  fontWeight: 700, fontSize: 14, cursor: fanNote === savedNote ? 'default' : 'pointer',
-                  opacity: noteSaving ? 0.7 : 1,
-                }}
-              >
-                {noteSaving ? 'Saving...' : noteSaved ? '✓ Saved!' : fanNote === savedNote ? 'No changes' : 'Save Note'}
-              </button>
-            </div>
-          </div>
-        )}
-
-      </div>
-    </div>
-  )
-}
-
-
-// ============================================================
-
 export default function Dashboard() {
   const router = useRouter()
   const [user, setUser] = useState(null)
@@ -1315,10 +800,6 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [uploadPlatform, setUploadPlatform] = useState("")
-  const [fanSearchOpen, setFanSearchOpen] = useState(false)
-  const [shareModalOpen, setShareModalOpen] = useState(false)
-  const [shareCopied, setShareCopied] = useState(false)
-  const [chartDrillDay, setChartDrillDay] = useState(null)
   const [activeTab, setActiveTab] = useState("overview")
   const [toast, setToast] = useState("")
   const [uploadCount, setUploadCount] = useState(0)
@@ -1332,6 +813,10 @@ export default function Dashboard() {
   const [messageCopied, setMessageCopied] = useState(false)
   const [showUpgradeModal, setShowUpgradeModal] = useState(false)
   const [showBetaPrompt, setShowBetaPrompt] = useState(false)
+  const [fanSearchOpen, setFanSearchOpen] = useState(false)
+  const [fanSearchQuery, setFanSearchQuery] = useState("")
+  const [shareModalOpen, setShareModalOpen] = useState(false)
+  const [chartDrillDay, setChartDrillDay] = useState(null)
   // ── LIVE MODE STATE ───────────────────────────────────────
   const [liveActive, setLiveActive] = useState(false)
   const [liveStartTime, setLiveStartTime] = useState(null)
@@ -1445,21 +930,7 @@ export default function Dashboard() {
         if (!data || data.length < PAGE) break
         from += PAGE
       }
-      if (allData.length) {
-        // Dedup on load — strip duplicate rows from the DB before touching state
-        // Key matches validateDataset: username + tokens + usd (rounded) + minute + platform
-        const seenKeys = new Set()
-        const dedupedData = allData.filter(t => {
-          const tMin = (t.date_time || '').slice(0, 16)
-          const key = `${(t.username || '').toLowerCase()}|${t.tokens || 0}|${Math.round((t.usd || 0) * 100)}|${tMin}|${t.platform}`
-          if (seenKeys.has(key)) return false
-          seenKeys.add(key)
-          return true
-        })
-        setTips(dedupedData)
-        const result = runEngine(dedupedData)
-        setAnalytics(result)
-      }
+      if (allData.length) { setTips(allData); const result = runEngine(allData); setAnalytics(result) }
     } finally { setLoading(false) }
   }
 
@@ -1481,26 +952,18 @@ export default function Dashboard() {
         return
       }
 
-      const platform = parsed[0]?.platform || 'Unknown'
-      track('csv_imported', { rows: parsed.length, platform })
+      track('csv_imported', { rows: parsed.length, platform: parsed[0]?.platform || 'Unknown' })
 
-      // DELETE existing rows for this platform first, then insert clean.
-      // This replaces the old "skip duplicates" approach — the CSV IS the source
-      // of truth for each platform, so we always do a clean replace.
-      if (platform !== 'Unknown') {
-        const { error: delError } = await supabase
-          .from('tips')
-          .delete()
-          .eq('user_id', user.id)
-          .eq('platform', platform)
-        if (delError) {
-          showToast("❌ Failed to clear old data: " + delError.message)
-          setUploading(false)
-          return
-        }
+      const unique = removeDuplicates(tips, parsed)
+      const duplicateCount = parsed.length - unique.length
+
+      if (unique.length === 0) {
+        showToast(`⚠️ All ${parsed.length} tips are already imported!`)
+        setUploading(false)
+        return
       }
 
-      const toInsert = parsed.map(r => {
+      const toInsert = unique.map(r => {
         const tokens = r.tokens || 0
         const usd = (r.usd && r.usd > 0) ? r.usd : parseFloat((tokens * 0.05).toFixed(2))
         return {
@@ -1529,7 +992,9 @@ export default function Dashboard() {
         await supabase.from('analytics_events').insert({ user_id: user.id, event_name: 'csv_uploaded', properties: { count: newCount, platform: parsed[0]?.platform || 'Unknown', rows: unique.length } })
         await supabase.from('beta_users').upsert({ user_id: user.id, email: user.email, csv_upload_count: newCount }, { onConflict: 'user_id' })
       } catch(e) {}
-      const msg = `✅ Imported ${toInsert.length} tips from ${platform}!`
+      const msg = duplicateCount > 0
+        ? `✅ Imported ${unique.length} tips (${duplicateCount} duplicates skipped)`
+        : `✅ Imported ${unique.length} tips from ${parsed[0]?.platform || "CSV"}!`
       showToast(msg)
       await loadData(user.id)
     } catch (err) {
@@ -1574,9 +1039,9 @@ export default function Dashboard() {
   const lossAlerts = liveAnalytics?.lossAlerts || analytics?.lossAlerts || []
   const nextMoves = liveAnalytics?.nextMoves || analytics?.nextMoves || []
   const totalRevenue = analytics?.totalUSD || 0
-  // Only average sessions with real duration — require 10+ min to prevent absurd $/hr from near-zero durations
-  const timedSessions = sessions.filter(s => !s.durationUnknown && s.usdPerHour !== null && s.durationMinutes >= 10)
-  const avgPerHour = timedSessions.length ? timedSessions.reduce((sum, s) => sum + Math.min(s.usdPerHour || 0, 500), 0) / timedSessions.length : 0
+  // Only average sessions with real duration (exclude zero-timestamp BongaCams exports)
+  const timedSessions = sessions.filter(s => !s.durationUnknown && s.usdPerHour !== null)
+  const avgPerHour = timedSessions.length ? timedSessions.reduce((sum, s) => sum + (s.usdPerHour || 0), 0) / timedSessions.length : 0
   // Single source of truth — pre-computed in aggregateRows, same values used everywhere
   const analyticsbestDay  = analytics?.bestDay  || null
   const analyticsBestHour = analytics?.bestHour || null
@@ -1595,14 +1060,14 @@ export default function Dashboard() {
     platformTimes[t.platform].days[day]   = (platformTimes[t.platform].days[day]   || 0) + (t.usd || 0)
   })
 
-  const UTC_DAYS_SHORT = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
   const filteredWhales = whales.filter(w => {
     if (whaleFilter !== "ALL" && w.tier !== whaleFilter) return false
     if (platformFilter !== "ALL" && w.platform !== platformFilter) return false
     if (chartDrillDay) {
-      const tippedOnDay = tips.some(t => {
-        const dayShort = UTC_DAYS_SHORT[new Date(t.date_time || t.dateRaw).getUTCDay()]
-        return t.username.toLowerCase() === w.username.toLowerCase() && dayShort === chartDrillDay
+      const fanTips = (w.tips && w.tips.length > 0) ? w.tips : tips.filter(t => t.username?.toLowerCase() === w.username?.toLowerCase())
+      const tippedOnDay = fanTips.some(t => {
+        const dayShort = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][new Date(t.date_time || t.dateRaw).getUTCDay()]
+        return dayShort === chartDrillDay
       })
       if (!tippedOnDay) return false
     }
@@ -2012,14 +1477,14 @@ export default function Dashboard() {
         </nav>
 
         <div style={{ padding: "16px 20px", borderTop: "1px solid rgba(255,255,255,0.08)", display: "flex", flexDirection: "column", gap: 10 }}>
-          <div style={{ padding: 12, borderRadius: 10, background: "linear-gradient(135deg, rgba(236,72,153,0.15), rgba(124,92,255,0.15))", border: "1px solid rgba(236,72,153,0.3)", textAlign: "center" }}>
+          <div style={{ padding: 12, borderRadius: 10, background: "linear-gradient(135deg, rgba(59,130,246,0.1), rgba(236,72,153,0.1))", border: "1px solid rgba(236,72,153,0.3)", textAlign: "center" }}>
             <div style={{ fontSize: 18, marginBottom: 4 }}>🎉</div>
             <div style={{ fontSize: 12, fontWeight: 700, color: C.white, marginBottom: 2 }}>Free for first 100 users</div>
             <div style={{ fontSize: 10, color: C.muted, marginBottom: 8 }}>Spots filling up fast</div>
             <div style={{ height: 4, borderRadius: 4, background: "rgba(255,255,255,0.1)", overflow: "hidden" }}>
-              <div style={{ height: "100%", width: `${Math.min((betaCount ?? 63) / 100 * 100, 100)}%`, borderRadius: 4, background: "linear-gradient(90deg, #22D3EE, #EC4899)", transition: "width 0.6s ease" }} />
+              <div style={{ height: "100%", width: "63%", borderRadius: 4, background: "linear-gradient(90deg, #3b82f6, #ec4899)", transition: "width 0.6s ease" }} />
             </div>
-            <div style={{ fontSize: 10, color: C.muted, marginTop: 4 }}>{betaCount ?? "..."} / 100 spots taken</div>
+            <div style={{ fontSize: 10, color: C.pink, fontWeight: 600, marginTop: 4 }}>63 / 100 spots left</div>
           </div>
           <button
             onClick={handleSignOut}
@@ -2043,7 +1508,7 @@ export default function Dashboard() {
 
         {activeTab === "overview" && (
           <div>
-            <div style={{ marginBottom: 24, padding: "14px 20px", borderRadius: 12, background: "linear-gradient(135deg, rgba(245,158,11,0.15), rgba(251,146,60,0.1))", border: "1px solid rgba(245,158,11,0.4)", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+            <div style={{ marginBottom: 24, padding: "14px 20px", borderRadius: 12, background: "linear-gradient(135deg, rgba(59,130,246,0.1), rgba(236,72,153,0.1))", border: "1px solid rgba(236,72,153,0.3)", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                 <div style={{ fontSize: 24 }}>🎉</div>
                 <div>
@@ -2052,11 +1517,18 @@ export default function Dashboard() {
                 </div>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-                <div style={{ fontSize: 12, color: C.gold, fontWeight: 600 }}>{betaCount ?? "..."}/100 spots taken</div>
+                <div style={{ fontSize: 12, color: C.pink, fontWeight: 600 }}>63 / 100 spots left</div>
                 <div style={{ width: 80, height: 6, borderRadius: 4, background: "rgba(255,255,255,0.1)", overflow: "hidden" }}>
-                  <div style={{ height: "100%", width: `${Math.min((betaCount ?? 63) / 100 * 100, 100)}%`, borderRadius: 4, background: "linear-gradient(90deg, #F59E0B, #FB923C)", transition: "width 0.6s ease" }} />
+                  <div style={{ height: "100%", width: "37%", borderRadius: 4, background: "linear-gradient(90deg, #3b82f6, #ec4899)", transition: "width 0.6s ease" }} />
                 </div>
               </div>
+            </div>
+
+            {/* SHARE MY STATS */}
+            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 16 }}>
+              <button onClick={() => setShareModalOpen(true)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 10, background: "linear-gradient(135deg, rgba(236,72,153,0.15), rgba(168,85,247,0.15))", border: "1px solid rgba(236,72,153,0.35)", color: C.white, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                📤 Share My Stats
+              </button>
             </div>
 
             {(() => {
@@ -2212,11 +1684,11 @@ export default function Dashboard() {
                             : intensity < 0.75 ? "rgba(34,211,238,0.60)"
                             : "rgba(34,211,238,0.90)"
                           return (
-                            <div key={d} title={val > 0 ? `${plat} ${d}: avg $${val.toFixed(2)}/day — click to see fans` : `${plat} ${d}: no tips`}
-                              onClick={() => { if (val > 0) { setChartDrillDay(d); setActiveTab("whales") } }}
-                              onMouseEnter={e => { if (val > 0) e.currentTarget.style.transform = "scale(1.1)" }}
-                              onMouseLeave={e => { e.currentTarget.style.transform = "scale(1)" }}
-                              style={{ height: 36, borderRadius: 6, background: bg, border: isToday ? "2px solid rgba(34,211,238,0.7)" : "1px solid rgba(255,255,255,0.06)", display: "flex", alignItems: "center", justifyContent: "center", cursor: val > 0 ? "pointer" : "default", transition: "transform 0.12s" }}>
+                            <div key={d} title={`${plat} ${d}: avg $${val.toFixed(2)}/day — click to see fans active on ${d}s`}
+                              onClick={() => { setChartDrillDay(d); setActiveTab("whales") }}
+                              style={{ height: 36, borderRadius: 6, background: bg, border: isToday ? "2px solid rgba(34,211,238,0.7)" : "1px solid rgba(255,255,255,0.06)", display: "flex", alignItems: "center", justifyContent: "center", cursor: val > 0 ? "pointer" : "default", transition: "transform 0.1s, opacity 0.1s" }}
+                              onMouseEnter={e => { if (val > 0) e.currentTarget.style.opacity = "0.8" }}
+                              onMouseLeave={e => { e.currentTarget.style.opacity = "1" }}>
                               {val > 0 && <span style={{ fontSize: 9, fontWeight: 700, color: intensity > 0.45 ? "#fff" : C.muted }}>${val >= 100 ? Math.round(val) : val.toFixed(0)}</span>}
                             </div>
                           )
@@ -2778,19 +2250,21 @@ export default function Dashboard() {
 
         {activeTab === "whales" && (
           <div>
-            <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 8 }}>🐳 Top Fans</h1>
-            <p style={{ fontSize: 13, color: C.muted, marginBottom: 24 }}>Your highest-value supporters ranked by total spend</p>
-
-            {/* DRILL-DOWN INDICATOR */}
-            {chartDrillDay && (
-              <div style={{ marginBottom: 16, padding: "10px 16px", borderRadius: 10, background: "rgba(34,211,238,0.08)", border: "1px solid rgba(34,211,238,0.3)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div style={{ fontSize: 13, color: C.cyan }}>
-                  📅 Showing fans who tipped on <strong>{chartDrillDay}</strong>
-                </div>
-                <button onClick={() => setChartDrillDay(null)}
-                  style={{ fontSize: 12, color: C.muted, background: "none", border: "none", cursor: "pointer", padding: "2px 6px" }}>✕ Clear</button>
+            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 12, marginBottom: 8 }}>
+              <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, margin: 0 }}>🐳 Top Fans</h1>
+              <div style={{ display: "flex", gap: 8 }}>
+                {chartDrillDay && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", borderRadius: 10, background: "rgba(34,211,238,0.1)", border: "1px solid rgba(34,211,238,0.35)", fontSize: 13, color: C.cyan, fontWeight: 600 }}>
+                    📅 {chartDrillDay}s only
+                    <button onClick={() => setChartDrillDay(null)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 14, padding: 0, lineHeight: 1 }}>✕</button>
+                  </div>
+                )}
+                <button onClick={() => setFanSearchOpen(true)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 10, background: "linear-gradient(135deg, rgba(59,130,246,0.15), rgba(236,72,153,0.15))", border: "1px solid rgba(59,130,246,0.35)", color: C.white, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                  🔍 Search Fan
+                </button>
               </div>
-            )}
+            </div>
+            <p style={{ fontSize: 13, color: C.muted, marginBottom: 24 }}>Your highest-value supporters ranked by total spend</p>
 
             {/* FILTERS */}
             <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
@@ -2866,6 +2340,7 @@ export default function Dashboard() {
                     if (w.tipProbability?.level === "High") tags.push({ label: "🟢 Likely to tip soon", color: C.green })
                     if (w.churnRisk?.level === "High" || w.churnRisk?.level === "Critical") tags.push({ label: "🚨 At churn risk", color: C.red })
                     if (w.daysSinceLastTip <= 3) tags.push({ label: "🔥 Recently active", color: C.orange })
+                    if (w.tipNotes && w.tipNotes.length > 0) tags.push({ label: "💬 Leaves tip notes", color: C.indigo })
                     if (w.spendPercentile >= 90) tags.push({ label: `👑 Top ${100 - w.spendPercentile}% spender`, color: C.gold })
 
                     // Relationship status
@@ -2971,6 +2446,20 @@ export default function Dashboard() {
                             <div style={{ fontSize: 13, fontWeight: 700, color: C.green }}>${w.lifetimeValue?.monthly > 0 ? w.lifetimeValue.monthly.toFixed(0) : '—'}</div>
                           </div>
                         </div>
+
+                        {/* TIP NOTES */}
+                        {w.tipNotes && w.tipNotes.length > 0 && (
+                          <div style={{ marginBottom: 12 }}>
+                            <div style={{ fontSize: 10, color: C.muted, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>Recent Tip Notes</div>
+                            <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 64, overflowY: "auto" }}>
+                              {w.tipNotes.slice(-2).reverse().map((note, j) => (
+                                <div key={j} style={{ padding: "6px 10px", background: `${C.indigo}10`, border: `1px solid ${C.indigo}20`, borderRadius: 6, fontSize: 11, color: C.text, fontStyle: "italic" }}>
+                                  "{note}"
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
 
                         {/* COACHING BULLETS */}
                         <div style={{ padding: "10px 14px", background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 10 }}>
@@ -4399,64 +3888,111 @@ export default function Dashboard() {
       )}
 
       {/* FAN SEARCH MODAL */}
-      {fanSearchOpen && (
-        <FanSearchModal
-          userId={user?.id}
-          allTips={tips}
-          onClose={() => setFanSearchOpen(false)}
-        />
-      )}
+      {fanSearchOpen && (() => {
+        const q = fanSearchQuery.toLowerCase().trim()
+        const results = q.length < 1 ? [] : whales.filter(w => w.username?.toLowerCase().includes(q)).slice(0, 8)
+        return (
+          <div onClick={() => { setFanSearchOpen(false); setFanSearchQuery("") }} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 1010, padding: "80px 20px 20px" }}>
+            <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 540, background: "rgba(15,20,32,0.98)", backdropFilter: "blur(24px)", borderRadius: 20, border: "1px solid rgba(255,255,255,0.1)", boxShadow: "0 0 80px rgba(59,130,246,0.2)", overflow: "hidden" }}>
+              <div style={{ height: 3, background: "linear-gradient(90deg, #3b82f6, #a855f7, #ec4899)" }} />
+              <div style={{ padding: 24 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16, background: "rgba(255,255,255,0.05)", borderRadius: 12, border: "1px solid rgba(255,255,255,0.1)", padding: "10px 14px" }}>
+                  <span style={{ fontSize: 16, flexShrink: 0 }}>🔍</span>
+                  <input
+                    autoFocus
+                    value={fanSearchQuery}
+                    onChange={e => setFanSearchQuery(e.target.value)}
+                    placeholder="Search by username..."
+                    style={{ flex: 1, background: "none", border: "none", outline: "none", color: C.white, fontSize: 15, fontFamily: "inherit" }}
+                  />
+                  {fanSearchQuery && (
+                    <button onClick={() => setFanSearchQuery("")} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 16, padding: 0, lineHeight: 1 }}>✕</button>
+                  )}
+                </div>
+
+                {q.length < 1 && (
+                  <p style={{ textAlign: "center", color: C.muted, fontSize: 13, padding: "20px 0" }}>Type a username to search your fans</p>
+                )}
+
+                {q.length >= 1 && results.length === 0 && (
+                  <p style={{ textAlign: "center", color: C.muted, fontSize: 13, padding: "20px 0" }}>No fans found matching "{fanSearchQuery}"</p>
+                )}
+
+                {results.map((w, i) => (
+                  <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px", borderRadius: 12, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", marginBottom: 8 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                      <div style={{ width: 36, height: 36, borderRadius: "50%", background: "linear-gradient(135deg, rgba(59,130,246,0.3), rgba(236,72,153,0.3))", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 700, color: C.white, flexShrink: 0 }}>
+                        {w.username?.[0]?.toUpperCase() || "?"}
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: C.white }}>{w.username}</div>
+                        <div style={{ fontSize: 11, color: C.muted }}>{w.platform} · {w.tipCount} tips · last {new Date(w.lastTipDate).toLocaleDateString()}</div>
+                      </div>
+                    </div>
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{ fontSize: 15, fontWeight: 700, color: C.green }}>${w.totalUSD.toFixed(2)}</div>
+                      <span style={{ padding: "3px 8px", borderRadius: 100, background: `${TIER_COLORS[w.tier]}20`, color: TIER_COLORS[w.tier], fontSize: 10, fontWeight: 600 }}>{w.tier}</span>
+                    </div>
+                  </div>
+                ))}
+
+                <div style={{ marginTop: 16, textAlign: "center" }}>
+                  <button onClick={() => { setFanSearchOpen(false); setFanSearchQuery("") }} style={{ padding: "8px 20px", borderRadius: 10, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: C.muted, fontSize: 13, cursor: "pointer" }}>
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* SHARE MY STATS MODAL */}
       {shareModalOpen && (() => {
         const topFan = whales[0]
-        const lines = [
-          "My CamCash Stats",
-          "",
-          "Total Earned: $" + totalRevenue.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}),
-          "Avg $/Hour: $" + avgPerHour.toFixed(2),
-          "Sessions: " + sessions.length,
-          "Total Fans: " + whales.length,
-        ]
-        if (topFan) lines.push("Top Fan: " + topFan.username + " ($" + topFan.totalUSD.toFixed(2) + ")")
-        if (analytics && analytics.bestDay) lines.push("Best Day: " + analytics.bestDay)
-        if (analytics && analytics.bestHour != null) lines.push("Peak Hour: " + analytics.bestHour + ":00 UTC")
-        lines.push("")
-        lines.push("Built with CamCash - free analytics for cam models")
-        lines.push("camcashgrl.com")
-        const statsText = lines.join("\n")
-        const handleCopy = () => {
-          navigator.clipboard.writeText(statsText).then(() => {
-            setShareCopied(true)
-            setTimeout(() => setShareCopied(false), 2500)
-          })
-        }
+        const bestDayLabel = analyticsbestDay?.day || null
+        const platforms = [...new Set(tips.map(t => t.platform))].join(" & ")
+        const oneTimerPct = whales.length > 0 ? Math.round((whales.filter(w => w.tipCount === 1).length / whales.length) * 100) : 0
+        const cardLines = [
+          `💰 Total Earned: $${totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+          topFan ? `🏆 Top Fan: ${topFan.username} ($${topFan.totalUSD.toFixed(2)})` : null,
+          bestDayLabel ? `📅 Best Day: ${bestDayLabel}s` : null,
+          `👥 ${whales.length} total fans across ${platforms}`,
+          `🔁 ${oneTimerPct}% one-time tippers — that many to win back!`,
+          `\nAnalytics by CamCash → camcashgrl.com`,
+        ].filter(Boolean).join("\n")
+
         return (
-          <div onClick={e => e.target === e.currentTarget && setShareModalOpen(false)}
-            style={{ position: "fixed", inset: 0, zIndex: 10000, background: "rgba(0,0,0,0.85)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-            <div style={{ width: "100%", maxWidth: 520, background: "rgba(15,20,32,0.98)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 20, overflow: "hidden", boxShadow: "0 40px 120px rgba(0,0,0,0.8)" }}>
-              <div style={{ padding: "20px 24px", borderBottom: "1px solid rgba(255,255,255,0.08)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div>
-                  <div style={{ fontSize: 16, fontWeight: 800, color: C.white }}>Share My Stats</div>
-                  <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>Copy your stats to share on Twitter, Reddit, Discord...</div>
+          <div onClick={() => setShareModalOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.88)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1010, padding: 20 }}>
+            <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 480, background: "rgba(15,20,32,0.98)", backdropFilter: "blur(24px)", borderRadius: 24, border: "1px solid rgba(255,255,255,0.1)", boxShadow: "0 0 80px rgba(236,72,153,0.2)", overflow: "hidden" }}>
+              <div style={{ height: 4, background: "linear-gradient(90deg, #ec4899, #a855f7, #3b82f6)" }} />
+              <div style={{ padding: 32 }}>
+                <h2 style={{ fontSize: 22, fontWeight: 800, color: C.white, marginBottom: 6 }}>📤 Share My Stats</h2>
+                <p style={{ fontSize: 13, color: C.muted, marginBottom: 24 }}>Copy your earnings snapshot to flex on Twitter or in cam communities</p>
+
+                {/* Stats card preview */}
+                <div style={{ background: "linear-gradient(135deg, rgba(59,130,246,0.1), rgba(236,72,153,0.1))", borderRadius: 16, border: "1px solid rgba(255,255,255,0.1)", padding: 20, marginBottom: 20, fontFamily: "monospace" }}>
+                  {cardLines.split("\n").map((line, i) => (
+                    <div key={i} style={{ fontSize: 13, color: line.startsWith("Analytics") ? C.cyan : C.white, lineHeight: 1.9, fontWeight: line.startsWith("Analytics") ? 600 : 400 }}>{line}</div>
+                  ))}
                 </div>
-                <button onClick={() => setShareModalOpen(false)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 20 }}>x</button>
-              </div>
-              <div style={{ padding: 24 }}>
-                <div style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 12, padding: 20, marginBottom: 16, fontFamily: "monospace", fontSize: 13, color: C.text, lineHeight: 1.7, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-                  {statsText}
-                </div>
+
                 <div style={{ display: "flex", gap: 10 }}>
-                  <button onClick={handleCopy}
-                    style={{ flex: 1, padding: "12px 20px", borderRadius: 10, background: shareCopied ? "rgba(16,185,129,0.2)" : "linear-gradient(135deg, #7C5CFF, #EC4899)", border: shareCopied ? "1px solid rgba(16,185,129,0.4)" : "none", color: C.white, fontWeight: 700, fontSize: 14, cursor: "pointer" }}>
-                    {shareCopied ? "Copied!" : "Copy Stats"}
+                  <button
+                    onClick={() => { navigator.clipboard.writeText(cardLines); setShareModalOpen(false); setToast("Copied to clipboard! 🎉") }}
+                    style={{ flex: 1, padding: "12px", borderRadius: 12, background: "linear-gradient(135deg, #ec4899, #a855f7)", border: "none", color: C.white, fontSize: 14, fontWeight: 700, cursor: "pointer", boxShadow: "0 0 20px rgba(236,72,153,0.3)" }}>
+                    📋 Copy to Clipboard
                   </button>
-                  <a href={"https://twitter.com/intent/tweet?text=" + encodeURIComponent(statsText.slice(0, 280))}
-                    target="_blank" rel="noopener noreferrer"
-                    style={{ padding: "12px 20px", borderRadius: 10, background: "rgba(29,161,242,0.15)", border: "1px solid rgba(29,161,242,0.3)", color: "#1DA1F2", fontWeight: 700, fontSize: 14, textDecoration: "none", display: "flex", alignItems: "center", gap: 6 }}>
-                    Share on X
-                  </a>
+                  <button
+                    onClick={() => { const encoded = encodeURIComponent(cardLines); window.open(`https://twitter.com/intent/tweet?text=${encoded}`, "_blank") }}
+                    style={{ flex: 1, padding: "12px", borderRadius: 12, background: "rgba(29,161,242,0.15)", border: "1px solid rgba(29,161,242,0.4)", color: "#1DA1F2", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+                    𝕏 Post to Twitter
+                  </button>
                 </div>
+
+                <button onClick={() => setShareModalOpen(false)} style={{ width: "100%", marginTop: 12, padding: "10px", borderRadius: 10, background: "transparent", border: "none", color: C.muted, fontSize: 13, cursor: "pointer" }}>
+                  Cancel
+                </button>
               </div>
             </div>
           </div>
