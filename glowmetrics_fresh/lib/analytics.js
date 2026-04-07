@@ -83,33 +83,9 @@ export function normalizeToUTC(raw) {
   const cleaned = raw.trim()
   if (!cleaned) return null
 
-  // Already ISO format with Z or without
+  // Already ISO format with Z
   if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(cleaned)) {
     const d = new Date(cleaned)
-    return isNaN(d.getTime()) ? null : d.toISOString()
-  }
-  // ISO with space separator: 2024-11-26 04:47:00
-  if (/^\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}/.test(cleaned)) {
-    const d = new Date(cleaned.replace(' ', 'T'))
-    return isNaN(d.getTime()) ? null : d.toISOString()
-  }
-  // Chaturbate: "Mar 19, 2026, 4:54 AM"
-  const cbMatch = cleaned.match(/^([A-Za-z]{3})\s+(\d{1,2}),\s+(\d{4}),\s*(\d{1,2}):(\d{2})\s*(AM|PM)/i)
-  if (cbMatch) {
-    const months = {jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12'}
-    const mon = months[cbMatch[1].toLowerCase()] || '01'
-    let hr = parseInt(cbMatch[4])
-    if (cbMatch[6].toUpperCase() === 'PM' && hr < 12) hr += 12
-    if (cbMatch[6].toUpperCase() === 'AM' && hr === 12) hr = 0
-    const iso = `${cbMatch[3]}-${mon}-${cbMatch[2].padStart(2,'0')}T${hr.toString().padStart(2,'0')}:${cbMatch[5]}:00Z`
-    const d = new Date(iso)
-    return isNaN(d.getTime()) ? null : d.toISOString()
-  }
-  // European DD.MM.YYYY HH:MM (BongaCams)
-  const euroMatch = cleaned.match(/^(\d{2})\.(\d{2})\.(\d{4})(?:\s+(\d{2}:\d{2}))?/)
-  if (euroMatch) {
-    const iso = `${euroMatch[3]}-${euroMatch[2]}-${euroMatch[1]}T${euroMatch[4] || '00:00'}:00Z`
-    const d = new Date(iso)
     return isNaN(d.getTime()) ? null : d.toISOString()
   }
 
@@ -816,14 +792,9 @@ export function getTokenRate(platform, userRates = {}) {
 
 function detectPlatform(text) {
   const lower = text.toLowerCase()
-  // Chaturbate: has "Tip From:" action column or token balance header
-  if (lower.includes('tip from:') || lower.includes('token balance') || lower.includes('token change') || lower.includes('chaturbate')) return 'Chaturbate'
-  // BongaCams: explicit keyword, or "your payout", or private chat keywords, or European date + dollar amount (headerless exports)
-  if (lower.includes('bongacams') || lower.includes('bonga') || lower.includes('your payout') ||
-      lower.includes('chat type') || lower.includes('full-private chat') || lower.includes('private chat') || lower.includes('spy mode') ||
-      (/\d{2}\.\d{2}\.\d{4}/.test(text) && text.includes('$'))) return 'BongaCams'
-  // MyFreeCams: has "Reference ID" header with ordinal dates like "Jan 31st, 2024"
-  if (lower.includes('myfreecams') || lower.includes('mfc') || (lower.includes('reference id') && /\b\d+(st|nd|rd|th),/.test(text))) return 'MyFreeCams'
+  if (lower.includes('chaturbate') || lower.includes('tip from:') || lower.includes('token balance') || lower.includes('token change')) return 'Chaturbate'
+  if (lower.includes('bongacams') || lower.includes('bonga') || lower.includes('your payout')) return 'BongaCams'
+  if (lower.includes('myfreecams') || lower.includes('mfc')) return 'MyFreeCams'
   if (lower.includes('stripchat')) return 'Stripchat'
   if (lower.includes('camsoda')) return 'CamSoda'
   return 'Unknown'
@@ -835,44 +806,14 @@ function detectPlatform(text) {
 
 function normalizeDate(raw) {
   if (!raw) return null
-  const s = raw.trim()
-  // European DD.MM.YYYY HH:MM (BongaCams)
-  const euro = s.match(/^(\d{2})\.(\d{2})\.(\d{4})(?:\s+(\d{2}:\d{2}))?/)
-  if (euro) return `${euro[3]}-${euro[2]}-${euro[1]}${euro[4] ? 'T' + euro[4] + ':00' : 'T00:00:00'}`
-  // MFC: "Jan 31st, 2024 10:40 PM" (ordinal suffix before comma)
-  const mfcOrd = s.match(/^([A-Za-z]{3})\s+(\d{1,2})(?:st|nd|rd|th),\s+(\d{4})\s+(\d{1,2}):(\d{2})\s*(AM|PM)/i)
-  if (mfcOrd) {
-    const months = {jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12'}
-    const mon = months[mfcOrd[1].toLowerCase()] || '01'
-    const day = mfcOrd[2].padStart(2,'0')
-    const yr  = mfcOrd[3]
-    let hr    = parseInt(mfcOrd[4])
-    const min = mfcOrd[5]
-    const ampm = mfcOrd[6].toUpperCase()
-    if (ampm === 'PM' && hr < 12) hr += 12
-    if (ampm === 'AM' && hr === 12) hr = 0
-    return `${yr}-${mon}-${day}T${hr.toString().padStart(2,'0')}:${min}:00`
-  }
-  // Chaturbate: "Mar 19, 2026, 4:54 AM" or "Mar 19, 2026, 4:54AM"
-  const cbFull = s.match(/^([A-Za-z]{3})\s+(\d{1,2}),\s+(\d{4}),\s*(\d{1,2}):(\d{2})\s*(AM|PM)/i)
-  if (cbFull) {
-    const months = {jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12'}
-    const mon = months[cbFull[1].toLowerCase()] || '01'
-    const day = cbFull[2].padStart(2,'0')
-    const yr  = cbFull[3]
-    let hr    = parseInt(cbFull[4])
-    const min = cbFull[5]
-    const ampm = cbFull[6].toUpperCase()
-    if (ampm === 'PM' && hr < 12) hr += 12
-    if (ampm === 'AM' && hr === 12) hr = 0
-    return `${yr}-${mon}-${day}T${hr.toString().padStart(2,'0')}:${min}:00`
-  }
+  // European DD.MM.YYYY
+  const euro = raw.match(/^(\d{2})\.(\d{2})\.(\d{4})(?:\s+(\d{2}:\d{2}))?/)
+  if (euro) return `${euro[2]}/${euro[1]}/${euro[3]}${euro[4] ? ' ' + euro[4] : ''}`
   // YYYY/MM/DD
-  const slash = s.match(/^(\d{4})\/(\d{2})\/(\d{2})(.*)/)
-  if (slash) return `${slash[1]}-${slash[2]}-${slash[3]}${slash[4].replace(' ','T').trim() || 'T00:00:00'}`
-  // ISO/SQL with or without T
-  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.replace(' ', 'T').replace('Z','')
-  return s
+  const slash = raw.match(/^(\d{4})\/(\d{2})\/(\d{2})(.*)/)
+  if (slash) return `${slash[1]}-${slash[2]}-${slash[3]}${slash[4]}`
+  // ISO with Z: 2026-03-01T22:14:03Z
+  return raw.replace('T', ' ').replace('Z', '')
 }
 
 // ============================================
@@ -892,7 +833,7 @@ function normalizeHeaderName(h) {
   if (clean === 'action') return 'action'
   // Catch ALL note/message column variants from Chaturbate and other platforms
   if ([
-    'note', 'notes', 'tip_note', 'message', 'tip_message', 'comment',
+    'note', 'tip_note', 'message', 'tip_message', 'comment',
     'comment_text', 'msg', 'text', 'note_text', 'tip_comment',
     'user_note', 'sender_note', 'chat_message'
   ].includes(clean)) return 'note'
@@ -912,34 +853,16 @@ function re_clean(h) {
 // FIX #1: REMOVE .filter(v => v !== '') — empty columns must stay in place
 // to preserve alignment with headers. Trimming only.
 function parseCSVLine(line) {
+  // Handle case where entire row is wrapped in outer quotes: "col1,col2,col3"
+  // Only treat as outer-wrap if there are no inner quotes at all
   const trimmed = line.trim()
-  // Outer-quote detection: try parsing as one big outer-quoted string.
-  // If the row starts and ends with " we attempt to strip the outer quotes,
-  // unescape any inner "" pairs, and split on commas.
-  // If that yields >1 column the row was outer-wrapped (MFC, BongaCams private).
-  // If it yields exactly 1 column, fall through to standard CSV parsing.
-  if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
-    const inner = trimmed.slice(1, -1)
-    // Try tab-delimited first (BongaCams private chat export uses tabs inside outer quotes)
-    if (inner.includes('\t')) {
-      const cols = inner.split('\t').map(c => c.replace(/""/g, '"').trim())
-      if (cols.length > 1) return cols
-    }
-    // Then try comma-delimited (BongaCams private tips export)
-    const cols = []
-    let cur = ''
-    for (let i = 0; i < inner.length; i++) {
-      if (inner[i] === '"' && i + 1 < inner.length && inner[i+1] === '"') {
-        cur += '"'; i++
-      } else if (inner[i] === ',') {
-        cols.push(cur.trim()); cur = ''
-      } else {
-        cur += inner[i]
-      }
-    }
-    cols.push(cur.trim())
-    if (cols.length > 1) return cols  // confirmed outer-wrapped
-    // else: single-col result means it was a normal quoted field -- fall through
+  if (
+    trimmed.startsWith('"') &&
+    trimmed.endsWith('"') &&
+    !trimmed.slice(1, -1).includes('"')
+  ) {
+    // Preserve empty columns — map(trim) only, no filter
+    return trimmed.slice(1, -1).split(',').map(v => v.trim())
   }
 
   const result = []
@@ -1069,20 +992,14 @@ function parseHeaderless(lines, platform) {
     const vals = parseCSVLine(line)
     if (vals.length === 0) continue
 
-    // Chaturbate "Tip From: username [optional note]" format
+    // Chaturbate "Tip From: username message" format
     if (vals.length >= 3 && vals[1] && vals[1].toLowerCase().includes('tip from')) {
       const dateRaw = normalizeDate(vals[0].replace(/"/g, ''))
-      // Skip transfers/cashouts
-      if (vals[1].toLowerCase().includes('transfer') || vals[1].toLowerCase().includes('cash')) continue
-      // Username is the first alphanumeric/underscore run after "Tip From: "
-      // Everything after the username (even without a space) is the note.
-      // Chaturbate usernames: letters, numbers, underscores only.
-      const afterFrom = vals[1].replace(/tip from[:\s]*/i, '').trim()
-      const userMatch = afterFrom.match(/^([\w]+)(.*)$/)
-      const username = userMatch ? userMatch[1] : afterFrom.split(' ')[0]
-      const tip_note = userMatch ? userMatch[2].trim() : ''
+      const m = vals[1].match(/tip from[:\s]*(\S+)/i)
+      const username = m ? m[1] : null
       const tokens = parseInt(vals[2]) || 0
       if (!username || tokens <= 0) continue
+      if (vals[1].toLowerCase().includes('transfer') || vals[1].toLowerCase().includes('cash')) continue
 
       // FIX #3: Validate date
       if (!dateRaw || isNaN(new Date(dateRaw).getTime())) continue
@@ -1091,24 +1008,18 @@ function parseHeaderless(lines, platform) {
         dateRaw, date_time: dateRaw, username,
         platform: 'Chaturbate', tokens,
         usd: parseFloat((tokens * getTokenRate(platform)).toFixed(2)),
-        tip_type: 'Tip', tip_note
+        tip_type: 'Tip', tip_note: ''
       })
       continue
     }
 
-    // European date DD.MM.YYYY (BongaCams headerless — tips, private, spy exports)
-    // Handles both comma-separated and tab-separated inner content
+    // European date DD.MM.YYYY (BongaCams headerless)
     if (vals.length >= 4 && /^\d{2}\.\d{2}\.\d{4}/.test(vals[0])) {
       const dateRaw = normalizeDate(vals[0])
-      const username = vals[1]?.trim() || null
-      const tipType = vals[2]?.trim() || 'Tip'
+      const username = vals[1] || null
       const tokens = parseInt(vals[3]) || 0
-      const usdRaw = vals[4] ? parseFloat(vals[4].replace(/[$,]/g, '')) : 0
-      const usd = usdRaw > 0 ? parseFloat(usdRaw.toFixed(2)) : parseFloat((tokens * getTokenRate(platform || 'BongaCams')).toFixed(2))
-      if (!username || (tokens <= 0 && usdRaw <= 0)) continue
-
-      // Skip header-like rows
-      if (username.toLowerCase() === 'member' || tipType.toLowerCase() === 'chat type') continue
+      const usd = parseFloat((vals[4] || '').replace(/[$,]/g, '')) || 0
+      if (!username || (tokens <= 0 && usd <= 0)) continue
 
       // FIX #3: Validate date
       if (!dateRaw || isNaN(new Date(dateRaw).getTime())) continue
@@ -1116,9 +1027,9 @@ function parseHeaderless(lines, platform) {
       results.push({
         dateRaw, date_time: dateRaw, username,
         platform: platform || 'BongaCams',
-        tokens: tokens > 0 ? tokens : Math.round(usdRaw / getTokenRate(platform || 'BongaCams')),
-        usd,
-        tip_type: tipType, tip_note: ''
+        tokens: tokens > 0 ? tokens : Math.round(usd / getTokenRate(platform)),
+        usd: usd > 0 ? parseFloat(usd.toFixed(2)) : parseFloat((tokens * getTokenRate(platform)).toFixed(2)),
+        tip_type: vals[2] || 'Tip', tip_note: ''
       })
       continue
     }
@@ -1219,19 +1130,11 @@ export function detectSessions(tips) {
   if (cur && cur.tips.length > 0) sessions.push(finalizeSession(cur))
 
   // MANDATORY: Exclude sessions < 30 min or < 2 tips — not analytically valid
-  // A single tip or all-same-timestamp session is NOT a valid session.
-  // But allow sessions where tips span multiple distinct minutes even if
-  // individual minutes have many tips (MFC/BongaCams minute-precision exports).
-  // Valid session requires:
-  // - at least 2 tips
-  // - not all tips at a single identical timestamp
-  // - either 30+ min span OR at least 2 distinct tip-minutes (handles MFC/Bonga minute-precision)
-  // - at least 10 min span so $/hr is meaningful (avoids "$3000/hr" from 2 tips 1 min apart)
+  // A single tip with 0 duration is NOT a session
   return sessions.filter(s =>
+    s.durationMinutes >= 30 &&
     s.tipCount >= 2 &&
-    !s.durationUnknown &&
-    s.durationMinutes >= 10 &&
-    (s.durationMinutes >= 30 || s.distinctMinutes >= 2)
+    !s.durationUnknown
   )
 }
 
@@ -1239,13 +1142,10 @@ function finalizeSession(s) {
   const durationMs = s.endTime - s.startTime
   const durationMinutes = Math.round(durationMs / 60000)
 
-  // Count distinct minute-timestamps in this session — if only 1, all tips
-  // landed at the same minute (zero-duration, can't compute $/hr accurately)
-  const distinctMinutes = new Set(s.tips.map(t => t.dateRaw ? t.dateRaw.slice(0,16) : t.date_time ? String(t.date_time).slice(0,16) : '')).size
-
-  // durationUnknown = all tips share a single timestamp AND duration is 0
-  // (e.g. platforms that export only dates with no time component)
-  const durationUnknown = durationMinutes === 0 && distinctMinutes <= 1
+  // If all tips landed at the same timestamp (e.g. BongaCams midnight exports with
+  // no real time data), duration is 0 — mark session as durationUnknown and exclude
+  // it from $/hour calculations rather than faking a 30-min floor that tanks averages.
+  const durationUnknown = durationMinutes === 0
   const effectiveMinutes = durationUnknown ? null : Math.max(durationMinutes, 5)
   const durationHours = effectiveMinutes ? effectiveMinutes / 60 : null
 
@@ -1289,7 +1189,6 @@ function finalizeSession(s) {
     : 0
 
   return {
-    distinctMinutes,
     id: `session_${s.startTime.getTime()}`,
     platform: s.platform,
     startTime: s.startTime.toISOString(),
@@ -1581,7 +1480,7 @@ export function predictRevenue(tips, sessions) {
 // LOSS ALERTS
 // ============================================
 
-export function generateLossAlerts(tips, sessions, whales, bestHour, bestHourByPlatform = {}) {
+export function generateLossAlerts(tips, sessions, whales, bestHour) {
   const alerts = []
   const now = Date.now()
   const MS = 86400000
@@ -1594,24 +1493,13 @@ export function generateLossAlerts(tips, sessions, whales, bestHour, bestHourByP
   const tipsPrevWeek  = tipsLast14.filter(t => !tipsLast7Set.has(t.id || `${t.date_time}_${t.username}`))
   const sessionsLast3 = sessions.filter(s => (now - new Date(s.startTime).getTime()) / MS <= 3)
 
-  // Peak window missed — per platform so the alert specifies where to stream
-  const platHours = Object.entries(bestHourByPlatform).filter(([, bh]) => bh)
-  if (platHours.length > 0) {
-    platHours.forEach(([plat, platBH]) => {
-      const bh = parseInt(platBH.hour)
-      const platSessions = sessionsLast3.filter(s => s.platform === plat)
-      const recentAtPeak = platSessions.filter(s => Math.abs(new Date(s.startTime).getHours() - bh) <= 1)
-      if (platSessions.length > 0 && recentAtPeak.length === 0) {
-        const estLoss = parseFloat((platBH.avg * 3).toFixed(2))
-        const label = bh === 0 ? '12 AM' : bh < 12 ? `${bh} AM` : bh === 12 ? '12 PM' : `${bh - 12} PM`
-        alerts.push({ type: 'peak_missed', severity: 'warning', icon: '🚨', message: `You haven't streamed ${plat} during your peak window (${label}) in 3 days — estimated loss: $${estLoss}`, action: `Go live on ${plat} at ${label} to recover this` })
-      }
-    })
-  } else if (bestHour) {
+  // Peak window missed — uses pre-computed bestHour from aggregateRows
+  if (bestHour) {
     const bh = parseInt(bestHour.hour)
     const avgAtPeak = bestHour.avg
-    const recentAtPeak = sessionsLast3.filter(s => Math.abs(new Date(s.startTime).getHours() - bh) <= 1)
-    if (sessionsLast3.length > 0 && recentAtPeak.length === 0) {
+    const recentSessions = sessionsLast3
+    const recentAtPeak = recentSessions.filter(s => Math.abs(new Date(s.startTime).getHours() - bh) <= 1)
+    if (recentSessions.length > 0 && recentAtPeak.length === 0) {
       const estLoss = parseFloat((avgAtPeak * 3).toFixed(2))
       const label = bh === 0 ? '12 AM' : bh < 12 ? `${bh} AM` : bh === 12 ? '12 PM' : `${bh - 12} PM`
       alerts.push({ type: 'peak_missed', severity: 'warning', icon: '🚨', message: `You haven't streamed during your peak window (${label}) in 3 days — estimated loss: $${estLoss}`, action: `Go live at ${label} to recover this` })
@@ -1651,51 +1539,26 @@ export function generateLossAlerts(tips, sessions, whales, bestHour, bestHourByP
 // INSIGHTS (ACTION-ORIENTED)
 // ============================================
 
-export function generateInsights(tips, sessions, bestDay, worstDay, bestHour, bestDayByPlatform = {}, bestHourByPlatform = {}) {
+export function generateInsights(tips, sessions, bestDay, worstDay, bestHour) {
   const insights = []
   if (!tips.length || !sessions.length) return insights
   const now = Date.now()
 
-  // Best day per platform — specific so you know WHICH platform to prioritize
-  const platformsWithDay = Object.entries(bestDayByPlatform)
-  if (platformsWithDay.length > 0) {
-    platformsWithDay.forEach(([plat, bd]) => {
-      if (!bd) return
-      const platSessions = sessions.filter(s => s.platform === plat)
-      if (platSessions.length < 2) return
-      const avgOverall = platSessions.reduce((s, x) => s + x.totalUSD, 0) / platSessions.length
-      const mult = avgOverall > 0 ? (bd.avg / avgOverall).toFixed(1) : null
-      const costOfMissing = parseFloat((bd.avg - avgOverall).toFixed(2))
-      insights.push({ icon: '📅', text: `${bd.day}s are your best day on ${plat}${mult && mult !== '1.0' ? ` — ${mult}x your avg session ($${bd.avg.toFixed(0)} avg)` : ` ($${bd.avg.toFixed(0)} avg)`}. Missing one ${bd.day} costs ~$${Math.max(0, costOfMissing).toFixed(0)}`, type: 'day', priority: 1 })
-    })
-  } else if (bestDay && worstDay && bestDay.day !== worstDay.day) {
-    // Fallback to overall if no platform breakdown available
+  // Best day — uses pre-computed avg-per-session value passed in from aggregateRows
+  if (bestDay && worstDay && bestDay.day !== worstDay.day) {
     const avgOverall = sessions.reduce((s, x) => s + x.totalUSD, 0) / sessions.length
     const mult = (bestDay.avg / avgOverall).toFixed(1)
     const costOfMissing = parseFloat((bestDay.avg - avgOverall).toFixed(2))
-    insights.push({ icon: '📅', text: `${bestDay.day}s are your highest-earning day overall — your avg session earns ${mult}x more ($${bestDay.avg.toFixed(0)} avg). Missing one ${bestDay.day} costs you ~$${costOfMissing}`, type: 'day', priority: 1 })
+    insights.push({ icon: '📅', text: `${bestDay.day}s are your highest-earning day — your avg session earns ${mult}x more ($${bestDay.avg.toFixed(0)} avg). Missing one ${bestDay.day} costs you ~$${costOfMissing}`, type: 'day', priority: 1 })
   }
 
-  // Best hour per platform
-  const platformsWithHour = Object.entries(bestHourByPlatform)
-  if (platformsWithHour.length > 0) {
-    platformsWithHour.forEach(([plat, bh]) => {
-      if (!bh) return
-      const platSessions = sessions.filter(s => s.platform === plat)
-      if (platSessions.length < 2) return
-      const h = parseInt(bh.hour)
-      const label = h === 0 ? '12 AM' : h < 12 ? `${h} AM` : h === 12 ? '12 PM' : `${h - 12} PM`
-      const avgOverall = platSessions.reduce((s, x) => s + x.totalUSD, 0) / platSessions.length
-      const multiplier = avgOverall > 0 ? (bh.avg / avgOverall).toFixed(1) : null
-      insights.push({ icon: '⏰', text: `Go live at ${label} on ${plat}${multiplier && multiplier !== '1.0' ? ` — your earnings are ${multiplier}x higher at this hour` : ''} ($${bh.avg.toFixed(0)} avg/active day)`, type: 'time', priority: 1 })
-    })
-  } else if (bestHour) {
-    // Fallback
+  // Best hour — uses pre-computed value
+  if (bestHour) {
     const h = parseInt(bestHour.hour)
     const label = h === 0 ? '12 AM' : h < 12 ? `${h} AM` : h === 12 ? '12 PM' : `${h - 12} PM`
     const avgOverall = sessions.reduce((s, x) => s + x.totalUSD, 0) / sessions.length
     const multiplier = avgOverall > 0 ? (bestHour.avg / avgOverall).toFixed(1) : null
-    insights.push({ icon: '⏰', text: `Go live at ${label} overall${multiplier ? ` — ${multiplier}x higher earnings` : ''} ($${bestHour.avg.toFixed(0)} avg). Missing this window costs you real money every session`, type: 'time', priority: 1 })
+    insights.push({ icon: '⏰', text: `Go live at ${label} — your avg session earnings are ${multiplier ? `${multiplier}x higher` : 'at their peak'} at this hour ($${bestHour.avg.toFixed(0)} avg). Missing this window costs you real money every session`, type: 'time', priority: 1 })
   }
 
   // Whale concentration — use only true Whales (top 5%) for this insight
@@ -1775,46 +1638,23 @@ export function generateInsights(tips, sessions, bestDay, worstDay, bestHour, be
 // NEXT MOVE ENGINE
 // ============================================
 
-export function generateNextMoves(tips, sessions, whales, predictions, bestHour, bestHourByPlatform = {}) {
+export function generateNextMoves(tips, sessions, whales, predictions, bestHour) {
   const moves = []
   const now = Date.now()
 
-  // Best hour coaching — per platform so you know WHERE to stream, not just when
-  const currentHour = new Date().getHours()
-  const platHourEntries = Object.entries(bestHourByPlatform).filter(([, bh]) => bh)
-  if (platHourEntries.length > 0) {
-    // Find the single best platform+hour combo right now or coming up
-    let bestCombo = null
-    platHourEntries.forEach(([plat, bh]) => {
-      const bhInt = parseInt(bh.hour)
-      const hoursUntil = (bhInt - currentHour + 24) % 24
-      if (!bestCombo || hoursUntil < bestCombo.hoursUntil) {
-        bestCombo = { plat, bh, bhInt, hoursUntil }
-      }
-    })
-    if (bestCombo) {
-      const { plat, bh, bhInt, hoursUntil } = bestCombo
-      const label = bhInt === 0 ? '12 AM' : bhInt < 12 ? `${bhInt} AM` : bhInt === 12 ? '12 PM' : `${bhInt - 12} PM`
-      const avg = bh.avg
-      if (hoursUntil === 0 || hoursUntil === 1) {
-        moves.push({ icon: '🔥', color: '#FB923C', text: `Go live on ${plat} NOW — ${label} is your peak ${plat} hour ($${avg.toFixed(0)} avg/active day)`, priority: 0 })
-      } else if (hoursUntil <= 2) {
-        moves.push({ icon: '⏰', color: '#22D3EE', text: `${hoursUntil}h until your peak ${plat} window (${label}). Prep your room and get ready — $${avg.toFixed(0)} avg/active day at this hour`, priority: 1 })
-      } else {
-        moves.push({ icon: '🕐', color: '#22D3EE', text: `Your best time on ${plat} is ${label} — plan your next stream around it ($${avg.toFixed(0)} avg/active day)`, priority: 2 })
-      }
-    }
-  } else if (bestHour) {
-    // Fallback to overall if no platform breakdown
+  // Best hour coaching — uses pre-computed bestHour from aggregateRows
+  if (bestHour) {
     const bh = parseInt(bestHour.hour)
+    const currentHour = new Date().getHours()
     const hoursUntil = (bh - currentHour + 24) % 24
+    const avgAtPeak = bestHour.avg
     const label = bh === 0 ? '12 AM' : bh < 12 ? `${bh} AM` : bh === 12 ? '12 PM' : `${bh - 12} PM`
     if (hoursUntil === 0 || hoursUntil === 1) {
-      moves.push({ icon: '🔥', color: '#FB923C', text: `Go live NOW — ${label} is your peak earning hour ($${bestHour.avg.toFixed(0)} avg/active day)`, priority: 0 })
+      moves.push({ icon: '🔥', color: '#FB923C', text: `Go live NOW — ${label} is your peak earning time. Your data shows you average $${avgAtPeak.toFixed(0)}/session at this hour`, priority: 0 })
     } else if (hoursUntil <= 2) {
-      moves.push({ icon: '⏰', color: '#22D3EE', text: `${hoursUntil}h until your peak window (${label}). Prep your room and get ready — $${bestHour.avg.toFixed(0)} avg/active day`, priority: 1 })
+      moves.push({ icon: '⏰', color: '#22D3EE', text: `You're ${hoursUntil} hour${hoursUntil > 1 ? 's' : ''} away from your peak time (${label}). Prep your room title and get ready — you avg $${avgAtPeak.toFixed(0)} at this hour`, priority: 1 })
     } else {
-      moves.push({ icon: '🕐', color: '#22D3EE', text: `Your best earning time is ${label} — plan your next stream around it ($${bestHour.avg.toFixed(0)} avg/active day)`, priority: 2 })
+      moves.push({ icon: '🕐', color: '#22D3EE', text: `Your best earning time is ${label} — plan your next stream around it. Your data shows $${avgAtPeak.toFixed(0)} avg per session at this hour`, priority: 2 })
     }
   }
 
@@ -2259,36 +2099,12 @@ export function aggregateRows(tips) {
   const worstDay = [...dayAvgs].sort((a, b) => a.avg - b.avg)[0] || null
   const bestHour = hourAvgs.sort((a, b) => b.avg - a.avg)[0]  || null
 
-  // Per-platform best day + best hour — used for platform-specific insights
-  const platforms = [...new Set(cleanTips.map(t => t.platform))]
-  const bestDayByPlatform = {}
-  const bestHourByPlatform = {}
-  platforms.forEach(plat => {
-    const platTips = cleanTips.filter(t => t.platform === plat)
-    const pDayTotals = {}, pDayDates = {}, pHourTotals = {}, pHourDates = {}
-    platTips.forEach(t => {
-      const dt = new Date(t.dateRaw || t.date_time)
-      const d = UTC_DAYS_LONG[dt.getUTCDay()]
-      const h = dt.getUTCHours()
-      pDayTotals[d] = (pDayTotals[d] || 0) + (t.usd || 0)
-      if (!pDayDates[d]) pDayDates[d] = new Set()
-      pDayDates[d].add(dt.toISOString().slice(0, 10))
-      pHourTotals[h] = (pHourTotals[h] || 0) + (t.usd || 0)
-      if (!pHourDates[h]) pHourDates[h] = new Set()
-      pHourDates[h].add(dt.toISOString().slice(0, 10))
-    })
-    const pDayAvgs = Object.keys(pDayTotals).map(d => ({ day: d, avg: pDayTotals[d] / (pDayDates[d]?.size || 1) }))
-    const pHourAvgs = Object.keys(pHourTotals).map(h => ({ hour: h, avg: pHourTotals[h] / (pHourDates[h]?.size || 1) }))
-    bestDayByPlatform[plat] = pDayAvgs.sort((a, b) => b.avg - a.avg)[0] || null
-    bestHourByPlatform[plat] = pHourAvgs.sort((a, b) => b.avg - a.avg)[0] || null
-  })
-
   const whales      = identifyWhales(cleanTips)
-  const insights    = generateInsights(cleanTips, sessions, bestDay, worstDay, bestHour, bestDayByPlatform, bestHourByPlatform)
+  const insights    = generateInsights(cleanTips, sessions, bestDay, worstDay, bestHour)
   const predictions = predictRevenue(cleanTips, sessions)
   const whaleAlerts = generateWhaleAlerts(whales)
-  const lossAlerts  = generateLossAlerts(cleanTips, sessions, whales, bestHour, bestHourByPlatform)
-  const nextMoves   = generateNextMoves(cleanTips, sessions, whales, predictions, bestHour, bestHourByPlatform)
+  const lossAlerts  = generateLossAlerts(cleanTips, sessions, whales, bestHour)
+  const nextMoves   = generateNextMoves(cleanTips, sessions, whales, predictions, bestHour)
 
   // Single pass for totals — uses cleanTips (all-time, validated)
   let totalUSD = 0
@@ -2349,12 +2165,12 @@ export function aggregateRows(tips) {
     avgTipSize: parseFloat((cleanTips.length > 0 ? totalUSD / cleanTips.length : 0).toFixed(2)),
     topTippers, platforms, sessions, insights: validateInsights(insights), predictions,
     whaleAlerts, lossAlerts, nextMoves, whales,
-    bestDay, bestHour, bestDayByPlatform, bestHourByPlatform, timeRanges,
+    bestDay, bestHour, timeRanges,
     dependencyRisk,   // top1/3/5 pct + risk level
     preTipBehavior,   // peak tipping window + avg gap
     trueHourlyAvg,    // 24-slot array: avgPerActiveDay per UTC hour
   }
-  return verifyConsistency(rawResult, tips)
+  return verifyConsistency(rawResult, cleanTips)
 }
 
 // ============================================
