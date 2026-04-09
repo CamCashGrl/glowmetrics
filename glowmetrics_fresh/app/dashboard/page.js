@@ -934,24 +934,48 @@ export default function Dashboard() {
     } finally { setLoading(false) }
   }
 
-  const removeDuplicates = (existingTips, newTips) => {
-    const existingKeys = new Set(existingTips.map(t => `${t.date_time}_${t.username}_${t.tokens}_${t.platform}`))
-    return newTips.filter(t => !existingKeys.has(`${t.dateRaw || t.date_time}_${t.username}_${t.tokens}_${t.platform}`))
-  }
-
+ // ── FIXED: calls /api/upload route with dedup RPC, not direct Supabase insert
   const handleCSV = async (file, forcePlatform = null) => {
     if (!file || !user) return
     setUploading(true)
     try {
-      const text = await file.text()
-      const parsed = parseCSV(text, forcePlatform)
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) { showToast("❌ Not logged in"); setUploading(false); return }
 
-      if (!parsed.length) {
-        showToast("❌ No valid rows found — try selecting your platform from the dropdown and re-uploading")
+      const fd = new FormData()
+      fd.append('file', file)
+      if (forcePlatform) fd.append('platform', forcePlatform)
+
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session.access_token}` },
+        body: fd,
+      })
+
+      const result = await res.json()
+
+      if (!res.ok || result.error) {
+        showToast("❌ " + (result.error || 'Upload failed'))
         setUploading(false)
         return
       }
 
+      track('csv_imported', { rows: result.inserted, platform: result.platform || 'Unknown' })
+
+      const msg = result.skipped > 0
+        ? `✅ Imported ${result.inserted} tips (${result.skipped} duplicates skipped)`
+        : `✅ Imported ${result.inserted} tips from ${result.platform}!`
+      showToast(msg)
+
+      setUploadCount(c => c + 1)
+      await loadData(user.id)
+
+    } catch (err) {
+      showToast("❌ " + err.message)
+    } finally {
+      setUploading(false)
+    }
+  }
       track('csv_imported', { rows: parsed.length, platform: parsed[0]?.platform || 'Unknown' })
 
       const unique = removeDuplicates(tips, parsed)
