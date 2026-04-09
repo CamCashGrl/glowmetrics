@@ -32,7 +32,8 @@ export default function LoginPage() {
         const { error } = await supabase.auth.signUp({ email, password })
         if (error) throw error
         setError("✅ Check your email to verify your account!")
-        setTimeout(() => router.push("/dashboard"), 2000)
+        // ── FIX: send new users to onboarding, not dashboard
+        setTimeout(() => router.push("/onboarding"), 2000)
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password })
         if (error) throw error
