@@ -35,8 +35,6 @@ export async function POST(req) {
   const parsed = parseCSV(raw)
 
   const rows = parsed.map((row) => {
-    // Use actual USD from CSV if present — do NOT override with token math
-    // if the platform provides real USD values (BongaCams does)
     const tokens = Number(row.tokens) || 0
     const rawUsd = Number(row.usd) || 0
     const usd = rawUsd > 0
@@ -77,16 +75,16 @@ export async function POST(req) {
     }
   }
 
-  // ── BATCH INSERT via dedup RPC ─────────────────────────────────────────
-  // Uses insert_tips_dedup RPC which:
-  //   1. Deduplicates WITHIN each batch (DISTINCT ON)
-  //   2. Skips rows already in DB (ON CONFLICT DO NOTHING)
-  //   3. Never crashes on duplicates — silently skips them
-  //
-  // CRITICAL: ALL batches are sent regardless of individual results.
-  // A skipped-duplicate batch is NOT an error — it's expected behavior.
-  // We only log real DB errors and continue to the next batch.
+  // ── DETECT PLATFORM ─────────────────────────────────────────────────────
+  // Use the most common platform from parsed rows
+  const platformCounts = {}
+  rows.forEach(r => {
+    platformCounts[r.platform] = (platformCounts[r.platform] || 0) + 1
+  })
+  const detectedPlatform = Object.entries(platformCounts)
+    .sort((a, b) => b[1] - a[1])[0]?.[0] || 'Unknown'
 
+  // ── BATCH INSERT via dedup RPC ─────────────────────────────────────────
   let inserted = 0
   let skipped  = 0
   const errors = []
@@ -101,16 +99,51 @@ export async function POST(req) {
     })
 
     if (error) {
-      // Log but KEEP GOING — never abandon remaining batches
       console.error(`[UPLOAD] Batch ${batchNum}/${totalBatches} error:`, error.message)
       errors.push({ batch: batchNum, error: error.message })
-      continue // ← always finish all batches
+      continue
     }
 
     inserted += data?.inserted || 0
     skipped  += data?.skipped  || 0
 
     console.log(`[UPLOAD] Batch ${batchNum}/${totalBatches} — inserted: ${data?.inserted}, skipped: ${data?.skipped}`)
+  }
+
+  // ── LOG TO csv_uploads ─────────────────────────────────────────────────
+  try {
+    const dates = rows.map(r => new Date(r.date_time)).filter(d => !isNaN(d))
+    const dateFrom = dates.length ? new Date(Math.min(...dates)) : null
+    const dateTo   = dates.length ? new Date(Math.max(...dates)) : null
+
+    // Build sorted array of unique "YYYY-MM" strings covered
+    const monthsSet = new Set(
+      dates.map(d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
+    )
+    const monthsCovered = [...monthsSet].sort()
+
+    const totalUsd = rows.reduce((sum, r) => sum + (r.usd || 0), 0)
+    const totalTokens = rows.reduce((sum, r) => sum + (r.tokens || 0), 0)
+
+    await supabase.from('csv_uploads').insert({
+      user_id:        user.id,
+      upload_ref:     crypto.randomUUID(),
+      platform:       detectedPlatform,
+      file_name:      file.name || 'upload.csv',
+      date_from:      dateFrom,
+      date_to:        dateTo,
+      months_covered: monthsCovered,
+      total_rows:     rows.length,
+      inserted_rows:  inserted,
+      skipped_rows:   skipped,
+      total_usd:      parseFloat(totalUsd.toFixed(2)),
+      total_tokens:   totalTokens,
+      status:         errors.length > 0 ? 'partial' : 'complete',
+    })
+    console.log(`[UPLOAD] Logged csv_upload record for ${detectedPlatform} — ${monthsCovered.length} months covered`)
+  } catch (logErr) {
+    // Non-fatal — don't fail the whole upload if logging fails
+    console.warn('[UPLOAD] Failed to log csv_upload record:', logErr.message)
   }
 
   // ── RESPONSE ───────────────────────────────────────────────────────────
@@ -121,6 +154,7 @@ export async function POST(req) {
     total:     rows.length,
     batches:   totalBatches,
     batchSize: BATCH_SIZE,
+    platform:  detectedPlatform, // ← used by dashboard toast
   }
 
   if (errors.length > 0) {
