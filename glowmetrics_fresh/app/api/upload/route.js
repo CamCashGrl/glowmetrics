@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { parseCSV } from '../../../lib/analytics'
 
+const BATCH_SIZE = 250 // Safe batch size — never hit Supabase limits
+
 export async function POST(req) {
   const auth = req.headers.get('Authorization')
   if (!auth) {
@@ -9,7 +11,6 @@ export async function POST(req) {
   }
 
   const token = auth.replace('Bearer ', '')
-
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
@@ -17,7 +18,6 @@ export async function POST(req) {
   )
 
   const { data: { user }, error: ue } = await supabase.auth.getUser(token)
-
   if (ue || !user) {
     return NextResponse.json({ error: 'Invalid session' }, { status: 401 })
   }
@@ -30,38 +30,34 @@ export async function POST(req) {
     return NextResponse.json({ error: 'No file uploaded' }, { status: 400 })
   }
 
-  // 🔥 PARSE + NORMALIZE
+  // ── PARSE + NORMALIZE ──────────────────────────────────────────────────
   const raw = await file.text()
   const parsed = parseCSV(raw)
 
   const rows = parsed.map((row) => {
+    // Use actual USD from CSV if present — do NOT override with token math
+    // if the platform provides real USD values (BongaCams does)
     const tokens = Number(row.tokens) || 0
-
-    // SINGLE SOURCE OF TRUTH
-    const usd = tokens > 0
-      ? parseFloat((tokens * 0.05).toFixed(2))
-      : Number(row.usd) || 0
+    const rawUsd = Number(row.usd) || 0
+    const usd = rawUsd > 0
+      ? parseFloat(rawUsd.toFixed(2))
+      : parseFloat((tokens * 0.05).toFixed(2))
 
     return {
+      user_id:   user.id,
       date_time: row.dateRaw || row.date_time || null,
-      platform: row.platform || 'Unknown',
-      username: row.username || 'Unknown',
-
-      tip_type: row.tip_type || 'Tip',
-
-      // normalize notes safely
-      tip_note:
-        row.tip_note ||
-        row.message ||
-        row.note ||
-        '',
-
+      platform:  row.platform  || 'Unknown',
+      username:  row.username  || 'Unknown',
+      tip_type:  row.tip_type  || 'Tip',
+      tip_note:  row.tip_note  || row.note || row.message || '',
       tokens,
       usd,
-
-      user_id: user.id,
     }
-  })
+  }).filter(r =>
+    r.date_time &&
+    r.username !== 'Unknown' &&
+    (r.tokens > 0 || r.usd > 0)
+  )
 
   if (!rows.length) {
     return NextResponse.json(
@@ -70,42 +66,71 @@ export async function POST(req) {
     )
   }
 
-  // 🔥 OPTIONAL FULL REPLACE
+  // ── OPTIONAL FULL REPLACE ──────────────────────────────────────────────
   if (replace) {
     const { error } = await supabase
       .from('tips')
       .delete()
       .eq('user_id', user.id)
-
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
   }
 
-  // 🔥 BATCH INSERT (SAFE)
+  // ── BATCH INSERT via dedup RPC ─────────────────────────────────────────
+  // Uses insert_tips_dedup RPC which:
+  //   1. Deduplicates WITHIN each batch (DISTINCT ON)
+  //   2. Skips rows already in DB (ON CONFLICT DO NOTHING)
+  //   3. Never crashes on duplicates — silently skips them
+  //
+  // CRITICAL: ALL batches are sent regardless of individual results.
+  // A skipped-duplicate batch is NOT an error — it's expected behavior.
+  // We only log real DB errors and continue to the next batch.
+
   let inserted = 0
+  let skipped  = 0
+  const errors = []
+  const totalBatches = Math.ceil(rows.length / BATCH_SIZE)
 
-  for (let i = 0; i < rows.length; i += 500) {
-    const batch = rows.slice(i, i + 500)
+  for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+    const batch    = rows.slice(i, i + BATCH_SIZE)
+    const batchNum = Math.floor(i / BATCH_SIZE) + 1
 
-    const { error } = await supabase
-      .from('tips')
-      .insert(batch)
+    const { data, error } = await supabase.rpc('insert_tips_dedup', {
+      tips: batch
+    })
 
     if (error) {
-      console.error('[UPLOAD ERROR]', error)
-      return NextResponse.json({ error: error.message }, { status: 500 })
+      // Log but KEEP GOING — never abandon remaining batches
+      console.error(`[UPLOAD] Batch ${batchNum}/${totalBatches} error:`, error.message)
+      errors.push({ batch: batchNum, error: error.message })
+      continue // ← always finish all batches
     }
 
-    inserted += batch.length
+    inserted += data?.inserted || 0
+    skipped  += data?.skipped  || 0
+
+    console.log(`[UPLOAD] Batch ${batchNum}/${totalBatches} — inserted: ${data?.inserted}, skipped: ${data?.skipped}`)
   }
 
-  console.log('[upload] parsed rows:', parsed.length)
-  console.log('[upload] inserted rows:', inserted)
-
-  return NextResponse.json({
-    ok: true,
+  // ── RESPONSE ───────────────────────────────────────────────────────────
+  const response = {
+    ok:        errors.length === 0,
     inserted,
-    total: rows.length,
-  })
+    skipped,
+    total:     rows.length,
+    batches:   totalBatches,
+    batchSize: BATCH_SIZE,
+  }
+
+  if (errors.length > 0) {
+    response.warnings = errors
+    response.message  = `${errors.length} batch(es) had errors but upload continued. ${inserted} of ${rows.length} rows inserted.`
+    console.warn('[UPLOAD] Completed with errors:', errors)
+  } else {
+    response.message = `All ${inserted} tips inserted successfully (${skipped} duplicates skipped).`
+    console.log('[UPLOAD] Complete:', response.message)
+  }
+
+  return NextResponse.json(response)
 }
