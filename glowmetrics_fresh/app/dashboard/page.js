@@ -57,7 +57,7 @@ const TOY_CATEGORIES = {
   domi: {
     sensation: ["the power hits different with every tip", "Domi doesn't hold back", "full intensity on command"],
     control:   ["you set the power level", "tip to push it harder", "Domi obeys you"],
-  const  [showWalkthrough, setShowWalkthrough] = useState(false)
+  
     
    buildup:   ["turning it up with every tip", "building to max — don't stop", "almost at full power"],
   },
@@ -806,6 +806,7 @@ export default function Dashboard() {
   const [uploadPlatform, setUploadPlatform] = useState("")
   const [activeTab, setActiveTab] = useState("overview")
   const [toast, setToast] = useState("")
+  const [showWalkthrough, setShowWalkthrough] = useState(false)
   const [uploadCount, setUploadCount] = useState(0)
   const [whaleFilter, setWhaleFilter] = useState("ALL")
   const [platformFilter, setPlatformFilter] = useState("ALL")
