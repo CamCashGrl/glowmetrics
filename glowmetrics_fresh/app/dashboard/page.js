@@ -1419,20 +1419,40 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <nav style={{ flex: 1, padding: "16px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
-          {[["overview", "📊", "Overview"], ["platforms", "🎯", "Platforms"], ["whales", "🐳", "Top Fans"], ["sessions", "🎥", "Sessions"], ["live", "🔴", "Live Mode"], ["data", "📝", "Edit Data"], ["titles", "🎬", "Room Titles"], ["help", "❓", "CSV Help"], ["upload", "📥", "Import"]].map(([id, icon, label]) => (
-            <button key={id} onClick={() => setActiveTab(id)} style={{
-              display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 10,
-              background: activeTab === id ? "linear-gradient(135deg, rgba(59,130,246,0.2), rgba(236,72,153,0.2))" : "transparent",
-              border: activeTab === id ? "1px solid rgba(59,130,246,0.4)" : "1px solid transparent",
-              boxShadow: activeTab === id ? "0 0 20px rgba(59,130,246,0.3)" : "none",
-              color: activeTab === id ? C.white : C.muted, fontSize: 14, fontWeight: activeTab === id ? 600 : 400,
-              cursor: "pointer", transition: "all 0.15s", textAlign: "left"
-            }}>
-              <span style={{ fontSize: 18 }}>{icon}</span>{label}
-            </button>
-          ))}
-        </nav>
+       {[
+  ["overview",  "📊", "Overview",   "tab-overview"],
+  ["platforms", "🎯", "Platforms",  "tab-platforms"],
+  ["whales",    "🐳", "Top Fans",   "tab-whales"],
+  ["sessions",  "🎥", "Sessions",   "tab-sessions"],
+  ["live",      "🔴", "Live Mode",  "tab-live"],
+  ["data",      "📝", "Edit Data",  "tab-data"],
+  ["titles",    "🎬", "Room Titles","tab-titles"],
+  ["help",      "❓", "CSV Help",   "tab-help"],
+  ["upload",    "📥", "Import",     "tab-upload"],
+].map(([id, icon, label, tourId]) => (
+  <button
+    key={id}
+    data-tour={tourId}
+    onClick={() => setActiveTab(id)}
+    style={{
+      display: "flex", alignItems: "center", gap: 10,
+      padding: "10px 12px", borderRadius: 10,
+      background: activeTab === id
+        ? "linear-gradient(135deg, rgba(59,130,246,0.2), rgba(236,72,153,0.2))"
+        : "transparent",
+      border: activeTab === id
+        ? "1px solid rgba(59,130,246,0.4)"
+        : "1px solid transparent",
+      boxShadow: activeTab === id ? "0 0 20px rgba(59,130,246,0.3)" : "none",
+      color: activeTab === id ? C.white : C.muted,
+      fontSize: 14, fontWeight: activeTab === id ? 600 : 400,
+      cursor: "pointer", transition: "all 0.15s", textAlign: "left"
+    }}
+  >
+    <span style={{ fontSize: 18 }}>{icon}</span>{label}
+  </button>
+))}
+
 
         <div style={{ padding: "16px 20px", borderTop: "1px solid rgba(255,255,255,0.08)", display: "flex", flexDirection: "column", gap: 10 }}>
           <div style={{ padding: 12, borderRadius: 10, background: "linear-gradient(135deg, rgba(59,130,246,0.1), rgba(236,72,153,0.1))", border: "1px solid rgba(236,72,153,0.3)", textAlign: "center" }}>
@@ -1769,6 +1789,7 @@ export default function Dashboard() {
                 )}
               </div>
             )}
+           <BestTimeCard tips={tips} sessions={sessions} />
 
             {/* SMART INSIGHTS */}
             <div style={{ ...glassCard, borderRadius: 14, padding: 24, marginBottom: 28 }}>
