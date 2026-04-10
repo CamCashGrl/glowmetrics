@@ -57,8 +57,8 @@ const TOY_CATEGORIES = {
   domi: {
     sensation: ["the power hits different with every tip", "Domi doesn't hold back", "full intensity on command"],
     control:   ["you set the power level", "tip to push it harder", "Domi obeys you"],
-    const [showWalkthrough, setShowWalkthrough] = useState(false)
-    buildup:   ["turning it up with every tip", "building to max — don't stop", "almost at full power"],
+    
+   buildup:   ["turning it up with every tip", "building to max — don't stop", "almost at full power"],
   },
   edge: {
     sensation: ["edging myself with every tip", "tip to push me further", "so close to the edge"],
