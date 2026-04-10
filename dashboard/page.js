@@ -3,6 +3,8 @@ import React, { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
 import { parseCSV, aggregateRows as runEngine } from "../../lib/analytics"
+import DashboardWalkthrough from "../../components/DashboardWalkthrough"
+import BestTimeCard from "../../components/BestTimeCard"
 
 // Analytics tracking — works whether or not @vercel/analytics is installed
 let track = (event, props) => {}
@@ -55,6 +57,7 @@ const TOY_CATEGORIES = {
   domi: {
     sensation: ["the power hits different with every tip", "Domi doesn't hold back", "full intensity on command"],
     control:   ["you set the power level", "tip to push it harder", "Domi obeys you"],
+    const [showWalkthrough, setShowWalkthrough] = useState(false)
     buildup:   ["turning it up with every tip", "building to max — don't stop", "almost at full power"],
   },
   edge: {
