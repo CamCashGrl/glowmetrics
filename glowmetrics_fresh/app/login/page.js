@@ -4,13 +4,14 @@ import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
 
 const C = {
-  bg: "#0B0F1A",
-  card: "#121826",
-  border: "#1e2d45",
-  cyan: "#22D3EE",
-  pink: "#EC4899",
-  white: "#F1F5F9",
-  muted: "#475569",
+  bg: "#070B14",
+  card: "rgba(20, 28, 45, 0.75)",
+  border: "rgba(255,255,255,0.08)",
+  blue: "#4F8CFF",
+  purple: "#A855F7",
+  accent: "linear-gradient(135deg, #4F8CFF, #A855F7)",
+  white: "#E6EDF3",
+  muted: "rgba(255,255,255,0.6)",
   red: "#F87171",
 }
 
@@ -48,152 +49,94 @@ export default function LoginPage() {
   return (
     <div style={{
       minHeight: "100vh",
-      background: C.bg,
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
       fontFamily: "'Inter', sans-serif",
       padding: 20,
       position: "relative",
-      overflow: "hidden"
+      overflow: "hidden",
+
+      /* 🌌 MATCHED BACKGROUND */
+      background: `
+        radial-gradient(circle at 20% 20%, rgba(79,140,255,0.15), transparent 40%),
+        radial-gradient(circle at 80% 80%, rgba(168,85,247,0.12), transparent 40%),
+        #070B14
+      `
     }}>
 
-      {/* 🔥 BACKGROUND GLOW */}
-      <div style={{
-        position: "absolute",
-        width: 600,
-        height: 600,
-        background: C.cyan,
-        opacity: 0.15,
-        filter: "blur(120px)",
-        top: -150,
-        left: -150
-      }} />
-      <div style={{
-        position: "absolute",
-        width: 500,
-        height: 500,
-        background: C.pink,
-        opacity: 0.15,
-        filter: "blur(120px)",
-        bottom: -150,
-        right: -150
-      }} />
-
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
         * { box-sizing: border-box; margin: 0; padding: 0; }
-
-        @keyframes gradientShift {
-          0% { background-position: 0% 50%; }
-          50% { background-position: 100% 50%; }
-          100% { background-position: 0% 50%; }
-        }
-
-        @keyframes shine {
-          0% { transform: translateX(-100%); }
-          100% { transform: translateX(200%); }
-        }
       `}</style>
 
-      {/* 🔥 OUTER WRAP FOR ANIMATED BORDER */}
+      {/* CARD WRAPPER */}
       <div style={{
         position: "relative",
-        padding: 1,
-        borderRadius: 24,
-        overflow: "hidden"
+        width: "100%",
+        maxWidth: 420
       }}>
 
-        {/* ✨ ANIMATED BORDER */}
+        {/* ✨ SUBTLE GLOW BORDER */}
         <div style={{
           position: "absolute",
           inset: 0,
-          background: `linear-gradient(120deg, ${C.cyan}, ${C.pink}, ${C.cyan})`,
-          backgroundSize: "300% 300%",
-          animation: "gradientShift 6s ease infinite",
-          filter: "blur(8px)",
-          opacity: 0.6
+          borderRadius: 18,
+          padding: 1,
+          background: "linear-gradient(120deg, rgba(79,140,255,0.4), rgba(168,85,247,0.4), transparent)",
+          WebkitMask: "linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0)",
+          WebkitMaskComposite: "xor",
+          opacity: 0.5,
+          pointerEvents: "none"
         }} />
 
-        {/* ORIGINAL CARD */}
+        {/* MAIN CARD */}
         <div style={{
           position: "relative",
           zIndex: 10,
-          background: "rgba(18, 24, 38, 0.85)",
-          backdropFilter: "blur(16px)",
+          padding: "42px 34px",
+          borderRadius: 18,
+          background: C.card,
           border: `1px solid ${C.border}`,
-          borderRadius: 24,
-          padding: "52px 44px",
-          width: "100%",
-          maxWidth: 460,
-          boxShadow: "0 0 80px rgba(168,85,247,0.15)"
+          backdropFilter: "blur(18px)",
+          boxShadow: "0 10px 40px rgba(0,0,0,0.4)"
         }}>
 
-          {/* LOGO */}
-          <div style={{ textAlign: "center", marginBottom: 36 }}>
-            <div style={{
-              width: 70,
-              height: 70,
-              borderRadius: 18,
-              background: `linear-gradient(135deg, ${C.cyan}, ${C.pink}, ${C.cyan})`,
-              backgroundSize: "200% 200%",
-              animation: "gradientShift 5s ease infinite",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: 34,
-              fontWeight: 800,
-              color: C.white,
-              margin: "0 auto 18px",
-              boxShadow: `0 12px 30px ${C.cyan}40`,
-              position: "relative",
-              overflow: "hidden"
-            }}>
-              $
-
-              {/* ✨ SHINE EFFECT */}
-              <div style={{
-                position: "absolute",
-                top: 0,
-                left: 0,
-                width: "50%",
-                height: "100%",
-                background: "linear-gradient(120deg, transparent, rgba(255,255,255,0.6), transparent)",
-                transform: "skewX(-20deg)",
-                animation: "shine 3s infinite"
-              }} />
-            </div>
-
+          {/* HEADER */}
+          <div style={{ textAlign: "center", marginBottom: 32 }}>
             <h1 style={{
-              fontSize: 34,
-              fontWeight: 800,
+              fontSize: 32,
+              fontWeight: 700,
               color: C.white,
-              marginBottom: 8
+              marginBottom: 6
             }}>
               Cam<span style={{
-                background: `linear-gradient(90deg, ${C.cyan}, ${C.pink}, ${C.cyan})`,
-                backgroundSize: "200% 200%",
-                animation: "gradientShift 6s ease infinite",
+                background: C.accent,
                 WebkitBackgroundClip: "text",
                 WebkitTextFillColor: "transparent"
               }}>Cash</span>
             </h1>
 
-            <p style={{ fontSize: 15, color: C.muted }}>
-              Know exactly when, how, and who to stream for 💰
-            </p>
-
-            <p style={{ fontSize: 12, color: "#22c55e", marginTop: 6 }}>
-              🔥 Increase earnings with data-driven insights
+            <p style={{
+              fontSize: 14,
+              color: C.muted
+            }}>
+              Stream smarter. Earn more.
             </p>
           </div>
 
           {/* FORM */}
           <form onSubmit={handleAuth}>
-            <div style={{ marginBottom: 20 }}>
-              <label style={{ fontSize: 14, color: C.white, marginBottom: 6, display: "block" }}>
+            <div style={{ marginBottom: 18 }}>
+              <label style={{
+                fontSize: 13,
+                color: C.muted,
+                marginBottom: 6,
+                display: "block"
+              }}>
                 Email
               </label>
+
               <input
                 type="email"
                 value={email}
@@ -202,22 +145,35 @@ export default function LoginPage() {
                 style={{
                   width: "100%",
                   padding: "14px 16px",
-                  background: "#020617",
+                  background: "rgba(255,255,255,0.03)",
                   border: `1px solid ${C.border}`,
-                  borderRadius: 12,
+                  borderRadius: 10,
                   color: C.white,
-                  fontSize: 15,
-                  outline: "none"
+                  fontSize: 14,
+                  outline: "none",
+                  transition: "all 0.2s ease"
                 }}
-                onFocus={(e) => e.target.style.borderColor = C.pink}
-                onBlur={(e) => e.target.style.borderColor = C.border}
+                onFocus={(e) => {
+                  e.target.style.borderColor = C.blue
+                  e.target.style.background = "rgba(255,255,255,0.05)"
+                }}
+                onBlur={(e) => {
+                  e.target.style.borderColor = C.border
+                  e.target.style.background = "rgba(255,255,255,0.03)"
+                }}
               />
             </div>
 
-            <div style={{ marginBottom: 24 }}>
-              <label style={{ fontSize: 14, color: C.white, marginBottom: 6, display: "block" }}>
+            <div style={{ marginBottom: 22 }}>
+              <label style={{
+                fontSize: 13,
+                color: C.muted,
+                marginBottom: 6,
+                display: "block"
+              }}>
                 Password
               </label>
+
               <input
                 type="password"
                 value={password}
@@ -227,27 +183,40 @@ export default function LoginPage() {
                 style={{
                   width: "100%",
                   padding: "14px 16px",
-                  background: "#020617",
+                  background: "rgba(255,255,255,0.03)",
                   border: `1px solid ${C.border}`,
-                  borderRadius: 12,
+                  borderRadius: 10,
                   color: C.white,
-                  fontSize: 15,
-                  outline: "none"
+                  fontSize: 14,
+                  outline: "none",
+                  transition: "all 0.2s ease"
                 }}
-                onFocus={(e) => e.target.style.borderColor = C.cyan}
-                onBlur={(e) => e.target.style.borderColor = C.border}
+                onFocus={(e) => {
+                  e.target.style.borderColor = C.blue
+                  e.target.style.background = "rgba(255,255,255,0.05)"
+                }}
+                onBlur={(e) => {
+                  e.target.style.borderColor = C.border
+                  e.target.style.background = "rgba(255,255,255,0.03)"
+                }}
               />
             </div>
 
             {error && (
               <div style={{
-                padding: "12px 16px",
-                background: error.includes("✅") ? `${C.cyan}15` : `${C.red}15`,
-                border: `1px solid ${error.includes("✅") ? C.cyan + "30" : C.red + "30"}`,
+                padding: "12px 14px",
+                background: error.includes("✅")
+                  ? "rgba(79,140,255,0.1)"
+                  : "rgba(248,113,113,0.1)",
+                border: `1px solid ${
+                  error.includes("✅")
+                    ? "rgba(79,140,255,0.3)"
+                    : "rgba(248,113,113,0.3)"
+                }`,
                 borderRadius: 10,
-                color: error.includes("✅") ? C.cyan : C.red,
-                fontSize: 14,
-                marginBottom: 20
+                color: error.includes("✅") ? C.blue : C.red,
+                fontSize: 13,
+                marginBottom: 16
               }}>
                 {error}
               </div>
@@ -258,28 +227,29 @@ export default function LoginPage() {
               disabled={loading}
               style={{
                 width: "100%",
-                padding: "15px",
-                background: `linear-gradient(135deg, ${C.cyan}, ${C.pink})`,
+                padding: "14px",
+                background: C.accent,
                 border: "none",
-                borderRadius: 12,
-                color: C.white,
-                fontSize: 16,
-                fontWeight: 700,
-                cursor: loading ? "not-allowed" : "pointer",
+                borderRadius: 10,
+                color: "#fff",
+                fontSize: 15,
+                fontWeight: 600,
+                cursor: "pointer",
+                boxShadow: "0 6px 20px rgba(79,140,255,0.3)",
                 opacity: loading ? 0.7 : 1,
-                boxShadow: `0 8px 25px ${C.pink}40`
+                transition: "all 0.2s ease"
               }}
             >
               {loading
                 ? "Entering..."
                 : mode === "signup"
                 ? "Create Account"
-                : "Enter Dashboard"}
+                : "Log In"}
             </button>
           </form>
 
           {/* TOGGLE */}
-          <div style={{ marginTop: 24, textAlign: "center" }}>
+          <div style={{ marginTop: 20, textAlign: "center" }}>
             <button
               onClick={() => {
                 setMode(mode === "login" ? "signup" : "login")
@@ -288,8 +258,8 @@ export default function LoginPage() {
               style={{
                 background: "none",
                 border: "none",
-                color: C.cyan,
-                fontSize: 14,
+                color: C.muted,
+                fontSize: 13,
                 cursor: "pointer"
               }}
             >
