@@ -921,63 +921,46 @@ export default function Dashboard() {
     router.replace('/login')
   }
 
-  const loadData = async (uid) => {
-    setLoading(true)
-    try {
-      let allData = []
-      let from = 0
-      const PAGE = 1000
-      while (true) {
-        const { data, error } = await supabase.from("tips").select("*").eq("user_id", uid).order("date_time", { ascending: true }).range(from, from + PAGE - 1)
-        if (error) break
-        if (data?.length) allData = [...allData, ...data]
-        if (!data || data.length < PAGE) break
-        from += PAGE
-      }
-      if (allData.length) { setTips(allData); const result = runEngine(allData); setAnalytics(result) }
-    } finally { setLoading(false) }
-  }
-const handleCSV = async (file, forcePlatform = null) => {
-    if (!file || !user) return
-    setUploading(true)
-    try {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) { showToast("❌ Not logged in"); setUploading(false); return }
-
-      const fd = new FormData()
-      fd.append('file', file)
-      if (forcePlatform) fd.append('platform', forcePlatform)
-
-      const res = await fetch('/api/upload', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${session.access_token}` },
-        body: fd,
-      })
-
-      const result = await res.json()
-
-      if (!res.ok || result.error) {
-        showToast("❌ " + (result.error || 'Upload failed'))
-        setUploading(false)
-        return
-      }
-
-      track('csv_imported', { rows: result.inserted, platform: result.platform || 'Unknown' })
-
-      const msg = result.skipped > 0
-        ? `✅ Imported ${result.inserted} tips (${result.skipped} duplicates skipped)`
-        : `✅ Imported ${result.inserted} tips from ${result.platform}!`
-      showToast(msg)
-
-      setUploadCount(c => c + 1)
-      await loadData(user.id)
-
-    } catch (err) {
-      showToast("❌ " + err.message)
-    } finally {
-      setUploading(false)
+ const loadData = async (uid) => {
+  setLoading(true)
+  try {
+    let allData = []
+    let from = 0
+    const PAGE = 1000
+    while (true) {
+      const { data, error } = await supabase
+        .from("tips")
+        .select("*")
+        .eq("user_id", uid)
+        .order("date_time", { ascending: true })
+        .range(from, from + PAGE - 1)
+      if (error) break
+      if (data?.length) allData = [...allData, ...data]
+      if (!data || data.length < PAGE) break
+      from += PAGE
     }
+    if (allData.length) {
+      setTips(allData)
+      const result = runEngine(allData)
+      setAnalytics(result)
+    }
+
+    // ── CHECK ONBOARDING STATUS — show walkthrough if not completed ──
+    const { data: betaRow } = await supabase
+      .from("beta_users")
+      .select("onboarding_complete")
+      .eq("user_id", uid)
+      .single()
+
+    if (betaRow && betaRow.onboarding_complete === false) {
+      setShowWalkthrough(true)
+    }
+
+  } finally {
+    setLoading(false)
   }
+}
+ 
 
   const deleteTip = async (tipId) => {
     if (!confirm("Delete this tip?")) return
