@@ -3,6 +3,8 @@ import React, { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
 import { parseCSV, aggregateRows as runEngine } from "../../lib/analytics"
+import DashboardWalkthrough from "../../components/DashboardWalkthrough"
+import BestTimeCard from "../../components/BestTimeCard"
 
 // Analytics tracking — works whether or not @vercel/analytics is installed
 let track = (event, props) => {}
@@ -33,7 +35,19 @@ const formatHour = (hour) => {
   return `${h - 12} PM`
 }
 
-// ── TOY CATEGORY LIBRARY
+// ── FIX: Standalone copy button component so each item can have its own
+// copied state WITHOUT calling useState inside a .map() callback.
+// Rules of Hooks require hooks to only be called at the top level of a
+// React function component — never inside loops, conditions, or callbacks.
+// ── Title Generator extracted as a proper component so useState calls are legal
+// ============================================================
+// ROOM TITLE ENGINE — ONE TITLE AT A TIME
+// Formula: HOOK + TARGET + ACTION + REWARD + URGENCY
+// ============================================================
+
+// ── TOY CATEGORY LIBRARY ────────────────────────────────────────────────────
+// Each category has its own language — sensation, power, intensity, etc.
+// Extend by adding new keys. Matched by detecting keywords in toy name.
 const TOY_CATEGORIES = {
   lush: {
     sensation: ["I feel every tip inside me", "every vibration takes me higher", "I feel it deep with every tip"],
@@ -43,6 +57,7 @@ const TOY_CATEGORIES = {
   domi: {
     sensation: ["the power hits different with every tip", "Domi doesn't hold back", "full intensity on command"],
     control:   ["you set the power level", "tip to push it harder", "Domi obeys you"],
+    const [showWalkthrough, setShowWalkthrough] = useState(false)
     buildup:   ["turning it up with every tip", "building to max — don't stop", "almost at full power"],
   },
   edge: {
@@ -55,6 +70,7 @@ const TOY_CATEGORIES = {
     control:   ["secret control in your hands", "tip and watch my reaction", "nobody knows but you"],
     buildup:   ["getting harder to stay quiet", "one more tip and I can't hide it", "you're making this impossible"],
   },
+  // Generic fallback for any other toy
   default: {
     sensation: ["I feel every tip", "tip = instant reaction", "every one hits harder"],
     control:   ["you decide what happens", "you run this room", "tip to take control"],
@@ -72,84 +88,296 @@ function getToyCategory(toyName) {
   return TOY_CATEGORIES.default
 }
 
+// ── MOOD LIBRARY ─────────────────────────────────────────────────────────────
+// Mood shapes the emotional tone of hooks and closers
 const MOOD_HOOKS = {
-  tease: ["let's see how far you take me","I'm not giving it up that easy","you have to earn it tonight","almost… not yet","make me want to"],
-  dominant: ["top tipper owns this room","you earn what I give you","prove you deserve it","this is my show — tip to play","I decide — you tip"],
-  submissive: ["I do what you say tonight","you're in charge — tip to command me","whatever you want, tip for it","your wish is my reaction","tell me what to do"],
-  hype: ["WE ARE SO CLOSE","the energy in here is insane right now","LET'S GOOO — tip to push it","this room is on fire","we're making history tonight"],
-  mystery: ["you won't believe what happens at goal","something big is coming… tip to find out","I have a surprise — help me get there","you're not ready for what's next","curious? tip to unlock it"],
+  tease: [
+    "let's see how far you take me",
+    "I'm not giving it up that easy",
+    "you have to earn it tonight",
+    "almost… not yet",
+    "make me want to",
+  ],
+  dominant: [
+    "top tipper owns this room",
+    "you earn what I give you",
+    "prove you deserve it",
+    "this is my show — tip to play",
+    "I decide — you tip",
+  ],
+  submissive: [
+    "I do what you say tonight",
+    "you're in charge — tip to command me",
+    "whatever you want, tip for it",
+    "your wish is my reaction",
+    "tell me what to do",
+  ],
+  hype: [
+    "WE ARE SO CLOSE",
+    "the energy in here is insane right now",
+    "LET'S GOOO — tip to push it",
+    "this room is on fire",
+    "we're making history tonight",
+  ],
+  mystery: [
+    "you won't believe what happens at goal",
+    "something big is coming… tip to find out",
+    "I have a surprise — help me get there",
+    "you're not ready for what's next",
+    "curious? tip to unlock it",
+  ],
 }
 
 function buildOneTitle(ctx) {
-  const { isPeakNow, peakSoon, bestHourLabel, hoursUntilPeak, hasWhales, topWhaleName, whaleCount, hasReturners, returningPct, lowActivity, todayIsBestDay, todayDay, tokenGoal, action, toy, mood, useEmojis, avgSessionUSD } = ctx
+  const {
+    isPeakNow, peakSoon, bestHourLabel, hoursUntilPeak,
+    hasWhales, topWhaleName, whaleCount,
+    hasReturners, returningPct,
+    lowActivity, todayIsBestDay, todayDay,
+    tokenGoal, action, toy, mood,
+    useEmojis, avgSessionUSD,
+  } = ctx
+
   const e = (emoji) => useEmojis ? emoji : ""
   const pick = (arr) => arr[Math.floor(Math.random() * arr.length)]
+
   const hasToy  = Boolean(toy && toy.trim())
   const hasMood = Boolean(mood && mood !== "none")
   const toyLib  = getToyCategory(toy)
-  const moodHooks = hasMood ? (MOOD_HOOKS[mood] || []) : []
-  const toyHooks = hasToy ? [`tip to control my ${toy} ${e("🎮")}`,`you control my ${toy} ${e("⚡")}`,`my ${toy} is on — you decide ${e("😈")}`,`${toy} is live and waiting`,toyLib ? pick(toyLib.control) : `tip to run my ${toy}`] : []
-  const dataHooks = [...(isPeakNow ? [`live right now ${e("🔴")}`,`going live this second`] : []),...(peakSoon ? [`going live in ${hoursUntilPeak}h — don't miss it`] : []),...(lowActivity ? [`miss me? ${e("👀")}`,`been a minute ${e("💭")}`] : []),...(todayIsBestDay ? [`${todayDay}s hit different ${e("🔥")}`] : []),...(hasWhales ? [`VIPs run the show tonight ${e("💎")}`] : [])]
-  const evergreen = [`you decide what I do ${e("👑")}`,`top tipper controls everything`,`feeling dangerous tonight ${e("😈")}`,`not holding back tonight ${e("🔥")}`,`bad girl energy ${e("😈")}`,`catching me in a mood ${e("🌙")}`,`prove you want it ${e("👀")}`,`make me ${e("😏")}`]
+
+  // ── HOOKS ─────────────────────────────────────────────────────────────────
+  // Priority: mood hooks > toy hooks > data hooks > evergreen
+  const moodHooks   = hasMood ? (MOOD_HOOKS[mood] || []) : []
+  const toyHooks    = hasToy ? [
+    `tip to control my ${toy} ${e("🎮")}`,
+    `you control my ${toy} ${e("⚡")}`,
+    `my ${toy} is on — you decide ${e("😈")}`,
+    `${toy} is live and waiting`,
+    toyLib ? pick(toyLib.control) : `tip to run my ${toy}`,
+  ] : []
+
+  const dataHooks = [
+    ...(isPeakNow      ? [`live right now ${e("🔴")}`, `going live this second`] : []),
+    ...(peakSoon       ? [`going live in ${hoursUntilPeak}h — don't miss it`] : []),
+    ...(lowActivity    ? [`miss me? ${e("👀")}`, `been a minute ${e("💭")}`] : []),
+    ...(todayIsBestDay ? [`${todayDay}s hit different ${e("🔥")}`] : []),
+    ...(hasWhales      ? [`VIPs run the show tonight ${e("💎")}`] : []),
+  ]
+
+  const evergreen = [
+    `you decide what I do ${e("👑")}`,
+    `top tipper controls everything`,
+    `feeling dangerous tonight ${e("😈")}`,
+    `not holding back tonight ${e("🔥")}`,
+    `bad girl energy ${e("😈")}`,
+    `catching me in a mood ${e("🌙")}`,
+    `prove you want it ${e("👀")}`,
+    `make me ${e("😏")}`,
+  ]
+
+  // Weight: if mood+toy both set, 50% mood, 50% toy; otherwise bias toward what's set
   let hookPool
-  if (moodHooks.length && toyHooks.length) { hookPool = Math.random() < 0.5 ? moodHooks : toyHooks }
-  else if (moodHooks.length) { hookPool = [...moodHooks, ...dataHooks, ...evergreen.slice(0, 4)] }
-  else if (toyHooks.length) { hookPool = [...toyHooks, ...dataHooks.slice(0, 2), ...evergreen.slice(0, 3)] }
-  else { hookPool = [...dataHooks, ...evergreen] }
+  if (moodHooks.length && toyHooks.length) {
+    hookPool = Math.random() < 0.5 ? moodHooks : toyHooks
+  } else if (moodHooks.length) {
+    hookPool = [...moodHooks, ...dataHooks, ...evergreen.slice(0, 4)]
+  } else if (toyHooks.length) {
+    hookPool = [...toyHooks, ...dataHooks.slice(0, 2), ...evergreen.slice(0, 3)]
+  } else {
+    hookPool = [...dataHooks, ...evergreen]
+  }
+
+  // ── GOAL TEXT ─────────────────────────────────────────────────────────────
   let goalText
-  if (hasToy && tokenGoal && action) { goalText = pick([`hit ${tokenGoal} → ${action} + ${toy} reacts`,`${tokenGoal} tokens = ${action} & full ${toy} control`,`tip to reach ${tokenGoal} — ${toy} goes wild & you get ${action}`]) }
-  else if (hasToy && tokenGoal) { goalText = pick([`hit ${tokenGoal} → my ${toy} reacts`,`${tokenGoal} = full ${toy} control`,`tip to ${tokenGoal} — ${toy} goes crazy`,`get me to ${tokenGoal} and feel what happens`]) }
-  else if (hasToy && action) { goalText = pick([`tip → ${action} + ${toy} control`,`tip = ${action} & ${toy} reaction`,`unlock ${action} — ${toy} goes with it`]) }
-  else if (hasToy) { goalText = toyLib ? pick([...toyLib.sensation, ...toyLib.control]) : pick([`tip to control my ${toy}`,`tip = ${toy} reacts`,`tip to push my ${toy}`]) }
-  else if (tokenGoal && action) { goalText = pick([`hit ${tokenGoal} → ${action}`,`${tokenGoal} tokens = ${action}`,`tip to reach ${tokenGoal} & get ${action}`,`${tokenGoal} gets you ${action}`]) }
-  else if (tokenGoal) { goalText = pick([`help me hit ${tokenGoal}`,`tip to reach ${tokenGoal}`,`${tokenGoal} is the goal — push me there`,`so close to ${tokenGoal} — don't stop`]) }
-  else if (action) { goalText = pick([`tip → ${action}`,`tip = ${action}`,`unlock ${action}`,`tip and I ${action}`]) }
-  else if (hasMood) { goalText = pick(["tip to decide what happens next","tip to take this further","tip = reaction","tip and see what I do"]) }
-  else { goalText = pick(["tip to take control","tip = instant reaction","tip to decide what happens","tip to run this room"]) }
+  if (hasToy && tokenGoal && action) {
+    goalText = pick([
+      `hit ${tokenGoal} → ${action} + ${toy} reacts`,
+      `${tokenGoal} tokens = ${action} & full ${toy} control`,
+      `tip to reach ${tokenGoal} — ${toy} goes wild & you get ${action}`,
+    ])
+  } else if (hasToy && tokenGoal) {
+    goalText = pick([
+      `hit ${tokenGoal} → my ${toy} reacts`,
+      `${tokenGoal} = full ${toy} control`,
+      `tip to ${tokenGoal} — ${toy} goes crazy`,
+      `get me to ${tokenGoal} and feel what happens`,
+    ])
+  } else if (hasToy && action) {
+    goalText = pick([
+      `tip → ${action} + ${toy} control`,
+      `tip = ${action} & ${toy} reaction`,
+      `unlock ${action} — ${toy} goes with it`,
+    ])
+  } else if (hasToy) {
+    // Toy only — use toy library sensations
+    goalText = toyLib
+      ? pick([...toyLib.sensation, ...toyLib.control])
+      : pick([`tip to control my ${toy}`, `tip = ${toy} reacts`, `tip to push my ${toy}`])
+  } else if (tokenGoal && action) {
+    goalText = pick([
+      `hit ${tokenGoal} → ${action}`,
+      `${tokenGoal} tokens = ${action}`,
+      `tip to reach ${tokenGoal} & get ${action}`,
+      `${tokenGoal} gets you ${action}`,
+    ])
+  } else if (tokenGoal) {
+    goalText = pick([
+      `help me hit ${tokenGoal}`,
+      `tip to reach ${tokenGoal}`,
+      `${tokenGoal} is the goal — push me there`,
+      `so close to ${tokenGoal} — don't stop`,
+    ])
+  } else if (action) {
+    goalText = pick([
+      `tip → ${action}`,
+      `tip = ${action}`,
+      `unlock ${action}`,
+      `tip and I ${action}`,
+    ])
+  } else if (hasMood) {
+    // Mood only — use buildup or mystery phrasing
+    goalText = pick([
+      "tip to decide what happens next",
+      "tip to take this further",
+      "tip = reaction",
+      "tip and see what I do",
+    ])
+  } else {
+    goalText = pick([
+      "tip to take control",
+      "tip = instant reaction",
+      "tip to decide what happens",
+      "tip to run this room",
+    ])
+  }
+
+  // ── REWARDS ───────────────────────────────────────────────────────────────
+  // Toy → sensation rewards; Mood → mood-matched rewards; fallback → general
   let rewards
-  if (hasToy && toyLib) { rewards = [...toyLib.sensation,...toyLib.buildup,`${toy} goes full power ${e("⚡")}`,`full ${toy} control ${e("👑")}`,...(action ? [`${action} + ${toy} reaction`] : [])] }
-  else if (hasMood && mood === "tease") { rewards = [`and maybe I give you what you want ${e("😏")}`,`but you have to earn it first`,`if you're lucky tonight ${e("👀")}`,`I might just let go ${e("💋")}`] }
-  else if (hasMood && mood === "dominant") { rewards = [`you earn your reward ${e("👑")}`,`top earner gets access ${e("🔒")}`,`I reward the ones who prove it`,`exclusive access for top tipper`] }
-  else if (hasMood && mood === "hype") { rewards = [`something HUGE happens at goal ${e("🔥")}`,`biggest reaction of the night ${e("⚡")}`,`I go all out ${e("🔥")}`] }
-  else { rewards = [...(action ? [`${action} ${e("😏")}`,`you get ${action}`] : []),`special reaction ${e("🔥")}`,`private show ${e("💎")}`,`you choose everything ${e("👑")}`,`I react to every tip ${e("⚡")}`,`exclusive content ${e("🔒")}`,`big surprise ${e("🎁")}`] }
-  const urgencies = [...(isPeakNow ? ["live now","happening right now"] : []),...(peakSoon ? [`${hoursUntilPeak}h left`,"starting soon"] : []),"tonight only","this hour only","now or never","before I log off","don't miss it","limited time","while I'm in this mood","live now"]
-  const hook = pick(hookPool), reward = pick(rewards), urgency = pick(urgencies)
+  if (hasToy && toyLib) {
+    rewards = [
+      ...toyLib.sensation,
+      ...toyLib.buildup,
+      `${toy} goes full power ${e("⚡")}`,
+      `full ${toy} control ${e("👑")}`,
+      ...(action ? [`${action} + ${toy} reaction`] : []),
+    ]
+  } else if (hasMood && mood === "tease") {
+    rewards = [
+      `and maybe I give you what you want ${e("😏")}`,
+      `but you have to earn it first`,
+      `if you're lucky tonight ${e("👀")}`,
+      `I might just let go ${e("💋")}`,
+    ]
+  } else if (hasMood && mood === "dominant") {
+    rewards = [
+      `you earn your reward ${e("👑")}`,
+      `top earner gets access ${e("🔒")}`,
+      `I reward the ones who prove it`,
+      `exclusive access for top tipper`,
+    ]
+  } else if (hasMood && mood === "hype") {
+    rewards = [
+      `something HUGE happens at goal ${e("🔥")}`,
+      `biggest reaction of the night ${e("⚡")}`,
+      `I go all out ${e("🔥")}`,
+    ]
+  } else {
+    rewards = [
+      ...(action ? [`${action} ${e("😏")}`, `you get ${action}`] : []),
+      `special reaction ${e("🔥")}`,
+      `private show ${e("💎")}`,
+      `you choose everything ${e("👑")}`,
+      `I react to every tip ${e("⚡")}`,
+      `exclusive content ${e("🔒")}`,
+      `big surprise ${e("🎁")}`,
+    ]
+  }
+
+  // ── URGENCY ───────────────────────────────────────────────────────────────
+  const urgencies = [
+    ...(isPeakNow ? ["live now", "happening right now"] : []),
+    ...(peakSoon  ? [`${hoursUntilPeak}h left`, "starting soon"] : []),
+    "tonight only",
+    "this hour only",
+    "now or never",
+    "before I log off",
+    "don't miss it",
+    "limited time",
+    "while I'm in this mood",
+    "live now",
+  ]
+
+  const hook    = pick(hookPool)
+  const reward  = pick(rewards)
+  const urgency = pick(urgencies)
+
+  // ── 9 DISTINCT STRUCTURES — varied rhythm, length, tone ──────────────────
+  // Includes short punchy, mid-length emotional, and longer descriptive forms
   const n = Math.floor(Math.random() * 9)
   let title
-  if (n === 0) { title = `${hook} ${e("💦")} ${goalText} → ${reward} (${urgency})` }
-  else if (n === 1) { title = `${reward} ${e("🔥")} — ${goalText} • ${urgency}` }
-  else if (n === 2) { title = `${goalText} = ${reward} ${e("🔥")} • ${urgency}` }
-  else if (n === 3) { title = `${hook}… ${goalText} (${urgency}) ${e("👀")}` }
-  else if (n === 4) { title = `${urgency.toUpperCase()} ${e("⚡")} ${hook} — ${goalText}` }
-  else if (n === 5) { title = `${hook} • ${goalText} • ${reward} (${urgency})` }
-  else if (n === 6) { title = `${goalText} ${e("→")} ${reward} ${e("💋")} ${urgency}` }
-  else if (n === 7) { title = `${hook}… ${reward} ${e("😈")} (${urgency})` }
-  else { const closer = hasToy && toyLib ? pick(toyLib.buildup) : (hasMood ? pick(MOOD_HOOKS[mood] || [reward]) : reward); title = `${hook} ${e("💦")} ${goalText} — ${closer} (${urgency})` }
+
+  if (n === 0) {
+    // Classic formula — mid length
+    title = `${hook} ${e("💦")} ${goalText} → ${reward} (${urgency})`
+  } else if (n === 1) {
+    // Reward-first — payoff leads
+    title = `${reward} ${e("🔥")} — ${goalText} • ${urgency}`
+  } else if (n === 2) {
+    // Short punchy — goal = reward only
+    title = `${goalText} = ${reward} ${e("🔥")} • ${urgency}`
+  } else if (n === 3) {
+    // Mystery — hook leads with curiosity gap
+    title = `${hook}… ${goalText} (${urgency}) ${e("👀")}`
+  } else if (n === 4) {
+    // FOMO urgency first — time pressure leads
+    title = `${urgency.toUpperCase()} ${e("⚡")} ${hook} — ${goalText}`
+  } else if (n === 5) {
+    // Power dynamic — three-beat structure
+    title = `${hook} • ${goalText} • ${reward} (${urgency})`
+  } else if (n === 6) {
+    // Clean CTA — minimal noise
+    title = `${goalText} ${e("→")} ${reward} ${e("💋")} ${urgency}`
+  } else if (n === 7) {
+    // Emotional / tease — conversational, no formula markers
+    title = `${hook}… ${reward} ${e("😈")} (${urgency})`
+  } else {
+    // Buildup — toyLib.buildup or mood closer if available
+    const closer = hasToy && toyLib ? pick(toyLib.buildup) : (hasMood ? pick(MOOD_HOOKS[mood] || [reward]) : reward)
+    title = `${hook} ${e("💦")} ${goalText} — ${closer} (${urgency})`
+  }
+
+  // Sanitize
   title = title.replace(/\s{2,}/g, " ").replace(/→\s*→/g, "→").trim()
   if (title.length > 100) title = title.slice(0, 97) + "..."
+
+  // ── DRIVERS ───────────────────────────────────────────────────────────────
   const drivers = []
   if (isPeakNow || peakSoon) drivers.push("peak hour timing")
-  if (hasWhales) drivers.push(`${whaleCount} VIP fans`)
-  if (todayIsBestDay) drivers.push(`${todayDay} is your best day`)
-  if (lowActivity) drivers.push("low recent activity")
-  if (tokenGoal) drivers.push(`${tokenGoal} token goal`)
-  if (hasToy) drivers.push(`${toy} (${getToyCategory(toy) === TOY_CATEGORIES.lush ? "wearable" : toy.toLowerCase().includes("domi") ? "wand" : "toy"})`)
+  if (hasWhales)             drivers.push(`${whaleCount} VIP fans`)
+  if (todayIsBestDay)        drivers.push(`${todayDay} is your best day`)
+  if (lowActivity)           drivers.push("low recent activity")
+  if (tokenGoal)             drivers.push(`${tokenGoal} token goal`)
+  if (hasToy)                drivers.push(`${toy} (${getToyCategory(toy) === TOY_CATEGORIES.lush ? "wearable" : toy.toLowerCase().includes("domi") ? "wand" : "toy"})`)
   if (hasMood && mood !== "none") drivers.push(`${mood} mood`)
-  if (action) drivers.push(`reward: ${action}`)
-  if (hasReturners) drivers.push(`${returningPct}% returning fans`)
-  if (drivers.length === 0) drivers.push("general engagement")
+  if (action)                drivers.push(`reward: ${action}`)
+  if (hasReturners)          drivers.push(`${returningPct}% returning fans`)
+  if (drivers.length === 0)  drivers.push("general engagement")
+
   return { title, drivers }
 }
 
-// ── HASHTAG GENERATOR
+// ============================================================
+// HASHTAG GENERATOR — standalone component
+// ============================================================
 const HASHTAG_POOLS_HG = {
   platform: {
-    Chaturbate: ['#Chaturbate','#CBLive','#ChaturbateModel','#CB','#ChaturbateLive','#ChaturbateGirl'],
-    BongaCams:  ['#BongaCams','#BongaLive','#BCModel','#BongaCamsLive','#BongaCamsGirl'],
-    MyFreeCams: ['#MyFreeCams','#MFC','#MFCModel','#MFCShare','#MyFreeCamsModel'],
-    Stripchat:  ['#Stripchat','#StripchatLive','#StripchatModel','#StripchatGirl'],
-    CamSoda:    ['#CamSoda','#CamSodaLive','#CamSodaModel'],
-    Any:        ['#CamGirl','#Webcam','#LiveStream','#AdultStream','#LiveCam'],
+    Chaturbate:  ['#Chaturbate','#CBLive','#ChaturbateModel','#CB','#ChaturbateLive','#ChaturbateGirl'],
+    BongaCams:   ['#BongaCams','#BongaLive','#BCModel','#BongaCamsLive','#BongaCamsGirl'],
+    MyFreeCams:  ['#MyFreeCams','#MFC','#MFCModel','#MFCShare','#MyFreeCamsModel'],
+    Stripchat:   ['#Stripchat','#StripchatLive','#StripchatModel','#StripchatGirl'],
+    CamSoda:     ['#CamSoda','#CamSodaLive','#CamSodaModel'],
+    Any:         ['#CamGirl','#Webcam','#LiveStream','#AdultStream','#LiveCam'],
   },
   toy: {
     Lush:        ['#Lush','#LushControl','#ControlMyLush','#LushVibrator','#InteractiveToy','#TipToControl'],
@@ -160,12 +388,12 @@ const HASHTAG_POOLS_HG = {
     None:        ['#TipMenu','#GoalShow','#LiveNow','#TipToDecide'],
   },
   vibe: {
-    tease:      ['#TeasingYou','#SlowBurn','#EarnIt','#NaughtyStream','#BadGirl'],
-    dominant:   ['#BossMode','#YouObey','#InControl','#BadGirl','#DominantVibes'],
-    submissive: ['#YouDecide','#YouControl','#GoodGirl','#YourWish','#SubVibes'],
-    hype:       ['#LiveNow','#TipGoal','#GoGoGo','#HighEnergy','#LetsDo'],
-    mystery:    ['#Surprise','#TonightOnly','#SecretShow','#MysteryReward','#FindOut'],
-    none:       ['#LiveNow','#TipMenu','#StreamLife','#OnlineNow'],
+    tease:       ['#TeasingYou','#SlowBurn','#EarnIt','#NaughtyStream','#BadGirl'],
+    dominant:    ['#BossMode','#YouObey','#InControl','#BadGirl','#DominantVibes'],
+    submissive:  ['#YouDecide','#YouControl','#GoodGirl','#YourWish','#SubVibes'],
+    hype:        ['#LiveNow','#TipGoal','#GoGoGo','#HighEnergy','#LetsDo'],
+    mystery:     ['#Surprise','#TonightOnly','#SecretShow','#MysteryReward','#FindOut'],
+    none:        ['#LiveNow','#TipMenu','#StreamLife','#OnlineNow'],
   },
   goal:        ['#TokenGoal','#GoalShow','#TipToFinish','#AlmostThere','#TipMenu','#HelpMeHitGoal'],
   highTraffic: ['#CamGirl','#LiveStream','#AdultStream','#WebcamModel','#OnlineFun','#NSFW','#AdultContent'],
@@ -197,11 +425,28 @@ function HashtagGenerator({ C, glassCard }) {
   const [copied, setCopied] = useState(false)
   const [copiedTag, setCopiedTag] = useState(null)
 
-  const generate = () => { const tags = generateHashtagsHG({ platform, toy, mood, hasGoal, count }); setHashtags(tags) }
-  const copyAll = () => { navigator.clipboard.writeText(hashtags.join(' ')).catch(() => {}); setCopied(true); setTimeout(() => setCopied(false), 2000) }
-  const copyOne = (tag) => { navigator.clipboard.writeText(tag).catch(() => {}); setCopiedTag(tag); setTimeout(() => setCopiedTag(null), 1500) }
+  const generate = () => {
+    const tags = generateHashtagsHG({ platform, toy, mood, hasGoal, count })
+    setHashtags(tags)
+  }
 
-  const inp = { padding: '8px 12px', borderRadius: 8, fontSize: 13, background: '#0f1623', border: '1px solid rgba(255,255,255,0.1)', color: C.white, outline: 'none', width: '100%', boxSizing: 'border-box' }
+  const copyAll = () => {
+    navigator.clipboard.writeText(hashtags.join(' ')).catch(() => {})
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  const copyOne = (tag) => {
+    navigator.clipboard.writeText(tag).catch(() => {})
+    setCopiedTag(tag)
+    setTimeout(() => setCopiedTag(null), 1500)
+  }
+
+  const inp = {
+    padding: '8px 12px', borderRadius: 8, fontSize: 13,
+    background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
+    color: C.white, outline: 'none', width: '100%', boxSizing: 'border-box',
+  }
   const lbl = { fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 5, display: 'block' }
 
   return (
@@ -210,36 +455,83 @@ function HashtagGenerator({ C, glassCard }) {
         <div style={{ fontSize: 20, fontWeight: 800, color: C.white, marginBottom: 4 }}># Hashtag Generator</div>
         <div style={{ fontSize: 13, color: C.muted }}>Platform-specific hashtags for your stream — mix of high-traffic and niche</div>
       </div>
+
       <div style={{ ...glassCard, borderRadius: 16, padding: 24, marginBottom: 20 }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 14, marginBottom: 20 }}>
-          <div><label style={lbl}>Platform</label><select value={platform} onChange={e => setPlatform(e.target.value)} style={inp}>{['Chaturbate','BongaCams','MyFreeCams','Stripchat','CamSoda','Any'].map(p => <option key={p}>{p}</option>)}</select></div>
-          <div><label style={lbl}>Toy</label><select value={toy} onChange={e => setToy(e.target.value)} style={inp}>{['None','Lush','Domi','Edge','Hush','Interactive'].map(t => <option key={t}>{t}</option>)}</select></div>
-          <div><label style={lbl}>Mood / Vibe</label><select value={mood} onChange={e => setMood(e.target.value)} style={inp}>{[['none','No mood'],['tease','Tease'],['dominant','Dominant'],['submissive','Submissive'],['hype','Hype'],['mystery','Mystery']].map(([v,l]) => <option key={v} value={v}>{l}</option>)}</select></div>
-          <div><label style={lbl}>How many</label><select value={count} onChange={e => setCount(parseInt(e.target.value))} style={inp}>{[10,12,15,18,20].map(n => <option key={n}>{n}</option>)}</select></div>
+          <div>
+            <label style={lbl}>Platform</label>
+            <select value={platform} onChange={e => setPlatform(e.target.value)} style={inp}>
+              {['Chaturbate','BongaCams','MyFreeCams','Stripchat','CamSoda','Any'].map(p => <option key={p}>{p}</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={lbl}>Toy</label>
+            <select value={toy} onChange={e => setToy(e.target.value)} style={inp}>
+              {['None','Lush','Domi','Edge','Hush','Interactive'].map(t => <option key={t}>{t}</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={lbl}>Mood / Vibe</label>
+            <select value={mood} onChange={e => setMood(e.target.value)} style={inp}>
+              {[['none','No mood'],['tease','Tease'],['dominant','Dominant'],['submissive','Submissive'],['hype','Hype'],['mystery','Mystery']].map(([v,l]) => <option key={v} value={v}>{l}</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={lbl}>How many</label>
+            <select value={count} onChange={e => setCount(parseInt(e.target.value))} style={inp}>
+              {[10,12,15,18,20].map(n => <option key={n}>{n}</option>)}
+            </select>
+          </div>
         </div>
+
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, color: C.text }}>
             <input type="checkbox" checked={hasGoal} onChange={e => setHasGoal(e.target.checked)} style={{ accentColor: C.cyan }} />
             Include token goal hashtags
           </label>
         </div>
-        <button onClick={generate} style={{ padding: '10px 28px', borderRadius: 9, background: 'linear-gradient(135deg, #22D3EE, #EC4899)', border: 'none', color: 'white', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
+
+        <button onClick={generate} style={{
+          padding: '10px 28px', borderRadius: 9,
+          background: 'linear-gradient(135deg, #22D3EE, #EC4899)',
+          border: 'none', color: 'white', fontWeight: 700, fontSize: 14, cursor: 'pointer',
+        }}>
           # Generate Hashtags
         </button>
       </div>
+
       {hashtags.length > 0 && (
         <div style={{ ...glassCard, borderRadius: 16, padding: 24 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: C.white }}>{hashtags.length} hashtags generated</div>
-            <button onClick={copyAll} style={{ padding: '7px 18px', borderRadius: 8, fontSize: 12, fontWeight: 700, background: copied ? 'rgba(16,185,129,0.2)' : 'rgba(34,211,238,0.1)', border: `1px solid ${copied ? 'rgba(16,185,129,0.4)' : 'rgba(34,211,238,0.3)'}`, color: copied ? '#10B981' : C.cyan, cursor: 'pointer' }}>{copied ? '✓ Copied All!' : '📋 Copy All'}</button>
+            <div style={{ fontSize: 13, fontWeight: 600, color: C.white }}>
+              {hashtags.length} hashtags generated
+            </div>
+            <button onClick={copyAll} style={{
+              padding: '7px 18px', borderRadius: 8, fontSize: 12, fontWeight: 700,
+              background: copied ? 'rgba(16,185,129,0.2)' : 'rgba(34,211,238,0.1)',
+              border: `1px solid ${copied ? 'rgba(16,185,129,0.4)' : 'rgba(34,211,238,0.3)'}`,
+              color: copied ? '#10B981' : C.cyan, cursor: 'pointer',
+            }}>
+              {copied ? '✓ Copied All!' : '📋 Copy All'}
+            </button>
           </div>
+
+          {/* Tag cloud */}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
             {hashtags.map(tag => (
-              <button key={tag} onClick={() => copyOne(tag)} style={{ padding: '6px 12px', borderRadius: 20, fontSize: 13, cursor: 'pointer', background: copiedTag === tag ? 'rgba(16,185,129,0.15)' : 'rgba(124,92,255,0.1)', border: `1px solid ${copiedTag === tag ? 'rgba(16,185,129,0.4)' : 'rgba(124,92,255,0.25)'}`, color: copiedTag === tag ? '#10B981' : '#A78BFA', fontWeight: 500, transition: 'all 0.15s' }}>
+              <button key={tag} onClick={() => copyOne(tag)} style={{
+                padding: '6px 12px', borderRadius: 20, fontSize: 13, cursor: 'pointer',
+                background: copiedTag === tag ? 'rgba(16,185,129,0.15)' : 'rgba(124,92,255,0.1)',
+                border: `1px solid ${copiedTag === tag ? 'rgba(16,185,129,0.4)' : 'rgba(124,92,255,0.25)'}`,
+                color: copiedTag === tag ? '#10B981' : '#A78BFA',
+                fontWeight: 500, transition: 'all 0.15s',
+              }}>
                 {copiedTag === tag ? '✓' : ''}{tag}
               </button>
             ))}
           </div>
+
+          {/* Full text for easy copy-paste */}
           <div style={{ padding: '12px 14px', borderRadius: 10, background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.06)', fontSize: 12, color: C.muted, lineHeight: 1.7, wordBreak: 'break-all' }}>
             {hashtags.join(' ')}
           </div>
@@ -249,9 +541,10 @@ function HashtagGenerator({ C, glassCard }) {
   )
 }
 
+
 function TitleGenerator({ C, glassCard, analytics, tips, sessions, whales }) {
-  const [current, setCurrent] = useState(null)
-  const [history, setHistory] = useState([])
+  const [current, setCurrent] = useState(null)   // { title, drivers }
+  const [history, setHistory] = useState([])      // last 5 titles
   const [copiedCurrent, setCopiedCurrent] = useState(false)
   const [copiedIdx, setCopiedIdx] = useState(null)
   const [tokenGoal, setTokenGoal] = useState(0)
@@ -264,37 +557,65 @@ function TitleGenerator({ C, glassCard, analytics, tips, sessions, whales }) {
     const now = new Date()
     const currentHour = now.getHours()
     const todayDay = now.toLocaleDateString("en-US", { weekday: "long" })
+
+    // Best hour from sessions
     const hourTotals = {}
-    ;(sessions || []).forEach(s => { const h = new Date(s.startTime).getHours(); hourTotals[h] = (hourTotals[h] || 0) + s.totalUSD })
+    ;(sessions || []).forEach(s => {
+      const h = new Date(s.startTime).getHours()
+      hourTotals[h] = (hourTotals[h] || 0) + s.totalUSD
+    })
     const bestHourEntry = Object.entries(hourTotals).sort((a,b) => b[1]-a[1])[0]
     const bestHour = bestHourEntry ? parseInt(bestHourEntry[0]) : null
-    const bestHourLabel = bestHour !== null ? (bestHour === 0 ? "12 AM" : bestHour < 12 ? `${bestHour} AM` : bestHour === 12 ? "12 PM" : `${bestHour-12} PM`) : null
+    const bestHourLabel = bestHour !== null
+      ? (bestHour === 0 ? "12 AM" : bestHour < 12 ? `${bestHour} AM` : bestHour === 12 ? "12 PM" : `${bestHour-12} PM`)
+      : null
     const hoursUntilPeak = bestHour !== null ? (bestHour - currentHour + 24) % 24 : 99
     const isPeakNow = hoursUntilPeak <= 1
     const peakSoon = hoursUntilPeak <= 3 && !isPeakNow
+
+    // Best day
     const dayTotals = {}
-    ;(sessions || []).forEach(s => { const d = new Date(s.startTime).toLocaleDateString("en-US", { weekday: "long" }); dayTotals[d] = (dayTotals[d] || 0) + s.totalUSD })
+    ;(sessions || []).forEach(s => {
+      const d = new Date(s.startTime).toLocaleDateString("en-US", { weekday: "long" })
+      dayTotals[d] = (dayTotals[d] || 0) + s.totalUSD
+    })
     const bestDay = Object.entries(dayTotals).sort((a,b) => b[1]-a[1])[0]?.[0] || null
     const todayIsBestDay = bestDay === todayDay
+
+    // Whales
     const sorted = [...(whales || [])].sort((a,b) => b.totalUSD - a.totalUSD)
     const whaleCount = sorted.filter(w => w.tier === "Whale" || w.tier === "Shark").length
     const topWhaleName = sorted[0]?.username || null
     const hasWhales = whaleCount > 0
+
+    // Returning fans
     const fanCounts = {}
     ;(tips || []).forEach(t => { fanCounts[t.username] = (fanCounts[t.username] || 0) + 1 })
     const total = Object.keys(fanCounts).length
     const returning = Object.values(fanCounts).filter(c => c > 1).length
     const returningPct = total > 0 ? Math.round((returning / total) * 100) : 0
     const hasReturners = returningPct > 30
+
+    // Low activity
     const recentTips = (tips || []).filter(t => (Date.now() - new Date(t.date_time||t.dateRaw)) / 86400000 <= 7)
     const lowActivity = recentTips.length < 5
-    const avgSessionUSD = sessions?.length ? sessions.reduce((s,x) => s + x.totalUSD, 0) / sessions.length : 0
-    return { isPeakNow, peakSoon, bestHour, bestHourLabel, hoursUntilPeak, hasWhales, topWhaleName, whaleCount, hasReturners, returningPct, lowActivity, todayIsBestDay, todayDay, tokenGoal, action, toy, mood, useEmojis, avgSessionUSD }
+
+    const avgSessionUSD = sessions?.length
+      ? sessions.reduce((s,x) => s + x.totalUSD, 0) / sessions.length : 0
+
+    return {
+      isPeakNow, peakSoon, bestHour, bestHourLabel, hoursUntilPeak,
+      hasWhales, topWhaleName, whaleCount,
+      hasReturners, returningPct,
+      lowActivity, todayIsBestDay, todayDay,
+      tokenGoal, action, toy, mood, useEmojis, avgSessionUSD,
+    }
   }
 
   const generate = () => {
     const ctx = buildCtx()
     const result = buildOneTitle(ctx)
+    // Push previous to history (keep last 5)
     if (current) setHistory(h => [current, ...h].slice(0, 5))
     setCurrent(result)
     setCopiedCurrent(false)
@@ -302,22 +623,29 @@ function TitleGenerator({ C, glassCard, analytics, tips, sessions, whales }) {
 
   const copyTitle = (title, idx = null) => {
     navigator.clipboard.writeText(title)
-    if (idx === null) { setCopiedCurrent(true); setTimeout(() => setCopiedCurrent(false), 2000) }
-    else { setCopiedIdx(idx); setTimeout(() => setCopiedIdx(null), 2000) }
+    if (idx === null) {
+      setCopiedCurrent(true)
+      setTimeout(() => setCopiedCurrent(false), 2000)
+    } else {
+      setCopiedIdx(idx)
+      setTimeout(() => setCopiedIdx(null), 2000)
+    }
   }
 
   const ctx = buildCtx()
+
+  // Context badges for display
   const badges = []
-  if (ctx.isPeakNow && ctx.bestHourLabel) badges.push({ label: `🔴 Peak hour NOW (${ctx.bestHourLabel})`, color: C.orange })
+  if (ctx.isPeakNow && ctx.bestHourLabel)  badges.push({ label: `🔴 Peak hour NOW (${ctx.bestHourLabel})`, color: C.orange })
   else if (ctx.peakSoon && ctx.bestHourLabel) badges.push({ label: `⏳ Peak in ${ctx.hoursUntilPeak}h (${ctx.bestHourLabel})`, color: C.gold })
-  if (ctx.hasWhales) badges.push({ label: `💎 ${ctx.whaleCount} VIP fans`, color: C.gold })
+  if (ctx.hasWhales)    badges.push({ label: `💎 ${ctx.whaleCount} VIP fans`, color: C.gold })
   if (ctx.todayIsBestDay) badges.push({ label: `📅 Best day: ${ctx.todayDay}`, color: C.green })
   if (ctx.hasReturners) badges.push({ label: `🔁 ${ctx.returningPct}% return rate`, color: C.cyan })
-  if (ctx.lowActivity) badges.push({ label: `💤 Low recent activity`, color: C.orange })
-  if (ctx.tokenGoal) badges.push({ label: `🎯 Goal: ${ctx.tokenGoal} tokens`, color: C.pink })
+  if (ctx.lowActivity)  badges.push({ label: `💤 Low recent activity`, color: C.orange })
+  if (ctx.tokenGoal)    badges.push({ label: `🎯 Goal: ${ctx.tokenGoal} tokens`, color: C.pink })
   if (ctx.mood && ctx.mood !== "none") badges.push({ label: `🎭 Mood: ${ctx.mood}`, color: C.indigo })
 
-  const inp = { background: "#0f1623", border: "1px solid rgba(255,255,255,0.1)", padding: "10px 14px", borderRadius: 10, color: C.white, outline: "none", width: "100%", fontSize: 13 }
+  const inp = { background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", padding: "10px 14px", borderRadius: 10, color: C.white, outline: "none", width: "100%", fontSize: 13 }
 
   return (
     <div style={{ maxWidth: 680, margin: "0 auto", paddingTop: 8 }}>
@@ -325,18 +653,30 @@ function TitleGenerator({ C, glassCard, analytics, tips, sessions, whales }) {
         <h1 style={{ fontSize: 26, fontWeight: 800, color: C.white, marginBottom: 4 }}>🎬 Room Title Generator</h1>
         <p style={{ fontSize: 13, color: C.muted }}>Formula: Hook + Target + Action + Reward + Urgency — one title at a time</p>
       </div>
+
+      {/* LIVE DATA BADGES */}
       {badges.length > 0 && (
         <div style={{ ...glassCard, borderRadius: 14, padding: "14px 18px", marginBottom: 20 }}>
           <div style={{ fontSize: 10, color: C.muted, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.8 }}>Influencing your titles right now</div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
-            {badges.map((b, i) => (<span key={i} style={{ padding: "4px 12px", borderRadius: 20, background: `${b.color}15`, border: `1px solid ${b.color}30`, fontSize: 12, fontWeight: 600, color: b.color }}>{b.label}</span>))}
+            {badges.map((b, i) => (
+              <span key={i} style={{ padding: "4px 12px", borderRadius: 20, background: `${b.color}15`, border: `1px solid ${b.color}30`, fontSize: 12, fontWeight: 600, color: b.color }}>{b.label}</span>
+            ))}
           </div>
         </div>
       )}
+
+      {/* INPUTS */}
       <div style={{ ...glassCard, borderRadius: 14, padding: 18, marginBottom: 20 }}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
-          <div><div style={{ fontSize: 10, color: C.muted, marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.5 }}>Token Goal</div><input type="number" value={tokenGoal || ""} onChange={e => setTokenGoal(Number(e.target.value) || 0)} style={inp} placeholder="e.g. 500 (leave blank to skip)" /></div>
-          <div><div style={{ fontSize: 10, color: C.muted, marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.5 }}>Reward / Action</div><input value={action} onChange={e => setAction(e.target.value)} style={inp} placeholder="e.g. flash, dance, strip" /></div>
+          <div>
+            <div style={{ fontSize: 10, color: C.muted, marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.5 }}>Token Goal</div>
+            <input type="number" value={tokenGoal || ""} onChange={e => setTokenGoal(Number(e.target.value) || 0)} style={inp} placeholder="e.g. 500 (leave blank to skip)" />
+          </div>
+          <div>
+            <div style={{ fontSize: 10, color: C.muted, marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.5 }}>Reward / Action</div>
+            <input value={action} onChange={e => setAction(e.target.value)} style={inp} placeholder="e.g. flash, dance, strip" />
+          </div>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
           <div>
@@ -372,21 +712,33 @@ function TitleGenerator({ C, glassCard, analytics, tips, sessions, whales }) {
           </button>
         </div>
       </div>
+
+      {/* CURRENT TITLE — big, prominent */}
       {current && (
         <div style={{ ...glassCard, borderRadius: 16, padding: 28, marginBottom: 20, border: "1px solid rgba(236,72,153,0.3)", background: "linear-gradient(135deg, rgba(236,72,153,0.06), rgba(124,92,255,0.06))" }}>
           <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 14 }}>Your title</div>
-          <div style={{ fontSize: 20, fontWeight: 800, color: C.white, lineHeight: 1.4, marginBottom: 20 }}>{current.title}</div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: C.white, lineHeight: 1.4, marginBottom: 20 }}>
+            {current.title}
+          </div>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-              {current.drivers.map((d, i) => (<span key={i} style={{ fontSize: 10, color: C.cyan, padding: "3px 9px", borderRadius: 20, background: "rgba(34,211,238,0.1)", border: "1px solid rgba(34,211,238,0.2)" }}>📊 {d}</span>))}
+              {current.drivers.map((d, i) => (
+                <span key={i} style={{ fontSize: 10, color: C.cyan, padding: "3px 9px", borderRadius: 20, background: "rgba(34,211,238,0.1)", border: "1px solid rgba(34,211,238,0.2)" }}>📊 {d}</span>
+              ))}
             </div>
             <div style={{ display: "flex", gap: 10 }}>
-              <button onClick={generate} style={{ padding: "8px 18px", borderRadius: 9, background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.12)", color: C.muted, fontSize: 13, cursor: "pointer" }}>🔁 Try Another</button>
-              <button onClick={() => copyTitle(current.title)} style={{ padding: "8px 22px", borderRadius: 9, background: copiedCurrent ? "rgba(16,185,129,0.2)" : "linear-gradient(135deg, #22D3EE, #EC4899)", border: copiedCurrent ? "1px solid rgba(16,185,129,0.4)" : "none", color: C.white, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>{copiedCurrent ? "✔ Copied!" : "📋 Copy Title"}</button>
+              <button onClick={generate} style={{ padding: "8px 18px", borderRadius: 9, background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.12)", color: C.muted, fontSize: 13, cursor: "pointer" }}>
+                🔁 Try Another
+              </button>
+              <button onClick={() => copyTitle(current.title)} style={{ padding: "8px 22px", borderRadius: 9, background: copiedCurrent ? "rgba(16,185,129,0.2)" : "linear-gradient(135deg, #22D3EE, #EC4899)", border: copiedCurrent ? "1px solid rgba(16,185,129,0.4)" : "none", color: C.white, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                {copiedCurrent ? "✔ Copied!" : "📋 Copy Title"}
+              </button>
             </div>
           </div>
         </div>
       )}
+
+      {/* EMPTY STATE */}
       {!current && (
         <div style={{ textAlign: "center", padding: "52px 20px", color: C.muted }}>
           <div style={{ fontSize: 44, marginBottom: 12 }}>🎬</div>
@@ -394,6 +746,8 @@ function TitleGenerator({ C, glassCard, analytics, tips, sessions, whales }) {
           <div style={{ fontSize: 13, lineHeight: 1.6 }}>Built from the viral formula: Hook + Target + Action + Reward + Urgency.<br/>Your earnings data shapes every title.</div>
         </div>
       )}
+
+      {/* HISTORY */}
       {history.length > 0 && (
         <div style={{ ...glassCard, borderRadius: 14, padding: 18 }}>
           <div style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 12 }}>Previous titles</div>
@@ -401,12 +755,15 @@ function TitleGenerator({ C, glassCard, analytics, tips, sessions, whales }) {
             {history.map((h, i) => (
               <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", borderRadius: 10, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", gap: 12 }}>
                 <span style={{ fontSize: 13, color: C.text, flex: 1, lineHeight: 1.4 }}>{h.title}</span>
-                <button onClick={() => copyTitle(h.title, i)} style={{ flexShrink: 0, padding: "4px 12px", borderRadius: 7, background: copiedIdx === i ? "rgba(16,185,129,0.2)" : "rgba(255,255,255,0.06)", border: `1px solid ${copiedIdx === i ? "rgba(16,185,129,0.4)" : "rgba(255,255,255,0.1)"}`, color: copiedIdx === i ? C.green : C.muted, fontSize: 11, cursor: "pointer" }}>{copiedIdx === i ? "✔" : "📋"}</button>
+                <button onClick={() => copyTitle(h.title, i)} style={{ flexShrink: 0, padding: "4px 12px", borderRadius: 7, background: copiedIdx === i ? "rgba(16,185,129,0.2)" : "rgba(255,255,255,0.06)", border: `1px solid ${copiedIdx === i ? "rgba(16,185,129,0.4)" : "rgba(255,255,255,0.1)"}`, color: copiedIdx === i ? C.green : C.muted, fontSize: 11, cursor: "pointer" }}>
+                  {copiedIdx === i ? "✔" : "📋"}
+                </button>
               </div>
             ))}
           </div>
         </div>
       )}
+
       <div style={{ marginTop: 16, padding: "11px 16px", background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.18)", borderRadius: 10 }}>
         <div style={{ fontSize: 12, color: C.gold }}>💡 Refresh every 20–30 min — platforms rank active streams higher when titles change frequently.</div>
       </div>
@@ -417,8 +774,21 @@ function TitleGenerator({ C, glassCard, analytics, tips, sessions, whales }) {
 function CopyButton({ text, label = "📋 Copy", copiedLabel = "✅ Copied!", style = {} }) {
   const [copied, setCopied] = useState(false)
   return (
-    <button onClick={() => { navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 2000) }}
-      style={{ padding: "7px 14px", borderRadius: 8, background: copied ? "rgba(16,185,129,0.2)" : "rgba(255,255,255,0.06)", border: `1px solid ${copied ? "rgba(16,185,129,0.4)" : "rgba(255,255,255,0.1)"}`, color: copied ? C.green : C.muted, fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "all 0.15s", ...style }}>
+    <button
+      onClick={() => {
+        navigator.clipboard.writeText(text)
+        setCopied(true)
+        setTimeout(() => setCopied(false), 2000)
+      }}
+      style={{
+        padding: "7px 14px", borderRadius: 8,
+        background: copied ? "rgba(16,185,129,0.2)" : "rgba(255,255,255,0.06)",
+        border: `1px solid ${copied ? "rgba(16,185,129,0.4)" : "rgba(255,255,255,0.1)"}`,
+        color: copied ? C.green : C.muted,
+        fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "all 0.15s",
+        ...style
+      }}
+    >
       {copied ? copiedLabel : label}
     </button>
   )
@@ -450,6 +820,7 @@ export default function Dashboard() {
   const [fanSearchQuery, setFanSearchQuery] = useState("")
   const [shareModalOpen, setShareModalOpen] = useState(false)
   const [chartDrillDay, setChartDrillDay] = useState(null)
+  // ── LIVE MODE STATE ───────────────────────────────────────
   const [liveActive, setLiveActive] = useState(false)
   const [liveStartTime, setLiveStartTime] = useState(null)
   const [liveEvents, setLiveEvents] = useState([])
@@ -471,27 +842,41 @@ export default function Dashboard() {
   const [dateTo, setDateTo] = useState('')
   const [tokenRates, setTokenRates] = useState({ Chaturbate: 0.05, BongaCams: 0.05, MyFreeCams: 0.05, Stripchat: 0.05, CamSoda: 0.05 })
   const [showRateEditor, setShowRateEditor] = useState(false)
-  const [uploadHistory, setUploadHistory] = useState([])
 
   const isBetaUser = true
   const isPro = true
   const uploadLimit = Infinity
 
-  const openUpgradeModal = (source) => { track('upgrade_click', { source }); setShowUpgradeModal(true) }
+  const openUpgradeModal = (source) => {
+    track('upgrade_click', { source })
+    setShowUpgradeModal(true)
+  }
+
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(""), 3500) }
 
+  // ── EXTENSION LISTENER — receives tips from Chrome extension ────────────
   useEffect(() => {
     const handleExtensionMessage = (event) => {
       if (event.source !== window) return
       if (event.data?.type !== 'CAMCASH_TIP_EVENT') return
       const { event: tipEvent } = event.data
       if (!tipEvent || !tipEvent.username) return
+      // Only feed into live mode if active
       setLiveActive(active => {
         if (active) {
-          const rate = 0.05
+          const rate = 0.05 // will use tokenRates from state in real impl
           const tokens = parseInt(tipEvent.tokens) || 0
-          const usd = parseFloat(tipEvent.usd) || 0
-          const normalized = { username: tipEvent.username, tokens, usd, normalizedRevenue: usd > 0 ? usd : parseFloat((tokens * rate).toFixed(2)), sourceUsed: usd > 0 ? 'usd' : 'tokens', timestamp: new Date(tipEvent.timestamp || Date.now()), platform: tipEvent.platform || 'Unknown', source: 'extension' }
+          const usd    = parseFloat(tipEvent.usd) || 0
+          const normalized = {
+            username: tipEvent.username,
+            tokens,
+            usd,
+            normalizedRevenue: usd > 0 ? usd : parseFloat((tokens * rate).toFixed(2)),
+            sourceUsed: usd > 0 ? 'usd' : 'tokens',
+            timestamp: new Date(tipEvent.timestamp || Date.now()),
+            platform: tipEvent.platform || 'Unknown',
+            source: 'extension',
+          }
           setLiveEvents(prev => [...prev, normalized])
         }
         return active
@@ -506,10 +891,20 @@ export default function Dashboard() {
       if (!user) { router.replace("/login"); return }
       setUser(user)
       loadData(user.id)
-      supabase.from('beta_users').select('id', { count: 'exact', head: true }).then(({ count }) => { if (count !== null) setBetaCount(count) })
+      // Fetch real beta user count for the progress bar
+      supabase.from('beta_users').select('id', { count: 'exact', head: true })
+        .then(({ count }) => { if (count !== null) setBetaCount(count) })
       try {
-        supabase.from('beta_users').upsert({ user_id: user.id, email: user.email, signed_up_at: user.created_at }, { onConflict: 'user_id', ignoreDuplicates: true })
-        supabase.from('analytics_events').insert({ user_id: user.id, event_name: 'dashboard_opened', properties: { email: user.email } })
+        supabase.from('beta_users').upsert({
+          user_id: user.id,
+          email: user.email,
+          signed_up_at: user.created_at
+        }, { onConflict: 'user_id', ignoreDuplicates: true })
+        supabase.from('analytics_events').insert({
+          user_id: user.id,
+          event_name: 'dashboard_opened',
+          properties: { email: user.email }
+        })
       } catch(e) {}
     })
   }, [])
@@ -520,7 +915,10 @@ export default function Dashboard() {
     return () => clearInterval(interval)
   }, [tips])
 
-  const handleSignOut = async () => { await supabase.auth.signOut(); router.replace('/login') }
+  const handleSignOut = async () => {
+    await supabase.auth.signOut()
+    router.replace('/login')
+  }
 
   const loadData = async (uid) => {
     setLoading(true)
@@ -536,31 +934,48 @@ export default function Dashboard() {
         from += PAGE
       }
       if (allData.length) { setTips(allData); const result = runEngine(allData); setAnalytics(result) }
-      // Load upload history
-      const { data: uploads } = await supabase.from('csv_uploads').select('*').eq('user_id', uid).order('uploaded_at', { ascending: false })
-      if (uploads) setUploadHistory(uploads)
     } finally { setLoading(false) }
   }
-
-  const handleCSV = async (file, forcePlatform = null) => {
+const handleCSV = async (file, forcePlatform = null) => {
     if (!file || !user) return
     setUploading(true)
     try {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) { showToast("❌ Not logged in"); setUploading(false); return }
+
       const fd = new FormData()
       fd.append('file', file)
       if (forcePlatform) fd.append('platform', forcePlatform)
-      const res = await fetch('/api/upload', { method: 'POST', headers: { Authorization: `Bearer ${session.access_token}` }, body: fd })
+
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session.access_token}` },
+        body: fd,
+      })
+
       const result = await res.json()
-      if (!res.ok || result.error) { showToast("❌ " + (result.error || 'Upload failed')); setUploading(false); return }
+
+      if (!res.ok || result.error) {
+        showToast("❌ " + (result.error || 'Upload failed'))
+        setUploading(false)
+        return
+      }
+
       track('csv_imported', { rows: result.inserted, platform: result.platform || 'Unknown' })
-      const msg = result.skipped > 0 ? `✅ Imported ${result.inserted} tips (${result.skipped} duplicates skipped)` : `✅ Imported ${result.inserted} tips from ${result.platform}!`
+
+      const msg = result.skipped > 0
+        ? `✅ Imported ${result.inserted} tips (${result.skipped} duplicates skipped)`
+        : `✅ Imported ${result.inserted} tips from ${result.platform}!`
       showToast(msg)
+
       setUploadCount(c => c + 1)
       await loadData(user.id)
-    } catch (err) { showToast("❌ " + err.message) }
-    finally { setUploading(false) }
+
+    } catch (err) {
+      showToast("❌ " + err.message)
+    } finally {
+      setUploading(false)
+    }
   }
 
   const deleteTip = async (tipId) => {
@@ -593,16 +1008,21 @@ export default function Dashboard() {
   const platforms = analytics?.platforms || []
   const dependencyRisk = analytics?.dependencyRisk || null
   const preTipBehavior = analytics?.preTipBehavior || null
-  const trueHourlyAvg = analytics?.trueHourlyAvg || []
+  const trueHourlyAvg  = analytics?.trueHourlyAvg  || []
   const alerts = liveAnalytics?.whaleAlerts || analytics?.whaleAlerts || []
   const lossAlerts = liveAnalytics?.lossAlerts || analytics?.lossAlerts || []
   const nextMoves = liveAnalytics?.nextMoves || analytics?.nextMoves || []
   const totalRevenue = analytics?.totalUSD || 0
+  // Only average sessions with real duration (exclude zero-timestamp BongaCams exports)
   const timedSessions = sessions.filter(s => !s.durationUnknown && s.usdPerHour !== null)
   const avgPerHour = timedSessions.length ? timedSessions.reduce((sum, s) => sum + (s.usdPerHour || 0), 0) / timedSessions.length : 0
-  const analyticsbestDay = analytics?.bestDay || null
+  // Single source of truth — pre-computed in aggregateRows, same values used everywhere
+  const analyticsbestDay  = analytics?.bestDay  || null
   const analyticsBestHour = analytics?.bestHour || null
 
+  // Build platformTimes from INDIVIDUAL TIPS (not session start time)
+  // so hour/day reflects when money actually came in, not when the session started
+  // Use UTC to match the database timestamps
   const UTC_DAYS_LONG = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
   const platformTimes = {}
   tips.forEach(t => {
@@ -611,7 +1031,7 @@ export default function Dashboard() {
     const hour = dt.getUTCHours()
     const day = UTC_DAYS_LONG[dt.getUTCDay()]
     platformTimes[t.platform].hours[hour] = (platformTimes[t.platform].hours[hour] || 0) + (t.usd || 0)
-    platformTimes[t.platform].days[day] = (platformTimes[t.platform].days[day] || 0) + (t.usd || 0)
+    platformTimes[t.platform].days[day]   = (platformTimes[t.platform].days[day]   || 0) + (t.usd || 0)
   })
 
   const filteredWhales = whales.filter(w => {
@@ -619,7 +1039,10 @@ export default function Dashboard() {
     if (platformFilter !== "ALL" && w.platform !== platformFilter) return false
     if (chartDrillDay) {
       const fanTips = (w.tips && w.tips.length > 0) ? w.tips : tips.filter(t => t.username?.toLowerCase() === w.username?.toLowerCase())
-      const tippedOnDay = fanTips.some(t => { const dayShort = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][new Date(t.date_time || t.dateRaw).getUTCDay()]; return dayShort === chartDrillDay })
+      const tippedOnDay = fanTips.some(t => {
+        const dayShort = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][new Date(t.date_time || t.dateRaw).getUTCDay()]
+        return dayShort === chartDrillDay
+      })
       if (!tippedOnDay) return false
     }
     return true
@@ -627,92 +1050,343 @@ export default function Dashboard() {
 
   const allPlatforms = [...new Set(tips.map(t => t.platform))]
 
+  // ── Build "What's Next" alerts — smarter, personalized, prioritized
   const buildWhatsNextAlerts = () => {
     const now = Date.now()
-    const strikeHot = [], winBack = [], milestone = [], onlineNow = [], dormant = [], performance = []
+    const strikeHot = []
+    const winBack = []
+    const milestone = []
+    const onlineNow = []
+    const dormant = []
+    const performance = []
+
+    // Helper: get personalized re-engage message based on fan behavior
     const getPersonalMsg = (w) => {
       const name = w.username
-      if (w.hasPrivates && w.privateCount >= 2) return `Hey ${name}! Been thinking about doing more privates lately 👀 You always make them so fun 💕`
-      if (w.tipCount >= 20 && w.avgTipSize < 5) return `Hey ${name}! I always love seeing your name pop up in chat 💕 Going live soon — come say hi!`
-      if (w.avgTipSize >= 20) return `Hey ${name}! I was literally just thinking about that amazing tip you sent 🥺 Going live tonight 🔥`
+      if (w.hasPrivates && w.privateCount >= 2)
+        return `Hey ${name}! Been thinking about doing more privates lately 👀 You always make them so fun 💕`
+      if (w.tipCount >= 20 && w.avgTipSize < 5)
+        return `Hey ${name}! I always love seeing your name pop up in chat 💕 Going live soon — come say hi!`
+      if (w.avgTipSize >= 20)
+        return `Hey ${name}! I was literally just thinking about that amazing tip you sent 🥺 Going live tonight 🔥`
       return `Hey ${name}! I've been thinking about you lately 💕 I'm going live soon and would love to see you there 🔥`
     }
-    whales.forEach(w => { const hrs = (now - new Date(w.lastTipDate)) / 3600000; if (hrs <= 24 && w.tipProbability?.level === 'High') { strikeHot.push({ type: 'strike_hot', icon: '🔥', color: C.orange, severity: 'success', title: `Strike while ${w.username} is hot`, message: `They tipped in the last 24 hours and their tip probability is high — go live NOW while they're warm`, cta: 'Copy Message', username: w.username, whale: w, reengageMsg: getPersonalMsg(w) }) } })
-    whales.filter(w => w.totalUSD >= 50).forEach(w => { const days = Math.floor((now - new Date(w.lastTipDate)) / 86400000); if (days >= 45 && days <= 90) { const name = w.username; winBack.push({ type: 'win_back', icon: '💔', color: C.pink, severity: 'warning', title: `Win back ${name} — $${w.totalUSD.toFixed(0)} lifetime fan`, message: `They spent $${w.totalUSD.toFixed(0)} total but haven't tipped in ${days} days. A personal message could bring them back.`, cta: 'Copy Message', username: name, whale: w, reengageMsg: `Hey ${name}! I miss you — it's been a while and I just wanted to check in 💕 I'm going live tonight and it would mean a lot to see you there` }) } })
+
+    // 1. STRIKE WHILE HOT — tipped in last 24h AND high tip probability
+    whales.forEach(w => {
+      const hrs = (now - new Date(w.lastTipDate)) / 3600000
+      if (hrs <= 24 && w.tipProbability?.level === 'High') {
+        strikeHot.push({
+          type: 'strike_hot', icon: '🔥', color: C.orange, severity: 'success',
+          title: `Strike while ${w.username} is hot`,
+          message: `They tipped in the last 24 hours and their tip probability is high — go live NOW while they're warm`,
+          cta: 'Copy Message', username: w.username, whale: w,
+          reengageMsg: getPersonalMsg(w)
+        })
+      }
+    })
+
+    // 2. WIN BACK — $50+ lifetime, 45–90 days gone
+    whales.filter(w => w.totalUSD >= 50).forEach(w => {
+      const days = Math.floor((now - new Date(w.lastTipDate)) / 86400000)
+      if (days >= 45 && days <= 90) {
+        const name = w.username
+        winBack.push({
+          type: 'win_back', icon: '💔', color: C.pink, severity: 'warning',
+          title: `Win back ${name} — $${w.totalUSD.toFixed(0)} lifetime fan`,
+          message: `They spent $${w.totalUSD.toFixed(0)} total but haven't tipped in ${days} days. A personal message could bring them back.`,
+          cta: 'Copy Message', username: name, whale: w,
+          reengageMsg: `Hey ${name}! I miss you — it's been a while and I just wanted to check in 💕 I'm going live tonight and it would mean a lot to see you there`
+        })
+      }
+    })
+
+    // 3. MILESTONE — within 10% of $50 / $100 / $200 / $500
     const milestones = [50, 100, 200, 500]
-    whales.forEach(w => { for (const m of milestones) { const remaining = m - w.totalUSD; if (remaining > 0 && remaining <= m * 0.10) { milestone.push({ type: 'milestone', icon: '💰', color: C.gold, severity: 'info', title: `${w.username} is $${remaining.toFixed(0)} away from $${m}`, message: `They've spent $${w.totalUSD.toFixed(0)} lifetime — a little encouragement could push them to the $${m} milestone`, cta: 'Copy Message', username: w.username, whale: w, reengageMsg: getPersonalMsg(w) }); break } } })
+    whales.forEach(w => {
+      for (const m of milestones) {
+        const remaining = m - w.totalUSD
+        if (remaining > 0 && remaining <= m * 0.10) {
+          milestone.push({
+            type: 'milestone', icon: '💰', color: C.gold, severity: 'info',
+            title: `${w.username} is $${remaining.toFixed(0)} away from $${m}`,
+            message: `They've spent $${w.totalUSD.toFixed(0)} lifetime — a little encouragement could push them to the $${m} milestone`,
+            cta: 'Copy Message', username: w.username, whale: w,
+            reengageMsg: getPersonalMsg(w)
+          })
+          break
+        }
+      }
+    })
+
+    // 4. ONLINE NOW / ONLINE SOON
     whales.slice(0, 5).forEach(w => {
       if (w.tipCount < 5) return
-      const fanTips = (w.tips && w.tips.length > 0) ? w.tips : tips.filter(t => t.username.toLowerCase() === w.username.toLowerCase())
+      const fanTips = (w.tips && w.tips.length > 0)
+        ? w.tips
+        : tips.filter(t => t.username.toLowerCase() === w.username.toLowerCase())
       if (fanTips.length < 5) return
       const hourCounts = {}
-      fanTips.forEach(t => { const h = new Date(t.date_time || t.dateRaw).getHours(); hourCounts[h] = (hourCounts[h] || 0) + 1 })
+      fanTips.forEach(t => {
+        const h = new Date(t.date_time || t.dateRaw).getHours()
+        hourCounts[h] = (hourCounts[h] || 0) + 1
+      })
       const bestHour = Object.entries(hourCounts).sort((a, b) => b[1] - a[1])[0]
       if (!bestHour) return
-      const peakHour = parseInt(bestHour[0]), currentHour = new Date().getHours(), hoursAway = Math.abs(currentHour - peakHour)
+      const peakHour = parseInt(bestHour[0])
+      const currentHour = new Date().getHours()
+      const hoursAway = Math.abs(currentHour - peakHour)
       const probability = Math.min(95, Math.round((bestHour[1] / fanTips.length) * 100 * 2.5))
       const label = peakHour === 0 ? '12 AM' : peakHour < 12 ? `${peakHour} AM` : peakHour === 12 ? '12 PM' : `${peakHour - 12} PM`
-      if (hoursAway <= 2 && probability >= 40) { onlineNow.push({ type: 'online_now', icon: '🟢', color: C.green, severity: 'success', title: `${w.username} is probably online right now`, message: `They usually tip around ${label} — ~${probability}% chance they're active. Go live or message now!`, cta: 'Copy Message', username: w.username, whale: w, reengageMsg: getPersonalMsg(w) }) }
-      else if (hoursAway <= 10 && probability >= 40) { onlineNow.push({ type: 'online_soon', icon: '⏰', color: C.gold, severity: 'warning', title: `${w.username} is likely online in ~${hoursAway}h`, message: `They typically tip around ${label} (${probability}% probability). Plan your stream around it.`, cta: null, username: w.username, whale: w, reengageMsg: '' }) }
+      if (hoursAway <= 2 && probability >= 40) {
+        onlineNow.push({
+          type: 'online_now', icon: '🟢', color: C.green, severity: 'success',
+          title: `${w.username} is probably online right now`,
+          message: `They usually tip around ${label} — ~${probability}% chance they're active. Go live or message now!`,
+          cta: 'Copy Message', username: w.username, whale: w,
+          reengageMsg: getPersonalMsg(w)
+        })
+      } else if (hoursAway <= 10 && probability >= 40) {
+        onlineNow.push({
+          type: 'online_soon', icon: '⏰', color: C.gold, severity: 'warning',
+          title: `${w.username} is likely online in ~${hoursAway}h`,
+          message: `They typically tip around ${label} (${probability}% probability). Plan your stream around it.`,
+          cta: null, username: w.username, whale: w, reengageMsg: ''
+        })
+      }
     })
-    whales.filter(w => w.totalUSD >= 20).slice(0, 3).forEach(w => { const days = Math.floor((now - new Date(w.lastTipDate)) / 86400000); if (days >= 7 && days <= 44) { const timeStr = days >= 30 ? `${Math.round(days / 30)} month${days >= 60 ? 's' : ''}` : `${days} days`; dormant.push({ type: 'dormant', icon: '💤', color: C.orange, severity: 'warning', title: `You haven't heard from ${w.username} in ${timeStr}`, message: `They've spent $${w.totalUSD.toFixed(0)} total — send them a message so they know you're thinking of them`, cta: 'Copy Message', username: w.username, whale: w, reengageMsg: getPersonalMsg(w) }) } })
+
+    // 5. DORMANT
+    whales.filter(w => w.totalUSD >= 20).slice(0, 3).forEach(w => {
+      const days = Math.floor((now - new Date(w.lastTipDate)) / 86400000)
+      if (days >= 7 && days <= 44) {
+        const timeStr = days >= 30 ? `${Math.round(days / 30)} month${days >= 60 ? 's' : ''}` : `${days} days`
+        dormant.push({
+          type: 'dormant', icon: '💤', color: C.orange, severity: 'warning',
+          title: `You haven't heard from ${w.username} in ${timeStr}`,
+          message: `They've spent $${w.totalUSD.toFixed(0)} total — send them a message so they know you're thinking of them`,
+          cta: 'Copy Message', username: w.username, whale: w,
+          reengageMsg: getPersonalMsg(w)
+        })
+      }
+    })
+
+    // 6. PERFORMANCE — best day insight
     const analyticsbestDay = analytics?.bestDay
     if (analyticsbestDay) {
       const avgSession = sessions.length ? sessions.reduce((s, x) => s + x.totalUSD, 0) / sessions.length : 0
       const bestSessions = sessions.filter(s => s.totalUSD >= avgSession * 1.5)
-      const bestDayCount = bestSessions.filter(s => new Date(s.startTime).toLocaleDateString('en-US', { weekday: 'long' }) === analyticsbestDay.day).length
-      if (bestDayCount >= 2) { performance.push({ type: 'performance', icon: '📈', color: C.pink, severity: 'info', title: `Your best sessions happen on ${analyticsbestDay.day}s`, message: `${bestDayCount} of your top-earning streams were on ${analyticsbestDay.day}s ($${analyticsbestDay.avg.toFixed(0)} avg). Plan your next high-effort stream for this day`, cta: null, reengageMsg: '' }) }
+      const bestDayCount = bestSessions.filter(s =>
+        new Date(s.startTime).toLocaleDateString('en-US', { weekday: 'long' }) === analyticsbestDay.day
+      ).length
+      if (bestDayCount >= 2) {
+        performance.push({
+          type: 'performance', icon: '📈', color: C.pink, severity: 'info',
+          title: `Your best sessions happen on ${analyticsbestDay.day}s`,
+          message: `${bestDayCount} of your top-earning streams were on ${analyticsbestDay.day}s ($${analyticsbestDay.avg.toFixed(0)} avg). Plan your next high-effort stream for this day`,
+          cta: null, reengageMsg: ''
+        })
+      }
     }
+
+    // Social mention alerts (keep, they're genuinely useful)
     const socialAlerts = []
-    const SOCIAL_KEYWORDS = { snapchat: /snap\s?chat|snapchat|snap/i, instagram: /instagram|insta|ig\b/i, twitter: /twitter|x\.com|\bx\b/i, onlyfans: /onlyfans|only fans|of\b/i }
+    const SOCIAL_KEYWORDS = {
+      snapchat: /snap\s?chat|snapchat|snap/i,
+      instagram: /instagram|insta|ig\b/i,
+      twitter: /twitter|x\.com|\bx\b/i,
+      onlyfans: /onlyfans|only fans|of\b/i,
+    }
     whales.forEach(w => {
       if (!w.tipNotes || w.tipNotes.length === 0) return
       Object.entries(SOCIAL_KEYWORDS).forEach(([platform, regex]) => {
         const matchingNote = w.tipNotes.find(n => regex.test(n))
-        if (matchingNote) { const usernameMatch = matchingNote.match(/@[\w.]+|(?:my|is|:)\s*([\w.@]+)/i); const extractedUser = usernameMatch ? usernameMatch[1] || usernameMatch[0] : null; socialAlerts.push({ type: 'social_mention', icon: '📱', color: C.cyan, severity: 'info', title: `${w.username} mentioned ${platform.charAt(0).toUpperCase() + platform.slice(1)}`, message: extractedUser ? `They left their ${platform} as "${extractedUser}" in a tip note — add them before you forget!` : `They mentioned ${platform} in a tip note — ask them for their handle next time`, cta: 'Copy Message', username: w.username, whale: w, reengageMsg: getPersonalMsg(w) }) }
+        if (matchingNote) {
+          const usernameMatch = matchingNote.match(/@[\w.]+|(?:my|is|:)\s*([\w.@]+)/i)
+          const extractedUser = usernameMatch ? usernameMatch[1] || usernameMatch[0] : null
+          socialAlerts.push({
+            type: 'social_mention', icon: '📱', color: C.cyan, severity: 'info',
+            title: `${w.username} mentioned ${platform.charAt(0).toUpperCase() + platform.slice(1)}`,
+            message: extractedUser
+              ? `They left their ${platform} as "${extractedUser}" in a tip note — add them before you forget!`
+              : `They mentioned ${platform} in a tip note — ask them for their handle next time`,
+            cta: 'Copy Message', username: w.username, whale: w,
+            reengageMsg: getPersonalMsg(w)
+          })
+        }
       })
     })
-    return [...strikeHot, ...winBack, ...milestone, ...onlineNow, ...dormant, ...performance, ...socialAlerts].slice(0, 6)
+
+    // Merge in priority order, cap at 6
+    return [
+      ...strikeHot,
+      ...winBack,
+      ...milestone,
+      ...onlineNow,
+      ...dormant,
+      ...performance,
+      ...socialAlerts,
+    ].slice(0, 6)
   }
 
+  // ── Build re-engage list outside JSX for the same reason
   const buildReengageList = () => {
     const now = Date.now()
-    const messageSets = [(name) => `Hey ${name}! I've been thinking about you lately 💕 I'm going live tonight and would love to see your name in the chat 🔥`,(name) => `${name}! It's been a minute and honestly I miss you 😊 Jumping on soon — come say hi? 💋`,(name) => `Hey love 💕 Just wanted to reach out because I was literally just thinking about you. Going live tonight — hope to see you there!`]
-    return whales.filter(w => { const days = Math.floor((now - new Date(w.lastTipDate)) / 86400000); return days >= 3 && days <= 60 && w.totalUSD >= 10 }).sort((a, b) => b.totalUSD - a.totalUSD).slice(0, 5).map((w, i) => { const days = Math.floor((now - new Date(w.lastTipDate)) / 86400000); return { whale: w, days, urgency: days > 30 ? C.red : days > 14 ? C.orange : C.gold, msg: messageSets[i % messageSets.length](w.username) } })
+    const messageSets = [
+      (name) => `Hey ${name}! I've been thinking about you lately 💕 I'm going live tonight and would love to see your name in the chat 🔥`,
+      (name) => `${name}! It's been a minute and honestly I miss you 😊 Jumping on soon — come say hi? 💋`,
+      (name) => `Hey love 💕 Just wanted to reach out because I was literally just thinking about you. Going live tonight — hope to see you there!`,
+    ]
+    return whales
+      .filter(w => {
+        const days = Math.floor((now - new Date(w.lastTipDate)) / 86400000)
+        return days >= 3 && days <= 60 && w.totalUSD >= 10
+      })
+      .sort((a, b) => b.totalUSD - a.totalUSD)
+      .slice(0, 5)
+      .map((w, i) => {
+        const days = Math.floor((now - new Date(w.lastTipDate)) / 86400000)
+        return {
+          whale: w,
+          days,
+          urgency: days > 30 ? C.red : days > 14 ? C.orange : C.gold,
+          msg: messageSets[i % messageSets.length](w.username)
+        }
+      })
   }
 
+  // ============================================================
+  // REAL-TIME INTELLIGENCE COMPUTED FROM ACTUAL DB DATA
+  // ============================================================
+
   const buildRealTimeAlerts = () => {
-    const now = Date.now(), currentHour = new Date().getHours(), currentDay = new Date().toLocaleDateString('en-US', { weekday: 'long' })
+    const now = Date.now()
+    const currentHour = new Date().getHours()
+    const currentDay = new Date().toLocaleDateString('en-US', { weekday: 'long' })
     const alerts = []
+
+    // --- PLATFORM DAY-OF-WEEK PERFORMANCE ---
+    // Use UTC day to avoid timezone shifts (DB stores UTC timestamps)
     const UTC_DAYS_LONG = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
     const platDayMap = {}
-    tips.forEach(t => { const p = t.platform, d = new Date(t.date_time || t.dateRaw), day = UTC_DAYS_LONG[d.getUTCDay()]; if (!platDayMap[p]) platDayMap[p] = {}; if (!platDayMap[p][day]) platDayMap[p][day] = 0; platDayMap[p][day] += t.usd || 0 })
+    tips.forEach(t => {
+      const p = t.platform
+      const d = new Date(t.date_time || t.dateRaw)
+      const day = UTC_DAYS_LONG[d.getUTCDay()]
+      if (!platDayMap[p]) platDayMap[p] = {}
+      if (!platDayMap[p][day]) platDayMap[p][day] = 0
+      platDayMap[p][day] += t.usd || 0
+    })
+
+    // Find best day per platform
     const platBestDay = {}
-    Object.entries(platDayMap).forEach(([plat, days]) => { const sorted = Object.entries(days).sort((a, b) => b[1] - a[1]); if (sorted.length > 0) platBestDay[plat] = { day: sorted[0][0], usd: sorted[0][1] } })
-    Object.entries(platBestDay).forEach(([plat, { day, usd }]) => { if (day === currentDay) { const otherPlat = Object.entries(platBestDay).find(([p]) => p !== plat); const comparison = otherPlat ? ` — ${(usd / Math.max(otherPlat[1].usd, 1)).toFixed(1)}x more than ${otherPlat[0]}` : ''; alerts.push({ type: 'best_day', priority: 0, icon: '📅', color: '#F59E0B', title: `${currentDay} is your best day on ${plat}`, message: `You earn more on ${plat} on ${currentDay}s than any other day${comparison}. Go live now.` }) } })
+    Object.entries(platDayMap).forEach(([plat, days]) => {
+      const sorted = Object.entries(days).sort((a, b) => b[1] - a[1])
+      if (sorted.length > 0) platBestDay[plat] = { day: sorted[0][0], usd: sorted[0][1] }
+    })
+
+    // "Best day of the week" alert — fire if today is the best day for any platform
+    Object.entries(platBestDay).forEach(([plat, { day, usd }]) => {
+      if (day === currentDay) {
+        const otherPlat = Object.entries(platBestDay).find(([p]) => p !== plat)
+        const comparison = otherPlat
+          ? ` — ${(usd / Math.max(otherPlat[1].usd, 1)).toFixed(1)}x more than ${otherPlat[0]}`
+          : ''
+        alerts.push({
+          type: 'best_day', priority: 0, icon: '📅', color: '#F59E0B',
+          title: `${currentDay} is your best day on ${plat}`,
+          message: `You earn more on ${plat} on ${currentDay}s than any other day${comparison}. Go live now.`
+        })
+      }
+    })
+
+    // --- PLATFORM vs PLATFORM HOUR COMPARISON ---
     const platHourMap = {}
-    tips.forEach(t => { const p = t.platform, h = new Date(t.date_time || t.dateRaw).getHours(); if (!platHourMap[p]) platHourMap[p] = {}; if (!platHourMap[p][h]) platHourMap[p][h] = 0; platHourMap[p][h] += t.usd || 0 })
+    tips.forEach(t => {
+      const p = t.platform
+      const h = new Date(t.date_time || t.dateRaw).getHours()
+      if (!platHourMap[p]) platHourMap[p] = {}
+      if (!platHourMap[p][h]) platHourMap[p][h] = 0
+      platHourMap[p][h] += t.usd || 0
+    })
+
     const platNames = Object.keys(platHourMap)
-    if (platNames.length >= 2) { platNames.forEach(plat => { const hourVal = platHourMap[plat][currentHour] || 0; const otherPlats = platNames.filter(p => p !== plat); otherPlats.forEach(other => { const otherVal = platHourMap[other][currentHour] || 0; if (hourVal > 0 && otherVal > 0 && hourVal >= otherVal * 1.5) { const mult = (hourVal / otherVal).toFixed(1), label = currentHour === 0 ? '12 AM' : currentHour < 12 ? `${currentHour} AM` : currentHour === 12 ? '12 PM' : `${currentHour - 12} PM`; alerts.push({ type: 'platform_hour', priority: 1, icon: '⚡', color: '#22D3EE', title: `Right now ${plat} earns ${mult}x more than ${other}`, message: `At ${label}, ${plat} historically earns $${hourVal.toFixed(0)} vs $${otherVal.toFixed(0)} on ${other}. Stream on ${plat} now.` }) } }) }) }
+    if (platNames.length >= 2) {
+      platNames.forEach(plat => {
+        const hourVal = platHourMap[plat][currentHour] || 0
+        const otherPlats = platNames.filter(p => p !== plat)
+        otherPlats.forEach(other => {
+          const otherVal = platHourMap[other][currentHour] || 0
+          if (hourVal > 0 && otherVal > 0 && hourVal >= otherVal * 1.5) {
+            const mult = (hourVal / otherVal).toFixed(1)
+            const label = currentHour === 0 ? '12 AM' : currentHour < 12 ? `${currentHour} AM` : currentHour === 12 ? '12 PM' : `${currentHour - 12} PM`
+            alerts.push({
+              type: 'platform_hour', priority: 1, icon: '⚡', color: '#22D3EE',
+              title: `Right now ${plat} earns ${mult}x more than ${other}`,
+              message: `At ${label}, ${plat} historically earns $${hourVal.toFixed(0)} vs $${otherVal.toFixed(0)} on ${other}. Stream on ${plat} now.`
+            })
+          }
+        })
+      })
+    }
+
+    // --- TOP WHALE LIKELY ONLINE ---
+    // Uses actual peak hour from their tip history
     const topWhales = [...whales].sort((a, b) => b.totalUSD - a.totalUSD).slice(0, 5)
     topWhales.forEach(w => {
-      const fanTips = (w.tips && w.tips.length > 0) ? w.tips : tips.filter(t => t.username.toLowerCase() === w.username.toLowerCase())
+      const fanTips = (w.tips && w.tips.length > 0)
+        ? w.tips
+        : tips.filter(t => t.username.toLowerCase() === w.username.toLowerCase())
       if (fanTips.length < 3) return
+
       const hourCounts = {}
-      fanTips.forEach(t => { const h = new Date(t.date_time || t.dateRaw).getHours(); hourCounts[h] = (hourCounts[h] || 0) + 1 })
+      fanTips.forEach(t => {
+        const h = new Date(t.date_time || t.dateRaw).getHours()
+        hourCounts[h] = (hourCounts[h] || 0) + 1
+      })
       const sortedHours = Object.entries(hourCounts).sort((a, b) => b[1] - a[1])
       if (!sortedHours.length) return
-      const peakHour = parseInt(sortedHours[0][0]), hoursAway = (peakHour - currentHour + 24) % 24
+
+      const peakHour = parseInt(sortedHours[0][0])
+      const hoursAway = (peakHour - currentHour + 24) % 24
       const confidence = Math.min(95, Math.round((sortedHours[0][1] / fanTips.length) * 100 * 2.5))
       const label = peakHour === 0 ? '12 AM' : peakHour < 12 ? `${peakHour} AM` : peakHour === 12 ? '12 PM' : `${peakHour - 12} PM`
       const daysSince = Math.floor((now - new Date(w.lastTipDate)) / 86400000)
-      if (hoursAway === 0 || hoursAway === 1) { alerts.push({ type: 'whale_online_now', priority: 0, icon: '🟢', color: '#10B981', title: `${w.username} is likely online RIGHT NOW on ${w.platform}`, message: `Your #${topWhales.indexOf(w)+1} tipper ($${w.totalUSD.toFixed(0)} lifetime) peaks at ${label} — go live on ${w.platform} immediately. ${daysSince > 0 ? `They haven't tipped in ${daysSince} days.` : 'They tipped recently!'}` }) }
-      else if (hoursAway <= 3) { alerts.push({ type: 'whale_online_soon', priority: 1, icon: '⏰', color: '#F59E0B', title: `${w.username} likely online in ~${hoursAway}h on ${w.platform}`, message: `Your top whale peaks at ${label} with ${confidence}% confidence. Prep your stream on ${w.platform} — they've spent $${w.totalUSD.toFixed(0)} with you.` }) }
+
+      if (hoursAway === 0 || hoursAway === 1) {
+        alerts.push({
+          type: 'whale_online_now', priority: 0, icon: '🟢', color: '#10B981',
+          title: `${w.username} is likely online RIGHT NOW on ${w.platform}`,
+          message: `Your #${topWhales.indexOf(w)+1} tipper ($${w.totalUSD.toFixed(0)} lifetime) peaks at ${label} — go live on ${w.platform} immediately. ${daysSince > 0 ? `They haven't tipped in ${daysSince} days.` : 'They tipped recently!'}`
+        })
+      } else if (hoursAway <= 3) {
+        alerts.push({
+          type: 'whale_online_soon', priority: 1, icon: '⏰', color: '#F59E0B',
+          title: `${w.username} likely online in ~${hoursAway}h on ${w.platform}`,
+          message: `Your top whale peaks at ${label} with ${confidence}% confidence. Prep your stream on ${w.platform} — they've spent $${w.totalUSD.toFixed(0)} with you.`
+        })
+      }
     })
+
+    // --- PLATFORM DOMINANCE ALERT ---
     const platTotals = {}
-    tips.forEach(t => { platTotals[t.platform] = (platTotals[t.platform] || 0) + (t.usd || 0) })
+    tips.forEach(t => {
+      platTotals[t.platform] = (platTotals[t.platform] || 0) + (t.usd || 0)
+    })
     const sortedPlats = Object.entries(platTotals).sort((a, b) => b[1] - a[1])
-    if (sortedPlats.length >= 2) { const [topPlat, topUSD] = sortedPlats[0], [bottomPlat, bottomUSD] = sortedPlats[sortedPlats.length - 1]; if (bottomUSD > 0) { const mult = (topUSD / bottomUSD).toFixed(1); alerts.push({ type: 'platform_dominance', priority: 2, icon: '🏆', color: '#F59E0B', title: `${topPlat} earns ${mult}x more than ${bottomPlat} overall`, message: `$${topUSD.toFixed(0)} on ${topPlat} vs $${bottomUSD.toFixed(0)} on ${bottomPlat} all time. Your time on ${topPlat} is ${mult}x more valuable.` }) } }
+    if (sortedPlats.length >= 2) {
+      const [topPlat, topUSD] = sortedPlats[0]
+      const [bottomPlat, bottomUSD] = sortedPlats[sortedPlats.length - 1]
+      if (bottomUSD > 0) {
+        const mult = (topUSD / bottomUSD).toFixed(1)
+        alerts.push({
+          type: 'platform_dominance', priority: 2, icon: '🏆', color: '#F59E0B',
+          title: `${topPlat} earns ${mult}x more than ${bottomPlat} overall`,
+          message: `$${topUSD.toFixed(0)} on ${topPlat} vs $${bottomUSD.toFixed(0)} on ${bottomPlat} all time. Your time on ${topPlat} is ${mult}x more valuable.`
+        })
+      }
+    }
+
     return alerts.sort((a, b) => a.priority - b.priority).slice(0, 6)
   }
 
@@ -721,7 +1395,11 @@ export default function Dashboard() {
   const realTimeAlerts = buildRealTimeAlerts()
 
   return (
-    <div style={{ minHeight: "100vh", background: `radial-gradient(circle at 20% 30%, rgba(59,130,246,0.25), transparent 40%), radial-gradient(circle at 80% 70%, rgba(236,72,153,0.25), transparent 40%), radial-gradient(circle at 50% 50%, rgba(168,85,247,0.15), transparent 60%), #05070f`, fontFamily: "'Inter', sans-serif", color: C.text }}>
+    <div style={{
+      minHeight: "100vh",
+      background: `radial-gradient(circle at 20% 30%, rgba(59,130,246,0.25), transparent 40%), radial-gradient(circle at 80% 70%, rgba(236,72,153,0.25), transparent 40%), radial-gradient(circle at 50% 50%, rgba(168,85,247,0.15), transparent 60%), #05070f`,
+      fontFamily: "'Inter', sans-serif", color: C.text
+    }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -732,25 +1410,7 @@ export default function Dashboard() {
         .dash-card:hover { transform: translateY(-2px); }
         .whale-row { transition: background 0.15s; }
         .whale-row:hover { background: rgba(59,130,246,0.08) !important; }
-        select, select option { background: #0f1623 !important; color: #F1F5F9 !important; }
-        select:focus { outline: none; border-color: #22D3EE; }
-        @keyframes spin { to { transform: rotate(360deg) } }
         @keyframes pulse-msg { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.25); } }
-        @media (max-width: 768px) {
-          .sidebar { display: none !important; }
-          .main-content { margin-left: 0 !important; padding: 16px 12px 80px !important; }
-          .mobile-nav { display: flex !important; }
-          .stat-grid { grid-template-columns: repeat(2, 1fr) !important; }
-          .live-grid { grid-template-columns: 1fr !important; }
-          .session-metrics { grid-template-columns: repeat(2, 1fr) !important; }
-          .upload-tab { max-width: 100% !important; }
-          .hide-mobile { display: none !important; }
-          .toast-bar { left: 12px !important; right: 12px !important; bottom: 80px !important; }
-        }
-        @media (min-width: 769px) {
-          .mobile-nav { display: none !important; }
-          .sidebar { display: flex !important; }
-        }
       `}</style>
 
       <div style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 0 }}>
@@ -758,8 +1418,8 @@ export default function Dashboard() {
         <div style={{ position: "absolute", width: 900, height: 900, bottom: "-20%", right: "-10%", background: "radial-gradient(circle, rgba(236,72,153,0.35), transparent 60%)", filter: "blur(120px)" }} />
       </div>
 
-      {/* SIDEBAR — desktop only */}
-      <div className="sidebar" style={{ position: "fixed", left: 0, top: 0, bottom: 0, width: 240, background: "rgba(15,20,32,0.85)", backdropFilter: "blur(20px)", borderRight: "1px solid rgba(255,255,255,0.08)", flexDirection: "column", zIndex: 50 }}>
+      {/* SIDEBAR */}
+      <div style={{ position: "fixed", left: 0, top: 0, bottom: 0, width: 240, background: "rgba(15,20,32,0.85)", backdropFilter: "blur(20px)", borderRight: "1px solid rgba(255,255,255,0.08)", display: "flex", flexDirection: "column", zIndex: 50 }}>
         <div style={{ padding: "24px 20px", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <div style={{ width: 40, height: 40, borderRadius: 10, background: "linear-gradient(135deg, #22D3EE, #EC4899)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, fontWeight: 700, color: C.white, boxShadow: "0 0 20px rgba(34,211,238,0.4)" }}>$</div>
@@ -768,16 +1428,28 @@ export default function Dashboard() {
           {user && <div style={{ fontSize: 11, color: C.muted, marginTop: 10 }}>{user.email}</div>}
           <div style={{ marginTop: 12, padding: "6px 10px", borderRadius: 8, background: "linear-gradient(135deg, rgba(245,158,11,0.2), rgba(251,146,60,0.2))", border: "1px solid rgba(245,158,11,0.4)", display: "flex", alignItems: "center", gap: 6 }}>
             <div style={{ width: 6, height: 6, borderRadius: "50%", background: C.gold, flexShrink: 0, boxShadow: `0 0 6px ${C.gold}` }} />
-            <div><div style={{ fontSize: 10, fontWeight: 700, color: C.gold, letterSpacing: 0.5 }}>FREE BETA</div><div style={{ fontSize: 9, color: C.orange }}>All features unlocked</div></div>
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: C.gold, letterSpacing: 0.5 }}>FREE BETA</div>
+              <div style={{ fontSize: 9, color: C.orange }}>All features unlocked</div>
+            </div>
           </div>
         </div>
+
         <nav style={{ flex: 1, padding: "16px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
           {[["overview", "📊", "Overview"], ["platforms", "🎯", "Platforms"], ["whales", "🐳", "Top Fans"], ["sessions", "🎥", "Sessions"], ["live", "🔴", "Live Mode"], ["data", "📝", "Edit Data"], ["titles", "🎬", "Room Titles"], ["help", "❓", "CSV Help"], ["upload", "📥", "Import"]].map(([id, icon, label]) => (
-            <button key={id} onClick={() => setActiveTab(id)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 10, background: activeTab === id ? "linear-gradient(135deg, rgba(59,130,246,0.2), rgba(236,72,153,0.2))" : "transparent", border: activeTab === id ? "1px solid rgba(59,130,246,0.4)" : "1px solid transparent", boxShadow: activeTab === id ? "0 0 20px rgba(59,130,246,0.3)" : "none", color: activeTab === id ? C.white : C.muted, fontSize: 14, fontWeight: activeTab === id ? 600 : 400, cursor: "pointer", transition: "all 0.15s", textAlign: "left" }}>
+            <button key={id} onClick={() => setActiveTab(id)} style={{
+              display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 10,
+              background: activeTab === id ? "linear-gradient(135deg, rgba(59,130,246,0.2), rgba(236,72,153,0.2))" : "transparent",
+              border: activeTab === id ? "1px solid rgba(59,130,246,0.4)" : "1px solid transparent",
+              boxShadow: activeTab === id ? "0 0 20px rgba(59,130,246,0.3)" : "none",
+              color: activeTab === id ? C.white : C.muted, fontSize: 14, fontWeight: activeTab === id ? 600 : 400,
+              cursor: "pointer", transition: "all 0.15s", textAlign: "left"
+            }}>
               <span style={{ fontSize: 18 }}>{icon}</span>{label}
             </button>
           ))}
         </nav>
+
         <div style={{ padding: "16px 20px", borderTop: "1px solid rgba(255,255,255,0.08)", display: "flex", flexDirection: "column", gap: 10 }}>
           <div style={{ padding: 12, borderRadius: 10, background: "linear-gradient(135deg, rgba(59,130,246,0.1), rgba(236,72,153,0.1))", border: "1px solid rgba(236,72,153,0.3)", textAlign: "center" }}>
             <div style={{ fontSize: 18, marginBottom: 4 }}>🎉</div>
@@ -788,17 +1460,25 @@ export default function Dashboard() {
             </div>
             <div style={{ fontSize: 10, color: C.pink, fontWeight: 600, marginTop: 4 }}>63 / 100 spots left</div>
           </div>
-          <button onClick={handleSignOut} style={{ width: "100%", padding: "9px 12px", borderRadius: 9, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", color: C.muted, fontSize: 13, cursor: "pointer", fontWeight: 500, display: "flex", alignItems: "center", justifyContent: "center", gap: 7, transition: "all 0.15s" }}
+          <button
+            onClick={handleSignOut}
+            style={{
+              width: "100%", padding: "9px 12px", borderRadius: 9,
+              background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)",
+              color: C.muted, fontSize: 13, cursor: "pointer", fontWeight: 500,
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 7,
+              transition: "all 0.15s",
+            }}
             onMouseEnter={e => { e.currentTarget.style.background = "rgba(248,113,113,0.1)"; e.currentTarget.style.borderColor = "rgba(248,113,113,0.3)"; e.currentTarget.style.color = "#F87171" }}
-            onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,255,255,0.04)"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"; e.currentTarget.style.color = C.muted }}>
+            onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,255,255,0.04)"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"; e.currentTarget.style.color = C.muted }}
+          >
             <span style={{ fontSize: 15 }}>→</span> Sign Out
           </button>
         </div>
       </div>
 
       {/* MAIN CONTENT */}
-      <div className="main-content" style={{ marginLeft: 240, padding: 32, position: "relative", zIndex: 1 }}>
-
+      <div style={{ marginLeft: 240, padding: 32, position: "relative", zIndex: 1 }}>
 
         {activeTab === "overview" && (
           <div>
@@ -818,6 +1498,7 @@ export default function Dashboard() {
               </div>
             </div>
 
+            {/* SHARE MY STATS */}
             <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 16 }}>
               <button onClick={() => setShareModalOpen(true)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 10, background: "linear-gradient(135deg, rgba(236,72,153,0.15), rgba(168,85,247,0.15))", border: "1px solid rgba(236,72,153,0.35)", color: C.white, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
                 📤 Share My Stats
@@ -833,7 +1514,7 @@ export default function Dashboard() {
               const topPct = Math.max(1, Math.min(25, Math.round(100 - (totalRevenue / 50))))
               const streak = recentSessions.length
               return (
-                <div className="stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 20, marginBottom: 28 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 20, marginBottom: 28 }}>
                   {[
                     { label: "Total Earned", value: `$${totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, sub: `Top ${topPct}% of models on this platform`, icon: "💰", badge: growthPct !== null ? (growthPct >= 0 ? `↑ ${growthPct}% vs last month` : `↓ ${Math.abs(growthPct)}% vs last month`) : null, badgeColor: growthPct !== null && growthPct >= 0 ? C.green : C.red },
                     { label: "Avg $/Hour", value: `$${avgPerHour.toFixed(2)}`, sub: avgPerHour > 20 ? "Above average — keep it up!" : "Tip: stream at peak hours", icon: "⏱️", badge: null },
@@ -853,6 +1534,470 @@ export default function Dashboard() {
                 </div>
               )
             })()}
+
+            {/* WHAT SHOULD I DO RIGHT NOW */}
+            {(() => {
+              const actions = nextMoves.length > 0 ? nextMoves : [{ icon: "📊", color: C.cyan, text: "Import your first CSV to unlock personalized action recommendations", cta: null }]
+              return (
+                <div style={{ ...glassCard, borderRadius: 16, padding: 24, marginBottom: 28 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
+                    <div style={{ width: 36, height: 36, borderRadius: 10, background: "linear-gradient(135deg, #22D3EE, #7C5CFF)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>⚡</div>
+                    <div>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: C.white }}>What Should I Do Right Now?</div>
+                      <div style={{ fontSize: 12, color: C.muted }}>Live coaching based on your actual data</div>
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    {actions.map((a, i) => (
+                      <div key={i} style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, padding: "14px 16px", background: `${a.color}10`, border: `1px solid ${a.color}30`, borderRadius: 12 }}>
+                        <div style={{ display: "flex", gap: 12, alignItems: "flex-start", flex: 1 }}>
+                          <span style={{ fontSize: 20, flexShrink: 0 }}>{a.icon}</span>
+                          <div style={{ fontSize: 14, color: C.white, lineHeight: 1.5 }}>{a.text}</div>
+                        </div>
+                        {a.cta && (
+                          <button onClick={() => { const w = whales.find(wh => wh.username === a.username); if (w) { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) } }}
+                            style={{ flexShrink: 0, padding: "6px 14px", borderRadius: 8, background: "linear-gradient(135deg, #EC4899, #7C5CFF)", boxShadow: "0 0 20px rgba(236,72,153,0.4)", border: "none", color: C.white, fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
+                            💌 Message
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            })()}
+
+            {/* REAL-TIME LIVE INTELLIGENCE */}
+            {realTimeAlerts.length > 0 && (
+              <div style={{ ...glassCard, borderRadius: 16, padding: 24, marginBottom: 28, border: "1px solid rgba(34,211,238,0.2)" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
+                  <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#10B981", boxShadow: "0 0 8px #10B981", animation: "pulse-msg 1.5s infinite" }} />
+                  <div style={{ fontSize: 18, fontWeight: 800, color: C.white }}>Live Intelligence</div>
+                  <div style={{ fontSize: 11, color: C.green, padding: "2px 8px", borderRadius: 20, background: "rgba(16,185,129,0.15)", border: "1px solid rgba(16,185,129,0.3)" }}>REAL DATA</div>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {realTimeAlerts.map((a, i) => (
+                    <div key={i} style={{ padding: "14px 16px", borderRadius: 12, background: `${a.color}0d`, border: `1px solid ${a.color}30`, display: "flex", gap: 12, alignItems: "flex-start" }}>
+                      <span style={{ fontSize: 20, flexShrink: 0 }}>{a.icon}</span>
+                      <div>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: C.white, marginBottom: 3 }}>{a.title}</div>
+                        <div style={{ fontSize: 12, color: C.text, lineHeight: 1.5 }}>{a.message}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* PLATFORM DAY PERFORMANCE GRID */}
+            {(() => {
+              // UTC day extraction — avoids timezone drift on stored timestamps
+              const UTC_DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
+              const UTC_DAYS_LONG = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
+
+              // Accumulate total USD and count unique calendar-dates per platform+day
+              // so we can show avg per active day, not inflated totals
+              const platDayUSD = {}   // platform -> short-day -> total $
+              const platDayDates = {} // platform -> short-day -> Set of 'YYYY-MM-DD'
+              tips.forEach(t => {
+                const p = t.platform
+                const dt = new Date(t.date_time || t.dateRaw)
+                const shortDay = UTC_DAYS[dt.getUTCDay()]
+                const dateKey = dt.toISOString().slice(0, 10) // 'YYYY-MM-DD'
+                if (!platDayUSD[p]) platDayUSD[p] = {}
+                if (!platDayDates[p]) platDayDates[p] = {}
+                platDayUSD[p][shortDay] = (platDayUSD[p][shortDay] || 0) + (t.usd || 0)
+                if (!platDayDates[p][shortDay]) platDayDates[p][shortDay] = new Set()
+                platDayDates[p][shortDay].add(dateKey)
+              })
+
+              // Build avg-per-active-day for each cell
+              const platDayAvg = {}
+              Object.keys(platDayUSD).forEach(p => {
+                platDayAvg[p] = {}
+                UTC_DAYS.forEach(d => {
+                  const total = platDayUSD[p][d] || 0
+                  const activeDays = platDayDates[p]?.[d]?.size || 1
+                  platDayAvg[p][d] = total > 0 ? parseFloat((total / activeDays).toFixed(2)) : 0
+                })
+              })
+
+              const platList = Object.keys(platDayAvg)
+              if (platList.length < 1) return null
+
+              // Today's UTC day
+              const nowUTC = new Date()
+              const todayShort = UTC_DAYS[nowUTC.getUTCDay()]
+              const todayLong = UTC_DAYS_LONG[nowUTC.getUTCDay()]
+
+              return (
+                <div style={{ ...glassCard, borderRadius: 16, padding: 24, marginBottom: 28 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4, flexWrap: "wrap", gap: 8 }}>
+                    <h2 style={{ fontSize: 18, fontWeight: 700, color: C.white }}>📅 Platform Performance by Day</h2>
+                    <span style={{ fontSize: 11, color: C.muted, padding: "3px 10px", borderRadius: 20, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}>avg $/active day</span>
+                  </div>
+                  <p style={{ fontSize: 12, color: C.muted, marginBottom: 16 }}>Which platform earns more on each day of the week — based on your real data</p>
+                  <div style={{ display: "grid", gridTemplateColumns: `90px repeat(7, 1fr)`, gap: 4 }}>
+                    <div />
+                    {UTC_DAYS.map(d => (
+                      <div key={d} style={{ textAlign: "center", fontSize: 11, fontWeight: 700, color: d === todayShort ? C.cyan : C.muted, paddingBottom: 6 }}>{d}</div>
+                    ))}
+                    {platList.map(plat => {
+                      const dayVals = UTC_DAYS.map(d => platDayAvg[plat][d] || 0)
+                      const maxVal = Math.max(...dayVals, 0.01)
+                      return [
+                        <div key={plat + '_label'} style={{ fontSize: 10, fontWeight: 700, color: C.text, display: "flex", alignItems: "center", paddingRight: 6, lineHeight: 1.3 }}>{plat.replace('BongaCams','Bonga').replace('Chaturbate','CB')}</div>,
+                        ...UTC_DAYS.map(d => {
+                          const val = platDayAvg[plat][d] || 0
+                          const intensity = maxVal > 0 ? val / maxVal : 0
+                          const isToday = d === todayShort
+                          const bg = val === 0
+                            ? "rgba(255,255,255,0.03)"
+                            : intensity < 0.25 ? "rgba(34,211,238,0.12)"
+                            : intensity < 0.5  ? "rgba(34,211,238,0.30)"
+                            : intensity < 0.75 ? "rgba(34,211,238,0.60)"
+                            : "rgba(34,211,238,0.90)"
+                          return (
+                            <div key={d} title={`${plat} ${d}: avg $${val.toFixed(2)}/day — click to see fans active on ${d}s`}
+                              onClick={() => { setChartDrillDay(d); setActiveTab("whales") }}
+                              style={{ height: 36, borderRadius: 6, background: bg, border: isToday ? "2px solid rgba(34,211,238,0.7)" : "1px solid rgba(255,255,255,0.06)", display: "flex", alignItems: "center", justifyContent: "center", cursor: val > 0 ? "pointer" : "default", transition: "transform 0.1s, opacity 0.1s" }}
+                              onMouseEnter={e => { if (val > 0) e.currentTarget.style.opacity = "0.8" }}
+                              onMouseLeave={e => { e.currentTarget.style.opacity = "1" }}>
+                              {val > 0 && <span style={{ fontSize: 9, fontWeight: 700, color: intensity > 0.45 ? "#fff" : C.muted }}>${val >= 100 ? Math.round(val) : val.toFixed(0)}</span>}
+                            </div>
+                          )
+                        })
+                      ]
+                    })}
+                  </div>
+                  <div style={{ marginTop: 10, fontSize: 11, color: C.muted }}>
+                    Today ({todayLong}) is highlighted in cyan. Values = avg earnings per active stream day. Darker = more.
+                  </div>
+                </div>
+              )
+            })()}
+
+            {/* TIPPERS LIKELY ONLINE NOW */}
+            {(() => {
+              const currentHour = new Date().getHours()
+              const label = h => h === 0 ? '12 AM' : h < 12 ? `${h} AM` : h === 12 ? '12 PM' : `${h-12} PM`
+              const likelyOnline = whales
+                .filter(w => w.tipCount >= 3)
+                .map(w => {
+                  const fanTips = (w.tips && w.tips.length > 0) ? w.tips : tips.filter(t => t.username.toLowerCase() === w.username.toLowerCase())
+                  const hourCounts = {}
+                  fanTips.forEach(t => {
+                    const h = new Date(t.date_time || t.dateRaw).getHours()
+                    hourCounts[h] = (hourCounts[h] || 0) + 1
+                  })
+                  const sorted = Object.entries(hourCounts).sort((a,b) => b[1]-a[1])
+                  if (!sorted.length) return null
+                  const peakHour = parseInt(sorted[0][0])
+                  const hoursAway = (peakHour - currentHour + 24) % 24
+                  const confidence = Math.min(95, Math.round((sorted[0][1] / fanTips.length) * 100 * 2.5))
+                  return { ...w, peakHour, hoursAway, confidence, peakLabel: label(peakHour) }
+                })
+                .filter(Boolean)
+                .filter(w => w.hoursAway <= 2 && w.confidence >= 35)
+                .sort((a,b) => b.totalUSD - a.totalUSD)
+                .slice(0, 4)
+
+              if (!likelyOnline.length) return null
+              return (
+                <div style={{ ...glassCard, borderRadius: 16, padding: 24, marginBottom: 28 }}>
+                  <h2 style={{ fontSize: 18, fontWeight: 700, color: C.white, marginBottom: 4 }}>🟢 Tippers Likely Online Now</h2>
+                  <p style={{ fontSize: 12, color: C.muted, marginBottom: 16 }}>Based on their real tip-time patterns from your data</p>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    {likelyOnline.map((w, i) => (
+                      <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", borderRadius: 12, background: "rgba(16,185,129,0.08)", border: "1px solid rgba(16,185,129,0.25)", flexWrap: "wrap", gap: 10 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                          <div style={{ width: 8, height: 8, borderRadius: "50%", background: C.green, boxShadow: `0 0 6px ${C.green}` }} />
+                          <div>
+                            <div style={{ fontSize: 14, fontWeight: 700, color: C.white }}>{w.username}</div>
+                            <div style={{ fontSize: 11, color: C.muted }}>${w.totalUSD.toFixed(0)} lifetime · peaks at {w.peakLabel} · {w.platform}</div>
+                          </div>
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <span style={{ fontSize: 11, padding: "3px 10px", borderRadius: 20, background: "rgba(16,185,129,0.2)", color: C.green, fontWeight: 700 }}>{w.confidence}% likely</span>
+                          <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }} style={{ padding: "5px 12px", borderRadius: 8, background: "linear-gradient(135deg,#22D3EE,#EC4899)", border: "none", color: C.white, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>💌 Message</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            })()}
+
+            {/* DEPENDENCY RISK */}
+            {dependencyRisk && dependencyRisk.level !== 'low' && (
+              <div style={{ ...glassCard, borderRadius: 14, padding: 20, marginBottom: 20, border: `1px solid ${dependencyRisk.level === 'high' ? 'rgba(248,113,113,0.3)' : 'rgba(245,158,11,0.3)'}` }}>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 9, background: dependencyRisk.level === 'high' ? "rgba(248,113,113,0.15)" : "rgba(245,158,11,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>
+                    {dependencyRisk.level === 'high' ? '🚨' : '⚠️'}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: C.white, marginBottom: 4 }}>Revenue Dependency Risk — {dependencyRisk.level === 'high' ? 'High' : 'Medium'}</div>
+                    <div style={{ fontSize: 13, color: C.text, marginBottom: 10 }}>{dependencyRisk.message}</div>
+                    <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                      {[
+                        { label: "Top fan", value: `${dependencyRisk.top1Pct}%` },
+                        { label: "Top 3 fans", value: `${dependencyRisk.top3Pct}%` },
+                        { label: "Top 5 fans", value: `${dependencyRisk.top5Pct}%` },
+                        { label: "Loss if #1 leaves", value: `$${dependencyRisk.lossIfTopFanLeaves}` },
+                      ].map(({ label, value }) => (
+                        <div key={label} style={{ padding: "6px 12px", borderRadius: 8, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}>
+                          <div style={{ fontSize: 10, color: C.muted }}>{label}</div>
+                          <div style={{ fontSize: 14, fontWeight: 700, color: C.white }}>{value}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* PRE-TIP BEHAVIOR */}
+            {preTipBehavior && (
+              <div style={{ ...glassCard, borderRadius: 14, padding: 20, marginBottom: 20 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+                  <div style={{ fontSize: 20 }}>🧠</div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: C.white }}>Tip Behavior Patterns</div>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+                  <div style={{ padding: "12px 14px", background: "rgba(255,255,255,0.04)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.06)" }}>
+                    <div style={{ fontSize: 10, color: C.muted, marginBottom: 4, textTransform: "uppercase" }}>Avg gap between tips</div>
+                    <div style={{ fontSize: 20, fontWeight: 800, color: C.cyan }}>{preTipBehavior.avgGapMinutes} min</div>
+                  </div>
+                  {preTipBehavior.peakTippingWindow && (
+                    <div style={{ padding: "12px 14px", background: "rgba(255,255,255,0.04)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.06)" }}>
+                      <div style={{ fontSize: 10, color: C.muted, marginBottom: 4, textTransform: "uppercase" }}>Peak tipping window</div>
+                      <div style={{ fontSize: 20, fontWeight: 800, color: C.gold }}>{preTipBehavior.peakTippingWindow.label}</div>
+                    </div>
+                  )}
+                </div>
+                <div style={{ padding: "10px 14px", background: "rgba(236,72,153,0.06)", border: "1px solid rgba(236,72,153,0.2)", borderRadius: 9, fontSize: 13, color: C.text }}>
+                  💡 {preTipBehavior.recommendation}
+                </div>
+                {preTipBehavior.clusteringDetected && (
+                  <div style={{ marginTop: 8, padding: "8px 12px", background: "rgba(34,211,238,0.06)", border: "1px solid rgba(34,211,238,0.2)", borderRadius: 8, fontSize: 12, color: C.cyan }}>
+                    🔥 Tip clustering detected — fans tip in bursts. Use momentum: acknowledge tips publicly to trigger more.
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* SMART INSIGHTS */}
+            <div style={{ ...glassCard, borderRadius: 14, padding: 24, marginBottom: 28 }}>
+              <h2 style={{ fontSize: 18, fontWeight: 700, color: C.white, marginBottom: 16 }}>💡 Smart Insights</h2>
+              {insights.slice(0, 3).map((ins, i) => (
+                <div key={i} style={{ background: "rgba(34,211,238,0.08)", border: "1px solid rgba(34,211,238,0.2)", borderRadius: 10, padding: 16, marginBottom: 12 }}>
+                  <div style={{ fontSize: 14, color: C.white }}>{ins.icon} {ins.text}</div>
+                </div>
+              ))}
+              <div style={{ position: "relative", borderRadius: 10, overflow: "hidden", marginTop: 8 }}>
+                <div style={{ filter: isPro ? "none" : "blur(3px)", pointerEvents: "none" }}>
+                  {insights.slice(3, 8).map((ins, i) => (
+                    <div key={i} style={{ background: "rgba(34,211,238,0.05)", border: "1px solid rgba(34,211,238,0.1)", borderRadius: 10, padding: 16, marginBottom: 8 }}>
+                      <div style={{ fontSize: 14, color: C.white }}>{ins.icon} {ins.text}</div>
+                    </div>
+                  ))}
+                </div>
+                {!isPro && (
+                  <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "rgba(5,7,15,0.75)", backdropFilter: "blur(2px)", borderRadius: 10 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: C.white, marginBottom: 4 }}>🔒 {Math.max(0, insights.length - 3)} more insights hidden</div>
+                    <div style={{ fontSize: 12, color: C.muted, marginBottom: 12 }}>Timing patterns, predictions & advanced strategy</div>
+                    <button onClick={() => openUpgradeModal('insights')} style={{ padding: "8px 20px", borderRadius: 8, background: "linear-gradient(135deg,#3b82f6,#ec4899)", border: "none", color: C.white, fontSize: 12, fontWeight: 700, cursor: "pointer", boxShadow: "0 0 20px rgba(59,130,246,0.4)" }}>
+                      🔓 Unlock All Insights
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* WHAT'S NEXT — FIX: alerts built outside JSX, CopyButton component handles per-item state */}
+            <div style={{ ...glassCard, borderRadius: 14, padding: 24, marginBottom: 28 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
+                <div style={{ width: 36, height: 36, borderRadius: 10, background: "linear-gradient(135deg, #F59E0B, #EC4899)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>🧭</div>
+                <div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: C.white }}>What's Next</div>
+                  <div style={{ fontSize: 12, color: C.muted }}>Personalized alerts based on your tippers' real behavior</div>
+                </div>
+              </div>
+
+              {whatsNextAlerts.length === 0 ? (
+                <div style={{ fontSize: 13, color: C.muted }}>Import more CSV data to unlock personalized alerts based on your tippers' behavior.</div>
+              ) : (
+                whatsNextAlerts.slice(0, 8).map((a, i) => (
+                  <div key={i} style={{ padding: 16, borderRadius: 12, marginBottom: 10, background: `${a.color}08`, border: `1px solid ${a.color}25`, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+                    <div style={{ display: "flex", gap: 12, flex: 1, minWidth: 200 }}>
+                      <span style={{ fontSize: 22, flexShrink: 0 }}>{a.icon}</span>
+                      <div>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: C.white, marginBottom: 4 }}>{a.title}</div>
+                        <div style={{ fontSize: 13, color: C.text, lineHeight: 1.6 }}>{a.message}</div>
+                      </div>
+                    </div>
+                    {a.cta && (
+                      <div style={{ display: "flex", gap: 8, flexShrink: 0, alignItems: "center" }}>
+                        {/* FIX: CopyButton is a proper component — each instance has its own state */}
+                        <CopyButton text={a.reengageMsg} />
+                        <button
+                          onClick={() => { if (a.whale) { setMessageTarget(a.whale); setMessageIndex(0); setMessageCopied(false) } }}
+                          style={{ fontSize: 20, background: "none", border: "none", cursor: "pointer", animation: "pulse-msg 2s infinite" }}>
+                          💌
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* RE-ENGAGE NOW — FIX: same pattern, CopyButton handles per-row state */}
+            <div style={{ ...glassCard, borderRadius: 14, padding: 24, marginBottom: 28 }}>
+              <h2 style={{ fontSize: 18, fontWeight: 700, color: C.white, marginBottom: 6 }}>💌 Re-engage Now</h2>
+              <p style={{ fontSize: 13, color: C.muted, marginBottom: 16 }}>Top spenders who haven't tipped recently — reach out before they go cold</p>
+
+              {reengageList.length === 0 ? (
+                <div style={{ fontSize: 13, color: C.muted }}>No dormant fans right now — your audience is active! 🎉</div>
+              ) : (
+                reengageList.map(({ whale: w, days, urgency, msg }, i) => (
+                  <div key={i} style={{ padding: 16, borderRadius: 12, marginBottom: 10, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12, flex: 1, minWidth: 200 }}>
+                      <div style={{ width: 40, height: 40, borderRadius: 10, background: `${urgency}20`, border: `1px solid ${urgency}40`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 800, color: urgency, flexShrink: 0 }}>
+                        {w.username.charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <span style={{ fontSize: 14, fontWeight: 700, color: C.white }}>{w.username}</span>
+                          <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 20, background: `${urgency}20`, color: urgency, fontWeight: 600 }}>{days}d ago</span>
+                        </div>
+                        <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>${w.totalUSD.toFixed(0)} lifetime · {w.tipCount} tips · {w.platform}</div>
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                      {/* FIX: CopyButton component — no useState inside map */}
+                      <CopyButton
+                        text={msg}
+                        label="📋 Copy Message"
+                        copiedLabel="✅ Copied!"
+                        style={{ padding: "8px 14px" }}
+                      />
+                      <button
+                        onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }}
+                        style={{ padding: "8px 14px", borderRadius: 8, background: "linear-gradient(135deg, rgba(236,72,153,0.3), rgba(124,92,255,0.3))", border: "1px solid rgba(236,72,153,0.4)", color: C.pink, fontSize: 12, fontWeight: 600, cursor: "pointer", animation: "pulse-msg 2s infinite" }}>
+                        💌
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* LOSS ALERTS */}
+            <div style={{ ...glassCard, borderRadius: 14, padding: 24, marginBottom: 28 }}>
+              <h2 style={{ fontSize: 18, fontWeight: 700, color: C.white, marginBottom: 16 }}>🚨 Loss Alerts</h2>
+              {lossAlerts.length === 0 && <div style={{ color: C.muted, fontSize: 13 }}>No active alerts — you're on track! 🎉</div>}
+              {lossAlerts.map((a, i) => (
+                <div key={i} style={{ padding: 14, borderRadius: 10, marginBottom: 10, background: a.severity === 'critical' ? "rgba(248,113,113,0.15)" : a.severity === 'warning' ? "rgba(251,146,60,0.15)" : "rgba(34,211,238,0.1)", border: `1px solid ${a.severity === 'critical' ? C.red : a.severity === 'warning' ? C.orange : C.cyan}30` }}>
+                  <div style={{ fontSize: 14, color: C.white, marginBottom: 4 }}>{a.icon} {a.message}</div>
+                  <div style={{ fontSize: 12, color: C.muted }}>👉 {a.action}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* LIVE AI ALERTS */}
+            <div style={{ ...glassCard, borderRadius: 14, padding: 24, marginBottom: 28 }}>
+              <h2 style={{ fontSize: 18, fontWeight: 700, color: C.white, marginBottom: 16 }}>🚨 Live AI Alerts</h2>
+              {alerts.length === 0 && <div style={{ color: C.muted, fontSize: 13 }}>No active alerts</div>}
+              {alerts.slice(0, 5).map((a, i) => (
+                <div key={i} style={{ padding: 14, borderRadius: 10, marginBottom: 10, background: a.severity === "critical" ? "rgba(248,113,113,0.15)" : a.severity === "warning" ? "rgba(251,146,60,0.15)" : a.severity === "success" ? "rgba(16,185,129,0.15)" : "rgba(34,211,238,0.1)", border: `1px solid ${a.severity === "critical" ? C.red : a.severity === "warning" ? C.orange : a.severity === "success" ? C.green : C.cyan}30` }}>
+                  <div style={{ fontSize: 14, color: C.white }}>{a.icon} {a.message}</div>
+                  <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>👉 {a.action}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {activeTab === "platforms" && (() => {
+          // ── Time filter
+          const now = Date.now()
+          const filterMs = platformTimeFilter === "7D" ? 7 * 86400000
+                         : platformTimeFilter === "30D" ? 30 * 86400000
+                         : platformTimeFilter === "90D" ? 90 * 86400000
+                         : null
+
+          const filteredTips = filterMs
+            ? tips.filter(t => now - new Date(t.date_time).getTime() <= filterMs)
+            : tips
+
+          // Rebuild platform stats from filtered tips using same logic as engine
+          const pfMap = {}
+          filteredTips.forEach(t => {
+            const k = t.platform || "Unknown"
+            if (!pfMap[k]) pfMap[k] = { platform: k, totalUSD: 0, tips: 0, sessions: new Set(), hours: 0 }
+            pfMap[k].totalUSD += t.usd || 0
+            pfMap[k].tips += 1
+          })
+          // Overlay session data for hour counts
+          const filteredSessions = filterMs
+            ? sessions.filter(s => now - new Date(s.startTime).getTime() <= filterMs)
+            : sessions
+          filteredSessions.forEach(s => {
+            if (!pfMap[s.platform]) pfMap[s.platform] = { platform: s.platform, totalUSD: 0, tips: 0, sessions: new Set(), hours: 0 }
+            pfMap[s.platform].sessions.add(s.id || s.startTime)
+            pfMap[s.platform].hours += s.durationHours || 0
+          })
+          const filteredPlatforms = Object.values(pfMap).map(p => ({
+            platform: p.platform,
+            totalUSD: parseFloat(p.totalUSD.toFixed(2)),
+            sessions: p.sessions.size,
+            hours: parseFloat(p.hours.toFixed(1)),
+            usdPerHour: p.hours > 0 ? parseFloat((p.totalUSD / p.hours).toFixed(2)) : 0,
+            avgTipSize: p.tips > 0 ? parseFloat((p.totalUSD / p.tips).toFixed(2)) : 0,
+            tipCount: p.tips
+          })).sort((a, b) => b.totalUSD - a.totalUSD)
+
+          const displayPlatforms = filteredPlatforms.length > 0 ? filteredPlatforms : platforms
+          const maxUSD = Math.max(...displayPlatforms.map(p => p.totalUSD), 1)
+          const maxUPH = Math.max(...displayPlatforms.map(p => p.usdPerHour), 1)
+
+          const getPlatformInsights = (p) => {
+            const insights = []
+            const avgUPH = displayPlatforms.reduce((s, x) => s + x.usdPerHour, 0) / (displayPlatforms.length || 1)
+            const pctAbove = displayPlatforms.length > 1 ? Math.round(((p.usdPerHour - avgUPH) / avgUPH) * 100) : null
+            const bHour = Object.entries(platformTimes[p.platform]?.hours || {}).sort((a, b) => b[1] - a[1])[0]
+
+            // For best day: compute avg per active day (not raw total which is misleading)
+            const dayData = platformTimes[p.platform]?.days || {}
+            const dayAvgs = Object.entries(dayData).map(([day, total]) => {
+              // Count distinct calendar dates for this platform+day combo
+              const activeDates = new Set(
+                tips.filter(t => {
+                  if (t.platform !== p.platform) return false
+                  const dt = new Date(t.date_time || t.dateRaw)
+                  return UTC_DAYS_LONG[dt.getUTCDay()] === day
+                }).map(t => new Date(t.date_time || t.dateRaw).toISOString().slice(0,10))
+              ).size
+              return [day, activeDates > 0 ? total / activeDates : 0]
+            })
+            const bDay = dayAvgs.sort((a, b) => b[1] - a[1])[0]
+
+            const isTop = displayPlatforms.length > 1 && p.totalUSD === maxUSD
+            const isTopUPH = displayPlatforms.length > 1 && p.usdPerHour === maxUPH
+            if (isTop)    insights.push({ icon: "🏆", text: "Your highest revenue platform", color: C.gold })
+            if (isTopUPH && !isTop) insights.push({ icon: "⚡", text: "Most efficient — highest $/hour", color: C.cyan })
+            if (pctAbove !== null && pctAbove >= 20)  insights.push({ icon: "🔥", text: `Earns ${pctAbove}% more per hour than your average`, color: C.green })
+            if (pctAbove !== null && pctAbove <= -20) insights.push({ icon: "📉", text: `${Math.abs(pctAbove)}% below your avg $/hour — consider shifting time`, color: C.orange })
+            if (bDay)  insights.push({ icon: "📅", text: `Best day: ${bDay[0]} ($${parseFloat(bDay[1]).toFixed(0)} avg/stream day)`, color: C.white })
+            if (bHour) insights.push({ icon: "🕐", text: `Peak time: ${formatHour(bHour[0])} ($${parseFloat(bHour[1]).toFixed(0)} total earned)`, color: C.white })
+            if (p.sessions >= 5 && p.hours / p.sessions < 1) insights.push({ icon: "⏱️", text: "Short sessions — try streaming longer to boost earnings", color: C.muted })
+            return insights
+          }
+
+          const PLATFORM_EMOJI = { Chaturbate: "🟣", BongaCams: "🔴", MyFreeCams: "🟠", CamSoda: "🟢", Stripchat: "🔵", Flirt4Free: "💜" }
+
+          return (
             <div>
               {/* HEADER + TIME FILTER */}
               <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 28, flexWrap: "wrap", gap: 16 }}>
