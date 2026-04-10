@@ -3,20 +3,9 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
 
-const C = {
-  bg: "#070B14",
-  card: "rgba(20, 28, 45, 0.75)",
-  border: "rgba(255,255,255,0.08)",
-  blue: "#4F8CFF",
-  purple: "#A855F7",
-  accent: "linear-gradient(135deg, #4F8CFF, #A855F7)",
-  white: "#E6EDF3",
-  muted: "rgba(255,255,255,0.6)",
-  red: "#F87171",
-}
-
 export default function LoginPage() {
   const router = useRouter()
+
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false)
@@ -32,7 +21,7 @@ export default function LoginPage() {
       if (mode === "signup") {
         const { error } = await supabase.auth.signUp({ email, password })
         if (error) throw error
-        setError("✅ Check your email to verify your account!")
+        setError("Check your email to verify your account")
         setTimeout(() => router.push("/onboarding"), 2000)
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password })
@@ -47,229 +36,232 @@ export default function LoginPage() {
   }
 
   return (
-    <div style={{
-      minHeight: "100vh",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      fontFamily: "'Inter', sans-serif",
-      padding: 20,
-      position: "relative",
-      overflow: "hidden",
-
-      /* 🌌 MATCHED BACKGROUND */
-      background: `
-        radial-gradient(circle at 20% 20%, rgba(79,140,255,0.15), transparent 40%),
-        radial-gradient(circle at 80% 80%, rgba(168,85,247,0.12), transparent 40%),
-        #070B14
-      `
-    }}>
-
+    <div className="login-bg">
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-        * { box-sizing: border-box; margin: 0; padding: 0; }
+        * {
+          box-sizing: border-box;
+        }
+
+        /* ===== BACKGROUND ===== */
+        .login-bg {
+          min-height: 100vh;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 24px;
+          font-family: Inter, sans-serif;
+
+          background:
+            radial-gradient(circle at 15% 25%, rgba(14,165,233,0.08), transparent 40%),
+            radial-gradient(circle at 85% 75%, rgba(37,99,235,0.08), transparent 40%),
+            linear-gradient(135deg, #05070d, #0b1220);
+
+          background-size: 200% 200%;
+          animation: subtleWave 18s ease-in-out infinite;
+        }
+
+        @keyframes subtleWave {
+          0% { background-position: 0% 50%, 100% 50%, 0% 0%; }
+          50% { background-position: 10% 60%, 90% 40%, 0% 0%; }
+          100% { background-position: 0% 50%, 100% 50%, 0% 0%; }
+        }
+
+        /* ===== CARD ===== */
+        .login-card {
+          width: 100%;
+          max-width: 420px;
+          padding: 44px 36px;
+          border-radius: 22px;
+
+          background: rgba(10, 15, 25, 0.78);
+          backdrop-filter: blur(20px);
+
+          border: 1px solid rgba(14,165,233,0.18);
+          box-shadow: 
+            0 10px 50px rgba(0,0,0,0.6),
+            0 0 40px rgba(14,165,233,0.08);
+
+          position: relative;
+          overflow: hidden;
+
+          transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .login-card:hover {
+          transform: translateY(-6px);
+          box-shadow:
+            0 20px 60px rgba(0,0,0,0.7),
+            0 0 60px rgba(37,99,235,0.15);
+        }
+
+        /* light sweep */
+        .login-card::before {
+          content: "";
+          position: absolute;
+          top: 0;
+          left: -120%;
+          width: 50%;
+          height: 100%;
+          background: linear-gradient(
+            120deg,
+            transparent,
+            rgba(14,165,233,0.12),
+            transparent
+          );
+          animation: sweep 6s infinite;
+        }
+
+        @keyframes sweep {
+          0% { left: -120%; }
+          100% { left: 200%; }
+        }
+
+        /* ===== LOGO ===== */
+        .logo {
+          font-size: 30px;
+          font-weight: 700;
+          text-align: center;
+          margin-bottom: 4px;
+
+          background: linear-gradient(90deg, #0ea5e9, #2563eb, #0ea5e9);
+          background-size: 200%;
+
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+
+          animation: shimmer 8s linear infinite;
+        }
+
+        @keyframes shimmer {
+          0% { background-position: -200%; }
+          100% { background-position: 200%; }
+        }
+
+        .subtitle {
+          text-align: center;
+          font-size: 13px;
+          color: rgba(255,255,255,0.55);
+          margin-bottom: 32px;
+        }
+
+        /* ===== INPUTS ===== */
+        .input {
+          width: 100%;
+          padding: 15px;
+          margin-bottom: 16px;
+          border-radius: 12px;
+
+          border: 1px solid rgba(255,255,255,0.06);
+          background: rgba(255,255,255,0.02);
+
+          color: white;
+          font-size: 14px;
+
+          transition: all 0.2s ease;
+        }
+
+        .input:focus {
+          border-color: #0ea5e9;
+          background: rgba(255,255,255,0.04);
+          box-shadow: 0 0 0 2px rgba(14,165,233,0.08);
+          outline: none;
+        }
+
+        /* ===== BUTTON ===== */
+        .button {
+          width: 100%;
+          padding: 15px;
+          margin-top: 4px;
+
+          border-radius: 12px;
+          border: none;
+
+          font-weight: 600;
+          font-size: 15px;
+
+          background: linear-gradient(135deg, #0ea5e9, #2563eb);
+          color: white;
+
+          box-shadow: 0 6px 20px rgba(14,165,233,0.18);
+
+          transition: all 0.2s ease;
+        }
+
+        .button:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 10px 30px rgba(37,99,235,0.25);
+        }
+
+        /* ===== ERROR ===== */
+        .error {
+          margin-bottom: 14px;
+          font-size: 13px;
+          color: #f87171;
+          text-align: center;
+        }
+
+        /* ===== TOGGLE ===== */
+        .toggle {
+          margin-top: 20px;
+          text-align: center;
+          font-size: 13px;
+          color: rgba(255,255,255,0.5);
+          cursor: pointer;
+          transition: color 0.2s ease;
+        }
+
+        .toggle:hover {
+          color: #0ea5e9;
+        }
       `}</style>
 
-      {/* CARD WRAPPER */}
-      <div style={{
-        position: "relative",
-        width: "100%",
-        maxWidth: 420
-      }}>
+      <div className="login-card">
 
-        {/* ✨ SUBTLE GLOW BORDER */}
-        <div style={{
-          position: "absolute",
-          inset: 0,
-          borderRadius: 18,
-          padding: 1,
-          background: "linear-gradient(120deg, rgba(79,140,255,0.4), rgba(168,85,247,0.4), transparent)",
-          WebkitMask: "linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0)",
-          WebkitMaskComposite: "xor",
-          opacity: 0.5,
-          pointerEvents: "none"
-        }} />
+        <div className="logo">CamCash</div>
+        <div className="subtitle">Turn attention into income</div>
 
-        {/* MAIN CARD */}
-        <div style={{
-          position: "relative",
-          zIndex: 10,
-          padding: "42px 34px",
-          borderRadius: 18,
-          background: C.card,
-          border: `1px solid ${C.border}`,
-          backdropFilter: "blur(18px)",
-          boxShadow: "0 10px 40px rgba(0,0,0,0.4)"
-        }}>
+        <form onSubmit={handleAuth}>
+          <input
+            className="input"
+            type="email"
+            placeholder="Email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
 
-          {/* HEADER */}
-          <div style={{ textAlign: "center", marginBottom: 32 }}>
-            <h1 style={{
-              fontSize: 32,
-              fontWeight: 700,
-              color: C.white,
-              marginBottom: 6
-            }}>
-              Cam<span style={{
-                background: C.accent,
-                WebkitBackgroundClip: "text",
-                WebkitTextFillColor: "transparent"
-              }}>Cash</span>
-            </h1>
+          <input
+            className="input"
+            type="password"
+            placeholder="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+          />
 
-            <p style={{
-              fontSize: 14,
-              color: C.muted
-            }}>
-              Stream smarter. Earn more.
-            </p>
-          </div>
+          {error && <div className="error">{error}</div>}
 
-          {/* FORM */}
-          <form onSubmit={handleAuth}>
-            <div style={{ marginBottom: 18 }}>
-              <label style={{
-                fontSize: 13,
-                color: C.muted,
-                marginBottom: 6,
-                display: "block"
-              }}>
-                Email
-              </label>
+          <button className="button" disabled={loading}>
+            {loading
+              ? "Entering..."
+              : mode === "signup"
+              ? "Create Account"
+              : "Log In"}
+          </button>
+        </form>
 
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                style={{
-                  width: "100%",
-                  padding: "14px 16px",
-                  background: "rgba(255,255,255,0.03)",
-                  border: `1px solid ${C.border}`,
-                  borderRadius: 10,
-                  color: C.white,
-                  fontSize: 14,
-                  outline: "none",
-                  transition: "all 0.2s ease"
-                }}
-                onFocus={(e) => {
-                  e.target.style.borderColor = C.blue
-                  e.target.style.background = "rgba(255,255,255,0.05)"
-                }}
-                onBlur={(e) => {
-                  e.target.style.borderColor = C.border
-                  e.target.style.background = "rgba(255,255,255,0.03)"
-                }}
-              />
-            </div>
-
-            <div style={{ marginBottom: 22 }}>
-              <label style={{
-                fontSize: 13,
-                color: C.muted,
-                marginBottom: 6,
-                display: "block"
-              }}>
-                Password
-              </label>
-
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                minLength={6}
-                style={{
-                  width: "100%",
-                  padding: "14px 16px",
-                  background: "rgba(255,255,255,0.03)",
-                  border: `1px solid ${C.border}`,
-                  borderRadius: 10,
-                  color: C.white,
-                  fontSize: 14,
-                  outline: "none",
-                  transition: "all 0.2s ease"
-                }}
-                onFocus={(e) => {
-                  e.target.style.borderColor = C.blue
-                  e.target.style.background = "rgba(255,255,255,0.05)"
-                }}
-                onBlur={(e) => {
-                  e.target.style.borderColor = C.border
-                  e.target.style.background = "rgba(255,255,255,0.03)"
-                }}
-              />
-            </div>
-
-            {error && (
-              <div style={{
-                padding: "12px 14px",
-                background: error.includes("✅")
-                  ? "rgba(79,140,255,0.1)"
-                  : "rgba(248,113,113,0.1)",
-                border: `1px solid ${
-                  error.includes("✅")
-                    ? "rgba(79,140,255,0.3)"
-                    : "rgba(248,113,113,0.3)"
-                }`,
-                borderRadius: 10,
-                color: error.includes("✅") ? C.blue : C.red,
-                fontSize: 13,
-                marginBottom: 16
-              }}>
-                {error}
-              </div>
-            )}
-
-            <button
-              type="submit"
-              disabled={loading}
-              style={{
-                width: "100%",
-                padding: "14px",
-                background: C.accent,
-                border: "none",
-                borderRadius: 10,
-                color: "#fff",
-                fontSize: 15,
-                fontWeight: 600,
-                cursor: "pointer",
-                boxShadow: "0 6px 20px rgba(79,140,255,0.3)",
-                opacity: loading ? 0.7 : 1,
-                transition: "all 0.2s ease"
-              }}
-            >
-              {loading
-                ? "Entering..."
-                : mode === "signup"
-                ? "Create Account"
-                : "Log In"}
-            </button>
-          </form>
-
-          {/* TOGGLE */}
-          <div style={{ marginTop: 20, textAlign: "center" }}>
-            <button
-              onClick={() => {
-                setMode(mode === "login" ? "signup" : "login")
-                setError("")
-              }}
-              style={{
-                background: "none",
-                border: "none",
-                color: C.muted,
-                fontSize: 13,
-                cursor: "pointer"
-              }}
-            >
-              {mode === "login"
-                ? "Don't have an account? Sign up"
-                : "Already have an account? Sign in"}
-            </button>
-          </div>
-
+        <div
+          className="toggle"
+          onClick={() => {
+            setMode(mode === "login" ? "signup" : "login")
+            setError("")
+          }}
+        >
+          {mode === "login"
+            ? "Don't have an account? Sign up"
+            : "Already have an account? Log in"}
         </div>
+
       </div>
     </div>
   )
