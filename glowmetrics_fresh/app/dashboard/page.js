@@ -3979,16 +3979,29 @@ export default function Dashboard() {
         )
       })()}
 
-      {toast && (
-        <div style={{ position: "fixed", bottom: 24, left: 272, background: "rgba(15,20,32,0.95)", backdropFilter: "blur(20px)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 12, padding: "14px 20px", color: C.white, fontSize: 14, zIndex: 9999, boxShadow: "0 8px 32px rgba(0,0,0,0.8)" }}>
-        {toast}
-     
-     )}
-   {showWalkthrough && (
+  {toast && (
+  <div style={{ 
+    position: "fixed",
+    bottom: 24,
+    left: 272,
+    background: "rgba(15,20,32,0.95)",
+    backdropFilter: "blur(20px)",
+    border: "1px solid rgba(255,255,255,0.1)",
+    borderRadius: 12,
+    padding: "14px 20px",
+    color: C.white,
+    fontSize: 14,
+    zIndex: 9999,
+    boxShadow: "0 8px 32px rgba(0,0,0,0.8)"
+  }}>
+    {toast}
+  </div>
+)}
+
+{showWalkthrough && (
   <DashboardWalkthrough
     onComplete={async () => {
       setShowWalkthrough(false)
-      // Mark onboarding complete in Supabase
       await supabase
         .from("beta_users")
         .update({ onboarding_complete: true })
@@ -3997,7 +4010,4 @@ export default function Dashboard() {
     userName={user?.email}
   />
 )}
-
-</div>
-  )
-}
+     
