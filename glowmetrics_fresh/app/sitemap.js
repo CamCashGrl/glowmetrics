@@ -1,6 +1,6 @@
 // app/sitemap.js
 export default function sitemap() {
-  const base = 'https://www.camcashgrl.com'
+  const base = 'https://camcashgrl.com'
   const now = new Date()
 
   const guides = [
