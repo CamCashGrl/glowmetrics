@@ -1012,7 +1012,7 @@ const handleCSV = async (file, forcePlatform = null) => {
     if (!user) return
     try { const { error } = await supabase.from("tips").delete().eq("user_id", user.id); if (error) throw error; showToast("✅ All tips deleted"); setShowDeleteConfirm(false); await loadData(user.id) }
     catch (err) { showToast("❌ " + err.message) }
-  }
+  
 
   if (loading) {
     return (
