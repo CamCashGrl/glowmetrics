@@ -3,7 +3,6 @@ import React, { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
 import { parseCSV, aggregateRows as runEngine } from "../../lib/analytics"
-// DashboardWalkthrough and BestTimeCard removed — components don't exist yet
 
 // Analytics tracking — works whether or not @vercel/analytics is installed
 let track = (event, props) => {}
@@ -818,9 +817,6 @@ export default function Dashboard() {
   const [fanSearchQuery, setFanSearchQuery] = useState("")
   const [shareModalOpen, setShareModalOpen] = useState(false)
   const [chartDrillDay, setChartDrillDay] = useState(null)
-  const [chartDrillHour, setChartDrillHour] = useState(null)
-  const [whalePage, setWhalePage] = useState(0)
-  const WHALES_PER_PAGE = 50
   // ── LIVE MODE STATE ───────────────────────────────────────
   const [liveActive, setLiveActive] = useState(false)
   const [liveStartTime, setLiveStartTime] = useState(null)
@@ -844,28 +840,11 @@ export default function Dashboard() {
   const [tokenRates, setTokenRates] = useState({ Chaturbate: 0.05, BongaCams: 0.05, MyFreeCams: 0.05, Stripchat: 0.05, CamSoda: 0.05 })
   const [showRateEditor, setShowRateEditor] = useState(false)
 
-  const [countUpValue, setCountUpValue] = useState(0)
-  const [countUpDone, setCountUpDone] = useState(false)
+  const isBetaUser = true
   const isPro = true
   const uploadLimit = Infinity
 
-  // Count-up animation for total earnings when data first loads
-  useEffect(() => {
-    if (!totalRevenue || countUpDone) return
-    setCountUpDone(true)
-    const duration = 1800
-    const steps = 60
-    const increment = totalRevenue / steps
-    let current = 0
-    let step = 0
-    const timer = setInterval(() => {
-      step++
-      current = Math.min(increment * step, totalRevenue)
-      setCountUpValue(current)
-      if (step >= steps) clearInterval(timer)
-    }, duration / steps)
-    return () => clearInterval(timer)
-  }, [totalRevenue])
+  const openUpgradeModal = (source) => {
     track('upgrade_click', { source })
     setShowUpgradeModal(true)
   }
@@ -929,8 +908,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (!tips.length) return
-    // FIX: re-run the engine on latest tips so liveAnalytics is actually fresh
-    const interval = setInterval(() => { setLiveAnalytics(runEngine(tips)) }, 5000)
+    const interval = setInterval(() => { setLiveAnalytics(analytics) }, 5000)
     return () => clearInterval(interval)
   }, [tips])
 
@@ -999,20 +977,15 @@ const handleCSV = async (file, forcePlatform = null) => {
 
   const deleteTip = async (tipId) => {
     if (!confirm("Delete this tip?")) return
-    try {
-      // Safety: always scope delete to both tip id AND user_id — never delete another user's data
-      const { error } = await supabase.from("tips").delete().eq("id", tipId).eq("user_id", user.id)
-      if (error) throw error
-      showToast("✅ Tip deleted")
-      await loadData(user.id)
-    } catch (err) { showToast("❌ " + err.message) }
+    try { const { error } = await supabase.from("tips").delete().eq("id", tipId); if (error) throw error; showToast("✅ Tip deleted"); await loadData(user.id) }
+    catch (err) { showToast("❌ " + err.message) }
   }
 
   const deleteAllTips = async () => {
     if (!user) return
     try { const { error } = await supabase.from("tips").delete().eq("user_id", user.id); if (error) throw error; showToast("✅ All tips deleted"); setShowDeleteConfirm(false); await loadData(user.id) }
     catch (err) { showToast("❌ " + err.message) }
-  
+  }
 
   if (loading) {
     return (
@@ -1041,6 +1014,7 @@ const handleCSV = async (file, forcePlatform = null) => {
   const timedSessions = sessions.filter(s => !s.durationUnknown && s.usdPerHour !== null)
   const avgPerHour = timedSessions.length ? timedSessions.reduce((sum, s) => sum + (s.usdPerHour || 0), 0) / timedSessions.length : 0
   // Single source of truth — pre-computed in aggregateRows, same values used everywhere
+  const analyticsbestDay  = analytics?.bestDay  || null
   const analyticsBestHour = analytics?.bestHour || null
 
   // Build platformTimes from INDIVIDUAL TIPS (not session start time)
@@ -1070,15 +1044,6 @@ const handleCSV = async (file, forcePlatform = null) => {
     }
     return true
   })
-
-  // Reset whale page when filters change
-  const prevWhaleFilter = React.useRef(whaleFilter)
-  const prevPlatformFilter = React.useRef(platformFilter)
-  if (prevWhaleFilter.current !== whaleFilter || prevPlatformFilter.current !== platformFilter) {
-    prevWhaleFilter.current = whaleFilter
-    prevPlatformFilter.current = platformFilter
-    if (whalePage !== 0) setWhalePage(0)
-  }
 
   const allPlatforms = [...new Set(tips.map(t => t.platform))]
 
@@ -1238,10 +1203,10 @@ const handleCSV = async (file, forcePlatform = null) => {
           const extractedUser = usernameMatch ? usernameMatch[1] || usernameMatch[0] : null
           socialAlerts.push({
             type: 'social_mention', icon: '📱', color: C.cyan, severity: 'info',
-            title: w.username + ' mentioned ' + platform.charAt(0).toUpperCase() + platform.slice(1),
+            title: `${w.username} mentioned ${platform.charAt(0).toUpperCase() + platform.slice(1)}`,
             message: extractedUser
-              ? 'They left their ' + platform + ' as "' + extractedUser + '" in a tip note — add them before you forget!'
-              : 'They mentioned ' + platform + ' in a tip note — ask them for their handle next time',
+              ? `They left their ${platform} as "${extractedUser}" in a tip note — add them before you forget!`
+              : `They mentioned ${platform} in a tip note — ask them for their handle next time`,
             cta: 'Copy Message', username: w.username, whale: w,
             reengageMsg: getPersonalMsg(w)
           })
@@ -1443,79 +1408,6 @@ const handleCSV = async (file, forcePlatform = null) => {
         .whale-row { transition: background 0.15s; }
         .whale-row:hover { background: rgba(59,130,246,0.08) !important; }
         @keyframes pulse-msg { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.25); } }
-
-        /* ── MOBILE RESPONSIVE ── */
-        .sidebar { width: 240px; position: fixed; left: 0; top: 0; bottom: 0; z-index: 50; }
-        .main-content { margin-left: 240px; padding: 32px; }
-        .stat-grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
-        .stat-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
-        .stat-grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
-        .platform-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
-        .session-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
-        .live-grid { display: grid; grid-template-columns: 1fr 380px; gap: 20px; }
-        .live-kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
-        .side-by-side { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-
-        @media (max-width: 900px) {
-          .sidebar { width: 0; overflow: hidden; }
-          .main-content { margin-left: 0 !important; padding: 16px !important; }
-          .stat-grid-4 { grid-template-columns: repeat(2, 1fr); gap: 12px; }
-          .platform-grid { grid-template-columns: repeat(2, 1fr); }
-          .live-grid { grid-template-columns: 1fr; }
-          .live-kpi-grid { grid-template-columns: repeat(2, 1fr); }
-          .session-grid { grid-template-columns: repeat(3, 1fr); }
-          .side-by-side { grid-template-columns: 1fr; }
-        }
-        @media (max-width: 600px) {
-          .stat-grid-4 { grid-template-columns: 1fr 1fr; gap: 10px; }
-          .stat-grid-3 { grid-template-columns: 1fr 1fr; }
-          .stat-grid-2 { grid-template-columns: 1fr; }
-          .platform-grid { grid-template-columns: 1fr 1fr; }
-          .session-grid { grid-template-columns: repeat(2, 1fr); }
-          .live-kpi-grid { grid-template-columns: repeat(2, 1fr); }
-        }
-
-        /* Mobile nav bar at bottom on small screens */
-        .mobile-nav { display: none; }
-        @media (max-width: 900px) {
-          .mobile-nav {
-            display: flex;
-            position: fixed;
-            bottom: 0; left: 0; right: 0;
-            background: rgba(10,14,24,0.97);
-            backdrop-filter: blur(20px);
-            border-top: 1px solid rgba(255,255,255,0.08);
-            z-index: 100;
-            padding: 8px 4px;
-            gap: 2px;
-            overflow-x: auto;
-          }
-          .mobile-nav button {
-            flex: 1;
-            min-width: 52px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 3px;
-            padding: 6px 4px;
-            background: none;
-            border: none;
-            cursor: pointer;
-            border-radius: 8px;
-            transition: background 0.15s;
-          }
-          .mobile-nav button.active { background: rgba(59,130,246,0.2); }
-          .mobile-nav .nav-icon { font-size: 18px; }
-          .mobile-nav .nav-label { font-size: 9px; color: #475569; font-weight: 600; }
-          .mobile-nav button.active .nav-label { color: #F1F5F9; }
-          /* Extra bottom padding so content isn't hidden under nav */
-          .main-content { padding-bottom: 80px !important; }
-        }
-
-        /* Table scroll on mobile */
-        .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-        /* Prevent text overflow in table cells */
-        td, th { word-break: break-word; }
       `}</style>
 
       <div style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 0 }}>
@@ -1523,8 +1415,8 @@ const handleCSV = async (file, forcePlatform = null) => {
         <div style={{ position: "absolute", width: 900, height: 900, bottom: "-20%", right: "-10%", background: "radial-gradient(circle, rgba(236,72,153,0.35), transparent 60%)", filter: "blur(120px)" }} />
       </div>
 
-      {/* SIDEBAR — hidden on mobile, replaced by bottom nav */}
-      <div className="sidebar" style={{ background: "rgba(15,20,32,0.85)", backdropFilter: "blur(20px)", borderRight: "1px solid rgba(255,255,255,0.08)", display: "flex", flexDirection: "column" }}>
+      {/* SIDEBAR */}
+      <div style={{ position: "fixed", left: 0, top: 0, bottom: 0, width: 240, background: "rgba(15,20,32,0.85)", backdropFilter: "blur(20px)", borderRight: "1px solid rgba(255,255,255,0.08)", display: "flex", flexDirection: "column", zIndex: 50 }}>
         <div style={{ padding: "24px 20px", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <div style={{ width: 40, height: 40, borderRadius: 10, background: "linear-gradient(135deg, #22D3EE, #EC4899)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, fontWeight: 700, color: C.white, boxShadow: "0 0 20px rgba(34,211,238,0.4)" }}>$</div>
@@ -1583,7 +1475,7 @@ const handleCSV = async (file, forcePlatform = null) => {
       </div>
 
       {/* MAIN CONTENT */}
-      <div className="main-content" style={{ position: "relative", zIndex: 1 }}>
+      <div style={{ marginLeft: 240, padding: 32, position: "relative", zIndex: 1 }}>
 
         {activeTab === "overview" && (
           <div>
@@ -1616,27 +1508,13 @@ const handleCSV = async (file, forcePlatform = null) => {
               const recentRev = recentSessions.reduce((s, r) => s + (r.totalUSD || 0), 0)
               const prevRev = prevSessions.reduce((s, r) => s + (r.totalUSD || 0), 0)
               const growthPct = prevRev > 0 ? Math.round(((recentRev - prevRev) / prevRev) * 100) : null
+              const topPct = Math.max(1, Math.min(25, Math.round(100 - (totalRevenue / 50))))
               const streak = recentSessions.length
-
-              // Best day + time + platform — always show platform
-              const bd = analytics?.bestDay || null
-              const bh = analytics?.bestHour || null
-              const topPlatform = analytics?.platforms?.length
-                ? [...analytics.platforms].sort((a,b) => b.totalUSD - a.totalUSD)[0]?.platform
-                : null
-              const bestDayTimeStr = bd && bh
-                ? `${bd.day}s at ${formatHour(bh.hour)}${topPlatform ? ` on ${topPlatform}` : ''}`
-                : bd ? `${bd.day}s${topPlatform ? ` on ${topPlatform}` : ''}`
-                : bh ? `${formatHour(bh.hour)}${topPlatform ? ` on ${topPlatform}` : ''}`
-                : sessions.length ? 'Import more data to unlock' : null
-
-              const displayTotal = countUpDone ? totalRevenue : countUpValue
-
               return (
-                <div className="stat-grid-4" style={{ marginBottom: 28 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 20, marginBottom: 28 }}>
                   {[
-                    { label: "Total Earned", value: `$${displayTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, sub: growthPct !== null ? (growthPct >= 0 ? `↑ ${growthPct}% vs last 30 days` : `↓ ${Math.abs(growthPct)}% vs last 30 days`) : `${tips.length} tips recorded`, icon: "💰", badge: growthPct !== null ? (growthPct >= 0 ? `↑ ${growthPct}%` : `↓ ${Math.abs(growthPct)}%`) : null, badgeColor: growthPct !== null && growthPct >= 0 ? C.green : C.red },
-                    { label: "Avg $/Hour", value: avgPerHour > 0 ? `$${avgPerHour.toFixed(2)}` : '—', sub: avgPerHour > 20 ? "Above average — keep it up!" : avgPerHour > 0 ? "Stream at peak hours to improve" : "Import data to calculate", icon: "⏱️", badge: null },
+                    { label: "Total Earned", value: `$${totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, sub: `Top ${topPct}% of models on this platform`, icon: "💰", badge: growthPct !== null ? (growthPct >= 0 ? `↑ ${growthPct}% vs last month` : `↓ ${Math.abs(growthPct)}% vs last month`) : null, badgeColor: growthPct !== null && growthPct >= 0 ? C.green : C.red },
+                    { label: "Avg $/Hour", value: `$${avgPerHour.toFixed(2)}`, sub: avgPerHour > 20 ? "Above average — keep it up!" : "Tip: stream at peak hours", icon: "⏱️", badge: null },
                     { label: "Total Fans", value: whales.length, sub: `${whales.filter(w => Math.floor((Date.now() - new Date(w.lastTipDate)) / 86400000) <= 30).length} active in last 30 days`, icon: "👥", badge: null },
                     { label: "Sessions", value: sessions.length, sub: `${streak} in last 30 days${streak >= 3 ? " 🔥" : ""}`, icon: "🎥", badge: streak >= 5 ? "🔥 On a streak!" : null, badgeColor: C.gold }
                   ].map((s, i) => (
@@ -1650,41 +1528,6 @@ const handleCSV = async (file, forcePlatform = null) => {
                       {s.badge && <div style={{ marginTop: 8, display: "inline-block", padding: "2px 8px", borderRadius: 6, background: `${s.badgeColor}20`, border: `1px solid ${s.badgeColor}40`, fontSize: 10, fontWeight: 700, color: s.badgeColor }}>{s.badge}</div>}
                     </div>
                   ))}
-                </div>
-              )
-            })()}
-
-            {/* BEST DAY & TIME BANNER */}
-            {(() => {
-              const bd = analytics?.bestDay || null
-              const bh = analytics?.bestHour || null
-              const topPlatform = analytics?.platforms?.length
-                ? [...analytics.platforms].sort((a,b) => b.totalUSD - a.totalUSD)[0]?.platform
-                : null
-              if (!bd && !bh) return null
-              return (
-                <div style={{ marginBottom: 24, padding: "16px 20px", borderRadius: 14, background: "linear-gradient(135deg, rgba(124,92,255,0.15), rgba(236,72,153,0.12))", border: "1px solid rgba(124,92,255,0.35)", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
-                  <div style={{ width: 40, height: 40, borderRadius: 10, background: "linear-gradient(135deg, #7C5CFF, #EC4899)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>⭐</div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 3 }}>Your Best Time To Stream</div>
-                    <div style={{ fontSize: 18, fontWeight: 800, color: C.white }}>
-                      {bd && <span>{bd.day}s</span>}
-                      {bd && bh && <span style={{ color: C.muted, fontWeight: 400 }}> at </span>}
-                      {bh && <span style={{ color: C.cyan }}>{formatHour(bh.hour)}</span>}
-                      {topPlatform && <span style={{ color: C.muted, fontWeight: 400 }}> on </span>}
-                      {topPlatform && <span style={{ color: C.pink }}>{topPlatform}</span>}
-                    </div>
-                    <div style={{ fontSize: 12, color: C.muted, marginTop: 3 }}>
-                      {bd && <span>${bd.avg.toFixed(0)}/hr avg on {bd.day}s</span>}
-                      {bd && bh && <span style={{ margin: "0 8px" }}>·</span>}
-                      {bh && <span>${bh.avg.toFixed(0)}/hr avg at {formatHour(bh.hour)}</span>}
-                    </div>
-                  </div>
-                  {bd && bh && (
-                    <div style={{ padding: "8px 16px", borderRadius: 10, background: "rgba(124,92,255,0.2)", border: "1px solid rgba(124,92,255,0.4)", fontSize: 12, fontWeight: 700, color: "#c4b5fd", flexShrink: 0 }}>
-                      Based on your real data
-                    </div>
-                  )}
                 </div>
               )
             })()}
@@ -1812,12 +1655,12 @@ const handleCSV = async (file, forcePlatform = null) => {
                             : intensity < 0.75 ? "rgba(34,211,238,0.60)"
                             : "rgba(34,211,238,0.90)"
                           return (
-                            <div key={d} title={`${plat} ${d}: avg $${val.toFixed(2)}/day — click to see fans & best hour`}
-                              onClick={() => { if (val > 0) setChartDrillDay(chartDrillDay === d ? null : d) }}
-                              style={{ height: 36, borderRadius: 6, background: chartDrillDay === d ? "rgba(236,72,153,0.7)" : bg, border: chartDrillDay === d ? "2px solid rgba(236,72,153,0.9)" : isToday ? "2px solid rgba(34,211,238,0.7)" : "1px solid rgba(255,255,255,0.06)", display: "flex", alignItems: "center", justifyContent: "center", cursor: val > 0 ? "pointer" : "default", transition: "all 0.15s" }}
-                              onMouseEnter={e => { if (val > 0) e.currentTarget.style.transform = "scale(1.08)" }}
-                              onMouseLeave={e => { e.currentTarget.style.transform = "scale(1)" }}>
-                              {val > 0 && <span style={{ fontSize: 9, fontWeight: 700, color: intensity > 0.45 || chartDrillDay === d ? "#fff" : C.muted }}>${val >= 100 ? Math.round(val) : val.toFixed(0)}</span>}
+                            <div key={d} title={`${plat} ${d}: avg $${val.toFixed(2)}/day — click to see fans active on ${d}s`}
+                              onClick={() => { setChartDrillDay(d); setActiveTab("whales") }}
+                              style={{ height: 36, borderRadius: 6, background: bg, border: isToday ? "2px solid rgba(34,211,238,0.7)" : "1px solid rgba(255,255,255,0.06)", display: "flex", alignItems: "center", justifyContent: "center", cursor: val > 0 ? "pointer" : "default", transition: "transform 0.1s, opacity 0.1s" }}
+                              onMouseEnter={e => { if (val > 0) e.currentTarget.style.opacity = "0.8" }}
+                              onMouseLeave={e => { e.currentTarget.style.opacity = "1" }}>
+                              {val > 0 && <span style={{ fontSize: 9, fontWeight: 700, color: intensity > 0.45 ? "#fff" : C.muted }}>${val >= 100 ? Math.round(val) : val.toFixed(0)}</span>}
                             </div>
                           )
                         })
@@ -1825,72 +1668,8 @@ const handleCSV = async (file, forcePlatform = null) => {
                     })}
                   </div>
                   <div style={{ marginTop: 10, fontSize: 11, color: C.muted }}>
-                    Today ({todayLong}) is highlighted in cyan. Click any cell to see fans & best hour for that day.
+                    Today ({todayLong}) is highlighted in cyan. Values = avg earnings per active stream day. Darker = more.
                   </div>
-
-                  {/* DRILL DOWN PANEL */}
-                  {chartDrillDay && (() => {
-                    // Fans who tipped on this day of week
-                    const drillFans = whales
-                      .map(w => {
-                        const fanTips = (w.tips && w.tips.length > 0) ? w.tips : tips.filter(t => t.username?.toLowerCase() === w.username?.toLowerCase())
-                        const tipsOnDay = fanTips.filter(t => {
-                          const short = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][new Date(t.date_time || t.dateRaw).getUTCDay()]
-                          return short === chartDrillDay
-                        })
-                        if (!tipsOnDay.length) return null
-                        return { ...w, tipsOnDay: tipsOnDay.length, usdOnDay: tipsOnDay.reduce((s,t) => s + (t.usd||0), 0) }
-                      })
-                      .filter(Boolean)
-                      .sort((a,b) => b.usdOnDay - a.usdOnDay)
-                      .slice(0, 8)
-
-                    // Best hour on this day
-                    const hourMap = {}
-                    tips.forEach(t => {
-                      const short = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][new Date(t.date_time || t.dateRaw).getUTCDay()]
-                      if (short !== chartDrillDay) return
-                      const h = new Date(t.date_time || t.dateRaw).getHours()
-                      hourMap[h] = (hourMap[h] || 0) + (t.usd || 0)
-                    })
-                    const bestHourEntry = Object.entries(hourMap).sort((a,b) => b[1]-a[1])[0]
-                    const bestHourLabel = bestHourEntry ? formatHour(bestHourEntry[0]) : null
-
-                    return (
-                      <div style={{ marginTop: 16, padding: 20, borderRadius: 14, background: "rgba(236,72,153,0.06)", border: "1px solid rgba(236,72,153,0.25)" }}>
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, flexWrap: "wrap", gap: 8 }}>
-                          <div>
-                            <div style={{ fontSize: 16, fontWeight: 800, color: C.white }}>📅 {chartDrillDay}s — Drill Down</div>
-                            {bestHourLabel && <div style={{ fontSize: 12, color: C.cyan, marginTop: 3 }}>Best hour on {chartDrillDay}s: <strong>{bestHourLabel}</strong> (${parseFloat(bestHourEntry[1]).toFixed(0)} total earned)</div>}
-                          </div>
-                          <button onClick={() => setChartDrillDay(null)} style={{ background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 8, color: C.muted, fontSize: 12, padding: "4px 12px", cursor: "pointer" }}>✕ Close</button>
-                        </div>
-                        {drillFans.length === 0 ? (
-                          <div style={{ fontSize: 13, color: C.muted }}>No fans tipped on {chartDrillDay}s yet</div>
-                        ) : (
-                          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                            {drillFans.map((w, i) => (
-                              <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", borderRadius: 10, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }}>
-                                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                                  <div style={{ width: 30, height: 30, borderRadius: "50%", background: `${TIER_COLORS[w.tier] || C.cyan}20`, border: `1px solid ${TIER_COLORS[w.tier] || C.cyan}40`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800, color: TIER_COLORS[w.tier] || C.cyan }}>
-                                    {w.username.charAt(0).toUpperCase()}
-                                  </div>
-                                  <div>
-                                    <div style={{ fontSize: 13, fontWeight: 700, color: C.white }}>{w.username}</div>
-                                    <div style={{ fontSize: 11, color: C.muted }}>{w.tipsOnDay} tips on {chartDrillDay}s · {w.platform}</div>
-                                  </div>
-                                </div>
-                                <div style={{ textAlign: "right" }}>
-                                  <div style={{ fontSize: 14, fontWeight: 700, color: C.green }}>${w.usdOnDay.toFixed(2)}</div>
-                                  <div style={{ fontSize: 10, color: C.muted }}>on {chartDrillDay}s</div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })()}
                 </div>
               )
             })()}
@@ -2262,7 +2041,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                 const totalHours = displayPlatforms.reduce((s, p) => s + p.hours, 0)
                 const totalEarned = displayPlatforms.reduce((s, p) => s + p.totalUSD, 0)
                 return (
-                  <div className="stat-grid-4" style={{ marginBottom: 28 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 28 }}>
                     {[
                       { icon: "💰", label: "Top Revenue", value: topRev.platform, sub: `$${topRev.totalUSD.toFixed(2)} total`, color: C.gold },
                       { icon: "⚡", label: "Most Efficient", value: topEff.platform, sub: `$${topEff.usdPerHour.toFixed(2)}/hour`, color: C.cyan },
@@ -2474,13 +2253,8 @@ const handleCSV = async (file, forcePlatform = null) => {
               )}
             </div>
 
-            {/* ALL TIPPERS TABLE — 50 per page */}
-            {(() => {
-              const totalWhalePages = Math.ceil(filteredWhales.length / WHALES_PER_PAGE)
-              const pagedWhales = filteredWhales.slice(whalePage * WHALES_PER_PAGE, (whalePage + 1) * WHALES_PER_PAGE)
-              return (
+            {/* ALL TIPPERS TABLE — shows everyone */}
             <div style={{ ...glassCard, borderRadius: 14, overflow: "hidden", marginBottom: 20 }}>
-              <div className="table-scroll">
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                 <thead>
                   <tr style={{ background: "rgba(255,255,255,0.04)", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
@@ -2490,9 +2264,9 @@ const handleCSV = async (file, forcePlatform = null) => {
                   </tr>
                 </thead>
                 <tbody>
-                  {pagedWhales.map((w, i) => (
+                  {filteredWhales.map((w, i) => (
                     <tr key={i} className="whale-row" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
-                      <td style={{ padding: "12px 16px", color: (whalePage * WHALES_PER_PAGE + i) < 3 ? C.gold : C.muted, fontWeight: (whalePage * WHALES_PER_PAGE + i) < 3 ? 700 : 400 }}>#{whalePage * WHALES_PER_PAGE + i + 1}</td>
+                      <td style={{ padding: "12px 16px", color: i < 3 ? C.gold : C.muted, fontWeight: i < 3 ? 700 : 400 }}>#{i + 1}</td>
                       <td style={{ padding: "12px 16px" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                           <span style={{ color: C.white, fontWeight: 600 }}>{w.username}</span>
@@ -2516,26 +2290,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                   ))}
                 </tbody>
               </table>
-              </div>
-              {totalWhalePages > 1 && (
-                <div style={{ padding: "14px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", background: "rgba(255,255,255,0.02)", borderTop: "1px solid rgba(255,255,255,0.06)" }}>
-                  <button onClick={() => setWhalePage(p => Math.max(0, p-1))} disabled={whalePage === 0}
-                    style={{ padding: "7px 16px", borderRadius: 8, background: whalePage === 0 ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.1)", color: whalePage === 0 ? C.muted : C.white, fontSize: 13, cursor: whalePage === 0 ? "not-allowed" : "pointer" }}>
-                    ← Prev
-                  </button>
-                  <span style={{ fontSize: 13, color: C.muted }}>
-                    Page <strong style={{ color: C.white }}>{whalePage + 1}</strong> of <strong style={{ color: C.white }}>{totalWhalePages}</strong>
-                    <span style={{ marginLeft: 10 }}>({filteredWhales.length} total fans)</span>
-                  </span>
-                  <button onClick={() => setWhalePage(p => Math.min(totalWhalePages-1, p+1))} disabled={whalePage >= totalWhalePages-1}
-                    style={{ padding: "7px 16px", borderRadius: 8, background: whalePage >= totalWhalePages-1 ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.1)", color: whalePage >= totalWhalePages-1 ? C.muted : C.white, fontSize: 13, cursor: whalePage >= totalWhalePages-1 ? "not-allowed" : "pointer" }}>
-                    Next →
-                  </button>
-                </div>
-              )}
             </div>
-              )
-            })()}
 
             {/* 💎 WHALE INTELLIGENCE PANEL */}
             {filteredWhales.length > 0 && (
@@ -3183,7 +2938,7 @@ const handleCSV = async (file, forcePlatform = null) => {
 
               {/* OVERVIEW STATS BAR */}
               {sessions.length > 0 && (
-                <div className="stat-grid-4" style={{ marginBottom: 28 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 28 }}>
                   {[
                     { label: "Total Sessions", value: sessions.length, color: C.cyan },
                     { label: "Avg Earnings", value: `$${avgSession.toFixed(2)}`, color: C.green },
@@ -4214,16 +3969,6 @@ const handleCSV = async (file, forcePlatform = null) => {
           </div>
         )
       })()}
-
-      {/* MOBILE BOTTOM NAV */}
-      <nav className="mobile-nav">
-        {[["overview","📊","Stats"],["platforms","🎯","Platforms"],["whales","🐳","Fans"],["sessions","🎥","Sessions"],["live","🔴","Live"],["titles","🎬","Titles"],["upload","📥","Import"]].map(([id, icon, label]) => (
-          <button key={id} onClick={() => setActiveTab(id)} className={activeTab === id ? "active" : ""}>
-            <span className="nav-icon">{icon}</span>
-            <span className="nav-label">{label}</span>
-          </button>
-        ))}
-      </nav>
 
       {toast && (
         <div style={{ position: "fixed", bottom: 24, left: 272, background: "rgba(15,20,32,0.95)", backdropFilter: "blur(20px)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 12, padding: "14px 20px", color: C.white, fontSize: 14, zIndex: 9999, boxShadow: "0 8px 32px rgba(0,0,0,0.8)" }}>
