@@ -8,11 +8,11 @@ import LandingClient from './LandingClient'
 export const metadata = {
   title: 'CamCash — Cam Model Analytics That Makes You More Money',
   description: 'Upload your Chaturbate or BongaCams CSV and instantly see your top tippers, best stream times, peak earning hours, and what to do to earn more. Free cam model analytics.',
-  alternates: { canonical: 'https://www.camcashgrl.com/landing' },
+  alternates: { canonical: 'https://www.camcashgrl.com' },
   openGraph: {
     title: 'CamCash — Cam Model Analytics That Makes You More Money',
     description: 'Know exactly when to go live, who your most valuable fans are, and how much more you could be earning. Free for cam models.',
-    url: 'https://www.camcashgrl.com/landing',
+    url: 'https://www.camcashgrl.com',
     type: 'website',
   },
 }
