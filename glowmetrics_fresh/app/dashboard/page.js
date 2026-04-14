@@ -555,14 +555,22 @@ function TitleGenerator({ C, glassCard, analytics, tips, sessions, whales }) {
     const currentHour = now.getHours()
     const todayDay = now.toLocaleDateString("en-US", { weekday: "long" })
 
-    // Best hour from sessions
-    const hourTotals = {}
-    ;(sessions || []).forEach(s => {
-      const h = new Date(s.startTime).getHours()
-      hourTotals[h] = (hourTotals[h] || 0) + s.totalUSD
-    })
-    const bestHourEntry = Object.entries(hourTotals).sort((a,b) => b[1]-a[1])[0]
-    const bestHour = bestHourEntry ? parseInt(bestHourEntry[0]) : null
+    // FIX: bestHour uses avg USD per session at each hour, not raw totals
+    // Prefer pre-computed value from analytics.js aggregateRows if available
+    const _analyticsBestHourCtx = analytics?.bestHour || null
+    let bestHour = null
+    if (_analyticsBestHourCtx) {
+      bestHour = parseInt(_analyticsBestHourCtx.hour)
+    } else {
+      const hourUSD = {}; const hourCount = {}
+      ;(sessions || []).forEach(s => {
+        const h = new Date(s.startTime).getHours()
+        hourUSD[h] = (hourUSD[h] || 0) + s.totalUSD
+        hourCount[h] = (hourCount[h] || 0) + 1
+      })
+      const bestHourEntry = Object.entries(hourUSD).map(([h, usd]) => [h, usd / (hourCount[h] || 1)]).sort((a,b) => b[1]-a[1])[0]
+      bestHour = bestHourEntry ? parseInt(bestHourEntry[0]) : null
+    }
     const bestHourLabel = bestHour !== null
       ? (bestHour === 0 ? "12 AM" : bestHour < 12 ? `${bestHour} AM` : bestHour === 12 ? "12 PM" : `${bestHour-12} PM`)
       : null
@@ -1012,7 +1020,10 @@ const handleCSV = async (file, forcePlatform = null) => {
   const totalRevenue = analytics?.totalUSD || 0
   // Only average sessions with real duration (exclude zero-timestamp BongaCams exports)
   const timedSessions = sessions.filter(s => !s.durationUnknown && s.usdPerHour !== null)
-  const avgPerHour = timedSessions.length ? timedSessions.reduce((sum, s) => sum + (s.usdPerHour || 0), 0) / timedSessions.length : 0
+  // FIX: use total USD / total hours (not avg of per-session rates — that inflates short sessions)
+  const timedTotalUSD = timedSessions.reduce((sum, s) => sum + (s.totalUSD || 0), 0)
+  const timedTotalHours = timedSessions.reduce((sum, s) => sum + (s.durationHours || 0), 0)
+  const avgPerHour = timedTotalHours > 0 ? timedTotalUSD / timedTotalHours : 0
   // Single source of truth — pre-computed in aggregateRows, same values used everywhere
   const analyticsbestDay  = analytics?.bestDay  || null
   const analyticsBestHour = analytics?.bestHour || null
@@ -1503,20 +1514,25 @@ const handleCSV = async (file, forcePlatform = null) => {
             </div>
 
             {(() => {
-              const recentSessions = sessions.filter(s => new Date(s.startTime) > new Date(Date.now() - 30 * 86400000))
-              const prevSessions = sessions.filter(s => { const d = new Date(s.startTime); return d > new Date(Date.now() - 60 * 86400000) && d <= new Date(Date.now() - 30 * 86400000) })
-              const recentRev = recentSessions.reduce((s, r) => s + (r.totalUSD || 0), 0)
-              const prevRev = prevSessions.reduce((s, r) => s + (r.totalUSD || 0), 0)
-              const growthPct = prevRev > 0 ? Math.round(((recentRev - prevRev) / prevRev) * 100) : null
+              // FIX: use real calendar months for vs-last-month, not rolling 30d windows
+              const now = new Date()
+              const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+              const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+              const thisMonthRev = tips.filter(t => new Date(t.date_time || t.dateRaw) >= thisMonthStart).reduce((s, t) => s + (t.usd || 0), 0)
+              const prevMonthRev = tips.filter(t => { const d = new Date(t.date_time || t.dateRaw); return d >= prevMonthStart && d < thisMonthStart }).reduce((s, t) => s + (t.usd || 0), 0)
+              const growthPct = prevMonthRev > 0 ? Math.round(((thisMonthRev - prevMonthRev) / prevMonthRev) * 100) : null
               const topPct = Math.max(1, Math.min(25, Math.round(100 - (totalRevenue / 50))))
-              const streak = recentSessions.length
+              // FIX: sessions in last 30 days (not total sessions count)
+              const sessionsLast30 = sessions.filter(s => (Date.now() - new Date(s.startTime)) / 86400000 <= 30).length
+              // FIX: fans active in last 30 days = unique usernames with a tip in last 30d
+              const fansActiveLast30 = new Set(tips.filter(t => (Date.now() - new Date(t.date_time || t.dateRaw)) / 86400000 <= 30).map(t => t.username)).size
               return (
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 20, marginBottom: 28 }}>
                   {[
                     { label: "Total Earned", value: `$${totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, sub: `Top ${topPct}% of models on this platform`, icon: "💰", badge: growthPct !== null ? (growthPct >= 0 ? `↑ ${growthPct}% vs last month` : `↓ ${Math.abs(growthPct)}% vs last month`) : null, badgeColor: growthPct !== null && growthPct >= 0 ? C.green : C.red },
                     { label: "Avg $/Hour", value: `$${avgPerHour.toFixed(2)}`, sub: avgPerHour > 20 ? "Above average — keep it up!" : "Tip: stream at peak hours", icon: "⏱️", badge: null },
-                    { label: "Total Fans", value: whales.length, sub: `${whales.filter(w => Math.floor((Date.now() - new Date(w.lastTipDate)) / 86400000) <= 30).length} active in last 30 days`, icon: "👥", badge: null },
-                    { label: "Sessions", value: sessions.length, sub: `${streak} in last 30 days${streak >= 3 ? " 🔥" : ""}`, icon: "🎥", badge: streak >= 5 ? "🔥 On a streak!" : null, badgeColor: C.gold }
+                    { label: "Total Fans", value: whales.length, sub: `${fansActiveLast30} active in last 30 days`, icon: "👥", badge: null },
+                    { label: "Sessions", value: sessions.length, sub: `${sessionsLast30} in last 30 days${sessionsLast30 >= 3 ? " 🔥" : ""}`, icon: "🎥", badge: sessionsLast30 >= 5 ? "🔥 On a streak!" : null, badgeColor: C.gold }
                   ].map((s, i) => (
                     <div key={i} className="dash-card" style={{ ...glassCard, borderRadius: 18, padding: 22, position: "relative", overflow: "hidden" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
