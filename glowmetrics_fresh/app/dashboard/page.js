@@ -822,6 +822,7 @@ export default function Dashboard() {
   const [showUpgradeModal, setShowUpgradeModal] = useState(false)
   const [showBetaPrompt, setShowBetaPrompt] = useState(false)
   const [fanSearchOpen, setFanSearchOpen] = useState(false)
+  const [whalePage, setWhalePage] = useState(0)
   const [fanSearchQuery, setFanSearchQuery] = useState("")
   const [shareModalOpen, setShareModalOpen] = useState(false)
   const [chartDrillDay, setChartDrillDay] = useState(null)
@@ -1456,6 +1457,8 @@ const handleCSV = async (file, forcePlatform = null) => {
         .whale-row { transition: background 0.15s; }
         .whale-row:hover { background: rgba(59,130,246,0.08) !important; }
         @keyframes pulse-msg { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.25); } }
+        @keyframes pulse-envelope { 0%, 100% { transform: scale(1); filter: drop-shadow(0 0 0px #ec4899); } 50% { transform: scale(1.18); filter: drop-shadow(0 0 6px #ec4899cc); } }
+        @keyframes pulse-view { 0%, 100% { box-shadow: 0 0 0px rgba(34,211,238,0); border-color: rgba(34,211,238,0.3); } 50% { box-shadow: 0 0 8px rgba(34,211,238,0.5); border-color: rgba(34,211,238,0.7); } }
         @keyframes growBar { from { transform: scaleY(0); transform-origin: bottom; opacity: 0; } to { transform: scaleY(1); transform-origin: bottom; opacity: 1; } }
         @keyframes fadeUp { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
       `}</style>
@@ -2538,6 +2541,13 @@ const handleCSV = async (file, forcePlatform = null) => {
                 <button onClick={() => setFanSearchOpen(true)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 10, background: "linear-gradient(135deg, rgba(59,130,246,0.15), rgba(236,72,153,0.15))", border: "1px solid rgba(59,130,246,0.35)", color: C.white, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
                   🔍 Search Fan
                 </button>
+                <button
+                  onClick={() => { if (filteredWhales[0]) { setMessageTarget(filteredWhales[0]); setMessageIndex(0); setMessageCopied(false) } }}
+                  title="Message your top fan"
+                  style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 10, background: "linear-gradient(135deg, rgba(236,72,153,0.15), rgba(168,85,247,0.15))", border: "1px solid rgba(236,72,153,0.35)", color: C.white, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                  <span style={{ fontSize: 18, display: "inline-block", animation: "pulse-envelope 2s ease-in-out infinite" }}>💌</span>
+                  Message Fan
+                </button>
               </div>
             </div>
             <p style={{ fontSize: 13, color: C.muted, marginBottom: 24 }}>Your highest-value supporters ranked by total spend</p>
@@ -2546,13 +2556,13 @@ const handleCSV = async (file, forcePlatform = null) => {
             <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
               <div style={{ display: "flex", gap: 6, background: "rgba(255,255,255,0.04)", padding: 4, borderRadius: 10, border: "1px solid rgba(255,255,255,0.08)" }}>
                 {["ALL","Whale","Shark","Regular","Dormant"].map(t => (
-                  <button key={t} onClick={() => setWhaleFilter(t)} style={{ padding: "5px 12px", borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: "pointer", border: "none", transition: "all 0.15s", background: whaleFilter === t ? "linear-gradient(135deg, #3b82f6, #ec4899)" : "transparent", color: whaleFilter === t ? C.white : C.muted }}>{t}</button>
+                  <button key={t} onClick={() => { setWhaleFilter(t); setWhalePage(0) }} style={{ padding: "5px 12px", borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: "pointer", border: "none", transition: "all 0.15s", background: whaleFilter === t ? "linear-gradient(135deg, #3b82f6, #ec4899)" : "transparent", color: whaleFilter === t ? C.white : C.muted }}>{t}</button>
                 ))}
               </div>
               {allPlatforms.length > 1 && (
                 <div style={{ display: "flex", gap: 6, background: "rgba(255,255,255,0.04)", padding: 4, borderRadius: 10, border: "1px solid rgba(255,255,255,0.08)" }}>
                   {["ALL", ...allPlatforms].map(p => (
-                    <button key={p} onClick={() => setPlatformFilter(p)} style={{ padding: "5px 12px", borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: "pointer", border: "none", transition: "all 0.15s", background: platformFilter === p ? "rgba(34,211,238,0.2)" : "transparent", color: platformFilter === p ? C.cyan : C.muted }}>{p}</button>
+                    <button key={p} onClick={() => { setPlatformFilter(p); setWhalePage(0) }} style={{ padding: "5px 12px", borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: "pointer", border: "none", transition: "all 0.15s", background: platformFilter === p ? "rgba(34,211,238,0.2)" : "transparent", color: platformFilter === p ? C.cyan : C.muted }}>{p}</button>
                   ))}
                 </div>
               )}
@@ -2563,15 +2573,20 @@ const handleCSV = async (file, forcePlatform = null) => {
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                 <thead>
                   <tr style={{ background: "rgba(255,255,255,0.04)", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-                    {["#", "Username", "Total $", "Tips", "Avg Tip", "Platform", "Tier", "Last Tip", "Actions"].map(h => (
+                    {["#", "Username", "Total $", "Platform", "Tier", "Last Tip", "Actions"].map(h => (
                       <th key={h} style={{ padding: "12px 16px", textAlign: "left", color: C.muted, fontSize: 11, textTransform: "uppercase", fontWeight: 500 }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredWhales.map((w, i) => (
+                  {(() => {
+                    const FANS_PER_PAGE = 25
+                    const pagedWhales = filteredWhales.slice(whalePage * FANS_PER_PAGE, (whalePage + 1) * FANS_PER_PAGE)
+                    return pagedWhales.map((w, i) => {
+                      const globalIdx = whalePage * FANS_PER_PAGE + i
+                      return (
                     <tr key={i} className="whale-row" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
-                      <td style={{ padding: "12px 16px", color: i < 3 ? C.gold : C.muted, fontWeight: i < 3 ? 700 : 400 }}>#{i + 1}</td>
+                      <td style={{ padding: "12px 16px", color: globalIdx < 3 ? C.gold : C.muted, fontWeight: globalIdx < 3 ? 700 : 400 }}>#{globalIdx + 1}</td>
                       <td style={{ padding: "12px 16px" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                           <span style={{ color: C.white, fontWeight: 600 }}>{w.username}</span>
@@ -2581,21 +2596,49 @@ const handleCSV = async (file, forcePlatform = null) => {
                         </div>
                       </td>
                       <td style={{ padding: "12px 16px", color: C.green, fontWeight: 700 }}>${w.totalUSD.toFixed(2)}</td>
-                      <td style={{ padding: "12px 16px", color: C.muted }}>{w.tipCount}</td>
-                      <td style={{ padding: "12px 16px", color: C.cyan }}>${w.avgTipSize.toFixed(2)}</td>
+
                       <td style={{ padding: "12px 16px", color: C.muted }}>{w.platform}</td>
                       <td style={{ padding: "12px 16px" }}>
                         <span style={{ padding: "4px 10px", borderRadius: 100, background: `${TIER_COLORS[w.tier]}15`, color: TIER_COLORS[w.tier], fontSize: 11, fontWeight: 600 }}>{w.tier}</span>
                       </td>
                       <td style={{ padding: "12px 16px", color: C.muted, fontSize: 12 }}>{new Date(w.lastTipDate).toLocaleDateString()}</td>
                       <td style={{ padding: "12px 16px" }}>
-                        <button onClick={() => setSelectedWhale(w)} style={{ padding: "4px 10px", borderRadius: 6, background: "rgba(34,211,238,0.15)", border: "1px solid rgba(34,211,238,0.3)", color: C.cyan, fontSize: 11, cursor: "pointer" }}>🔍 View</button>
+                        <button onClick={() => setSelectedWhale(w)}
+                          style={{ padding: "4px 12px", borderRadius: 6, background: "rgba(34,211,238,0.15)", border: "1px solid rgba(34,211,238,0.3)", color: C.cyan, fontSize: 11, cursor: "pointer", fontWeight: 600, animation: "pulse-view 2.5s ease-in-out infinite" }}
+                          onMouseEnter={e => { e.currentTarget.style.animation = "none"; e.currentTarget.style.background = "rgba(34,211,238,0.3)"; e.currentTarget.style.boxShadow = "0 0 10px rgba(34,211,238,0.4)" }}
+                          onMouseLeave={e => { e.currentTarget.style.animation = "pulse-view 2.5s ease-in-out infinite"; e.currentTarget.style.background = "rgba(34,211,238,0.15)"; e.currentTarget.style.boxShadow = "none" }}>
+                          View →
+                        </button>
                       </td>
                     </tr>
-                  ))}
+                      )
+                    })
+                  })()}
                 </tbody>
               </table>
             </div>
+
+            {/* PAGINATION */}
+            {filteredWhales.length > 25 && (() => {
+              const FANS_PER_PAGE = 25
+              const totalWhalePages = Math.ceil(filteredWhales.length / FANS_PER_PAGE)
+              return (
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 20px", marginBottom: 20, background: "rgba(255,255,255,0.03)", borderRadius: 12, border: "1px solid rgba(255,255,255,0.08)" }}>
+                  <button onClick={() => setWhalePage(p => Math.max(0, p - 1))} disabled={whalePage === 0}
+                    style={{ padding: "7px 18px", borderRadius: 8, background: whalePage === 0 ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.1)", color: whalePage === 0 ? C.muted : C.white, fontSize: 13, cursor: whalePage === 0 ? "not-allowed" : "pointer" }}>
+                    ← Prev
+                  </button>
+                  <span style={{ fontSize: 13, color: C.muted }}>
+                    Page <span style={{ color: C.white, fontWeight: 600 }}>{whalePage + 1}</span> of <span style={{ color: C.white, fontWeight: 600 }}>{totalWhalePages}</span>
+                    <span style={{ marginLeft: 12 }}>({whalePage * FANS_PER_PAGE + 1}–{Math.min((whalePage + 1) * FANS_PER_PAGE, filteredWhales.length)} of {filteredWhales.length} fans)</span>
+                  </span>
+                  <button onClick={() => setWhalePage(p => Math.min(totalWhalePages - 1, p + 1))} disabled={whalePage >= totalWhalePages - 1}
+                    style={{ padding: "7px 18px", borderRadius: 8, background: whalePage >= totalWhalePages - 1 ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.1)", color: whalePage >= totalWhalePages - 1 ? C.muted : C.white, fontSize: 13, cursor: whalePage >= totalWhalePages - 1 ? "not-allowed" : "pointer" }}>
+                    Next →
+                  </button>
+                </div>
+              )
+            })()}
 
             {/* 💎 WHALE INTELLIGENCE PANEL */}
             {filteredWhales.length > 0 && (
