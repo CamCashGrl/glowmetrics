@@ -1798,8 +1798,8 @@ const handleCSV = async (file, forcePlatform = null) => {
                       })}
                     </div>
                     <div style={{ marginTop: 8, fontSize: 11, color: C.muted }}>Today ({todayLong}) highlighted in cyan. Darker = more earnings.</div>
-                  </div>{/* end heatmap grid */}
-                  </div>{/* end heatmap-wrap */}
+                  </div>
+                  </div>
                 )
               })()}
             </div>
