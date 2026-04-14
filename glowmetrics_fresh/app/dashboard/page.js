@@ -1455,6 +1455,7 @@ const handleCSV = async (file, forcePlatform = null) => {
         .whale-row { transition: background 0.15s; }
         .whale-row:hover { background: rgba(59,130,246,0.08) !important; }
         @keyframes pulse-msg { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.25); } }
+        @keyframes fadeUp { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
       `}</style>
 
       <div style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 0 }}>
@@ -1462,8 +1463,8 @@ const handleCSV = async (file, forcePlatform = null) => {
         <div style={{ position: "absolute", width: 900, height: 900, bottom: "-20%", right: "-10%", background: "radial-gradient(circle, rgba(236,72,153,0.35), transparent 60%)", filter: "blur(120px)" }} />
       </div>
 
-      {/* SIDEBAR */}
-      <div style={{ position: "fixed", left: 0, top: 0, bottom: 0, width: 240, background: "rgba(15,20,32,0.85)", backdropFilter: "blur(20px)", borderRight: "1px solid rgba(255,255,255,0.08)", display: "flex", flexDirection: "column", zIndex: 50 }}>
+      {/* SIDEBAR — desktop only, hidden on mobile via CSS */}
+      <div className="dash-sidebar" style={{ position: "fixed", left: 0, top: 0, bottom: 0, width: 240, background: "rgba(15,20,32,0.85)", backdropFilter: "blur(20px)", borderRight: "1px solid rgba(255,255,255,0.08)", display: "flex", flexDirection: "column", zIndex: 50 }}>
         <div style={{ padding: "24px 20px", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <div style={{ width: 40, height: 40, borderRadius: 10, background: "linear-gradient(135deg, #22D3EE, #EC4899)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, fontWeight: 700, color: C.white, boxShadow: "0 0 20px rgba(34,211,238,0.4)" }}>$</div>
@@ -1521,8 +1522,18 @@ const handleCSV = async (file, forcePlatform = null) => {
         </div>
       </div>
 
+      {/* MOBILE BOTTOM NAV — hidden on desktop via CSS */}
+      <div className="dash-bottom-nav" style={{ display: "none" }}>
+        {[["overview","📊","Overview"],["platforms","🎯","Platforms"],["whales","🐳","Fans"],["sessions","🎥","Sessions"],["live","🔴","Live"],["upload","📥","Import"]].map(([id, icon, label]) => (
+          <button key={id} onClick={() => setActiveTab(id)} className={activeTab === id ? "active" : ""}>
+            <span className="nav-icon">{icon}</span>
+            <span className="nav-label">{label}</span>
+          </button>
+        ))}
+      </div>
+
       {/* MAIN CONTENT */}
-      <div style={{ marginLeft: 240, padding: 32, position: "relative", zIndex: 1 }}>
+      <div className="dash-main" style={{ marginLeft: 240, padding: 32, position: "relative", zIndex: 1 }}>
 
         {activeTab === "overview" && (
           <div style={{ animation: "fadeUp 0.3s ease" }}>
@@ -1575,7 +1586,7 @@ const handleCSV = async (file, forcePlatform = null) => {
               const velPlatforms = Object.entries(platformVelocity).filter(([,v]) => v !== null).sort((a,b) => (b[1]||0)-(a[1]||0))
               return (
                 <>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: velPlatforms.length ? 12 : 28 }}>
+                  <div className="stat-grid-4" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: velPlatforms.length ? 12 : 28 }}>
                     {cards.map((s, i) => (
                       <div key={i} className="dash-card" style={{ ...glassCard, borderRadius: 18, padding: "22px 20px", position: "relative", overflow: "hidden", animation: `fadeUp 0.3s ease ${i * 0.06}s both`, boxShadow: s.glow ? `0 0 30px rgba(16,185,129,0.2), ${glassCard.boxShadow}` : glassCard.boxShadow }}>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
@@ -1590,7 +1601,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                   </div>
                   {/* Earnings Velocity strip — formula: totalUSD / totalHours per platform */}
                   {velPlatforms.length > 0 && (
-                    <div style={{ display: "flex", gap: 10, marginBottom: 28, flexWrap: "wrap" }}>
+                    <div className="velocity-strip" style={{ display: "flex", gap: 10, marginBottom: 28, flexWrap: "wrap" }}>
                       {velPlatforms.map(([plat, vel], i) => (
                         <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 14px", borderRadius: 20, background: "rgba(34,211,238,0.07)", border: "1px solid rgba(34,211,238,0.2)", animation: `fadeUp 0.3s ease ${0.25 + i*0.05}s both` }}>
                           <span style={{ fontSize: 11, color: C.muted }}>{plat.replace('BongaCams','Bonga').replace('MyFreeCams','MFC').replace('Chaturbate','CB')}</span>
@@ -1689,7 +1700,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                   <div style={{ marginBottom: 18 }}>
                     {/* Platform ROI row: formula = total_earnings / total_hours */}
                     <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10 }}>Platform ROI ($/hr streamed)</div>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10, marginBottom: 18 }}>
+                    <div className="platform-roi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10, marginBottom: 18 }}>
                       {allPlats.map((p, i) => {
                         const roi = platformVelocity[p.platform] ?? (p.hours > 0 ? parseFloat((p.totalUSD / p.hours).toFixed(2)) : null)
                         const bestTime = platformBestTimes[p.platform]
@@ -1757,7 +1768,8 @@ const handleCSV = async (file, forcePlatform = null) => {
                       <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>Platform by Day of Week</span>
                       <span style={{ fontSize: 11, color: C.muted, padding: "2px 8px", borderRadius: 20, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}>avg $/active day</span>
                     </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "80px repeat(7, 1fr)", gap: 3 }}>
+                    <div className="heatmap-wrap" style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "80px repeat(7, 1fr)", gap: 3, minWidth: 480 }}>
                       <div />
                       {UTC_DAYS.map(d => (
                         <div key={d} style={{ textAlign: "center", fontSize: 11, fontWeight: 700, color: d === todayShort ? C.cyan : C.muted, paddingBottom: 4 }}>{d}</div>
@@ -1786,7 +1798,8 @@ const handleCSV = async (file, forcePlatform = null) => {
                       })}
                     </div>
                     <div style={{ marginTop: 8, fontSize: 11, color: C.muted }}>Today ({todayLong}) highlighted in cyan. Darker = more earnings.</div>
-                  </div>
+                  </div>{/* end heatmap grid */}
+                  </div>{/* end heatmap-wrap */}
                 )
               })()}
             </div>
@@ -3666,7 +3679,7 @@ const handleCSV = async (file, forcePlatform = null) => {
         const biggestTip = whaleTips.length ? Math.max(...whaleTips.map(t => t.usd)) : 0
         return (
           <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 20 }}>
-            <div style={{ width: 560, maxHeight: "90vh", overflowY: "auto", ...glassCard, borderRadius: 20 }}>
+            <div className="modal-inner" style={{ width: 560, maxHeight: "90vh", overflowY: "auto", ...glassCard, borderRadius: 20 }}>
               <div style={{ padding: "24px 24px 20px", background: `linear-gradient(135deg, ${tierColor}15, transparent)`, borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
@@ -3816,7 +3829,7 @@ const handleCSV = async (file, forcePlatform = null) => {
         const vibes = ["💕 Reconnect", "🔥 Going Live", "🥰 Appreciation", "😘 Flirty", "👀 FOMO"]
         return (
           <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1001, padding: 20 }}>
-            <div style={{ width: 520, ...glassCard, borderRadius: 20, overflow: "hidden" }}>
+            <div className="modal-inner" style={{ width: 520, ...glassCard, borderRadius: 20, overflow: "hidden" }}>
               <div style={{ padding: "20px 24px", background: "linear-gradient(135deg, rgba(236,72,153,0.2), rgba(124,92,255,0.15))", borderBottom: "1px solid rgba(255,255,255,0.08)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
                   <div style={{ fontSize: 17, fontWeight: 800, color: C.white }}>💌 Message Generator</div>
