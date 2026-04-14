@@ -1,9 +1,15 @@
 import './globals.css'
 import { Analytics } from '@vercel/analytics/react'
 
-const SITE_URL = 'https://.camcashgrl.com'
+const SITE_URL = 'https://www.camcashgrl.com'
 const TITLE = 'CamCash — Cam Model Analytics That Makes You More Money'
 const DESC = 'Free analytics for cam models on Chaturbate, BongaCams & more. See your top tippers, best stream times, peak earning hours, and exactly what to do to increase tips. Upload your CSV — instant insights.'
+
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+}
 
 export const metadata = {
   metadataBase: new URL(SITE_URL),
