@@ -46,3 +46,142 @@ a { color: inherit; text-decoration: none; }
 input::placeholder { color: #2e2a4a; }
 input:focus { outline: none; }
 button { cursor: pointer; }
+
+/* ─── MOBILE VIEWPORT ────────────────────────────────────────────────────── */
+/* Prevents horizontal scroll on all pages */
+html, body { overflow-x: hidden; max-width: 100vw; }
+
+/* ─── DASHBOARD MOBILE ───────────────────────────────────────────────────── */
+
+/* Sidebar → hidden on mobile, replaced by bottom tab bar */
+@media (max-width: 768px) {
+  /* Hide desktop sidebar */
+  .dash-sidebar { display: none !important; }
+
+  /* Remove sidebar margin from main content */
+  .dash-main { margin-left: 0 !important; padding: 12px 12px 80px !important; }
+
+  /* Bottom nav bar */
+  .dash-bottom-nav {
+    display: flex !important;
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    z-index: 100;
+    background: rgba(12,16,28,0.97);
+    backdrop-filter: blur(20px);
+    border-top: 1px solid rgba(255,255,255,0.08);
+    padding: 6px 4px env(safe-area-inset-bottom);
+    gap: 0;
+  }
+
+  .dash-bottom-nav button {
+    flex: 1;
+    display: flex !important;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    padding: 6px 2px;
+    background: transparent;
+    border: none;
+    color: #475569;
+    font-size: 9px;
+    font-weight: 500;
+    cursor: pointer;
+    border-radius: 8px;
+    transition: all 0.15s;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .dash-bottom-nav button.active {
+    color: #22D3EE;
+    background: rgba(34,211,238,0.1);
+  }
+
+  .dash-bottom-nav button .nav-icon {
+    font-size: 18px;
+    line-height: 1;
+  }
+
+  .dash-bottom-nav button .nav-label {
+    font-size: 9px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+
+  /* 4-col stat grid → 2x2 on mobile */
+  .stat-grid-4 { grid-template-columns: repeat(2, 1fr) !important; }
+
+  /* Platform ROI cards → single col */
+  .platform-roi-grid { grid-template-columns: 1fr !important; }
+
+  /* Fan section grids → single col */
+  .fan-card-grid { grid-template-columns: 1fr !important; }
+
+  /* How it works steps → single col */
+  .steps-grid { grid-template-columns: 1fr !important; }
+
+  /* Heatmap table — allow horizontal scroll */
+  .heatmap-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+  /* Hero grid on landing */
+  .hero-grid { grid-template-columns: 1fr !important; }
+  .desktop-auth-wrap { display: none !important; }
+  .mobile-cta-btn { display: inline-block !important; }
+  .mobile-auth-wrap { display: block !important; }
+
+  /* Feature cards → single col */
+  .feature-grid { grid-template-columns: 1fr !important; }
+  .platform-grid { grid-template-columns: 1fr !important; }
+
+  /* Large font sizes → smaller on mobile */
+  .hero-h1 { font-size: clamp(28px, 8vw, 44px) !important; }
+
+  /* Stat card numbers smaller */
+  .stat-value { font-size: 26px !important; }
+
+  /* Modals → full screen on mobile */
+  .modal-inner {
+    width: 100% !important;
+    max-width: 100% !important;
+    height: 100% !important;
+    max-height: 100% !important;
+    border-radius: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* Overflow scroll for wide tables */
+  .scroll-x { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+  /* Session and whale tab tables */
+  .data-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; min-width: 0; }
+  .data-table-wrap table { min-width: 500px; }
+
+  /* Upload tab form */
+  .upload-grid { grid-template-columns: 1fr !important; }
+
+  /* Insights wrap text properly */
+  .insight-text { font-size: 13px !important; word-break: break-word; }
+
+  /* Action center max 2 items stacked */
+  .action-center-item { flex-direction: column !important; align-items: flex-start !important; }
+
+  /* Reduce padding on cards */
+  .mobile-compact { padding: 14px 14px !important; }
+
+  /* Velocity strip wrap */
+  .velocity-strip { flex-wrap: wrap !important; }
+
+  /* Platform table header */
+  .platform-table-wrap { overflow-x: auto; }
+}
+
+@media (max-width: 480px) {
+  /* Extra small phones */
+  .dash-main { padding: 10px 10px 80px !important; }
+  .stat-value { font-size: 22px !important; }
+  .section-title { font-size: 16px !important; }
+}
