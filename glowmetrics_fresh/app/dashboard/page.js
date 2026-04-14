@@ -938,7 +938,17 @@ export default function Dashboard() {
         if (!data || data.length < PAGE) break
         from += PAGE
       }
-      if (allData.length) { setTips(allData); const result = runEngine(allData); setAnalytics(result) }
+      if (allData.length) {
+        setTips(allData)
+        try {
+          const result = runEngine(allData)
+          setAnalytics(result)
+        } catch (engineErr) {
+          console.error('[loadData] runEngine failed:', engineErr)
+          // Analytics failed but tips are loaded — dashboard will show raw data
+          // without computed insights rather than a blank screen
+        }
+      }
     } finally { setLoading(false) }
   }
 const handleCSV = async (file, forcePlatform = null) => {
@@ -1136,14 +1146,15 @@ const handleCSV = async (file, forcePlatform = null) => {
       if (fanTips.length < 5) return
       const hourCounts = {}
       fanTips.forEach(t => {
-        const h = new Date(t.date_time || t.dateRaw).getHours()
+        // FIX: use getUTCHours() — tips stored in UTC
+        const h = new Date(t.date_time || t.dateRaw).getUTCHours()
         hourCounts[h] = (hourCounts[h] || 0) + 1
       })
       const bestHour = Object.entries(hourCounts).sort((a, b) => b[1] - a[1])[0]
       if (!bestHour) return
       const peakHour = parseInt(bestHour[0])
-      const currentHour = new Date().getHours()
-      const hoursAway = Math.abs(currentHour - peakHour)
+      const currentUTCHr = new Date().getUTCHours()
+      const hoursAway = (peakHour - currentUTCHr + 24) % 24
       const probability = Math.min(95, Math.round((bestHour[1] / fanTips.length) * 100 * 2.5))
       const label = peakHour === 0 ? '12 AM' : peakHour < 12 ? `${peakHour} AM` : peakHour === 12 ? '12 PM' : `${peakHour - 12} PM`
       if (hoursAway <= 2 && probability >= 40) {
@@ -1309,29 +1320,46 @@ const handleCSV = async (file, forcePlatform = null) => {
     })
 
     // --- PLATFORM vs PLATFORM HOUR COMPARISON ---
-    const platHourMap = {}
+    // FIX: use avg USD per hour-session (not raw cumulative totals)
+    // FIX: use getUTCHours() — tips are stored in UTC
+    const platHourUSD = {}; const platHourSessions = {}
     tips.forEach(t => {
       const p = t.platform
-      const h = new Date(t.date_time || t.dateRaw).getHours()
-      if (!platHourMap[p]) platHourMap[p] = {}
-      if (!platHourMap[p][h]) platHourMap[p][h] = 0
-      platHourMap[p][h] += t.usd || 0
+      const d = new Date(t.date_time || t.dateRaw)
+      // Floor to UTC hour-bucket key for deduplication
+      const bucketKey = Math.floor(d.getTime() / 3600000)
+      const h = d.getUTCHours()
+      if (!platHourUSD[p]) { platHourUSD[p] = {}; platHourSessions[p] = {} }
+      if (!platHourUSD[p][h]) { platHourUSD[p][h] = 0; platHourSessions[p][h] = new Set() }
+      platHourUSD[p][h] += t.usd || 0
+      platHourSessions[p][h].add(bucketKey)
+    })
+    // Compute avg per session at each UTC hour per platform
+    const platHourAvg = {}
+    Object.keys(platHourUSD).forEach(p => {
+      platHourAvg[p] = {}
+      Object.keys(platHourUSD[p]).forEach(h => {
+        const sessions = platHourSessions[p][h].size || 1
+        platHourAvg[p][h] = platHourUSD[p][h] / sessions
+      })
     })
 
-    const platNames = Object.keys(platHourMap)
+    const platNames = Object.keys(platHourAvg)
+    // Use UTC current hour to match stored data
+    const currentUTCHour = new Date().getUTCHours()
     if (platNames.length >= 2) {
       platNames.forEach(plat => {
-        const hourVal = platHourMap[plat][currentHour] || 0
+        const hourVal = platHourAvg[plat][currentUTCHour] || 0
         const otherPlats = platNames.filter(p => p !== plat)
         otherPlats.forEach(other => {
-          const otherVal = platHourMap[other][currentHour] || 0
+          const otherVal = platHourAvg[other][currentUTCHour] || 0
           if (hourVal > 0 && otherVal > 0 && hourVal >= otherVal * 1.5) {
             const mult = (hourVal / otherVal).toFixed(1)
-            const label = currentHour === 0 ? '12 AM' : currentHour < 12 ? `${currentHour} AM` : currentHour === 12 ? '12 PM' : `${currentHour - 12} PM`
+            const label = currentUTCHour === 0 ? '12 AM' : currentUTCHour < 12 ? `${currentUTCHour} AM` : currentUTCHour === 12 ? '12 PM' : `${currentUTCHour - 12} PM`
             alerts.push({
               type: 'platform_hour', priority: 1, icon: '⚡', color: '#22D3EE',
               title: `Right now ${plat} earns ${mult}x more than ${other}`,
-              message: `At ${label}, ${plat} historically earns $${hourVal.toFixed(0)} vs $${otherVal.toFixed(0)} on ${other}. Stream on ${plat} now.`
+              message: `At ${label} UTC, ${plat} historically averages $${hourVal.toFixed(0)} vs $${otherVal.toFixed(0)} on ${other}. Stream on ${plat} now.`
             })
           }
         })
@@ -1347,16 +1375,17 @@ const handleCSV = async (file, forcePlatform = null) => {
         : tips.filter(t => t.username.toLowerCase() === w.username.toLowerCase())
       if (fanTips.length < 3) return
 
+      // FIX: use getUTCHours() — tips stored in UTC
       const hourCounts = {}
       fanTips.forEach(t => {
-        const h = new Date(t.date_time || t.dateRaw).getHours()
+        const h = new Date(t.date_time || t.dateRaw).getUTCHours()
         hourCounts[h] = (hourCounts[h] || 0) + 1
       })
       const sortedHours = Object.entries(hourCounts).sort((a, b) => b[1] - a[1])
       if (!sortedHours.length) return
 
       const peakHour = parseInt(sortedHours[0][0])
-      const hoursAway = (peakHour - currentHour + 24) % 24
+      const hoursAway = (peakHour - new Date().getUTCHours() + 24) % 24
       const confidence = Math.min(95, Math.round((sortedHours[0][1] / fanTips.length) * 100 * 2.5))
       const label = peakHour === 0 ? '12 AM' : peakHour < 12 ? `${peakHour} AM` : peakHour === 12 ? '12 PM' : `${peakHour - 12} PM`
       const daysSince = Math.floor((now - new Date(w.lastTipDate)) / 86400000)
@@ -1694,19 +1723,21 @@ const handleCSV = async (file, forcePlatform = null) => {
             {(() => {
               const currentHour = new Date().getHours()
               const label = h => h === 0 ? '12 AM' : h < 12 ? `${h} AM` : h === 12 ? '12 PM' : `${h-12} PM`
+              // FIX: use getUTCHours() — tips stored in UTC
+              const currentUTCHourLO = new Date().getUTCHours()
               const likelyOnline = whales
                 .filter(w => w.tipCount >= 3)
                 .map(w => {
                   const fanTips = (w.tips && w.tips.length > 0) ? w.tips : tips.filter(t => t.username.toLowerCase() === w.username.toLowerCase())
                   const hourCounts = {}
                   fanTips.forEach(t => {
-                    const h = new Date(t.date_time || t.dateRaw).getHours()
+                    const h = new Date(t.date_time || t.dateRaw).getUTCHours()
                     hourCounts[h] = (hourCounts[h] || 0) + 1
                   })
                   const sorted = Object.entries(hourCounts).sort((a,b) => b[1]-a[1])
                   if (!sorted.length) return null
                   const peakHour = parseInt(sorted[0][0])
-                  const hoursAway = (peakHour - currentHour + 24) % 24
+                  const hoursAway = (peakHour - currentUTCHourLO + 24) % 24
                   const confidence = Math.min(95, Math.round((sorted[0][1] / fanTips.length) * 100 * 2.5))
                   return { ...w, peakHour, hoursAway, confidence, peakLabel: label(peakHour) }
                 })
