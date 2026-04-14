@@ -1,50 +1,63 @@
-// app/sitemap.js
 export default function sitemap() {
-  const base = 'https://camcashgrl.com'
+  const base = 'https://www.camcashgrl.com'
   const now = new Date()
 
-  const guides = [
-    'chaturbate-earnings-tracker','cam-model-analytics','how-to-increase-cam-tips',
-    'bongacams-analytics','cam-model-top-tippers','best-time-to-stream-chaturbate',
-    'cam-model-income-tracker','myfreecams-analytics','chaturbate-token-tracker',
-    'cam-model-revenue-dashboard','cam-model-session-breakdown','chaturbate-best-hours',
+  // Every real blog page in /app/blog/
+  const blogs = [
+    'best-cam-model-tools',
+    'cam-model-earnings',
+    'cam-model-taxes',
+    'how-much-do-chaturbate-models-make',
+    'how-to-build-loyal-fans',
+    'how-to-get-more-tips-on-myfreecams',
+    'how-to-get-veiwers-on-chaturbate',
+    'how-to-increase-cam-earnings',
+    'how-to-make-more-money-on-chaturbate',
+    'how-to-re-engage-whales-and-high-tipping-fans',
+    'why-cam-income-is-inconsistent',
+    'why-cam-streams-arent-making-money',
+    'why-you-arent-making-money-on-chaturbate',
   ]
 
-  const blogs = [
-    // Original 3
-    'how-to-increase-cam-earnings',
-    'why-cam-streams-arent-making-money',
-    'best-cam-model-tools',
-    // Cluster 1 pillar + supporting
-    'cam-model-earnings',
-    'how-much-do-chaturbate-models-make',
-    'how-to-make-more-money-on-chaturbate',
-    'why-cam-income-is-inconsistent',
-    // New batch
-    'cam-model-taxes',
-    'how-to-build-loyal-fans',
-    'how-to-stay-anonymous-as-a-cam-model',
-    'cam-model-room-titles',
-    'chaturbate-token-goals',
-    'bongacams-vs-chaturbate',
-    'cam-model-income-tracking',
+  // Every real guide slug defined in /app/guides/[slug]/page.js
+  const guides = [
+    'chaturbate-earnings-tracker',
+    'cam-model-analytics',
+    'how-to-increase-cam-tips',
+    'bongacams-analytics',
+    'cam-model-top-tippers',
+    'best-time-to-stream-chaturbate',
+    'cam-model-income-tracker',
+    'myfreecams-analytics',
+    'chaturbate-token-tracker',
+    'cam-model-revenue-dashboard',
+    'cam-model-session-breakdown',
+    'chaturbate-best-hours',
   ]
 
   return [
-    { url: base,              lastModified: now, changeFrequency: 'weekly',  priority: 1.0 },
-    { url: `${base}/landing`, lastModified: now, changeFrequency: 'weekly',  priority: 0.9 },
-    { url: `${base}/login`,   lastModified: now, changeFrequency: 'monthly', priority: 0.4 },
+    // Core public pages
+    { url: base,                          lastModified: now, changeFrequency: 'weekly',  priority: 1.0 },
+    { url: `${base}/landing`,             lastModified: now, changeFrequency: 'weekly',  priority: 0.9 },
+    { url: `${base}/reset-password`,      lastModified: now, changeFrequency: 'never',   priority: 0.1 },
+
+    // Blog posts — high priority for SEO traffic
     ...blogs.map(slug => ({
       url: `${base}/blog/${slug}`,
       lastModified: now,
       changeFrequency: 'monthly',
       priority: 0.85,
     })),
+
+    // Keyword-targeted guide pages — highest ranking potential
     ...guides.map(slug => ({
       url: `${base}/guides/${slug}`,
       lastModified: now,
       changeFrequency: 'monthly',
-      priority: 0.8,
+      priority: 0.9,
     })),
+
+    // Excluded (private/auth-only — never index these):
+    // /dashboard, /onboarding, /login, /admin, /api/, /test, /testt
   ]
 }
