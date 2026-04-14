@@ -851,12 +851,27 @@ export function generateInsights(tips, sessions, bestDay, worstDay, bestHour) {
   if (!tips.length || !sessions.length) return insights
   const now = Date.now()
 
-  // Best day — uses pre-computed avg-per-session value passed in from aggregateRows
+  // Best day — uses pre-computed avg-per-active-day passed in from aggregateRows
+  // FIX: compare bestDay.avg vs the mean of all day avgs (not avg per session)
   if (bestDay && worstDay && bestDay.day !== worstDay.day) {
-    const avgOverall = sessions.reduce((s, x) => s + x.totalUSD, 0) / sessions.length
-    const mult = (bestDay.avg / avgOverall).toFixed(1)
-    const costOfMissing = parseFloat((bestDay.avg - avgOverall).toFixed(2))
-    insights.push({ icon: '📅', text: `${bestDay.day}s are your highest-earning day — your avg session earns ${mult}x more ($${bestDay.avg.toFixed(0)} avg). Missing one ${bestDay.day} costs you ~$${costOfMissing}`, type: 'day', priority: 1 })
+    // Re-derive per-day avg from tips directly for accuracy
+    const dayTips = {}; const dayDates = {}
+    tips.forEach(t => {
+      const d = new Date(t.dateRaw || t.date_time)
+      const dow = d.toLocaleDateString('en-US', { weekday: 'long' })
+      const dateKey = d.toLocaleDateString()
+      if (!dayTips[dow]) { dayTips[dow] = 0; dayDates[dow] = new Set() }
+      dayTips[dow] += t.usd || 0
+      dayDates[dow].add(dateKey)
+    })
+    const dayAvgs = Object.keys(dayTips).map(d => dayTips[d] / (dayDates[d].size || 1))
+    const overallDayAvg = dayAvgs.length ? dayAvgs.reduce((a,b) => a+b, 0) / dayAvgs.length : 0
+    const bestDayAvg = dayTips[bestDay.day] / (dayDates[bestDay.day]?.size || 1)
+    const mult = overallDayAvg > 0 ? (bestDayAvg / overallDayAvg).toFixed(1) : null
+    const costOfMissing = parseFloat((bestDayAvg - overallDayAvg).toFixed(2))
+    if (mult && parseFloat(mult) > 1 && costOfMissing > 0) {
+      insights.push({ icon: '📅', text: `${bestDay.day}s are your highest-earning day — you avg $${bestDayAvg.toFixed(0)} on ${bestDay.day}s vs $${overallDayAvg.toFixed(0)} on other days (${mult}x more). Missing one ${bestDay.day} costs you ~$${costOfMissing.toFixed(0)}`, type: 'day', priority: 1 })
+    }
   }
 
   // Best hour — uses pre-computed value
@@ -1011,45 +1026,46 @@ export function aggregateRows(tips) {
   const sessions    = detectSessions(tips)
 
   // ── SINGLE SOURCE OF TRUTH for best day and best hour ──────────────────
-  // Method: avg USD PER HOUR OF ACTUAL STREAM TIME at that hour/day.
-  // This is the correct "best time to stream" metric — revenue divided by
-  // time, not raw revenue totals (which would just show your busiest hours).
-  //
-  // We accumulate: total $ earned and total minutes streamed per hour-of-day
-  // and per day-of-week, then divide to get true $/hour rate.
-  //
-  // Only sessions with known duration (durationUnknown === false) are used.
+  // Method: avg USD per active calendar day (for bestDay)
+  //         avg USD per unique UTC hour-bucket (for bestHour)
+  // Both use UTC timestamps to match DB storage.
 
-  const dayRevenue = {}; const dayMinutes = {}
-  const hourRevenue = {}; const hourMinutes = {}
+  const dayTipsUSD = {}; const dayActiveDates = {}
+  const hourTipsUSD = {}; const hourBucketSets = {}
 
-  sessions.forEach(s => {
-    if (s.durationUnknown) return  // skip sessions with no real duration
-    const d = new Date(s.startTime).toLocaleDateString('en-US', { weekday: 'long' })
-    const h = new Date(s.startTime).getHours()
-    dayRevenue[d]  = (dayRevenue[d]  || 0) + s.totalUSD
-    dayMinutes[d]  = (dayMinutes[d]  || 0) + s.durationMinutes
-    hourRevenue[h] = (hourRevenue[h] || 0) + s.totalUSD
-    hourMinutes[h] = (hourMinutes[h] || 0) + s.durationMinutes
+  tips.forEach(t => {
+    const dt = new Date(t.dateRaw || t.date_time)
+    if (isNaN(dt.getTime())) return
+    const dow = dt.toLocaleDateString('en-US', { weekday: 'long', timeZone: 'UTC' })
+    const dateKey = dt.toLocaleDateString('en-US', { timeZone: 'UTC' })
+    const h = dt.getUTCHours()
+    const hBucket = Math.floor(dt.getTime() / 3600000)
+
+    if (!dayTipsUSD[dow]) { dayTipsUSD[dow] = 0; dayActiveDates[dow] = new Set() }
+    dayTipsUSD[dow] += t.usd || 0
+    dayActiveDates[dow].add(dateKey)
+
+    if (!hourTipsUSD[h]) { hourTipsUSD[h] = 0; hourBucketSets[h] = new Set() }
+    hourTipsUSD[h] += t.usd || 0
+    hourBucketSets[h].add(hBucket)
   })
 
-  // avg = total revenue / total hours streamed at that slot
-  const dayAvgs = Object.keys(dayRevenue).map(d => ({
+  const dayAvgs = Object.keys(dayTipsUSD).map(d => ({
     day: d,
-    avg: dayMinutes[d] > 0 ? parseFloat(((dayRevenue[d] / dayMinutes[d]) * 60).toFixed(2)) : 0,
-    total: dayRevenue[d],
-    count: 1
+    avg: parseFloat((dayTipsUSD[d] / (dayActiveDates[d].size || 1)).toFixed(2)),
+    total: dayTipsUSD[d],
+    count: dayActiveDates[d].size
   }))
-  const hourAvgs = Object.keys(hourRevenue).map(h => ({
+  const hourAvgs = Object.keys(hourTipsUSD).map(h => ({
     hour: h,
-    avg: hourMinutes[h] > 0 ? parseFloat(((hourRevenue[h] / hourMinutes[h]) * 60).toFixed(2)) : 0,
-    total: hourRevenue[h],
-    count: 1
+    avg: parseFloat((hourTipsUSD[h] / (hourBucketSets[h].size || 1)).toFixed(2)),
+    total: hourTipsUSD[h],
+    count: hourBucketSets[h].size
   }))
 
-  const bestDay  = dayAvgs.sort((a, b)  => b.avg - a.avg)[0]  || null
-  const worstDay = [...dayAvgs].sort((a, b)  => a.avg - b.avg)[0]  || null
-  const bestHour = hourAvgs.sort((a, b) => b.avg - a.avg)[0]  || null
+  const bestDay  = [...dayAvgs].sort((a, b) => b.avg - a.avg)[0] || null
+  const worstDay = [...dayAvgs].sort((a, b) => a.avg - b.avg)[0] || null
+  const bestHour = [...hourAvgs].sort((a, b) => b.avg - a.avg)[0] || null
 
   const whales      = identifyWhales(tips)
   const insights    = generateInsights(tips, sessions, bestDay, worstDay, bestHour)
