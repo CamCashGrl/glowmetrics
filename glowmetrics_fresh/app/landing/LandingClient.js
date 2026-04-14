@@ -72,17 +72,32 @@ export default function LandingPage(){
           See your biggest spenders, when you earn most, and exactly what to do next.
         </p>
 
-        <button onClick={()=>router.push("/login")} style={{
-          marginTop:24,
-          padding:"16px 44px",
-          borderRadius:12,
-          background:"linear-gradient(135deg,#3b82f6,#ec4899)",
-          color:"white",
-          fontWeight:700,
-          fontSize:16
-        }}>
-          Sign Up
-        </button>
+        <div style={{display:"flex",gap:12,justifyContent:"center",marginTop:24,flexWrap:"wrap"}}>
+          <button onClick={()=>router.push("/login?mode=signup")} style={{
+            padding:"16px 44px",
+            borderRadius:12,
+            background:"linear-gradient(135deg,#3b82f6,#ec4899)",
+            color:"white",
+            fontWeight:700,
+            fontSize:16,
+            border:"none",
+            cursor:"pointer"
+          }}>
+            Sign Up Free
+          </button>
+          <button onClick={()=>router.push("/login")} style={{
+            padding:"16px 44px",
+            borderRadius:12,
+            background:"transparent",
+            color:"white",
+            fontWeight:700,
+            fontSize:16,
+            border:"1px solid rgba(255,255,255,0.25)",
+            cursor:"pointer"
+          }}>
+            Log In
+          </button>
+        </div>
 
         <p style={{marginTop:10,color:"#ec4899",fontWeight:600}}>
           63 / 100 spots left
@@ -195,9 +210,21 @@ export default function LandingPage(){
       </div>
 
       {/* FINAL CTA */}
-      <div style={{textAlign:"center",marginTop:30}}>
-        <button onClick={()=>router.push("/login")} className="btn1 big">
+      <div style={{textAlign:"center",marginTop:30,display:"flex",gap:12,justifyContent:"center",flexWrap:"wrap"}}>
+        <button onClick={()=>router.push("/login?mode=signup")} className="btn1 big">
           Start Making More Per Stream
+        </button>
+        <button onClick={()=>router.push("/login")} style={{
+          padding:"16px 40px",
+          fontSize:16,
+          borderRadius:12,
+          background:"transparent",
+          color:"white",
+          fontWeight:700,
+          border:"1px solid rgba(255,255,255,0.25)",
+          cursor:"pointer"
+        }}>
+          Already have an account? Log In
         </button>
       </div>
 
