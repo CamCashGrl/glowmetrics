@@ -825,6 +825,7 @@ export default function Dashboard() {
   const [fanSearchQuery, setFanSearchQuery] = useState("")
   const [shareModalOpen, setShareModalOpen] = useState(false)
   const [chartDrillDay, setChartDrillDay] = useState(null)
+  const [heatmapDrillDay, setHeatmapDrillDay] = useState(null)   // which day was clicked in heatmap
   // ── LIVE MODE STATE ───────────────────────────────────────
   const [liveActive, setLiveActive] = useState(false)
   const [liveStartTime, setLiveStartTime] = useState(null)
@@ -1455,6 +1456,7 @@ const handleCSV = async (file, forcePlatform = null) => {
         .whale-row { transition: background 0.15s; }
         .whale-row:hover { background: rgba(59,130,246,0.08) !important; }
         @keyframes pulse-msg { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.25); } }
+        @keyframes growBar { from { transform: scaleY(0); transform-origin: bottom; opacity: 0; } to { transform: scaleY(1); transform-origin: bottom; opacity: 1; } }
         @keyframes fadeUp { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
       `}</style>
 
@@ -1786,7 +1788,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                             const bg = val === 0 ? "rgba(255,255,255,0.03)" : intensity < 0.25 ? "rgba(34,211,238,0.12)" : intensity < 0.5 ? "rgba(34,211,238,0.30)" : intensity < 0.75 ? "rgba(34,211,238,0.60)" : "rgba(34,211,238,0.90)"
                             return (
                               <div key={d} title={`${plat} ${d}: avg $${val.toFixed(2)}/day`}
-                                onClick={() => { setChartDrillDay(d); setActiveTab("whales") }}
+                                onClick={() => { if (val > 0) setHeatmapDrillDay(prev => prev === d ? null : d) }}
                                 style={{ height: 32, borderRadius: 5, background: bg, border: isToday ? "2px solid rgba(34,211,238,0.7)" : "1px solid rgba(255,255,255,0.05)", display: "flex", alignItems: "center", justifyContent: "center", cursor: val > 0 ? "pointer" : "default", transition: "opacity 0.1s" }}
                                 onMouseEnter={e => { if (val > 0) e.currentTarget.style.opacity = "0.75" }}
                                 onMouseLeave={e => { e.currentTarget.style.opacity = "1" }}>
@@ -1797,9 +1799,95 @@ const handleCSV = async (file, forcePlatform = null) => {
                         ]
                       })}
                     </div>
-                    <div style={{ marginTop: 8, fontSize: 11, color: C.muted }}>Today ({todayLong}) highlighted in cyan. Darker = more earnings.</div>
+                    <div style={{ marginTop: 8, fontSize: 11, color: C.muted }}>
+                      Today ({todayLong}) highlighted in cyan · <strong style={{ color: C.cyan }}>Click any cell</strong> to see your best time to stream that day
+                    </div>
                   </div>
                   </div>
+
+                  {/* DAY DRILL PANEL — appears when a heatmap cell is clicked */}
+                  {heatmapDrillDay && (() => {
+                    const dayLong = { Sun:'Sunday', Mon:'Monday', Tue:'Tuesday', Wed:'Wednesday', Thu:'Thursday', Fri:'Friday', Sat:'Saturday' }[heatmapDrillDay]
+                    const fmtH2 = h => { const n = parseInt(h); return n === 0 ? '12 AM' : n < 12 ? `${n} AM` : n === 12 ? '12 PM' : `${n-12} PM` }
+
+                    // Best hour per platform on this specific day
+                    const platHourOnDay = {}
+                    tips.forEach(t => {
+                      const dt = new Date(t.date_time || t.dateRaw)
+                      const tDay = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][dt.getUTCDay()]
+                      if (tDay !== heatmapDrillDay) return
+                      const p = t.platform
+                      const h = dt.getUTCHours()
+                      const bucket = Math.floor(dt.getTime() / 3600000)
+                      if (!platHourOnDay[p]) platHourOnDay[p] = {}
+                      if (!platHourOnDay[p][h]) platHourOnDay[p][h] = { usd: 0, buckets: new Set() }
+                      platHourOnDay[p][h].usd += t.usd || 0
+                      platHourOnDay[p][h].buckets.add(bucket)
+                    })
+
+                    // For each platform: best hour by avg $/session on that day
+                    const bestHourPerPlat = {}
+                    Object.keys(platHourOnDay).forEach(plat => {
+                      const hours = Object.entries(platHourOnDay[plat])
+                        .map(([h, data]) => ({ hour: parseInt(h), avg: parseFloat((data.usd / data.buckets.size).toFixed(2)), sessions: data.buckets.size }))
+                        .filter(x => x.sessions >= 1)
+                        .sort((a, b) => b.avg - a.avg)
+                      if (hours.length) bestHourPerPlat[plat] = hours[0]
+                    })
+
+                    // Overall avg for this day across all platforms
+                    const dayTipsTotal = tips.filter(t => {
+                      const dt = new Date(t.date_time || t.dateRaw)
+                      return ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][dt.getUTCDay()] === heatmapDrillDay
+                    })
+                    const dayAvg = dayTipsTotal.length > 0 ? (dayTipsTotal.reduce((s, t) => s + (t.usd || 0), 0) / new Set(dayTipsTotal.map(t => new Date(t.date_time || t.dateRaw).toISOString().slice(0,10))).size).toFixed(0) : 0
+                    const platColors = { Chaturbate: '#22D3EE', BongaCams: '#EC4899', MyFreeCams: '#F59E0B' }
+
+                    return (
+                      <div style={{ marginTop: 12, padding: 16, borderRadius: 12, background: 'rgba(34,211,238,0.06)', border: '1px solid rgba(34,211,238,0.2)', animation: 'fadeUp 0.2s ease' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                          <div>
+                            <div style={{ fontSize: 15, fontWeight: 700, color: C.white }}>📅 {dayLong}s — Best Times to Stream</div>
+                            <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>You avg ${dayAvg} per active {dayLong} · based on your real tip history</div>
+                          </div>
+                          <button onClick={() => setHeatmapDrillDay(null)} style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer', fontSize: 18, padding: 4, lineHeight: 1 }}>✕</button>
+                        </div>
+                        {Object.keys(bestHourPerPlat).length === 0 ? (
+                          <div style={{ fontSize: 13, color: C.muted }}>Not enough {dayLong} data yet — stream more on {dayLong}s to unlock this insight.</div>
+                        ) : (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                            {Object.entries(bestHourPerPlat).sort((a,b) => b[1].avg - a[1].avg).map(([plat, best]) => {
+                              const col = platColors[plat] || C.blue
+                              const allHoursForPlat = Object.entries(platHourOnDay[plat] || {})
+                                .map(([h, data]) => ({ hour: parseInt(h), avg: parseFloat((data.usd / data.buckets.size).toFixed(2)) }))
+                                .sort((a, b) => b.avg - a.avg)
+                                .slice(0, 3)
+                              return (
+                                <div key={plat} style={{ padding: '12px 14px', borderRadius: 10, background: `${col}0d`, border: `1px solid ${col}25` }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, flexWrap: 'wrap' }}>
+                                    <div>
+                                      <div style={{ fontSize: 12, fontWeight: 700, color: col, marginBottom: 4 }}>{plat}</div>
+                                      <div style={{ fontSize: 20, fontWeight: 900, color: C.white }}>⏰ {fmtH2(best.hour)}</div>
+                                      <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>${best.avg.toFixed(0)} avg/session · {best.sessions} session{best.sessions !== 1 ? 's' : ''} tracked</div>
+                                    </div>
+                                    {allHoursForPlat.length > 1 && (
+                                      <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'flex-end' }}>
+                                        {allHoursForPlat.map((h, i) => (
+                                          <div key={h.hour} style={{ fontSize: 11, color: i === 0 ? col : C.muted }}>
+                                            {i === 0 ? '🥇' : i === 1 ? '🥈' : '🥉'} {fmtH2(h.hour)} · ${h.avg.toFixed(0)}/session
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })()}
                 )
               })()}
             </div>
@@ -3287,40 +3375,86 @@ const handleCSV = async (file, forcePlatform = null) => {
                         </div>
                       )}
 
-                      {/* TIMELINE CHART */}
-                      {bd.buckets.length > 1 && (
-                        <div style={{ marginBottom: 24 }}>
-                          <div style={{ fontSize: 12, fontWeight: 600, color: C.muted, marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>⏱ Earnings Timeline (5-min buckets)</div>
-                          <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 64, padding: "0 0 4px" }}>
-                            {bd.buckets.map((b, bi) => {
-                              const heightPct = maxBucketUSD > 0 ? (b.usd / maxBucketUSD) : 0
-                              const isPeak = bi === bd.buckets.indexOf(bd.peakBucket)
-                              const barColor = isPeak ? C.gold : b.usd > 0 ? C.cyan : "rgba(255,255,255,0.06)"
-                              return (
-                                <div key={bi} title={`${b.label}: $${b.usd.toFixed(2)}`} style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "flex-end", height: "100%" }}>
-                                  <div style={{ width: "100%", height: `${Math.max(heightPct * 100, b.usd > 0 ? 4 : 2)}%`, background: barColor, borderRadius: "3px 3px 0 0", transition: "height 0.3s", minHeight: b.usd > 0 ? 4 : 2 }} />
-                                </div>
-                              )
-                            })}
+                      {/* TIMELINE CHART — animated bars + hover tooltip */}
+                      {bd.buckets.length > 1 && (() => {
+                        return (
+                          <div style={{ marginBottom: 24 }}>
+                            <div style={{ fontSize: 12, fontWeight: 600, color: C.muted, marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>⏱ Earnings Timeline (5-min buckets)</div>
+                            <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 80, padding: "0 0 4px", position: "relative" }}>
+                              {bd.buckets.map((b, bi) => {
+                                const heightPct = maxBucketUSD > 0 ? (b.usd / maxBucketUSD) : 0
+                                const isPeak = bi === bd.buckets.indexOf(bd.peakBucket)
+                                const barColor = isPeak ? C.gold : b.usd > 0 ? C.cyan : "rgba(255,255,255,0.06)"
+                                const barGlow = isPeak ? `0 0 8px ${C.gold}80` : b.usd > 0 ? `0 0 6px rgba(34,211,238,0.3)` : "none"
+                                return (
+                                  <div key={bi}
+                                    title={b.usd > 0 ? `${b.label}: $${b.usd.toFixed(2)}` : b.label}
+                                    style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "flex-end", height: "100%", cursor: b.usd > 0 ? "pointer" : "default", position: "relative" }}
+                                    onMouseEnter={e => {
+                                      if (b.usd <= 0) return
+                                      const bar = e.currentTarget.querySelector('.session-bar')
+                                      if (bar) { bar.style.opacity = '0.75'; bar.style.boxShadow = barGlow }
+                                      const tip = e.currentTarget.querySelector('.bar-tooltip')
+                                      if (tip) tip.style.display = 'block'
+                                    }}
+                                    onMouseLeave={e => {
+                                      const bar = e.currentTarget.querySelector('.session-bar')
+                                      if (bar) { bar.style.opacity = '1'; bar.style.boxShadow = isPeak ? barGlow : 'none' }
+                                      const tip = e.currentTarget.querySelector('.bar-tooltip')
+                                      if (tip) tip.style.display = 'none'
+                                    }}>
+                                    {/* Tooltip */}
+                                    {b.usd > 0 && (
+                                      <div className="bar-tooltip" style={{ display: "none", position: "absolute", bottom: "100%", left: "50%", transform: "translateX(-50%)", marginBottom: 4, background: "rgba(5,7,15,0.95)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 6, padding: "4px 8px", whiteSpace: "nowrap", zIndex: 10, pointerEvents: "none" }}>
+                                        <div style={{ fontSize: 11, fontWeight: 700, color: isPeak ? C.gold : C.white }}>${b.usd.toFixed(2)}</div>
+                                        <div style={{ fontSize: 9, color: C.muted }}>{b.label} {b.count > 0 ? `· ${b.count} tip${b.count !== 1 ? 's' : ''}` : ''}</div>
+                                      </div>
+                                    )}
+                                    {/* Bar */}
+                                    <div className="session-bar" style={{
+                                      width: "100%",
+                                      height: `${Math.max(heightPct * 100, b.usd > 0 ? 5 : 2)}%`,
+                                      background: barColor,
+                                      borderRadius: "3px 3px 0 0",
+                                      boxShadow: isPeak ? barGlow : "none",
+                                      transition: "height 0.4s cubic-bezier(0.34,1.56,0.64,1), opacity 0.15s",
+                                      minHeight: b.usd > 0 ? 5 : 2,
+                                      animation: `growBar 0.5s cubic-bezier(0.34,1.56,0.64,1) ${bi * 0.015}s both`,
+                                    }} />
+                                  </div>
+                                )
+                              })}
+                            </div>
+                            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
+                              <span style={{ fontSize: 9, color: C.muted }}>{fmt(s.startTime)}</span>
+                              {bd.spikes.length > 0 && <span style={{ fontSize: 9, color: C.gold }}>🔥 Peak at {bd.spikes[0].time} · ${bd.spikes[0].usd}</span>}
+                              <span style={{ fontSize: 9, color: C.muted }}>{fmt(s.endTime)}</span>
+                            </div>
                           </div>
-                          <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
-                            <span style={{ fontSize: 9, color: C.muted }}>{fmt(s.startTime)}</span>
-                            {bd.spikes.length > 0 && <span style={{ fontSize: 9, color: C.gold }}>🔥 Peak at {bd.spikes[0].time}</span>}
-                            <span style={{ fontSize: 9, color: C.muted }}>{fmt(s.endTime)}</span>
-                          </div>
-                        </div>
-                      )}
+                        )
+                      })()}
 
                       {/* FIRST HALF vs SECOND HALF */}
                       <div style={{ marginBottom: 24 }}>
-                        <div style={{ fontSize: 12, fontWeight: 600, color: C.muted, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 }}>📊 Session Pacing</div>
-                        <div style={{ display: "flex", height: 28, borderRadius: 8, overflow: "hidden", border: "1px solid rgba(255,255,255,0.08)" }}>
-                          <div style={{ width: `${bd.firstHalfPct}%`, background: "linear-gradient(90deg, #22D3EE, #60A5FA)", display: "flex", alignItems: "center", justifyContent: "center", transition: "width 0.4s" }}>
-                            {bd.firstHalfPct >= 20 && <span style={{ fontSize: 10, fontWeight: 800, color: "#fff" }}>First half {bd.firstHalfPct}%</span>}
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: C.muted, textTransform: "uppercase", letterSpacing: 0.5 }}>📊 Session Pacing</div>
+                          <div style={{ display: "flex", gap: 14, fontSize: 11, color: C.muted }}>
+                            <span style={{ color: C.cyan }}>First half {bd.firstHalfPct}%</span>
+                            <span>Second half {100 - bd.firstHalfPct}%</span>
+                          </div>
+                        </div>
+                        <div style={{ display: "flex", height: 32, borderRadius: 8, overflow: "hidden", border: "1px solid rgba(255,255,255,0.08)", cursor: "default" }}>
+                          <div style={{ width: `${bd.firstHalfPct}%`, background: "linear-gradient(90deg, #22D3EE, #60A5FA)", display: "flex", alignItems: "center", justifyContent: "center", transition: "width 0.6s cubic-bezier(0.34,1.56,0.64,1)", minWidth: bd.firstHalfPct > 0 ? 2 : 0 }}>
+                            {bd.firstHalfPct >= 25 && <span style={{ fontSize: 11, fontWeight: 800, color: "#fff" }}>${(s.totalUSD * bd.firstHalfPct / 100).toFixed(0)}</span>}
                           </div>
                           <div style={{ flex: 1, background: "rgba(255,255,255,0.06)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                            {100 - bd.firstHalfPct >= 20 && <span style={{ fontSize: 10, color: C.muted }}>Second half {100 - bd.firstHalfPct}%</span>}
+                            {100 - bd.firstHalfPct >= 25 && <span style={{ fontSize: 11, color: C.muted }}>${(s.totalUSD * (100 - bd.firstHalfPct) / 100).toFixed(0)}</span>}
                           </div>
+                        </div>
+                        <div style={{ fontSize: 11, color: C.muted, marginTop: 6 }}>
+                          {bd.firstHalfPct >= 60 ? "💡 Strong opening — most earnings in first half" :
+                           bd.firstHalfPct <= 35 ? "💡 Slow start — earnings built momentum in second half" :
+                           "💡 Balanced pacing — earnings spread evenly"}
                         </div>
                       </div>
 
