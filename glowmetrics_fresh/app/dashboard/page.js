@@ -1037,6 +1037,13 @@ const handleCSV = async (file, forcePlatform = null) => {
   // Single source of truth — pre-computed in aggregateRows, same values used everywhere
   const analyticsbestDay  = analytics?.bestDay  || null
   const analyticsBestHour = analytics?.bestHour || null
+  // Advanced analytics — from aggregateRows
+  const platformBestTimes     = analytics?.platformBestTimes     || {}
+  const earningsVelocity      = analytics?.earningsVelocity      ?? null
+  const platformVelocity      = analytics?.platformVelocity      || {}
+  const missedRevenueByPlat   = analytics?.missedRevenueByPlatform || {}
+  const returningVsNew        = analytics?.returningVsNew        || null
+  const topFanDependency      = analytics?.topFanDependency      || null
 
   // Build platformTimes from INDIVIDUAL TIPS (not session start time)
   // so hour/day reflects when money actually came in, not when the session started
@@ -1564,20 +1571,42 @@ const handleCSV = async (file, forcePlatform = null) => {
                 { label: "Total Fans", value: whales.length.toLocaleString(), sub: `${fansActiveLast30} active in last 30 days`, icon: "👥", badge: null },
                 { label: "Sessions", value: sessions.length.toLocaleString(), sub: `${sessionsLast30} in last 30 days${sessionsLast30 >= 3 ? " 🔥" : ""}`, icon: "🎥", badge: sessionsLast30 >= 5 ? "🔥 On a streak!" : null, badgeColor: C.gold }
               ]
+              // Earnings velocity per platform for velocity strip
+              const velPlatforms = Object.entries(platformVelocity).filter(([,v]) => v !== null).sort((a,b) => (b[1]||0)-(a[1]||0))
               return (
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 28 }}>
-                  {cards.map((s, i) => (
-                    <div key={i} className="dash-card" style={{ ...glassCard, borderRadius: 18, padding: "22px 20px", position: "relative", overflow: "hidden", animation: `fadeUp 0.3s ease ${i * 0.06}s both`, boxShadow: s.glow ? `0 0 30px rgba(16,185,129,0.2), ${glassCard.boxShadow}` : glassCard.boxShadow }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
-                        <span style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600 }}>{s.label}</span>
-                        <span style={{ fontSize: 22 }}>{s.icon}</span>
+                <>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: velPlatforms.length ? 12 : 28 }}>
+                    {cards.map((s, i) => (
+                      <div key={i} className="dash-card" style={{ ...glassCard, borderRadius: 18, padding: "22px 20px", position: "relative", overflow: "hidden", animation: `fadeUp 0.3s ease ${i * 0.06}s both`, boxShadow: s.glow ? `0 0 30px rgba(16,185,129,0.2), ${glassCard.boxShadow}` : glassCard.boxShadow }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
+                          <span style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600 }}>{s.label}</span>
+                          <span style={{ fontSize: 22 }}>{s.icon}</span>
+                        </div>
+                        <div style={{ fontSize: 34, fontWeight: 900, background: "linear-gradient(135deg,#60a5fa,#f472b6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", marginBottom: 6, lineHeight: 1.1 }}>{s.value}</div>
+                        <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.4 }}>{s.sub}</div>
+                        {s.badge && <div style={{ marginTop: 8, display: "inline-block", padding: "2px 8px", borderRadius: 6, background: `${s.badgeColor}20`, border: `1px solid ${s.badgeColor}40`, fontSize: 10, fontWeight: 700, color: s.badgeColor }}>{s.badge}</div>}
                       </div>
-                      <div style={{ fontSize: 34, fontWeight: 900, background: "linear-gradient(135deg,#60a5fa,#f472b6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", marginBottom: 6, lineHeight: 1.1 }}>{s.value}</div>
-                      <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.4 }}>{s.sub}</div>
-                      {s.badge && <div style={{ marginTop: 8, display: "inline-block", padding: "2px 8px", borderRadius: 6, background: `${s.badgeColor}20`, border: `1px solid ${s.badgeColor}40`, fontSize: 10, fontWeight: 700, color: s.badgeColor }}>{s.badge}</div>}
+                    ))}
+                  </div>
+                  {/* Earnings Velocity strip — formula: totalUSD / totalHours per platform */}
+                  {velPlatforms.length > 0 && (
+                    <div style={{ display: "flex", gap: 10, marginBottom: 28, flexWrap: "wrap" }}>
+                      {velPlatforms.map(([plat, vel], i) => (
+                        <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 14px", borderRadius: 20, background: "rgba(34,211,238,0.07)", border: "1px solid rgba(34,211,238,0.2)", animation: `fadeUp 0.3s ease ${0.25 + i*0.05}s both` }}>
+                          <span style={{ fontSize: 11, color: C.muted }}>{plat.replace('BongaCams','Bonga').replace('MyFreeCams','MFC').replace('Chaturbate','CB')}</span>
+                          <span style={{ fontSize: 13, fontWeight: 700, color: C.cyan }}>${vel.toFixed(2)}/hr</span>
+                          <span style={{ fontSize: 10, color: C.muted }}>velocity</span>
+                        </div>
+                      ))}
+                      {earningsVelocity !== null && (
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 14px", borderRadius: 20, background: "rgba(16,185,129,0.07)", border: "1px solid rgba(16,185,129,0.2)" }}>
+                          <span style={{ fontSize: 11, color: C.muted }}>Overall</span>
+                          <span style={{ fontSize: 13, fontWeight: 700, color: C.green }}>${earningsVelocity.toFixed(2)}/hr</span>
+                        </div>
+                      )}
                     </div>
-                  ))}
-                </div>
+                  )}
+                </>
               )
             })()}
 
@@ -1650,38 +1679,49 @@ const handleCSV = async (file, forcePlatform = null) => {
                 </div>
               </div>
 
-              {/* Best time + best day row */}
+              {/* Platform ROI + Per-Platform Best Time (mandatory: always show platform context) */}
               {(() => {
-                const bh = analyticsBestHour
-                const bd = analyticsbestDay
-                const items = []
-                if (bh) {
-                  const h = parseInt(bh.hour)
-                  const label = h === 0 ? '12 AM' : h < 12 ? `${h} AM` : h === 12 ? '12 PM' : `${h-12} PM`
-                  items.push({ icon: '⏰', label: 'Best Hour', value: label, sub: `$${bh.avg.toFixed(0)} avg/session`, color: C.cyan })
-                }
-                if (bd) {
-                  items.push({ icon: '📅', label: 'Best Day', value: bd.day, sub: `$${bd.avg.toFixed(0)} avg/active day`, color: C.gold })
-                }
-                if (avgPerHour > 0) {
-                  items.push({ icon: '⚡', label: 'Avg $/Hour', value: `$${avgPerHour.toFixed(2)}`, sub: 'across all sessions', color: C.green })
-                }
-                const topPlatform = [...(analytics?.platforms || [])].sort((a,b) => b.totalUSD - a.totalUSD)[0]
-                if (topPlatform) {
-                  items.push({ icon: '🏆', label: 'Top Platform', value: topPlatform.platform.replace('BongaCams','Bonga').replace('MyFreeCams','MFC'), sub: `$${topPlatform.totalUSD.toFixed(0)} all time`, color: C.pink })
-                }
-                if (!items.length) return null
+                const fmtH = h => h === 0 ? '12 AM' : h < 12 ? `${h} AM` : h === 12 ? '12 PM' : `${h-12} PM`
+                const platColors = { Chaturbate: C.cyan, BongaCams: C.pink, MyFreeCams: C.gold }
+                const allPlats = [...(analytics?.platforms || [])].sort((a,b) => b.totalUSD - a.totalUSD)
+                if (!allPlats.length) return null
                 return (
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 10, marginBottom: 18 }}>
-                    {items.map((item, i) => (
-                      <div key={i} style={{ padding: "14px 16px", borderRadius: 12, background: `${item.color}0d`, border: `1px solid ${item.color}28`, transition: "transform 0.15s" }}
-                        onMouseEnter={e => e.currentTarget.style.transform = "scale(1.02)"}
-                        onMouseLeave={e => e.currentTarget.style.transform = ""}>
-                        <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 4 }}>{item.icon} {item.label}</div>
-                        <div style={{ fontSize: 20, fontWeight: 800, color: item.color, marginBottom: 2 }}>{item.value}</div>
-                        <div style={{ fontSize: 11, color: C.muted }}>{item.sub}</div>
+                  <div style={{ marginBottom: 18 }}>
+                    {/* Platform ROI row: formula = total_earnings / total_hours */}
+                    <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10 }}>Platform ROI ($/hr streamed)</div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10, marginBottom: 18 }}>
+                      {allPlats.map((p, i) => {
+                        const roi = platformVelocity[p.platform] ?? (p.hours > 0 ? parseFloat((p.totalUSD / p.hours).toFixed(2)) : null)
+                        const bestTime = platformBestTimes[p.platform]
+                        const col = platColors[p.platform] || C.blue
+                        const isTop = i === 0
+                        return (
+                          <div key={i} style={{ padding: "14px 16px", borderRadius: 12, background: isTop ? `${col}12` : `${col}08`, border: `1px solid ${isTop ? col + '40' : col + '20'}`, transition: "transform 0.15s, box-shadow 0.15s", position: "relative" }}
+                            onMouseEnter={e => { e.currentTarget.style.transform = "scale(1.02)"; e.currentTarget.style.boxShadow = `0 4px 16px ${col}20` }}
+                            onMouseLeave={e => { e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = "" }}>
+                            {isTop && <div style={{ position: "absolute", top: 8, right: 8, fontSize: 9, padding: "2px 6px", borderRadius: 10, background: `${col}25`, color: col, fontWeight: 700 }}>TOP ROI</div>}
+                            <div style={{ fontSize: 11, fontWeight: 700, color: col, marginBottom: 6 }}>{p.platform.replace('BongaCams','Bonga').replace('MyFreeCams','MFC')}</div>
+                            <div style={{ fontSize: 22, fontWeight: 900, color: C.white, marginBottom: 2 }}>{roi !== null ? `$${roi.toFixed(2)}/hr` : '—'}</div>
+                            <div style={{ fontSize: 11, color: C.muted, marginBottom: bestTime ? 8 : 0 }}>${p.totalUSD.toFixed(0)} total · {p.hours.toFixed(0)}h streamed</div>
+                            {bestTime && (
+                              <div style={{ padding: "5px 8px", borderRadius: 8, background: `${col}10`, border: `1px solid ${col}25`, fontSize: 11, color: col }}>
+                                ⏰ Best: <strong>{fmtH(bestTime.hour)}</strong> · ${bestTime.avg.toFixed(0)} avg ({bestTime.sessionCount} sessions)
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                    {/* Best day */}
+                    {analyticsbestDay && (
+                      <div style={{ display: "flex", gap: 8, alignItems: "center", padding: "10px 14px", borderRadius: 10, background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.2)", marginBottom: 0 }}>
+                        <span style={{ fontSize: 16 }}>📅</span>
+                        <div style={{ fontSize: 13, color: C.white }}>
+                          <strong>{analyticsbestDay.day}s</strong> earn the most — ${analyticsbestDay.avg.toFixed(0)} avg per active day
+                          {analyticsbestDay.count >= 3 && <span style={{ color: C.muted, marginLeft: 6 }}>across {analyticsbestDay.count} {analyticsbestDay.day}s tracked</span>}
+                        </div>
                       </div>
-                    ))}
+                    )}
                   </div>
                 )
               })()}
@@ -1794,7 +1834,13 @@ const handleCSV = async (file, forcePlatform = null) => {
                     </div>
                     <div>
                       <div style={{ fontSize: 13, fontWeight: 700, color: C.white }}>{w.username}</div>
-                      <div style={{ fontSize: 11, color: C.muted }}>${w.totalUSD.toFixed(0)} lifetime{opts.sub ? ` · ${opts.sub}` : ''} · {w.platform}</div>
+                      <div style={{ fontSize: 11, color: C.muted }}>
+                      <span style={{ color: C.white, fontWeight: 600 }}>${w.totalUSD.toFixed(0)}</span> lifetime
+                      {opts.sub ? ` · ${opts.sub}` : ''}
+                      {w.tipCount > 1 && ` · ${w.tipCount} tips`}
+                      {w.avgDaysBetweenTips && w.tipCount > 1 && <span style={{ color: w.churnRisk?.level === 'High' || w.churnRisk?.level === 'Critical' ? C.red : C.muted }}>{` · every ~${Math.round(w.avgDaysBetweenTips)}d`}</span>}
+                      {` · ${w.platform}`}
+                    </div>
                     </div>
                   </div>
                   {opts.badge && <span style={{ fontSize: 11, padding: "3px 9px", borderRadius: 20, background: opts.badgeBg, color: opts.badgeColor, fontWeight: 700, whiteSpace: "nowrap" }}>{opts.badge}</span>}
@@ -1878,14 +1924,18 @@ const handleCSV = async (file, forcePlatform = null) => {
             })()}
 
             {/* ═══════════════════════════════════════
-                5. YOU'RE LOSING MONEY — Risk / Loss
+                5. YOU'RE LOSING MONEY — Risk / Loss + Missed Revenue
             ═══════════════════════════════════════ */}
             {(() => {
               const allAlerts = [
                 ...(lossAlerts || []),
                 ...(alerts || []).slice(0, 3)
               ].slice(0, 6)
-              if (!allAlerts.length) return null
+              const missedEntries = Object.entries(missedRevenueByPlat)
+                .filter(([,m]) => m.missedRevenue > 5)
+                .sort((a,b) => b[1].missedRevenue - a[1].missedRevenue)
+              if (!allAlerts.length && !missedEntries.length) return null
+              const fmtH2 = h => h === 0 ? '12 AM' : h < 12 ? `${h} AM` : h === 12 ? '12 PM' : `${h-12} PM`
               return (
                 <div style={{ ...glassCard, borderRadius: 18, padding: 24, marginBottom: 28, border: "1px solid rgba(251,146,60,0.2)", animation: "fadeUp 0.3s ease 0.25s both" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
@@ -1895,6 +1945,31 @@ const handleCSV = async (file, forcePlatform = null) => {
                       <div style={{ fontSize: 12, color: C.muted }}>Inactivity, cold fans, missed windows</div>
                     </div>
                   </div>
+
+                  {/* Missed Revenue — formula: (bestHourAvg - overallAvg) × sessionsNotAtBestHour */}
+                  {missedEntries.length > 0 && (
+                    <div style={{ marginBottom: 14 }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: C.orange, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 8 }}>💸 Missed Revenue (by streaming off-peak)</div>
+                      {missedEntries.map(([plat, m], i) => (
+                        <div key={i} style={{ padding: "12px 14px", borderRadius: 10, marginBottom: 8, background: "rgba(251,146,60,0.08)", border: "1px solid rgba(251,146,60,0.22)" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, flexWrap: "wrap" }}>
+                            <div>
+                              <div style={{ fontSize: 13, fontWeight: 700, color: C.white, marginBottom: 3 }}>
+                                📉 {plat} — estimated <span style={{ color: C.orange }}>${m.missedRevenue.toFixed(0)}</span> left on the table
+                              </div>
+                              <div style={{ fontSize: 12, color: C.muted }}>
+                                {m.sessionsNotAtBestHour} sessions ran off-peak · Best hour is {fmtH2(m.bestHour)} (${m.bestHourAvg.toFixed(0)} avg) vs your overall ${m.overallAvg.toFixed(0)} avg
+                              </div>
+                            </div>
+                            <div style={{ fontSize: 11, padding: "3px 9px", borderRadius: 20, background: "rgba(251,146,60,0.2)", color: C.orange, fontWeight: 700, whiteSpace: "nowrap" }}>
+                              Stream at {fmtH2(m.bestHour)}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                     {allAlerts.map((a, i) => (
                       <div key={i} style={{ padding: "12px 14px", borderRadius: 10, background: a.severity === 'critical' ? "rgba(248,113,113,0.1)" : "rgba(251,146,60,0.08)", border: `1px solid ${a.severity === 'critical' ? 'rgba(248,113,113,0.25)' : 'rgba(251,146,60,0.2)'}` }}>
@@ -1910,12 +1985,49 @@ const handleCSV = async (file, forcePlatform = null) => {
             {/* ═══════════════════════════════════════
                 6. SMART INSIGHTS — scannable, lower priority
             ═══════════════════════════════════════ */}
-            {insights.length > 0 && (
+            {(insights.length > 0 || topFanDependency || returningVsNew) && (
               <div style={{ ...glassCard, borderRadius: 18, padding: 24, marginBottom: 28, animation: "fadeUp 0.3s ease 0.3s both" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
                   <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(34,211,238,0.12)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>💡</div>
                   <div style={{ fontSize: 18, fontWeight: 800, color: C.white }}>Smart Insights</div>
                 </div>
+
+                {/* Top Fan Dependency — formula: topN_revenue / total_revenue */}
+                {topFanDependency && (
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: 8, marginBottom: 14 }}>
+                    {[
+                      { label: "Top fan", value: `${topFanDependency.top1Pct}%`, sub: "of total revenue", risk: topFanDependency.top1Pct > 20 },
+                      { label: "Top 3 fans", value: `${topFanDependency.top3Pct}%`, sub: "of total revenue", risk: topFanDependency.top3Pct > 50 },
+                      { label: "Top 5 fans", value: `${topFanDependency.top5Pct}%`, sub: "of total revenue", risk: false },
+                      { label: "Loss if #1 leaves", value: `$${topFanDependency.lossIfTopFanLeaves.toFixed(0)}`, sub: "estimated impact", risk: topFanDependency.top1Pct > 15 },
+                    ].map(({ label, value, sub, risk }) => (
+                      <div key={label} style={{ padding: "10px 12px", borderRadius: 10, background: risk ? "rgba(248,113,113,0.08)" : "rgba(255,255,255,0.04)", border: `1px solid ${risk ? "rgba(248,113,113,0.2)" : "rgba(255,255,255,0.08)"}` }}>
+                        <div style={{ fontSize: 10, color: C.muted, marginBottom: 3 }}>{label}</div>
+                        <div style={{ fontSize: 16, fontWeight: 800, color: risk ? C.red : C.white }}>{value}</div>
+                        <div style={{ fontSize: 10, color: C.muted }}>{sub}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Returning vs New — formula: avg_repeat_spend vs avg_new_spend */}
+                {returningVsNew && returningVsNew.multiplier && (
+                  <div style={{ padding: "12px 14px", borderRadius: 10, background: "rgba(16,185,129,0.07)", border: "1px solid rgba(16,185,129,0.2)", marginBottom: 14, display: "flex", gap: 16, flexWrap: "wrap" }}>
+                    <div style={{ flex: 1, minWidth: 100 }}>
+                      <div style={{ fontSize: 10, color: C.muted, marginBottom: 2 }}>🔁 Returning fans ({returningVsNew.returningPct}%)</div>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: C.green }}>${returningVsNew.avgReturnSpend.toFixed(0)} avg</div>
+                    </div>
+                    <div style={{ flex: 1, minWidth: 100 }}>
+                      <div style={{ fontSize: 10, color: C.muted, marginBottom: 2 }}>👋 New fans ({100 - returningVsNew.returningPct}%)</div>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: C.blue }}>${returningVsNew.avgNewSpend.toFixed(0)} avg</div>
+                    </div>
+                    <div style={{ flex: 1, minWidth: 100 }}>
+                      <div style={{ fontSize: 10, color: C.muted, marginBottom: 2 }}>💰 Loyalty multiplier</div>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: C.gold }}>{returningVsNew.multiplier}x more</div>
+                    </div>
+                  </div>
+                )}
+
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   {insights.slice(0, 3).map((ins, i) => (
                     <div key={i} style={{ display: "flex", gap: 12, alignItems: "flex-start", padding: "11px 14px", borderRadius: 10, background: "rgba(34,211,238,0.06)", border: "1px solid rgba(34,211,238,0.15)" }}>
@@ -1938,7 +2050,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                       <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "rgba(5,7,15,0.75)", backdropFilter: "blur(2px)", borderRadius: 10 }}>
                         <div style={{ fontSize: 13, fontWeight: 700, color: C.white, marginBottom: 4 }}>🔒 {Math.max(0, insights.length - 3)} more insights hidden</div>
                         <div style={{ fontSize: 12, color: C.muted, marginBottom: 12 }}>Timing patterns, predictions & advanced strategy</div>
-                        <button onClick={() => openUpgradeModal('insights')} style={{ padding: "8px 20px", borderRadius: 8, background: "linear-gradient(135deg,#3b82f6,#ec4899)", border: "none", color: C.white, fontSize: 12, fontWeight: 700, cursor: "pointer", boxShadow: "0 0 20px rgba(59,130,246,0.4)" }}>
+                        <button onClick={() => openUpgradeModal("insights")} style={{ padding: "8px 20px", borderRadius: 8, background: "linear-gradient(135deg,#3b82f6,#ec4899)", border: "none", color: C.white, fontSize: 12, fontWeight: 700, cursor: "pointer", boxShadow: "0 0 20px rgba(59,130,246,0.4)" }}>
                           🔓 Unlock All Insights
                         </button>
                       </div>
