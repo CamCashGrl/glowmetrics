@@ -1121,6 +1121,111 @@ export function aggregateRows(tips) {
     churnRisk: w.churnRisk
   }))
 
+  // ── PER-PLATFORM BEST HOUR ────────────────────────────────────────────
+  // Formula: avg USD per unique UTC hour-bucket, per platform
+  // Only use tips with valid timestamps
+  const platHourUSD = {}; const platHourBuckets = {}
+  tips.forEach(t => {
+    const dt = new Date(t.dateRaw || t.date_time)
+    if (isNaN(dt.getTime())) return
+    const p = t.platform || 'Unknown'
+    const h = dt.getUTCHours()
+    const bucket = Math.floor(dt.getTime() / 3600000)
+    if (!platHourUSD[p]) { platHourUSD[p] = {}; platHourBuckets[p] = {} }
+    if (!platHourUSD[p][h]) { platHourUSD[p][h] = 0; platHourBuckets[p][h] = new Set() }
+    platHourUSD[p][h] += t.usd || 0
+    platHourBuckets[p][h].add(bucket)
+  })
+  // For each platform: find best hour (highest avg $/hour-bucket)
+  const platformBestTimes = {}
+  Object.keys(platHourUSD).forEach(plat => {
+    const hourAvgList = Object.keys(platHourUSD[plat]).map(h => ({
+      hour: parseInt(h),
+      avg: parseFloat((platHourUSD[plat][h] / (platHourBuckets[plat][h].size || 1)).toFixed(2)),
+      sessionCount: platHourBuckets[plat][h].size
+    }))
+    // Require at least 2 sessions at an hour to be meaningful
+    const qualified = hourAvgList.filter(x => x.sessionCount >= 2)
+    const best = (qualified.length ? qualified : hourAvgList).sort((a,b) => b.avg - a.avg)[0]
+    if (best) platformBestTimes[plat] = best
+  })
+
+  // ── EARNINGS VELOCITY ─────────────────────────────────────────────────
+  // Formula: total USD / total timed hours across all sessions
+  const timedSessions = sessions.filter(s => !s.durationUnknown && s.durationHours > 0)
+  const totalTimedUSD   = timedSessions.reduce((s, x) => s + x.totalUSD, 0)
+  const totalTimedHours = timedSessions.reduce((s, x) => s + x.durationHours, 0)
+  const earningsVelocity = totalTimedHours > 0
+    ? parseFloat((totalTimedUSD / totalTimedHours).toFixed(2))
+    : null
+
+  // Per-platform velocity
+  const platformVelocity = {}
+  Object.keys(platformMap).forEach(plat => {
+    const p = platformMap[plat]
+    platformVelocity[plat] = p.hours > 0
+      ? parseFloat((p.totalUSD / p.hours).toFixed(2))
+      : null
+  })
+
+  // ── MISSED REVENUE ────────────────────────────────────────────────────
+  // Formula (per platform):
+  //   missedRevenue = (bestHourAvg - overallPlatformAvgPerSession) × sessionsNotAtBestHour
+  // Only computed if we have enough sessions per platform
+  const missedRevenueByPlatform = {}
+  Object.keys(platformBestTimes).forEach(plat => {
+    const platSessions = sessions.filter(s => s.platform === plat)
+    if (platSessions.length < 5) return
+    const best = platformBestTimes[plat]
+    const overallAvg = platSessions.reduce((s, x) => s + x.totalUSD, 0) / platSessions.length
+    const sessionsAtBestHour = platSessions.filter(s => new Date(s.startTime).getUTCHours() === best.hour).length
+    const sessionsNotAtBest  = platSessions.length - sessionsAtBestHour
+    const missed = parseFloat(((best.avg - overallAvg) * sessionsNotAtBest).toFixed(2))
+    if (missed > 0) {
+      missedRevenueByPlatform[plat] = {
+        bestHourAvg: best.avg,
+        overallAvg: parseFloat(overallAvg.toFixed(2)),
+        sessionsNotAtBestHour: sessionsNotAtBest,
+        missedRevenue: missed,
+        bestHour: best.hour
+      }
+    }
+  })
+
+  // ── FAN FREQUENCY ─────────────────────────────────────────────────────
+  // Already computed on whale objects as: tipCount / activeDays
+  // Surfaced here as a summary
+  const totalActiveFans = whales.length
+  const returningFans   = whales.filter(w => w.tipCount > 1)
+  const avgReturnSpend  = returningFans.length
+    ? parseFloat((returningFans.reduce((s, w) => s + w.totalUSD, 0) / returningFans.length).toFixed(2))
+    : 0
+  const newFans       = whales.filter(w => w.tipCount === 1)
+  const avgNewSpend   = newFans.length
+    ? parseFloat((newFans.reduce((s, w) => s + w.totalUSD, 0) / newFans.length).toFixed(2))
+    : 0
+  const returningVsNew = {
+    returningCount: returningFans.length,
+    newCount: newFans.length,
+    returningPct: totalActiveFans > 0 ? Math.round((returningFans.length / totalActiveFans) * 100) : 0,
+    avgReturnSpend,
+    avgNewSpend,
+    multiplier: avgNewSpend > 0 ? parseFloat((avgReturnSpend / avgNewSpend).toFixed(1)) : null
+  }
+
+  // ── TOP FAN DEPENDENCY ────────────────────────────────────────────────
+  // Formula: topN_revenue / total_revenue
+  const sortedWhales = [...whales].sort((a, b) => b.totalUSD - a.totalUSD)
+  const top1Rev  = sortedWhales[0]?.totalUSD || 0
+  const top3Rev  = sortedWhales.slice(0, 3).reduce((s, w) => s + w.totalUSD, 0)
+  const top5Rev  = sortedWhales.slice(0, 5).reduce((s, w) => s + w.totalUSD, 0)
+  const topFanDependency = totalUSD > 0 ? {
+    top1Pct:  Math.round((top1Rev  / totalUSD) * 100),
+    top3Pct:  Math.round((top3Rev  / totalUSD) * 100),
+    top5Pct:  Math.round((top5Rev  / totalUSD) * 100),
+    lossIfTopFanLeaves: parseFloat(top1Rev.toFixed(2))
+  } : null
+
   return {
     totalUSD: parseFloat(totalUSD.toFixed(2)),
     totalTokens,
@@ -1128,6 +1233,13 @@ export function aggregateRows(tips) {
     avgTipSize: parseFloat((tips.length > 0 ? totalUSD / tips.length : 0).toFixed(2)),
     topTippers, platforms, sessions, insights: validateInsights(insights), predictions,
     whaleAlerts, lossAlerts, nextMoves, whales,
-    bestDay, bestHour   // ← single source of truth, consumed by dashboard
+    bestDay, bestHour,
+    // ── New advanced analytics ──
+    platformBestTimes,    // { platform: { hour, avg, sessionCount } }
+    earningsVelocity,     // overall $/hour (null if no timed sessions)
+    platformVelocity,     // { platform: $/hour }
+    missedRevenueByPlatform, // { platform: { bestHourAvg, overallAvg, sessionsNotAtBestHour, missedRevenue, bestHour } }
+    returningVsNew,       // { returningCount, newCount, returningPct, avgReturnSpend, avgNewSpend, multiplier }
+    topFanDependency      // { top1Pct, top3Pct, top5Pct, lossIfTopFanLeaves }
   }
 }
