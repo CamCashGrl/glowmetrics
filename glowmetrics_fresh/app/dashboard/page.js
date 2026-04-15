@@ -947,14 +947,18 @@ export default function Dashboard() {
     }
   }
 
-  // Auto-refresh every 60 minutes
+  // Auto-refresh: 15-min insights + 60-min full data + on tab focus
   useEffect(() => {
     if (!user) return
-    const interval = setInterval(() => {
-      loadData(user.id)
-      loadInsights(user.id)
-    }, 60 * 60 * 1000)
-    return () => clearInterval(interval)
+    const insightsInterval = setInterval(() => loadInsights(user.id), 15 * 60 * 1000)
+    const dataInterval = setInterval(() => { loadData(user.id); loadInsights(user.id) }, 60 * 60 * 1000)
+    const onFocus = () => loadInsights(user.id)
+    window.addEventListener('focus', onFocus)
+    return () => {
+      clearInterval(insightsInterval)
+      clearInterval(dataInterval)
+      window.removeEventListener('focus', onFocus)
+    }
   }, [user])
 
   const handleSignOut = async () => {
@@ -1605,47 +1609,178 @@ const handleCSV = async (file, forcePlatform = null) => {
           <div style={{ animation: "fadeUp 0.3s ease" }}>
 
             {/* ── HOW TO MAKE MORE MONEY RIGHT NOW ─────────────────────── */}
-            {insights?.has_data && insights?.insights?.length > 0 && (
+            {insights?.has_data && (
               <div style={{ marginBottom: 28 }}>
-                {/* Header row with last updated */}
+
+                {/* ── HEADER ── */}
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, flexWrap: "wrap", gap: 8 }}>
                   <div>
                     <div style={{ fontSize: 18, fontWeight: 800, color: C.white }}>⚡ How to Make More Money Right Now</div>
-                    <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>Generated from your real data · Updates every hour</div>
+                    <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>Real analysis from your data · Refreshes every 15 min</div>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    {lastUpdated && (
-                      <span style={{ fontSize: 11, color: C.muted }}>Last updated {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                    )}
+                    {lastUpdated && <span style={{ fontSize: 11, color: C.muted }}>Updated {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>}
                     <button onClick={() => loadInsights(user?.id)} disabled={insightsLoading}
-                      style={{ padding: "5px 12px", borderRadius: 8, background: "rgba(34,211,238,0.1)", border: "1px solid rgba(34,211,238,0.25)", color: C.cyan, fontSize: 11, fontWeight: 600, cursor: insightsLoading ? "not-allowed" : "pointer" }}>
-                      {insightsLoading ? "Updating..." : "↻ Refresh"}
+                      style={{ padding: "5px 12px", borderRadius: 8, background: "rgba(34,211,238,0.08)", border: "1px solid rgba(34,211,238,0.2)", color: C.cyan, fontSize: 11, fontWeight: 600, cursor: insightsLoading ? "not-allowed" : "pointer" }}>
+                      {insightsLoading ? "..." : "↻ Refresh"}
                     </button>
                   </div>
                 </div>
 
-                {/* Today's #1 action — highlighted */}
-                {insights.insights.find(i => i.type === "today" || i.impact === "high") && (() => {
-                  const top = insights.insights.find(i => i.type === "today") || insights.insights[0]
+                {/* ── GO LIVE STATUS BLOCK ── */}
+                {insights.go_live_status && (() => {
+                  const s = insights.go_live_status
+                  const isHigh = s.status === "high"
+                  const isWarm = s.status === "warm"
+                  const isLow = s.status === "low"
+                  const fmtH = h => h === 0 ? "12 AM" : h < 12 ? `${h} AM` : h === 12 ? "12 PM" : `${h-12} PM`
+                  const statusColor = isHigh ? "#22c55e" : isWarm ? C.gold : "#f87171"
+                  const statusBg = isHigh ? "rgba(34,197,94,0.1)" : isWarm ? "rgba(251,191,36,0.1)" : "rgba(248,113,113,0.08)"
+                  const statusBorder = isHigh ? "rgba(34,197,94,0.4)" : isWarm ? "rgba(251,191,36,0.35)" : "rgba(248,113,113,0.3)"
+                  const dot = isHigh ? "🟢" : isWarm ? "🟡" : "🔴"
+                  const label = isHigh ? "HIGH EARNING WINDOW" : isWarm ? "WARM WINDOW" : "LOW VALUE TIME"
+                  const minsLeft = 60 - new Date().getMinutes()
                   return (
-                    <div style={{ padding: "18px 22px", borderRadius: 14, background: "linear-gradient(135deg, rgba(34,211,238,0.12), rgba(59,130,246,0.08))", border: "1px solid rgba(34,211,238,0.3)", marginBottom: 12, position: "relative", overflow: "hidden" }}>
-                      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: "linear-gradient(90deg, #22D3EE, #3b82f6)" }} />
-                      <div style={{ fontSize: 11, fontWeight: 700, color: C.cyan, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>🎯 TOP PRIORITY TODAY</div>
-                      <div style={{ fontSize: 17, fontWeight: 800, color: C.white, marginBottom: 6 }}>{top.title}</div>
-                      <div style={{ fontSize: 13, color: "#94a3b8", marginBottom: 10, lineHeight: 1.6 }}>{top.body}</div>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: C.cyan }}>→ {top.action}</div>
+                    <div style={{ padding: "18px 22px", borderRadius: 14, background: statusBg, border: `1px solid ${statusBorder}`, marginBottom: 14, position: "relative", overflow: "hidden" }}>
+                      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg, ${statusColor}, transparent)` }} />
+                      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: 11, fontWeight: 800, color: statusColor, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 6 }}>
+                            {dot} {label}
+                            {isHigh && <span style={{ marginLeft: 8, fontWeight: 500, color: C.muted }}>(next {minsLeft} min)</span>}
+                          </div>
+                          {isHigh && (
+                            <>
+                              <div style={{ fontSize: 20, fontWeight: 900, color: "#22c55e", marginBottom: 4 }}>GO LIVE NOW</div>
+                              <div style={{ fontSize: 13, color: "#94a3b8", lineHeight: 1.6 }}>
+                                This hour ({fmtH(s.current_hour)}) earns +{Math.round((s.multiplier - 1) * 100)}% more than your average — ${s.current_hour_avg}/tip vs ${s.overall_avg} avg.
+                              </div>
+                            </>
+                          )}
+                          {isWarm && (
+                            <>
+                              <div style={{ fontSize: 17, fontWeight: 800, color: C.gold, marginBottom: 4 }}>Decent window — worth going live</div>
+                              <div style={{ fontSize: 13, color: "#94a3b8", lineHeight: 1.6 }}>
+                                This hour ({fmtH(s.current_hour)}) is around average (${s.current_hour_avg}/tip). Not your peak, but solid.
+                              </div>
+                            </>
+                          )}
+                          {isLow && (
+                            <>
+                              <div style={{ fontSize: 17, fontWeight: 800, color: "#f87171", marginBottom: 4 }}>Wait — go live at {fmtH(s.next_best_hour)} instead</div>
+                              <div style={{ fontSize: 13, color: "#94a3b8", lineHeight: 1.6 }}>
+                                Right now averages ${s.current_hour_avg}/tip. At {fmtH(s.next_best_hour)} you average ${s.next_best_hour_avg}/tip — {s.next_best_hour_avg > 0 ? Math.round(s.next_best_hour_avg / Math.max(s.current_hour_avg, 0.01)) : "?"}x more.
+                              </div>
+                            </>
+                          )}
+                          {s.status === "unknown" && (
+                            <div style={{ fontSize: 13, color: C.muted }}>Not enough data for this hour yet. Your overall best time is {fmtH(s.next_best_hour)} (${s.next_best_hour_avg}/tip avg).</div>
+                          )}
+                        </div>
+                        {isHigh && (
+                          <div style={{ padding: "10px 20px", borderRadius: 10, background: "rgba(34,197,94,0.15)", border: "1px solid rgba(34,197,94,0.4)", fontSize: 13, fontWeight: 700, color: "#22c55e", whiteSpace: "nowrap" }}>
+                            🔥 Peak Window
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )
                 })()}
 
-                {/* Remaining insights grid */}
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 10 }}>
-                  {insights.insights
-                    .filter(i => i.type !== "today")
-                    .map((ins, idx) => {
-                      const impactColor = ins.impact === "high" ? C.gold : ins.impact === "positive" ? C.green : ins.impact === "warning" ? C.orange : C.blue
+                {/* ── MISSED OPPORTUNITY ALERT ── */}
+                {insights.missed_opportunity && (() => {
+                  const m = insights.missed_opportunity
+                  const fmtH = h => h === 0 ? "12 AM" : h < 12 ? `${h} AM` : h === 12 ? "12 PM" : `${h-12} PM`
+                  return (
+                    <div style={{ padding: "14px 18px", borderRadius: 12, background: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.3)", marginBottom: 14, display: "flex", alignItems: "center", gap: 12 }}>
+                      <span style={{ fontSize: 20 }}>⚠️</span>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: C.gold }}>You missed your #1 earning window today ({fmtH(m.hour)})</div>
+                        <div style={{ fontSize: 12, color: C.muted }}>Estimated missed earnings: ~${m.estimated_loss}. Don't miss it tomorrow.</div>
+                      </div>
+                    </div>
+                  )
+                })()}
+
+                {/* ── TODAY'S MONEY PLAN ── */}
+                {insights.daily_plan?.best_hour != null && (() => {
+                  const p = insights.daily_plan
+                  const fmtH = h => h === 0 ? "12 AM" : h < 12 ? `${h} AM` : h === 12 ? "12 PM" : `${h-12} PM`
+                  return (
+                    <div style={{ padding: "16px 20px", borderRadius: 14, background: "rgba(59,130,246,0.07)", border: "1px solid rgba(59,130,246,0.2)", marginBottom: 14 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: C.blue, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>📋 TODAY'S MONEY PLAN</div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+                          <span style={{ color: C.cyan, fontWeight: 700, minWidth: 16 }}>•</span>
+                          <div style={{ fontSize: 13, color: C.white }}>
+                            <strong>Go live at {fmtH(p.best_hour)}</strong>
+                            <span style={{ color: C.muted }}> — your highest earning hour today (${p.best_hour_avg}/tip avg)</span>
+                          </div>
+                        </div>
+                        <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+                          <span style={{ color: C.cyan, fontWeight: 700, minWidth: 16 }}>•</span>
+                          <div style={{ fontSize: 13, color: C.white }}>
+                            <strong>Stay live for {p.optimal_session_length}</strong>
+                            <span style={{ color: C.muted }}> — your peak earning window per session</span>
+                            {p.decay_at_minute > 0 && <span style={{ color: C.orange }}> · re-engage at {p.decay_at_minute} min</span>}
+                          </div>
+                        </div>
+                        {p.second_best_hour != null && (
+                          <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+                            <span style={{ color: C.cyan, fontWeight: 700, minWidth: 16 }}>•</span>
+                            <div style={{ fontSize: 13, color: C.white }}>
+                              <strong>Second session at {fmtH(p.second_best_hour)}</strong>
+                              <span style={{ color: C.muted }}> — 2nd highest hour (${p.second_best_hour_avg}/tip avg)</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })()}
+
+                {/* ── MOMENTUM / STREAK ── */}
+                {insights.momentum && (() => {
+                  const m = insights.momentum
+                  const abovePacing = m.today_pacing_pct > 100
+                  const nearBest = m.best_day_earnings > 0 && m.today_earnings > 0 && (m.today_earnings / m.best_day_earnings) > 0.7
+                  if (m.streak_days < 2 && m.today_pacing_pct === 0 && !nearBest) return null
+                  return (
+                    <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
+                      {m.streak_days >= 2 && (
+                        <div style={{ flex: 1, minWidth: 160, padding: "12px 16px", borderRadius: 12, background: "rgba(34,197,94,0.07)", border: "1px solid rgba(34,197,94,0.2)" }}>
+                          <div style={{ fontSize: 18, marginBottom: 4 }}>📈</div>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: "#22c55e" }}>{m.streak_days}-day earning streak</div>
+                          <div style={{ fontSize: 11, color: C.muted }}>Keep the momentum going</div>
+                        </div>
+                      )}
+                      {m.today_pacing_pct > 0 && (
+                        <div style={{ flex: 1, minWidth: 160, padding: "12px 16px", borderRadius: 12, background: abovePacing ? "rgba(34,197,94,0.07)" : "rgba(255,255,255,0.03)", border: `1px solid ${abovePacing ? "rgba(34,197,94,0.2)" : "rgba(255,255,255,0.08)"}` }}>
+                          <div style={{ fontSize: 18, marginBottom: 4 }}>{abovePacing ? "🔥" : "📊"}</div>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: abovePacing ? "#22c55e" : C.muted }}>
+                            Today pacing {abovePacing ? "+" : ""}{m.today_pacing_pct - 100}% {abovePacing ? "above" : "below"} average
+                          </div>
+                          <div style={{ fontSize: 11, color: C.muted }}>${m.today_earnings} earned today vs ${m.avg_daily_earnings} avg</div>
+                        </div>
+                      )}
+                      {nearBest && (
+                        <div style={{ flex: 1, minWidth: 160, padding: "12px 16px", borderRadius: 12, background: "rgba(251,191,36,0.07)", border: "1px solid rgba(251,191,36,0.2)" }}>
+                          <div style={{ fontSize: 18, marginBottom: 4 }}>🏆</div>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: C.gold }}>Close to your best day ever</div>
+                          <div style={{ fontSize: 11, color: C.muted }}>${m.today_earnings} today · best: ${m.best_day_earnings}</div>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })()}
+
+                {/* ── INSIGHTS GRID ── */}
+                {insights.insights?.length > 0 && (
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 10 }}>
+                    {insights.insights.map((ins, idx) => {
+                      const impactColor = ins.impact === "critical" ? "#22c55e" : ins.impact === "high" ? C.gold : ins.impact === "positive" ? C.green : ins.impact === "warning" ? "#f87171" : C.blue
                       return (
-                        <div key={idx} style={{ padding: "14px 16px", borderRadius: 12, background: "rgba(255,255,255,0.03)", border: `1px solid ${impactColor}25`, position: "relative" }}>
+                        <div key={idx} style={{ padding: "14px 16px", borderRadius: 12, background: "rgba(255,255,255,0.03)", border: `1px solid ${impactColor}20`, position: "relative" }}>
                           <div style={{ position: "absolute", top: 0, left: 0, width: 3, height: "100%", borderRadius: "12px 0 0 12px", background: impactColor }} />
                           <div style={{ paddingLeft: 8 }}>
                             <div style={{ fontSize: 13, fontWeight: 700, color: C.white, marginBottom: 4 }}>{ins.title}</div>
@@ -1655,19 +1790,21 @@ const handleCSV = async (file, forcePlatform = null) => {
                         </div>
                       )
                     })}
-                </div>
+                  </div>
+                )}
+
               </div>
             )}
 
-            {/* Loading state for insights */}
+            {/* Loading state */}
             {insightsLoading && !insights && (
-              <div style={{ marginBottom: 28, padding: "20px 22px", borderRadius: 14, background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", display: "flex", alignItems: "center", gap: 12 }}>
-                <div style={{ width: 20, height: 20, borderRadius: "50%", border: "2px solid rgba(34,211,238,0.3)", borderTopColor: C.cyan, animation: "spin 0.8s linear infinite", flexShrink: 0 }} />
-                <div style={{ fontSize: 13, color: C.muted }}>Analyzing your data for personalized insights...</div>
+              <div style={{ marginBottom: 28, padding: "18px 22px", borderRadius: 14, background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", display: "flex", alignItems: "center", gap: 12 }}>
+                <div style={{ width: 18, height: 18, borderRadius: "50%", border: "2px solid rgba(34,211,238,0.3)", borderTopColor: C.cyan, animation: "spin 0.8s linear infinite", flexShrink: 0 }} />
+                <div style={{ fontSize: 13, color: C.muted }}>Analyzing your data...</div>
               </div>
             )}
 
-            {/* BETA BANNER */}
+                        {/* BETA BANNER */}
             <div style={{ marginBottom: 24, padding: "14px 20px", borderRadius: 12, background: "linear-gradient(135deg, rgba(59,130,246,0.1), rgba(236,72,153,0.1))", border: "1px solid rgba(236,72,153,0.3)", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                 <div style={{ fontSize: 24 }}>🎉</div>
