@@ -809,6 +809,8 @@ export default function Dashboard() {
   const [uploading, setUploading] = useState(false)
   const [uploadPlatform, setUploadPlatform] = useState("")
   const [activeTab, setActiveTab] = useState("overview")
+  const [showWalkthrough, setShowWalkthrough] = useState(false)
+  const [walkthroughStep, setWalkthroughStep] = useState(1)
   const [toast, setToast] = useState("")
   const [uploadCount, setUploadCount] = useState(0)
   const [whaleFilter, setWhaleFilter] = useState("ALL")
@@ -898,6 +900,11 @@ export default function Dashboard() {
       if (!user) { router.replace("/login"); return }
       setUser(user)
       loadData(user.id)
+      // Check if new user needs walkthrough
+      supabase.from('beta_users').select('onboarding_complete').eq('user_id', user.id).single()
+        .then(({ data: profile }) => {
+          if (!profile?.onboarding_complete) setShowWalkthrough(true)
+        })
       // Fetch real beta user count for the progress bar
       supabase.from('beta_users').select('id', { count: 'exact', head: true })
         .then(({ count }) => { if (count !== null) setBetaCount(count) })
@@ -921,6 +928,17 @@ export default function Dashboard() {
     const interval = setInterval(() => { setLiveAnalytics(analytics) }, 5000)
     return () => clearInterval(interval)
   }, [tips])
+
+  const dismissWalkthrough = async () => {
+    setShowWalkthrough(false)
+    // Mark onboarding complete so walkthrough never shows again
+    if (user) {
+      await supabase.from('beta_users').upsert(
+        { user_id: user.id, email: user.email, onboarding_complete: true },
+        { onConflict: 'user_id' }
+      )
+    }
+  }
 
   const handleSignOut = async () => {
     await supabase.auth.signOut()
@@ -1806,9 +1824,9 @@ const handleCSV = async (file, forcePlatform = null) => {
                       Today ({todayLong}) highlighted in cyan · <strong style={{ color: C.cyan }}>Click any cell</strong> to see your best time to stream that day
                     </div>
                   </div>
-                  
+                  </div>
 
-                  
+                  {/* DAY DRILL PANEL — appears when a heatmap cell is clicked */}
                   {heatmapDrillDay && (() => {
                     const dayLong = { Sun:'Sunday', Mon:'Monday', Tue:'Tuesday', Wed:'Wednesday', Thu:'Thursday', Fri:'Friday', Sat:'Saturday' }[heatmapDrillDay]
                     const fmtH2 = h => { const n = parseInt(h); return n === 0 ? '12 AM' : n < 12 ? `${n} AM` : n === 12 ? '12 PM' : `${n-12} PM` }
@@ -4364,6 +4382,69 @@ const handleCSV = async (file, forcePlatform = null) => {
           </div>
         )
       })()}
+
+      {/* ── WALKTHROUGH MODAL ─────────────────────────────────────── */}
+      {showWalkthrough && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 2000, padding: 20 }}>
+          <div style={{ width: "100%", maxWidth: 480, background: "linear-gradient(135deg, #1e293b, #0f172a)", borderRadius: 20, border: "1px solid rgba(255,255,255,0.1)", overflow: "hidden", boxShadow: "0 0 60px rgba(34,211,238,0.15)" }}>
+            {/* Header */}
+            <div style={{ padding: "24px 28px 0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ display: "flex", gap: 8 }}>
+                {[1, 2].map(s => (
+                  <div key={s} style={{ width: s === walkthroughStep ? 24 : 8, height: 8, borderRadius: 4, background: s === walkthroughStep ? "#22D3EE" : "rgba(255,255,255,0.15)", transition: "all 0.3s" }} />
+                ))}
+              </div>
+              <button onClick={dismissWalkthrough} style={{ background: "none", border: "none", color: "#475569", cursor: "pointer", fontSize: 20, lineHeight: 1, padding: 4 }}>✕</button>
+            </div>
+
+            {/* Step 1 — Import CSV */}
+            {walkthroughStep === 1 && (
+              <div style={{ padding: "20px 28px 28px" }}>
+                <div style={{ fontSize: 40, marginBottom: 12 }}>📥</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: "white", marginBottom: 8 }}>Start by importing your CSV</div>
+                <div style={{ fontSize: 14, color: "#94a3b8", lineHeight: 1.7, marginBottom: 24 }}>
+                  CamCash works by reading your earnings data directly from your platform CSV files. Export from Chaturbate, BongaCams, or MyFreeCams and upload it here — your full earnings history loads instantly.
+                </div>
+                <div style={{ padding: "14px 16px", background: "rgba(34,211,238,0.08)", border: "1px solid rgba(34,211,238,0.2)", borderRadius: 12, marginBottom: 24, fontSize: 13, color: "#94a3b8", lineHeight: 1.7 }}>
+                  💡 <strong style={{ color: "white" }}>Chaturbate:</strong> Token Stats → Download CSV<br/>
+                  💡 <strong style={{ color: "white" }}>BongaCams:</strong> Earnings → Export<br/>
+                  💡 <strong style={{ color: "white" }}>MyFreeCams:</strong> Account → Transaction History
+                </div>
+                <div style={{ display: "flex", gap: 10 }}>
+                  <button onClick={() => { setActiveTab("upload"); setShowWalkthrough(false) }} style={{ flex: 1, padding: "13px 0", borderRadius: 10, background: "linear-gradient(135deg, #3b82f6, #ec4899)", border: "none", color: "white", fontWeight: 700, fontSize: 14, cursor: "pointer", boxShadow: "0 4px 20px rgba(236,72,153,0.3)" }}>
+                    Go to Import →
+                  </button>
+                  <button onClick={() => setWalkthroughStep(2)} style={{ padding: "13px 18px", borderRadius: 10, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: "#94a3b8", fontWeight: 600, fontSize: 14, cursor: "pointer" }}>
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Step 2 — CSV Help */}
+            {walkthroughStep === 2 && (
+              <div style={{ padding: "20px 28px 28px" }}>
+                <div style={{ fontSize: 40, marginBottom: 12 }}>📋</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: "white", marginBottom: 8 }}>Need help with your CSV?</div>
+                <div style={{ fontSize: 14, color: "#94a3b8", lineHeight: 1.7, marginBottom: 24 }}>
+                  The CSV Help section has step-by-step guides for every platform — exactly where to find your export, what format to use, and how to fix common issues.
+                </div>
+                <div style={{ padding: "14px 16px", background: "rgba(168,85,247,0.08)", border: "1px solid rgba(168,85,247,0.2)", borderRadius: 12, marginBottom: 24, fontSize: 13, color: "#94a3b8", lineHeight: 1.7 }}>
+                  📌 If your CSV isn't uploading correctly, the CSV Help tab has specific fixes for each platform's format quirks.
+                </div>
+                <div style={{ display: "flex", gap: 10 }}>
+                  <button onClick={() => { setActiveTab("help"); dismissWalkthrough() }} style={{ flex: 1, padding: "13px 0", borderRadius: 10, background: "linear-gradient(135deg, #a855f7, #3b82f6)", border: "none", color: "white", fontWeight: 700, fontSize: 14, cursor: "pointer", boxShadow: "0 4px 20px rgba(168,85,247,0.3)" }}>
+                    Go to CSV Help →
+                  </button>
+                  <button onClick={dismissWalkthrough} style={{ padding: "13px 18px", borderRadius: 10, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: "#94a3b8", fontWeight: 600, fontSize: 14, cursor: "pointer" }}>
+                    Done
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {toast && (
         <div style={{ position: "fixed", bottom: 24, left: 272, background: "rgba(15,20,32,0.95)", backdropFilter: "blur(20px)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 12, padding: "14px 20px", color: C.white, fontSize: 14, zIndex: 9999, boxShadow: "0 8px 32px rgba(0,0,0,0.8)" }}>
