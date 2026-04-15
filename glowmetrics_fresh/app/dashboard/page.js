@@ -1891,6 +1891,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                       </div>
                     )
                   })()}
+                  </div>
                 )
               })()}
             </div>
