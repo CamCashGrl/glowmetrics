@@ -17,9 +17,6 @@ const C = {
 const TIER_COLORS = {
   "Whale": C.gold, "Shark": C.blue, "Regular": C.cyan, "Dormant": C.orange
 }
-const TIER_ICONS = {
-  "Whale": "🐳", "Shark": "🦈", "Regular": "🐟", "Dormant": "💤"
-}
 
 const glassCard = {
   background: "rgba(15,20,32,0.75)",
@@ -41,739 +38,167 @@ const formatHour = (hour) => {
 // Rules of Hooks require hooks to only be called at the top level of a
 // React function component — never inside loops, conditions, or callbacks.
 // ── Title Generator extracted as a proper component so useState calls are legal
-// ============================================================
-// ROOM TITLE ENGINE — ONE TITLE AT A TIME
-// Formula: HOOK + TARGET + ACTION + REWARD + URGENCY
-// ============================================================
-
-// ── TOY CATEGORY LIBRARY ────────────────────────────────────────────────────
-// Each category has its own language — sensation, power, intensity, etc.
-// Extend by adding new keys. Matched by detecting keywords in toy name.
-const TOY_CATEGORIES = {
-  lush: {
-    sensation: ["I feel every tip inside me", "every vibration takes me higher", "I feel it deep with every tip"],
-    control:   ["you control what I feel", "tip to decide my intensity", "you're inside my head right now"],
-    buildup:   ["so close… keep going", "don't stop — I'm almost there", "one more tip and I lose it"],
-  },
-  domi: {
-    sensation: ["the power hits different with every tip", "Domi doesn't hold back", "full intensity on command"],
-    control:   ["you set the power level", "tip to push it harder", "Domi obeys you"],
-    buildup:   ["turning it up with every tip", "building to max — don't stop", "almost at full power"],
-  },
-  edge: {
-    sensation: ["edging myself with every tip", "tip to push me further", "so close to the edge"],
-    control:   ["you decide when I fall", "tip to keep me on the edge", "you control the limit"],
-    buildup:   ["closer… and closer…", "don't let me fall yet", "holding on as long as you tip"],
-  },
-  hush: {
-    sensation: ["wearing it in public… tip to activate", "you have no idea what this does to me", "shh… I feel every one"],
-    control:   ["secret control in your hands", "tip and watch my reaction", "nobody knows but you"],
-    buildup:   ["getting harder to stay quiet", "one more tip and I can't hide it", "you're making this impossible"],
-  },
-  // Generic fallback for any other toy
-  default: {
-    sensation: ["I feel every tip", "tip = instant reaction", "every one hits harder"],
-    control:   ["you decide what happens", "you run this room", "tip to take control"],
-    buildup:   ["getting closer with every tip", "almost there — keep going", "don't stop now"],
-  }
-}
-
-function getToyCategory(toyName) {
-  if (!toyName) return null
-  const t = toyName.toLowerCase()
-  if (t.includes("lush"))  return TOY_CATEGORIES.lush
-  if (t.includes("domi"))  return TOY_CATEGORIES.domi
-  if (t.includes("edge"))  return TOY_CATEGORIES.edge
-  if (t.includes("hush"))  return TOY_CATEGORIES.hush
-  return TOY_CATEGORIES.default
-}
-
-// ── MOOD LIBRARY ─────────────────────────────────────────────────────────────
-// Mood shapes the emotional tone of hooks and closers
-const MOOD_HOOKS = {
-  tease: [
-    "let's see how far you take me",
-    "I'm not giving it up that easy",
-    "you have to earn it tonight",
-    "almost… not yet",
-    "make me want to",
-  ],
-  dominant: [
-    "top tipper owns this room",
-    "you earn what I give you",
-    "prove you deserve it",
-    "this is my show — tip to play",
-    "I decide — you tip",
-  ],
-  submissive: [
-    "I do what you say tonight",
-    "you're in charge — tip to command me",
-    "whatever you want, tip for it",
-    "your wish is my reaction",
-    "tell me what to do",
-  ],
-  hype: [
-    "WE ARE SO CLOSE",
-    "the energy in here is insane right now",
-    "LET'S GOOO — tip to push it",
-    "this room is on fire",
-    "we're making history tonight",
-  ],
-  mystery: [
-    "you won't believe what happens at goal",
-    "something big is coming… tip to find out",
-    "I have a surprise — help me get there",
-    "you're not ready for what's next",
-    "curious? tip to unlock it",
-  ],
-}
-
-function buildOneTitle(ctx) {
-  const {
-    isPeakNow, peakSoon, bestHourLabel, hoursUntilPeak,
-    hasWhales, topWhaleName, whaleCount,
-    hasReturners, returningPct,
-    lowActivity, todayIsBestDay, todayDay,
-    tokenGoal, action, toy, mood,
-    useEmojis, avgSessionUSD,
-  } = ctx
-
-  const e = (emoji) => useEmojis ? emoji : ""
-  const pick = (arr) => arr[Math.floor(Math.random() * arr.length)]
-
-  const hasToy  = Boolean(toy && toy.trim())
-  const hasMood = Boolean(mood && mood !== "none")
-  const toyLib  = getToyCategory(toy)
-
-  // ── HOOKS ─────────────────────────────────────────────────────────────────
-  // Priority: mood hooks > toy hooks > data hooks > evergreen
-  const moodHooks   = hasMood ? (MOOD_HOOKS[mood] || []) : []
-  const toyHooks    = hasToy ? [
-    `tip to control my ${toy} ${e("🎮")}`,
-    `you control my ${toy} ${e("⚡")}`,
-    `my ${toy} is on — you decide ${e("😈")}`,
-    `${toy} is live and waiting`,
-    toyLib ? pick(toyLib.control) : `tip to run my ${toy}`,
-  ] : []
-
-  const dataHooks = [
-    ...(isPeakNow      ? [`live right now ${e("🔴")}`, `going live this second`] : []),
-    ...(peakSoon       ? [`going live in ${hoursUntilPeak}h — don't miss it`] : []),
-    ...(lowActivity    ? [`miss me? ${e("👀")}`, `been a minute ${e("💭")}`] : []),
-    ...(todayIsBestDay ? [`${todayDay}s hit different ${e("🔥")}`] : []),
-    ...(hasWhales      ? [`VIPs run the show tonight ${e("💎")}`] : []),
-  ]
-
-  const evergreen = [
-    `you decide what I do ${e("👑")}`,
-    `top tipper controls everything`,
-    `feeling dangerous tonight ${e("😈")}`,
-    `not holding back tonight ${e("🔥")}`,
-    `bad girl energy ${e("😈")}`,
-    `catching me in a mood ${e("🌙")}`,
-    `prove you want it ${e("👀")}`,
-    `make me ${e("😏")}`,
-  ]
-
-  // Weight: if mood+toy both set, 50% mood, 50% toy; otherwise bias toward what's set
-  let hookPool
-  if (moodHooks.length && toyHooks.length) {
-    hookPool = Math.random() < 0.5 ? moodHooks : toyHooks
-  } else if (moodHooks.length) {
-    hookPool = [...moodHooks, ...dataHooks, ...evergreen.slice(0, 4)]
-  } else if (toyHooks.length) {
-    hookPool = [...toyHooks, ...dataHooks.slice(0, 2), ...evergreen.slice(0, 3)]
-  } else {
-    hookPool = [...dataHooks, ...evergreen]
-  }
-
-  // ── GOAL TEXT ─────────────────────────────────────────────────────────────
-  let goalText
-  if (hasToy && tokenGoal && action) {
-    goalText = pick([
-      `hit ${tokenGoal} → ${action} + ${toy} reacts`,
-      `${tokenGoal} tokens = ${action} & full ${toy} control`,
-      `tip to reach ${tokenGoal} — ${toy} goes wild & you get ${action}`,
-    ])
-  } else if (hasToy && tokenGoal) {
-    goalText = pick([
-      `hit ${tokenGoal} → my ${toy} reacts`,
-      `${tokenGoal} = full ${toy} control`,
-      `tip to ${tokenGoal} — ${toy} goes crazy`,
-      `get me to ${tokenGoal} and feel what happens`,
-    ])
-  } else if (hasToy && action) {
-    goalText = pick([
-      `tip → ${action} + ${toy} control`,
-      `tip = ${action} & ${toy} reaction`,
-      `unlock ${action} — ${toy} goes with it`,
-    ])
-  } else if (hasToy) {
-    // Toy only — use toy library sensations
-    goalText = toyLib
-      ? pick([...toyLib.sensation, ...toyLib.control])
-      : pick([`tip to control my ${toy}`, `tip = ${toy} reacts`, `tip to push my ${toy}`])
-  } else if (tokenGoal && action) {
-    goalText = pick([
-      `hit ${tokenGoal} → ${action}`,
-      `${tokenGoal} tokens = ${action}`,
-      `tip to reach ${tokenGoal} & get ${action}`,
-      `${tokenGoal} gets you ${action}`,
-    ])
-  } else if (tokenGoal) {
-    goalText = pick([
-      `help me hit ${tokenGoal}`,
-      `tip to reach ${tokenGoal}`,
-      `${tokenGoal} is the goal — push me there`,
-      `so close to ${tokenGoal} — don't stop`,
-    ])
-  } else if (action) {
-    goalText = pick([
-      `tip → ${action}`,
-      `tip = ${action}`,
-      `unlock ${action}`,
-      `tip and I ${action}`,
-    ])
-  } else if (hasMood) {
-    // Mood only — use buildup or mystery phrasing
-    goalText = pick([
-      "tip to decide what happens next",
-      "tip to take this further",
-      "tip = reaction",
-      "tip and see what I do",
-    ])
-  } else {
-    goalText = pick([
-      "tip to take control",
-      "tip = instant reaction",
-      "tip to decide what happens",
-      "tip to run this room",
-    ])
-  }
-
-  // ── REWARDS ───────────────────────────────────────────────────────────────
-  // Toy → sensation rewards; Mood → mood-matched rewards; fallback → general
-  let rewards
-  if (hasToy && toyLib) {
-    rewards = [
-      ...toyLib.sensation,
-      ...toyLib.buildup,
-      `${toy} goes full power ${e("⚡")}`,
-      `full ${toy} control ${e("👑")}`,
-      ...(action ? [`${action} + ${toy} reaction`] : []),
-    ]
-  } else if (hasMood && mood === "tease") {
-    rewards = [
-      `and maybe I give you what you want ${e("😏")}`,
-      `but you have to earn it first`,
-      `if you're lucky tonight ${e("👀")}`,
-      `I might just let go ${e("💋")}`,
-    ]
-  } else if (hasMood && mood === "dominant") {
-    rewards = [
-      `you earn your reward ${e("👑")}`,
-      `top earner gets access ${e("🔒")}`,
-      `I reward the ones who prove it`,
-      `exclusive access for top tipper`,
-    ]
-  } else if (hasMood && mood === "hype") {
-    rewards = [
-      `something HUGE happens at goal ${e("🔥")}`,
-      `biggest reaction of the night ${e("⚡")}`,
-      `I go all out ${e("🔥")}`,
-    ]
-  } else {
-    rewards = [
-      ...(action ? [`${action} ${e("😏")}`, `you get ${action}`] : []),
-      `special reaction ${e("🔥")}`,
-      `private show ${e("💎")}`,
-      `you choose everything ${e("👑")}`,
-      `I react to every tip ${e("⚡")}`,
-      `exclusive content ${e("🔒")}`,
-      `big surprise ${e("🎁")}`,
-    ]
-  }
-
-  // ── URGENCY ───────────────────────────────────────────────────────────────
-  const urgencies = [
-    ...(isPeakNow ? ["live now", "happening right now"] : []),
-    ...(peakSoon  ? [`${hoursUntilPeak}h left`, "starting soon"] : []),
-    "tonight only",
-    "this hour only",
-    "now or never",
-    "before I log off",
-    "don't miss it",
-    "limited time",
-    "while I'm in this mood",
-    "live now",
-  ]
-
-  const hook    = pick(hookPool)
-  const reward  = pick(rewards)
-  const urgency = pick(urgencies)
-
-  // ── 9 DISTINCT STRUCTURES — varied rhythm, length, tone ──────────────────
-  // Includes short punchy, mid-length emotional, and longer descriptive forms
-  const n = Math.floor(Math.random() * 9)
-  let title
-
-  if (n === 0) {
-    // Classic formula — mid length
-    title = `${hook} ${e("💦")} ${goalText} → ${reward} (${urgency})`
-  } else if (n === 1) {
-    // Reward-first — payoff leads
-    title = `${reward} ${e("🔥")} — ${goalText} • ${urgency}`
-  } else if (n === 2) {
-    // Short punchy — goal = reward only
-    title = `${goalText} = ${reward} ${e("🔥")} • ${urgency}`
-  } else if (n === 3) {
-    // Mystery — hook leads with curiosity gap
-    title = `${hook}… ${goalText} (${urgency}) ${e("👀")}`
-  } else if (n === 4) {
-    // FOMO urgency first — time pressure leads
-    title = `${urgency.toUpperCase()} ${e("⚡")} ${hook} — ${goalText}`
-  } else if (n === 5) {
-    // Power dynamic — three-beat structure
-    title = `${hook} • ${goalText} • ${reward} (${urgency})`
-  } else if (n === 6) {
-    // Clean CTA — minimal noise
-    title = `${goalText} ${e("→")} ${reward} ${e("💋")} ${urgency}`
-  } else if (n === 7) {
-    // Emotional / tease — conversational, no formula markers
-    title = `${hook}… ${reward} ${e("😈")} (${urgency})`
-  } else {
-    // Buildup — toyLib.buildup or mood closer if available
-    const closer = hasToy && toyLib ? pick(toyLib.buildup) : (hasMood ? pick(MOOD_HOOKS[mood] || [reward]) : reward)
-    title = `${hook} ${e("💦")} ${goalText} — ${closer} (${urgency})`
-  }
-
-  // Sanitize
-  title = title.replace(/\s{2,}/g, " ").replace(/→\s*→/g, "→").trim()
-  if (title.length > 100) title = title.slice(0, 97) + "..."
-
-  // ── DRIVERS ───────────────────────────────────────────────────────────────
-  const drivers = []
-  if (isPeakNow || peakSoon) drivers.push("peak hour timing")
-  if (hasWhales)             drivers.push(`${whaleCount} VIP fans`)
-  if (todayIsBestDay)        drivers.push(`${todayDay} is your best day`)
-  if (lowActivity)           drivers.push("low recent activity")
-  if (tokenGoal)             drivers.push(`${tokenGoal} token goal`)
-  if (hasToy)                drivers.push(`${toy} (${getToyCategory(toy) === TOY_CATEGORIES.lush ? "wearable" : toy.toLowerCase().includes("domi") ? "wand" : "toy"})`)
-  if (hasMood && mood !== "none") drivers.push(`${mood} mood`)
-  if (action)                drivers.push(`reward: ${action}`)
-  if (hasReturners)          drivers.push(`${returningPct}% returning fans`)
-  if (drivers.length === 0)  drivers.push("general engagement")
-
-  return { title, drivers }
-}
-
-// ============================================================
-// HASHTAG GENERATOR — standalone component
-// ============================================================
-const HASHTAG_POOLS_HG = {
-  platform: {
-    Chaturbate:  ['#Chaturbate','#CBLive','#ChaturbateModel','#CB','#ChaturbateLive','#ChaturbateGirl'],
-    BongaCams:   ['#BongaCams','#BongaLive','#BCModel','#BongaCamsLive','#BongaCamsGirl'],
-    MyFreeCams:  ['#MyFreeCams','#MFC','#MFCModel','#MFCShare','#MyFreeCamsModel'],
-    Stripchat:   ['#Stripchat','#StripchatLive','#StripchatModel','#StripchatGirl'],
-    CamSoda:     ['#CamSoda','#CamSodaLive','#CamSodaModel'],
-    Any:         ['#CamGirl','#Webcam','#LiveStream','#AdultStream','#LiveCam'],
-  },
-  toy: {
-    Lush:        ['#Lush','#LushControl','#ControlMyLush','#LushVibrator','#InteractiveToy','#TipToControl'],
-    Domi:        ['#Domi','#DomiControl','#ControlMyDomi','#Lovense','#InteractiveToy','#TipToControl'],
-    Edge:        ['#Edge','#LovenseEdge','#InteractiveToy','#TipToControl','#Lovense'],
-    Hush:        ['#Hush','#LovenseHush','#InteractiveToy','#TipToControl','#Lovense'],
-    Interactive: ['#InteractiveShow','#TipToControl','#LiveShow','#InteractiveToy','#Lovense'],
-    None:        ['#TipMenu','#GoalShow','#LiveNow','#TipToDecide'],
-  },
-  vibe: {
-    tease:       ['#TeasingYou','#SlowBurn','#EarnIt','#NaughtyStream','#BadGirl'],
-    dominant:    ['#BossMode','#YouObey','#InControl','#BadGirl','#DominantVibes'],
-    submissive:  ['#YouDecide','#YouControl','#GoodGirl','#YourWish','#SubVibes'],
-    hype:        ['#LiveNow','#TipGoal','#GoGoGo','#HighEnergy','#LetsDo'],
-    mystery:     ['#Surprise','#TonightOnly','#SecretShow','#MysteryReward','#FindOut'],
-    none:        ['#LiveNow','#TipMenu','#StreamLife','#OnlineNow'],
-  },
-  goal:        ['#TokenGoal','#GoalShow','#TipToFinish','#AlmostThere','#TipMenu','#HelpMeHitGoal'],
-  highTraffic: ['#CamGirl','#LiveStream','#AdultStream','#WebcamModel','#OnlineFun','#NSFW','#AdultContent'],
-  content:     ['#CamModel','#OnlineStar','#StreamerLife','#LiveEntertainment','#CamLife'],
-}
-
-function generateHashtagsHG({ platform, toy, mood, hasGoal, count = 15 }) {
-  const tags = new Set()
-  const platTags = HASHTAG_POOLS_HG.platform[platform] || HASHTAG_POOLS_HG.platform.Any
-  platTags.slice(0, 3).forEach(t => tags.add(t))
-  HASHTAG_POOLS_HG.platform.Any.slice(0, 2).forEach(t => tags.add(t))
-  const toyTags = HASHTAG_POOLS_HG.toy[toy] || HASHTAG_POOLS_HG.toy.None
-  toyTags.slice(0, 4).forEach(t => tags.add(t))
-  const vibeTags = HASHTAG_POOLS_HG.vibe[mood] || HASHTAG_POOLS_HG.vibe.none
-  vibeTags.slice(0, 3).forEach(t => tags.add(t))
-  if (hasGoal) HASHTAG_POOLS_HG.goal.slice(0, 2).forEach(t => tags.add(t))
-  HASHTAG_POOLS_HG.highTraffic.forEach(t => { if (tags.size < count) tags.add(t) })
-  HASHTAG_POOLS_HG.content.forEach(t => { if (tags.size < count) tags.add(t) })
-  return Array.from(tags).slice(0, count)
-}
-
-function HashtagGenerator({ C, glassCard }) {
-  const [platform, setPlatform] = useState("Chaturbate")
-  const [toy, setToy] = useState("None")
-  const [mood, setMood] = useState("none")
-  const [hasGoal, setHasGoal] = useState(false)
-  const [count, setCount] = useState(15)
+function TitleGenerator({ C, glassCard }) {
+  const [titles, setTitles] = useState([])
+  const [selected, setSelected] = useState(null)
   const [hashtags, setHashtags] = useState([])
-  const [copied, setCopied] = useState(false)
-  const [copiedTag, setCopiedTag] = useState(null)
-
-  const generate = () => {
-    const tags = generateHashtagsHG({ platform, toy, mood, hasGoal, count })
-    setHashtags(tags)
-  }
-
-  const copyAll = () => {
-    navigator.clipboard.writeText(hashtags.join(' ')).catch(() => {})
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
-
-  const copyOne = (tag) => {
-    navigator.clipboard.writeText(tag).catch(() => {})
-    setCopiedTag(tag)
-    setTimeout(() => setCopiedTag(null), 1500)
-  }
-
-  const inp = {
-    padding: '8px 12px', borderRadius: 8, fontSize: 13,
-    background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
-    color: C.white, outline: 'none', width: '100%', boxSizing: 'border-box',
-  }
-  const lbl = { fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 5, display: 'block' }
-
-  return (
-    <div>
-      <div style={{ marginBottom: 24 }}>
-        <div style={{ fontSize: 20, fontWeight: 800, color: C.white, marginBottom: 4 }}># Hashtag Generator</div>
-        <div style={{ fontSize: 13, color: C.muted }}>Platform-specific hashtags for your stream — mix of high-traffic and niche</div>
-      </div>
-
-      <div style={{ ...glassCard, borderRadius: 16, padding: 24, marginBottom: 20 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 14, marginBottom: 20 }}>
-          <div>
-            <label style={lbl}>Platform</label>
-            <select value={platform} onChange={e => setPlatform(e.target.value)} style={inp}>
-              {['Chaturbate','BongaCams','MyFreeCams','Stripchat','CamSoda','Any'].map(p => <option key={p}>{p}</option>)}
-            </select>
-          </div>
-          <div>
-            <label style={lbl}>Toy</label>
-            <select value={toy} onChange={e => setToy(e.target.value)} style={inp}>
-              {['None','Lush','Domi','Edge','Hush','Interactive'].map(t => <option key={t}>{t}</option>)}
-            </select>
-          </div>
-          <div>
-            <label style={lbl}>Mood / Vibe</label>
-            <select value={mood} onChange={e => setMood(e.target.value)} style={inp}>
-              {[['none','No mood'],['tease','Tease'],['dominant','Dominant'],['submissive','Submissive'],['hype','Hype'],['mystery','Mystery']].map(([v,l]) => <option key={v} value={v}>{l}</option>)}
-            </select>
-          </div>
-          <div>
-            <label style={lbl}>How many</label>
-            <select value={count} onChange={e => setCount(parseInt(e.target.value))} style={inp}>
-              {[10,12,15,18,20].map(n => <option key={n}>{n}</option>)}
-            </select>
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, color: C.text }}>
-            <input type="checkbox" checked={hasGoal} onChange={e => setHasGoal(e.target.checked)} style={{ accentColor: C.cyan }} />
-            Include token goal hashtags
-          </label>
-        </div>
-
-        <button onClick={generate} style={{
-          padding: '10px 28px', borderRadius: 9,
-          background: 'linear-gradient(135deg, #22D3EE, #EC4899)',
-          border: 'none', color: 'white', fontWeight: 700, fontSize: 14, cursor: 'pointer',
-        }}>
-          # Generate Hashtags
-        </button>
-      </div>
-
-      {hashtags.length > 0 && (
-        <div style={{ ...glassCard, borderRadius: 16, padding: 24 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: C.white }}>
-              {hashtags.length} hashtags generated
-            </div>
-            <button onClick={copyAll} style={{
-              padding: '7px 18px', borderRadius: 8, fontSize: 12, fontWeight: 700,
-              background: copied ? 'rgba(16,185,129,0.2)' : 'rgba(34,211,238,0.1)',
-              border: `1px solid ${copied ? 'rgba(16,185,129,0.4)' : 'rgba(34,211,238,0.3)'}`,
-              color: copied ? '#10B981' : C.cyan, cursor: 'pointer',
-            }}>
-              {copied ? '✓ Copied All!' : '📋 Copy All'}
-            </button>
-          </div>
-
-          {/* Tag cloud */}
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
-            {hashtags.map(tag => (
-              <button key={tag} onClick={() => copyOne(tag)} style={{
-                padding: '6px 12px', borderRadius: 20, fontSize: 13, cursor: 'pointer',
-                background: copiedTag === tag ? 'rgba(16,185,129,0.15)' : 'rgba(124,92,255,0.1)',
-                border: `1px solid ${copiedTag === tag ? 'rgba(16,185,129,0.4)' : 'rgba(124,92,255,0.25)'}`,
-                color: copiedTag === tag ? '#10B981' : '#A78BFA',
-                fontWeight: 500, transition: 'all 0.15s',
-              }}>
-                {copiedTag === tag ? '✓' : ''}{tag}
-              </button>
-            ))}
-          </div>
-
-          {/* Full text for easy copy-paste */}
-          <div style={{ padding: '12px 14px', borderRadius: 10, background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.06)', fontSize: 12, color: C.muted, lineHeight: 1.7, wordBreak: 'break-all' }}>
-            {hashtags.join(' ')}
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-
-function TitleGenerator({ C, glassCard, analytics, tips, sessions, whales }) {
-  const [current, setCurrent] = useState(null)   // { title, drivers }
-  const [history, setHistory] = useState([])      // last 5 titles
-  const [copiedCurrent, setCopiedCurrent] = useState(false)
-  const [copiedIdx, setCopiedIdx] = useState(null)
-  const [tokenGoal, setTokenGoal] = useState(0)
+  const [tokensEnabled, setTokensEnabled] = useState(false)
+  const [tokenGoal, setTokenGoal] = useState(500)
   const [action, setAction] = useState("")
+  const [interactive, setInteractive] = useState(false)
   const [toy, setToy] = useState("")
-  const [mood, setMood] = useState("none")
-  const [useEmojis, setUseEmojis] = useState(true)
+  const [game, setGame] = useState("")
+  const [emojis, setEmojis] = useState(true)
+  const [hashtagsEnabled, setHashtagsEnabled] = useState(true)
+  const [autoCopy, setAutoCopy] = useState(true)
+  const [copiedIndex, setCopiedIndex] = useState(null)
+  const [copiedSelected, setCopiedSelected] = useState(false)
 
-  const buildCtx = () => {
-    const now = new Date()
-    const currentHour = now.getHours()
-    const todayDay = now.toLocaleDateString("en-US", { weekday: "long" })
+  const scoreTitle = title => {
+    let score = 0
+    if (title.includes("Tip")) score += 2
+    if (title.includes("Control")) score += 2
+    if (title.includes("Top")) score += 1
+    if (title.length < 90) score += 1
+    if (/🔥|💦|😈|👑/.test(title)) score += 1
+    return score
+  }
 
-    // FIX: bestHour uses avg USD per session at each hour, not raw totals
-    // Prefer pre-computed value from analytics.js aggregateRows if available
-    const _analyticsBestHourCtx = analytics?.bestHour || null
-    let bestHour = null
-    if (_analyticsBestHourCtx) {
-      bestHour = parseInt(_analyticsBestHourCtx.hour)
-    } else {
-      const hourUSD = {}; const hourCount = {}
-      ;(sessions || []).forEach(s => {
-        const h = new Date(s.startTime).getHours()
-        hourUSD[h] = (hourUSD[h] || 0) + s.totalUSD
-        hourCount[h] = (hourCount[h] || 0) + 1
-      })
-      const bestHourEntry = Object.entries(hourUSD).map(([h, usd]) => [h, usd / (hourCount[h] || 1)]).sort((a,b) => b[1]-a[1])[0]
-      bestHour = bestHourEntry ? parseInt(bestHourEntry[0]) : null
-    }
-    const bestHourLabel = bestHour !== null
-      ? (bestHour === 0 ? "12 AM" : bestHour < 12 ? `${bestHour} AM` : bestHour === 12 ? "12 PM" : `${bestHour-12} PM`)
-      : null
-    const hoursUntilPeak = bestHour !== null ? (bestHour - currentHour + 24) % 24 : 99
-    const isPeakNow = hoursUntilPeak <= 1
-    const peakSoon = hoursUntilPeak <= 3 && !isPeakNow
-
-    // Best day
-    const dayTotals = {}
-    ;(sessions || []).forEach(s => {
-      const d = new Date(s.startTime).toLocaleDateString("en-US", { weekday: "long" })
-      dayTotals[d] = (dayTotals[d] || 0) + s.totalUSD
-    })
-    const bestDay = Object.entries(dayTotals).sort((a,b) => b[1]-a[1])[0]?.[0] || null
-    const todayIsBestDay = bestDay === todayDay
-
-    // Whales
-    const sorted = [...(whales || [])].sort((a,b) => b.totalUSD - a.totalUSD)
-    const whaleCount = sorted.filter(w => w.tier === "Whale" || w.tier === "Shark").length
-    const topWhaleName = sorted[0]?.username || null
-    const hasWhales = whaleCount > 0
-
-    // Returning fans
-    const fanCounts = {}
-    ;(tips || []).forEach(t => { fanCounts[t.username] = (fanCounts[t.username] || 0) + 1 })
-    const total = Object.keys(fanCounts).length
-    const returning = Object.values(fanCounts).filter(c => c > 1).length
-    const returningPct = total > 0 ? Math.round((returning / total) * 100) : 0
-    const hasReturners = returningPct > 30
-
-    // Low activity
-    const recentTips = (tips || []).filter(t => (Date.now() - new Date(t.date_time||t.dateRaw)) / 86400000 <= 7)
-    const lowActivity = recentTips.length < 5
-
-    const avgSessionUSD = sessions?.length
-      ? sessions.reduce((s,x) => s + x.totalUSD, 0) / sessions.length : 0
-
-    return {
-      isPeakNow, peakSoon, bestHour, bestHourLabel, hoursUntilPeak,
-      hasWhales, topWhaleName, whaleCount,
-      hasReturners, returningPct,
-      lowActivity, todayIsBestDay, todayDay,
-      tokenGoal, action, toy, mood, useEmojis, avgSessionUSD,
-    }
+  const copyFull = (selectedText, hashtagsArray) => {
+    const fullText = `${selectedText}\n\n${hashtagsArray.join(" ")}`
+    navigator.clipboard.writeText(fullText)
+    setCopiedSelected(true)
+    setTimeout(() => setCopiedSelected(false), 1500)
   }
 
   const generate = () => {
-    const ctx = buildCtx()
-    const result = buildOneTitle(ctx)
-    // Push previous to history (keep last 5)
-    if (current) setHistory(h => [current, ...h].slice(0, 5))
-    setCurrent(result)
-    setCopiedCurrent(false)
-  }
-
-  const copyTitle = (title, idx = null) => {
-    navigator.clipboard.writeText(title)
-    if (idx === null) {
-      setCopiedCurrent(true)
-      setTimeout(() => setCopiedCurrent(false), 2000)
-    } else {
-      setCopiedIdx(idx)
-      setTimeout(() => setCopiedIdx(null), 2000)
+    const results = []
+    let attempts = 0
+    const emojisSet = emojis ? ["🔥","💦","😈","👑"] : [""]
+    while (results.length < 25 && attempts < 100) {
+      attempts++
+      const e = emojisSet[Math.floor(Math.random() * emojisSet.length)]
+      const structures = [
+        `Tip ${Math.floor(Math.random()*20)+5} → ${action || "Make Me React"} ${e}`,
+        `Top Tipper Controls Me ${e}`,
+        `You Control Everything • Tip To Play ${e}`,
+        `Hit ${tokenGoal} → ${action || "Special Reward"} ${e}`,
+        `Tip = ${action || "Reaction"} • Don't Stop ${e}`,
+        `Control My ${toy || "Toy"} • Tip To Activate ${e}`,
+        `${game || "Game Mode"} • Winner Gets Control ${e}`
+      ]
+      let title = structures[Math.floor(Math.random() * structures.length)]
+      if (interactive) title += " • Interactive ON"
+      if (tokensEnabled) title += ` • Goal: ${tokenGoal}`
+      if (!results.find(r => r.text === title)) results.push({ text: title, score: scoreTitle(title) })
     }
+    setTitles(results.sort((a,b) => b.score - a.score))
+    setSelected(null)
+    setHashtags([])
+    setCopiedIndex(null)
+    setCopiedSelected(false)
   }
 
-  const ctx = buildCtx()
+  const toggleBtn = (val, label, onToggle) => (
+    <label style={{ color: C.text, display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+      <input type="checkbox" checked={val} onChange={onToggle} style={{ accentColor: C.pink }} /> {label}
+    </label>
+  )
 
-  // Context badges for display
-  const badges = []
-  if (ctx.isPeakNow && ctx.bestHourLabel)  badges.push({ label: `🔴 Peak hour NOW (${ctx.bestHourLabel})`, color: C.orange })
-  else if (ctx.peakSoon && ctx.bestHourLabel) badges.push({ label: `⏳ Peak in ${ctx.hoursUntilPeak}h (${ctx.bestHourLabel})`, color: C.gold })
-  if (ctx.hasWhales)    badges.push({ label: `💎 ${ctx.whaleCount} VIP fans`, color: C.gold })
-  if (ctx.todayIsBestDay) badges.push({ label: `📅 Best day: ${ctx.todayDay}`, color: C.green })
-  if (ctx.hasReturners) badges.push({ label: `🔁 ${ctx.returningPct}% return rate`, color: C.cyan })
-  if (ctx.lowActivity)  badges.push({ label: `💤 Low recent activity`, color: C.orange })
-  if (ctx.tokenGoal)    badges.push({ label: `🎯 Goal: ${ctx.tokenGoal} tokens`, color: C.pink })
-  if (ctx.mood && ctx.mood !== "none") badges.push({ label: `🎭 Mood: ${ctx.mood}`, color: C.indigo })
-
-  const inp = { background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", padding: "10px 14px", borderRadius: 10, color: C.white, outline: "none", width: "100%", fontSize: 13 }
+  const inpStyle = { background: C.card2, border: `1px solid ${C.border2}`, padding: 8, borderRadius: 8, color: C.white, outline: "none", width: "100%" }
 
   return (
-    <div style={{ maxWidth: 680, margin: "0 auto", paddingTop: 8 }}>
-      <div style={{ marginBottom: 20 }}>
-        <h1 style={{ fontSize: 26, fontWeight: 800, color: C.white, marginBottom: 4 }}>🎬 Room Title Generator</h1>
-        <p style={{ fontSize: 13, color: C.muted }}>Formula: Hook + Target + Action + Reward + Urgency — one title at a time</p>
+    <div style={{ ...glassCard, padding: 20, borderRadius: 16, marginTop: 20, maxWidth: 700 }}>
+      <h2 style={{ fontSize: 18, marginBottom: 12, color: C.white, fontWeight: 700 }}>🔥 Viral Title Generator</h2>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 15 }}>
+        {toggleBtn(tokensEnabled, "Token Goal", () => setTokensEnabled(!tokensEnabled))}
+        {tokensEnabled && (
+          <>
+            <input value={tokenGoal} onChange={e => setTokenGoal(Number(e.target.value))} style={inpStyle} placeholder="Token Goal" />
+            <input value={action} onChange={e => setAction(e.target.value)} placeholder="Action" style={inpStyle} />
+          </>
+        )}
+        {toggleBtn(interactive, "Interactive", () => setInteractive(!interactive))}
+        {interactive && (
+          <>
+            <input value={toy} onChange={e => setToy(e.target.value)} placeholder="Toy" style={inpStyle} />
+            <input value={game} onChange={e => setGame(e.target.value)} placeholder="Game" style={inpStyle} />
+          </>
+        )}
+        {toggleBtn(emojis, "Emojis", () => setEmojis(!emojis))}
+        {toggleBtn(hashtagsEnabled, "Hashtags", () => setHashtagsEnabled(!hashtagsEnabled))}
+        {toggleBtn(autoCopy, "Auto Copy", () => setAutoCopy(!autoCopy))}
       </div>
-
-      {/* LIVE DATA BADGES */}
-      {badges.length > 0 && (
-        <div style={{ ...glassCard, borderRadius: 14, padding: "14px 18px", marginBottom: 20 }}>
-          <div style={{ fontSize: 10, color: C.muted, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.8 }}>Influencing your titles right now</div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
-            {badges.map((b, i) => (
-              <span key={i} style={{ padding: "4px 12px", borderRadius: 20, background: `${b.color}15`, border: `1px solid ${b.color}30`, fontSize: 12, fontWeight: 600, color: b.color }}>{b.label}</span>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* INPUTS */}
-      <div style={{ ...glassCard, borderRadius: 14, padding: 18, marginBottom: 20 }}>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
-          <div>
-            <div style={{ fontSize: 10, color: C.muted, marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.5 }}>Token Goal</div>
-            <input type="number" value={tokenGoal || ""} onChange={e => setTokenGoal(Number(e.target.value) || 0)} style={inp} placeholder="e.g. 500 (leave blank to skip)" />
-          </div>
-          <div>
-            <div style={{ fontSize: 10, color: C.muted, marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.5 }}>Reward / Action</div>
-            <input value={action} onChange={e => setAction(e.target.value)} style={inp} placeholder="e.g. flash, dance, strip" />
-          </div>
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
-          <div>
-            <div style={{ fontSize: 10, color: C.muted, marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.5 }}>Toy</div>
-            <select value={toy} onChange={e => setToy(e.target.value)} style={{ ...inp, cursor: "pointer" }}>
-              <option value="">No toy</option>
-              <option value="Lush">Lovense Lush (wearable)</option>
-              <option value="Domi">Lovense Domi (wand)</option>
-              <option value="Edge">Lovense Edge (prostate)</option>
-              <option value="Hush">Lovense Hush (plug)</option>
-              <option value="interactive toy">Interactive toy (generic)</option>
-            </select>
-          </div>
-          <div>
-            <div style={{ fontSize: 10, color: C.muted, marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.5 }}>Vibe / Mood</div>
-            <select value={mood} onChange={e => setMood(e.target.value)} style={{ ...inp, cursor: "pointer" }}>
-              <option value="none">No mood (auto)</option>
-              <option value="tease">Tease / buildup</option>
-              <option value="dominant">Dominant / in charge</option>
-              <option value="submissive">Submissive / playful</option>
-              <option value="hype">High energy / hype</option>
-              <option value="mystery">Mystery / curiosity</option>
-            </select>
-          </div>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13, color: C.text }}>
-            <input type="checkbox" checked={useEmojis} onChange={() => setUseEmojis(v => !v)} style={{ accentColor: C.pink }} />
-            Include emojis
-          </label>
-          <button onClick={generate} style={{ padding: "11px 28px", borderRadius: 10, background: "linear-gradient(135deg, #EC4899, #7C5CFF)", border: "none", color: C.white, fontSize: 15, fontWeight: 800, cursor: "pointer", boxShadow: "0 0 24px rgba(236,72,153,0.4)", letterSpacing: 0.3 }}>
-            ✨ Generate Title
+      <div style={{ display: "flex", gap: 10, marginBottom: 15 }}>
+        <button onClick={generate} style={{ background: C.pink, padding: "10px 16px", borderRadius: 10, color: C.white, border: "none", fontWeight: 700, cursor: "pointer" }}>
+          ✨ Generate Titles
+        </button>
+        {titles.length > 0 && (
+          <button onClick={generate} style={{ background: "rgba(255,255,255,0.06)", padding: "10px 16px", borderRadius: 10, color: C.muted, border: `1px solid ${C.border}`, cursor: "pointer" }}>
+            🔁 Regenerate
           </button>
-        </div>
+        )}
       </div>
-
-      {/* CURRENT TITLE — big, prominent */}
-      {current && (
-        <div style={{ ...glassCard, borderRadius: 16, padding: 28, marginBottom: 20, border: "1px solid rgba(236,72,153,0.3)", background: "linear-gradient(135deg, rgba(236,72,153,0.06), rgba(124,92,255,0.06))" }}>
-          <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 14 }}>Your title</div>
-          <div style={{ fontSize: 20, fontWeight: 800, color: C.white, lineHeight: 1.4, marginBottom: 20 }}>
-            {current.title}
-          </div>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-              {current.drivers.map((d, i) => (
-                <span key={i} style={{ fontSize: 10, color: C.cyan, padding: "3px 9px", borderRadius: 20, background: "rgba(34,211,238,0.1)", border: "1px solid rgba(34,211,238,0.2)" }}>📊 {d}</span>
-              ))}
-            </div>
-            <div style={{ display: "flex", gap: 10 }}>
-              <button onClick={generate} style={{ padding: "8px 18px", borderRadius: 9, background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.12)", color: C.muted, fontSize: 13, cursor: "pointer" }}>
-                🔁 Try Another
-              </button>
-              <button onClick={() => copyTitle(current.title)} style={{ padding: "8px 22px", borderRadius: 9, background: copiedCurrent ? "rgba(16,185,129,0.2)" : "linear-gradient(135deg, #22D3EE, #EC4899)", border: copiedCurrent ? "1px solid rgba(16,185,129,0.4)" : "none", color: C.white, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
-                {copiedCurrent ? "✔ Copied!" : "📋 Copy Title"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* EMPTY STATE */}
-      {!current && (
-        <div style={{ textAlign: "center", padding: "52px 20px", color: C.muted }}>
-          <div style={{ fontSize: 44, marginBottom: 12 }}>🎬</div>
-          <div style={{ fontSize: 16, fontWeight: 700, color: C.white, marginBottom: 6 }}>One perfect title, every time</div>
-          <div style={{ fontSize: 13, lineHeight: 1.6 }}>Built from the viral formula: Hook + Target + Action + Reward + Urgency.<br/>Your earnings data shapes every title.</div>
-        </div>
-      )}
-
-      {/* HISTORY */}
-      {history.length > 0 && (
-        <div style={{ ...glassCard, borderRadius: 14, padding: 18 }}>
-          <div style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 12 }}>Previous titles</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {history.map((h, i) => (
-              <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", borderRadius: 10, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", gap: 12 }}>
-                <span style={{ fontSize: 13, color: C.text, flex: 1, lineHeight: 1.4 }}>{h.title}</span>
-                <button onClick={() => copyTitle(h.title, i)} style={{ flexShrink: 0, padding: "4px 12px", borderRadius: 7, background: copiedIdx === i ? "rgba(16,185,129,0.2)" : "rgba(255,255,255,0.06)", border: `1px solid ${copiedIdx === i ? "rgba(16,185,129,0.4)" : "rgba(255,255,255,0.1)"}`, color: copiedIdx === i ? C.green : C.muted, fontSize: 11, cursor: "pointer" }}>
-                  {copiedIdx === i ? "✔" : "📋"}
+      <div style={{ display: "grid", gap: 8 }}>
+        {titles.map((t, i) => (
+          <div key={i} onClick={() => {
+            setSelected(t)
+            let tags = []
+            if (hashtagsEnabled) {
+              const base = ["#camgirl","#livecam","#fyp"]
+              if (t.text.includes("Control")) tags = ["#controlme","#lovense"]
+              else if (t.text.includes("Tip")) tags = ["#tips","#paytoplay"]
+              else tags = ["#sexy","#flirty"]
+              tags = [...base, ...tags]
+              setHashtags(tags)
+            }
+            if (autoCopy) {
+              const full = hashtagsEnabled ? `${t.text}\n\n${tags.join(" ")}` : t.text
+              navigator.clipboard.writeText(full)
+              setCopiedIndex(i)
+              setTimeout(() => setCopiedIndex(null), 1200)
+            }
+          }}
+            style={{ padding: 10, borderRadius: 10, cursor: "pointer", background: selected?.text === t.text ? C.indigo : C.card, border: `1px solid ${C.border}` }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ flex: 1, color: C.white, fontSize: 13 }}>{t.text}</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 12, color: C.text }}>
+                  {copiedIndex === i ? "✔ Copied" : `Score: ${t.score}`}
+                </span>
+                <button onClick={e => {
+                  e.stopPropagation()
+                  navigator.clipboard.writeText(t.text)
+                  setCopiedIndex(i)
+                  setTimeout(() => setCopiedIndex(null), 1200)
+                }} style={{ background: C.cyan, border: "none", padding: "4px 8px", borderRadius: 6, cursor: "pointer", fontSize: 12 }}>
+                  {copiedIndex === i ? "✔" : "📋"}
                 </button>
               </div>
-            ))}
+            </div>
+          </div>
+        ))}
+      </div>
+      {selected && (
+        <div style={{ marginTop: 12, color: C.cyan }}>
+          <div style={{ marginBottom: 6 }}>{selected.text}</div>
+          {hashtags.length > 0 && (
+            <div style={{ marginBottom: 10, fontSize: 13, color: C.text }}>{hashtags.join(" ")}</div>
+          )}
+          <div style={{ display: "flex", gap: 10 }}>
+            <button onClick={() => copyFull(selected.text, hashtags)}
+              style={{ background: C.pink, padding: "6px 12px", borderRadius: 8, border: "none", cursor: "pointer", color: C.white, fontWeight: 600 }}>
+              {copiedSelected ? "✔ Copied!" : "Copy Title + Tags"}
+            </button>
+            <button onClick={() => navigator.clipboard.writeText(hashtags.join(" "))}
+              style={{ background: C.card2, padding: "6px 12px", borderRadius: 8, border: `1px solid ${C.border}`, cursor: "pointer", color: C.white }}>
+              Copy Tags
+            </button>
           </div>
         </div>
       )}
-
-      <div style={{ marginTop: 16, padding: "11px 16px", background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.18)", borderRadius: 10 }}>
-        <div style={{ fontSize: 12, color: C.gold }}>💡 Refresh every 20–30 min — platforms rank active streams higher when titles change frequently.</div>
+      <div style={{ marginTop: 16, padding: 14, background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.25)", borderRadius: 10 }}>
+        <div style={{ fontSize: 13, color: C.gold }}>💡 Refreshing your title every 20–30 minutes increases ranking frequency and visibility by ~30–50%.</div>
       </div>
     </div>
   )
@@ -809,14 +234,8 @@ export default function Dashboard() {
   const [analytics, setAnalytics] = useState(null)
   const [liveAnalytics, setLiveAnalytics] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [insights, setInsights] = useState(null)
-  const [insightsLoading, setInsightsLoading] = useState(false)
-  const [lastUpdated, setLastUpdated] = useState(null)
   const [uploading, setUploading] = useState(false)
-  const [uploadPlatform, setUploadPlatform] = useState("")
   const [activeTab, setActiveTab] = useState("overview")
-  const [showWalkthrough, setShowWalkthrough] = useState(false)
-  const [walkthroughStep, setWalkthroughStep] = useState(1)
   const [toast, setToast] = useState("")
   const [uploadCount, setUploadCount] = useState(0)
   const [whaleFilter, setWhaleFilter] = useState("ALL")
@@ -829,22 +248,6 @@ export default function Dashboard() {
   const [messageCopied, setMessageCopied] = useState(false)
   const [showUpgradeModal, setShowUpgradeModal] = useState(false)
   const [showBetaPrompt, setShowBetaPrompt] = useState(false)
-  const [fanSearchOpen, setFanSearchOpen] = useState(false)
-  const [whalePage, setWhalePage] = useState(0)
-  const [fanSearchQuery, setFanSearchQuery] = useState("")
-  const [shareModalOpen, setShareModalOpen] = useState(false)
-  const [chartDrillDay, setChartDrillDay] = useState(null)
-  const [heatmapDrillDay, setHeatmapDrillDay] = useState(null)   // which day was clicked in heatmap
-  // ── LIVE MODE STATE ───────────────────────────────────────
-  const [liveActive, setLiveActive] = useState(false)
-  const [liveStartTime, setLiveStartTime] = useState(null)
-  const [liveEvents, setLiveEvents] = useState([])
-  const [liveGoalTokens, setLiveGoalTokens] = useState(0)
-  const [livePlatform, setLivePlatform] = useState('Chaturbate')
-  const [liveTipInput, setLiveTipInput] = useState({ username: '', tokens: '', usd: '' })
-  const [liveAlerts, setLiveAlerts] = useState([])
-  const [liveTick, setLiveTick] = useState(0)
-  const [betaCount, setBetaCount] = useState(null)
   const [earlyAccessEmail, setEarlyAccessEmail] = useState('')
   const [earlyAccessSubmitted, setEarlyAccessSubmitted] = useState(false)
   const [earlyAccessSubmitting, setEarlyAccessSubmitting] = useState(false)
@@ -855,8 +258,6 @@ export default function Dashboard() {
   const [tipPage, setTipPage] = useState(0)
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
-  const [tokenRates, setTokenRates] = useState({ Chaturbate: 0.05, BongaCams: 0.05, MyFreeCams: 0.05, Stripchat: 0.05, CamSoda: 0.05 })
-  const [showRateEditor, setShowRateEditor] = useState(false)
 
   const isBetaUser = true
   const isPro = true
@@ -869,52 +270,11 @@ export default function Dashboard() {
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(""), 3500) }
 
-  // ── EXTENSION LISTENER — receives tips from Chrome extension ────────────
-  useEffect(() => {
-    const handleExtensionMessage = (event) => {
-      if (event.source !== window) return
-      if (event.data?.type !== 'CAMCASH_TIP_EVENT') return
-      const { event: tipEvent } = event.data
-      if (!tipEvent || !tipEvent.username) return
-      // Only feed into live mode if active
-      setLiveActive(active => {
-        if (active) {
-          const rate = 0.05 // will use tokenRates from state in real impl
-          const tokens = parseInt(tipEvent.tokens) || 0
-          const usd    = parseFloat(tipEvent.usd) || 0
-          const normalized = {
-            username: tipEvent.username,
-            tokens,
-            usd,
-            normalizedRevenue: usd > 0 ? usd : parseFloat((tokens * rate).toFixed(2)),
-            sourceUsed: usd > 0 ? 'usd' : 'tokens',
-            timestamp: new Date(tipEvent.timestamp || Date.now()),
-            platform: tipEvent.platform || 'Unknown',
-            source: 'extension',
-          }
-          setLiveEvents(prev => [...prev, normalized])
-        }
-        return active
-      })
-    }
-    window.addEventListener('message', handleExtensionMessage)
-    return () => window.removeEventListener('message', handleExtensionMessage)
-  }, [])
-
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) { router.replace("/login"); return }
       setUser(user)
       loadData(user.id)
-      loadInsights(user.id)
-      // Check if new user needs walkthrough
-      supabase.from('beta_users').select('onboarding_complete').eq('user_id', user.id).single()
-        .then(({ data: profile }) => {
-          if (!profile?.onboarding_complete) setShowWalkthrough(true)
-        })
-      // Fetch real beta user count for the progress bar
-      supabase.from('beta_users').select('id', { count: 'exact', head: true })
-        .then(({ count }) => { if (count !== null) setBetaCount(count) })
       try {
         supabase.from('beta_users').upsert({
           user_id: user.id,
@@ -936,49 +296,6 @@ export default function Dashboard() {
     return () => clearInterval(interval)
   }, [tips])
 
-  const dismissWalkthrough = async () => {
-    setShowWalkthrough(false)
-    // Mark onboarding complete so walkthrough never shows again
-    if (user) {
-      await supabase.from('beta_users').upsert(
-        { user_id: user.id, email: user.email, onboarding_complete: true },
-        { onConflict: 'user_id' }
-      )
-    }
-  }
-
-  // Auto-refresh: 15-min insights + 60-min full data + on tab focus
-  useEffect(() => {
-    if (!user) return
-    const insightsInterval = setInterval(() => loadInsights(user.id), 15 * 60 * 1000)
-    const dataInterval = setInterval(() => { loadData(user.id); loadInsights(user.id) }, 60 * 60 * 1000)
-    const onFocus = () => loadInsights(user.id)
-    window.addEventListener('focus', onFocus)
-    return () => {
-      clearInterval(insightsInterval)
-      clearInterval(dataInterval)
-      window.removeEventListener('focus', onFocus)
-    }
-  }, [user])
-
-  const handleSignOut = async () => {
-    await supabase.auth.signOut()
-    router.replace('/login')
-  }
-
-  const loadInsights = async (uid) => {
-    if (!uid) return
-    setInsightsLoading(true)
-    try {
-      const { data, error } = await supabase.rpc('get_user_insights', { p_user_id: uid })
-      if (!error && data) {
-        setInsights(data)
-        setLastUpdated(new Date())
-      }
-    } catch(e) { console.error('Insights failed:', e) }
-    finally { setInsightsLoading(false) }
-  }
-
   const loadData = async (uid) => {
     setLoading(true)
     try {
@@ -992,54 +309,73 @@ export default function Dashboard() {
         if (!data || data.length < PAGE) break
         from += PAGE
       }
-      if (allData.length) {
-        setTips(allData)
-        try {
-          const result = runEngine(allData)
-          setAnalytics(result)
-        } catch (engineErr) {
-          console.error('[loadData] runEngine failed:', engineErr)
-          // Analytics failed but tips are loaded — dashboard will show raw data
-          // without computed insights rather than a blank screen
-        }
-      }
+      if (allData.length) { setTips(allData); const result = runEngine(allData); setAnalytics(result) }
     } finally { setLoading(false) }
   }
-const handleCSV = async (file, forcePlatform = null) => {
+
+  const removeDuplicates = (existingTips, newTips) => {
+    const existingKeys = new Set(existingTips.map(t => `${t.date_time}_${t.username}_${t.tokens}_${t.platform}`))
+    return newTips.filter(t => !existingKeys.has(`${t.dateRaw || t.date_time}_${t.username}_${t.tokens}_${t.platform}`))
+  }
+
+  const handleCSV = async (file) => {
     if (!file || !user) return
     setUploading(true)
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) { showToast("❌ Not logged in"); setUploading(false); return }
+      const text = await file.text()
+      const parsed = parseCSV(text)
 
-      const fd = new FormData()
-      fd.append('file', file)
-      if (forcePlatform) fd.append('platform', forcePlatform)
-
-      const res = await fetch('/api/upload', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${session.access_token}` },
-        body: fd,
-      })
-
-      const result = await res.json()
-
-      if (!res.ok || result.error) {
-        showToast("❌ " + (result.error || 'Upload failed'))
+      if (!parsed.length) {
+        showToast("❌ No valid rows found in this file")
         setUploading(false)
         return
       }
 
-      track('csv_imported', { rows: result.inserted, platform: result.platform || 'Unknown' })
+      track('csv_imported', { rows: parsed.length, platform: parsed[0]?.platform || 'Unknown' })
 
-      const msg = result.skipped > 0
-        ? `✅ Imported ${result.inserted} tips (${result.skipped} duplicates skipped)`
-        : `✅ Imported ${result.inserted} tips from ${result.platform}!`
+      const unique = removeDuplicates(tips, parsed)
+      const duplicateCount = parsed.length - unique.length
+
+      if (unique.length === 0) {
+        showToast(`⚠️ All ${parsed.length} tips are already imported!`)
+        setUploading(false)
+        return
+      }
+
+      const toInsert = unique.map(r => {
+        const tokens = r.tokens || 0
+        const usd = (r.usd && r.usd > 0) ? r.usd : parseFloat((tokens * 0.05).toFixed(2))
+        return {
+          user_id: user.id,
+          date_time: r.dateRaw || r.date_time,
+          platform: r.platform,
+          username: r.username,
+          tip_type: r.tip_type || "Tip",
+          tokens,
+          usd,
+          tip_note: r.tip_note || r.note || ""
+        }
+      })
+
+      const BATCH_SIZE = 500
+      for (let i = 0; i < toInsert.length; i += BATCH_SIZE) {
+        const batch = toInsert.slice(i, i + BATCH_SIZE)
+        const { error } = await supabase.from("tips").insert(batch)
+        if (error) { showToast("❌ " + error.message); setUploading(false); return }
+      }
+
+      setUploadCount(uploadCount + 1)
+      const newCount = uploadCount + 1
+      if (newCount === 2 || newCount === 3) setShowBetaPrompt(true)
+      try {
+        await supabase.from('analytics_events').insert({ user_id: user.id, event_name: 'csv_uploaded', properties: { count: newCount, platform: parsed[0]?.platform || 'Unknown', rows: unique.length } })
+        await supabase.from('beta_users').upsert({ user_id: user.id, email: user.email, csv_upload_count: newCount }, { onConflict: 'user_id' })
+      } catch(e) {}
+      const msg = duplicateCount > 0
+        ? `✅ Imported ${unique.length} tips (${duplicateCount} duplicates skipped)`
+        : `✅ Imported ${unique.length} tips from ${parsed[0]?.platform || "CSV"}!`
       showToast(msg)
-
-      setUploadCount(c => c + 1)
       await loadData(user.id)
-
     } catch (err) {
       showToast("❌ " + err.message)
     } finally {
@@ -1075,55 +411,27 @@ const handleCSV = async (file, forcePlatform = null) => {
   const whales = analytics?.whales || []
   const insights = analytics?.insights || []
   const platforms = analytics?.platforms || []
-  const dependencyRisk = analytics?.dependencyRisk || null
-  const preTipBehavior = analytics?.preTipBehavior || null
-  const trueHourlyAvg  = analytics?.trueHourlyAvg  || []
   const alerts = liveAnalytics?.whaleAlerts || analytics?.whaleAlerts || []
   const lossAlerts = liveAnalytics?.lossAlerts || analytics?.lossAlerts || []
   const nextMoves = liveAnalytics?.nextMoves || analytics?.nextMoves || []
   const totalRevenue = analytics?.totalUSD || 0
-  // Only average sessions with real duration (exclude zero-timestamp BongaCams exports)
-  const timedSessions = sessions.filter(s => !s.durationUnknown && s.usdPerHour !== null)
-  // FIX: use total USD / total hours (not avg of per-session rates — that inflates short sessions)
-  const timedTotalUSD = timedSessions.reduce((sum, s) => sum + (s.totalUSD || 0), 0)
-  const timedTotalHours = timedSessions.reduce((sum, s) => sum + (s.durationHours || 0), 0)
-  const avgPerHour = timedTotalHours > 0 ? timedTotalUSD / timedTotalHours : 0
+  const avgPerHour = sessions.length ? sessions.reduce((sum, s) => sum + (s.usdPerHour || 0), 0) / sessions.length : 0
   // Single source of truth — pre-computed in aggregateRows, same values used everywhere
   const analyticsbestDay  = analytics?.bestDay  || null
   const analyticsBestHour = analytics?.bestHour || null
-  // Advanced analytics — from aggregateRows
-  const platformBestTimes     = analytics?.platformBestTimes     || {}
-  const earningsVelocity      = analytics?.earningsVelocity      ?? null
-  const platformVelocity      = analytics?.platformVelocity      || {}
-  const missedRevenueByPlat   = analytics?.missedRevenueByPlatform || {}
-  const returningVsNew        = analytics?.returningVsNew        || null
-  const topFanDependency      = analytics?.topFanDependency      || null
 
-  // Build platformTimes from INDIVIDUAL TIPS (not session start time)
-  // so hour/day reflects when money actually came in, not when the session started
-  // Use UTC to match the database timestamps
-  const UTC_DAYS_LONG = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
   const platformTimes = {}
-  tips.forEach(t => {
-    if (!platformTimes[t.platform]) platformTimes[t.platform] = { hours: {}, days: {} }
-    const dt = new Date(t.date_time || t.dateRaw)
-    const hour = dt.getUTCHours()
-    const day = UTC_DAYS_LONG[dt.getUTCDay()]
-    platformTimes[t.platform].hours[hour] = (platformTimes[t.platform].hours[hour] || 0) + (t.usd || 0)
-    platformTimes[t.platform].days[day]   = (platformTimes[t.platform].days[day]   || 0) + (t.usd || 0)
+  sessions.forEach(s => {
+    if (!platformTimes[s.platform]) platformTimes[s.platform] = { hours: {}, days: {} }
+    const hour = new Date(s.startTime).getHours()
+    const day = new Date(s.startTime).toLocaleDateString('en-US', { weekday: 'long' })
+    platformTimes[s.platform].hours[hour] = (platformTimes[s.platform].hours[hour] || 0) + s.totalUSD
+    platformTimes[s.platform].days[day] = (platformTimes[s.platform].days[day] || 0) + s.totalUSD
   })
 
   const filteredWhales = whales.filter(w => {
     if (whaleFilter !== "ALL" && w.tier !== whaleFilter) return false
     if (platformFilter !== "ALL" && w.platform !== platformFilter) return false
-    if (chartDrillDay) {
-      const fanTips = (w.tips && w.tips.length > 0) ? w.tips : tips.filter(t => t.username?.toLowerCase() === w.username?.toLowerCase())
-      const tippedOnDay = fanTips.some(t => {
-        const dayShort = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][new Date(t.date_time || t.dateRaw).getUTCDay()]
-        return dayShort === chartDrillDay
-      })
-      if (!tippedOnDay) return false
-    }
     return true
   })
 
@@ -1207,15 +515,14 @@ const handleCSV = async (file, forcePlatform = null) => {
       if (fanTips.length < 5) return
       const hourCounts = {}
       fanTips.forEach(t => {
-        // FIX: use getUTCHours() — tips stored in UTC
-        const h = new Date(t.date_time || t.dateRaw).getUTCHours()
+        const h = new Date(t.date_time || t.dateRaw).getHours()
         hourCounts[h] = (hourCounts[h] || 0) + 1
       })
       const bestHour = Object.entries(hourCounts).sort((a, b) => b[1] - a[1])[0]
       if (!bestHour) return
       const peakHour = parseInt(bestHour[0])
-      const currentUTCHr = new Date().getUTCHours()
-      const hoursAway = (peakHour - currentUTCHr + 24) % 24
+      const currentHour = new Date().getHours()
+      const hoursAway = Math.abs(currentHour - peakHour)
       const probability = Math.min(95, Math.round((bestHour[1] / fanTips.length) * 100 * 2.5))
       const label = peakHour === 0 ? '12 AM' : peakHour < 12 ? `${peakHour} AM` : peakHour === 12 ? '12 PM' : `${peakHour - 12} PM`
       if (hoursAway <= 2 && probability >= 40) {
@@ -1346,13 +653,11 @@ const handleCSV = async (file, forcePlatform = null) => {
     const alerts = []
 
     // --- PLATFORM DAY-OF-WEEK PERFORMANCE ---
-    // Use UTC day to avoid timezone shifts (DB stores UTC timestamps)
-    const UTC_DAYS_LONG = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
+    // Computed from actual tip data per platform per day
     const platDayMap = {}
     tips.forEach(t => {
       const p = t.platform
-      const d = new Date(t.date_time || t.dateRaw)
-      const day = UTC_DAYS_LONG[d.getUTCDay()]
+      const day = new Date(t.date_time || t.dateRaw).toLocaleDateString('en-US', { weekday: 'long' })
       if (!platDayMap[p]) platDayMap[p] = {}
       if (!platDayMap[p][day]) platDayMap[p][day] = 0
       platDayMap[p][day] += t.usd || 0
@@ -1381,46 +686,29 @@ const handleCSV = async (file, forcePlatform = null) => {
     })
 
     // --- PLATFORM vs PLATFORM HOUR COMPARISON ---
-    // FIX: use avg USD per hour-session (not raw cumulative totals)
-    // FIX: use getUTCHours() — tips are stored in UTC
-    const platHourUSD = {}; const platHourSessions = {}
+    const platHourMap = {}
     tips.forEach(t => {
       const p = t.platform
-      const d = new Date(t.date_time || t.dateRaw)
-      // Floor to UTC hour-bucket key for deduplication
-      const bucketKey = Math.floor(d.getTime() / 3600000)
-      const h = d.getUTCHours()
-      if (!platHourUSD[p]) { platHourUSD[p] = {}; platHourSessions[p] = {} }
-      if (!platHourUSD[p][h]) { platHourUSD[p][h] = 0; platHourSessions[p][h] = new Set() }
-      platHourUSD[p][h] += t.usd || 0
-      platHourSessions[p][h].add(bucketKey)
-    })
-    // Compute avg per session at each UTC hour per platform
-    const platHourAvg = {}
-    Object.keys(platHourUSD).forEach(p => {
-      platHourAvg[p] = {}
-      Object.keys(platHourUSD[p]).forEach(h => {
-        const sessions = platHourSessions[p][h].size || 1
-        platHourAvg[p][h] = platHourUSD[p][h] / sessions
-      })
+      const h = new Date(t.date_time || t.dateRaw).getHours()
+      if (!platHourMap[p]) platHourMap[p] = {}
+      if (!platHourMap[p][h]) platHourMap[p][h] = 0
+      platHourMap[p][h] += t.usd || 0
     })
 
-    const platNames = Object.keys(platHourAvg)
-    // Use UTC current hour to match stored data
-    const currentUTCHour = new Date().getUTCHours()
+    const platNames = Object.keys(platHourMap)
     if (platNames.length >= 2) {
       platNames.forEach(plat => {
-        const hourVal = platHourAvg[plat][currentUTCHour] || 0
+        const hourVal = platHourMap[plat][currentHour] || 0
         const otherPlats = platNames.filter(p => p !== plat)
         otherPlats.forEach(other => {
-          const otherVal = platHourAvg[other][currentUTCHour] || 0
+          const otherVal = platHourMap[other][currentHour] || 0
           if (hourVal > 0 && otherVal > 0 && hourVal >= otherVal * 1.5) {
             const mult = (hourVal / otherVal).toFixed(1)
-            const label = currentUTCHour === 0 ? '12 AM' : currentUTCHour < 12 ? `${currentUTCHour} AM` : currentUTCHour === 12 ? '12 PM' : `${currentUTCHour - 12} PM`
+            const label = currentHour === 0 ? '12 AM' : currentHour < 12 ? `${currentHour} AM` : currentHour === 12 ? '12 PM' : `${currentHour - 12} PM`
             alerts.push({
               type: 'platform_hour', priority: 1, icon: '⚡', color: '#22D3EE',
               title: `Right now ${plat} earns ${mult}x more than ${other}`,
-              message: `At ${label} UTC, ${plat} historically averages $${hourVal.toFixed(0)} vs $${otherVal.toFixed(0)} on ${other}. Stream on ${plat} now.`
+              message: `At ${label}, ${plat} historically earns $${hourVal.toFixed(0)} vs $${otherVal.toFixed(0)} on ${other}. Stream on ${plat} now.`
             })
           }
         })
@@ -1436,17 +724,16 @@ const handleCSV = async (file, forcePlatform = null) => {
         : tips.filter(t => t.username.toLowerCase() === w.username.toLowerCase())
       if (fanTips.length < 3) return
 
-      // FIX: use getUTCHours() — tips stored in UTC
       const hourCounts = {}
       fanTips.forEach(t => {
-        const h = new Date(t.date_time || t.dateRaw).getUTCHours()
+        const h = new Date(t.date_time || t.dateRaw).getHours()
         hourCounts[h] = (hourCounts[h] || 0) + 1
       })
       const sortedHours = Object.entries(hourCounts).sort((a, b) => b[1] - a[1])
       if (!sortedHours.length) return
 
       const peakHour = parseInt(sortedHours[0][0])
-      const hoursAway = (peakHour - new Date().getUTCHours() + 24) % 24
+      const hoursAway = (peakHour - currentHour + 24) % 24
       const confidence = Math.min(95, Math.round((sortedHours[0][1] / fanTips.length) * 100 * 2.5))
       const label = peakHour === 0 ? '12 AM' : peakHour < 12 ? `${peakHour} AM` : peakHour === 12 ? '12 PM' : `${peakHour - 12} PM`
       const daysSince = Math.floor((now - new Date(w.lastTipDate)) / 86400000)
@@ -1509,10 +796,6 @@ const handleCSV = async (file, forcePlatform = null) => {
         .whale-row { transition: background 0.15s; }
         .whale-row:hover { background: rgba(59,130,246,0.08) !important; }
         @keyframes pulse-msg { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.25); } }
-        @keyframes pulse-envelope { 0%, 100% { transform: scale(1); filter: drop-shadow(0 0 0px #ec4899); } 50% { transform: scale(1.18); filter: drop-shadow(0 0 6px #ec4899cc); } }
-        @keyframes pulse-view { 0%, 100% { box-shadow: 0 0 0px rgba(34,211,238,0); border-color: rgba(34,211,238,0.3); } 50% { box-shadow: 0 0 8px rgba(34,211,238,0.5); border-color: rgba(34,211,238,0.7); } }
-        @keyframes growBar { from { transform: scaleY(0); transform-origin: bottom; opacity: 0; } to { transform: scaleY(1); transform-origin: bottom; opacity: 1; } }
-        @keyframes fadeUp { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
       `}</style>
 
       <div style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 0 }}>
@@ -1520,8 +803,8 @@ const handleCSV = async (file, forcePlatform = null) => {
         <div style={{ position: "absolute", width: 900, height: 900, bottom: "-20%", right: "-10%", background: "radial-gradient(circle, rgba(236,72,153,0.35), transparent 60%)", filter: "blur(120px)" }} />
       </div>
 
-      {/* SIDEBAR — desktop only, hidden on mobile via CSS */}
-      <div className="dash-sidebar" style={{ position: "fixed", left: 0, top: 0, bottom: 0, width: 240, background: "rgba(15,20,32,0.85)", backdropFilter: "blur(20px)", borderRight: "1px solid rgba(255,255,255,0.08)", display: "flex", flexDirection: "column", zIndex: 50 }}>
+      {/* SIDEBAR */}
+      <div style={{ position: "fixed", left: 0, top: 0, bottom: 0, width: 240, background: "rgba(15,20,32,0.85)", backdropFilter: "blur(20px)", borderRight: "1px solid rgba(255,255,255,0.08)", display: "flex", flexDirection: "column", zIndex: 50 }}>
         <div style={{ padding: "24px 20px", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <div style={{ width: 40, height: 40, borderRadius: 10, background: "linear-gradient(135deg, #22D3EE, #EC4899)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, fontWeight: 700, color: C.white, boxShadow: "0 0 20px rgba(34,211,238,0.4)" }}>$</div>
@@ -1538,7 +821,7 @@ const handleCSV = async (file, forcePlatform = null) => {
         </div>
 
         <nav style={{ flex: 1, padding: "16px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
-          {[["overview", "📊", "Overview"], ["platforms", "🎯", "Platforms"], ["whales", "🐳", "Top Fans"], ["sessions", "🎥", "Sessions"], ["live", "🔴", "Live Mode"], ["data", "📝", "Edit Data"], ["titles", "🎬", "Room Titles"], ["help", "❓", "CSV Help"], ["upload", "📥", "Import"]].map(([id, icon, label]) => (
+          {[["overview", "📊", "Overview"], ["platforms", "🎯", "Platforms"], ["whales", "🐳", "Top Fans"], ["sessions", "🎥", "Sessions"], ["data", "📝", "Edit Data"], ["titles", "🎬", "Room Titles"], ["help", "❓", "CSV Help"], ["upload", "📥", "Import"]].map(([id, icon, label]) => (
             <button key={id} onClick={() => setActiveTab(id)} style={{
               display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 10,
               background: activeTab === id ? "linear-gradient(135deg, rgba(59,130,246,0.2), rgba(236,72,153,0.2))" : "transparent",
@@ -1552,260 +835,25 @@ const handleCSV = async (file, forcePlatform = null) => {
           ))}
         </nav>
 
-        <div style={{ padding: "16px 20px", borderTop: "1px solid rgba(255,255,255,0.08)", display: "flex", flexDirection: "column", gap: 10 }}>
-          <div style={{ padding: 12, borderRadius: 10, background: "linear-gradient(135deg, rgba(59,130,246,0.1), rgba(236,72,153,0.1))", border: "1px solid rgba(236,72,153,0.3)", textAlign: "center" }}>
+        <div style={{ padding: "16px 20px", borderTop: "1px solid rgba(255,255,255,0.08)" }}>
+          <div style={{ padding: 12, borderRadius: 10, background: "linear-gradient(135deg, rgba(236,72,153,0.15), rgba(124,92,255,0.15))", border: "1px solid rgba(236,72,153,0.3)", textAlign: "center" }}>
             <div style={{ fontSize: 18, marginBottom: 4 }}>🎉</div>
             <div style={{ fontSize: 12, fontWeight: 700, color: C.white, marginBottom: 2 }}>Free for first 100 users</div>
             <div style={{ fontSize: 10, color: C.muted, marginBottom: 8 }}>Spots filling up fast</div>
             <div style={{ height: 4, borderRadius: 4, background: "rgba(255,255,255,0.1)", overflow: "hidden" }}>
-              <div style={{ height: "100%", width: "63%", borderRadius: 4, background: "linear-gradient(90deg, #3b82f6, #ec4899)", transition: "width 0.6s ease" }} />
+              <div style={{ height: "100%", width: "63%", borderRadius: 4, background: "linear-gradient(90deg, #22D3EE, #EC4899)" }} />
             </div>
-            <div style={{ fontSize: 10, color: C.pink, fontWeight: 600, marginTop: 4 }}>63 / 100 spots left</div>
+            <div style={{ fontSize: 10, color: C.muted, marginTop: 4 }}>63 / 100 spots taken</div>
           </div>
-          <button
-            onClick={handleSignOut}
-            style={{
-              width: "100%", padding: "9px 12px", borderRadius: 9,
-              background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)",
-              color: C.muted, fontSize: 13, cursor: "pointer", fontWeight: 500,
-              display: "flex", alignItems: "center", justifyContent: "center", gap: 7,
-              transition: "all 0.15s",
-            }}
-            onMouseEnter={e => { e.currentTarget.style.background = "rgba(248,113,113,0.1)"; e.currentTarget.style.borderColor = "rgba(248,113,113,0.3)"; e.currentTarget.style.color = "#F87171" }}
-            onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,255,255,0.04)"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"; e.currentTarget.style.color = C.muted }}
-          >
-            <span style={{ fontSize: 15 }}>→</span> Sign Out
-          </button>
         </div>
-      </div>
-
-      {/* MOBILE BOTTOM NAV — hidden on desktop via CSS */}
-      <div className="dash-bottom-nav" style={{ display: "none" }}>
-        {[["overview","📊","Overview"],["platforms","🎯","Platforms"],["whales","🐳","Fans"],["sessions","🎥","Sessions"],["live","🔴","Live"],["upload","📥","Import"]].map(([id, icon, label]) => (
-          <button key={id} onClick={() => setActiveTab(id)} className={activeTab === id ? "active" : ""}>
-            <span className="nav-icon">{icon}</span>
-            <span className="nav-label">{label}</span>
-          </button>
-        ))}
-        <button onClick={handleSignOut} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3, padding: "6px 2px", background: "transparent", border: "none", color: "#F87171", fontSize: 9, fontWeight: 500, cursor: "pointer", borderRadius: 8 }}>
-          <span className="nav-icon">🚪</span>
-          <span className="nav-label">Logout</span>
-        </button>
       </div>
 
       {/* MAIN CONTENT */}
-      <div className="dash-main" style={{ marginLeft: 240, padding: 32, position: "relative", zIndex: 1 }}>
-        {/* TOP BAR — logout visible on all screen sizes */}
-        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
-          <button onClick={handleSignOut}
-            style={{ padding: "6px 14px", borderRadius: 8, background: "rgba(248,113,113,0.08)", border: "1px solid rgba(248,113,113,0.2)", color: "#F87171", fontSize: 12, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
-            onMouseEnter={e => { e.currentTarget.style.background = "rgba(248,113,113,0.18)" }}
-            onMouseLeave={e => { e.currentTarget.style.background = "rgba(248,113,113,0.08)" }}>
-            🚪 Log Out
-          </button>
-        </div>
+      <div style={{ marginLeft: 240, padding: 32, position: "relative", zIndex: 1 }}>
 
         {activeTab === "overview" && (
-          <div style={{ animation: "fadeUp 0.3s ease" }}>
-
-            {/* ── HOW TO MAKE MORE MONEY RIGHT NOW ─────────────────────── */}
-            {insights?.has_data && (
-              <div style={{ marginBottom: 28 }}>
-
-                {/* ── HEADER ── */}
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, flexWrap: "wrap", gap: 8 }}>
-                  <div>
-                    <div style={{ fontSize: 18, fontWeight: 800, color: C.white }}>⚡ How to Make More Money Right Now</div>
-                    <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>Real analysis from your data · Refreshes every 15 min</div>
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    {lastUpdated && <span style={{ fontSize: 11, color: C.muted }}>Updated {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>}
-                    <button onClick={() => loadInsights(user?.id)} disabled={insightsLoading}
-                      style={{ padding: "5px 12px", borderRadius: 8, background: "rgba(34,211,238,0.08)", border: "1px solid rgba(34,211,238,0.2)", color: C.cyan, fontSize: 11, fontWeight: 600, cursor: insightsLoading ? "not-allowed" : "pointer" }}>
-                      {insightsLoading ? "..." : "↻ Refresh"}
-                    </button>
-                  </div>
-                </div>
-
-                {/* ── GO LIVE STATUS BLOCK ── */}
-                {insights.go_live_status && (() => {
-                  const s = insights.go_live_status
-                  const isHigh = s.status === "high"
-                  const isWarm = s.status === "warm"
-                  const isLow = s.status === "low"
-                  const fmtH = h => h === 0 ? "12 AM" : h < 12 ? `${h} AM` : h === 12 ? "12 PM" : `${h-12} PM`
-                  const statusColor = isHigh ? "#22c55e" : isWarm ? C.gold : "#f87171"
-                  const statusBg = isHigh ? "rgba(34,197,94,0.1)" : isWarm ? "rgba(251,191,36,0.1)" : "rgba(248,113,113,0.08)"
-                  const statusBorder = isHigh ? "rgba(34,197,94,0.4)" : isWarm ? "rgba(251,191,36,0.35)" : "rgba(248,113,113,0.3)"
-                  const dot = isHigh ? "🟢" : isWarm ? "🟡" : "🔴"
-                  const label = isHigh ? "HIGH EARNING WINDOW" : isWarm ? "WARM WINDOW" : "LOW VALUE TIME"
-                  const minsLeft = 60 - new Date().getMinutes()
-                  return (
-                    <div style={{ padding: "18px 22px", borderRadius: 14, background: statusBg, border: `1px solid ${statusBorder}`, marginBottom: 14, position: "relative", overflow: "hidden" }}>
-                      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg, ${statusColor}, transparent)` }} />
-                      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontSize: 11, fontWeight: 800, color: statusColor, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 6 }}>
-                            {dot} {label}
-                            {isHigh && <span style={{ marginLeft: 8, fontWeight: 500, color: C.muted }}>(next {minsLeft} min)</span>}
-                          </div>
-                          {isHigh && (
-                            <>
-                              <div style={{ fontSize: 20, fontWeight: 900, color: "#22c55e", marginBottom: 4 }}>GO LIVE NOW</div>
-                              <div style={{ fontSize: 13, color: "#94a3b8", lineHeight: 1.6 }}>
-                                This hour ({fmtH(s.current_hour)}) earns +{Math.round((s.multiplier - 1) * 100)}% more than your average — ${s.current_hour_avg}/tip vs ${s.overall_avg} avg.
-                              </div>
-                            </>
-                          )}
-                          {isWarm && (
-                            <>
-                              <div style={{ fontSize: 17, fontWeight: 800, color: C.gold, marginBottom: 4 }}>Decent window — worth going live</div>
-                              <div style={{ fontSize: 13, color: "#94a3b8", lineHeight: 1.6 }}>
-                                This hour ({fmtH(s.current_hour)}) is around average (${s.current_hour_avg}/tip). Not your peak, but solid.
-                              </div>
-                            </>
-                          )}
-                          {isLow && (
-                            <>
-                              <div style={{ fontSize: 17, fontWeight: 800, color: "#f87171", marginBottom: 4 }}>Wait — go live at {fmtH(s.next_best_hour)} instead</div>
-                              <div style={{ fontSize: 13, color: "#94a3b8", lineHeight: 1.6 }}>
-                                Right now averages ${s.current_hour_avg}/tip. At {fmtH(s.next_best_hour)} you average ${s.next_best_hour_avg}/tip — {s.next_best_hour_avg > 0 ? Math.round(s.next_best_hour_avg / Math.max(s.current_hour_avg, 0.01)) : "?"}x more.
-                              </div>
-                            </>
-                          )}
-                          {s.status === "unknown" && (
-                            <div style={{ fontSize: 13, color: C.muted }}>Not enough data for this hour yet. Your overall best time is {fmtH(s.next_best_hour)} (${s.next_best_hour_avg}/tip avg).</div>
-                          )}
-                        </div>
-                        {isHigh && (
-                          <div style={{ padding: "10px 20px", borderRadius: 10, background: "rgba(34,197,94,0.15)", border: "1px solid rgba(34,197,94,0.4)", fontSize: 13, fontWeight: 700, color: "#22c55e", whiteSpace: "nowrap" }}>
-                            🔥 Peak Window
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )
-                })()}
-
-                {/* ── MISSED OPPORTUNITY ALERT ── */}
-                {insights.missed_opportunity && (() => {
-                  const m = insights.missed_opportunity
-                  const fmtH = h => h === 0 ? "12 AM" : h < 12 ? `${h} AM` : h === 12 ? "12 PM" : `${h-12} PM`
-                  return (
-                    <div style={{ padding: "14px 18px", borderRadius: 12, background: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.3)", marginBottom: 14, display: "flex", alignItems: "center", gap: 12 }}>
-                      <span style={{ fontSize: 20 }}>⚠️</span>
-                      <div>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: C.gold }}>You missed your #1 earning window today ({fmtH(m.hour)})</div>
-                        <div style={{ fontSize: 12, color: C.muted }}>Estimated missed earnings: ~${m.estimated_loss}. Don't miss it tomorrow.</div>
-                      </div>
-                    </div>
-                  )
-                })()}
-
-                {/* ── TODAY'S MONEY PLAN ── */}
-                {insights.daily_plan?.best_hour != null && (() => {
-                  const p = insights.daily_plan
-                  const fmtH = h => h === 0 ? "12 AM" : h < 12 ? `${h} AM` : h === 12 ? "12 PM" : `${h-12} PM`
-                  return (
-                    <div style={{ padding: "16px 20px", borderRadius: 14, background: "rgba(59,130,246,0.07)", border: "1px solid rgba(59,130,246,0.2)", marginBottom: 14 }}>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: C.blue, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>📋 TODAY'S MONEY PLAN</div>
-                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                        <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
-                          <span style={{ color: C.cyan, fontWeight: 700, minWidth: 16 }}>•</span>
-                          <div style={{ fontSize: 13, color: C.white }}>
-                            <strong>Go live at {fmtH(p.best_hour)}</strong>
-                            <span style={{ color: C.muted }}> — your highest earning hour today (${p.best_hour_avg}/tip avg)</span>
-                          </div>
-                        </div>
-                        <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
-                          <span style={{ color: C.cyan, fontWeight: 700, minWidth: 16 }}>•</span>
-                          <div style={{ fontSize: 13, color: C.white }}>
-                            <strong>Stay live for {p.optimal_session_length}</strong>
-                            <span style={{ color: C.muted }}> — your peak earning window per session</span>
-                            {p.decay_at_minute > 0 && <span style={{ color: C.orange }}> · re-engage at {p.decay_at_minute} min</span>}
-                          </div>
-                        </div>
-                        {p.second_best_hour != null && (
-                          <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
-                            <span style={{ color: C.cyan, fontWeight: 700, minWidth: 16 }}>•</span>
-                            <div style={{ fontSize: 13, color: C.white }}>
-                              <strong>Second session at {fmtH(p.second_best_hour)}</strong>
-                              <span style={{ color: C.muted }}> — 2nd highest hour (${p.second_best_hour_avg}/tip avg)</span>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )
-                })()}
-
-                {/* ── MOMENTUM / STREAK ── */}
-                {insights.momentum && (() => {
-                  const m = insights.momentum
-                  const abovePacing = m.today_pacing_pct > 100
-                  const nearBest = m.best_day_earnings > 0 && m.today_earnings > 0 && (m.today_earnings / m.best_day_earnings) > 0.7
-                  if (m.streak_days < 2 && m.today_pacing_pct === 0 && !nearBest) return null
-                  return (
-                    <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
-                      {m.streak_days >= 2 && (
-                        <div style={{ flex: 1, minWidth: 160, padding: "12px 16px", borderRadius: 12, background: "rgba(34,197,94,0.07)", border: "1px solid rgba(34,197,94,0.2)" }}>
-                          <div style={{ fontSize: 18, marginBottom: 4 }}>📈</div>
-                          <div style={{ fontSize: 13, fontWeight: 700, color: "#22c55e" }}>{m.streak_days}-day earning streak</div>
-                          <div style={{ fontSize: 11, color: C.muted }}>Keep the momentum going</div>
-                        </div>
-                      )}
-                      {m.today_pacing_pct > 0 && (
-                        <div style={{ flex: 1, minWidth: 160, padding: "12px 16px", borderRadius: 12, background: abovePacing ? "rgba(34,197,94,0.07)" : "rgba(255,255,255,0.03)", border: `1px solid ${abovePacing ? "rgba(34,197,94,0.2)" : "rgba(255,255,255,0.08)"}` }}>
-                          <div style={{ fontSize: 18, marginBottom: 4 }}>{abovePacing ? "🔥" : "📊"}</div>
-                          <div style={{ fontSize: 13, fontWeight: 700, color: abovePacing ? "#22c55e" : C.muted }}>
-                            Today pacing {abovePacing ? "+" : ""}{m.today_pacing_pct - 100}% {abovePacing ? "above" : "below"} average
-                          </div>
-                          <div style={{ fontSize: 11, color: C.muted }}>${m.today_earnings} earned today vs ${m.avg_daily_earnings} avg</div>
-                        </div>
-                      )}
-                      {nearBest && (
-                        <div style={{ flex: 1, minWidth: 160, padding: "12px 16px", borderRadius: 12, background: "rgba(251,191,36,0.07)", border: "1px solid rgba(251,191,36,0.2)" }}>
-                          <div style={{ fontSize: 18, marginBottom: 4 }}>🏆</div>
-                          <div style={{ fontSize: 13, fontWeight: 700, color: C.gold }}>Close to your best day ever</div>
-                          <div style={{ fontSize: 11, color: C.muted }}>${m.today_earnings} today · best: ${m.best_day_earnings}</div>
-                        </div>
-                      )}
-                    </div>
-                  )
-                })()}
-
-                {/* ── INSIGHTS GRID ── */}
-                {insights.insights?.length > 0 && (
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 10 }}>
-                    {insights.insights.map((ins, idx) => {
-                      const impactColor = ins.impact === "critical" ? "#22c55e" : ins.impact === "high" ? C.gold : ins.impact === "positive" ? C.green : ins.impact === "warning" ? "#f87171" : C.blue
-                      return (
-                        <div key={idx} style={{ padding: "14px 16px", borderRadius: 12, background: "rgba(255,255,255,0.03)", border: `1px solid ${impactColor}20`, position: "relative" }}>
-                          <div style={{ position: "absolute", top: 0, left: 0, width: 3, height: "100%", borderRadius: "12px 0 0 12px", background: impactColor }} />
-                          <div style={{ paddingLeft: 8 }}>
-                            <div style={{ fontSize: 13, fontWeight: 700, color: C.white, marginBottom: 4 }}>{ins.title}</div>
-                            <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.6, marginBottom: 8 }}>{ins.body}</div>
-                            <div style={{ fontSize: 11, fontWeight: 600, color: impactColor }}>→ {ins.action}</div>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-
-              </div>
-            )}
-
-            {/* Loading state */}
-            {insightsLoading && !insights && (
-              <div style={{ marginBottom: 28, padding: "18px 22px", borderRadius: 14, background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", display: "flex", alignItems: "center", gap: 12 }}>
-                <div style={{ width: 18, height: 18, borderRadius: "50%", border: "2px solid rgba(34,211,238,0.3)", borderTopColor: C.cyan, animation: "spin 0.8s linear infinite", flexShrink: 0 }} />
-                <div style={{ fontSize: 13, color: C.muted }}>Analyzing your data...</div>
-              </div>
-            )}
-
-                        {/* BETA BANNER */}
-            <div style={{ marginBottom: 24, padding: "14px 20px", borderRadius: 12, background: "linear-gradient(135deg, rgba(59,130,246,0.1), rgba(236,72,153,0.1))", border: "1px solid rgba(236,72,153,0.3)", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+          <div>
+            <div style={{ marginBottom: 24, padding: "14px 20px", borderRadius: 12, background: "linear-gradient(135deg, rgba(245,158,11,0.15), rgba(251,146,60,0.1))", border: "1px solid rgba(245,158,11,0.4)", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                 <div style={{ fontSize: 24 }}>🎉</div>
                 <div>
@@ -1814,123 +862,65 @@ const handleCSV = async (file, forcePlatform = null) => {
                 </div>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-                <div style={{ fontSize: 12, color: C.pink, fontWeight: 600 }}>63 / 100 spots left</div>
+                <div style={{ fontSize: 12, color: C.gold, fontWeight: 600 }}>63/100 spots taken</div>
                 <div style={{ width: 80, height: 6, borderRadius: 4, background: "rgba(255,255,255,0.1)", overflow: "hidden" }}>
-                  <div style={{ height: "100%", width: "37%", borderRadius: 4, background: "linear-gradient(90deg, #3b82f6, #ec4899)", transition: "width 0.6s ease" }} />
+                  <div style={{ height: "100%", width: "63%", borderRadius: 4, background: "linear-gradient(90deg, #F59E0B, #FB923C)" }} />
                 </div>
               </div>
             </div>
 
-            {/* SHARE MY STATS */}
-            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 16 }}>
-              <button onClick={() => setShareModalOpen(true)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 10, background: "linear-gradient(135deg, rgba(236,72,153,0.15), rgba(168,85,247,0.15))", border: "1px solid rgba(236,72,153,0.35)", color: C.white, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-                📤 Share My Stats
-              </button>
-            </div>
-
-            {/* ═══════════════════════════════════════
-                1. MONEY SNAPSHOT
-            ═══════════════════════════════════════ */}
             {(() => {
-              const now = new Date()
-              const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1)
-              const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1)
-              const thisMonthRev = tips.filter(t => new Date(t.date_time || t.dateRaw) >= thisMonthStart).reduce((s, t) => s + (t.usd || 0), 0)
-              const prevMonthRev = tips.filter(t => { const d = new Date(t.date_time || t.dateRaw); return d >= prevMonthStart && d < thisMonthStart }).reduce((s, t) => s + (t.usd || 0), 0)
-              const growthPct = prevMonthRev > 0 ? Math.round(((thisMonthRev - prevMonthRev) / prevMonthRev) * 100) : null
-              const isPositive = growthPct !== null && growthPct >= 0
+              const recentSessions = sessions.filter(s => new Date(s.startTime) > new Date(Date.now() - 30 * 86400000))
+              const prevSessions = sessions.filter(s => { const d = new Date(s.startTime); return d > new Date(Date.now() - 60 * 86400000) && d <= new Date(Date.now() - 30 * 86400000) })
+              const recentRev = recentSessions.reduce((s, r) => s + (r.totalUSD || 0), 0)
+              const prevRev = prevSessions.reduce((s, r) => s + (r.totalUSD || 0), 0)
+              const growthPct = prevRev > 0 ? Math.round(((recentRev - prevRev) / prevRev) * 100) : null
               const topPct = Math.max(1, Math.min(25, Math.round(100 - (totalRevenue / 50))))
-              const sessionsLast30 = sessions.filter(s => (Date.now() - new Date(s.startTime)) / 86400000 <= 30).length
-              const fansActiveLast30 = new Set(tips.filter(t => (Date.now() - new Date(t.date_time || t.dateRaw)) / 86400000 <= 30).map(t => t.username)).size
-              const cards = [
-                { label: "Total Earned", value: `$${totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, sub: `Top ${topPct}% of models on this platform`, icon: "💰", badge: growthPct !== null ? (isPositive ? `↑ ${growthPct}% vs last month` : `↓ ${Math.abs(growthPct)}% vs last month`) : null, badgeColor: isPositive ? C.green : C.red, glow: isPositive },
-                { label: "Avg $/Hour", value: `$${avgPerHour.toFixed(2)}`, sub: avgPerHour > 20 ? "Above average — keep it up!" : "Tip: stream at peak hours", icon: "⏱️", badge: null },
-                { label: "Total Fans", value: whales.length.toLocaleString(), sub: `${fansActiveLast30} active in last 30 days`, icon: "👥", badge: null },
-                { label: "Sessions", value: sessions.length.toLocaleString(), sub: `${sessionsLast30} in last 30 days${sessionsLast30 >= 3 ? " 🔥" : ""}`, icon: "🎥", badge: sessionsLast30 >= 5 ? "🔥 On a streak!" : null, badgeColor: C.gold }
-              ]
-              // Earnings velocity per platform for velocity strip
-              const velPlatforms = Object.entries(platformVelocity).filter(([,v]) => v !== null).sort((a,b) => (b[1]||0)-(a[1]||0))
+              const streak = recentSessions.length
               return (
-                <>
-                  <div className="stat-grid-4" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: velPlatforms.length ? 12 : 28 }}>
-                    {cards.map((s, i) => (
-                      <div key={i} className="dash-card" style={{ ...glassCard, borderRadius: 18, padding: "22px 20px", position: "relative", overflow: "hidden", animation: `fadeUp 0.3s ease ${i * 0.06}s both`, boxShadow: s.glow ? `0 0 30px rgba(16,185,129,0.2), ${glassCard.boxShadow}` : glassCard.boxShadow }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
-                          <span style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600 }}>{s.label}</span>
-                          <span style={{ fontSize: 22 }}>{s.icon}</span>
-                        </div>
-                        <div style={{ fontSize: 34, fontWeight: 900, background: "linear-gradient(135deg,#60a5fa,#f472b6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", marginBottom: 6, lineHeight: 1.1 }}>{s.value}</div>
-                        <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.4 }}>{s.sub}</div>
-                        {s.badge && <div style={{ marginTop: 8, display: "inline-block", padding: "2px 8px", borderRadius: 6, background: `${s.badgeColor}20`, border: `1px solid ${s.badgeColor}40`, fontSize: 10, fontWeight: 700, color: s.badgeColor }}>{s.badge}</div>}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 20, marginBottom: 28 }}>
+                  {[
+                    { label: "Total Earned", value: `$${totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, sub: `Top ${topPct}% of models on this platform`, icon: "💰", badge: growthPct !== null ? (growthPct >= 0 ? `↑ ${growthPct}% vs last month` : `↓ ${Math.abs(growthPct)}% vs last month`) : null, badgeColor: growthPct !== null && growthPct >= 0 ? C.green : C.red },
+                    { label: "Avg $/Hour", value: `$${avgPerHour.toFixed(2)}`, sub: avgPerHour > 20 ? "Above average — keep it up!" : "Tip: stream at peak hours", icon: "⏱️", badge: null },
+                    { label: "Total Fans", value: whales.length, sub: `${whales.filter(w => Math.floor((Date.now() - new Date(w.lastTipDate)) / 86400000) <= 30).length} active in last 30 days`, icon: "👥", badge: null },
+                    { label: "Sessions", value: sessions.length, sub: `${streak} in last 30 days${streak >= 3 ? " 🔥" : ""}`, icon: "🎥", badge: streak >= 5 ? "🔥 On a streak!" : null, badgeColor: C.gold }
+                  ].map((s, i) => (
+                    <div key={i} className="dash-card" style={{ ...glassCard, borderRadius: 18, padding: 22, position: "relative", overflow: "hidden" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                        <span style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: 1 }}>{s.label}</span>
+                        <span style={{ fontSize: 20 }}>{s.icon}</span>
                       </div>
-                    ))}
-                  </div>
-                  {/* Earnings Velocity strip — formula: totalUSD / totalHours per platform */}
-                  {velPlatforms.length > 0 && (
-                    <div className="velocity-strip" style={{ display: "flex", gap: 10, marginBottom: 28, flexWrap: "wrap" }}>
-                      {velPlatforms.map(([plat, vel], i) => (
-                        <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 14px", borderRadius: 20, background: "rgba(34,211,238,0.07)", border: "1px solid rgba(34,211,238,0.2)", animation: `fadeUp 0.3s ease ${0.25 + i*0.05}s both` }}>
-                          <span style={{ fontSize: 11, color: C.muted }}>{plat.replace('BongaCams','Bonga').replace('MyFreeCams','MFC').replace('Chaturbate','CB')}</span>
-                          <span style={{ fontSize: 13, fontWeight: 700, color: C.cyan }}>${vel.toFixed(2)}/hr</span>
-                          <span style={{ fontSize: 10, color: C.muted }}>velocity</span>
-                        </div>
-                      ))}
-                      {earningsVelocity !== null && (
-                        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 14px", borderRadius: 20, background: "rgba(16,185,129,0.07)", border: "1px solid rgba(16,185,129,0.2)" }}>
-                          <span style={{ fontSize: 11, color: C.muted }}>Overall</span>
-                          <span style={{ fontSize: 13, fontWeight: 700, color: C.green }}>${earningsVelocity.toFixed(2)}/hr</span>
-                        </div>
-                      )}
+                      <div style={{ fontSize: 36, fontWeight: 900, background: "linear-gradient(135deg,#60a5fa,#f472b6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", marginBottom: 6 }}>{s.value}</div>
+                      <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.4 }}>{s.sub}</div>
+                      {s.badge && <div style={{ marginTop: 8, display: "inline-block", padding: "2px 8px", borderRadius: 6, background: `${s.badgeColor}20`, border: `1px solid ${s.badgeColor}40`, fontSize: 10, fontWeight: 700, color: s.badgeColor }}>{s.badge}</div>}
                     </div>
-                  )}
-                </>
+                  ))}
+                </div>
               )
             })()}
 
-            {/* ═══════════════════════════════════════
-                2. PRIMARY ACTION CENTER — "Make Money Right Now"
-                Merges: What Should I Do + Live Intelligence top alerts
-                Shows max 3 actions ranked by revenue impact
-            ═══════════════════════════════════════ */}
+            {/* WHAT SHOULD I DO RIGHT NOW */}
             {(() => {
-              // Merge nextMoves + top realTimeAlerts, deduplicate, cap at 3
-              const merged = []
-
-              // Add nextMoves first (already ranked by priority)
-              ;(nextMoves || []).forEach(a => {
-                merged.push({ icon: a.icon, color: a.color || C.cyan, text: a.text, cta: a.cta, username: a.username, source: 'move' })
-              })
-
-              // Add top realTimeAlerts that aren't duplicated
-              ;(realTimeAlerts || []).slice(0, 3).forEach(a => {
-                const isDupe = merged.some(m => m.text && a.message && m.text.toLowerCase().includes((a.title || '').toLowerCase().slice(0, 20)))
-                if (!isDupe) merged.push({ icon: a.icon, color: a.color || C.cyan, text: `${a.title} — ${a.message}`, cta: false, source: 'alert' })
-              })
-
-              const actions = merged.slice(0, 3)
-              if (!actions.length) return null
-
+              const actions = nextMoves.length > 0 ? nextMoves : [{ icon: "📊", color: C.cyan, text: "Import your first CSV to unlock personalized action recommendations", cta: null }]
               return (
-                <div style={{ ...glassCard, borderRadius: 18, padding: 24, marginBottom: 28, border: "1px solid rgba(34,211,238,0.2)", animation: "fadeUp 0.3s ease 0.1s both" }}>
+                <div style={{ ...glassCard, borderRadius: 16, padding: 24, marginBottom: 28 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
-                    <div style={{ width: 36, height: 36, borderRadius: 10, background: "linear-gradient(135deg,#22D3EE,#7C5CFF)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>⚡</div>
+                    <div style={{ width: 36, height: 36, borderRadius: 10, background: "linear-gradient(135deg, #22D3EE, #7C5CFF)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>⚡</div>
                     <div>
-                      <div style={{ fontSize: 18, fontWeight: 800, color: C.white }}>Make Money Right Now</div>
-                      <div style={{ fontSize: 12, color: C.muted }}>Ranked by estimated revenue impact from your real data</div>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: C.white }}>What Should I Do Right Now?</div>
+                      <div style={{ fontSize: 12, color: C.muted }}>Live coaching based on your actual data</div>
                     </div>
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                     {actions.map((a, i) => (
-                      <div key={i} style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, padding: "14px 16px", background: i === 0 ? `${a.color}18` : `${a.color}0d`, border: `1px solid ${i === 0 ? a.color + '50' : a.color + '28'}`, borderRadius: 12, boxShadow: i === 0 ? `0 0 18px ${a.color}18` : 'none', transition: "transform 0.15s, box-shadow 0.15s" }}
-                        onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.boxShadow = `0 4px 20px ${a.color}28` }}
-                        onMouseLeave={e => { e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = i === 0 ? `0 0 18px ${a.color}18` : 'none' }}>
+                      <div key={i} style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, padding: "14px 16px", background: `${a.color}10`, border: `1px solid ${a.color}30`, borderRadius: 12 }}>
                         <div style={{ display: "flex", gap: 12, alignItems: "flex-start", flex: 1 }}>
                           <span style={{ fontSize: 20, flexShrink: 0 }}>{a.icon}</span>
-                          <div style={{ fontSize: 14, color: C.white, lineHeight: 1.55 }}>{a.text}</div>
+                          <div style={{ fontSize: 14, color: C.white, lineHeight: 1.5 }}>{a.text}</div>
                         </div>
                         {a.cta && (
                           <button onClick={() => { const w = whales.find(wh => wh.username === a.username); if (w) { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) } }}
-                            style={{ flexShrink: 0, padding: "7px 14px", borderRadius: 8, background: "linear-gradient(135deg,#EC4899,#7C5CFF)", border: "none", color: C.white, fontSize: 12, fontWeight: 700, cursor: "pointer", animation: "pulse-msg 2.5s infinite" }}>
+                            style={{ flexShrink: 0, padding: "6px 14px", borderRadius: 8, background: "linear-gradient(135deg, #EC4899, #7C5CFF)", boxShadow: "0 0 20px rgba(236,72,153,0.4)", border: "none", color: C.white, fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
                             💌 Message
                           </button>
                         )}
@@ -1941,405 +931,118 @@ const handleCSV = async (file, forcePlatform = null) => {
               )
             })()}
 
-            {/* ═══════════════════════════════════════
-                3. WHAT'S WORKING — Strategy
-                Platform performance + best time + best day merged
-            ═══════════════════════════════════════ */}
-            <div style={{ ...glassCard, borderRadius: 18, padding: 24, marginBottom: 28, animation: "fadeUp 0.3s ease 0.15s both" }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18, flexWrap: "wrap", gap: 8 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <div style={{ width: 36, height: 36, borderRadius: 10, background: "linear-gradient(135deg,#F59E0B,#10B981)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>📊</div>
-                  <div>
-                    <div style={{ fontSize: 18, fontWeight: 800, color: C.white }}>What's Working</div>
-                    <div style={{ fontSize: 12, color: C.muted }}>Platform, time & session strategy from your data</div>
-                  </div>
+            {/* REAL-TIME LIVE INTELLIGENCE */}
+            {realTimeAlerts.length > 0 && (
+              <div style={{ ...glassCard, borderRadius: 16, padding: 24, marginBottom: 28, border: "1px solid rgba(34,211,238,0.2)" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
+                  <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#10B981", boxShadow: "0 0 8px #10B981", animation: "pulse-msg 1.5s infinite" }} />
+                  <div style={{ fontSize: 18, fontWeight: 800, color: C.white }}>Live Intelligence</div>
+                  <div style={{ fontSize: 11, color: C.green, padding: "2px 8px", borderRadius: 20, background: "rgba(16,185,129,0.15)", border: "1px solid rgba(16,185,129,0.3)" }}>REAL DATA</div>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {realTimeAlerts.map((a, i) => (
+                    <div key={i} style={{ padding: "14px 16px", borderRadius: 12, background: `${a.color}0d`, border: `1px solid ${a.color}30`, display: "flex", gap: 12, alignItems: "flex-start" }}>
+                      <span style={{ fontSize: 20, flexShrink: 0 }}>{a.icon}</span>
+                      <div>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: C.white, marginBottom: 3 }}>{a.title}</div>
+                        <div style={{ fontSize: 12, color: C.text, lineHeight: 1.5 }}>{a.message}</div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
+            )}
 
-              {/* Platform ROI + Per-Platform Best Time (mandatory: always show platform context) */}
-              {(() => {
-                const fmtH = h => h === 0 ? '12 AM' : h < 12 ? `${h} AM` : h === 12 ? '12 PM' : `${h-12} PM`
-                const platColors = { Chaturbate: C.cyan, BongaCams: C.pink, MyFreeCams: C.gold }
-                const allPlats = [...(analytics?.platforms || [])].sort((a,b) => b.totalUSD - a.totalUSD)
-                if (!allPlats.length) return null
-                return (
-                  <div style={{ marginBottom: 18 }}>
-                    {/* Platform ROI row: formula = total_earnings / total_hours */}
-                    <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10 }}>Platform ROI ($/hr streamed)</div>
-                    <div className="platform-roi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10, marginBottom: 18 }}>
-                      {allPlats.map((p, i) => {
-                        const roi = platformVelocity[p.platform] ?? (p.hours > 0 ? parseFloat((p.totalUSD / p.hours).toFixed(2)) : null)
-                        const bestTime = platformBestTimes[p.platform]
-                        const col = platColors[p.platform] || C.blue
-                        const isTop = i === 0
-                        return (
-                          <div key={i} style={{ padding: "14px 16px", borderRadius: 12, background: isTop ? `${col}12` : `${col}08`, border: `1px solid ${isTop ? col + '40' : col + '20'}`, transition: "transform 0.15s, box-shadow 0.15s", position: "relative" }}
-                            onMouseEnter={e => { e.currentTarget.style.transform = "scale(1.02)"; e.currentTarget.style.boxShadow = `0 4px 16px ${col}20` }}
-                            onMouseLeave={e => { e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = "" }}>
-                            {isTop && <div style={{ position: "absolute", top: 8, right: 8, fontSize: 9, padding: "2px 6px", borderRadius: 10, background: `${col}25`, color: col, fontWeight: 700 }}>TOP ROI</div>}
-                            <div style={{ fontSize: 11, fontWeight: 700, color: col, marginBottom: 6 }}>{p.platform.replace('BongaCams','Bonga').replace('MyFreeCams','MFC')}</div>
-                            <div style={{ fontSize: 22, fontWeight: 900, color: C.white, marginBottom: 2 }}>{roi !== null ? `$${roi.toFixed(2)}/hr` : '—'}</div>
-                            <div style={{ fontSize: 11, color: C.muted, marginBottom: bestTime ? 8 : 0 }}>${p.totalUSD.toFixed(0)} total · {p.hours.toFixed(0)}h streamed</div>
-                            {bestTime && (
-                              <div style={{ padding: "5px 8px", borderRadius: 8, background: `${col}10`, border: `1px solid ${col}25`, fontSize: 11, color: col }}>
-                                ⏰ Best: <strong>{fmtH(bestTime.hour)}</strong> · ${bestTime.avg.toFixed(0)} avg ({bestTime.sessionCount} sessions)
-                              </div>
-                            )}
-                          </div>
-                        )
-                      })}
-                    </div>
-                    {/* Best day */}
-                    {analyticsbestDay && (
-                      <div style={{ display: "flex", gap: 8, alignItems: "center", padding: "10px 14px", borderRadius: 10, background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.2)", marginBottom: 0 }}>
-                        <span style={{ fontSize: 16 }}>📅</span>
-                        <div style={{ fontSize: 13, color: C.white }}>
-                          <strong>{analyticsbestDay.day}s</strong> earn the most — ${analyticsbestDay.avg.toFixed(0)} avg per active day
-                          {analyticsbestDay.count >= 3 && <span style={{ color: C.muted, marginLeft: 6 }}>across {analyticsbestDay.count} {analyticsbestDay.day}s tracked</span>}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )
-              })()}
-
-              {/* Platform day heatmap */}
-              {(() => {
-                const UTC_DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
-                const platDayUSD = {}; const platDayDates = {}
-                tips.forEach(t => {
-                  const p = t.platform; const dt = new Date(t.date_time || t.dateRaw)
-                  const shortDay = UTC_DAYS[dt.getUTCDay()]; const dateKey = dt.toISOString().slice(0, 10)
-                  if (!platDayUSD[p]) platDayUSD[p] = {}
-                  if (!platDayDates[p]) platDayDates[p] = {}
-                  platDayUSD[p][shortDay] = (platDayUSD[p][shortDay] || 0) + (t.usd || 0)
-                  if (!platDayDates[p][shortDay]) platDayDates[p][shortDay] = new Set()
-                  platDayDates[p][shortDay].add(dateKey)
-                })
-                const platDayAvg = {}
-                Object.keys(platDayUSD).forEach(p => {
-                  platDayAvg[p] = {}
-                  UTC_DAYS.forEach(d => {
-                    const total = platDayUSD[p][d] || 0; const activeDays = platDayDates[p]?.[d]?.size || 1
-                    platDayAvg[p][d] = total > 0 ? parseFloat((total / activeDays).toFixed(2)) : 0
-                  })
-                })
-                const platList = Object.keys(platDayAvg)
-                if (platList.length < 1) return null
-                const todayShort = UTC_DAYS[new Date().getUTCDay()]
-                const todayLong = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][new Date().getUTCDay()]
-                return (
-                  <div>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>Platform by Day of Week</span>
-                      <span style={{ fontSize: 11, color: C.muted, padding: "2px 8px", borderRadius: 20, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}>avg $/active day</span>
-                    </div>
-                    <div className="heatmap-wrap" style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
-                    <div style={{ display: "grid", gridTemplateColumns: "80px repeat(7, 1fr)", gap: 3, minWidth: 480 }}>
-                      <div />
-                      {UTC_DAYS.map(d => (
-                        <div key={d} style={{ textAlign: "center", fontSize: 11, fontWeight: 700, color: d === todayShort ? C.cyan : C.muted, paddingBottom: 4 }}>{d}</div>
-                      ))}
-                      {platList.map(plat => {
-                        const dayVals = UTC_DAYS.map(d => platDayAvg[plat][d] || 0)
-                        const maxVal = Math.max(...dayVals, 0.01)
-                        return [
-                          <div key={plat + '_l'} style={{ fontSize: 10, fontWeight: 700, color: C.text, display: "flex", alignItems: "center", paddingRight: 4, lineHeight: 1.3 }}>{plat.replace('BongaCams','Bonga').replace('Chaturbate','CB').replace('MyFreeCams','MFC')}</div>,
-                          ...UTC_DAYS.map(d => {
-                            const val = platDayAvg[plat][d] || 0
-                            const intensity = maxVal > 0 ? val / maxVal : 0
-                            const isToday = d === todayShort
-                            const bg = val === 0 ? "rgba(255,255,255,0.03)" : intensity < 0.25 ? "rgba(34,211,238,0.12)" : intensity < 0.5 ? "rgba(34,211,238,0.30)" : intensity < 0.75 ? "rgba(34,211,238,0.60)" : "rgba(34,211,238,0.90)"
-                            return (
-                              <div key={d} title={`${plat} ${d}: avg $${val.toFixed(2)}/day`}
-                                onClick={() => { if (val > 0) setHeatmapDrillDay(prev => prev === d ? null : d) }}
-                                style={{ height: 32, borderRadius: 5, background: bg, border: isToday ? "2px solid rgba(34,211,238,0.7)" : "1px solid rgba(255,255,255,0.05)", display: "flex", alignItems: "center", justifyContent: "center", cursor: val > 0 ? "pointer" : "default", transition: "opacity 0.1s" }}
-                                onMouseEnter={e => { if (val > 0) e.currentTarget.style.opacity = "0.75" }}
-                                onMouseLeave={e => { e.currentTarget.style.opacity = "1" }}>
-                                {val > 0 && <span style={{ fontSize: 9, fontWeight: 700, color: intensity > 0.45 ? "#fff" : C.muted }}>${val >= 100 ? Math.round(val) : val.toFixed(0)}</span>}
-                              </div>
-                            )
-                          })
-                        ]
-                      })}
-                    </div>
-                    <div style={{ marginTop: 8, fontSize: 11, color: C.muted }}>
-                      Today ({todayLong}) highlighted in cyan · <strong style={{ color: C.cyan }}>Click any cell</strong> to see your best time to stream that day
-                    </div>
-                  
-                  </div>
-
-                  {heatmapDrillDay && (() => {
-                    const dayLong = { Sun:'Sunday', Mon:'Monday', Tue:'Tuesday', Wed:'Wednesday', Thu:'Thursday', Fri:'Friday', Sat:'Saturday' }[heatmapDrillDay]
-                    const fmtH2 = h => { const n = parseInt(h); return n === 0 ? '12 AM' : n < 12 ? `${n} AM` : n === 12 ? '12 PM' : `${n-12} PM` }
-
-                    // Best hour per platform on this specific day
-                    const platHourOnDay = {}
-                    tips.forEach(t => {
-                      const dt = new Date(t.date_time || t.dateRaw)
-                      const tDay = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][dt.getUTCDay()]
-                      if (tDay !== heatmapDrillDay) return
-                      const p = t.platform
-                      const h = dt.getUTCHours()
-                      const bucket = Math.floor(dt.getTime() / 3600000)
-                      if (!platHourOnDay[p]) platHourOnDay[p] = {}
-                      if (!platHourOnDay[p][h]) platHourOnDay[p][h] = { usd: 0, buckets: new Set() }
-                      platHourOnDay[p][h].usd += t.usd || 0
-                      platHourOnDay[p][h].buckets.add(bucket)
-                    })
-
-                    // For each platform: best hour by avg $/session on that day
-                    const bestHourPerPlat = {}
-                    Object.keys(platHourOnDay).forEach(plat => {
-                      const hours = Object.entries(platHourOnDay[plat])
-                        .map(([h, data]) => ({ hour: parseInt(h), avg: parseFloat((data.usd / data.buckets.size).toFixed(2)), sessions: data.buckets.size }))
-                        .filter(x => x.sessions >= 1)
-                        .sort((a, b) => b.avg - a.avg)
-                      if (hours.length) bestHourPerPlat[plat] = hours[0]
-                    })
-
-                    // Overall avg for this day across all platforms
-                    const dayTipsTotal = tips.filter(t => {
-                      const dt = new Date(t.date_time || t.dateRaw)
-                      return ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][dt.getUTCDay()] === heatmapDrillDay
-                    })
-                    const dayAvg = dayTipsTotal.length > 0 ? (dayTipsTotal.reduce((s, t) => s + (t.usd || 0), 0) / new Set(dayTipsTotal.map(t => new Date(t.date_time || t.dateRaw).toISOString().slice(0,10))).size).toFixed(0) : 0
-                    const platColors = { Chaturbate: '#22D3EE', BongaCams: '#EC4899', MyFreeCams: '#F59E0B' }
-
-                    return (
-                      <div style={{ marginTop: 12, padding: 16, borderRadius: 12, background: 'rgba(34,211,238,0.06)', border: '1px solid rgba(34,211,238,0.2)', animation: 'fadeUp 0.2s ease' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                          <div>
-                            <div style={{ fontSize: 15, fontWeight: 700, color: C.white }}>📅 {dayLong}s — Best Times to Stream</div>
-                            <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>You avg ${dayAvg} per active {dayLong} · based on your real tip history</div>
-                          </div>
-                          <button onClick={() => setHeatmapDrillDay(null)} style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer', fontSize: 18, padding: 4, lineHeight: 1 }}>✕</button>
-                        </div>
-                        {Object.keys(bestHourPerPlat).length === 0 ? (
-                          <div style={{ fontSize: 13, color: C.muted }}>Not enough {dayLong} data yet — stream more on {dayLong}s to unlock this insight.</div>
-                        ) : (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                            {Object.entries(bestHourPerPlat).sort((a,b) => b[1].avg - a[1].avg).map(([plat, best]) => {
-                              const col = platColors[plat] || C.blue
-                              const allHoursForPlat = Object.entries(platHourOnDay[plat] || {})
-                                .map(([h, data]) => ({ hour: parseInt(h), avg: parseFloat((data.usd / data.buckets.size).toFixed(2)) }))
-                                .sort((a, b) => b.avg - a.avg)
-                                .slice(0, 3)
-                              return (
-                                <div key={plat} style={{ padding: '12px 14px', borderRadius: 10, background: `${col}0d`, border: `1px solid ${col}25` }}>
-                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, flexWrap: 'wrap' }}>
-                                    <div>
-                                      <div style={{ fontSize: 12, fontWeight: 700, color: col, marginBottom: 4 }}>{plat}</div>
-                                      <div style={{ fontSize: 20, fontWeight: 900, color: C.white }}>⏰ {fmtH2(best.hour)}</div>
-                                      <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>${best.avg.toFixed(0)} avg/session · {best.sessions} session{best.sessions !== 1 ? 's' : ''} tracked</div>
-                                    </div>
-                                    {allHoursForPlat.length > 1 && (
-                                      <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'flex-end' }}>
-                                        {allHoursForPlat.map((h, i) => (
-                                          <div key={h.hour} style={{ fontSize: 11, color: i === 0 ? col : C.muted }}>
-                                            {i === 0 ? '🥇' : i === 1 ? '🥈' : '🥉'} {fmtH2(h.hour)} · ${h.avg.toFixed(0)}/session
-                                          </div>
-                                        ))}
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                              )
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })()}
-                  </div>
-                )
-              })()}
-            </div>
-
-            {/* ═══════════════════════════════════════
-                4. YOUR TOP EARNERS
-                A. Likely Online Now  B. Milestones  C. At Risk
-            ═══════════════════════════════════════ */}
+            {/* PLATFORM DAY PERFORMANCE GRID */}
             {(() => {
-              const currentUTCHourTE = new Date().getUTCHours()
-              const labelH = h => h === 0 ? '12 AM' : h < 12 ? `${h} AM` : h === 12 ? '12 PM' : `${h-12} PM`
+              const platDayData = {}
+              tips.forEach(t => {
+                const p = t.platform
+                const day = new Date(t.date_time || t.dateRaw).toLocaleDateString('en-US', { weekday: 'short' })
+                if (!platDayData[p]) platDayData[p] = {}
+                platDayData[p][day] = (platDayData[p][day] || 0) + (t.usd || 0)
+              })
+              const platList = Object.keys(platDayData)
+              if (platList.length < 1) return null
+              const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
+              const todayShort = new Date().toLocaleDateString('en-US', { weekday: 'short' })
+              return (
+                <div style={{ ...glassCard, borderRadius: 16, padding: 24, marginBottom: 28 }}>
+                  <h2 style={{ fontSize: 18, fontWeight: 700, color: C.white, marginBottom: 4 }}>📅 Platform Performance by Day</h2>
+                  <p style={{ fontSize: 12, color: C.muted, marginBottom: 16 }}>Which platform earns most on each day — your real data</p>
+                  <div style={{ display: "grid", gridTemplateColumns: `80px repeat(7, 1fr)`, gap: 4 }}>
+                    <div />
+                    {days.map(d => (
+                      <div key={d} style={{ textAlign: "center", fontSize: 11, fontWeight: 700, color: d === todayShort ? C.cyan : C.muted, paddingBottom: 6 }}>{d}</div>
+                    ))}
+                    {platList.map(plat => {
+                      const dayVals = days.map(d => platDayData[plat][d] || 0)
+                      const maxVal = Math.max(...dayVals, 1)
+                      return [
+                        <div key={plat + '_label'} style={{ fontSize: 11, fontWeight: 700, color: C.text, display: "flex", alignItems: "center", paddingRight: 8 }}>{plat.replace('BongaCams','Bonga')}</div>,
+                        ...days.map((d, di) => {
+                          const val = platDayData[plat][d] || 0
+                          const intensity = val / maxVal
+                          const isToday = d === todayShort
+                          const bg = val === 0 ? "rgba(255,255,255,0.03)" : intensity < 0.3 ? "rgba(34,211,238,0.15)" : intensity < 0.6 ? "rgba(34,211,238,0.4)" : "rgba(34,211,238,0.85)"
+                          return (
+                            <div key={d} title={`${plat} ${d}: $${val.toFixed(0)}`} style={{ height: 32, borderRadius: 6, background: bg, border: isToday ? "2px solid rgba(34,211,238,0.6)" : "1px solid rgba(255,255,255,0.06)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                              {val > 0 && <span style={{ fontSize: 9, fontWeight: 700, color: intensity > 0.4 ? "#fff" : C.muted }}>${val.toFixed(0)}</span>}
+                            </div>
+                          )
+                        })
+                      ]
+                    })}
+                  </div>
+                  <div style={{ marginTop: 10, fontSize: 11, color: C.muted }}>Today ({todayShort}) is highlighted. Darker = more earnings.</div>
+                </div>
+              )
+            })()}
 
+            {/* TIPPERS LIKELY ONLINE NOW */}
+            {(() => {
+              const currentHour = new Date().getHours()
+              const label = h => h === 0 ? '12 AM' : h < 12 ? `${h} AM` : h === 12 ? '12 PM' : `${h-12} PM`
               const likelyOnline = whales
                 .filter(w => w.tipCount >= 3)
                 .map(w => {
                   const fanTips = (w.tips && w.tips.length > 0) ? w.tips : tips.filter(t => t.username.toLowerCase() === w.username.toLowerCase())
                   const hourCounts = {}
-                  fanTips.forEach(t => { const h = new Date(t.date_time || t.dateRaw).getUTCHours(); hourCounts[h] = (hourCounts[h] || 0) + 1 })
+                  fanTips.forEach(t => {
+                    const h = new Date(t.date_time || t.dateRaw).getHours()
+                    hourCounts[h] = (hourCounts[h] || 0) + 1
+                  })
                   const sorted = Object.entries(hourCounts).sort((a,b) => b[1]-a[1])
                   if (!sorted.length) return null
                   const peakHour = parseInt(sorted[0][0])
-                  const hoursAway = (peakHour - currentUTCHourTE + 24) % 24
+                  const hoursAway = (peakHour - currentHour + 24) % 24
                   const confidence = Math.min(95, Math.round((sorted[0][1] / fanTips.length) * 100 * 2.5))
-                  return { ...w, peakHour, hoursAway, confidence, peakLabel: labelH(peakHour) }
+                  return { ...w, peakHour, hoursAway, confidence, peakLabel: label(peakHour) }
                 })
                 .filter(Boolean)
                 .filter(w => w.hoursAway <= 2 && w.confidence >= 35)
                 .sort((a,b) => b.totalUSD - a.totalUSD)
-                .slice(0, 3)
+                .slice(0, 4)
 
-              const milestones = (whatsNextAlerts || []).filter(a => a.type === 'milestone').slice(0, 3)
-
-              const atRisk = reengageList.slice(0, 3)
-
-              const hasAny = likelyOnline.length || milestones.length || atRisk.length
-              if (!hasAny) return null
-
-              const fanCard = (w, opts = {}) => (
-                <div style={{ padding: "12px 14px", borderRadius: 12, background: opts.bg || "rgba(255,255,255,0.03)", border: opts.border || "1px solid rgba(255,255,255,0.07)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", transition: "transform 0.15s, box-shadow 0.15s", cursor: "default" }}
-                  onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-1px) scale(1.01)"; e.currentTarget.style.boxShadow = opts.hoverGlow || "0 4px 16px rgba(255,255,255,0.06)" }}
-                  onMouseLeave={e => { e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = "" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 160 }}>
-                    <div style={{ width: 36, height: 36, borderRadius: 9, background: opts.avatarBg || "rgba(34,211,238,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 800, color: opts.avatarColor || C.cyan, flexShrink: 0 }}>
-                      {w.username.charAt(0).toUpperCase()}
-                    </div>
-                    <div>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: C.white }}>{w.username}</div>
-                      <div style={{ fontSize: 11, color: C.muted }}>
-                      <span style={{ color: C.white, fontWeight: 600 }}>${w.totalUSD.toFixed(0)}</span> lifetime
-                      {opts.sub ? ` · ${opts.sub}` : ''}
-                      {w.tipCount > 1 && ` · ${w.tipCount} tips`}
-                      {w.avgDaysBetweenTips && w.tipCount > 1 && <span style={{ color: w.churnRisk?.level === 'High' || w.churnRisk?.level === 'Critical' ? C.red : C.muted }}>{` · every ~${Math.round(w.avgDaysBetweenTips)}d`}</span>}
-                      {` · ${w.platform}`}
-                    </div>
-                    </div>
-                  </div>
-                  {opts.badge && <span style={{ fontSize: 11, padding: "3px 9px", borderRadius: 20, background: opts.badgeBg, color: opts.badgeColor, fontWeight: 700, whiteSpace: "nowrap" }}>{opts.badge}</span>}
-                  {opts.action && (
-                    <button onClick={opts.action} style={{ padding: "6px 12px", borderRadius: 8, background: opts.btnBg || "linear-gradient(135deg,#22D3EE,#EC4899)", border: "none", color: C.white, fontSize: 11, fontWeight: 700, cursor: "pointer", flexShrink: 0, animation: opts.pulseBtn ? "pulse-msg 2.5s infinite" : "none" }}>
-                      {opts.btnLabel || "💌 Message"}
-                    </button>
-                  )}
-                </div>
-              )
-
+              if (!likelyOnline.length) return null
               return (
-                <div style={{ ...glassCard, borderRadius: 18, padding: 24, marginBottom: 28, animation: "fadeUp 0.3s ease 0.2s both" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
-                    <div style={{ width: 36, height: 36, borderRadius: 10, background: "linear-gradient(135deg,#EC4899,#7C5CFF)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>👑</div>
-                    <div>
-                      <div style={{ fontSize: 18, fontWeight: 800, color: C.white }}>Your Top Earners</div>
-                      <div style={{ fontSize: 12, color: C.muted }}>Who's online, who's close to a milestone, who needs a message</div>
-                    </div>
-                  </div>
-
-                  {/* A. Likely Online Now */}
-                  {likelyOnline.length > 0 && (
-                    <div style={{ marginBottom: 20 }}>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: C.green, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10, display: "flex", alignItems: "center", gap: 6 }}>
-                        <div style={{ width: 7, height: 7, borderRadius: "50%", background: C.green, boxShadow: `0 0 6px ${C.green}` }} />
-                        Likely Online Now
-                      </div>
-                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                        {likelyOnline.map((w, i) => fanCard(w, {
-                          bg: "rgba(16,185,129,0.07)", border: "1px solid rgba(16,185,129,0.22)", hoverGlow: "0 4px 16px rgba(16,185,129,0.15)",
-                          avatarBg: "rgba(16,185,129,0.18)", avatarColor: C.green,
-                          sub: `peaks at ${w.peakLabel}`,
-                          badge: `${w.confidence}% likely`, badgeBg: "rgba(16,185,129,0.2)", badgeColor: C.green,
-                          action: () => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) },
-                          btnBg: "linear-gradient(135deg,#10B981,#22D3EE)", pulseBtn: i === 0
-                        }))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* B. Close to Milestone */}
-                  {milestones.length > 0 && (
-                    <div style={{ marginBottom: 20 }}>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: C.gold, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10 }}>💰 Close to Milestone</div>
-                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                        {milestones.map((a, i) => {
-                          const w = a.whale
-                          if (!w) return null
-                          return fanCard(w, {
-                            bg: "rgba(245,158,11,0.07)", border: "1px solid rgba(245,158,11,0.22)", hoverGlow: "0 4px 16px rgba(245,158,11,0.12)",
-                            avatarBg: "rgba(245,158,11,0.18)", avatarColor: C.gold,
-                            sub: a.message?.match(/\$[\d.]+ away/)?.[0] || '',
-                            action: () => { if (a.whale) { setMessageTarget(a.whale); setMessageIndex(0); setMessageCopied(false) } },
-                            btnBg: "linear-gradient(135deg,#F59E0B,#EC4899)", pulseBtn: false
-                          })
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* C. At Risk — Re-engage */}
-                  {atRisk.length > 0 && (
-                    <div>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: C.orange, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10 }}>⚠️ At Risk — Re-engage</div>
-                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                        {atRisk.map(({ whale: w, days, urgency, msg }, i) => fanCard(w, {
-                          bg: `${urgency}08`, border: `1px solid ${urgency}25`, hoverGlow: `0 4px 16px ${urgency}18`,
-                          avatarBg: `${urgency}20`, avatarColor: urgency,
-                          sub: `${days}d since last tip`,
-                          badge: `${days}d ago`, badgeBg: `${urgency}20`, badgeColor: urgency,
-                          action: () => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) },
-                          btnBg: `linear-gradient(135deg,${urgency},#EC4899)`, pulseBtn: i === 0,
-                          btnLabel: "💌 Message"
-                        }))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )
-            })()}
-
-            {/* ═══════════════════════════════════════
-                5. YOU'RE LOSING MONEY — Risk / Loss + Missed Revenue
-            ═══════════════════════════════════════ */}
-            {(() => {
-              const allAlerts = [
-                ...(lossAlerts || []),
-                ...(alerts || []).slice(0, 3)
-              ].slice(0, 6)
-              const missedEntries = Object.entries(missedRevenueByPlat)
-                .filter(([,m]) => m.missedRevenue > 5)
-                .sort((a,b) => b[1].missedRevenue - a[1].missedRevenue)
-              if (!allAlerts.length && !missedEntries.length) return null
-              const fmtH2 = h => h === 0 ? '12 AM' : h < 12 ? `${h} AM` : h === 12 ? '12 PM' : `${h-12} PM`
-              return (
-                <div style={{ ...glassCard, borderRadius: 18, padding: 24, marginBottom: 28, border: "1px solid rgba(251,146,60,0.2)", animation: "fadeUp 0.3s ease 0.25s both" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
-                    <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(251,146,60,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>🚨</div>
-                    <div>
-                      <div style={{ fontSize: 18, fontWeight: 800, color: C.white }}>You're Losing Money</div>
-                      <div style={{ fontSize: 12, color: C.muted }}>Inactivity, cold fans, missed windows</div>
-                    </div>
-                  </div>
-
-                  {/* Missed Revenue — formula: (bestHourAvg - overallAvg) × sessionsNotAtBestHour */}
-                  {missedEntries.length > 0 && (
-                    <div style={{ marginBottom: 14 }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: C.orange, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 8 }}>💸 Missed Revenue (by streaming off-peak)</div>
-                      {missedEntries.map(([plat, m], i) => (
-                        <div key={i} style={{ padding: "12px 14px", borderRadius: 10, marginBottom: 8, background: "rgba(251,146,60,0.08)", border: "1px solid rgba(251,146,60,0.22)" }}>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, flexWrap: "wrap" }}>
-                            <div>
-                              <div style={{ fontSize: 13, fontWeight: 700, color: C.white, marginBottom: 3 }}>
-                                📉 {plat} — estimated <span style={{ color: C.orange }}>${m.missedRevenue.toFixed(0)}</span> left on the table
-                              </div>
-                              <div style={{ fontSize: 12, color: C.muted }}>
-                                {m.sessionsNotAtBestHour} sessions ran off-peak · Best hour is {fmtH2(m.bestHour)} (${m.bestHourAvg.toFixed(0)} avg) vs your overall ${m.overallAvg.toFixed(0)} avg
-                              </div>
-                            </div>
-                            <div style={{ fontSize: 11, padding: "3px 9px", borderRadius: 20, background: "rgba(251,146,60,0.2)", color: C.orange, fontWeight: 700, whiteSpace: "nowrap" }}>
-                              Stream at {fmtH2(m.bestHour)}
-                            </div>
+                <div style={{ ...glassCard, borderRadius: 16, padding: 24, marginBottom: 28 }}>
+                  <h2 style={{ fontSize: 18, fontWeight: 700, color: C.white, marginBottom: 4 }}>🟢 Tippers Likely Online Now</h2>
+                  <p style={{ fontSize: 12, color: C.muted, marginBottom: 16 }}>Based on their real tip-time patterns from your data</p>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    {likelyOnline.map((w, i) => (
+                      <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", borderRadius: 12, background: "rgba(16,185,129,0.08)", border: "1px solid rgba(16,185,129,0.25)", flexWrap: "wrap", gap: 10 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                          <div style={{ width: 8, height: 8, borderRadius: "50%", background: C.green, boxShadow: `0 0 6px ${C.green}` }} />
+                          <div>
+                            <div style={{ fontSize: 14, fontWeight: 700, color: C.white }}>{w.username}</div>
+                            <div style={{ fontSize: 11, color: C.muted }}>${w.totalUSD.toFixed(0)} lifetime · peaks at {w.peakLabel} · {w.platform}</div>
                           </div>
                         </div>
-                      ))}
-                    </div>
-                  )}
-
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    {allAlerts.map((a, i) => (
-                      <div key={i} style={{ padding: "12px 14px", borderRadius: 10, background: a.severity === 'critical' ? "rgba(248,113,113,0.1)" : "rgba(251,146,60,0.08)", border: `1px solid ${a.severity === 'critical' ? 'rgba(248,113,113,0.25)' : 'rgba(251,146,60,0.2)'}` }}>
-                        <div style={{ fontSize: 13, color: C.white, marginBottom: 3 }}>{a.icon} {a.message}</div>
-                        <div style={{ fontSize: 11, color: C.muted }}>👉 {a.action}</div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <span style={{ fontSize: 11, padding: "3px 10px", borderRadius: 20, background: "rgba(16,185,129,0.2)", color: C.green, fontWeight: 700 }}>{w.confidence}% likely</span>
+                          <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }} style={{ padding: "5px 12px", borderRadius: 8, background: "linear-gradient(135deg,#22D3EE,#EC4899)", border: "none", color: C.white, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>💌 Message</button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -2347,141 +1050,136 @@ const handleCSV = async (file, forcePlatform = null) => {
               )
             })()}
 
-            {/* ═══════════════════════════════════════
-                6. SMART INSIGHTS — scannable, lower priority
-            ═══════════════════════════════════════ */}
-            {(insights.length > 0 || topFanDependency || returningVsNew) && (
-              <div style={{ ...glassCard, borderRadius: 18, padding: 24, marginBottom: 28, animation: "fadeUp 0.3s ease 0.3s both" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
-                  <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(34,211,238,0.12)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>💡</div>
-                  <div style={{ fontSize: 18, fontWeight: 800, color: C.white }}>Smart Insights</div>
+            {/* SMART INSIGHTS */}
+            <div style={{ ...glassCard, borderRadius: 14, padding: 24, marginBottom: 28 }}>
+              <h2 style={{ fontSize: 18, fontWeight: 700, color: C.white, marginBottom: 16 }}>💡 Smart Insights</h2>
+              {insights.slice(0, 3).map((ins, i) => (
+                <div key={i} style={{ background: "rgba(34,211,238,0.08)", border: "1px solid rgba(34,211,238,0.2)", borderRadius: 10, padding: 16, marginBottom: 12 }}>
+                  <div style={{ fontSize: 14, color: C.white }}>{ins.icon} {ins.text}</div>
                 </div>
-
-                {/* Top Fan Dependency — formula: topN_revenue / total_revenue */}
-                {topFanDependency && (
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: 8, marginBottom: 14 }}>
-                    {[
-                      { label: "Top fan", value: `${topFanDependency.top1Pct}%`, sub: "of total revenue", risk: topFanDependency.top1Pct > 20 },
-                      { label: "Top 3 fans", value: `${topFanDependency.top3Pct}%`, sub: "of total revenue", risk: topFanDependency.top3Pct > 50 },
-                      { label: "Top 5 fans", value: `${topFanDependency.top5Pct}%`, sub: "of total revenue", risk: false },
-                      { label: "Loss if #1 leaves", value: `$${topFanDependency.lossIfTopFanLeaves.toFixed(0)}`, sub: "estimated impact", risk: topFanDependency.top1Pct > 15 },
-                    ].map(({ label, value, sub, risk }) => (
-                      <div key={label} style={{ padding: "10px 12px", borderRadius: 10, background: risk ? "rgba(248,113,113,0.08)" : "rgba(255,255,255,0.04)", border: `1px solid ${risk ? "rgba(248,113,113,0.2)" : "rgba(255,255,255,0.08)"}` }}>
-                        <div style={{ fontSize: 10, color: C.muted, marginBottom: 3 }}>{label}</div>
-                        <div style={{ fontSize: 16, fontWeight: 800, color: risk ? C.red : C.white }}>{value}</div>
-                        <div style={{ fontSize: 10, color: C.muted }}>{sub}</div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Returning vs New — formula: avg_repeat_spend vs avg_new_spend */}
-                {returningVsNew && returningVsNew.multiplier && (
-                  <div style={{ padding: "12px 14px", borderRadius: 10, background: "rgba(16,185,129,0.07)", border: "1px solid rgba(16,185,129,0.2)", marginBottom: 14, display: "flex", gap: 16, flexWrap: "wrap" }}>
-                    <div style={{ flex: 1, minWidth: 100 }}>
-                      <div style={{ fontSize: 10, color: C.muted, marginBottom: 2 }}>🔁 Returning fans ({returningVsNew.returningPct}%)</div>
-                      <div style={{ fontSize: 18, fontWeight: 800, color: C.green }}>${returningVsNew.avgReturnSpend.toFixed(0)} avg</div>
-                    </div>
-                    <div style={{ flex: 1, minWidth: 100 }}>
-                      <div style={{ fontSize: 10, color: C.muted, marginBottom: 2 }}>👋 New fans ({100 - returningVsNew.returningPct}%)</div>
-                      <div style={{ fontSize: 18, fontWeight: 800, color: C.blue }}>${returningVsNew.avgNewSpend.toFixed(0)} avg</div>
-                    </div>
-                    <div style={{ flex: 1, minWidth: 100 }}>
-                      <div style={{ fontSize: 10, color: C.muted, marginBottom: 2 }}>💰 Loyalty multiplier</div>
-                      <div style={{ fontSize: 18, fontWeight: 800, color: C.gold }}>{returningVsNew.multiplier}x more</div>
-                    </div>
-                  </div>
-                )}
-
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {insights.slice(0, 3).map((ins, i) => (
-                    <div key={i} style={{ display: "flex", gap: 12, alignItems: "flex-start", padding: "11px 14px", borderRadius: 10, background: "rgba(34,211,238,0.06)", border: "1px solid rgba(34,211,238,0.15)" }}>
-                      <span style={{ fontSize: 16, flexShrink: 0 }}>{ins.icon}</span>
-                      <div style={{ fontSize: 13, color: C.white, lineHeight: 1.55 }}>{ins.text}</div>
+              ))}
+              <div style={{ position: "relative", borderRadius: 10, overflow: "hidden", marginTop: 8 }}>
+                <div style={{ filter: isPro ? "none" : "blur(3px)", pointerEvents: "none" }}>
+                  {insights.slice(3, 8).map((ins, i) => (
+                    <div key={i} style={{ background: "rgba(34,211,238,0.05)", border: "1px solid rgba(34,211,238,0.1)", borderRadius: 10, padding: 16, marginBottom: 8 }}>
+                      <div style={{ fontSize: 14, color: C.white }}>{ins.icon} {ins.text}</div>
                     </div>
                   ))}
                 </div>
-                {insights.length > 3 && (
-                  <div style={{ position: "relative", borderRadius: 10, overflow: "hidden", marginTop: 8 }}>
-                    <div style={{ filter: isPro ? "none" : "blur(3px)", pointerEvents: "none" }}>
-                      {insights.slice(3, 8).map((ins, i) => (
-                        <div key={i} style={{ display: "flex", gap: 12, alignItems: "flex-start", padding: "11px 14px", borderRadius: 10, background: "rgba(34,211,238,0.04)", border: "1px solid rgba(34,211,238,0.1)", marginTop: 6 }}>
-                          <span style={{ fontSize: 16, flexShrink: 0 }}>{ins.icon}</span>
-                          <div style={{ fontSize: 13, color: C.white, lineHeight: 1.55 }}>{ins.text}</div>
-                        </div>
-                      ))}
+                {!isPro && (
+                  <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "rgba(5,7,15,0.75)", backdropFilter: "blur(2px)", borderRadius: 10 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: C.white, marginBottom: 4 }}>🔒 {Math.max(0, insights.length - 3)} more insights hidden</div>
+                    <div style={{ fontSize: 12, color: C.muted, marginBottom: 12 }}>Timing patterns, predictions & advanced strategy</div>
+                    <button onClick={() => openUpgradeModal('insights')} style={{ padding: "8px 20px", borderRadius: 8, background: "linear-gradient(135deg,#3b82f6,#ec4899)", border: "none", color: C.white, fontSize: 12, fontWeight: 700, cursor: "pointer", boxShadow: "0 0 20px rgba(59,130,246,0.4)" }}>
+                      🔓 Unlock All Insights
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* WHAT'S NEXT — FIX: alerts built outside JSX, CopyButton component handles per-item state */}
+            <div style={{ ...glassCard, borderRadius: 14, padding: 24, marginBottom: 28 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
+                <div style={{ width: 36, height: 36, borderRadius: 10, background: "linear-gradient(135deg, #F59E0B, #EC4899)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>🧭</div>
+                <div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: C.white }}>What's Next</div>
+                  <div style={{ fontSize: 12, color: C.muted }}>Personalized alerts based on your tippers' real behavior</div>
+                </div>
+              </div>
+
+              {whatsNextAlerts.length === 0 ? (
+                <div style={{ fontSize: 13, color: C.muted }}>Import more CSV data to unlock personalized alerts based on your tippers' behavior.</div>
+              ) : (
+                whatsNextAlerts.slice(0, 8).map((a, i) => (
+                  <div key={i} style={{ padding: 16, borderRadius: 12, marginBottom: 10, background: `${a.color}08`, border: `1px solid ${a.color}25`, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+                    <div style={{ display: "flex", gap: 12, flex: 1, minWidth: 200 }}>
+                      <span style={{ fontSize: 22, flexShrink: 0 }}>{a.icon}</span>
+                      <div>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: C.white, marginBottom: 4 }}>{a.title}</div>
+                        <div style={{ fontSize: 13, color: C.text, lineHeight: 1.6 }}>{a.message}</div>
+                      </div>
                     </div>
-                    {!isPro && (
-                      <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "rgba(5,7,15,0.75)", backdropFilter: "blur(2px)", borderRadius: 10 }}>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: C.white, marginBottom: 4 }}>🔒 {Math.max(0, insights.length - 3)} more insights hidden</div>
-                        <div style={{ fontSize: 12, color: C.muted, marginBottom: 12 }}>Timing patterns, predictions & advanced strategy</div>
-                        <button onClick={() => openUpgradeModal("insights")} style={{ padding: "8px 20px", borderRadius: 8, background: "linear-gradient(135deg,#3b82f6,#ec4899)", border: "none", color: C.white, fontSize: 12, fontWeight: 700, cursor: "pointer", boxShadow: "0 0 20px rgba(59,130,246,0.4)" }}>
-                          🔓 Unlock All Insights
+                    {a.cta && (
+                      <div style={{ display: "flex", gap: 8, flexShrink: 0, alignItems: "center" }}>
+                        {/* FIX: CopyButton is a proper component — each instance has its own state */}
+                        <CopyButton text={a.reengageMsg} />
+                        <button
+                          onClick={() => { if (a.whale) { setMessageTarget(a.whale); setMessageIndex(0); setMessageCopied(false) } }}
+                          style={{ fontSize: 20, background: "none", border: "none", cursor: "pointer", animation: "pulse-msg 2s infinite" }}>
+                          💌
                         </button>
                       </div>
                     )}
                   </div>
-                )}
-              </div>
-            )}
+                ))
+              )}
+            </div>
 
-            {/* Dependency risk + pre-tip behavior — kept, moved lower */}
-            {dependencyRisk && dependencyRisk.level !== 'low' && (
-              <div style={{ ...glassCard, borderRadius: 14, padding: 20, marginBottom: 20, border: `1px solid ${dependencyRisk.level === 'high' ? 'rgba(248,113,113,0.3)' : 'rgba(245,158,11,0.3)'}` }}>
-                <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
-                  <div style={{ width: 36, height: 36, borderRadius: 9, background: dependencyRisk.level === 'high' ? "rgba(248,113,113,0.15)" : "rgba(245,158,11,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>
-                    {dependencyRisk.level === 'high' ? '🚨' : '⚠️'}
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: C.white, marginBottom: 4 }}>Revenue Dependency Risk — {dependencyRisk.level === 'high' ? 'High' : 'Medium'}</div>
-                    <div style={{ fontSize: 13, color: C.text, marginBottom: 10 }}>{dependencyRisk.message}</div>
-                    <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                      {[
-                        { label: "Top fan", value: `${dependencyRisk.top1Pct}%` },
-                        { label: "Top 3 fans", value: `${dependencyRisk.top3Pct}%` },
-                        { label: "Top 5 fans", value: `${dependencyRisk.top5Pct}%` },
-                        { label: "Loss if #1 leaves", value: `$${dependencyRisk.lossIfTopFanLeaves}` },
-                      ].map(({ label, value }) => (
-                        <div key={label} style={{ padding: "6px 12px", borderRadius: 8, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}>
-                          <div style={{ fontSize: 10, color: C.muted }}>{label}</div>
-                          <div style={{ fontSize: 14, fontWeight: 700, color: C.white }}>{value}</div>
+            {/* RE-ENGAGE NOW — FIX: same pattern, CopyButton handles per-row state */}
+            <div style={{ ...glassCard, borderRadius: 14, padding: 24, marginBottom: 28 }}>
+              <h2 style={{ fontSize: 18, fontWeight: 700, color: C.white, marginBottom: 6 }}>💌 Re-engage Now</h2>
+              <p style={{ fontSize: 13, color: C.muted, marginBottom: 16 }}>Top spenders who haven't tipped recently — reach out before they go cold</p>
+
+              {reengageList.length === 0 ? (
+                <div style={{ fontSize: 13, color: C.muted }}>No dormant fans right now — your audience is active! 🎉</div>
+              ) : (
+                reengageList.map(({ whale: w, days, urgency, msg }, i) => (
+                  <div key={i} style={{ padding: 16, borderRadius: 12, marginBottom: 10, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12, flex: 1, minWidth: 200 }}>
+                      <div style={{ width: 40, height: 40, borderRadius: 10, background: `${urgency}20`, border: `1px solid ${urgency}40`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 800, color: urgency, flexShrink: 0 }}>
+                        {w.username.charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <span style={{ fontSize: 14, fontWeight: 700, color: C.white }}>{w.username}</span>
+                          <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 20, background: `${urgency}20`, color: urgency, fontWeight: 600 }}>{days}d ago</span>
                         </div>
-                      ))}
+                        <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>${w.totalUSD.toFixed(0)} lifetime · {w.tipCount} tips · {w.platform}</div>
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                      {/* FIX: CopyButton component — no useState inside map */}
+                      <CopyButton
+                        text={msg}
+                        label="📋 Copy Message"
+                        copiedLabel="✅ Copied!"
+                        style={{ padding: "8px 14px" }}
+                      />
+                      <button
+                        onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }}
+                        style={{ padding: "8px 14px", borderRadius: 8, background: "linear-gradient(135deg, rgba(236,72,153,0.3), rgba(124,92,255,0.3))", border: "1px solid rgba(236,72,153,0.4)", color: C.pink, fontSize: 12, fontWeight: 600, cursor: "pointer", animation: "pulse-msg 2s infinite" }}>
+                        💌
+                      </button>
                     </div>
                   </div>
-                </div>
-              </div>
-            )}
+                ))
+              )}
+            </div>
 
-            {preTipBehavior && (
-              <div style={{ ...glassCard, borderRadius: 14, padding: 20, marginBottom: 20 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-                  <div style={{ fontSize: 20 }}>🧠</div>
-                  <div style={{ fontSize: 16, fontWeight: 700, color: C.white }}>Tip Behavior Patterns</div>
+            {/* LOSS ALERTS */}
+            <div style={{ ...glassCard, borderRadius: 14, padding: 24, marginBottom: 28 }}>
+              <h2 style={{ fontSize: 18, fontWeight: 700, color: C.white, marginBottom: 16 }}>🚨 Loss Alerts</h2>
+              {lossAlerts.length === 0 && <div style={{ color: C.muted, fontSize: 13 }}>No active alerts — you're on track! 🎉</div>}
+              {lossAlerts.map((a, i) => (
+                <div key={i} style={{ padding: 14, borderRadius: 10, marginBottom: 10, background: a.severity === 'critical' ? "rgba(248,113,113,0.15)" : a.severity === 'warning' ? "rgba(251,146,60,0.15)" : "rgba(34,211,238,0.1)", border: `1px solid ${a.severity === 'critical' ? C.red : a.severity === 'warning' ? C.orange : C.cyan}30` }}>
+                  <div style={{ fontSize: 14, color: C.white, marginBottom: 4 }}>{a.icon} {a.message}</div>
+                  <div style={{ fontSize: 12, color: C.muted }}>👉 {a.action}</div>
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
-                  <div style={{ padding: "12px 14px", background: "rgba(255,255,255,0.04)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.06)" }}>
-                    <div style={{ fontSize: 10, color: C.muted, marginBottom: 4, textTransform: "uppercase" }}>Avg gap between tips</div>
-                    <div style={{ fontSize: 20, fontWeight: 800, color: C.cyan }}>{preTipBehavior.avgGapMinutes} min</div>
-                  </div>
-                  {preTipBehavior.peakTippingWindow && (
-                    <div style={{ padding: "12px 14px", background: "rgba(255,255,255,0.04)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.06)" }}>
-                      <div style={{ fontSize: 10, color: C.muted, marginBottom: 4, textTransform: "uppercase" }}>Peak tipping window</div>
-                      <div style={{ fontSize: 20, fontWeight: 800, color: C.gold }}>{preTipBehavior.peakTippingWindow.label}</div>
-                    </div>
-                  )}
-                </div>
-                <div style={{ padding: "10px 14px", background: "rgba(236,72,153,0.06)", border: "1px solid rgba(236,72,153,0.2)", borderRadius: 9, fontSize: 13, color: C.text }}>
-                  💡 {preTipBehavior.recommendation}
-                </div>
-                {preTipBehavior.clusteringDetected && (
-                  <div style={{ marginTop: 8, padding: "8px 12px", background: "rgba(34,211,238,0.06)", border: "1px solid rgba(34,211,238,0.2)", borderRadius: 8, fontSize: 12, color: C.cyan }}>
-                    🔥 Tip clustering detected — fans tip in bursts. Acknowledge tips publicly to trigger more.
-                  </div>
-                )}
-              </div>
-            )}
+              ))}
+            </div>
 
+            {/* LIVE AI ALERTS */}
+            <div style={{ ...glassCard, borderRadius: 14, padding: 24, marginBottom: 28 }}>
+              <h2 style={{ fontSize: 18, fontWeight: 700, color: C.white, marginBottom: 16 }}>🚨 Live AI Alerts</h2>
+              {alerts.length === 0 && <div style={{ color: C.muted, fontSize: 13 }}>No active alerts</div>}
+              {alerts.slice(0, 5).map((a, i) => (
+                <div key={i} style={{ padding: 14, borderRadius: 10, marginBottom: 10, background: a.severity === "critical" ? "rgba(248,113,113,0.15)" : a.severity === "warning" ? "rgba(251,146,60,0.15)" : a.severity === "success" ? "rgba(16,185,129,0.15)" : "rgba(34,211,238,0.1)", border: `1px solid ${a.severity === "critical" ? C.red : a.severity === "warning" ? C.orange : a.severity === "success" ? C.green : C.cyan}30` }}>
+                  <div style={{ fontSize: 14, color: C.white }}>{a.icon} {a.message}</div>
+                  <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>👉 {a.action}</div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
@@ -2533,30 +1231,15 @@ const handleCSV = async (file, forcePlatform = null) => {
             const avgUPH = displayPlatforms.reduce((s, x) => s + x.usdPerHour, 0) / (displayPlatforms.length || 1)
             const pctAbove = displayPlatforms.length > 1 ? Math.round(((p.usdPerHour - avgUPH) / avgUPH) * 100) : null
             const bHour = Object.entries(platformTimes[p.platform]?.hours || {}).sort((a, b) => b[1] - a[1])[0]
-
-            // For best day: compute avg per active day (not raw total which is misleading)
-            const dayData = platformTimes[p.platform]?.days || {}
-            const dayAvgs = Object.entries(dayData).map(([day, total]) => {
-              // Count distinct calendar dates for this platform+day combo
-              const activeDates = new Set(
-                tips.filter(t => {
-                  if (t.platform !== p.platform) return false
-                  const dt = new Date(t.date_time || t.dateRaw)
-                  return UTC_DAYS_LONG[dt.getUTCDay()] === day
-                }).map(t => new Date(t.date_time || t.dateRaw).toISOString().slice(0,10))
-              ).size
-              return [day, activeDates > 0 ? total / activeDates : 0]
-            })
-            const bDay = dayAvgs.sort((a, b) => b[1] - a[1])[0]
-
+            const bDay  = Object.entries(platformTimes[p.platform]?.days  || {}).sort((a, b) => b[1] - a[1])[0]
             const isTop = displayPlatforms.length > 1 && p.totalUSD === maxUSD
             const isTopUPH = displayPlatforms.length > 1 && p.usdPerHour === maxUPH
             if (isTop)    insights.push({ icon: "🏆", text: "Your highest revenue platform", color: C.gold })
             if (isTopUPH && !isTop) insights.push({ icon: "⚡", text: "Most efficient — highest $/hour", color: C.cyan })
             if (pctAbove !== null && pctAbove >= 20)  insights.push({ icon: "🔥", text: `Earns ${pctAbove}% more per hour than your average`, color: C.green })
             if (pctAbove !== null && pctAbove <= -20) insights.push({ icon: "📉", text: `${Math.abs(pctAbove)}% below your avg $/hour — consider shifting time`, color: C.orange })
-            if (bDay)  insights.push({ icon: "📅", text: `Best day: ${bDay[0]} ($${parseFloat(bDay[1]).toFixed(0)} avg/stream day)`, color: C.white })
-            if (bHour) insights.push({ icon: "🕐", text: `Peak time: ${formatHour(bHour[0])} ($${parseFloat(bHour[1]).toFixed(0)} total earned)`, color: C.white })
+            if (bDay)  insights.push({ icon: "📅", text: `Best day: ${bDay[0]} ($${parseFloat(bDay[1]).toFixed(0)} avg)`, color: C.white })
+            if (bHour) insights.push({ icon: "🕐", text: `Peak time: ${formatHour(bHour[0])} ($${parseFloat(bHour[1]).toFixed(0)} earned)`, color: C.white })
             if (p.sessions >= 5 && p.hours / p.sessions < 1) insights.push({ icon: "⏱️", text: "Short sessions — try streaming longer to boost earnings", color: C.muted })
             return insights
           }
@@ -2692,14 +1375,13 @@ const handleCSV = async (file, forcePlatform = null) => {
                       ))}
                     </div>
 
-                    {/* HOURLY HEATMAP — uses trueHourlyAvg (avg per active day per UTC hour) */}
+                    {/* HOURLY HEATMAP */}
                     {(() => {
-                      // Filter trueHourlyAvg to this platform using platformTimes for totals
                       const hourData = platformTimes[p.platform]?.hours || {}
                       const maxEarning = Math.max(...Object.values(hourData), 1)
                       return (
                         <div style={{ marginBottom: 20 }}>
-                          <div style={{ fontSize: 11, color: C.muted, marginBottom: 8 }}>⏰ Earnings by hour of day (UTC total)</div>
+                          <div style={{ fontSize: 11, color: C.muted, marginBottom: 8 }}>⏰ Earnings by hour of day</div>
                           <div style={{ display: "flex", gap: 2, flexWrap: "nowrap", overflowX: "auto" }}>
                             {Array.from({ length: 24 }, (_, h) => {
                               const val = hourData[h] || 0
@@ -2790,40 +1472,20 @@ const handleCSV = async (file, forcePlatform = null) => {
 
         {activeTab === "whales" && (
           <div>
-            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 12, marginBottom: 8 }}>
-              <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, margin: 0 }}>🐳 Top Fans</h1>
-              <div style={{ display: "flex", gap: 8 }}>
-                {chartDrillDay && (
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", borderRadius: 10, background: "rgba(34,211,238,0.1)", border: "1px solid rgba(34,211,238,0.35)", fontSize: 13, color: C.cyan, fontWeight: 600 }}>
-                    📅 {chartDrillDay}s only
-                    <button onClick={() => setChartDrillDay(null)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 14, padding: 0, lineHeight: 1 }}>✕</button>
-                  </div>
-                )}
-                <button onClick={() => setFanSearchOpen(true)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 10, background: "linear-gradient(135deg, rgba(59,130,246,0.15), rgba(236,72,153,0.15))", border: "1px solid rgba(59,130,246,0.35)", color: C.white, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-                  🔍 Search Fan
-                </button>
-                <button
-                  onClick={() => { if (filteredWhales[0]) { setMessageTarget(filteredWhales[0]); setMessageIndex(0); setMessageCopied(false) } }}
-                  title="Message your top fan"
-                  style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 10, background: "linear-gradient(135deg, rgba(236,72,153,0.15), rgba(168,85,247,0.15))", border: "1px solid rgba(236,72,153,0.35)", color: C.white, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-                  <span style={{ fontSize: 18, display: "inline-block", animation: "pulse-envelope 2s ease-in-out infinite" }}>💌</span>
-                  Message Fan
-                </button>
-              </div>
-            </div>
+            <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 8 }}>🐳 Top Fans</h1>
             <p style={{ fontSize: 13, color: C.muted, marginBottom: 24 }}>Your highest-value supporters ranked by total spend</p>
 
             {/* FILTERS */}
             <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
               <div style={{ display: "flex", gap: 6, background: "rgba(255,255,255,0.04)", padding: 4, borderRadius: 10, border: "1px solid rgba(255,255,255,0.08)" }}>
                 {["ALL","Whale","Shark","Regular","Dormant"].map(t => (
-                  <button key={t} onClick={() => { setWhaleFilter(t); setWhalePage(0) }} style={{ padding: "5px 12px", borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: "pointer", border: "none", transition: "all 0.15s", background: whaleFilter === t ? "linear-gradient(135deg, #3b82f6, #ec4899)" : "transparent", color: whaleFilter === t ? C.white : C.muted }}>{TIER_ICONS[t] ? `${TIER_ICONS[t]} ` : ""}{t}</button>
+                  <button key={t} onClick={() => setWhaleFilter(t)} style={{ padding: "5px 12px", borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: "pointer", border: "none", transition: "all 0.15s", background: whaleFilter === t ? "linear-gradient(135deg, #3b82f6, #ec4899)" : "transparent", color: whaleFilter === t ? C.white : C.muted }}>{t}</button>
                 ))}
               </div>
               {allPlatforms.length > 1 && (
                 <div style={{ display: "flex", gap: 6, background: "rgba(255,255,255,0.04)", padding: 4, borderRadius: 10, border: "1px solid rgba(255,255,255,0.08)" }}>
                   {["ALL", ...allPlatforms].map(p => (
-                    <button key={p} onClick={() => { setPlatformFilter(p); setWhalePage(0) }} style={{ padding: "5px 12px", borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: "pointer", border: "none", transition: "all 0.15s", background: platformFilter === p ? "rgba(34,211,238,0.2)" : "transparent", color: platformFilter === p ? C.cyan : C.muted }}>{p}</button>
+                    <button key={p} onClick={() => setPlatformFilter(p)} style={{ padding: "5px 12px", borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: "pointer", border: "none", transition: "all 0.15s", background: platformFilter === p ? "rgba(34,211,238,0.2)" : "transparent", color: platformFilter === p ? C.cyan : C.muted }}>{p}</button>
                   ))}
                 </div>
               )}
@@ -2834,76 +1496,39 @@ const handleCSV = async (file, forcePlatform = null) => {
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                 <thead>
                   <tr style={{ background: "rgba(255,255,255,0.04)", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-                    {["#", "Username", "Total $", "Platform", "Tier", "Last Tip", "Actions"].map(h => (
+                    {["#", "Username", "Total $", "Tips", "Avg Tip", "Platform", "Tier", "Last Tip", "Actions"].map(h => (
                       <th key={h} style={{ padding: "12px 16px", textAlign: "left", color: C.muted, fontSize: 11, textTransform: "uppercase", fontWeight: 500 }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {(() => {
-                    const FANS_PER_PAGE = 25
-                    const pagedWhales = filteredWhales.slice(whalePage * FANS_PER_PAGE, (whalePage + 1) * FANS_PER_PAGE)
-                    return pagedWhales.map((w, i) => {
-                      const globalIdx = whalePage * FANS_PER_PAGE + i
-                      return (
+                  {filteredWhales.map((w, i) => (
                     <tr key={i} className="whale-row" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
-                      <td style={{ padding: "12px 16px", color: globalIdx < 3 ? C.gold : C.muted, fontWeight: globalIdx < 3 ? 700 : 400 }}>#{globalIdx + 1}</td>
+                      <td style={{ padding: "12px 16px", color: i < 3 ? C.gold : C.muted, fontWeight: i < 3 ? 700 : 400 }}>#{i + 1}</td>
                       <td style={{ padding: "12px 16px" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                           <span style={{ color: C.white, fontWeight: 600 }}>{w.username}</span>
+                          <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }}
+                            style={{ fontSize: 18, background: "none", border: "none", cursor: "pointer", lineHeight: 1, padding: 0 }}
+                            title="Message">💌</button>
                         </div>
                       </td>
                       <td style={{ padding: "12px 16px", color: C.green, fontWeight: 700 }}>${w.totalUSD.toFixed(2)}</td>
-
+                      <td style={{ padding: "12px 16px", color: C.muted }}>{w.tipCount}</td>
+                      <td style={{ padding: "12px 16px", color: C.cyan }}>${w.avgTipSize.toFixed(2)}</td>
                       <td style={{ padding: "12px 16px", color: C.muted }}>{w.platform}</td>
                       <td style={{ padding: "12px 16px" }}>
-                        <span style={{ padding: "4px 10px", borderRadius: 100, background: `${TIER_COLORS[w.tier]}15`, color: TIER_COLORS[w.tier], fontSize: 11, fontWeight: 600 }}>{TIER_ICONS[w.tier] || ""} {w.tier}</span>
+                        <span style={{ padding: "4px 10px", borderRadius: 100, background: `${TIER_COLORS[w.tier]}15`, color: TIER_COLORS[w.tier], fontSize: 11, fontWeight: 600 }}>{w.tier}</span>
                       </td>
                       <td style={{ padding: "12px 16px", color: C.muted, fontSize: 12 }}>{new Date(w.lastTipDate).toLocaleDateString()}</td>
                       <td style={{ padding: "12px 16px" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }}
-                            title="Message fan"
-                            style={{ fontSize: 20, background: "none", border: "none", cursor: "pointer", lineHeight: 1, padding: 2, display: "inline-block", animation: "pulse-envelope 2s ease-in-out infinite" }}>
-                            💌
-                          </button>
-                          <button onClick={() => setSelectedWhale(w)}
-                            style={{ padding: "4px 12px", borderRadius: 6, background: "rgba(34,211,238,0.15)", border: "1px solid rgba(34,211,238,0.3)", color: C.cyan, fontSize: 11, cursor: "pointer", fontWeight: 600, animation: "pulse-view 2.5s ease-in-out infinite" }}
-                            onMouseEnter={e => { e.currentTarget.style.animation = "none"; e.currentTarget.style.background = "rgba(34,211,238,0.3)"; e.currentTarget.style.boxShadow = "0 0 10px rgba(34,211,238,0.4)" }}
-                            onMouseLeave={e => { e.currentTarget.style.animation = "pulse-view 2.5s ease-in-out infinite"; e.currentTarget.style.background = "rgba(34,211,238,0.15)"; e.currentTarget.style.boxShadow = "none" }}>
-                            View →
-                          </button>
-                        </div>
+                        <button onClick={() => setSelectedWhale(w)} style={{ padding: "4px 10px", borderRadius: 6, background: "rgba(34,211,238,0.15)", border: "1px solid rgba(34,211,238,0.3)", color: C.cyan, fontSize: 11, cursor: "pointer" }}>🔍 View</button>
                       </td>
                     </tr>
-                      )
-                    })
-                  })()}
+                  ))}
                 </tbody>
               </table>
             </div>
-
-            {/* PAGINATION */}
-            {filteredWhales.length > 25 && (() => {
-              const FANS_PER_PAGE = 25
-              const totalWhalePages = Math.ceil(filteredWhales.length / FANS_PER_PAGE)
-              return (
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 20px", marginBottom: 20, background: "rgba(255,255,255,0.03)", borderRadius: 12, border: "1px solid rgba(255,255,255,0.08)" }}>
-                  <button onClick={() => setWhalePage(p => Math.max(0, p - 1))} disabled={whalePage === 0}
-                    style={{ padding: "7px 18px", borderRadius: 8, background: whalePage === 0 ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.1)", color: whalePage === 0 ? C.muted : C.white, fontSize: 13, cursor: whalePage === 0 ? "not-allowed" : "pointer" }}>
-                    ← Prev
-                  </button>
-                  <span style={{ fontSize: 13, color: C.muted }}>
-                    Page <span style={{ color: C.white, fontWeight: 600 }}>{whalePage + 1}</span> of <span style={{ color: C.white, fontWeight: 600 }}>{totalWhalePages}</span>
-                    <span style={{ marginLeft: 12 }}>({whalePage * FANS_PER_PAGE + 1}–{Math.min((whalePage + 1) * FANS_PER_PAGE, filteredWhales.length)} of {filteredWhales.length} fans)</span>
-                  </span>
-                  <button onClick={() => setWhalePage(p => Math.min(totalWhalePages - 1, p + 1))} disabled={whalePage >= totalWhalePages - 1}
-                    style={{ padding: "7px 18px", borderRadius: 8, background: whalePage >= totalWhalePages - 1 ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.1)", color: whalePage >= totalWhalePages - 1 ? C.muted : C.white, fontSize: 13, cursor: whalePage >= totalWhalePages - 1 ? "not-allowed" : "pointer" }}>
-                    Next →
-                  </button>
-                </div>
-              )
-            })()}
 
             {/* 💎 WHALE INTELLIGENCE PANEL */}
             {filteredWhales.length > 0 && (
@@ -3075,794 +1700,63 @@ const handleCSV = async (file, forcePlatform = null) => {
           </div>
         )}
 
-        {activeTab === "live" && (() => {
-          // ── INLINE LIVE ENGINE (no external import needed) ────────────────
-
-          const normalizeTip = (ev) => {
-            const tokens = parseInt(ev.tokens) || 0
-            const usd    = parseFloat(ev.usd) || 0
-            const rate   = tokenRates[livePlatform] || 0.05
-            let rev = 0, src = 'unknown', conf = 0
-            if (usd > 0 && tokens > 0) {
-              rev = usd; src = 'usd'; conf = 0.9
-            } else if (usd > 0) {
-              rev = usd; src = 'usd'; conf = 0.95
-            } else if (tokens > 0) {
-              rev = parseFloat((tokens * rate).toFixed(2)); src = 'tokens'; conf = 0.75
-            }
-            return { ...ev, normalizedRevenue: rev, sourceUsed: src, confidenceScore: conf, timestamp: ev.timestamp || new Date() }
-          }
-
-          const computeState = () => {
-            if (!liveEvents.length || !liveStartTime) return null
-            const nowMs = Date.now()
-            const startMs = new Date(liveStartTime).getTime()
-            const elapsedMins = Math.max((nowMs - startMs) / 60000, 0.1)
-            let totalRevenue = 0, totalTokens = 0
-            const tipperMap = {}
-            liveEvents.forEach(ev => {
-              totalRevenue += ev.normalizedRevenue || 0
-              totalTokens  += ev.tokens || 0
-              tipperMap[ev.username] = (tipperMap[ev.username] || 0) + (ev.normalizedRevenue || 0)
-            })
-            const sorted = [...liveEvents].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
-            const lastTip = sorted[0]
-            const timeSinceLast = lastTip
-              ? parseFloat(((nowMs - new Date(lastTip.timestamp).getTime()) / 60000).toFixed(1))
-              : null
-            const goalProgress = liveGoalTokens > 0
-              ? Math.min(100, Math.round((totalTokens / liveGoalTokens) * 100))
-              : 0
-            const tpm = parseFloat((liveEvents.length / elapsedMins).toFixed(2))
-            const avgTip = parseFloat((totalRevenue / liveEvents.length).toFixed(2))
-            const midMs = startMs + (nowMs - startMs) / 2
-            const fh = liveEvents.filter(e => new Date(e.timestamp).getTime() <= midMs)
-            const sh = liveEvents.filter(e => new Date(e.timestamp).getTime() > midMs)
-            const hm = elapsedMins / 2
-            const fUPM = hm > 0 ? fh.reduce((s, e) => s + (e.normalizedRevenue||0), 0) / hm : 0
-            const sUPM = hm > 0 ? sh.reduce((s, e) => s + (e.normalizedRevenue||0), 0) / hm : 0
-            let pace = 'unknown'
-            if (elapsedMins >= 5) {
-              if (sUPM > fUPM * 1.15) pace = 'above'
-              else if (sUPM < fUPM * 0.75) pace = 'below'
-              else pace = 'on_track'
-            }
-            const topEntry = Object.entries(tipperMap).sort((a, b) => b[1] - a[1])[0]
-            return {
-              totalRevenue: parseFloat(totalRevenue.toFixed(2)),
-              totalTokens, elapsedMins: parseFloat(elapsedMins.toFixed(1)),
-              tipsPerMinute: tpm, avgTipValue: avgTip,
-              timeSinceLastTip: timeSinceLast, goalProgress, paceStatus: pace,
-              topTipper: topEntry ? { username: topEntry[0], revenue: parseFloat(topEntry[1].toFixed(2)) } : null,
-              firstHalfUPM: parseFloat(fUPM.toFixed(3)),
-              secondHalfUPM: parseFloat(sUPM.toFixed(3)),
-              currentUPM: parseFloat((totalRevenue / elapsedMins).toFixed(3)),
-            }
-          }
-
-          const getAlerts = (state) => {
-            if (!state) return []
-            const { timeSinceLastTip, paceStatus, goalProgress, topTipper, totalRevenue, elapsedMins } = state
-            const alerts = []
-            if (timeSinceLastTip >= 8)
-              alerts.push({ level: 'critical', icon: '🚨', text: `No tips in ${Math.round(timeSinceLastTip)} min — call out names NOW` })
-            else if (timeSinceLastTip >= 5)
-              alerts.push({ level: 'warning', icon: '⚠️', text: `${Math.round(timeSinceLastTip)} min silence — restart with a quick goal` })
-            if (paceStatus === 'below' && elapsedMins >= 8)
-              alerts.push({ level: 'warning', icon: '📉', text: 'Pace dropping — activate toy or set a micro-goal' })
-            if (paceStatus === 'above' && elapsedMins >= 8)
-              alerts.push({ level: 'success', icon: '🔥', text: "Momentum building — don't break the energy" })
-            if (goalProgress >= 90 && goalProgress < 100)
-              alerts.push({ level: 'critical', icon: '🎯', text: `${goalProgress}% to goal — push NOW, announce the reward` })
-            if (goalProgress >= 100)
-              alerts.push({ level: 'success', icon: '🎉', text: 'Goal hit! Set the next one immediately' })
-            if (topTipper && totalRevenue > 0 && topTipper.revenue / totalRevenue >= 0.45)
-              alerts.push({ level: 'info', icon: '🐳', text: `${topTipper.username} is ${Math.round(topTipper.revenue/totalRevenue*100)}% of revenue — give them attention` })
-            return alerts.slice(0, 4)
-          }
-
-          const getNextAction = (state) => {
-            if (!state) return { text: 'Start your stream to get live coaching' }
-            const { timeSinceLastTip, paceStatus, goalProgress, topTipper, totalRevenue, elapsedMins, tipsPerMinute } = state
-            if (goalProgress >= 90 && goalProgress < 100)
-              return { text: `Announce your reward out loud — goal is ${goalProgress}%. Tell chat exactly what happens when you hit it.` }
-            if (timeSinceLastTip >= 6)
-              return { text: 'Say 3 names in chat right now. "I see [name] — tip to control what I do next."' }
-            if (paceStatus === 'below' && elapsedMins >= 8)
-              return { text: 'Set a small 50-token goal right now — micro-goals restart momentum when the room slows.' }
-            if (topTipper && totalRevenue > 0 && topTipper.revenue / totalRevenue >= 0.4)
-              return { text: `Thank ${topTipper.username} by name and offer them something exclusive for their next tip.` }
-            if (elapsedMins < 15 && state.totalRevenue < 2)
-              return { text: 'Set a 200-token opening goal and announce it. Early goals train the room to tip.' }
-            return { text: 'Keep energy high — acknowledge every tipper by name. Recognition drives repeat tipping.' }
-          }
-
-          // Add tip handler
-          const addTip = () => {
-            const { username, tokens, usd } = liveTipInput
-            if (!username && !tokens && !usd) return
-            const raw = {
-              username: username || 'anonymous',
-              tokens: parseInt(tokens) || 0,
-              usd: parseFloat(usd) || 0,
-              timestamp: new Date(),
-              platform: livePlatform,
-            }
-            const normalized = normalizeTip(raw)
-            setLiveEvents(prev => [...prev, normalized])
-            setLiveTipInput({ username: '', tokens: '', usd: '' })
-          }
-
-          const state = computeState()
-          const alerts = getAlerts(state)
-          const nextAction = getNextAction(state)
-
-          const PACE_CONFIG = {
-            above:    { label: '🔥 Hot', color: C.green,  bg: 'rgba(16,185,129,0.12)',  border: 'rgba(16,185,129,0.3)' },
-            on_track: { label: '✅ On Track', color: C.cyan, bg: 'rgba(34,211,238,0.1)', border: 'rgba(34,211,238,0.25)' },
-            below:    { label: '📉 Slow', color: C.red,   bg: 'rgba(248,113,113,0.1)',  border: 'rgba(248,113,113,0.3)' },
-            unknown:  { label: '⏳ Starting', color: C.muted, bg: 'rgba(255,255,255,0.04)', border: 'rgba(255,255,255,0.1)' },
-          }
-          const ALERT_COLORS = { critical: C.red, warning: C.orange, success: C.green, info: C.cyan }
-          const pace = PACE_CONFIG[state?.paceStatus || 'unknown']
-          const inp2 = { background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, padding: '8px 12px', color: C.white, fontSize: 13, outline: 'none', width: '100%' }
-
-          return (
-            <div>
-              {/* HEADER */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <div style={{ width: 10, height: 10, borderRadius: '50%', background: liveActive ? C.green : C.muted, boxShadow: liveActive ? `0 0 10px ${C.green}` : 'none', animation: liveActive ? 'pulse-msg 1.5s infinite' : 'none' }} />
-                    <h1 style={{ fontSize: 26, fontWeight: 800, color: C.white }}>🔴 Live Mode</h1>
-                  </div>
-                  <p style={{ fontSize: 13, color: C.muted, marginTop: 2 }}>Real-time coaching while you stream</p>
-                </div>
-                <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-                  <select value={livePlatform} onChange={e => setLivePlatform(e.target.value)}
-                    style={{ ...inp2, width: 'auto', padding: '8px 12px' }}>
-                    {['Chaturbate','BongaCams','MyFreeCams','CamSoda','Stripchat'].map(p => (
-                      <option key={p} value={p}>{p}</option>
-                    ))}
-                  </select>
+        {activeTab === "sessions" && (
+          <div>
+            <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 32 }}>🎥 Stream Sessions</h1>
+            {sessions.slice(0, 3).map((s, i) => (
+              <div key={i} className="dash-card" style={{ ...glassCard, borderRadius: 14, padding: 20, marginBottom: 16 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
                   <div>
-                    <input type="number" value={liveGoalTokens || ''} onChange={e => setLiveGoalTokens(Number(e.target.value)||0)}
-                      placeholder="Token goal (optional)"
-                      style={{ ...inp2, width: 180 }} />
+                    <div style={{ fontSize: 16, fontWeight: 600, color: C.white }}>{new Date(s.startTime).toLocaleDateString()} • {s.platform}</div>
+                    <div style={{ fontSize: 13, color: C.muted }}>{new Date(s.startTime).toLocaleTimeString()}</div>
                   </div>
-                  {!liveActive ? (
-                    <button onClick={() => { setLiveActive(true); setLiveStartTime(new Date()); setLiveEvents([]) }}
-                      style={{ padding: '10px 24px', borderRadius: 10, background: 'linear-gradient(135deg, #10B981, #22D3EE)', border: 'none', color: C.white, fontWeight: 800, fontSize: 14, cursor: 'pointer', boxShadow: '0 0 20px rgba(16,185,129,0.4)' }}>
-                      ▶ Start Stream
-                    </button>
-                  ) : (
-                    <button onClick={() => { setLiveActive(false) }}
-                      style={{ padding: '10px 24px', borderRadius: 10, background: 'rgba(248,113,113,0.2)', border: '1px solid rgba(248,113,113,0.4)', color: C.red, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
-                      ⏹ End Stream
-                    </button>
-                  )}
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: 24, fontWeight: 700, color: C.green }}>${s.totalUSD}</div>
+                    <div style={{ fontSize: 12, color: C.cyan }}>{s.durationHours.toFixed(1)}h</div>
+                  </div>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+                  <div><div style={{ fontSize: 11, color: C.muted }}>$/Hour</div><div style={{ fontSize: 15, fontWeight: 600, color: C.white }}>${s.usdPerHour}</div></div>
+                  <div><div style={{ fontSize: 11, color: C.muted }}>Tips</div><div style={{ fontSize: 15, fontWeight: 600, color: C.white }}>{s.tipCount}</div></div>
+                  <div><div style={{ fontSize: 11, color: C.muted }}>Avg Tip</div><div style={{ fontSize: 15, fontWeight: 600, color: C.white }}>${s.avgTipSize}</div></div>
+                  <div><div style={{ fontSize: 11, color: C.muted }}>Fans</div><div style={{ fontSize: 15, fontWeight: 600, color: C.white }}>{s.uniqueFans}</div></div>
                 </div>
               </div>
-
-              {!liveActive && !liveEvents.length && (
-                <div style={{ ...glassCard, borderRadius: 16, padding: 48, textAlign: 'center', marginBottom: 24 }}>
-                  <div style={{ fontSize: 48, marginBottom: 12 }}>🔴</div>
-                  <div style={{ fontSize: 18, fontWeight: 700, color: C.white, marginBottom: 8 }}>Ready to go live</div>
-                  <div style={{ fontSize: 13, color: C.muted, maxWidth: 400, margin: '0 auto', lineHeight: 1.6 }}>
-                    Set your platform and token goal above, then click Start Stream.<br/>
-                    Log tips as they come in to get real-time coaching, alerts, and pace tracking.
-                  </div>
-                </div>
-              )}
-
-              {(liveActive || liveEvents.length > 0) && (
-                <div>
-                  {/* MAIN GRID — stats left, alerts right */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: 20, marginBottom: 20 }}>
-
-                    {/* LEFT — stats */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-
-                      {/* KEY METRICS */}
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
-                        {[
-                          { label: 'Revenue', value: `$${state?.totalRevenue?.toFixed(2) || '0.00'}`, color: C.green, big: true },
-                          { label: 'Tips/min', value: state?.tipsPerMinute?.toFixed(1) || '0', color: C.cyan },
-                          { label: 'Avg Tip', value: `$${state?.avgTipValue?.toFixed(2) || '0.00'}`, color: C.gold },
-                          { label: 'Time', value: state ? `${Math.floor(state.elapsedMins)}m` : '0m', color: C.muted },
-                        ].map(({ label, value, color, big }) => (
-                          <div key={label} style={{ ...glassCard, borderRadius: 12, padding: '14px 16px' }}>
-                            <div style={{ fontSize: 10, color: C.muted, textTransform: 'uppercase', marginBottom: 4 }}>{label}</div>
-                            <div style={{ fontSize: big ? 26 : 20, fontWeight: 900, color }}>{value}</div>
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* PACE + GOAL */}
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                        {/* Pace status */}
-                        <div style={{ borderRadius: 12, padding: '14px 18px', background: pace.bg, border: `1px solid ${pace.border}` }}>
-                          <div style={{ fontSize: 10, color: C.muted, textTransform: 'uppercase', marginBottom: 6 }}>Pace</div>
-                          <div style={{ fontSize: 18, fontWeight: 800, color: pace.color }}>{pace.label}</div>
-                          {state?.firstHalfUPM > 0 && (
-                            <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>
-                              1st half: ${state.firstHalfUPM.toFixed(2)}/min → 2nd: ${state.secondHalfUPM.toFixed(2)}/min
-                            </div>
-                          )}
+            ))}
+            {sessions.length > 3 && (
+              <div style={{ position: "relative", borderRadius: 14, overflow: "hidden" }}>
+                <div style={{ filter: isPro ? "none" : "blur(4px)", pointerEvents: "none" }}>
+                  {sessions.slice(3, 7).map((s, i) => (
+                    <div key={i} style={{ ...glassCard, borderRadius: 14, padding: 20, marginBottom: 16 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between" }}>
+                        <div>
+                          <div style={{ fontSize: 15, fontWeight: 600, color: C.white }}>{new Date(s.startTime).toLocaleDateString()} • {s.platform}</div>
+                          <div style={{ fontSize: 13, color: C.muted }}>{s.durationHours.toFixed(1)}h • {s.tipCount} tips</div>
                         </div>
-                        {/* Goal progress */}
-                        <div style={{ ...glassCard, borderRadius: 12, padding: '14px 18px' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                            <div style={{ fontSize: 10, color: C.muted, textTransform: 'uppercase' }}>Goal Progress</div>
-                            <div style={{ fontSize: 13, fontWeight: 700, color: state?.goalProgress >= 100 ? C.green : C.white }}>
-                              {state?.goalProgress || 0}%
-                            </div>
-                          </div>
-                          <div style={{ height: 8, borderRadius: 4, background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
-                            <div style={{ height: '100%', width: `${state?.goalProgress || 0}%`, borderRadius: 4, background: `linear-gradient(90deg, ${C.cyan}, ${C.pink})`, transition: 'width 0.4s ease' }} />
-                          </div>
-                          {liveGoalTokens > 0 && state && (
-                            <div style={{ fontSize: 11, color: C.muted, marginTop: 6 }}>
-                              {state.totalTokens} / {liveGoalTokens} tokens
-                            </div>
-                          )}
-                        </div>
+                        <div style={{ fontSize: 22, fontWeight: 700, color: C.green }}>${s.totalUSD}</div>
                       </div>
-
-                      {/* TIP INPUT */}
-                      {liveActive && (
-                        <div style={{ ...glassCard, borderRadius: 12, padding: 16 }}>
-                          <div style={{ fontSize: 11, color: C.muted, marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>Log a tip</div>
-                          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: 8 }}>
-                            <input placeholder="Username" value={liveTipInput.username}
-                              onChange={e => setLiveTipInput(p => ({ ...p, username: e.target.value }))}
-                              onKeyDown={e => e.key === 'Enter' && addTip()}
-                              style={inp2} />
-                            <input type="number" placeholder="Tokens" value={liveTipInput.tokens}
-                              onChange={e => setLiveTipInput(p => ({ ...p, tokens: e.target.value }))}
-                              onKeyDown={e => e.key === 'Enter' && addTip()}
-                              style={inp2} />
-                            <input type="number" placeholder="USD" value={liveTipInput.usd}
-                              onChange={e => setLiveTipInput(p => ({ ...p, usd: e.target.value }))}
-                              onKeyDown={e => e.key === 'Enter' && addTip()}
-                              style={inp2} />
-                            <button onClick={addTip}
-                              style={{ padding: '8px 16px', borderRadius: 8, background: 'linear-gradient(135deg, #22D3EE, #EC4899)', border: 'none', color: C.white, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                              + Add
-                            </button>
-                          </div>
-                          <div style={{ fontSize: 10, color: C.muted, marginTop: 6 }}>Press Enter or click Add — tokens or USD, whichever you have</div>
-                        </div>
-                      )}
-
-                      {/* TIP FEED */}
-                      {liveEvents.length > 0 && (
-                        <div style={{ ...glassCard, borderRadius: 12, padding: 16 }}>
-                          <div style={{ fontSize: 11, color: C.muted, marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>Live Tip Feed</div>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 220, overflowY: 'auto' }}>
-                            {[...liveEvents].reverse().map((ev, i) => (
-                              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', borderRadius: 8, background: i === 0 ? 'rgba(34,211,238,0.08)' : 'rgba(255,255,255,0.03)', border: i === 0 ? '1px solid rgba(34,211,238,0.2)' : '1px solid rgba(255,255,255,0.05)' }}>
-                                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                                  <span style={{ fontSize: 12, fontWeight: 600, color: C.white }}>{ev.username}</span>
-                                  {ev.tokens > 0 && <span style={{ fontSize: 11, color: C.cyan }}>{ev.tokens} tkns</span>}
-                                </div>
-                                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                                  <span style={{ fontSize: 13, fontWeight: 700, color: C.green }}>${ev.normalizedRevenue?.toFixed(2) || '0.00'}</span>
-                                  <span style={{ fontSize: 10, color: C.muted }}>{new Date(ev.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* RIGHT — alerts + next action */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-
-                      {/* NEXT ACTION — prominent */}
-                      <div style={{ borderRadius: 14, padding: 20, background: 'linear-gradient(135deg, rgba(236,72,153,0.12), rgba(124,92,255,0.12))', border: '1px solid rgba(236,72,153,0.3)' }}>
-                        <div style={{ fontSize: 10, color: C.pink, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10, fontWeight: 700 }}>⚡ Do This Now</div>
-                        <div style={{ fontSize: 14, color: C.white, fontWeight: 600, lineHeight: 1.6 }}>{nextAction.text}</div>
-                      </div>
-
-                      {/* LIVE ALERTS */}
-                      <div style={{ ...glassCard, borderRadius: 14, padding: 16, flex: 1 }}>
-                        <div style={{ fontSize: 10, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 12 }}>Live Alerts</div>
-                        {alerts.length === 0 ? (
-                          <div style={{ fontSize: 13, color: C.muted, textAlign: 'center', padding: '20px 0' }}>
-                            {liveActive ? 'All clear — keep going 👍' : 'Start streaming to see alerts'}
-                          </div>
-                        ) : (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                            {alerts.map((a, i) => (
-                              <div key={i} style={{ padding: '10px 14px', borderRadius: 10, background: `${ALERT_COLORS[a.level]}10`, border: `1px solid ${ALERT_COLORS[a.level]}30`, display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-                                <span style={{ fontSize: 16, flexShrink: 0 }}>{a.icon}</span>
-                                <span style={{ fontSize: 12, color: ALERT_COLORS[a.level], fontWeight: 600, lineHeight: 1.5 }}>{a.text}</span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* EXTENSION CTA */}
-                      <div style={{ borderRadius: 12, padding: '14px 16px', background: 'rgba(124,92,255,0.08)', border: '1px solid rgba(124,92,255,0.25)', textAlign: 'center' }}>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: C.white, marginBottom: 4 }}>⚡ Auto-capture tips</div>
-                        <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.5 }}>
-                          Install the CamCash Chrome extension to automatically capture tips from your stream — no manual logging needed.
-                        </div>
-                        <div style={{ marginTop: 8, fontSize: 11, color: C.indigo }}>Coming soon</div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          )
-        })()}
-
-        {activeTab === "sessions" && (() => {
-          // ── SESSION BREAKDOWN ENGINE ────────────────────────────────
-          // Pure logic — runs on each session's tips array
-          const getSessionBreakdown = (s) => {
-            const rawTips = s.tips || []
-            if (rawTips.length === 0) return null
-
-            const sorted = [...rawTips].sort((a, b) =>
-              new Date(a.dateRaw || a.date_time) - new Date(b.dateRaw || b.date_time)
-            )
-
-            const startMs = new Date(s.startTime).getTime()
-            const endMs   = new Date(s.endTime).getTime()
-            const durationMins = Math.max(s.durationMinutes || 1, 1)
-
-            // ── TIMELINE BUCKETS (5-min intervals) ──────────────────
-            const bucketCount = Math.max(Math.ceil(durationMins / 5), 1)
-            const buckets = Array.from({ length: bucketCount }, (_, i) => ({
-              label: `${i * 5}m`,
-              usd: 0,
-              count: 0,
-            }))
-            sorted.forEach(t => {
-              const tMs = new Date(t.dateRaw || t.date_time).getTime()
-              const minOffset = (tMs - startMs) / 60000
-              const idx = Math.min(Math.floor(minOffset / 5), bucketCount - 1)
-              if (idx >= 0 && idx < buckets.length) {
-                buckets[idx].usd += parseFloat(t.usd) || 0
-                buckets[idx].count += 1
-              }
-            })
-
-            // ── PEAK BUCKET ─────────────────────────────────────────
-            const peakBucket = [...buckets].sort((a, b) => b.usd - a.usd)[0]
-            const peakBucketIdx = buckets.indexOf(peakBucket)
-            const peakMinute = peakBucketIdx * 5
-            const peakTime = new Date(startMs + peakMinute * 60000)
-
-            // ── FIRST HALF vs SECOND HALF ────────────────────────────
-            const half = Math.floor(buckets.length / 2)
-            const firstHalfUSD = buckets.slice(0, half).reduce((s, b) => s + b.usd, 0)
-            const secondHalfUSD = buckets.slice(half).reduce((s, b) => s + b.usd, 0)
-            const firstHalfPct = s.totalUSD > 0 ? Math.round((firstHalfUSD / s.totalUSD) * 100) : 0
-
-            // ── TOP TIPPERS ─────────────────────────────────────────
-            const tipperMap = {}
-            sorted.forEach(t => {
-              const u = t.username || "unknown"
-              tipperMap[u] = (tipperMap[u] || 0) + (parseFloat(t.usd) || 0)
-            })
-            const topTippers = Object.entries(tipperMap)
-              .sort((a, b) => b[1] - a[1])
-              .slice(0, 3)
-              .map(([username, usd]) => ({
-                username,
-                usd: parseFloat(usd.toFixed(2)),
-                pct: s.totalUSD > 0 ? Math.round((usd / s.totalUSD) * 100) : 0,
-              }))
-
-            // ── SPIKES (bucket > 2x avg) ─────────────────────────────
-            const avgBucketUSD = s.totalUSD / buckets.length
-            const spikes = buckets
-              .map((b, i) => ({ ...b, idx: i }))
-              .filter(b => b.usd >= avgBucketUSD * 2 && b.usd > 0)
-              .map(b => ({
-                minute: b.idx * 5,
-                usd: parseFloat(b.usd.toFixed(2)),
-                time: new Date(startMs + b.idx * 5 * 60000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-              }))
-
-            // ── PERFORMANCE vs historical avg ────────────────────────
-            const allAvg = sessions.length > 0
-              ? sessions.reduce((s, x) => s + x.totalUSD, 0) / sessions.length
-              : 0
-            const performance = s.totalUSD >= allAvg * 1.3
-              ? "high"
-              : s.totalUSD <= allAvg * 0.6
-              ? "low"
-              : "average"
-
-            // ── REVENUE PER MINUTE ───────────────────────────────────
-            const revenuePerMin = parseFloat((s.totalUSD / durationMins).toFixed(3))
-
-            // ── INSIGHTS ────────────────────────────────────────────
-            const insights = []
-            if (firstHalfPct >= 60)
-              insights.push(`You earned ${firstHalfPct}% of your revenue in the first half of the stream`)
-            if (firstHalfPct <= 35 && durationMins > 20)
-              insights.push(`Your stream warmed up slowly — earnings picked up in the second half`)
-            if (topTippers[0] && topTippers[0].pct >= 40)
-              insights.push(`${topTippers[0].username} drove ${topTippers[0].pct}% of this session's revenue`)
-            if (spikes.length > 0)
-              insights.push(`Your biggest spike was at ${spikes[0].time} — $${spikes[0].usd} in 5 minutes`)
-            if (s.uniqueFans === 1)
-              insights.push(`Only one fan tipped this session — great loyalty, but audience diversity helps`)
-            if (s.uniqueFans >= 5)
-              insights.push(`${s.uniqueFans} different fans tipped — strong audience engagement`)
-            if (durationMins < 20 && s.totalUSD > 0)
-              insights.push(`Short session (${Math.round(durationMins)} min) with solid earnings — your hook is working`)
-            if (performance === "high")
-              insights.push(`This was one of your top sessions — $${s.totalUSD} vs $${allAvg.toFixed(0)} avg`)
-            if (performance === "low")
-              insights.push(`Below your average session ($${allAvg.toFixed(0)}) — see recommendations below`)
-
-            // ── RECOMMENDATIONS ─────────────────────────────────────
-            const recommendations = []
-            if (firstHalfPct >= 60)
-              recommendations.push("Your best earnings happen early — open with high energy and a strong tip goal right away")
-            if (firstHalfPct <= 35)
-              recommendations.push("Slow start detected — open with a countdown goal or shoutout to get early tipping momentum")
-            if (topTippers[0] && topTippers[0].pct >= 50)
-              recommendations.push(`Retain ${topTippers[0].username} — they drove half your session. Give them public recognition next time`)
-            if (s.uniqueFans <= 2 && s.tipCount > 10)
-              recommendations.push("Diversify your audience — most tips came from 1–2 fans. Engage lurkers with low-barrier goals")
-            if (durationMins < 30 && s.totalUSD > 0)
-              recommendations.push(`You earned $${s.totalUSD} in ${Math.round(durationMins)} min. Extending to 45–60 min could 2x your earnings`)
-            if (spikes.length >= 2)
-              recommendations.push("Multiple spike moments detected — identify what triggered them and recreate it intentionally")
-            if (revenuePerMin > 0 && revenuePerMin < 0.10)
-              recommendations.push("Low revenue per minute — try setting a token goal every 15 min to maintain tipping momentum")
-            if (performance === "high")
-              recommendations.push("Replicate this stream: same time, same platform, similar energy — your data supports it")
-            if (recommendations.length === 0)
-              recommendations.push("Keep streaming consistently — more data helps us give you sharper recommendations")
-
-            return {
-              buckets, peakTime, peakBucket, firstHalfPct,
-              topTippers, spikes, performance, revenuePerMin,
-              insights, recommendations,
-            }
-          }
-
-          // ── PERFORMANCE BADGE CONFIG ────────────────────────────────
-          const PERF = {
-            high:    { label: "🔥 High Performing", color: "#10B981", bg: "rgba(16,185,129,0.1)",  border: "rgba(16,185,129,0.3)" },
-            average: { label: "📊 Average",          color: "#F59E0B", bg: "rgba(245,158,11,0.1)", border: "rgba(245,158,11,0.25)" },
-            low:     { label: "📉 Underperforming",  color: "#F87171", bg: "rgba(248,113,113,0.1)", border: "rgba(248,113,113,0.25)" },
-          }
-
-          const avgSession = sessions.length ? sessions.reduce((s,x) => s+x.totalUSD,0)/sessions.length : 0
-
-          return (
-            <div>
-              <div style={{ marginBottom: 24 }}>
-                <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 4 }}>🎥 Session Breakdown</h1>
-                <p style={{ fontSize: 13, color: C.muted }}>What happened in each stream and how to earn more next time</p>
-              </div>
-
-              {/* OVERVIEW STATS BAR */}
-              {sessions.length > 0 && (
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 28 }}>
-                  {[
-                    { label: "Total Sessions", value: sessions.length, color: C.cyan },
-                    { label: "Avg Earnings", value: `$${avgSession.toFixed(2)}`, color: C.green },
-                    { label: "Best Session", value: `$${Math.max(...sessions.map(s => s.totalUSD)).toFixed(2)}`, color: C.gold },
-                    { label: "Total Earned", value: `$${sessions.reduce((s,x) => s+x.totalUSD,0).toFixed(2)}`, color: C.pink },
-                  ].map(({ label, value, color }) => (
-                    <div key={label} style={{ ...glassCard, borderRadius: 12, padding: "16px 18px" }}>
-                      <div style={{ fontSize: 11, color: C.muted, marginBottom: 4, textTransform: "uppercase" }}>{label}</div>
-                      <div style={{ fontSize: 22, fontWeight: 800, color }}>{value}</div>
                     </div>
                   ))}
                 </div>
-              )}
-
-              {/* SESSION CARDS — ALL of them, fully broken down */}
-              {sessions.length === 0 && (
-                <div style={{ ...glassCard, borderRadius: 14, padding: 40, textAlign: "center" }}>
-                  <div style={{ fontSize: 40, marginBottom: 12 }}>🎥</div>
-                  <div style={{ fontSize: 16, fontWeight: 700, color: C.white }}>No sessions yet</div>
-                  <div style={{ fontSize: 13, color: C.muted, marginTop: 6 }}>Import your CSV data to see session breakdowns</div>
-                </div>
-              )}
-
-              {sessions.map((s, si) => {
-                const bd = getSessionBreakdown(s)
-                if (!bd) return null
-                const perf = PERF[bd.performance]
-                const maxBucketUSD = Math.max(...bd.buckets.map(b => b.usd), 0.01)
-                const fmt = dt => new Date(dt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-
-                return (
-                  <div key={si} style={{ ...glassCard, borderRadius: 16, marginBottom: 24, overflow: "hidden" }}>
-
-                    {/* SESSION HEADER */}
-                    <div style={{ padding: "20px 24px", borderBottom: "1px solid rgba(255,255,255,0.07)", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
-                      <div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
-                          <span style={{ fontSize: 16, fontWeight: 800, color: C.white }}>
-                            {new Date(s.startTime).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
-                          </span>
-                          <span style={{ fontSize: 13, color: C.muted }}>{fmt(s.startTime)} → {fmt(s.endTime)}</span>
-                          <span style={{ fontSize: 12, color: C.muted }}>• {s.platform}</span>
-                        </div>
-                        <span style={{ padding: "3px 10px", borderRadius: 20, background: perf.bg, border: `1px solid ${perf.border}`, fontSize: 11, fontWeight: 700, color: perf.color }}>{perf.label}</span>
-                      </div>
-                      <div style={{ textAlign: "right" }}>
-                        <div style={{ fontSize: 28, fontWeight: 900, color: C.green }}>${s.totalUSD.toFixed(2)}</div>
-                        <div style={{ fontSize: 12, color: C.muted }}>{Math.round(s.durationMinutes)} min • ${bd.revenuePerMin.toFixed(2)}/min</div>
-                      </div>
-                    </div>
-
-                    <div style={{ padding: 24 }}>
-
-                      {/* REVENUE GAP — vs last 5 sessions */}
-                      {(() => {
-                        const recentSessions = sessions.filter(x => x.id !== s.id && !x.durationUnknown)
-                        const comparable = recentSessions.filter(x => x.platform === s.platform).slice(-5)
-                        const base = comparable.length >= 3 ? comparable : recentSessions.slice(-5)
-                        if (base.length < 2 || s.durationUnknown) return null
-                        const expected = base.reduce((a, x) => a + x.totalUSD, 0) / base.length
-                        const gap = expected - s.totalUSD
-                        const gapPct = expected > 0 ? Math.round((gap / expected) * 100) : 0
-                        if (Math.abs(gapPct) < 10) return null
-                        const isUnder = gap > 0
-                        const color = isUnder ? C.red : C.green
-                        const bg    = isUnder ? "rgba(248,113,113,0.06)" : "rgba(16,185,129,0.06)"
-                        const bdr   = isUnder ? "rgba(248,113,113,0.25)" : "rgba(16,185,129,0.25)"
-                        return (
-                          <div style={{ padding: "10px 14px", borderRadius: 10, background: bg, border: `1px solid ${bdr}`, marginBottom: 14, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                            <span style={{ fontSize: 13, color, fontWeight: 600 }}>
-                              {isUnder ? `⚠️ $${gap.toFixed(0)} below your avg session ($${expected.toFixed(0)}) — ${gapPct}% shortfall` : `✅ $${Math.abs(gap).toFixed(0)} above your avg session — top ${Math.abs(gapPct)}% performance`}
-                            </span>
-                          </div>
-                        )
-                      })()}
-
-                      {/* CORE METRICS */}
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 10, marginBottom: 16 }}>
-                        {[
-                          { label: "Tips",        value: s.tipCount,                    color: C.cyan  },
-                          { label: "Unique Fans", value: s.uniqueFans,                  color: C.pink  },
-                          { label: "Avg Tip",     value: `$${s.avgTipSize}`,            color: C.gold  },
-                          { label: "$/Hour",      value: s.usdPerHour !== null ? `$${s.usdPerHour}` : "—",  color: C.green },
-                          { label: "$/Min",       value: s.usdPerMinute !== null ? `$${s.usdPerMinute}` : "—", color: C.cyan },
-                        ].map(({ label, value, color }) => (
-                          <div key={label} style={{ padding: "12px 14px", background: "rgba(255,255,255,0.04)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.06)" }}>
-                            <div style={{ fontSize: 10, color: C.muted, marginBottom: 4, textTransform: "uppercase" }}>{label}</div>
-                            <div style={{ fontSize: 18, fontWeight: 800, color }}>{value}</div>
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* VELOCITY + CONCENTRATION ROW */}
-                      {(s.velocityTrend !== 'unknown' || s.topContributorPct >= 40) && (
-                        <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
-                          {s.velocityTrend !== 'unknown' && (() => {
-                            const vConfig = {
-                              growing: { icon: "📈", label: "Momentum building", color: C.green, bg: "rgba(16,185,129,0.08)", border: "rgba(16,185,129,0.25)" },
-                              dying:   { icon: "📉", label: "Earnings slowing", color: C.red,   bg: "rgba(248,113,113,0.08)", border: "rgba(248,113,113,0.25)" },
-                              steady:  { icon: "➡️", label: "Steady pace",       color: C.muted, bg: "rgba(255,255,255,0.04)", border: "rgba(255,255,255,0.1)" },
-                            }
-                            const v = vConfig[s.velocityTrend]
-                            const pctChange = s.firstHalfUPM && s.secondHalfUPM
-                              ? Math.round(Math.abs((s.secondHalfUPM - s.firstHalfUPM) / s.firstHalfUPM) * 100)
-                              : null
-                            return (
-                              <div style={{ flex: 1, minWidth: 180, padding: "10px 14px", borderRadius: 10, background: v.bg, border: `1px solid ${v.border}`, display: "flex", alignItems: "center", gap: 8 }}>
-                                <span style={{ fontSize: 16 }}>{v.icon}</span>
-                                <div>
-                                  <div style={{ fontSize: 12, fontWeight: 700, color: v.color }}>{v.label}</div>
-                                  {pctChange !== null && (
-                                    <div style={{ fontSize: 11, color: C.muted }}>
-                                      {s.velocityTrend === 'growing' ? `+${pctChange}%` : s.velocityTrend === 'dying' ? `-${pctChange}%` : '~0%'} vs first half
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            )
-                          })()}
-                          {s.topContributorPct >= 40 && (
-                            <div style={{ flex: 1, minWidth: 200, padding: "10px 14px", borderRadius: 10, background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.25)", display: "flex", alignItems: "center", gap: 8 }}>
-                              <span style={{ fontSize: 16 }}>⚠️</span>
-                              <div>
-                                <div style={{ fontSize: 12, fontWeight: 700, color: C.gold }}>{s.topContributorPct}% from one fan</div>
-                                <div style={{ fontSize: 11, color: C.muted }}>{s.topContributor} drove most of this session</div>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      {/* TIMELINE CHART — animated bars + hover tooltip */}
-                      {bd.buckets.length > 1 && (() => {
-                        return (
-                          <div style={{ marginBottom: 24 }}>
-                            <div style={{ fontSize: 12, fontWeight: 600, color: C.muted, marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>⏱ Earnings Timeline (5-min buckets)</div>
-                            <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 80, padding: "0 0 4px", position: "relative" }}>
-                              {bd.buckets.map((b, bi) => {
-                                const heightPct = maxBucketUSD > 0 ? (b.usd / maxBucketUSD) : 0
-                                const isPeak = bi === bd.buckets.indexOf(bd.peakBucket)
-                                const barColor = isPeak ? C.gold : b.usd > 0 ? C.cyan : "rgba(255,255,255,0.06)"
-                                const barGlow = isPeak ? `0 0 8px ${C.gold}80` : b.usd > 0 ? `0 0 6px rgba(34,211,238,0.3)` : "none"
-                                return (
-                                  <div key={bi}
-                                    title={b.usd > 0 ? `${b.label}: $${b.usd.toFixed(2)}` : b.label}
-                                    style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "flex-end", height: "100%", cursor: b.usd > 0 ? "pointer" : "default", position: "relative" }}
-                                    onMouseEnter={e => {
-                                      if (b.usd <= 0) return
-                                      const bar = e.currentTarget.querySelector('.session-bar')
-                                      if (bar) { bar.style.opacity = '0.75'; bar.style.boxShadow = barGlow }
-                                      const tip = e.currentTarget.querySelector('.bar-tooltip')
-                                      if (tip) tip.style.display = 'block'
-                                    }}
-                                    onMouseLeave={e => {
-                                      const bar = e.currentTarget.querySelector('.session-bar')
-                                      if (bar) { bar.style.opacity = '1'; bar.style.boxShadow = isPeak ? barGlow : 'none' }
-                                      const tip = e.currentTarget.querySelector('.bar-tooltip')
-                                      if (tip) tip.style.display = 'none'
-                                    }}>
-                                    {/* Tooltip */}
-                                    {b.usd > 0 && (
-                                      <div className="bar-tooltip" style={{ display: "none", position: "absolute", bottom: "100%", left: "50%", transform: "translateX(-50%)", marginBottom: 4, background: "rgba(5,7,15,0.95)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 6, padding: "4px 8px", whiteSpace: "nowrap", zIndex: 10, pointerEvents: "none" }}>
-                                        <div style={{ fontSize: 11, fontWeight: 700, color: isPeak ? C.gold : C.white }}>${b.usd.toFixed(2)}</div>
-                                        <div style={{ fontSize: 9, color: C.muted }}>{b.label} {b.count > 0 ? `· ${b.count} tip${b.count !== 1 ? 's' : ''}` : ''}</div>
-                                      </div>
-                                    )}
-                                    {/* Bar */}
-                                    <div className="session-bar" style={{
-                                      width: "100%",
-                                      height: `${Math.max(heightPct * 100, b.usd > 0 ? 5 : 2)}%`,
-                                      background: barColor,
-                                      borderRadius: "3px 3px 0 0",
-                                      boxShadow: isPeak ? barGlow : "none",
-                                      transition: "height 0.4s cubic-bezier(0.34,1.56,0.64,1), opacity 0.15s",
-                                      minHeight: b.usd > 0 ? 5 : 2,
-                                      animation: `growBar 0.5s cubic-bezier(0.34,1.56,0.64,1) ${bi * 0.015}s both`,
-                                    }} />
-                                  </div>
-                                )
-                              })}
-                            </div>
-                            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
-                              <span style={{ fontSize: 9, color: C.muted }}>{fmt(s.startTime)}</span>
-                              {bd.spikes.length > 0 && <span style={{ fontSize: 9, color: C.gold }}>🔥 Peak at {bd.spikes[0].time} · ${bd.spikes[0].usd}</span>}
-                              <span style={{ fontSize: 9, color: C.muted }}>{fmt(s.endTime)}</span>
-                            </div>
-                          </div>
-                        )
-                      })()}
-
-                      {/* FIRST HALF vs SECOND HALF */}
-                      <div style={{ marginBottom: 24 }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                          <div style={{ fontSize: 12, fontWeight: 600, color: C.muted, textTransform: "uppercase", letterSpacing: 0.5 }}>📊 Session Pacing</div>
-                          <div style={{ display: "flex", gap: 14, fontSize: 11, color: C.muted }}>
-                            <span style={{ color: C.cyan }}>First half {bd.firstHalfPct}%</span>
-                            <span>Second half {100 - bd.firstHalfPct}%</span>
-                          </div>
-                        </div>
-                        <div style={{ display: "flex", height: 32, borderRadius: 8, overflow: "hidden", border: "1px solid rgba(255,255,255,0.08)", cursor: "default" }}>
-                          <div style={{ width: `${bd.firstHalfPct}%`, background: "linear-gradient(90deg, #22D3EE, #60A5FA)", display: "flex", alignItems: "center", justifyContent: "center", transition: "width 0.6s cubic-bezier(0.34,1.56,0.64,1)", minWidth: bd.firstHalfPct > 0 ? 2 : 0 }}>
-                            {bd.firstHalfPct >= 25 && <span style={{ fontSize: 11, fontWeight: 800, color: "#fff" }}>${(s.totalUSD * bd.firstHalfPct / 100).toFixed(0)}</span>}
-                          </div>
-                          <div style={{ flex: 1, background: "rgba(255,255,255,0.06)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                            {100 - bd.firstHalfPct >= 25 && <span style={{ fontSize: 11, color: C.muted }}>${(s.totalUSD * (100 - bd.firstHalfPct) / 100).toFixed(0)}</span>}
-                          </div>
-                        </div>
-                        <div style={{ fontSize: 11, color: C.muted, marginTop: 6 }}>
-                          {bd.firstHalfPct >= 60 ? "💡 Strong opening — most earnings in first half" :
-                           bd.firstHalfPct <= 35 ? "💡 Slow start — earnings built momentum in second half" :
-                           "💡 Balanced pacing — earnings spread evenly"}
-                        </div>
-                      </div>
-
-                      {/* TOP TIPPERS */}
-                      {bd.topTippers.length > 0 && (
-                        <div style={{ marginBottom: 24 }}>
-                          <div style={{ fontSize: 12, fontWeight: 600, color: C.muted, marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>🏆 Top Contributors</div>
-                          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                            {bd.topTippers.map((t, ti) => (
-                              <div key={ti} style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                                <span style={{ fontSize: 14, flexShrink: 0 }}>{["🥇","🥈","🥉"][ti]}</span>
-                                <span style={{ fontSize: 13, color: C.white, fontWeight: 600, minWidth: 100 }}>{t.username}</span>
-                                <div style={{ flex: 1, height: 6, borderRadius: 3, background: "rgba(255,255,255,0.06)", overflow: "hidden" }}>
-                                  <div style={{ height: "100%", width: `${t.pct}%`, background: ti === 0 ? `linear-gradient(90deg, ${C.gold}, ${C.orange})` : ti === 1 ? C.cyan : C.muted, borderRadius: 3 }} />
-                                </div>
-                                <span style={{ fontSize: 12, color: C.green, fontWeight: 700, flexShrink: 0 }}>${t.usd}</span>
-                                <span style={{ fontSize: 11, color: C.muted, flexShrink: 0 }}>{t.pct}%</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* INSIGHTS + RECOMMENDATIONS side by side */}
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-                        {/* INSIGHTS */}
-                        <div style={{ padding: "14px 16px", background: "rgba(34,211,238,0.06)", border: "1px solid rgba(34,211,238,0.2)", borderRadius: 12 }}>
-                          <div style={{ fontSize: 12, fontWeight: 700, color: C.cyan, marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>💡 What Happened</div>
-                          <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-                            {bd.insights.map((ins, ii) => (
-                              <div key={ii} style={{ fontSize: 12, color: C.text, lineHeight: 1.5, display: "flex", gap: 6 }}>
-                                <span style={{ color: C.cyan, flexShrink: 0 }}>→</span>
-                                <span>{ins}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                        {/* RECOMMENDATIONS */}
-                        <div style={{ padding: "14px 16px", background: "rgba(236,72,153,0.06)", border: "1px solid rgba(236,72,153,0.2)", borderRadius: 12 }}>
-                          <div style={{ fontSize: 12, fontWeight: 700, color: C.pink, marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>🚀 Do This Next Time</div>
-                          <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-                            {bd.recommendations.map((rec, ri) => (
-                              <div key={ri} style={{ fontSize: 12, color: C.text, lineHeight: 1.5, display: "flex", gap: 6 }}>
-                                <span style={{ color: C.pink, flexShrink: 0 }}>•</span>
-                                <span>{rec}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-
-                    </div>
+                {!isPro && (
+                  <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "rgba(5,7,15,0.75)", backdropFilter: "blur(2px)", borderRadius: 14 }}>
+                    <div style={{ fontSize: 28, marginBottom: 8 }}>🔒</div>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: C.white, marginBottom: 4 }}>+{sessions.length - 3} more sessions locked</div>
+                    <div style={{ fontSize: 12, color: C.muted, marginBottom: 16 }}>Full session history, deep analytics & trends</div>
+                    <button onClick={() => openUpgradeModal('sessions')} style={{ padding: "10px 28px", borderRadius: 10, background: "linear-gradient(135deg,#3b82f6,#ec4899)", border: "none", color: C.white, fontSize: 14, fontWeight: 700, cursor: "pointer", boxShadow: "0 0 30px rgba(59,130,246,0.4)" }}>
+                      🔓 Unlock Full History
+                    </button>
                   </div>
-                )
-              })}
-            </div>
-          )
-        })()}
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         {activeTab === "data" && (
           <div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
               <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white }}>📝 Edit Data</h1>
-
-            {/* TOKEN RATE CONFIGURATOR */}
-            <div style={{ ...glassCard, borderRadius: 14, padding: 20, marginBottom: 20 }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: showRateEditor ? 16 : 0 }}>
-                <div>
-                  <div style={{ fontSize: 15, fontWeight: 700, color: C.white }}>⚙️ Token → USD Rates</div>
-                  <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>Configurable per platform. Default is $0.05/token (Chaturbate standard)</div>
-                </div>
-                <button onClick={() => setShowRateEditor(v => !v)} style={{ padding: "6px 14px", borderRadius: 8, background: "rgba(34,211,238,0.12)", border: "1px solid rgba(34,211,238,0.3)", color: C.cyan, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
-                  {showRateEditor ? "▲ Close" : "✏️ Edit Rates"}
-                </button>
-              </div>
-              {showRateEditor && (
-                <div>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: 12 }}>
-                    {Object.entries(tokenRates).map(([plat, rate]) => (
-                      <div key={plat} style={{ padding: "12px 14px", background: "rgba(255,255,255,0.04)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.08)" }}>
-                        <div style={{ fontSize: 11, color: C.muted, marginBottom: 6, textTransform: "uppercase" }}>{plat}</div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                          <span style={{ fontSize: 13, color: C.muted }}>$</span>
-                          <input
-                            type="number" step="0.001" min="0.001" max="1"
-                            value={rate}
-                            onChange={e => setTokenRates(r => ({ ...r, [plat]: parseFloat(e.target.value) || 0.05 }))}
-                            style={{ flex: 1, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 6, padding: "6px 8px", color: C.white, fontSize: 13, outline: "none" }}
-                          />
-                          <span style={{ fontSize: 11, color: C.muted }}>/token</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  <div style={{ fontSize: 11, color: C.muted, padding: "8px 12px", background: "rgba(245,158,11,0.06)", border: "1px solid rgba(245,158,11,0.15)", borderRadius: 8 }}>
-                    💡 Chaturbate pays $0.05/token to broadcasters. BongaCams, Stripchat, and others vary — check your payout page. Changes apply to new uploads only.
-                  </div>
-                </div>
-              )}
-            </div>
               <button onClick={() => setShowDeleteConfirm(true)} style={{ padding: "10px 20px", borderRadius: 8, background: "rgba(248,113,113,0.15)", border: "1px solid rgba(248,113,113,0.3)", color: C.red, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>🗑️ Delete All Tips</button>
             </div>
 
@@ -3959,42 +1853,17 @@ const handleCSV = async (file, forcePlatform = null) => {
           <div style={{ maxWidth: 600, margin: "0 auto" }}>
             <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 8 }}>📥 Import CSV</h1>
             <p style={{ fontSize: 14, color: C.muted, marginBottom: 32 }}>Unlimited uploads during free beta • Auto-removes duplicates</p>
-            <div style={{ ...glassCard, borderRadius: 14, padding: 32, marginBottom: 16 }}>
-              <div style={{ marginBottom: 20 }}>
-                <label style={{ fontSize: 12, color: C.muted, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8, display: "block" }}>Platform (optional — helps if auto-detect fails)</label>
-                <select value={uploadPlatform} onChange={e => setUploadPlatform(e.target.value)}
-                  style={{ width: "100%", padding: "10px 14px", borderRadius: 9, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: C.white, fontSize: 14, outline: "none" }}>
-                  <option value="">Auto-detect (recommended)</option>
-                  <option value="Chaturbate">Chaturbate</option>
-                  <option value="BongaCams">BongaCams</option>
-                  <option value="MyFreeCams">MyFreeCams</option>
-                  <option value="Stripchat">Stripchat</option>
-                  <option value="CamSoda">CamSoda</option>
-                </select>
-              </div>
-              <div style={{ textAlign: "center" }}>
-                <div style={{ fontSize: 40, marginBottom: 12 }}>📁</div>
-                <label style={{ display: "inline-block", padding: "14px 32px", borderRadius: 10, background: "linear-gradient(135deg, #22D3EE, #EC4899)", boxShadow: "0 0 20px rgba(34,211,238,0.4), 0 0 40px rgba(236,72,153,0.3)", color: C.white, fontSize: 15, fontWeight: 600, cursor: "pointer" }}>
-                  {uploading ? "Processing..." : "Choose CSV File"}
-                  <input type="file" accept=".csv,.txt" style={{ display: "none" }} onChange={e => handleCSV(e.target.files[0], uploadPlatform || null)} disabled={uploading} />
-                </label>
-                <p style={{ fontSize: 12, color: C.muted, marginTop: 12 }}>Supports Chaturbate, BongaCams, MyFreeCams, Stripchat, CamSoda</p>
-              </div>
-            </div>
-            <div style={{ padding: "12px 16px", borderRadius: 10, background: "rgba(34,211,238,0.05)", border: "1px solid rgba(34,211,238,0.15)", fontSize: 12, color: C.muted }}>
-              <strong style={{ color: C.cyan }}>CSV not loading?</strong> Try selecting your platform from the dropdown above, then re-upload. For Chaturbate: export from Stats & Data → Token Stats. For BongaCams: export from Reports.
+            <div style={{ ...glassCard, borderRadius: 14, padding: 40, textAlign: "center" }}>
+              <div style={{ fontSize: 48, marginBottom: 16 }}>📁</div>
+              <label style={{ display: "inline-block", padding: "14px 32px", borderRadius: 10, background: "linear-gradient(135deg, #22D3EE, #EC4899)", boxShadow: "0 0 20px rgba(34,211,238,0.4), 0 0 40px rgba(236,72,153,0.3)", color: C.white, fontSize: 15, fontWeight: 600, cursor: "pointer" }}>
+                {uploading ? "Processing..." : "Choose CSV File"}
+                <input type="file" accept=".csv" style={{ display: "none" }} onChange={e => handleCSV(e.target.files[0])} disabled={uploading} />
+              </label>
             </div>
           </div>
         )}
 
-        {activeTab === "titles" && (
-          <div>
-            <TitleGenerator C={C} glassCard={glassCard} analytics={analytics} tips={tips} sessions={sessions} whales={whales} />
-            <div style={{ marginTop: 40, paddingTop: 32, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
-              <HashtagGenerator C={C} glassCard={glassCard} />
-            </div>
-          </div>
-        )}
+        {activeTab === "titles" && <TitleGenerator C={C} glassCard={glassCard} />}
 
         {activeTab === "help" && (
           <div style={{ maxWidth: 900 }}>
@@ -4121,7 +1990,7 @@ const handleCSV = async (file, forcePlatform = null) => {
         const biggestTip = whaleTips.length ? Math.max(...whaleTips.map(t => t.usd)) : 0
         return (
           <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 20 }}>
-            <div className="modal-inner" style={{ width: 560, maxHeight: "90vh", overflowY: "auto", ...glassCard, borderRadius: 20 }}>
+            <div style={{ width: 560, maxHeight: "90vh", overflowY: "auto", ...glassCard, borderRadius: 20 }}>
               <div style={{ padding: "24px 24px 20px", background: `linear-gradient(135deg, ${tierColor}15, transparent)`, borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
@@ -4271,7 +2140,7 @@ const handleCSV = async (file, forcePlatform = null) => {
         const vibes = ["💕 Reconnect", "🔥 Going Live", "🥰 Appreciation", "😘 Flirty", "👀 FOMO"]
         return (
           <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1001, padding: 20 }}>
-            <div className="modal-inner" style={{ width: 520, ...glassCard, borderRadius: 20, overflow: "hidden" }}>
+            <div style={{ width: 520, ...glassCard, borderRadius: 20, overflow: "hidden" }}>
               <div style={{ padding: "20px 24px", background: "linear-gradient(135deg, rgba(236,72,153,0.2), rgba(124,92,255,0.15))", borderBottom: "1px solid rgba(255,255,255,0.08)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
                   <div style={{ fontSize: 17, fontWeight: 800, color: C.white }}>💌 Message Generator</div>
@@ -4513,181 +2382,6 @@ const handleCSV = async (file, forcePlatform = null) => {
                 </>
               )}
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* FAN SEARCH MODAL */}
-      {fanSearchOpen && (() => {
-        const q = fanSearchQuery.toLowerCase().trim()
-        const results = q.length < 1 ? [] : whales.filter(w => w.username?.toLowerCase().includes(q)).slice(0, 8)
-        return (
-          <div onClick={() => { setFanSearchOpen(false); setFanSearchQuery("") }} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 1010, padding: "80px 20px 20px" }}>
-            <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 540, background: "rgba(15,20,32,0.98)", backdropFilter: "blur(24px)", borderRadius: 20, border: "1px solid rgba(255,255,255,0.1)", boxShadow: "0 0 80px rgba(59,130,246,0.2)", overflow: "hidden" }}>
-              <div style={{ height: 3, background: "linear-gradient(90deg, #3b82f6, #a855f7, #ec4899)" }} />
-              <div style={{ padding: 24 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16, background: "rgba(255,255,255,0.05)", borderRadius: 12, border: "1px solid rgba(255,255,255,0.1)", padding: "10px 14px" }}>
-                  <span style={{ fontSize: 16, flexShrink: 0 }}>🔍</span>
-                  <input
-                    autoFocus
-                    value={fanSearchQuery}
-                    onChange={e => setFanSearchQuery(e.target.value)}
-                    placeholder="Search by username..."
-                    style={{ flex: 1, background: "none", border: "none", outline: "none", color: C.white, fontSize: 15, fontFamily: "inherit" }}
-                  />
-                  {fanSearchQuery && (
-                    <button onClick={() => setFanSearchQuery("")} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 16, padding: 0, lineHeight: 1 }}>✕</button>
-                  )}
-                </div>
-
-                {q.length < 1 && (
-                  <p style={{ textAlign: "center", color: C.muted, fontSize: 13, padding: "20px 0" }}>Type a username to search your fans</p>
-                )}
-
-                {q.length >= 1 && results.length === 0 && (
-                  <p style={{ textAlign: "center", color: C.muted, fontSize: 13, padding: "20px 0" }}>No fans found matching "{fanSearchQuery}"</p>
-                )}
-
-                {results.map((w, i) => (
-                  <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px", borderRadius: 12, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", marginBottom: 8 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                      <div style={{ width: 36, height: 36, borderRadius: "50%", background: "linear-gradient(135deg, rgba(59,130,246,0.3), rgba(236,72,153,0.3))", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 700, color: C.white, flexShrink: 0 }}>
-                        {w.username?.[0]?.toUpperCase() || "?"}
-                      </div>
-                      <div>
-                        <div style={{ fontSize: 14, fontWeight: 700, color: C.white }}>{w.username}</div>
-                        <div style={{ fontSize: 11, color: C.muted }}>{w.platform} · {w.tipCount} tips · last {new Date(w.lastTipDate).toLocaleDateString()}</div>
-                      </div>
-                    </div>
-                    <div style={{ textAlign: "right" }}>
-                      <div style={{ fontSize: 15, fontWeight: 700, color: C.green }}>${w.totalUSD.toFixed(2)}</div>
-                      <span style={{ padding: "3px 8px", borderRadius: 100, background: `${TIER_COLORS[w.tier]}20`, color: TIER_COLORS[w.tier], fontSize: 10, fontWeight: 600 }}>{w.tier}</span>
-                    </div>
-                  </div>
-                ))}
-
-                <div style={{ marginTop: 16, textAlign: "center" }}>
-                  <button onClick={() => { setFanSearchOpen(false); setFanSearchQuery("") }} style={{ padding: "8px 20px", borderRadius: 10, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: C.muted, fontSize: 13, cursor: "pointer" }}>
-                    Close
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )
-      })()}
-
-      {/* SHARE MY STATS MODAL */}
-      {shareModalOpen && (() => {
-        const topFan = whales[0]
-        const bestDayLabel = analyticsbestDay?.day || null
-        const platforms = [...new Set(tips.map(t => t.platform))].join(" & ")
-        const oneTimerPct = whales.length > 0 ? Math.round((whales.filter(w => w.tipCount === 1).length / whales.length) * 100) : 0
-        const cardLines = [
-          `💰 Total Earned: $${totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-          topFan ? `🏆 Top Fan: ${topFan.username} ($${topFan.totalUSD.toFixed(2)})` : null,
-          bestDayLabel ? `📅 Best Day: ${bestDayLabel}s` : null,
-          `👥 ${whales.length} total fans across ${platforms}`,
-          `🔁 ${oneTimerPct}% one-time tippers — that many to win back!`,
-          `\nAnalytics by CamCash → camcashgrl.com`,
-        ].filter(Boolean).join("\n")
-
-        return (
-          <div onClick={() => setShareModalOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.88)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1010, padding: 20 }}>
-            <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 480, background: "rgba(15,20,32,0.98)", backdropFilter: "blur(24px)", borderRadius: 24, border: "1px solid rgba(255,255,255,0.1)", boxShadow: "0 0 80px rgba(236,72,153,0.2)", overflow: "hidden" }}>
-              <div style={{ height: 4, background: "linear-gradient(90deg, #ec4899, #a855f7, #3b82f6)" }} />
-              <div style={{ padding: 32 }}>
-                <h2 style={{ fontSize: 22, fontWeight: 800, color: C.white, marginBottom: 6 }}>📤 Share My Stats</h2>
-                <p style={{ fontSize: 13, color: C.muted, marginBottom: 24 }}>Copy your earnings snapshot to flex on Twitter or in cam communities</p>
-
-                {/* Stats card preview */}
-                <div style={{ background: "linear-gradient(135deg, rgba(59,130,246,0.1), rgba(236,72,153,0.1))", borderRadius: 16, border: "1px solid rgba(255,255,255,0.1)", padding: 20, marginBottom: 20, fontFamily: "monospace" }}>
-                  {cardLines.split("\n").map((line, i) => (
-                    <div key={i} style={{ fontSize: 13, color: line.startsWith("Analytics") ? C.cyan : C.white, lineHeight: 1.9, fontWeight: line.startsWith("Analytics") ? 600 : 400 }}>{line}</div>
-                  ))}
-                </div>
-
-                <div style={{ display: "flex", gap: 10 }}>
-                  <button
-                    onClick={() => { navigator.clipboard.writeText(cardLines); setShareModalOpen(false); setToast("Copied to clipboard! 🎉") }}
-                    style={{ flex: 1, padding: "12px", borderRadius: 12, background: "linear-gradient(135deg, #ec4899, #a855f7)", border: "none", color: C.white, fontSize: 14, fontWeight: 700, cursor: "pointer", boxShadow: "0 0 20px rgba(236,72,153,0.3)" }}>
-                    📋 Copy to Clipboard
-                  </button>
-                  <button
-                    onClick={() => { const encoded = encodeURIComponent(cardLines); window.open(`https://twitter.com/intent/tweet?text=${encoded}`, "_blank") }}
-                    style={{ flex: 1, padding: "12px", borderRadius: 12, background: "rgba(29,161,242,0.15)", border: "1px solid rgba(29,161,242,0.4)", color: "#1DA1F2", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
-                    𝕏 Post to Twitter
-                  </button>
-                </div>
-
-                <button onClick={() => setShareModalOpen(false)} style={{ width: "100%", marginTop: 12, padding: "10px", borderRadius: 10, background: "transparent", border: "none", color: C.muted, fontSize: 13, cursor: "pointer" }}>
-                  Cancel
-                </button>
-              </div>
-            </div>
-          </div>
-        )
-      })()}
-
-      {/* ── WALKTHROUGH MODAL ─────────────────────────────────────── */}
-      {showWalkthrough && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 2000, padding: 20 }}>
-          <div style={{ width: "100%", maxWidth: 480, background: "linear-gradient(135deg, #1e293b, #0f172a)", borderRadius: 20, border: "1px solid rgba(255,255,255,0.1)", overflow: "hidden", boxShadow: "0 0 60px rgba(34,211,238,0.15)" }}>
-            {/* Header */}
-            <div style={{ padding: "24px 28px 0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div style={{ display: "flex", gap: 8 }}>
-                {[1, 2].map(s => (
-                  <div key={s} style={{ width: s === walkthroughStep ? 24 : 8, height: 8, borderRadius: 4, background: s === walkthroughStep ? "#22D3EE" : "rgba(255,255,255,0.15)", transition: "all 0.3s" }} />
-                ))}
-              </div>
-              <button onClick={dismissWalkthrough} style={{ background: "none", border: "none", color: "#475569", cursor: "pointer", fontSize: 20, lineHeight: 1, padding: 4 }}>✕</button>
-            </div>
-
-            {/* Step 1 — Import CSV */}
-            {walkthroughStep === 1 && (
-              <div style={{ padding: "20px 28px 28px" }}>
-                <div style={{ fontSize: 40, marginBottom: 12 }}>📥</div>
-                <div style={{ fontSize: 22, fontWeight: 800, color: "white", marginBottom: 8 }}>Start by importing your CSV</div>
-                <div style={{ fontSize: 14, color: "#94a3b8", lineHeight: 1.7, marginBottom: 24 }}>
-                  CamCash works by reading your earnings data directly from your platform CSV files. Export from Chaturbate, BongaCams, or MyFreeCams and upload it here — your full earnings history loads instantly.
-                </div>
-                <div style={{ padding: "14px 16px", background: "rgba(34,211,238,0.08)", border: "1px solid rgba(34,211,238,0.2)", borderRadius: 12, marginBottom: 24, fontSize: 13, color: "#94a3b8", lineHeight: 1.7 }}>
-                  💡 <strong style={{ color: "white" }}>Chaturbate:</strong> Token Stats → Download CSV<br/>
-                  💡 <strong style={{ color: "white" }}>BongaCams:</strong> Earnings → Export<br/>
-                  💡 <strong style={{ color: "white" }}>MyFreeCams:</strong> Account → Transaction History
-                </div>
-                <div style={{ display: "flex", gap: 10 }}>
-                  <button onClick={() => { setActiveTab("upload"); setShowWalkthrough(false) }} style={{ flex: 1, padding: "13px 0", borderRadius: 10, background: "linear-gradient(135deg, #3b82f6, #ec4899)", border: "none", color: "white", fontWeight: 700, fontSize: 14, cursor: "pointer", boxShadow: "0 4px 20px rgba(236,72,153,0.3)" }}>
-                    Go to Import →
-                  </button>
-                  <button onClick={() => setWalkthroughStep(2)} style={{ padding: "13px 18px", borderRadius: 10, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: "#94a3b8", fontWeight: 600, fontSize: 14, cursor: "pointer" }}>
-                    Next
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Step 2 — CSV Help */}
-            {walkthroughStep === 2 && (
-              <div style={{ padding: "20px 28px 28px" }}>
-                <div style={{ fontSize: 40, marginBottom: 12 }}>📋</div>
-                <div style={{ fontSize: 22, fontWeight: 800, color: "white", marginBottom: 8 }}>Need help with your CSV?</div>
-                <div style={{ fontSize: 14, color: "#94a3b8", lineHeight: 1.7, marginBottom: 24 }}>
-                  The CSV Help section has step-by-step guides for every platform — exactly where to find your export, what format to use, and how to fix common issues.
-                </div>
-                <div style={{ padding: "14px 16px", background: "rgba(168,85,247,0.08)", border: "1px solid rgba(168,85,247,0.2)", borderRadius: 12, marginBottom: 24, fontSize: 13, color: "#94a3b8", lineHeight: 1.7 }}>
-                  📌 If your CSV isn't uploading correctly, the CSV Help tab has specific fixes for each platform's format quirks.
-                </div>
-                <div style={{ display: "flex", gap: 10 }}>
-                  <button onClick={() => { setActiveTab("help"); dismissWalkthrough() }} style={{ flex: 1, padding: "13px 0", borderRadius: 10, background: "linear-gradient(135deg, #a855f7, #3b82f6)", border: "none", color: "white", fontWeight: 700, fontSize: 14, cursor: "pointer", boxShadow: "0 4px 20px rgba(168,85,247,0.3)" }}>
-                    Go to CSV Help →
-                  </button>
-                  <button onClick={dismissWalkthrough} style={{ padding: "13px 18px", borderRadius: 10, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: "#94a3b8", fontWeight: 600, fontSize: 14, cursor: "pointer" }}>
-                    Done
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
         </div>
       )}
