@@ -2069,7 +2069,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                   </div>
                   </div>
 
-                  {heatmapDrillDay && (() => {
+                  
                     const dayLong = { Sun:'Sunday', Mon:'Monday', Tue:'Tuesday', Wed:'Wednesday', Thu:'Thursday', Fri:'Friday', Sat:'Saturday' }[heatmapDrillDay]
                     const fmtH2 = h => { const n = parseInt(h); return n === 0 ? '12 AM' : n < 12 ? `${n} AM` : n === 12 ? '12 PM' : `${n-12} PM` }
 
