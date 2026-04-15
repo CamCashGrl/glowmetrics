@@ -1,114 +1,12 @@
 "use client"
-import { useState, useEffect } from "react"
+import { useState, useEffect, memo, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
 
-export default function LandingPage() {
-  const router = useRouter()
+// ── Auth panel as a proper top-level component so inputs never remount ──
+const AuthPanel = memo(function AuthPanel({ isSignUp, setIsSignUp, email, setEmail, password, setPassword,
+  authLoading, authError, authMsg, handleAuth, handleForgotPassword, id }) {
 
-  const [msgIndex, setMsgIndex]     = useState(0)
-  const [copied, setCopied]         = useState(false)
-  const [whaleIndex, setWhaleIndex] = useState(0)
-  const [alertIndex, setAlertIndex] = useState(0)
-
-  // Auth panel
-  const [isSignUp, setIsSignUp]     = useState(true)
-  const [email, setEmail]           = useState("")
-  const [password, setPassword]     = useState("")
-  const [authLoading, setAuthLoading] = useState(false)
-  const [authMsg, setAuthMsg]       = useState("")
-  const [authError, setAuthError]   = useState("")
-
-  const messages = [
-    "Hey 😘 I've been thinking about you... I'm live tonight ❤️",
-    "Miss you 💕 come make tonight fun 🔥",
-    "It's been a while… come back 😈",
-  ]
-  const whales = [
-    { name: "user_ULTRAVIP999", spent: "$41,820", inactive: "520 days" },
-    { name: "user_TOPSPENDERX", spent: "$33,140", inactive: "300 days" },
-  ]
-  const alerts = [
-    "You have top spenders you're not tracking.",
-    "You're missing your highest earning hours.",
-    "You have inactive whales worth thousands.",
-    "You could be earning more on a different platform.",
-  ]
-
-  // Staggered intervals
-  useEffect(() => {
-    const a = setInterval(() => {
-      setMsgIndex(p => (p + 1) % messages.length)
-      setWhaleIndex(p => (p + 1) % whales.length)
-    }, 6000)
-    const b = setInterval(() => setAlertIndex(p => (p + 1) % alerts.length), 5000)
-    return () => { clearInterval(a); clearInterval(b) }
-  }, [])
-
-  // Redirect if already logged in
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) router.replace("/dashboard")
-    })
-  }, [])
-
-  const handleCopy = () => {
-    navigator.clipboard.writeText(messages[msgIndex])
-    setCopied(true)
-    setTimeout(() => setCopied(false), 1200)
-  }
-
-  const handleAuth = async (e) => {
-    e.preventDefault()
-    setAuthLoading(true)
-    setAuthError("")
-    setAuthMsg("")
-
-    if (isSignUp) {
-      const { error } = await supabase.auth.signUp({ email, password })
-      if (error) {
-        setAuthError(error.message)
-        setAuthLoading(false)
-      } else {
-        // Check if auto-confirmed (dev/no email confirm)
-        const { data: { user } } = await supabase.auth.getUser()
-        if (user) {
-          router.push("/dashboard")
-        } else {
-          setAuthMsg("Account created! Check your email to confirm, then log in.")
-          setIsSignUp(false)
-          setAuthLoading(false)
-        }
-      }
-    } else {
-      const { error } = await supabase.auth.signInWithPassword({ email, password })
-      if (error) {
-        setAuthError(error.message)
-        setAuthLoading(false)
-      } else {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (user) {
-          const { data: profile } = await supabase
-            .from("beta_users")
-            .select("onboarding_complete")
-            .eq("user_id", user.id)
-            .single()
-          router.push("/dashboard")
-        }
-      }
-    }
-  }
-
-  const handleForgotPassword = async () => {
-    if (!email) { setAuthError("Enter your email first."); return }
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: "https://www.camcashgrl.com/reset-password",
-    })
-    if (error) setAuthError(error.message)
-    else setAuthMsg("Password reset email sent — check your inbox.")
-  }
-
-  // ── Shared input style ──────────────────────────────────────────────
   const inputStyle = {
     width: "100%", padding: "11px 14px", borderRadius: 9,
     background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.1)",
@@ -116,8 +14,7 @@ export default function LandingPage() {
     boxSizing: "border-box", fontFamily: "Inter, sans-serif",
   }
 
-  // ── Auth Panel — shared between hero and bottom CTA ─────────────────
-  const AuthPanel = ({ id }) => (
+  return (
     <div id={id} style={{
       background: "linear-gradient(135deg,#1e293b,#020617)",
       border: "1px solid rgba(255,255,255,0.1)",
@@ -145,7 +42,7 @@ export default function LandingPage() {
       }}>
         {[["Sign Up", true], ["Log In", false]].map(([label, val]) => (
           <button key={label} type="button"
-            onClick={() => { setIsSignUp(val); setAuthError(""); setAuthMsg("") }}
+            onClick={() => setIsSignUp(val)}
             style={{
               flex: 1, padding: "9px 0", fontSize: 13, fontWeight: 600,
               background: isSignUp === val ? "rgba(34,211,238,0.15)" : "transparent",
@@ -162,12 +59,14 @@ export default function LandingPage() {
           value={email} onChange={e => setEmail(e.target.value)} style={inputStyle}
           onFocus={e => e.target.style.borderColor = "#22D3EE"}
           onBlur={e => e.target.style.borderColor = "rgba(255,255,255,0.1)"}
+          autoComplete="email"
         />
         <input type="password" placeholder="Password" required
           value={password} onChange={e => setPassword(e.target.value)}
           style={{ ...inputStyle, marginBottom: isSignUp ? 4 : 0 }}
           onFocus={e => e.target.style.borderColor = "#22D3EE"}
           onBlur={e => e.target.style.borderColor = "rgba(255,255,255,0.1)"}
+          autoComplete={isSignUp ? "new-password" : "current-password"}
         />
 
         {!isSignUp && (
@@ -204,6 +103,107 @@ export default function LandingPage() {
       )}
     </div>
   )
+})
+
+export default function LandingPage() {
+  const router = useRouter()
+
+  const [msgIndex, setMsgIndex]     = useState(0)
+  const [copied, setCopied]         = useState(false)
+  const [whaleIndex, setWhaleIndex] = useState(0)
+  const [alertIndex, setAlertIndex] = useState(0)
+
+  // Auth state — lifted to parent, passed as props to AuthPanel
+  const [isSignUp, setIsSignUp]       = useState(true)
+  const [email, setEmail]             = useState("")
+  const [password, setPassword]       = useState("")
+  const [authLoading, setAuthLoading] = useState(false)
+  const [authMsg, setAuthMsg]         = useState("")
+  const [authError, setAuthError]     = useState("")
+
+  const messages = [
+    "Hey 😘 I've been thinking about you... I'm live tonight ❤️",
+    "Miss you 💕 come make tonight fun 🔥",
+    "It's been a while… come back 😈",
+  ]
+  const whales = [
+    { name: "user_ULTRAVIP999", spent: "$41,820", inactive: "520 days" },
+    { name: "user_TOPSPENDERX", spent: "$33,140", inactive: "300 days" },
+  ]
+  const alerts = [
+    "You have top spenders you're not tracking.",
+    "You're missing your highest earning hours.",
+    "You have inactive whales worth thousands.",
+    "You could be earning more on a different platform.",
+  ]
+
+  useEffect(() => {
+    const a = setInterval(() => {
+      setMsgIndex(p => (p + 1) % messages.length)
+      setWhaleIndex(p => (p + 1) % whales.length)
+    }, 6000)
+    const b = setInterval(() => setAlertIndex(p => (p + 1) % alerts.length), 5000)
+    return () => { clearInterval(a); clearInterval(b) }
+  }, [])
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) router.replace("/dashboard")
+    })
+  }, [])
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(messages[msgIndex])
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1200)
+  }
+
+  const handleAuth = useCallback(async (e) => {
+    e.preventDefault()
+    setAuthLoading(true)
+    setAuthError("")
+    setAuthMsg("")
+
+    if (isSignUp) {
+      const { error } = await supabase.auth.signUp({ email, password })
+      if (error) {
+        setAuthError(error.message)
+        setAuthLoading(false)
+      } else {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user) {
+          router.push("/dashboard")
+        } else {
+          setAuthMsg("Account created! Check your email to confirm, then log in.")
+          setIsSignUp(false)
+          setAuthLoading(false)
+        }
+      }
+    } else {
+      const { error } = await supabase.auth.signInWithPassword({ email, password })
+      if (error) {
+        setAuthError(error.message)
+        setAuthLoading(false)
+      } else {
+        router.push("/dashboard")
+      }
+    }
+  }, [email, password, isSignUp, router])
+
+  const handleForgotPassword = useCallback(async () => {
+    if (!email) { setAuthError("Enter your email first."); return }
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: "https://www.camcashgrl.com/reset-password",
+    })
+    if (error) setAuthError(error.message)
+    else setAuthMsg("Password reset email sent — check your inbox.")
+  }, [email])
+
+  // Shared props for both AuthPanel instances
+  const authProps = {
+    isSignUp, setIsSignUp, email, setEmail, password, setPassword,
+    authLoading, authError, authMsg, handleAuth, handleForgotPassword,
+  }
 
   return (
     <div style={{ minHeight: "100vh", background: "#05070f", color: "#cbd5e1", fontFamily: "Inter, sans-serif" }}>
@@ -241,7 +241,6 @@ export default function LandingPage() {
               ))}
             </div>
 
-            {/* Mobile-only scroll CTA */}
             <button className="mobile-cta-btn"
               onClick={() => document.getElementById("auth-panel-mobile")?.scrollIntoView({ behavior: "smooth" })}
               style={{ display: "none", padding: "14px 36px", borderRadius: 12, background: "linear-gradient(135deg,#3b82f6,#ec4899)", color: "white", fontWeight: 700, fontSize: 16, border: "none", cursor: "pointer", boxShadow: "0 4px 20px rgba(236,72,153,0.3)" }}>
@@ -251,13 +250,13 @@ export default function LandingPage() {
 
           {/* Right: auth panel (desktop only) */}
           <div className="desktop-auth-wrap">
-            <AuthPanel id="auth-panel-desktop" />
+            <AuthPanel id="auth-panel-desktop" {...authProps} />
           </div>
         </div>
 
         {/* Mobile auth panel */}
         <div id="auth-panel-mobile" className="mobile-auth-wrap" style={{ display: "none", marginTop: 36 }}>
-          <AuthPanel id="auth-panel-mobile-inner" />
+          <AuthPanel id="auth-panel-mobile-inner" {...authProps} />
         </div>
       </div>
 
@@ -315,12 +314,6 @@ export default function LandingPage() {
         </div>
       </div>
 
-      {/* ── DASHBOARD PREVIEW ────────────────────────────────────────── */}
-      <div style={{ textAlign:"center", maxWidth:900, margin:"0 auto 40px", padding:"0 24px" }}>
-        <img src="/dashboard-preview.png" style={{ width:"100%", borderRadius:14, border:"1px solid rgba(255,255,255,0.08)" }} alt="CamCash dashboard" />
-        <p style={{ marginTop:10, color:"#64748b", fontSize:13 }}>Instant breakdown of your earnings, fans, and peak times</p>
-      </div>
-
       {/* ── PLATFORM EDGE ────────────────────────────────────────────── */}
       <div style={{ maxWidth:900, margin:"0 auto 48px", padding:"0 24px" }}>
         <div className="platform-grid" style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:18 }}>
@@ -342,18 +335,13 @@ export default function LandingPage() {
           <div style={{ fontSize:15, color:"#64748b" }}>Free during beta. No credit card. Takes 2 minutes.</div>
         </div>
         <div style={{ width:"100%", maxWidth:420 }}>
-          <AuthPanel id="auth-panel-bottom" />
+          <AuthPanel id="auth-panel-bottom" {...authProps} />
         </div>
       </div>
 
       {/* ── STYLES ───────────────────────────────────────────────────── */}
       <style jsx>{`
-        .card {
-          background: linear-gradient(135deg,#1e293b,#020617);
-          padding: 20px; border-radius: 14px;
-          border: 1px solid rgba(255,255,255,0.06);
-          transition: transform 0.2s, box-shadow 0.2s;
-        }
+        .card { background: linear-gradient(135deg,#1e293b,#020617); padding: 20px; border-radius: 14px; border: 1px solid rgba(255,255,255,0.06); transition: transform 0.2s, box-shadow 0.2s; }
         .card:hover { box-shadow: 0 0 20px rgba(236,72,153,0.2); transform: translateY(-2px); }
         .title { color: #a855f7; font-weight: 600; }
         .box { background: rgba(255,255,255,0.05); padding: 14px; border-radius: 10px; margin-top: 10px; min-height: 65px; font-size: 14px; line-height: 1.5; }
@@ -363,7 +351,6 @@ export default function LandingPage() {
         .btn1:hover { opacity:0.88; }
         .btn2 { flex:1; padding:10px; border-radius:8px; background:#0f172a; color:white; border:none; cursor:pointer; transition:background 0.15s; }
         .btn2:hover { background:#1e293b; }
-
         @media (max-width: 768px) {
           .hero-grid { grid-template-columns: 1fr !important; }
           .desktop-auth-wrap { display: none !important; }
