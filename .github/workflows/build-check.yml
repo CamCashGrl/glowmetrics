@@ -1,0 +1,47 @@
+name: Build Check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: glowmetrics_fresh
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: glowmetrics_fresh/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check for JSX syntax errors
+        run: |
+          echo "Checking for broken JSX comment patterns..."
+          if grep -rn "</div>{/\*" app/; then
+            echo "❌ BROKEN JSX: Found invalid comment after closing div tag"
+            echo "Fix: Change '</div>{/* comment */}' to '</div>' on its own line"
+            exit 1
+          fi
+          echo "✅ No broken JSX patterns found"
+
+      - name: Build
+        run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+
+      - name: Build succeeded
+        run: echo "✅ Build passed — safe to deploy"
