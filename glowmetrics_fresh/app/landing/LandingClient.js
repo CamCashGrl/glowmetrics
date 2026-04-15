@@ -73,7 +73,7 @@ export default function LandingPage() {
         // Check if auto-confirmed (dev/no email confirm)
         const { data: { user } } = await supabase.auth.getUser()
         if (user) {
-          router.push("/onboarding")
+          router.push("/dashboard")
         } else {
           setAuthMsg("Account created! Check your email to confirm, then log in.")
           setIsSignUp(false)
@@ -93,7 +93,7 @@ export default function LandingPage() {
             .select("onboarding_complete")
             .eq("user_id", user.id)
             .single()
-          router.push(profile?.onboarding_complete ? "/dashboard" : "/onboarding")
+          router.push("/dashboard")
         }
       }
     }
