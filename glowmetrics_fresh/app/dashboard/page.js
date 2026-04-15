@@ -17,6 +17,9 @@ const C = {
 const TIER_COLORS = {
   "Whale": C.gold, "Shark": C.blue, "Regular": C.cyan, "Dormant": C.orange
 }
+const TIER_ICONS = {
+  "Whale": "🐳", "Shark": "🦈", "Regular": "🐟", "Dormant": "💤"
+}
 
 const glassCard = {
   background: "rgba(15,20,32,0.75)",
@@ -806,6 +809,9 @@ export default function Dashboard() {
   const [analytics, setAnalytics] = useState(null)
   const [liveAnalytics, setLiveAnalytics] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [insights, setInsights] = useState(null)
+  const [insightsLoading, setInsightsLoading] = useState(false)
+  const [lastUpdated, setLastUpdated] = useState(null)
   const [uploading, setUploading] = useState(false)
   const [uploadPlatform, setUploadPlatform] = useState("")
   const [activeTab, setActiveTab] = useState("overview")
@@ -900,6 +906,7 @@ export default function Dashboard() {
       if (!user) { router.replace("/login"); return }
       setUser(user)
       loadData(user.id)
+      loadInsights(user.id)
       // Check if new user needs walkthrough
       supabase.from('beta_users').select('onboarding_complete').eq('user_id', user.id).single()
         .then(({ data: profile }) => {
@@ -940,9 +947,32 @@ export default function Dashboard() {
     }
   }
 
+  // Auto-refresh every 60 minutes
+  useEffect(() => {
+    if (!user) return
+    const interval = setInterval(() => {
+      loadData(user.id)
+      loadInsights(user.id)
+    }, 60 * 60 * 1000)
+    return () => clearInterval(interval)
+  }, [user])
+
   const handleSignOut = async () => {
     await supabase.auth.signOut()
     router.replace('/login')
+  }
+
+  const loadInsights = async (uid) => {
+    if (!uid) return
+    setInsightsLoading(true)
+    try {
+      const { data, error } = await supabase.rpc('get_user_insights', { p_user_id: uid })
+      if (!error && data) {
+        setInsights(data)
+        setLastUpdated(new Date())
+      }
+    } catch(e) { console.error('Insights failed:', e) }
+    finally { setInsightsLoading(false) }
   }
 
   const loadData = async (uid) => {
@@ -1553,13 +1583,89 @@ const handleCSV = async (file, forcePlatform = null) => {
             <span className="nav-label">{label}</span>
           </button>
         ))}
+        <button onClick={handleSignOut} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3, padding: "6px 2px", background: "transparent", border: "none", color: "#F87171", fontSize: 9, fontWeight: 500, cursor: "pointer", borderRadius: 8 }}>
+          <span className="nav-icon">🚪</span>
+          <span className="nav-label">Logout</span>
+        </button>
       </div>
 
       {/* MAIN CONTENT */}
       <div className="dash-main" style={{ marginLeft: 240, padding: 32, position: "relative", zIndex: 1 }}>
+        {/* TOP BAR — logout visible on all screen sizes */}
+        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+          <button onClick={handleSignOut}
+            style={{ padding: "6px 14px", borderRadius: 8, background: "rgba(248,113,113,0.08)", border: "1px solid rgba(248,113,113,0.2)", color: "#F87171", fontSize: 12, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
+            onMouseEnter={e => { e.currentTarget.style.background = "rgba(248,113,113,0.18)" }}
+            onMouseLeave={e => { e.currentTarget.style.background = "rgba(248,113,113,0.08)" }}>
+            🚪 Log Out
+          </button>
+        </div>
 
         {activeTab === "overview" && (
           <div style={{ animation: "fadeUp 0.3s ease" }}>
+
+            {/* ── HOW TO MAKE MORE MONEY RIGHT NOW ─────────────────────── */}
+            {insights?.has_data && insights?.insights?.length > 0 && (
+              <div style={{ marginBottom: 28 }}>
+                {/* Header row with last updated */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, flexWrap: "wrap", gap: 8 }}>
+                  <div>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: C.white }}>⚡ How to Make More Money Right Now</div>
+                    <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>Generated from your real data · Updates every hour</div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    {lastUpdated && (
+                      <span style={{ fontSize: 11, color: C.muted }}>Last updated {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                    )}
+                    <button onClick={() => loadInsights(user?.id)} disabled={insightsLoading}
+                      style={{ padding: "5px 12px", borderRadius: 8, background: "rgba(34,211,238,0.1)", border: "1px solid rgba(34,211,238,0.25)", color: C.cyan, fontSize: 11, fontWeight: 600, cursor: insightsLoading ? "not-allowed" : "pointer" }}>
+                      {insightsLoading ? "Updating..." : "↻ Refresh"}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Today's #1 action — highlighted */}
+                {insights.insights.find(i => i.type === "today" || i.impact === "high") && (() => {
+                  const top = insights.insights.find(i => i.type === "today") || insights.insights[0]
+                  return (
+                    <div style={{ padding: "18px 22px", borderRadius: 14, background: "linear-gradient(135deg, rgba(34,211,238,0.12), rgba(59,130,246,0.08))", border: "1px solid rgba(34,211,238,0.3)", marginBottom: 12, position: "relative", overflow: "hidden" }}>
+                      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: "linear-gradient(90deg, #22D3EE, #3b82f6)" }} />
+                      <div style={{ fontSize: 11, fontWeight: 700, color: C.cyan, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>🎯 TOP PRIORITY TODAY</div>
+                      <div style={{ fontSize: 17, fontWeight: 800, color: C.white, marginBottom: 6 }}>{top.title}</div>
+                      <div style={{ fontSize: 13, color: "#94a3b8", marginBottom: 10, lineHeight: 1.6 }}>{top.body}</div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: C.cyan }}>→ {top.action}</div>
+                    </div>
+                  )
+                })()}
+
+                {/* Remaining insights grid */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 10 }}>
+                  {insights.insights
+                    .filter(i => i.type !== "today")
+                    .map((ins, idx) => {
+                      const impactColor = ins.impact === "high" ? C.gold : ins.impact === "positive" ? C.green : ins.impact === "warning" ? C.orange : C.blue
+                      return (
+                        <div key={idx} style={{ padding: "14px 16px", borderRadius: 12, background: "rgba(255,255,255,0.03)", border: `1px solid ${impactColor}25`, position: "relative" }}>
+                          <div style={{ position: "absolute", top: 0, left: 0, width: 3, height: "100%", borderRadius: "12px 0 0 12px", background: impactColor }} />
+                          <div style={{ paddingLeft: 8 }}>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: C.white, marginBottom: 4 }}>{ins.title}</div>
+                            <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.6, marginBottom: 8 }}>{ins.body}</div>
+                            <div style={{ fontSize: 11, fontWeight: 600, color: impactColor }}>→ {ins.action}</div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                </div>
+              </div>
+            )}
+
+            {/* Loading state for insights */}
+            {insightsLoading && !insights && (
+              <div style={{ marginBottom: 28, padding: "20px 22px", borderRadius: 14, background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", display: "flex", alignItems: "center", gap: 12 }}>
+                <div style={{ width: 20, height: 20, borderRadius: "50%", border: "2px solid rgba(34,211,238,0.3)", borderTopColor: C.cyan, animation: "spin 0.8s linear infinite", flexShrink: 0 }} />
+                <div style={{ fontSize: 13, color: C.muted }}>Analyzing your data for personalized insights...</div>
+              </div>
+            )}
 
             {/* BETA BANNER */}
             <div style={{ marginBottom: 24, padding: "14px 20px", borderRadius: 12, background: "linear-gradient(135deg, rgba(59,130,246,0.1), rgba(236,72,153,0.1))", border: "1px solid rgba(236,72,153,0.3)", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
@@ -1826,7 +1932,6 @@ const handleCSV = async (file, forcePlatform = null) => {
                   </div>
                   </div>
 
-                  {/* DAY DRILL PANEL — appears when a heatmap cell is clicked */}
                   {heatmapDrillDay && (() => {
                     const dayLong = { Sun:'Sunday', Mon:'Monday', Tue:'Tuesday', Wed:'Wednesday', Thu:'Thursday', Fri:'Friday', Sat:'Saturday' }[heatmapDrillDay]
                     const fmtH2 = h => { const n = parseInt(h); return n === 0 ? '12 AM' : n < 12 ? `${n} AM` : n === 12 ? '12 PM' : `${n-12} PM` }
@@ -2575,7 +2680,7 @@ const handleCSV = async (file, forcePlatform = null) => {
             <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
               <div style={{ display: "flex", gap: 6, background: "rgba(255,255,255,0.04)", padding: 4, borderRadius: 10, border: "1px solid rgba(255,255,255,0.08)" }}>
                 {["ALL","Whale","Shark","Regular","Dormant"].map(t => (
-                  <button key={t} onClick={() => { setWhaleFilter(t); setWhalePage(0) }} style={{ padding: "5px 12px", borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: "pointer", border: "none", transition: "all 0.15s", background: whaleFilter === t ? "linear-gradient(135deg, #3b82f6, #ec4899)" : "transparent", color: whaleFilter === t ? C.white : C.muted }}>{t}</button>
+                  <button key={t} onClick={() => { setWhaleFilter(t); setWhalePage(0) }} style={{ padding: "5px 12px", borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: "pointer", border: "none", transition: "all 0.15s", background: whaleFilter === t ? "linear-gradient(135deg, #3b82f6, #ec4899)" : "transparent", color: whaleFilter === t ? C.white : C.muted }}>{TIER_ICONS[t] ? `${TIER_ICONS[t]} ` : ""}{t}</button>
                 ))}
               </div>
               {allPlatforms.length > 1 && (
@@ -2609,25 +2714,29 @@ const handleCSV = async (file, forcePlatform = null) => {
                       <td style={{ padding: "12px 16px" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                           <span style={{ color: C.white, fontWeight: 600 }}>{w.username}</span>
-                          <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }}
-                            style={{ fontSize: 18, background: "none", border: "none", cursor: "pointer", lineHeight: 1, padding: 0 }}
-                            title="Message">💌</button>
                         </div>
                       </td>
                       <td style={{ padding: "12px 16px", color: C.green, fontWeight: 700 }}>${w.totalUSD.toFixed(2)}</td>
 
                       <td style={{ padding: "12px 16px", color: C.muted }}>{w.platform}</td>
                       <td style={{ padding: "12px 16px" }}>
-                        <span style={{ padding: "4px 10px", borderRadius: 100, background: `${TIER_COLORS[w.tier]}15`, color: TIER_COLORS[w.tier], fontSize: 11, fontWeight: 600 }}>{w.tier}</span>
+                        <span style={{ padding: "4px 10px", borderRadius: 100, background: `${TIER_COLORS[w.tier]}15`, color: TIER_COLORS[w.tier], fontSize: 11, fontWeight: 600 }}>{TIER_ICONS[w.tier] || ""} {w.tier}</span>
                       </td>
                       <td style={{ padding: "12px 16px", color: C.muted, fontSize: 12 }}>{new Date(w.lastTipDate).toLocaleDateString()}</td>
                       <td style={{ padding: "12px 16px" }}>
-                        <button onClick={() => setSelectedWhale(w)}
-                          style={{ padding: "4px 12px", borderRadius: 6, background: "rgba(34,211,238,0.15)", border: "1px solid rgba(34,211,238,0.3)", color: C.cyan, fontSize: 11, cursor: "pointer", fontWeight: 600, animation: "pulse-view 2.5s ease-in-out infinite" }}
-                          onMouseEnter={e => { e.currentTarget.style.animation = "none"; e.currentTarget.style.background = "rgba(34,211,238,0.3)"; e.currentTarget.style.boxShadow = "0 0 10px rgba(34,211,238,0.4)" }}
-                          onMouseLeave={e => { e.currentTarget.style.animation = "pulse-view 2.5s ease-in-out infinite"; e.currentTarget.style.background = "rgba(34,211,238,0.15)"; e.currentTarget.style.boxShadow = "none" }}>
-                          View →
-                        </button>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }}
+                            title="Message fan"
+                            style={{ fontSize: 20, background: "none", border: "none", cursor: "pointer", lineHeight: 1, padding: 2, display: "inline-block", animation: "pulse-envelope 2s ease-in-out infinite" }}>
+                            💌
+                          </button>
+                          <button onClick={() => setSelectedWhale(w)}
+                            style={{ padding: "4px 12px", borderRadius: 6, background: "rgba(34,211,238,0.15)", border: "1px solid rgba(34,211,238,0.3)", color: C.cyan, fontSize: 11, cursor: "pointer", fontWeight: 600, animation: "pulse-view 2.5s ease-in-out infinite" }}
+                            onMouseEnter={e => { e.currentTarget.style.animation = "none"; e.currentTarget.style.background = "rgba(34,211,238,0.3)"; e.currentTarget.style.boxShadow = "0 0 10px rgba(34,211,238,0.4)" }}
+                            onMouseLeave={e => { e.currentTarget.style.animation = "pulse-view 2.5s ease-in-out infinite"; e.currentTarget.style.background = "rgba(34,211,238,0.15)"; e.currentTarget.style.boxShadow = "none" }}>
+                            View →
+                          </button>
+                        </div>
                       </td>
                     </tr>
                       )
