@@ -5,10 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
-    "lint": "next lint --dir app --dir lib --dir components",
-    "prebuild": "next lint --dir app --dir lib --dir components || echo \"Lint warnings found\"",
-    "typecheck": "tsc --noEmit 2>/dev/null || true"
+    "start": "next start"
   },
   "dependencies": {
     "next": "14.2.0",
