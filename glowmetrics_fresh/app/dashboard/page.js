@@ -1806,9 +1806,9 @@ const handleCSV = async (file, forcePlatform = null) => {
                       Today ({todayLong}) highlighted in cyan · <strong style={{ color: C.cyan }}>Click any cell</strong> to see your best time to stream that day
                     </div>
                   </div>
-                  </div>
+                  
 
-                  {/* DAY DRILL PANEL — appears when a heatmap cell is clicked */}
+                  
                   {heatmapDrillDay && (() => {
                     const dayLong = { Sun:'Sunday', Mon:'Monday', Tue:'Tuesday', Wed:'Wednesday', Thu:'Thursday', Fri:'Friday', Sat:'Saturday' }[heatmapDrillDay]
                     const fmtH2 = h => { const n = parseInt(h); return n === 0 ? '12 AM' : n < 12 ? `${n} AM` : n === 12 ? '12 PM' : `${n-12} PM` }
