@@ -2066,7 +2066,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                     <div style={{ marginTop: 8, fontSize: 11, color: C.muted }}>
                       Today ({todayLong}) highlighted in cyan · <strong style={{ color: C.cyan }}>Click any cell</strong> to see your best time to stream that day
                     </div>
-                  </div>
+                  
                   </div>
 
                   {heatmapDrillDay && (() => {
