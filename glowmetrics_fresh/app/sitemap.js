@@ -8,14 +8,12 @@ export default function sitemap() {
     'cam-model-taxes',
     'how-much-do-chaturbate-models-make',
     'how-to-build-loyal-fans',
-    'how-to-get-more-tips-on-myfreecams',
-    'how-to-get-viewers-on-chaturbate',        // ✅ fixed typo (was: how-to-get-veiwers-on-chaturbate)
+    'how-to-get-more-tips-on-myfreecams',  
     'how-to-increase-cam-earnings',
     'how-to-make-more-money-on-chaturbate',
-    'how-to-re-engage-whales-and-high-tipping-fans',
     'why-cam-income-is-inconsistent',
     'why-cam-streams-arent-making-money',
-    'why-you-arent-making-money-on-chaturbate',
+    
   ]
 
   const guides = [
