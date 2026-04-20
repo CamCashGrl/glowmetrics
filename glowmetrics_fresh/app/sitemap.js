@@ -2,7 +2,6 @@ export default function sitemap() {
   const base = 'https://www.camcashgrl.com'
   const now = new Date()
 
-  // Every real blog page in /app/blog/
   const blogs = [
     'best-cam-model-tools',
     'cam-model-earnings',
@@ -10,7 +9,7 @@ export default function sitemap() {
     'how-much-do-chaturbate-models-make',
     'how-to-build-loyal-fans',
     'how-to-get-more-tips-on-myfreecams',
-    'how-to-get-veiwers-on-chaturbate',
+    'how-to-get-viewers-on-chaturbate',        // ✅ fixed typo (was: how-to-get-veiwers-on-chaturbate)
     'how-to-increase-cam-earnings',
     'how-to-make-more-money-on-chaturbate',
     'how-to-re-engage-whales-and-high-tipping-fans',
@@ -19,7 +18,6 @@ export default function sitemap() {
     'why-you-arent-making-money-on-chaturbate',
   ]
 
-  // Every real guide slug defined in /app/guides/[slug]/page.js
   const guides = [
     'chaturbate-earnings-tracker',
     'cam-model-analytics',
@@ -37,11 +35,10 @@ export default function sitemap() {
 
   return [
     // Core public pages
-    { url: base,                          lastModified: now, changeFrequency: 'weekly',  priority: 1.0 },
-    { url: `${base}/landing`,             lastModified: now, changeFrequency: 'weekly',  priority: 0.9 },
-    { url: `${base}/reset-password`,      lastModified: now, changeFrequency: 'never',   priority: 0.1 },
+    // NOTE: /landing is excluded — use canonical / as the homepage
+    { url: base, lastModified: now, changeFrequency: 'weekly', priority: 1.0 },
 
-    // Blog posts — high priority for SEO traffic
+    // Blog posts
     ...blogs.map(slug => ({
       url: `${base}/blog/${slug}`,
       lastModified: now,
@@ -49,7 +46,7 @@ export default function sitemap() {
       priority: 0.85,
     })),
 
-    // Keyword-targeted guide pages — highest ranking potential
+    // Keyword-targeted guide pages
     ...guides.map(slug => ({
       url: `${base}/guides/${slug}`,
       lastModified: now,
@@ -58,6 +55,6 @@ export default function sitemap() {
     })),
 
     // Excluded (private/auth-only — never index these):
-    // /dashboard, /onboarding, /login, /admin, /api/, /test, /testt
+    // /dashboard, /onboarding, /login, /admin, /api/, /landing, /test, /testt, /reset-password
   ]
 }
