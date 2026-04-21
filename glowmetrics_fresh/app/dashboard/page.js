@@ -1,5 +1,5 @@
 "use client"
-import React, { useState, useEffect, useCallback } from "react"
+import React, { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
 import { parseCSV, aggregateRows as runEngine } from "../../lib/analytics"
@@ -848,6 +848,17 @@ export default function Dashboard() {
   const [tokenRates, setTokenRates] = useState({ Chaturbate: 0.05, BongaCams: 0.05, MyFreeCams: 0.05, Stripchat: 0.05, CamSoda: 0.05 })
   const [showRateEditor, setShowRateEditor] = useState(false)
 
+  // ── ANIMATION STATE ──────────────────────────────────────
+  const [counterBumping, setCounterBumping] = useState(false)
+  const [lastUpdatedSection, setLastUpdatedSection] = useState(null)
+  const [newAlertKey, setNewAlertKey] = useState(0)
+  const [lastRefreshed, setLastRefreshed] = useState(null)
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const [newTipCount, setNewTipCount] = useState(0)
+  const prevTipCountRef = useRef(0)
+  const realtimeChannelRef = useRef(null)
+  const refreshTimerRef = useRef(null)
+
   const isBetaUser = true
   const isPro = true
   const uploadLimit = Infinity
@@ -858,6 +869,23 @@ export default function Dashboard() {
   }
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(""), 3500) }
+
+  // Tab persistence
+  const handleTabChange = (tab) => {
+    setActiveTab(tab)
+    if (typeof window !== 'undefined') localStorage.setItem('camcash_tab', tab)
+  }
+
+  // Counter bump when new tips arrive
+  useEffect(() => {
+    if (newTipCount > prevTipCountRef.current) {
+      setCounterBumping(true)
+      setLastUpdatedSection('tips')
+      setTimeout(() => setCounterBumping(false), 320)
+      setTimeout(() => setLastUpdatedSection(null), 2500)
+    }
+    prevTipCountRef.current = newTipCount
+  }, [newTipCount])
 
   // ── EXTENSION LISTENER — receives tips from Chrome extension ────────────
   useEffect(() => {
@@ -892,33 +920,77 @@ export default function Dashboard() {
   }, [])
 
   useEffect(() => {
+    // Restore saved tab
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('camcash_tab')
+      if (saved) setActiveTab(saved)
+    }
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) { router.replace("/login"); return }
       setUser(user)
       loadData(user.id)
-      // Fetch real beta user count for the progress bar
       supabase.from('beta_users').select('id', { count: 'exact', head: true })
         .then(({ count }) => { if (count !== null) setBetaCount(count) })
       try {
         supabase.from('beta_users').upsert({
-          user_id: user.id,
-          email: user.email,
-          signed_up_at: user.created_at
+          user_id: user.id, email: user.email, signed_up_at: user.created_at
         }, { onConflict: 'user_id', ignoreDuplicates: true })
         supabase.from('analytics_events').insert({
-          user_id: user.id,
-          event_name: 'dashboard_opened',
-          properties: { email: user.email }
+          user_id: user.id, event_name: 'dashboard_opened', properties: { email: user.email }
         })
       } catch(e) {}
+
+      // ── SUPABASE REALTIME ──────────────────────────────────
+      const channel = supabase
+        .channel(`tips_live_${user.id}`)
+        .on('postgres_changes', {
+          event: 'INSERT', schema: 'public', table: 'tips',
+          filter: `user_id=eq.${user.id}`
+        }, (payload) => {
+          setTips(prev => {
+            const exists = prev.some(t =>
+              t.date_time === payload.new.date_time &&
+              t.username === payload.new.username &&
+              t.tokens === payload.new.tokens
+            )
+            if (exists) return prev
+            const updated = [...prev, payload.new].sort((a,b) => new Date(a.date_time)-new Date(b.date_time))
+            try { setAnalytics(runEngine(updated)) } catch(e) {}
+            return updated
+          })
+          setNewTipCount(n => n + 1)
+          setNewAlertKey(k => k + 1)
+          setLastRefreshed(new Date())
+        })
+        .subscribe()
+      realtimeChannelRef.current = channel
+
+      // ── AUTO-REFRESH every 30s lightweight, full reload every 10min ──
+      let tick = 0
+      refreshTimerRef.current = setInterval(() => {
+        tick++
+        if (tick >= 20) {
+          tick = 0
+          setIsRefreshing(true)
+          loadData(user.id).then(() => { setIsRefreshing(false); setLastRefreshed(new Date()) })
+        } else {
+          setTips(prev => {
+            if (!prev.length) return prev
+            try { setAnalytics(runEngine(prev)) } catch(e) {}
+            return prev
+          })
+        }
+      }, 30000)
     })
+    return () => {
+      if (realtimeChannelRef.current) supabase.removeChannel(realtimeChannelRef.current)
+      if (refreshTimerRef.current) clearInterval(refreshTimerRef.current)
+    }
   }, [])
 
   useEffect(() => {
-    if (!tips.length) return
-    const interval = setInterval(() => { setLiveAnalytics(analytics) }, 5000)
-    return () => clearInterval(interval)
-  }, [tips])
+    if (analytics) setLiveAnalytics(analytics)
+  }, [analytics])
 
   const handleSignOut = async () => {
     await supabase.auth.signOut()
@@ -949,6 +1021,7 @@ export default function Dashboard() {
           // without computed insights rather than a blank screen
         }
       }
+      setLastRefreshed(new Date())
     } finally { setLoading(false) }
   }
 const handleCSV = async (file, forcePlatform = null) => {
@@ -1452,10 +1525,76 @@ const handleCSV = async (file, forcePlatform = null) => {
         ::-webkit-scrollbar-thumb { background: #2a3f5f; border-radius: 3px; }
         .dash-card { transition: transform 0.2s ease, box-shadow 0.2s ease; }
         .dash-card:hover { transform: translateY(-2px); }
-        .whale-row { transition: background 0.15s; }
-        .whale-row:hover { background: rgba(59,130,246,0.08) !important; }
+        .whale-row { transition: background 0.15s, transform 0.12s ease; }
+        .whale-row:hover { background: rgba(59,130,246,0.08) !important; transform: translateX(2px); }
         @keyframes pulse-msg { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.25); } }
         @keyframes fadeUp { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ── ALERT ANIMATIONS ── */
+        @keyframes alertEnter {
+          0%   { opacity: 0; transform: translateY(-10px) scale(0.97); }
+          60%  { opacity: 1; transform: translateY(1px) scale(1.01); }
+          100% { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        @keyframes alertExit {
+          0%   { opacity: 1; transform: translateY(0) scale(1); max-height: 200px; margin-bottom: 8px; }
+          100% { opacity: 0; transform: translateY(6px) scale(0.97); max-height: 0; margin-bottom: 0; padding: 0; }
+        }
+        @keyframes alertPulseCritical {
+          0%   { box-shadow: 0 0 0 0 rgba(248,113,113,0.45); }
+          50%  { box-shadow: 0 0 0 8px rgba(248,113,113,0); }
+          100% { box-shadow: 0 0 0 0 rgba(248,113,113,0); }
+        }
+        @keyframes alertPulseWarning {
+          0%   { box-shadow: 0 0 0 0 rgba(251,146,60,0.4); }
+          50%  { box-shadow: 0 0 0 7px rgba(251,146,60,0); }
+          100% { box-shadow: 0 0 0 0 rgba(251,146,60,0); }
+        }
+        @keyframes alertPulseSuccess {
+          0%   { box-shadow: 0 0 0 0 rgba(16,185,129,0.4); }
+          50%  { box-shadow: 0 0 0 7px rgba(16,185,129,0); }
+          100% { box-shadow: 0 0 0 0 rgba(16,185,129,0); }
+        }
+        @keyframes alertPulseInfo {
+          0%   { box-shadow: 0 0 0 0 rgba(34,211,238,0.35); }
+          50%  { box-shadow: 0 0 0 6px rgba(34,211,238,0); }
+          100% { box-shadow: 0 0 0 0 rgba(34,211,238,0); }
+        }
+        @keyframes counterBump {
+          0%   { transform: scale(1); }
+          40%  { transform: scale(1.4); }
+          70%  { transform: scale(0.9); }
+          100% { transform: scale(1); }
+        }
+        @keyframes recentlyUpdated {
+          0%   { background-color: rgba(34,211,238,0.14); }
+          100% { background-color: transparent; }
+        }
+        @keyframes listSlotIn {
+          0%   { opacity: 0; transform: translateY(-8px); }
+          100% { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes timestampTick {
+          0%   { opacity: 0.45; }
+          50%  { opacity: 1; }
+          100% { opacity: 0.45; }
+        }
+        .alert-enter { animation: alertEnter 280ms cubic-bezier(0.34,1.2,0.64,1) forwards; }
+        .alert-exit  { animation: alertExit 180ms ease-in forwards; overflow: hidden; pointer-events: none; }
+        .alert-pulse-critical { animation: alertPulseCritical 500ms ease-out 280ms 1 forwards; }
+        .alert-pulse-warning  { animation: alertPulseWarning  500ms ease-out 280ms 1 forwards; }
+        .alert-pulse-success  { animation: alertPulseSuccess  500ms ease-out 280ms 1 forwards; }
+        .alert-pulse-info     { animation: alertPulseInfo     500ms ease-out 280ms 1 forwards; }
+        .counter-bump { display: inline-block; animation: counterBump 300ms cubic-bezier(0.34,1.3,0.64,1) forwards; }
+        .recently-updated { animation: recentlyUpdated 2500ms ease-out forwards; border-radius: inherit; }
+        .list-slot-in { animation: listSlotIn 220ms ease-out forwards; }
+        .timestamp-idle { animation: timestampTick 3s ease-in-out infinite; }
+        .hoverable { transition: transform 0.15s ease, box-shadow 0.15s ease; }
+        .hoverable:hover { transform: translateY(-2px) scale(1.005); box-shadow: 0 6px 24px rgba(0,0,0,0.35); }
+        .alert-row { transition: transform 0.12s ease; }
+        .alert-row:hover { transform: translateX(3px); }
+        button:active { transform: scale(0.96) !important; transition: transform 0.1s ease !important; }
       `}</style>
 
       <div style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 0 }}>
@@ -1503,7 +1642,7 @@ const handleCSV = async (file, forcePlatform = null) => {
             <div style={{ height: 4, borderRadius: 4, background: "rgba(255,255,255,0.1)", overflow: "hidden" }}>
               <div style={{ height: "100%", width: "63%", borderRadius: 4, background: "linear-gradient(90deg, #3b82f6, #ec4899)", transition: "width 0.6s ease" }} />
             </div>
-            <div style={{ fontSize: 10, color: C.pink, fontWeight: 600, marginTop: 4 }}>63 / 100 spots left</div>
+            <div style={{ fontSize: 10, color: C.pink, fontWeight: 600, marginTop: 4 }}><span key={betaCount} className={betaCount !== null ? "counter-bump" : ""}>{betaCount ?? 63}</span> / 100 spots left</div>
           </div>
           <button
             onClick={handleSignOut}
@@ -1534,6 +1673,30 @@ const handleCSV = async (file, forcePlatform = null) => {
 
       {/* MAIN CONTENT */}
       <div className="dash-main" style={{ marginLeft: 240, padding: 32, position: "relative", zIndex: 1 }}>
+
+        {/* ── LIVE STATUS BAR ── */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 12px", borderRadius: 20, background: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.25)" }}>
+            <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#10B981", boxShadow: "0 0 6px #10B981", animation: "pulse-msg 2s infinite" }} />
+            <span style={{ fontSize: 11, fontWeight: 700, color: "#10B981" }}>LIVE</span>
+          </div>
+          {isRefreshing && (
+            <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "#94A3B8" }}>
+              <div style={{ width: 12, height: 12, border: "1.5px solid rgba(34,211,238,0.3)", borderTopColor: "#22D3EE", borderRadius: "50%", animation: "spin 0.7s linear infinite" }} />
+              Refreshing...
+            </div>
+          )}
+          {lastRefreshed && !isRefreshing && (
+            <span key={lastRefreshed.getTime()} className="recently-updated" style={{ fontSize: 11, color: "#475569", padding: "2px 6px", borderRadius: 4 }}>
+              Updated {lastRefreshed.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+            </span>
+          )}
+          {newTipCount > 0 && (
+            <div style={{ padding: "3px 10px", borderRadius: 20, background: "rgba(236,72,153,0.15)", border: "1px solid rgba(236,72,153,0.35)", fontSize: 11, fontWeight: 700, color: "#EC4899", animation: "alertEnter 0.3s ease forwards" }}>
+              +<span key={newTipCount} className={counterBumping ? "counter-bump" : ""}>{newTipCount}</span> new tip{newTipCount > 1 ? "s" : ""}
+            </div>
+          )}
+        </div>
 
         {activeTab === "overview" && (
           <div style={{ animation: "fadeUp 0.3s ease" }}>
@@ -1655,7 +1818,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                     {actions.map((a, i) => (
-                      <div key={i} style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, padding: "14px 16px", background: i === 0 ? `${a.color}18` : `${a.color}0d`, border: `1px solid ${i === 0 ? a.color + '50' : a.color + '28'}`, borderRadius: 12, boxShadow: i === 0 ? `0 0 18px ${a.color}18` : 'none', transition: "transform 0.15s, box-shadow 0.15s" }}
+                      <div key={i} className={`alert-enter alert-pulse-info alert-row`} style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, padding: "14px 16px", background: i === 0 ? `${a.color}18` : `${a.color}0d`, border: `1px solid ${i === 0 ? a.color + '50' : a.color + '28'}`, borderRadius: 12, boxShadow: i === 0 ? `0 0 18px ${a.color}18` : 'none', animationDelay: `${i * 40}ms` }}
                         onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.boxShadow = `0 4px 20px ${a.color}28` }}
                         onMouseLeave={e => { e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = i === 0 ? `0 0 18px ${a.color}18` : 'none' }}>
                         <div style={{ display: "flex", gap: 12, alignItems: "flex-start", flex: 1 }}>
@@ -1985,7 +2148,7 @@ const handleCSV = async (file, forcePlatform = null) => {
 
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                     {allAlerts.map((a, i) => (
-                      <div key={i} style={{ padding: "12px 14px", borderRadius: 10, background: a.severity === 'critical' ? "rgba(248,113,113,0.1)" : "rgba(251,146,60,0.08)", border: `1px solid ${a.severity === 'critical' ? 'rgba(248,113,113,0.25)' : 'rgba(251,146,60,0.2)'}` }}>
+                      <div key={i} className={`alert-enter alert-pulse-${a.severity === "critical" ? "critical" : "warning"} alert-row`} style={{ padding: "12px 14px", borderRadius: 10, background: a.severity === 'critical' ? "rgba(248,113,113,0.1)" : "rgba(251,146,60,0.08)", border: `1px solid ${a.severity === 'critical' ? 'rgba(248,113,113,0.25)' : 'rgba(251,146,60,0.2)'}`, animationDelay: `${i * 50}ms` }}>
                         <div style={{ fontSize: 13, color: C.white, marginBottom: 3 }}>{a.icon} {a.message}</div>
                         <div style={{ fontSize: 11, color: C.muted }}>👉 {a.action}</div>
                       </div>
@@ -2043,7 +2206,7 @@ const handleCSV = async (file, forcePlatform = null) => {
 
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   {insights.slice(0, 3).map((ins, i) => (
-                    <div key={i} style={{ display: "flex", gap: 12, alignItems: "flex-start", padding: "11px 14px", borderRadius: 10, background: "rgba(34,211,238,0.06)", border: "1px solid rgba(34,211,238,0.15)" }}>
+                    <div key={i} className="list-slot-in" style={{ display: "flex", gap: 12, alignItems: "flex-start", padding: "11px 14px", borderRadius: 10, background: "rgba(34,211,238,0.06)", border: "1px solid rgba(34,211,238,0.15)", animationDelay: `${i * 60}ms` }}>
                       <span style={{ fontSize: 16, flexShrink: 0 }}>{ins.icon}</span>
                       <div style={{ fontSize: 13, color: C.white, lineHeight: 1.55 }}>{ins.text}</div>
                     </div>
