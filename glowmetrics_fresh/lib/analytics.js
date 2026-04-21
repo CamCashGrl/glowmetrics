@@ -1248,6 +1248,62 @@ export function aggregateRows(tips) {
     lossIfTopFanLeaves: parseFloat(top1Rev.toFixed(2))
   } : null
 
+  // ── MONTHLY BREAKDOWN ─────────────────────────────────────────────
+  const monthlyMap = {}
+  tips.forEach(t => {
+    const dt = new Date(t.dateRaw || t.date_time)
+    if (isNaN(dt.getTime())) return
+    const key = `${dt.getUTCFullYear()}-${String(dt.getUTCMonth()+1).padStart(2,'0')}`
+    if (!monthlyMap[key]) monthlyMap[key] = { month: key, usd: 0, tips: 0, fans: new Set(), sessions: 0 }
+    monthlyMap[key].usd += t.usd || 0
+    monthlyMap[key].tips += 1
+    monthlyMap[key].fans.add(t.username)
+  })
+  // Count sessions per month
+  sessions.forEach(s => {
+    const dt = new Date(s.startTime)
+    const key = `${dt.getUTCFullYear()}-${String(dt.getUTCMonth()+1).padStart(2,'0')}`
+    if (monthlyMap[key]) monthlyMap[key].sessions += 1
+  })
+  const monthlyData = Object.values(monthlyMap)
+    .sort((a, b) => a.month.localeCompare(b.month))
+    .map(m => ({
+      month: m.month,
+      usd: parseFloat(m.usd.toFixed(2)),
+      tips: m.tips,
+      fans: m.fans.size,
+      sessions: m.sessions,
+      usdPerFan: m.fans.size > 0 ? parseFloat((m.usd / m.fans.size).toFixed(2)) : 0
+    }))
+  const bestMonth = [...monthlyData].sort((a,b) => b.usd - a.usd)[0] || null
+  const worstMonth = [...monthlyData].sort((a,b) => a.usd - b.usd)[0] || null
+
+  // ── TIP TYPE BREAKDOWN ─────────────────────────────────────────────
+  const tipTypeMap = {}
+  tips.forEach(t => {
+    const type = t.tip_type || 'Tip'
+    if (!tipTypeMap[type]) tipTypeMap[type] = { type, usd: 0, count: 0, fans: new Set() }
+    tipTypeMap[type].usd += t.usd || 0
+    tipTypeMap[type].count += 1
+    tipTypeMap[type].fans.add(t.username)
+  })
+  const tipTypeBreakdown = Object.values(tipTypeMap)
+    .map(t => ({ ...t, fans: t.fans.size, avgUsd: parseFloat((t.usd / t.count).toFixed(2)), pct: parseFloat(((t.usd / totalUSD) * 100).toFixed(1)) }))
+    .sort((a, b) => b.usd - a.usd)
+
+  // Private show specific insights
+  const privateShowFans = Object.values((() => {
+    const m = {}
+    tips.filter(t => (t.tip_type||'').toLowerCase().includes('private')).forEach(t => {
+      if (!m[t.username]) m[t.username] = { username: t.username, usd: 0, count: 0 }
+      m[t.username].usd += t.usd || 0
+      m[t.username].count += 1
+    })
+    return m
+  })()).sort((a,b) => b.usd - a.usd)
+
+  const spyShowFans = [...new Set(tips.filter(t => (t.tip_type||'').toLowerCase().includes('spy')).map(t => t.username))]
+
   return {
     totalUSD: parseFloat(totalUSD.toFixed(2)),
     totalTokens,
@@ -1256,6 +1312,8 @@ export function aggregateRows(tips) {
     topTippers, platforms, sessions, insights: validateInsights(insights), predictions,
     whaleAlerts, lossAlerts, nextMoves, whales,
     bestDay, bestHour,
+    monthlyData, bestMonth, worstMonth,
+    tipTypeBreakdown, privateShowFans, spyShowFans,
     // ── New advanced analytics ──
     platformBestTimes,    // { platform: { hour, avg, sessionCount } }
     earningsVelocity,     // overall $/hour (null if no timed sessions)
