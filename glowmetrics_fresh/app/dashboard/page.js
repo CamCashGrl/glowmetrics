@@ -863,6 +863,8 @@ export default function Dashboard() {
   const [scheduleLoaded, setScheduleLoaded] = useState(false)
   const [savingSchedule, setSavingSchedule] = useState(false)
   const [liveSessionSaving, setLiveSessionSaving] = useState(false)
+  const [fanAIInsights, setFanAIInsights] = useState({}) // { username: { loading, text, error } }
+  const [profileTab, setProfileTab] = useState('overview') // overview | tips | notes | ai
 
   // ── ANIMATION STATE ──────────────────────────────────────
   const [counterBumping, setCounterBumping] = useState(false)
@@ -932,6 +934,80 @@ export default function Dashboard() {
       }
     } catch(e) { showToast('❌ Failed to save session') }
     finally { setLiveSessionSaving(false) }
+  }
+
+  // ── GENERATE FAN AI INSIGHTS ─────────────────────────────────────
+  const generateFanInsights = async (whale) => {
+    const key = whale.username.toLowerCase()
+    if (fanAIInsights[key]?.text) return // already generated
+    setFanAIInsights(prev => ({ ...prev, [key]: { loading: true, text: null, error: null } }))
+    try {
+      const whaleTips = tips.filter(t => t.username === whale.username)
+      const now = new Date()
+      const currentHour = now.getHours()
+      const currentDay = now.toLocaleDateString('en-US', { weekday: 'long' })
+      const hourLabel = currentHour === 0 ? '12 AM' : currentHour < 12 ? `${currentHour} AM` : currentHour === 12 ? '12 PM' : `${currentHour-12} PM`
+
+      // Extract tip notes from username variants (CB appends notes to usernames)
+      const variants = tips.filter(t => t.username.toLowerCase().startsWith(key) && t.username.toLowerCase() !== key)
+      const tipNoteKeywords = variants.map(t => t.username.slice(key.length)).filter(n => n.length > 1 && n.length < 30)
+
+      // Get tip type breakdown for this fan
+      const privates = whaleTips.filter(t => t.tip_type?.toLowerCase().includes('private'))
+      const spyTips = whaleTips.filter(t => t.tip_type?.toLowerCase().includes('spy'))
+
+      // Day/hour patterns
+      const hourCounts = {}
+      whaleTips.forEach(t => {
+        const h = new Date(t.date_time).getHours()
+        hourCounts[h] = (hourCounts[h] || 0) + 1
+      })
+      const topHour = Object.entries(hourCounts).sort((a,b)=>b[1]-a[1])[0]
+      const topHourLabel = topHour ? (parseInt(topHour[0]) === 0 ? '12 AM' : parseInt(topHour[0]) < 12 ? `${topHour[0]} AM` : parseInt(topHour[0]) === 12 ? '12 PM' : `${parseInt(topHour[0])-12} PM`) : 'unknown'
+
+      const savedNote = tipperNotes[key]?.note || ''
+
+      const prompt = `You are a cam model analytics assistant. Analyze this fan and give actionable insights.
+
+FAN: ${whale.username}
+Total spent: $${whale.totalUSD.toFixed(2)} over ${whale.tipCount} tips
+Avg tip: $${whale.avgTipSize.toFixed(2)} | Biggest tip: $${whale.biggestTip?.toFixed(2) || 'unknown'}
+Tier: ${whale.tier} | Days since last tip: ${whale.daysSinceLastTip}
+Private shows booked: ${privates.length} | Spy shows: ${spyTips.length}
+Most active hour: ${topHourLabel}
+Tip notes/keywords found in username variants: ${tipNoteKeywords.length > 0 ? tipNoteKeywords.join(', ') : 'none'}
+Streamer's saved note about this fan: ${savedNote || 'none'}
+Current time: ${hourLabel} on ${currentDay}
+
+Respond with EXACTLY this format (keep each bullet under 15 words):
+PERSONALITY:
+• [kink/preference inferred from tip notes or behavior]
+• [another trait if available]
+
+ENGAGEMENT STRATEGY:
+• [specific action to take right now based on time/day]
+• [re-engagement tip based on their pattern]
+
+REVENUE OPPORTUNITY:
+• [specific upsell or engagement idea for this fan]
+
+Keep it direct, specific, and actionable. Reference their actual data. Max 120 words total.`
+
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 300,
+          messages: [{ role: 'user', content: prompt }]
+        })
+      })
+      const data = await response.json()
+      const text = data.content?.[0]?.text || 'Could not generate insights.'
+      setFanAIInsights(prev => ({ ...prev, [key]: { loading: false, text, error: null } }))
+    } catch(e) {
+      setFanAIInsights(prev => ({ ...prev, [whale.username.toLowerCase()]: { loading: false, text: null, error: 'Failed to load insights' } }))
+    }
   }
 
   // ── TOGGLE SCHEDULE SLOT ──────────────────────────────────────────
@@ -2898,7 +2974,12 @@ const handleCSV = async (file, forcePlatform = null) => {
                       </td>
                       <td style={{ padding: "12px 16px", color: C.muted, fontSize: 12 }}>{new Date(w.lastTipDate).toLocaleDateString()}</td>
                       <td style={{ padding: "12px 16px" }}>
-                        <button onClick={() => setSelectedWhale(w)} style={{ padding: "4px 10px", borderRadius: 6, background: "rgba(34,211,238,0.15)", border: "1px solid rgba(34,211,238,0.3)", color: C.cyan, fontSize: 11, cursor: "pointer" }}>🔍 View</button>
+                        <button onClick={() => { setSelectedWhale(w); setProfileTab('overview') }}
+  style={{ padding: "5px 12px", borderRadius: 8, background: "linear-gradient(135deg,rgba(34,211,238,0.2),rgba(124,92,255,0.2))", border: "1px solid rgba(34,211,238,0.4)", color: C.cyan, fontSize: 11, fontWeight: 700, cursor: "pointer", transition: "all 0.15s", letterSpacing: 0.3 }}
+  onMouseEnter={e => { e.currentTarget.style.background = "linear-gradient(135deg,rgba(34,211,238,0.35),rgba(124,92,255,0.35))"; e.currentTarget.style.transform = "translateY(-1px)" }}
+  onMouseLeave={e => { e.currentTarget.style.background = "linear-gradient(135deg,rgba(34,211,238,0.2),rgba(124,92,255,0.2))"; e.currentTarget.style.transform = "" }}>
+  VIEW PROFILE
+</button>
                       </td>
                     </tr>
                   ))}
@@ -2996,7 +3077,12 @@ const handleCSV = async (file, forcePlatform = null) => {
                             </div>
                           </div>
                           <div style={{ display: "flex", gap: 6, alignItems:"center" }}>
-                            <button onClick={() => setSelectedWhale(w)} style={{ padding: "4px 10px", borderRadius: 6, background: "rgba(34,211,238,0.12)", border: "1px solid rgba(34,211,238,0.25)", color: C.cyan, fontSize: 11, cursor: "pointer" }}>🔍 Profile</button>
+                            <button onClick={() => { setSelectedWhale(w); setProfileTab('overview') }}
+  style={{ padding: "5px 12px", borderRadius: 8, background: "linear-gradient(135deg,rgba(34,211,238,0.2),rgba(124,92,255,0.2))", border: "1px solid rgba(34,211,238,0.4)", color: C.cyan, fontSize: 11, fontWeight: 700, cursor: "pointer", letterSpacing: 0.3 }}
+  onMouseEnter={e => { e.currentTarget.style.background="linear-gradient(135deg,rgba(34,211,238,0.35),rgba(124,92,255,0.35))"; e.currentTarget.style.transform="translateY(-1px)" }}
+  onMouseLeave={e => { e.currentTarget.style.background="linear-gradient(135deg,rgba(34,211,238,0.2),rgba(124,92,255,0.2))"; e.currentTarget.style.transform="" }}>
+  VIEW PROFILE
+</button>
                             <button onClick={() => { setNoteTarget(w.username); setNoteText(tipperNotes[w.username?.toLowerCase()]?.note || '') }}
                               style={{ padding: "4px 8px", borderRadius: 6, background: tipperNotes[w.username?.toLowerCase()]?.note ? "rgba(245,158,11,0.15)" : "rgba(255,255,255,0.05)", border: tipperNotes[w.username?.toLowerCase()]?.note ? "1px solid rgba(245,158,11,0.3)" : "1px solid rgba(255,255,255,0.1)", color: tipperNotes[w.username?.toLowerCase()]?.note ? C.gold : C.muted, fontSize: 11, cursor: "pointer" }}>
                               {tipperNotes[w.username?.toLowerCase()]?.note ? "📝 Note" : "📝"}
@@ -4725,130 +4811,340 @@ const handleCSV = async (file, forcePlatform = null) => {
       {/* WHALE PROFILE MODAL */}
       {selectedWhale && (() => {
         const w = selectedWhale
-        const whaleTips = tips.filter(t => t.username === w.username && t.platform === w.platform)
-        const sortedTips = [...whaleTips].sort((a, b) => new Date(b.date_time) - new Date(a.date_time))
-        const firstTip = whaleTips.length ? whaleTips.reduce((a, b) => new Date(a.date_time) < new Date(b.date_time) ? a : b) : null
-        const daysSinceLastTip = Math.floor((Date.now() - new Date(w.lastTipDate)) / 86400000)
+        const wKey = w.username?.toLowerCase()
+        const whaleTips = tips.filter(t => t.username === w.username)
+        const sortedTips = [...whaleTips].sort((a,b) => new Date(b.date_time)-new Date(a.date_time))
+        const firstTip = sortedTips.length ? sortedTips[sortedTips.length-1] : null
+        const daysSinceLastTip = Math.floor((Date.now()-new Date(w.lastTipDate))/86400000)
         const tierColor = TIER_COLORS[w.tier] || C.cyan
-        const avgDaysBetweenTips = whaleTips.length > 1 ? Math.floor((new Date(w.lastTipDate) - new Date(firstTip?.date_time)) / 86400000 / (whaleTips.length - 1)) : 7
-        const likelyReturnDays = Math.max(0, avgDaysBetweenTips - daysSinceLastTip)
-        const churnRisk = daysSinceLastTip > avgDaysBetweenTips * 2 ? "High" : daysSinceLastTip > avgDaysBetweenTips ? "Medium" : "Low"
-        const churnColor = churnRisk === "High" ? C.red : churnRisk === "Medium" ? C.orange : C.green
-        const biggestTip = whaleTips.length ? Math.max(...whaleTips.map(t => t.usd)) : 0
+        const avgDaysBetweenTips = whaleTips.length > 1 ? Math.floor((new Date(w.lastTipDate)-new Date(firstTip?.date_time))/86400000/(whaleTips.length-1)) : 30
+        const likelyReturnDays = Math.max(0, avgDaysBetweenTips-daysSinceLastTip)
+        const churnRisk = daysSinceLastTip > avgDaysBetweenTips*2 ? "High" : daysSinceLastTip > avgDaysBetweenTips ? "Medium" : "Low"
+        const churnColor = churnRisk==="High" ? C.red : churnRisk==="Medium" ? C.orange : C.green
+        const biggestTip = whaleTips.length ? Math.max(...whaleTips.map(t=>t.usd)) : 0
+        const privateTips = whaleTips.filter(t=>t.tip_type?.toLowerCase().includes('private'))
+        const spyTips = whaleTips.filter(t=>t.tip_type?.toLowerCase().includes('spy'))
+        const savedNote = tipperNotes[wKey] || {}
+        const aiData = fanAIInsights[wKey]
+
+        // Extract tip note keywords from CB username variants
+        const variants = tips.filter(t => t.username.toLowerCase().startsWith(wKey) && t.username.toLowerCase() !== wKey)
+        const tipKeywords = [...new Set(variants.map(t => t.username.slice(wKey.length).trim()).filter(n=>n.length>1&&n.length<25))]
+
+        // Hour heatmap
+        const hourCounts = {}
+        whaleTips.forEach(t => {
+          const h = new Date(t.date_time).getHours()
+          hourCounts[h] = (hourCounts[h]||0)+1
+        })
+        const maxHourCount = Math.max(...Object.values(hourCounts),1)
+        const topHour = Object.entries(hourCounts).sort((a,b)=>b[1]-a[1])[0]
+        const topHourLabel = topHour ? (parseInt(topHour[0])===0?"12 AM":parseInt(topHour[0])<12?`${topHour[0]} AM`:parseInt(topHour[0])===12?"12 PM":`${parseInt(topHour[0])-12} PM`) : "—"
+
+        // Day heatmap
+        const DAYS_SHORT = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"]
+        const dayCounts = {Sun:0,Mon:0,Tue:0,Wed:0,Thu:0,Fri:0,Sat:0}
+        whaleTips.forEach(t => { const d = new Date(t.date_time).getDay(); dayCounts[DAYS_SHORT[d]]++ })
+        const maxDayCount = Math.max(...Object.values(dayCounts),1)
+
+        // Fan personality tags from tip notes + behavior
+        const personalityTags = []
+        const kw = tipKeywords.map(k=>k.toLowerCase()).join(' ')
+        if (kw.includes('moan')||kw.includes('loud')||kw.includes('vocal')) personalityTags.push({label:'🔊 Loves moaning',col:C.pink})
+        if (kw.includes('dom')||kw.includes('goddess')||kw.includes('queen')||kw.includes('mistress')) personalityTags.push({label:'👑 Dominant preference',col:C.gold})
+        if (kw.includes('sub')||kw.includes('obey')||kw.includes('please')||kw.includes('master')) personalityTags.push({label:'🔗 Submissive vibe',col:C.indigo})
+        if (kw.includes('fuck')||kw.includes('fuck me')||kw.includes('harder')) personalityTags.push({label:'🔥 High energy',col:C.orange})
+        if (kw.includes('edge')||kw.includes('tease')||kw.includes('slow')) personalityTags.push({label:'⏳ Edging/tease fan',col:C.cyan})
+        if (privateTips.length > 0) personalityTags.push({label:`🔒 Books privates (${privateTips.length}x)`,col:C.pink})
+        if (spyTips.length > 0) personalityTags.push({label:`👁️ Spy show viewer (${spyTips.length}x)`,col:C.orange})
+        if (w.tipCount >= 20) personalityTags.push({label:'⭐ Super regular',col:C.green})
+        if (biggestTip >= 50) personalityTags.push({label:`💎 Big spender ($${biggestTip.toFixed(0)} max)`,col:C.gold})
+
+        const TABS = [
+          {id:'overview',label:'Overview'},
+          {id:'tips',label:'Tip History'},
+          {id:'notes',label:'📝 My Notes'},
+          {id:'ai',label:'🤖 AI Insights'},
+        ]
+
         return (
-          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 20 }}>
-            <div className="modal-inner" style={{ width: 560, maxHeight: "90vh", overflowY: "auto", ...glassCard, borderRadius: 20 }}>
-              <div style={{ padding: "24px 24px 20px", background: `linear-gradient(135deg, ${tierColor}15, transparent)`, borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                    <div style={{ width: 52, height: 52, borderRadius: 14, background: `linear-gradient(135deg, ${tierColor}, ${tierColor}80)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, fontWeight: 800, color: "#fff" }}>{w.username.charAt(0).toUpperCase()}</div>
+          <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000,padding:16}}
+            onClick={e=>{if(e.target===e.currentTarget)setSelectedWhale(null)}}>
+            <div style={{width:580,maxHeight:"92vh",overflowY:"auto",...glassCard,borderRadius:22,display:"flex",flexDirection:"column"}}>
+
+              {/* ── HEADER ── */}
+              <div style={{padding:"22px 24px 18px",background:`linear-gradient(135deg,${tierColor}18,transparent)`,borderBottom:"1px solid rgba(255,255,255,0.07)"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
+                  <div style={{display:"flex",alignItems:"center",gap:14}}>
+                    <div style={{width:54,height:54,borderRadius:14,background:`linear-gradient(135deg,${tierColor},${tierColor}80)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,fontWeight:900,color:"#fff",boxShadow:`0 0 20px ${tierColor}40`}}>
+                      {w.username.charAt(0).toUpperCase()}
+                    </div>
                     <div>
-                      <div style={{ fontSize: 20, fontWeight: 800, color: C.white }}>{w.username}</div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
-                        <span style={{ padding: "2px 10px", borderRadius: 100, background: `${tierColor}20`, border: `1px solid ${tierColor}50`, color: tierColor, fontSize: 11, fontWeight: 700 }}>{w.tier}</span>
-                        <span style={{ fontSize: 12, color: C.muted }}>{w.platform}</span>
+                      <div style={{fontSize:20,fontWeight:900,color:C.white}}>{w.username}</div>
+                      <div style={{display:"flex",alignItems:"center",gap:8,marginTop:4,flexWrap:"wrap"}}>
+                        <span style={{padding:"2px 10px",borderRadius:100,background:`${tierColor}20`,border:`1px solid ${tierColor}50`,color:tierColor,fontSize:11,fontWeight:700}}>{w.tier}</span>
+                        <span style={{fontSize:12,color:C.muted}}>{w.platform}</span>
+                        <span style={{fontSize:12,color:daysSinceLastTip<7?C.green:daysSinceLastTip<30?C.gold:C.red,fontWeight:600}}>
+                          {daysSinceLastTip===0?"Active today":`${daysSinceLastTip}d ago`}
+                        </span>
                       </div>
                     </div>
                   </div>
-                  <button onClick={() => setSelectedWhale(null)} style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.1)", color: C.muted, fontSize: 16, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+                  <button onClick={()=>setSelectedWhale(null)} style={{width:32,height:32,borderRadius:"50%",background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.1)",color:C.muted,fontSize:16,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>✕</button>
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
-                  {[{ label: "Total Spent", value: `$${w.totalUSD.toFixed(2)}`, color: C.green }, { label: "Tips Given", value: w.tipCount, color: C.cyan }, { label: "Avg Tip", value: `$${w.avgTipSize.toFixed(2)}`, color: C.gold }, { label: "Biggest Tip", value: `$${biggestTip.toFixed(2)}`, color: C.pink }].map(({ label, value, color }) => (
-                    <div key={label} style={{ background: "rgba(255,255,255,0.05)", borderRadius: 10, padding: 12, textAlign: "center" }}>
-                      <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>{label}</div>
-                      <div style={{ fontSize: 16, fontWeight: 800, color }}>{value}</div>
+
+                {/* Stat row */}
+                <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10}}>
+                  {[
+                    {label:"Total Spent",value:`$${w.totalUSD.toFixed(2)}`,color:C.green},
+                    {label:"Tips",value:w.tipCount,color:C.cyan},
+                    {label:"Avg Tip",value:`$${w.avgTipSize.toFixed(2)}`,color:C.gold},
+                    {label:"Biggest",value:`$${biggestTip.toFixed(2)}`,color:C.pink},
+                  ].map(({label,value,color})=>(
+                    <div key={label} style={{background:"rgba(255,255,255,0.05)",borderRadius:10,padding:"10px 12px",textAlign:"center"}}>
+                      <div style={{fontSize:10,color:C.muted,marginBottom:3}}>{label}</div>
+                      <div style={{fontSize:15,fontWeight:800,color}}>{value}</div>
                     </div>
                   ))}
                 </div>
+
+                {/* Personality tags */}
+                {personalityTags.length > 0 && (
+                  <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:12}}>
+                    {personalityTags.map(t=>(
+                      <span key={t.label} style={{padding:"3px 10px",borderRadius:20,background:`${t.col}15`,border:`1px solid ${t.col}35`,color:t.col,fontSize:11,fontWeight:600}}>
+                        {t.label}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
-              <div style={{ padding: 24, display: "flex", flexDirection: "column", gap: 20 }}>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>📊 Fan Intelligence</div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
-                    {[{ label: "First tip", value: firstTip ? new Date(firstTip.date_time).toLocaleDateString() : "—" }, { label: "Last tip", value: `${new Date(w.lastTipDate).toLocaleDateString()} (${daysSinceLastTip}d ago)` }, { label: "Avg days between tips", value: `${avgDaysBetweenTips} days` }, { label: "Churn risk", value: churnRisk, color: churnColor }].map(({ label, value, color }) => (
-                      <div key={label} style={{ padding: 14, background: "rgba(255,255,255,0.04)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.07)" }}>
-                        <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>{label}</div>
-                        <div style={{ fontSize: 14, fontWeight: 600, color: color || C.white }}>{value}</div>
+
+              {/* ── TABS ── */}
+              <div style={{display:"flex",borderBottom:"1px solid rgba(255,255,255,0.07)",padding:"0 20px"}}>
+                {TABS.map(tab=>(
+                  <button key={tab.id} onClick={()=>{ setProfileTab(tab.id); if(tab.id==='ai'&&!fanAIInsights[wKey]?.text&&!fanAIInsights[wKey]?.loading) generateFanInsights(w) }}
+                    style={{padding:"12px 14px",background:"none",border:"none",borderBottom:`2px solid ${profileTab===tab.id?tierColor:"transparent"}`,color:profileTab===tab.id?C.white:C.muted,fontSize:13,fontWeight:profileTab===tab.id?700:400,cursor:"pointer",whiteSpace:"nowrap",transition:"all 0.15s"}}>
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* ── TAB CONTENT ── */}
+              <div style={{padding:22,flex:1}}>
+
+                {/* OVERVIEW TAB */}
+                {profileTab==='overview' && (
+                  <div style={{display:"flex",flexDirection:"column",gap:16}}>
+
+                    {/* Tip notes from CB username variants */}
+                    {tipKeywords.length > 0 && (
+                      <div style={{padding:16,borderRadius:12,background:"rgba(124,92,255,0.08)",border:"1px solid rgba(124,92,255,0.25)"}}>
+                        <div style={{fontSize:12,fontWeight:700,color:C.indigo,marginBottom:10}}>💬 Tip Notes Left by Fan</div>
+                        <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                          {tipKeywords.map(k=>(
+                            <span key={k} style={{padding:"4px 10px",borderRadius:8,background:"rgba(124,92,255,0.15)",border:"1px solid rgba(124,92,255,0.3)",fontSize:12,color:C.white}}>"{k}"</span>
+                          ))}
+                        </div>
+                        <div style={{fontSize:11,color:C.muted,marginTop:8}}>These are words the fan included with their tips</div>
                       </div>
-                    ))}
-                  </div>
-                  {w.typicalOnlineHours && w.typicalOnlineHours !== "Unknown" && (
-                    <div style={{ padding: "9px 14px", background: `${C.cyan}10`, border: `1px solid ${C.cyan}25`, borderRadius: 9, marginBottom: 12 }}>
-                      <span style={{ fontSize: 12, color: C.cyan }}>🕐 Best time to reach: <strong>{w.typicalOnlineHours}</strong></span>
+                    )}
+
+                    {/* Activity timing */}
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                      <div style={{padding:14,background:"rgba(255,255,255,0.04)",borderRadius:10,border:"1px solid rgba(255,255,255,0.07)"}}>
+                        <div style={{fontSize:11,color:C.muted,marginBottom:4}}>⏰ Most active hour</div>
+                        <div style={{fontSize:16,fontWeight:800,color:C.cyan}}>{topHourLabel}</div>
+                      </div>
+                      <div style={{padding:14,background:"rgba(255,255,255,0.04)",borderRadius:10,border:"1px solid rgba(255,255,255,0.07)"}}>
+                        <div style={{fontSize:11,color:C.muted,marginBottom:4}}>🔄 Tips every</div>
+                        <div style={{fontSize:16,fontWeight:800,color:C.gold}}>{avgDaysBetweenTips}d avg</div>
+                      </div>
+                      <div style={{padding:14,background:"rgba(255,255,255,0.04)",borderRadius:10,border:"1px solid rgba(255,255,255,0.07)"}}>
+                        <div style={{fontSize:11,color:C.muted,marginBottom:4}}>📅 Expected return</div>
+                        <div style={{fontSize:16,fontWeight:800,color:likelyReturnDays===0?C.orange:C.white}}>{likelyReturnDays===0?"Overdue!":likelyReturnDays===1?"Tomorrow":`~${likelyReturnDays}d`}</div>
+                      </div>
+                      <div style={{padding:14,background:"rgba(255,255,255,0.04)",borderRadius:10,border:"1px solid rgba(255,255,255,0.07)"}}>
+                        <div style={{fontSize:11,color:C.muted,marginBottom:4}}>⚠️ Churn risk</div>
+                        <div style={{fontSize:16,fontWeight:800,color:churnColor}}>{churnRisk}</div>
+                      </div>
                     </div>
-                  )}
-                  {(() => {
-                    const dayKeys = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]
-                    const dayCounts = { Mon:0,Tue:0,Wed:0,Thu:0,Fri:0,Sat:0,Sun:0 }
-                    whaleTips.forEach(t => {
-                      const d = new Date(t.date_time).getDay()
-                      const key = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][d]
-                      if (key in dayCounts) dayCounts[key]++
-                    })
-                    const maxCount = Math.max(...Object.values(dayCounts), 1)
-                    return (
-                      <div>
-                        <div style={{ fontSize: 11, color: C.muted, marginBottom: 8 }}>📅 Tips by day of week</div>
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4 }}>
-                          {dayKeys.map(d => {
-                            const count = dayCounts[d]
-                            const intensity = count / maxCount
-                            const bg = intensity === 0 ? "rgba(255,255,255,0.04)" : intensity < 0.33 ? "rgba(124,92,255,0.2)" : intensity < 0.66 ? "rgba(124,92,255,0.5)" : "rgba(124,92,255,0.9)"
-                            return (
-                              <div key={d} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-                                <div style={{ width: "100%", height: 30, borderRadius: 6, background: bg, border: "1px solid rgba(255,255,255,0.06)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                                  <span style={{ fontSize: 10, fontWeight: 700, color: count > 0 ? C.white : C.muted }}>{count || ""}</span>
-                                </div>
-                                <span style={{ fontSize: 9, color: C.muted }}>{d}</span>
+
+                    {/* Day of week heatmap */}
+                    <div>
+                      <div style={{fontSize:12,color:C.muted,marginBottom:8}}>📅 Tips by day of week</div>
+                      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4}}>
+                        {DAYS_SHORT.map(d=>{
+                          const count=dayCounts[d]; const intensity=count/maxDayCount
+                          const bg=count===0?"rgba(255,255,255,0.04)":intensity<0.33?"rgba(124,92,255,0.2)":intensity<0.66?"rgba(124,92,255,0.5)":"rgba(124,92,255,0.9)"
+                          return (
+                            <div key={d} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
+                              <div style={{width:"100%",height:32,borderRadius:6,background:bg,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                                <span style={{fontSize:11,fontWeight:700,color:count>0?C.white:C.muted}}>{count||""}</span>
                               </div>
-                            )
-                          })}
+                              <span style={{fontSize:9,color:C.muted}}>{d}</span>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Top 3 tips */}
+                    <div>
+                      <div style={{fontSize:12,color:C.muted,marginBottom:8}}>🏆 Biggest tips</div>
+                      <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                        {[...whaleTips].sort((a,b)=>b.usd-a.usd).slice(0,3).map((t,i)=>(
+                          <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 14px",background:"rgba(255,255,255,0.04)",borderRadius:8}}>
+                            <div style={{display:"flex",alignItems:"center",gap:10}}>
+                              <span style={{fontSize:14}}>{["🥇","🥈","🥉"][i]}</span>
+                              <div>
+                                <div style={{fontSize:12,color:C.muted}}>{new Date(t.date_time).toLocaleDateString()}</div>
+                                {t.tip_type && t.tip_type!=='Tip' && <div style={{fontSize:10,color:C.indigo}}>{t.tip_type}</div>}
+                              </div>
+                            </div>
+                            <div style={{fontSize:15,fontWeight:800,color:C.gold}}>${t.usd.toFixed(2)}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Quick action buttons */}
+                    <div style={{display:"flex",gap:10,paddingTop:4}}>
+                      <button onClick={()=>{setMessageTarget(w);setMessageIndex(0);setMessageCopied(false)}}
+                        style={{flex:1,padding:"11px 0",borderRadius:10,background:"linear-gradient(135deg,#EC4899,#7C5CFF)",border:"none",color:C.white,fontSize:13,fontWeight:700,cursor:"pointer",animation:"pulse-msg 2.5s infinite"}}>
+                        💌 Message Fan
+                      </button>
+                      <button onClick={()=>{setProfileTab('notes');setNoteTarget(w.username);setNoteText(savedNote.note||'')}}
+                        style={{flex:1,padding:"11px 0",borderRadius:10,background:savedNote.note?"rgba(245,158,11,0.2)":"rgba(255,255,255,0.06)",border:`1px solid ${savedNote.note?"rgba(245,158,11,0.4)":"rgba(255,255,255,0.1)"}`,color:savedNote.note?C.gold:C.muted,fontSize:13,fontWeight:700,cursor:"pointer"}}>
+                        📝 {savedNote.note?"Edit Note":"Add Note"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* TIP HISTORY TAB */}
+                {profileTab==='tips' && (
+                  <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                    <div style={{fontSize:12,color:C.muted,marginBottom:8}}>{whaleTips.length} tips total · ${w.totalUSD.toFixed(2)} lifetime</div>
+                    {sortedTips.map((t,i)=>(
+                      <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 14px",background:"rgba(255,255,255,0.03)",borderRadius:8,border:"1px solid rgba(255,255,255,0.06)"}}>
+                        <div>
+                          <div style={{fontSize:12,color:C.white}}>{new Date(t.date_time).toLocaleDateString()} at {new Date(t.date_time).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}</div>
+                          {t.tip_type && t.tip_type!=='Tip' && <div style={{fontSize:10,color:C.indigo,marginTop:2}}>{t.tip_type}</div>}
+                        </div>
+                        <div style={{fontSize:14,fontWeight:700,color:C.green}}>${t.usd.toFixed(2)}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* NOTES TAB */}
+                {profileTab==='notes' && (
+                  <div style={{display:"flex",flexDirection:"column",gap:14}}>
+                    <div style={{fontSize:13,color:C.muted}}>Private notes about {w.username} — only you can see these</div>
+                    <textarea value={noteText} onChange={e=>setNoteText(e.target.value)}
+                      placeholder={`e.g. Loves dominant energy, books privates on Sundays, favorite toy is Lush, responds well to shoutouts during stream...`}
+                      rows={5}
+                      style={{width:"100%",padding:"12px 14px",borderRadius:10,background:"rgba(255,255,255,0.05)",border:"1px solid rgba(245,158,11,0.3)",color:C.white,fontSize:13,outline:"none",resize:"vertical",fontFamily:"inherit",boxSizing:"border-box"}}
+                      onFocus={e=>e.target.style.borderColor="rgba(245,158,11,0.6)"}
+                      onBlur={e=>e.target.style.borderColor="rgba(245,158,11,0.3)"}
+                    />
+                    {/* Key insights bullets if note has content */}
+                    {noteText && (
+                      <div style={{padding:14,borderRadius:10,background:"rgba(245,158,11,0.06)",border:"1px solid rgba(245,158,11,0.2)"}}>
+                        <div style={{fontSize:12,fontWeight:700,color:C.gold,marginBottom:8}}>📌 Key Details Detected</div>
+                        <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                          {noteText.split(/[,.
+]/).filter(s=>s.trim().length>3).slice(0,5).map((line,i)=>(
+                            <div key={i} style={{fontSize:12,color:C.text,display:"flex",gap:6,alignItems:"flex-start"}}>
+                              <span style={{color:C.gold,flexShrink:0}}>•</span>
+                              <span>{line.trim()}</span>
+                            </div>
+                          ))}
                         </div>
                       </div>
-                    )
-                  })()}
-                </div>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>🏆 Top 3 Tips</div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                    {[...whaleTips].sort((a,b) => b.usd - a.usd).slice(0,3).map((t, i) => (
-                      <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: "rgba(255,255,255,0.04)", borderRadius: 8, border: "1px solid rgba(255,255,255,0.07)" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                          <span style={{ fontSize: 14 }}>{["🥇","🥈","🥉"][i]}</span>
-                          <span style={{ fontSize: 12, color: C.muted }}>{new Date(t.date_time).toLocaleDateString()}</span>
+                    )}
+                    <div style={{display:"flex",gap:10}}>
+                      <button onClick={()=>saveTipperNote(w.username,noteText)} disabled={noteSaving}
+                        style={{flex:1,padding:"11px 0",borderRadius:10,background:"linear-gradient(135deg,#F59E0B,#EC4899)",border:"none",color:C.white,fontSize:14,fontWeight:700,cursor:"pointer"}}>
+                        {noteSaving?"Saving...":"💾 Save Note"}
+                      </button>
+                      {savedNote.note && (
+                        <button onClick={()=>saveTipperNote(w.username,'')}
+                          style={{padding:"11px 14px",borderRadius:10,background:"rgba(248,113,113,0.12)",border:"1px solid rgba(248,113,113,0.3)",color:C.red,fontSize:13,cursor:"pointer"}}>
+                          Delete
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* AI INSIGHTS TAB */}
+                {profileTab==='ai' && (
+                  <div style={{display:"flex",flexDirection:"column",gap:14}}>
+                    {aiData?.loading && (
+                      <div style={{textAlign:"center",padding:40}}>
+                        <div style={{width:32,height:32,border:"3px solid rgba(124,92,255,0.3)",borderTopColor:C.indigo,borderRadius:"50%",animation:"spin 0.8s linear infinite",margin:"0 auto 12px"}} />
+                        <div style={{fontSize:13,color:C.muted}}>Analyzing {w.username}'s behavior patterns...</div>
+                      </div>
+                    )}
+                    {aiData?.error && (
+                      <div style={{padding:16,borderRadius:12,background:"rgba(248,113,113,0.08)",border:"1px solid rgba(248,113,113,0.2)",color:C.red,fontSize:13}}>{aiData.error}</div>
+                    )}
+                    {aiData?.text && (
+                      <div>
+                        <div style={{fontSize:12,color:C.muted,marginBottom:14,display:"flex",alignItems:"center",gap:6}}>
+                          <div style={{width:6,height:6,borderRadius:"50%",background:C.green,animation:"pulse-msg 2s infinite"}} />
+                          AI analysis based on real tip data · updates each time you open
                         </div>
-                        <div style={{ fontSize: 15, fontWeight: 800, color: C.gold }}>${t.usd.toFixed(2)}</div>
+                        {aiData.text.split('
+
+').map((section,i)=>{
+                          const [header,...lines] = section.split('
+')
+                          const col = i===0?C.pink:i===1?C.cyan:C.gold
+                          return (
+                            <div key={i} style={{marginBottom:14,padding:14,borderRadius:12,background:`${col}08`,border:`1px solid ${col}20`}}>
+                              <div style={{fontSize:12,fontWeight:800,color:col,marginBottom:8}}>{header}</div>
+                              {lines.map((line,j)=>(
+                                <div key={j} style={{fontSize:13,color:C.text,display:"flex",gap:8,alignItems:"flex-start",marginBottom:4}}>
+                                  <span style={{color:col,flexShrink:0,marginTop:1}}>•</span>
+                                  <span>{line.replace(/^[•\-]\s*/,'')}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )
+                        })}
+                        <button onClick={()=>{ setFanAIInsights(prev=>({...prev,[wKey]:null})); generateFanInsights(w) }}
+                          style={{width:"100%",padding:"9px 0",borderRadius:8,background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.1)",color:C.muted,fontSize:12,cursor:"pointer",marginTop:4}}>
+                          🔄 Regenerate insights
+                        </button>
                       </div>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>🕐 Recent Tips</div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                    {sortedTips.slice(0, 5).map((t, i) => (
-                      <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: "rgba(255,255,255,0.04)", borderRadius: 8, border: "1px solid rgba(255,255,255,0.07)" }}>
-                        <div style={{ fontSize: 12, color: C.muted }}>{new Date(t.date_time).toLocaleDateString()} at {new Date(t.date_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</div>
-                        <div style={{ fontSize: 14, fontWeight: 700, color: C.green }}>${t.usd.toFixed(2)}</div>
+                    )}
+                    {!aiData && (
+                      <div style={{textAlign:"center",padding:32}}>
+                        <div style={{fontSize:32,marginBottom:12}}>🤖</div>
+                        <div style={{fontSize:15,fontWeight:700,color:C.white,marginBottom:6}}>AI Fan Analysis</div>
+                        <div style={{fontSize:13,color:C.muted,marginBottom:20}}>Get personality insights, engagement strategy, and revenue opportunities based on {w.username}'s real data</div>
+                        <button onClick={()=>generateFanInsights(w)}
+                          style={{padding:"12px 28px",borderRadius:12,background:"linear-gradient(135deg,#7C5CFF,#22D3EE)",border:"none",color:C.white,fontSize:14,fontWeight:700,cursor:"pointer"}}>
+                          ✨ Generate Insights
+                        </button>
                       </div>
-                    ))}
+                    )}
                   </div>
-                </div>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>🤖 AI Predictions</div>
-                  <div style={{ padding: 16, background: "rgba(255,255,255,0.04)", borderRadius: 12, border: "1px solid rgba(255,255,255,0.07)", display: "flex", flexDirection: "column", gap: 10 }}>
-                    {[{ label: "📅 Likely to tip again in", value: likelyReturnDays === 0 ? "Overdue!" : `~${likelyReturnDays} days`, color: C.cyan }, { label: "💸 Predicted next tip size", value: `$${(w.avgTipSize * 1.1).toFixed(2)}`, color: C.gold }, { label: "🎯 Engagement score", value: `${Math.min(99, Math.round((w.tipCount / 10) * 20 + (w.totalUSD / 100) * 10))} / 100`, color: C.pink }, { label: "📈 30-day revenue forecast", value: `$${((w.totalUSD / Math.max(1, Math.floor((Date.now() - new Date(firstTip?.date_time)) / 2592000000))) * 1.05).toFixed(2)}`, color: C.green }].map(({ label, value, color }) => (
-                      <div key={label} style={{ display: "flex", justifyContent: "space-between", padding: "10px 14px", background: "rgba(255,255,255,0.04)", borderRadius: 8 }}>
-                        <div style={{ fontSize: 13, color: C.text }}>{label}</div>
-                        <div style={{ fontSize: 13, fontWeight: 700, color }}>{value}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                <button onClick={() => setSelectedWhale(null)} style={{ width: "100%", padding: "12px", borderRadius: 10, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: C.muted, fontSize: 14, cursor: "pointer" }}>Close Profile</button>
+                )}
+              </div>
+
+              {/* Close button */}
+              <div style={{padding:"14px 22px",borderTop:"1px solid rgba(255,255,255,0.06)"}}>
+                <button onClick={()=>setSelectedWhale(null)}
+                  style={{width:"100%",padding:"11px",borderRadius:10,background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.09)",color:C.muted,fontSize:14,cursor:"pointer"}}>
+                  Close
+                </button>
               </div>
             </div>
           </div>
-        )
       })()}
 
       {/* MESSAGE GENERATOR MODAL */}
