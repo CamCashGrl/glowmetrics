@@ -1282,7 +1282,7 @@ const handleCSV = async (file, forcePlatform = null) => {
         performance.push({
           type: 'performance', icon: '📈', color: C.pink, severity: 'info',
           title: `Your best sessions happen on ${analyticsbestDay.day}s`,
-          message: `${bestDayCount} of your top-earning streams were on ${analyticsbestDay.day}s ($${analyticsbestDay.avg.toFixed(0)} avg). Plan your next high-effort stream for this day`,
+          message: `${bestDayCount} of your top-earning streams were on ${analyticsbestDay.day}s. Plan your next high-effort stream for this day`,
           cta: null, reengageMsg: ''
         })
       }
@@ -1827,8 +1827,8 @@ const handleCSV = async (file, forcePlatform = null) => {
                         </div>
                         {a.cta && (
                           <button onClick={() => { const w = whales.find(wh => wh.username === a.username); if (w) { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) } }}
-                            style={{ flexShrink: 0, padding: "7px 14px", borderRadius: 8, background: "linear-gradient(135deg,#EC4899,#7C5CFF)", border: "none", color: C.white, fontSize: 12, fontWeight: 700, cursor: "pointer", animation: "pulse-msg 2.5s infinite" }}>
-                            💌 Message
+                            style={{ flexShrink: 0, padding: "8px 10px", borderRadius: 8, background: "none", border: "none", color: C.pink, fontSize: 22, cursor: "pointer", animation: "pulse-msg 2s infinite", lineHeight: 1 }}>
+                            💌
                           </button>
                         )}
                       </div>
@@ -1887,15 +1887,20 @@ const handleCSV = async (file, forcePlatform = null) => {
                       })}
                     </div>
                     {/* Best day */}
-                    {analyticsbestDay && (
-                      <div style={{ display: "flex", gap: 8, alignItems: "center", padding: "10px 14px", borderRadius: 10, background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.2)", marginBottom: 0 }}>
-                        <span style={{ fontSize: 16 }}>📅</span>
-                        <div style={{ fontSize: 13, color: C.white }}>
-                          <strong>{analyticsbestDay.day}s</strong> earn the most — ${analyticsbestDay.avg.toFixed(0)} avg per active day
-                          {analyticsbestDay.count >= 3 && <span style={{ color: C.muted, marginLeft: 6 }}>across {analyticsbestDay.count} {analyticsbestDay.day}s tracked</span>}
+                    {analyticsbestDay && (() => {
+                      // Use avg per SESSION on best day (not avg/calendar day)
+                      const bdSess = sessions.filter(s => new Date(s.startTime).toLocaleDateString('en-US', { weekday: 'long' }) === analyticsbestDay.day)
+                      const bdAvg = bdSess.length ? (bdSess.reduce((a,s) => a+s.totalUSD,0)/bdSess.length) : analyticsbestDay.avg
+                      return (
+                        <div style={{ display: "flex", gap: 8, alignItems: "center", padding: "10px 14px", borderRadius: 10, background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.2)", marginBottom: 0 }}>
+                          <span style={{ fontSize: 16 }}>📅</span>
+                          <div style={{ fontSize: 13, color: C.white }}>
+                            <strong>{analyticsbestDay.day}s</strong> earn the most — ${bdAvg.toFixed(0)} avg per session
+                            {bdSess.length >= 3 && <span style={{ color: C.muted, marginLeft: 6 }}>across {bdSess.length} {analyticsbestDay.day} sessions</span>}
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      )
+                    })()}
                   </div>
                 )
               })()}
@@ -1949,7 +1954,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                             const bg = val === 0 ? "rgba(255,255,255,0.03)" : intensity < 0.25 ? "rgba(34,211,238,0.12)" : intensity < 0.5 ? "rgba(34,211,238,0.30)" : intensity < 0.75 ? "rgba(34,211,238,0.60)" : "rgba(34,211,238,0.90)"
                             return (
                               <div key={d} title={`${plat} ${d}: avg $${val.toFixed(2)}/day`}
-                                onClick={() => { setChartDrillDay(d); setActiveTab("whales") }}
+                                onClick={() => { if (val > 0) setChartDrillDay(d) }}
                                 style={{ height: 32, borderRadius: 5, background: bg, border: isToday ? "2px solid rgba(34,211,238,0.7)" : "1px solid rgba(255,255,255,0.05)", display: "flex", alignItems: "center", justifyContent: "center", cursor: val > 0 ? "pointer" : "default", transition: "opacity 0.1s" }}
                                 onMouseEnter={e => { if (val > 0) e.currentTarget.style.opacity = "0.75" }}
                                 onMouseLeave={e => { e.currentTarget.style.opacity = "1" }}>
@@ -2022,7 +2027,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                   {opts.badge && <span style={{ fontSize: 11, padding: "3px 9px", borderRadius: 20, background: opts.badgeBg, color: opts.badgeColor, fontWeight: 700, whiteSpace: "nowrap" }}>{opts.badge}</span>}
                   {opts.action && (
                     <button onClick={opts.action} style={{ padding: "6px 12px", borderRadius: 8, background: opts.btnBg || "linear-gradient(135deg,#22D3EE,#EC4899)", border: "none", color: C.white, fontSize: 11, fontWeight: 700, cursor: "pointer", flexShrink: 0, animation: opts.pulseBtn ? "pulse-msg 2.5s infinite" : "none" }}>
-                      {opts.btnLabel || "💌 Message"}
+                      {opts.btnLabel || "💌"}
                     </button>
                   )}
                 </div>
@@ -2052,7 +2057,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                           sub: `peaks at ${w.peakLabel}`,
                           badge: `${w.confidence}% likely`, badgeBg: "rgba(16,185,129,0.2)", badgeColor: C.green,
                           action: () => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) },
-                          btnBg: "linear-gradient(135deg,#10B981,#22D3EE)", pulseBtn: i === 0
+                          btnBg: "none", pulseBtn: true
                         }))}
                       </div>
                     </div>
@@ -2090,7 +2095,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                           badge: `${days}d ago`, badgeBg: `${urgency}20`, badgeColor: urgency,
                           action: () => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) },
                           btnBg: `linear-gradient(135deg,${urgency},#EC4899)`, pulseBtn: i === 0,
-                          btnLabel: "💌 Message"
+                          btnLabel: "💌"
                         }))}
                       </div>
                     </div>
@@ -2131,7 +2136,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, flexWrap: "wrap" }}>
                             <div>
                               <div style={{ fontSize: 13, fontWeight: 700, color: C.white, marginBottom: 3 }}>
-                                📉 {plat} — estimated <span style={{ color: C.orange }}>${m.missedRevenue.toFixed(0)}</span> left on the table
+                                📉 {plat} — peak hour earns <span style={{ color: C.cyan }}>{m.multiplier || (m.bestHourAvg && m.overallAvg ? (m.bestHourAvg/m.overallAvg).toFixed(1) : "5")}x</span> your avg session. Shift more streams to {m.bestHour < 12 ? m.bestHour === 0 ? "12 AM" : m.bestHour + " AM" : m.bestHour === 12 ? "12 PM" : (m.bestHour-12) + " PM"} to add ~<span style={{ color: C.green }}>${Math.round((m.bestHourAvg||0) - (m.overallAvg||0))}/stream</span>
                               </div>
                               <div style={{ fontSize: 12, color: C.muted }}>
                                 {m.sessionsNotAtBestHour} sessions ran off-peak · Best hour is {fmtH2(m.bestHour)} (${m.bestHourAvg.toFixed(0)} avg) vs your overall ${m.overallAvg.toFixed(0)} avg
@@ -2651,7 +2656,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                           <span style={{ color: C.white, fontWeight: 600 }}>{w.username}</span>
                           <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }}
-                            style={{ fontSize: 18, background: "none", border: "none", cursor: "pointer", lineHeight: 1, padding: 0 }}
+                            style={{ fontSize: 20, background: "none", border: "none", cursor: "pointer", lineHeight: 1, padding: 0, animation: "pulse-msg 2s infinite" }}
                             title="Message">💌</button>
                         </div>
                       </td>
@@ -2763,7 +2768,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                           </div>
                           <div style={{ display: "flex", gap: 6 }}>
                             <button onClick={() => setSelectedWhale(w)} style={{ padding: "4px 10px", borderRadius: 6, background: "rgba(34,211,238,0.12)", border: "1px solid rgba(34,211,238,0.25)", color: C.cyan, fontSize: 11, cursor: "pointer" }}>🔍 Profile</button>
-                            <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }} style={{ padding: "4px 10px", borderRadius: 6, background: "rgba(236,72,153,0.12)", border: "1px solid rgba(236,72,153,0.25)", color: C.pink, fontSize: 11, cursor: "pointer" }}>💌 Message</button>
+                            <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }} style={{ padding: "4px 8px", borderRadius: 6, background: "none", border: "none", color: C.pink, fontSize: 20, cursor: "pointer", animation: "pulse-msg 2s infinite", lineHeight: 1 }}>💌</button>
                           </div>
                         </div>
 
@@ -3709,7 +3714,7 @@ const handleCSV = async (file, forcePlatform = null) => {
         )}
 
         {activeTab === "titles" && (
-          <div>
+          <div style={{ maxWidth: 760, margin: "0 auto" }}>
             <TitleGenerator C={C} glassCard={glassCard} analytics={analytics} tips={tips} sessions={sessions} whales={whales} />
             <div style={{ marginTop: 40, paddingTop: 32, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
               <HashtagGenerator C={C} glassCard={glassCard} />
