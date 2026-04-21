@@ -961,25 +961,20 @@ export default function Dashboard() {
           setNewTipCount(n => n + 1)
           setNewAlertKey(k => k + 1)
           setLastRefreshed(new Date())
+          // Invalidate the sessionStorage cache so next hard reload gets fresh data
+          try { sessionStorage.removeItem(`camcash_tips_${user.id}`) } catch(e) {}
         })
         .subscribe()
       realtimeChannelRef.current = channel
 
-      // ── AUTO-REFRESH every 30s lightweight, full reload every 10min ──
-      let tick = 0
+      // ── LIGHTWEIGHT 30s analytics re-run (NO DB calls — just re-runs engine on cached data)
+      // Full reloads only happen on: initial load, CSV upload, focus after 5+ min away
       refreshTimerRef.current = setInterval(() => {
-        tick++
-        if (tick >= 20) {
-          tick = 0
-          setIsRefreshing(true)
-          loadData(user.id).then(() => { setIsRefreshing(false); setLastRefreshed(new Date()) })
-        } else {
-          setTips(prev => {
-            if (!prev.length) return prev
-            try { setAnalytics(runEngine(prev)) } catch(e) {}
-            return prev
-          })
-        }
+        setTips(prev => {
+          if (!prev.length) return prev
+          try { setAnalytics(runEngine(prev)) } catch(e) {}
+          return prev
+        })
       }, 30000)
     })
     return () => {
@@ -987,6 +982,27 @@ export default function Dashboard() {
       if (refreshTimerRef.current) clearInterval(refreshTimerRef.current)
     }
   }, [])
+
+  // ── VISIBILITY REFRESH: only reload if tab was hidden for 15+ min ──
+  // Uses visibilitychange instead of focus so switching windows doesn't fire it
+  useEffect(() => {
+    if (!user) return
+    let hiddenAt = null
+    const onVisibility = () => {
+      if (document.hidden) {
+        hiddenAt = Date.now()
+      } else if (hiddenAt && Date.now() - hiddenAt > 15 * 60 * 1000) {
+        // Tab was hidden for 15+ min — reload fresh data
+        try { sessionStorage.removeItem(`camcash_tips_${user.id}`) } catch(e) {}
+        loadData(user.id, true).then(() => setLastRefreshed(new Date()))
+        hiddenAt = null
+      } else {
+        hiddenAt = null
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => document.removeEventListener('visibilitychange', onVisibility)
+  }, [user])
 
   useEffect(() => {
     if (analytics) setLiveAnalytics(analytics)
@@ -997,7 +1013,23 @@ export default function Dashboard() {
     router.replace('/login')
   }
 
-  const loadData = async (uid) => {
+  const loadData = async (uid, force = false) => {
+    // ── CACHE CHECK: skip DB if data is fresh (< 15 min old) ──
+    if (!force) {
+      try {
+        const cached = sessionStorage.getItem(`camcash_tips_${uid}`)
+        const cachedTime = sessionStorage.getItem(`camcash_tips_time_${uid}`)
+        if (cached && cachedTime && Date.now() - parseInt(cachedTime) < 15 * 60 * 1000) {
+          const allData = JSON.parse(cached)
+          setTips(allData)
+          try { setAnalytics(runEngine(allData)) } catch(e) {}
+          setLoading(false)
+          setLastRefreshed(new Date(parseInt(cachedTime)))
+          return
+        }
+      } catch(e) {} // sessionStorage unavailable (private mode) — fall through to fetch
+    }
+
     setLoading(true)
     try {
       let allData = []
@@ -1017,9 +1049,12 @@ export default function Dashboard() {
           setAnalytics(result)
         } catch (engineErr) {
           console.error('[loadData] runEngine failed:', engineErr)
-          // Analytics failed but tips are loaded — dashboard will show raw data
-          // without computed insights rather than a blank screen
         }
+        // Save to cache
+        try {
+          sessionStorage.setItem(`camcash_tips_${uid}`, JSON.stringify(allData))
+          sessionStorage.setItem(`camcash_tips_time_${uid}`, Date.now().toString())
+        } catch(e) {} // quota exceeded — fine, skip cache
       }
       setLastRefreshed(new Date())
     } finally { setLoading(false) }
@@ -1057,7 +1092,9 @@ const handleCSV = async (file, forcePlatform = null) => {
       showToast(msg)
 
       setUploadCount(c => c + 1)
-      await loadData(user.id)
+      // Force reload after upload — bypass cache so new tips appear immediately
+      try { sessionStorage.removeItem(`camcash_tips_${user.id}`) } catch(e) {}
+      await loadData(user.id, true)
 
     } catch (err) {
       showToast("❌ " + err.message)
@@ -1074,7 +1111,7 @@ const handleCSV = async (file, forcePlatform = null) => {
 
   const deleteAllTips = async () => {
     if (!user) return
-    try { const { error } = await supabase.from("tips").delete().eq("user_id", user.id); if (error) throw error; showToast("✅ All tips deleted"); setShowDeleteConfirm(false); await loadData(user.id) }
+    try { const { error } = await supabase.from("tips").delete().eq("user_id", user.id); if (error) throw error; showToast("✅ All tips deleted"); setShowDeleteConfirm(false); try { sessionStorage.removeItem(`camcash_tips_${user.id}`) } catch(e) {}; await loadData(user.id, true) }
     catch (err) { showToast("❌ " + err.message) }
   }
 
