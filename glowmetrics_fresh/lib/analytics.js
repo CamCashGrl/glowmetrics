@@ -864,9 +864,22 @@ export function generateInsights(tips, sessions, bestDay, worstDay, bestHour) {
       dayTips[dow] += t.usd || 0
       dayDates[dow].add(dateKey)
     })
-    const dayAvgs = Object.keys(dayTips).map(d => dayTips[d] / (dayDates[d].size || 1))
-    const overallDayAvg = dayAvgs.length ? dayAvgs.reduce((a,b) => a+b, 0) / dayAvgs.length : 0
-    const bestDayAvg = dayTips[bestDay.day] / (dayDates[bestDay.day]?.size || 1)
+    // FIX: use avg per SESSION on each day (not avg/calendar day which dilutes by inactive days)
+    const daySessionMap = {}
+    sessions.forEach(s => {
+      const d = new Date(s.startTime).toLocaleDateString('en-US', { weekday: 'long' })
+      if (!daySessionMap[d]) daySessionMap[d] = []
+      daySessionMap[d].push(s.totalUSD)
+    })
+    const bestDayAvg = daySessionMap[bestDay.day]
+      ? daySessionMap[bestDay.day].reduce((a,b) => a+b, 0) / daySessionMap[bestDay.day].length
+      : (dayTips[bestDay.day] / (dayDates[bestDay.day]?.size || 1))
+    const otherDaysSessions = Object.entries(daySessionMap)
+      .filter(([d]) => d !== bestDay.day)
+      .flatMap(([_, vals]) => vals)
+    const overallDayAvg = otherDaysSessions.length
+      ? otherDaysSessions.reduce((a,b) => a+b, 0) / otherDaysSessions.length
+      : 0
     const mult = overallDayAvg > 0 ? (bestDayAvg / overallDayAvg).toFixed(1) : null
     const costOfMissing = parseFloat((bestDayAvg - overallDayAvg).toFixed(2))
     if (mult && parseFloat(mult) > 1 && costOfMissing > 0) {
@@ -896,8 +909,11 @@ export function generateInsights(tips, sessions, bestDay, worstDay, bestHour) {
   }
 
   // Session length vs earnings
-  const longSessions  = sessions.filter(s => s.durationMinutes > 60)
-  const shortSessions = sessions.filter(s => s.durationMinutes <= 60)
+  // FIX: exclude durationUnknown sessions (zero-duration exports) from both buckets
+  // so we only compare sessions where we actually know the stream length
+  const timedSessionsForLength = sessions.filter(s => !s.durationUnknown)
+  const longSessions  = timedSessionsForLength.filter(s => s.durationMinutes > 60)
+  const shortSessions = timedSessionsForLength.filter(s => s.durationMinutes > 1 && s.durationMinutes <= 60)
   if (longSessions.length >= 3 && shortSessions.length >= 3) {
     const longAvg  = longSessions.reduce((s, x) => s + x.totalUSD, 0) / longSessions.length
     const shortAvg = shortSessions.reduce((s, x) => s + x.totalUSD, 0) / shortSessions.length
@@ -927,7 +943,9 @@ export function generateInsights(tips, sessions, bestDay, worstDay, bestHour) {
     const multiplierText = avgOneTime > 0 && avgReturning > 0
       ? `${(avgReturning / avgOneTime).toFixed(1)}x more`
       : 'significantly more'
-    insights.push({ icon: '🔁', text: `${pct}% of your fans are returning tippers — loyalty is your strongest asset. Returning fans spend ${multiplierText} on average than first-timers ($${avgReturning.toFixed(0)} vs $${avgOneTime.toFixed(0)})`, type: 'retention', priority: 3 })
+    // FIX: use toFixed(2) for new fan avg so $0.50 doesn't round to $0 or $1
+    const fmtAmt = (v) => v < 1 ? `$${v.toFixed(2)}` : `$${v.toFixed(0)}`
+    insights.push({ icon: '🔁', text: `${pct}% of your fans are returning tippers — loyalty is your strongest asset. Returning fans spend ${multiplierText} on average than first-timers (${fmtAmt(avgReturning)} vs ${fmtAmt(avgOneTime)})`, type: 'retention', priority: 3 })
   }
 
   // Weekly momentum
@@ -1170,7 +1188,8 @@ export function aggregateRows(tips) {
 
   // ── MISSED REVENUE ────────────────────────────────────────────────────
   // Formula (per platform):
-  //   missedRevenue = (bestHourAvg - overallPlatformAvgPerSession) × sessionsNotAtBestHour
+  //   potentialGain = (bestHourAvg - overallPlatformAvgPerSession) × sessionsNotAtBestHour
+  // Capped at 3x overall avg to avoid misleading huge numbers
   // Only computed if we have enough sessions per platform
   const missedRevenueByPlatform = {}
   Object.keys(platformBestTimes).forEach(plat => {
@@ -1180,14 +1199,17 @@ export function aggregateRows(tips) {
     const overallAvg = platSessions.reduce((s, x) => s + x.totalUSD, 0) / platSessions.length
     const sessionsAtBestHour = platSessions.filter(s => new Date(s.startTime).getUTCHours() === best.hour).length
     const sessionsNotAtBest  = platSessions.length - sessionsAtBestHour
-    const missed = parseFloat(((best.avg - overallAvg) * sessionsNotAtBest).toFixed(2))
+    // Cap the gap at 2x overall avg to avoid astronomical unrealistic numbers
+    const gap = Math.min(best.avg - overallAvg, overallAvg * 2)
+    const missed = parseFloat((gap * sessionsNotAtBest).toFixed(2))
     if (missed > 0) {
       missedRevenueByPlatform[plat] = {
         bestHourAvg: best.avg,
         overallAvg: parseFloat(overallAvg.toFixed(2)),
         sessionsNotAtBestHour: sessionsNotAtBest,
         missedRevenue: missed,
-        bestHour: best.hour
+        bestHour: best.hour,
+        multiplier: parseFloat((best.avg / overallAvg).toFixed(1))
       }
     }
   })
