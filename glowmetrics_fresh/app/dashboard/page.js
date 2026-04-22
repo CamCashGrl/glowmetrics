@@ -1454,7 +1454,7 @@ const handleCSV = async (file, forcePlatform = null) => {
 
   const buildRealTimeAlerts = () => {
     const now = Date.now()
-    const currentHour = new Date().getUTCHours()
+    const alertCurrentHour = new Date().getUTCHours()
     const currentDay = new Date().toLocaleDateString('en-US', { weekday: 'long' })
     const alerts = []
 
