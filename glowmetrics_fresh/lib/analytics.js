@@ -243,7 +243,8 @@ function parseWithHeaders(lines, platform) {
 
     if (tipType && !tipType.includes('tip') && !tipType.includes('private') &&
         !tipType.includes('spy') && !tipType.includes('show') && !tipType.includes('chat') &&
-        !tipType.includes('received') && !tipType.includes('freechat')) continue
+        !tipType.includes('received') && !tipType.includes('freechat') &&
+        !tipType.includes('sale')) continue
 
     if (tipType.includes('cash') || tipType.includes('transfer') ||
         tipType.includes('payout') || tipType.includes('refund')) continue
@@ -1054,9 +1055,10 @@ export function aggregateRows(tips) {
   tips.forEach(t => {
     const dt = new Date(t.dateRaw || t.date_time)
     if (isNaN(dt.getTime())) return
-    const dow = dt.toLocaleDateString('en-US', { weekday: 'long', timeZone: 'UTC' })
-    const dateKey = dt.toLocaleDateString('en-US', { timeZone: 'UTC' })
-    const h = dt.getUTCHours()
+    // Use LOCAL time (not UTC) — CSV timestamps are stored in local time
+    const dow = dt.toLocaleDateString('en-US', { weekday: 'long' })
+    const dateKey = dt.toLocaleDateString('en-US')
+    const h = dt.getHours()
     const hBucket = Math.floor(dt.getTime() / 3600000)
 
     if (!dayTipsUSD[dow]) { dayTipsUSD[dow] = 0; dayActiveDates[dow] = new Set() }
@@ -1111,7 +1113,8 @@ export function aggregateRows(tips) {
     platformMap[s.platform].totalUSD    += s.totalUSD
     platformMap[s.platform].totalTokens += s.totalTokens
     platformMap[s.platform].sessions    += 1
-    platformMap[s.platform].hours       += s.durationHours
+    // FIX: only count hours for timed sessions (exclude single-tip zero-duration)
+    if (!s.durationUnknown) platformMap[s.platform].hours += s.durationHours
     platformMap[s.platform].tips        += s.tipCount
   })
 
@@ -1147,7 +1150,7 @@ export function aggregateRows(tips) {
     const dt = new Date(t.dateRaw || t.date_time)
     if (isNaN(dt.getTime())) return
     const p = t.platform || 'Unknown'
-    const h = dt.getUTCHours()
+    const h = dt.getHours() // LOCAL time — matches CSV timestamps
     const bucket = Math.floor(dt.getTime() / 3600000)
     if (!platHourUSD[p]) { platHourUSD[p] = {}; platHourBuckets[p] = {} }
     if (!platHourUSD[p][h]) { platHourUSD[p][h] = 0; platHourBuckets[p][h] = new Set() }
@@ -1197,7 +1200,7 @@ export function aggregateRows(tips) {
     if (platSessions.length < 5) return
     const best = platformBestTimes[plat]
     const overallAvg = platSessions.reduce((s, x) => s + x.totalUSD, 0) / platSessions.length
-    const sessionsAtBestHour = platSessions.filter(s => new Date(s.startTime).getUTCHours() === best.hour).length
+    const sessionsAtBestHour = platSessions.filter(s => new Date(s.startTime).getHours() === best.hour).length
     const sessionsNotAtBest  = platSessions.length - sessionsAtBestHour
     // Cap the gap at 2x overall avg to avoid astronomical unrealistic numbers
     const gap = Math.min(best.avg - overallAvg, overallAvg * 2)
