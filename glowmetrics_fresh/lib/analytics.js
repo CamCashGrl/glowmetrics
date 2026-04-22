@@ -602,7 +602,7 @@ export function identifyWhales(tips) {
 
     const hourCounts = {}
     f.tips.forEach(t => {
-      const h = new Date(t.dateRaw || t.date_time).getHours()
+      const h = new Date(t.dateRaw || t.date_time).getUTCHours()
       hourCounts[h] = (hourCounts[h] || 0) + 1
     })
     const mostActiveHour = Object.entries(hourCounts).sort((a, b) => b[1] - a[1])[0]
@@ -761,8 +761,8 @@ export function predictRevenue(tips, sessions) {
     trend: weeklyTrend !== null ? parseFloat(weeklyTrend.toFixed(1)) : null
   }
 
-  const todayDow = new Date().getDay()
-  const sameDaySessions = sessions.filter(s => new Date(s.startTime).getDay() === todayDow)
+  const todayDow = new Date().getUTCDay()
+  const sameDaySessions = sessions.filter(s => new Date(s.startTime).getUTCDay() === todayDow)
   // Require at least 3 sessions on this day of week for a meaningful prediction
   if (sameDaySessions.length >= 3) {
     const amounts = sameDaySessions.map(s => s.totalUSD).sort((a, b) => a - b)
@@ -801,7 +801,7 @@ export function generateLossAlerts(tips, sessions, whales, bestHour) {
     const bh = parseInt(bestHour.hour)
     const avgAtPeak = bestHour.avg
     const recentSessions = sessions.filter(s => (now - new Date(s.startTime)) / 86400000 <= 3)
-    const recentAtPeak = recentSessions.filter(s => Math.abs(new Date(s.startTime).getHours() - bh) <= 1)
+    const recentAtPeak = recentSessions.filter(s => Math.abs(new Date(s.startTime).getUTCHours() - bh) <= 1)
     if (recentSessions.length > 0 && recentAtPeak.length === 0) {
       const estLoss = parseFloat((avgAtPeak * 3).toFixed(2))
       const label = bh === 0 ? '12 AM' : bh < 12 ? `${bh} AM` : bh === 12 ? '12 PM' : `${bh - 12} PM`
@@ -984,7 +984,7 @@ export function generateNextMoves(tips, sessions, whales, predictions, bestHour)
   // Best hour coaching — uses pre-computed bestHour from aggregateRows
   if (bestHour) {
     const bh = parseInt(bestHour.hour)
-    const currentHour = new Date().getHours()
+    const currentHour = new Date().getUTCHours()
     const hoursUntil = (bh - currentHour + 24) % 24
     const avgAtPeak = bestHour.avg
     const label = bh === 0 ? '12 AM' : bh < 12 ? `${bh} AM` : bh === 12 ? '12 PM' : `${bh - 12} PM`
@@ -1058,7 +1058,7 @@ export function aggregateRows(tips) {
     // Use LOCAL time (not UTC) — CSV timestamps are stored in local time
     const dow = dt.toLocaleDateString('en-US', { weekday: 'long' })
     const dateKey = dt.toLocaleDateString('en-US')
-    const h = dt.getHours()
+    const h = dt.getUTCHours()
     const hBucket = Math.floor(dt.getTime() / 3600000)
 
     if (!dayTipsUSD[dow]) { dayTipsUSD[dow] = 0; dayActiveDates[dow] = new Set() }
@@ -1150,7 +1150,7 @@ export function aggregateRows(tips) {
     const dt = new Date(t.dateRaw || t.date_time)
     if (isNaN(dt.getTime())) return
     const p = t.platform || 'Unknown'
-    const h = dt.getHours() // LOCAL time — matches CSV timestamps
+    const h = dt.getUTCHours() // UTC — DB stores timestamps as UTC
     const bucket = Math.floor(dt.getTime() / 3600000)
     if (!platHourUSD[p]) { platHourUSD[p] = {}; platHourBuckets[p] = {} }
     if (!platHourUSD[p][h]) { platHourUSD[p][h] = 0; platHourBuckets[p][h] = new Set() }
@@ -1200,7 +1200,7 @@ export function aggregateRows(tips) {
     if (platSessions.length < 5) return
     const best = platformBestTimes[plat]
     const overallAvg = platSessions.reduce((s, x) => s + x.totalUSD, 0) / platSessions.length
-    const sessionsAtBestHour = platSessions.filter(s => new Date(s.startTime).getHours() === best.hour).length
+    const sessionsAtBestHour = platSessions.filter(s => new Date(s.startTime).getUTCHours() === best.hour).length
     const sessionsNotAtBest  = platSessions.length - sessionsAtBestHour
     // Cap the gap at 2x overall avg to avoid astronomical unrealistic numbers
     const gap = Math.min(best.avg - overallAvg, overallAvg * 2)
