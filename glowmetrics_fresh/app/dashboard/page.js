@@ -855,16 +855,6 @@ export default function Dashboard() {
   const [noteTarget, setNoteTarget] = useState(null)
   const [noteText, setNoteText] = useState('')
   const [noteSaving, setNoteSaving] = useState(false)
-  // ── ROUND 2 FEATURES ─────────────────────────────────────────────
-  const [calendarYear, setCalendarYear] = useState(new Date().getFullYear())
-  const [calendarMonth, setCalendarMonth] = useState(new Date().getMonth()) // 0-indexed
-  const [savedLiveSessions, setSavedLiveSessions] = useState([])
-  const [scheduleSlots, setScheduleSlots] = useState([]) // [{day_of_week, start_hour}]
-  const [scheduleLoaded, setScheduleLoaded] = useState(false)
-  const [savingSchedule, setSavingSchedule] = useState(false)
-  const [liveSessionSaving, setLiveSessionSaving] = useState(false)
-  const [fanAIInsights, setFanAIInsights] = useState({}) // { username: { loading, text, error } }
-  const [profileTab, setProfileTab] = useState('overview') // overview | tips | notes | ai
 
   // ── ANIMATION STATE ──────────────────────────────────────
   const [counterBumping, setCounterBumping] = useState(false)
@@ -905,127 +895,6 @@ export default function Dashboard() {
       setNoteTarget(null)
     } catch(e) { showToast('❌ Failed to save note') }
     finally { setNoteSaving(false) }
-  }
-
-  // ── SAVE LIVE SESSION ────────────────────────────────────────────
-  const saveLiveSession = async (sessionData) => {
-    if (!user) return
-    setLiveSessionSaving(true)
-    try {
-      const { data, error } = await supabase.from('saved_live_sessions').insert({
-        user_id: user.id,
-        platform: sessionData.platform || 'Chaturbate',
-        started_at: sessionData.startTime,
-        ended_at: sessionData.endTime,
-        duration_minutes: sessionData.durationMinutes || 0,
-        total_usd: sessionData.totalUSD || 0,
-        total_tokens: sessionData.totalTokens || 0,
-        tip_count: sessionData.tipCount || 0,
-        unique_fans: sessionData.uniqueFans || 0,
-        goal_usd: sessionData.goalUSD || 0,
-        goal_hit: sessionData.goalHit || false,
-        top_tipper: sessionData.topTipper || '',
-        top_tipper_usd: sessionData.topTipperUSD || 0,
-        events: JSON.stringify(sessionData.events || [])
-      }).select().single()
-      if (!error && data) {
-        setSavedLiveSessions(prev => [data, ...prev])
-        showToast('✅ Session saved to history!')
-      }
-    } catch(e) { showToast('❌ Failed to save session') }
-    finally { setLiveSessionSaving(false) }
-  }
-
-  // ── GENERATE FAN AI INSIGHTS ─────────────────────────────────────
-  const generateFanInsights = async (whale) => {
-    const key = whale.username.toLowerCase()
-    if (fanAIInsights[key]?.text) return // already generated
-    setFanAIInsights(prev => ({ ...prev, [key]: { loading: true, text: null, error: null } }))
-    try {
-      const whaleTips = tips.filter(t => t.username === whale.username)
-      const now = new Date()
-      const currentHour = now.getHours()
-      const currentDay = now.toLocaleDateString('en-US', { weekday: 'long' })
-      const hourLabel = currentHour === 0 ? '12 AM' : currentHour < 12 ? `${currentHour} AM` : currentHour === 12 ? '12 PM' : `${currentHour-12} PM`
-
-      // Extract tip notes from username variants (CB appends notes to usernames)
-      const variants = tips.filter(t => t.username.toLowerCase().startsWith(key) && t.username.toLowerCase() !== key)
-      const tipNoteKeywords = variants.map(t => t.username.slice(key.length)).filter(n => n.length > 1 && n.length < 30)
-
-      // Get tip type breakdown for this fan
-      const privates = whaleTips.filter(t => t.tip_type?.toLowerCase().includes('private'))
-      const spyTips = whaleTips.filter(t => t.tip_type?.toLowerCase().includes('spy'))
-
-      // Day/hour patterns
-      const hourCounts = {}
-      whaleTips.forEach(t => {
-        const h = new Date(t.date_time).getHours()
-        hourCounts[h] = (hourCounts[h] || 0) + 1
-      })
-      const topHour = Object.entries(hourCounts).sort((a,b)=>b[1]-a[1])[0]
-      const topHourLabel = topHour ? (parseInt(topHour[0]) === 0 ? '12 AM' : parseInt(topHour[0]) < 12 ? `${topHour[0]} AM` : parseInt(topHour[0]) === 12 ? '12 PM' : `${parseInt(topHour[0])-12} PM`) : 'unknown'
-
-      const savedNote = tipperNotes[key]?.note || ''
-
-      const prompt = `You are a cam model analytics assistant. Analyze this fan and give actionable insights.
-
-FAN: ${whale.username}
-Total spent: $${whale.totalUSD.toFixed(2)} over ${whale.tipCount} tips
-Avg tip: $${whale.avgTipSize.toFixed(2)} | Biggest tip: $${whale.biggestTip?.toFixed(2) || 'unknown'}
-Tier: ${whale.tier} | Days since last tip: ${whale.daysSinceLastTip}
-Private shows booked: ${privates.length} | Spy shows: ${spyTips.length}
-Most active hour: ${topHourLabel}
-Tip notes/keywords found in username variants: ${tipNoteKeywords.length > 0 ? tipNoteKeywords.join(', ') : 'none'}
-Streamer's saved note about this fan: ${savedNote || 'none'}
-Current time: ${hourLabel} on ${currentDay}
-
-Respond with EXACTLY this format (keep each bullet under 15 words):
-PERSONALITY:
-• [kink/preference inferred from tip notes or behavior]
-• [another trait if available]
-
-ENGAGEMENT STRATEGY:
-• [specific action to take right now based on time/day]
-• [re-engagement tip based on their pattern]
-
-REVENUE OPPORTUNITY:
-• [specific upsell or engagement idea for this fan]
-
-Keep it direct, specific, and actionable. Reference their actual data. Max 120 words total.`
-
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 300,
-          messages: [{ role: 'user', content: prompt }]
-        })
-      })
-      const data = await response.json()
-      const text = data.content?.[0]?.text || 'Could not generate insights.'
-      setFanAIInsights(prev => ({ ...prev, [key]: { loading: false, text, error: null } }))
-    } catch(e) {
-      setFanAIInsights(prev => ({ ...prev, [whale.username.toLowerCase()]: { loading: false, text: null, error: 'Failed to load insights' } }))
-    }
-  }
-
-  // ── TOGGLE SCHEDULE SLOT ──────────────────────────────────────────
-  const toggleScheduleSlot = async (dayOfWeek, startHour) => {
-    if (!user) return
-    const key = `${dayOfWeek}-${startHour}`
-    const exists = scheduleSlots.find(s => s.day_of_week === dayOfWeek && s.start_hour === startHour)
-    setSavingSchedule(true)
-    try {
-      if (exists) {
-        await supabase.from('stream_schedule').delete().eq('user_id', user.id).eq('day_of_week', dayOfWeek).eq('start_hour', startHour)
-        setScheduleSlots(prev => prev.filter(s => !(s.day_of_week === dayOfWeek && s.start_hour === startHour)))
-      } else {
-        const { data } = await supabase.from('stream_schedule').insert({ user_id: user.id, day_of_week: dayOfWeek, start_hour: startHour, is_active: true }).select().single()
-        if (data) setScheduleSlots(prev => [...prev, data])
-      }
-    } catch(e) { showToast('❌ Schedule update failed') }
-    finally { setSavingSchedule(false) }
   }
 
   // ── SAVE MONTHLY GOAL ─────────────────────────────────────────────
@@ -1117,12 +986,6 @@ Keep it direct, specific, and actionable. Reference their actual data. Max 120 w
             setTipperNotes(map)
           }
         })
-      // Load saved live sessions
-      supabase.from('saved_live_sessions').select('*').eq('user_id', user.id).order('started_at', { ascending: false }).limit(50)
-        .then(({ data }) => { if (data) setSavedLiveSessions(data) })
-      // Load stream schedule
-      supabase.from('stream_schedule').select('*').eq('user_id', user.id).eq('is_active', true)
-        .then(({ data }) => { if (data) { setScheduleSlots(data); setScheduleLoaded(true) } else { setScheduleLoaded(true) } })
       supabase.from('beta_users').select('id', { count: 'exact', head: true })
         .then(({ count }) => { if (count !== null) setBetaCount(count) })
       try {
@@ -1851,7 +1714,7 @@ const handleCSV = async (file, forcePlatform = null) => {
         </div>
 
         <nav style={{ flex: 1, padding: "16px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
-          {[["overview", "📊", "Overview"], ["platforms", "🎯", "Platforms"], ["whales", "🐳", "Top Fans"], ["sessions", "🎥", "Sessions"], ["monthly", "📈", "Monthly"], ["calendar", "📅", "Calendar"], ["schedule", "🗓️", "Schedule"], ["live", "🔴", "Live Mode"], ["data", "📝", "Edit Data"], ["titles", "🎬", "Room Titles"], ["help", "❓", "CSV Help"], ["upload", "📥", "Import"]].map(([id, icon, label]) => (
+          {[["overview", "📊", "Overview"], ["platforms", "🎯", "Platforms"], ["whales", "🐳", "Top Fans"], ["sessions", "🎥", "Sessions"], ["monthly", "📈", "Monthly"], ["live", "🔴", "Live Mode"], ["data", "📝", "Edit Data"], ["titles", "🎬", "Room Titles"], ["help", "❓", "CSV Help"], ["upload", "📥", "Import"]].map(([id, icon, label]) => (
             <button key={id} onClick={() => setActiveTab(id)} style={{
               display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 10,
               background: activeTab === id ? "linear-gradient(135deg, rgba(59,130,246,0.2), rgba(236,72,153,0.2))" : "transparent",
@@ -1894,7 +1757,7 @@ const handleCSV = async (file, forcePlatform = null) => {
 
       {/* MOBILE BOTTOM NAV — hidden on desktop via CSS */}
       <div className="dash-bottom-nav" style={{ display: "none" }}>
-        {[["overview","📊","Overview"],["platforms","🎯","Platforms"],["whales","🐳","Fans"],["sessions","🎥","Sessions"],["monthly","📈","Monthly"],["calendar","📅","Cal"],["schedule","🗓️","Sched"],["live","🔴","Live"],["upload","📥","Import"]].map(([id, icon, label]) => (
+        {[["overview","📊","Overview"],["platforms","🎯","Platforms"],["whales","🐳","Fans"],["sessions","🎥","Sessions"],["monthly","📈","Monthly"],["live","🔴","Live"],["upload","📥","Import"]].map(([id, icon, label]) => (
           <button key={id} onClick={() => setActiveTab(id)} className={activeTab === id ? "active" : ""}>
             <span className="nav-icon">{icon}</span>
             <span className="nav-label">{label}</span>
@@ -2050,42 +1913,6 @@ const handleCSV = async (file, forcePlatform = null) => {
                     </div>
                   )}
                 </>
-              )
-            })()}
-
-            {/* ── FAN ANNIVERSARY CALLOUT on Overview ── */}
-            {(() => {
-              if (!tips.length) return null
-              const today = new Date()
-              const fanFirstTip = {}
-              tips.forEach(t => {
-                const u = t.username?.toLowerCase()
-                if (!u) return
-                const dt = new Date(t.date_time || t.dateRaw)
-                if (!fanFirstTip[u] || dt < fanFirstTip[u].date) fanFirstTip[u] = { date: dt, username: t.username }
-              })
-              const todayAnnivs = Object.values(fanFirstTip).filter(f => {
-                const ann = new Date(today.getFullYear(), f.date.getMonth(), f.date.getDate())
-                return Math.abs((ann - today) / 86400000) < 1
-              })
-              const tomorrowAnnivs = Object.values(fanFirstTip).filter(f => {
-                const ann = new Date(today.getFullYear(), f.date.getMonth(), f.date.getDate())
-                const diff = (ann - today) / 86400000
-                return diff >= 0.5 && diff < 1.5
-              })
-              const all = [...todayAnnivs, ...tomorrowAnnivs]
-              if (!all.length) return null
-              return (
-                <div style={{ marginBottom:20, padding:"14px 18px", borderRadius:14, background:"rgba(245,158,11,0.08)", border:"1px solid rgba(245,158,11,0.3)", display:"flex", alignItems:"flex-start", gap:12 }}>
-                  <span style={{ fontSize:22 }}>🎂</span>
-                  <div style={{ flex:1 }}>
-                    <div style={{ fontSize:14, fontWeight:800, color:C.gold, marginBottom:4 }}>
-                      {todayAnnivs.length > 0 ? `${todayAnnivs.map(f=>f.username).join(', ')} — tipping anniversary today!` : `${tomorrowAnnivs.map(f=>f.username).join(', ')} — anniversary tomorrow`}
-                    </div>
-                    <div style={{ fontSize:12, color:C.muted }}>Send a message to keep them engaged 💌</div>
-                  </div>
-                  <button onClick={() => setActiveTab('calendar')} style={{ padding:"4px 10px", borderRadius:6, background:"rgba(245,158,11,0.15)", border:"1px solid rgba(245,158,11,0.35)", color:C.gold, fontSize:11, cursor:"pointer", whiteSpace:"nowrap" }}>View all →</button>
-                </div>
               )
             })()}
 
@@ -2974,12 +2801,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                       </td>
                       <td style={{ padding: "12px 16px", color: C.muted, fontSize: 12 }}>{new Date(w.lastTipDate).toLocaleDateString()}</td>
                       <td style={{ padding: "12px 16px" }}>
-                        <button onClick={() => { setSelectedWhale(w); setProfileTab('overview') }}
-  style={{ padding: "5px 12px", borderRadius: 8, background: "linear-gradient(135deg,rgba(34,211,238,0.2),rgba(124,92,255,0.2))", border: "1px solid rgba(34,211,238,0.4)", color: C.cyan, fontSize: 11, fontWeight: 700, cursor: "pointer", transition: "all 0.15s", letterSpacing: 0.3 }}
-  onMouseEnter={e => { e.currentTarget.style.background = "linear-gradient(135deg,rgba(34,211,238,0.35),rgba(124,92,255,0.35))"; e.currentTarget.style.transform = "translateY(-1px)" }}
-  onMouseLeave={e => { e.currentTarget.style.background = "linear-gradient(135deg,rgba(34,211,238,0.2),rgba(124,92,255,0.2))"; e.currentTarget.style.transform = "" }}>
-  VIEW PROFILE
-</button>
+                        <button onClick={() => setSelectedWhale(w)} style={{ padding: "4px 10px", borderRadius: 6, background: "rgba(34,211,238,0.15)", border: "1px solid rgba(34,211,238,0.3)", color: C.cyan, fontSize: 11, cursor: "pointer" }}>🔍 View</button>
                       </td>
                     </tr>
                   ))}
@@ -3077,12 +2899,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                             </div>
                           </div>
                           <div style={{ display: "flex", gap: 6, alignItems:"center" }}>
-                            <button onClick={() => { setSelectedWhale(w); setProfileTab('overview') }}
-  style={{ padding: "5px 12px", borderRadius: 8, background: "linear-gradient(135deg,rgba(34,211,238,0.2),rgba(124,92,255,0.2))", border: "1px solid rgba(34,211,238,0.4)", color: C.cyan, fontSize: 11, fontWeight: 700, cursor: "pointer", letterSpacing: 0.3 }}
-  onMouseEnter={e => { e.currentTarget.style.background="linear-gradient(135deg,rgba(34,211,238,0.35),rgba(124,92,255,0.35))"; e.currentTarget.style.transform="translateY(-1px)" }}
-  onMouseLeave={e => { e.currentTarget.style.background="linear-gradient(135deg,rgba(34,211,238,0.2),rgba(124,92,255,0.2))"; e.currentTarget.style.transform="" }}>
-  VIEW PROFILE
-</button>
+                            <button onClick={() => setSelectedWhale(w)} style={{ padding: "4px 10px", borderRadius: 6, background: "rgba(34,211,238,0.12)", border: "1px solid rgba(34,211,238,0.25)", color: C.cyan, fontSize: 11, cursor: "pointer" }}>🔍 Profile</button>
                             <button onClick={() => { setNoteTarget(w.username); setNoteText(tipperNotes[w.username?.toLowerCase()]?.note || '') }}
                               style={{ padding: "4px 8px", borderRadius: 6, background: tipperNotes[w.username?.toLowerCase()]?.note ? "rgba(245,158,11,0.15)" : "rgba(255,255,255,0.05)", border: tipperNotes[w.username?.toLowerCase()]?.note ? "1px solid rgba(245,158,11,0.3)" : "1px solid rgba(255,255,255,0.1)", color: tipperNotes[w.username?.toLowerCase()]?.note ? C.gold : C.muted, fontSize: 11, cursor: "pointer" }}>
                               {tipperNotes[w.username?.toLowerCase()]?.note ? "📝 Note" : "📝"}
@@ -3327,34 +3144,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                       ▶ Start Stream
                     </button>
                   ) : (
-                    <button onClick={async () => {
-                      if (liveEvents.length > 0 && liveStartTime) {
-                        const endTime = new Date()
-                        const durMin = Math.round((endTime - new Date(liveStartTime)) / 60000)
-                        const totalUSD = liveEvents.reduce((s,e) => s+(e.normalizedRevenue||0), 0)
-                        const totalTok = liveEvents.reduce((s,e) => s+(e.tokens||0), 0)
-                        const fanSet = [...new Set(liveEvents.map(e=>e.username))]
-                        const tipperMap = {}
-                        liveEvents.forEach(e => { tipperMap[e.username]=(tipperMap[e.username]||0)+(e.normalizedRevenue||0) })
-                        const topEntry = Object.entries(tipperMap).sort((a,b)=>b[1]-a[1])[0]
-                        await saveLiveSession({
-                          platform: livePlatform,
-                          startTime: new Date(liveStartTime).toISOString(),
-                          endTime: endTime.toISOString(),
-                          durationMinutes: durMin,
-                          totalUSD: parseFloat(totalUSD.toFixed(2)),
-                          totalTokens: totalTok,
-                          tipCount: liveEvents.length,
-                          uniqueFans: fanSet.length,
-                          goalUSD: liveGoalTokens*(tokenRates[livePlatform]||0.05),
-                          goalHit: totalTok >= liveGoalTokens && liveGoalTokens > 0,
-                          topTipper: topEntry?.[0]||'',
-                          topTipperUSD: topEntry?.[1]||0,
-                          events: liveEvents
-                        })
-                      }
-                      setLiveActive(false)
-                    }}
+                    <button onClick={() => { setLiveActive(false) }}
                       style={{ padding: '10px 24px', borderRadius: 10, background: 'rgba(248,113,113,0.2)', border: '1px solid rgba(248,113,113,0.4)', color: C.red, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
                       ⏹ End Stream
                     </button>
@@ -4331,364 +4121,6 @@ const handleCSV = async (file, forcePlatform = null) => {
           )
         })()}
 
-        {/* ════════════════════════════════════════════════════════
-            EARNINGS CALENDAR TAB
-        ════════════════════════════════════════════════════════ */}
-        {activeTab === "calendar" && (() => {
-          // Build a day-by-day earnings map from tips
-          const dayMap = {}
-          tips.forEach(t => {
-            const dt = new Date(t.date_time || t.dateRaw)
-            if (isNaN(dt.getTime())) return
-            const key = dt.toISOString().slice(0,10) // YYYY-MM-DD
-            if (!dayMap[key]) dayMap[key] = { usd: 0, tips: 0, fans: new Set() }
-            dayMap[key].usd += t.usd || 0
-            dayMap[key].tips += 1
-            dayMap[key].fans.add(t.username)
-          })
-          // Convert to plain objects
-          const dayData = {}
-          Object.entries(dayMap).forEach(([k,v]) => { dayData[k] = { usd: parseFloat(v.usd.toFixed(2)), tips: v.tips, fans: v.fans.size } })
-
-          const maxDayUSD = Math.max(...Object.values(dayData).map(d => d.usd), 1)
-          const today = new Date()
-          const todayKey = today.toISOString().slice(0,10)
-
-          // Fan anniversaries — first tip date per fan
-          const fanFirstTip = {}
-          tips.forEach(t => {
-            const u = t.username?.toLowerCase()
-            if (!u) return
-            const dt = new Date(t.date_time || t.dateRaw)
-            if (!fanFirstTip[u] || dt < fanFirstTip[u].date) {
-              fanFirstTip[u] = { date: dt, username: t.username }
-            }
-          })
-          // Anniversaries this month/next 30 days
-          const upcomingAnniversaries = Object.values(fanFirstTip).filter(f => {
-            const thisYear = new Date(today.getFullYear(), f.date.getMonth(), f.date.getDate())
-            const diff = (thisYear - today) / 86400000
-            return diff >= -1 && diff <= 30
-          }).map(f => {
-            const thisYear = new Date(today.getFullYear(), f.date.getMonth(), f.date.getDate())
-            const daysAway = Math.round((thisYear - today) / 86400000)
-            const years = today.getFullYear() - f.date.getFullYear()
-            const whale = analytics?.whales?.find(w => w.username?.toLowerCase() === f.username?.toLowerCase())
-            return { username: f.username, daysAway, years, date: thisYear, totalUSD: whale?.totalUSD || 0 }
-          }).sort((a,b) => a.daysAway - b.daysAway)
-
-          // Build calendar
-          const firstDay = new Date(calendarYear, calendarMonth, 1)
-          const lastDay = new Date(calendarYear, calendarMonth + 1, 0)
-          const startDow = firstDay.getDay() // 0=Sun
-          const daysInMonth = lastDay.getDate()
-          const monthName = firstDay.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
-
-          // All-time best days top 5 for streak display
-          const sortedDays = Object.entries(dayData).sort((a,b) => b[1].usd - a[1].usd)
-          const bestDayKey = sortedDays[0]?.[0]
-
-          // Monthly total for displayed month
-          const monthKey = `${calendarYear}-${String(calendarMonth+1).padStart(2,'0')}`
-          const monthlyTotal = Object.entries(dayData)
-            .filter(([k]) => k.startsWith(monthKey))
-            .reduce((s,[,v]) => s + v.usd, 0)
-
-          return (
-            <div style={{ animation: "fadeUp 0.3s ease" }}>
-              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:24, flexWrap:"wrap", gap:12 }}>
-                <div>
-                  <div style={{ fontSize:24, fontWeight:900, color:C.white }}>📅 Earnings Calendar</div>
-                  <div style={{ fontSize:13, color:C.muted }}>Every day you streamed — click a day for details</div>
-                </div>
-              </div>
-
-              {/* ── UPCOMING ANNIVERSARIES ── */}
-              {upcomingAnniversaries.length > 0 && (
-                <div style={{ ...glassCard, borderRadius:16, padding:20, marginBottom:20, border:"1px solid rgba(245,158,11,0.25)" }}>
-                  <div style={{ fontSize:14, fontWeight:800, color:C.gold, marginBottom:12 }}>🎂 Fan Anniversaries — Next 30 Days</div>
-                  <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-                    {upcomingAnniversaries.slice(0,5).map(a => (
-                      <div key={a.username} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"10px 14px", borderRadius:10, background:"rgba(245,158,11,0.07)", border:"1px solid rgba(245,158,11,0.18)" }}>
-                        <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                          <div style={{ width:28, height:28, borderRadius:8, background:"linear-gradient(135deg,#F59E0B,#EC4899)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, flexShrink:0 }}>🎂</div>
-                          <div>
-                            <div style={{ fontSize:13, fontWeight:700, color:C.white }}>{a.username}</div>
-                            <div style={{ fontSize:11, color:C.muted }}>
-                              {a.daysAway === 0 ? "🎉 Today!" : a.daysAway === 1 ? "Tomorrow" : `In ${a.daysAway} days`}
-                              {" · "}{a.years} year{a.years !== 1 ? "s" : ""} as a fan
-                            </div>
-                          </div>
-                        </div>
-                        <div style={{ textAlign:"right" }}>
-                          {a.totalUSD > 0 && <div style={{ fontSize:13, fontWeight:700, color:C.gold }}>${a.totalUSD.toFixed(0)} lifetime</div>}
-                          <button onClick={() => { const whale = analytics?.whales?.find(w => w.username?.toLowerCase() === a.username?.toLowerCase()); if (whale) { setMessageTarget(whale); setMessageIndex(0); setMessageCopied(false) } }}
-                            style={{ fontSize:16, background:"none", border:"none", cursor:"pointer", padding:0, animation:"pulse-msg 2s infinite" }}>💌</button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* ── CALENDAR NAVIGATION ── */}
-              <div style={{ ...glassCard, borderRadius:18, padding:24, marginBottom:20 }}>
-                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:20 }}>
-                  <button onClick={() => { let m = calendarMonth - 1, y = calendarYear; if (m < 0) { m = 11; y-- } setCalendarMonth(m); setCalendarYear(y) }}
-                    style={{ padding:"6px 14px", borderRadius:8, background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.1)", color:C.white, cursor:"pointer", fontSize:16 }}>‹</button>
-                  <div style={{ textAlign:"center" }}>
-                    <div style={{ fontSize:18, fontWeight:800, color:C.white }}>{monthName}</div>
-                    <div style={{ fontSize:12, color:C.muted }}>${monthlyTotal.toFixed(2)} this month</div>
-                  </div>
-                  <button onClick={() => { let m = calendarMonth + 1, y = calendarYear; if (m > 11) { m = 0; y++ } setCalendarMonth(m); setCalendarYear(y) }}
-                    style={{ padding:"6px 14px", borderRadius:8, background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.1)", color:C.white, cursor:"pointer", fontSize:16 }}>›</button>
-                </div>
-
-                {/* Day headers */}
-                <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", gap:4, marginBottom:4 }}>
-                  {["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map(d => (
-                    <div key={d} style={{ textAlign:"center", fontSize:10, fontWeight:700, color:C.muted, padding:"4px 0" }}>{d}</div>
-                  ))}
-                </div>
-
-                {/* Calendar grid */}
-                <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", gap:4 }}>
-                  {/* Empty cells before month start */}
-                  {Array.from({ length: startDow }).map((_,i) => <div key={`e${i}`} />)}
-                  {/* Day cells */}
-                  {Array.from({ length: daysInMonth }).map((_,i) => {
-                    const day = i + 1
-                    const key = `${calendarYear}-${String(calendarMonth+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`
-                    const data = dayData[key]
-                    const isToday = key === todayKey
-                    const isBest = key === bestDayKey
-                    const intensity = data ? Math.min(1, data.usd / maxDayUSD) : 0
-                    const hasData = !!data
-                    const bg = !hasData ? "rgba(255,255,255,0.02)"
-                      : intensity < 0.15 ? "rgba(124,92,255,0.15)"
-                      : intensity < 0.35 ? "rgba(124,92,255,0.35)"
-                      : intensity < 0.6  ? "rgba(124,92,255,0.6)"
-                      : intensity < 0.85 ? "rgba(124,92,255,0.85)"
-                      : "#7C5CFF"
-                    return (
-                      <div key={key}
-                        title={data ? `${key}: $${data.usd.toFixed(2)} · ${data.tips} tips · ${data.fans} fans` : key}
-                        style={{ aspectRatio:"1", borderRadius:8, background:bg, border: isToday ? `2px solid ${C.cyan}` : isBest ? `2px solid ${C.gold}` : "1px solid rgba(255,255,255,0.05)", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", cursor: hasData ? "pointer" : "default", position:"relative", transition:"transform 0.1s", padding:2 }}
-                        onMouseEnter={e => { if (hasData) e.currentTarget.style.transform = "scale(1.08)" }}
-                        onMouseLeave={e => { e.currentTarget.style.transform = "scale(1)" }}>
-                        <div style={{ fontSize:10, color: isToday ? C.cyan : hasData ? C.white : C.muted, fontWeight: isToday || isBest ? 700 : 400 }}>{day}</div>
-                        {data && <div style={{ fontSize:8, color: intensity > 0.5 ? C.white : C.muted, fontWeight:700 }}>${data.usd >= 100 ? Math.round(data.usd) : data.usd.toFixed(0)}</div>}
-                        {isBest && <div style={{ position:"absolute", top:1, right:2, fontSize:7 }}>🏆</div>}
-                      </div>
-                    )
-                  })}
-                </div>
-
-                {/* Legend */}
-                <div style={{ display:"flex", alignItems:"center", gap:12, marginTop:16, flexWrap:"wrap" }}>
-                  <span style={{ fontSize:11, color:C.muted }}>Earnings:</span>
-                  {[["Low","rgba(124,92,255,0.25)"],["Mid","rgba(124,92,255,0.6)"],["High","#7C5CFF"]].map(([l,c]) => (
-                    <span key={l} style={{ display:"flex", alignItems:"center", gap:4, fontSize:10, color:C.muted }}>
-                      <span style={{ width:12, height:12, borderRadius:3, background:c, display:"inline-block" }} />{l}
-                    </span>
-                  ))}
-                  <span style={{ display:"flex", alignItems:"center", gap:4, fontSize:10, color:C.cyan }}><span style={{ width:12, height:12, borderRadius:3, border:`2px solid ${C.cyan}`, display:"inline-block" }} />Today</span>
-                  <span style={{ display:"flex", alignItems:"center", gap:4, fontSize:10, color:C.gold }}><span style={{ width:12, height:12, borderRadius:3, border:`2px solid ${C.gold}`, display:"inline-block" }} />Best day 🏆</span>
-                </div>
-              </div>
-
-              {/* ── ALL-TIME BEST DAYS ── */}
-              {sortedDays.length > 0 && (
-                <div style={{ ...glassCard, borderRadius:16, padding:20 }}>
-                  <div style={{ fontSize:14, fontWeight:800, color:C.white, marginBottom:12 }}>🏆 Best Earning Days</div>
-                  <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-                    {sortedDays.slice(0,5).map(([k,v],i) => {
-                      const dt = new Date(k)
-                      const label = dt.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'})
-                      return (
-                        <div key={k} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"10px 14px", borderRadius:10, background: i===0 ? "rgba(245,158,11,0.1)" : "rgba(255,255,255,0.03)", border: i===0 ? "1px solid rgba(245,158,11,0.3)" : "1px solid rgba(255,255,255,0.06)" }}>
-                          <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                            <span style={{ fontSize:14, fontWeight:800, color: i===0 ? C.gold : C.muted }}>#{i+1}</span>
-                            <div>
-                              <div style={{ fontSize:13, fontWeight:700, color:C.white }}>{label}</div>
-                              <div style={{ fontSize:11, color:C.muted }}>{v.tips} tips · {v.fans} fans</div>
-                            </div>
-                          </div>
-                          <div style={{ fontSize:16, fontWeight:900, color: i===0 ? C.gold : C.cyan }}>${v.usd.toFixed(2)}</div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              )}
-            </div>
-          )
-        })()}
-
-        {/* ════════════════════════════════════════════════════════
-            STREAM SCHEDULE TAB
-        ════════════════════════════════════════════════════════ */}
-        {activeTab === "schedule" && (() => {
-          const DAYS = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"]
-          const HOURS = Array.from({length:24},(_,i)=>i)
-          const fmtH = h => h===0?"12 AM":h<12?`${h} AM`:h===12?"12 PM":`${h-12} PM`
-          const isSlotActive = (d,h) => scheduleSlots.some(s=>s.day_of_week===d&&s.start_hour===h)
-
-          // Recommended slots from analytics
-          const bestHour = analytics?.bestHour ? parseInt(analytics.bestHour.hour) : null
-          const bestDayName = analytics?.bestDay?.day
-          const bestDayNum = bestDayName ? ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"].indexOf(bestDayName) : -1
-
-          // What's next on the schedule
-          const now = new Date()
-          const currentDow = now.getDay()
-          const currentHour = now.getHours()
-          const upcomingSlots = []
-          for (let offset = 0; offset < 7; offset++) {
-            const checkDow = (currentDow + offset) % 7
-            const slotsOnDay = scheduleSlots.filter(s => s.day_of_week === checkDow).sort((a,b)=>a.start_hour-b.start_hour)
-            slotsOnDay.forEach(s => {
-              if (offset === 0 && s.start_hour <= currentHour) return // past for today
-              const hoursAway = offset * 24 + (s.start_hour - currentHour)
-              upcomingSlots.push({ ...s, hoursAway, dayName: DAYS[checkDow] })
-            })
-          }
-          const nextStream = upcomingSlots[0]
-
-          // Revenue per hour of week from analytics
-          const platHourData = analytics?.platformBestTimes?.Chaturbate || analytics?.platformBestTimes?.[Object.keys(analytics?.platformBestTimes||{})[0]]
-
-          return (
-            <div style={{ animation:"fadeUp 0.3s ease" }}>
-              <div style={{ fontSize:24, fontWeight:900, color:C.white, marginBottom:4 }}>🗓️ Stream Schedule</div>
-              <div style={{ fontSize:13, color:C.muted, marginBottom:24 }}>Plan your streams around your peak earning hours</div>
-
-              {/* ── NEXT STREAM COUNTDOWN ── */}
-              {nextStream ? (
-                <div style={{ ...glassCard, borderRadius:16, padding:20, marginBottom:20, border:"1px solid rgba(34,211,238,0.25)", display:"flex", alignItems:"center", gap:16, flexWrap:"wrap" }}>
-                  <div style={{ fontSize:28 }}>⏰</div>
-                  <div style={{ flex:1 }}>
-                    <div style={{ fontSize:13, color:C.cyan, fontWeight:700 }}>Next Scheduled Stream</div>
-                    <div style={{ fontSize:20, fontWeight:900, color:C.white }}>{nextStream.dayName} at {fmtH(nextStream.start_hour)}</div>
-                    <div style={{ fontSize:12, color:C.muted }}>
-                      {nextStream.hoursAway < 1 ? "Starting soon!" : nextStream.hoursAway === 1 ? "In 1 hour" : `In ${nextStream.hoursAway} hours`}
-                      {bestHour === nextStream.start_hour ? " · 🔥 This is your peak hour!" : ""}
-                    </div>
-                  </div>
-                  {bestHour !== null && (
-                    <div style={{ padding:"10px 16px", borderRadius:10, background:"rgba(245,158,11,0.1)", border:"1px solid rgba(245,158,11,0.25)", textAlign:"center" }}>
-                      <div style={{ fontSize:11, color:C.gold }}>Your peak time</div>
-                      <div style={{ fontSize:16, fontWeight:800, color:C.gold }}>{fmtH(bestHour)}</div>
-                      <div style={{ fontSize:11, color:C.muted }}>${analytics?.bestHour?.avg?.toFixed(0)} avg/session</div>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div style={{ ...glassCard, borderRadius:16, padding:20, marginBottom:20, border:"1px solid rgba(255,255,255,0.08)", textAlign:"center", color:C.muted }}>
-                  No streams scheduled yet — click time slots below to build your schedule
-                </div>
-              )}
-
-              {/* ── RECOMMENDATIONS ── */}
-              {(bestHour !== null || bestDayNum >= 0) && (
-                <div style={{ ...glassCard, borderRadius:16, padding:16, marginBottom:20, border:"1px solid rgba(16,185,129,0.2)" }}>
-                  <div style={{ fontSize:13, fontWeight:700, color:C.green, marginBottom:10 }}>✨ Recommended Based on Your Data</div>
-                  <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
-                    {bestDayNum >= 0 && bestHour !== null && (
-                      <button onClick={() => toggleScheduleSlot(bestDayNum, bestHour)}
-                        style={{ padding:"8px 14px", borderRadius:8, background: isSlotActive(bestDayNum, bestHour) ? "rgba(16,185,129,0.25)" : "rgba(16,185,129,0.12)", border:`1px solid rgba(16,185,129,${isSlotActive(bestDayNum,bestHour)?'0.6':'0.3'})`, color:C.green, fontSize:12, fontWeight:700, cursor:"pointer" }}>
-                        {isSlotActive(bestDayNum, bestHour) ? "✅" : "➕"} {DAYS[bestDayNum]} {fmtH(bestHour)} — ${analytics?.bestHour?.avg?.toFixed(0)}/session avg
-                      </button>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* ── WEEKLY GRID ── */}
-              <div style={{ ...glassCard, borderRadius:18, padding:24, marginBottom:20 }}>
-                <div style={{ fontSize:14, fontWeight:800, color:C.white, marginBottom:4 }}>Weekly Schedule</div>
-                <div style={{ fontSize:12, color:C.muted, marginBottom:16 }}>Click any time slot to add/remove it from your schedule</div>
-                <div style={{ overflowX:"auto" }}>
-                  <div style={{ display:"grid", gridTemplateColumns:`80px repeat(7, 1fr)`, gap:3, minWidth:560 }}>
-                    {/* Header row */}
-                    <div />
-                    {DAYS.map((d,i) => (
-                      <div key={d} style={{ textAlign:"center", fontSize:11, fontWeight:700, color: i===bestDayNum ? C.gold : C.muted, padding:"4px 2px", borderBottom:"1px solid rgba(255,255,255,0.06)" }}>
-                        {d}{i===bestDayNum?" ⭐":""}
-                      </div>
-                    ))}
-                    {/* Time rows - just peak hours for clarity */}
-                    {[8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,0,1,2].map(h => (
-                      <>
-                        <div key={`lbl-${h}`} style={{ fontSize:10, color:C.muted, display:"flex", alignItems:"center", paddingRight:8 }}>{fmtH(h)}</div>
-                        {DAYS.map((_,d) => {
-                          const active = isSlotActive(d,h)
-                          const isPeak = h === bestHour && d === bestDayNum
-                          return (
-                            <div key={`${d}-${h}`}
-                              onClick={() => toggleScheduleSlot(d,h)}
-                              style={{ height:28, borderRadius:4, background: active ? (isPeak ? "linear-gradient(135deg,#F59E0B,#10B981)" : "linear-gradient(135deg,#7C5CFF,#22D3EE)") : isPeak ? "rgba(245,158,11,0.15)" : "rgba(255,255,255,0.03)", border: isPeak && !active ? "1px solid rgba(245,158,11,0.4)" : active ? "none" : "1px solid rgba(255,255,255,0.04)", cursor:"pointer", transition:"all 0.15s", display:"flex", alignItems:"center", justifyContent:"center", fontSize:10, color: active ? C.white : "transparent" }}
-                              onMouseEnter={e => { if(!active) e.currentTarget.style.background="rgba(124,92,255,0.2)" }}
-                              onMouseLeave={e => { if(!active) e.currentTarget.style.background=isPeak?"rgba(245,158,11,0.15)":"rgba(255,255,255,0.03)" }}>
-                              {active ? "✓" : ""}
-                            </div>
-                          )
-                        })}
-                      </>
-                    ))}
-                  </div>
-                </div>
-                <div style={{ fontSize:11, color:C.muted, marginTop:12, display:"flex", gap:16, flexWrap:"wrap" }}>
-                  <span style={{ display:"flex", alignItems:"center", gap:4 }}><span style={{ width:12, height:12, borderRadius:3, background:"linear-gradient(135deg,#7C5CFF,#22D3EE)", display:"inline-block" }} /> Scheduled</span>
-                  <span style={{ display:"flex", alignItems:"center", gap:4 }}><span style={{ width:12, height:12, borderRadius:3, border:"1px solid rgba(245,158,11,0.4)", display:"inline-block" }} /> Your peak time</span>
-                </div>
-              </div>
-
-              {/* ── ACTIVE SCHEDULE SUMMARY ── */}
-              {scheduleSlots.length > 0 && (
-                <div style={{ ...glassCard, borderRadius:16, padding:20 }}>
-                  <div style={{ fontSize:14, fontWeight:800, color:C.white, marginBottom:12 }}>Your Schedule ({scheduleSlots.length} slots)</div>
-                  <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>
-                    {[...scheduleSlots].sort((a,b) => a.day_of_week - b.day_of_week || a.start_hour - b.start_hour).map(s => (
-                      <div key={`${s.day_of_week}-${s.start_hour}`} style={{ padding:"6px 12px", borderRadius:20, background:"rgba(124,92,255,0.15)", border:"1px solid rgba(124,92,255,0.35)", fontSize:12, color:C.white, display:"flex", alignItems:"center", gap:6 }}>
-                        {DAYS[s.day_of_week]} {fmtH(s.start_hour)}
-                        <button onClick={() => toggleScheduleSlot(s.day_of_week, s.start_hour)}
-                          style={{ background:"none", border:"none", color:C.muted, cursor:"pointer", fontSize:12, padding:0, lineHeight:1, marginLeft:2 }}>✕</button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* ── SAVED LIVE SESSIONS ── */}
-              {savedLiveSessions.length > 0 && (
-                <div style={{ ...glassCard, borderRadius:16, padding:20, marginTop:20 }}>
-                  <div style={{ fontSize:14, fontWeight:800, color:C.white, marginBottom:12 }}>📼 Past Live Sessions</div>
-                  <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-                    {savedLiveSessions.slice(0,10).map(s => {
-                      const dt = new Date(s.started_at)
-                      const label = dt.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})
-                      const hr = Math.floor(s.duration_minutes/60), min = s.duration_minutes%60
-                      return (
-                        <div key={s.id} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"10px 14px", borderRadius:10, background:"rgba(255,255,255,0.03)", border:"1px solid rgba(255,255,255,0.06)", flexWrap:"wrap", gap:8 }}>
-                          <div>
-                            <div style={{ fontSize:13, fontWeight:700, color:C.white }}>{label} — {dt.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</div>
-                            <div style={{ fontSize:11, color:C.muted }}>{hr > 0 ? `${hr}h ` : ""}{min}min · {s.tip_count} tips · {s.unique_fans} fans</div>
-                          </div>
-                          <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-                            {s.goal_hit && <span style={{ fontSize:10, padding:"2px 8px", borderRadius:10, background:"rgba(16,185,129,0.15)", color:C.green, fontWeight:700 }}>🎯 Goal hit!</span>}
-                            <div style={{ fontSize:16, fontWeight:900, color:C.green }}>${parseFloat(s.total_usd).toFixed(2)}</div>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              )}
-            </div>
-          )
-        })()}
-
         {activeTab === "titles" && (
           <div style={{ maxWidth: 760, margin: "0 auto" }}>
             <TitleGenerator C={C} glassCard={glassCard} analytics={analytics} tips={tips} sessions={sessions} whales={whales} />
@@ -4811,340 +4243,130 @@ const handleCSV = async (file, forcePlatform = null) => {
       {/* WHALE PROFILE MODAL */}
       {selectedWhale && (() => {
         const w = selectedWhale
-        const wKey = w.username?.toLowerCase()
-        const whaleTips = tips.filter(t => t.username === w.username)
-        const sortedTips = [...whaleTips].sort((a,b) => new Date(b.date_time)-new Date(a.date_time))
-        const firstTip = sortedTips.length ? sortedTips[sortedTips.length-1] : null
-        const daysSinceLastTip = Math.floor((Date.now()-new Date(w.lastTipDate))/86400000)
+        const whaleTips = tips.filter(t => t.username === w.username && t.platform === w.platform)
+        const sortedTips = [...whaleTips].sort((a, b) => new Date(b.date_time) - new Date(a.date_time))
+        const firstTip = whaleTips.length ? whaleTips.reduce((a, b) => new Date(a.date_time) < new Date(b.date_time) ? a : b) : null
+        const daysSinceLastTip = Math.floor((Date.now() - new Date(w.lastTipDate)) / 86400000)
         const tierColor = TIER_COLORS[w.tier] || C.cyan
-        const avgDaysBetweenTips = whaleTips.length > 1 ? Math.floor((new Date(w.lastTipDate)-new Date(firstTip?.date_time))/86400000/(whaleTips.length-1)) : 30
-        const likelyReturnDays = Math.max(0, avgDaysBetweenTips-daysSinceLastTip)
-        const churnRisk = daysSinceLastTip > avgDaysBetweenTips*2 ? "High" : daysSinceLastTip > avgDaysBetweenTips ? "Medium" : "Low"
-        const churnColor = churnRisk==="High" ? C.red : churnRisk==="Medium" ? C.orange : C.green
-        const biggestTip = whaleTips.length ? Math.max(...whaleTips.map(t=>t.usd)) : 0
-        const privateTips = whaleTips.filter(t=>t.tip_type?.toLowerCase().includes('private'))
-        const spyTips = whaleTips.filter(t=>t.tip_type?.toLowerCase().includes('spy'))
-        const savedNote = tipperNotes[wKey] || {}
-        const aiData = fanAIInsights[wKey]
-
-        // Extract tip note keywords from CB username variants
-        const variants = tips.filter(t => t.username.toLowerCase().startsWith(wKey) && t.username.toLowerCase() !== wKey)
-        const tipKeywords = [...new Set(variants.map(t => t.username.slice(wKey.length).trim()).filter(n=>n.length>1&&n.length<25))]
-
-        // Hour heatmap
-        const hourCounts = {}
-        whaleTips.forEach(t => {
-          const h = new Date(t.date_time).getHours()
-          hourCounts[h] = (hourCounts[h]||0)+1
-        })
-        const maxHourCount = Math.max(...Object.values(hourCounts),1)
-        const topHour = Object.entries(hourCounts).sort((a,b)=>b[1]-a[1])[0]
-        const topHourLabel = topHour ? (parseInt(topHour[0])===0?"12 AM":parseInt(topHour[0])<12?`${topHour[0]} AM`:parseInt(topHour[0])===12?"12 PM":`${parseInt(topHour[0])-12} PM`) : "—"
-
-        // Day heatmap
-        const DAYS_SHORT = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"]
-        const dayCounts = {Sun:0,Mon:0,Tue:0,Wed:0,Thu:0,Fri:0,Sat:0}
-        whaleTips.forEach(t => { const d = new Date(t.date_time).getDay(); dayCounts[DAYS_SHORT[d]]++ })
-        const maxDayCount = Math.max(...Object.values(dayCounts),1)
-
-        // Fan personality tags from tip notes + behavior
-        const personalityTags = []
-        const kw = tipKeywords.map(k=>k.toLowerCase()).join(' ')
-        if (kw.includes('moan')||kw.includes('loud')||kw.includes('vocal')) personalityTags.push({label:'🔊 Loves moaning',col:C.pink})
-        if (kw.includes('dom')||kw.includes('goddess')||kw.includes('queen')||kw.includes('mistress')) personalityTags.push({label:'👑 Dominant preference',col:C.gold})
-        if (kw.includes('sub')||kw.includes('obey')||kw.includes('please')||kw.includes('master')) personalityTags.push({label:'🔗 Submissive vibe',col:C.indigo})
-        if (kw.includes('fuck')||kw.includes('fuck me')||kw.includes('harder')) personalityTags.push({label:'🔥 High energy',col:C.orange})
-        if (kw.includes('edge')||kw.includes('tease')||kw.includes('slow')) personalityTags.push({label:'⏳ Edging/tease fan',col:C.cyan})
-        if (privateTips.length > 0) personalityTags.push({label:`🔒 Books privates (${privateTips.length}x)`,col:C.pink})
-        if (spyTips.length > 0) personalityTags.push({label:`👁️ Spy show viewer (${spyTips.length}x)`,col:C.orange})
-        if (w.tipCount >= 20) personalityTags.push({label:'⭐ Super regular',col:C.green})
-        if (biggestTip >= 50) personalityTags.push({label:`💎 Big spender ($${biggestTip.toFixed(0)} max)`,col:C.gold})
-
-        const TABS = [
-          {id:'overview',label:'Overview'},
-          {id:'tips',label:'Tip History'},
-          {id:'notes',label:'📝 My Notes'},
-          {id:'ai',label:'🤖 AI Insights'},
-        ]
-
+        const avgDaysBetweenTips = whaleTips.length > 1 ? Math.floor((new Date(w.lastTipDate) - new Date(firstTip?.date_time)) / 86400000 / (whaleTips.length - 1)) : 7
+        const likelyReturnDays = Math.max(0, avgDaysBetweenTips - daysSinceLastTip)
+        const churnRisk = daysSinceLastTip > avgDaysBetweenTips * 2 ? "High" : daysSinceLastTip > avgDaysBetweenTips ? "Medium" : "Low"
+        const churnColor = churnRisk === "High" ? C.red : churnRisk === "Medium" ? C.orange : C.green
+        const biggestTip = whaleTips.length ? Math.max(...whaleTips.map(t => t.usd)) : 0
         return (
-          <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000,padding:16}}
-            onClick={e=>{if(e.target===e.currentTarget)setSelectedWhale(null)}}>
-            <div style={{width:580,maxHeight:"92vh",overflowY:"auto",...glassCard,borderRadius:22,display:"flex",flexDirection:"column"}}>
-
-              {/* ── HEADER ── */}
-              <div style={{padding:"22px 24px 18px",background:`linear-gradient(135deg,${tierColor}18,transparent)`,borderBottom:"1px solid rgba(255,255,255,0.07)"}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
-                  <div style={{display:"flex",alignItems:"center",gap:14}}>
-                    <div style={{width:54,height:54,borderRadius:14,background:`linear-gradient(135deg,${tierColor},${tierColor}80)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,fontWeight:900,color:"#fff",boxShadow:`0 0 20px ${tierColor}40`}}>
-                      {w.username.charAt(0).toUpperCase()}
-                    </div>
+          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 20 }}>
+            <div className="modal-inner" style={{ width: 560, maxHeight: "90vh", overflowY: "auto", ...glassCard, borderRadius: 20 }}>
+              <div style={{ padding: "24px 24px 20px", background: `linear-gradient(135deg, ${tierColor}15, transparent)`, borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                    <div style={{ width: 52, height: 52, borderRadius: 14, background: `linear-gradient(135deg, ${tierColor}, ${tierColor}80)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, fontWeight: 800, color: "#fff" }}>{w.username.charAt(0).toUpperCase()}</div>
                     <div>
-                      <div style={{fontSize:20,fontWeight:900,color:C.white}}>{w.username}</div>
-                      <div style={{display:"flex",alignItems:"center",gap:8,marginTop:4,flexWrap:"wrap"}}>
-                        <span style={{padding:"2px 10px",borderRadius:100,background:`${tierColor}20`,border:`1px solid ${tierColor}50`,color:tierColor,fontSize:11,fontWeight:700}}>{w.tier}</span>
-                        <span style={{fontSize:12,color:C.muted}}>{w.platform}</span>
-                        <span style={{fontSize:12,color:daysSinceLastTip<7?C.green:daysSinceLastTip<30?C.gold:C.red,fontWeight:600}}>
-                          {daysSinceLastTip===0?"Active today":`${daysSinceLastTip}d ago`}
-                        </span>
+                      <div style={{ fontSize: 20, fontWeight: 800, color: C.white }}>{w.username}</div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
+                        <span style={{ padding: "2px 10px", borderRadius: 100, background: `${tierColor}20`, border: `1px solid ${tierColor}50`, color: tierColor, fontSize: 11, fontWeight: 700 }}>{w.tier}</span>
+                        <span style={{ fontSize: 12, color: C.muted }}>{w.platform}</span>
                       </div>
                     </div>
                   </div>
-                  <button onClick={()=>setSelectedWhale(null)} style={{width:32,height:32,borderRadius:"50%",background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.1)",color:C.muted,fontSize:16,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>✕</button>
+                  <button onClick={() => setSelectedWhale(null)} style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.1)", color: C.muted, fontSize: 16, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
                 </div>
-
-                {/* Stat row */}
-                <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10}}>
-                  {[
-                    {label:"Total Spent",value:`$${w.totalUSD.toFixed(2)}`,color:C.green},
-                    {label:"Tips",value:w.tipCount,color:C.cyan},
-                    {label:"Avg Tip",value:`$${w.avgTipSize.toFixed(2)}`,color:C.gold},
-                    {label:"Biggest",value:`$${biggestTip.toFixed(2)}`,color:C.pink},
-                  ].map(({label,value,color})=>(
-                    <div key={label} style={{background:"rgba(255,255,255,0.05)",borderRadius:10,padding:"10px 12px",textAlign:"center"}}>
-                      <div style={{fontSize:10,color:C.muted,marginBottom:3}}>{label}</div>
-                      <div style={{fontSize:15,fontWeight:800,color}}>{value}</div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
+                  {[{ label: "Total Spent", value: `$${w.totalUSD.toFixed(2)}`, color: C.green }, { label: "Tips Given", value: w.tipCount, color: C.cyan }, { label: "Avg Tip", value: `$${w.avgTipSize.toFixed(2)}`, color: C.gold }, { label: "Biggest Tip", value: `$${biggestTip.toFixed(2)}`, color: C.pink }].map(({ label, value, color }) => (
+                    <div key={label} style={{ background: "rgba(255,255,255,0.05)", borderRadius: 10, padding: 12, textAlign: "center" }}>
+                      <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>{label}</div>
+                      <div style={{ fontSize: 16, fontWeight: 800, color }}>{value}</div>
                     </div>
                   ))}
                 </div>
-
-                {/* Personality tags */}
-                {personalityTags.length > 0 && (
-                  <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:12}}>
-                    {personalityTags.map(t=>(
-                      <span key={t.label} style={{padding:"3px 10px",borderRadius:20,background:`${t.col}15`,border:`1px solid ${t.col}35`,color:t.col,fontSize:11,fontWeight:600}}>
-                        {t.label}
-                      </span>
-                    ))}
-                  </div>
-                )}
               </div>
-
-              {/* ── TABS ── */}
-              <div style={{display:"flex",borderBottom:"1px solid rgba(255,255,255,0.07)",padding:"0 20px"}}>
-                {TABS.map(tab=>(
-                  <button key={tab.id} onClick={()=>{ setProfileTab(tab.id); if(tab.id==='ai'&&!fanAIInsights[wKey]?.text&&!fanAIInsights[wKey]?.loading) generateFanInsights(w) }}
-                    style={{padding:"12px 14px",background:"none",border:"none",borderBottom:`2px solid ${profileTab===tab.id?tierColor:"transparent"}`,color:profileTab===tab.id?C.white:C.muted,fontSize:13,fontWeight:profileTab===tab.id?700:400,cursor:"pointer",whiteSpace:"nowrap",transition:"all 0.15s"}}>
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
-
-              {/* ── TAB CONTENT ── */}
-              <div style={{padding:22,flex:1}}>
-
-                {/* OVERVIEW TAB */}
-                {profileTab==='overview' && (
-                  <div style={{display:"flex",flexDirection:"column",gap:16}}>
-
-                    {/* Tip notes from CB username variants */}
-                    {tipKeywords.length > 0 && (
-                      <div style={{padding:16,borderRadius:12,background:"rgba(124,92,255,0.08)",border:"1px solid rgba(124,92,255,0.25)"}}>
-                        <div style={{fontSize:12,fontWeight:700,color:C.indigo,marginBottom:10}}>💬 Tip Notes Left by Fan</div>
-                        <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-                          {tipKeywords.map(k=>(
-                            <span key={k} style={{padding:"4px 10px",borderRadius:8,background:"rgba(124,92,255,0.15)",border:"1px solid rgba(124,92,255,0.3)",fontSize:12,color:C.white}}>"{k}"</span>
-                          ))}
-                        </div>
-                        <div style={{fontSize:11,color:C.muted,marginTop:8}}>These are words the fan included with their tips</div>
-                      </div>
-                    )}
-
-                    {/* Activity timing */}
-                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-                      <div style={{padding:14,background:"rgba(255,255,255,0.04)",borderRadius:10,border:"1px solid rgba(255,255,255,0.07)"}}>
-                        <div style={{fontSize:11,color:C.muted,marginBottom:4}}>⏰ Most active hour</div>
-                        <div style={{fontSize:16,fontWeight:800,color:C.cyan}}>{topHourLabel}</div>
-                      </div>
-                      <div style={{padding:14,background:"rgba(255,255,255,0.04)",borderRadius:10,border:"1px solid rgba(255,255,255,0.07)"}}>
-                        <div style={{fontSize:11,color:C.muted,marginBottom:4}}>🔄 Tips every</div>
-                        <div style={{fontSize:16,fontWeight:800,color:C.gold}}>{avgDaysBetweenTips}d avg</div>
-                      </div>
-                      <div style={{padding:14,background:"rgba(255,255,255,0.04)",borderRadius:10,border:"1px solid rgba(255,255,255,0.07)"}}>
-                        <div style={{fontSize:11,color:C.muted,marginBottom:4}}>📅 Expected return</div>
-                        <div style={{fontSize:16,fontWeight:800,color:likelyReturnDays===0?C.orange:C.white}}>{likelyReturnDays===0?"Overdue!":likelyReturnDays===1?"Tomorrow":`~${likelyReturnDays}d`}</div>
-                      </div>
-                      <div style={{padding:14,background:"rgba(255,255,255,0.04)",borderRadius:10,border:"1px solid rgba(255,255,255,0.07)"}}>
-                        <div style={{fontSize:11,color:C.muted,marginBottom:4}}>⚠️ Churn risk</div>
-                        <div style={{fontSize:16,fontWeight:800,color:churnColor}}>{churnRisk}</div>
-                      </div>
-                    </div>
-
-                    {/* Day of week heatmap */}
-                    <div>
-                      <div style={{fontSize:12,color:C.muted,marginBottom:8}}>📅 Tips by day of week</div>
-                      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4}}>
-                        {DAYS_SHORT.map(d=>{
-                          const count=dayCounts[d]; const intensity=count/maxDayCount
-                          const bg=count===0?"rgba(255,255,255,0.04)":intensity<0.33?"rgba(124,92,255,0.2)":intensity<0.66?"rgba(124,92,255,0.5)":"rgba(124,92,255,0.9)"
-                          return (
-                            <div key={d} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
-                              <div style={{width:"100%",height:32,borderRadius:6,background:bg,display:"flex",alignItems:"center",justifyContent:"center"}}>
-                                <span style={{fontSize:11,fontWeight:700,color:count>0?C.white:C.muted}}>{count||""}</span>
-                              </div>
-                              <span style={{fontSize:9,color:C.muted}}>{d}</span>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </div>
-
-                    {/* Top 3 tips */}
-                    <div>
-                      <div style={{fontSize:12,color:C.muted,marginBottom:8}}>🏆 Biggest tips</div>
-                      <div style={{display:"flex",flexDirection:"column",gap:6}}>
-                        {[...whaleTips].sort((a,b)=>b.usd-a.usd).slice(0,3).map((t,i)=>(
-                          <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 14px",background:"rgba(255,255,255,0.04)",borderRadius:8}}>
-                            <div style={{display:"flex",alignItems:"center",gap:10}}>
-                              <span style={{fontSize:14}}>{["🥇","🥈","🥉"][i]}</span>
-                              <div>
-                                <div style={{fontSize:12,color:C.muted}}>{new Date(t.date_time).toLocaleDateString()}</div>
-                                {t.tip_type && t.tip_type!=='Tip' && <div style={{fontSize:10,color:C.indigo}}>{t.tip_type}</div>}
-                              </div>
-                            </div>
-                            <div style={{fontSize:15,fontWeight:800,color:C.gold}}>${t.usd.toFixed(2)}</div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Quick action buttons */}
-                    <div style={{display:"flex",gap:10,paddingTop:4}}>
-                      <button onClick={()=>{setMessageTarget(w);setMessageIndex(0);setMessageCopied(false)}}
-                        style={{flex:1,padding:"11px 0",borderRadius:10,background:"linear-gradient(135deg,#EC4899,#7C5CFF)",border:"none",color:C.white,fontSize:13,fontWeight:700,cursor:"pointer",animation:"pulse-msg 2.5s infinite"}}>
-                        💌 Message Fan
-                      </button>
-                      <button onClick={()=>{setProfileTab('notes');setNoteTarget(w.username);setNoteText(savedNote.note||'')}}
-                        style={{flex:1,padding:"11px 0",borderRadius:10,background:savedNote.note?"rgba(245,158,11,0.2)":"rgba(255,255,255,0.06)",border:`1px solid ${savedNote.note?"rgba(245,158,11,0.4)":"rgba(255,255,255,0.1)"}`,color:savedNote.note?C.gold:C.muted,fontSize:13,fontWeight:700,cursor:"pointer"}}>
-                        📝 {savedNote.note?"Edit Note":"Add Note"}
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* TIP HISTORY TAB */}
-                {profileTab==='tips' && (
-                  <div style={{display:"flex",flexDirection:"column",gap:6}}>
-                    <div style={{fontSize:12,color:C.muted,marginBottom:8}}>{whaleTips.length} tips total · ${w.totalUSD.toFixed(2)} lifetime</div>
-                    {sortedTips.map((t,i)=>(
-                      <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 14px",background:"rgba(255,255,255,0.03)",borderRadius:8,border:"1px solid rgba(255,255,255,0.06)"}}>
-                        <div>
-                          <div style={{fontSize:12,color:C.white}}>{new Date(t.date_time).toLocaleDateString()} at {new Date(t.date_time).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}</div>
-                          {t.tip_type && t.tip_type!=='Tip' && <div style={{fontSize:10,color:C.indigo,marginTop:2}}>{t.tip_type}</div>}
-                        </div>
-                        <div style={{fontSize:14,fontWeight:700,color:C.green}}>${t.usd.toFixed(2)}</div>
+              <div style={{ padding: 24, display: "flex", flexDirection: "column", gap: 20 }}>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>📊 Fan Intelligence</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
+                    {[{ label: "First tip", value: firstTip ? new Date(firstTip.date_time).toLocaleDateString() : "—" }, { label: "Last tip", value: `${new Date(w.lastTipDate).toLocaleDateString()} (${daysSinceLastTip}d ago)` }, { label: "Avg days between tips", value: `${avgDaysBetweenTips} days` }, { label: "Churn risk", value: churnRisk, color: churnColor }].map(({ label, value, color }) => (
+                      <div key={label} style={{ padding: 14, background: "rgba(255,255,255,0.04)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.07)" }}>
+                        <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>{label}</div>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: color || C.white }}>{value}</div>
                       </div>
                     ))}
                   </div>
-                )}
-
-                {/* NOTES TAB */}
-                {profileTab==='notes' && (
-                  <div style={{display:"flex",flexDirection:"column",gap:14}}>
-                    <div style={{fontSize:13,color:C.muted}}>Private notes about {w.username} — only you can see these</div>
-                    <textarea value={noteText} onChange={e=>setNoteText(e.target.value)}
-                      placeholder={`e.g. Loves dominant energy, books privates on Sundays, favorite toy is Lush, responds well to shoutouts during stream...`}
-                      rows={5}
-                      style={{width:"100%",padding:"12px 14px",borderRadius:10,background:"rgba(255,255,255,0.05)",border:"1px solid rgba(245,158,11,0.3)",color:C.white,fontSize:13,outline:"none",resize:"vertical",fontFamily:"inherit",boxSizing:"border-box"}}
-                      onFocus={e=>e.target.style.borderColor="rgba(245,158,11,0.6)"}
-                      onBlur={e=>e.target.style.borderColor="rgba(245,158,11,0.3)"}
-                    />
-                    {/* Key insights bullets if note has content */}
-                    {noteText && (
-                      <div style={{padding:14,borderRadius:10,background:"rgba(245,158,11,0.06)",border:"1px solid rgba(245,158,11,0.2)"}}>
-                        <div style={{fontSize:12,fontWeight:700,color:C.gold,marginBottom:8}}>📌 Key Details Detected</div>
-                        <div style={{display:"flex",flexDirection:"column",gap:4}}>
-                          {noteText.split(/[,.
-]/).filter(s=>s.trim().length>3).slice(0,5).map((line,i)=>(
-                            <div key={i} style={{fontSize:12,color:C.text,display:"flex",gap:6,alignItems:"flex-start"}}>
-                              <span style={{color:C.gold,flexShrink:0}}>•</span>
-                              <span>{line.trim()}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    <div style={{display:"flex",gap:10}}>
-                      <button onClick={()=>saveTipperNote(w.username,noteText)} disabled={noteSaving}
-                        style={{flex:1,padding:"11px 0",borderRadius:10,background:"linear-gradient(135deg,#F59E0B,#EC4899)",border:"none",color:C.white,fontSize:14,fontWeight:700,cursor:"pointer"}}>
-                        {noteSaving?"Saving...":"💾 Save Note"}
-                      </button>
-                      {savedNote.note && (
-                        <button onClick={()=>saveTipperNote(w.username,'')}
-                          style={{padding:"11px 14px",borderRadius:10,background:"rgba(248,113,113,0.12)",border:"1px solid rgba(248,113,113,0.3)",color:C.red,fontSize:13,cursor:"pointer"}}>
-                          Delete
-                        </button>
-                      )}
+                  {w.typicalOnlineHours && w.typicalOnlineHours !== "Unknown" && (
+                    <div style={{ padding: "9px 14px", background: `${C.cyan}10`, border: `1px solid ${C.cyan}25`, borderRadius: 9, marginBottom: 12 }}>
+                      <span style={{ fontSize: 12, color: C.cyan }}>🕐 Best time to reach: <strong>{w.typicalOnlineHours}</strong></span>
                     </div>
-                  </div>
-                )}
-
-                {/* AI INSIGHTS TAB */}
-                {profileTab==='ai' && (
-                  <div style={{display:"flex",flexDirection:"column",gap:14}}>
-                    {aiData?.loading && (
-                      <div style={{textAlign:"center",padding:40}}>
-                        <div style={{width:32,height:32,border:"3px solid rgba(124,92,255,0.3)",borderTopColor:C.indigo,borderRadius:"50%",animation:"spin 0.8s linear infinite",margin:"0 auto 12px"}} />
-                        <div style={{fontSize:13,color:C.muted}}>Analyzing {w.username}'s behavior patterns...</div>
-                      </div>
-                    )}
-                    {aiData?.error && (
-                      <div style={{padding:16,borderRadius:12,background:"rgba(248,113,113,0.08)",border:"1px solid rgba(248,113,113,0.2)",color:C.red,fontSize:13}}>{aiData.error}</div>
-                    )}
-                    {aiData?.text && (
+                  )}
+                  {(() => {
+                    const dayKeys = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]
+                    const dayCounts = { Mon:0,Tue:0,Wed:0,Thu:0,Fri:0,Sat:0,Sun:0 }
+                    whaleTips.forEach(t => {
+                      const d = new Date(t.date_time).getDay()
+                      const key = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][d]
+                      if (key in dayCounts) dayCounts[key]++
+                    })
+                    const maxCount = Math.max(...Object.values(dayCounts), 1)
+                    return (
                       <div>
-                        <div style={{fontSize:12,color:C.muted,marginBottom:14,display:"flex",alignItems:"center",gap:6}}>
-                          <div style={{width:6,height:6,borderRadius:"50%",background:C.green,animation:"pulse-msg 2s infinite"}} />
-                          AI analysis based on real tip data · updates each time you open
-                        </div>
-                        {aiData.text.split('
-
-').map((section,i)=>{
-                          const [header,...lines] = section.split('
-')
-                          const col = i===0?C.pink:i===1?C.cyan:C.gold
-                          return (
-                            <div key={i} style={{marginBottom:14,padding:14,borderRadius:12,background:`${col}08`,border:`1px solid ${col}20`}}>
-                              <div style={{fontSize:12,fontWeight:800,color:col,marginBottom:8}}>{header}</div>
-                              {lines.map((line,j)=>(
-                                <div key={j} style={{fontSize:13,color:C.text,display:"flex",gap:8,alignItems:"flex-start",marginBottom:4}}>
-                                  <span style={{color:col,flexShrink:0,marginTop:1}}>•</span>
-                                  <span>{line.replace(/^[•\-]\s*/,'')}</span>
+                        <div style={{ fontSize: 11, color: C.muted, marginBottom: 8 }}>📅 Tips by day of week</div>
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4 }}>
+                          {dayKeys.map(d => {
+                            const count = dayCounts[d]
+                            const intensity = count / maxCount
+                            const bg = intensity === 0 ? "rgba(255,255,255,0.04)" : intensity < 0.33 ? "rgba(124,92,255,0.2)" : intensity < 0.66 ? "rgba(124,92,255,0.5)" : "rgba(124,92,255,0.9)"
+                            return (
+                              <div key={d} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+                                <div style={{ width: "100%", height: 30, borderRadius: 6, background: bg, border: "1px solid rgba(255,255,255,0.06)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                  <span style={{ fontSize: 10, fontWeight: 700, color: count > 0 ? C.white : C.muted }}>{count || ""}</span>
                                 </div>
-                              ))}
-                            </div>
-                          )
-                        })}
-                        <button onClick={()=>{ setFanAIInsights(prev=>({...prev,[wKey]:null})); generateFanInsights(w) }}
-                          style={{width:"100%",padding:"9px 0",borderRadius:8,background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.1)",color:C.muted,fontSize:12,cursor:"pointer",marginTop:4}}>
-                          🔄 Regenerate insights
-                        </button>
+                                <span style={{ fontSize: 9, color: C.muted }}>{d}</span>
+                              </div>
+                            )
+                          })}
+                        </div>
                       </div>
-                    )}
-                    {!aiData && (
-                      <div style={{textAlign:"center",padding:32}}>
-                        <div style={{fontSize:32,marginBottom:12}}>🤖</div>
-                        <div style={{fontSize:15,fontWeight:700,color:C.white,marginBottom:6}}>AI Fan Analysis</div>
-                        <div style={{fontSize:13,color:C.muted,marginBottom:20}}>Get personality insights, engagement strategy, and revenue opportunities based on {w.username}'s real data</div>
-                        <button onClick={()=>generateFanInsights(w)}
-                          style={{padding:"12px 28px",borderRadius:12,background:"linear-gradient(135deg,#7C5CFF,#22D3EE)",border:"none",color:C.white,fontSize:14,fontWeight:700,cursor:"pointer"}}>
-                          ✨ Generate Insights
-                        </button>
+                    )
+                  })()}
+                </div>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>🏆 Top 3 Tips</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {[...whaleTips].sort((a,b) => b.usd - a.usd).slice(0,3).map((t, i) => (
+                      <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: "rgba(255,255,255,0.04)", borderRadius: 8, border: "1px solid rgba(255,255,255,0.07)" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <span style={{ fontSize: 14 }}>{["🥇","🥈","🥉"][i]}</span>
+                          <span style={{ fontSize: 12, color: C.muted }}>{new Date(t.date_time).toLocaleDateString()}</span>
+                        </div>
+                        <div style={{ fontSize: 15, fontWeight: 800, color: C.gold }}>${t.usd.toFixed(2)}</div>
                       </div>
-                    )}
+                    ))}
                   </div>
-                )}
-              </div>
-
-              {/* Close button */}
-              <div style={{padding:"14px 22px",borderTop:"1px solid rgba(255,255,255,0.06)"}}>
-                <button onClick={()=>setSelectedWhale(null)}
-                  style={{width:"100%",padding:"11px",borderRadius:10,background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.09)",color:C.muted,fontSize:14,cursor:"pointer"}}>
-                  Close
-                </button>
+                </div>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>🕐 Recent Tips</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {sortedTips.slice(0, 5).map((t, i) => (
+                      <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: "rgba(255,255,255,0.04)", borderRadius: 8, border: "1px solid rgba(255,255,255,0.07)" }}>
+                        <div style={{ fontSize: 12, color: C.muted }}>{new Date(t.date_time).toLocaleDateString()} at {new Date(t.date_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</div>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: C.green }}>${t.usd.toFixed(2)}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>🤖 AI Predictions</div>
+                  <div style={{ padding: 16, background: "rgba(255,255,255,0.04)", borderRadius: 12, border: "1px solid rgba(255,255,255,0.07)", display: "flex", flexDirection: "column", gap: 10 }}>
+                    {[{ label: "📅 Likely to tip again in", value: likelyReturnDays === 0 ? "Overdue!" : `~${likelyReturnDays} days`, color: C.cyan }, { label: "💸 Predicted next tip size", value: `$${(w.avgTipSize * 1.1).toFixed(2)}`, color: C.gold }, { label: "🎯 Engagement score", value: `${Math.min(99, Math.round((w.tipCount / 10) * 20 + (w.totalUSD / 100) * 10))} / 100`, color: C.pink }, { label: "📈 30-day revenue forecast", value: `$${((w.totalUSD / Math.max(1, Math.floor((Date.now() - new Date(firstTip?.date_time)) / 2592000000))) * 1.05).toFixed(2)}`, color: C.green }].map(({ label, value, color }) => (
+                      <div key={label} style={{ display: "flex", justifyContent: "space-between", padding: "10px 14px", background: "rgba(255,255,255,0.04)", borderRadius: 8 }}>
+                        <div style={{ fontSize: 13, color: C.text }}>{label}</div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color }}>{value}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <button onClick={() => setSelectedWhale(null)} style={{ width: "100%", padding: "12px", borderRadius: 10, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: C.muted, fontSize: 14, cursor: "pointer" }}>Close Profile</button>
               </div>
             </div>
           </div>
+        )
       })()}
 
       {/* MESSAGE GENERATOR MODAL */}
