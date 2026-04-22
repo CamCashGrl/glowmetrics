@@ -834,6 +834,7 @@ export default function Dashboard() {
   const [liveTipInput, setLiveTipInput] = useState({ username: '', tokens: '', usd: '' })
   const [liveAlerts, setLiveAlerts] = useState([])
   const [liveTick, setLiveTick] = useState(0)
+  const [minuteTick, setMinuteTick] = useState(0) // increments every 60s to refresh time-based alerts
   const [betaCount, setBetaCount] = useState(null)
   const [earlyAccessEmail, setEarlyAccessEmail] = useState('')
   const [earlyAccessSubmitted, setEarlyAccessSubmitted] = useState(false)
@@ -1033,10 +1034,17 @@ export default function Dashboard() {
           return prev
         })
       }, 30000)
+
+      // ── MINUTE TICK — re-evaluates time-based alerts every 60s ──
+      // Daily Brief, real-time alerts, and best-time alert update as the hour changes
+      const minuteTimer = setInterval(() => {
+        setMinuteTick(t => t + 1)
+      }, 60000)
     })
     return () => {
       if (realtimeChannelRef.current) supabase.removeChannel(realtimeChannelRef.current)
       if (refreshTimerRef.current) clearInterval(refreshTimerRef.current)
+      clearInterval(minuteTimer)
     }
   }, [])
 
@@ -1729,8 +1737,11 @@ const handleCSV = async (file, forcePlatform = null) => {
 
   const whatsNextAlerts = buildWhatsNextAlerts()
   const reengageList = buildReengageList()
-  const dailyBrief = buildDailyBrief()
-  const realTimeAlerts = buildRealTimeAlerts()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const dailyBrief = buildDailyBrief() // re-runs every minuteTick
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const realTimeAlerts = buildRealTimeAlerts() // re-runs every minuteTick
+  void minuteTick // ensures re-render when minute changes
 
   return (
     <div style={{
@@ -1834,8 +1845,7 @@ const handleCSV = async (file, forcePlatform = null) => {
           <div style={{ marginTop: 12, padding: "6px 10px", borderRadius: 8, background: "linear-gradient(135deg, rgba(245,158,11,0.2), rgba(251,146,60,0.2))", border: "1px solid rgba(245,158,11,0.4)", display: "flex", alignItems: "center", gap: 6 }}>
             <div style={{ width: 6, height: 6, borderRadius: "50%", background: C.gold, flexShrink: 0, boxShadow: `0 0 6px ${C.gold}` }} />
             <div>
-              <div style={{ fontSize: 10, fontWeight: 700, color: C.gold, letterSpacing: 0.5 }}>FREE BETA</div>
-              <div style={{ fontSize: 9, color: C.orange }}>All features unlocked</div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: C.gold, letterSpacing: 0.5 }}>BETA</div>
             </div>
           </div>
         </div>
@@ -1857,13 +1867,8 @@ const handleCSV = async (file, forcePlatform = null) => {
 
         <div style={{ padding: "16px 20px", borderTop: "1px solid rgba(255,255,255,0.08)", display: "flex", flexDirection: "column", gap: 10 }}>
           <div style={{ padding: 12, borderRadius: 10, background: "linear-gradient(135deg, rgba(59,130,246,0.1), rgba(236,72,153,0.1))", border: "1px solid rgba(236,72,153,0.3)", textAlign: "center" }}>
-            <div style={{ fontSize: 18, marginBottom: 4 }}>🎉</div>
-            <div style={{ fontSize: 12, fontWeight: 700, color: C.white, marginBottom: 2 }}>Free for first 100 users</div>
-            <div style={{ fontSize: 10, color: C.muted, marginBottom: 8 }}>Spots filling up fast</div>
-            <div style={{ height: 4, borderRadius: 4, background: "rgba(255,255,255,0.1)", overflow: "hidden" }}>
-              <div style={{ height: "100%", width: "63%", borderRadius: 4, background: "linear-gradient(90deg, #3b82f6, #ec4899)", transition: "width 0.6s ease" }} />
-            </div>
-            <div style={{ fontSize: 10, color: C.pink, fontWeight: 600, marginTop: 4 }}><span key={betaCount} className={betaCount !== null ? "counter-bump" : ""}>{betaCount ?? 63}</span> / 100 spots left</div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: C.gold, letterSpacing: 1 }}>✨ BETA</div>
+            <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>All features unlocked</div>
           </div>
           <button
             onClick={handleSignOut}
@@ -1953,6 +1958,44 @@ const handleCSV = async (file, forcePlatform = null) => {
               </div>
 
               <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+
+                {/* ═══ BEST TIME TO STREAM ALERT ═══ */}
+                {bhLabel && (
+                  <div style={{ padding: '14px 16px', borderRadius: 13, background: atPeak ? 'linear-gradient(135deg,rgba(16,185,129,0.15),rgba(34,211,238,0.08))' : 'linear-gradient(135deg,rgba(124,92,255,0.12),rgba(34,211,238,0.06))', border: `1px solid ${atPeak ? 'rgba(16,185,129,0.4)' : 'rgba(124,92,255,0.35)'}`, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                    <div style={{ fontSize: 22, flexShrink: 0, marginTop: 1 }}>{atPeak ? '🟢' : '⏰'}</div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: atPeak ? C.green : C.white, marginBottom: 5 }}>
+                        {atPeak
+                          ? `Your peak window is RIGHT NOW — go live on ${displayPlat} immediately`
+                          : `Your best time to stream today is ${bhLabel} on ${displayPlat}`
+                        }
+                      </div>
+                      <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.65 }}>
+                        {`Since it's ${todayName}`}
+                        {isBestDay ? ` (your highest-earning day)` : ``}
+                        {`, you peak at ${bhLabel} UTC on ${displayPlat} with `}
+                        <span style={{ color: C.gold, fontWeight: 700 }}>${displayAvg.toFixed(0)} avg/session</span>
+                        {`. Stream `}
+                        <span style={{ color: C.cyan, fontWeight: 700 }}>60+ min</span>
+                        {` to earn `}
+                        <span style={{ color: C.green, fontWeight: 700 }}>${predictionLow}–${predictionHigh}</span>
+                        {` — longer sessions earn `}
+                        <span style={{ color: C.indigo, fontWeight: 700 }}>+101% more</span>
+                        {` on average.`}
+                      </div>
+                      {!atPeak && hoursUntilPeak !== null && hoursUntilPeak > 0 && (
+                        <div style={{ marginTop: 8, fontSize: 11, color: C.indigo, fontWeight: 600 }}>
+                          ⏳ {hoursUntilPeak === 1 ? 'Starting in ~1 hour — prep your room now' : `${hoursUntilPeak} hours away — set a reminder`}
+                        </div>
+                      )}
+                      {atPeak && (
+                        <div style={{ marginTop: 8, fontSize: 11, color: C.green, fontWeight: 700 }}>
+                          🔥 This window closes in ~{(60 - new Date().getUTCMinutes())} minutes — don't wait
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 {/* ROW 1 — Today / Peak Window / Best Platform */}
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
@@ -2059,66 +2102,6 @@ const handleCSV = async (file, forcePlatform = null) => {
         {activeTab === "overview" && (
           <div style={{ animation: "fadeUp 0.3s ease" }}>
 
-            {/* BETA BANNER */}
-            <div style={{ marginBottom: 24, padding: "14px 20px", borderRadius: 12, background: "linear-gradient(135deg, rgba(59,130,246,0.1), rgba(236,72,153,0.1))", border: "1px solid rgba(236,72,153,0.3)", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <div style={{ fontSize: 24 }}>🎉</div>
-                <div>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: C.white }}>You're one of our first 100 beta users — everything is free!</div>
-                  <div style={{ fontSize: 12, color: C.muted }}>All Pro features unlocked. No credit card. No limits. Just good vibes.</div>
-                </div>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-                <div style={{ fontSize: 12, color: C.pink, fontWeight: 600 }}>63 / 100 spots left</div>
-                <div style={{ width: 80, height: 6, borderRadius: 4, background: "rgba(255,255,255,0.1)", overflow: "hidden" }}>
-                  <div style={{ height: "100%", width: "37%", borderRadius: 4, background: "linear-gradient(90deg, #3b82f6, #ec4899)", transition: "width 0.6s ease" }} />
-                </div>
-              </div>
-            </div>
-
-            {/* ── BEST MONTH / MONTHLY GOAL CALLOUT on Overview ── */}
-            {(() => {
-              const bestMo = analytics?.bestMonth
-              const monthly = analytics?.monthlyData || []
-              const now = new Date()
-              const thisMonthKey = `${now.getUTCFullYear()}-${String(now.getUTCMonth()+1).padStart(2,'0')}`
-              const thisMonthUSD = monthly.find(m => m.month === thisMonthKey)?.usd || 0
-              const fmtMonth = (key) => { const [y,m] = key.split('-'); return new Date(y,parseInt(m)-1,1).toLocaleDateString('en-US',{month:'long',year:'2-digit'}) }
-              const goalPct = monthlyGoal > 0 ? Math.min(100, Math.round((thisMonthUSD / monthlyGoal) * 100)) : null
-
-              if (!bestMo && !monthlyGoal) return null
-              return (
-                <div style={{ display:"flex", gap:12, marginBottom:20, flexWrap:"wrap" }}>
-                  {bestMo && (
-                    <div onClick={() => setActiveTab('monthly')} style={{ flex:1, minWidth:200, padding:"12px 16px", borderRadius:12, background:"rgba(245,158,11,0.08)", border:"1px solid rgba(245,158,11,0.25)", cursor:"pointer", display:"flex", alignItems:"center", gap:10 }}>
-                      <span style={{ fontSize:20 }}>🏆</span>
-                      <div>
-                        <div style={{ fontSize:11, color:C.gold, fontWeight:700 }}>Best Month</div>
-                        <div style={{ fontSize:15, fontWeight:800, color:C.white }}>{fmtMonth(bestMo.month)} · ${bestMo.usd.toFixed(0)}</div>
-                      </div>
-                    </div>
-                  )}
-                  {monthlyGoal > 0 && (
-                    <div onClick={() => setActiveTab('monthly')} style={{ flex:1, minWidth:200, padding:"12px 16px", borderRadius:12, background:"rgba(16,185,129,0.08)", border:"1px solid rgba(16,185,129,0.25)", cursor:"pointer" }}>
-                      <div style={{ display:"flex", justifyContent:"space-between", marginBottom:6 }}>
-                        <span style={{ fontSize:11, color:C.green, fontWeight:700 }}>🎯 Monthly Goal</span>
-                        <span style={{ fontSize:11, fontWeight:700, color: goalPct >= 100 ? C.green : C.cyan }}>{goalPct}%</span>
-                      </div>
-                      <div style={{ height:5, borderRadius:3, background:"rgba(255,255,255,0.08)", overflow:"hidden" }}>
-                        <div style={{ height:"100%", width:`${goalPct}%`, borderRadius:3, background:"linear-gradient(90deg,#10B981,#22D3EE)" }} />
-                      </div>
-                      <div style={{ fontSize:11, color:C.muted, marginTop:4 }}>${thisMonthUSD.toFixed(0)} / ${monthlyGoal.toFixed(0)}</div>
-                    </div>
-                  )}
-                </div>
-              )
-            })()}
-
-            {/* SHARE MY STATS */}
-            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 16 }}>
-              <button onClick={() => setShareModalOpen(true)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 10, background: "linear-gradient(135deg, rgba(236,72,153,0.15), rgba(168,85,247,0.15))", border: "1px solid rgba(236,72,153,0.35)", color: C.white, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-                📤 Share My Stats
-              </button>
             </div>
 
             {/* ═══════════════════════════════════════
@@ -2130,7 +2113,7 @@ const handleCSV = async (file, forcePlatform = null) => {
               const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1)
               const thisMonthRev = tips.filter(t => new Date(t.date_time || t.dateRaw) >= thisMonthStart).reduce((s, t) => s + (t.usd || 0), 0)
               const prevMonthRev = tips.filter(t => { const d = new Date(t.date_time || t.dateRaw); return d >= prevMonthStart && d < thisMonthStart }).reduce((s, t) => s + (t.usd || 0), 0)
-              const growthPct = prevMonthRev > 0 ? Math.round(((thisMonthRev - prevMonthRev) / prevMonthRev) * 100) : null
+              const growthPct = (prevMonthRev > 0 && thisMonthRev > 0) ? Math.round(((thisMonthRev - prevMonthRev) / prevMonthRev) * 100) : null
               const isPositive = growthPct !== null && growthPct >= 0
               const topPct = Math.max(1, Math.min(25, Math.round(100 - (totalRevenue / 50))))
               const sessionsLast30 = sessions.filter(s => (Date.now() - new Date(s.startTime)) / 86400000 <= 30).length
@@ -4130,7 +4113,7 @@ const handleCSV = async (file, forcePlatform = null) => {
           const daysLeft = daysInMonth - dayOfMonth
           const projectedEnd = thisMonthUSD > 0 ? Math.round(thisMonthUSD / dayOfMonth * daysInMonth) : null
           const maxBarUSD = Math.max(...monthly.map(m => m.usd), 1)
-          const fmtMonth = (key) => { const [y,m] = key.split('-'); return new Date(y,parseInt(m)-1,1).toLocaleDateString('en-US',{month:'short',year:'2-digit'}) }
+          const fmtMonth = (key) => { const [y,m] = key.split('-'); const mo = new Date(y,parseInt(m)-1,1).toLocaleDateString('en-US',{month:'short'}); return mo + " '" + String(y).slice(-2) }
 
           return (
             <div style={{ animation: "fadeUp 0.3s ease" }}>
