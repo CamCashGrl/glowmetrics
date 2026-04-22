@@ -2009,7 +2009,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                             </div>
                           </div>
                           <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }}
-                            style={{ padding: '4px 8px', borderRadius: 7, background: 'none', border: '1px solid rgba(16,185,129,0.3)', color: C.green, fontSize: 11, cursor: 'pointer', fontWeight: 600 }}>
+                            style={{ padding: '4px', borderRadius: 8, background: 'none', border: 'none', color: C.green, fontSize: 26, cursor: 'pointer', lineHeight: 1, animation: 'pulse-msg 2s infinite', flexShrink: 0 }}>
                             💌
                           </button>
                         </div>
@@ -2035,7 +2035,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                             </div>
                           </div>
                           <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }}
-                            style={{ padding: '4px 8px', borderRadius: 7, background: 'none', border: '1px solid rgba(236,72,153,0.3)', color: C.pink, fontSize: 11, cursor: 'pointer', fontWeight: 600 }}>
+                            style={{ padding: '4px', borderRadius: 8, background: 'none', border: 'none', color: C.pink, fontSize: 26, cursor: 'pointer', lineHeight: 1, animation: 'pulse-msg 2s infinite', flexShrink: 0 }}>
                             💌
                           </button>
                         </div>
@@ -2223,7 +2223,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                         </div>
                         {a.cta && (
                           <button onClick={() => { const w = whales.find(wh => wh.username === a.username); if (w) { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) } }}
-                            style={{ flexShrink: 0, padding: "8px 10px", borderRadius: 8, background: "none", border: "none", color: C.pink, fontSize: 22, cursor: "pointer", animation: "pulse-msg 2s infinite", lineHeight: 1 }}>
+                            style={{ flexShrink: 0, padding: "6px", borderRadius: 8, background: "none", border: "none", color: C.pink, fontSize: 28, cursor: "pointer", animation: "pulse-msg 2s infinite", lineHeight: 1 }}>
                             💌
                           </button>
                         )}
@@ -3052,7 +3052,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                           <span style={{ color: C.white, fontWeight: 600 }}>{w.username}</span>
                           <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }}
-                            style={{ fontSize: 20, background: "none", border: "none", cursor: "pointer", lineHeight: 1, padding: 0, animation: "pulse-msg 2s infinite" }}
+                            style={{ fontSize: 26, background: "none", border: "none", cursor: "pointer", lineHeight: 1, padding: '4px', animation: "pulse-msg 2s infinite" }}
                             title="Message">💌</button>
                         </div>
                       </td>
@@ -3168,7 +3168,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                               style={{ padding: "4px 8px", borderRadius: 6, background: tipperNotes[w.username?.toLowerCase()]?.note ? "rgba(245,158,11,0.15)" : "rgba(255,255,255,0.05)", border: tipperNotes[w.username?.toLowerCase()]?.note ? "1px solid rgba(245,158,11,0.3)" : "1px solid rgba(255,255,255,0.1)", color: tipperNotes[w.username?.toLowerCase()]?.note ? C.gold : C.muted, fontSize: 11, cursor: "pointer" }}>
                               {tipperNotes[w.username?.toLowerCase()]?.note ? "📝 Note" : "📝"}
                             </button>
-                            <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }} style={{ padding: "4px 8px", borderRadius: 6, background: "none", border: "none", color: C.pink, fontSize: 20, cursor: "pointer", animation: "pulse-msg 2s infinite", lineHeight: 1 }}>💌</button>
+                            <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }} style={{ padding: "4px", borderRadius: 8, background: "none", border: "none", color: C.pink, fontSize: 26, cursor: "pointer", animation: "pulse-msg 2s infinite", lineHeight: 1 }}>💌</button>
                           </div>
                         </div>
 
