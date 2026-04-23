@@ -921,7 +921,11 @@ export default function Dashboard() {
     setActiveTab(tab)
     if (typeof window !== 'undefined') {
       localStorage.setItem('camcash_tab', tab)
+      // Scroll both window and the main content div to top
       window.scrollTo({ top: 0, behavior: 'instant' })
+      document.querySelector('.dash-main')?.scrollTo({ top: 0, behavior: 'instant' })
+      document.documentElement.scrollTop = 0
+      document.body.scrollTop = 0
     }
   }
 
@@ -2439,7 +2443,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                         ]
                       })}
                     </div>
-                    <div style={{ marginTop: 8, fontSize: 11, color: C.muted }}>Today ({todayLong}) highlighted in cyan. Darker = more earnings. <span style={{ color: C.cyan }}>Click any cell to filter Top Fans by that day.</span></div>
+                    <div style={{ marginTop: 8, fontSize: 11, color: C.muted }}>Today ({todayLong}) highlighted in cyan. Darker = more earnings. Click any cell to filter Top Fans by that day. <span style={{ color: C.cyan }}>Click any cell to filter Top Fans by that day.</span></div>
                   </div>
                   </div>
                 )
