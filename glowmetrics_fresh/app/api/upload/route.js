@@ -118,7 +118,7 @@ export async function POST(req) {
 
     // Build sorted array of unique "YYYY-MM" strings covered
     const monthsSet = new Set(
-      dates.map(d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
+      dates.map(d => `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`)
     )
     const monthsCovered = [...monthsSet].sort()
 
