@@ -2,7 +2,7 @@
 
 export default function BestTimeCard() {
   const now = new Date()
-  const hour = now.getHours()
+  const hour = now.getUTCHours()
 
   let suggestion = "Slow hours — focus on content creation."
 
