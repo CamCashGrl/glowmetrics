@@ -867,7 +867,7 @@ export function generateInsights(tips, sessions, bestDay, worstDay, bestHour) {
   const returning = Object.values(fanTipCounts).filter(c => c > 1).length
   const total     = Object.keys(fanTipCounts).length
   if (total > 10) {
-    const pct = Math.round((returning / total) * 100)
+    const pct = total > 0 ? Math.round((returning / total) * 100) : 0
     const returningKeys = Object.keys(fanTipCounts).filter(k => fanTipCounts[k] > 1)
     const oneTimeKeys   = Object.keys(fanTipCounts).filter(k => fanTipCounts[k] === 1)
     const avgReturning  = returningKeys.length ? returningKeys.reduce((s, k) => s + fanTipUSD[k], 0) / returningKeys.length : 0
@@ -977,7 +977,7 @@ export function aggregateRows(tips) {
   const dayTotals = {}; const daySessionCount = {}
   const hourTotals = {}; const hourSessionCount = {}
   sessions.forEach(s => {
-    const d = new Date(s.startTime).toLocaleDateString('en-US', { weekday: 'long' })
+    const d = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][new Date(s.startTime).getUTCDay()]
     const h = new Date(s.startTime).getUTCHours()
     dayTotals[d]  = (dayTotals[d]  || 0) + s.totalUSD
     daySessionCount[d]  = (daySessionCount[d]  || 0) + 1
