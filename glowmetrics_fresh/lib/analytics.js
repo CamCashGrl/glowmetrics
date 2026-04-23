@@ -1146,18 +1146,7 @@ export function aggregateRows(tips) {
   // ── PER-PLATFORM BEST HOUR ────────────────────────────────────────────
   // Formula: avg USD per unique UTC hour-bucket, per platform
   // Only use tips with valid timestamps
-  const platHourUSD = {}; const platHourBuckets = {}
-  tips.forEach(t => {
-    const dt = new Date(t.dateRaw || t.date_time)
-    if (isNaN(dt.getTime())) return
-    const p = t.platform || 'Unknown'
-    const h = dt.getUTCHours() // UTC — timestamps stored as UTC in Supabase
-    const bucket = Math.floor(dt.getTime() / 3600000)
-    if (!platHourUSD[p]) { platHourUSD[p] = {}; platHourBuckets[p] = {} }
-    if (!platHourUSD[p][h]) { platHourUSD[p][h] = 0; platHourBuckets[p][h] = new Set() }
-    platHourUSD[p][h] += t.usd || 0
-    platHourBuckets[p][h].add(bucket)
-  })
+ 
   // For each platform: find best hour (highest avg $/hour-bucket)
   // Per-platform: best hour overall + best hour per day of week
   // Formula: SUM(usd) / COUNT(DISTINCT hour-bucket) per platform per hour
