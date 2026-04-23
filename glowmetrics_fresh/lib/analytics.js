@@ -513,7 +513,7 @@ function finalizeSession(s) {
   const topEntry = Object.entries(tipperMap).sort((a, b) => b[1] - a[1])[0]
   const topContributor = topEntry ? topEntry[0] : null
   const topContributorPct = topEntry && totalUSD > 0
-    ? Math.round((topEntry[1] / totalUSD) * 100)
+    ? (totalUSD > 0 ? Math.round((topEntry[1] / totalUSD) * 100) : 0)
     : 0
 
   return {
@@ -859,8 +859,8 @@ export function generateInsights(tips, sessions, bestDay, worstDay, bestHour) {
     const dayTips = {}; const dayDates = {}
     tips.forEach(t => {
       const d = new Date(t.dateRaw || t.date_time)
-      const dow = d.toLocaleDateString('en-US', { weekday: 'long' })
-      const dateKey = d.toLocaleDateString()
+      const dow = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][d.getUTCDay()]
+      const dateKey = `${d.getUTCFullYear()}-${d.getUTCMonth()}-${d.getUTCDate()}`
       if (!dayTips[dow]) { dayTips[dow] = 0; dayDates[dow] = new Set() }
       dayTips[dow] += t.usd || 0
       dayDates[dow].add(dateKey)
@@ -868,7 +868,7 @@ export function generateInsights(tips, sessions, bestDay, worstDay, bestHour) {
     // FIX: use avg per SESSION on each day (not avg/calendar day which dilutes by inactive days)
     const daySessionMap = {}
     sessions.forEach(s => {
-      const d = new Date(s.startTime).toLocaleDateString('en-US', { weekday: 'long' })
+      const d = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][new Date(s.startTime).getUTCDay()]
       if (!daySessionMap[d]) daySessionMap[d] = []
       daySessionMap[d].push(s.totalUSD)
     })
@@ -935,7 +935,7 @@ export function generateInsights(tips, sessions, bestDay, worstDay, bestHour) {
   const returning = Object.values(fanTipCounts).filter(c => c > 1).length
   const total     = Object.keys(fanTipCounts).length
   if (total > 10) {
-    const pct = Math.round((returning / total) * 100)
+    const pct = total > 0 ? Math.round((returning / total) * 100) : 0
     // Compare avg spend: returning fans (tipped >1 time) vs one-time fans
     const returningKeys = Object.keys(fanTipCounts).filter(k => fanTipCounts[k] > 1)
     const oneTimeKeys   = Object.keys(fanTipCounts).filter(k => fanTipCounts[k] === 1)
@@ -1055,9 +1055,10 @@ export function aggregateRows(tips) {
   tips.forEach(t => {
     const dt = new Date(t.dateRaw || t.date_time)
     if (isNaN(dt.getTime())) return
-    // Use LOCAL time (not UTC) — CSV timestamps are stored in local time
-    const dow = dt.toLocaleDateString('en-US', { weekday: 'long' })
-    const dateKey = dt.toLocaleDateString('en-US')
+    // UTC — timestamps stored as UTC in Supabase
+    const UTC_LONG = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
+    const dow = UTC_LONG[dt.getUTCDay()]
+    const dateKey = `${dt.getUTCFullYear()}-${dt.getUTCMonth()}-${dt.getUTCDate()}`
     const h = dt.getUTCHours()
     const hBucket = Math.floor(dt.getTime() / 3600000)
 
@@ -1150,7 +1151,7 @@ export function aggregateRows(tips) {
     const dt = new Date(t.dateRaw || t.date_time)
     if (isNaN(dt.getTime())) return
     const p = t.platform || 'Unknown'
-    const h = dt.getUTCHours() // UTC — DB stores timestamps as UTC
+    const h = dt.getUTCHours() // UTC — timestamps stored as UTC in Supabase
     const bucket = Math.floor(dt.getTime() / 3600000)
     if (!platHourUSD[p]) { platHourUSD[p] = {}; platHourBuckets[p] = {} }
     if (!platHourUSD[p][h]) { platHourUSD[p][h] = 0; platHourBuckets[p][h] = new Set() }
@@ -1158,155 +1159,86 @@ export function aggregateRows(tips) {
     platHourBuckets[p][h].add(bucket)
   })
   // For each platform: find best hour (highest avg $/hour-bucket)
-  const platformBestTimes = {}
-  Object.keys(platHourUSD).forEach(plat => {
-    const hourAvgList = Object.keys(platHourUSD[plat]).map(h => ({
-      hour: parseInt(h),
-      avg: parseFloat((platHourUSD[plat][h] / (platHourBuckets[plat][h].size || 1)).toFixed(2)),
-      sessionCount: platHourBuckets[plat][h].size
-    }))
-    // Require at least 2 sessions at an hour to be meaningful
-    const qualified = hourAvgList.filter(x => x.sessionCount >= 2)
-    const best = (qualified.length ? qualified : hourAvgList).sort((a,b) => b.avg - a.avg)[0]
-    if (best) platformBestTimes[plat] = best
-  })
+  // Per-platform: best hour overall + best hour per day of week
+  // Formula: SUM(usd) / COUNT(DISTINCT hour-bucket) per platform per hour
+  const UTC_DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
+  const platHourUSD = {}; const platHourBuckets = {}
+  const platDayUSD = {}; const platDayDates = {}
+  const platDayHourUSD = {}; const platDayHourBuckets = {}
 
-  // ── EARNINGS VELOCITY ─────────────────────────────────────────────────
-  // Formula: total USD / total timed hours across all sessions
-  const timedSessions = sessions.filter(s => !s.durationUnknown && s.durationHours > 0)
-  const totalTimedUSD   = timedSessions.reduce((s, x) => s + x.totalUSD, 0)
-  const totalTimedHours = timedSessions.reduce((s, x) => s + x.durationHours, 0)
-  const earningsVelocity = totalTimedHours > 0
-    ? parseFloat((totalTimedUSD / totalTimedHours).toFixed(2))
-    : null
-
-  // Per-platform velocity
-  const platformVelocity = {}
-  Object.keys(platformMap).forEach(plat => {
-    const p = platformMap[plat]
-    platformVelocity[plat] = p.hours > 0
-      ? parseFloat((p.totalUSD / p.hours).toFixed(2))
-      : null
-  })
-
-  // ── MISSED REVENUE ────────────────────────────────────────────────────
-  // Formula (per platform):
-  //   potentialGain = (bestHourAvg - overallPlatformAvgPerSession) × sessionsNotAtBestHour
-  // Capped at 3x overall avg to avoid misleading huge numbers
-  // Only computed if we have enough sessions per platform
-  const missedRevenueByPlatform = {}
-  Object.keys(platformBestTimes).forEach(plat => {
-    const platSessions = sessions.filter(s => s.platform === plat)
-    if (platSessions.length < 5) return
-    const best = platformBestTimes[plat]
-    const overallAvg = platSessions.reduce((s, x) => s + x.totalUSD, 0) / platSessions.length
-    const sessionsAtBestHour = platSessions.filter(s => new Date(s.startTime).getUTCHours() === best.hour).length
-    const sessionsNotAtBest  = platSessions.length - sessionsAtBestHour
-    // Cap the gap at 2x overall avg to avoid astronomical unrealistic numbers
-    const gap = Math.min(best.avg - overallAvg, overallAvg * 2)
-    const missed = parseFloat((gap * sessionsNotAtBest).toFixed(2))
-    if (missed > 0) {
-      missedRevenueByPlatform[plat] = {
-        bestHourAvg: best.avg,
-        overallAvg: parseFloat(overallAvg.toFixed(2)),
-        sessionsNotAtBestHour: sessionsNotAtBest,
-        missedRevenue: missed,
-        bestHour: best.hour,
-        multiplier: parseFloat((best.avg / overallAvg).toFixed(1))
-      }
-    }
-  })
-
-  // ── FAN FREQUENCY ─────────────────────────────────────────────────────
-  // Already computed on whale objects as: tipCount / activeDays
-  // Surfaced here as a summary
-  const totalActiveFans = whales.length
-  const returningFans   = whales.filter(w => w.tipCount > 1)
-  const avgReturnSpend  = returningFans.length
-    ? parseFloat((returningFans.reduce((s, w) => s + w.totalUSD, 0) / returningFans.length).toFixed(2))
-    : 0
-  const newFans       = whales.filter(w => w.tipCount === 1)
-  const avgNewSpend   = newFans.length
-    ? parseFloat((newFans.reduce((s, w) => s + w.totalUSD, 0) / newFans.length).toFixed(2))
-    : 0
-  const returningVsNew = {
-    returningCount: returningFans.length,
-    newCount: newFans.length,
-    returningPct: totalActiveFans > 0 ? Math.round((returningFans.length / totalActiveFans) * 100) : 0,
-    avgReturnSpend,
-    avgNewSpend,
-    multiplier: avgNewSpend > 0 ? parseFloat((avgReturnSpend / avgNewSpend).toFixed(1)) : null
-  }
-
-  // ── TOP FAN DEPENDENCY ────────────────────────────────────────────────
-  // Formula: topN_revenue / total_revenue
-  const sortedWhales = [...whales].sort((a, b) => b.totalUSD - a.totalUSD)
-  const top1Rev  = sortedWhales[0]?.totalUSD || 0
-  const top3Rev  = sortedWhales.slice(0, 3).reduce((s, w) => s + w.totalUSD, 0)
-  const top5Rev  = sortedWhales.slice(0, 5).reduce((s, w) => s + w.totalUSD, 0)
-  const topFanDependency = totalUSD > 0 ? {
-    top1Pct:  Math.round((top1Rev  / totalUSD) * 100),
-    top3Pct:  Math.round((top3Rev  / totalUSD) * 100),
-    top5Pct:  Math.round((top5Rev  / totalUSD) * 100),
-    lossIfTopFanLeaves: parseFloat(top1Rev.toFixed(2))
-  } : null
-
-  // ── MONTHLY BREAKDOWN ─────────────────────────────────────────────
-  const monthlyMap = {}
   tips.forEach(t => {
+    const p = t.platform || 'Chaturbate'
     const dt = new Date(t.dateRaw || t.date_time)
     if (isNaN(dt.getTime())) return
-    const key = `${dt.getUTCFullYear()}-${String(dt.getUTCMonth()+1).padStart(2,'0')}`
-    if (!monthlyMap[key]) monthlyMap[key] = { month: key, usd: 0, tips: 0, fans: new Set(), sessions: 0 }
-    monthlyMap[key].usd += t.usd || 0
-    monthlyMap[key].tips += 1
-    monthlyMap[key].fans.add(t.username)
-  })
-  // Count sessions per month
-  sessions.forEach(s => {
-    const dt = new Date(s.startTime)
-    const key = `${dt.getUTCFullYear()}-${String(dt.getUTCMonth()+1).padStart(2,'0')}`
-    if (monthlyMap[key]) monthlyMap[key].sessions += 1
-  })
-  const monthlyData = Object.values(monthlyMap)
-    .sort((a, b) => a.month.localeCompare(b.month))
-    .map(m => ({
-      month: m.month,
-      usd: parseFloat(m.usd.toFixed(2)),
-      tips: m.tips,
-      fans: m.fans.size,
-      sessions: m.sessions,
-      usdPerFan: m.fans.size > 0 ? parseFloat((m.usd / m.fans.size).toFixed(2)) : 0
-    }))
-  const bestMonth = [...monthlyData].sort((a,b) => b.usd - a.usd)[0] || null
-  const worstMonth = [...monthlyData].sort((a,b) => a.usd - b.usd)[0] || null
+    const h = dt.getUTCHours()
+    const dow = UTC_DAYS[dt.getUTCDay()]
+    const dateKey = `${dt.getUTCFullYear()}-${dt.getUTCMonth()}-${dt.getUTCDate()}`
+    const hBucket = Math.floor(dt.getTime() / 3600000)
+    const usd = t.usd || 0
 
-  // ── TIP TYPE BREAKDOWN ─────────────────────────────────────────────
-  const tipTypeMap = {}
-  tips.forEach(t => {
-    const type = t.tip_type || 'Tip'
-    if (!tipTypeMap[type]) tipTypeMap[type] = { type, usd: 0, count: 0, fans: new Set() }
-    tipTypeMap[type].usd += t.usd || 0
-    tipTypeMap[type].count += 1
-    tipTypeMap[type].fans.add(t.username)
-  })
-  const tipTypeBreakdown = Object.values(tipTypeMap)
-    .map(t => ({ ...t, fans: t.fans.size, avgUsd: parseFloat((t.usd / t.count).toFixed(2)), pct: parseFloat(((t.usd / totalUSD) * 100).toFixed(1)) }))
-    .sort((a, b) => b.usd - a.usd)
+    // Platform × hour
+    if (!platHourUSD[p]) { platHourUSD[p] = {}; platHourBuckets[p] = {} }
+    if (!platHourUSD[p][h]) { platHourUSD[p][h] = 0; platHourBuckets[p][h] = new Set() }
+    platHourUSD[p][h] += usd
+    platHourBuckets[p][h].add(hBucket)
 
-  // Private show specific insights
-  const privateShowFans = Object.values((() => {
-    const m = {}
-    tips.filter(t => (t.tip_type||'').toLowerCase().includes('private')).forEach(t => {
-      if (!m[t.username]) m[t.username] = { username: t.username, usd: 0, count: 0 }
-      m[t.username].usd += t.usd || 0
-      m[t.username].count += 1
+    // Platform × day
+    if (!platDayUSD[p]) { platDayUSD[p] = {}; platDayDates[p] = {} }
+    if (!platDayUSD[p][dow]) { platDayUSD[p][dow] = 0; platDayDates[p][dow] = new Set() }
+    platDayUSD[p][dow] += usd
+    platDayDates[p][dow].add(dateKey)
+
+    // Platform × day × hour (for "best hour on THIS day" real-time)
+    const dayHourKey = `${dow}__${h}`
+    if (!platDayHourUSD[p]) { platDayHourUSD[p] = {}; platDayHourBuckets[p] = {} }
+    if (!platDayHourUSD[p][dayHourKey]) { platDayHourUSD[p][dayHourKey] = 0; platDayHourBuckets[p][dayHourKey] = new Set() }
+    platDayHourUSD[p][dayHourKey] += usd
+    platDayHourBuckets[p][dayHourKey].add(hBucket)
+  })
+
+  const platformBestTimes = {}
+  Object.keys(platHourUSD).forEach(p => {
+    // Best hour overall (formula: SUM(usd) / COUNT(DISTINCT hour-bucket))
+    const hourEntries = Object.keys(platHourUSD[p]).map(h => ({
+      hour: parseInt(h),
+      avg: platHourBuckets[p][h].size > 0 ? parseFloat((platHourUSD[p][h] / platHourBuckets[p][h].size).toFixed(2)) : 0,
+      sessionCount: platHourBuckets[p][h].size,
+      total: platHourUSD[p][h]
+    })).filter(e => e.sessionCount >= 1).sort((a, b) => b.avg - a.avg)
+
+    // Best day overall (formula: SUM(usd) / COUNT(DISTINCT active days))
+    const dayEntries = Object.keys(platDayUSD[p]).map(d => ({
+      day: d,
+      avg: platDayDates[p][d].size > 0 ? parseFloat((platDayUSD[p][d] / platDayDates[p][d].size).toFixed(2)) : 0,
+      activeDays: platDayDates[p][d].size,
+      total: platDayUSD[p][d]
+    })).filter(e => e.activeDays >= 1).sort((a, b) => b.avg - a.avg)
+
+    // Best hour per day of week (for real-time "best hour today on this platform")
+    const bestHourByDay = {}
+    UTC_DAYS.forEach(dow => {
+      const dayHourEntries = Object.keys(platDayHourUSD[p] || {})
+        .filter(k => k.startsWith(dow + '__'))
+        .map(k => {
+          const h = parseInt(k.split('__')[1])
+          const buckets = platDayHourBuckets[p][k]
+          return {
+            hour: h,
+            avg: buckets.size > 0 ? parseFloat((platDayHourUSD[p][k] / buckets.size).toFixed(2)) : 0,
+            sessionCount: buckets.size
+          }
+        }).filter(e => e.sessionCount >= 1).sort((a, b) => b.avg - a.avg)
+      if (dayHourEntries.length > 0) bestHourByDay[dow] = dayHourEntries[0]
     })
-    return m
-  })()).sort((a,b) => b.usd - a.usd)
 
-  const spyShowFans = [...new Set(tips.filter(t => (t.tip_type||'').toLowerCase().includes('spy')).map(t => t.username))]
-
+    platformBestTimes[p] = {
+      hour: hourEntries[0] || null,        // best hour overall
+      bestDay: dayEntries[0] || null,       // best day overall
+      bestHourByDay,                        // best hour for each specific day
+      allHours: hourEntries,
+      allDays: dayEntries,
+    }
+  })
   return {
     totalUSD: parseFloat(totalUSD.toFixed(2)),
     totalTokens,
