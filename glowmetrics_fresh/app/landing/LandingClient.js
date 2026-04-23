@@ -115,6 +115,7 @@ export default function LandingPage() {
 
   // Auth state — lifted to parent, passed as props to AuthPanel
   const [isSignUp, setIsSignUp]       = useState(true)
+  const [loggedIn, setLoggedIn]       = useState(false)
   const [email, setEmail]             = useState("")
   const [password, setPassword]       = useState("")
   const [authLoading, setAuthLoading] = useState(false)
@@ -148,7 +149,10 @@ export default function LandingPage() {
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) router.replace("/dashboard")
+      if (user) {
+        setLoggedIn(true)
+        router.replace("/dashboard")
+      }
     })
   }, [])
 
@@ -199,6 +203,12 @@ export default function LandingPage() {
     else setAuthMsg("Password reset email sent — check your inbox.")
   }, [email])
 
+  const handleSignOut = async () => {
+    await supabase.auth.signOut()
+    setLoggedIn(false)
+    router.replace('/landing')
+  }
+
   // Shared props for both AuthPanel instances
   const authProps = {
     isSignUp, setIsSignUp, email, setEmail, password, setPassword,
@@ -207,6 +217,35 @@ export default function LandingPage() {
 
   return (
     <div style={{ minHeight: "100vh", background: "#05070f", color: "#cbd5e1", fontFamily: "Inter, sans-serif" }}>
+
+      {/* ── TOP NAV ─────────────────────────────────────────────────── */}
+      <div style={{ position: "sticky", top: 0, zIndex: 50, borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(5,7,15,0.85)", backdropFilter: "blur(16px)" }}>
+        <div style={{ maxWidth: 1100, margin: "0 auto", padding: "12px 24px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ width: 32, height: 32, borderRadius: 8, background: "linear-gradient(135deg,#22D3EE,#EC4899)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 900, color: "white" }}>$</div>
+            <span style={{ fontSize: 17, fontWeight: 800, color: "white" }}>Cam<span style={{ background: "linear-gradient(90deg,#22D3EE,#EC4899)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Cash</span></span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            {loggedIn ? (
+              <>
+                <button onClick={() => router.push("/dashboard")}
+                  style={{ padding: "8px 18px", borderRadius: 9, background: "linear-gradient(135deg,#22D3EE,#EC4899)", border: "none", color: "white", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                  Go to Dashboard →
+                </button>
+                <button onClick={handleSignOut}
+                  style={{ padding: "8px 14px", borderRadius: 9, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "#94a3b8", fontSize: 13, cursor: "pointer" }}>
+                  Sign Out
+                </button>
+              </>
+            ) : (
+              <button onClick={() => document.getElementById("auth-panel-desktop")?.scrollIntoView({ behavior: "smooth" })}
+                style={{ padding: "8px 18px", borderRadius: 9, background: "linear-gradient(135deg,#22D3EE,#EC4899)", border: "none", color: "white", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                Get Started Free →
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
 
       {/* ── HERO ─────────────────────────────────────────────────────── */}
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: "56px 24px 32px" }}>
@@ -219,7 +258,7 @@ export default function LandingPage() {
               borderRadius: 20, background: "rgba(168,85,247,0.12)",
               border: "1px solid rgba(168,85,247,0.3)", fontSize: 12, fontWeight: 600, color: "#a855f7",
             }}>
-              🔥 63 / 100 beta spots left
+              ✨ Free during beta
             </div>
 
             <h1 style={{ fontSize: "clamp(34px,4.5vw,54px)", color: "white", fontWeight: 900, lineHeight: 1.1, marginBottom: 18 }}>
