@@ -298,7 +298,46 @@ export default function LandingPage() {
           <AuthPanel id="auth-panel-mobile-inner" {...authProps} />
         </div>
       </div>
+{/* ── SEO CONTENT ─────────────────────────────────────────────── */}
 
+<div style={{ maxWidth: 900, margin: "0 auto 40px", padding: "0 24px" }}>
+  <h2 style={{ fontSize: 24, fontWeight: 800, color: "white", marginBottom: 12 }}>
+    Cam Model Analytics & Tools to Increase Your Earnings
+  </h2>
+
+  <p style={{ fontSize: 15, color: "#94a3b8", lineHeight: 1.7 }}>
+    CamCash helps cam models track earnings, identify top spenders, and understand exactly when they make the most money. 
+    Instead of guessing what works, you get real data on your fans, tips, and performance across platforms like Chaturbate, 
+    BongaCams, and MyFreeCams.
+  </p>
+
+  <p style={{ fontSize: 15, color: "#94a3b8", lineHeight: 1.7, marginTop: 12 }}>
+    Upload your cam site data and instantly see your highest paying fans, inactive whales worth re-engaging, and the best 
+    times to go live. Whether you're trying to grow your income or optimize your streams, CamCash gives you the insights 
+    you need to earn more.
+  </p>
+</div>
+
+{/* ── ROOM TITLE GENERATOR ───────────────────────────────────── */}
+
+<div style={{ maxWidth: 900, margin: "0 auto 50px", padding: "0 24px" }}>
+  <h2 style={{ fontSize: 24, fontWeight: 800, color: "white", marginBottom: 10 }}>
+    🔥 Free Cam Room Title Generator
+  </h2>
+
+  <p style={{ fontSize: 14, color: "#94a3b8", marginBottom: 16 }}>
+    Generate high-converting room titles that attract viewers and increase tips instantly.
+  </p>
+
+  <div style={{
+    background: "linear-gradient(135deg,#1e293b,#020617)",
+    borderRadius: 14,
+    padding: 20,
+    border: "1px solid rgba(255,255,255,0.06)"
+  }}>
+    <TitleGenerator />
+  </div>
+</div>
       {/* ── AI ALERT ─────────────────────────────────────────────────── */}
       <div style={{ maxWidth: 900, margin: "0 auto 36px", padding: "0 24px" }}>
         <div style={{
