@@ -12,13 +12,7 @@ export default function sitemap() {
     },
 
     // Blog posts
-    {
-      url: `${baseUrl}/blog/best-cam-model-tools`,
-      lastModified: now,
-      changeFrequency: 'monthly',
-      priority: 0.85,
-    },
-    {
+      {
       url: `${baseUrl}/blog/cam-model-earnings`,
       lastModified: now,
       changeFrequency: 'monthly',
