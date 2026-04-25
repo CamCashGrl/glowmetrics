@@ -1,4 +1,4 @@
-Hide quoted text
+
 export default function sitemap() {
   const baseUrl = 'https://www.camcashgrl.com';
   const now = new Date().toISOString();
