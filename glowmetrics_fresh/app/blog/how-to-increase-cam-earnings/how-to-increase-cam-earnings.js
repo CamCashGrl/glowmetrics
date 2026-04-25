@@ -1,7 +1,4 @@
 // app/blog/how-to-increase-cam-earnings/page.js
-// Target keyword: increase cam earnings
-// Secondary: cam model tip tracker, chaturbate analytics, cam model analytics tool
-
 export const metadata = {
   title: 'How to Increase Cam Earnings Using Data (Not Guesswork) | CamCash',
   description: 'Learn the data-driven strategies cam models use to increase cam earnings on Chaturbate and BongaCams. Track your tips, find your peak hours, and grow your income with real numbers.',
@@ -48,25 +45,19 @@ export default function BlogPost1() {
   return (
     <div style={s.page}>
       <nav style={s.nav}>
-        <a href="/landing" style={s.logo}>Cam<span style={s.logoAccent}>Cash</span></a>
-        <a href="/login" style={s.navCta}>Start Free →</a>
+        <a href="/" style={s.logo}>Cam<span style={s.logoAccent}>Cash</span></a>
+        <a href="/" style={s.navCta}>Start Free →</a>
       </nav>
-
       <article style={s.article}>
         <nav style={s.breadcrumb} aria-label="breadcrumb">
-          <a href="/landing" style={s.breadLink}>Home</a>
+          <a href="/" style={s.breadLink}>Home</a>
           <span style={s.breadSep}>›</span>
-          <a href="/landing#blog" style={s.breadLink}>Blog</a>
+          <a href="/" style={s.breadLink}>Blog</a>
           <span style={s.breadSep}>›</span>
           <span style={{ color: '#475569' }}>How to Increase Cam Earnings</span>
         </nav>
-
         <h1 style={s.h1}>How to Increase Cam Earnings Using Data (Not Guesswork)</h1>
-        <p style={s.intro}>
-          Most cam models approach their income the same way: stream consistently, engage your audience, hope it works.
-          The models who actually grow their income over time aren't just working harder — they're using their data.
-          This guide breaks down exactly how.
-        </p>
+        <p style={s.intro}>Most cam models approach their income the same way: stream consistently, engage your audience, hope it works. The models who actually grow their income over time aren't just working harder — they're using their data. This guide breaks down exactly how.</p>
 
         <h2 style={s.h2}>Why Most Cam Models Leave Money on the Table</h2>
         <p style={s.p}>Cam modeling generates a significant amount of data — every tip, every session, every hour streamed creates a record. But almost no one uses it.</p>
@@ -81,39 +72,32 @@ export default function BlogPost1() {
 
         <h2 style={s.h2}>Step 1: Track Every Tip Across Every Session</h2>
         <p style={s.p}>The foundation of data-driven cam income is complete tip tracking — every tip, every session, every platform. Not just your good nights.</p>
-
         <h3 style={s.h3}>What to track:</h3>
         <ul style={s.ul}>
           <li style={s.li}>Username, amount (tokens and/or USD), and timestamp for every tip</li>
           <li style={s.li}>Which platform the tip came from</li>
           <li style={s.li}>Session start and end time</li>
         </ul>
-
         <p style={s.p}>When you have complete tip history, patterns emerge. You'll see that specific fans tip on specific days. You'll see that your Tuesday sessions consistently outperform Friday sessions. You'll see that one platform generates $18/hr while another generates $6/hr.</p>
-        <p style={s.p}>These patterns are invisible when you're streaming. They become obvious when you look at the data.</p>
-
         <div style={s.highlight}>
           <strong style={{ color: 'white' }}>Tool to use:</strong>
-          <span style={{ color: '#94A3B8' }}> Export your CSV from Chaturbate or BongaCams and upload it to <a href="/login" style={{ color: '#22D3EE' }}>CamCash</a> — it processes your full tip history automatically and shows you all of this in one dashboard.</span>
+          <span style={{ color: '#94A3B8' }}> Export your CSV from Chaturbate or BongaCams and upload it to <a href="/" style={{ color: '#22D3EE' }}>CamCash</a> — it processes your full tip history automatically and shows you all of this in one dashboard.</span>
         </div>
 
         <h2 style={s.h2}>Step 2: Find Your Real Peak Hours</h2>
         <p style={s.p}>The most common tip for increasing cam earnings is "stream at peak traffic times." The problem is that generic peak hours are based on platform-wide traffic — not your specific audience.</p>
         <p style={s.p}>Your top fans have their own schedules. A model whose biggest tippers are in Europe will have completely different peak hours than one whose audience is primarily US-based.</p>
-
         <h3 style={s.h3}>How to find YOUR peak hours:</h3>
         <ul style={s.ul}>
           <li style={s.li}>Export at least 3 months of tip history from your platform</li>
           <li style={s.li}>Group your tips by hour of day</li>
-          <li style={s.li}>Calculate average earnings per active streaming day at each hour — not total earnings, which gets skewed by how many times you streamed at that hour</li>
+          <li style={s.li}>Calculate average earnings per active streaming day at each hour</li>
         </ul>
-
-        <p style={s.p}>Most models find 2–3 hours where they earn 40–80% more than their overall average. Shifting your schedule to hit these windows consistently is the single highest-leverage change you can make to increase cam earnings without changing anything else about your performance.</p>
+        <p style={s.p}>Most models find 2–3 hours where they earn 40–80% more than their overall average. Shifting your schedule to hit these windows is the single highest-leverage change you can make to increase cam earnings without changing anything else.</p>
 
         <h2 style={s.h2}>Step 3: Identify and Protect Your High-Value Fans</h2>
         <p style={s.p}>In almost every cam model's earning history, a small number of fans generate a disproportionate amount of revenue. Typically, the top 10–15% of fans account for 60–70% of total income.</p>
-        <p style={s.p}>These are your whales. Losing one of them can cost you $50–$300+ in a month depending on their spending habits. Most models don't realize a whale is going cold until they've already been gone for weeks.</p>
-
+        <p style={s.p}>These are your whales. Losing one of them can cost you $50–$300+ in a month. Most models don't realize a whale is going cold until they've already been gone for weeks.</p>
         <h3 style={s.h3}>What to track per fan:</h3>
         <ul style={s.ul}>
           <li style={s.li}>Lifetime spend in USD</li>
@@ -122,30 +106,24 @@ export default function BlogPost1() {
           <li style={s.li}>Days since last tip</li>
           <li style={s.li}>Risk level based on their typical tipping pattern</li>
         </ul>
-
-        <p style={s.p}>When a high-value fan's gap since last tip exceeds their average interval, it's time to reach out. A personalized message referencing something specific about their tipping history has a much higher re-engagement rate than a generic note.</p>
+        <p style={s.p}>When a high-value fan's gap since last tip exceeds their average interval, it's time to reach out. A personalized message has a much higher re-engagement rate than a generic note.</p>
 
         <h2 style={s.h2}>Step 4: Analyze Every Session Like a Business</h2>
         <p style={s.p}>After each stream, ask three questions:</p>
-
         <h3 style={s.h3}>Did I earn above or below my average?</h3>
         <p style={s.p}>Not in absolute terms — in relative terms. A $40 session might be great if your average is $25, or poor if your average is $65. Knowing your benchmark makes every session meaningful data instead of just a number.</p>
-
         <h3 style={s.h3}>When did the money come in?</h3>
-        <p style={s.p}>Was it front-loaded (big tips early, then dying off)? Back-loaded (slow start, then a rush)? Each pattern calls for a different strategy. Front-loaded sessions suggest you opened strong but lost momentum. Back-loaded suggests your audience needs warmup time.</p>
-
+        <p style={s.p}>Was it front-loaded (big tips early, then dying off)? Back-loaded (slow start, then a rush)? Each pattern calls for a different strategy.</p>
         <h3 style={s.h3}>Who drove the revenue?</h3>
-        <p style={s.p}>If one fan contributed 50%+ of a session's income, that's a concentration risk. Great for tonight — but if they're not there next time, your session tanks. Focus on engaging multiple tippers rather than depending on one.</p>
+        <p style={s.p}>If one fan contributed 50%+ of a session's income, that's a concentration risk. Focus on engaging multiple tippers rather than depending on one.</p>
 
         <h2 style={s.h2}>Step 5: Compare Your Platforms Honestly</h2>
-        <p style={s.p}>If you stream on more than one platform, you almost certainly earn more per hour on one than the other. The question is whether you know which one — and whether your time reflects that.</p>
-        <p style={s.p}>The right metric is USD earned per hour streamed, calculated per platform. Most models who do this analysis find a significant difference — commonly 2–4x more on one platform than the other.</p>
-        <p style={s.p}>The right answer depends entirely on your specific audience and history. The point is to make the decision based on actual data, not assumption.</p>
+        <p style={s.p}>If you stream on more than one platform, you almost certainly earn more per hour on one than the other. The right metric is USD earned per hour streamed, calculated per platform. Most models who do this analysis find a significant difference — commonly 2–4x more on one platform than the other.</p>
 
         <div style={s.ctaBanner}>
           <div style={s.ctaTitle}>See exactly where your money comes from</div>
           <div style={s.ctaSub}>Upload your Chaturbate or BongaCams CSV — free, takes under 2 minutes</div>
-          <a href="/login" style={s.ctaBtn}>Start Free with CamCash →</a>
+          <a href="/" style={s.ctaBtn}>Start Free with CamCash →</a>
         </div>
 
         <div style={s.related}>
@@ -157,7 +135,6 @@ export default function BlogPost1() {
           </div>
         </div>
       </article>
-
       <footer style={s.footer}>
         <p style={s.footerText}>© 2026 CamCash — Built for cam models who want to grow</p>
       </footer>
