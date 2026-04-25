@@ -1,3 +1,4 @@
+Hide quoted text
 export default function sitemap() {
   const baseUrl = 'https://www.camcashgrl.com';
   const now = new Date().toISOString();
@@ -72,92 +73,5 @@ export default function sitemap() {
       changeFrequency: 'monthly',
       priority: 0.85,
     },
-    // New blog posts
     {
-      url: `${baseUrl}/blog/how-to-get--veiws-on-chaturbate`,
-      lastModified: now,
-      changeFrequency: 'monthly',
-      priority: 0.85,
-    },
-    {
-      url: `${baseUrl}/blog/how-to-re-engage-whales-and-top-tippers`,
-      lastModified: now,
-      changeFrequency: 'monthly',
-      priority: 0.85,
-    },
-
-    // Guides
-    {
-      url: `${baseUrl}/guides/chaturbate-earnings-tracker`,
-      lastModified: now,
-      changeFrequency: 'monthly',
-      priority: 0.9,
-    },
-    {
-      url: `${baseUrl}/guides/cam-model-analytics`,
-      lastModified: now,
-      changeFrequency: 'monthly',
-      priority: 0.9,
-    },
-    {
-      url: `${baseUrl}/guides/how-to-increase-cam-tips`,
-      lastModified: now,
-      changeFrequency: 'monthly',
-      priority: 0.9,
-    },
-    {
-      url: `${baseUrl}/guides/bongacams-analytics`,
-      lastModified: now,
-      changeFrequency: 'monthly',
-      priority: 0.9,
-    },
-    {
-      url: `${baseUrl}/guides/cam-model-top-tippers`,
-      lastModified: now,
-      changeFrequency: 'monthly',
-      priority: 0.9,
-    },
-    {
-      url: `${baseUrl}/guides/best-time-to-stream-chaturbate`,
-      lastModified: now,
-      changeFrequency: 'monthly',
-      priority: 0.9,
-    },
-    {
-      url: `${baseUrl}/guides/cam-model-income-tracker`,
-      lastModified: now,
-      changeFrequency: 'monthly',
-      priority: 0.9,
-    },
-    {
-      url: `${baseUrl}/guides/myfreecams-analytics`,
-      lastModified: now,
-      changeFrequency: 'monthly',
-      priority: 0.9,
-    },
-    {
-      url: `${baseUrl}/guides/chaturbate-token-tracker`,
-      lastModified: now,
-      changeFrequency: 'monthly',
-      priority: 0.9,
-    },
-    {
-      url: `${baseUrl}/guides/cam-model-revenue-dashboard`,
-      lastModified: now,
-      changeFrequency: 'monthly',
-      priority: 0.9,
-    },
-    {
-      url: `${baseUrl}/guides/cam-model-session-breakdown`,
-      lastModified: now,
-      changeFrequency: 'monthly',
-      priority: 0.9,
-    },
-    {
-      url: `${baseUrl}/guides/chaturbate-best-hours`,
-      lastModified: now,
-      changeFrequency: 'monthly',
-      priority: 0.9,
-    },
-  ];
-}
+      url: `${baseUrl}/blog/how-to-get-views-on-chaturbate`,
