@@ -1,3 +1,4 @@
+
 import './globals.css'
 import { Analytics } from '@vercel/analytics/react'
 import Script from 'next/script'
@@ -39,6 +40,9 @@ export const metadata = {
   authors: [{ name: 'CamCash', url: SITE_URL }],
   creator: 'CamCash',
   publisher: 'CamCash',
+  alternates: {
+    canonical: SITE_URL,
+  },
   robots: {
     index: true,
     follow: true,
@@ -71,10 +75,6 @@ export const metadata = {
     description: DESC,
     images: [`${SITE_URL}/og-image.png`],
   },
-  // ✅ REMOVED hardcoded canonical from here.
-  // Next.js will now auto-generate the correct canonical for each page
-  // using metadataBase + the page's own URL path.
-  // Individual pages can still override with their own alternates.canonical if needed.
   icons: { icon: '/favicon.ico', apple: '/apple-touch-icon.png' },
 }
 
