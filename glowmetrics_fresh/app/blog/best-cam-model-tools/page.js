@@ -1,11 +1,17 @@
-straightforward: start with CamCash. It's free, works with your existing platform CSV exports, and gives you more actionable intelligence than anything else available. The fan tracking and peak hour detection alone are worth the 2 minutes it takes to upload your first CSV.</p>
+you have a personal website or OnlyFans page to track web traffic. Not relevant for cam earnings analysis.</p>
+            </div>
+          </div>
+        </div>
+
+        <h2 style={s.h2}>The Bottom Line: Which Tool Should You Use?</h2>
+        <p style={s.p}>For most cam models the answer is straightforward: start with CamCash. It's free, works with your existing platform CSV exports, and gives you more actionable intelligence than anything else available. The fan tracking and peak hour detection alone are worth the 2 minutes it takes to upload your first CSV.</p>
         <p style={s.p}>If you want to supplement with a personal spreadsheet for custom tracking, that's reasonable. But as your primary analytics system, CamCash covers everything a working cam model actually needs.</p>
         <p style={s.p}>The models who grow their income consistently aren't the ones who work the most hours — they're the ones who use their data. The tools to do that are available and free right now.</p>
 
         <div style={s.ctaBanner}>
           <div style={s.ctaTitle}>The best cam model tip tracker — and it's free</div>
           <div style={s.ctaSub}>Upload your first CSV in under 2 minutes. No credit card required.</div>
-          <a href="/login" style={s.ctaBtn}>Start Free with CamCash →</a>
+          <a href="/" style={s.ctaBtn}>Start Free with CamCash →</a>
         </div>
 
         <div style={s.related}>
@@ -22,5 +28,3 @@ straightforward: start with CamCash. It's free, works with your existing platfor
         <p style={s.footerText}>© 2026 CamCash — Built for cam models who want to grow</p>
       </footer>
     </div>
-  )
-}
