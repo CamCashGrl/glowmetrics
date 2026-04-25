@@ -3,7 +3,7 @@ import { useState, useEffect, memo, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
 
-// ── Auth panel as a proper top-level component so inputs never remount ──
+// â”€â”€ Auth panel as a proper top-level component so inputs never remount â”€â”€
 const AuthPanel = memo(function AuthPanel({ isSignUp, setIsSignUp, email, setEmail, password, setPassword,
   authLoading, authError, authMsg, handleAuth, handleForgotPassword, id }) {
 
@@ -31,7 +31,7 @@ const AuthPanel = memo(function AuthPanel({ isSignUp, setIsSignUp, email, setEma
         }}>$</div>
         <div style={{ fontSize: 16, fontWeight: 800, color: "white" }}>CamCash</div>
         <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>
-          {isSignUp ? "Free during beta. No credit card." : "Welcome back 💋"}
+          {isSignUp ? "Free during beta. No credit card." : "Welcome back ðŸ’‹"}
         </div>
       </div>
 
@@ -92,14 +92,110 @@ const AuthPanel = memo(function AuthPanel({ isSignUp, setIsSignUp, email, setEma
         }}>
           {authLoading
             ? (isSignUp ? "Creating account..." : "Logging in...")
-            : (isSignUp ? "Start Free →" : "Log In →")}
+            : (isSignUp ? "Start Free â†’" : "Log In â†’")}
         </button>
       </form>
 
       {isSignUp && (
         <p style={{ fontSize: 11, color: "#475569", textAlign: "center", marginTop: 10, marginBottom: 0 }}>
-          No credit card · Free during beta · Cancel anytime
+          No credit card Â· Free during beta Â· Cancel anytime
         </p>
+      )}
+    </div>
+  )
+})
+
+// â”€â”€ Room Title Generator â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+const TitleGenerator = memo(function TitleGenerator() {
+  const [vibe, setVibe] = useState("")
+  const [titles, setTitles] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [copied, setCopied] = useState(null)
+
+  const vibeOptions = ["Playful ðŸ˜ˆ", "Romantic ðŸ’•", "Wild ðŸ”¥", "Cozy â˜•", "Teasing ðŸ˜", "Exclusive ðŸ‘‘"]
+
+  const generate = useCallback(async () => {
+    setLoading(true)
+    setTitles([])
+    try {
+      const prompt = `Generate 4 short, high-converting cam room titles for a cam model. Vibe: ${vibe || "fun and flirty"}. Each title should be under 60 characters, attention-grabbing, and encourage tips. Return ONLY a JSON array of 4 strings, no explanation, no markdown.`
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 300,
+          messages: [{ role: "user", content: prompt }],
+        }),
+      })
+      const data = await res.json()
+      const text = data.content?.map(b => b.text || "").join("") || "[]"
+      const clean = text.replace(/```json|```/g, "").trim()
+      const parsed = JSON.parse(clean)
+      setTitles(Array.isArray(parsed) ? parsed : [])
+    } catch {
+      setTitles(["Couldn't generate â€” try again!"])
+    }
+    setLoading(false)
+  }, [vibe])
+
+  const handleCopy = (title, i) => {
+    navigator.clipboard.writeText(title)
+    setCopied(i)
+    setTimeout(() => setCopied(null), 1200)
+  }
+
+  return (
+    <div>
+      {/* Vibe selector */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 14 }}>
+        {vibeOptions.map(v => (
+          <button key={v} type="button" onClick={() => setVibe(v)}
+            style={{
+              padding: "6px 14px", borderRadius: 20, fontSize: 12, fontWeight: 600,
+              background: vibe === v ? "linear-gradient(135deg,#3b82f6,#ec4899)" : "rgba(255,255,255,0.06)",
+              color: vibe === v ? "white" : "#94a3b8",
+              border: vibe === v ? "none" : "1px solid rgba(255,255,255,0.1)",
+              cursor: "pointer", transition: "all 0.2s",
+            }}>
+            {v}
+          </button>
+        ))}
+      </div>
+
+      <button type="button" onClick={generate} disabled={loading}
+        style={{
+          padding: "10px 24px", borderRadius: 10, fontWeight: 700, fontSize: 14,
+          background: loading ? "rgba(59,130,246,0.4)" : "linear-gradient(135deg,#3b82f6,#ec4899)",
+          color: "white", border: "none", cursor: loading ? "not-allowed" : "pointer",
+          boxShadow: loading ? "none" : "0 4px 16px rgba(236,72,153,0.25)",
+          transition: "all 0.2s", marginBottom: 16,
+        }}>
+        {loading ? "Generating..." : "âœ¨ Generate Titles"}
+      </button>
+
+      {titles.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {titles.map((title, i) => (
+            <div key={i} style={{
+              display: "flex", justifyContent: "space-between", alignItems: "center",
+              background: "rgba(255,255,255,0.05)", borderRadius: 10, padding: "12px 14px",
+              border: "1px solid rgba(255,255,255,0.07)",
+            }}>
+              <span style={{ fontSize: 14, color: "#e2e8f0", flex: 1, marginRight: 12 }}>{title}</span>
+              <button type="button" onClick={() => handleCopy(title, i)}
+                style={{
+                  padding: "5px 12px", borderRadius: 7, fontSize: 12, fontWeight: 600,
+                  background: copied === i ? "rgba(34,211,238,0.2)" : "rgba(255,255,255,0.08)",
+                  color: copied === i ? "#22D3EE" : "#94a3b8",
+                  border: copied === i ? "1px solid #22D3EE" : "1px solid rgba(255,255,255,0.1)",
+                  cursor: "pointer", whiteSpace: "nowrap", transition: "all 0.15s",
+                }}>
+                {copied === i ? "Copied!" : "Copy"}
+              </button>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   )
@@ -113,9 +209,8 @@ export default function LandingPage() {
   const [whaleIndex, setWhaleIndex] = useState(0)
   const [alertIndex, setAlertIndex] = useState(0)
 
-  // Auth state — lifted to parent, passed as props to AuthPanel
+  // Auth state â€” lifted to parent, passed as props to AuthPanel
   const [isSignUp, setIsSignUp]       = useState(true)
-  const [loggedIn, setLoggedIn]       = useState(false)
   const [email, setEmail]             = useState("")
   const [password, setPassword]       = useState("")
   const [authLoading, setAuthLoading] = useState(false)
@@ -123,9 +218,9 @@ export default function LandingPage() {
   const [authError, setAuthError]     = useState("")
 
   const messages = [
-    "Hey 😘 I've been thinking about you... I'm live tonight ❤️",
-    "Miss you 💕 come make tonight fun 🔥",
-    "It's been a while… come back 😈",
+    "Hey ðŸ˜˜ I've been thinking about you... I'm live tonight â¤ï¸",
+    "Miss you ðŸ’• come make tonight fun ðŸ”¥",
+    "It's been a whileâ€¦ come back ðŸ˜ˆ",
   ]
   const whales = [
     { name: "user_ULTRAVIP999", spent: "$41,820", inactive: "520 days" },
@@ -149,10 +244,7 @@ export default function LandingPage() {
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) {
-        setLoggedIn(true)
-        router.replace("/dashboard")
-      }
+      if (user) router.replace("/dashboard")
     })
   }, [])
 
@@ -200,14 +292,8 @@ export default function LandingPage() {
       redirectTo: "https://www.camcashgrl.com/reset-password",
     })
     if (error) setAuthError(error.message)
-    else setAuthMsg("Password reset email sent — check your inbox.")
+    else setAuthMsg("Password reset email sent â€” check your inbox.")
   }, [email])
-
-  const handleSignOut = async () => {
-    await supabase.auth.signOut()
-    setLoggedIn(false)
-    router.replace('/landing')
-  }
 
   // Shared props for both AuthPanel instances
   const authProps = {
@@ -218,36 +304,7 @@ export default function LandingPage() {
   return (
     <div style={{ minHeight: "100vh", background: "#05070f", color: "#cbd5e1", fontFamily: "Inter, sans-serif" }}>
 
-      {/* ── TOP NAV ─────────────────────────────────────────────────── */}
-      <div style={{ position: "sticky", top: 0, zIndex: 50, borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(5,7,15,0.85)", backdropFilter: "blur(16px)" }}>
-        <div style={{ maxWidth: 1100, margin: "0 auto", padding: "12px 24px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ width: 32, height: 32, borderRadius: 8, background: "linear-gradient(135deg,#22D3EE,#EC4899)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 900, color: "white" }}>$</div>
-            <span style={{ fontSize: 17, fontWeight: 800, color: "white" }}>Cam<span style={{ background: "linear-gradient(90deg,#22D3EE,#EC4899)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Cash</span></span>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            {loggedIn ? (
-              <>
-                <button onClick={() => router.push("/dashboard")}
-                  style={{ padding: "8px 18px", borderRadius: 9, background: "linear-gradient(135deg,#22D3EE,#EC4899)", border: "none", color: "white", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
-                  Go to Dashboard →
-                </button>
-                <button onClick={handleSignOut}
-                  style={{ padding: "8px 14px", borderRadius: 9, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "#94a3b8", fontSize: 13, cursor: "pointer" }}>
-                  Sign Out
-                </button>
-              </>
-            ) : (
-              <button onClick={() => document.getElementById("auth-panel-desktop")?.scrollIntoView({ behavior: "smooth" })}
-                style={{ padding: "8px 18px", borderRadius: 9, background: "linear-gradient(135deg,#22D3EE,#EC4899)", border: "none", color: "white", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
-                Get Started Free →
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* ── HERO ─────────────────────────────────────────────────────── */}
+      {/* â”€â”€ HERO â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: "56px 24px 32px" }}>
         <div className="hero-grid" style={{ display: "grid", gridTemplateColumns: "1fr 380px", gap: 52, alignItems: "center" }}>
 
@@ -258,14 +315,14 @@ export default function LandingPage() {
               borderRadius: 20, background: "rgba(168,85,247,0.12)",
               border: "1px solid rgba(168,85,247,0.3)", fontSize: 12, fontWeight: 600, color: "#a855f7",
             }}>
-              ✨ Free during beta
+              ðŸ”¥ 63 / 100 beta spots left
             </div>
 
             <h1 style={{ fontSize: "clamp(34px,4.5vw,54px)", color: "white", fontWeight: 900, lineHeight: 1.1, marginBottom: 18 }}>
               Turn Your Fans Into<br />
               <span style={{ background: "linear-gradient(135deg,#3b82f6,#ec4899)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
                 More Money
-              </span>{" "}— Automatically
+              </span>{" "}â€” Automatically
             </h1>
 
             <p style={{ fontSize: 18, lineHeight: 1.65, color: "#94a3b8", marginBottom: 28, maxWidth: 480 }}>
@@ -273,7 +330,7 @@ export default function LandingPage() {
             </p>
 
             <div style={{ display: "flex", gap: 20, flexWrap: "wrap", marginBottom: 28 }}>
-              {[["⚡","Ready in 2 minutes"],["💸","100% free in beta"],["🔒","Your data stays private"]].map(([icon, text]) => (
+              {[["âš¡","Ready in 2 minutes"],["ðŸ’¸","100% free in beta"],["ðŸ”’","Your data stays private"]].map(([icon, text]) => (
                 <div key={text} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "#64748b" }}>
                   <span>{icon}</span><span>{text}</span>
                 </div>
@@ -283,7 +340,7 @@ export default function LandingPage() {
             <button className="mobile-cta-btn"
               onClick={() => document.getElementById("auth-panel-mobile")?.scrollIntoView({ behavior: "smooth" })}
               style={{ display: "none", padding: "14px 36px", borderRadius: 12, background: "linear-gradient(135deg,#3b82f6,#ec4899)", color: "white", fontWeight: 700, fontSize: 16, border: "none", cursor: "pointer", boxShadow: "0 4px 20px rgba(236,72,153,0.3)" }}>
-              Start Free →
+              Start Free â†’
             </button>
           </div>
 
@@ -298,61 +355,12 @@ export default function LandingPage() {
           <AuthPanel id="auth-panel-mobile-inner" {...authProps} />
         </div>
       </div>
-{/* ── SEO CONTENT ─────────────────────────────────────────────── */}
 
-<div style={{ maxWidth: 900, margin: "0 auto 40px", padding: "0 24px" }}>
-  <h2 style={{ fontSize: 24, fontWeight: 800, color: "white", marginBottom: 12 }}>
-    Cam Model Analytics & Tools to Increase Your Earnings
-  </h2>
-
-  <p style={{ fontSize: 15, color: "#94a3b8", lineHeight: 1.7 }}>
-    CamCash helps cam models track earnings, identify top spenders, and understand exactly when they make the most money. 
-    Instead of guessing what works, you get real data on your fans, tips, and performance across platforms like Chaturbate, 
-    BongaCams, and MyFreeCams.
-  </p>
-
-  <p style={{ fontSize: 15, color: "#94a3b8", lineHeight: 1.7, marginTop: 12 }}>
-    Upload your cam site data and instantly see your highest paying fans, inactive whales worth re-engaging, and the best 
-    times to go live. Whether you're trying to grow your income or optimize your streams, CamCash gives you the insights 
-    you need to earn more.
-  </p>
-</div>
-
-{/* ── ROOM TITLE GENERATOR ───────────────────────────────────── */}
-
-<div style={{ maxWidth: 900, margin: "0 auto 50px", padding: "0 24px" }}>
-  <h2 style={{ fontSize: 24, fontWeight: 800, color: "white", marginBottom: 10 }}>
-    🔥 Free Cam Room Title Generator
-  </h2>
-
-  <p style={{ fontSize: 14, color: "#94a3b8", marginBottom: 16 }}>
-    Generate high-converting room titles that attract viewers and increase tips instantly.
-  </p>
-
-  <div style={{
-    background: "linear-gradient(135deg,#1e293b,#020617)",
-    borderRadius: 14,
-    padding: 20,
-    border: "1px solid rgba(255,255,255,0.06)"
-  }}>
-    <TitleGenerator />
-  </div>
-</div>
-      {/* ── AI ALERT ─────────────────────────────────────────────────── */}
-      <div style={{ maxWidth: 900, margin: "0 auto 36px", padding: "0 24px" }}>
-        <div style={{
-          padding: "14px 18px", borderRadius: 12,
-          background: "rgba(168,85,247,0.08)", border: "1px solid rgba(168,85,247,0.25)", fontSize: 14,
-        }}>
-          🤖 <strong>AI Insight:</strong> {alerts[alertIndex]}
-        </div>
-      </div>
-
-      {/* ── FEATURES ─────────────────────────────────────────────────── */}
+      {/* â”€â”€ FEATURES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div style={{ maxWidth: 900, margin: "0 auto 36px", padding: "0 24px" }}>
         <div className="feature-grid" style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 18 }}>
           <div className="card">
-            <div className="title"><span className="pulse-icon">💌</span> Message a High Spender</div>
+            <div className="title"><span className="pulse-icon">ðŸ’Œ</span> Message a High Spender</div>
             <div className="box">{messages[msgIndex]}</div>
             <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
               <button onClick={() => setMsgIndex(p => (p + 1) % messages.length)} className="btn2">Generate</button>
@@ -360,7 +368,7 @@ export default function LandingPage() {
             </div>
           </div>
           <div className="card">
-            <div className="title">🐳 High Spender</div>
+            <div className="title">ðŸ³ High Spender</div>
             <div style={{ marginTop: 10 }}>
               <div style={{ fontWeight: 600 }}>{whales[whaleIndex].name}</div>
               <div style={{ color: "#ec4899", marginTop: 6, fontSize: 18 }}>{whales[whaleIndex].spent}</div>
@@ -370,7 +378,7 @@ export default function LandingPage() {
         </div>
       </div>
 
-      {/* ── HOW IT WORKS ─────────────────────────────────────────────── */}
+      {/* â”€â”€ HOW IT WORKS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div style={{ maxWidth: 900, margin: "0 auto 40px", padding: "0 24px" }}>
         <div style={{ textAlign: "center", marginBottom: 24 }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: "#a855f7", textTransform: "uppercase", letterSpacing: 1.2, marginBottom: 8 }}>How It Works</div>
@@ -378,9 +386,9 @@ export default function LandingPage() {
         </div>
         <div className="steps-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16 }}>
           {[
-            { n:"1", icon:"🔗", title:"Connect your platforms",   body:"Upload your Chaturbate, BongaCams, or MFC CSV — takes under 2 minutes." },
-            { n:"2", icon:"📊", title:"Track earnings + fans",    body:"See your top tippers, best stream hours, and platform ROI — all in one place." },
-            { n:"3", icon:"⚡", title:"Get told what to do next", body:"Your dashboard tells you exactly who to message and when to go live." },
+            { n:"1", icon:"ðŸ”—", title:"Connect your platforms",   body:"Upload your Chaturbate, BongaCams, or MFC CSV â€” takes under 2 minutes." },
+            { n:"2", icon:"ðŸ“Š", title:"Track earnings + fans",    body:"See your top tippers, best stream hours, and platform ROI â€” all in one place." },
+            { n:"3", icon:"âš¡", title:"Get told what to do next", body:"Your dashboard tells you exactly who to message and when to go live." },
           ].map(({ n, icon, title, body }) => (
             <div key={n} className="card" style={{ textAlign: "center" }}>
               <div style={{ width:30, height:30, borderRadius:"50%", background:"linear-gradient(135deg,#3b82f6,#ec4899)", color:"white", fontWeight:800, fontSize:13, display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 10px" }}>{n}</div>
@@ -392,21 +400,66 @@ export default function LandingPage() {
         </div>
       </div>
 
-      {/* ── PLATFORM EDGE ────────────────────────────────────────────── */}
+      {/* â”€â”€ PLATFORM EDGE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div style={{ maxWidth:900, margin:"0 auto 48px", padding:"0 24px" }}>
         <div className="platform-grid" style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:18 }}>
           <div className="card">
-            <div className="title">📊 Platform Comparison</div>
-            <div style={{ marginTop:10 }}>Chaturbate — $520 avg<br/>Stripchat — $340 avg<br/>CamSoda — $290 avg</div>
+            <div className="title">ðŸ“Š Platform Comparison</div>
+            <div style={{ marginTop:10 }}>Chaturbate â€” $520 avg<br/>Stripchat â€” $340 avg<br/>CamSoda â€” $290 avg</div>
           </div>
           <div className="card">
-            <div className="title">💡 What This Means</div>
+            <div className="title">ðŸ’¡ What This Means</div>
             <div style={{ marginTop:10 }}>You're making ~35% more on Chaturbate. Stream there more often.</div>
           </div>
         </div>
       </div>
 
-      {/* ── BOTTOM CTA + AUTH PANEL ───────────────────────────────────── */}
+      {/* â”€â”€ SEO CONTENT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      <div style={{ maxWidth: 900, margin: "0 auto 40px", padding: "0 24px" }}>
+        <h2 style={{ fontSize: 24, fontWeight: 800, color: "white", marginBottom: 12 }}>
+          Cam Model Analytics &amp; Tools to Increase Your Earnings
+        </h2>
+        <p style={{ fontSize: 15, color: "#94a3b8", lineHeight: 1.7 }}>
+          CamCash helps cam models track earnings, identify top spenders, and understand exactly when they make the most money.
+          Instead of guessing what works, you get real data on your fans, tips, and performance across platforms like Chaturbate,
+          BongaCams, and MyFreeCams.
+        </p>
+        <p style={{ fontSize: 15, color: "#94a3b8", lineHeight: 1.7, marginTop: 12 }}>
+          Upload your cam site data and instantly see your highest paying fans, inactive whales worth re-engaging, and the best
+          times to go live. Whether you're trying to grow your income or optimize your streams, CamCash gives you the insights
+          you need to earn more.
+        </p>
+      </div>
+
+      {/* â”€â”€ ROOM TITLE GENERATOR â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      <div style={{ maxWidth: 900, margin: "0 auto 50px", padding: "0 24px" }}>
+        <h2 style={{ fontSize: 24, fontWeight: 800, color: "white", marginBottom: 10 }}>
+          ðŸ”¥ Free Cam Room Title Generator
+        </h2>
+        <p style={{ fontSize: 14, color: "#94a3b8", marginBottom: 16 }}>
+          Generate high-converting room titles that attract viewers and increase tips instantly.
+        </p>
+        <div style={{
+          background: "linear-gradient(135deg,#1e293b,#020617)",
+          borderRadius: 14,
+          padding: 20,
+          border: "1px solid rgba(255,255,255,0.06)"
+        }}>
+          <TitleGenerator />
+        </div>
+      </div>
+
+      {/* â”€â”€ AI ALERT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      <div style={{ maxWidth: 900, margin: "0 auto 36px", padding: "0 24px" }}>
+        <div style={{
+          padding: "14px 18px", borderRadius: 12,
+          background: "rgba(168,85,247,0.08)", border: "1px solid rgba(168,85,247,0.25)", fontSize: 14,
+        }}>
+          ðŸ¤– <strong>AI Insight:</strong> {alerts[alertIndex]}
+        </div>
+      </div>
+
+      {/* â”€â”€ BOTTOM CTA + AUTH PANEL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div style={{ maxWidth:900, margin:"0 auto 60px", padding:"0 24px", display:"flex", flexDirection:"column", alignItems:"center", gap:24 }}>
         <div style={{ textAlign:"center" }}>
           <div style={{ fontSize:28, fontWeight:900, color:"white", marginBottom:8 }}>Ready to make more per stream?</div>
@@ -417,7 +470,7 @@ export default function LandingPage() {
         </div>
       </div>
 
-      {/* ── STYLES ───────────────────────────────────────────────────── */}
+      {/* â”€â”€ STYLES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <style jsx>{`
         .card { background: linear-gradient(135deg,#1e293b,#020617); padding: 20px; border-radius: 14px; border: 1px solid rgba(255,255,255,0.06); transition: transform 0.2s, box-shadow 0.2s; }
         .card:hover { box-shadow: 0 0 20px rgba(236,72,153,0.2); transform: translateY(-2px); }
