@@ -1,7 +1,4 @@
 // app/blog/why-cam-streams-arent-making-money/page.js
-// Target keyword: cam model analytics
-// Secondary: chaturbate analytics, increase cam earnings, camgirl income tracker
-
 export const metadata = {
   title: "Why Your Cam Streams Aren't Making Money (And How to Fix It) | CamCash",
   description: "Struggling with inconsistent cam earnings? These are the real reasons cam streams underperform — and the data-driven fixes that actually work on Chaturbate and BongaCams.",
@@ -52,7 +49,7 @@ export default function BlogPost2() {
   const mistakes = [
     { num: 'Mistake 1', title: 'Streaming at the Wrong Times' },
     { num: 'Mistake 2', title: 'Ignoring Fan Retention' },
-    { num: 'Mistake 3', title: 'Not Knowing When Your Streams Die' },
+    { num: 'Mistake 3', title: "Not Knowing When Your Streams Die" },
     { num: 'Mistake 4', title: 'Splitting Time Equally Across Platforms' },
     { num: 'Mistake 5', title: 'No Real-Time Strategy During Streams' },
   ]
@@ -60,26 +57,19 @@ export default function BlogPost2() {
   return (
     <div style={s.page}>
       <nav style={s.nav}>
-        <a href="/landing" style={s.logo}>Cam<span style={s.logoAccent}>Cash</span></a>
-        <a href="/login" style={s.navCta}>Start Free →</a>
+        <a href="/" style={s.logo}>Cam<span style={s.logoAccent}>Cash</span></a>
+        <a href="/" style={s.navCta}>Start Free →</a>
       </nav>
-
       <article style={s.article}>
         <nav style={s.breadcrumb} aria-label="breadcrumb">
-          <a href="/landing" style={s.breadLink}>Home</a>
+          <a href="/" style={s.breadLink}>Home</a>
           <span style={s.breadSep}>›</span>
-          <a href="/landing#blog" style={s.breadLink}>Blog</a>
+          <a href="/" style={s.breadLink}>Blog</a>
           <span style={s.breadSep}>›</span>
           <span style={{ color: '#475569' }}>Why Streams Aren't Making Money</span>
         </nav>
-
         <h1 style={s.h1}>Why Your Cam Streams Aren't Making Money (And How to Fix It)</h1>
-        <p style={s.intro}>
-          You're putting in the hours. You're engaging your audience. You're consistent.
-          And yet the income feels unpredictable — some streams are great, others are disappointing,
-          and you can't always figure out why. Here are the real reasons, and what to do about each one.
-        </p>
-
+        <p style={s.intro}>You're putting in the hours. You're engaging your audience. You're consistent. And yet the income feels unpredictable — some streams are great, others are disappointing, and you can't always figure out why. Here are the real reasons, and what to do about each one.</p>
         <h2 style={s.h2}>The 5 Mistakes at a Glance</h2>
         <div style={{ marginBottom: 40 }}>
           {mistakes.map((m, i) => (
@@ -89,67 +79,52 @@ export default function BlogPost2() {
             </div>
           ))}
         </div>
-
         <h2 style={s.h2}>The Real Problem: You're Flying Blind</h2>
-        <p style={s.p}>Before getting into specific mistakes, it's worth naming the root cause of most cam income problems: a lack of data.</p>
-        <p style={s.p}>When you don't track your performance systematically, you're left relying on memory and feeling. You remember your best streams and your worst ones, but everything in between blurs together. You don't know if Tuesday is actually better than Saturday for your audience. You don't know if your income tends to drop after 45 minutes. You don't know which fans are worth prioritizing.</p>
-        <p style={s.p}>You can't optimize what you can't measure. The fixes below all start from the same place: getting clear on what your actual data says.</p>
+        <p style={s.p}>Before getting into specific mistakes, it's worth naming the root cause of most cam income problems: a lack of data. When you don't track your performance systematically, you're left relying on memory and feeling. You can't optimize what you can't measure.</p>
 
         <h2 style={s.h2}>Mistake 1: Streaming at the Wrong Times</h2>
-        <p style={s.p}>This is the most common and most fixable cause of underperforming streams.</p>
-        <p style={s.p}>Most models pick their streaming schedule based on availability, habit, or generic advice about "peak platform hours." Generic peak hours reflect platform-wide traffic patterns — not your specific audience. Your viewers have jobs, time zones, and routines. Your top tippers are most active at specific times that may have nothing to do with when overall Chaturbate traffic is highest.</p>
-
+        <p style={s.p}>Most models pick their streaming schedule based on availability, habit, or generic advice about "peak platform hours." Generic peak hours reflect platform-wide traffic patterns — not your specific audience. Your top tippers are most active at specific times that may have nothing to do with when overall Chaturbate traffic is highest.</p>
         <div style={s.fixBox}>
           <div style={s.fixLabel}>✅ The Fix</div>
-          <p style={{ ...s.p, marginBottom: 0 }}>Analyze your tip history by hour of day. Look for hours where your average earnings per active streaming day are consistently higher. For most models there are 2–3 clear peak windows that generate 40–80% more revenue than off-peak hours. Shifting your schedule to hit these windows is often the single biggest lever for increasing income without changing anything else.</p>
+          <p style={{ ...s.p, marginBottom: 0 }}>Analyze your tip history by hour of day. For most models there are 2–3 clear peak windows that generate 40–80% more revenue than off-peak hours. Shifting your schedule to hit these windows is often the single biggest lever for increasing income without changing anything else.</p>
         </div>
 
         <h2 style={s.h2}>Mistake 2: Ignoring Fan Retention</h2>
-        <p style={s.p}>Acquiring a new tipper is harder than keeping an existing one. Most cam models understand this intuitively but don't act on it systematically.</p>
-        <p style={s.p}>High-value fans go cold gradually — they tip less frequently, then stop appearing, then disappear entirely. By the time you notice, they've often moved on. The typical interval between tips varies by fan. Some tip daily, some weekly, some monthly. When a fan's gap significantly exceeds their normal interval, they're at risk — but you can only know their normal interval if you're tracking it.</p>
-
+        <p style={s.p}>High-value fans go cold gradually — they tip less frequently, then stop appearing, then disappear entirely. By the time you notice, they've often moved on. The typical interval between tips varies by fan. When a fan's gap significantly exceeds their normal interval, they're at risk — but you can only know their normal interval if you're tracking it.</p>
         <div style={s.fixBox}>
           <div style={s.fixLabel}>✅ The Fix</div>
-          <p style={{ ...s.p, marginBottom: 0 }}>Track each fan's tipping history including days since last tip, average interval, and churn risk level. When a high-value fan exceeds their normal interval, reach out with a personalized message before they go fully cold. Models who actively manage fan retention report that recovering even one high-value fan per month adds meaningfully to their income.</p>
+          <p style={{ ...s.p, marginBottom: 0 }}>Track each fan's tipping history including days since last tip, average interval, and churn risk level. When a high-value fan exceeds their normal interval, reach out with a personalized message before they go fully cold.</p>
         </div>
 
         <h2 style={s.h2}>Mistake 3: Not Knowing When Your Streams Die</h2>
-        <p style={s.p}>Most streaming sessions have a natural arc. Some are front-loaded (strong opening, declining tips). Some are back-loaded (slow start, then momentum builds). Some hit a wall at a specific time. If you don't track when tips come in within sessions, you can't see your arc.</p>
-        <p style={s.p}>You might be staying online 30 minutes past the point where your income has dried up, or cutting sessions short before your natural peak.</p>
-
+        <p style={s.p}>Most streaming sessions have a natural arc. Some are front-loaded (strong opening, declining tips). Some are back-loaded (slow start, then momentum builds). If you don't track when tips come in within sessions, you can't see your arc. You might be staying online 30 minutes past the point where your income has dried up.</p>
         <div style={s.fixBox}>
           <div style={s.fixLabel}>✅ The Fix</div>
-          <p style={{ ...s.p, marginBottom: 0 }}>Look at how your revenue splits between the first and second half of streams. A healthy stream has equal or growing second-half pace. A dying stream shows second-half earnings at 50–70% of first-half pace or lower. Once you know your pattern, you can either end sessions at the natural momentum peak or identify what's causing the drop and address it specifically.</p>
+          <p style={{ ...s.p, marginBottom: 0 }}>Look at how your revenue splits between the first and second half of streams. A healthy stream has equal or growing second-half pace. Once you know your pattern, you can either end sessions at the natural momentum peak or identify what's causing the drop.</p>
         </div>
 
         <h2 style={s.h2}>Mistake 4: Splitting Time Equally Across Platforms</h2>
-        <p style={s.p}>If you stream on Chaturbate and BongaCams (or any combination), you almost certainly earn more per hour on one than the other. Streaming them equally regardless of performance is an income drain.</p>
-        <p style={s.p}>Without measuring $/hr per platform, you don't know which one is worth your time. You might be spending 50% of your streaming hours on a platform that generates 25% of your income per hour.</p>
-
+        <p style={s.p}>If you stream on Chaturbate and BongaCams, you almost certainly earn more per hour on one than the other. Streaming them equally regardless of performance is an income drain. Without measuring $/hr per platform, you don't know which one is worth your time.</p>
         <div style={s.fixBox}>
           <div style={s.fixLabel}>✅ The Fix</div>
-          <p style={{ ...s.p, marginBottom: 0 }}>Calculate your earnings per hour for each platform — total USD earned divided by total hours streamed, per platform. The platform with the higher $/hr deserves more of your time. The gap is often larger than you'd expect. This doesn't mean abandoning your lower-performing platform entirely — audience diversification has its own value — but it does mean not treating both platforms as equally valuable when the data says otherwise.</p>
+          <p style={{ ...s.p, marginBottom: 0 }}>Calculate your earnings per hour for each platform — total USD earned divided by total hours streamed, per platform. The platform with the higher $/hr deserves more of your time. The gap is often larger than you'd expect.</p>
         </div>
 
         <h2 style={s.h2}>Mistake 5: No Real-Time Strategy During Streams</h2>
-        <p style={s.p}>What you do during a stream — when you set goals, how you engage with tippers, when you switch strategy — has a significant impact on earnings. But most models make these decisions by feel.</p>
-        <p style={s.p}>If the room is quiet for 8 minutes, is that normal for this time of day or is it a warning sign? If your pace is below average, should you switch strategies or stay the course? These questions are easier to answer with data than without it.</p>
-
+        <p style={s.p}>If the room is quiet for 8 minutes, is that normal or a warning sign? If your pace is below average, should you switch strategies or stay the course? These questions are easier to answer with data than without it.</p>
         <div style={s.fixBox}>
           <div style={s.fixLabel}>✅ The Fix</div>
-          <p style={{ ...s.p, marginBottom: 0 }}>Use real-time tracking during your streams. Log tips as they come in and watch your pace relative to your historical average. Let the data tell you when to push harder and when to maintain. <a href="/login" style={{ color: '#22D3EE' }}>CamCash's Live Mode</a> gives you a live pace indicator, silence detection, goal tracking, and one specific coaching instruction that updates based on what's actually happening in your stream.</p>
+          <p style={{ ...s.p, marginBottom: 0 }}>Use real-time tracking during your streams. <a href="/" style={{ color: '#22D3EE' }}>CamCash's Live Mode</a> gives you a live pace indicator, silence detection, goal tracking, and one specific coaching instruction that updates based on what's actually happening in your stream.</p>
         </div>
 
         <h2 style={s.h2}>The Pattern Across All These Mistakes</h2>
-        <p style={s.p}>Every one of these mistakes shares the same root: making decisions without data. Streaming at the wrong time because you don't know your peak hours. Losing fans because you don't track their patterns. Staying live too long because you can't see your session arc.</p>
-        <p style={s.p}>The fix isn't working harder. It's working with better information. Your earnings data already exists — it's sitting in your Chaturbate and BongaCams accounts right now. The question is whether you're using it.</p>
+        <p style={s.p}>Every one of these mistakes shares the same root: making decisions without data. The fix isn't working harder — it's working with better information. Your earnings data already exists in your Chaturbate and BongaCams accounts right now. The question is whether you're using it.</p>
 
         <div style={s.ctaBanner}>
           <div style={s.ctaTitle}>Find out what your data actually says</div>
           <div style={s.ctaSub}>Upload your earnings CSV — free, no credit card, takes under 2 minutes</div>
-          <a href="/login" style={s.ctaBtn}>Start Free with CamCash →</a>
+          <a href="/" style={s.ctaBtn}>Start Free with CamCash →</a>
         </div>
-
         <div style={s.related}>
           <div style={s.relatedTitle}>Related articles</div>
           <div style={s.relatedLinks}>
@@ -159,7 +134,6 @@ export default function BlogPost2() {
           </div>
         </div>
       </article>
-
       <footer style={s.footer}>
         <p style={s.footerText}>© 2026 CamCash — Built for cam models who want to grow</p>
       </footer>
