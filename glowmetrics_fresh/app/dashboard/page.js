@@ -919,14 +919,7 @@ export default function Dashboard() {
   // Tab persistence
   const handleTabChange = (tab) => {
     setActiveTab(tab)
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('camcash_tab', tab)
-      // Scroll both window and the main content div to top
-      window.scrollTo({ top: 0, behavior: 'instant' })
-      document.querySelector('.dash-main')?.scrollTo({ top: 0, behavior: 'instant' })
-      document.documentElement.scrollTop = 0
-      document.body.scrollTop = 0
-    }
+    if (typeof window !== 'undefined') localStorage.setItem('camcash_tab', tab)
   }
 
   // Counter bump when new tips arrive
@@ -1475,22 +1468,10 @@ const handleCSV = async (file, forcePlatform = null) => {
     const DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
     const todayName = DAYS[utcDay]
 
-    // Best hour: today-specific per platform first, then all-time fallback
-    // Formula: SUM(usd) / COUNT(DISTINCT hour-bucket) for THIS day of week on THIS platform
-    const fmtHour = h => h === 0 ? '12 AM' : h < 12 ? `${h} AM` : h === 12 ? '12 PM' : `${h-12} PM`
-    const platBestTimes = analytics?.platformBestTimes || {}
-    let todayBestPlat = null, todayBestHourNum = null, todayBestAvg = 0
-    Object.entries(platBestTimes).forEach(([plat, times]) => {
-      const todayEntry = times?.bestHourByDay?.[todayName]
-      if (todayEntry && todayEntry.avg > todayBestAvg) {
-        todayBestAvg = todayEntry.avg
-        todayBestHourNum = todayEntry.hour
-        todayBestPlat = plat
-      }
-    })
+    // Best hour from analytics engine
     const bestHour = analytics?.bestHour
-    const bh = todayBestHourNum !== null ? todayBestHourNum : (bestHour ? parseInt(bestHour.hour) : null)
-    const bhLabel = bh === null ? null : fmtHour(bh)
+    const bh = bestHour ? parseInt(bestHour.hour) : null
+    const bhLabel = bh === null ? null : bh === 0 ? '12 AM' : bh < 12 ? `${bh} AM` : bh === 12 ? '12 PM' : `${bh - 12} PM`
     const hoursUntilPeak = bh !== null ? (bh - utcHour + 24) % 24 : null
     const atPeak = hoursUntilPeak === 0 || hoursUntilPeak === 1
 
@@ -1522,8 +1503,8 @@ const handleCSV = async (file, forcePlatform = null) => {
         if (avg > bestPlatPeakAvg) { bestPlatPeakAvg = avg; bestPlatPeak = plat }
       })
     }
-    const displayPlat = todayBestPlat || bestPlatPeak || bestPlatNow || 'Chaturbate'
-    const displayAvg = todayBestAvg || bestPlatPeakAvg || bestPlatNowAvg || bestHour?.avg || 0
+    const displayPlat = bestPlatPeak || bestPlatNow || 'Chaturbate'
+    const displayAvg = bestPlatPeakAvg || bestPlatNowAvg || bestHour?.avg || 0
 
     // Best day
     const bestDay = analytics?.bestDay
@@ -1600,22 +1581,9 @@ const handleCSV = async (file, forcePlatform = null) => {
       .sort((a, b) => b.totalUSD - a.totalUSD)
       .slice(0, 3)
 
-    const platTodayStats = {}
-    Object.entries(platBestTimes).forEach(([plat, times]) => {
-      const todayHour = times?.bestHourByDay?.[todayName]
-      const bestDayEntry = times?.bestDay
-      platTodayStats[plat] = {
-        todayBestHour: todayHour ? fmtHour(todayHour.hour) : null,
-        todayBestAvg: todayHour?.avg || 0,
-        bestDay: bestDayEntry?.day || null,
-        bestDayAvg: bestDayEntry?.avg || 0,
-        overallBestHour: times?.hour ? fmtHour(times.hour.hour) : null,
-        overallBestHourAvg: times?.hour?.avg || 0,
-      }
-    })
     return { todayName, bhLabel, bh, atPeak, hoursUntilPeak, displayPlat, displayAvg,
       isBestDay, bestDay, sessionAvg, peakAvg, predictionLow, predictionHigh,
-      reengageFans, likelyOnline, platTodayStats }
+      reengageFans, likelyOnline }
   }
 
   const buildRealTimeAlerts = () => {
@@ -1902,8 +1870,8 @@ const handleCSV = async (file, forcePlatform = null) => {
         </div>
 
         <nav style={{ flex: 1, padding: "16px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
-          {[["overview", "📊", "Overview"], ["platforms", "🎯", "Platforms"], ["whales", "🐳", "Top Fans"], ["sessions", "🎥", "Sessions"], ["monthly", "📈", "Monthly"], ["live", "🔴", "Live Mode"], ["titles", "🎬", "Room Titles"], ["help", "❓", "CSV Help"]].map(([id, icon, label]) => (
-            <button key={id} onClick={() => handleTabChange(id)} style={{
+          {[["overview", "📊", "Overview"], ["platforms", "🎯", "Platforms"], ["whales", "🐳", "Top Fans"], ["sessions", "🎥", "Sessions"], ["monthly", "📈", "Monthly"], ["live", "🔴", "Live Mode"], ["data", "📝", "Edit Data"], ["titles", "🎬", "Room Titles"], ["help", "❓", "CSV Help"], ["upload", "📥", "Import"]].map(([id, icon, label]) => (
+            <button key={id} onClick={() => setActiveTab(id)} style={{
               display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 10,
               background: activeTab === id ? "linear-gradient(135deg, rgba(59,130,246,0.2), rgba(236,72,153,0.2))" : "transparent",
               border: activeTab === id ? "1px solid rgba(59,130,246,0.4)" : "1px solid transparent",
@@ -1914,49 +1882,6 @@ const handleCSV = async (file, forcePlatform = null) => {
               <span style={{ fontSize: 18 }}>{icon}</span>{label}
             </button>
           ))}
-
-          {/* ── IMPORT dropdown ── */}
-          {(() => {
-            const importOpen = activeTab === 'upload' || activeTab === 'data'
-            return (
-              <div style={{ margin: '0 0 4px' }}>
-                <button
-                  onClick={() => handleTabChange(activeTab === 'upload' || activeTab === 'data' ? 'overview' : 'upload')}
-                  style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    width: '100%', padding: '10px 12px', borderRadius: 10,
-                    background: importOpen ? 'linear-gradient(135deg, rgba(59,130,246,0.2), rgba(236,72,153,0.2))' : 'transparent',
-                    border: importOpen ? '1px solid rgba(59,130,246,0.4)' : '1px solid transparent',
-                    boxShadow: importOpen ? '0 0 20px rgba(59,130,246,0.3)' : 'none',
-                    color: importOpen ? C.white : C.muted, fontSize: 14, fontWeight: importOpen ? 600 : 400,
-                    cursor: 'pointer', transition: 'all 0.15s', textAlign: 'left',
-                  }}>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <span style={{ fontSize: 18 }}>📥</span> Import
-                  </span>
-                  <span style={{ fontSize: 10, color: C.muted, transition: 'transform 0.2s', display: 'inline-block', transform: importOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>▼</span>
-                </button>
-                {importOpen && (
-                  <div style={{ marginTop: 4, marginLeft: 12, display: 'flex', flexDirection: 'column', gap: 3 }}>
-                    <button onClick={() => handleTabChange('upload')}
-                      style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 8,
-                        background: activeTab === 'upload' ? 'rgba(34,211,238,0.15)' : 'rgba(255,255,255,0.03)',
-                        border: activeTab === 'upload' ? '1px solid rgba(34,211,238,0.4)' : '1px solid rgba(255,255,255,0.06)',
-                        color: activeTab === 'upload' ? C.cyan : C.muted, fontSize: 13, cursor: 'pointer', textAlign: 'left' }}>
-                      <span style={{ fontSize: 15 }}>📤</span> Import CSV
-                    </button>
-                    <button onClick={() => handleTabChange('data')}
-                      style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 8,
-                        background: activeTab === 'data' ? 'rgba(236,72,153,0.15)' : 'rgba(255,255,255,0.03)',
-                        border: activeTab === 'data' ? '1px solid rgba(236,72,153,0.4)' : '1px solid rgba(255,255,255,0.06)',
-                        color: activeTab === 'data' ? C.pink : C.muted, fontSize: 13, cursor: 'pointer', textAlign: 'left' }}>
-                      <span style={{ fontSize: 15 }}>📝</span> Edit Data
-                    </button>
-                  </div>
-                )}
-              </div>
-            )
-          })()}
         </nav>
 
         <div style={{ padding: "16px 20px", borderTop: "1px solid rgba(255,255,255,0.08)", display: "flex", flexDirection: "column", gap: 10 }}>
@@ -1971,7 +1896,7 @@ const handleCSV = async (file, forcePlatform = null) => {
       {/* MOBILE BOTTOM NAV — hidden on desktop via CSS */}
       <div className="dash-bottom-nav" style={{ display: "none" }}>
         {[["overview","📊","Overview"],["platforms","🎯","Platforms"],["whales","🐳","Fans"],["sessions","🎥","Sessions"],["monthly","📈","Monthly"],["live","🔴","Live"],["upload","📥","Import"]].map(([id, icon, label]) => (
-          <button key={id} onClick={() => handleTabChange(id)} className={activeTab === id ? "active" : ""}>
+          <button key={id} onClick={() => setActiveTab(id)} className={activeTab === id ? "active" : ""}>
             <span className="nav-icon">{icon}</span>
             <span className="nav-label">{label}</span>
           </button>
@@ -2012,7 +1937,7 @@ const handleCSV = async (file, forcePlatform = null) => {
         {dailyBrief && (() => {
           const { todayName, bhLabel, bh, atPeak, hoursUntilPeak, displayPlat, displayAvg,
             isBestDay, bestDay, sessionAvg, peakAvg, predictionLow, predictionHigh,
-            reengageFans, likelyOnline, platTodayStats } = dailyBrief
+            reengageFans, likelyOnline } = dailyBrief
           return (
             <div style={{ marginBottom: 20, borderRadius: 18, overflow: 'hidden', border: `1px solid ${atPeak ? 'rgba(16,185,129,0.45)' : 'rgba(124,92,255,0.3)'}`, background: 'rgba(10,12,24,0.7)', backdropFilter: 'blur(16px)', animation: 'fadeUp 0.3s ease both' }}>
 
@@ -2335,31 +2260,11 @@ const handleCSV = async (file, forcePlatform = null) => {
                             <div style={{ fontSize: 11, fontWeight: 700, color: col, marginBottom: 6 }}>{p.platform.replace('BongaCams','Bonga').replace('MyFreeCams','MFC')}</div>
                             <div style={{ fontSize: 22, fontWeight: 900, color: C.white, marginBottom: 2 }}>{roi !== null ? `$${roi.toFixed(2)}/hr` : '—'}</div>
                             <div style={{ fontSize: 11, color: C.muted, marginBottom: bestTime ? 8 : 0 }}>${p.totalUSD.toFixed(0)} total · {p.hours.toFixed(0)}h streamed</div>
-                            {(() => {
-                            const todayUTCName = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][new Date().getUTCDay()]
-                            const ptimes = analytics?.platformBestTimes?.[p.platform]
-                            const todayHour = ptimes?.bestHourByDay?.[todayUTCName]
-                            const bestDayEntry = ptimes?.bestDay
-                            return (
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 4 }}>
-                                {bestDayEntry && (
-                                  <div style={{ padding: '5px 8px', borderRadius: 8, background: `${col}10`, border: `1px solid ${col}25`, fontSize: 11, color: col }}>
-                                    Best day: <strong>{bestDayEntry.day}s</strong> ${bestDayEntry.avg.toFixed(0)} avg
-                                  </div>
-                                )}
-                                {bestTime && (
-                                  <div style={{ padding: '5px 8px', borderRadius: 8, background: `${col}10`, border: `1px solid ${col}25`, fontSize: 11, color: col }}>
-                                    Best hour overall: <strong>{fmtH(bestTime.hour)}</strong> ${bestTime.avg.toFixed(0)} avg
-                                  </div>
-                                )}
-                                {todayHour && (
-                                  <div style={{ padding: '5px 8px', borderRadius: 8, background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.25)', fontSize: 11, color: '#10B981' }}>
-                                    Today ({todayUTCName}): <strong>{fmtH(todayHour.hour)}</strong> ${todayHour.avg.toFixed(0)}/hr avg
-                                  </div>
-                                )}
+                            {bestTime && (
+                              <div style={{ padding: "5px 8px", borderRadius: 8, background: `${col}10`, border: `1px solid ${col}25`, fontSize: 11, color: col }}>
+                                ⏰ Best: <strong>{fmtH(bestTime.hour)}</strong> · ${bestTime.avg.toFixed(0)} avg ({bestTime.sessionCount} sessions)
                               </div>
-                            )
-                          })()}
+                            )}
                           </div>
                         )
                       })}
@@ -2432,10 +2337,10 @@ const handleCSV = async (file, forcePlatform = null) => {
                             const bg = val === 0 ? "rgba(255,255,255,0.03)" : intensity < 0.25 ? "rgba(34,211,238,0.12)" : intensity < 0.5 ? "rgba(34,211,238,0.30)" : intensity < 0.75 ? "rgba(34,211,238,0.60)" : "rgba(34,211,238,0.90)"
                             return (
                               <div key={d} title={`${plat} ${d}: avg $${val.toFixed(2)}/day`}
-                                onClick={() => { if (val > 0) { setChartDrillDay(d); handleTabChange("whales") } }}
-                                style={{ height: 32, borderRadius: 5, background: bg, border: isToday ? "2px solid rgba(34,211,238,0.7)" : "1px solid rgba(255,255,255,0.05)", display: "flex", alignItems: "center", justifyContent: "center", cursor: val > 0 ? "pointer" : "default", transition: "all 0.15s", transform: "scale(1)" }}
-                                onMouseEnter={e => { if (val > 0) { e.currentTarget.style.transform = "scale(1.08)"; e.currentTarget.style.boxShadow = "0 0 8px rgba(34,211,238,0.5)" } }}
-                                onMouseLeave={e => { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.boxShadow = "" }}>
+                                onClick={() => { if (val > 0) setChartDrillDay(d) }}
+                                style={{ height: 32, borderRadius: 5, background: bg, border: isToday ? "2px solid rgba(34,211,238,0.7)" : "1px solid rgba(255,255,255,0.05)", display: "flex", alignItems: "center", justifyContent: "center", cursor: val > 0 ? "pointer" : "default", transition: "opacity 0.1s" }}
+                                onMouseEnter={e => { if (val > 0) e.currentTarget.style.opacity = "0.75" }}
+                                onMouseLeave={e => { e.currentTarget.style.opacity = "1" }}>
                                 {val > 0 && <span style={{ fontSize: 9, fontWeight: 700, color: intensity > 0.45 ? "#fff" : C.muted }}>${val >= 100 ? Math.round(val) : val.toFixed(0)}</span>}
                               </div>
                             )
@@ -2443,7 +2348,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                         ]
                       })}
                     </div>
-                    <div style={{ marginTop: 8, fontSize: 11, color: C.muted }}>Today ({todayLong}) highlighted in cyan. Darker = more earnings. Click any cell to filter Top Fans by that day. <span style={{ color: C.cyan }}>Click any cell to filter Top Fans by that day.</span></div>
+                    <div style={{ marginTop: 8, fontSize: 11, color: C.muted }}>Today ({todayLong}) highlighted in cyan. Darker = more earnings.</div>
                   </div>
                   </div>
                 )
@@ -4878,7 +4783,7 @@ const handleCSV = async (file, forcePlatform = null) => {
               </div>
               <div style={{ padding: 16, background: "rgba(124,92,255,0.1)", border: "1px solid rgba(124,92,255,0.25)", borderRadius: 12, marginBottom: 18 }}>
                 <div style={{ fontSize: 14, color: C.indigo, fontWeight: 700, marginBottom: 8 }}>🚀 Early Access Offer</div>
-                <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.7, marginBottom: 10 }}>Early access users can lock in founding pricing:</div>
+                <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.7, marginBottom: 10 }}>Right now everything is free during beta. But early users can:</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
                   {["Lock in lifetime pricing before it increases", "Get every future premium feature included", "Keep full access as we expand the product"].map(t => (
                     <div key={t} style={{ fontSize: 12, color: C.white }}>• {t}</div>
