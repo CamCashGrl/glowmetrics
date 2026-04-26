@@ -4,70 +4,34 @@ import { useState, useEffect, memo } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
 
-// ── Small helpers ─────────────────────────────────────
-const fadeIn = { transition: "all .4s ease" }
-
-// ── Auth Panel (UNCHANGED CORE LOGIC) ─────────────────
-const AuthPanel = memo(function AuthPanel({
-  isSignUp, setIsSignUp, email, setEmail, password, setPassword,
-  authLoading, authError, authMsg, handleAuth
-}) {
-  const inputStyle = {
-    width: "100%", padding: "11px 14px", borderRadius: 9,
-    background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.1)",
-    color: "white", fontSize: 14, marginBottom: 10
-  }
-
-  return (
-    <div style={{ background: "linear-gradient(135deg,#1e293b,#020617)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 16, padding: 24 }}>
-      <h3 style={{ marginBottom: 12 }}>{isSignUp ? "Create Account" : "Welcome Back"}</h3>
-
-      <input style={inputStyle} placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} />
-      <input style={inputStyle} type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} />
-
-      <button onClick={handleAuth} disabled={authLoading} style={{ width: "100%", padding: 12, borderRadius: 10, background: "linear-gradient(135deg,#22D3EE,#EC4899)", border: "none", color: "white" }}>
-        {authLoading ? "Loading..." : isSignUp ? "Sign Up" : "Log In"}
-      </button>
-
-      <div style={{ marginTop: 10, fontSize: 13, cursor: "pointer" }} onClick={() => setIsSignUp(!isSignUp)}>
-        {isSignUp ? "Already have an account? Log in" : "Create account"}
-      </div>
-
-      {authError && <div style={{ color: "#f87171" }}>{authError}</div>}
-      {authMsg && <div style={{ color: "#34d399" }}>{authMsg}</div>}
-    </div>
-  )
-})
-
-// ── Typing + Copy Message Generator ───────────────────
-function MessageGenerator() {
+// ================= HERO MESSAGE ENGINE =================
+function MessageEngine() {
   const messages = [
-    "Hey baloo_13… I saved something for you tonight",
-    "baloo_13 you were my top supporter last time",
-    "Come back baloo_13… it gets better",
-    "baloo_13 I’ve got a private show waiting"
+    "Hey baloo_13... I saved something just for you tonight",
+    "baloo_13 you were my top supporter last stream",
+    "Come back baloo_13... it gets better",
+    "baloo_13 I have a private show waiting for you"
   ]
 
   const [index, setIndex] = useState(0)
-  const [display, setDisplay] = useState("")
+  const [text, setText] = useState("")
   const [copied, setCopied] = useState(false)
 
-  // typing effect
   useEffect(() => {
     let i = 0
-    setDisplay("")
     const current = messages[index]
+    setText("")
 
     const typing = setInterval(() => {
       i++
-      setDisplay(current.slice(0, i))
+      setText(current.slice(0, i))
       if (i >= current.length) clearInterval(typing)
-    }, 25)
+    }, 20)
 
     const rotate = setTimeout(() => {
       setIndex((prev) => (prev + 1) % messages.length)
       setCopied(false)
-    }, 3200)
+    }, 3000)
 
     return () => {
       clearInterval(typing)
@@ -81,22 +45,38 @@ function MessageGenerator() {
   }
 
   return (
-    <div style={{ padding: 18, borderRadius: 14, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", ...fadeIn }}>
-      <div style={{ fontSize: 14, minHeight: 40 }}>{display}</div>
+    <div style={{
+      background: "linear-gradient(135deg,#0f172a,#020617)",
+      border: "1px solid rgba(255,255,255,0.1)",
+      borderRadius: 16,
+      padding: 20,
+      boxShadow: "0 0 40px rgba(236,72,153,0.15)"
+    }}>
+      <div style={{ fontSize: 15, minHeight: 50 }}>{text}</div>
 
-      <button onClick={copy} style={{ marginTop: 10, padding: "6px 12px", borderRadius: 8, border: "none", background: copied ? "#34d399" : "#22D3EE", color: "black", transform: copied ? "scale(1.05)" : "scale(1)", transition: "all .2s" }}>
-        {copied ? "Copied" : "Copy"}
+      <button onClick={copy} style={{
+        marginTop: 12,
+        padding: "8px 14px",
+        borderRadius: 10,
+        border: "none",
+        background: copied ? "#22c55e" : "#22D3EE",
+        color: "black",
+        fontWeight: 600,
+        transform: copied ? "scale(1.05)" : "scale(1)",
+        transition: "all .2s"
+      }}>
+        {copied ? "Copied" : "Copy Message"}
       </button>
     </div>
   )
 }
 
-// ── Insights Slider ───────────────────────────────────
-function InsightsSlider() {
-  const insights = [
-    "Top 2% of fans generate 68% of revenue",
-    "Your peak tipping hour: 11:40PM",
-    "Returning fans spend 3.2x more",
+// ================= INSIGHTS =================
+function InsightTicker() {
+  const data = [
+    "Top 2% of fans generate 70% of revenue",
+    "Peak tipping window detected at 11:42PM",
+    "Returning fans spend 3x more",
     "Whales re-engage within 48 hours",
     "Private shows convert 4x higher"
   ]
@@ -104,43 +84,56 @@ function InsightsSlider() {
   const [i, setI] = useState(0)
 
   useEffect(() => {
-    const t = setInterval(() => setI((p) => (p + 1) % insights.length), 2500)
+    const t = setInterval(() => setI((p) => (p + 1) % data.length), 2500)
     return () => clearInterval(t)
   }, [])
 
   return (
-    <div style={{ padding: 18, borderRadius: 14, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}>
-      <div style={{ fontSize: 13, opacity: 0.7 }}>Live Insight</div>
-      <div style={{ fontSize: 15 }}>{insights[i]}</div>
+    <div style={{
+      marginTop: 16,
+      padding: 14,
+      borderRadius: 12,
+      background: "rgba(255,255,255,0.05)",
+      border: "1px solid rgba(255,255,255,0.08)"
+    }}>
+      <div style={{ fontSize: 12, opacity: 0.6 }}>LIVE INSIGHT</div>
+      <div style={{ fontSize: 15 }}>{data[i]}</div>
     </div>
   )
 }
 
-// ── Platform Logos Strip ──────────────────────────────
-function LogoStrip() {
-  const logos = ["CB","SC","OF","MV","CS","BC"]
+// ================= AUTH =================
+const AuthPanel = memo(function AuthPanel({
+  isSignUp, setIsSignUp, email, setEmail, password, setPassword,
+  authLoading, authError, handleAuth
+}) {
   return (
-    <div style={{ display: "flex", gap: 10, marginTop: 10, opacity: 0.6 }}>
-      {logos.map((l, idx) => (
-        <div key={idx} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.1)", fontSize: 12 }}>
-          {l}
-        </div>
-      ))}
+    <div style={{
+      background: "linear-gradient(135deg,#1e293b,#020617)",
+      border: "1px solid rgba(255,255,255,0.1)",
+      borderRadius: 16,
+      padding: 24
+    }}>
+
+      <h3>{isSignUp ? "Create Account" : "Welcome Back"}</h3>
+
+      <input placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} style={{ width: "100%", marginTop: 10, padding: 10, borderRadius: 8 }} />
+      <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} style={{ width: "100%", marginTop: 10, padding: 10, borderRadius: 8 }} />
+
+      <button onClick={handleAuth} style={{ width: "100%", marginTop: 12, padding: 12, borderRadius: 10, background: "#ec4899", color: "white", border: "none" }}>
+        {authLoading ? "Loading..." : isSignUp ? "Sign Up" : "Log In"}
+      </button>
+
+      <div onClick={() => setIsSignUp(!isSignUp)} style={{ marginTop: 10, cursor: "pointer", fontSize: 13 }}>
+        {isSignUp ? "Already have an account? Log in" : "Create account"}
+      </div>
+
+      {authError && <div style={{ color: "red" }}>{authError}</div>}
     </div>
   )
-}
+})
 
-// ── Feature Card ──────────────────────────────────────
-function FeatureCard({ title, desc }) {
-  return (
-    <div style={{ padding: 18, borderRadius: 14, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}>
-      <h4>{title}</h4>
-      <p style={{ fontSize: 13, opacity: 0.8 }}>{desc}</p>
-    </div>
-  )
-}
-
-// ── Main Page ─────────────────────────────────────────
+// ================= MAIN =================
 export default function Page() {
   const router = useRouter()
 
@@ -149,7 +142,6 @@ export default function Page() {
   const [isSignUp, setIsSignUp] = useState(false)
   const [authLoading, setAuthLoading] = useState(false)
   const [authError, setAuthError] = useState("")
-  const [authMsg, setAuthMsg] = useState("")
 
   const handleAuth = async () => {
     setAuthLoading(true)
@@ -166,32 +158,28 @@ export default function Page() {
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: "#020617", color: "white", fontFamily: "Inter, sans-serif" }}>
+    <div style={{ background: "#020617", color: "white", minHeight: "100vh", fontFamily: "Inter" }}>
 
       {/* NAV */}
-      <div style={{ display: "flex", justifyContent: "space-between", padding: "14px 22px", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-        <div style={{ fontWeight: 700 }}>CamCash</div>
-        <div style={{ fontSize: 13, opacity: 0.7 }}>Features • Insights • Growth</div>
+      <div style={{ padding: 16, borderBottom: "1px solid rgba(255,255,255,0.08)", display: "flex", justifyContent: "space-between" }}>
+        <b>CamCash</b>
+        <div style={{ fontSize: 13 }}>Insights • Growth • Revenue</div>
       </div>
 
       {/* HERO */}
-      <div style={{ maxWidth: 1100, margin: "30px auto", display: "grid", gridTemplateColumns: "1.1fr 0.9fr", gap: 26, padding: "0 20px" }}>
+      <div style={{ maxWidth: 1100, margin: "40px auto", display: "grid", gridTemplateColumns: "1.2fr 0.8fr", gap: 30, padding: "0 20px" }}>
 
         <div>
-          <h1 style={{ fontSize: 34, marginBottom: 10 }}>
+          <h1 style={{ fontSize: 40, marginBottom: 10 }}>
             Re-engage your top supporters
           </h1>
 
-          <p style={{ opacity: 0.7, marginBottom: 14 }}>
-            Unlock insights that could multiply your earnings
+          <p style={{ opacity: 0.7, marginBottom: 16 }}>
+            Turn your best fans into consistent high spenders
           </p>
 
-          <MessageGenerator />
-
-          <div style={{ marginTop: 14 }}>
-            <InsightsSlider />
-            <LogoStrip />
-          </div>
+          <MessageEngine />
+          <InsightTicker />
         </div>
 
         <AuthPanel
@@ -203,17 +191,34 @@ export default function Page() {
           setPassword={setPassword}
           authLoading={authLoading}
           authError={authError}
-          authMsg={authMsg}
           handleAuth={handleAuth}
         />
 
       </div>
 
-      {/* FEATURES (HIGHER + COMPACT) */}
-      <div style={{ maxWidth: 1100, margin: "10px auto 60px", display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16, padding: "0 20px" }}>
-        <FeatureCard title="Top Supporters" desc="Identify whales instantly" />
-        <FeatureCard title="Peak Engagement" desc="Know exactly when fans spend" />
-        <FeatureCard title="Revenue Insights" desc="Double down on what converts" />
+      {/* HOW IT WORKS + BLOG */}
+      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "30px 20px", borderTop: "1px solid rgba(255,255,255,0.08)" }}>
+
+        <h3>How it works</h3>
+        <p style={{ fontSize: 13, opacity: 0.7 }}>
+          Connect your data. Track fan behavior. Re-engage your highest spenders automatically.
+        </p>
+
+        <div style={{ marginTop: 20 }}>
+          {["Growth","Whales","Retention","Revenue"].map((tag,i)=>(
+            <a key={i} href={`/blog?tag=${tag}`} style={{ marginRight: 10 }}>#{tag}</a>
+          ))}
+        </div>
+
+        <div style={{ marginTop: 14 }}>
+          <a href="/blog/top-earning-cam-model-strategies">Top earning strategies</a><br/>
+          <a href="/blog/how-to-retain-whales">How to retain whales</a>
+        </div>
+
+        <div style={{ marginTop: 20 }}>
+          <a href="mailto:your@email.com">Submit feedback</a>
+        </div>
+
       </div>
 
     </div>
