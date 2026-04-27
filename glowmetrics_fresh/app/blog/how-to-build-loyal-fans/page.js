@@ -12,6 +12,18 @@ export const metadata = {
 }
 
 export default function BuildLoyalFans() {
+  const schema = {
+    '@context': 'https://schema.org',
+    '@type': 'Article',
+    headline: 'How to Build a Loyal Fanbase as a Cam Model (That Actually Tips)',
+    description: "Loyal fans are the foundation of stable cam income. Here's how to identify, develop, and retain high-value regulars on Chaturbate, BongaCams, and more.",
+    url: 'https://www.camcashgrl.com/blog/how-to-build-loyal-fans',
+    datePublished: '2026-01-01',
+    dateModified: '2026-04-27',
+    author: { '@type': 'Organization', name: 'CamCash', url: 'https://www.camcashgrl.com' },
+    publisher: { '@type': 'Organization', name: 'CamCash', url: 'https://www.camcashgrl.com', logo: { '@type': 'ImageObject', url: 'https://www.camcashgrl.com/og-image.png' } },
+    mainEntityOfPage: { '@type': 'WebPage', '@id': 'https://www.camcashgrl.com/blog/how-to-build-loyal-fans' },
+  }
   const s = {
     page: { background: '#05070f', minHeight: '100vh', color: '#94A3B8', fontFamily: 'Inter, sans-serif' },
     nav: { padding: '20px 40px', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
@@ -41,14 +53,15 @@ export default function BuildLoyalFans() {
 
   return (
     <div style={s.page}>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }} />
       <nav style={s.nav}>
-        <a href="/landing" style={s.logo}>Cam<span style={s.accent}>Cash</span></a>
-        <a href="/login" style={s.navCta}>Start Free →</a>
+        <a href="/" style={s.logo}>Cam<span style={s.accent}>Cash</span></a>
+        <a href="/"\1>Start Free →</a>
       </nav>
       <article style={s.article}>
         <nav style={s.bread}>
-          <a href="/landing" style={s.breadLink}>Home</a><span style={s.sep}>›</span>
-          <a href="/blog/how-to-grow-as-a-cam-model" style={s.breadLink}>Growth</a><span style={s.sep}>›</span>
+          <a href="/" style={s.breadLink}>Home</a><span style={s.sep}>›</span>
+          <a href="/" style={s.breadLink}>Growth</a><span style={s.sep}>›</span>
           <span style={{ color: '#475569' }}>Build Loyal Fans</span>
         </nav>
 
@@ -148,12 +161,13 @@ export default function BuildLoyalFans() {
           <a href="/login" style={s.ctaBtn}>Start Free with CamCash →</a>
         </div>
 
-        <div style={s.related}>
-          <div style={{ fontSize: 13, color: '#475569' }}>Related articles</div>
+                <div style={s.related}>
+          <div style={s.relatedTitle}>Related articles</div>
           <div style={s.relatedLinks}>
+            <a href="/blog/how-to-re-engage-whales-and-top-tippers" style={s.relatedLink}>Re-Engage Whales & Top Tippers</a>
             <a href="/blog/why-cam-income-is-inconsistent" style={s.relatedLink}>Why Income Is Inconsistent</a>
             <a href="/blog/cam-model-earnings" style={s.relatedLink}>Cam Model Earnings Guide</a>
-            <a href="/blog/how-to-make-more-money-on-chaturbate" style={s.relatedLink}>Make More on Chaturbate</a>
+            <a href="/guides/cam-model-top-tippers" style={s.relatedLink}>Top Tipper Tracking Guide</a>
           </div>
         </div>
       </article>
