@@ -49,8 +49,22 @@ export default function WhyNotMakingMoney() {
     footerText: { fontSize: 12, color: '#475569' },
   }
 
+  const schema = {
+    '@context': 'https://schema.org',
+    '@type': 'Article',
+    headline: "Why You're Not Making Money on Chaturbate (And Exactly How to Fix It)",
+    description: "Most cam models aren't failing because of looks or effort — they're failing because they don't understand how the system works. Here's exactly why and how to fix it.",
+    url: 'https://www.camcashgrl.com/blog/why-youre-not-making-money-on-chaturbate',
+    datePublished: '2026-01-01',
+    dateModified: '2026-04-27',
+    author: { '@type': 'Organization', name: 'CamCash', url: 'https://www.camcashgrl.com' },
+    publisher: { '@type': 'Organization', name: 'CamCash', url: 'https://www.camcashgrl.com', logo: { '@type': 'ImageObject', url: 'https://www.camcashgrl.com/og-image.png' } },
+    mainEntityOfPage: { '@type': 'WebPage', '@id': 'https://www.camcashgrl.com/blog/why-youre-not-making-money-on-chaturbate' },
+  }
+
   return (
     <div style={s.page}>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }} />
       <nav style={s.nav}>
         <a href="/" style={s.logo}>Cam<span style={s.logoAccent}>Cash</span></a>
         <a href="/" style={s.navCta}>Start Free →</a>
@@ -58,8 +72,6 @@ export default function WhyNotMakingMoney() {
       <article style={s.article}>
         <nav style={s.breadcrumb} aria-label="breadcrumb">
           <a href="/" style={s.breadLink}>Home</a>
-          <span style={s.breadSep}>›</span>
-          <a href="/" style={s.breadLink}>Blog</a>
           <span style={s.breadSep}>›</span>
           <span style={{ color: '#475569' }}>Why You're Not Making Money on Chaturbate</span>
         </nav>
@@ -85,9 +97,9 @@ export default function WhyNotMakingMoney() {
             <h3 style={s.h3}>How to Fix It</h3>
             <p style={s.p}>You need to guide your viewers. Don't just sit and wait — tell them what to do.</p>
             <div style={s.exampleBox}>
-              <p style={{ ...s.p, marginBottom: 4 }}>"Tip 5 tokens to see something fun 💕"</p>
-              <p style={{ ...s.p, marginBottom: 4 }}>"We're 20 tokens away from the next goal 👀"</p>
-              <p style={{ ...s.p, marginBottom: 0 }}>"Don't be shy, I reward tippers 😈"</p>
+              <p style={{ ...s.p, marginBottom: 4 }}>„Tip 5 tokens to see something fun 💕"</p>
+              <p style={{ ...s.p, marginBottom: 4 }}>„We're 20 tokens away from the next goal 👀"</p>
+              <p style={{ ...s.p, marginBottom: 0 }}>„Don't be shy, I reward tippers 😈"</p>
             </div>
             <p style={{ ...s.p, marginBottom: 0 }}>People don't tip automatically — they respond to direction.</p>
           </div>
@@ -111,6 +123,7 @@ export default function WhyNotMakingMoney() {
           <div style={s.problemHeader}><div style={s.problemTitle}>Problem #3: Your Stream Looks "Dead"</div></div>
           <div style={s.problemBody}>
             <p style={s.p}>If someone clicks your stream and sees silence, no movement, and no reactions — they leave instantly. Even with zero viewers, talk constantly, smile and react, move around, and keep your energy high. Your stream should look active at all times. Once one person stays, others follow.</p>
+            <p style={{ ...s.p, marginBottom: 0 }}>Also check: <a href="/blog/how-to-get-views-on-chaturbate" style={{ color: '#22D3EE' }}>How to Get More Viewers on Chaturbate</a> for the full room positioning strategy.</p>
           </div>
         </div>
 
@@ -125,6 +138,7 @@ export default function WhyNotMakingMoney() {
           <div style={s.problemHeader}><div style={s.problemTitle}>Problem #5: You're Streaming Without a Strategy</div></div>
           <div style={s.problemBody}>
             <p style={s.p}>Just going live and hoping for the best isn't a strategy — it's guessing. Treat your stream like a system: test different titles, track tip patterns, adjust your schedule, and improve based on results. The models making the most money aren't guessing — they're optimizing.</p>
+            <p style={{ ...s.p, marginBottom: 0 }}>Read: <a href="/blog/how-to-make-more-money-on-chaturbate" style={{ color: '#22D3EE' }}>11 Data-Proven Strategies to Make More on Chaturbate</a>.</p>
           </div>
         </div>
 
@@ -132,6 +146,7 @@ export default function WhyNotMakingMoney() {
           <div style={s.problemHeader}><div style={s.problemTitle}>Problem #6: You're Not Building Regulars</div></div>
           <div style={s.problemBody}>
             <p style={s.p}>One-time viewers won't make you consistent money. Regulars will. Talk directly to viewers, remember usernames, reward repeat tippers, and create a community vibe. People come back when they feel noticed.</p>
+            <p style={{ ...s.p, marginBottom: 0 }}>Full guide: <a href="/blog/how-to-build-loyal-fans" style={{ color: '#22D3EE' }}>How to Build a Loyal Fanbase as a Cam Model</a>.</p>
           </div>
         </div>
 
@@ -174,6 +189,7 @@ export default function WhyNotMakingMoney() {
             <a href="/blog/how-to-make-more-money-on-chaturbate" style={s.relatedLink}>11 Chaturbate Strategies</a>
             <a href="/blog/how-to-get-views-on-chaturbate" style={s.relatedLink}>Get More Viewers on Chaturbate</a>
             <a href="/blog/why-cam-streams-arent-making-money" style={s.relatedLink}>Why Streams Underperform</a>
+            <a href="/guides/chaturbate-earnings-tracker" style={s.relatedLink}>Chaturbate Earnings Tracker</a>
           </div>
         </div>
       </article>
