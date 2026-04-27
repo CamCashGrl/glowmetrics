@@ -1,7 +1,4 @@
 // app/blog/how-much-do-chaturbate-models-make/page.js
-// Target keyword: how much do chaturbate models make
-// Cluster 1 supporting post — links back to /blog/cam-model-earnings
-
 export const metadata = {
   title: 'How Much Do Chaturbate Models Make Per Hour? (Real Numbers) | CamCash',
   description: 'Real Chaturbate model earnings data — average $/hr, token payout rates, what affects your income, and how to calculate your own earnings per hour.',
@@ -50,16 +47,30 @@ export default function ChaturbateEarningsPost() {
     footerText: { fontSize: 12, color: '#475569' },
   }
 
+  const schema = {
+    '@context': 'https://schema.org',
+    '@type': 'Article',
+    headline: 'How Much Do Chaturbate Models Make Per Hour? (Real Numbers)',
+    description: 'Real Chaturbate model earnings data — average $/hr, token payout rates, what affects your income, and how to calculate your own earnings per hour.',
+    url: 'https://www.camcashgrl.com/blog/how-much-do-chaturbate-models-make',
+    datePublished: '2026-01-01',
+    dateModified: '2026-04-27',
+    author: { '@type': 'Organization', name: 'CamCash', url: 'https://www.camcashgrl.com' },
+    publisher: { '@type': 'Organization', name: 'CamCash', url: 'https://www.camcashgrl.com', logo: { '@type': 'ImageObject', url: 'https://www.camcashgrl.com/og-image.png' } },
+    mainEntityOfPage: { '@type': 'WebPage', '@id': 'https://www.camcashgrl.com/blog/how-much-do-chaturbate-models-make' },
+  }
+
   return (
     <div style={s.page}>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }} />
       <nav style={s.nav}>
-        <a href="/landing" style={s.logo}>Cam<span style={s.logoAccent}>Cash</span></a>
-        <a href="/login" style={s.navCta}>Calculate My $/hr Free →</a>
+        <a href="/" style={s.logo}>Cam<span style={s.logoAccent}>Cash</span></a>
+        <a href="/" style={s.navCta}>Calculate My $/hr Free →</a>
       </nav>
 
       <article style={s.article}>
         <nav style={s.breadcrumb}>
-          <a href="/landing" style={s.breadLink}>Home</a>
+          <a href="/" style={s.breadLink}>Home</a>
           <span style={s.breadSep}>›</span>
           <a href="/blog/cam-model-earnings" style={s.breadLink}>Cam Model Earnings</a>
           <span style={s.breadSep}>›</span>
@@ -97,10 +108,9 @@ export default function ChaturbateEarningsPost() {
           <li style={s.li}>10,000 tokens = $500.00 to you</li>
         </ul>
         <p style={s.p}>Note that Chaturbate sells tokens to viewers at a higher rate ($10.99 for 100 tokens at standard pricing). The difference is Chaturbate's margin. Your payout rate as a model stays at $0.05/token regardless of what viewers pay.</p>
-        <p style={s.p}>Some high-volume models negotiate improved rates with Chaturbate directly — but this requires significant streaming history and isn't available to new models.</p>
 
         <h2 style={s.h2}>What Chaturbate Models Actually Earn Per Hour</h2>
-        <p style={s.p}>Community-reported earnings (from forums, Reddit threads, and model communities) suggest these approximate ranges for <em>active</em> Chaturbate models — meaning those streaming at least 15 hours per week:</p>
+        <p style={s.p}>Community-reported earnings suggest these approximate ranges for <em>active</em> Chaturbate models — meaning those streaming at least 15 hours per week:</p>
 
         {[
           { tier: 'New models (0–6 months)', range: '$3–$10/hr', note: 'Building audience, inconsistent tips, learning platform' },
@@ -117,30 +127,27 @@ export default function ChaturbateEarningsPost() {
           </div>
         ))}
 
-        <p style={{ ...s.p, fontSize: 13, color: '#475569', marginTop: 12 }}>These are rough ranges based on community data. Your actual earnings depend on factors covered below.</p>
-
         <h2 style={s.h2}>What Actually Affects Your Chaturbate Hourly Earnings</h2>
 
         <h3 style={s.h3}>1. When You Stream</h3>
         <p style={s.p}>Your peak earning hours are determined by when your specific audience is online — not Chaturbate's overall traffic peaks. Models with European fans have completely different peak windows than those with US-based audiences. Streaming during your off-peak hours can cut your $/hr by 40–60% even with identical effort.</p>
 
         <h3 style={s.h3}>2. Who Your Top Fans Are</h3>
-        <p style={s.p}>In most Chaturbate earning histories, 10–15% of tippers generate 60–70% of revenue. These high-value fans ("whales") tip significantly more than average. One whale who tips 200–500 tokens per session has more impact on your $/hr than 20 small tippers combined. Identifying and retaining these fans is the highest-leverage activity for growing hourly earnings.</p>
+        <p style={s.p}>In most Chaturbate earning histories, 10–15% of tippers generate 60–70% of revenue. These high-value fans ("whales") tip significantly more than average. Identifying and retaining these fans is the highest-leverage activity for growing hourly earnings. Read: <a href="/blog/how-to-build-loyal-fans" style={{ color: '#22D3EE' }}>How to Build a Loyal Fanbase That Actually Tips</a>.</p>
 
         <h3 style={s.h3}>3. How You Structure Your Show</h3>
         <p style={s.p}>Models who use token goals, tip menus, and interactive toys (Lovense Lush, Domi, etc.) consistently report higher $/hr than those who don't. Token goals give viewers a clear reason to tip now rather than waiting. Interactive toys make every tip feel tangible and immediate — which increases tip frequency.</p>
 
         <h3 style={s.h3}>4. Session Length vs Performance</h3>
-        <p style={s.p}>Longer sessions don't automatically mean higher $/hr — in fact many models find their earnings pace drops significantly after the first 45–60 minutes. Understanding your personal session curve (when you earn most and when momentum drops) helps you optimize when to push harder and when to end a session and start fresh.</p>
+        <p style={s.p}>Longer sessions don't automatically mean higher $/hr. Many models find their earnings pace drops significantly after the first 45–60 minutes. Understanding your personal session curve helps you optimize when to push harder and when to end a session and start fresh.</p>
 
         <h2 style={s.h2}>How to Calculate Your Own Chaturbate $/hr</h2>
         <p style={s.p}>The manual method: Export your token history from Chaturbate → group sessions by start/end time → divide USD earned by hours streamed for each session → average across sessions.</p>
-        <p style={s.p}>The easier method:</p>
 
         <div style={s.highlight}>
           <strong style={{ color: 'white', display: 'block', marginBottom: 8 }}>Calculate your Chaturbate $/hr automatically:</strong>
           <p style={{ ...s.p, marginBottom: 12 }}>Upload your Chaturbate CSV to CamCash and it calculates your real $/hr automatically — per session, per platform, and compared against your own historical average. You'll also see your peak hours, top fans, and session breakdown all in one place.</p>
-          <a href="/login" style={{ ...s.ctaBtn, display: 'inline-block', padding: '9px 22px', fontSize: 13 }}>Calculate My Chaturbate $/hr Free →</a>
+          <a href="/" style={{ ...s.ctaBtn, display: 'inline-block', padding: '9px 22px', fontSize: 13 }}>Calculate My Chaturbate $/hr Free →</a>
         </div>
 
         <h2 style={s.h2}>Tips to Increase Your Chaturbate Earnings Per Hour</h2>
@@ -150,10 +157,9 @@ export default function ChaturbateEarningsPost() {
           <li style={s.li}><strong style={{ color: 'white' }}>Use an interactive toy</strong> — tip-activated vibrations increase tip frequency dramatically</li>
           <li style={s.li}><strong style={{ color: 'white' }}>Acknowledge tippers by name</strong> — recognition drives repeat tipping more than almost any other tactic</li>
           <li style={s.li}><strong style={{ color: 'white' }}>Track your whale fans</strong> — know when your high-value regulars are due to tip and reach out proactively</li>
-          <li style={s.li}><strong style={{ color: 'white' }}>End sessions at the right time</strong> — if your pace is dropping in the second half, ending early and starting fresh often outperforms grinding through a dead room</li>
         </ul>
 
-        <p style={s.p}>For a deeper dive into growth tactics, see our guide: <a href="/blog/how-to-make-more-money-on-chaturbate" style={{ color: '#22D3EE' }}>How to Make More Money on Chaturbate: 11 Data-Proven Strategies</a>.</p>
+        <p style={s.p}>For a deeper dive into growth tactics, see: <a href="/blog/how-to-make-more-money-on-chaturbate" style={{ color: '#22D3EE' }}>How to Make More Money on Chaturbate: 11 Data-Proven Strategies</a>. And if you're not making money yet: <a href="/blog/why-youre-not-making-money-on-chaturbate" style={{ color: '#22D3EE' }}>Why You're Not Making Money on Chaturbate</a>.</p>
 
         <a href="/blog/cam-model-earnings" style={s.pillarLink}>
           <div style={{ fontSize: 11, color: '#475569', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>Part of our complete guide</div>
@@ -163,7 +169,7 @@ export default function ChaturbateEarningsPost() {
         <div style={s.ctaBanner}>
           <div style={s.ctaTitle}>See your real Chaturbate $/hr</div>
           <div style={s.ctaSub}>Upload your CSV — CamCash calculates your earnings per hour automatically. Free, no credit card.</div>
-          <a href="/login" style={s.ctaBtn}>Start Free with CamCash →</a>
+          <a href="/" style={s.ctaBtn}>Start Free with CamCash →</a>
         </div>
 
         <div style={s.related}>
@@ -171,8 +177,9 @@ export default function ChaturbateEarningsPost() {
           <div style={s.relatedLinks}>
             <a href="/blog/cam-model-earnings" style={s.relatedLink}>Cam Model Earnings Guide</a>
             <a href="/blog/how-to-make-more-money-on-chaturbate" style={s.relatedLink}>Make More on Chaturbate</a>
-            <a href="/blog/bongacams-vs-chaturbate" style={s.relatedLink}>BongaCams vs Chaturbate</a>
+            <a href="/blog/why-youre-not-making-money-on-chaturbate" style={s.relatedLink}>Why You're Not Making Money</a>
             <a href="/guides/chaturbate-earnings-tracker" style={s.relatedLink}>Chaturbate Earnings Tracker</a>
+            <a href="/guides/chaturbate-best-hours" style={s.relatedLink}>Best Hours to Stream on Chaturbate</a>
           </div>
         </div>
       </article>
