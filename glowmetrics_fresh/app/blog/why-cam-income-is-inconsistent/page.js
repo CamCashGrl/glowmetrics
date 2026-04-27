@@ -12,6 +12,18 @@ export const metadata = {
 }
 
 export default function InconsistentCamIncome() {
+  const schema = {
+    '@context': 'https://schema.org',
+    '@type': 'Article',
+    headline: 'Why Your Cam Income Is Inconsistent (And How to Fix It)',
+    description: "If your cam earnings feel unpredictable, there's usually a data-driven reason. Here's what causes inconsistent cam income and exactly how to fix each one.",
+    url: 'https://www.camcashgrl.com/blog/why-cam-income-is-inconsistent',
+    datePublished: '2026-01-01',
+    dateModified: '2026-04-27',
+    author: { '@type': 'Organization', name: 'CamCash', url: 'https://www.camcashgrl.com' },
+    publisher: { '@type': 'Organization', name: 'CamCash', url: 'https://www.camcashgrl.com', logo: { '@type': 'ImageObject', url: 'https://www.camcashgrl.com/og-image.png' } },
+    mainEntityOfPage: { '@type': 'WebPage', '@id': 'https://www.camcashgrl.com/blog/why-cam-income-is-inconsistent' },
+  }
   const s = {
     page: { background: '#05070f', minHeight: '100vh', color: '#94A3B8', fontFamily: 'Inter, sans-serif' },
     nav: { padding: '20px 40px', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
@@ -59,6 +71,7 @@ export default function InconsistentCamIncome() {
 
   return (
     <div style={s.page}>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }} />
       <nav style={s.nav}>
         <a href="/" style={s.logo}>Cam<span style={s.logoAccent}>Cash</span></a>
         <a href="/" style={s.navCta}>Analyze My Earnings Free →</a>
@@ -100,12 +113,13 @@ export default function InconsistentCamIncome() {
           <div style={s.ctaSub}>Upload your CSV — CamCash shows your peak hours, fan churn risk, and session performance baseline. Free.</div>
           <a href="/" style={s.ctaBtn}>Start Free with CamCash →</a>
         </div>
-        <div style={s.related}>
+                <div style={s.related}>
           <div style={s.relatedTitle}>Related articles</div>
           <div style={s.relatedLinks}>
             <a href="/blog/cam-model-earnings" style={s.relatedLink}>Cam Model Earnings Guide</a>
             <a href="/blog/why-cam-streams-arent-making-money" style={s.relatedLink}>Why Streams Underperform</a>
             <a href="/blog/how-to-make-more-money-on-chaturbate" style={s.relatedLink}>11 Chaturbate Strategies</a>
+            <a href="/guides/cam-model-income-tracker" style={s.relatedLink}>Cam Model Income Tracker</a>
           </div>
         </div>
       </article>
