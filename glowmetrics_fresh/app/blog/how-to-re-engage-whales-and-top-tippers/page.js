@@ -12,6 +12,18 @@ export const metadata = {
 }
 
 export default function ReEngageWhales() {
+  const schema = {
+    '@context': 'https://schema.org',
+    '@type': 'Article',
+    headline: 'How to Re-Engage Whales and Top Tippers (Win Back Your Big Spenders)',
+    description: 'Your biggest earners going quiet? Learn proven strategies to re-engage whales and top tippers on Chaturbate, MFC, and BongaCams before they disappear for good.',
+    url: 'https://www.camcashgrl.com/blog/how-to-re-engage-whales-and-top-tippers',
+    datePublished: '2026-01-01',
+    dateModified: '2026-04-27',
+    author: { '@type': 'Organization', name: 'CamCash', url: 'https://www.camcashgrl.com' },
+    publisher: { '@type': 'Organization', name: 'CamCash', url: 'https://www.camcashgrl.com', logo: { '@type': 'ImageObject', url: 'https://www.camcashgrl.com/og-image.png' } },
+    mainEntityOfPage: { '@type': 'WebPage', '@id': 'https://www.camcashgrl.com/blog/how-to-re-engage-whales-and-top-tippers' },
+  }
   const s = {
     page: { background: '#05070f', minHeight: '100vh', color: '#94A3B8', fontFamily: 'Inter, sans-serif' },
     nav: { padding: '20px 40px', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
@@ -88,6 +100,7 @@ export default function ReEngageWhales() {
 
   return (
     <div style={s.page}>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }} />
       <nav style={s.nav}>
         <a href="/" style={s.logo}>Cam<span style={s.logoAccent}>Cash</span></a>
         <a href="/" style={s.navCta}>Start Free →</a>
@@ -138,13 +151,13 @@ export default function ReEngageWhales() {
           <a href="/" style={s.ctaBtn}>Start Free with CamCash →</a>
         </div>
 
-        <div style={s.related}>
+                <div style={s.related}>
           <div style={s.relatedTitle}>Related articles</div>
           <div style={s.relatedLinks}>
+            <a href="/blog/how-to-build-loyal-fans" style={s.relatedLink}>Build a Loyal Fanbase</a>
             <a href="/blog/how-to-get-views-on-chaturbate" style={s.relatedLink}>Get More Viewers on Chaturbate</a>
             <a href="/blog/how-to-make-more-money-on-chaturbate" style={s.relatedLink}>Make More on Chaturbate</a>
-            <a href="/blog/how-to-build-loyal-fans" style={s.relatedLink}>Build a Loyal Fanbase</a>
-            <a href="/blog/why-cam-income-is-inconsistent" style={s.relatedLink}>Why Income Is Inconsistent</a>
+            <a href="/guides/cam-model-top-tippers" style={s.relatedLink}>Top Tipper Tracking Guide</a>
           </div>
         </div>
       </article>
