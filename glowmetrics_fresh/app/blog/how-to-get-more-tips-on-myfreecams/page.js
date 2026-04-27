@@ -12,6 +12,18 @@ export const metadata = {
 }
 
 export default function MoreTipsOnMFC() {
+  const schema = {
+    '@context': 'https://schema.org',
+    '@type': 'Article',
+    headline: 'How to Get More Tips on MyFreeCams (Proven Strategies)',
+    description: 'Struggling to get tips on MyFreeCams? Learn proven strategies to increase tips, engage viewers, and boost your cam income fast.',
+    url: 'https://www.camcashgrl.com/blog/how-to-get-more-tips-on-myfreecams',
+    datePublished: '2026-01-01',
+    dateModified: '2026-04-27',
+    author: { '@type': 'Organization', name: 'CamCash', url: 'https://www.camcashgrl.com' },
+    publisher: { '@type': 'Organization', name: 'CamCash', url: 'https://www.camcashgrl.com', logo: { '@type': 'ImageObject', url: 'https://www.camcashgrl.com/og-image.png' } },
+    mainEntityOfPage: { '@type': 'WebPage', '@id': 'https://www.camcashgrl.com/blog/how-to-get-more-tips-on-myfreecams' },
+  }
   const s = {
     page: { background: '#05070f', minHeight: '100vh', color: '#94A3B8', fontFamily: 'Inter, sans-serif' },
     nav: { padding: '20px 40px', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
@@ -75,6 +87,7 @@ export default function MoreTipsOnMFC() {
 
   return (
     <div style={s.page}>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }} />
       <nav style={s.nav}>
         <a href="/" style={s.logo}>Cam<span style={s.logoAccent}>Cash</span></a>
         <a href="/" style={s.navCta}>Start Free →</a>
@@ -124,11 +137,11 @@ export default function MoreTipsOnMFC() {
           <a href="/" style={s.ctaBtn}>Start Free with CamCash →</a>
         </div>
 
-        <div style={s.related}>
+                <div style={s.related}>
           <div style={s.relatedTitle}>Related articles</div>
           <div style={s.relatedLinks}>
-            <a href="/blog/how-to-increase-cam-earnings" style={s.relatedLink}>How to Increase Cam Earnings</a>
             <a href="/blog/how-to-build-loyal-fans" style={s.relatedLink}>Build a Loyal Fanbase</a>
+            <a href="/blog/how-to-increase-cam-earnings" style={s.relatedLink}>How to Increase Cam Earnings</a>
             <a href="/blog/how-to-re-engage-whales-and-top-tippers" style={s.relatedLink}>Re-Engage Whales</a>
             <a href="/guides/myfreecams-analytics" style={s.relatedLink}>MyFreeCams Analytics Guide</a>
           </div>
