@@ -12,6 +12,18 @@ export const metadata = {
 }
 
 export default function CamModelTaxes() {
+  const schema = {
+    '@context': 'https://schema.org',
+    '@type': 'Article',
+    headline: 'Cam Model Taxes: What to Track, What to Deduct, and How to File',
+    description: "Cam model income is taxable. Here's exactly what to track, what deductions you can claim, when to pay quarterly, and how to avoid the most common tax mistakes.",
+    url: 'https://www.camcashgrl.com/blog/cam-model-taxes',
+    datePublished: '2026-01-01',
+    dateModified: '2026-04-27',
+    author: { '@type': 'Organization', name: 'CamCash', url: 'https://www.camcashgrl.com' },
+    publisher: { '@type': 'Organization', name: 'CamCash', url: 'https://www.camcashgrl.com', logo: { '@type': 'ImageObject', url: 'https://www.camcashgrl.com/og-image.png' } },
+    mainEntityOfPage: { '@type': 'WebPage', '@id': 'https://www.camcashgrl.com/blog/cam-model-taxes' },
+  }
   const s = {
     page: { background: '#05070f', minHeight: '100vh', color: '#94A3B8', fontFamily: 'Inter, sans-serif' },
     nav: { padding: '20px 40px', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
@@ -41,13 +53,14 @@ export default function CamModelTaxes() {
 
   return (
     <div style={s.page}>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }} />
       <nav style={s.nav}>
-        <a href="/landing" style={s.logo}>Cam<span style={s.accent}>Cash</span></a>
-        <a href="/login" style={s.navCta}>Start Free →</a>
+        <a href="/" style={s.logo}>Cam<span style={s.accent}>Cash</span></a>
+        <a href="/"\1>Start Free →</a>
       </nav>
       <article style={s.article}>
         <nav style={s.bread}>
-          <a href="/landing" style={s.breadLink}>Home</a><span style={s.sep}>›</span>
+          <a href="/" style={s.breadLink}>Home</a><span style={s.sep}>›</span>
           <a href="/blog/cam-model-earnings" style={s.breadLink}>Earnings</a><span style={s.sep}>›</span>
           <span style={{ color: '#475569' }}>Cam Model Taxes</span>
         </nav>
@@ -158,12 +171,12 @@ export default function CamModelTaxes() {
           <a href="/login" style={s.ctaBtn}>Start Free with CamCash →</a>
         </div>
 
-        <div style={s.related}>
-          <div style={{ fontSize: 13, color: '#475569' }}>Related articles</div>
+                <div style={s.related}>
+          <div style={s.relatedTitle}>Related articles</div>
           <div style={s.relatedLinks}>
             <a href="/blog/cam-model-earnings" style={s.relatedLink}>Cam Model Earnings Guide</a>
-            <a href="/blog/how-to-stay-anonymous-as-a-cam-model" style={s.relatedLink}>Stay Anonymous as a Cam Model</a>
-            <a href="/blog/cam-model-income-tracking" style={s.relatedLink}>Income Tracking Report</a>
+            <a href="/blog/best-cam-model-tools" style={s.relatedLink}>Best Cam Model Tools</a>
+            <a href="/blog/how-to-increase-cam-earnings" style={s.relatedLink}>How to Increase Cam Earnings</a>
           </div>
         </div>
       </article>
