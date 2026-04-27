@@ -1,0 +1,128 @@
+// app/components/BlogComponents.js
+// Shared components for all blog posts
+// Usage: import { BlogNav, BlogFooter, ArticleSchema, RelatedLinks } from '../../components/BlogComponents'
+
+'use client'
+
+// ── ARTICLE SCHEMA ────────────────────────────────────────────────────────────
+// Add <ArticleSchema /> near the top of each blog post article
+// Pass in the post's title, description, url, and datePublished
+export function ArticleSchema({ title, description, url, datePublished = '2026-01-01' }) {
+  const schema = {
+    '@context': 'https://schema.org',
+    '@type': 'Article',
+    headline: title,
+    description: description,
+    url: url,
+    datePublished: datePublished,
+    dateModified: new Date().toISOString().split('T')[0],
+    author: {
+      '@type': 'Organization',
+      name: 'CamCash',
+      url: 'https://www.camcashgrl.com',
+    },
+    publisher: {
+      '@type': 'Organization',
+      name: 'CamCash',
+      url: 'https://www.camcashgrl.com',
+      logo: {
+        '@type': 'ImageObject',
+        url: 'https://www.camcashgrl.com/og-image.png',
+      },
+    },
+    mainEntityOfPage: {
+      '@type': 'WebPage',
+      '@id': url,
+    },
+  }
+
+  return (
+    <script
+      type="application/ld+json"
+      dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
+    />
+  )
+}
+
+// ── BLOG NAV ──────────────────────────────────────────────────────────────────
+export function BlogNav() {
+  return (
+    <nav style={{
+      padding: '20px 40px',
+      borderBottom: '1px solid rgba(255,255,255,0.06)',
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    }}>
+      <a href="/" style={{ fontWeight: 800, fontSize: 20, color: 'white', textDecoration: 'none' }}>
+        Cam<span style={{ color: '#22D3EE' }}>Cash</span>
+      </a>
+      <a href="/" style={{
+        padding: '8px 20px', borderRadius: 8,
+        background: 'linear-gradient(135deg, #22D3EE, #EC4899)',
+        color: 'white', fontWeight: 700, fontSize: 13, textDecoration: 'none',
+      }}>
+        Start Free →
+      </a>
+    </nav>
+  )
+}
+
+// ── BLOG FOOTER ───────────────────────────────────────────────────────────────
+export function BlogFooter() {
+  return (
+    <footer style={{
+      borderTop: '1px solid rgba(255,255,255,0.06)',
+      padding: '32px 40px',
+      textAlign: 'center',
+    }}>
+      <p style={{ fontSize: 12, color: '#475569' }}>
+        © 2026 CamCash — Built for cam models who want to grow
+      </p>
+    </footer>
+  )
+}
+
+// ── RELATED LINKS ─────────────────────────────────────────────────────────────
+// Pass an array of { href, label } objects
+export function RelatedLinks({ links }) {
+  return (
+    <div style={{ marginTop: 48, paddingTop: 32, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+      <div style={{ fontSize: 13, color: '#475569', marginBottom: 12 }}>Related articles</div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+        {links.map(({ href, label }) => (
+          <a key={href} href={href} style={{
+            padding: '6px 14px', borderRadius: 20,
+            background: 'rgba(255,255,255,0.04)',
+            border: '1px solid rgba(255,255,255,0.1)',
+            color: '#22D3EE', fontSize: 13, textDecoration: 'none',
+          }}>
+            {label}
+          </a>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ── CTA BANNER ────────────────────────────────────────────────────────────────
+export function CtaBanner({ title, sub, btnText = 'Start Free with CamCash →', href = '/' }) {
+  return (
+    <div style={{
+      padding: '28px 32px', borderRadius: 16,
+      background: 'linear-gradient(135deg, rgba(34,211,238,0.08), rgba(236,72,153,0.08))',
+      border: '1px solid rgba(34,211,238,0.25)',
+      margin: '48px 0', textAlign: 'center',
+    }}>
+      <div style={{ fontSize: 20, fontWeight: 800, color: 'white', marginBottom: 8 }}>{title}</div>
+      <div style={{ fontSize: 14, color: '#94A3B8', marginBottom: 20 }}>{sub}</div>
+      <a href={href} style={{
+        display: 'inline-block', padding: '11px 30px', borderRadius: 10,
+        background: 'linear-gradient(135deg, #22D3EE, #EC4899)',
+        color: 'white', fontWeight: 700, fontSize: 14, textDecoration: 'none',
+      }}>
+        {btnText}
+      </a>
+    </div>
+  )
+}
