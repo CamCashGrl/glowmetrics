@@ -56,7 +56,7 @@ export default function BuildLoyalFans() {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }} />
       <nav style={s.nav}>
         <a href="/" style={s.logo}>Cam<span style={s.accent}>Cash</span></a>
-        <a href="/"\1>Start Free →</a>
+        <a href="/" style={s.navCta}>Start Free →</a>
       </nav>
       <article style={s.article}>
         <nav style={s.bread}>
