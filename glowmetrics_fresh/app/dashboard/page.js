@@ -552,7 +552,7 @@ function TitleGenerator({ C, glassCard, analytics, tips, sessions, whales }) {
 
   const buildCtx = () => {
     const now = new Date()
-    const currentHour = now.getUTCHours()
+    const currentHour = now.getHours()
     const todayDay = now.toLocaleDateString("en-US", { weekday: "long" })
 
     // FIX: bestHour uses avg USD per session at each hour, not raw totals
@@ -564,7 +564,7 @@ function TitleGenerator({ C, glassCard, analytics, tips, sessions, whales }) {
     } else {
       const hourUSD = {}; const hourCount = {}
       ;(sessions || []).forEach(s => {
-        const h = new Date(s.startTime).getUTCHours()
+        const h = new Date(s.startTime).getHours()
         hourUSD[h] = (hourUSD[h] || 0) + s.totalUSD
         hourCount[h] = (hourCount[h] || 0) + 1
       })
@@ -834,7 +834,6 @@ export default function Dashboard() {
   const [liveTipInput, setLiveTipInput] = useState({ username: '', tokens: '', usd: '' })
   const [liveAlerts, setLiveAlerts] = useState([])
   const [liveTick, setLiveTick] = useState(0)
-  const [minuteTick, setMinuteTick] = useState(0) // increments every 60s to refresh time-based alerts
   const [betaCount, setBetaCount] = useState(null)
   const [earlyAccessEmail, setEarlyAccessEmail] = useState('')
   const [earlyAccessSubmitted, setEarlyAccessSubmitted] = useState(false)
@@ -848,14 +847,6 @@ export default function Dashboard() {
   const [dateTo, setDateTo] = useState('')
   const [tokenRates, setTokenRates] = useState({ Chaturbate: 0.05, BongaCams: 0.05, MyFreeCams: 0.05, Stripchat: 0.05, CamSoda: 0.05 })
   const [showRateEditor, setShowRateEditor] = useState(false)
-  // ── ROUND 1 FEATURES ─────────────────────────────────────────────
-  const [monthlyGoal, setMonthlyGoal] = useState(null)
-  const [goalInput, setGoalInput] = useState('')
-  const [showGoalEditor, setShowGoalEditor] = useState(false)
-  const [tipperNotes, setTipperNotes] = useState({}) // { username: { note, followUp } }
-  const [noteTarget, setNoteTarget] = useState(null)
-  const [noteText, setNoteText] = useState('')
-  const [noteSaving, setNoteSaving] = useState(false)
 
   // ── ANIMATION STATE ──────────────────────────────────────
   const [counterBumping, setCounterBumping] = useState(false)
@@ -879,54 +870,10 @@ export default function Dashboard() {
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(""), 3500) }
 
-  // ── SAVE TIPPER NOTE ─────────────────────────────────────────────
-  const saveTipperNote = async (username, note, followUp = false) => {
-    if (!user) return
-    setNoteSaving(true)
-    try {
-      await supabase.from('tipper_notes').upsert({
-        user_id: user.id,
-        tipper_username: username.toLowerCase(),
-        note,
-        follow_up: followUp,
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'user_id,tipper_username' })
-      setTipperNotes(prev => ({ ...prev, [username.toLowerCase()]: { note, followUp } }))
-      showToast('✅ Note saved')
-      setNoteTarget(null)
-    } catch(e) { showToast('❌ Failed to save note') }
-    finally { setNoteSaving(false) }
-  }
-
-  // ── SAVE MONTHLY GOAL ─────────────────────────────────────────────
-  const saveMonthlyGoal = async (amount) => {
-    if (!user || !amount) return
-    const target = parseFloat(amount)
-    if (isNaN(target) || target <= 0) return
-    try {
-      await supabase.from('user_goals').upsert({
-        user_id: user.id,
-        goal_type: 'monthly',
-        target_usd: target,
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'user_id,goal_type' })
-      setMonthlyGoal(target)
-      setShowGoalEditor(false)
-      showToast(`✅ Goal set: $${target.toFixed(0)}/month`)
-    } catch(e) { showToast('❌ Failed to save goal') }
-  }
-
   // Tab persistence
   const handleTabChange = (tab) => {
     setActiveTab(tab)
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('camcash_tab', tab)
-      // Scroll both window and the main content div to top
-      window.scrollTo({ top: 0, behavior: 'instant' })
-      document.querySelector('.dash-main')?.scrollTo({ top: 0, behavior: 'instant' })
-      document.documentElement.scrollTop = 0
-      document.body.scrollTop = 0
-    }
+    if (typeof window !== 'undefined') localStorage.setItem('camcash_tab', tab)
   }
 
   // Counter bump when new tips arrive
@@ -982,18 +929,6 @@ export default function Dashboard() {
       if (!user) { router.replace("/login"); return }
       setUser(user)
       loadData(user.id)
-      // Load monthly goal from DB
-      supabase.from('user_goals').select('*').eq('user_id', user.id).eq('goal_type', 'monthly').maybeSingle()
-        .then(({ data }) => { if (data) { setMonthlyGoal(data.target_usd); setGoalInput(data.target_usd.toString()) } })
-      // Load tipper notes
-      supabase.from('tipper_notes').select('*').eq('user_id', user.id)
-        .then(({ data }) => {
-          if (data?.length) {
-            const map = {}
-            data.forEach(n => { map[n.tipper_username.toLowerCase()] = { note: n.note, followUp: n.follow_up } })
-            setTipperNotes(map)
-          }
-        })
       supabase.from('beta_users').select('id', { count: 'exact', head: true })
         .then(({ count }) => { if (count !== null) setBetaCount(count) })
       try {
@@ -1041,17 +976,10 @@ export default function Dashboard() {
           return prev
         })
       }, 30000)
-
-      // ── MINUTE TICK — re-evaluates time-based alerts every 60s ──
-      // Daily Brief, real-time alerts, and best-time alert update as the hour changes
-      const minuteTimer = setInterval(() => {
-        setMinuteTick(t => t + 1)
-      }, 60000)
     })
     return () => {
       if (realtimeChannelRef.current) supabase.removeChannel(realtimeChannelRef.current)
       if (refreshTimerRef.current) clearInterval(refreshTimerRef.current)
-      clearInterval(minuteTimer)
     }
   }, [])
 
@@ -1467,160 +1395,9 @@ const handleCSV = async (file, forcePlatform = null) => {
   // REAL-TIME INTELLIGENCE COMPUTED FROM ACTUAL DB DATA
   // ============================================================
 
-  const buildDailyBrief = () => {
-    if (!tips || tips.length === 0 || !analytics) return null
-    const now = new Date()
-    const utcHour = now.getUTCHours()
-    const utcDay = now.getUTCDay()
-    const DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
-    const todayName = DAYS[utcDay]
-
-    // Best hour: today-specific per platform first, then all-time fallback
-    // Formula: SUM(usd) / COUNT(DISTINCT hour-bucket) for THIS day of week on THIS platform
-    const fmtHour = h => h === 0 ? '12 AM' : h < 12 ? `${h} AM` : h === 12 ? '12 PM' : `${h-12} PM`
-    const platBestTimes = analytics?.platformBestTimes || {}
-    let todayBestPlat = null, todayBestHourNum = null, todayBestAvg = 0
-    Object.entries(platBestTimes).forEach(([plat, times]) => {
-      const todayEntry = times?.bestHourByDay?.[todayName]
-      if (todayEntry && todayEntry.avg > todayBestAvg) {
-        todayBestAvg = todayEntry.avg
-        todayBestHourNum = todayEntry.hour
-        todayBestPlat = plat
-      }
-    })
-    const bestHour = analytics?.bestHour
-    const bh = todayBestHourNum !== null ? todayBestHourNum : (bestHour ? parseInt(bestHour.hour) : null)
-    const bhLabel = bh === null ? null : fmtHour(bh)
-    const hoursUntilPeak = bh !== null ? (bh - utcHour + 24) % 24 : null
-    const atPeak = hoursUntilPeak === 0 || hoursUntilPeak === 1
-
-    // Best platform per hour
-    const platHourUSD = {}; const platHourSessions = {}
-    tips.forEach(t => {
-      const p = t.platform || 'Chaturbate'
-      const d = new Date(t.date_time || t.dateRaw)
-      const h = d.getUTCHours()
-      const bucket = Math.floor(d.getTime() / 3600000)
-      if (!platHourUSD[p]) { platHourUSD[p] = {}; platHourSessions[p] = {} }
-      if (!platHourUSD[p][h]) { platHourUSD[p][h] = 0; platHourSessions[p][h] = new Set() }
-      platHourUSD[p][h] += t.usd || 0
-      platHourSessions[p][h].add(bucket)
-    })
-    let bestPlatNow = null; let bestPlatNowAvg = 0
-    Object.keys(platHourUSD).forEach(plat => {
-      const sessions = platHourSessions[plat][utcHour]?.size || 0
-      if (sessions === 0) return
-      const avg = platHourUSD[plat][utcHour] / sessions
-      if (avg > bestPlatNowAvg) { bestPlatNowAvg = avg; bestPlatNow = plat }
-    })
-    let bestPlatPeak = null; let bestPlatPeakAvg = 0
-    if (bh !== null) {
-      Object.keys(platHourUSD).forEach(plat => {
-        const sessions = platHourSessions[plat][bh]?.size || 0
-        if (sessions === 0) return
-        const avg = platHourUSD[plat][bh] / sessions
-        if (avg > bestPlatPeakAvg) { bestPlatPeakAvg = avg; bestPlatPeak = plat }
-      })
-    }
-    const displayPlat = todayBestPlat || bestPlatPeak || bestPlatNow || 'Chaturbate'
-    const displayAvg = todayBestAvg || bestPlatPeakAvg || bestPlatNowAvg || bestHour?.avg || 0
-
-    // Best day
-    const bestDay = analytics?.bestDay
-    const isBestDay = bestDay?.day === todayName
-    const sessionAvg = analytics?.sessions?.length
-      ? analytics.sessions.reduce((s, x) => s + x.totalUSD, 0) / analytics.sessions.length : 0
-
-    // Income prediction for peak window
-    const sessionsAtPeak = (analytics?.sessions || []).filter(s => {
-      const h = new Date(s.startTime).getUTCHours()
-      return bh !== null && Math.abs(h - bh) <= 1
-    })
-    const peakAvg = sessionsAtPeak.length >= 2
-      ? sessionsAtPeak.reduce((s, x) => s + x.totalUSD, 0) / sessionsAtPeak.length
-      : (bestHour?.avg || sessionAvg)
-    const predictionLow = Math.round(peakAvg * 0.6)
-    const predictionHigh = Math.round(peakAvg * 1.5)
-
-    // Re-engage list — fans who tip 50+ tokens avg per session, appear in 2+ streams, and are overdue
-    // "Every 2-3 streams" = session-level frequency, not tip count
-    const SESSION_GAP_MS = 3 * 60 * 60 * 1000
-    const reengageFans = (whales || [])
-      .filter(w => {
-        if (!w.tips || w.tips.length < 2) return false
-
-        // Group this fan's tips into sessions (3hr gap = new session)
-        const sorted = [...w.tips].sort((a, b) =>
-          new Date(a.date_time || a.dateRaw) - new Date(b.date_time || b.dateRaw)
-        )
-        const fanSessions = []
-        let cur = [sorted[0]]
-        for (let i = 1; i < sorted.length; i++) {
-          const gap = new Date(sorted[i].date_time || sorted[i].dateRaw) -
-                      new Date(sorted[i-1].date_time || sorted[i-1].dateRaw)
-          if (gap > SESSION_GAP_MS) { fanSessions.push(cur); cur = [sorted[i]] }
-          else cur.push(sorted[i])
-        }
-        fanSessions.push(cur)
-
-        // Must have appeared in 2+ sessions
-        if (fanSessions.length < 2) return false
-
-        // Avg tokens per session must be 50+
-        const avgTokensPerSession = fanSessions.reduce((sum, s) =>
-          sum + s.reduce((t, tip) => t + (tip.tokens || 0), 0), 0) / fanSessions.length
-        if (avgTokensPerSession < 50) return false
-
-        // Calculate avg days between sessions
-        const sessionDates = fanSessions.map(s => new Date(s[0].date_time || s[0].dateRaw))
-        let totalGap = 0
-        for (let i = 1; i < sessionDates.length; i++) {
-          totalGap += (sessionDates[i] - sessionDates[i-1]) / 86400000
-        }
-        const avgDaysBetweenSessions = fanSessions.length > 1 ? totalGap / (fanSessions.length - 1) : 30
-
-        // Must be overdue — gone longer than 1.5x their normal interval
-        // (accounts for "every 2-3 streams" — if they stream 2-3x/week that's a few days)
-        const daysSince = w.daysSinceLastTip
-        const overdueThreshold = Math.max(avgDaysBetweenSessions * 1.5, 3)
-        return daysSince >= overdueThreshold
-      })
-      .sort((a, b) => b.totalUSD - a.totalUSD)
-      .slice(0, 5)
-
-    // Likely online right now
-    const likelyOnline = (whales || [])
-      .filter(w => {
-        if (!w.tips || w.tips.length < 3) return false
-        const hc = {}
-        w.tips.forEach(t => { const h = new Date(t.date_time || t.dateRaw).getUTCHours(); hc[h] = (hc[h] || 0) + 1 })
-        const peakH = parseInt(Object.entries(hc).sort((a,b) => b[1]-a[1])[0][0])
-        return (peakH - utcHour + 24) % 24 <= 1
-      })
-      .sort((a, b) => b.totalUSD - a.totalUSD)
-      .slice(0, 3)
-
-    const platTodayStats = {}
-    Object.entries(platBestTimes).forEach(([plat, times]) => {
-      const todayHour = times?.bestHourByDay?.[todayName]
-      const bestDayEntry = times?.bestDay
-      platTodayStats[plat] = {
-        todayBestHour: todayHour ? fmtHour(todayHour.hour) : null,
-        todayBestAvg: todayHour?.avg || 0,
-        bestDay: bestDayEntry?.day || null,
-        bestDayAvg: bestDayEntry?.avg || 0,
-        overallBestHour: times?.hour ? fmtHour(times.hour.hour) : null,
-        overallBestHourAvg: times?.hour?.avg || 0,
-      }
-    })
-    return { todayName, bhLabel, bh, atPeak, hoursUntilPeak, displayPlat, displayAvg,
-      isBestDay, bestDay, sessionAvg, peakAvg, predictionLow, predictionHigh,
-      reengageFans, likelyOnline, platTodayStats }
-  }
-
   const buildRealTimeAlerts = () => {
     const now = Date.now()
-    const alertCurrentHour = new Date().getUTCHours()
+    const currentHour = new Date().getHours()
     const currentDay = new Date().toLocaleDateString('en-US', { weekday: 'long' })
     const alerts = []
 
@@ -1769,11 +1546,7 @@ const handleCSV = async (file, forcePlatform = null) => {
 
   const whatsNextAlerts = buildWhatsNextAlerts()
   const reengageList = buildReengageList()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const dailyBrief = buildDailyBrief() // re-runs every minuteTick
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const realTimeAlerts = buildRealTimeAlerts() // re-runs every minuteTick
-  void minuteTick // ensures re-render when minute changes
+  const realTimeAlerts = buildRealTimeAlerts()
 
   return (
     <div style={{
@@ -1873,37 +1646,19 @@ const handleCSV = async (file, forcePlatform = null) => {
             <div style={{ width: 40, height: 40, borderRadius: 10, background: "linear-gradient(135deg, #22D3EE, #EC4899)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, fontWeight: 700, color: C.white, boxShadow: "0 0 20px rgba(34,211,238,0.4)" }}>$</div>
             <span style={{ fontSize: 20, fontWeight: 800, color: C.white }}>Cam<span style={{ background: "linear-gradient(90deg, #22D3EE, #EC4899)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Cash</span></span>
           </div>
-          {user && (
-            <div style={{ marginTop: 10 }}>
-              <div style={{ fontSize: 11, color: C.muted, marginBottom: 8 }}>{user.email}</div>
-              <button
-                onClick={handleSignOut}
-                style={{
-                  width: "100%", padding: "8px 12px", borderRadius: 8,
-                  background: "rgba(248,113,113,0.12)",
-                  border: "1px solid rgba(248,113,113,0.35)",
-                  color: "#F87171", fontSize: 12, fontWeight: 700,
-                  cursor: "pointer", display: "flex", alignItems: "center",
-                  justifyContent: "center", gap: 6, transition: "all 0.15s",
-                }}
-                onMouseEnter={e => { e.currentTarget.style.background = "rgba(248,113,113,0.22)"; e.currentTarget.style.borderColor = "rgba(248,113,113,0.6)" }}
-                onMouseLeave={e => { e.currentTarget.style.background = "rgba(248,113,113,0.12)"; e.currentTarget.style.borderColor = "rgba(248,113,113,0.35)" }}
-              >
-                <span>→</span> Sign Out
-              </button>
-            </div>
-          )}
-          <div style={{ marginTop: 10, padding: "6px 10px", borderRadius: 8, background: "linear-gradient(135deg, rgba(245,158,11,0.2), rgba(251,146,60,0.2))", border: "1px solid rgba(245,158,11,0.4)", display: "flex", alignItems: "center", gap: 6 }}>
+          {user && <div style={{ fontSize: 11, color: C.muted, marginTop: 10 }}>{user.email}</div>}
+          <div style={{ marginTop: 12, padding: "6px 10px", borderRadius: 8, background: "linear-gradient(135deg, rgba(245,158,11,0.2), rgba(251,146,60,0.2))", border: "1px solid rgba(245,158,11,0.4)", display: "flex", alignItems: "center", gap: 6 }}>
             <div style={{ width: 6, height: 6, borderRadius: "50%", background: C.gold, flexShrink: 0, boxShadow: `0 0 6px ${C.gold}` }} />
             <div>
-              <div style={{ fontSize: 10, fontWeight: 700, color: C.gold, letterSpacing: 0.5 }}>BETA</div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: C.gold, letterSpacing: 0.5 }}>FREE BETA</div>
+              <div style={{ fontSize: 9, color: C.orange }}>All features unlocked</div>
             </div>
           </div>
         </div>
 
         <nav style={{ flex: 1, padding: "16px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
-          {[["overview", "📊", "Overview"], ["platforms", "🎯", "Platforms"], ["whales", "🐳", "Top Fans"], ["sessions", "🎥", "Sessions"], ["monthly", "📈", "Monthly"], ["live", "🔴", "Live Mode"], ["titles", "🎬", "Room Titles"], ["help", "❓", "CSV Help"]].map(([id, icon, label]) => (
-            <button key={id} onClick={() => handleTabChange(id)} style={{
+          {[["overview", "📊", "Overview"], ["platforms", "🎯", "Platforms"], ["whales", "🐳", "Top Fans"], ["sessions", "🎥", "Sessions"], ["live", "🔴", "Live Mode"], ["data", "📝", "Edit Data"], ["titles", "🎬", "Room Titles"], ["help", "❓", "CSV Help"], ["upload", "📥", "Import"]].map(([id, icon, label]) => (
+            <button key={id} onClick={() => setActiveTab(id)} style={{
               display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 10,
               background: activeTab === id ? "linear-gradient(135deg, rgba(59,130,246,0.2), rgba(236,72,153,0.2))" : "transparent",
               border: activeTab === id ? "1px solid rgba(59,130,246,0.4)" : "1px solid transparent",
@@ -1914,64 +1669,39 @@ const handleCSV = async (file, forcePlatform = null) => {
               <span style={{ fontSize: 18 }}>{icon}</span>{label}
             </button>
           ))}
-
-          {/* ── IMPORT dropdown ── */}
-          {(() => {
-            const importOpen = activeTab === 'upload' || activeTab === 'data'
-            return (
-              <div style={{ margin: '0 0 4px' }}>
-                <button
-                  onClick={() => handleTabChange(activeTab === 'upload' || activeTab === 'data' ? 'overview' : 'upload')}
-                  style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    width: '100%', padding: '10px 12px', borderRadius: 10,
-                    background: importOpen ? 'linear-gradient(135deg, rgba(59,130,246,0.2), rgba(236,72,153,0.2))' : 'transparent',
-                    border: importOpen ? '1px solid rgba(59,130,246,0.4)' : '1px solid transparent',
-                    boxShadow: importOpen ? '0 0 20px rgba(59,130,246,0.3)' : 'none',
-                    color: importOpen ? C.white : C.muted, fontSize: 14, fontWeight: importOpen ? 600 : 400,
-                    cursor: 'pointer', transition: 'all 0.15s', textAlign: 'left',
-                  }}>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <span style={{ fontSize: 18 }}>📥</span> Import
-                  </span>
-                  <span style={{ fontSize: 10, color: C.muted, transition: 'transform 0.2s', display: 'inline-block', transform: importOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>▼</span>
-                </button>
-                {importOpen && (
-                  <div style={{ marginTop: 4, marginLeft: 12, display: 'flex', flexDirection: 'column', gap: 3 }}>
-                    <button onClick={() => handleTabChange('upload')}
-                      style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 8,
-                        background: activeTab === 'upload' ? 'rgba(34,211,238,0.15)' : 'rgba(255,255,255,0.03)',
-                        border: activeTab === 'upload' ? '1px solid rgba(34,211,238,0.4)' : '1px solid rgba(255,255,255,0.06)',
-                        color: activeTab === 'upload' ? C.cyan : C.muted, fontSize: 13, cursor: 'pointer', textAlign: 'left' }}>
-                      <span style={{ fontSize: 15 }}>📤</span> Import CSV
-                    </button>
-                    <button onClick={() => handleTabChange('data')}
-                      style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 8,
-                        background: activeTab === 'data' ? 'rgba(236,72,153,0.15)' : 'rgba(255,255,255,0.03)',
-                        border: activeTab === 'data' ? '1px solid rgba(236,72,153,0.4)' : '1px solid rgba(255,255,255,0.06)',
-                        color: activeTab === 'data' ? C.pink : C.muted, fontSize: 13, cursor: 'pointer', textAlign: 'left' }}>
-                      <span style={{ fontSize: 15 }}>📝</span> Edit Data
-                    </button>
-                  </div>
-                )}
-              </div>
-            )
-          })()}
         </nav>
 
         <div style={{ padding: "16px 20px", borderTop: "1px solid rgba(255,255,255,0.08)", display: "flex", flexDirection: "column", gap: 10 }}>
           <div style={{ padding: 12, borderRadius: 10, background: "linear-gradient(135deg, rgba(59,130,246,0.1), rgba(236,72,153,0.1))", border: "1px solid rgba(236,72,153,0.3)", textAlign: "center" }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: C.gold, letterSpacing: 1 }}>✨ BETA</div>
-            <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>All features unlocked</div>
+            <div style={{ fontSize: 18, marginBottom: 4 }}>🎉</div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: C.white, marginBottom: 2 }}>Free for first 100 users</div>
+            <div style={{ fontSize: 10, color: C.muted, marginBottom: 8 }}>Spots filling up fast</div>
+            <div style={{ height: 4, borderRadius: 4, background: "rgba(255,255,255,0.1)", overflow: "hidden" }}>
+              <div style={{ height: "100%", width: "63%", borderRadius: 4, background: "linear-gradient(90deg, #3b82f6, #ec4899)", transition: "width 0.6s ease" }} />
+            </div>
+            <div style={{ fontSize: 10, color: C.pink, fontWeight: 600, marginTop: 4 }}><span key={betaCount} className={betaCount !== null ? "counter-bump" : ""}>{betaCount ?? 63}</span> / 100 spots left</div>
           </div>
-
+          <button
+            onClick={handleSignOut}
+            style={{
+              width: "100%", padding: "9px 12px", borderRadius: 9,
+              background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)",
+              color: C.muted, fontSize: 13, cursor: "pointer", fontWeight: 500,
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 7,
+              transition: "all 0.15s",
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = "rgba(248,113,113,0.1)"; e.currentTarget.style.borderColor = "rgba(248,113,113,0.3)"; e.currentTarget.style.color = "#F87171" }}
+            onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,255,255,0.04)"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"; e.currentTarget.style.color = C.muted }}
+          >
+            <span style={{ fontSize: 15 }}>→</span> Sign Out
+          </button>
         </div>
       </div>
 
       {/* MOBILE BOTTOM NAV — hidden on desktop via CSS */}
       <div className="dash-bottom-nav" style={{ display: "none" }}>
-        {[["overview","📊","Overview"],["platforms","🎯","Platforms"],["whales","🐳","Fans"],["sessions","🎥","Sessions"],["monthly","📈","Monthly"],["live","🔴","Live"],["upload","📥","Import"]].map(([id, icon, label]) => (
-          <button key={id} onClick={() => handleTabChange(id)} className={activeTab === id ? "active" : ""}>
+        {[["overview","📊","Overview"],["platforms","🎯","Platforms"],["whales","🐳","Fans"],["sessions","🎥","Sessions"],["live","🔴","Live"],["upload","📥","Import"]].map(([id, icon, label]) => (
+          <button key={id} onClick={() => setActiveTab(id)} className={activeTab === id ? "active" : ""}>
             <span className="nav-icon">{icon}</span>
             <span className="nav-label">{label}</span>
           </button>
@@ -2005,194 +1735,43 @@ const handleCSV = async (file, forcePlatform = null) => {
           )}
         </div>
 
-        {/* ═══════════════════════════════════════════════════════
-            DAILY BRIEF — always visible, above all tabs
-            Refreshes based on UTC time + your real session data
-        ═══════════════════════════════════════════════════════ */}
-        {dailyBrief && (() => {
-          const { todayName, bhLabel, bh, atPeak, hoursUntilPeak, displayPlat, displayAvg,
-            isBestDay, bestDay, sessionAvg, peakAvg, predictionLow, predictionHigh,
-            reengageFans, likelyOnline, platTodayStats } = dailyBrief
-          return (
-            <div style={{ marginBottom: 20, borderRadius: 18, overflow: 'hidden', border: `1px solid ${atPeak ? 'rgba(16,185,129,0.45)' : 'rgba(124,92,255,0.3)'}`, background: 'rgba(10,12,24,0.7)', backdropFilter: 'blur(16px)', animation: 'fadeUp 0.3s ease both' }}>
-
-              {/* Header bar */}
-              <div style={{ padding: '13px 20px', background: atPeak ? 'linear-gradient(135deg,rgba(16,185,129,0.2),rgba(34,211,238,0.1))' : 'linear-gradient(135deg,rgba(124,92,255,0.18),rgba(34,211,238,0.08))', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <div style={{ width: 32, height: 32, borderRadius: 9, background: atPeak ? 'linear-gradient(135deg,#10B981,#22D3EE)' : 'linear-gradient(135deg,#7C5CFF,#22D3EE)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15 }}>
-                    {atPeak ? '🟢' : '📋'}
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 15, fontWeight: 800, color: C.white }}>
-                      {atPeak ? 'Peak Window LIVE — Go Live Now' : 'Daily Brief'}
-                    </div>
-                    <div style={{ fontSize: 11, color: C.muted }}>{todayName} · based on your real session history</div>
-                  </div>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                  {isBestDay && <div style={{ padding: '3px 10px', borderRadius: 20, background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.4)', fontSize: 11, fontWeight: 700, color: C.gold }}>🔥 Your Best Day</div>}
-                  {atPeak
-                    ? <div style={{ padding: '4px 12px', borderRadius: 20, background: 'rgba(16,185,129,0.2)', border: '1px solid rgba(16,185,129,0.5)', fontSize: 12, fontWeight: 700, color: C.green }}>🟢 Peak Now</div>
-                    : bhLabel && <div style={{ padding: '4px 12px', borderRadius: 20, background: 'rgba(124,92,255,0.12)', border: '1px solid rgba(124,92,255,0.3)', fontSize: 12, fontWeight: 600, color: C.indigo }}>⏰ Peak in {hoursUntilPeak}h</div>
-                  }
-                </div>
-              </div>
-
-              <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-
-                {/* ═══ BEST TIME TO STREAM ALERT ═══ */}
-                {bhLabel && (
-                  <div style={{ padding: '14px 16px', borderRadius: 13, background: atPeak ? 'linear-gradient(135deg,rgba(16,185,129,0.15),rgba(34,211,238,0.08))' : 'linear-gradient(135deg,rgba(124,92,255,0.12),rgba(34,211,238,0.06))', border: `1px solid ${atPeak ? 'rgba(16,185,129,0.4)' : 'rgba(124,92,255,0.35)'}`, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-                    <div style={{ fontSize: 22, flexShrink: 0, marginTop: 1 }}>{atPeak ? '🟢' : '⏰'}</div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 13, fontWeight: 800, color: atPeak ? C.green : C.white, marginBottom: 5 }}>
-                        {atPeak
-                          ? `Your peak window is RIGHT NOW — go live on ${displayPlat} immediately`
-                          : `Your best time to stream today is ${bhLabel} on ${displayPlat}`
-                        }
-                      </div>
-                      <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.65 }}>
-                        {`Since it's ${todayName}`}
-                        {isBestDay ? ` (your highest-earning day)` : ``}
-                        {`, you peak at ${bhLabel} UTC on ${displayPlat} with `}
-                        <span style={{ color: C.gold, fontWeight: 700 }}>${displayAvg.toFixed(0)} avg/session</span>
-                        {`. Stream `}
-                        <span style={{ color: C.cyan, fontWeight: 700 }}>60+ min</span>
-                        {` to earn `}
-                        <span style={{ color: C.green, fontWeight: 700 }}>${predictionLow}–${predictionHigh}</span>
-                        {` — longer sessions earn `}
-                        <span style={{ color: C.indigo, fontWeight: 700 }}>+101% more</span>
-                        {` on average.`}
-                      </div>
-                      {!atPeak && hoursUntilPeak !== null && hoursUntilPeak > 0 && (
-                        <div style={{ marginTop: 8, fontSize: 11, color: C.indigo, fontWeight: 600 }}>
-                          ⏳ {hoursUntilPeak === 1 ? 'Starting in ~1 hour — prep your room now' : `${hoursUntilPeak} hours away — set a reminder`}
-                        </div>
-                      )}
-                      {atPeak && (
-                        <div style={{ marginTop: 8, fontSize: 11, color: C.green, fontWeight: 700 }}>
-                          🔥 This window closes in ~{(60 - new Date().getUTCMinutes())} minutes — don't wait
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* ROW 1 — Today / Peak Window / Best Platform */}
-                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                  <div style={{ flex: 1, minWidth: 130, padding: '11px 14px', borderRadius: 11, background: 'rgba(124,92,255,0.08)', border: '1px solid rgba(124,92,255,0.18)' }}>
-                    <div style={{ fontSize: 10, color: C.muted, marginBottom: 3, textTransform: 'uppercase', letterSpacing: 1 }}>Today</div>
-                    <div style={{ fontSize: 14, fontWeight: 800, color: C.white }}>{todayName}</div>
-                    <div style={{ fontSize: 11, color: C.indigo, marginTop: 2 }}>
-                      {isBestDay ? `🏆 Your best day — avg $${(bestDay?.avg || sessionAvg).toFixed(0)}/session` : `avg ~$${sessionAvg.toFixed(0)}/session`}
-                    </div>
-                  </div>
-
-                  <div style={{ flex: 1, minWidth: 130, padding: '11px 14px', borderRadius: 11, background: atPeak ? 'rgba(16,185,129,0.12)' : 'rgba(34,211,238,0.07)', border: `1px solid ${atPeak ? 'rgba(16,185,129,0.4)' : 'rgba(34,211,238,0.18)'}` }}>
-                    <div style={{ fontSize: 10, color: C.muted, marginBottom: 3, textTransform: 'uppercase', letterSpacing: 1 }}>Best Time</div>
-                    <div style={{ fontSize: 14, fontWeight: 800, color: atPeak ? C.green : C.white }}>{bhLabel || 'Calculating...'}</div>
-                    <div style={{ fontSize: 11, color: atPeak ? C.green : C.cyan, marginTop: 2 }}>
-                      {atPeak ? 'ON RIGHT NOW — stream!' : hoursUntilPeak !== null ? `in ${hoursUntilPeak}h · $${displayAvg.toFixed(0)} avg` : ''}
-                    </div>
-                  </div>
-
-                  <div style={{ flex: 1, minWidth: 130, padding: '11px 14px', borderRadius: 11, background: 'rgba(245,158,11,0.07)', border: '1px solid rgba(245,158,11,0.18)' }}>
-                    <div style={{ fontSize: 10, color: C.muted, marginBottom: 3, textTransform: 'uppercase', letterSpacing: 1 }}>Best Platform</div>
-                    <div style={{ fontSize: 14, fontWeight: 800, color: C.white }}>{displayPlat}</div>
-                    <div style={{ fontSize: 11, color: C.gold, marginTop: 2 }}>${displayAvg.toFixed(0)} avg at {bhLabel || 'peak'}</div>
-                  </div>
-
-                  {bhLabel && (
-                    <div style={{ flex: 1, minWidth: 130, padding: '11px 14px', borderRadius: 11, background: 'rgba(16,185,129,0.07)', border: '1px solid rgba(16,185,129,0.18)' }}>
-                      <div style={{ fontSize: 10, color: C.muted, marginBottom: 3, textTransform: 'uppercase', letterSpacing: 1 }}>Income Forecast</div>
-                      <div style={{ fontSize: 14, fontWeight: 800, color: C.green }}>${predictionLow}–${predictionHigh}</div>
-                      <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>if you stream at {bhLabel}</div>
-                    </div>
-                  )}
-                </div>
-
-                {/* ROW 2 — Likely Online + Re-engage */}
-                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-
-                  {/* Likely Online */}
-                  {likelyOnline.length > 0 && (
-                    <div style={{ flex: 1, minWidth: 200, padding: '12px 14px', borderRadius: 11, background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.18)' }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: C.green, marginBottom: 9, display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: C.green, display: 'inline-block', boxShadow: `0 0 5px ${C.green}`, animation: 'pulse-msg 2s infinite' }}/>
-                        Likely Online Right Now
-                      </div>
-                      {likelyOnline.map((w, i) => (
-                        <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: i < likelyOnline.length - 1 ? 7 : 0 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <div style={{ width: 26, height: 26, borderRadius: '50%', background: `linear-gradient(135deg,#10B981,#22D3EE)`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, color: '#fff', flexShrink: 0 }}>
-                              {w.username[0].toUpperCase()}
-                            </div>
-                            <div>
-                              <div style={{ fontSize: 12, fontWeight: 700, color: C.white }}>{w.username}</div>
-                              <div style={{ fontSize: 10, color: C.muted }}>${w.totalUSD.toFixed(0)} lifetime · {w.platform}</div>
-                            </div>
-                          </div>
-                          <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }}
-                            style={{ padding: '4px', borderRadius: 8, background: 'none', border: 'none', color: C.green, fontSize: 26, cursor: 'pointer', lineHeight: 1, animation: 'pulse-msg 2s infinite', flexShrink: 0 }}>
-                            💌
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Re-engage */}
-                  {reengageFans.length > 0 && (
-                    <div style={{ flex: 1, minWidth: 200, padding: '12px 14px', borderRadius: 11, background: 'rgba(236,72,153,0.06)', border: '1px solid rgba(236,72,153,0.18)' }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: C.pink, marginBottom: 9, display: 'flex', alignItems: 'center', gap: 6 }}>
-                        ⚠️ Re-engage Today
-                      </div>
-                      {reengageFans.map((w, i) => (
-                        <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: i < reengageFans.length - 1 ? 7 : 0 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <div style={{ width: 26, height: 26, borderRadius: '50%', background: `linear-gradient(135deg,#EC4899,#7C5CFF)`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, color: '#fff', flexShrink: 0 }}>
-                              {w.username[0].toUpperCase()}
-                            </div>
-                            <div>
-                              <div style={{ fontSize: 12, fontWeight: 700, color: C.white }}>{w.username}</div>
-                              <div style={{ fontSize: 10, color: C.muted }}>${w.totalUSD.toFixed(0)} · {w.avgTipSize >= 50*0.05 ? Math.round(w.avgTipSize/0.05) + ' tok avg' : w.totalTokens + ' tok'} · {w.daysSinceLastTip}d gone</div>
-                            </div>
-                          </div>
-                          <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }}
-                            style={{ padding: '4px', borderRadius: 8, background: 'none', border: 'none', color: C.pink, fontSize: 26, cursor: 'pointer', lineHeight: 1, animation: 'pulse-msg 2s infinite', flexShrink: 0 }}>
-                            💌
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* If neither list has data */}
-                  {likelyOnline.length === 0 && reengageFans.length === 0 && (
-                    <div style={{ flex: 1, padding: '12px 14px', borderRadius: 11, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', fontSize: 12, color: C.muted }}>
-                      No fan alerts right now — check back after more sessions.
-                    </div>
-                  )}
-                </div>
-
-              </div>
-            </div>
-          )
-        })()}
-
         {activeTab === "overview" && (
           <div style={{ animation: "fadeUp 0.3s ease" }}>
+
+            {/* BETA BANNER */}
+            <div style={{ marginBottom: 24, padding: "14px 20px", borderRadius: 12, background: "linear-gradient(135deg, rgba(59,130,246,0.1), rgba(236,72,153,0.1))", border: "1px solid rgba(236,72,153,0.3)", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <div style={{ fontSize: 24 }}>🎉</div>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: C.white }}>You're one of our first 100 beta users — everything is free!</div>
+                  <div style={{ fontSize: 12, color: C.muted }}>All Pro features unlocked. No credit card. No limits. Just good vibes.</div>
+                </div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+                <div style={{ fontSize: 12, color: C.pink, fontWeight: 600 }}>63 / 100 spots left</div>
+                <div style={{ width: 80, height: 6, borderRadius: 4, background: "rgba(255,255,255,0.1)", overflow: "hidden" }}>
+                  <div style={{ height: "100%", width: "37%", borderRadius: 4, background: "linear-gradient(90deg, #3b82f6, #ec4899)", transition: "width 0.6s ease" }} />
+                </div>
+              </div>
+            </div>
+
+            {/* SHARE MY STATS */}
+            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 16 }}>
+              <button onClick={() => setShareModalOpen(true)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 10, background: "linear-gradient(135deg, rgba(236,72,153,0.15), rgba(168,85,247,0.15))", border: "1px solid rgba(236,72,153,0.35)", color: C.white, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                📤 Share My Stats
+              </button>
+            </div>
 
             {/* ═══════════════════════════════════════
                 1. MONEY SNAPSHOT
             ═══════════════════════════════════════ */}
             {(() => {
               const now = new Date()
-              const thisMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
-              const prevMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1))
+              const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+              const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1)
               const thisMonthRev = tips.filter(t => new Date(t.date_time || t.dateRaw) >= thisMonthStart).reduce((s, t) => s + (t.usd || 0), 0)
               const prevMonthRev = tips.filter(t => { const d = new Date(t.date_time || t.dateRaw); return d >= prevMonthStart && d < thisMonthStart }).reduce((s, t) => s + (t.usd || 0), 0)
-              const growthPct = (prevMonthRev > 0 && thisMonthRev > 0) ? Math.round(((thisMonthRev - prevMonthRev) / prevMonthRev) * 100) : null
+              const growthPct = prevMonthRev > 0 ? Math.round(((thisMonthRev - prevMonthRev) / prevMonthRev) * 100) : null
               const isPositive = growthPct !== null && growthPct >= 0
               const topPct = Math.max(1, Math.min(25, Math.round(100 - (totalRevenue / 50))))
               const sessionsLast30 = sessions.filter(s => (Date.now() - new Date(s.startTime)) / 86400000 <= 30).length
@@ -2285,7 +1864,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                         </div>
                         {a.cta && (
                           <button onClick={() => { const w = whales.find(wh => wh.username === a.username); if (w) { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) } }}
-                            style={{ flexShrink: 0, padding: "6px", borderRadius: 8, background: "none", border: "none", color: C.pink, fontSize: 28, cursor: "pointer", animation: "pulse-msg 2s infinite", lineHeight: 1 }}>
+                            style={{ flexShrink: 0, padding: "8px 10px", borderRadius: 8, background: "none", border: "none", color: C.pink, fontSize: 22, cursor: "pointer", animation: "pulse-msg 2s infinite", lineHeight: 1 }}>
                             💌
                           </button>
                         )}
@@ -2335,31 +1914,11 @@ const handleCSV = async (file, forcePlatform = null) => {
                             <div style={{ fontSize: 11, fontWeight: 700, color: col, marginBottom: 6 }}>{p.platform.replace('BongaCams','Bonga').replace('MyFreeCams','MFC')}</div>
                             <div style={{ fontSize: 22, fontWeight: 900, color: C.white, marginBottom: 2 }}>{roi !== null ? `$${roi.toFixed(2)}/hr` : '—'}</div>
                             <div style={{ fontSize: 11, color: C.muted, marginBottom: bestTime ? 8 : 0 }}>${p.totalUSD.toFixed(0)} total · {p.hours.toFixed(0)}h streamed</div>
-                            {(() => {
-                            const todayUTCName = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][new Date().getUTCDay()]
-                            const ptimes = analytics?.platformBestTimes?.[p.platform]
-                            const todayHour = ptimes?.bestHourByDay?.[todayUTCName]
-                            const bestDayEntry = ptimes?.bestDay
-                            return (
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 4 }}>
-                                {bestDayEntry && (
-                                  <div style={{ padding: '5px 8px', borderRadius: 8, background: `${col}10`, border: `1px solid ${col}25`, fontSize: 11, color: col }}>
-                                    Best day: <strong>{bestDayEntry.day}s</strong> ${bestDayEntry.avg.toFixed(0)} avg
-                                  </div>
-                                )}
-                                {bestTime && (
-                                  <div style={{ padding: '5px 8px', borderRadius: 8, background: `${col}10`, border: `1px solid ${col}25`, fontSize: 11, color: col }}>
-                                    Best hour overall: <strong>{fmtH(bestTime.hour)}</strong> ${bestTime.avg.toFixed(0)} avg
-                                  </div>
-                                )}
-                                {todayHour && (
-                                  <div style={{ padding: '5px 8px', borderRadius: 8, background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.25)', fontSize: 11, color: '#10B981' }}>
-                                    Today ({todayUTCName}): <strong>{fmtH(todayHour.hour)}</strong> ${todayHour.avg.toFixed(0)}/hr avg
-                                  </div>
-                                )}
+                            {bestTime && (
+                              <div style={{ padding: "5px 8px", borderRadius: 8, background: `${col}10`, border: `1px solid ${col}25`, fontSize: 11, color: col }}>
+                                ⏰ Best: <strong>{fmtH(bestTime.hour)}</strong> · ${bestTime.avg.toFixed(0)} avg ({bestTime.sessionCount} sessions)
                               </div>
-                            )
-                          })()}
+                            )}
                           </div>
                         )
                       })}
@@ -2432,10 +1991,10 @@ const handleCSV = async (file, forcePlatform = null) => {
                             const bg = val === 0 ? "rgba(255,255,255,0.03)" : intensity < 0.25 ? "rgba(34,211,238,0.12)" : intensity < 0.5 ? "rgba(34,211,238,0.30)" : intensity < 0.75 ? "rgba(34,211,238,0.60)" : "rgba(34,211,238,0.90)"
                             return (
                               <div key={d} title={`${plat} ${d}: avg $${val.toFixed(2)}/day`}
-                                onClick={() => { if (val > 0) { setChartDrillDay(d); handleTabChange("whales") } }}
-                                style={{ height: 32, borderRadius: 5, background: bg, border: isToday ? "2px solid rgba(34,211,238,0.7)" : "1px solid rgba(255,255,255,0.05)", display: "flex", alignItems: "center", justifyContent: "center", cursor: val > 0 ? "pointer" : "default", transition: "all 0.15s", transform: "scale(1)" }}
-                                onMouseEnter={e => { if (val > 0) { e.currentTarget.style.transform = "scale(1.08)"; e.currentTarget.style.boxShadow = "0 0 8px rgba(34,211,238,0.5)" } }}
-                                onMouseLeave={e => { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.boxShadow = "" }}>
+                                onClick={() => { if (val > 0) setChartDrillDay(d) }}
+                                style={{ height: 32, borderRadius: 5, background: bg, border: isToday ? "2px solid rgba(34,211,238,0.7)" : "1px solid rgba(255,255,255,0.05)", display: "flex", alignItems: "center", justifyContent: "center", cursor: val > 0 ? "pointer" : "default", transition: "opacity 0.1s" }}
+                                onMouseEnter={e => { if (val > 0) e.currentTarget.style.opacity = "0.75" }}
+                                onMouseLeave={e => { e.currentTarget.style.opacity = "1" }}>
                                 {val > 0 && <span style={{ fontSize: 9, fontWeight: 700, color: intensity > 0.45 ? "#fff" : C.muted }}>${val >= 100 ? Math.round(val) : val.toFixed(0)}</span>}
                               </div>
                             )
@@ -2443,7 +2002,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                         ]
                       })}
                     </div>
-                    <div style={{ marginTop: 8, fontSize: 11, color: C.muted }}>Today ({todayLong}) highlighted in cyan. Darker = more earnings. Click any cell to filter Top Fans by that day. <span style={{ color: C.cyan }}>Click any cell to filter Top Fans by that day.</span></div>
+                    <div style={{ marginTop: 8, fontSize: 11, color: C.muted }}>Today ({todayLong}) highlighted in cyan. Darker = more earnings.</div>
                   </div>
                   </div>
                 )
@@ -3134,7 +2693,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                           <span style={{ color: C.white, fontWeight: 600 }}>{w.username}</span>
                           <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }}
-                            style={{ fontSize: 26, background: "none", border: "none", cursor: "pointer", lineHeight: 1, padding: '4px', animation: "pulse-msg 2s infinite" }}
+                            style={{ fontSize: 20, background: "none", border: "none", cursor: "pointer", lineHeight: 1, padding: 0, animation: "pulse-msg 2s infinite" }}
                             title="Message">💌</button>
                         </div>
                       </td>
@@ -3244,13 +2803,9 @@ const handleCSV = async (file, forcePlatform = null) => {
                               <span style={{ fontSize: 11, color: C.muted }}>${w.totalUSD.toFixed(0)} lifetime · {w.tipCount} tips · {w.platform}</span>
                             </div>
                           </div>
-                          <div style={{ display: "flex", gap: 6, alignItems:"center" }}>
+                          <div style={{ display: "flex", gap: 6 }}>
                             <button onClick={() => setSelectedWhale(w)} style={{ padding: "4px 10px", borderRadius: 6, background: "rgba(34,211,238,0.12)", border: "1px solid rgba(34,211,238,0.25)", color: C.cyan, fontSize: 11, cursor: "pointer" }}>🔍 Profile</button>
-                            <button onClick={() => { setNoteTarget(w.username); setNoteText(tipperNotes[w.username?.toLowerCase()]?.note || '') }}
-                              style={{ padding: "4px 8px", borderRadius: 6, background: tipperNotes[w.username?.toLowerCase()]?.note ? "rgba(245,158,11,0.15)" : "rgba(255,255,255,0.05)", border: tipperNotes[w.username?.toLowerCase()]?.note ? "1px solid rgba(245,158,11,0.3)" : "1px solid rgba(255,255,255,0.1)", color: tipperNotes[w.username?.toLowerCase()]?.note ? C.gold : C.muted, fontSize: 11, cursor: "pointer" }}>
-                              {tipperNotes[w.username?.toLowerCase()]?.note ? "📝 Note" : "📝"}
-                            </button>
-                            <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }} style={{ padding: "4px", borderRadius: 8, background: "none", border: "none", color: C.pink, fontSize: 26, cursor: "pointer", animation: "pulse-msg 2s infinite", lineHeight: 1 }}>💌</button>
+                            <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }} style={{ padding: "4px 8px", borderRadius: 6, background: "none", border: "none", color: C.pink, fontSize: 20, cursor: "pointer", animation: "pulse-msg 2s infinite", lineHeight: 1 }}>💌</button>
                           </div>
                         </div>
 
@@ -4195,278 +3750,6 @@ const handleCSV = async (file, forcePlatform = null) => {
           </div>
         )}
 
-        {activeTab === "monthly" && (() => {
-          const monthly = analytics?.monthlyData || []
-          const tipTypes = analytics?.tipTypeBreakdown || []
-          const privFans = analytics?.privateShowFans || []
-          const spyFans = analytics?.spyShowFans || []
-          const bestMo = analytics?.bestMonth
-          const totalUSD = analytics?.totalUSD || 0
-          const now = new Date()
-          const thisMonthKey = `${now.getUTCFullYear()}-${String(now.getUTCMonth()+1).padStart(2,'0')}`
-          const thisMonth = monthly.find(m => m.month === thisMonthKey)
-          const thisMonthUSD = thisMonth?.usd || 0
-          const goalPct = monthlyGoal > 0 ? Math.min(100, Math.round((thisMonthUSD / monthlyGoal) * 100)) : null
-          const daysInMonth = new Date(now.getUTCFullYear(), now.getUTCMonth()+1, 0).getDate()
-          const dayOfMonth = now.getUTCDate()
-          const daysLeft = daysInMonth - dayOfMonth
-          const projectedEnd = thisMonthUSD > 0 ? Math.round(thisMonthUSD / dayOfMonth * daysInMonth) : null
-          const maxBarUSD = Math.max(...monthly.map(m => m.usd), 1)
-          const fmtMonth = (key) => { const [y,m] = key.split('-'); const mo = new Date(y,parseInt(m)-1,1).toLocaleDateString('en-US',{month:'short'}); return mo + " '" + String(y).slice(-2) }
-
-          return (
-            <div style={{ animation: "fadeUp 0.3s ease" }}>
-
-              {/* ── HEADER ── */}
-              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:28, flexWrap:"wrap", gap:12 }}>
-                <div>
-                  <div style={{ fontSize:24, fontWeight:900, color:C.white }}>📈 Monthly Overview</div>
-                  <div style={{ fontSize:13, color:C.muted }}>Earnings trends, tip types, and private show breakdown</div>
-                </div>
-              </div>
-
-              {/* ── GOAL TRACKER ── */}
-              <div style={{ ...glassCard, borderRadius:18, padding:24, marginBottom:24, border:"1px solid rgba(16,185,129,0.25)" }}>
-                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:16, flexWrap:"wrap", gap:10 }}>
-                  <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                    <div style={{ width:36, height:36, borderRadius:10, background:"linear-gradient(135deg,#10B981,#22D3EE)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>🎯</div>
-                    <div>
-                      <div style={{ fontSize:16, fontWeight:800, color:C.white }}>Monthly Goal</div>
-                      <div style={{ fontSize:12, color:C.muted }}>{now.toLocaleDateString('en-US',{month:'long',year:'numeric'})}</div>
-                    </div>
-                  </div>
-                  <button onClick={() => setShowGoalEditor(v => !v)} style={{ padding:"6px 14px", borderRadius:8, background:"rgba(16,185,129,0.15)", border:"1px solid rgba(16,185,129,0.35)", color:C.green, fontSize:12, fontWeight:700, cursor:"pointer" }}>
-                    {monthlyGoal ? "✏️ Edit Goal" : "➕ Set Goal"}
-                  </button>
-                </div>
-
-                {showGoalEditor && (
-                  <div style={{ display:"flex", gap:8, marginBottom:16, alignItems:"center" }}>
-                    <span style={{ color:C.green, fontSize:16, fontWeight:700 }}>$</span>
-                    <input
-                      type="number" placeholder="e.g. 500" value={goalInput}
-                      onChange={e => setGoalInput(e.target.value)}
-                      onFocus={e => e.target.style.borderColor="rgba(16,185,129,0.6)"}
-                      onBlur={e => e.target.style.borderColor="rgba(255,255,255,0.1)"}
-                      style={{ flex:1, padding:"8px 12px", borderRadius:8, background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", color:C.white, fontSize:14, outline:"none" }}
-                    />
-                    <button onClick={() => saveMonthlyGoal(goalInput)} style={{ padding:"8px 16px", borderRadius:8, background:"linear-gradient(135deg,#10B981,#22D3EE)", border:"none", color:C.white, fontSize:13, fontWeight:700, cursor:"pointer" }}>Save</button>
-                  </div>
-                )}
-
-                {monthlyGoal ? (
-                  <div>
-                    <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
-                      <span style={{ fontSize:13, color:C.muted }}>
-                        <span style={{ color:C.white, fontWeight:700, fontSize:18 }}>${thisMonthUSD.toFixed(0)}</span>
-                        <span style={{ color:C.muted }}> / ${monthlyGoal.toFixed(0)} goal</span>
-                      </span>
-                      <span style={{ fontSize:13, fontWeight:700, color: goalPct >= 100 ? C.green : goalPct >= 70 ? C.gold : C.cyan }}>{goalPct}%</span>
-                    </div>
-                    <div style={{ height:12, borderRadius:6, background:"rgba(255,255,255,0.08)", overflow:"hidden", marginBottom:10 }}>
-                      <div style={{ height:"100%", width:`${goalPct}%`, borderRadius:6, background: goalPct >= 100 ? "linear-gradient(90deg,#10B981,#22D3EE)" : goalPct >= 70 ? "linear-gradient(90deg,#F59E0B,#10B981)" : "linear-gradient(90deg,#22D3EE,#7C5CFF)", transition:"width 0.8s ease" }} />
-                    </div>
-                    <div style={{ display:"flex", gap:16, flexWrap:"wrap" }}>
-                      <span style={{ fontSize:12, color:C.muted }}>{daysLeft} days left this month</span>
-                      {projectedEnd && <span style={{ fontSize:12, color: projectedEnd >= monthlyGoal ? C.green : C.orange }}>At this pace: ${projectedEnd} projected</span>}
-                      {goalPct >= 100 && <span style={{ fontSize:12, color:C.green, fontWeight:700 }}>🎉 Goal smashed!</span>}
-                    </div>
-                  </div>
-                ) : (
-                  <div style={{ textAlign:"center", padding:"12px 0", color:C.muted, fontSize:13 }}>Set a monthly earnings goal to track your progress here</div>
-                )}
-              </div>
-
-              {/* ── BEST MONTH CALLOUT ── */}
-              {bestMo && (
-                <div style={{ ...glassCard, borderRadius:14, padding:18, marginBottom:24, border:"1px solid rgba(245,158,11,0.3)", background:"rgba(245,158,11,0.06)", display:"flex", alignItems:"center", gap:14, flexWrap:"wrap" }}>
-                  <div style={{ fontSize:28 }}>🏆</div>
-                  <div style={{ flex:1 }}>
-                    <div style={{ fontSize:13, color:C.gold, fontWeight:700, marginBottom:2 }}>Best Month Ever</div>
-                    <div style={{ fontSize:20, fontWeight:900, color:C.white }}>{fmtMonth(bestMo.month)} — ${bestMo.usd.toLocaleString('en-US',{minimumFractionDigits:0})}</div>
-                    <div style={{ fontSize:12, color:C.muted }}>{bestMo.fans} fans · {bestMo.tips} tips · ${bestMo.usdPerFan} avg per fan</div>
-                  </div>
-                  {thisMonthUSD > 0 && (
-                    <div style={{ textAlign:"right" }}>
-                      <div style={{ fontSize:11, color:C.muted }}>vs this month</div>
-                      <div style={{ fontSize:14, fontWeight:700, color: thisMonthUSD >= bestMo.usd ? C.green : C.orange }}>
-                        {thisMonthUSD >= bestMo.usd ? "🔥 New record!" : `${Math.round((thisMonthUSD/bestMo.usd)*100)}% there`}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* ── MONTHLY BAR CHART ── */}
-              <div style={{ ...glassCard, borderRadius:18, padding:24, marginBottom:24 }}>
-                <div style={{ fontSize:16, fontWeight:800, color:C.white, marginBottom:4 }}>Monthly Earnings</div>
-                <div style={{ fontSize:12, color:C.muted, marginBottom:20 }}>{monthly.length} months of data</div>
-                {monthly.length === 0 ? (
-                  <div style={{ textAlign:"center", padding:40, color:C.muted }}>No monthly data yet — upload a CSV to get started</div>
-                ) : (
-                  <div style={{ overflowX:"auto" }}>
-                    <div style={{ display:"flex", alignItems:"flex-end", gap:6, minWidth: Math.max(monthly.length * 44, 400), height:180, paddingBottom:24, position:"relative" }}>
-                      {/* Grid lines */}
-                      {[0.25,0.5,0.75,1].map(pct => (
-                        <div key={pct} style={{ position:"absolute", left:0, right:0, bottom: pct*180+24+"px", borderTop:"1px solid rgba(255,255,255,0.05)", pointerEvents:"none" }}>
-                          <span style={{ fontSize:9, color:C.muted, position:"absolute", left:0, top:-9 }}>${Math.round(maxBarUSD*pct)}</span>
-                        </div>
-                      ))}
-                      {monthly.map((m, i) => {
-                        const h = Math.max(4, Math.round((m.usd / maxBarUSD) * 156))
-                        const isBest = m.month === bestMo?.month
-                        const isCurrent = m.month === thisMonthKey
-                        const col = isBest ? C.gold : isCurrent ? C.green : C.indigo
-                        return (
-                          <div key={m.month} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:4, cursor:"default" }}
-                            title={`${fmtMonth(m.month)}: $${m.usd.toFixed(2)} · ${m.fans} fans · ${m.tips} tips`}>
-                            <div style={{ fontSize:9, color:C.muted, fontWeight:600, opacity: m.usd > maxBarUSD*0.1 ? 1 : 0 }}>${m.usd >= 100 ? Math.round(m.usd) : m.usd.toFixed(0)}</div>
-                            <div style={{ width:"100%", height:h, borderRadius:"4px 4px 0 0", background: isBest ? `linear-gradient(180deg,${C.gold},${C.orange})` : isCurrent ? `linear-gradient(180deg,${C.green},${C.cyan})` : `linear-gradient(180deg,${C.indigo},rgba(124,92,255,0.4))`, boxShadow: isBest ? `0 0 12px ${C.gold}40` : isCurrent ? `0 0 12px ${C.green}40` : "none", transition:"height 0.4s ease", animationDelay:`${i*30}ms` }} />
-                            <div style={{ fontSize:9, color: isCurrent ? C.green : isBest ? C.gold : C.muted, fontWeight: isCurrent || isBest ? 700 : 400, whiteSpace:"nowrap" }}>{fmtMonth(m.month)}</div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )}
-                {/* Legend */}
-                <div style={{ display:"flex", gap:16, marginTop:8, flexWrap:"wrap" }}>
-                  {[["🟡","Best month",C.gold],["🟢","This month",C.green],["🟣","Past months",C.indigo]].map(([dot,label,col]) => (
-                    <span key={label} style={{ fontSize:11, color:C.muted, display:"flex", alignItems:"center", gap:4 }}>
-                      <span style={{ width:8, height:8, borderRadius:2, background:col, display:"inline-block" }} />{label}
-                    </span>
-                  ))}
-                </div>
-              </div>
-
-              {/* ── MONTHLY STATS GRID ── */}
-              {monthly.length > 0 && (() => {
-                const last3 = monthly.slice(-3)
-                const avgMonthly = monthly.reduce((s,m) => s+m.usd, 0) / monthly.length
-                const trend = monthly.length >= 2 ? monthly[monthly.length-1].usd - monthly[monthly.length-2].usd : 0
-                return (
-                  <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))", gap:12, marginBottom:24 }}>
-                    {[
-                      { label:"Avg / Month", value:`$${Math.round(avgMonthly)}`, icon:"📊", color:C.cyan },
-                      { label:"Best Month", value:`$${bestMo?.usd?.toFixed(0)||0}`, sub:bestMo ? fmtMonth(bestMo.month) : '', icon:"🏆", color:C.gold },
-                      { label:"MoM Trend", value: trend >= 0 ? `+$${Math.round(trend)}` : `-$${Math.round(Math.abs(trend))}`, icon: trend >= 0 ? "📈" : "📉", color: trend >= 0 ? C.green : C.red },
-                      { label:"Months Tracked", value: monthly.length, icon:"📅", color:C.indigo },
-                    ].map(({ label, value, sub, icon, color }) => (
-                      <div key={label} style={{ ...glassCard, borderRadius:14, padding:16, border:`1px solid ${color}20` }}>
-                        <div style={{ fontSize:11, color:C.muted, marginBottom:6 }}>{icon} {label}</div>
-                        <div style={{ fontSize:20, fontWeight:900, color }}>{value}</div>
-                        {sub && <div style={{ fontSize:11, color:C.muted }}>{sub}</div>}
-                      </div>
-                    ))}
-                  </div>
-                )
-              })()}
-
-              {/* ── TIP TYPE BREAKDOWN ── */}
-              <div style={{ ...glassCard, borderRadius:18, padding:24, marginBottom:24 }}>
-                <div style={{ fontSize:16, fontWeight:800, color:C.white, marginBottom:4 }}>Revenue by Type</div>
-                <div style={{ fontSize:12, color:C.muted, marginBottom:20 }}>How your earnings break down across tips, privates, and spy shows</div>
-                <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-                  {tipTypes.map(t => {
-                    const col = t.type.toLowerCase().includes('private') ? C.pink : t.type.toLowerCase().includes('spy') ? C.orange : t.type.toLowerCase().includes('received') ? C.cyan : C.indigo
-                    return (
-                      <div key={t.type} style={{ padding:"14px 16px", borderRadius:12, background:`${col}0d`, border:`1px solid ${col}25` }}>
-                        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
-                          <div style={{ fontSize:14, fontWeight:700, color:C.white }}>{t.type}</div>
-                          <div style={{ fontSize:16, fontWeight:900, color:col }}>${t.usd.toFixed(2)} <span style={{ fontSize:12, color:C.muted }}>({t.pct}%)</span></div>
-                        </div>
-                        <div style={{ height:6, borderRadius:3, background:"rgba(255,255,255,0.06)", overflow:"hidden", marginBottom:8 }}>
-                          <div style={{ height:"100%", width:`${t.pct}%`, borderRadius:3, background:col, transition:"width 0.8s ease" }} />
-                        </div>
-                        <div style={{ display:"flex", gap:16, flexWrap:"wrap" }}>
-                          {[
-                            [`${t.count} tips`],
-                            [`${t.fans} fans`],
-                            [`$${t.avgUsd} avg tip`],
-                          ].map(([v]) => <span key={v} style={{ fontSize:11, color:C.muted }}>{v}</span>)}
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-
-              {/* ── PRIVATE SHOW INTEL ── */}
-              {privFans.length > 0 && (
-                <div style={{ ...glassCard, borderRadius:18, padding:24, marginBottom:24, border:"1px solid rgba(236,72,153,0.2)" }}>
-                  <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:16 }}>
-                    <div style={{ width:36, height:36, borderRadius:10, background:"linear-gradient(135deg,#EC4899,#7C5CFF)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>🔒</div>
-                    <div>
-                      <div style={{ fontSize:16, fontWeight:800, color:C.white }}>Private Show Fans</div>
-                      <div style={{ fontSize:12, color:C.muted }}>{privFans.length} fans have booked a private show</div>
-                    </div>
-                  </div>
-                  <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-                    {privFans.slice(0,8).map((f,i) => (
-                      <div key={f.username} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"10px 14px", borderRadius:10, background:"rgba(236,72,153,0.07)", border:"1px solid rgba(236,72,153,0.15)" }}>
-                        <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                          <div style={{ width:28, height:28, borderRadius:8, background:`linear-gradient(135deg,#EC4899,#7C5CFF)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:700, color:C.white, flexShrink:0 }}>{f.username[0]?.toUpperCase()}</div>
-                          <div>
-                            <div style={{ fontSize:13, fontWeight:700, color:C.white }}>{f.username}</div>
-                            <div style={{ fontSize:11, color:C.muted }}>{f.count} private{f.count>1?'s':''}</div>
-                          </div>
-                        </div>
-                        <div style={{ fontSize:14, fontWeight:700, color:C.pink }}>${f.usd.toFixed(2)}</div>
-                      </div>
-                    ))}
-                  </div>
-                  {spyFans.length > 0 && (
-                    <div style={{ marginTop:16, padding:"12px 14px", borderRadius:10, background:"rgba(251,146,60,0.07)", border:"1px solid rgba(251,146,60,0.2)" }}>
-                      <div style={{ fontSize:13, fontWeight:700, color:C.orange, marginBottom:4 }}>👁️ Spy Show Viewers ({spyFans.length} fans)</div>
-                      <div style={{ fontSize:12, color:C.muted }}>These fans watched your privates but never booked one — warm leads for re-engagement</div>
-                      <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginTop:8 }}>
-                        {spyFans.slice(0,10).map(u => (
-                          <span key={u} style={{ padding:"3px 8px", borderRadius:6, background:"rgba(251,146,60,0.12)", border:"1px solid rgba(251,146,60,0.2)", fontSize:11, color:C.orange }}>{u}</span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* ── MONTHLY FAN TABLE ── */}
-              {monthly.length > 0 && (
-                <div style={{ ...glassCard, borderRadius:18, padding:24 }}>
-                  <div style={{ fontSize:16, fontWeight:800, color:C.white, marginBottom:16 }}>Month by Month</div>
-                  <div style={{ overflowX:"auto" }}>
-                    <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
-                      <thead>
-                        <tr style={{ borderBottom:"1px solid rgba(255,255,255,0.08)" }}>
-                          {["Month","Revenue","Tips","Fans","$/Fan","Sessions"].map(h => (
-                            <th key={h} style={{ padding:"8px 12px", textAlign:"left", color:C.muted, fontWeight:600, fontSize:11 }}>{h}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {[...monthly].reverse().map((m,i) => {
-                          const isBest = m.month === bestMo?.month
-                          const isCurrent = m.month === thisMonthKey
-                          return (
-                            <tr key={m.month} style={{ borderBottom:"1px solid rgba(255,255,255,0.04)", background: isBest ? "rgba(245,158,11,0.06)" : isCurrent ? "rgba(16,185,129,0.06)" : "transparent" }}>
-                              <td style={{ padding:"10px 12px", color: isBest ? C.gold : isCurrent ? C.green : C.white, fontWeight: isBest||isCurrent ? 700 : 400 }}>{fmtMonth(m.month)}{isBest?" 🏆":isCurrent?" ◀":""}</td>
-                              <td style={{ padding:"10px 12px", color:C.white, fontWeight:700 }}>${m.usd.toFixed(2)}</td>
-                              <td style={{ padding:"10px 12px", color:C.muted }}>{m.tips}</td>
-                              <td style={{ padding:"10px 12px", color:C.muted }}>{m.fans}</td>
-                              <td style={{ padding:"10px 12px", color:C.cyan }}>${m.usdPerFan}</td>
-                              <td style={{ padding:"10px 12px", color:C.muted }}>{m.sessions}</td>
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-
-            </div>
-          )
-        })()}
-
         {activeTab === "titles" && (
           <div style={{ maxWidth: 760, margin: "0 auto" }}>
             <TitleGenerator C={C} glassCard={glassCard} analytics={analytics} tips={tips} sessions={sessions} whales={whales} />
@@ -4645,7 +3928,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                     const dayKeys = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]
                     const dayCounts = { Mon:0,Tue:0,Wed:0,Thu:0,Fri:0,Sat:0,Sun:0 }
                     whaleTips.forEach(t => {
-                      const d = new Date(t.date_time).getUTCDay()
+                      const d = new Date(t.date_time).getDay()
                       const key = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][d]
                       if (key in dayCounts) dayCounts[key]++
                     })
@@ -4878,7 +4161,7 @@ const handleCSV = async (file, forcePlatform = null) => {
               </div>
               <div style={{ padding: 16, background: "rgba(124,92,255,0.1)", border: "1px solid rgba(124,92,255,0.25)", borderRadius: 12, marginBottom: 18 }}>
                 <div style={{ fontSize: 14, color: C.indigo, fontWeight: 700, marginBottom: 8 }}>🚀 Early Access Offer</div>
-                <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.7, marginBottom: 10 }}>Early access users can lock in founding pricing:</div>
+                <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.7, marginBottom: 10 }}>Right now everything is free during beta. But early users can:</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
                   {["Lock in lifetime pricing before it increases", "Get every future premium feature included", "Keep full access as we expand the product"].map(t => (
                     <div key={t} style={{ fontSize: 12, color: C.white }}>• {t}</div>
@@ -5058,40 +4341,6 @@ const handleCSV = async (file, forcePlatform = null) => {
       })()}
 
       {/* SHARE MY STATS MODAL */}
-      {/* ── NOTE MODAL ── */}
-      {noteTarget && (
-        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
-          <div style={{ ...glassCard, borderRadius:20, padding:28, width:"100%", maxWidth:440, border:"1px solid rgba(245,158,11,0.3)" }}>
-            <div style={{ fontSize:18, fontWeight:800, color:C.white, marginBottom:4 }}>📝 Note for {noteTarget}</div>
-            <div style={{ fontSize:12, color:C.muted, marginBottom:16 }}>Private note — only you can see this</div>
-            <textarea
-              value={noteText}
-              onChange={e => setNoteText(e.target.value)}
-              placeholder="e.g. Loves privates, tips on Sundays, favorite toy is the Lush..."
-              rows={4}
-              style={{ width:"100%", padding:"10px 12px", borderRadius:10, background:"rgba(255,255,255,0.05)", border:"1px solid rgba(245,158,11,0.3)", color:C.white, fontSize:13, outline:"none", resize:"vertical", fontFamily:"inherit", boxSizing:"border-box" }}
-            />
-            <div style={{ display:"flex", gap:10, marginTop:14 }}>
-              <button onClick={() => saveTipperNote(noteTarget, noteText)}
-                disabled={noteSaving}
-                style={{ flex:1, padding:"10px 0", borderRadius:10, background:"linear-gradient(135deg,#F59E0B,#EC4899)", border:"none", color:C.white, fontSize:14, fontWeight:700, cursor:"pointer" }}>
-                {noteSaving ? "Saving..." : "Save Note"}
-              </button>
-              {tipperNotes[noteTarget?.toLowerCase()]?.note && (
-                <button onClick={() => saveTipperNote(noteTarget, '')}
-                  style={{ padding:"10px 14px", borderRadius:10, background:"rgba(248,113,113,0.15)", border:"1px solid rgba(248,113,113,0.3)", color:C.red, fontSize:13, cursor:"pointer" }}>
-                  Delete
-                </button>
-              )}
-              <button onClick={() => setNoteTarget(null)}
-                style={{ padding:"10px 14px", borderRadius:10, background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.1)", color:C.muted, fontSize:13, cursor:"pointer" }}>
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {shareModalOpen && (() => {
         const topFan = whales[0]
         const bestDayLabel = analyticsbestDay?.day || null
