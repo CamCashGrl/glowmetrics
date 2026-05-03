@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
 import { parseCSV, aggregateRows as runEngine } from "../../lib/analytics"
 import CSVImport from "./CSVImport"
+import Sidebar from "./Sidebar"
 
 // Analytics tracking — works whether or not @vercel/analytics is installed
 let track = (event, props) => {}
