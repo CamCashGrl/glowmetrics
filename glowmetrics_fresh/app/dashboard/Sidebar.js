@@ -1,20 +1,99 @@
 "use client"
 import React, { useState } from "react"
 
-const NAV = [
-  { id: "overview",  icon: "📊", label: "Overview" },
-  { id: "platforms", icon: "🎯", label: "Platforms" },
-  { id: "whales",    icon: "🐳", label: "Top Fans" },
-  { id: "sessions",  icon: "🎥", label: "Sessions" },
-  { id: "live",      icon: "🔴", label: "Live Mode" },
-  { id: "data",      icon: "📝", label: "Edit Data" },
-  { id: "titles",    icon: "🎬", label: "Room Titles" },
-  { id: "help",      icon: "❓", label: "CSV Help" },
-  { id: "upload",    icon: "📥", label: "Import" },
+const SECTIONS = [
+  {
+    id: "main",
+    label: null,
+    items: [
+      { id: "overview",  icon: "📊", label: "Overview" },
+      { id: "platforms", icon: "🎯", label: "Platforms" },
+      { id: "whales",    icon: "🐳", label: "Top Fans" },
+    ]
+  },
+  {
+    id: "analytics",
+    label: "ANALYTICS",
+    items: [
+      { id: "sessions", icon: "🎥", label: "Sessions" },
+      { id: "monthly",  icon: "📈", label: "Monthly" },
+    ]
+  },
+  {
+    id: "tools",
+    label: "TOOLS",
+    items: [
+      { id: "live",   icon: "🔴", label: "Live Mode" },
+      { id: "data",   icon: "📝", label: "Edit Data" },
+      { id: "titles", icon: "🎬", label: "Room Titles" },
+    ]
+  },
+]
+
+const BOTTOM_ITEMS = [
+  { id: "help",   icon: "❓", label: "CSV Help" },
+  { id: "upload", icon: "📥", label: "Import CSV" },
 ]
 
 export default function Sidebar({ activeTab, onTabChange, user, onSignOut }) {
   const [hoveredId, setHoveredId] = useState(null)
+
+  const NavItem = ({ id, icon, label }) => {
+    const isActive  = activeTab === id
+    const isHovered = hoveredId === id
+    return (
+      <button
+        onClick={() => onTabChange(id)}
+        onMouseEnter={() => setHoveredId(id)}
+        onMouseLeave={() => setHoveredId(null)}
+        style={{
+          width: "100%",
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          padding: "8px 12px",
+          borderRadius: 9,
+          border: isActive
+            ? "1px solid rgba(59,130,246,0.3)"
+            : "1px solid transparent",
+          cursor: "pointer",
+          textAlign: "left",
+          fontSize: 13,
+          fontWeight: isActive ? 600 : 400,
+          letterSpacing: 0.1,
+          color: isActive ? "#F1F5F9" : isHovered ? "#94A3B8" : "#4B5E78",
+          background: isActive
+            ? "linear-gradient(135deg, rgba(59,130,246,0.18), rgba(236,72,153,0.13))"
+            : isHovered
+            ? "rgba(255,255,255,0.04)"
+            : "transparent",
+          boxShadow: isActive ? "0 0 16px rgba(59,130,246,0.12)" : "none",
+          position: "relative",
+          overflow: "hidden",
+          transition: "all 0.15s ease",
+        }}
+      >
+        {isActive && (
+          <div style={{
+            position: "absolute", left: 0, top: "18%", bottom: "18%",
+            width: 2.5, borderRadius: 2,
+            background: "linear-gradient(180deg, #22D3EE, #EC4899)",
+            boxShadow: "0 0 6px rgba(34,211,238,0.6)",
+          }} />
+        )}
+        <span style={{
+          fontSize: 15, lineHeight: 1, flexShrink: 0,
+          filter: isActive
+            ? "drop-shadow(0 0 4px rgba(34,211,238,0.45))"
+            : isHovered ? "brightness(1.3)" : "brightness(0.8)",
+          transition: "filter 0.15s",
+        }}>
+          {icon}
+        </span>
+        <span style={{ lineHeight: 1 }}>{label}</span>
+      </button>
+    )
+  }
 
   return (
     <div style={{
@@ -24,37 +103,26 @@ export default function Sidebar({ activeTab, onTabChange, user, onSignOut }) {
       display: "flex",
       flexDirection: "column",
       zIndex: 50,
-      background: "linear-gradient(180deg, #0a0d1a 0%, #07090f 100%)",
+      background: "linear-gradient(180deg, #0a0d1a 0%, #070910 100%)",
       borderRight: "1px solid rgba(255,255,255,0.06)",
-      boxShadow: "inset -1px 0 0 rgba(124,92,255,0.08)",
+      boxShadow: "inset -1px 0 0 rgba(124,92,255,0.07), 2px 0 20px rgba(0,0,0,0.4)",
     }}>
       <style>{`
-        .nav-btn {
-          transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease;
-          position: relative;
-          overflow: hidden;
-        }
-        .nav-btn:hover { transform: translateX(2px); }
-        .nav-btn:active { transform: scale(0.97) !important; }
-        .sidebar-nav::-webkit-scrollbar { width: 2px; }
-        .sidebar-nav::-webkit-scrollbar-track { background: transparent; }
-        .sidebar-nav::-webkit-scrollbar-thumb {
+        .sidebar-scroll::-webkit-scrollbar { width: 2px; }
+        .sidebar-scroll::-webkit-scrollbar-track { background: transparent; }
+        .sidebar-scroll::-webkit-scrollbar-thumb {
           background: rgba(124,92,255,0.2);
           border-radius: 2px;
         }
       `}</style>
 
-      {/* ── HEADER ── */}
+      {/* ── TOP: Logo + email + beta — FIXED ── */}
       <div style={{
-        padding: "16px 16px 12px",
+        padding: "16px 16px 14px",
         borderBottom: "1px solid rgba(255,255,255,0.05)",
         flexShrink: 0,
       }}>
-        {/* Logo + sign out */}
-        <div style={{
-          display: "flex", alignItems: "center",
-          justifyContent: "space-between", marginBottom: 8,
-        }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
             <div style={{
               width: 30, height: 30, borderRadius: 9,
@@ -65,57 +133,40 @@ export default function Sidebar({ activeTab, onTabChange, user, onSignOut }) {
               flexShrink: 0,
             }}>$</div>
             <span style={{ fontSize: 17, fontWeight: 800, color: "#F1F5F9", letterSpacing: -0.3 }}>
-              Cam
-              <span style={{
+              Cam<span style={{
                 background: "linear-gradient(90deg, #22D3EE, #EC4899)",
-                WebkitBackgroundClip: "text",
-                WebkitTextFillColor: "transparent",
+                WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
               }}>Cash</span>
             </span>
           </div>
-
           {onSignOut && (
-            <button
-              onClick={onSignOut}
-              title="Sign Out"
-              style={{
-                padding: "3px 8px", borderRadius: 5,
-                background: "rgba(248,113,113,0.08)",
-                border: "1px solid rgba(248,113,113,0.18)",
-                color: "#F87171", fontSize: 9, fontWeight: 700,
-                cursor: "pointer", letterSpacing: 0.3,
-                transition: "background 0.15s",
-              }}
-              onMouseEnter={e => e.currentTarget.style.background = "rgba(248,113,113,0.18)"}
+            <button onClick={onSignOut} title="Sign Out" style={{
+              padding: "3px 8px", borderRadius: 5,
+              background: "rgba(248,113,113,0.08)",
+              border: "1px solid rgba(248,113,113,0.18)",
+              color: "#F87171", fontSize: 9, fontWeight: 700,
+              cursor: "pointer", transition: "background 0.15s",
+            }}
+              onMouseEnter={e => e.currentTarget.style.background = "rgba(248,113,113,0.2)"}
               onMouseLeave={e => e.currentTarget.style.background = "rgba(248,113,113,0.08)"}
             >OUT</button>
           )}
         </div>
-
-        {/* Email */}
         {user && (
           <div style={{
-            fontSize: 10, color: "#334155",
+            fontSize: 10, color: "#2d3f55", marginBottom: 10,
             overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-            marginBottom: 8,
-          }}>
-            {user.email}
-          </div>
+          }}>{user.email}</div>
         )}
-
-        {/* Beta badge */}
         <div style={{
           display: "flex", alignItems: "center", gap: 6,
           padding: "5px 10px", borderRadius: 7,
-          background: "linear-gradient(135deg, rgba(245,158,11,0.14), rgba(251,146,60,0.08))",
-          border: "1px solid rgba(245,158,11,0.28)",
+          background: "linear-gradient(135deg, rgba(245,158,11,0.13), rgba(251,146,60,0.07))",
+          border: "1px solid rgba(245,158,11,0.25)",
         }}>
           <div style={{
             width: 6, height: 6, borderRadius: "50%",
-            background: "#F59E0B",
-            boxShadow: "0 0 5px #F59E0B",
-            flexShrink: 0,
-            animation: "none",
+            background: "#F59E0B", boxShadow: "0 0 5px #F59E0B", flexShrink: 0,
           }} />
           <div>
             <div style={{ fontSize: 10, fontWeight: 700, color: "#F59E0B", letterSpacing: 0.5 }}>FREE BETA</div>
@@ -124,92 +175,51 @@ export default function Sidebar({ activeTab, onTabChange, user, onSignOut }) {
         </div>
       </div>
 
-      {/* ── NAV ── flat list, no section boxes */}
-      <div
-        className="sidebar-nav"
-        style={{
-          flex: 1,
-          overflowY: "auto",
-          overflowX: "hidden",
-          padding: "8px 10px",
-          display: "flex",
-          flexDirection: "column",
-          gap: 2,
-          minHeight: 0,
-        }}
-      >
-        {NAV.map(({ id, icon, label }) => {
-          const isActive  = activeTab === id
-          const isHovered = hoveredId === id
-
-          return (
-            <button
-              key={id}
-              className="nav-btn"
-              onClick={() => onTabChange(id)}
-              onMouseEnter={() => setHoveredId(id)}
-              onMouseLeave={() => setHoveredId(null)}
-              style={{
-                width: "100%",
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-                padding: "8px 11px",
-                borderRadius: 9,
-                border: isActive
-                  ? "1px solid rgba(59,130,246,0.28)"
-                  : "1px solid transparent",
-                cursor: "pointer",
-                textAlign: "left",
-                fontSize: 13,
-                fontWeight: isActive ? 600 : 400,
-                letterSpacing: 0.1,
-                color: isActive
-                  ? "#F1F5F9"
-                  : isHovered
-                  ? "#94A3B8"
-                  : "#4B5E78",
-                background: isActive
-                  ? "linear-gradient(135deg, rgba(59,130,246,0.16), rgba(236,72,153,0.12))"
-                  : isHovered
-                  ? "rgba(255,255,255,0.04)"
-                  : "transparent",
-                boxShadow: isActive
-                  ? "0 0 14px rgba(59,130,246,0.12)"
-                  : "none",
-              }}
-            >
-              {/* Active left accent */}
-              {isActive && (
-                <div style={{
-                  position: "absolute",
-                  left: 0, top: "18%", bottom: "18%",
-                  width: 2.5, borderRadius: 2,
-                  background: "linear-gradient(180deg, #22D3EE, #EC4899)",
-                  boxShadow: "0 0 6px rgba(34,211,238,0.55)",
-                }} />
-              )}
-
-              {/* Icon */}
-              <span style={{
-                fontSize: 15,
-                lineHeight: 1,
-                flexShrink: 0,
-                filter: isActive
-                  ? "drop-shadow(0 0 4px rgba(34,211,238,0.45))"
-                  : isHovered
-                  ? "brightness(1.3)"
-                  : "brightness(0.85)",
-                transition: "filter 0.15s",
+      {/* ── MIDDLE: Scrollable nav ── */}
+      <div className="sidebar-scroll" style={{
+        flex: 1, overflowY: "auto", overflowX: "hidden",
+        padding: "10px 10px 6px",
+        display: "flex", flexDirection: "column", gap: 2,
+        minHeight: 0,
+      }}>
+        {SECTIONS.map((section, si) => (
+          <div key={section.id} style={{ marginTop: si > 0 ? 14 : 0 }}>
+            {section.label && (
+              <div style={{
+                fontSize: 9, fontWeight: 700, letterSpacing: 1.5,
+                color: "#1e3a52", textTransform: "uppercase",
+                padding: "0 10px 5px",
               }}>
-                {icon}
-              </span>
+                {section.label}
+              </div>
+            )}
+            <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+              {section.items.map(item => (
+                <NavItem key={item.id} {...item} />
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
 
-              {/* Label */}
-              <span style={{ lineHeight: 1 }}>{label}</span>
-            </button>
-          )
-        })}
+      {/* ── BOTTOM: Support items — pinned ── */}
+      <div style={{
+        padding: "8px 10px 12px",
+        borderTop: "1px solid rgba(255,255,255,0.04)",
+        flexShrink: 0,
+      }}>
+        <div style={{
+          fontSize: 9, fontWeight: 700, letterSpacing: 1.5,
+          color: "#1e3a52", textTransform: "uppercase",
+          padding: "0 10px 5px",
+        }}>
+          SUPPORT
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+          {BOTTOM_ITEMS.map(item => (
+            <NavItem key={item.id} {...item} />
+          ))}
+        </div>
       </div>
     </div>
   )
