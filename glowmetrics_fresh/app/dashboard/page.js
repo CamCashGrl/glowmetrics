@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
 import { parseCSV, aggregateRows as runEngine } from "../../lib/analytics"
+import CSVImport from "./CSVImport"
 
 // Analytics tracking — works whether or not @vercel/analytics is installed
 let track = (event, props) => {}
@@ -4122,9 +4123,13 @@ const handleCSV = async (file, forcePlatform = null) => {
           </div>
         )}
 
-        {activeTab === "upload" && (
-          <div style={{ maxWidth: 600, margin: "0 auto" }}>
-            <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 8 }}>📥 Import CSV</h1>
+  {activeTab === "upload" && (
+  <CSVImport
+    user={user}
+    onSuccess={() => loadData(user.id, true)}
+    showToast={showToast}
+  />
+)}
             <p style={{ fontSize: 14, color: C.muted, marginBottom: 32 }}>Unlimited uploads during free beta • Auto-removes duplicates</p>
             <div style={{ ...glassCard, borderRadius: 14, padding: 32, marginBottom: 16 }}>
               <div style={{ marginBottom: 20 }}>
