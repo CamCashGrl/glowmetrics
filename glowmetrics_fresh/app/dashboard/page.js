@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
 import { parseCSV, aggregateRows as runEngine } from "../../lib/analytics"
+import CSVImport from "./CSVImport"
 
 // Analytics tracking — works whether or not @vercel/analytics is installed
 let track = (event, props) => {}
