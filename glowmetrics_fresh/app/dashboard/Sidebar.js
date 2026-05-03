@@ -2,31 +2,15 @@
 import React, { useState } from "react"
 
 const NAV = [
-  {
-    section: "MAIN",
-    items: [
-      { id: "overview",  icon: "📊", label: "Overview" },
-      { id: "platforms", icon: "🎯", label: "Platforms" },
-      { id: "whales",    icon: "🐳", label: "Top Fans" },
-    ]
-  },
-  {
-    section: "ANALYTICS",
-    items: [
-      { id: "sessions", icon: "🎥", label: "Sessions" },
-      { id: "monthly",  icon: "📈", label: "Monthly" },
-    ]
-  },
-  {
-    section: "TOOLS",
-    items: [
-      { id: "live",   icon: "🔴", label: "Live Mode" },
-      { id: "titles", icon: "🎬", label: "Room Titles" },
-      { id: "upload", icon: "📥", label: "Import CSV" },
-      { id: "help",   icon: "❓", label: "CSV Help" },
-      { id: "data",   icon: "📝", label: "Edit Data" },
-    ]
-  },
+  { id: "overview",  icon: "📊", label: "Overview" },
+  { id: "platforms", icon: "🎯", label: "Platforms" },
+  { id: "whales",    icon: "🐳", label: "Top Fans" },
+  { id: "sessions",  icon: "🎥", label: "Sessions" },
+  { id: "live",      icon: "🔴", label: "Live Mode" },
+  { id: "data",      icon: "📝", label: "Edit Data" },
+  { id: "titles",    icon: "🎬", label: "Room Titles" },
+  { id: "help",      icon: "❓", label: "CSV Help" },
+  { id: "upload",    icon: "📥", label: "Import" },
 ]
 
 export default function Sidebar({ activeTab, onTabChange, user, onSignOut }) {
@@ -40,56 +24,47 @@ export default function Sidebar({ activeTab, onTabChange, user, onSignOut }) {
       display: "flex",
       flexDirection: "column",
       zIndex: 50,
-      background: "linear-gradient(180deg, rgba(8,11,22,0.99) 0%, rgba(5,7,15,1) 100%)",
-      borderRight: "1px solid rgba(255,255,255,0.05)",
-      backdropFilter: "blur(24px)",
-      WebkitBackdropFilter: "blur(24px)",
+      background: "linear-gradient(180deg, #0a0d1a 0%, #07090f 100%)",
+      borderRight: "1px solid rgba(255,255,255,0.06)",
+      boxShadow: "inset -1px 0 0 rgba(124,92,255,0.08)",
     }}>
       <style>{`
-        @keyframes glow-pulse {
-          0%,100% { opacity: 0.5; }
-          50%      { opacity: 1; }
-        }
         .nav-btn {
-          transition: background 0.15s ease, color 0.15s ease,
-                      box-shadow 0.15s ease, transform 0.15s ease;
+          transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease;
           position: relative;
           overflow: hidden;
         }
-        .nav-btn:hover  { transform: translateX(2px); }
+        .nav-btn:hover { transform: translateX(2px); }
         .nav-btn:active { transform: scale(0.97) !important; }
-        .sidebar-scroll { overflow-y: auto; overflow-x: hidden; }
-        .sidebar-scroll::-webkit-scrollbar { width: 2px; }
-        .sidebar-scroll::-webkit-scrollbar-track { background: transparent; }
-        .sidebar-scroll::-webkit-scrollbar-thumb {
-          background: rgba(124,92,255,0.25);
+        .sidebar-nav::-webkit-scrollbar { width: 2px; }
+        .sidebar-nav::-webkit-scrollbar-track { background: transparent; }
+        .sidebar-nav::-webkit-scrollbar-thumb {
+          background: rgba(124,92,255,0.2);
           border-radius: 2px;
         }
       `}</style>
 
-      {/* ── LOGO HEADER ── */}
+      {/* ── HEADER ── */}
       <div style={{
-        padding: "12px 14px 10px",
+        padding: "16px 16px 12px",
         borderBottom: "1px solid rgba(255,255,255,0.05)",
         flexShrink: 0,
       }}>
-        {/* Logo row */}
+        {/* Logo + sign out */}
         <div style={{
           display: "flex", alignItems: "center",
-          justifyContent: "space-between", marginBottom: 6,
+          justifyContent: "space-between", marginBottom: 8,
         }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
             <div style={{
-              width: 28, height: 28, borderRadius: 8,
+              width: 30, height: 30, borderRadius: 9,
               background: "linear-gradient(135deg, #22D3EE, #EC4899)",
               display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: 14, fontWeight: 800, color: "#fff",
-              boxShadow: "0 0 10px rgba(34,211,238,0.3)",
+              fontSize: 15, fontWeight: 800, color: "#fff",
+              boxShadow: "0 0 12px rgba(34,211,238,0.3)",
               flexShrink: 0,
             }}>$</div>
-            <span style={{
-              fontSize: 16, fontWeight: 800, color: "#F1F5F9", letterSpacing: -0.3,
-            }}>
+            <span style={{ fontSize: 17, fontWeight: 800, color: "#F1F5F9", letterSpacing: -0.3 }}>
               Cam
               <span style={{
                 background: "linear-gradient(90deg, #22D3EE, #EC4899)",
@@ -99,144 +74,142 @@ export default function Sidebar({ activeTab, onTabChange, user, onSignOut }) {
             </span>
           </div>
 
-          {/* Sign out */}
           {onSignOut && (
             <button
               onClick={onSignOut}
               title="Sign Out"
               style={{
-                padding: "3px 7px", borderRadius: 5,
+                padding: "3px 8px", borderRadius: 5,
                 background: "rgba(248,113,113,0.08)",
-                border: "1px solid rgba(248,113,113,0.2)",
+                border: "1px solid rgba(248,113,113,0.18)",
                 color: "#F87171", fontSize: 9, fontWeight: 700,
                 cursor: "pointer", letterSpacing: 0.3,
                 transition: "background 0.15s",
               }}
-              onMouseEnter={e => e.currentTarget.style.background = "rgba(248,113,113,0.2)"}
+              onMouseEnter={e => e.currentTarget.style.background = "rgba(248,113,113,0.18)"}
               onMouseLeave={e => e.currentTarget.style.background = "rgba(248,113,113,0.08)"}
-            >
-              OUT
-            </button>
+            >OUT</button>
           )}
         </div>
 
         {/* Email */}
         {user && (
           <div style={{
-            fontSize: 9, color: "#2d3f55",
-            overflow: "hidden", textOverflow: "ellipsis",
-            whiteSpace: "nowrap", marginBottom: 6,
+            fontSize: 10, color: "#334155",
+            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+            marginBottom: 8,
           }}>
             {user.email}
           </div>
         )}
+
+        {/* Beta badge */}
+        <div style={{
+          display: "flex", alignItems: "center", gap: 6,
+          padding: "5px 10px", borderRadius: 7,
+          background: "linear-gradient(135deg, rgba(245,158,11,0.14), rgba(251,146,60,0.08))",
+          border: "1px solid rgba(245,158,11,0.28)",
+        }}>
+          <div style={{
+            width: 6, height: 6, borderRadius: "50%",
+            background: "#F59E0B",
+            boxShadow: "0 0 5px #F59E0B",
+            flexShrink: 0,
+            animation: "none",
+          }} />
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: "#F59E0B", letterSpacing: 0.5 }}>FREE BETA</div>
+            <div style={{ fontSize: 9, color: "#FB923C" }}>All features unlocked</div>
+          </div>
+        </div>
       </div>
 
-      {/* ── NAV SECTIONS ── */}
+      {/* ── NAV ── flat list, no section boxes */}
       <div
-        className="sidebar-scroll"
+        className="sidebar-nav"
         style={{
           flex: 1,
-          padding: "6px 8px",
+          overflowY: "auto",
+          overflowX: "hidden",
+          padding: "8px 10px",
           display: "flex",
           flexDirection: "column",
-          gap: 4,
+          gap: 2,
           minHeight: 0,
         }}
       >
-        {NAV.map(({ section, items }) => (
-          <div
-            key={section}
-            style={{
-              background: "rgba(255,255,255,0.02)",
-              border: "1px solid rgba(255,255,255,0.04)",
-              borderRadius: 9,
-              padding: "3px 3px 4px",
-              flexShrink: 0,
-            }}
-          >
-            {/* Section label */}
-            <div style={{
-              fontSize: 8, fontWeight: 700,
-              letterSpacing: 1.4, color: "#1e3048",
-              textTransform: "uppercase",
-              padding: "3px 8px 2px",
-            }}>
-              {section}
-            </div>
+        {NAV.map(({ id, icon, label }) => {
+          const isActive  = activeTab === id
+          const isHovered = hoveredId === id
 
-            {/* Items */}
-            {items.map(({ id, icon, label }) => {
-              const isActive  = activeTab === id
-              const isHovered = hoveredId === id
-              return (
-                <button
-                  key={id}
-                  className="nav-btn"
-                  onClick={() => onTabChange(id)}
-                  onMouseEnter={() => setHoveredId(id)}
-                  onMouseLeave={() => setHoveredId(null)}
-                  style={{
-                    width: "100%",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                    padding: "6px 9px",
-                    borderRadius: 7,
-                    border: "none",
-                    cursor: "pointer",
-                    textAlign: "left",
-                    fontSize: 12,
-                    fontWeight: isActive ? 700 : 400,
-                    color: isActive
-                      ? "#F1F5F9"
-                      : isHovered
-                      ? "#94A3B8"
-                      : "#475569",
-                    background: isActive
-                      ? "linear-gradient(135deg, rgba(59,130,246,0.22), rgba(236,72,153,0.16))"
-                      : isHovered
-                      ? "rgba(255,255,255,0.05)"
-                      : "transparent",
-                    boxShadow: isActive
-                      ? "inset 0 0 0 1px rgba(59,130,246,0.3), 0 2px 10px rgba(59,130,246,0.12)"
-                      : "none",
-                    marginBottom: 1,
-                  }}
-                >
-                  {/* Active accent bar */}
-                  {isActive && (
-                    <div style={{
-                      position: "absolute",
-                      left: 0, top: "15%", bottom: "15%",
-                      width: 2, borderRadius: 2,
-                      background: "linear-gradient(180deg, #22D3EE, #EC4899)",
-                      boxShadow: "0 0 5px rgba(34,211,238,0.6)",
-                    }} />
-                  )}
+          return (
+            <button
+              key={id}
+              className="nav-btn"
+              onClick={() => onTabChange(id)}
+              onMouseEnter={() => setHoveredId(id)}
+              onMouseLeave={() => setHoveredId(null)}
+              style={{
+                width: "100%",
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                padding: "8px 11px",
+                borderRadius: 9,
+                border: isActive
+                  ? "1px solid rgba(59,130,246,0.28)"
+                  : "1px solid transparent",
+                cursor: "pointer",
+                textAlign: "left",
+                fontSize: 13,
+                fontWeight: isActive ? 600 : 400,
+                letterSpacing: 0.1,
+                color: isActive
+                  ? "#F1F5F9"
+                  : isHovered
+                  ? "#94A3B8"
+                  : "#4B5E78",
+                background: isActive
+                  ? "linear-gradient(135deg, rgba(59,130,246,0.16), rgba(236,72,153,0.12))"
+                  : isHovered
+                  ? "rgba(255,255,255,0.04)"
+                  : "transparent",
+                boxShadow: isActive
+                  ? "0 0 14px rgba(59,130,246,0.12)"
+                  : "none",
+              }}
+            >
+              {/* Active left accent */}
+              {isActive && (
+                <div style={{
+                  position: "absolute",
+                  left: 0, top: "18%", bottom: "18%",
+                  width: 2.5, borderRadius: 2,
+                  background: "linear-gradient(180deg, #22D3EE, #EC4899)",
+                  boxShadow: "0 0 6px rgba(34,211,238,0.55)",
+                }} />
+              )}
 
-                  {/* Icon */}
-                  <span style={{
-                    fontSize: 13,
-                    lineHeight: 1,
-                    filter: isActive
-                      ? "drop-shadow(0 0 4px rgba(34,211,238,0.5))"
-                      : isHovered
-                      ? "drop-shadow(0 0 2px rgba(148,163,184,0.3))"
-                      : "none",
-                    transition: "filter 0.15s",
-                    flexShrink: 0,
-                  }}>
-                    {icon}
-                  </span>
+              {/* Icon */}
+              <span style={{
+                fontSize: 15,
+                lineHeight: 1,
+                flexShrink: 0,
+                filter: isActive
+                  ? "drop-shadow(0 0 4px rgba(34,211,238,0.45))"
+                  : isHovered
+                  ? "brightness(1.3)"
+                  : "brightness(0.85)",
+                transition: "filter 0.15s",
+              }}>
+                {icon}
+              </span>
 
-                  {/* Label */}
-                  <span style={{ lineHeight: 1 }}>{label}</span>
-                </button>
-              )
-            })}
-          </div>
-        ))}
+              {/* Label */}
+              <span style={{ lineHeight: 1 }}>{label}</span>
+            </button>
+          )
+        })}
       </div>
     </div>
   )
