@@ -1,4 +1,4 @@
-"use client"
+"use client" // v2
 import React, { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
