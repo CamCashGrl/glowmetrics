@@ -1,5 +1,5 @@
 "use client"
-import React, { useState, useEffect, useCallback } from "react"
+import React, { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
 import { parseCSV, aggregateRows as runEngine } from "../../lib/analytics"
@@ -552,17 +552,25 @@ function TitleGenerator({ C, glassCard, analytics, tips, sessions, whales }) {
 
   const buildCtx = () => {
     const now = new Date()
-    const currentHour = now.getHours()
+    const currentHour = now.getUTCHours()
     const todayDay = now.toLocaleDateString("en-US", { weekday: "long" })
 
-    // Best hour from sessions
-    const hourTotals = {}
-    ;(sessions || []).forEach(s => {
-      const h = new Date(s.startTime).getHours()
-      hourTotals[h] = (hourTotals[h] || 0) + s.totalUSD
-    })
-    const bestHourEntry = Object.entries(hourTotals).sort((a,b) => b[1]-a[1])[0]
-    const bestHour = bestHourEntry ? parseInt(bestHourEntry[0]) : null
+    // FIX: bestHour uses avg USD per session at each hour, not raw totals
+    // Prefer pre-computed value from analytics.js aggregateRows if available
+    const _analyticsBestHourCtx = analytics?.bestHour || null
+    let bestHour = null
+    if (_analyticsBestHourCtx) {
+      bestHour = parseInt(_analyticsBestHourCtx.hour)
+    } else {
+      const hourUSD = {}; const hourCount = {}
+      ;(sessions || []).forEach(s => {
+        const h = new Date(s.startTime).getUTCHours()
+        hourUSD[h] = (hourUSD[h] || 0) + s.totalUSD
+        hourCount[h] = (hourCount[h] || 0) + 1
+      })
+      const bestHourEntry = Object.entries(hourUSD).map(([h, usd]) => [h, usd / (hourCount[h] || 1)]).sort((a,b) => b[1]-a[1])[0]
+      bestHour = bestHourEntry ? parseInt(bestHourEntry[0]) : null
+    }
     const bestHourLabel = bestHour !== null
       ? (bestHour === 0 ? "12 AM" : bestHour < 12 ? `${bestHour} AM` : bestHour === 12 ? "12 PM" : `${bestHour-12} PM`)
       : null
@@ -826,6 +834,7 @@ export default function Dashboard() {
   const [liveTipInput, setLiveTipInput] = useState({ username: '', tokens: '', usd: '' })
   const [liveAlerts, setLiveAlerts] = useState([])
   const [liveTick, setLiveTick] = useState(0)
+  const [minuteTick, setMinuteTick] = useState(0) // increments every 60s to refresh time-based alerts
   const [betaCount, setBetaCount] = useState(null)
   const [earlyAccessEmail, setEarlyAccessEmail] = useState('')
   const [earlyAccessSubmitted, setEarlyAccessSubmitted] = useState(false)
@@ -839,6 +848,25 @@ export default function Dashboard() {
   const [dateTo, setDateTo] = useState('')
   const [tokenRates, setTokenRates] = useState({ Chaturbate: 0.05, BongaCams: 0.05, MyFreeCams: 0.05, Stripchat: 0.05, CamSoda: 0.05 })
   const [showRateEditor, setShowRateEditor] = useState(false)
+  // ── ROUND 1 FEATURES ─────────────────────────────────────────────
+  const [monthlyGoal, setMonthlyGoal] = useState(null)
+  const [goalInput, setGoalInput] = useState('')
+  const [showGoalEditor, setShowGoalEditor] = useState(false)
+  const [tipperNotes, setTipperNotes] = useState({}) // { username: { note, followUp } }
+  const [noteTarget, setNoteTarget] = useState(null)
+  const [noteText, setNoteText] = useState('')
+  const [noteSaving, setNoteSaving] = useState(false)
+
+  // ── ANIMATION STATE ──────────────────────────────────────
+  const [counterBumping, setCounterBumping] = useState(false)
+  const [lastUpdatedSection, setLastUpdatedSection] = useState(null)
+  const [newAlertKey, setNewAlertKey] = useState(0)
+  const [lastRefreshed, setLastRefreshed] = useState(null)
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const [newTipCount, setNewTipCount] = useState(0)
+  const prevTipCountRef = useRef(0)
+  const realtimeChannelRef = useRef(null)
+  const refreshTimerRef = useRef(null)
 
   const isBetaUser = true
   const isPro = true
@@ -850,6 +878,67 @@ export default function Dashboard() {
   }
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(""), 3500) }
+
+  // ── SAVE TIPPER NOTE ─────────────────────────────────────────────
+  const saveTipperNote = async (username, note, followUp = false) => {
+    if (!user) return
+    setNoteSaving(true)
+    try {
+      await supabase.from('tipper_notes').upsert({
+        user_id: user.id,
+        tipper_username: username.toLowerCase(),
+        note,
+        follow_up: followUp,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'user_id,tipper_username' })
+      setTipperNotes(prev => ({ ...prev, [username.toLowerCase()]: { note, followUp } }))
+      showToast('✅ Note saved')
+      setNoteTarget(null)
+    } catch(e) { showToast('❌ Failed to save note') }
+    finally { setNoteSaving(false) }
+  }
+
+  // ── SAVE MONTHLY GOAL ─────────────────────────────────────────────
+  const saveMonthlyGoal = async (amount) => {
+    if (!user || !amount) return
+    const target = parseFloat(amount)
+    if (isNaN(target) || target <= 0) return
+    try {
+      await supabase.from('user_goals').upsert({
+        user_id: user.id,
+        goal_type: 'monthly',
+        target_usd: target,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'user_id,goal_type' })
+      setMonthlyGoal(target)
+      setShowGoalEditor(false)
+      showToast(`✅ Goal set: $${target.toFixed(0)}/month`)
+    } catch(e) { showToast('❌ Failed to save goal') }
+  }
+
+  // Tab persistence
+  const handleTabChange = (tab) => {
+    setActiveTab(tab)
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('camcash_tab', tab)
+      // Scroll both window and the main content div to top
+      window.scrollTo({ top: 0, behavior: 'instant' })
+      document.querySelector('.dash-main')?.scrollTo({ top: 0, behavior: 'instant' })
+      document.documentElement.scrollTop = 0
+      document.body.scrollTop = 0
+    }
+  }
+
+  // Counter bump when new tips arrive
+  useEffect(() => {
+    if (newTipCount > prevTipCountRef.current) {
+      setCounterBumping(true)
+      setLastUpdatedSection('tips')
+      setTimeout(() => setCounterBumping(false), 320)
+      setTimeout(() => setLastUpdatedSection(null), 2500)
+    }
+    prevTipCountRef.current = newTipCount
+  }, [newTipCount])
 
   // ── EXTENSION LISTENER — receives tips from Chrome extension ────────────
   useEffect(() => {
@@ -884,40 +973,135 @@ export default function Dashboard() {
   }, [])
 
   useEffect(() => {
+    // Restore saved tab
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('camcash_tab')
+      if (saved) setActiveTab(saved)
+    }
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) { router.replace("/login"); return }
       setUser(user)
       loadData(user.id)
-      // Fetch real beta user count for the progress bar
+      // Load monthly goal from DB
+      supabase.from('user_goals').select('*').eq('user_id', user.id).eq('goal_type', 'monthly').maybeSingle()
+        .then(({ data }) => { if (data) { setMonthlyGoal(data.target_usd); setGoalInput(data.target_usd.toString()) } })
+      // Load tipper notes
+      supabase.from('tipper_notes').select('*').eq('user_id', user.id)
+        .then(({ data }) => {
+          if (data?.length) {
+            const map = {}
+            data.forEach(n => { map[n.tipper_username.toLowerCase()] = { note: n.note, followUp: n.follow_up } })
+            setTipperNotes(map)
+          }
+        })
       supabase.from('beta_users').select('id', { count: 'exact', head: true })
         .then(({ count }) => { if (count !== null) setBetaCount(count) })
       try {
         supabase.from('beta_users').upsert({
-          user_id: user.id,
-          email: user.email,
-          signed_up_at: user.created_at
+          user_id: user.id, email: user.email, signed_up_at: user.created_at
         }, { onConflict: 'user_id', ignoreDuplicates: true })
         supabase.from('analytics_events').insert({
-          user_id: user.id,
-          event_name: 'dashboard_opened',
-          properties: { email: user.email }
+          user_id: user.id, event_name: 'dashboard_opened', properties: { email: user.email }
         })
       } catch(e) {}
+
+      // ── SUPABASE REALTIME ──────────────────────────────────
+      const channel = supabase
+        .channel(`tips_live_${user.id}`)
+        .on('postgres_changes', {
+          event: 'INSERT', schema: 'public', table: 'tips',
+          filter: `user_id=eq.${user.id}`
+        }, (payload) => {
+          setTips(prev => {
+            const exists = prev.some(t =>
+              t.date_time === payload.new.date_time &&
+              t.username === payload.new.username &&
+              t.tokens === payload.new.tokens
+            )
+            if (exists) return prev
+            const updated = [...prev, payload.new].sort((a,b) => new Date(a.date_time)-new Date(b.date_time))
+            try { setAnalytics(runEngine(updated)) } catch(e) {}
+            return updated
+          })
+          setNewTipCount(n => n + 1)
+          setNewAlertKey(k => k + 1)
+          setLastRefreshed(new Date())
+          // Invalidate the sessionStorage cache so next hard reload gets fresh data
+          try { sessionStorage.removeItem(`camcash_tips_${user.id}`) } catch(e) {}
+        })
+        .subscribe()
+      realtimeChannelRef.current = channel
+
+      // ── LIGHTWEIGHT 30s analytics re-run (NO DB calls — just re-runs engine on cached data)
+      // Full reloads only happen on: initial load, CSV upload, focus after 5+ min away
+      refreshTimerRef.current = setInterval(() => {
+        setTips(prev => {
+          if (!prev.length) return prev
+          try { setAnalytics(runEngine(prev)) } catch(e) {}
+          return prev
+        })
+      }, 30000)
+
+      // ── MINUTE TICK — re-evaluates time-based alerts every 60s ──
+      // Daily Brief, real-time alerts, and best-time alert update as the hour changes
+      const minuteTimer = setInterval(() => {
+        setMinuteTick(t => t + 1)
+      }, 60000)
     })
+    return () => {
+      if (realtimeChannelRef.current) supabase.removeChannel(realtimeChannelRef.current)
+      if (refreshTimerRef.current) clearInterval(refreshTimerRef.current)
+      clearInterval(minuteTimer)
+    }
   }, [])
 
+  // ── VISIBILITY REFRESH: only reload if tab was hidden for 15+ min ──
+  // Uses visibilitychange instead of focus so switching windows doesn't fire it
   useEffect(() => {
-    if (!tips.length) return
-    const interval = setInterval(() => { setLiveAnalytics(analytics) }, 5000)
-    return () => clearInterval(interval)
-  }, [tips])
+    if (!user) return
+    let hiddenAt = null
+    const onVisibility = () => {
+      if (document.hidden) {
+        hiddenAt = Date.now()
+      } else if (hiddenAt && Date.now() - hiddenAt > 15 * 60 * 1000) {
+        // Tab was hidden for 15+ min — reload fresh data
+        try { sessionStorage.removeItem(`camcash_tips_${user.id}`) } catch(e) {}
+        loadData(user.id, true).then(() => setLastRefreshed(new Date()))
+        hiddenAt = null
+      } else {
+        hiddenAt = null
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => document.removeEventListener('visibilitychange', onVisibility)
+  }, [user])
+
+  useEffect(() => {
+    if (analytics) setLiveAnalytics(analytics)
+  }, [analytics])
 
   const handleSignOut = async () => {
     await supabase.auth.signOut()
     router.replace('/login')
   }
 
-  const loadData = async (uid) => {
+  const loadData = async (uid, force = false) => {
+    // ── CACHE CHECK: skip DB if data is fresh (< 15 min old) ──
+    if (!force) {
+      try {
+        const cached = sessionStorage.getItem(`camcash_tips_${uid}`)
+        const cachedTime = sessionStorage.getItem(`camcash_tips_time_${uid}`)
+        if (cached && cachedTime && Date.now() - parseInt(cachedTime) < 15 * 60 * 1000) {
+          const allData = JSON.parse(cached)
+          setTips(allData)
+          try { setAnalytics(runEngine(allData)) } catch(e) {}
+          setLoading(false)
+          setLastRefreshed(new Date(parseInt(cachedTime)))
+          return
+        }
+      } catch(e) {} // sessionStorage unavailable (private mode) — fall through to fetch
+    }
+
     setLoading(true)
     try {
       let allData = []
@@ -930,73 +1114,60 @@ export default function Dashboard() {
         if (!data || data.length < PAGE) break
         from += PAGE
       }
-      if (allData.length) { setTips(allData); const result = runEngine(allData); setAnalytics(result) }
+      if (allData.length) {
+        setTips(allData)
+        try {
+          const result = runEngine(allData)
+          setAnalytics(result)
+        } catch (engineErr) {
+          console.error('[loadData] runEngine failed:', engineErr)
+        }
+        // Save to cache
+        try {
+          sessionStorage.setItem(`camcash_tips_${uid}`, JSON.stringify(allData))
+          sessionStorage.setItem(`camcash_tips_time_${uid}`, Date.now().toString())
+        } catch(e) {} // quota exceeded — fine, skip cache
+      }
+      setLastRefreshed(new Date())
     } finally { setLoading(false) }
   }
-
-  const removeDuplicates = (existingTips, newTips) => {
-    const existingKeys = new Set(existingTips.map(t => `${t.date_time}_${t.username}_${t.tokens}_${t.platform}`))
-    return newTips.filter(t => !existingKeys.has(`${t.dateRaw || t.date_time}_${t.username}_${t.tokens}_${t.platform}`))
-  }
-
-  const handleCSV = async (file, forcePlatform = null) => {
+const handleCSV = async (file, forcePlatform = null) => {
     if (!file || !user) return
     setUploading(true)
     try {
-      const text = await file.text()
-      const parsed = parseCSV(text, forcePlatform)
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) { showToast("❌ Not logged in"); setUploading(false); return }
 
-      if (!parsed.length) {
-        showToast("❌ No valid rows found — try selecting your platform from the dropdown and re-uploading")
-        setUploading(false)
-        return
-      }
+      const fd = new FormData()
+      fd.append('file', file)
+      if (forcePlatform) fd.append('platform', forcePlatform)
 
-      track('csv_imported', { rows: parsed.length, platform: parsed[0]?.platform || 'Unknown' })
-
-      const unique = removeDuplicates(tips, parsed)
-      const duplicateCount = parsed.length - unique.length
-
-      if (unique.length === 0) {
-        showToast(`⚠️ All ${parsed.length} tips are already imported!`)
-        setUploading(false)
-        return
-      }
-
-      const toInsert = unique.map(r => {
-        const tokens = r.tokens || 0
-        const usd = (r.usd && r.usd > 0) ? r.usd : parseFloat((tokens * 0.05).toFixed(2))
-        return {
-          user_id: user.id,
-          date_time: r.dateRaw || r.date_time,
-          platform: r.platform,
-          username: r.username,
-          tip_type: r.tip_type || "Tip",
-          tokens,
-          usd,
-          tip_note: r.tip_note || r.note || ""
-        }
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session.access_token}` },
+        body: fd,
       })
 
-      const BATCH_SIZE = 500
-      for (let i = 0; i < toInsert.length; i += BATCH_SIZE) {
-        const batch = toInsert.slice(i, i + BATCH_SIZE)
-        const { error } = await supabase.from("tips").insert(batch)
-        if (error) { showToast("❌ " + error.message); setUploading(false); return }
+      const result = await res.json()
+
+      if (!res.ok || result.error) {
+        showToast("❌ " + (result.error || 'Upload failed'))
+        setUploading(false)
+        return
       }
 
-      setUploadCount(uploadCount + 1)
-      const newCount = uploadCount + 1
-      if (newCount === 2 || newCount === 3) setShowBetaPrompt(true)
-      try {
-        await supabase.from('analytics_events').insert({ user_id: user.id, event_name: 'csv_uploaded', properties: { count: newCount, platform: parsed[0]?.platform || 'Unknown', rows: unique.length } })
-        await supabase.from('beta_users').upsert({ user_id: user.id, email: user.email, csv_upload_count: newCount }, { onConflict: 'user_id' })
-      } catch(e) {}
-      const msg = duplicateCount > 0
-        ? `✅ Imported ${unique.length} tips (${duplicateCount} duplicates skipped)`
-        : `✅ Imported ${unique.length} tips from ${parsed[0]?.platform || "CSV"}!`
+      track('csv_imported', { rows: result.inserted, platform: result.platform || 'Unknown' })
+
+      const msg = result.skipped > 0
+        ? `✅ Imported ${result.inserted} tips (${result.skipped} duplicates skipped)`
+        : `✅ Imported ${result.inserted} tips from ${result.platform}!`
       showToast(msg)
-      await loadData(user.id)
+
+      setUploadCount(c => c + 1)
+      // Force reload after upload — bypass cache so new tips appear immediately
+      try { sessionStorage.removeItem(`camcash_tips_${user.id}`) } catch(e) {}
+      await loadData(user.id, true)
+
     } catch (err) {
       showToast("❌ " + err.message)
     } finally {
@@ -1012,7 +1183,7 @@ export default function Dashboard() {
 
   const deleteAllTips = async () => {
     if (!user) return
-    try { const { error } = await supabase.from("tips").delete().eq("user_id", user.id); if (error) throw error; showToast("✅ All tips deleted"); setShowDeleteConfirm(false); await loadData(user.id) }
+    try { const { error } = await supabase.from("tips").delete().eq("user_id", user.id); if (error) throw error; showToast("✅ All tips deleted"); setShowDeleteConfirm(false); try { sessionStorage.removeItem(`camcash_tips_${user.id}`) } catch(e) {}; await loadData(user.id, true) }
     catch (err) { showToast("❌ " + err.message) }
   }
 
@@ -1041,10 +1212,20 @@ export default function Dashboard() {
   const totalRevenue = analytics?.totalUSD || 0
   // Only average sessions with real duration (exclude zero-timestamp BongaCams exports)
   const timedSessions = sessions.filter(s => !s.durationUnknown && s.usdPerHour !== null)
-  const avgPerHour = timedSessions.length ? timedSessions.reduce((sum, s) => sum + (s.usdPerHour || 0), 0) / timedSessions.length : 0
+  // FIX: use total USD / total hours (not avg of per-session rates — that inflates short sessions)
+  const timedTotalUSD = timedSessions.reduce((sum, s) => sum + (s.totalUSD || 0), 0)
+  const timedTotalHours = timedSessions.reduce((sum, s) => sum + (s.durationHours || 0), 0)
+  const avgPerHour = timedTotalHours > 0 ? timedTotalUSD / timedTotalHours : 0
   // Single source of truth — pre-computed in aggregateRows, same values used everywhere
   const analyticsbestDay  = analytics?.bestDay  || null
   const analyticsBestHour = analytics?.bestHour || null
+  // Advanced analytics — from aggregateRows
+  const platformBestTimes     = analytics?.platformBestTimes     || {}
+  const earningsVelocity      = analytics?.earningsVelocity      ?? null
+  const platformVelocity      = analytics?.platformVelocity      || {}
+  const missedRevenueByPlat   = analytics?.missedRevenueByPlatform || {}
+  const returningVsNew        = analytics?.returningVsNew        || null
+  const topFanDependency      = analytics?.topFanDependency      || null
 
   // Build platformTimes from INDIVIDUAL TIPS (not session start time)
   // so hour/day reflects when money actually came in, not when the session started
@@ -1154,14 +1335,15 @@ export default function Dashboard() {
       if (fanTips.length < 5) return
       const hourCounts = {}
       fanTips.forEach(t => {
-        const h = new Date(t.date_time || t.dateRaw).getHours()
+        // FIX: use getUTCHours() — tips stored in UTC
+        const h = new Date(t.date_time || t.dateRaw).getUTCHours()
         hourCounts[h] = (hourCounts[h] || 0) + 1
       })
       const bestHour = Object.entries(hourCounts).sort((a, b) => b[1] - a[1])[0]
       if (!bestHour) return
       const peakHour = parseInt(bestHour[0])
-      const currentHour = new Date().getHours()
-      const hoursAway = Math.abs(currentHour - peakHour)
+      const currentUTCHr = new Date().getUTCHours()
+      const hoursAway = (peakHour - currentUTCHr + 24) % 24
       const probability = Math.min(95, Math.round((bestHour[1] / fanTips.length) * 100 * 2.5))
       const label = peakHour === 0 ? '12 AM' : peakHour < 12 ? `${peakHour} AM` : peakHour === 12 ? '12 PM' : `${peakHour - 12} PM`
       if (hoursAway <= 2 && probability >= 40) {
@@ -1209,7 +1391,7 @@ export default function Dashboard() {
         performance.push({
           type: 'performance', icon: '📈', color: C.pink, severity: 'info',
           title: `Your best sessions happen on ${analyticsbestDay.day}s`,
-          message: `${bestDayCount} of your top-earning streams were on ${analyticsbestDay.day}s ($${analyticsbestDay.avg.toFixed(0)} avg). Plan your next high-effort stream for this day`,
+          message: `${bestDayCount} of your top-earning streams were on ${analyticsbestDay.day}s. Plan your next high-effort stream for this day`,
           cta: null, reengageMsg: ''
         })
       }
@@ -1285,9 +1467,160 @@ export default function Dashboard() {
   // REAL-TIME INTELLIGENCE COMPUTED FROM ACTUAL DB DATA
   // ============================================================
 
+  const buildDailyBrief = () => {
+    if (!tips || tips.length === 0 || !analytics) return null
+    const now = new Date()
+    const utcHour = now.getUTCHours()
+    const utcDay = now.getUTCDay()
+    const DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
+    const todayName = DAYS[utcDay]
+
+    // Best hour: today-specific per platform first, then all-time fallback
+    // Formula: SUM(usd) / COUNT(DISTINCT hour-bucket) for THIS day of week on THIS platform
+    const fmtHour = h => h === 0 ? '12 AM' : h < 12 ? `${h} AM` : h === 12 ? '12 PM' : `${h-12} PM`
+    const platBestTimes = analytics?.platformBestTimes || {}
+    let todayBestPlat = null, todayBestHourNum = null, todayBestAvg = 0
+    Object.entries(platBestTimes).forEach(([plat, times]) => {
+      const todayEntry = times?.bestHourByDay?.[todayName]
+      if (todayEntry && todayEntry.avg > todayBestAvg) {
+        todayBestAvg = todayEntry.avg
+        todayBestHourNum = todayEntry.hour
+        todayBestPlat = plat
+      }
+    })
+    const bestHour = analytics?.bestHour
+    const bh = todayBestHourNum !== null ? todayBestHourNum : (bestHour ? parseInt(bestHour.hour) : null)
+    const bhLabel = bh === null ? null : fmtHour(bh)
+    const hoursUntilPeak = bh !== null ? (bh - utcHour + 24) % 24 : null
+    const atPeak = hoursUntilPeak === 0 || hoursUntilPeak === 1
+
+    // Best platform per hour
+    const platHourUSD = {}; const platHourSessions = {}
+    tips.forEach(t => {
+      const p = t.platform || 'Chaturbate'
+      const d = new Date(t.date_time || t.dateRaw)
+      const h = d.getUTCHours()
+      const bucket = Math.floor(d.getTime() / 3600000)
+      if (!platHourUSD[p]) { platHourUSD[p] = {}; platHourSessions[p] = {} }
+      if (!platHourUSD[p][h]) { platHourUSD[p][h] = 0; platHourSessions[p][h] = new Set() }
+      platHourUSD[p][h] += t.usd || 0
+      platHourSessions[p][h].add(bucket)
+    })
+    let bestPlatNow = null; let bestPlatNowAvg = 0
+    Object.keys(platHourUSD).forEach(plat => {
+      const sessions = platHourSessions[plat][utcHour]?.size || 0
+      if (sessions === 0) return
+      const avg = platHourUSD[plat][utcHour] / sessions
+      if (avg > bestPlatNowAvg) { bestPlatNowAvg = avg; bestPlatNow = plat }
+    })
+    let bestPlatPeak = null; let bestPlatPeakAvg = 0
+    if (bh !== null) {
+      Object.keys(platHourUSD).forEach(plat => {
+        const sessions = platHourSessions[plat][bh]?.size || 0
+        if (sessions === 0) return
+        const avg = platHourUSD[plat][bh] / sessions
+        if (avg > bestPlatPeakAvg) { bestPlatPeakAvg = avg; bestPlatPeak = plat }
+      })
+    }
+    const displayPlat = todayBestPlat || bestPlatPeak || bestPlatNow || 'Chaturbate'
+    const displayAvg = todayBestAvg || bestPlatPeakAvg || bestPlatNowAvg || bestHour?.avg || 0
+
+    // Best day
+    const bestDay = analytics?.bestDay
+    const isBestDay = bestDay?.day === todayName
+    const sessionAvg = analytics?.sessions?.length
+      ? analytics.sessions.reduce((s, x) => s + x.totalUSD, 0) / analytics.sessions.length : 0
+
+    // Income prediction for peak window
+    const sessionsAtPeak = (analytics?.sessions || []).filter(s => {
+      const h = new Date(s.startTime).getUTCHours()
+      return bh !== null && Math.abs(h - bh) <= 1
+    })
+    const peakAvg = sessionsAtPeak.length >= 2
+      ? sessionsAtPeak.reduce((s, x) => s + x.totalUSD, 0) / sessionsAtPeak.length
+      : (bestHour?.avg || sessionAvg)
+    const predictionLow = Math.round(peakAvg * 0.6)
+    const predictionHigh = Math.round(peakAvg * 1.5)
+
+    // Re-engage list — fans who tip 50+ tokens avg per session, appear in 2+ streams, and are overdue
+    // "Every 2-3 streams" = session-level frequency, not tip count
+    const SESSION_GAP_MS = 3 * 60 * 60 * 1000
+    const reengageFans = (whales || [])
+      .filter(w => {
+        if (!w.tips || w.tips.length < 2) return false
+
+        // Group this fan's tips into sessions (3hr gap = new session)
+        const sorted = [...w.tips].sort((a, b) =>
+          new Date(a.date_time || a.dateRaw) - new Date(b.date_time || b.dateRaw)
+        )
+        const fanSessions = []
+        let cur = [sorted[0]]
+        for (let i = 1; i < sorted.length; i++) {
+          const gap = new Date(sorted[i].date_time || sorted[i].dateRaw) -
+                      new Date(sorted[i-1].date_time || sorted[i-1].dateRaw)
+          if (gap > SESSION_GAP_MS) { fanSessions.push(cur); cur = [sorted[i]] }
+          else cur.push(sorted[i])
+        }
+        fanSessions.push(cur)
+
+        // Must have appeared in 2+ sessions
+        if (fanSessions.length < 2) return false
+
+        // Avg tokens per session must be 50+
+        const avgTokensPerSession = fanSessions.reduce((sum, s) =>
+          sum + s.reduce((t, tip) => t + (tip.tokens || 0), 0), 0) / fanSessions.length
+        if (avgTokensPerSession < 50) return false
+
+        // Calculate avg days between sessions
+        const sessionDates = fanSessions.map(s => new Date(s[0].date_time || s[0].dateRaw))
+        let totalGap = 0
+        for (let i = 1; i < sessionDates.length; i++) {
+          totalGap += (sessionDates[i] - sessionDates[i-1]) / 86400000
+        }
+        const avgDaysBetweenSessions = fanSessions.length > 1 ? totalGap / (fanSessions.length - 1) : 30
+
+        // Must be overdue — gone longer than 1.5x their normal interval
+        // (accounts for "every 2-3 streams" — if they stream 2-3x/week that's a few days)
+        const daysSince = w.daysSinceLastTip
+        const overdueThreshold = Math.max(avgDaysBetweenSessions * 1.5, 3)
+        return daysSince >= overdueThreshold
+      })
+      .sort((a, b) => b.totalUSD - a.totalUSD)
+      .slice(0, 5)
+
+    // Likely online right now
+    const likelyOnline = (whales || [])
+      .filter(w => {
+        if (!w.tips || w.tips.length < 3) return false
+        const hc = {}
+        w.tips.forEach(t => { const h = new Date(t.date_time || t.dateRaw).getUTCHours(); hc[h] = (hc[h] || 0) + 1 })
+        const peakH = parseInt(Object.entries(hc).sort((a,b) => b[1]-a[1])[0][0])
+        return (peakH - utcHour + 24) % 24 <= 1
+      })
+      .sort((a, b) => b.totalUSD - a.totalUSD)
+      .slice(0, 3)
+
+    const platTodayStats = {}
+    Object.entries(platBestTimes).forEach(([plat, times]) => {
+      const todayHour = times?.bestHourByDay?.[todayName]
+      const bestDayEntry = times?.bestDay
+      platTodayStats[plat] = {
+        todayBestHour: todayHour ? fmtHour(todayHour.hour) : null,
+        todayBestAvg: todayHour?.avg || 0,
+        bestDay: bestDayEntry?.day || null,
+        bestDayAvg: bestDayEntry?.avg || 0,
+        overallBestHour: times?.hour ? fmtHour(times.hour.hour) : null,
+        overallBestHourAvg: times?.hour?.avg || 0,
+      }
+    })
+    return { todayName, bhLabel, bh, atPeak, hoursUntilPeak, displayPlat, displayAvg,
+      isBestDay, bestDay, sessionAvg, peakAvg, predictionLow, predictionHigh,
+      reengageFans, likelyOnline, platTodayStats }
+  }
+
   const buildRealTimeAlerts = () => {
     const now = Date.now()
-    const currentHour = new Date().getHours()
+    const alertCurrentHour = new Date().getUTCHours()
     const currentDay = new Date().toLocaleDateString('en-US', { weekday: 'long' })
     const alerts = []
 
@@ -1327,29 +1660,46 @@ export default function Dashboard() {
     })
 
     // --- PLATFORM vs PLATFORM HOUR COMPARISON ---
-    const platHourMap = {}
+    // FIX: use avg USD per hour-session (not raw cumulative totals)
+    // FIX: use getUTCHours() — tips are stored in UTC
+    const platHourUSD = {}; const platHourSessions = {}
     tips.forEach(t => {
       const p = t.platform
-      const h = new Date(t.date_time || t.dateRaw).getHours()
-      if (!platHourMap[p]) platHourMap[p] = {}
-      if (!platHourMap[p][h]) platHourMap[p][h] = 0
-      platHourMap[p][h] += t.usd || 0
+      const d = new Date(t.date_time || t.dateRaw)
+      // Floor to UTC hour-bucket key for deduplication
+      const bucketKey = Math.floor(d.getTime() / 3600000)
+      const h = d.getUTCHours()
+      if (!platHourUSD[p]) { platHourUSD[p] = {}; platHourSessions[p] = {} }
+      if (!platHourUSD[p][h]) { platHourUSD[p][h] = 0; platHourSessions[p][h] = new Set() }
+      platHourUSD[p][h] += t.usd || 0
+      platHourSessions[p][h].add(bucketKey)
+    })
+    // Compute avg per session at each UTC hour per platform
+    const platHourAvg = {}
+    Object.keys(platHourUSD).forEach(p => {
+      platHourAvg[p] = {}
+      Object.keys(platHourUSD[p]).forEach(h => {
+        const sessions = platHourSessions[p][h].size || 1
+        platHourAvg[p][h] = platHourUSD[p][h] / sessions
+      })
     })
 
-    const platNames = Object.keys(platHourMap)
+    const platNames = Object.keys(platHourAvg)
+    // Use UTC current hour to match stored data
+    const currentUTCHour = new Date().getUTCHours()
     if (platNames.length >= 2) {
       platNames.forEach(plat => {
-        const hourVal = platHourMap[plat][currentHour] || 0
+        const hourVal = platHourAvg[plat][currentUTCHour] || 0
         const otherPlats = platNames.filter(p => p !== plat)
         otherPlats.forEach(other => {
-          const otherVal = platHourMap[other][currentHour] || 0
+          const otherVal = platHourAvg[other][currentUTCHour] || 0
           if (hourVal > 0 && otherVal > 0 && hourVal >= otherVal * 1.5) {
             const mult = (hourVal / otherVal).toFixed(1)
-            const label = currentHour === 0 ? '12 AM' : currentHour < 12 ? `${currentHour} AM` : currentHour === 12 ? '12 PM' : `${currentHour - 12} PM`
+            const label = currentUTCHour === 0 ? '12 AM' : currentUTCHour < 12 ? `${currentUTCHour} AM` : currentUTCHour === 12 ? '12 PM' : `${currentUTCHour - 12} PM`
             alerts.push({
               type: 'platform_hour', priority: 1, icon: '⚡', color: '#22D3EE',
               title: `Right now ${plat} earns ${mult}x more than ${other}`,
-              message: `At ${label}, ${plat} historically earns $${hourVal.toFixed(0)} vs $${otherVal.toFixed(0)} on ${other}. Stream on ${plat} now.`
+              message: `At ${label} UTC, ${plat} historically averages $${hourVal.toFixed(0)} vs $${otherVal.toFixed(0)} on ${other}. Stream on ${plat} now.`
             })
           }
         })
@@ -1365,16 +1715,17 @@ export default function Dashboard() {
         : tips.filter(t => t.username.toLowerCase() === w.username.toLowerCase())
       if (fanTips.length < 3) return
 
+      // FIX: use getUTCHours() — tips stored in UTC
       const hourCounts = {}
       fanTips.forEach(t => {
-        const h = new Date(t.date_time || t.dateRaw).getHours()
+        const h = new Date(t.date_time || t.dateRaw).getUTCHours()
         hourCounts[h] = (hourCounts[h] || 0) + 1
       })
       const sortedHours = Object.entries(hourCounts).sort((a, b) => b[1] - a[1])
       if (!sortedHours.length) return
 
       const peakHour = parseInt(sortedHours[0][0])
-      const hoursAway = (peakHour - currentHour + 24) % 24
+      const hoursAway = (peakHour - new Date().getUTCHours() + 24) % 24
       const confidence = Math.min(95, Math.round((sortedHours[0][1] / fanTips.length) * 100 * 2.5))
       const label = peakHour === 0 ? '12 AM' : peakHour < 12 ? `${peakHour} AM` : peakHour === 12 ? '12 PM' : `${peakHour - 12} PM`
       const daysSince = Math.floor((now - new Date(w.lastTipDate)) / 86400000)
@@ -1418,7 +1769,11 @@ export default function Dashboard() {
 
   const whatsNextAlerts = buildWhatsNextAlerts()
   const reengageList = buildReengageList()
-  const realTimeAlerts = buildRealTimeAlerts()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const dailyBrief = buildDailyBrief() // re-runs every minuteTick
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const realTimeAlerts = buildRealTimeAlerts() // re-runs every minuteTick
+  void minuteTick // ensures re-render when minute changes
 
   return (
     <div style={{
@@ -1434,9 +1789,76 @@ export default function Dashboard() {
         ::-webkit-scrollbar-thumb { background: #2a3f5f; border-radius: 3px; }
         .dash-card { transition: transform 0.2s ease, box-shadow 0.2s ease; }
         .dash-card:hover { transform: translateY(-2px); }
-        .whale-row { transition: background 0.15s; }
-        .whale-row:hover { background: rgba(59,130,246,0.08) !important; }
+        .whale-row { transition: background 0.15s, transform 0.12s ease; }
+        .whale-row:hover { background: rgba(59,130,246,0.08) !important; transform: translateX(2px); }
         @keyframes pulse-msg { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.25); } }
+        @keyframes fadeUp { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ── ALERT ANIMATIONS ── */
+        @keyframes alertEnter {
+          0%   { opacity: 0; transform: translateY(-10px) scale(0.97); }
+          60%  { opacity: 1; transform: translateY(1px) scale(1.01); }
+          100% { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        @keyframes alertExit {
+          0%   { opacity: 1; transform: translateY(0) scale(1); max-height: 200px; margin-bottom: 8px; }
+          100% { opacity: 0; transform: translateY(6px) scale(0.97); max-height: 0; margin-bottom: 0; padding: 0; }
+        }
+        @keyframes alertPulseCritical {
+          0%   { box-shadow: 0 0 0 0 rgba(248,113,113,0.45); }
+          50%  { box-shadow: 0 0 0 8px rgba(248,113,113,0); }
+          100% { box-shadow: 0 0 0 0 rgba(248,113,113,0); }
+        }
+        @keyframes alertPulseWarning {
+          0%   { box-shadow: 0 0 0 0 rgba(251,146,60,0.4); }
+          50%  { box-shadow: 0 0 0 7px rgba(251,146,60,0); }
+          100% { box-shadow: 0 0 0 0 rgba(251,146,60,0); }
+        }
+        @keyframes alertPulseSuccess {
+          0%   { box-shadow: 0 0 0 0 rgba(16,185,129,0.4); }
+          50%  { box-shadow: 0 0 0 7px rgba(16,185,129,0); }
+          100% { box-shadow: 0 0 0 0 rgba(16,185,129,0); }
+        }
+        @keyframes alertPulseInfo {
+          0%   { box-shadow: 0 0 0 0 rgba(34,211,238,0.35); }
+          50%  { box-shadow: 0 0 0 6px rgba(34,211,238,0); }
+          100% { box-shadow: 0 0 0 0 rgba(34,211,238,0); }
+        }
+        @keyframes counterBump {
+          0%   { transform: scale(1); }
+          40%  { transform: scale(1.4); }
+          70%  { transform: scale(0.9); }
+          100% { transform: scale(1); }
+        }
+        @keyframes recentlyUpdated {
+          0%   { background-color: rgba(34,211,238,0.14); }
+          100% { background-color: transparent; }
+        }
+        @keyframes listSlotIn {
+          0%   { opacity: 0; transform: translateY(-8px); }
+          100% { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes timestampTick {
+          0%   { opacity: 0.45; }
+          50%  { opacity: 1; }
+          100% { opacity: 0.45; }
+        }
+        .alert-enter { animation: alertEnter 280ms cubic-bezier(0.34,1.2,0.64,1) forwards; }
+        .alert-exit  { animation: alertExit 180ms ease-in forwards; overflow: hidden; pointer-events: none; }
+        .alert-pulse-critical { animation: alertPulseCritical 500ms ease-out 280ms 1 forwards; }
+        .alert-pulse-warning  { animation: alertPulseWarning  500ms ease-out 280ms 1 forwards; }
+        .alert-pulse-success  { animation: alertPulseSuccess  500ms ease-out 280ms 1 forwards; }
+        .alert-pulse-info     { animation: alertPulseInfo     500ms ease-out 280ms 1 forwards; }
+        .counter-bump { display: inline-block; animation: counterBump 300ms cubic-bezier(0.34,1.3,0.64,1) forwards; }
+        .recently-updated { animation: recentlyUpdated 2500ms ease-out forwards; border-radius: inherit; }
+        .list-slot-in { animation: listSlotIn 220ms ease-out forwards; }
+        .timestamp-idle { animation: timestampTick 3s ease-in-out infinite; }
+        .hoverable { transition: transform 0.15s ease, box-shadow 0.15s ease; }
+        .hoverable:hover { transform: translateY(-2px) scale(1.005); box-shadow: 0 6px 24px rgba(0,0,0,0.35); }
+        .alert-row { transition: transform 0.12s ease; }
+        .alert-row:hover { transform: translateX(3px); }
+        button:active { transform: scale(0.96) !important; transition: transform 0.1s ease !important; }
       `}</style>
 
       <div style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 0 }}>
@@ -1444,26 +1866,44 @@ export default function Dashboard() {
         <div style={{ position: "absolute", width: 900, height: 900, bottom: "-20%", right: "-10%", background: "radial-gradient(circle, rgba(236,72,153,0.35), transparent 60%)", filter: "blur(120px)" }} />
       </div>
 
-      {/* SIDEBAR */}
-      <div style={{ position: "fixed", left: 0, top: 0, bottom: 0, width: 240, background: "rgba(15,20,32,0.85)", backdropFilter: "blur(20px)", borderRight: "1px solid rgba(255,255,255,0.08)", display: "flex", flexDirection: "column", zIndex: 50 }}>
+      {/* SIDEBAR — desktop only, hidden on mobile via CSS */}
+      <div className="dash-sidebar" style={{ position: "fixed", left: 0, top: 0, bottom: 0, width: 240, background: "rgba(15,20,32,0.85)", backdropFilter: "blur(20px)", borderRight: "1px solid rgba(255,255,255,0.08)", display: "flex", flexDirection: "column", zIndex: 50 }}>
         <div style={{ padding: "24px 20px", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <div style={{ width: 40, height: 40, borderRadius: 10, background: "linear-gradient(135deg, #22D3EE, #EC4899)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, fontWeight: 700, color: C.white, boxShadow: "0 0 20px rgba(34,211,238,0.4)" }}>$</div>
             <span style={{ fontSize: 20, fontWeight: 800, color: C.white }}>Cam<span style={{ background: "linear-gradient(90deg, #22D3EE, #EC4899)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Cash</span></span>
           </div>
-          {user && <div style={{ fontSize: 11, color: C.muted, marginTop: 10 }}>{user.email}</div>}
-          <div style={{ marginTop: 12, padding: "6px 10px", borderRadius: 8, background: "linear-gradient(135deg, rgba(245,158,11,0.2), rgba(251,146,60,0.2))", border: "1px solid rgba(245,158,11,0.4)", display: "flex", alignItems: "center", gap: 6 }}>
+          {user && (
+            <div style={{ marginTop: 10 }}>
+              <div style={{ fontSize: 11, color: C.muted, marginBottom: 8 }}>{user.email}</div>
+              <button
+                onClick={handleSignOut}
+                style={{
+                  width: "100%", padding: "8px 12px", borderRadius: 8,
+                  background: "rgba(248,113,113,0.12)",
+                  border: "1px solid rgba(248,113,113,0.35)",
+                  color: "#F87171", fontSize: 12, fontWeight: 700,
+                  cursor: "pointer", display: "flex", alignItems: "center",
+                  justifyContent: "center", gap: 6, transition: "all 0.15s",
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = "rgba(248,113,113,0.22)"; e.currentTarget.style.borderColor = "rgba(248,113,113,0.6)" }}
+                onMouseLeave={e => { e.currentTarget.style.background = "rgba(248,113,113,0.12)"; e.currentTarget.style.borderColor = "rgba(248,113,113,0.35)" }}
+              >
+                <span>→</span> Sign Out
+              </button>
+            </div>
+          )}
+          <div style={{ marginTop: 10, padding: "6px 10px", borderRadius: 8, background: "linear-gradient(135deg, rgba(245,158,11,0.2), rgba(251,146,60,0.2))", border: "1px solid rgba(245,158,11,0.4)", display: "flex", alignItems: "center", gap: 6 }}>
             <div style={{ width: 6, height: 6, borderRadius: "50%", background: C.gold, flexShrink: 0, boxShadow: `0 0 6px ${C.gold}` }} />
             <div>
-              <div style={{ fontSize: 10, fontWeight: 700, color: C.gold, letterSpacing: 0.5 }}>FREE BETA</div>
-              <div style={{ fontSize: 9, color: C.orange }}>All features unlocked</div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: C.gold, letterSpacing: 0.5 }}>BETA</div>
             </div>
           </div>
         </div>
 
         <nav style={{ flex: 1, padding: "16px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
-          {[["overview", "📊", "Overview"], ["platforms", "🎯", "Platforms"], ["whales", "🐳", "Top Fans"], ["sessions", "🎥", "Sessions"], ["live", "🔴", "Live Mode"], ["data", "📝", "Edit Data"], ["titles", "🎬", "Room Titles"], ["help", "❓", "CSV Help"], ["upload", "📥", "Import"]].map(([id, icon, label]) => (
-            <button key={id} onClick={() => setActiveTab(id)} style={{
+          {[["overview", "📊", "Overview"], ["platforms", "🎯", "Platforms"], ["whales", "🐳", "Top Fans"], ["sessions", "🎥", "Sessions"], ["monthly", "📈", "Monthly"], ["live", "🔴", "Live Mode"], ["titles", "🎬", "Room Titles"], ["upload", "📥", "Import CSV"], ["help", "❓", "CSV Help"]].map(([id, icon, label]) => (
+            <button key={id} onClick={() => handleTabChange(id)} style={{
               display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 10,
               background: activeTab === id ? "linear-gradient(135deg, rgba(59,130,246,0.2), rgba(236,72,153,0.2))" : "transparent",
               border: activeTab === id ? "1px solid rgba(59,130,246,0.4)" : "1px solid transparent",
@@ -1474,116 +1914,338 @@ export default function Dashboard() {
               <span style={{ fontSize: 18 }}>{icon}</span>{label}
             </button>
           ))}
+
+
         </nav>
 
         <div style={{ padding: "16px 20px", borderTop: "1px solid rgba(255,255,255,0.08)", display: "flex", flexDirection: "column", gap: 10 }}>
           <div style={{ padding: 12, borderRadius: 10, background: "linear-gradient(135deg, rgba(59,130,246,0.1), rgba(236,72,153,0.1))", border: "1px solid rgba(236,72,153,0.3)", textAlign: "center" }}>
-            <div style={{ fontSize: 18, marginBottom: 4 }}>🎉</div>
-            <div style={{ fontSize: 12, fontWeight: 700, color: C.white, marginBottom: 2 }}>Free for first 100 users</div>
-            <div style={{ fontSize: 10, color: C.muted, marginBottom: 8 }}>Spots filling up fast</div>
-            <div style={{ height: 4, borderRadius: 4, background: "rgba(255,255,255,0.1)", overflow: "hidden" }}>
-              <div style={{ height: "100%", width: "63%", borderRadius: 4, background: "linear-gradient(90deg, #3b82f6, #ec4899)", transition: "width 0.6s ease" }} />
-            </div>
-            <div style={{ fontSize: 10, color: C.pink, fontWeight: 600, marginTop: 4 }}>63 / 100 spots left</div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: C.gold, letterSpacing: 1 }}>✨ BETA</div>
+            <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>All features unlocked</div>
           </div>
-          <button
-            onClick={handleSignOut}
-            style={{
-              width: "100%", padding: "9px 12px", borderRadius: 9,
-              background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)",
-              color: C.muted, fontSize: 13, cursor: "pointer", fontWeight: 500,
-              display: "flex", alignItems: "center", justifyContent: "center", gap: 7,
-              transition: "all 0.15s",
-            }}
-            onMouseEnter={e => { e.currentTarget.style.background = "rgba(248,113,113,0.1)"; e.currentTarget.style.borderColor = "rgba(248,113,113,0.3)"; e.currentTarget.style.color = "#F87171" }}
-            onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,255,255,0.04)"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"; e.currentTarget.style.color = C.muted }}
-          >
-            <span style={{ fontSize: 15 }}>→</span> Sign Out
-          </button>
+
         </div>
       </div>
 
+      {/* MOBILE BOTTOM NAV — hidden on desktop via CSS */}
+      <div className="dash-bottom-nav" style={{ display: "none" }}>
+        {[["overview","📊","Overview"],["platforms","🎯","Platforms"],["whales","🐳","Fans"],["sessions","🎥","Sessions"],["monthly","📈","Monthly"],["live","🔴","Live"],["upload","📥","Import"]].map(([id, icon, label]) => (
+          <button key={id} onClick={() => handleTabChange(id)} className={activeTab === id ? "active" : ""}>
+            <span className="nav-icon">{icon}</span>
+            <span className="nav-label">{label}</span>
+          </button>
+        ))}
+      </div>
+
       {/* MAIN CONTENT */}
-      <div style={{ marginLeft: 240, padding: 32, position: "relative", zIndex: 1 }}>
+      <div className="dash-main" style={{ marginLeft: 240, padding: 32, position: "relative", zIndex: 1 }}>
+
+        {/* ── LIVE STATUS BAR ── */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 12px", borderRadius: 20, background: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.25)" }}>
+            <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#10B981", boxShadow: "0 0 6px #10B981", animation: "pulse-msg 2s infinite" }} />
+            <span style={{ fontSize: 11, fontWeight: 700, color: "#10B981" }}>LIVE</span>
+          </div>
+          {isRefreshing && (
+            <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "#94A3B8" }}>
+              <div style={{ width: 12, height: 12, border: "1.5px solid rgba(34,211,238,0.3)", borderTopColor: "#22D3EE", borderRadius: "50%", animation: "spin 0.7s linear infinite" }} />
+              Refreshing...
+            </div>
+          )}
+          {lastRefreshed && !isRefreshing && (
+            <span key={lastRefreshed.getTime()} className="recently-updated" style={{ fontSize: 11, color: "#475569", padding: "2px 6px", borderRadius: 4 }}>
+              Updated {lastRefreshed.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+            </span>
+          )}
+          {newTipCount > 0 && (
+            <div style={{ padding: "3px 10px", borderRadius: 20, background: "rgba(236,72,153,0.15)", border: "1px solid rgba(236,72,153,0.35)", fontSize: 11, fontWeight: 700, color: "#EC4899", animation: "alertEnter 0.3s ease forwards" }}>
+              +<span key={newTipCount} className={counterBumping ? "counter-bump" : ""}>{newTipCount}</span> new tip{newTipCount > 1 ? "s" : ""}
+            </div>
+          )}
+        </div>
+
+        {/* ═══════════════════════════════════════════════════════
+            DAILY BRIEF — always visible, above all tabs
+            Refreshes based on UTC time + your real session data
+        ═══════════════════════════════════════════════════════ */}
+        {dailyBrief && (() => {
+          const { todayName, bhLabel, bh, atPeak, hoursUntilPeak, displayPlat, displayAvg,
+            isBestDay, bestDay, sessionAvg, peakAvg, predictionLow, predictionHigh,
+            reengageFans, likelyOnline, platTodayStats } = dailyBrief
+          return (
+            <div style={{ marginBottom: 20, borderRadius: 18, overflow: 'hidden', border: `1px solid ${atPeak ? 'rgba(16,185,129,0.45)' : 'rgba(124,92,255,0.3)'}`, background: 'rgba(10,12,24,0.7)', backdropFilter: 'blur(16px)', animation: 'fadeUp 0.3s ease both' }}>
+
+              {/* Header bar */}
+              <div style={{ padding: '13px 20px', background: atPeak ? 'linear-gradient(135deg,rgba(16,185,129,0.2),rgba(34,211,238,0.1))' : 'linear-gradient(135deg,rgba(124,92,255,0.18),rgba(34,211,238,0.08))', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ width: 32, height: 32, borderRadius: 9, background: atPeak ? 'linear-gradient(135deg,#10B981,#22D3EE)' : 'linear-gradient(135deg,#7C5CFF,#22D3EE)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15 }}>
+                    {atPeak ? '🟢' : '📋'}
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 15, fontWeight: 800, color: C.white }}>
+                      {atPeak ? 'Peak Window LIVE — Go Live Now' : 'Daily Brief'}
+                    </div>
+                    <div style={{ fontSize: 11, color: C.muted }}>{todayName} · based on your real session history</div>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  {isBestDay && <div style={{ padding: '3px 10px', borderRadius: 20, background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.4)', fontSize: 11, fontWeight: 700, color: C.gold }}>🔥 Your Best Day</div>}
+                  {atPeak
+                    ? <div style={{ padding: '4px 12px', borderRadius: 20, background: 'rgba(16,185,129,0.2)', border: '1px solid rgba(16,185,129,0.5)', fontSize: 12, fontWeight: 700, color: C.green }}>🟢 Peak Now</div>
+                    : bhLabel && <div style={{ padding: '4px 12px', borderRadius: 20, background: 'rgba(124,92,255,0.12)', border: '1px solid rgba(124,92,255,0.3)', fontSize: 12, fontWeight: 600, color: C.indigo }}>⏰ Peak in {hoursUntilPeak}h</div>
+                  }
+                </div>
+              </div>
+
+              <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+
+                {/* ═══ BEST TIME TO STREAM ALERT ═══ */}
+                {bhLabel && (
+                  <div style={{ padding: '14px 16px', borderRadius: 13, background: atPeak ? 'linear-gradient(135deg,rgba(16,185,129,0.15),rgba(34,211,238,0.08))' : 'linear-gradient(135deg,rgba(124,92,255,0.12),rgba(34,211,238,0.06))', border: `1px solid ${atPeak ? 'rgba(16,185,129,0.4)' : 'rgba(124,92,255,0.35)'}`, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                    <div style={{ fontSize: 22, flexShrink: 0, marginTop: 1 }}>{atPeak ? '🟢' : '⏰'}</div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: atPeak ? C.green : C.white, marginBottom: 5 }}>
+                        {atPeak
+                          ? `Your peak window is RIGHT NOW — go live on ${displayPlat} immediately`
+                          : `Your best time to stream today is ${bhLabel} on ${displayPlat}`
+                        }
+                      </div>
+                      <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.65 }}>
+                        {`Since it's ${todayName}`}
+                        {isBestDay ? ` (your highest-earning day)` : ``}
+                        {`, you peak at ${bhLabel} UTC on ${displayPlat} with `}
+                        <span style={{ color: C.gold, fontWeight: 700 }}>${displayAvg.toFixed(0)} avg/session</span>
+                        {`. Stream `}
+                        <span style={{ color: C.cyan, fontWeight: 700 }}>60+ min</span>
+                        {` to earn `}
+                        <span style={{ color: C.green, fontWeight: 700 }}>${predictionLow}–${predictionHigh}</span>
+                        {` — longer sessions earn `}
+                        <span style={{ color: C.indigo, fontWeight: 700 }}>+101% more</span>
+                        {` on average.`}
+                      </div>
+                      {!atPeak && hoursUntilPeak !== null && hoursUntilPeak > 0 && (
+                        <div style={{ marginTop: 8, fontSize: 11, color: C.indigo, fontWeight: 600 }}>
+                          ⏳ {hoursUntilPeak === 1 ? 'Starting in ~1 hour — prep your room now' : `${hoursUntilPeak} hours away — set a reminder`}
+                        </div>
+                      )}
+                      {atPeak && (
+                        <div style={{ marginTop: 8, fontSize: 11, color: C.green, fontWeight: 700 }}>
+                          🔥 This window closes in ~{(60 - new Date().getUTCMinutes())} minutes — don't wait
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* ROW 1 — Today / Peak Window / Best Platform */}
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                  <div style={{ flex: 1, minWidth: 130, padding: '11px 14px', borderRadius: 11, background: 'rgba(124,92,255,0.08)', border: '1px solid rgba(124,92,255,0.18)' }}>
+                    <div style={{ fontSize: 10, color: C.muted, marginBottom: 3, textTransform: 'uppercase', letterSpacing: 1 }}>Today</div>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: C.white }}>{todayName}</div>
+                    <div style={{ fontSize: 11, color: C.indigo, marginTop: 2 }}>
+                      {isBestDay ? `🏆 Your best day — avg $${(bestDay?.avg || sessionAvg).toFixed(0)}/session` : `avg ~$${sessionAvg.toFixed(0)}/session`}
+                    </div>
+                  </div>
+
+                  <div style={{ flex: 1, minWidth: 130, padding: '11px 14px', borderRadius: 11, background: atPeak ? 'rgba(16,185,129,0.12)' : 'rgba(34,211,238,0.07)', border: `1px solid ${atPeak ? 'rgba(16,185,129,0.4)' : 'rgba(34,211,238,0.18)'}` }}>
+                    <div style={{ fontSize: 10, color: C.muted, marginBottom: 3, textTransform: 'uppercase', letterSpacing: 1 }}>Best Time</div>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: atPeak ? C.green : C.white }}>{bhLabel || 'Calculating...'}</div>
+                    <div style={{ fontSize: 11, color: atPeak ? C.green : C.cyan, marginTop: 2 }}>
+                      {atPeak ? 'ON RIGHT NOW — stream!' : hoursUntilPeak !== null ? `in ${hoursUntilPeak}h · $${displayAvg.toFixed(0)} avg` : ''}
+                    </div>
+                  </div>
+
+                  <div style={{ flex: 1, minWidth: 130, padding: '11px 14px', borderRadius: 11, background: 'rgba(245,158,11,0.07)', border: '1px solid rgba(245,158,11,0.18)' }}>
+                    <div style={{ fontSize: 10, color: C.muted, marginBottom: 3, textTransform: 'uppercase', letterSpacing: 1 }}>Best Platform</div>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: C.white }}>{displayPlat}</div>
+                    <div style={{ fontSize: 11, color: C.gold, marginTop: 2 }}>${displayAvg.toFixed(0)} avg at {bhLabel || 'peak'}</div>
+                  </div>
+
+                  {bhLabel && (
+                    <div style={{ flex: 1, minWidth: 130, padding: '11px 14px', borderRadius: 11, background: 'rgba(16,185,129,0.07)', border: '1px solid rgba(16,185,129,0.18)' }}>
+                      <div style={{ fontSize: 10, color: C.muted, marginBottom: 3, textTransform: 'uppercase', letterSpacing: 1 }}>Income Forecast</div>
+                      <div style={{ fontSize: 14, fontWeight: 800, color: C.green }}>${predictionLow}–${predictionHigh}</div>
+                      <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>if you stream at {bhLabel}</div>
+                    </div>
+                  )}
+                </div>
+
+                {/* ROW 2 — Likely Online + Re-engage */}
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+
+                  {/* Likely Online */}
+                  {likelyOnline.length > 0 && (
+                    <div style={{ flex: 1, minWidth: 200, padding: '12px 14px', borderRadius: 11, background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.18)' }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: C.green, marginBottom: 9, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: C.green, display: 'inline-block', boxShadow: `0 0 5px ${C.green}`, animation: 'pulse-msg 2s infinite' }}/>
+                        Likely Online Right Now
+                      </div>
+                      {likelyOnline.map((w, i) => (
+                        <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: i < likelyOnline.length - 1 ? 7 : 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <div style={{ width: 26, height: 26, borderRadius: '50%', background: `linear-gradient(135deg,#10B981,#22D3EE)`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, color: '#fff', flexShrink: 0 }}>
+                              {w.username[0].toUpperCase()}
+                            </div>
+                            <div>
+                              <div style={{ fontSize: 12, fontWeight: 700, color: C.white }}>{w.username}</div>
+                              <div style={{ fontSize: 10, color: C.muted }}>${w.totalUSD.toFixed(0)} lifetime · {w.platform}</div>
+                            </div>
+                          </div>
+                          <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }}
+                            style={{ padding: '4px', borderRadius: 8, background: 'none', border: 'none', color: C.green, fontSize: 26, cursor: 'pointer', lineHeight: 1, animation: 'pulse-msg 2s infinite', flexShrink: 0 }}>
+                            💌
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Re-engage */}
+                  {reengageFans.length > 0 && (
+                    <div style={{ flex: 1, minWidth: 200, padding: '12px 14px', borderRadius: 11, background: 'rgba(236,72,153,0.06)', border: '1px solid rgba(236,72,153,0.18)' }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: C.pink, marginBottom: 9, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        ⚠️ Re-engage Today
+                      </div>
+                      {reengageFans.map((w, i) => (
+                        <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: i < reengageFans.length - 1 ? 7 : 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <div style={{ width: 26, height: 26, borderRadius: '50%', background: `linear-gradient(135deg,#EC4899,#7C5CFF)`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, color: '#fff', flexShrink: 0 }}>
+                              {w.username[0].toUpperCase()}
+                            </div>
+                            <div>
+                              <div style={{ fontSize: 12, fontWeight: 700, color: C.white }}>{w.username}</div>
+                              <div style={{ fontSize: 10, color: C.muted }}>${w.totalUSD.toFixed(0)} · {w.avgTipSize >= 50*0.05 ? Math.round(w.avgTipSize/0.05) + ' tok avg' : w.totalTokens + ' tok'} · {w.daysSinceLastTip}d gone</div>
+                            </div>
+                          </div>
+                          <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }}
+                            style={{ padding: '4px', borderRadius: 8, background: 'none', border: 'none', color: C.pink, fontSize: 26, cursor: 'pointer', lineHeight: 1, animation: 'pulse-msg 2s infinite', flexShrink: 0 }}>
+                            💌
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* If neither list has data */}
+                  {likelyOnline.length === 0 && reengageFans.length === 0 && (
+                    <div style={{ flex: 1, padding: '12px 14px', borderRadius: 11, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', fontSize: 12, color: C.muted }}>
+                      No fan alerts right now — check back after more sessions.
+                    </div>
+                  )}
+                </div>
+
+              </div>
+            </div>
+          )
+        })()}
 
         {activeTab === "overview" && (
-          <div>
-            <div style={{ marginBottom: 24, padding: "14px 20px", borderRadius: 12, background: "linear-gradient(135deg, rgba(59,130,246,0.1), rgba(236,72,153,0.1))", border: "1px solid rgba(236,72,153,0.3)", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <div style={{ fontSize: 24 }}>🎉</div>
-                <div>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: C.white }}>You're one of our first 100 beta users — everything is free!</div>
-                  <div style={{ fontSize: 12, color: C.muted }}>All Pro features unlocked. No credit card. No limits. Just good vibes.</div>
-                </div>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-                <div style={{ fontSize: 12, color: C.pink, fontWeight: 600 }}>63 / 100 spots left</div>
-                <div style={{ width: 80, height: 6, borderRadius: 4, background: "rgba(255,255,255,0.1)", overflow: "hidden" }}>
-                  <div style={{ height: "100%", width: "37%", borderRadius: 4, background: "linear-gradient(90deg, #3b82f6, #ec4899)", transition: "width 0.6s ease" }} />
-                </div>
-              </div>
-            </div>
+          <div style={{ animation: "fadeUp 0.3s ease" }}>
 
-            {/* SHARE MY STATS */}
-            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 16 }}>
-              <button onClick={() => setShareModalOpen(true)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 10, background: "linear-gradient(135deg, rgba(236,72,153,0.15), rgba(168,85,247,0.15))", border: "1px solid rgba(236,72,153,0.35)", color: C.white, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-                📤 Share My Stats
-              </button>
-            </div>
-
+            {/* ═══════════════════════════════════════
+                1. MONEY SNAPSHOT
+            ═══════════════════════════════════════ */}
             {(() => {
-              const recentSessions = sessions.filter(s => new Date(s.startTime) > new Date(Date.now() - 30 * 86400000))
-              const prevSessions = sessions.filter(s => { const d = new Date(s.startTime); return d > new Date(Date.now() - 60 * 86400000) && d <= new Date(Date.now() - 30 * 86400000) })
-              const recentRev = recentSessions.reduce((s, r) => s + (r.totalUSD || 0), 0)
-              const prevRev = prevSessions.reduce((s, r) => s + (r.totalUSD || 0), 0)
-              const growthPct = prevRev > 0 ? Math.round(((recentRev - prevRev) / prevRev) * 100) : null
+              const now = new Date()
+              const thisMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
+              const prevMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1))
+              const thisMonthRev = tips.filter(t => new Date(t.date_time || t.dateRaw) >= thisMonthStart).reduce((s, t) => s + (t.usd || 0), 0)
+              const prevMonthRev = tips.filter(t => { const d = new Date(t.date_time || t.dateRaw); return d >= prevMonthStart && d < thisMonthStart }).reduce((s, t) => s + (t.usd || 0), 0)
+              const growthPct = (prevMonthRev > 0 && thisMonthRev > 0) ? Math.round(((thisMonthRev - prevMonthRev) / prevMonthRev) * 100) : null
+              const isPositive = growthPct !== null && growthPct >= 0
               const topPct = Math.max(1, Math.min(25, Math.round(100 - (totalRevenue / 50))))
-              const streak = recentSessions.length
+              const sessionsLast30 = sessions.filter(s => (Date.now() - new Date(s.startTime)) / 86400000 <= 30).length
+              const fansActiveLast30 = new Set(tips.filter(t => (Date.now() - new Date(t.date_time || t.dateRaw)) / 86400000 <= 30).map(t => t.username)).size
+              const cards = [
+                { label: "Total Earned", value: `$${totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, sub: `Top ${topPct}% of models on this platform`, icon: "💰", badge: growthPct !== null ? (isPositive ? `↑ ${growthPct}% vs last month` : `↓ ${Math.abs(growthPct)}% vs last month`) : null, badgeColor: isPositive ? C.green : C.red, glow: isPositive },
+                { label: "Avg $/Hour", value: `$${avgPerHour.toFixed(2)}`, sub: avgPerHour > 20 ? "Above average — keep it up!" : "Tip: stream at peak hours", icon: "⏱️", badge: null },
+                { label: "Total Fans", value: whales.length.toLocaleString(), sub: `${fansActiveLast30} active in last 30 days`, icon: "👥", badge: null },
+                { label: "Sessions", value: sessions.length.toLocaleString(), sub: `${sessionsLast30} in last 30 days${sessionsLast30 >= 3 ? " 🔥" : ""}`, icon: "🎥", badge: sessionsLast30 >= 5 ? "🔥 On a streak!" : null, badgeColor: C.gold }
+              ]
+              // Earnings velocity per platform for velocity strip
+              const velPlatforms = Object.entries(platformVelocity).filter(([,v]) => v !== null).sort((a,b) => (b[1]||0)-(a[1]||0))
               return (
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 20, marginBottom: 28 }}>
-                  {[
-                    { label: "Total Earned", value: `$${totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, sub: `Top ${topPct}% of models on this platform`, icon: "💰", badge: growthPct !== null ? (growthPct >= 0 ? `↑ ${growthPct}% vs last month` : `↓ ${Math.abs(growthPct)}% vs last month`) : null, badgeColor: growthPct !== null && growthPct >= 0 ? C.green : C.red },
-                    { label: "Avg $/Hour", value: `$${avgPerHour.toFixed(2)}`, sub: avgPerHour > 20 ? "Above average — keep it up!" : "Tip: stream at peak hours", icon: "⏱️", badge: null },
-                    { label: "Total Fans", value: whales.length, sub: `${whales.filter(w => Math.floor((Date.now() - new Date(w.lastTipDate)) / 86400000) <= 30).length} active in last 30 days`, icon: "👥", badge: null },
-                    { label: "Sessions", value: sessions.length, sub: `${streak} in last 30 days${streak >= 3 ? " 🔥" : ""}`, icon: "🎥", badge: streak >= 5 ? "🔥 On a streak!" : null, badgeColor: C.gold }
-                  ].map((s, i) => (
-                    <div key={i} className="dash-card" style={{ ...glassCard, borderRadius: 18, padding: 22, position: "relative", overflow: "hidden" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-                        <span style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: 1 }}>{s.label}</span>
-                        <span style={{ fontSize: 20 }}>{s.icon}</span>
+                <>
+                  <div className="stat-grid-4" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: velPlatforms.length ? 12 : 28 }}>
+                    {cards.map((s, i) => (
+                      <div key={i} className="dash-card" style={{ ...glassCard, borderRadius: 18, padding: "22px 20px", position: "relative", overflow: "hidden", animation: `fadeUp 0.3s ease ${i * 0.06}s both`, boxShadow: s.glow ? `0 0 30px rgba(16,185,129,0.2), ${glassCard.boxShadow}` : glassCard.boxShadow }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
+                          <span style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600 }}>{s.label}</span>
+                          <span style={{ fontSize: 22 }}>{s.icon}</span>
+                        </div>
+                        <div style={{ fontSize: 34, fontWeight: 900, background: "linear-gradient(135deg,#60a5fa,#f472b6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", marginBottom: 6, lineHeight: 1.1 }}>{s.value}</div>
+                        <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.4 }}>{s.sub}</div>
+                        {s.badge && <div style={{ marginTop: 8, display: "inline-block", padding: "2px 8px", borderRadius: 6, background: `${s.badgeColor}20`, border: `1px solid ${s.badgeColor}40`, fontSize: 10, fontWeight: 700, color: s.badgeColor }}>{s.badge}</div>}
                       </div>
-                      <div style={{ fontSize: 36, fontWeight: 900, background: "linear-gradient(135deg,#60a5fa,#f472b6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", marginBottom: 6 }}>{s.value}</div>
-                      <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.4 }}>{s.sub}</div>
-                      {s.badge && <div style={{ marginTop: 8, display: "inline-block", padding: "2px 8px", borderRadius: 6, background: `${s.badgeColor}20`, border: `1px solid ${s.badgeColor}40`, fontSize: 10, fontWeight: 700, color: s.badgeColor }}>{s.badge}</div>}
+                    ))}
+                  </div>
+                  {/* Earnings Velocity strip — formula: totalUSD / totalHours per platform */}
+                  {velPlatforms.length > 0 && (
+                    <div className="velocity-strip" style={{ display: "flex", gap: 10, marginBottom: 28, flexWrap: "wrap" }}>
+                      {velPlatforms.map(([plat, vel], i) => (
+                        <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 14px", borderRadius: 20, background: "rgba(34,211,238,0.07)", border: "1px solid rgba(34,211,238,0.2)", animation: `fadeUp 0.3s ease ${0.25 + i*0.05}s both` }}>
+                          <span style={{ fontSize: 11, color: C.muted }}>{plat.replace('BongaCams','Bonga').replace('MyFreeCams','MFC').replace('Chaturbate','CB')}</span>
+                          <span style={{ fontSize: 13, fontWeight: 700, color: C.cyan }}>${vel.toFixed(2)}/hr</span>
+                          <span style={{ fontSize: 10, color: C.muted }}>velocity</span>
+                        </div>
+                      ))}
+                      {earningsVelocity !== null && (
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 14px", borderRadius: 20, background: "rgba(16,185,129,0.07)", border: "1px solid rgba(16,185,129,0.2)" }}>
+                          <span style={{ fontSize: 11, color: C.muted }}>Overall</span>
+                          <span style={{ fontSize: 13, fontWeight: 700, color: C.green }}>${earningsVelocity.toFixed(2)}/hr</span>
+                        </div>
+                      )}
                     </div>
-                  ))}
-                </div>
+                  )}
+                </>
               )
             })()}
 
-            {/* WHAT SHOULD I DO RIGHT NOW */}
+            {/* ═══════════════════════════════════════
+                2. PRIMARY ACTION CENTER — "Make Money Right Now"
+                Merges: What Should I Do + Live Intelligence top alerts
+                Shows max 3 actions ranked by revenue impact
+            ═══════════════════════════════════════ */}
             {(() => {
-              const actions = nextMoves.length > 0 ? nextMoves : [{ icon: "📊", color: C.cyan, text: "Import your first CSV to unlock personalized action recommendations", cta: null }]
+              // Merge nextMoves + top realTimeAlerts, deduplicate, cap at 3
+              const merged = []
+
+              // Add nextMoves first (already ranked by priority)
+              ;(nextMoves || []).forEach(a => {
+                merged.push({ icon: a.icon, color: a.color || C.cyan, text: a.text, cta: a.cta, username: a.username, source: 'move' })
+              })
+
+              // Add top realTimeAlerts that aren't duplicated
+              ;(realTimeAlerts || []).slice(0, 3).forEach(a => {
+                const isDupe = merged.some(m => m.text && a.message && m.text.toLowerCase().includes((a.title || '').toLowerCase().slice(0, 20)))
+                if (!isDupe) merged.push({ icon: a.icon, color: a.color || C.cyan, text: `${a.title} — ${a.message}`, cta: false, source: 'alert' })
+              })
+
+              const actions = merged.slice(0, 3)
+              if (!actions.length) return null
+
               return (
-                <div style={{ ...glassCard, borderRadius: 16, padding: 24, marginBottom: 28 }}>
+                <div style={{ ...glassCard, borderRadius: 18, padding: 24, marginBottom: 28, border: "1px solid rgba(34,211,238,0.2)", animation: "fadeUp 0.3s ease 0.1s both" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
-                    <div style={{ width: 36, height: 36, borderRadius: 10, background: "linear-gradient(135deg, #22D3EE, #7C5CFF)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>⚡</div>
+                    <div style={{ width: 36, height: 36, borderRadius: 10, background: "linear-gradient(135deg,#22D3EE,#7C5CFF)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>⚡</div>
                     <div>
-                      <div style={{ fontSize: 18, fontWeight: 800, color: C.white }}>What Should I Do Right Now?</div>
-                      <div style={{ fontSize: 12, color: C.muted }}>Live coaching based on your actual data</div>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: C.white }}>Make Money Right Now</div>
+                      <div style={{ fontSize: 12, color: C.muted }}>Ranked by estimated revenue impact from your real data</div>
                     </div>
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                     {actions.map((a, i) => (
-                      <div key={i} style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, padding: "14px 16px", background: `${a.color}10`, border: `1px solid ${a.color}30`, borderRadius: 12 }}>
+                      <div key={i} className={`alert-enter alert-pulse-info alert-row`} style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, padding: "14px 16px", background: i === 0 ? `${a.color}18` : `${a.color}0d`, border: `1px solid ${i === 0 ? a.color + '50' : a.color + '28'}`, borderRadius: 12, boxShadow: i === 0 ? `0 0 18px ${a.color}18` : 'none', animationDelay: `${i * 40}ms` }}
+                        onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.boxShadow = `0 4px 20px ${a.color}28` }}
+                        onMouseLeave={e => { e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = i === 0 ? `0 0 18px ${a.color}18` : 'none' }}>
                         <div style={{ display: "flex", gap: 12, alignItems: "flex-start", flex: 1 }}>
                           <span style={{ fontSize: 20, flexShrink: 0 }}>{a.icon}</span>
-                          <div style={{ fontSize: 14, color: C.white, lineHeight: 1.5 }}>{a.text}</div>
+                          <div style={{ fontSize: 14, color: C.white, lineHeight: 1.55 }}>{a.text}</div>
                         </div>
                         {a.cta && (
                           <button onClick={() => { const w = whales.find(wh => wh.username === a.username); if (w) { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) } }}
-                            style={{ flexShrink: 0, padding: "6px 14px", borderRadius: 8, background: "linear-gradient(135deg, #EC4899, #7C5CFF)", boxShadow: "0 0 20px rgba(236,72,153,0.4)", border: "none", color: C.white, fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
-                            💌 Message
+                            style={{ flexShrink: 0, padding: "6px", borderRadius: 8, background: "none", border: "none", color: C.pink, fontSize: 28, cursor: "pointer", animation: "pulse-msg 2s infinite", lineHeight: 1 }}>
+                            💌
                           </button>
                         )}
                       </div>
@@ -1593,160 +2255,344 @@ export default function Dashboard() {
               )
             })()}
 
-            {/* REAL-TIME LIVE INTELLIGENCE */}
-            {realTimeAlerts.length > 0 && (
-              <div style={{ ...glassCard, borderRadius: 16, padding: 24, marginBottom: 28, border: "1px solid rgba(34,211,238,0.2)" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
-                  <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#10B981", boxShadow: "0 0 8px #10B981", animation: "pulse-msg 1.5s infinite" }} />
-                  <div style={{ fontSize: 18, fontWeight: 800, color: C.white }}>Live Intelligence</div>
-                  <div style={{ fontSize: 11, color: C.green, padding: "2px 8px", borderRadius: 20, background: "rgba(16,185,129,0.15)", border: "1px solid rgba(16,185,129,0.3)" }}>REAL DATA</div>
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                  {realTimeAlerts.map((a, i) => (
-                    <div key={i} style={{ padding: "14px 16px", borderRadius: 12, background: `${a.color}0d`, border: `1px solid ${a.color}30`, display: "flex", gap: 12, alignItems: "flex-start" }}>
-                      <span style={{ fontSize: 20, flexShrink: 0 }}>{a.icon}</span>
-                      <div>
-                        <div style={{ fontSize: 14, fontWeight: 700, color: C.white, marginBottom: 3 }}>{a.title}</div>
-                        <div style={{ fontSize: 12, color: C.text, lineHeight: 1.5 }}>{a.message}</div>
-                      </div>
-                    </div>
-                  ))}
+            {/* ═══════════════════════════════════════
+                3. WHAT'S WORKING — Strategy
+                Platform performance + best time + best day merged
+            ═══════════════════════════════════════ */}
+            <div style={{ ...glassCard, borderRadius: 18, padding: 24, marginBottom: 28, animation: "fadeUp 0.3s ease 0.15s both" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18, flexWrap: "wrap", gap: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 10, background: "linear-gradient(135deg,#F59E0B,#10B981)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>📊</div>
+                  <div>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: C.white }}>What's Working</div>
+                    <div style={{ fontSize: 12, color: C.muted }}>Platform, time & session strategy from your data</div>
+                  </div>
                 </div>
               </div>
-            )}
 
-            {/* PLATFORM DAY PERFORMANCE GRID */}
-            {(() => {
-              // UTC day extraction — avoids timezone drift on stored timestamps
-              const UTC_DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
-              const UTC_DAYS_LONG = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
+              {/* Platform ROI + Per-Platform Best Time (mandatory: always show platform context) */}
+              {(() => {
+                const fmtH = h => h === 0 ? '12 AM' : h < 12 ? `${h} AM` : h === 12 ? '12 PM' : `${h-12} PM`
+                const platColors = { Chaturbate: C.cyan, BongaCams: C.pink, MyFreeCams: C.gold }
+                const allPlats = [...(analytics?.platforms || [])].sort((a,b) => b.totalUSD - a.totalUSD)
+                if (!allPlats.length) return null
+                return (
+                  <div style={{ marginBottom: 18 }}>
+                    {/* Platform ROI row: formula = total_earnings / total_hours */}
+                    <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10 }}>Platform ROI ($/hr streamed)</div>
+                    <div className="platform-roi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10, marginBottom: 18 }}>
+                      {allPlats.map((p, i) => {
+                        const roi = platformVelocity[p.platform] ?? (p.hours > 0 ? parseFloat((p.totalUSD / p.hours).toFixed(2)) : null)
+                        const bestTime = platformBestTimes[p.platform]
+                        const col = platColors[p.platform] || C.blue
+                        const isTop = i === 0
+                        return (
+                          <div key={i} style={{ padding: "14px 16px", borderRadius: 12, background: isTop ? `${col}12` : `${col}08`, border: `1px solid ${isTop ? col + '40' : col + '20'}`, transition: "transform 0.15s, box-shadow 0.15s", position: "relative" }}
+                            onMouseEnter={e => { e.currentTarget.style.transform = "scale(1.02)"; e.currentTarget.style.boxShadow = `0 4px 16px ${col}20` }}
+                            onMouseLeave={e => { e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = "" }}>
+                            {isTop && <div style={{ position: "absolute", top: 8, right: 8, fontSize: 9, padding: "2px 6px", borderRadius: 10, background: `${col}25`, color: col, fontWeight: 700 }}>TOP ROI</div>}
+                            <div style={{ fontSize: 11, fontWeight: 700, color: col, marginBottom: 6 }}>{p.platform.replace('BongaCams','Bonga').replace('MyFreeCams','MFC')}</div>
+                            <div style={{ fontSize: 22, fontWeight: 900, color: C.white, marginBottom: 2 }}>{roi !== null ? `$${roi.toFixed(2)}/hr` : '—'}</div>
+                            <div style={{ fontSize: 11, color: C.muted, marginBottom: bestTime ? 8 : 0 }}>${p.totalUSD.toFixed(0)} total · {p.hours.toFixed(0)}h streamed</div>
+                            {(() => {
+                            const todayUTCName = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][new Date().getUTCDay()]
+                            const ptimes = analytics?.platformBestTimes?.[p.platform]
+                            const todayHour = ptimes?.bestHourByDay?.[todayUTCName]
+                            const bestDayEntry = ptimes?.bestDay
+                            return (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 4 }}>
+                                {bestDayEntry && (
+                                  <div style={{ padding: '5px 8px', borderRadius: 8, background: `${col}10`, border: `1px solid ${col}25`, fontSize: 11, color: col }}>
+                                    Best day: <strong>{bestDayEntry.day}s</strong> ${bestDayEntry.avg.toFixed(0)} avg
+                                  </div>
+                                )}
+                                {bestTime && (
+                                  <div style={{ padding: '5px 8px', borderRadius: 8, background: `${col}10`, border: `1px solid ${col}25`, fontSize: 11, color: col }}>
+                                    Best hour overall: <strong>{fmtH(bestTime.hour)}</strong> ${bestTime.avg.toFixed(0)} avg
+                                  </div>
+                                )}
+                                {todayHour && (
+                                  <div style={{ padding: '5px 8px', borderRadius: 8, background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.25)', fontSize: 11, color: '#10B981' }}>
+                                    Today ({todayUTCName}): <strong>{fmtH(todayHour.hour)}</strong> ${todayHour.avg.toFixed(0)}/hr avg
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          })()}
+                          </div>
+                        )
+                      })}
+                    </div>
+                    {/* Best day */}
+                    {analyticsbestDay && (() => {
+                      // Use avg per SESSION on best day (not avg/calendar day)
+                      const bdSess = sessions.filter(s => new Date(s.startTime).toLocaleDateString('en-US', { weekday: 'long' }) === analyticsbestDay.day)
+                      const bdAvg = bdSess.length ? (bdSess.reduce((a,s) => a+s.totalUSD,0)/bdSess.length) : analyticsbestDay.avg
+                      return (
+                        <div style={{ display: "flex", gap: 8, alignItems: "center", padding: "10px 14px", borderRadius: 10, background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.2)", marginBottom: 0 }}>
+                          <span style={{ fontSize: 16 }}>📅</span>
+                          <div style={{ fontSize: 13, color: C.white }}>
+                            <strong>{analyticsbestDay.day}s</strong> earn the most — ${bdAvg.toFixed(0)} avg per session
+                            {bdSess.length >= 3 && <span style={{ color: C.muted, marginLeft: 6 }}>across {bdSess.length} {analyticsbestDay.day} sessions</span>}
+                          </div>
+                        </div>
+                      )
+                    })()}
+                  </div>
+                )
+              })()}
 
-              // Accumulate total USD and count unique calendar-dates per platform+day
-              // so we can show avg per active day, not inflated totals
-              const platDayUSD = {}   // platform -> short-day -> total $
-              const platDayDates = {} // platform -> short-day -> Set of 'YYYY-MM-DD'
-              tips.forEach(t => {
-                const p = t.platform
-                const dt = new Date(t.date_time || t.dateRaw)
-                const shortDay = UTC_DAYS[dt.getUTCDay()]
-                const dateKey = dt.toISOString().slice(0, 10) // 'YYYY-MM-DD'
-                if (!platDayUSD[p]) platDayUSD[p] = {}
-                if (!platDayDates[p]) platDayDates[p] = {}
-                platDayUSD[p][shortDay] = (platDayUSD[p][shortDay] || 0) + (t.usd || 0)
-                if (!platDayDates[p][shortDay]) platDayDates[p][shortDay] = new Set()
-                platDayDates[p][shortDay].add(dateKey)
-              })
-
-              // Build avg-per-active-day for each cell
-              const platDayAvg = {}
-              Object.keys(platDayUSD).forEach(p => {
-                platDayAvg[p] = {}
-                UTC_DAYS.forEach(d => {
-                  const total = platDayUSD[p][d] || 0
-                  const activeDays = platDayDates[p]?.[d]?.size || 1
-                  platDayAvg[p][d] = total > 0 ? parseFloat((total / activeDays).toFixed(2)) : 0
+              {/* Platform day heatmap */}
+              {(() => {
+                const UTC_DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
+                const platDayUSD = {}; const platDayDates = {}
+                tips.forEach(t => {
+                  const p = t.platform; const dt = new Date(t.date_time || t.dateRaw)
+                  const shortDay = UTC_DAYS[dt.getUTCDay()]; const dateKey = dt.toISOString().slice(0, 10)
+                  if (!platDayUSD[p]) platDayUSD[p] = {}
+                  if (!platDayDates[p]) platDayDates[p] = {}
+                  platDayUSD[p][shortDay] = (platDayUSD[p][shortDay] || 0) + (t.usd || 0)
+                  if (!platDayDates[p][shortDay]) platDayDates[p][shortDay] = new Set()
+                  platDayDates[p][shortDay].add(dateKey)
                 })
-              })
-
-              const platList = Object.keys(platDayAvg)
-              if (platList.length < 1) return null
-
-              // Today's UTC day
-              const nowUTC = new Date()
-              const todayShort = UTC_DAYS[nowUTC.getUTCDay()]
-              const todayLong = UTC_DAYS_LONG[nowUTC.getUTCDay()]
-
-              return (
-                <div style={{ ...glassCard, borderRadius: 16, padding: 24, marginBottom: 28 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4, flexWrap: "wrap", gap: 8 }}>
-                    <h2 style={{ fontSize: 18, fontWeight: 700, color: C.white }}>📅 Platform Performance by Day</h2>
-                    <span style={{ fontSize: 11, color: C.muted, padding: "3px 10px", borderRadius: 20, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}>avg $/active day</span>
+                const platDayAvg = {}
+                Object.keys(platDayUSD).forEach(p => {
+                  platDayAvg[p] = {}
+                  UTC_DAYS.forEach(d => {
+                    const total = platDayUSD[p][d] || 0; const activeDays = platDayDates[p]?.[d]?.size || 1
+                    platDayAvg[p][d] = total > 0 ? parseFloat((total / activeDays).toFixed(2)) : 0
+                  })
+                })
+                const platList = Object.keys(platDayAvg)
+                if (platList.length < 1) return null
+                const todayShort = UTC_DAYS[new Date().getUTCDay()]
+                const todayLong = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][new Date().getUTCDay()]
+                return (
+                  <div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>Platform by Day of Week</span>
+                      <span style={{ fontSize: 11, color: C.muted, padding: "2px 8px", borderRadius: 20, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}>avg $/active day</span>
+                    </div>
+                    <div className="heatmap-wrap" style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "80px repeat(7, 1fr)", gap: 3, minWidth: 480 }}>
+                      <div />
+                      {UTC_DAYS.map(d => (
+                        <div key={d} style={{ textAlign: "center", fontSize: 11, fontWeight: 700, color: d === todayShort ? C.cyan : C.muted, paddingBottom: 4 }}>{d}</div>
+                      ))}
+                      {platList.map(plat => {
+                        const dayVals = UTC_DAYS.map(d => platDayAvg[plat][d] || 0)
+                        const maxVal = Math.max(...dayVals, 0.01)
+                        return [
+                          <div key={plat + '_l'} style={{ fontSize: 10, fontWeight: 700, color: C.text, display: "flex", alignItems: "center", paddingRight: 4, lineHeight: 1.3 }}>{plat.replace('BongaCams','Bonga').replace('Chaturbate','CB').replace('MyFreeCams','MFC')}</div>,
+                          ...UTC_DAYS.map(d => {
+                            const val = platDayAvg[plat][d] || 0
+                            const intensity = maxVal > 0 ? val / maxVal : 0
+                            const isToday = d === todayShort
+                            const bg = val === 0 ? "rgba(255,255,255,0.03)" : intensity < 0.25 ? "rgba(34,211,238,0.12)" : intensity < 0.5 ? "rgba(34,211,238,0.30)" : intensity < 0.75 ? "rgba(34,211,238,0.60)" : "rgba(34,211,238,0.90)"
+                            return (
+                              <div key={d} title={`${plat} ${d}: avg $${val.toFixed(2)}/day`}
+                                onClick={() => { if (val > 0) { setChartDrillDay(d); handleTabChange("whales") } }}
+                                style={{ height: 32, borderRadius: 5, background: bg, border: isToday ? "2px solid rgba(34,211,238,0.7)" : "1px solid rgba(255,255,255,0.05)", display: "flex", alignItems: "center", justifyContent: "center", cursor: val > 0 ? "pointer" : "default", transition: "all 0.15s", transform: "scale(1)" }}
+                                onMouseEnter={e => { if (val > 0) { e.currentTarget.style.transform = "scale(1.08)"; e.currentTarget.style.boxShadow = "0 0 8px rgba(34,211,238,0.5)" } }}
+                                onMouseLeave={e => { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.boxShadow = "" }}>
+                                {val > 0 && <span style={{ fontSize: 9, fontWeight: 700, color: intensity > 0.45 ? "#fff" : C.muted }}>${val >= 100 ? Math.round(val) : val.toFixed(0)}</span>}
+                              </div>
+                            )
+                          })
+                        ]
+                      })}
+                    </div>
+                    <div style={{ marginTop: 8, fontSize: 11, color: C.muted }}>Today ({todayLong}) highlighted in cyan. Darker = more earnings. Click any cell to filter Top Fans by that day. <span style={{ color: C.cyan }}>Click any cell to filter Top Fans by that day.</span></div>
                   </div>
-                  <p style={{ fontSize: 12, color: C.muted, marginBottom: 16 }}>Which platform earns more on each day of the week — based on your real data</p>
-                  <div style={{ display: "grid", gridTemplateColumns: `90px repeat(7, 1fr)`, gap: 4 }}>
-                    <div />
-                    {UTC_DAYS.map(d => (
-                      <div key={d} style={{ textAlign: "center", fontSize: 11, fontWeight: 700, color: d === todayShort ? C.cyan : C.muted, paddingBottom: 6 }}>{d}</div>
-                    ))}
-                    {platList.map(plat => {
-                      const dayVals = UTC_DAYS.map(d => platDayAvg[plat][d] || 0)
-                      const maxVal = Math.max(...dayVals, 0.01)
-                      return [
-                        <div key={plat + '_label'} style={{ fontSize: 10, fontWeight: 700, color: C.text, display: "flex", alignItems: "center", paddingRight: 6, lineHeight: 1.3 }}>{plat.replace('BongaCams','Bonga').replace('Chaturbate','CB')}</div>,
-                        ...UTC_DAYS.map(d => {
-                          const val = platDayAvg[plat][d] || 0
-                          const intensity = maxVal > 0 ? val / maxVal : 0
-                          const isToday = d === todayShort
-                          const bg = val === 0
-                            ? "rgba(255,255,255,0.03)"
-                            : intensity < 0.25 ? "rgba(34,211,238,0.12)"
-                            : intensity < 0.5  ? "rgba(34,211,238,0.30)"
-                            : intensity < 0.75 ? "rgba(34,211,238,0.60)"
-                            : "rgba(34,211,238,0.90)"
-                          return (
-                            <div key={d} title={`${plat} ${d}: avg $${val.toFixed(2)}/day — click to see fans active on ${d}s`}
-                              onClick={() => { setChartDrillDay(d); setActiveTab("whales") }}
-                              style={{ height: 36, borderRadius: 6, background: bg, border: isToday ? "2px solid rgba(34,211,238,0.7)" : "1px solid rgba(255,255,255,0.06)", display: "flex", alignItems: "center", justifyContent: "center", cursor: val > 0 ? "pointer" : "default", transition: "transform 0.1s, opacity 0.1s" }}
-                              onMouseEnter={e => { if (val > 0) e.currentTarget.style.opacity = "0.8" }}
-                              onMouseLeave={e => { e.currentTarget.style.opacity = "1" }}>
-                              {val > 0 && <span style={{ fontSize: 9, fontWeight: 700, color: intensity > 0.45 ? "#fff" : C.muted }}>${val >= 100 ? Math.round(val) : val.toFixed(0)}</span>}
-                            </div>
-                          )
-                        })
-                      ]
-                    })}
                   </div>
-                  <div style={{ marginTop: 10, fontSize: 11, color: C.muted }}>
-                    Today ({todayLong}) is highlighted in cyan. Values = avg earnings per active stream day. Darker = more.
-                  </div>
-                </div>
-              )
-            })()}
+                )
+              })()}
+            </div>
 
-            {/* TIPPERS LIKELY ONLINE NOW */}
+            {/* ═══════════════════════════════════════
+                4. YOUR TOP EARNERS
+                A. Likely Online Now  B. Milestones  C. At Risk
+            ═══════════════════════════════════════ */}
             {(() => {
-              const currentHour = new Date().getHours()
-              const label = h => h === 0 ? '12 AM' : h < 12 ? `${h} AM` : h === 12 ? '12 PM' : `${h-12} PM`
+              const currentUTCHourTE = new Date().getUTCHours()
+              const labelH = h => h === 0 ? '12 AM' : h < 12 ? `${h} AM` : h === 12 ? '12 PM' : `${h-12} PM`
+
               const likelyOnline = whales
                 .filter(w => w.tipCount >= 3)
                 .map(w => {
                   const fanTips = (w.tips && w.tips.length > 0) ? w.tips : tips.filter(t => t.username.toLowerCase() === w.username.toLowerCase())
                   const hourCounts = {}
-                  fanTips.forEach(t => {
-                    const h = new Date(t.date_time || t.dateRaw).getHours()
-                    hourCounts[h] = (hourCounts[h] || 0) + 1
-                  })
+                  fanTips.forEach(t => { const h = new Date(t.date_time || t.dateRaw).getUTCHours(); hourCounts[h] = (hourCounts[h] || 0) + 1 })
                   const sorted = Object.entries(hourCounts).sort((a,b) => b[1]-a[1])
                   if (!sorted.length) return null
                   const peakHour = parseInt(sorted[0][0])
-                  const hoursAway = (peakHour - currentHour + 24) % 24
+                  const hoursAway = (peakHour - currentUTCHourTE + 24) % 24
                   const confidence = Math.min(95, Math.round((sorted[0][1] / fanTips.length) * 100 * 2.5))
-                  return { ...w, peakHour, hoursAway, confidence, peakLabel: label(peakHour) }
+                  return { ...w, peakHour, hoursAway, confidence, peakLabel: labelH(peakHour) }
                 })
                 .filter(Boolean)
                 .filter(w => w.hoursAway <= 2 && w.confidence >= 35)
                 .sort((a,b) => b.totalUSD - a.totalUSD)
-                .slice(0, 4)
+                .slice(0, 3)
 
-              if (!likelyOnline.length) return null
+              const milestones = (whatsNextAlerts || []).filter(a => a.type === 'milestone').slice(0, 3)
+
+              const atRisk = reengageList.slice(0, 3)
+
+              const hasAny = likelyOnline.length || milestones.length || atRisk.length
+              if (!hasAny) return null
+
+              const fanCard = (w, opts = {}) => (
+                <div style={{ padding: "12px 14px", borderRadius: 12, background: opts.bg || "rgba(255,255,255,0.03)", border: opts.border || "1px solid rgba(255,255,255,0.07)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", transition: "transform 0.15s, box-shadow 0.15s", cursor: "default" }}
+                  onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-1px) scale(1.01)"; e.currentTarget.style.boxShadow = opts.hoverGlow || "0 4px 16px rgba(255,255,255,0.06)" }}
+                  onMouseLeave={e => { e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = "" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 160 }}>
+                    <div style={{ width: 36, height: 36, borderRadius: 9, background: opts.avatarBg || "rgba(34,211,238,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 800, color: opts.avatarColor || C.cyan, flexShrink: 0 }}>
+                      {w.username.charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: C.white }}>{w.username}</div>
+                      <div style={{ fontSize: 11, color: C.muted }}>
+                      <span style={{ color: C.white, fontWeight: 600 }}>${w.totalUSD.toFixed(0)}</span> lifetime
+                      {opts.sub ? ` · ${opts.sub}` : ''}
+                      {w.tipCount > 1 && ` · ${w.tipCount} tips`}
+                      {w.avgDaysBetweenTips && w.tipCount > 1 && <span style={{ color: w.churnRisk?.level === 'High' || w.churnRisk?.level === 'Critical' ? C.red : C.muted }}>{` · every ~${Math.round(w.avgDaysBetweenTips)}d`}</span>}
+                      {` · ${w.platform}`}
+                    </div>
+                    </div>
+                  </div>
+                  {opts.badge && <span style={{ fontSize: 11, padding: "3px 9px", borderRadius: 20, background: opts.badgeBg, color: opts.badgeColor, fontWeight: 700, whiteSpace: "nowrap" }}>{opts.badge}</span>}
+                  {opts.action && (
+                    <button onClick={opts.action} style={{ padding: "6px 12px", borderRadius: 8, background: opts.btnBg || "linear-gradient(135deg,#22D3EE,#EC4899)", border: "none", color: C.white, fontSize: 11, fontWeight: 700, cursor: "pointer", flexShrink: 0, animation: opts.pulseBtn ? "pulse-msg 2.5s infinite" : "none" }}>
+                      {opts.btnLabel || "💌"}
+                    </button>
+                  )}
+                </div>
+              )
+
               return (
-                <div style={{ ...glassCard, borderRadius: 16, padding: 24, marginBottom: 28 }}>
-                  <h2 style={{ fontSize: 18, fontWeight: 700, color: C.white, marginBottom: 4 }}>🟢 Tippers Likely Online Now</h2>
-                  <p style={{ fontSize: 12, color: C.muted, marginBottom: 16 }}>Based on their real tip-time patterns from your data</p>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                    {likelyOnline.map((w, i) => (
-                      <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", borderRadius: 12, background: "rgba(16,185,129,0.08)", border: "1px solid rgba(16,185,129,0.25)", flexWrap: "wrap", gap: 10 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                          <div style={{ width: 8, height: 8, borderRadius: "50%", background: C.green, boxShadow: `0 0 6px ${C.green}` }} />
-                          <div>
-                            <div style={{ fontSize: 14, fontWeight: 700, color: C.white }}>{w.username}</div>
-                            <div style={{ fontSize: 11, color: C.muted }}>${w.totalUSD.toFixed(0)} lifetime · peaks at {w.peakLabel} · {w.platform}</div>
+                <div style={{ ...glassCard, borderRadius: 18, padding: 24, marginBottom: 28, animation: "fadeUp 0.3s ease 0.2s both" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
+                    <div style={{ width: 36, height: 36, borderRadius: 10, background: "linear-gradient(135deg,#EC4899,#7C5CFF)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>👑</div>
+                    <div>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: C.white }}>Your Top Earners</div>
+                      <div style={{ fontSize: 12, color: C.muted }}>Who's online, who's close to a milestone, who needs a message</div>
+                    </div>
+                  </div>
+
+                  {/* A. Likely Online Now */}
+                  {likelyOnline.length > 0 && (
+                    <div style={{ marginBottom: 20 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: C.green, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10, display: "flex", alignItems: "center", gap: 6 }}>
+                        <div style={{ width: 7, height: 7, borderRadius: "50%", background: C.green, boxShadow: `0 0 6px ${C.green}` }} />
+                        Likely Online Now
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        {likelyOnline.map((w, i) => fanCard(w, {
+                          bg: "rgba(16,185,129,0.07)", border: "1px solid rgba(16,185,129,0.22)", hoverGlow: "0 4px 16px rgba(16,185,129,0.15)",
+                          avatarBg: "rgba(16,185,129,0.18)", avatarColor: C.green,
+                          sub: `peaks at ${w.peakLabel}`,
+                          badge: `${w.confidence}% likely`, badgeBg: "rgba(16,185,129,0.2)", badgeColor: C.green,
+                          action: () => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) },
+                          btnBg: "none", pulseBtn: true
+                        }))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* B. Close to Milestone */}
+                  {milestones.length > 0 && (
+                    <div style={{ marginBottom: 20 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: C.gold, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10 }}>💰 Close to Milestone</div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        {milestones.map((a, i) => {
+                          const w = a.whale
+                          if (!w) return null
+                          return fanCard(w, {
+                            bg: "rgba(245,158,11,0.07)", border: "1px solid rgba(245,158,11,0.22)", hoverGlow: "0 4px 16px rgba(245,158,11,0.12)",
+                            avatarBg: "rgba(245,158,11,0.18)", avatarColor: C.gold,
+                            sub: a.message?.match(/\$[\d.]+ away/)?.[0] || '',
+                            action: () => { if (a.whale) { setMessageTarget(a.whale); setMessageIndex(0); setMessageCopied(false) } },
+                            btnBg: "linear-gradient(135deg,#F59E0B,#EC4899)", pulseBtn: false
+                          })
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* C. At Risk — Re-engage */}
+                  {atRisk.length > 0 && (
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: C.orange, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10 }}>⚠️ At Risk — Re-engage</div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        {atRisk.map(({ whale: w, days, urgency, msg }, i) => fanCard(w, {
+                          bg: `${urgency}08`, border: `1px solid ${urgency}25`, hoverGlow: `0 4px 16px ${urgency}18`,
+                          avatarBg: `${urgency}20`, avatarColor: urgency,
+                          sub: `${days}d since last tip`,
+                          badge: `${days}d ago`, badgeBg: `${urgency}20`, badgeColor: urgency,
+                          action: () => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) },
+                          btnBg: `linear-gradient(135deg,${urgency},#EC4899)`, pulseBtn: i === 0,
+                          btnLabel: "💌"
+                        }))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
+
+            {/* ═══════════════════════════════════════
+                5. YOU'RE LOSING MONEY — Risk / Loss + Missed Revenue
+            ═══════════════════════════════════════ */}
+            {(() => {
+              const allAlerts = [
+                ...(lossAlerts || []),
+                ...(alerts || []).slice(0, 3)
+              ].slice(0, 6)
+              const missedEntries = Object.entries(missedRevenueByPlat)
+                .filter(([,m]) => m.missedRevenue > 5)
+                .sort((a,b) => b[1].missedRevenue - a[1].missedRevenue)
+              if (!allAlerts.length && !missedEntries.length) return null
+              const fmtH2 = h => h === 0 ? '12 AM' : h < 12 ? `${h} AM` : h === 12 ? '12 PM' : `${h-12} PM`
+              return (
+                <div style={{ ...glassCard, borderRadius: 18, padding: 24, marginBottom: 28, border: "1px solid rgba(251,146,60,0.2)", animation: "fadeUp 0.3s ease 0.25s both" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
+                    <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(251,146,60,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>🚨</div>
+                    <div>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: C.white }}>You're Losing Money</div>
+                      <div style={{ fontSize: 12, color: C.muted }}>Inactivity, cold fans, missed windows</div>
+                    </div>
+                  </div>
+
+                  {/* Missed Revenue — formula: (bestHourAvg - overallAvg) × sessionsNotAtBestHour */}
+                  {missedEntries.length > 0 && (
+                    <div style={{ marginBottom: 14 }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: C.orange, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 8 }}>💸 Missed Revenue (by streaming off-peak)</div>
+                      {missedEntries.map(([plat, m], i) => (
+                        <div key={i} style={{ padding: "12px 14px", borderRadius: 10, marginBottom: 8, background: "rgba(251,146,60,0.08)", border: "1px solid rgba(251,146,60,0.22)" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, flexWrap: "wrap" }}>
+                            <div>
+                              <div style={{ fontSize: 13, fontWeight: 700, color: C.white, marginBottom: 3 }}>
+                                📉 {plat} — peak hour earns <span style={{ color: C.cyan }}>{m.multiplier || (m.bestHourAvg && m.overallAvg ? (m.bestHourAvg/m.overallAvg).toFixed(1) : "5")}x</span> your avg session. Shift more streams to {m.bestHour < 12 ? m.bestHour === 0 ? "12 AM" : m.bestHour + " AM" : m.bestHour === 12 ? "12 PM" : (m.bestHour-12) + " PM"} to add ~<span style={{ color: C.green }}>${Math.round((m.bestHourAvg||0) - (m.overallAvg||0))}/stream</span>
+                              </div>
+                              <div style={{ fontSize: 12, color: C.muted }}>
+                                {m.sessionsNotAtBestHour} sessions ran off-peak · Best hour is {fmtH2(m.bestHour)} (${m.bestHourAvg.toFixed(0)} avg) vs your overall ${m.overallAvg.toFixed(0)} avg
+                              </div>
+                            </div>
+                            <div style={{ fontSize: 11, padding: "3px 9px", borderRadius: 20, background: "rgba(251,146,60,0.2)", color: C.orange, fontWeight: 700, whiteSpace: "nowrap" }}>
+                              Stream at {fmtH2(m.bestHour)}
+                            </div>
                           </div>
                         </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                          <span style={{ fontSize: 11, padding: "3px 10px", borderRadius: 20, background: "rgba(16,185,129,0.2)", color: C.green, fontWeight: 700 }}>{w.confidence}% likely</span>
-                          <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }} style={{ padding: "5px 12px", borderRadius: 8, background: "linear-gradient(135deg,#22D3EE,#EC4899)", border: "none", color: C.white, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>💌 Message</button>
-                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {allAlerts.map((a, i) => (
+                      <div key={i} className={`alert-enter alert-pulse-${a.severity === "critical" ? "critical" : "warning"} alert-row`} style={{ padding: "12px 14px", borderRadius: 10, background: a.severity === 'critical' ? "rgba(248,113,113,0.1)" : "rgba(251,146,60,0.08)", border: `1px solid ${a.severity === 'critical' ? 'rgba(248,113,113,0.25)' : 'rgba(251,146,60,0.2)'}`, animationDelay: `${i * 50}ms` }}>
+                        <div style={{ fontSize: 13, color: C.white, marginBottom: 3 }}>{a.icon} {a.message}</div>
+                        <div style={{ fontSize: 11, color: C.muted }}>👉 {a.action}</div>
                       </div>
                     ))}
                   </div>
@@ -1754,7 +2600,85 @@ export default function Dashboard() {
               )
             })()}
 
-            {/* DEPENDENCY RISK */}
+            {/* ═══════════════════════════════════════
+                6. SMART INSIGHTS — scannable, lower priority
+            ═══════════════════════════════════════ */}
+            {(insights.length > 0 || topFanDependency || returningVsNew) && (
+              <div style={{ ...glassCard, borderRadius: 18, padding: 24, marginBottom: 28, animation: "fadeUp 0.3s ease 0.3s both" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(34,211,238,0.12)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>💡</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: C.white }}>Smart Insights</div>
+                </div>
+
+                {/* Top Fan Dependency — formula: topN_revenue / total_revenue */}
+                {topFanDependency && (
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: 8, marginBottom: 14 }}>
+                    {[
+                      { label: "Top fan", value: `${topFanDependency.top1Pct}%`, sub: "of total revenue", risk: topFanDependency.top1Pct > 20 },
+                      { label: "Top 3 fans", value: `${topFanDependency.top3Pct}%`, sub: "of total revenue", risk: topFanDependency.top3Pct > 50 },
+                      { label: "Top 5 fans", value: `${topFanDependency.top5Pct}%`, sub: "of total revenue", risk: false },
+                      { label: "Loss if #1 leaves", value: `$${topFanDependency.lossIfTopFanLeaves.toFixed(0)}`, sub: "estimated impact", risk: topFanDependency.top1Pct > 15 },
+                    ].map(({ label, value, sub, risk }) => (
+                      <div key={label} style={{ padding: "10px 12px", borderRadius: 10, background: risk ? "rgba(248,113,113,0.08)" : "rgba(255,255,255,0.04)", border: `1px solid ${risk ? "rgba(248,113,113,0.2)" : "rgba(255,255,255,0.08)"}` }}>
+                        <div style={{ fontSize: 10, color: C.muted, marginBottom: 3 }}>{label}</div>
+                        <div style={{ fontSize: 16, fontWeight: 800, color: risk ? C.red : C.white }}>{value}</div>
+                        <div style={{ fontSize: 10, color: C.muted }}>{sub}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Returning vs New — formula: avg_repeat_spend vs avg_new_spend */}
+                {returningVsNew && returningVsNew.multiplier && (
+                  <div style={{ padding: "12px 14px", borderRadius: 10, background: "rgba(16,185,129,0.07)", border: "1px solid rgba(16,185,129,0.2)", marginBottom: 14, display: "flex", gap: 16, flexWrap: "wrap" }}>
+                    <div style={{ flex: 1, minWidth: 100 }}>
+                      <div style={{ fontSize: 10, color: C.muted, marginBottom: 2 }}>🔁 Returning fans ({returningVsNew.returningPct}%)</div>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: C.green }}>${returningVsNew.avgReturnSpend.toFixed(0)} avg</div>
+                    </div>
+                    <div style={{ flex: 1, minWidth: 100 }}>
+                      <div style={{ fontSize: 10, color: C.muted, marginBottom: 2 }}>👋 New fans ({100 - returningVsNew.returningPct}%)</div>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: C.blue }}>${returningVsNew.avgNewSpend.toFixed(0)} avg</div>
+                    </div>
+                    <div style={{ flex: 1, minWidth: 100 }}>
+                      <div style={{ fontSize: 10, color: C.muted, marginBottom: 2 }}>💰 Loyalty multiplier</div>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: C.gold }}>{returningVsNew.multiplier}x more</div>
+                    </div>
+                  </div>
+                )}
+
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {insights.slice(0, 3).map((ins, i) => (
+                    <div key={i} className="list-slot-in" style={{ display: "flex", gap: 12, alignItems: "flex-start", padding: "11px 14px", borderRadius: 10, background: "rgba(34,211,238,0.06)", border: "1px solid rgba(34,211,238,0.15)", animationDelay: `${i * 60}ms` }}>
+                      <span style={{ fontSize: 16, flexShrink: 0 }}>{ins.icon}</span>
+                      <div style={{ fontSize: 13, color: C.white, lineHeight: 1.55 }}>{ins.text}</div>
+                    </div>
+                  ))}
+                </div>
+                {insights.length > 3 && (
+                  <div style={{ position: "relative", borderRadius: 10, overflow: "hidden", marginTop: 8 }}>
+                    <div style={{ filter: isPro ? "none" : "blur(3px)", pointerEvents: "none" }}>
+                      {insights.slice(3, 8).map((ins, i) => (
+                        <div key={i} style={{ display: "flex", gap: 12, alignItems: "flex-start", padding: "11px 14px", borderRadius: 10, background: "rgba(34,211,238,0.04)", border: "1px solid rgba(34,211,238,0.1)", marginTop: 6 }}>
+                          <span style={{ fontSize: 16, flexShrink: 0 }}>{ins.icon}</span>
+                          <div style={{ fontSize: 13, color: C.white, lineHeight: 1.55 }}>{ins.text}</div>
+                        </div>
+                      ))}
+                    </div>
+                    {!isPro && (
+                      <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "rgba(5,7,15,0.75)", backdropFilter: "blur(2px)", borderRadius: 10 }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: C.white, marginBottom: 4 }}>🔒 {Math.max(0, insights.length - 3)} more insights hidden</div>
+                        <div style={{ fontSize: 12, color: C.muted, marginBottom: 12 }}>Timing patterns, predictions & advanced strategy</div>
+                        <button onClick={() => openUpgradeModal("insights")} style={{ padding: "8px 20px", borderRadius: 8, background: "linear-gradient(135deg,#3b82f6,#ec4899)", border: "none", color: C.white, fontSize: 12, fontWeight: 700, cursor: "pointer", boxShadow: "0 0 20px rgba(59,130,246,0.4)" }}>
+                          🔓 Unlock All Insights
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Dependency risk + pre-tip behavior — kept, moved lower */}
             {dependencyRisk && dependencyRisk.level !== 'low' && (
               <div style={{ ...glassCard, borderRadius: 14, padding: 20, marginBottom: 20, border: `1px solid ${dependencyRisk.level === 'high' ? 'rgba(248,113,113,0.3)' : 'rgba(245,158,11,0.3)'}` }}>
                 <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
@@ -1782,7 +2706,6 @@ export default function Dashboard() {
               </div>
             )}
 
-            {/* PRE-TIP BEHAVIOR */}
             {preTipBehavior && (
               <div style={{ ...glassCard, borderRadius: 14, padding: 20, marginBottom: 20 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
@@ -1806,142 +2729,12 @@ export default function Dashboard() {
                 </div>
                 {preTipBehavior.clusteringDetected && (
                   <div style={{ marginTop: 8, padding: "8px 12px", background: "rgba(34,211,238,0.06)", border: "1px solid rgba(34,211,238,0.2)", borderRadius: 8, fontSize: 12, color: C.cyan }}>
-                    🔥 Tip clustering detected — fans tip in bursts. Use momentum: acknowledge tips publicly to trigger more.
+                    🔥 Tip clustering detected — fans tip in bursts. Acknowledge tips publicly to trigger more.
                   </div>
                 )}
               </div>
             )}
 
-            {/* SMART INSIGHTS */}
-            <div style={{ ...glassCard, borderRadius: 14, padding: 24, marginBottom: 28 }}>
-              <h2 style={{ fontSize: 18, fontWeight: 700, color: C.white, marginBottom: 16 }}>💡 Smart Insights</h2>
-              {insights.slice(0, 3).map((ins, i) => (
-                <div key={i} style={{ background: "rgba(34,211,238,0.08)", border: "1px solid rgba(34,211,238,0.2)", borderRadius: 10, padding: 16, marginBottom: 12 }}>
-                  <div style={{ fontSize: 14, color: C.white }}>{ins.icon} {ins.text}</div>
-                </div>
-              ))}
-              <div style={{ position: "relative", borderRadius: 10, overflow: "hidden", marginTop: 8 }}>
-                <div style={{ filter: isPro ? "none" : "blur(3px)", pointerEvents: "none" }}>
-                  {insights.slice(3, 8).map((ins, i) => (
-                    <div key={i} style={{ background: "rgba(34,211,238,0.05)", border: "1px solid rgba(34,211,238,0.1)", borderRadius: 10, padding: 16, marginBottom: 8 }}>
-                      <div style={{ fontSize: 14, color: C.white }}>{ins.icon} {ins.text}</div>
-                    </div>
-                  ))}
-                </div>
-                {!isPro && (
-                  <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "rgba(5,7,15,0.75)", backdropFilter: "blur(2px)", borderRadius: 10 }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: C.white, marginBottom: 4 }}>🔒 {Math.max(0, insights.length - 3)} more insights hidden</div>
-                    <div style={{ fontSize: 12, color: C.muted, marginBottom: 12 }}>Timing patterns, predictions & advanced strategy</div>
-                    <button onClick={() => openUpgradeModal('insights')} style={{ padding: "8px 20px", borderRadius: 8, background: "linear-gradient(135deg,#3b82f6,#ec4899)", border: "none", color: C.white, fontSize: 12, fontWeight: 700, cursor: "pointer", boxShadow: "0 0 20px rgba(59,130,246,0.4)" }}>
-                      🔓 Unlock All Insights
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* WHAT'S NEXT — FIX: alerts built outside JSX, CopyButton component handles per-item state */}
-            <div style={{ ...glassCard, borderRadius: 14, padding: 24, marginBottom: 28 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
-                <div style={{ width: 36, height: 36, borderRadius: 10, background: "linear-gradient(135deg, #F59E0B, #EC4899)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>🧭</div>
-                <div>
-                  <div style={{ fontSize: 18, fontWeight: 800, color: C.white }}>What's Next</div>
-                  <div style={{ fontSize: 12, color: C.muted }}>Personalized alerts based on your tippers' real behavior</div>
-                </div>
-              </div>
-
-              {whatsNextAlerts.length === 0 ? (
-                <div style={{ fontSize: 13, color: C.muted }}>Import more CSV data to unlock personalized alerts based on your tippers' behavior.</div>
-              ) : (
-                whatsNextAlerts.slice(0, 8).map((a, i) => (
-                  <div key={i} style={{ padding: 16, borderRadius: 12, marginBottom: 10, background: `${a.color}08`, border: `1px solid ${a.color}25`, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
-                    <div style={{ display: "flex", gap: 12, flex: 1, minWidth: 200 }}>
-                      <span style={{ fontSize: 22, flexShrink: 0 }}>{a.icon}</span>
-                      <div>
-                        <div style={{ fontSize: 14, fontWeight: 700, color: C.white, marginBottom: 4 }}>{a.title}</div>
-                        <div style={{ fontSize: 13, color: C.text, lineHeight: 1.6 }}>{a.message}</div>
-                      </div>
-                    </div>
-                    {a.cta && (
-                      <div style={{ display: "flex", gap: 8, flexShrink: 0, alignItems: "center" }}>
-                        {/* FIX: CopyButton is a proper component — each instance has its own state */}
-                        <CopyButton text={a.reengageMsg} />
-                        <button
-                          onClick={() => { if (a.whale) { setMessageTarget(a.whale); setMessageIndex(0); setMessageCopied(false) } }}
-                          style={{ fontSize: 20, background: "none", border: "none", cursor: "pointer", animation: "pulse-msg 2s infinite" }}>
-                          💌
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                ))
-              )}
-            </div>
-
-            {/* RE-ENGAGE NOW — FIX: same pattern, CopyButton handles per-row state */}
-            <div style={{ ...glassCard, borderRadius: 14, padding: 24, marginBottom: 28 }}>
-              <h2 style={{ fontSize: 18, fontWeight: 700, color: C.white, marginBottom: 6 }}>💌 Re-engage Now</h2>
-              <p style={{ fontSize: 13, color: C.muted, marginBottom: 16 }}>Top spenders who haven't tipped recently — reach out before they go cold</p>
-
-              {reengageList.length === 0 ? (
-                <div style={{ fontSize: 13, color: C.muted }}>No dormant fans right now — your audience is active! 🎉</div>
-              ) : (
-                reengageList.map(({ whale: w, days, urgency, msg }, i) => (
-                  <div key={i} style={{ padding: 16, borderRadius: 12, marginBottom: 10, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 12, flex: 1, minWidth: 200 }}>
-                      <div style={{ width: 40, height: 40, borderRadius: 10, background: `${urgency}20`, border: `1px solid ${urgency}40`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 800, color: urgency, flexShrink: 0 }}>
-                        {w.username.charAt(0).toUpperCase()}
-                      </div>
-                      <div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <span style={{ fontSize: 14, fontWeight: 700, color: C.white }}>{w.username}</span>
-                          <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 20, background: `${urgency}20`, color: urgency, fontWeight: 600 }}>{days}d ago</span>
-                        </div>
-                        <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>${w.totalUSD.toFixed(0)} lifetime · {w.tipCount} tips · {w.platform}</div>
-                      </div>
-                    </div>
-                    <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-                      {/* FIX: CopyButton component — no useState inside map */}
-                      <CopyButton
-                        text={msg}
-                        label="📋 Copy Message"
-                        copiedLabel="✅ Copied!"
-                        style={{ padding: "8px 14px" }}
-                      />
-                      <button
-                        onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }}
-                        style={{ padding: "8px 14px", borderRadius: 8, background: "linear-gradient(135deg, rgba(236,72,153,0.3), rgba(124,92,255,0.3))", border: "1px solid rgba(236,72,153,0.4)", color: C.pink, fontSize: 12, fontWeight: 600, cursor: "pointer", animation: "pulse-msg 2s infinite" }}>
-                        💌
-                      </button>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-
-            {/* LOSS ALERTS */}
-            <div style={{ ...glassCard, borderRadius: 14, padding: 24, marginBottom: 28 }}>
-              <h2 style={{ fontSize: 18, fontWeight: 700, color: C.white, marginBottom: 16 }}>🚨 Loss Alerts</h2>
-              {lossAlerts.length === 0 && <div style={{ color: C.muted, fontSize: 13 }}>No active alerts — you're on track! 🎉</div>}
-              {lossAlerts.map((a, i) => (
-                <div key={i} style={{ padding: 14, borderRadius: 10, marginBottom: 10, background: a.severity === 'critical' ? "rgba(248,113,113,0.15)" : a.severity === 'warning' ? "rgba(251,146,60,0.15)" : "rgba(34,211,238,0.1)", border: `1px solid ${a.severity === 'critical' ? C.red : a.severity === 'warning' ? C.orange : C.cyan}30` }}>
-                  <div style={{ fontSize: 14, color: C.white, marginBottom: 4 }}>{a.icon} {a.message}</div>
-                  <div style={{ fontSize: 12, color: C.muted }}>👉 {a.action}</div>
-                </div>
-              ))}
-            </div>
-
-            {/* LIVE AI ALERTS */}
-            <div style={{ ...glassCard, borderRadius: 14, padding: 24, marginBottom: 28 }}>
-              <h2 style={{ fontSize: 18, fontWeight: 700, color: C.white, marginBottom: 16 }}>🚨 Live AI Alerts</h2>
-              {alerts.length === 0 && <div style={{ color: C.muted, fontSize: 13 }}>No active alerts</div>}
-              {alerts.slice(0, 5).map((a, i) => (
-                <div key={i} style={{ padding: 14, borderRadius: 10, marginBottom: 10, background: a.severity === "critical" ? "rgba(248,113,113,0.15)" : a.severity === "warning" ? "rgba(251,146,60,0.15)" : a.severity === "success" ? "rgba(16,185,129,0.15)" : "rgba(34,211,238,0.1)", border: `1px solid ${a.severity === "critical" ? C.red : a.severity === "warning" ? C.orange : a.severity === "success" ? C.green : C.cyan}30` }}>
-                  <div style={{ fontSize: 14, color: C.white }}>{a.icon} {a.message}</div>
-                  <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>👉 {a.action}</div>
-                </div>
-              ))}
-            </div>
           </div>
         )}
 
@@ -2300,7 +3093,7 @@ export default function Dashboard() {
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                           <span style={{ color: C.white, fontWeight: 600 }}>{w.username}</span>
                           <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }}
-                            style={{ fontSize: 18, background: "none", border: "none", cursor: "pointer", lineHeight: 1, padding: 0 }}
+                            style={{ fontSize: 26, background: "none", border: "none", cursor: "pointer", lineHeight: 1, padding: '4px', animation: "pulse-msg 2s infinite" }}
                             title="Message">💌</button>
                         </div>
                       </td>
@@ -2410,9 +3203,13 @@ export default function Dashboard() {
                               <span style={{ fontSize: 11, color: C.muted }}>${w.totalUSD.toFixed(0)} lifetime · {w.tipCount} tips · {w.platform}</span>
                             </div>
                           </div>
-                          <div style={{ display: "flex", gap: 6 }}>
+                          <div style={{ display: "flex", gap: 6, alignItems:"center" }}>
                             <button onClick={() => setSelectedWhale(w)} style={{ padding: "4px 10px", borderRadius: 6, background: "rgba(34,211,238,0.12)", border: "1px solid rgba(34,211,238,0.25)", color: C.cyan, fontSize: 11, cursor: "pointer" }}>🔍 Profile</button>
-                            <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }} style={{ padding: "4px 10px", borderRadius: 6, background: "rgba(236,72,153,0.12)", border: "1px solid rgba(236,72,153,0.25)", color: C.pink, fontSize: 11, cursor: "pointer" }}>💌 Message</button>
+                            <button onClick={() => { setNoteTarget(w.username); setNoteText(tipperNotes[w.username?.toLowerCase()]?.note || '') }}
+                              style={{ padding: "4px 8px", borderRadius: 6, background: tipperNotes[w.username?.toLowerCase()]?.note ? "rgba(245,158,11,0.15)" : "rgba(255,255,255,0.05)", border: tipperNotes[w.username?.toLowerCase()]?.note ? "1px solid rgba(245,158,11,0.3)" : "1px solid rgba(255,255,255,0.1)", color: tipperNotes[w.username?.toLowerCase()]?.note ? C.gold : C.muted, fontSize: 11, cursor: "pointer" }}>
+                              {tipperNotes[w.username?.toLowerCase()]?.note ? "📝 Note" : "📝"}
+                            </button>
+                            <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }} style={{ padding: "4px", borderRadius: 8, background: "none", border: "none", color: C.pink, fontSize: 26, cursor: "pointer", animation: "pulse-msg 2s infinite", lineHeight: 1 }}>💌</button>
                           </div>
                         </div>
 
@@ -3357,8 +4154,280 @@ export default function Dashboard() {
           </div>
         )}
 
+        {activeTab === "monthly" && (() => {
+          const monthly = analytics?.monthlyData || []
+          const tipTypes = analytics?.tipTypeBreakdown || []
+          const privFans = analytics?.privateShowFans || []
+          const spyFans = analytics?.spyShowFans || []
+          const bestMo = analytics?.bestMonth
+          const totalUSD = analytics?.totalUSD || 0
+          const now = new Date()
+          const thisMonthKey = `${now.getUTCFullYear()}-${String(now.getUTCMonth()+1).padStart(2,'0')}`
+          const thisMonth = monthly.find(m => m.month === thisMonthKey)
+          const thisMonthUSD = thisMonth?.usd || 0
+          const goalPct = monthlyGoal > 0 ? Math.min(100, Math.round((thisMonthUSD / monthlyGoal) * 100)) : null
+          const daysInMonth = new Date(now.getUTCFullYear(), now.getUTCMonth()+1, 0).getDate()
+          const dayOfMonth = now.getUTCDate()
+          const daysLeft = daysInMonth - dayOfMonth
+          const projectedEnd = thisMonthUSD > 0 ? Math.round(thisMonthUSD / dayOfMonth * daysInMonth) : null
+          const maxBarUSD = Math.max(...monthly.map(m => m.usd), 1)
+          const fmtMonth = (key) => { const [y,m] = key.split('-'); const mo = new Date(y,parseInt(m)-1,1).toLocaleDateString('en-US',{month:'short'}); return mo + " '" + String(y).slice(-2) }
+
+          return (
+            <div style={{ animation: "fadeUp 0.3s ease" }}>
+
+              {/* ── HEADER ── */}
+              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:28, flexWrap:"wrap", gap:12 }}>
+                <div>
+                  <div style={{ fontSize:24, fontWeight:900, color:C.white }}>📈 Monthly Overview</div>
+                  <div style={{ fontSize:13, color:C.muted }}>Earnings trends, tip types, and private show breakdown</div>
+                </div>
+              </div>
+
+              {/* ── GOAL TRACKER ── */}
+              <div style={{ ...glassCard, borderRadius:18, padding:24, marginBottom:24, border:"1px solid rgba(16,185,129,0.25)" }}>
+                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:16, flexWrap:"wrap", gap:10 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                    <div style={{ width:36, height:36, borderRadius:10, background:"linear-gradient(135deg,#10B981,#22D3EE)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>🎯</div>
+                    <div>
+                      <div style={{ fontSize:16, fontWeight:800, color:C.white }}>Monthly Goal</div>
+                      <div style={{ fontSize:12, color:C.muted }}>{now.toLocaleDateString('en-US',{month:'long',year:'numeric'})}</div>
+                    </div>
+                  </div>
+                  <button onClick={() => setShowGoalEditor(v => !v)} style={{ padding:"6px 14px", borderRadius:8, background:"rgba(16,185,129,0.15)", border:"1px solid rgba(16,185,129,0.35)", color:C.green, fontSize:12, fontWeight:700, cursor:"pointer" }}>
+                    {monthlyGoal ? "✏️ Edit Goal" : "➕ Set Goal"}
+                  </button>
+                </div>
+
+                {showGoalEditor && (
+                  <div style={{ display:"flex", gap:8, marginBottom:16, alignItems:"center" }}>
+                    <span style={{ color:C.green, fontSize:16, fontWeight:700 }}>$</span>
+                    <input
+                      type="number" placeholder="e.g. 500" value={goalInput}
+                      onChange={e => setGoalInput(e.target.value)}
+                      onFocus={e => e.target.style.borderColor="rgba(16,185,129,0.6)"}
+                      onBlur={e => e.target.style.borderColor="rgba(255,255,255,0.1)"}
+                      style={{ flex:1, padding:"8px 12px", borderRadius:8, background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", color:C.white, fontSize:14, outline:"none" }}
+                    />
+                    <button onClick={() => saveMonthlyGoal(goalInput)} style={{ padding:"8px 16px", borderRadius:8, background:"linear-gradient(135deg,#10B981,#22D3EE)", border:"none", color:C.white, fontSize:13, fontWeight:700, cursor:"pointer" }}>Save</button>
+                  </div>
+                )}
+
+                {monthlyGoal ? (
+                  <div>
+                    <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
+                      <span style={{ fontSize:13, color:C.muted }}>
+                        <span style={{ color:C.white, fontWeight:700, fontSize:18 }}>${thisMonthUSD.toFixed(0)}</span>
+                        <span style={{ color:C.muted }}> / ${monthlyGoal.toFixed(0)} goal</span>
+                      </span>
+                      <span style={{ fontSize:13, fontWeight:700, color: goalPct >= 100 ? C.green : goalPct >= 70 ? C.gold : C.cyan }}>{goalPct}%</span>
+                    </div>
+                    <div style={{ height:12, borderRadius:6, background:"rgba(255,255,255,0.08)", overflow:"hidden", marginBottom:10 }}>
+                      <div style={{ height:"100%", width:`${goalPct}%`, borderRadius:6, background: goalPct >= 100 ? "linear-gradient(90deg,#10B981,#22D3EE)" : goalPct >= 70 ? "linear-gradient(90deg,#F59E0B,#10B981)" : "linear-gradient(90deg,#22D3EE,#7C5CFF)", transition:"width 0.8s ease" }} />
+                    </div>
+                    <div style={{ display:"flex", gap:16, flexWrap:"wrap" }}>
+                      <span style={{ fontSize:12, color:C.muted }}>{daysLeft} days left this month</span>
+                      {projectedEnd && <span style={{ fontSize:12, color: projectedEnd >= monthlyGoal ? C.green : C.orange }}>At this pace: ${projectedEnd} projected</span>}
+                      {goalPct >= 100 && <span style={{ fontSize:12, color:C.green, fontWeight:700 }}>🎉 Goal smashed!</span>}
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ textAlign:"center", padding:"12px 0", color:C.muted, fontSize:13 }}>Set a monthly earnings goal to track your progress here</div>
+                )}
+              </div>
+
+              {/* ── BEST MONTH CALLOUT ── */}
+              {bestMo && (
+                <div style={{ ...glassCard, borderRadius:14, padding:18, marginBottom:24, border:"1px solid rgba(245,158,11,0.3)", background:"rgba(245,158,11,0.06)", display:"flex", alignItems:"center", gap:14, flexWrap:"wrap" }}>
+                  <div style={{ fontSize:28 }}>🏆</div>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:13, color:C.gold, fontWeight:700, marginBottom:2 }}>Best Month Ever</div>
+                    <div style={{ fontSize:20, fontWeight:900, color:C.white }}>{fmtMonth(bestMo.month)} — ${bestMo.usd.toLocaleString('en-US',{minimumFractionDigits:0})}</div>
+                    <div style={{ fontSize:12, color:C.muted }}>{bestMo.fans} fans · {bestMo.tips} tips · ${bestMo.usdPerFan} avg per fan</div>
+                  </div>
+                  {thisMonthUSD > 0 && (
+                    <div style={{ textAlign:"right" }}>
+                      <div style={{ fontSize:11, color:C.muted }}>vs this month</div>
+                      <div style={{ fontSize:14, fontWeight:700, color: thisMonthUSD >= bestMo.usd ? C.green : C.orange }}>
+                        {thisMonthUSD >= bestMo.usd ? "🔥 New record!" : `${Math.round((thisMonthUSD/bestMo.usd)*100)}% there`}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ── MONTHLY BAR CHART ── */}
+              <div style={{ ...glassCard, borderRadius:18, padding:24, marginBottom:24 }}>
+                <div style={{ fontSize:16, fontWeight:800, color:C.white, marginBottom:4 }}>Monthly Earnings</div>
+                <div style={{ fontSize:12, color:C.muted, marginBottom:20 }}>{monthly.length} months of data</div>
+                {monthly.length === 0 ? (
+                  <div style={{ textAlign:"center", padding:40, color:C.muted }}>No monthly data yet — upload a CSV to get started</div>
+                ) : (
+                  <div style={{ overflowX:"auto" }}>
+                    <div style={{ display:"flex", alignItems:"flex-end", gap:6, minWidth: Math.max(monthly.length * 44, 400), height:180, paddingBottom:24, position:"relative" }}>
+                      {/* Grid lines */}
+                      {[0.25,0.5,0.75,1].map(pct => (
+                        <div key={pct} style={{ position:"absolute", left:0, right:0, bottom: pct*180+24+"px", borderTop:"1px solid rgba(255,255,255,0.05)", pointerEvents:"none" }}>
+                          <span style={{ fontSize:9, color:C.muted, position:"absolute", left:0, top:-9 }}>${Math.round(maxBarUSD*pct)}</span>
+                        </div>
+                      ))}
+                      {monthly.map((m, i) => {
+                        const h = Math.max(4, Math.round((m.usd / maxBarUSD) * 156))
+                        const isBest = m.month === bestMo?.month
+                        const isCurrent = m.month === thisMonthKey
+                        const col = isBest ? C.gold : isCurrent ? C.green : C.indigo
+                        return (
+                          <div key={m.month} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:4, cursor:"default" }}
+                            title={`${fmtMonth(m.month)}: $${m.usd.toFixed(2)} · ${m.fans} fans · ${m.tips} tips`}>
+                            <div style={{ fontSize:9, color:C.muted, fontWeight:600, opacity: m.usd > maxBarUSD*0.1 ? 1 : 0 }}>${m.usd >= 100 ? Math.round(m.usd) : m.usd.toFixed(0)}</div>
+                            <div style={{ width:"100%", height:h, borderRadius:"4px 4px 0 0", background: isBest ? `linear-gradient(180deg,${C.gold},${C.orange})` : isCurrent ? `linear-gradient(180deg,${C.green},${C.cyan})` : `linear-gradient(180deg,${C.indigo},rgba(124,92,255,0.4))`, boxShadow: isBest ? `0 0 12px ${C.gold}40` : isCurrent ? `0 0 12px ${C.green}40` : "none", transition:"height 0.4s ease", animationDelay:`${i*30}ms` }} />
+                            <div style={{ fontSize:9, color: isCurrent ? C.green : isBest ? C.gold : C.muted, fontWeight: isCurrent || isBest ? 700 : 400, whiteSpace:"nowrap" }}>{fmtMonth(m.month)}</div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+                {/* Legend */}
+                <div style={{ display:"flex", gap:16, marginTop:8, flexWrap:"wrap" }}>
+                  {[["🟡","Best month",C.gold],["🟢","This month",C.green],["🟣","Past months",C.indigo]].map(([dot,label,col]) => (
+                    <span key={label} style={{ fontSize:11, color:C.muted, display:"flex", alignItems:"center", gap:4 }}>
+                      <span style={{ width:8, height:8, borderRadius:2, background:col, display:"inline-block" }} />{label}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* ── MONTHLY STATS GRID ── */}
+              {monthly.length > 0 && (() => {
+                const last3 = monthly.slice(-3)
+                const avgMonthly = monthly.reduce((s,m) => s+m.usd, 0) / monthly.length
+                const trend = monthly.length >= 2 ? monthly[monthly.length-1].usd - monthly[monthly.length-2].usd : 0
+                return (
+                  <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))", gap:12, marginBottom:24 }}>
+                    {[
+                      { label:"Avg / Month", value:`$${Math.round(avgMonthly)}`, icon:"📊", color:C.cyan },
+                      { label:"Best Month", value:`$${bestMo?.usd?.toFixed(0)||0}`, sub:bestMo ? fmtMonth(bestMo.month) : '', icon:"🏆", color:C.gold },
+                      { label:"MoM Trend", value: trend >= 0 ? `+$${Math.round(trend)}` : `-$${Math.round(Math.abs(trend))}`, icon: trend >= 0 ? "📈" : "📉", color: trend >= 0 ? C.green : C.red },
+                      { label:"Months Tracked", value: monthly.length, icon:"📅", color:C.indigo },
+                    ].map(({ label, value, sub, icon, color }) => (
+                      <div key={label} style={{ ...glassCard, borderRadius:14, padding:16, border:`1px solid ${color}20` }}>
+                        <div style={{ fontSize:11, color:C.muted, marginBottom:6 }}>{icon} {label}</div>
+                        <div style={{ fontSize:20, fontWeight:900, color }}>{value}</div>
+                        {sub && <div style={{ fontSize:11, color:C.muted }}>{sub}</div>}
+                      </div>
+                    ))}
+                  </div>
+                )
+              })()}
+
+              {/* ── TIP TYPE BREAKDOWN ── */}
+              <div style={{ ...glassCard, borderRadius:18, padding:24, marginBottom:24 }}>
+                <div style={{ fontSize:16, fontWeight:800, color:C.white, marginBottom:4 }}>Revenue by Type</div>
+                <div style={{ fontSize:12, color:C.muted, marginBottom:20 }}>How your earnings break down across tips, privates, and spy shows</div>
+                <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                  {tipTypes.map(t => {
+                    const col = t.type.toLowerCase().includes('private') ? C.pink : t.type.toLowerCase().includes('spy') ? C.orange : t.type.toLowerCase().includes('received') ? C.cyan : C.indigo
+                    return (
+                      <div key={t.type} style={{ padding:"14px 16px", borderRadius:12, background:`${col}0d`, border:`1px solid ${col}25` }}>
+                        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+                          <div style={{ fontSize:14, fontWeight:700, color:C.white }}>{t.type}</div>
+                          <div style={{ fontSize:16, fontWeight:900, color:col }}>${t.usd.toFixed(2)} <span style={{ fontSize:12, color:C.muted }}>({t.pct}%)</span></div>
+                        </div>
+                        <div style={{ height:6, borderRadius:3, background:"rgba(255,255,255,0.06)", overflow:"hidden", marginBottom:8 }}>
+                          <div style={{ height:"100%", width:`${t.pct}%`, borderRadius:3, background:col, transition:"width 0.8s ease" }} />
+                        </div>
+                        <div style={{ display:"flex", gap:16, flexWrap:"wrap" }}>
+                          {[
+                            [`${t.count} tips`],
+                            [`${t.fans} fans`],
+                            [`$${t.avgUsd} avg tip`],
+                          ].map(([v]) => <span key={v} style={{ fontSize:11, color:C.muted }}>{v}</span>)}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* ── PRIVATE SHOW INTEL ── */}
+              {privFans.length > 0 && (
+                <div style={{ ...glassCard, borderRadius:18, padding:24, marginBottom:24, border:"1px solid rgba(236,72,153,0.2)" }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:16 }}>
+                    <div style={{ width:36, height:36, borderRadius:10, background:"linear-gradient(135deg,#EC4899,#7C5CFF)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>🔒</div>
+                    <div>
+                      <div style={{ fontSize:16, fontWeight:800, color:C.white }}>Private Show Fans</div>
+                      <div style={{ fontSize:12, color:C.muted }}>{privFans.length} fans have booked a private show</div>
+                    </div>
+                  </div>
+                  <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                    {privFans.slice(0,8).map((f,i) => (
+                      <div key={f.username} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"10px 14px", borderRadius:10, background:"rgba(236,72,153,0.07)", border:"1px solid rgba(236,72,153,0.15)" }}>
+                        <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                          <div style={{ width:28, height:28, borderRadius:8, background:`linear-gradient(135deg,#EC4899,#7C5CFF)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:700, color:C.white, flexShrink:0 }}>{f.username[0]?.toUpperCase()}</div>
+                          <div>
+                            <div style={{ fontSize:13, fontWeight:700, color:C.white }}>{f.username}</div>
+                            <div style={{ fontSize:11, color:C.muted }}>{f.count} private{f.count>1?'s':''}</div>
+                          </div>
+                        </div>
+                        <div style={{ fontSize:14, fontWeight:700, color:C.pink }}>${f.usd.toFixed(2)}</div>
+                      </div>
+                    ))}
+                  </div>
+                  {spyFans.length > 0 && (
+                    <div style={{ marginTop:16, padding:"12px 14px", borderRadius:10, background:"rgba(251,146,60,0.07)", border:"1px solid rgba(251,146,60,0.2)" }}>
+                      <div style={{ fontSize:13, fontWeight:700, color:C.orange, marginBottom:4 }}>👁️ Spy Show Viewers ({spyFans.length} fans)</div>
+                      <div style={{ fontSize:12, color:C.muted }}>These fans watched your privates but never booked one — warm leads for re-engagement</div>
+                      <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginTop:8 }}>
+                        {spyFans.slice(0,10).map(u => (
+                          <span key={u} style={{ padding:"3px 8px", borderRadius:6, background:"rgba(251,146,60,0.12)", border:"1px solid rgba(251,146,60,0.2)", fontSize:11, color:C.orange }}>{u}</span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ── MONTHLY FAN TABLE ── */}
+              {monthly.length > 0 && (
+                <div style={{ ...glassCard, borderRadius:18, padding:24 }}>
+                  <div style={{ fontSize:16, fontWeight:800, color:C.white, marginBottom:16 }}>Month by Month</div>
+                  <div style={{ overflowX:"auto" }}>
+                    <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
+                      <thead>
+                        <tr style={{ borderBottom:"1px solid rgba(255,255,255,0.08)" }}>
+                          {["Month","Revenue","Tips","Fans","$/Fan","Sessions"].map(h => (
+                            <th key={h} style={{ padding:"8px 12px", textAlign:"left", color:C.muted, fontWeight:600, fontSize:11 }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {[...monthly].reverse().map((m,i) => {
+                          const isBest = m.month === bestMo?.month
+                          const isCurrent = m.month === thisMonthKey
+                          return (
+                            <tr key={m.month} style={{ borderBottom:"1px solid rgba(255,255,255,0.04)", background: isBest ? "rgba(245,158,11,0.06)" : isCurrent ? "rgba(16,185,129,0.06)" : "transparent" }}>
+                              <td style={{ padding:"10px 12px", color: isBest ? C.gold : isCurrent ? C.green : C.white, fontWeight: isBest||isCurrent ? 700 : 400 }}>{fmtMonth(m.month)}{isBest?" 🏆":isCurrent?" ◀":""}</td>
+                              <td style={{ padding:"10px 12px", color:C.white, fontWeight:700 }}>${m.usd.toFixed(2)}</td>
+                              <td style={{ padding:"10px 12px", color:C.muted }}>{m.tips}</td>
+                              <td style={{ padding:"10px 12px", color:C.muted }}>{m.fans}</td>
+                              <td style={{ padding:"10px 12px", color:C.cyan }}>${m.usdPerFan}</td>
+                              <td style={{ padding:"10px 12px", color:C.muted }}>{m.sessions}</td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+            </div>
+          )
+        })()}
+
         {activeTab === "titles" && (
-          <div>
+          <div style={{ maxWidth: 760, margin: "0 auto" }}>
             <TitleGenerator C={C} glassCard={glassCard} analytics={analytics} tips={tips} sessions={sessions} whales={whales} />
             <div style={{ marginTop: 40, paddingTop: 32, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
               <HashtagGenerator C={C} glassCard={glassCard} />
@@ -3491,7 +4560,7 @@ export default function Dashboard() {
         const biggestTip = whaleTips.length ? Math.max(...whaleTips.map(t => t.usd)) : 0
         return (
           <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 20 }}>
-            <div style={{ width: 560, maxHeight: "90vh", overflowY: "auto", ...glassCard, borderRadius: 20 }}>
+            <div className="modal-inner" style={{ width: 560, maxHeight: "90vh", overflowY: "auto", ...glassCard, borderRadius: 20 }}>
               <div style={{ padding: "24px 24px 20px", background: `linear-gradient(135deg, ${tierColor}15, transparent)`, borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
@@ -3535,7 +4604,7 @@ export default function Dashboard() {
                     const dayKeys = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]
                     const dayCounts = { Mon:0,Tue:0,Wed:0,Thu:0,Fri:0,Sat:0,Sun:0 }
                     whaleTips.forEach(t => {
-                      const d = new Date(t.date_time).getDay()
+                      const d = new Date(t.date_time).getUTCDay()
                       const key = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][d]
                       if (key in dayCounts) dayCounts[key]++
                     })
@@ -3641,7 +4710,7 @@ export default function Dashboard() {
         const vibes = ["💕 Reconnect", "🔥 Going Live", "🥰 Appreciation", "😘 Flirty", "👀 FOMO"]
         return (
           <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1001, padding: 20 }}>
-            <div style={{ width: 520, ...glassCard, borderRadius: 20, overflow: "hidden" }}>
+            <div className="modal-inner" style={{ width: 520, ...glassCard, borderRadius: 20, overflow: "hidden" }}>
               <div style={{ padding: "20px 24px", background: "linear-gradient(135deg, rgba(236,72,153,0.2), rgba(124,92,255,0.15))", borderBottom: "1px solid rgba(255,255,255,0.08)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
                   <div style={{ fontSize: 17, fontWeight: 800, color: C.white }}>💌 Message Generator</div>
@@ -3768,7 +4837,7 @@ export default function Dashboard() {
               </div>
               <div style={{ padding: 16, background: "rgba(124,92,255,0.1)", border: "1px solid rgba(124,92,255,0.25)", borderRadius: 12, marginBottom: 18 }}>
                 <div style={{ fontSize: 14, color: C.indigo, fontWeight: 700, marginBottom: 8 }}>🚀 Early Access Offer</div>
-                <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.7, marginBottom: 10 }}>Right now everything is free during beta. But early users can:</div>
+                <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.7, marginBottom: 10 }}>Early access users can lock in founding pricing:</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
                   {["Lock in lifetime pricing before it increases", "Get every future premium feature included", "Keep full access as we expand the product"].map(t => (
                     <div key={t} style={{ fontSize: 12, color: C.white }}>• {t}</div>
@@ -3948,6 +5017,40 @@ export default function Dashboard() {
       })()}
 
       {/* SHARE MY STATS MODAL */}
+      {/* ── NOTE MODAL ── */}
+      {noteTarget && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
+          <div style={{ ...glassCard, borderRadius:20, padding:28, width:"100%", maxWidth:440, border:"1px solid rgba(245,158,11,0.3)" }}>
+            <div style={{ fontSize:18, fontWeight:800, color:C.white, marginBottom:4 }}>📝 Note for {noteTarget}</div>
+            <div style={{ fontSize:12, color:C.muted, marginBottom:16 }}>Private note — only you can see this</div>
+            <textarea
+              value={noteText}
+              onChange={e => setNoteText(e.target.value)}
+              placeholder="e.g. Loves privates, tips on Sundays, favorite toy is the Lush..."
+              rows={4}
+              style={{ width:"100%", padding:"10px 12px", borderRadius:10, background:"rgba(255,255,255,0.05)", border:"1px solid rgba(245,158,11,0.3)", color:C.white, fontSize:13, outline:"none", resize:"vertical", fontFamily:"inherit", boxSizing:"border-box" }}
+            />
+            <div style={{ display:"flex", gap:10, marginTop:14 }}>
+              <button onClick={() => saveTipperNote(noteTarget, noteText)}
+                disabled={noteSaving}
+                style={{ flex:1, padding:"10px 0", borderRadius:10, background:"linear-gradient(135deg,#F59E0B,#EC4899)", border:"none", color:C.white, fontSize:14, fontWeight:700, cursor:"pointer" }}>
+                {noteSaving ? "Saving..." : "Save Note"}
+              </button>
+              {tipperNotes[noteTarget?.toLowerCase()]?.note && (
+                <button onClick={() => saveTipperNote(noteTarget, '')}
+                  style={{ padding:"10px 14px", borderRadius:10, background:"rgba(248,113,113,0.15)", border:"1px solid rgba(248,113,113,0.3)", color:C.red, fontSize:13, cursor:"pointer" }}>
+                  Delete
+                </button>
+              )}
+              <button onClick={() => setNoteTarget(null)}
+                style={{ padding:"10px 14px", borderRadius:10, background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.1)", color:C.muted, fontSize:13, cursor:"pointer" }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {shareModalOpen && (() => {
         const topFan = whales[0]
         const bestDayLabel = analyticsbestDay?.day || null
