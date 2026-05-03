@@ -38,11 +38,12 @@ const BOTTOM_ITEMS = [
 export default function Sidebar({ activeTab, onTabChange, user, onSignOut }) {
   const [hoveredId, setHoveredId] = useState(null)
 
-  const NavItem = ({ id, icon, label }) => {
+  const renderItem = (id, icon, label) => {
     const isActive  = activeTab === id
     const isHovered = hoveredId === id
     return (
       <button
+        key={id}
         onClick={() => onTabChange(id)}
         onMouseEnter={() => setHoveredId(id)}
         onMouseLeave={() => setHoveredId(null)}
@@ -53,9 +54,7 @@ export default function Sidebar({ activeTab, onTabChange, user, onSignOut }) {
           gap: 10,
           padding: "8px 12px",
           borderRadius: 9,
-          border: isActive
-            ? "1px solid rgba(59,130,246,0.3)"
-            : "1px solid transparent",
+          border: isActive ? "1px solid rgba(59,130,246,0.3)" : "1px solid transparent",
           cursor: "pointer",
           textAlign: "left",
           fontSize: 13,
@@ -64,9 +63,7 @@ export default function Sidebar({ activeTab, onTabChange, user, onSignOut }) {
           color: isActive ? "#F1F5F9" : isHovered ? "#94A3B8" : "#4B5E78",
           background: isActive
             ? "linear-gradient(135deg, rgba(59,130,246,0.18), rgba(236,72,153,0.13))"
-            : isHovered
-            ? "rgba(255,255,255,0.04)"
-            : "transparent",
+            : isHovered ? "rgba(255,255,255,0.04)" : "transparent",
           boxShadow: isActive ? "0 0 16px rgba(59,130,246,0.12)" : "none",
           position: "relative",
           overflow: "hidden",
@@ -87,9 +84,7 @@ export default function Sidebar({ activeTab, onTabChange, user, onSignOut }) {
             ? "drop-shadow(0 0 4px rgba(34,211,238,0.45))"
             : isHovered ? "brightness(1.3)" : "brightness(0.8)",
           transition: "filter 0.15s",
-        }}>
-          {icon}
-        </span>
+        }}>{icon}</span>
         <span style={{ lineHeight: 1 }}>{label}</span>
       </button>
     )
@@ -110,13 +105,10 @@ export default function Sidebar({ activeTab, onTabChange, user, onSignOut }) {
       <style>{`
         .sidebar-scroll::-webkit-scrollbar { width: 2px; }
         .sidebar-scroll::-webkit-scrollbar-track { background: transparent; }
-        .sidebar-scroll::-webkit-scrollbar-thumb {
-          background: rgba(124,92,255,0.2);
-          border-radius: 2px;
-        }
+        .sidebar-scroll::-webkit-scrollbar-thumb { background: rgba(124,92,255,0.2); border-radius: 2px; }
       `}</style>
 
-      {/* ── TOP: Logo + email + beta — FIXED ── */}
+      {/* TOP — fixed */}
       <div style={{
         padding: "16px 16px 14px",
         borderBottom: "1px solid rgba(255,255,255,0.05)",
@@ -129,8 +121,7 @@ export default function Sidebar({ activeTab, onTabChange, user, onSignOut }) {
               background: "linear-gradient(135deg, #22D3EE, #EC4899)",
               display: "flex", alignItems: "center", justifyContent: "center",
               fontSize: 15, fontWeight: 800, color: "#fff",
-              boxShadow: "0 0 12px rgba(34,211,238,0.3)",
-              flexShrink: 0,
+              boxShadow: "0 0 12px rgba(34,211,238,0.3)", flexShrink: 0,
             }}>$</div>
             <span style={{ fontSize: 17, fontWeight: 800, color: "#F1F5F9", letterSpacing: -0.3 }}>
               Cam<span style={{
@@ -140,7 +131,7 @@ export default function Sidebar({ activeTab, onTabChange, user, onSignOut }) {
             </span>
           </div>
           {onSignOut && (
-            <button onClick={onSignOut} title="Sign Out" style={{
+            <button onClick={onSignOut} style={{
               padding: "3px 8px", borderRadius: 5,
               background: "rgba(248,113,113,0.08)",
               border: "1px solid rgba(248,113,113,0.18)",
@@ -175,7 +166,7 @@ export default function Sidebar({ activeTab, onTabChange, user, onSignOut }) {
         </div>
       </div>
 
-      {/* ── MIDDLE: Scrollable nav ── */}
+      {/* MIDDLE — scrollable nav */}
       <div className="sidebar-scroll" style={{
         flex: 1, overflowY: "auto", overflowX: "hidden",
         padding: "10px 10px 6px",
@@ -194,17 +185,15 @@ export default function Sidebar({ activeTab, onTabChange, user, onSignOut }) {
               </div>
             )}
             <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-              {section.items.map(item => (
-                <NavItem key={item.id} {...item} />
-              ))}
+              {section.items.map(item => renderItem(item.id, item.icon, item.label))}
             </div>
           </div>
         ))}
       </div>
 
-      {/* ── BOTTOM: Support items — pinned ── */}
+      {/* BOTTOM — pinned support items */}
       <div style={{
-        padding: "8px 10px 12px",
+        padding: "8px 10px 14px",
         borderTop: "1px solid rgba(255,255,255,0.04)",
         flexShrink: 0,
       }}>
@@ -216,9 +205,7 @@ export default function Sidebar({ activeTab, onTabChange, user, onSignOut }) {
           SUPPORT
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-          {BOTTOM_ITEMS.map(item => (
-            <NavItem key={item.id} {...item} />
-          ))}
+          {BOTTOM_ITEMS.map(item => renderItem(item.id, item.icon, item.label))}
         </div>
       </div>
     </div>
