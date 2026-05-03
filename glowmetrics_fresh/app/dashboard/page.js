@@ -1,4 +1,4 @@
-"use client" // v2
+"use client" // v3
 import React, { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
@@ -1902,7 +1902,7 @@ const handleCSV = async (file, forcePlatform = null) => {
         </div>
 
         <nav style={{ flex: 1, padding: "16px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
-          {[["overview", "📊", "Overview"], ["platforms", "🎯", "Platforms"], ["whales", "🐳", "Top Fans"], ["sessions", "🎥", "Sessions"], ["monthly", "📈", "Monthly"], ["live", "🔴", "Live Mode"], ["titles", "🎬", "Room Titles"], ["help", "❓", "CSV Help"]].map(([id, icon, label]) => (
+          {[["overview", "📊", "Overview"], ["platforms", "🎯", "Platforms"], ["whales", "🐳", "Top Fans"], ["sessions", "🎥", "Sessions"], ["monthly", "📈", "Monthly"], ["live", "🔴", "Live Mode"], ["titles", "🎬", "Room Titles"], ["upload", "📥", "Import CSV"], ["help", "❓", "CSV Help"]].map(([id, icon, label]) => (
             <button key={id} onClick={() => handleTabChange(id)} style={{
               display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 10,
               background: activeTab === id ? "linear-gradient(135deg, rgba(59,130,246,0.2), rgba(236,72,153,0.2))" : "transparent",
@@ -1915,48 +1915,7 @@ const handleCSV = async (file, forcePlatform = null) => {
             </button>
           ))}
 
-          {/* ── IMPORT dropdown ── */}
-          {(() => {
-            const importOpen = activeTab === 'upload' || activeTab === 'data'
-            return (
-              <div style={{ margin: '0 0 4px' }}>
-                <button
-                  onClick={() => handleTabChange(activeTab === 'upload' || activeTab === 'data' ? 'overview' : 'upload')}
-                  style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    width: '100%', padding: '10px 12px', borderRadius: 10,
-                    background: importOpen ? 'linear-gradient(135deg, rgba(59,130,246,0.2), rgba(236,72,153,0.2))' : 'transparent',
-                    border: importOpen ? '1px solid rgba(59,130,246,0.4)' : '1px solid transparent',
-                    boxShadow: importOpen ? '0 0 20px rgba(59,130,246,0.3)' : 'none',
-                    color: importOpen ? C.white : C.muted, fontSize: 14, fontWeight: importOpen ? 600 : 400,
-                    cursor: 'pointer', transition: 'all 0.15s', textAlign: 'left',
-                  }}>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <span style={{ fontSize: 18 }}>📥</span> Import
-                  </span>
-                  <span style={{ fontSize: 10, color: C.muted, transition: 'transform 0.2s', display: 'inline-block', transform: importOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>▼</span>
-                </button>
-                {importOpen && (
-                  <div style={{ marginTop: 4, marginLeft: 12, display: 'flex', flexDirection: 'column', gap: 3 }}>
-                    <button onClick={() => handleTabChange('upload')}
-                      style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 8,
-                        background: activeTab === 'upload' ? 'rgba(34,211,238,0.15)' : 'rgba(255,255,255,0.03)',
-                        border: activeTab === 'upload' ? '1px solid rgba(34,211,238,0.4)' : '1px solid rgba(255,255,255,0.06)',
-                        color: activeTab === 'upload' ? C.cyan : C.muted, fontSize: 13, cursor: 'pointer', textAlign: 'left' }}>
-                      <span style={{ fontSize: 15 }}>📤</span> Import CSV
-                    </button>
-                    <button onClick={() => handleTabChange('data')}
-                      style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 8,
-                        background: activeTab === 'data' ? 'rgba(236,72,153,0.15)' : 'rgba(255,255,255,0.03)',
-                        border: activeTab === 'data' ? '1px solid rgba(236,72,153,0.4)' : '1px solid rgba(255,255,255,0.06)',
-                        color: activeTab === 'data' ? C.pink : C.muted, fontSize: 13, cursor: 'pointer', textAlign: 'left' }}>
-                      <span style={{ fontSize: 15 }}>📝</span> Edit Data
-                    </button>
-                  </div>
-                )}
-              </div>
-            )
-          })()}
+
         </nav>
 
         <div style={{ padding: "16px 20px", borderTop: "1px solid rgba(255,255,255,0.08)", display: "flex", flexDirection: "column", gap: 10 }}>
