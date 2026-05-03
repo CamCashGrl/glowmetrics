@@ -1869,77 +1869,7 @@ const handleCSV = async (file, forcePlatform = null) => {
       </div>
 
       {/* SIDEBAR — desktop only, hidden on mobile via CSS */}
-      <Sidebar activeTab={activeTab} onTabChange={(tab) => { setActiveTab(tab); if (typeof window !== "undefined") { localStorage.setItem("camcash_tab", tab); window.scrollTo({ top: 0, behavior: "instant" }); } }} user={user} onSignOut={async () => { await supabase.auth.signOut(); router.replace("/login"); }} /><Sidebar activeTab={activeTab} onTabChange={(tab) => { setActiveTab(tab); if (typeof window !== "undefined") { localStorage.setItem("camcash_tab", tab); window.scrollTo({ top: 0, behavior: "instant" }); } }} user={user} onSignOut={async () => { await supabase.auth.signOut(); router.replace("/login"); }} /><div className="dash-sidebar" style={{display:"none"}} style={{display:"none"}} style={{ position: "fixed", left: 0, top: 0, bottom: 0, width: 240, background: "rgba(15,20,32,0.85)", backdropFilter: "blur(20px)", borderRight: "1px solid rgba(255,255,255,0.08)", display: "flex", flexDirection: "column", zIndex: 50 }}>
-        <div style={{ padding: "24px 20px", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <div style={{ width: 40, height: 40, borderRadius: 10, background: "linear-gradient(135deg, #22D3EE, #EC4899)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, fontWeight: 700, color: C.white, boxShadow: "0 0 20px rgba(34,211,238,0.4)" }}>$</div>
-            <span style={{ fontSize: 20, fontWeight: 800, color: C.white }}>Cam<span style={{ background: "linear-gradient(90deg, #22D3EE, #EC4899)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Cash</span></span>
-          </div>
-          {user && (
-            <div style={{ marginTop: 10 }}>
-              <div style={{ fontSize: 11, color: C.muted, marginBottom: 8 }}>{user.email}</div>
-              <button
-                onClick={handleSignOut}
-                style={{
-                  width: "100%", padding: "8px 12px", borderRadius: 8,
-                  background: "rgba(248,113,113,0.12)",
-                  border: "1px solid rgba(248,113,113,0.35)",
-                  color: "#F87171", fontSize: 12, fontWeight: 700,
-                  cursor: "pointer", display: "flex", alignItems: "center",
-                  justifyContent: "center", gap: 6, transition: "all 0.15s",
-                }}
-                onMouseEnter={e => { e.currentTarget.style.background = "rgba(248,113,113,0.22)"; e.currentTarget.style.borderColor = "rgba(248,113,113,0.6)" }}
-                onMouseLeave={e => { e.currentTarget.style.background = "rgba(248,113,113,0.12)"; e.currentTarget.style.borderColor = "rgba(248,113,113,0.35)" }}
-              >
-                <span>→</span> Sign Out
-              </button>
-            </div>
-          )}
-          <div style={{ marginTop: 10, padding: "6px 10px", borderRadius: 8, background: "linear-gradient(135deg, rgba(245,158,11,0.2), rgba(251,146,60,0.2))", border: "1px solid rgba(245,158,11,0.4)", display: "flex", alignItems: "center", gap: 6 }}>
-            <div style={{ width: 6, height: 6, borderRadius: "50%", background: C.gold, flexShrink: 0, boxShadow: `0 0 6px ${C.gold}` }} />
-            <div>
-              <div style={{ fontSize: 10, fontWeight: 700, color: C.gold, letterSpacing: 0.5 }}>BETA</div>
-            </div>
-          </div>
-        </div>
-
-        <nav style={{ flex: 1, padding: "16px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
-          {[["overview", "📊", "Overview"], ["platforms", "🎯", "Platforms"], ["whales", "🐳", "Top Fans"], ["sessions", "🎥", "Sessions"], ["monthly", "📈", "Monthly"], ["live", "🔴", "Live Mode"], ["titles", "🎬", "Room Titles"], ["upload", "📥", "Import CSV"], ["help", "❓", "CSV Help"]].map(([id, icon, label]) => (
-            <button key={id} onClick={() => handleTabChange(id)} style={{
-              display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 10,
-              background: activeTab === id ? "linear-gradient(135deg, rgba(59,130,246,0.2), rgba(236,72,153,0.2))" : "transparent",
-              border: activeTab === id ? "1px solid rgba(59,130,246,0.4)" : "1px solid transparent",
-              boxShadow: activeTab === id ? "0 0 20px rgba(59,130,246,0.3)" : "none",
-              color: activeTab === id ? C.white : C.muted, fontSize: 14, fontWeight: activeTab === id ? 600 : 400,
-              cursor: "pointer", transition: "all 0.15s", textAlign: "left"
-            }}>
-              <span style={{ fontSize: 18 }}>{icon}</span>{label}
-            </button>
-          ))}
-
-
-        </nav>
-
-        <div style={{ padding: "16px 20px", borderTop: "1px solid rgba(255,255,255,0.08)", display: "flex", flexDirection: "column", gap: 10 }}>
-          <div style={{ padding: 12, borderRadius: 10, background: "linear-gradient(135deg, rgba(59,130,246,0.1), rgba(236,72,153,0.1))", border: "1px solid rgba(236,72,153,0.3)", textAlign: "center" }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: C.gold, letterSpacing: 1 }}>✨ BETA</div>
-            <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>All features unlocked</div>
-          </div>
-
-        </div>
-      </div>
-
-      {/* MOBILE BOTTOM NAV — hidden on desktop via CSS */}
-      <div className="dash-bottom-nav" style={{ display: "none" }}>
-        {[["overview","📊","Overview"],["platforms","🎯","Platforms"],["whales","🐳","Fans"],["sessions","🎥","Sessions"],["monthly","📈","Monthly"],["live","🔴","Live"],["upload","📥","Import"]].map(([id, icon, label]) => (
-          <button key={id} onClick={() => handleTabChange(id)} className={activeTab === id ? "active" : ""}>
-            <span className="nav-icon">{icon}</span>
-            <span className="nav-label">{label}</span>
-          </button>
-        ))}
-      </div>
-
-      {/* MAIN CONTENT */}
+      <Sidebar activeTab={activeTab} onTabChange={(tab) => { setActiveTab(tab); if (typeof window !== "undefined") { localStorage.setItem("camcash_tab", tab); window.scrollTo({ top: 0, behavior: "instant" }); } }} user={user} onSignOut={async () => { await supabase.auth.signOut(); router.replace("/login"); }} /><Sidebar activeTab={activeTab} onTabChange={(tab) => { setActiveTab(tab); if (typeof window !== "undefined") { localStorage.setItem("camcash_tab", tab); window.scrollTo({ top: 0, behavior: "instant" }); } }} user={user} onSignOut={async () => { await supabase.auth.signOut(); router.replace("/login"); }} />{/* MAIN CONTENT */}
       <div className="dash-main" style={{ marginLeft: 240, padding: 32, position: "relative", zIndex: 1 }}>
 
         {/* ── LIVE STATUS BAR ── */}
