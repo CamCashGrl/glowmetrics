@@ -2,11 +2,11 @@
 import { useState } from 'react'
 
 const RATES = {
-  Chaturbate:  { broadcaster: 0.05,   viewer: 0.10,  note: 'Standard broadcaster rate' },
- BongaCams:   { broadcaster: 0.05,   viewer: 0.10,  note: 'Completed profile rate. Incomplete profile = $0.025/token' }, 
-  MyFreeCams:  { broadcaster: 0.05,   viewer: 0.10,  note: 'Standard MFC rate' },
-  Stripchat:   { broadcaster: 0.05,   viewer: 0.09,  note: 'Approximate broadcaster rate' },
-  CamSoda:     { broadcaster: 0.055,  viewer: 0.10,  note: 'Approximate broadcaster rate' },
+  Chaturbate:  { broadcaster: 0.05,  viewer: 0.10, note: 'Standard broadcaster rate' },
+  BongaCams:   { broadcaster: 0.05,  viewer: 0.10, note: 'Completed profile rate. Incomplete = $0.025/token' },
+  MyFreeCams:  { broadcaster: 0.05,  viewer: 0.10, note: 'Standard MFC rate' },
+  Stripchat:   { broadcaster: 0.05,  viewer: 0.09, note: 'Approximate broadcaster rate' },
+  CamSoda:     { broadcaster: 0.055, viewer: 0.10, note: 'Approximate broadcaster rate' },
 }
 
 const COMMON = [50, 100, 200, 500, 1000, 2000, 5000, 10000]
@@ -163,6 +163,13 @@ export default function TokenCalculatorClient() {
           )}
         </div>
 
+        {/* BONGACAMS NOTE */}
+        {platform === 'BongaCams' && (
+          <div style={{ padding: '12px 16px', borderRadius: 10, background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)', marginBottom: 20, fontSize: 13, color: C.gold }}>
+            ⚠️ BongaCams rate varies by profile status. Completed profile = $0.05/token. Incomplete profile = ~$0.025/token. Use the Custom rate button above if your rate differs.
+          </div>
+        )}
+
         {/* CONVERSION TABLE */}
         <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, overflow: 'hidden', marginBottom: 28 }}>
           <div style={{ padding: '18px 24px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
@@ -234,8 +241,9 @@ export default function TokenCalculatorClient() {
         {/* INFO SECTIONS */}
         {[
           { h2: 'How Much Does Chaturbate Pay Per Token?', body: 'Chaturbate pays broadcasters $0.05 per token. Viewers purchase tokens at $0.10 each, so Chaturbate keeps 50% and you receive 50%. Some models with high traffic negotiate higher rates directly with Chaturbate — if you have a custom rate, use the "Custom rate" button above to get accurate numbers.' },
-          { h2: 'Broadcaster Rate vs Viewer Rate', body: 'The viewer rate ($0.10/token on Chaturbate) is what fans pay to buy tokens. Your broadcaster rate ($0.05/token) is what you receive. This 50% split is standard across most cam platforms. BongaCams and CamSoda rates vary slightly and can increase with model level or traffic milestones.' },
-          { h2: 'Track More Than Just Token Math', body: 'A token calculator shows you what individual tips are worth — but CamCash shows you your total earning history, which fans tip the most, what time of day you earn the most, and how your platforms compare. It turns your raw CSV data into a complete analytics dashboard. Free for cam models during beta.' },
+          { h2: 'BongaCams Token Rate — Completed vs Incomplete Profile', body: 'BongaCams pays approximately $0.05/token if your profile is complete, and around $0.025/token if your profile is incomplete. Completing your profile effectively doubles your earnings per token. North American models may see slightly different rates depending on currency conversion.' },
+          { h2: 'Broadcaster Rate vs Viewer Rate', body: 'The viewer rate is what fans pay to buy tokens. Your broadcaster rate is what you actually receive. This split varies by platform — Chaturbate keeps 50%, BongaCams and others have similar splits. Use the Custom rate button if you have a negotiated rate.' },
+          { h2: 'Track More Than Just Token Math', body: 'A token calculator shows you what individual tips are worth — but CamCash shows you your total earning history, which fans tip the most, what time of day you earn the most, and how your platforms compare. Free for cam models during beta.' },
         ].map(({ h2, body }) => (
           <section key={h2} style={{ marginBottom: 32 }}>
             <h2 style={{ fontSize: 22, fontWeight: 800, color: C.white, marginBottom: 10, letterSpacing: '-0.01em' }}>{h2}</h2>
