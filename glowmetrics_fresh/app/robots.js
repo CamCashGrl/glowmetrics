@@ -8,7 +8,6 @@ export default function robots() {
           '/dashboard',
           '/admin',
           '/api/',
-          '/landing',
           '/login',
           '/onboarding',
           '/reset-password',
