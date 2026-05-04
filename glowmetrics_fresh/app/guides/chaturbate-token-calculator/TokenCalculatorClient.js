@@ -3,7 +3,7 @@ import { useState } from 'react'
 
 const RATES = {
   Chaturbate:  { broadcaster: 0.05,   viewer: 0.10,  note: 'Standard broadcaster rate' },
- BongaCams:   { broadcaster: 0.05,   viewer: 0.10,  note: 'Completed profile rate. Incomplete profile = $0.025/token' }, },
+ BongaCams:   { broadcaster: 0.05,   viewer: 0.10,  note: 'Completed profile rate. Incomplete profile = $0.025/token' }, 
   MyFreeCams:  { broadcaster: 0.05,   viewer: 0.10,  note: 'Standard MFC rate' },
   Stripchat:   { broadcaster: 0.05,   viewer: 0.09,  note: 'Approximate broadcaster rate' },
   CamSoda:     { broadcaster: 0.055,  viewer: 0.10,  note: 'Approximate broadcaster rate' },
