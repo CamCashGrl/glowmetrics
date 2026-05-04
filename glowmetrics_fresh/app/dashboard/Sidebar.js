@@ -26,7 +26,7 @@ const SECTIONS = [
       { id: "live",   icon: "🔴", label: "Live Mode" },
       { id: "data",   icon: "📝", label: "Edit Data" },
       { id: "titles", icon: "🎬", label: "Room Titles" },
-    ]
+    ]{ id: "calculator", icon: "🧮", label: "Token Calc" },
   },
 ]
 
