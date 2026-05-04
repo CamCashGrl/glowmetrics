@@ -32,6 +32,7 @@ export default function sitemap() {
     { url: `${baseUrl}/guides/chaturbate-token-tracker`, lastModified: now, changeFrequency: 'monthly', priority: 0.9 },
     { url: `${baseUrl}/guides/cam-model-revenue-dashboard`, lastModified: now, changeFrequency: 'monthly', priority: 0.9 },
     { url: `${baseUrl}/guides/cam-model-session-breakdown`, lastModified: now, changeFrequency: 'monthly', priority: 0.9 },
-    { url: `${baseUrl}/guides/chaturbate-best-hours`, lastModified: now, changeFrequency: 'monthly', priority: 0.9 },
+    { url: `${baseUrl}/guides/chaturbate-best-hours`, lastModified: now, changeFrequency: 'monthly', priority: 0.9 }, url
+  { url: `${baseUrl}/guides/chaturbate-token-calculator`, lastModified: now, changeFrequency: 'monthly', priority: 0.9 },
   ];
 }
