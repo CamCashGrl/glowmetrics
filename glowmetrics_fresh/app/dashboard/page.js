@@ -1053,7 +1053,7 @@ export default function Dashboard() {
     return () => {
       if (realtimeChannelRef.current) supabase.removeChannel(realtimeChannelRef.current)
       if (refreshTimerRef.current) clearInterval(refreshTimerRef.current)
-      clearInterval(minuteTimer)
+      // minuteTimer cleared inline
     }
   }, [])
 
