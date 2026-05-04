@@ -1088,21 +1088,8 @@ export default function Dashboard() {
   }
 
   const loadData = async (uid, force = false) => {
-    // ── CACHE CHECK: skip DB if data is fresh (< 15 min old) ──
-    if (!force) {
-      try {
-        const cached = sessionStorage.getItem(`camcash_tips_${uid}`)
-        const cachedTime = sessionStorage.getItem(`camcash_tips_time_${uid}`)
-        if (cached && cachedTime && Date.now() - parseInt(cachedTime) < 15 * 60 * 1000) {
-          const allData = JSON.parse(cached)
-          setTips(allData)
-          try { setAnalytics(runEngine(allData)) } catch(e) {}
-          setLoading(false)
-          setLastRefreshed(new Date(parseInt(cachedTime)))
-          return
-        }
-      } catch(e) {} // sessionStorage unavailable (private mode) — fall through to fetch
-    }
+    
+    
 
     setLoading(true)
     try {
