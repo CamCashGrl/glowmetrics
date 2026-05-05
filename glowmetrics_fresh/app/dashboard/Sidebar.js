@@ -23,10 +23,11 @@ const SECTIONS = [
     id: "tools",
     label: "TOOLS",
     items: [
-      { id: "live",   icon: "🔴", label: "Live Mode" },
-      { id: "data",   icon: "📝", label: "Edit Data" },
-      { id: "titles", icon: "🎬", label: "Room Titles" },
+      { id: "live",       icon: "🔴", label: "Live Mode" },
+      { id: "data",       icon: "📝", label: "Edit Data" },
+      { id: "titles",     icon: "🎬", label: "Room Titles" },
       { id: "calculator", icon: "🧮", label: "Token Calc" },
+    ]
   },
 ]
 
@@ -97,17 +98,9 @@ export default function Sidebar({ activeTab, onTabChange, user, onSignOut }) {
         .sidebar-scroll::-webkit-scrollbar { width: 2px; }
         .sidebar-scroll::-webkit-scrollbar-track { background: transparent; }
         .sidebar-scroll::-webkit-scrollbar-thumb { background: rgba(124,92,255,0.2); border-radius: 2px; }
-        @media (max-width: 768px) {
-          .sidebar-desktop { display: none !important; }
-          .mobile-menu-btn { display: flex !important; }
-        }
-        @media (min-width: 769px) {
-          .mobile-menu-btn { display: none !important; }
-          .mobile-overlay { display: none !important; }
-        }
       `}</style>
 
-      {/* TOP — fixed */}
+      {/* TOP */}
       <div style={{
         padding: "16px 16px 14px",
         borderBottom: "1px solid rgba(255,255,255,0.05)",
@@ -142,10 +135,8 @@ export default function Sidebar({ activeTab, onTabChange, user, onSignOut }) {
                 onMouseLeave={e => e.currentTarget.style.background = "rgba(248,113,113,0.08)"}
               >OUT</button>
             )}
-            {/* Mobile close button */}
             <button
               onClick={() => setMobileOpen(false)}
-              className="mobile-menu-btn"
               style={{
                 display: "none",
                 padding: "3px 8px", borderRadius: 5,
@@ -235,15 +226,15 @@ export default function Sidebar({ activeTab, onTabChange, user, onSignOut }) {
 
   return (
     <>
-      {/* DESKTOP sidebar — fixed */}
-      <div className="sidebar-desktop" style={{ position: "fixed", left: 0, top: 0, bottom: 0, ...sidebarStyle }}>
+      {/* DESKTOP */}
+      <div style={{ position: "fixed", left: 0, top: 0, bottom: 0, ...sidebarStyle }}>
         {sidebarContent}
       </div>
 
-      {/* MOBILE hamburger button */}
+      {/* MOBILE hamburger */}
       <button
-        className="mobile-menu-btn"
         onClick={() => setMobileOpen(true)}
+        className="mobile-menu-btn"
         style={{
           display: "none",
           position: "fixed", top: 16, left: 16, zIndex: 100,
@@ -260,7 +251,6 @@ export default function Sidebar({ activeTab, onTabChange, user, onSignOut }) {
       {/* MOBILE overlay */}
       {mobileOpen && (
         <div
-          className="mobile-overlay"
           onClick={() => setMobileOpen(false)}
           style={{
             position: "fixed", inset: 0, zIndex: 98,
@@ -270,19 +260,24 @@ export default function Sidebar({ activeTab, onTabChange, user, onSignOut }) {
         />
       )}
 
-      {/* MOBILE sidebar — slides in */}
+      {/* MOBILE sidebar */}
       <div
-        className="mobile-menu-btn"
         style={{
-          display: "none",
-          position: "fixed", left: mobileOpen ? 0 : -240, top: 0, bottom: 0,
+          display: mobileOpen ? "flex" : "none",
+          flexDirection: "column",
+          position: "fixed", left: 0, top: 0, bottom: 0,
           zIndex: 99,
-          transition: "left 0.25s ease",
           ...sidebarStyle,
         }}
       >
         {sidebarContent}
       </div>
+
+      <style>{`
+        @media (max-width: 768px) {
+          .mobile-menu-btn { display: flex !important; }
+        }
+      `}</style>
     </>
   )
 }
