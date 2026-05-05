@@ -1022,7 +1022,7 @@ export default function Dashboard() {
             )
             if (exists) return prev
             const updated = [...prev, payload.new].sort((a,b) => new Date(a.date_time)-new Date(b.date_time))
-            try { setAnalytics(runEngine(updated)) } catch(e) {}
+            try { const r = runEngine(updated); if(r) setAnalytics(r) } catch(e) { console.error('realtime runEngine failed:', e) }
             return updated
           })
           setNewTipCount(n => n + 1)
@@ -1039,7 +1039,7 @@ export default function Dashboard() {
       refreshTimerRef.current = setInterval(() => {
         setTips(prev => {
           if (!prev.length) return prev
-          try { setAnalytics(runEngine(prev)) } catch(e) {}
+          try { const r = runEngine(prev); if(r) setAnalytics(r) } catch(e) { console.error('refresh runEngine failed:', e) }
           return prev
         })
       }, 30000)
