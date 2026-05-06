@@ -2104,7 +2104,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                       {velPlatforms.map(([plat, vel], i) => (
                         <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 14px", borderRadius: 20, background: "rgba(34,211,238,0.07)", border: "1px solid rgba(34,211,238,0.2)", animation: `fadeUp 0.3s ease ${0.25 + i*0.05}s both` }}>
                           <span style={{ fontSize: 11, color: C.muted }}>{plat.replace('BongaCams','Bonga').replace('MyFreeCams','MFC').replace('Chaturbate','CB')}</span>
-                          <span style={{ fontSize: 13, fontWeight: 700, color: C.cyan }}>${vel.toFixed(2)}/hr</span>
+                         <span style={{ fontSize: 13, fontWeight: 700, color: C.cyan }}>${(vel ?? 0).toFixed(2)}/hr</span>
                           <span style={{ fontSize: 10, color: C.muted }}>velocity</span>
                         </div>
                       ))}
