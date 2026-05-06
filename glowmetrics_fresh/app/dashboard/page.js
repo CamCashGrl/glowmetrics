@@ -2211,7 +2211,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                             onMouseLeave={e => { e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = "" }}>
                             {isTop && <div style={{ position: "absolute", top: 8, right: 8, fontSize: 9, padding: "2px 6px", borderRadius: 10, background: `${col}25`, color: col, fontWeight: 700 }}>TOP ROI</div>}
                             <div style={{ fontSize: 11, fontWeight: 700, color: col, marginBottom: 6 }}>{p.platform.replace('BongaCams','Bonga').replace('MyFreeCams','MFC')}</div>
-                            <div style={{ fontSize: 22, fontWeight: 900, color: C.white, marginBottom: 2 }}>{roi !== null ? `$${roi.toFixed(2)}/hr` : '—'}</div>
+                            <div style={{ fontSize: 22, fontWeight: 900, color: C.white, marginBottom: 2 }}>{roi !== null ? `$${(roi || 0).toFixed(2)}/hr` : '—'}</div>
                             <div style={{ fontSize: 11, color: C.muted, marginBottom: bestTime ? 8 : 0 }}>${p.totalUSD.toFixed(0)} total · {p.hours.toFixed(0)}h streamed</div>
                             {(() => {
                             const todayUTCName = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][new Date().getUTCDay()]
@@ -2767,7 +2767,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                       <span style={{ fontSize: 20 }}>⚡</span>
                       <div>
                         <div style={{ fontSize: 14, fontWeight: 700, color: C.white }}>You earn {mult}x more per hour on {top.platform} than {bottom.platform}</div>
-                        <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>${top.usdPerHour.toFixed(2)}/hr vs ${bottom.usdPerHour.toFixed(2)}/hr — consider shifting more time to {top.platform}</div>
+                        <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>${to(p.usdPerHour || 0).toFixed(2)}/hr vs ${bottom.usdPerHour.toFixed(2)}/hr — consider shifting more time to {top.platform}</div>
                       </div>
                     </div>
                   )
@@ -2835,8 +2835,8 @@ const handleCSV = async (file, forcePlatform = null) => {
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 20 }}>
                       {[
                         { label: "Total Revenue", value: `$${p.totalUSD.toFixed(2)}`, color: C.green },
-                        { label: "$/Hour", value: `$${p.usdPerHour.toFixed(2)}`, color: C.cyan },
-                        { label: "Avg Session", value: `$${avgSessionUSD.toFixed(2)}`, color: C.pink },
+                        { label: "$/Hour", value: `$${(p.usdPerHour || 0).toFixed(2)}`, color: C.cyan },
+                        { label: "Avg Session", value: `$${(avgSessionUSD || 0).toFixed(2)}`, color: C.pink },
                         { label: "Avg Tip Size", value: `$${p.avgTipSize.toFixed(2)}`, color: C.gold },
                       ].map(({ label, value, color }) => (
                         <div key={label} style={{ background: "rgba(255,255,255,0.04)", borderRadius: 10, padding: "14px 16px", border: "1px solid rgba(255,255,255,0.06)" }}>
