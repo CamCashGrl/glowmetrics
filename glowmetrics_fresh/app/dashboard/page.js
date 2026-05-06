@@ -2222,17 +2222,17 @@ const handleCSV = async (file, forcePlatform = null) => {
                               <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 4 }}>
                                 {bestDayEntry && (
                                   <div style={{ padding: '5px 8px', borderRadius: 8, background: `${col}10`, border: `1px solid ${col}25`, fontSize: 11, color: col }}>
-                                    Best day: <strong>{bestDayEntry.day}s</strong> ${bestDayEntry.avg.toFixed(0)} avg
+                                    Best day: <strong>{bestDayEntry.day}s</strong> ${(bestDayEntry.avg || 0).toFixed(0)} avg
                                   </div>
                                 )}
                                 {bestTime && (
                                   <div style={{ padding: '5px 8px', borderRadius: 8, background: `${col}10`, border: `1px solid ${col}25`, fontSize: 11, color: col }}>
-                                    Best hour overall: <strong>{fmtH(bestTime.hour)}</strong> ${bestTime.avg.toFixed(0)} avg
+                                    Best hour overall: <strong>{fmtH(bestTime.hour)}</strong> ${(bestTime.avg || 0).toFixed(0)} avg
                                   </div>
                                 )}
                                 {todayHour && (
                                   <div style={{ padding: '5px 8px', borderRadius: 8, background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.25)', fontSize: 11, color: '#10B981' }}>
-                                    Today ({todayUTCName}): <strong>{fmtH(todayHour.hour)}</strong> ${todayHour.avg.toFixed(0)}/hr avg
+                                    Today ({todayUTCName}): <strong>{fmtH(todayHour.hour)}</strong> ${(todayHour.avg || 0).toFixed(0)}/hr avg
                                   </div>
                                 )}
                               </div>
