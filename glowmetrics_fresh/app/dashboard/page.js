@@ -2212,7 +2212,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                             {isTop && <div style={{ position: "absolute", top: 8, right: 8, fontSize: 9, padding: "2px 6px", borderRadius: 10, background: `${col}25`, color: col, fontWeight: 700 }}>TOP ROI</div>}
                             <div style={{ fontSize: 11, fontWeight: 700, color: col, marginBottom: 6 }}>{p.platform.replace('BongaCams','Bonga').replace('MyFreeCams','MFC')}</div>
                             <div style={{ fontSize: 22, fontWeight: 900, color: C.white, marginBottom: 2 }}>{roi !== null ? `$${(roi || 0).toFixed(2)}/hr` : '—'}</div>
-                            <div style={{ fontSize: 11, color: C.muted, marginBottom: bestTime ? 8 : 0 }}>${p.totalUSD.toFixed(0)} total · {p.hours.toFixed(0)}h streamed</div>
+                            <div style={{ fontSize: 11, color: C.muted, marginBottom: bestTime ? 8 : 0 }}>${(p.totalUSD || 0).toFixed(0)} total · {(p.hours || 0).toFixed(0)}h streamed</div>
                             {(() => {
                             const todayUTCName = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][new Date().getUTCDay()]
                             const ptimes = analytics?.platformBestTimes?.[p.platform]
@@ -2688,9 +2688,9 @@ const handleCSV = async (file, forcePlatform = null) => {
           })
           const filteredPlatforms = Object.values(pfMap).map(p => ({
             platform: p.platform,
-            totalUSD: parseFloat(p.totalUSD.toFixed(2)),
+            totalUSD: parseFloat((p.totalUSD || 0).toFixed(2)),
             sessions: p.sessions.size,
-            hours: parseFloat(p.hours.toFixed(1)),
+            hours: parseFloat((p.hours || 0).toFixed(1)),
             usdPerHour: p.hours > 0 ? parseFloat((p.totalUSD / p.hours).toFixed(2)) : 0,
             avgTipSize: p.tips > 0 ? parseFloat((p.totalUSD / p.tips).toFixed(2)) : 0,
             tipCount: p.tips
@@ -2767,7 +2767,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                       <span style={{ fontSize: 20 }}>⚡</span>
                       <div>
                         <div style={{ fontSize: 14, fontWeight: 700, color: C.white }}>You earn {mult}x more per hour on {top.platform} than {bottom.platform}</div>
-                        <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>${to(p.usdPerHour || 0).toFixed(2)}/hr vs ${bottom.usdPerHour.toFixed(2)}/hr — consider shifting more time to {top.platform}</div>
+                        <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>${to(p.usdPerHour || 0).toFixed(2)}/hr vs ${(bottom.usdPerHour || 0).toFixed(2)}/hr — consider shifting more time to {top.platform}</div>
                       </div>
                     </div>
                   )
@@ -2784,8 +2784,8 @@ const handleCSV = async (file, forcePlatform = null) => {
                 return (
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 28 }}>
                     {[
-                      { icon: "💰", label: "Top Revenue", value: topRev.platform, sub: `$${topRev.totalUSD.toFixed(2)} total`, color: C.gold },
-                      { icon: "⚡", label: "Most Efficient", value: topEff.platform, sub: `$${topEff.usdPerHour.toFixed(2)}/hour`, color: C.cyan },
+                      { icon: "💰", label: "Top Revenue", value: topRev.platform, sub: `$${(topRev.totalUSD || 0).toFixed(2)} total`, color: C.gold },
+                      { icon: "⚡", label: "Most Efficient", value: topEff.platform, sub: `$${(topEff.usdPerHour || 0).toFixed(2)}/hour`, color: C.cyan },
                       { icon: "🕒", label: "Total Hours", value: `${totalHours.toFixed(1)}h`, sub: `across ${displayPlatforms.length} platforms`, color: C.pink },
                       { icon: "💵", label: "Combined Earned", value: `$${totalEarned.toFixed(2)}`, sub: platformTimeFilter === "ALL" ? "all time" : `last ${platformTimeFilter}`, color: C.green },
                     ].map(({ icon, label, value, sub, color }) => (
@@ -2822,7 +2822,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                         </div>
                         <div>
                           <div style={{ fontSize: 20, fontWeight: 800, color: C.white }}>{p.platform}</div>
-                          <div style={{ fontSize: 12, color: C.muted }}>{p.sessions} sessions · {p.hours.toFixed(1)}h streamed</div>
+                          <div style={{ fontSize: 12, color: C.muted }}>{p.sessions} sessions · {(p.hours || 0).toFixed(1)}h streamed</div>
                         </div>
                       </div>
                       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -2834,10 +2834,10 @@ const handleCSV = async (file, forcePlatform = null) => {
                     {/* STAT GRID */}
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 20 }}>
                       {[
-                        { label: "Total Revenue", value: `$${p.totalUSD.toFixed(2)}`, color: C.green },
+                        { label: "Total Revenue", value: `$${(p.totalUSD || 0).toFixed(2)}`, color: C.green },
                         { label: "$/Hour", value: `$${(p.usdPerHour || 0).toFixed(2)}`, color: C.cyan },
                         { label: "Avg Session", value: `$${(avgSessionUSD || 0).toFixed(2)}`, color: C.pink },
-                        { label: "Avg Tip Size", value: `$${p.avgTipSize.toFixed(2)}`, color: C.gold },
+                        { label: "Avg Tip Size", value: `$${(p.avgTipSize || 0).toFixed(2)}`, color: C.gold },
                       ].map(({ label, value, color }) => (
                         <div key={label} style={{ background: "rgba(255,255,255,0.04)", borderRadius: 10, padding: "14px 16px", border: "1px solid rgba(255,255,255,0.06)" }}>
                           <div style={{ fontSize: 11, color: C.muted, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>{label}</div>
