@@ -1200,7 +1200,7 @@ const handleCSV = async (file, forcePlatform = null) => {
   const nextMoves = liveAnalytics?.nextMoves || analytics?.nextMoves || []
   const totalRevenue = analytics?.totalUSD || 0
   // Only average sessions with real duration (exclude zero-timestamp BongaCams exports)
-  const timedSessions = sessions.filter(s => !s.durationUnknown && s.usdPerHour !== null && (s.durationMinutes || 0) >= 20)
+  const timedSessions = sessions.filter(s => !s.durationUnknown && s.usdPerHour !== null)
   // FIX: use total USD / total hours (not avg of per-session rates — that inflates short sessions)
   const timedTotalUSD = timedSessions.reduce((sum, s) => sum + (s.totalUSD || 0), 0)
   const timedTotalHours = timedSessions.reduce((sum, s) => sum + (s.durationHours || 0), 0)
@@ -1528,8 +1528,8 @@ const handleCSV = async (file, forcePlatform = null) => {
     const peakAvg = sessionsAtPeak.length >= 2
       ? sessionsAtPeak.reduce((s, x) => s + x.totalUSD, 0) / sessionsAtPeak.length
       : (bestHour?.avg || sessionAvg)
-    const predictionLow = Math.round((displayAvg || peakAvg) * 0.6)
-    const predictionHigh = Math.round((displayAvg || peakAvg) * 1.5)
+    const predictionLow = Math.round(peakAvg * 0.6)
+    const predictionHigh = Math.round(peakAvg * 1.5)
 
     // Re-engage list — fans who tip 50+ tokens avg per session, appear in 2+ streams, and are overdue
     // "Every 2-3 streams" = session-level frequency, not tip count
@@ -1883,7 +1883,6 @@ const handleCSV = async (file, forcePlatform = null) => {
           )}
         </div>
 
-<<<<<<< HEAD
 
         {activeTab === "overview" && (
           <div style={{ animation: "fadeUp 0.3s ease" }}>
@@ -2124,248 +2123,6 @@ const handleCSV = async (file, forcePlatform = null) => {
               )
             })()}
 
-=======
-        {activeTab === "overview" && (
-          <div style={{ animation: "fadeUp 0.3s ease" }}>
-
-            {/* ═══════════════════════════════════════
-                1. MONEY SNAPSHOT
-            ═══════════════════════════════════════ */}
-            {(() => {
-              const now = new Date()
-              const thisMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
-              const prevMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1))
-              const thisMonthRev = tips.filter(t => new Date(t.date_time || t.dateRaw) >= thisMonthStart).reduce((s, t) => s + (t.usd || 0), 0)
-              const prevMonthRev = tips.filter(t => { const d = new Date(t.date_time || t.dateRaw); return d >= prevMonthStart && d < thisMonthStart }).reduce((s, t) => s + (t.usd || 0), 0)
-              const growthPct = (prevMonthRev > 0 && thisMonthRev > 0) ? Math.round(((thisMonthRev - prevMonthRev) / prevMonthRev) * 100) : null
-              const isPositive = growthPct !== null && growthPct >= 0
-              const topPct = Math.max(1, Math.min(25, Math.round(100 - (totalRevenue / 50))))
-              const sessionsLast30 = sessions.filter(s => (Date.now() - new Date(s.startTime)) / 86400000 <= 30).length
-              const fansActiveLast30 = new Set(tips.filter(t => (Date.now() - new Date(t.date_time || t.dateRaw)) / 86400000 <= 30).map(t => t.username)).size
-              const cards = [
-                { label: "Total Earned", value: `$${totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, sub: `Top ${topPct}% of models on this platform`, icon: "💰", badge: growthPct !== null ? (isPositive ? `↑ ${growthPct}% vs last month` : `↓ ${Math.abs(growthPct)}% vs last month`) : null, badgeColor: isPositive ? C.green : C.red, glow: isPositive },
-                { label: "Avg $/Hour", value: `$${avgPerHour.toFixed(2)}`, sub: avgPerHour > 20 ? "Above average — keep it up!" : "Tip: stream at peak hours", icon: "⏱️", badge: null },
-                { label: "Total Fans", value: whales.length.toLocaleString(), sub: `${fansActiveLast30} active in last 30 days`, icon: "👥", badge: null },
-                { label: "Sessions", value: sessions.length.toLocaleString(), sub: `${sessionsLast30} in last 30 days${sessionsLast30 >= 3 ? " 🔥" : ""}`, icon: "🎥", badge: sessionsLast30 >= 5 ? "🔥 On a streak!" : null, badgeColor: C.gold }
-              ]
-              // Earnings velocity per platform for velocity strip
-              const velPlatforms = Object.entries(platformVelocity).filter(([,v]) => v !== null).sort((a,b) => (b[1]||0)-(a[1]||0))
-              return (
-                <>
-                  <div className="stat-grid-4" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: velPlatforms.length ? 12 : 28 }}>
-                    {cards.map((s, i) => (
-                      <div key={i} className="dash-card" style={{ ...glassCard, borderRadius: 18, padding: "22px 20px", position: "relative", overflow: "hidden", animation: `fadeUp 0.3s ease ${i * 0.06}s both`, boxShadow: s.glow ? `0 0 30px rgba(16,185,129,0.2), ${glassCard.boxShadow}` : glassCard.boxShadow }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
-                          <span style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600 }}>{s.label}</span>
-                          <span style={{ fontSize: 22 }}>{s.icon}</span>
-                        </div>
-                        <div style={{ fontSize: 34, fontWeight: 900, background: "linear-gradient(135deg,#60a5fa,#f472b6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", marginBottom: 6, lineHeight: 1.1 }}>{s.value}</div>
-                        <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.4 }}>{s.sub}</div>
-                        {s.badge && <div style={{ marginTop: 8, display: "inline-block", padding: "2px 8px", borderRadius: 6, background: `${s.badgeColor}20`, border: `1px solid ${s.badgeColor}40`, fontSize: 10, fontWeight: 700, color: s.badgeColor }}>{s.badge}</div>}
-                      </div>
-                    ))}
-                  </div>
-                  {/* Earnings Velocity strip — formula: totalUSD / totalHours per platform */}
-                  {velPlatforms.length > 0 && (
-                    <div className="velocity-strip" style={{ display: "flex", gap: 10, marginBottom: 28, flexWrap: "wrap" }}>
-                      {velPlatforms.map(([plat, vel], i) => (
-                        <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 14px", borderRadius: 20, background: "rgba(34,211,238,0.07)", border: "1px solid rgba(34,211,238,0.2)", animation: `fadeUp 0.3s ease ${0.25 + i*0.05}s both` }}>
-                          <span style={{ fontSize: 11, color: C.muted }}>{plat.replace('BongaCams','Bonga').replace('MyFreeCams','MFC').replace('Chaturbate','CB')}</span>
-                         <span style={{ fontSize: 13, fontWeight: 700, color: C.cyan }}>${(vel ?? 0).toFixed(2)}/hr</span>
-                          <span style={{ fontSize: 10, color: C.muted }}>velocity</span>
-                        </div>
-                      ))}
-                      {earningsVelocity !== null && (
-                        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 14px", borderRadius: 20, background: "rgba(16,185,129,0.07)", border: "1px solid rgba(16,185,129,0.2)" }}>
-                          <span style={{ fontSize: 11, color: C.muted }}>Overall</span>
-                          <span style={{ fontSize: 13, fontWeight: 700, color: C.green }}>${earningsVelocity.toFixed(2)}/hr</span>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </>
-              )
-            })()}
-
-            {/* ═══════════════════════════════════════
-                DAILY BRIEF — overview only, below earnings
-            ═══════════════════════════════════════ */}
-        {/* ═══════════════════════════════════════════════════════
-            DAILY BRIEF — always visible, above all tabs
-            Refreshes based on UTC time + your real session data
-        ═══════════════════════════════════════════════════════ */}
-        {dailyBrief && (() => {
-          const { todayName, bhLabel, bh, atPeak, hoursUntilPeak, displayPlat, displayAvg,
-            isBestDay, bestDay, sessionAvg, peakAvg, predictionLow, predictionHigh,
-            reengageFans, likelyOnline, platTodayStats } = dailyBrief
-          return (
-            <div style={{ marginBottom: 20, borderRadius: 18, overflow: 'hidden', border: `1px solid ${atPeak ? 'rgba(16,185,129,0.45)' : 'rgba(124,92,255,0.3)'}`, background: 'rgba(10,12,24,0.7)', backdropFilter: 'blur(16px)', animation: 'fadeUp 0.3s ease both' }}>
-
-              {/* Header bar */}
-              <div style={{ padding: '13px 20px', background: atPeak ? 'linear-gradient(135deg,rgba(16,185,129,0.2),rgba(34,211,238,0.1))' : 'linear-gradient(135deg,rgba(124,92,255,0.18),rgba(34,211,238,0.08))', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <div style={{ width: 32, height: 32, borderRadius: 9, background: atPeak ? 'linear-gradient(135deg,#10B981,#22D3EE)' : 'linear-gradient(135deg,#7C5CFF,#22D3EE)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15 }}>
-                    {atPeak ? '🟢' : '📋'}
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 15, fontWeight: 800, color: C.white }}>
-                      {atPeak ? 'Peak Window LIVE — Go Live Now' : 'Daily Brief'}
-                    </div>
-                    <div style={{ fontSize: 11, color: C.muted }}>{todayName} · based on your real session history</div>
-                  </div>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                  {isBestDay && <div style={{ padding: '3px 10px', borderRadius: 20, background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.4)', fontSize: 11, fontWeight: 700, color: C.gold }}>🔥 Your Best Day</div>}
-                  {atPeak
-                    ? <div style={{ padding: '4px 12px', borderRadius: 20, background: 'rgba(16,185,129,0.2)', border: '1px solid rgba(16,185,129,0.5)', fontSize: 12, fontWeight: 700, color: C.green }}>🟢 Peak Now</div>
-                    : bhLabel && <div style={{ padding: '4px 12px', borderRadius: 20, background: 'rgba(124,92,255,0.12)', border: '1px solid rgba(124,92,255,0.3)', fontSize: 12, fontWeight: 600, color: C.indigo }}>⏰ Peak in {hoursUntilPeak}h</div>
-                  }
-                </div>
-              </div>
-
-              <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-
-                {/* ═══ BEST TIME TO STREAM ALERT ═══ */}
-                {bhLabel && (
-                  <div style={{ padding: '14px 16px', borderRadius: 13, background: atPeak ? 'linear-gradient(135deg,rgba(16,185,129,0.15),rgba(34,211,238,0.08))' : 'linear-gradient(135deg,rgba(124,92,255,0.12),rgba(34,211,238,0.06))', border: `1px solid ${atPeak ? 'rgba(16,185,129,0.4)' : 'rgba(124,92,255,0.35)'}`, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-                    <div style={{ fontSize: 22, flexShrink: 0, marginTop: 1 }}>{atPeak ? '🟢' : '⏰'}</div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 13, fontWeight: 800, color: atPeak ? C.green : C.white, marginBottom: 5 }}>
-                        {atPeak
-                          ? `Your peak window is RIGHT NOW — go live on ${displayPlat} immediately`
-                          : `Your best time to stream today is ${bhLabel} on ${displayPlat}`
-                        }
-                      </div>
-                      <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.65 }}>
-                        {`Since it's ${todayName}`}
-                        {isBestDay ? ` (your highest-earning day)` : ``}
-                        {`, you peak at ${bhLabel} UTC on ${displayPlat} with `}
-                        <span style={{ color: C.gold, fontWeight: 700 }}>${displayAvg.toFixed(0)} avg/session</span>
-                        {`. Stream `}
-                        <span style={{ color: C.cyan, fontWeight: 700 }}>60+ min</span>
-                        {` to earn `}
-                        <span style={{ color: C.green, fontWeight: 700 }}>${predictionLow}–${predictionHigh}</span>
-                        {` — longer sessions earn `}
-                        <span style={{ color: C.indigo, fontWeight: 700 }}>+101% more</span>
-                        {` on average.`}
-                      </div>
-                      {!atPeak && hoursUntilPeak !== null && hoursUntilPeak > 0 && (
-                        <div style={{ marginTop: 8, fontSize: 11, color: C.indigo, fontWeight: 600 }}>
-                          ⏳ {hoursUntilPeak === 1 ? 'Starting in ~1 hour — prep your room now' : `${hoursUntilPeak} hours away — set a reminder`}
-                        </div>
-                      )}
-                      {atPeak && (
-                        <div style={{ marginTop: 8, fontSize: 11, color: C.green, fontWeight: 700 }}>
-                          🔥 This window closes in ~{(60 - new Date().getUTCMinutes())} minutes — don't wait
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* ROW 1 — Today / Peak Window / Best Platform */}
-                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                  <div style={{ flex: 1, minWidth: 130, padding: '11px 14px', borderRadius: 11, background: 'rgba(124,92,255,0.08)', border: '1px solid rgba(124,92,255,0.18)' }}>
-                    <div style={{ fontSize: 10, color: C.muted, marginBottom: 3, textTransform: 'uppercase', letterSpacing: 1 }}>Today</div>
-                    <div style={{ fontSize: 14, fontWeight: 800, color: C.white }}>{todayName}</div>
-                    <div style={{ fontSize: 11, color: C.indigo, marginTop: 2 }}>
-                      {isBestDay ? `🏆 Your best day — avg $${(bestDay?.avg || sessionAvg).toFixed(0)}/session` : `avg ~$${sessionAvg.toFixed(0)}/session`}
-                    </div>
-                  </div>
-
-                  <div style={{ flex: 1, minWidth: 130, padding: '11px 14px', borderRadius: 11, background: atPeak ? 'rgba(16,185,129,0.12)' : 'rgba(34,211,238,0.07)', border: `1px solid ${atPeak ? 'rgba(16,185,129,0.4)' : 'rgba(34,211,238,0.18)'}` }}>
-                    <div style={{ fontSize: 10, color: C.muted, marginBottom: 3, textTransform: 'uppercase', letterSpacing: 1 }}>Best Time</div>
-                    <div style={{ fontSize: 14, fontWeight: 800, color: atPeak ? C.green : C.white }}>{bhLabel || 'Calculating...'}</div>
-                    <div style={{ fontSize: 11, color: atPeak ? C.green : C.cyan, marginTop: 2 }}>
-                      {atPeak ? 'ON RIGHT NOW — stream!' : hoursUntilPeak !== null ? `in ${hoursUntilPeak}h · $${displayAvg.toFixed(0)} avg` : ''}
-                    </div>
-                  </div>
-
-                  <div style={{ flex: 1, minWidth: 130, padding: '11px 14px', borderRadius: 11, background: 'rgba(245,158,11,0.07)', border: '1px solid rgba(245,158,11,0.18)' }}>
-                    <div style={{ fontSize: 10, color: C.muted, marginBottom: 3, textTransform: 'uppercase', letterSpacing: 1 }}>Best Platform</div>
-                    <div style={{ fontSize: 14, fontWeight: 800, color: C.white }}>{displayPlat}</div>
-                    <div style={{ fontSize: 11, color: C.gold, marginTop: 2 }}>${displayAvg.toFixed(0)} avg at {bhLabel || 'peak'}</div>
-                  </div>
-
-                  {bhLabel && (
-                    <div style={{ flex: 1, minWidth: 130, padding: '11px 14px', borderRadius: 11, background: 'rgba(16,185,129,0.07)', border: '1px solid rgba(16,185,129,0.18)' }}>
-                      <div style={{ fontSize: 10, color: C.muted, marginBottom: 3, textTransform: 'uppercase', letterSpacing: 1 }}>Income Forecast</div>
-                      <div style={{ fontSize: 14, fontWeight: 800, color: C.green }}>${predictionLow}–${predictionHigh}</div>
-                      <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>if you stream at {bhLabel}</div>
-                    </div>
-                  )}
-                </div>
-
-                {/* ROW 2 — Likely Online + Re-engage */}
-                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-
-                  {/* Likely Online */}
-                  {likelyOnline.length > 0 && (
-                    <div style={{ flex: 1, minWidth: 200, padding: '12px 14px', borderRadius: 11, background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.18)' }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: C.green, marginBottom: 9, display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: C.green, display: 'inline-block', boxShadow: `0 0 5px ${C.green}`, animation: 'pulse-msg 2s infinite' }}/>
-                        Likely Online Right Now
-                      </div>
-                      {likelyOnline.map((w, i) => (
-                        <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: i < likelyOnline.length - 1 ? 7 : 0 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <div style={{ width: 26, height: 26, borderRadius: '50%', background: `linear-gradient(135deg,#10B981,#22D3EE)`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, color: '#fff', flexShrink: 0 }}>
-                              {w.username[0].toUpperCase()}
-                            </div>
-                            <div>
-                              <div style={{ fontSize: 12, fontWeight: 700, color: C.white }}>{w.username}</div>
-                              <div style={{ fontSize: 10, color: C.muted }}>${w.totalUSD.toFixed(0)} lifetime · {w.platform}</div>
-                            </div>
-                          </div>
-                          <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }}
-                            style={{ padding: '4px', borderRadius: 8, background: 'none', border: 'none', color: C.green, fontSize: 26, cursor: 'pointer', lineHeight: 1, animation: 'pulse-msg 2s infinite', flexShrink: 0 }}>
-                            💌
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Re-engage */}
-                  {reengageFans.length > 0 && (
-                    <div style={{ flex: 1, minWidth: 200, padding: '12px 14px', borderRadius: 11, background: 'rgba(236,72,153,0.06)', border: '1px solid rgba(236,72,153,0.18)' }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: C.pink, marginBottom: 9, display: 'flex', alignItems: 'center', gap: 6 }}>
-                        ⚠️ Re-engage Today
-                      </div>
-                      {reengageFans.map((w, i) => (
-                        <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: i < reengageFans.length - 1 ? 7 : 0 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <div style={{ width: 26, height: 26, borderRadius: '50%', background: `linear-gradient(135deg,#EC4899,#7C5CFF)`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, color: '#fff', flexShrink: 0 }}>
-                              {w.username[0].toUpperCase()}
-                            </div>
-                            <div>
-                              <div style={{ fontSize: 12, fontWeight: 700, color: C.white }}>{w.username}</div>
-                              <div style={{ fontSize: 10, color: C.muted }}>${w.totalUSD.toFixed(0)} · {w.avgTipSize >= 50*0.05 ? Math.round(w.avgTipSize/0.05) + ' tok avg' : w.totalTokens + ' tok'} · {w.daysSinceLastTip}d gone</div>
-                            </div>
-                          </div>
-                          <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }}
-                            style={{ padding: '4px', borderRadius: 8, background: 'none', border: 'none', color: C.pink, fontSize: 26, cursor: 'pointer', lineHeight: 1, animation: 'pulse-msg 2s infinite', flexShrink: 0 }}>
-                            💌
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* If neither list has data */}
-                  {likelyOnline.length === 0 && reengageFans.length === 0 && (
-                    <div style={{ flex: 1, padding: '12px 14px', borderRadius: 11, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', fontSize: 12, color: C.muted }}>
-                      No fan alerts right now — check back after more sessions.
-                    </div>
-                  )}
-                </div>
-
-              </div>
-            </div>
-          )
-        })()}
-
->>>>>>> 0be548388b0183b299b361428457364cedbdd343
             {/* ═══════════════════════════════════════
                 LAYER 3 — FANS TO FOCUS ON
                 Priority-sorted: Urgent / Valuable / Growing / Cold
