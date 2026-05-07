@@ -1,5 +1,225 @@
 "use client"
-import React, { useState } from "react"
+import React, { useState, useCallback } from "react"
+
+// Token rates (per token)
+const PLATFORM_RATES = {
+  "Chaturbate":  { tokens: 1, usd: 0.05 },
+  "Stripchat":   { tokens: 1, usd: 0.05 },
+  "MyFreeCams":  { tokens: 1, usd: 0.05 },
+  "CamSoda":     { tokens: 1, usd: 0.05 },
+  "BongaCams":   { tokens: 1, usd: 0.05 },
+  "LiveJasmin":  { tokens: 1, usd: 0.05 },
+}
+
+// Chaturbate payout tiers
+const CB_TIERS = [
+  { min: 0,     max: 999,   rate: 0.05 },
+  { min: 1000,  max: 4999,  rate: 0.053 },
+  { min: 5000,  max: Infinity, rate: 0.055 },
+]
+
+function getCBRate(tokens) {
+  return CB_TIERS.find(t => tokens >= t.min && tokens <= t.max)?.rate ?? 0.05
+}
+
+function TokenCalculatorPanel({ onClose }) {
+  const [tokens, setTokens]       = useState("")
+  const [platform, setPlatform]   = useState("Chaturbate")
+  const [customRate, setCustomRate] = useState("")
+  const [useCustom, setUseCustom] = useState(false)
+
+  const numTokens = parseFloat(tokens) || 0
+  const rate = useCustom && customRate !== ""
+    ? parseFloat(customRate) || 0
+    : platform === "Chaturbate"
+      ? getCBRate(numTokens)
+      : PLATFORM_RATES[platform]?.usd ?? 0.05
+
+  const gross   = numTokens * rate
+  const net30   = gross * 0.70
+  const net35   = gross * 0.65
+  const net40   = gross * 0.60
+  const net50   = gross * 0.50
+
+  const fmt = (n) => n.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2 })
+
+  const inputStyle = {
+    width: "100%",
+    padding: "7px 10px",
+    borderRadius: 7,
+    border: "1px solid rgba(255,255,255,0.08)",
+    background: "rgba(255,255,255,0.04)",
+    color: "#F1F5F9",
+    fontSize: 13,
+    outline: "none",
+    boxSizing: "border-box",
+    transition: "border-color 0.15s",
+  }
+
+  const labelStyle = {
+    fontSize: 9, fontWeight: 700, letterSpacing: 1.2,
+    color: "#4B5E78", textTransform: "uppercase", marginBottom: 4,
+    display: "block",
+  }
+
+  const rowStyle = {
+    display: "flex", justifyContent: "space-between", alignItems: "center",
+    padding: "5px 0",
+    borderBottom: "1px solid rgba(255,255,255,0.04)",
+    fontSize: 11,
+  }
+
+  return (
+    <div style={{
+      position: "fixed",
+      left: 220,
+      top: 0,
+      bottom: 0,
+      width: 260,
+      background: "linear-gradient(180deg, #0c0f1e 0%, #08090f 100%)",
+      borderRight: "1px solid rgba(255,255,255,0.07)",
+      boxShadow: "4px 0 30px rgba(0,0,0,0.5)",
+      zIndex: 49,
+      display: "flex",
+      flexDirection: "column",
+      overflow: "hidden",
+    }}>
+      {/* Header */}
+      <div style={{
+        padding: "14px 14px 12px",
+        borderBottom: "1px solid rgba(255,255,255,0.05)",
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        flexShrink: 0,
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+          <span style={{ fontSize: 16 }}>🧮</span>
+          <span style={{ fontSize: 13, fontWeight: 700, color: "#F1F5F9" }}>Token Calculator</span>
+        </div>
+        <button onClick={onClose} style={{
+          background: "rgba(255,255,255,0.05)",
+          border: "1px solid rgba(255,255,255,0.08)",
+          borderRadius: 6, color: "#64748B",
+          width: 24, height: 24, cursor: "pointer",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: 13, lineHeight: 1,
+        }}>✕</button>
+      </div>
+
+      {/* Body */}
+      <div style={{ flex: 1, overflowY: "auto", padding: "14px 14px 10px" }}>
+
+        {/* Platform */}
+        <div style={{ marginBottom: 12 }}>
+          <label style={labelStyle}>Platform</label>
+          <select
+            value={platform}
+            onChange={e => setPlatform(e.target.value)}
+            style={{ ...inputStyle, cursor: "pointer" }}
+          >
+            {Object.keys(PLATFORM_RATES).map(p => (
+              <option key={p} value={p}>{p}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Token count */}
+        <div style={{ marginBottom: 12 }}>
+          <label style={labelStyle}>Token Count</label>
+          <input
+            type="number"
+            min="0"
+            placeholder="e.g. 5000"
+            value={tokens}
+            onChange={e => setTokens(e.target.value)}
+            style={inputStyle}
+          />
+        </div>
+
+        {/* Custom rate toggle */}
+        <div style={{ marginBottom: 12 }}>
+          <label style={{ ...labelStyle, display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+            <input
+              type="checkbox"
+              checked={useCustom}
+              onChange={e => setUseCustom(e.target.checked)}
+              style={{ accentColor: "#22D3EE", width: 12, height: 12 }}
+            />
+            Custom Rate ($/token)
+          </label>
+          {useCustom && (
+            <input
+              type="number"
+              min="0"
+              step="0.001"
+              placeholder="e.g. 0.053"
+              value={customRate}
+              onChange={e => setCustomRate(e.target.value)}
+              style={inputStyle}
+            />
+          )}
+        </div>
+
+        {/* Active rate display */}
+        {platform === "Chaturbate" && !useCustom && numTokens > 0 && (
+          <div style={{
+            fontSize: 10, color: "#22D3EE", marginBottom: 12,
+            padding: "5px 10px", borderRadius: 6,
+            background: "rgba(34,211,238,0.07)",
+            border: "1px solid rgba(34,211,238,0.15)",
+          }}>
+            Tier rate: ${rate.toFixed(3)}/token ({numTokens >= 5000 ? "5k+" : numTokens >= 1000 ? "1k–4.9k" : "0–999"})
+          </div>
+        )}
+
+        {/* Divider */}
+        <div style={{ borderTop: "1px solid rgba(255,255,255,0.05)", margin: "4px 0 10px" }} />
+
+        {/* Results */}
+        <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1.2, color: "#4B5E78", textTransform: "uppercase", marginBottom: 6 }}>
+          Estimated Earnings
+        </div>
+
+        <div style={{ marginBottom: 14 }}>
+          {/* Gross */}
+          <div style={{ ...rowStyle, paddingBottom: 8, marginBottom: 4 }}>
+            <span style={{ color: "#64748B" }}>Gross</span>
+            <span style={{ color: "#F1F5F9", fontWeight: 700, fontSize: 15 }}>{fmt(gross)}</span>
+          </div>
+          {[
+            { label: "After 30% cut", pct: "70%", val: net30 },
+            { label: "After 35% cut", pct: "65%", val: net35 },
+            { label: "After 40% cut", pct: "60%", val: net40 },
+            { label: "After 50% cut", pct: "50%", val: net50 },
+          ].map(({ label, pct, val }) => (
+            <div key={label} style={rowStyle}>
+              <div>
+                <span style={{ color: "#64748B" }}>{label}</span>
+                <span style={{ color: "#1e3a52", marginLeft: 4, fontSize: 9 }}>({pct} payout)</span>
+              </div>
+              <span style={{
+                color: val > 0 ? "#4ADE80" : "#64748B",
+                fontWeight: 600,
+              }}>{fmt(val)}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Per-token summary */}
+        {numTokens > 0 && (
+          <div style={{
+            padding: "8px 10px", borderRadius: 8,
+            background: "linear-gradient(135deg, rgba(59,130,246,0.08), rgba(236,72,153,0.06))",
+            border: "1px solid rgba(59,130,246,0.15)",
+            fontSize: 10, color: "#94A3B8",
+          }}>
+            <span style={{ color: "#22D3EE", fontWeight: 700 }}>{numTokens.toLocaleString()} tokens</span>
+            {" "}@ {fmt(rate)}/token = {fmt(gross)} gross
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
 
 const SECTIONS = [
   {
@@ -39,6 +259,7 @@ const BOTTOM_ITEMS = [
 export default function Sidebar({ activeTab, onTabChange, user, onSignOut }) {
   const [hoveredId, setHoveredId] = useState(null)
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [calcOpen, setCalcOpen] = useState(false)
 
   const renderItem = (id, icon, label) => {
     const isActive  = activeTab === id
@@ -46,7 +267,10 @@ export default function Sidebar({ activeTab, onTabChange, user, onSignOut }) {
     return (
       <button
         key={id}
-        onClick={() => { onTabChange(id); setMobileOpen(false) }}
+        onClick={() => {
+          if (id === "calculator") { setCalcOpen(o => !o); return }
+          onTabChange(id); setMobileOpen(false)
+        }}
         onMouseEnter={() => setHoveredId(id)}
         onMouseLeave={() => setHoveredId(null)}
         style={{
@@ -278,6 +502,8 @@ export default function Sidebar({ activeTab, onTabChange, user, onSignOut }) {
           .mobile-menu-btn { display: flex !important; }
         }
       `}</style>
+
+      {calcOpen && <TokenCalculatorPanel onClose={() => setCalcOpen(false)} />}
     </>
   )
 }
