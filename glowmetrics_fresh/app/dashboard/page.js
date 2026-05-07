@@ -1200,7 +1200,7 @@ const handleCSV = async (file, forcePlatform = null) => {
   const nextMoves = liveAnalytics?.nextMoves || analytics?.nextMoves || []
   const totalRevenue = analytics?.totalUSD || 0
   // Only average sessions with real duration (exclude zero-timestamp BongaCams exports)
-  const timedSessions = sessions.filter(s => !s.durationUnknown && s.usdPerHour !== null)
+  const timedSessions = sessions.filter(s => !s.durationUnknown && s.usdPerHour !== null && (s.durationMinutes || 0) >= 20)
   // FIX: use total USD / total hours (not avg of per-session rates — that inflates short sessions)
   const timedTotalUSD = timedSessions.reduce((sum, s) => sum + (s.totalUSD || 0), 0)
   const timedTotalHours = timedSessions.reduce((sum, s) => sum + (s.durationHours || 0), 0)
