@@ -1528,8 +1528,8 @@ const handleCSV = async (file, forcePlatform = null) => {
     const peakAvg = sessionsAtPeak.length >= 2
       ? sessionsAtPeak.reduce((s, x) => s + x.totalUSD, 0) / sessionsAtPeak.length
       : (bestHour?.avg || sessionAvg)
-    const predictionLow = Math.round(peakAvg * 0.6)
-    const predictionHigh = Math.round(peakAvg * 1.5)
+    const predictionLow = Math.round((displayAvg || peakAvg) * 0.6)
+    const predictionHigh = Math.round((displayAvg || peakAvg) * 1.5)
 
     // Re-engage list — fans who tip 50+ tokens avg per session, appear in 2+ streams, and are overdue
     // "Every 2-3 streams" = session-level frequency, not tip count
