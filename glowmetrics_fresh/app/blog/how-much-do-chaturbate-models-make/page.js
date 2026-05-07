@@ -65,7 +65,12 @@ export default function ChaturbateEarningsPost() {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }} />
       <nav style={s.nav}>
         <a href="/" style={s.logo}>Cam<span style={s.logoAccent}>Cash</span></a>
-        <a href="/" style={s.navCta}>Calculate My $/hr Free →</a>
+      <a
+  href="/tools/chaturbate-token-calculator"
+  style={s.navCta}
+>
+  Free Token Calculator →
+</a>
       </nav>
 
       <article style={s.article}>
@@ -100,6 +105,27 @@ export default function ChaturbateEarningsPost() {
         </div>
 
         <h2 style={s.h2}>Chaturbate's Token Payout Structure</h2>
+       <div style={s.highlight}>
+  <strong style={{ color: 'white', display: 'block', marginBottom: 8 }}>
+    Instantly calculate token earnings:
+  </strong>
+
+  <p style={{ ...s.p, marginBottom: 12 }}>
+    Use the free CamCash Token Calculator to convert Chaturbate tokens into real USD earnings instantly — including hourly estimates and payout projections.
+  </p>
+
+  <a
+    href="/tools/chaturbate-token-calculator"
+    style={{
+      ...s.ctaBtn,
+      display: 'inline-block',
+      padding: '9px 22px',
+      fontSize: 13,
+    }}
+  >
+    Open Token Calculator →
+  </a>
+</div>
         <p style={s.p}>Chaturbate pays models at a rate of <strong style={{ color: 'white' }}>$0.05 per token</strong> at the standard broadcaster rate. This means:</p>
         <ul style={s.ul}>
           <li style={s.li}>100 tokens = $5.00 to you</li>
@@ -151,6 +177,27 @@ export default function ChaturbateEarningsPost() {
         </div>
 
         <h2 style={s.h2}>Tips to Increase Your Chaturbate Earnings Per Hour</h2>
+        <div style={s.highlight}>
+  <strong style={{ color: 'white', display: 'block', marginBottom: 8 }}>
+    Better room titles can increase click-through rate
+  </strong>
+
+  <p style={{ ...s.p, marginBottom: 12 }}>
+    Your room title affects whether viewers click your stream in crowded categories. Use the free CamCash Room Title Generator to create high-converting Chaturbate titles based on proven formats.
+  </p>
+
+  <a
+    href="/tools/chaturbate-room-title-generator"
+    style={{
+      ...s.ctaBtn,
+      display: 'inline-block',
+      padding: '9px 22px',
+      fontSize: 13,
+    }}
+  >
+    Generate Room Titles →
+  </a>
+</div>
         <ul style={s.ul}>
           <li style={s.li}><strong style={{ color: 'white' }}>Stream during your personal peak hours</strong> — find these from your tip history, not from generic advice</li>
           <li style={s.li}><strong style={{ color: 'white' }}>Set a token goal at the start of every session</strong> — even a small goal (200–300 tokens) creates momentum</li>
@@ -169,12 +216,33 @@ export default function ChaturbateEarningsPost() {
         <div style={s.ctaBanner}>
           <div style={s.ctaTitle}>See your real Chaturbate $/hr</div>
           <div style={s.ctaSub}>Upload your CSV — CamCash calculates your earnings per hour automatically. Free, no credit card.</div>
-          <a href="/" style={s.ctaBtn}>Start Free with CamCash →</a>
-        </div>
+          <div style={s.ctaBanner}>
+  <div style={s.ctaTitle}>
+    See your real Chaturbate $/hr
+  </div>
+
+  <div style={s.ctaSub}>
+    Upload your CSV — CamCash calculates your earnings per hour automatically. Free, no credit card.
+  </div>
+
+  <a
+    href="/dashboard/demo"
+    style={s.ctaBtn}
+  >
+    Start Free with CamCash →
+  </a>
+</div>
 
         <div style={s.related}>
           <div style={s.relatedTitle}>Related articles</div>
           <div style={s.relatedLinks}>
+            <a href="/tools/chaturbate-token-calculator" style={s.relatedLink}>
+  Chaturbate Token Calculator
+</a>
+
+<a href="/tools/chaturbate-room-title-generator" style={s.relatedLink}>
+  Chaturbate Room Title Generator
+</a>
             <a href="/blog/cam-model-earnings" style={s.relatedLink}>Cam Model Earnings Guide</a>
             <a href="/blog/how-to-make-more-money-on-chaturbate" style={s.relatedLink}>Make More on Chaturbate</a>
             <a href="/blog/why-youre-not-making-money-on-chaturbate" style={s.relatedLink}>Why You're Not Making Money</a>
