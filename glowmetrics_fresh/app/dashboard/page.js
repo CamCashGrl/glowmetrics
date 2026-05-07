@@ -1883,6 +1883,71 @@ const handleCSV = async (file, forcePlatform = null) => {
           )}
         </div>
 
+        {activeTab === "overview" && (
+          <div style={{ animation: "fadeUp 0.3s ease" }}>
+
+            {/* ═══════════════════════════════════════
+                1. MONEY SNAPSHOT
+            ═══════════════════════════════════════ */}
+            {(() => {
+              const now = new Date()
+              const thisMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
+              const prevMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1))
+              const thisMonthRev = tips.filter(t => new Date(t.date_time || t.dateRaw) >= thisMonthStart).reduce((s, t) => s + (t.usd || 0), 0)
+              const prevMonthRev = tips.filter(t => { const d = new Date(t.date_time || t.dateRaw); return d >= prevMonthStart && d < thisMonthStart }).reduce((s, t) => s + (t.usd || 0), 0)
+              const growthPct = (prevMonthRev > 0 && thisMonthRev > 0) ? Math.round(((thisMonthRev - prevMonthRev) / prevMonthRev) * 100) : null
+              const isPositive = growthPct !== null && growthPct >= 0
+              const topPct = Math.max(1, Math.min(25, Math.round(100 - (totalRevenue / 50))))
+              const sessionsLast30 = sessions.filter(s => (Date.now() - new Date(s.startTime)) / 86400000 <= 30).length
+              const fansActiveLast30 = new Set(tips.filter(t => (Date.now() - new Date(t.date_time || t.dateRaw)) / 86400000 <= 30).map(t => t.username)).size
+              const cards = [
+                { label: "Total Earned", value: `$${totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, sub: `Top ${topPct}% of models on this platform`, icon: "💰", badge: growthPct !== null ? (isPositive ? `↑ ${growthPct}% vs last month` : `↓ ${Math.abs(growthPct)}% vs last month`) : null, badgeColor: isPositive ? C.green : C.red, glow: isPositive },
+                { label: "Avg $/Hour", value: `$${avgPerHour.toFixed(2)}`, sub: avgPerHour > 20 ? "Above average — keep it up!" : "Tip: stream at peak hours", icon: "⏱️", badge: null },
+                { label: "Total Fans", value: whales.length.toLocaleString(), sub: `${fansActiveLast30} active in last 30 days`, icon: "👥", badge: null },
+                { label: "Sessions", value: sessions.length.toLocaleString(), sub: `${sessionsLast30} in last 30 days${sessionsLast30 >= 3 ? " 🔥" : ""}`, icon: "🎥", badge: sessionsLast30 >= 5 ? "🔥 On a streak!" : null, badgeColor: C.gold }
+              ]
+              // Earnings velocity per platform for velocity strip
+              const velPlatforms = Object.entries(platformVelocity).filter(([,v]) => v !== null).sort((a,b) => (b[1]||0)-(a[1]||0))
+              return (
+                <>
+                  <div className="stat-grid-4" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: velPlatforms.length ? 12 : 28 }}>
+                    {cards.map((s, i) => (
+                      <div key={i} className="dash-card" style={{ ...glassCard, borderRadius: 18, padding: "22px 20px", position: "relative", overflow: "hidden", animation: `fadeUp 0.3s ease ${i * 0.06}s both`, boxShadow: s.glow ? `0 0 30px rgba(16,185,129,0.2), ${glassCard.boxShadow}` : glassCard.boxShadow }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
+                          <span style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600 }}>{s.label}</span>
+                          <span style={{ fontSize: 22 }}>{s.icon}</span>
+                        </div>
+                        <div style={{ fontSize: 34, fontWeight: 900, background: "linear-gradient(135deg,#60a5fa,#f472b6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", marginBottom: 6, lineHeight: 1.1 }}>{s.value}</div>
+                        <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.4 }}>{s.sub}</div>
+                        {s.badge && <div style={{ marginTop: 8, display: "inline-block", padding: "2px 8px", borderRadius: 6, background: `${s.badgeColor}20`, border: `1px solid ${s.badgeColor}40`, fontSize: 10, fontWeight: 700, color: s.badgeColor }}>{s.badge}</div>}
+                      </div>
+                    ))}
+                  </div>
+                  {/* Earnings Velocity strip — formula: totalUSD / totalHours per platform */}
+                  {velPlatforms.length > 0 && (
+                    <div className="velocity-strip" style={{ display: "flex", gap: 10, marginBottom: 28, flexWrap: "wrap" }}>
+                      {velPlatforms.map(([plat, vel], i) => (
+                        <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 14px", borderRadius: 20, background: "rgba(34,211,238,0.07)", border: "1px solid rgba(34,211,238,0.2)", animation: `fadeUp 0.3s ease ${0.25 + i*0.05}s both` }}>
+                          <span style={{ fontSize: 11, color: C.muted }}>{plat.replace('BongaCams','Bonga').replace('MyFreeCams','MFC').replace('Chaturbate','CB')}</span>
+                         <span style={{ fontSize: 13, fontWeight: 700, color: C.cyan }}>${(vel ?? 0).toFixed(2)}/hr</span>
+                          <span style={{ fontSize: 10, color: C.muted }}>velocity</span>
+                        </div>
+                      ))}
+                      {earningsVelocity !== null && (
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 14px", borderRadius: 20, background: "rgba(16,185,129,0.07)", border: "1px solid rgba(16,185,129,0.2)" }}>
+                          <span style={{ fontSize: 11, color: C.muted }}>Overall</span>
+                          <span style={{ fontSize: 13, fontWeight: 700, color: C.green }}>${earningsVelocity.toFixed(2)}/hr</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
+              )
+            })()}
+
+            {/* ═══════════════════════════════════════
+                DAILY BRIEF — overview only, below earnings
+            ═══════════════════════════════════════ */}
         {/* ═══════════════════════════════════════════════════════
             DAILY BRIEF — always visible, above all tabs
             Refreshes based on UTC time + your real session data
@@ -2057,68 +2122,6 @@ const handleCSV = async (file, forcePlatform = null) => {
             </div>
           )
         })()}
-
-        {activeTab === "overview" && (
-          <div style={{ animation: "fadeUp 0.3s ease" }}>
-
-            {/* ═══════════════════════════════════════
-                1. MONEY SNAPSHOT
-            ═══════════════════════════════════════ */}
-            {(() => {
-              const now = new Date()
-              const thisMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
-              const prevMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1))
-              const thisMonthRev = tips.filter(t => new Date(t.date_time || t.dateRaw) >= thisMonthStart).reduce((s, t) => s + (t.usd || 0), 0)
-              const prevMonthRev = tips.filter(t => { const d = new Date(t.date_time || t.dateRaw); return d >= prevMonthStart && d < thisMonthStart }).reduce((s, t) => s + (t.usd || 0), 0)
-              const growthPct = (prevMonthRev > 0 && thisMonthRev > 0) ? Math.round(((thisMonthRev - prevMonthRev) / prevMonthRev) * 100) : null
-              const isPositive = growthPct !== null && growthPct >= 0
-              const topPct = Math.max(1, Math.min(25, Math.round(100 - (totalRevenue / 50))))
-              const sessionsLast30 = sessions.filter(s => (Date.now() - new Date(s.startTime)) / 86400000 <= 30).length
-              const fansActiveLast30 = new Set(tips.filter(t => (Date.now() - new Date(t.date_time || t.dateRaw)) / 86400000 <= 30).map(t => t.username)).size
-              const cards = [
-                { label: "Total Earned", value: `$${totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, sub: `Top ${topPct}% of models on this platform`, icon: "💰", badge: growthPct !== null ? (isPositive ? `↑ ${growthPct}% vs last month` : `↓ ${Math.abs(growthPct)}% vs last month`) : null, badgeColor: isPositive ? C.green : C.red, glow: isPositive },
-                { label: "Avg $/Hour", value: `$${avgPerHour.toFixed(2)}`, sub: avgPerHour > 20 ? "Above average — keep it up!" : "Tip: stream at peak hours", icon: "⏱️", badge: null },
-                { label: "Total Fans", value: whales.length.toLocaleString(), sub: `${fansActiveLast30} active in last 30 days`, icon: "👥", badge: null },
-                { label: "Sessions", value: sessions.length.toLocaleString(), sub: `${sessionsLast30} in last 30 days${sessionsLast30 >= 3 ? " 🔥" : ""}`, icon: "🎥", badge: sessionsLast30 >= 5 ? "🔥 On a streak!" : null, badgeColor: C.gold }
-              ]
-              // Earnings velocity per platform for velocity strip
-              const velPlatforms = Object.entries(platformVelocity).filter(([,v]) => v !== null).sort((a,b) => (b[1]||0)-(a[1]||0))
-              return (
-                <>
-                  <div className="stat-grid-4" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: velPlatforms.length ? 12 : 28 }}>
-                    {cards.map((s, i) => (
-                      <div key={i} className="dash-card" style={{ ...glassCard, borderRadius: 18, padding: "22px 20px", position: "relative", overflow: "hidden", animation: `fadeUp 0.3s ease ${i * 0.06}s both`, boxShadow: s.glow ? `0 0 30px rgba(16,185,129,0.2), ${glassCard.boxShadow}` : glassCard.boxShadow }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
-                          <span style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600 }}>{s.label}</span>
-                          <span style={{ fontSize: 22 }}>{s.icon}</span>
-                        </div>
-                        <div style={{ fontSize: 34, fontWeight: 900, background: "linear-gradient(135deg,#60a5fa,#f472b6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", marginBottom: 6, lineHeight: 1.1 }}>{s.value}</div>
-                        <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.4 }}>{s.sub}</div>
-                        {s.badge && <div style={{ marginTop: 8, display: "inline-block", padding: "2px 8px", borderRadius: 6, background: `${s.badgeColor}20`, border: `1px solid ${s.badgeColor}40`, fontSize: 10, fontWeight: 700, color: s.badgeColor }}>{s.badge}</div>}
-                      </div>
-                    ))}
-                  </div>
-                  {/* Earnings Velocity strip — formula: totalUSD / totalHours per platform */}
-                  {velPlatforms.length > 0 && (
-                    <div className="velocity-strip" style={{ display: "flex", gap: 10, marginBottom: 28, flexWrap: "wrap" }}>
-                      {velPlatforms.map(([plat, vel], i) => (
-                        <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 14px", borderRadius: 20, background: "rgba(34,211,238,0.07)", border: "1px solid rgba(34,211,238,0.2)", animation: `fadeUp 0.3s ease ${0.25 + i*0.05}s both` }}>
-                          <span style={{ fontSize: 11, color: C.muted }}>{plat.replace('BongaCams','Bonga').replace('MyFreeCams','MFC').replace('Chaturbate','CB')}</span>
-                         <span style={{ fontSize: 13, fontWeight: 700, color: C.cyan }}>${(vel ?? 0).toFixed(2)}/hr</span>
-                          <span style={{ fontSize: 10, color: C.muted }}>velocity</span>
-                        </div>
-                      ))}
-                      {earningsVelocity !== null && (
-                        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 14px", borderRadius: 20, background: "rgba(16,185,129,0.07)", border: "1px solid rgba(16,185,129,0.2)" }}>
-                          <span style={{ fontSize: 11, color: C.muted }}>Overall</span>
-                          <span style={{ fontSize: 13, fontWeight: 700, color: C.green }}>${earningsVelocity.toFixed(2)}/hr</span>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </>
-              )
-            })()}
 
             {/* ═══════════════════════════════════════
                 2. PRIMARY ACTION CENTER — "Make Money Right Now"
