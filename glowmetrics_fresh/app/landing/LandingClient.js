@@ -249,17 +249,20 @@ export default function LandingPage() {
               ))}
             </div>
 
-            {/* Demo preview link */}
-            <a href="/landing/demo" style={{ display:"inline-flex", alignItems:"center", gap:6, marginBottom:16, padding:"7px 16px", borderRadius:20, background:"rgba(34,211,238,0.06)", border:"1px solid rgba(34,211,238,0.2)", color:"#22D3EE", fontSize:13, fontWeight:600, textDecoration:"none" }}>
-              👀 Preview the dashboard with demo data →
-            </a>
-
-            {/* Mobile-only scroll CTA */}
-            <button className="mobile-cta-btn"
-              onClick={() => document.getElementById("auth-panel-mobile")?.scrollIntoView({ behavior: "smooth" })}
-              style={{ display: "none", padding: "14px 36px", borderRadius: 12, background: "linear-gradient(135deg,#3b82f6,#ec4899)", color: "white", fontWeight: 700, fontSize: 16, border: "none", cursor: "pointer", boxShadow: "0 4px 20px rgba(236,72,153,0.3)" }}>
-              Start Free →
-            </button>
+            {/* CTA buttons — desktop shows both, mobile shows Start Free */}
+            <div style={{ display:"flex", gap:12, flexWrap:"wrap", marginBottom:8 }}>
+              <a href="/landing/demo" style={{ display:"inline-flex", alignItems:"center", gap:8, padding:"13px 26px", borderRadius:12, background:"rgba(34,211,238,0.08)", border:"2px solid rgba(34,211,238,0.35)", color:"#22D3EE", fontSize:15, fontWeight:700, textDecoration:"none", transition:"all 0.2s" }}
+                onMouseEnter={e=>{e.currentTarget.style.background="rgba(34,211,238,0.15)"}}
+                onMouseLeave={e=>{e.currentTarget.style.background="rgba(34,211,238,0.08)"}}>
+                👀 View Live Demo
+              </a>
+              <button className="mobile-cta-btn"
+                onClick={() => document.getElementById("auth-panel-mobile")?.scrollIntoView({ behavior: "smooth" })}
+                style={{ display: "none", padding: "13px 26px", borderRadius: 12, background: "linear-gradient(135deg,#3b82f6,#ec4899)", color: "white", fontWeight: 700, fontSize: 15, border: "none", cursor: "pointer", boxShadow: "0 4px 20px rgba(236,72,153,0.3)" }}>
+                Start Free →
+              </button>
+            </div>
+            <div style={{ fontSize:12, color:"#475569" }}>No signup needed to view the demo</div>
           </div>
 
           {/* Right: auth panel (desktop only) */}
@@ -328,10 +331,35 @@ export default function LandingPage() {
         </div>
       </div>
 
-      {/* ── DASHBOARD PREVIEW ────────────────────────────────────────── */}
-      <div style={{ textAlign:"center", maxWidth:900, margin:"0 auto 40px", padding:"0 24px" }}>
-        <img src="/dashboard-preview.png" style={{ width:"100%", borderRadius:14, border:"1px solid rgba(255,255,255,0.08)" }} alt="CamCash dashboard" />
-        <p style={{ marginTop:10, color:"#64748b", fontSize:13 }}>Instant breakdown of your earnings, fans, and peak times</p>
+      {/* ── DEMO CTA SECTION ─────────────────────────────────────────── */}
+      <div style={{ maxWidth:900, margin:"0 auto 48px", padding:"0 24px" }}>
+        <div style={{ borderRadius:20, background:"linear-gradient(135deg,rgba(34,211,238,0.08),rgba(124,92,255,0.08))", border:"1px solid rgba(34,211,238,0.25)", padding:"40px 48px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:32, flexWrap:"wrap", position:"relative", overflow:"hidden" }}>
+          {/* Accent line top */}
+          <div style={{ position:"absolute", top:0, left:0, right:0, height:2, background:"linear-gradient(90deg,#22D3EE,#EC4899)" }} />
+          <div style={{ flex:1, minWidth:260 }}>
+            <div style={{ fontSize:11, fontWeight:700, color:"#22D3EE", textTransform:"uppercase", letterSpacing:1.2, marginBottom:10 }}>✨ No signup required</div>
+            <div style={{ fontSize:"clamp(22px,2.5vw,30px)", fontWeight:900, color:"white", marginBottom:10, lineHeight:1.2 }}>
+              See your dashboard<br/>before you sign up
+            </div>
+            <p style={{ fontSize:15, color:"#64748b", lineHeight:1.65, marginBottom:0, maxWidth:420 }}>
+              We pre-loaded the demo with a real multi-platform streamer's data — Chaturbate, BongaCams, Stripchat, and CamSoda. See exactly what your dashboard would look like.
+            </p>
+          </div>
+          <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:14, flexShrink:0 }}>
+            <div style={{ display:"flex", flexDirection:"column", gap:8, alignItems:"center" }}>
+              {[["👑","Top fan intelligence — who to message"],["📊","Platform ROI — where your time is worth more"],["⏰","Peak hour analysis — when to go live"],["💌","Fan re-engagement messages — ready to copy"]].map(([icon,text]) => (
+                <div key={text} style={{ display:"flex", alignItems:"center", gap:8, fontSize:13, color:"#94a3b8" }}>
+                  <span>{icon}</span><span>{text}</span>
+                </div>
+              ))}
+            </div>
+            <a href="/landing/demo"
+              style={{ display:"inline-block", padding:"14px 36px", borderRadius:12, background:"linear-gradient(135deg,#22D3EE,#EC4899)", color:"white", fontWeight:800, fontSize:16, textDecoration:"none", boxShadow:"0 0 32px rgba(34,211,238,0.35)", letterSpacing:0.2, whiteSpace:"nowrap" }}>
+              👀 Open Live Demo →
+            </a>
+            <div style={{ fontSize:12, color:"#334155" }}>No account needed · 30 seconds to explore</div>
+          </div>
+        </div>
       </div>
 
       {/* ── PLATFORM EDGE ────────────────────────────────────────────── */}
