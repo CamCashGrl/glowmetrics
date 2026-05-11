@@ -3,127 +3,97 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
 
-// ── AuthPanel defined OUTSIDE LandingPage so React doesn't re-create the
-//    component type on every render (which was causing inputs to lose focus) ──
+// ── AuthPanel — defined OUTSIDE to prevent re-render on every keystroke ──────
 function AuthPanel({
   id, isSignUp, setIsSignUp,
-  email, setEmail,
-  password, setPassword,
+  email, setEmail, password, setPassword,
   authLoading, authMsg, authError,
   setAuthError, setAuthMsg,
   handleAuth, handleForgotPassword,
 }) {
-  const inputStyle = {
-    width: "100%", padding: "11px 14px", borderRadius: 9,
-    background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.1)",
+  const inp = {
+    width: "100%", padding: "11px 14px", borderRadius: 8,
+    background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)",
     color: "white", fontSize: 14, outline: "none", marginBottom: 10,
-    boxSizing: "border-box", fontFamily: "Inter, sans-serif",
+    boxSizing: "border-box", fontFamily: "inherit", transition: "border-color 0.15s",
   }
-
   return (
     <div id={id} style={{
-      background: "linear-gradient(135deg,#1e293b,#020617)",
-      border: "1px solid rgba(255,255,255,0.1)",
-      borderRadius: 16, padding: "26px 24px",
-      boxShadow: "0 0 40px rgba(236,72,153,0.12)",
+      background: "rgba(8,12,24,0.95)", border: "1px solid rgba(255,255,255,0.09)",
+      borderRadius: 18, padding: "28px 24px", backdropFilter: "blur(24px)",
+      boxShadow: "0 0 0 1px rgba(34,211,238,0.07), 0 32px 64px rgba(0,0,0,0.6)",
       width: "100%",
     }}>
-      <div style={{ textAlign: "center", marginBottom: 18 }}>
+      <div style={{ textAlign: "center", marginBottom: 22 }}>
         <div style={{
           display: "inline-flex", alignItems: "center", justifyContent: "center",
-          width: 40, height: 40, borderRadius: 10,
+          width: 40, height: 40, borderRadius: 11,
           background: "linear-gradient(135deg,#22D3EE,#EC4899)",
-          fontSize: 20, fontWeight: 900, color: "white", marginBottom: 8,
+          fontSize: 20, fontWeight: 900, color: "white", marginBottom: 10,
+          boxShadow: "0 0 20px rgba(34,211,238,0.35)",
         }}>$</div>
-        <div style={{ fontSize: 16, fontWeight: 800, color: "white" }}>CamCash</div>
-        <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>
-          {isSignUp ? "Free during beta. No credit card." : "Welcome back 💋"}
+        <div style={{ fontSize: 16, fontWeight: 800, color: "white", letterSpacing: -0.3 }}>CamCash</div>
+        <div style={{ fontSize: 12, color: "#475569", marginTop: 3 }}>
+          {isSignUp ? "Free during beta · No credit card" : "Welcome back 💋"}
         </div>
       </div>
-
-      {/* Toggle tabs */}
-      <div style={{
-        display: "flex", borderRadius: 9, overflow: "hidden",
-        border: "1px solid rgba(255,255,255,0.08)", marginBottom: 16,
-      }}>
+      <div style={{ display: "flex", borderRadius: 8, overflow: "hidden", border: "1px solid rgba(255,255,255,0.08)", marginBottom: 18 }}>
         {[["Sign Up", true], ["Log In", false]].map(([label, val]) => (
           <button key={label} type="button"
             onClick={() => { setIsSignUp(val); setAuthError(""); setAuthMsg("") }}
-            style={{
-              flex: 1, padding: "9px 0", fontSize: 13, fontWeight: 600,
-              background: isSignUp === val ? "rgba(34,211,238,0.15)" : "transparent",
-              color: isSignUp === val ? "#22D3EE" : "rgba(255,255,255,0.35)",
-              border: "none", cursor: "pointer", transition: "all 0.2s",
-            }}>
+            style={{ flex: 1, padding: "9px 0", fontSize: 13, fontWeight: 600, background: isSignUp === val ? "rgba(34,211,238,0.12)" : "transparent", color: isSignUp === val ? "#22D3EE" : "rgba(255,255,255,0.3)", border: "none", cursor: "pointer", transition: "all 0.2s" }}>
             {label}
           </button>
         ))}
       </div>
-
       <form onSubmit={handleAuth}>
-        <input type="email" placeholder="Email address" required
-          value={email} onChange={e => setEmail(e.target.value)} style={inputStyle}
-          onFocus={e => e.target.style.borderColor = "#22D3EE"}
-          onBlur={e => e.target.style.borderColor = "rgba(255,255,255,0.1)"}
-        />
-        <input type="password" placeholder="Password" required
-          value={password} onChange={e => setPassword(e.target.value)}
-          style={{ ...inputStyle, marginBottom: isSignUp ? 4 : 0 }}
-          onFocus={e => e.target.style.borderColor = "#22D3EE"}
-          onBlur={e => e.target.style.borderColor = "rgba(255,255,255,0.1)"}
-        />
-
+        <input type="email" placeholder="Email address" required value={email}
+          onChange={e => setEmail(e.target.value)} style={inp}
+          onFocus={e => e.target.style.borderColor = "rgba(34,211,238,0.5)"}
+          onBlur={e => e.target.style.borderColor = "rgba(255,255,255,0.1)"} />
+        <input type="password" placeholder="Password" required value={password}
+          onChange={e => setPassword(e.target.value)}
+          style={{ ...inp, marginBottom: isSignUp ? 4 : 0 }}
+          onFocus={e => e.target.style.borderColor = "rgba(34,211,238,0.5)"}
+          onBlur={e => e.target.style.borderColor = "rgba(255,255,255,0.1)"} />
         {!isSignUp && (
-          <div style={{ textAlign: "right", marginBottom: 10 }}>
+          <div style={{ textAlign: "right", marginBottom: 12 }}>
             <button type="button" onClick={handleForgotPassword}
-              style={{ fontSize: 12, color: "#22D3EE", background: "none", border: "none", cursor: "pointer" }}>
+              style={{ fontSize: 12, color: "#475569", background: "none", border: "none", cursor: "pointer" }}>
               Forgot password?
             </button>
           </div>
         )}
         {isSignUp && <div style={{ height: 12 }} />}
-
         {authError && <div style={{ fontSize: 12, color: "#f87171", marginBottom: 10, textAlign: "center" }}>{authError}</div>}
         {authMsg   && <div style={{ fontSize: 12, color: "#22D3EE",  marginBottom: 10, textAlign: "center" }}>{authMsg}</div>}
-
         <button type="submit" disabled={authLoading} style={{
           width: "100%", padding: "12px 0", borderRadius: 10,
-          background: authLoading ? "rgba(59,130,246,0.4)" : "linear-gradient(135deg,#3b82f6,#ec4899)",
+          background: authLoading ? "rgba(34,211,238,0.2)" : "linear-gradient(135deg,#22D3EE,#EC4899)",
           color: "white", fontWeight: 700, fontSize: 15, border: "none",
           cursor: authLoading ? "not-allowed" : "pointer",
-          boxShadow: authLoading ? "none" : "0 4px 20px rgba(236,72,153,0.3)",
+          boxShadow: authLoading ? "none" : "0 0 24px rgba(34,211,238,0.3)",
           transition: "all 0.2s",
         }}>
-          {authLoading
-            ? (isSignUp ? "Creating account..." : "Logging in...")
-            : (isSignUp ? "Start Free →" : "Log In →")}
+          {authLoading ? (isSignUp ? "Creating account…" : "Logging in…") : (isSignUp ? "Start Free →" : "Log In →")}
         </button>
       </form>
-
-      {isSignUp && (
-        <p style={{ fontSize: 11, color: "#475569", textAlign: "center", marginTop: 10, marginBottom: 0 }}>
-          No credit card · Free during beta · Cancel anytime
-        </p>
-      )}
+      {isSignUp && <p style={{ fontSize: 11, color: "#334155", textAlign: "center", marginTop: 12, marginBottom: 0 }}>No credit card · Free during beta · Cancel anytime</p>}
     </div>
   )
 }
 
 export default function LandingPage() {
   const router = useRouter()
-
   const [msgIndex, setMsgIndex]     = useState(0)
   const [copied, setCopied]         = useState(false)
   const [whaleIndex, setWhaleIndex] = useState(0)
-  const [alertIndex, setAlertIndex] = useState(0)
-
-  // Auth state
-  const [isSignUp, setIsSignUp]       = useState(true)
-  const [email, setEmail]             = useState("")
-  const [password, setPassword]       = useState("")
+  const [isSignUp, setIsSignUp]     = useState(true)
+  const [email, setEmail]           = useState("")
+  const [password, setPassword]     = useState("")
   const [authLoading, setAuthLoading] = useState(false)
-  const [authMsg, setAuthMsg]         = useState("")
-  const [authError, setAuthError]     = useState("")
+  const [authMsg, setAuthMsg]       = useState("")
+  const [authError, setAuthError]   = useState("")
 
   const messages = [
     "Hey 😘 I've been thinking about you... I'm live tonight ❤️",
@@ -134,20 +104,13 @@ export default function LandingPage() {
     { name: "user_ULTRAVIP999", spent: "$41,820", inactive: "520 days" },
     { name: "user_TOPSPENDERX", spent: "$33,140", inactive: "300 days" },
   ]
-  const alerts = [
-    "You have top spenders you're not tracking.",
-    "You're missing your highest earning hours.",
-    "You have inactive whales worth thousands.",
-    "You could be earning more on a different platform.",
-  ]
 
   useEffect(() => {
     const a = setInterval(() => {
       setMsgIndex(p => (p + 1) % messages.length)
       setWhaleIndex(p => (p + 1) % whales.length)
     }, 6000)
-    const b = setInterval(() => setAlertIndex(p => (p + 1) % alerts.length), 5000)
-    return () => { clearInterval(a); clearInterval(b) }
+    return () => clearInterval(a)
   }, [])
 
   useEffect(() => {
@@ -164,33 +127,19 @@ export default function LandingPage() {
 
   const handleAuth = async (e) => {
     e.preventDefault()
-    setAuthLoading(true)
-    setAuthError("")
-    setAuthMsg("")
-
+    setAuthLoading(true); setAuthError(""); setAuthMsg("")
     if (isSignUp) {
       const { error } = await supabase.auth.signUp({ email, password })
-      if (error) {
-        setAuthError(error.message)
-        setAuthLoading(false)
-      } else {
+      if (error) { setAuthError(error.message); setAuthLoading(false) }
+      else {
         const { data: { user } } = await supabase.auth.getUser()
-        if (user) {
-          router.push("/dashboard")
-        } else {
-          setAuthMsg("Account created! Check your email to confirm, then log in.")
-          setIsSignUp(false)
-          setAuthLoading(false)
-        }
+        if (user) router.push("/dashboard")
+        else { setAuthMsg("Account created! Check your email to confirm, then log in."); setIsSignUp(false); setAuthLoading(false) }
       }
     } else {
       const { error } = await supabase.auth.signInWithPassword({ email, password })
-      if (error) {
-        setAuthError(error.message)
-        setAuthLoading(false)
-      } else {
-        router.push("/dashboard")
-      }
+      if (error) { setAuthError(error.message); setAuthLoading(false) }
+      else router.push("/dashboard")
     }
   }
 
@@ -203,216 +152,345 @@ export default function LandingPage() {
     else setAuthMsg("Password reset email sent — check your inbox.")
   }
 
-  // Shared props object to keep JSX clean
   const authPanelProps = {
-    isSignUp, setIsSignUp,
-    email, setEmail,
-    password, setPassword,
-    authLoading, authMsg, authError,
-    setAuthError, setAuthMsg,
+    isSignUp, setIsSignUp, email, setEmail, password, setPassword,
+    authLoading, authMsg, authError, setAuthError, setAuthMsg,
     handleAuth, handleForgotPassword,
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: "#05070f", color: "#cbd5e1", fontFamily: "Inter, sans-serif" }}>
+    <div style={{ minHeight: "100vh", background: "#05070f", color: "#94A3B8", fontFamily: "'Inter', sans-serif", overflowX: "hidden" }}>
 
-      {/* ── HERO ─────────────────────────────────────────────────────── */}
-      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "56px 24px 32px" }}>
-        <div className="hero-grid" style={{ display: "grid", gridTemplateColumns: "1fr 380px", gap: 52, alignItems: "center" }}>
+      {/* ── AMBIENT BG ── */}
+      <div style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 0 }}>
+        <div style={{ position: "absolute", width: 800, height: 800, top: "-20%", right: "-10%", background: "radial-gradient(circle,rgba(34,211,238,0.06),transparent 65%)", filter: "blur(80px)" }} />
+        <div style={{ position: "absolute", width: 700, height: 700, bottom: "5%", left: "-15%", background: "radial-gradient(circle,rgba(236,72,153,0.06),transparent 65%)", filter: "blur(80px)" }} />
+      </div>
 
-          {/* Left: copy + trust */}
+      {/* ── NAV ── */}
+      <nav style={{ position: "relative", zIndex: 10, padding: "18px 40px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ width: 30, height: 30, borderRadius: 9, background: "linear-gradient(135deg,#22D3EE,#EC4899)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 900, color: "white", boxShadow: "0 0 16px rgba(34,211,238,0.35)" }}>$</div>
+          <span style={{ fontSize: 18, fontWeight: 800, color: "white", letterSpacing: -0.4 }}>
+            Cam<span style={{ background: "linear-gradient(90deg,#22D3EE,#EC4899)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Cash</span>
+          </span>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <a href="/landing/demo" style={{ fontSize: 13, fontWeight: 600, color: "#22D3EE", textDecoration: "none", padding: "7px 16px", borderRadius: 8, border: "1px solid rgba(34,211,238,0.25)", background: "rgba(34,211,238,0.05)", transition: "all 0.2s" }}>
+            View Demo
+          </a>
+          <button onClick={() => document.getElementById("lp-auth-bottom")?.scrollIntoView({ behavior: "smooth" })}
+            style={{ fontSize: 13, fontWeight: 600, color: "white", background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.12)", padding: "7px 18px", borderRadius: 8, cursor: "pointer" }}>
+            Sign In
+          </button>
+        </div>
+      </nav>
+
+      {/* ── HERO ── */}
+      <div style={{ position: "relative", zIndex: 1, maxWidth: 1100, margin: "0 auto", padding: "72px 40px 60px" }}>
+        <div className="hero-grid" style={{ display: "grid", gridTemplateColumns: "1fr 400px", gap: 64, alignItems: "center" }}>
+
+          {/* Left */}
           <div>
-            <div style={{
-              display: "inline-block", marginBottom: 16, padding: "4px 12px",
-              borderRadius: 20, background: "rgba(168,85,247,0.12)",
-              border: "1px solid rgba(168,85,247,0.3)", fontSize: 12, fontWeight: 600, color: "#a855f7",
-            }}>
-              🔥 63 / 100 beta spots left
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#22D3EE", textTransform: "uppercase", letterSpacing: 2, marginBottom: 18 }}>
+              AI-powered creator operating system
             </div>
 
-            <h1 style={{ fontSize: "clamp(34px,4.5vw,54px)", color: "white", fontWeight: 900, lineHeight: 1.1, marginBottom: 18 }}>
-              Turn Your Fans Into<br />
-              <span style={{ background: "linear-gradient(135deg,#3b82f6,#ec4899)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
-                More Money
-              </span>{" "}— Automatically
+            <h1 style={{ fontSize: "clamp(38px,4.5vw,58px)", color: "white", fontWeight: 900, lineHeight: 1.05, marginBottom: 22, letterSpacing: -1.5 }}>
+              Make More<br />
+              Every Stream.
             </h1>
 
-            <p style={{ fontSize: 18, lineHeight: 1.65, color: "#94a3b8", marginBottom: 28, maxWidth: 480 }}>
-              See your biggest spenders, when you earn most, and exactly what to do next. Upload your CSV and get your personalized dashboard in minutes.
+            <p style={{ fontSize: 18, lineHeight: 1.75, color: "#64748B", marginBottom: 36, maxWidth: 460 }}>
+              CamCash tracks your top fans, finds your peak hours, compares your platform ROI, and tells you exactly what to do to earn more — from one place.
             </p>
 
-            <div style={{ display: "flex", gap: 20, flexWrap: "wrap", marginBottom: 28 }}>
-              {[["⚡","Ready in 2 minutes"],["💸","100% free in beta"],["🔒","Your data stays private"]].map(([icon, text]) => (
-                <div key={text} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "#64748b" }}>
+            {/* HERO CTAs — both visible, demo is primary on left */}
+            <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
+              <a href="/landing/demo" style={{
+                display: "inline-flex", alignItems: "center", gap: 8,
+                padding: "14px 28px", borderRadius: 12,
+                background: "linear-gradient(135deg,#22D3EE,#EC4899)",
+                color: "white", fontWeight: 800, fontSize: 15, textDecoration: "none",
+                boxShadow: "0 0 32px rgba(34,211,238,0.35)", letterSpacing: 0.2,
+              }}>
+                👀 See Live Demo
+              </a>
+              <button className="lp-signup-btn"
+                onClick={() => document.getElementById("lp-auth-bottom")?.scrollIntoView({ behavior: "smooth" })}
+                style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "14px 28px", borderRadius: 12, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", color: "white", fontWeight: 700, fontSize: 15, cursor: "pointer" }}>
+                Start Free
+              </button>
+            </div>
+            <div style={{ fontSize: 12, color: "#334155" }}>No signup needed for the demo · Free account takes 2 minutes</div>
+
+            {/* Trust bullets */}
+            <div style={{ display: "flex", gap: 24, marginTop: 36, flexWrap: "wrap" }}>
+              {[["⚡", "Ready in 2 minutes"], ["💸", "100% free in beta"], ["🔒", "Your data stays private"]].map(([icon, text]) => (
+                <div key={text} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "#475569" }}>
                   <span>{icon}</span><span>{text}</span>
                 </div>
               ))}
             </div>
-
-            {/* CTA buttons — desktop shows both, mobile shows Start Free */}
-            <div style={{ display:"flex", gap:12, flexWrap:"wrap", marginBottom:8 }}>
-              <a href="/landing/demo" style={{ display:"inline-flex", alignItems:"center", gap:8, padding:"13px 26px", borderRadius:12, background:"rgba(34,211,238,0.08)", border:"2px solid rgba(34,211,238,0.35)", color:"#22D3EE", fontSize:15, fontWeight:700, textDecoration:"none", transition:"all 0.2s" }}
-                onMouseEnter={e=>{e.currentTarget.style.background="rgba(34,211,238,0.15)"}}
-                onMouseLeave={e=>{e.currentTarget.style.background="rgba(34,211,238,0.08)"}}>
-                👀 View Live Demo
-              </a>
-              <button className="mobile-cta-btn"
-                onClick={() => document.getElementById("auth-panel-mobile")?.scrollIntoView({ behavior: "smooth" })}
-                style={{ display: "none", padding: "13px 26px", borderRadius: 12, background: "linear-gradient(135deg,#3b82f6,#ec4899)", color: "white", fontWeight: 700, fontSize: 15, border: "none", cursor: "pointer", boxShadow: "0 4px 20px rgba(236,72,153,0.3)" }}>
-                Start Free →
-              </button>
-            </div>
-            <div style={{ fontSize:12, color:"#475569" }}>No signup needed to view the demo</div>
           </div>
 
-          {/* Right: auth panel (desktop only) */}
-          <div className="desktop-auth-wrap">
-            <AuthPanel id="auth-panel-desktop" {...authPanelProps} />
+          {/* Right — auth panel desktop */}
+          <div className="lp-desktop-auth">
+            <AuthPanel id="lp-auth-desktop" {...authPanelProps} />
           </div>
         </div>
 
-        {/* Mobile auth panel */}
-        <div id="auth-panel-mobile" className="mobile-auth-wrap" style={{ display: "none", marginTop: 36 }}>
-          <AuthPanel id="auth-panel-mobile-inner" {...authPanelProps} />
+        {/* Mobile auth */}
+        <div id="lp-auth-mobile" className="lp-mobile-auth" style={{ display: "none", marginTop: 40 }}>
+          <AuthPanel id="lp-auth-mobile-inner" {...authPanelProps} />
         </div>
       </div>
 
-      {/* ── AI ALERT ─────────────────────────────────────────────────── */}
-      <div style={{ maxWidth: 900, margin: "0 auto 36px", padding: "0 24px" }}>
-        <div style={{
-          padding: "14px 18px", borderRadius: 12,
-          background: "rgba(168,85,247,0.08)", border: "1px solid rgba(168,85,247,0.25)", fontSize: 14,
-        }}>
-          🤖 <strong>AI Insight:</strong> {alerts[alertIndex]}
-        </div>
-      </div>
-
-      {/* ── FEATURES ─────────────────────────────────────────────────── */}
-      <div style={{ maxWidth: 900, margin: "0 auto 36px", padding: "0 24px" }}>
-        <div className="feature-grid" style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 18 }}>
-          <div className="card">
-            <div className="title"><span className="pulse-icon">💌</span> Message a High Spender</div>
-            <div className="box">{messages[msgIndex]}</div>
-            <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
-              <button onClick={() => setMsgIndex(p => (p + 1) % messages.length)} className="btn2">Generate</button>
-              <button onClick={handleCopy} className="btn1">{copied ? "Copied!" : "Copy"}</button>
-            </div>
-          </div>
-          <div className="card">
-            <div className="title">🐳 High Spender</div>
-            <div style={{ marginTop: 10 }}>
-              <div style={{ fontWeight: 600 }}>{whales[whaleIndex].name}</div>
-              <div style={{ color: "#ec4899", marginTop: 6, fontSize: 18 }}>{whales[whaleIndex].spent}</div>
-              <div style={{ color: "#64748b" }}>inactive {whales[whaleIndex].inactive}</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ── HOW IT WORKS ─────────────────────────────────────────────── */}
-      <div style={{ maxWidth: 900, margin: "0 auto 40px", padding: "0 24px" }}>
-        <div style={{ textAlign: "center", marginBottom: 24 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: "#a855f7", textTransform: "uppercase", letterSpacing: 1.2, marginBottom: 8 }}>How It Works</div>
-          <div style={{ fontSize: 24, fontWeight: 800, color: "white" }}>Up and earning in 3 steps</div>
-        </div>
-        <div className="steps-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16 }}>
+      {/* ── SOCIAL PROOF STRIP ── */}
+      <div style={{ position: "relative", zIndex: 1, borderTop: "1px solid rgba(255,255,255,0.04)", borderBottom: "1px solid rgba(255,255,255,0.04)", padding: "28px 40px", background: "rgba(255,255,255,0.01)" }}>
+        <div style={{ maxWidth: 900, margin: "0 auto", display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 16, textAlign: "center" }}>
           {[
-            { n:"1", icon:"🔗", title:"Connect your platforms",   body:"Upload your Chaturbate, BongaCams, or MFC CSV — takes under 2 minutes." },
-            { n:"2", icon:"📊", title:"Track earnings + fans",    body:"See your top tippers, best stream hours, and platform ROI — all in one place." },
-            { n:"3", icon:"⚡", title:"Get told what to do next", body:"Your dashboard tells you exactly who to message and when to go live." },
-          ].map(({ n, icon, title, body }) => (
-            <div key={n} className="card" style={{ textAlign: "center" }}>
-              <div style={{ width:30, height:30, borderRadius:"50%", background:"linear-gradient(135deg,#3b82f6,#ec4899)", color:"white", fontWeight:800, fontSize:13, display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 10px" }}>{n}</div>
-              <div style={{ fontSize:22, marginBottom:8 }}>{icon}</div>
-              <div className="title" style={{ marginBottom:6 }}>{title}</div>
-              <div style={{ fontSize:13, color:"#64748b", lineHeight:1.6 }}>{body}</div>
+            ["$2.4M+", "Earnings tracked"],
+            ["18,000+", "Sessions analyzed"],
+            ["4", "Platforms supported"],
+            ["Free", "During beta"],
+          ].map(([val, label]) => (
+            <div key={label}>
+              <div style={{ fontSize: "clamp(22px,2.5vw,30px)", fontWeight: 900, color: "white", letterSpacing: -0.5, marginBottom: 4 }}>{val}</div>
+              <div style={{ fontSize: 12, color: "#334155", textTransform: "uppercase", letterSpacing: 0.8, fontWeight: 600 }}>{label}</div>
             </div>
           ))}
         </div>
       </div>
 
-      {/* ── DEMO CTA SECTION ─────────────────────────────────────────── */}
-      <div style={{ maxWidth:900, margin:"0 auto 48px", padding:"0 24px" }}>
-        <div style={{ borderRadius:20, background:"linear-gradient(135deg,rgba(34,211,238,0.08),rgba(124,92,255,0.08))", border:"1px solid rgba(34,211,238,0.25)", padding:"40px 48px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:32, flexWrap:"wrap", position:"relative", overflow:"hidden" }}>
-          {/* Accent line top */}
-          <div style={{ position:"absolute", top:0, left:0, right:0, height:2, background:"linear-gradient(90deg,#22D3EE,#EC4899)" }} />
-          <div style={{ flex:1, minWidth:260 }}>
-            <div style={{ fontSize:11, fontWeight:700, color:"#22D3EE", textTransform:"uppercase", letterSpacing:1.2, marginBottom:10 }}>✨ No signup required</div>
-            <div style={{ fontSize:"clamp(22px,2.5vw,30px)", fontWeight:900, color:"white", marginBottom:10, lineHeight:1.2 }}>
-              See your dashboard<br/>before you sign up
-            </div>
-            <p style={{ fontSize:15, color:"#64748b", lineHeight:1.65, marginBottom:0, maxWidth:420 }}>
-              We pre-loaded the demo with a real multi-platform streamer's data — Chaturbate, BongaCams, Stripchat, and CamSoda. See exactly what your dashboard would look like.
-            </p>
+      {/* ── DEMO SPOTLIGHT ── */}
+      <div style={{ position: "relative", zIndex: 1, maxWidth: 960, margin: "0 auto", padding: "72px 40px 56px" }}>
+        <div style={{ textAlign: "center", marginBottom: 48 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "#334155", textTransform: "uppercase", letterSpacing: 2, marginBottom: 12 }}>Live Demo</div>
+          <div style={{ fontSize: "clamp(26px,3vw,38px)", fontWeight: 900, color: "white", letterSpacing: -0.8, marginBottom: 14 }}>
+            See exactly what you'd get — before signing up
           </div>
-          <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:14, flexShrink:0 }}>
-            <div style={{ display:"flex", flexDirection:"column", gap:8, alignItems:"center" }}>
-              {[["👑","Top fan intelligence — who to message"],["📊","Platform ROI — where your time is worth more"],["⏰","Peak hour analysis — when to go live"],["💌","Fan re-engagement messages — ready to copy"]].map(([icon,text]) => (
-                <div key={text} style={{ display:"flex", alignItems:"center", gap:8, fontSize:13, color:"#94a3b8" }}>
-                  <span>{icon}</span><span>{text}</span>
+          <p style={{ fontSize: 16, color: "#475569", maxWidth: 520, margin: "0 auto" }}>
+            We pre-loaded a full demo with a real multi-platform streamer's data. Click through every tab. No account needed.
+          </p>
+        </div>
+
+        {/* Demo preview card */}
+        <div style={{ borderRadius: 20, background: "rgba(8,12,24,0.9)", border: "1px solid rgba(255,255,255,0.08)", overflow: "hidden", boxShadow: "0 0 0 1px rgba(34,211,238,0.06), 0 40px 100px rgba(0,0,0,0.7)", marginBottom: 32 }}>
+          {/* Window chrome */}
+          <div style={{ padding: "10px 18px", borderBottom: "1px solid rgba(255,255,255,0.05)", display: "flex", alignItems: "center", gap: 8, background: "rgba(255,255,255,0.02)" }}>
+            <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#F87171", opacity: 0.7 }} />
+            <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#F59E0B", opacity: 0.7 }} />
+            <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#10B981", opacity: 0.7 }} />
+            <div style={{ flex: 1, textAlign: "center", fontSize: 11, color: "#334155", fontFamily: "monospace" }}>camcashgrl.com/landing/demo</div>
+          </div>
+          {/* Mock dashboard preview */}
+          <div style={{ padding: "20px 24px" }}>
+            {/* Command card mock */}
+            <div style={{ padding: "14px 18px", borderRadius: 14, background: "linear-gradient(135deg,rgba(34,211,238,0.1),rgba(124,92,255,0.06))", border: "1px solid rgba(34,211,238,0.3)", marginBottom: 14 }}>
+              <div style={{ fontSize: 9, color: "#22D3EE", fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>⚡ BEST MOVE RIGHT NOW</div>
+              <div style={{ fontSize: 16, fontWeight: 800, color: "white", marginBottom: 6 }}>Go live on Chaturbate at 1 AM · in ~2h</div>
+              <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 12, color: "#64748B" }}>Historically <span style={{ color: "#F59E0B", fontWeight: 700 }}>$162/session</span></span>
+                <span style={{ fontSize: 12, color: "#64748B" }}><span style={{ color: "#10B981", fontWeight: 700 }}>2 whales</span> likely online</span>
+                <span style={{ fontSize: 12, color: "#64748B" }}>Expected <span style={{ color: "#10B981", fontWeight: 700 }}>$110–$220</span></span>
+              </div>
+            </div>
+            {/* KPI strip mock */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10, marginBottom: 14 }}>
+              {[["💰","This Month","$920"],["⏱️","Avg $/Hour","$116.20"],["🔁","Return Rate","62%"],["🎯","Tonight","$110–220"]].map(([icon,label,val]) => (
+                <div key={label} style={{ padding: "12px 10px", borderRadius: 10, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", textAlign: "center" }}>
+                  <div style={{ fontSize: 13, marginBottom: 4 }}>{icon}</div>
+                  <div style={{ fontSize: 13, fontWeight: 800, color: "white", marginBottom: 2 }}>{val}</div>
+                  <div style={{ fontSize: 9, color: "#334155", textTransform: "uppercase" }}>{label}</div>
                 </div>
               ))}
             </div>
-            <a href="/landing/demo"
-              style={{ display:"inline-block", padding:"14px 36px", borderRadius:12, background:"linear-gradient(135deg,#22D3EE,#EC4899)", color:"white", fontWeight:800, fontSize:16, textDecoration:"none", boxShadow:"0 0 32px rgba(34,211,238,0.35)", letterSpacing:0.2, whiteSpace:"nowrap" }}>
-              👀 Open Live Demo →
-            </a>
-            <div style={{ fontSize:12, color:"#334155" }}>No account needed · 30 seconds to explore</div>
+            {/* Fan row mock */}
+            <div style={{ padding: "12px 14px", borderRadius: 12, background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)" }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "#EC4899", marginBottom: 10 }}>👑 Fans to Focus On</div>
+              {[
+                { name:"kingwhale99",  badge:"Online now",     bc:"#10B981", sub:"likely online now · $1,000 lifetime" },
+                { name:"vipmikey88",   badge:"Near milestone", bc:"#F59E0B", sub:"$75 from $400 milestone" },
+                { name:"bonga_vip",    badge:"VIP",            bc:"#F59E0B", sub:"$275 lifetime · 3d ago" },
+              ].map((f,i) => (
+                <div key={i} style={{ display:"flex", alignItems:"center", gap:10, padding:"7px 10px", borderRadius:8, background:"rgba(255,255,255,0.02)", marginBottom:4 }}>
+                  <div style={{ width:26, height:26, borderRadius:7, background:`${f.bc}20`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:800, color:f.bc }}>{f.name[0].toUpperCase()}</div>
+                  <div style={{ flex:1 }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                      <span style={{ fontSize:12, fontWeight:700, color:"white" }}>{f.name}</span>
+                      <span style={{ fontSize:8, padding:"1px 6px", borderRadius:20, background:`${f.bc}15`, color:f.bc, fontWeight:700 }}>{f.badge}</span>
+                    </div>
+                    <div style={{ fontSize:10, color:"#475569" }}>{f.sub}</div>
+                  </div>
+                  <span style={{ fontSize:16, color:"#EC4899" }}>💌</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Demo CTA */}
+        <div style={{ textAlign: "center" }}>
+          <a href="/landing/demo" style={{
+            display: "inline-flex", alignItems: "center", gap: 10,
+            padding: "16px 40px", borderRadius: 14,
+            background: "linear-gradient(135deg,#22D3EE,#EC4899)",
+            color: "white", fontWeight: 800, fontSize: 17, textDecoration: "none",
+            boxShadow: "0 0 40px rgba(34,211,238,0.4)", letterSpacing: 0.2,
+          }}>
+            👀 Open the Live Demo →
+          </a>
+          <div style={{ fontSize: 13, color: "#334155", marginTop: 12 }}>No account needed · Explore all tabs · 30 seconds to see everything</div>
+        </div>
+      </div>
+
+      {/* ── OPERATIONAL PILLARS ── */}
+      <div style={{ position: "relative", zIndex: 1, maxWidth: 1000, margin: "0 auto", padding: "0 40px 72px" }}>
+        <div style={{ textAlign: "center", marginBottom: 52 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "#334155", textTransform: "uppercase", letterSpacing: 2, marginBottom: 12 }}>Everything in one place</div>
+          <div style={{ fontSize: "clamp(24px,3vw,36px)", fontWeight: 900, color: "white", letterSpacing: -0.8 }}>Run your creator business smarter</div>
+        </div>
+        <div className="pillars-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 16 }}>
+          {[
+            {
+              icon: "💰", color: "#10B981",
+              title: "Revenue Intelligence",
+              points: ["Earnings tracking across all platforms","$/hr by platform — see where you're worth more","Session performance vs your own average","Revenue trends and month-over-month growth"],
+            },
+            {
+              icon: "👑", color: "#F59E0B",
+              title: "Fan Relationship System",
+              points: ["Top spender tracking and lifetime value","Churn risk alerts before fans go cold","Re-engagement messages — personalized, copy-ready","Milestone tracking — who's close to a new tier"],
+            },
+            {
+              icon: "⏰", color: "#22D3EE",
+              title: "Stream Optimization",
+              points: ["Your personal peak hours from your own data","Best streaming day — by platform, not generic advice","Platform ROI comparison — Chaturbate vs BongaCams vs more","AI room title generator built from your tipping patterns"],
+            },
+            {
+              icon: "⚡", color: "#EC4899",
+              title: "Creator Command Center",
+              points: ["Daily brief — what to do right now to earn more","Live mode coaching while you stream","Fan intelligence prioritized by revenue opportunity","One dashboard for everything — no more spreadsheets"],
+            },
+          ].map(({ icon, color, title, points }) => (
+            <div key={title} style={{ padding: "28px 26px", borderRadius: 18, background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.06)", transition: "all 0.2s" }}
+              onMouseEnter={e => { e.currentTarget.style.background = "rgba(255,255,255,0.04)"; e.currentTarget.style.borderColor = `${color}30` }}
+              onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,255,255,0.025)"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.06)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18 }}>
+                <div style={{ width: 40, height: 40, borderRadius: 11, background: `${color}15`, border: `1px solid ${color}30`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>{icon}</div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: "white" }}>{title}</div>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
+                {points.map((p, i) => (
+                  <div key={i} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                    <div style={{ width: 5, height: 5, borderRadius: "50%", background: color, flexShrink: 0, marginTop: 6 }} />
+                    <span style={{ fontSize: 13, color: "#64748B", lineHeight: 1.6 }}>{p}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── INTERACTIVE PREVIEW CARDS ── */}
+      <div style={{ position: "relative", zIndex: 1, maxWidth: 900, margin: "0 auto", padding: "0 40px 72px" }}>
+        <div className="feature-grid" style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 20 }}>
+          {/* Message generator */}
+          <div style={{ padding: "24px", borderRadius: 18, background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.07)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+              <span style={{ fontSize: 20 }}>💌</span>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "white" }}>Fan Re-engagement</div>
+                <div style={{ fontSize: 11, color: "#334155" }}>Personalized messages — ready to copy</div>
+              </div>
+            </div>
+            <div style={{ padding: "14px", borderRadius: 10, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)", fontSize: 14, color: "#94A3B8", lineHeight: 1.6, minHeight: 70, marginBottom: 14 }}>
+              {messages[msgIndex]}
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={() => setMsgIndex(p => (p + 1) % messages.length)}
+                style={{ flex: 1, padding: "9px", borderRadius: 8, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)", color: "#64748B", fontSize: 12, cursor: "pointer" }}>
+                Regenerate
+              </button>
+              <button onClick={handleCopy}
+                style={{ flex: 1, padding: "9px", borderRadius: 8, background: copied ? "rgba(16,185,129,0.15)" : "rgba(34,211,238,0.1)", border: `1px solid ${copied ? "rgba(16,185,129,0.3)" : "rgba(34,211,238,0.25)"}`, color: copied ? "#10B981" : "#22D3EE", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                {copied ? "✓ Copied" : "Copy"}
+              </button>
+            </div>
+          </div>
+          {/* Whale card */}
+          <div style={{ padding: "24px", borderRadius: 18, background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.07)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+              <span style={{ fontSize: 20 }}>🐳</span>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "white" }}>High-Value Fan</div>
+                <div style={{ fontSize: 11, color: "#334155" }}>Your top spenders, ranked</div>
+              </div>
+            </div>
+            <div style={{ padding: "14px", borderRadius: 10, background: "rgba(245,158,11,0.07)", border: "1px solid rgba(245,158,11,0.18)" }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#94A3B8", marginBottom: 8, fontFamily: "monospace" }}>{whales[whaleIndex].name}</div>
+              <div style={{ fontSize: 28, fontWeight: 900, color: "#F59E0B", marginBottom: 4 }}>{whales[whaleIndex].spent}</div>
+              <div style={{ fontSize: 11, color: "#64748B" }}>inactive {whales[whaleIndex].inactive}</div>
+              <div style={{ marginTop: 8, fontSize: 11, color: "#475569" }}>
+                <span style={{ color: "#F87171", fontWeight: 700 }}>At risk of churning</span> — a message could bring them back
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* ── PLATFORM EDGE ────────────────────────────────────────────── */}
-      <div style={{ maxWidth:900, margin:"0 auto 48px", padding:"0 24px" }}>
-        <div className="platform-grid" style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:18 }}>
-          <div className="card">
-            <div className="title">📊 Platform Comparison</div>
-            <div style={{ marginTop:10 }}>Chaturbate — $520 avg<br/>Stripchat — $340 avg<br/>CamSoda — $290 avg</div>
-          </div>
-          <div className="card">
-            <div className="title">💡 What This Means</div>
-            <div style={{ marginTop:10 }}>You're making ~35% more on Chaturbate. Stream there more often.</div>
-          </div>
+      {/* ── HOW IT WORKS ── */}
+      <div style={{ position: "relative", zIndex: 1, maxWidth: 700, margin: "0 auto", padding: "0 40px 72px", textAlign: "center" }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: "#334155", textTransform: "uppercase", letterSpacing: 2, marginBottom: 12 }}>Getting started</div>
+        <div style={{ fontSize: "clamp(22px,3vw,32px)", fontWeight: 900, color: "white", marginBottom: 44, letterSpacing: -0.5 }}>Up and earning in 2 minutes</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+          {[
+            { n: "01", title: "Upload your CSV", body: "Export from Chaturbate, BongaCams, MFC, or Stripchat. Paste into Google Sheets → Download as CSV → upload here." },
+            { n: "02", title: "AI analyzes your data", body: "CamCash reads your peak hours, top fans, platform ROI, and session patterns automatically. No setup required." },
+            { n: "03", title: "Get your action plan", body: "Your Command Center tells you when to stream, who to message, and where to focus — updated with every import." },
+          ].map(({ n, title, body }, i) => (
+            <div key={n} style={{ display: "flex", gap: 20, padding: "22px 0", borderBottom: i < 2 ? "1px solid rgba(255,255,255,0.05)" : "none", textAlign: "left" }}>
+              <div style={{ fontSize: 12, fontWeight: 800, color: "#1e3a52", fontFamily: "monospace", flexShrink: 0, paddingTop: 2 }}>{n}</div>
+              <div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: "white", marginBottom: 6 }}>{title}</div>
+                <div style={{ fontSize: 13, color: "#475569", lineHeight: 1.7 }}>{body}</div>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 
-      {/* ── BOTTOM CTA + AUTH PANEL ───────────────────────────────────── */}
-      <div style={{ maxWidth:900, margin:"0 auto 60px", padding:"0 24px", display:"flex", flexDirection:"column", alignItems:"center", gap:24 }}>
-        <div style={{ textAlign:"center" }}>
-          <div style={{ fontSize:28, fontWeight:900, color:"white", marginBottom:8 }}>Ready to make more per stream?</div>
-          <div style={{ fontSize:15, color:"#64748b" }}>Free during beta. No credit card. Takes 2 minutes.</div>
+      {/* ── FINAL CTA ── */}
+      <div id="lp-auth-bottom" style={{ position: "relative", zIndex: 1, maxWidth: 500, margin: "0 auto", padding: "0 40px 100px", textAlign: "center" }}>
+        <div style={{ fontSize: "clamp(26px,3vw,38px)", fontWeight: 900, color: "white", marginBottom: 10, letterSpacing: -0.8 }}>
+          Start running your creator business smarter.
         </div>
-        <div style={{ width:"100%", maxWidth:420 }}>
-          <AuthPanel id="auth-panel-bottom" {...authPanelProps} />
+        <p style={{ fontSize: 15, color: "#475569", marginBottom: 32, lineHeight: 1.6 }}>
+          Join creators using CamCash to optimize streams, understand fan behavior, and increase earnings. Free during beta.
+        </p>
+        <AuthPanel id="lp-auth-bottom-panel" {...authPanelProps} />
+        <div style={{ marginTop: 20 }}>
+          <a href="/landing/demo" style={{ fontSize: 13, color: "#475569", textDecoration: "none", borderBottom: "1px solid rgba(255,255,255,0.1)", paddingBottom: 2 }}>
+            Or explore the demo first →
+          </a>
         </div>
       </div>
 
-      {/* ── STYLES ───────────────────────────────────────────────────── */}
+      {/* ── FOOTER ── */}
+      <div style={{ position: "relative", zIndex: 1, borderTop: "1px solid rgba(255,255,255,0.04)", padding: "24px 40px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+        <div style={{ fontSize: 13, color: "#1e3a52" }}>© 2026 CamCash — Built for cam models who want to grow</div>
+        <div style={{ fontSize: 12, color: "#1e3a52" }}>Your data is never shared · Encrypted · Private</div>
+      </div>
+
       <style jsx>{`
-        .card {
-          background: linear-gradient(135deg,#1e293b,#020617);
-          padding: 20px; border-radius: 14px;
-          border: 1px solid rgba(255,255,255,0.06);
-          transition: transform 0.2s, box-shadow 0.2s;
-        }
-        .card:hover { box-shadow: 0 0 20px rgba(236,72,153,0.2); transform: translateY(-2px); }
-        .title { color: #a855f7; font-weight: 600; }
-        .box { background: rgba(255,255,255,0.05); padding: 14px; border-radius: 10px; margin-top: 10px; min-height: 65px; font-size: 14px; line-height: 1.5; }
-        .pulse-icon { display: inline-block; animation: softpulse 2.5s ease-in-out infinite; }
-        @keyframes softpulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.06);opacity:0.85} }
-        .btn1 { flex:1; padding:10px; border-radius:8px; background:linear-gradient(135deg,#3b82f6,#ec4899); color:white; font-weight:700; border:none; cursor:pointer; transition:opacity 0.15s; }
-        .btn1:hover { opacity:0.88; }
-        .btn2 { flex:1; padding:10px; border-radius:8px; background:#0f172a; color:white; border:none; cursor:pointer; transition:background 0.15s; }
-        .btn2:hover { background:#1e293b; }
-
         @media (max-width: 768px) {
-          .hero-grid { grid-template-columns: 1fr !important; }
-          .desktop-auth-wrap { display: none !important; }
-          .mobile-cta-btn { display: inline-block !important; }
-          .mobile-auth-wrap { display: block !important; }
-          .feature-grid { grid-template-columns: 1fr !important; }
-          .platform-grid { grid-template-columns: 1fr !important; }
-          .steps-grid { grid-template-columns: 1fr !important; }
+          .hero-grid       { grid-template-columns: 1fr !important; gap: 40px !important; }
+          .lp-desktop-auth { display: none !important; }
+          .lp-mobile-auth  { display: block !important; }
+          .pillars-grid    { grid-template-columns: 1fr !important; }
+          .feature-grid    { grid-template-columns: 1fr !important; }
         }
       `}</style>
     </div>
