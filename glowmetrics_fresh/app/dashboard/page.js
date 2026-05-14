@@ -16,16 +16,6 @@ const C = {
   green: "#10B981", red: "#F87171", orange: "#FB923C", white: "#F1F5F9", text: "#94A3B8", muted: "#475569"
 }
 
-const ALERT_CFG = {
-    strike_hot:{bg:"rgba(251,146,60,0.08)",border:"rgba(251,146,60,0.25)",dot:"#FB923C"},
-    win_back:{bg:"rgba(236,72,153,0.08)",border:"rgba(236,72,153,0.25)",dot:"#EC4899"},
-    milestone:{bg:"rgba(245,158,11,0.08)",border:"rgba(245,158,11,0.25)",dot:"#F59E0B"},
-    online_now:{bg:"rgba(16,185,129,0.08)",border:"rgba(16,185,129,0.3)",dot:"#10B981"},
-    dormant:{bg:"rgba(251,146,60,0.06)",border:"rgba(251,146,60,0.2)",dot:"#FB923C"},
-    performance:{bg:"rgba(236,72,153,0.06)",border:"rgba(236,72,153,0.15)",dot:"#EC4899"},
-  }
-
-
 const TIER_COLORS = {
   "Whale": C.gold, "Shark": C.blue, "Regular": C.cyan, "Dormant": C.orange
 }
@@ -811,35 +801,6 @@ function CopyButton({ text, label = "📋 Copy", copiedLabel = "✅ Copied!", st
   )
 }
 
-function TokenCalcWidget({ tokenRates }) {
-  const [tokens, setTokens] = React.useState(0)
-  const t = parseFloat(tokens) || 0
-  const platforms = [
-    { plat: "Chaturbate", color: "#22D3EE" },
-    { plat: "BongaCams",  color: "#EC4899" },
-    { plat: "MyFreeCams", color: "#F59E0B" },
-    { plat: "Stripchat",  color: "#60A5FA" },
-    { plat: "CamSoda",    color: "#10B981" },
-  ]
-  return (
-    <div>
-      <input type="number" placeholder="e.g. 500" value={tokens || ""} onChange={e => setTokens(e.target.value)}
-        style={{ width:"100%", padding:"14px 16px", borderRadius:10, background:"rgba(255,255,255,0.06)", border:"1px solid rgba(34,211,238,0.4)", color:"#F1F5F9", fontSize:20, fontWeight:700, outline:"none", marginBottom:20, boxSizing:"border-box" }} />
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(160px, 1fr))", gap:12 }}>
-        {platforms.map(({ plat, color }) => {
-          const rate = tokenRates[plat] || 0.05
-          return (
-            <div key={plat} style={{ padding:"16px", borderRadius:12, background:"rgba(255,255,255,0.04)", border:"1px solid " + color + "20" }}>
-              <div style={{ fontSize:11, color:"#475569", marginBottom:6, textTransform:"uppercase" }}>{plat}</div>
-              <div style={{ fontSize:24, fontWeight:900, color }}>{"$" + (t * rate).toFixed(2)}</div>
-              <div style={{ fontSize:11, color:"#475569", marginTop:4 }}>{"$" + rate + "/token"}</div>
-            </div>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
 export default function Dashboard() {
   const router = useRouter()
   const [user, setUser] = useState(null)
@@ -895,7 +856,6 @@ export default function Dashboard() {
   const [showGoalEditor, setShowGoalEditor] = useState(false)
   const [tipperNotes, setTipperNotes] = useState({}) // { username: { note, followUp } }
   const [noteTarget, setNoteTarget] = useState(null)
-  const [expandFans, setExpandFans] = useState(false)
   const [noteText, setNoteText] = useState('')
   const [noteSaving, setNoteSaving] = useState(false)
 
@@ -1925,247 +1885,432 @@ const handleCSV = async (file, forcePlatform = null) => {
         </div>
 
 
-        {/* ── QUICK TOOL LINKS ── */}
-        <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
-          {[
-            { label: "🎬 Room Titles", tab: "titles" },
-            { label: "📥 Import CSV", tab: "upload" },
-            { label: "🔴 Go Live", tab: "live" },
-            { label: "👑 Top Fans", tab: "whales" },
-            { label: "📈 Monthly", tab: "monthly" },
-            { label: "🎯 Platforms", tab: "platforms" },
-          ].map(({ label, tab }) => (
-            <button key={tab} onClick={() => handleTabChange(tab)}
-              style={{ padding: "6px 14px", borderRadius: 20, background: activeTab === tab ? "linear-gradient(135deg,#22D3EE,#EC4899)" : "rgba(255,255,255,0.05)", border: activeTab === tab ? "none" : "1px solid rgba(255,255,255,0.1)", color: activeTab === tab ? "white" : "#94A3B8", fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "all 0.15s" }}>
-              {label}
-            </button>
-          ))}
-        </div>
-
-
-        {/* ── QUICK TOOL LINKS ── */}
-        <div style={{ display:"flex", gap:8, marginBottom:20, flexWrap:"wrap" }}>
-          {[
-            { label:"🎬 Room Titles", tab:"titles" },
-            { label:"📥 Import CSV", tab:"upload" },
-            { label:"🔴 Go Live", tab:"live" },
-            { label:"👑 Top Fans", tab:"whales" },
-            { label:"📈 Monthly", tab:"monthly" },
-            { label:"🎯 Platforms", tab:"platforms" },
-          ].map(({ label, tab }) => (
-            <button key={tab} onClick={() => handleTabChange(tab)}
-              style={{ padding:"6px 14px", borderRadius:20, background: activeTab===tab ? "linear-gradient(135deg,#22D3EE,#EC4899)" : "rgba(255,255,255,0.05)", border: activeTab===tab ? "none" : "1px solid rgba(255,255,255,0.1)", color: activeTab===tab ? "white" : "#94A3B8", fontSize:12, fontWeight:600, cursor:"pointer", transition:"all 0.15s" }}>
-              {label}
-            </button>
-          ))}
-        </div>
-
         {activeTab === "overview" && (
-            <div style={{ animation:"fadeUp 0.3s ease" }}>
+          <div style={{ animation: "fadeUp 0.3s ease" }}>
 
-              {/* TIER 1 — COMMAND CARD */}
-              {(() => {
-                const { bhLabel, atPeak, hoursUntilPeak, displayPlat, displayAvg, isBestDay, todayName,
-                  predictionLow, predictionHigh, likelyOnline, reengageFans: rf, platTodayStats } = dailyBrief
-                const cardState = atPeak ? "peak" : "before"
-                const cfg = {
-                  peak:   { icon:"🟢", label:"PEAK WINDOW OPEN — GO LIVE NOW", accent:"#10B981", border:"rgba(16,185,129,0.4)", bg:"linear-gradient(135deg,rgba(16,185,129,0.14),rgba(34,211,238,0.06))" },
-                  before: { icon:"⚡", label:"BEST MOVE RIGHT NOW",              accent:"#22D3EE", border:"rgba(34,211,238,0.35)", bg:"linear-gradient(135deg,rgba(34,211,238,0.1),rgba(124,92,255,0.06))" },
-                }[cardState]
-                const todayChanges = []
-                if (isBestDay) todayChanges.push(`${todayName} is your best earning day`)
-                if (atPeak) todayChanges.push("Peak window open now")
-                if (!atPeak && hoursUntilPeak <= 3) todayChanges.push(`Peak in ${hoursUntilPeak}h — ${bhLabel}`)
-                todayChanges.push("kingwhale99 tipped 2 days ago — due again soon")
-                return (
-                  <div style={{ marginBottom:20, borderRadius:18, border:`1px solid ${cfg.border}`, background:cfg.bg, overflow:"hidden", boxShadow:`0 0 40px ${cfg.accent}15` }}>
-                    <div style={{ height:3, background:`linear-gradient(90deg,${cfg.accent},#EC4899)` }} />
-                    <div style={{ padding:"18px 22px" }}>
-                      <div style={{ display:"flex", gap:8, marginBottom:14, flexWrap:"wrap" }}>
-                        {todayChanges.slice(0,3).map((c,i) => (
-                          <div key={i} style={{ padding:"3px 10px", borderRadius:20, background:"rgba(34,211,238,0.08)", border:"1px solid rgba(34,211,238,0.2)", fontSize:11, color:"#22D3EE", fontWeight:600 }}>● {c}</div>
+            {/* ═══════════════════════════════════════
+                LAYER 1 — COMMAND CARD
+                Stateful: before stream / at peak / after stream
+                Replaces: Daily Brief + Make Money Right Now
+            ═══════════════════════════════════════ */}
+            {(() => {
+              if (!dailyBrief) return null
+              const { todayName, bhLabel, bh, atPeak, hoursUntilPeak, displayPlat, displayAvg,
+                isBestDay, predictionLow, predictionHigh, likelyOnline, reengageFans } = dailyBrief
+
+              // Compute state: at_peak | before_stream | post_stream
+              const lastSession = sessions.length ? [...sessions].sort((a,b) => new Date(b.startTime)-new Date(a.startTime))[0] : null
+              const msSinceLastSession = lastSession ? Date.now() - new Date(lastSession.endTime || lastSession.startTime) : Infinity
+              const isPostStream = msSinceLastSession < 4 * 3600000 && lastSession
+
+              // Daily changes — what's new since yesterday
+              const todayChanges = []
+              const now = new Date()
+              const todayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
+              const todayTips = tips.filter(t => new Date(t.date_time || t.dateRaw) >= todayStart)
+              const returnedToday = todayTips.length > 0
+                ? [...new Set(todayTips.map(t => t.username))].filter(u => {
+                    const prev = tips.filter(t2 => t2.username === u && new Date(t2.date_time || t2.dateRaw) < todayStart)
+                    return prev.length > 0
+                  })
+                : []
+              if (returnedToday.length > 0) todayChanges.push(`${returnedToday.length} fan${returnedToday.length > 1 ? 's' : ''} returned today`)
+              if (isBestDay) todayChanges.push(`${todayName} is your best earning day`)
+              if (atPeak) todayChanges.push('Peak window open now')
+              if (bhLabel && !atPeak && hoursUntilPeak <= 3) todayChanges.push(`Peak in ${hoursUntilPeak}h — ${bhLabel}`)
+
+              // Determine card state
+              let cardState = 'before'
+              if (atPeak) cardState = 'peak'
+              else if (isPostStream) cardState = 'post'
+
+              const cardConfig = {
+                peak: {
+                  icon: '🟢',
+                  title: 'Peak Window Open — Go Live Now',
+                  accentColor: '#10B981',
+                  borderColor: 'rgba(16,185,129,0.4)',
+                  bg: 'linear-gradient(135deg,rgba(16,185,129,0.12),rgba(34,211,238,0.06))',
+                },
+                before: {
+                  icon: '⚡',
+                  title: 'Best Move Right Now',
+                  accentColor: '#22D3EE',
+                  borderColor: 'rgba(34,211,238,0.3)',
+                  bg: 'linear-gradient(135deg,rgba(34,211,238,0.08),rgba(124,92,255,0.06))',
+                },
+                post: {
+                  icon: '📊',
+                  title: 'Session Review Ready',
+                  accentColor: '#F59E0B',
+                  borderColor: 'rgba(245,158,11,0.3)',
+                  bg: 'linear-gradient(135deg,rgba(245,158,11,0.08),rgba(236,72,153,0.05))',
+                },
+              }
+              const cfg = cardConfig[cardState]
+
+              return (
+                <div style={{ marginBottom: 20, borderRadius: 16, border: `1px solid ${cfg.borderColor}`, background: cfg.bg, backdropFilter: 'blur(16px)', animation: 'fadeUp 0.3s ease both', overflow: 'hidden' }}>
+                  {/* Top accent line */}
+                  <div style={{ height: 2, background: `linear-gradient(90deg, ${cfg.accentColor}, #EC4899)` }} />
+
+                  <div style={{ padding: '16px 20px' }}>
+                    {/* Daily change pills */}
+                    {todayChanges.length > 0 && (
+                      <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+                        {todayChanges.slice(0,2).map((c,i) => (
+                          <div key={i} style={{ padding: '3px 10px', borderRadius: 20, background: `rgba(34,211,238,0.08)`, border: '1px solid rgba(34,211,238,0.2)', fontSize: 11, color: '#22D3EE', fontWeight: 600 }}>
+                            ● {c}
+                          </div>
                         ))}
                       </div>
-                      <div style={{ display:"flex", alignItems:"flex-start", gap:16 }}>
-                        <div style={{ width:46, height:46, borderRadius:13, background:`${cfg.accent}20`, border:`1px solid ${cfg.accent}40`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, flexShrink:0 }}>{cfg.icon}</div>
-                        <div style={{ flex:1 }}>
-                          <div style={{ fontSize:10, fontWeight:800, color:cfg.accent, textTransform:"uppercase", letterSpacing:1.2, marginBottom:5 }}>{cfg.label}</div>
-                          <div style={{ fontSize:20, fontWeight:900, color:"#F1F5F9", marginBottom:8 }}>
-                            Go live on {displayPlat} at {bhLabel}{hoursUntilPeak>0&&<span style={{ fontSize:15, color:"#64748B", fontWeight:500 }}> · in {hoursUntilPeak}h</span>}
-                          </div>
-                          <div style={{ display:"flex", gap:16, flexWrap:"wrap" }}>
-                            <span style={{ fontSize:12, color:"#64748B" }}>Historically <span style={{ color:"#F59E0B", fontWeight:700 }}>${displayAvg}/session</span></span>
-                            <span style={{ fontSize:12, color:"#64748B" }}><span style={{ color:"#10B981", fontWeight:700 }}>{likelyOnline.length} whales</span> likely online</span>
-                            <span style={{ fontSize:12, color:"#64748B" }}>Expected <span style={{ color:"#10B981", fontWeight:700 }}>${predictionLow}–${predictionHigh}</span></span>
-                          </div>
-                        </div>
-                      </div>
-                      <div style={{ marginTop:14, paddingTop:14, borderTop:"1px solid rgba(255,255,255,0.06)", display:"flex", gap:10, flexWrap:"wrap" }}>
-                        {Object.entries(platTodayStats).map(([plat,stats]) => stats.todayBestHour && (
-                          <div key={plat} style={{ padding:"4px 12px", borderRadius:20, background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.08)", fontSize:11, color:"#64748B" }}>
-                            {plat.replace("BongaCams","Bonga")} <span style={{ color:"#F1F5F9", fontWeight:700 }}>{stats.todayBestHour}</span> <span style={{ color:"#10B981" }}>${stats.todayBestAvg}/day</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                )
-              })()}
+                    )}
 
-              {/* TIER 2 — KPI STRIP */}
-              {(() => {
-                const thisMonthRev = DEMO_ANALYTICS.monthlyData.slice(-1)[0]?.usd || 19700
-                const prevMonthRev = DEMO_ANALYTICS.monthlyData.slice(-2)[0]?.usd || 38900
-                const growthPct = Math.round(((thisMonthRev-prevMonthRev)/prevMonthRev)*100)
-                const returningPct = 62
-                const fansActive30 = 10
-                const velPlats = Object.entries(platformVelocity).sort((a,b)=>b[1]-a[1])
-                const kpis = [
-                  { label:"This Month", value:`${thisMonthRev.toLocaleString()}`, sub:growthPct>=0?`↑ ${growthPct}% vs last month`:`↓ ${Math.abs(growthPct)}% vs last month`, subColor:growthPct>=0?C.green:C.orange, icon:"💰" },
-                  { label:"Avg $/Hour", value:`${avgPerHour.toFixed(0)}`, sub:"Top-tier performance", subColor:C.muted, icon:"⏱️" },
-                  { label:"Return Rate", value:`${returningPct}%`, sub:`${fansActive30} active fans (30d)`, subColor:C.muted, icon:"🔁" },
-                  { label:"Tonight's Forecast", value:"$1,100–$2,200", sub:"if you stream at 1 AM", subColor:C.muted, icon:"🎯" },
-                ]
-                return (
-                  <div style={{ marginBottom:20 }}>
-                    <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10, marginBottom:8 }}>
-                      {kpis.map((k,i) => (
-                        <div key={i} className="demo-card" style={{ ...glassCard, borderRadius:14, padding:"16px 14px", animation:`fadeUp 0.3s ease ${i*0.05}s both` }}>
-                          <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
-                            <span style={{ fontSize:10, color:C.muted, textTransform:"uppercase", letterSpacing:1, fontWeight:700 }}>{k.label}</span>
-                            <span style={{ fontSize:16 }}>{k.icon}</span>
-                          </div>
-                          <div style={{ fontSize:26, fontWeight:900, background:"linear-gradient(135deg,#60a5fa,#f472b6)", WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent", marginBottom:4, lineHeight:1.1 }}>{k.value}</div>
-                          <div style={{ fontSize:11, color:k.subColor }}>{k.sub}</div>
-                        </div>
-                      ))}
-                    </div>
-                    <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
-                      {velPlats.map(([plat,vel],i) => (
-                        <div key={i} style={{ display:"flex", alignItems:"center", gap:5, padding:"4px 10px", borderRadius:20, background:"rgba(34,211,238,0.06)", border:"1px solid rgba(34,211,238,0.12)" }}>
-                          <span style={{ fontSize:10, color:C.muted }}>{plat.replace("BongaCams","Bonga").replace("Chaturbate","CB")}</span>
-                          <span style={{ fontSize:11, fontWeight:700, color:C.cyan }}>${vel.toFixed(2)}/hr</span>
-                        </div>
-                      ))}
-                      <div style={{ display:"flex", alignItems:"center", gap:5, padding:"4px 10px", borderRadius:20, background:"rgba(16,185,129,0.06)", border:"1px solid rgba(16,185,129,0.12)" }}>
-                        <span style={{ fontSize:10, color:C.muted }}>Overall</span>
-                        <span style={{ fontSize:11, fontWeight:700, color:C.green }}>${earningsVelocity.toFixed(2)}/hr</span>
+                    {/* Main command */}
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+                      <div style={{ width: 40, height: 40, borderRadius: 12, background: `${cfg.accentColor}20`, border: `1px solid ${cfg.accentColor}40`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>
+                        {cfg.icon}
                       </div>
-                    </div>
-                  </div>
-                )
-              })()}
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: cfg.accentColor, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>{cfg.title}</div>
 
-              {/* TIER 3 — LIVE OPPORTUNITIES */}
-              <div style={{ ...glassCard, borderRadius:18, padding:22, marginBottom:18, animation:"fadeUp 0.3s ease 0.05s both" }}>
-                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:16 }}>
-                  <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                    <div style={{ width:34, height:34, borderRadius:10, background:"linear-gradient(135deg,#FB923C,#EC4899)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:16 }}>🚨</div>
-                    <div>
-                      <div style={{ fontSize:15, fontWeight:800, color:C.white }}>Live Opportunities</div>
-                      <div style={{ fontSize:11, color:C.muted }}>{whatsNextAlerts.length} actions waiting</div>
-                    </div>
-                  </div>
-                  <button onClick={() => setExpandAlerts(e=>!e)} style={{ padding:"4px 12px", borderRadius:8, background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", color:C.muted, fontSize:12, cursor:"pointer" }}>
-                    {expandAlerts?"Show less":"Show all "+whatsNextAlerts.length}
-                  </button>
-                </div>
-                <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-                  {(expandAlerts?whatsNextAlerts:whatsNextAlerts.slice(0,3)).map((a,i) => {
-                    const cfg2=ALERT_CFG[a.type]||ALERT_CFG.dormant
-                    return (
-                      <div key={i} className="demo-alert-row" style={{ display:"flex", alignItems:"center", gap:12, padding:"11px 14px", borderRadius:11, background:cfg2.bg, border:`1px solid ${cfg2.border}` }}>
-                        <div style={{ width:7, height:7, borderRadius:"50%", background:cfg2.dot, flexShrink:0, boxShadow:`0 0 5px ${cfg2.dot}` }} />
-                        <div style={{ flex:1, minWidth:0 }}>
-                          <div style={{ fontSize:13, fontWeight:700, color:C.white, marginBottom:2 }}>{a.title}</div>
-                          <div style={{ fontSize:11, color:C.muted, lineHeight:1.5 }}>{a.message}</div>
-                        </div>
-                        {a.cta && a.whale && (
-                          <button onClick={() => { setMessageTarget(a.whale); setMessageIndex(0); setMessageCopied(false) }}
-                            style={{ padding:"5px 12px", borderRadius:8, background:"linear-gradient(135deg,rgba(34,211,238,0.15),rgba(236,72,153,0.15))", border:"1px solid rgba(34,211,238,0.3)", color:C.cyan, fontSize:11, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap", flexShrink:0 }}>
-                            💌 Message
-                          </button>
+                        {cardState === 'peak' && (
+                          <>
+                            <div style={{ fontSize: 18, fontWeight: 900, color: '#F1F5F9', marginBottom: 6 }}>
+                              Go live on {displayPlat} immediately
+                            </div>
+                            <div style={{ fontSize: 13, color: '#64748B', lineHeight: 1.6 }}>
+                              This window closes in <span style={{ color: '#10B981', fontWeight: 700 }}>~{60 - new Date().getUTCMinutes()} min</span>
+                              {displayAvg > 0 && <> · <span style={{ color: '#F59E0B', fontWeight: 700 }}>${displayAvg.toFixed(0)} avg/session</span></>}
+                              {likelyOnline.length > 0 && <> · <span style={{ color: '#10B981', fontWeight: 700 }}>{likelyOnline.length} whale{likelyOnline.length > 1 ? 's' : ''} likely online</span></>}
+                            </div>
+                          </>
+                        )}
+
+                        {cardState === 'before' && bhLabel && (
+                          <>
+                            <div style={{ fontSize: 18, fontWeight: 900, color: '#F1F5F9', marginBottom: 6 }}>
+                              Go live on {displayPlat} at {bhLabel}
+                              {hoursUntilPeak !== null && hoursUntilPeak > 0 && <span style={{ fontSize: 14, color: '#64748B', fontWeight: 500 }}> · in {hoursUntilPeak}h</span>}
+                            </div>
+                            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                              {displayAvg > 0 && <span style={{ fontSize: 12, color: '#64748B' }}>Historically <span style={{ color: '#F59E0B', fontWeight: 700 }}>${displayAvg.toFixed(0)}/session</span></span>}
+                              {likelyOnline.length > 0 && <span style={{ fontSize: 12, color: '#64748B' }}><span style={{ color: '#10B981', fontWeight: 700 }}>{likelyOnline.length} whale{likelyOnline.length > 1 ? 's' : ''}</span> likely online</span>}
+                              {predictionLow > 0 && <span style={{ fontSize: 12, color: '#64748B' }}>Expected <span style={{ color: '#10B981', fontWeight: 700 }}>${predictionLow}–${predictionHigh}</span></span>}
+                            </div>
+                          </>
+                        )}
+
+                        {cardState === 'before' && !bhLabel && (
+                          <div style={{ fontSize: 15, fontWeight: 700, color: '#F1F5F9' }}>
+                            Upload more sessions to get personalized timing
+                          </div>
+                        )}
+
+                        {cardState === 'post' && lastSession && (
+                          <>
+                            <div style={{ fontSize: 18, fontWeight: 900, color: '#F1F5F9', marginBottom: 6 }}>
+                              You earned ${lastSession.totalUSD.toFixed(2)} just now
+                            </div>
+                            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                              {(() => {
+                                const avgSess = sessions.length > 1 ? sessions.reduce((s,x) => s+x.totalUSD,0)/sessions.length : 0
+                                const diff = avgSess > 0 ? Math.round(((lastSession.totalUSD - avgSess)/avgSess)*100) : null
+                                return diff !== null ? (
+                                  <span style={{ fontSize: 12, color: '#64748B' }}>
+                                    <span style={{ color: diff >= 0 ? '#10B981' : '#F87171', fontWeight: 700 }}>{diff >= 0 ? '+' : ''}{diff}%</span> vs your avg session
+                                  </span>
+                                ) : null
+                              })()}
+                              {reengageFans.length > 0 && (
+                                <span style={{ fontSize: 12, color: '#64748B' }}>
+                                  <span style={{ color: '#EC4899', fontWeight: 700 }}>{reengageFans.length} fan{reengageFans.length > 1 ? 's' : ''}</span> to re-engage
+                                </span>
+                              )}
+                            </div>
+                          </>
                         )}
                       </div>
-                    )
-                  })}
-                </div>
-              </div>
-
-              {/* TIER 4 — FAN INTELLIGENCE */}
-              <div style={{ ...glassCard, borderRadius:18, padding:22, marginBottom:18, animation:"fadeUp 0.3s ease 0.1s both" }}>
-                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:16 }}>
-                  <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                    <div style={{ width:34, height:34, borderRadius:10, background:"linear-gradient(135deg,#EC4899,#7C5CFF)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:16 }}>👑</div>
-                    <div>
-                      <div style={{ fontSize:15, fontWeight:800, color:C.white }}>Fan Intelligence</div>
-                      <div style={{ fontSize:11, color:C.muted }}>{scoredFans.filter(f=>f.priority==="urgent").length} urgent · {scoredFans.filter(f=>f.priority==="valuable").length} valuable · {scoredFans.filter(f=>f.priority==="growing").length} growing</div>
                     </div>
                   </div>
-                  {scoredFans.length>4 && <button onClick={() => setExpandFans(e=>!e)} style={{ padding:"4px 12px", borderRadius:8, background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", color:C.muted, fontSize:12, cursor:"pointer" }}>{expandFans?"Show less":`Show ${scoredFans.length-4} more`}</button>}
                 </div>
-                <div style={{ display:"flex", gap:8, marginBottom:14, flexWrap:"wrap" }}>
-                  <div style={{ padding:"4px 12px", borderRadius:20, background:"rgba(248,113,113,0.1)", border:"1px solid rgba(248,113,113,0.25)", fontSize:11, color:C.red, fontWeight:600 }}>⚠️ Top fan = {topFanDependency.top1Pct}% of revenue — concentration risk</div>
-                  <div style={{ padding:"4px 12px", borderRadius:20, background:"rgba(16,185,129,0.08)", border:"1px solid rgba(16,185,129,0.2)", fontSize:11, color:C.green, fontWeight:600 }}>🔁 Returning fans spend {returningVsNew.multiplier}x more</div>
-                </div>
-                <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
-                  {PRI_ORDER.filter(p=>shownGrouped[p]).map(priority => (
-                    <div key={priority}>
-                      <div style={{ fontSize:9, fontWeight:700, color:PRI_COLOR[priority], letterSpacing:1.5, textTransform:"uppercase", marginBottom:5, marginTop:priority!=="urgent"?10:0 }}>{PRI_LABEL[priority]}</div>
-                      {shownGrouped[priority].map((w,i) => (
-                        <div key={i} style={{ display:"flex", alignItems:"center", gap:11, padding:"9px 12px", borderRadius:10, background:"rgba(255,255,255,0.02)", border:"1px solid rgba(255,255,255,0.05)", marginBottom:4, transition:"background 0.15s" }}
-                          onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,0.05)"}
-                          onMouseLeave={e=>e.currentTarget.style.background="rgba(255,255,255,0.02)"}
-                        >
-                          <div style={{ width:30, height:30, borderRadius:8, background:`${PRI_COLOR[priority]}20`, border:`1px solid ${PRI_COLOR[priority]}30`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:800, color:PRI_COLOR[priority], flexShrink:0 }}>{w.username.charAt(0).toUpperCase()}</div>
-                          <div style={{ flex:1, minWidth:0 }}>
-                            <div style={{ display:"flex", alignItems:"center", gap:7, marginBottom:2 }}>
-                              <span style={{ fontSize:13, fontWeight:700, color:C.white }}>{w.username}</span>
-                              <span style={{ fontSize:9, padding:"1px 7px", borderRadius:20, background:`${w.bc}15`, color:w.bc, fontWeight:700 }}>{w.badge}</span>
-                            </div>
-                            <div style={{ fontSize:11, color:C.muted }}>{w.sub}</div>
-                          </div>
-                          <div style={{ display:"flex", gap:6, flexShrink:0 }}>
-                            <button onClick={() => setSelectedWhale(w)} style={{ padding:"3px 8px", borderRadius:6, background:"rgba(34,211,238,0.1)", border:"1px solid rgba(34,211,238,0.2)", color:C.cyan, fontSize:10, cursor:"pointer" }}>Profile</button>
-                            <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }} style={{ padding:"3px", background:"none", border:"none", color:C.pink, fontSize:20, cursor:"pointer", lineHeight:1 }}>💌</button>
-                          </div>
+              )
+            })()}
+
+            {/* ═══════════════════════════════════════
+                LAYER 2 — MONEY SNAPSHOT (KPI strip)
+            ═══════════════════════════════════════ */}
+            {(() => {
+              const now = new Date()
+              const thisMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
+              const prevMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1))
+              const thisMonthRev = tips.filter(t => new Date(t.date_time || t.dateRaw) >= thisMonthStart).reduce((s,t) => s+(t.usd||0), 0)
+              const prevMonthRev = tips.filter(t => { const d=new Date(t.date_time||t.dateRaw); return d>=prevMonthStart && d<thisMonthStart }).reduce((s,t) => s+(t.usd||0), 0)
+              const growthPct = (prevMonthRev > 0 && thisMonthRev > 0) ? Math.round(((thisMonthRev-prevMonthRev)/prevMonthRev)*100) : null
+              const isPositive = growthPct !== null && growthPct >= 0
+              const fansActiveLast30 = new Set(tips.filter(t => (Date.now()-new Date(t.date_time||t.dateRaw))/86400000 <= 30).map(t => t.username)).size
+              const returningPct = (() => {
+                const fc = {}; tips.forEach(t => { fc[t.username]=(fc[t.username]||0)+1 })
+                const total = Object.keys(fc).length
+                const ret = Object.values(fc).filter(c=>c>1).length
+                return total > 0 ? Math.round((ret/total)*100) : 0
+              })()
+              const forecast = dailyBrief ? dailyBrief.predictionLow + '–$' + dailyBrief.predictionHigh : null
+
+              const kpis = [
+                {
+                  label: "This Month",
+                  value: `$${thisMonthRev.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0})}`,
+                  sub: growthPct !== null ? (isPositive ? `↑ ${growthPct}% vs last month` : `↓ ${Math.abs(growthPct)}% vs last month`) : `$${totalRevenue.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0})} all time`,
+                  subColor: isPositive ? C.green : growthPct !== null ? C.red : C.muted,
+                  icon: "💰",
+                },
+                {
+                  label: "Avg $/Hour",
+                  value: `$${avgPerHour.toFixed(2)}`,
+                  sub: avgPerHour > 20 ? "Above avg — keep it up" : "Stream at peak hours",
+                  subColor: C.muted,
+                  icon: "⏱️",
+                },
+                {
+                  label: "Return Rate",
+                  value: `${returningPct}%`,
+                  sub: `${fansActiveLast30} active fans (30d)`,
+                  subColor: C.muted,
+                  icon: "🔁",
+                },
+                {
+                  label: "Tonight's Forecast",
+                  value: forecast ? `$${forecast}` : '—',
+                  sub: dailyBrief?.bhLabel ? `if you stream at ${dailyBrief.bhLabel}` : 'upload more data',
+                  subColor: C.muted,
+                  icon: "🎯",
+                },
+              ]
+
+              const velPlatforms = Object.entries(platformVelocity).filter(([,v]) => v !== null).sort((a,b) => (b[1]||0)-(a[1]||0))
+
+              return (
+                <>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: velPlatforms.length ? 10 : 24 }}>
+                    {kpis.map((k, i) => (
+                      <div key={i} className="dash-card" style={{ ...glassCard, borderRadius: 16, padding: "18px 16px", animation: `fadeUp 0.3s ease ${i*0.05}s both` }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
+                          <span style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 700 }}>{k.label}</span>
+                          <span style={{ fontSize: 18 }}>{k.icon}</span>
+                        </div>
+                        <div style={{ fontSize: 28, fontWeight: 900, background: "linear-gradient(135deg,#60a5fa,#f472b6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", marginBottom: 5, lineHeight: 1.1 }}>{k.value}</div>
+                        <div style={{ fontSize: 11, color: k.subColor, lineHeight: 1.4 }}>{k.sub}</div>
+                      </div>
+                    ))}
+                  </div>
+                  {velPlatforms.length > 0 && (
+                    <div style={{ display: "flex", gap: 8, marginBottom: 24, flexWrap: "wrap" }}>
+                      {velPlatforms.map(([plat, vel], i) => (
+                        <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 12px", borderRadius: 20, background: "rgba(34,211,238,0.06)", border: "1px solid rgba(34,211,238,0.15)" }}>
+                          <span style={{ fontSize: 10, color: C.muted }}>{plat.replace('BongaCams','Bonga').replace('MyFreeCams','MFC').replace('Chaturbate','CB')}</span>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: C.cyan }}>${(vel??0).toFixed(2)}/hr</span>
                         </div>
                       ))}
+                      {earningsVelocity !== null && (
+                        <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 12px", borderRadius: 20, background: "rgba(16,185,129,0.06)", border: "1px solid rgba(16,185,129,0.15)" }}>
+                          <span style={{ fontSize: 10, color: C.muted }}>Overall</span>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: C.green }}>${earningsVelocity.toFixed(2)}/hr</span>
+                        </div>
+                      )}
                     </div>
-                  ))}
-                </div>
-              </div>
+                  )}
+                </>
+              )
+            })()}
 
-              {/* TIER 5 — REVENUE TIMING */}
-              <div style={{ ...glassCard, borderRadius:18, padding:22, marginBottom:18, animation:"fadeUp 0.3s ease 0.15s both" }}>
-                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:16 }}>
-                  <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                    <div style={{ width:34, height:34, borderRadius:10, background:"linear-gradient(135deg,#22D3EE,#7C5CFF)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:16 }}>📊</div>
+            {/* ═══════════════════════════════════════
+                LAYER 3 — FANS TO FOCUS ON
+                Priority-sorted: Urgent / Valuable / Growing / Cold
+                Single list, single action per row
+            ═══════════════════════════════════════ */}
+            {(() => {
+              const now = Date.now()
+
+              // Score every fan — higher = more urgent
+              const scoredFans = whales.map(w => {
+                const daysSince = w.daysSinceLastTip || Math.floor((now - new Date(w.lastTipDate)) / 86400000)
+                const fanTips = (w.tips && w.tips.length > 0) ? w.tips : tips.filter(t => t.username?.toLowerCase() === w.username?.toLowerCase())
+                const hourCounts = {}
+                fanTips.forEach(t => { const h = new Date(t.date_time||t.dateRaw).getUTCHours(); hourCounts[h]=(hourCounts[h]||0)+1 })
+                const peakH = Object.entries(hourCounts).sort((a,b)=>b[1]-a[1])[0]
+                const hoursAway = peakH ? (parseInt(peakH[0]) - new Date().getUTCHours() + 24) % 24 : 99
+                const isLikelyOnline = hoursAway <= 2 && fanTips.length >= 3
+                const nearMilestone = [50,100,200,500].some(m => { const r=m-w.totalUSD; return r>0 && r<=m*0.1 })
+                const isHighValue = w.totalUSD >= 50
+                const isGrowing = w.tipCount >= 3 && daysSince <= 14
+                const isChurning = w.churnRisk?.level === 'High' || w.churnRisk?.level === 'Critical'
+
+                let priority = 'cold'
+                let priorityScore = 0
+                let sub = `${daysSince}d since last tip`
+                let badgeLabel = null, badgeColor = C.muted
+
+                if (isLikelyOnline && isHighValue) {
+                  priority = 'urgent'; priorityScore = 100 + w.totalUSD
+                  sub = `likely online now · $${w.totalUSD.toFixed(0)} lifetime`
+                  badgeLabel = 'Online now'; badgeColor = C.green
+                } else if (isChurning && isHighValue) {
+                  priority = 'urgent'; priorityScore = 90 + w.totalUSD
+                  sub = `${daysSince}d gone · $${w.totalUSD.toFixed(0)} lifetime`
+                  badgeLabel = 'At risk'; badgeColor = C.red
+                } else if (nearMilestone) {
+                  priority = 'valuable'; priorityScore = 80 + w.totalUSD
+                  const m = [50,100,200,500].find(m => { const r=m-w.totalUSD; return r>0 && r<=m*0.1 })
+                  sub = `$${(m-w.totalUSD).toFixed(0)} from $${m} milestone`
+                  badgeLabel = 'Near milestone'; badgeColor = C.gold
+                } else if (isHighValue && daysSince <= 30) {
+                  priority = 'valuable'; priorityScore = 70 + w.totalUSD
+                  sub = `$${w.totalUSD.toFixed(0)} lifetime · ${daysSince}d ago`
+                  badgeLabel = 'VIP'; badgeColor = C.gold
+                } else if (isGrowing) {
+                  priority = 'growing'; priorityScore = 50 + w.tipCount
+                  sub = `${w.tipCount} tips · every ~${Math.round(w.avgDaysBetweenTips||7)}d`
+                  badgeLabel = 'Growing'; badgeColor = C.cyan
+                } else if (daysSince > 45 && w.totalUSD >= 20) {
+                  priority = 'cold'; priorityScore = 30 + w.totalUSD / 10
+                  sub = `$${w.totalUSD.toFixed(0)} lifetime · ${daysSince}d gone`
+                  badgeLabel = 'Cold'; badgeColor = C.muted
+                }
+
+                return { ...w, priority, priorityScore, sub, badgeLabel, badgeColor }
+              })
+
+              // Sort by score, show top 6
+              const topFans = scoredFans
+                .filter(w => w.badgeLabel)
+                .sort((a,b) => b.priorityScore - a.priorityScore)
+                .slice(0, 6)
+
+              if (!topFans.length) return null
+
+              const PRIORITY_ORDER = ['urgent','valuable','growing','cold']
+              const PRIORITY_LABELS = { urgent: 'URGENT', valuable: 'VALUABLE', growing: 'GROWING', cold: 'COLD' }
+              const PRIORITY_COLORS = { urgent: C.red, valuable: C.gold, growing: C.cyan, cold: C.muted }
+
+              // Group by priority
+              const grouped = {}
+              topFans.forEach(f => {
+                if (!grouped[f.priority]) grouped[f.priority] = []
+                grouped[f.priority].push(f)
+              })
+
+              return (
+                <div style={{ ...glassCard, borderRadius: 18, padding: 24, marginBottom: 24, animation: "fadeUp 0.3s ease 0.1s both" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
+                    <div style={{ width: 36, height: 36, borderRadius: 10, background: "linear-gradient(135deg,#EC4899,#7C5CFF)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>👑</div>
                     <div>
-                      <div style={{ fontSize:15, fontWeight:800, color:C.white }}>Revenue Timing & Platform ROI</div>
-                      <div style={{ fontSize:11, color:C.muted }}>avg $/active day</div>
+                      <div style={{ fontSize: 16, fontWeight: 800, color: C.white }}>Fans to Focus On</div>
+                      <div style={{ fontSize: 11, color: C.muted }}>Sorted by revenue opportunity</div>
                     </div>
                   </div>
-                  <button onClick={() => setExpandTiming(e=>!e)} style={{ padding:"4px 12px", borderRadius:8, background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", color:C.muted, fontSize:12, cursor:"pointer" }}>{expandTiming?"Collapse":"Expand ↓"}</button>
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {PRIORITY_ORDER.filter(p => grouped[p]).map(priority => (
+                      <div key={priority}>
+                        <div style={{ fontSize: 9, fontWeight: 700, color: PRIORITY_COLORS[priority], letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 6, marginTop: priority !== 'urgent' ? 12 : 0 }}>
+                          {PRIORITY_LABELS[priority]}
+                        </div>
+                        {grouped[priority].map((w, i) => (
+                          <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", borderRadius: 10, background: `rgba(255,255,255,0.02)`, border: "1px solid rgba(255,255,255,0.05)", marginBottom: 4, transition: "background 0.15s" }}
+                            onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.05)"}
+                            onMouseLeave={e => e.currentTarget.style.background = "rgba(255,255,255,0.02)"}
+                          >
+                            {/* Avatar */}
+                            <div style={{ width: 32, height: 32, borderRadius: 8, background: `${PRIORITY_COLORS[priority]}20`, border: `1px solid ${PRIORITY_COLORS[priority]}30`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800, color: PRIORITY_COLORS[priority], flexShrink: 0 }}>
+                              {w.username.charAt(0).toUpperCase()}
+                            </div>
+                            {/* Info */}
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 2 }}>
+                                <span style={{ fontSize: 13, fontWeight: 700, color: C.white }}>{w.username}</span>
+                                <span style={{ fontSize: 9, padding: "1px 7px", borderRadius: 20, background: `${w.badgeColor}15`, color: w.badgeColor, fontWeight: 700 }}>{w.badgeLabel}</span>
+                              </div>
+                              <div style={{ fontSize: 11, color: C.muted }}>{w.sub}</div>
+                            </div>
+                            {/* Action */}
+                            <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }}
+                              style={{ padding: "4px", background: "none", border: "none", color: C.pink, fontSize: 22, cursor: "pointer", flexShrink: 0, lineHeight: 1, opacity: 0.8, transition: "opacity 0.15s" }}
+                              onMouseEnter={e => e.currentTarget.style.opacity = 1}
+                              onMouseLeave={e => e.currentTarget.style.opacity = 0.8}
+                            >💌</button>
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                {/* Heatmap */}
-                {platList2.length > 0 && (
-                  <div style={{ marginBottom:16 }}>
-                    <div style={{ overflowX:"auto" }}>
-                      <div style={{ display:"grid", gridTemplateColumns:"68px repeat(7,1fr)", gap:3, minWidth:400 }}>
+              )
+            })()}
+
+            {/* ═══════════════════════════════════════
+                LAYER 4 — HEATMAP + PLATFORM ROI
+                Hero visual first, then per-platform one-liners
+            ═══════════════════════════════════════ */}
+            <div style={{ ...glassCard, borderRadius: 18, padding: 24, marginBottom: 24, animation: "fadeUp 0.3s ease 0.15s both" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
+                <div style={{ fontSize: 16, fontWeight: 800, color: C.white }}>When & Where to Stream</div>
+                <span style={{ fontSize: 11, color: C.muted, padding: "2px 8px", borderRadius: 20, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }}>avg $/active day</span>
+              </div>
+
+              {/* HEATMAP — hero */}
+              {(() => {
+                const UTC_DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
+                const platDayUSD = {}; const platDayDates = {}
+                tips.forEach(t => {
+                  const p = t.platform; const dt = new Date(t.date_time || t.dateRaw)
+                  const shortDay = UTC_DAYS[dt.getUTCDay()]; const dateKey = dt.toISOString().slice(0,10)
+                  if (!platDayUSD[p]) platDayUSD[p] = {}
+                  if (!platDayDates[p]) platDayDates[p] = {}
+                  platDayUSD[p][shortDay] = (platDayUSD[p][shortDay]||0) + (t.usd||0)
+                  if (!platDayDates[p][shortDay]) platDayDates[p][shortDay] = new Set()
+                  platDayDates[p][shortDay].add(dateKey)
+                })
+                const platDayAvg = {}
+                Object.keys(platDayUSD).forEach(p => {
+                  platDayAvg[p] = {}
+                  UTC_DAYS.forEach(d => {
+                    const total = platDayUSD[p][d]||0; const activeDays = platDayDates[p]?.[d]?.size||1
+                    platDayAvg[p][d] = total > 0 ? parseFloat((total/activeDays).toFixed(2)) : 0
+                  })
+                })
+                const platList = Object.keys(platDayAvg)
+                if (!platList.length) return null
+                const todayShort = UTC_DAYS[new Date().getUTCDay()]
+                const todayLong = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][new Date().getUTCDay()]
+
+                return (
+                  <div style={{ marginBottom: 20 }}>
+                    <div className="heatmap-wrap" style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+                      <div style={{ display: "grid", gridTemplateColumns: "72px repeat(7,1fr)", gap: 3, minWidth: 420 }}>
                         <div/>
-                        {UTC_DAYS2.map(d => <div key={d} style={{ textAlign:"center", fontSize:11, fontWeight:700, color:d===todayShort2?C.cyan:C.muted, paddingBottom:3 }}>{d}</div>)}
-                        {platList2.map(plat => {
-                          const dayVals=UTC_DAYS2.map(d=>platDayAvg2[plat][d]||0)
-                          const maxV=Math.max(...dayVals,0.01)
+                        {UTC_DAYS.map(d => (
+                          <div key={d} style={{ textAlign: "center", fontSize: 11, fontWeight: 700, color: d===todayShort ? C.cyan : C.muted, paddingBottom: 4 }}>{d}</div>
+                        ))}
+                        {platList.map(plat => {
+                          const dayVals = UTC_DAYS.map(d => platDayAvg[plat][d]||0)
+                          const maxVal = Math.max(...dayVals, 0.01)
                           return [
-                            <div key={plat+"_l"} style={{ fontSize:10, fontWeight:700, color:C.text, display:"flex", alignItems:"center", paddingRight:4 }}>{plat.replace("BongaCams","Bonga").replace("Chaturbate","CB").replace("MyFreeCams","MFC")}</div>,
-                            ...UTC_DAYS2.map(d => {
-                              const val=platDayAvg2[plat][d]||0,intensity=maxV>0?val/maxV:0,isToday=d===todayShort2
-                              const bg=val===0?"rgba(255,255,255,0.03)":intensity<0.25?"rgba(34,211,238,0.12)":intensity<0.5?"rgba(34,211,238,0.30)":intensity<0.75?"rgba(34,211,238,0.60)":"rgba(34,211,238,0.90)"
+                            <div key={plat+'_l'} style={{ fontSize: 10, fontWeight: 700, color: C.text, display: "flex", alignItems: "center", paddingRight: 4 }}>
+                              {plat.replace('BongaCams','Bonga').replace('Chaturbate','CB').replace('MyFreeCams','MFC')}
+                            </div>,
+                            ...UTC_DAYS.map(d => {
+                              const val = platDayAvg[plat][d]||0
+                              const intensity = maxVal > 0 ? val/maxVal : 0
+                              const isToday = d === todayShort
+                              const bg = val===0 ? "rgba(255,255,255,0.03)" : intensity<0.25 ? "rgba(34,211,238,0.12)" : intensity<0.5 ? "rgba(34,211,238,0.30)" : intensity<0.75 ? "rgba(34,211,238,0.60)" : "rgba(34,211,238,0.90)"
                               return (
-                                <div key={d} style={{ height:30, borderRadius:5, background:bg, border:isToday?"2px solid rgba(34,211,238,0.6)":"1px solid rgba(255,255,255,0.05)", display:"flex", alignItems:"center", justifyContent:"center" }}>
-                                  {val>0&&<span style={{ fontSize:9, fontWeight:700, color:intensity>0.45?"#fff":C.muted }}>${val>=100?Math.round(val):val.toFixed(0)}</span>}
+                                <div key={d} title={`${plat} ${d}: avg $${val.toFixed(2)}/day`}
+                                  onClick={() => { if (val>0) { setChartDrillDay(d); handleTabChange("whales") } }}
+                                  style={{ height: 32, borderRadius: 5, background: bg, border: isToday ? "2px solid rgba(34,211,238,0.6)" : "1px solid rgba(255,255,255,0.05)", display: "flex", alignItems: "center", justifyContent: "center", cursor: val>0 ? "pointer" : "default", transition: "all 0.15s" }}
+                                  onMouseEnter={e => { if (val>0) { e.currentTarget.style.transform="scale(1.08)"; e.currentTarget.style.boxShadow="0 0 8px rgba(34,211,238,0.4)" } }}
+                                  onMouseLeave={e => { e.currentTarget.style.transform="scale(1)"; e.currentTarget.style.boxShadow="" }}>
+                                  {val>0 && <span style={{ fontSize: 9, fontWeight: 700, color: intensity>0.45 ? "#fff" : C.muted }}>${val>=100 ? Math.round(val) : val.toFixed(0)}</span>}
                                 </div>
                               )
                             })
@@ -2173,96 +2318,97 @@ const handleCSV = async (file, forcePlatform = null) => {
                         })}
                       </div>
                     </div>
-                    <div style={{ marginTop:5, fontSize:10, color:C.muted }}>Today ({todayLong2}) highlighted · darker = more earnings</div>
+                    <div style={{ marginTop: 6, fontSize: 10, color: C.muted }}>Today ({todayLong}) highlighted · darker = more earnings · click any cell to filter fans</div>
                   </div>
-                )}
-                {/* Platform ROI bars */}
-                <div style={{ display:"flex", flexDirection:"column", gap:7 }}>
-                  {platforms.map((p,i) => {
-                    const roi=platformVelocity[p.platform]||null,col=platColors2[p.platform]||C.blue,isTop=i===0
-                    const maxUPH=Math.max(...platforms.map(pl=>platformVelocity[pl.platform]||0),1)
-                    const uptPct=maxUPH>0&&roi?Math.round((roi/maxUPH)*100):0
-                    const bth=platformBestTimes[p.platform],bthHour=bth?.hour?.hour??bth?.hour??null
-                    const missed2=missedRevenueByPlat[p.platform]
-                    const hasWarn=missed2&&missed2.missedRevenue>5&&missed2.overallAvg>0&&missed2.bestHourAvg>missed2.overallAvg
-                    const missedPct=hasWarn?Math.min(Math.round(((missed2.bestHourAvg-missed2.overallAvg)/missed2.overallAvg)*100),999):0
-                    return (
-                      <div key={i} style={{ display:"flex", alignItems:"center", gap:10, padding:"9px 12px", borderRadius:10, background:isTop?`${col}08`:"rgba(255,255,255,0.02)", border:`1px solid ${isTop?col+"25":"rgba(255,255,255,0.05)"}` }}>
-                        <div style={{ width:7, height:7, borderRadius:"50%", background:col, flexShrink:0, boxShadow:isTop?`0 0 5px ${col}`:"none" }} />
-                        <div style={{ flex:1 }}>
-                          <div style={{ display:"flex", alignItems:"center", gap:7, marginBottom:3 }}>
-                            <span style={{ fontSize:13, fontWeight:700, color:C.white }}>{p.platform}</span>
-                            {isTop&&<span style={{ fontSize:9, color:col, fontWeight:700 }}>TOP ROI</span>}
-                            {roi&&<span style={{ fontSize:12, color:col, fontWeight:700 }}>${roi.toFixed(2)}/hr</span>}
-                            {bthHour!==null&&<span style={{ fontSize:11, color:C.muted }}>Best: {formatHour(bthHour)}</span>}
-                          </div>
-                          <div style={{ height:3, borderRadius:2, background:"rgba(255,255,255,0.06)", overflow:"hidden", maxWidth:180 }}>
-                            <div style={{ height:"100%", width:`${uptPct}%`, background:col, borderRadius:2 }} />
-                          </div>
-                        </div>
-                        {hasWarn&&<div style={{ fontSize:10, color:C.orange, fontWeight:700, whiteSpace:"nowrap" }}>↓{missedPct}% off-peak</div>}
-                      </div>
-                    )
-                  })}
-                </div>
-                {/* Expanded: missed revenue + real-time intel */}
-                {expandTiming && (
-                  <div style={{ marginTop:14, paddingTop:14, borderTop:"1px solid rgba(255,255,255,0.06)" }}>
-                    <div style={{ fontSize:11, fontWeight:700, color:C.orange, textTransform:"uppercase", letterSpacing:1, marginBottom:10 }}>💸 Missed Revenue Analysis</div>
-                    {Object.entries(missedRevenueByPlat).map(([plat,m]) => (
-                      <div key={plat} style={{ padding:"10px 14px", borderRadius:10, background:"rgba(251,146,60,0.07)", border:"1px solid rgba(251,146,60,0.2)", marginBottom:8 }}>
-                        <div style={{ fontSize:13, fontWeight:700, color:C.white, marginBottom:3 }}>{plat}</div>
-                        <div style={{ fontSize:12, color:C.muted }}>Leaving <span style={{ color:C.orange, fontWeight:700 }}>${m.missedRevenue.toFixed(0)}</span> on the table by streaming off-peak · best hour: <span style={{ color:C.green, fontWeight:700 }}>${m.bestHourAvg.toFixed(2)}/session</span> vs <span style={{ color:C.muted }}>${m.overallAvg.toFixed(2)} avg</span></div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+                )
+              })()}
 
-              {/* TIER 6 — SMART INSIGHTS (collapsible) */}
-              <div style={{ ...glassCard, borderRadius:18, overflow:"hidden", marginBottom:18, animation:"fadeUp 0.3s ease 0.2s both" }}>
-                <button onClick={() => setExpandInsights(e=>!e)}
-                  style={{ width:"100%", display:"flex", alignItems:"center", justifyContent:"space-between", padding:"16px 22px", background:"none", border:"none", cursor:"pointer", textAlign:"left" }}>
-                  <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                    <div style={{ width:34, height:34, borderRadius:10, background:"linear-gradient(135deg,#7C5CFF,#22D3EE)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:16 }}>💡</div>
-                    <div>
-                      <div style={{ fontSize:15, fontWeight:800, color:C.white }}>Smart Insights & Deep Analytics</div>
-                      <div style={{ fontSize:11, color:C.muted }}>Earning patterns · retention · behavior analysis</div>
-                    </div>
-                  </div>
-                  <span style={{ fontSize:16, color:C.muted, transition:"transform 0.2s", transform:expandInsights?"rotate(180deg)":"rotate(0deg)" }}>▼</span>
-                </button>
-                {expandInsights && (
-                  <div style={{ padding:"0 22px 22px", borderTop:"1px solid rgba(255,255,255,0.06)" }}>
-                    <div style={{ display:"flex", flexDirection:"column", gap:8, paddingTop:16 }}>
-                      {preTipBehavior && (
-                        <div style={{ padding:"12px 14px", borderRadius:11, background:"rgba(34,211,238,0.05)", border:"1px solid rgba(34,211,238,0.15)" }}>
-                          <div style={{ fontSize:12, fontWeight:700, color:C.cyan, marginBottom:4 }}>⚡ Pre-Stream Tip Behavior</div>
-                          <div style={{ fontSize:12, color:C.text, lineHeight:1.6 }}>{preTipBehavior.insight}</div>
+              {/* Platform one-liners */}
+              {(() => {
+                const fmtH = h => h===0?'12 AM':h<12?`${h} AM`:h===12?'12 PM':`${h-12} PM`
+                const platColors = { Chaturbate: C.cyan, BongaCams: C.pink, MyFreeCams: C.gold }
+                const allPlats = [...(analytics?.platforms||[])].sort((a,b)=>b.totalUSD-a.totalUSD)
+                if (!allPlats.length) return null
+                const maxUPH = Math.max(...allPlats.map(p => platformVelocity[p.platform]||0), 1)
+
+                return (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {allPlats.map((p, i) => {
+                      const roi = platformVelocity[p.platform] ?? (p.hours>0 ? parseFloat((p.totalUSD/p.hours).toFixed(2)) : null)
+                      const col = platColors[p.platform] || C.blue
+                      const isTop = i === 0
+                      const bestTime = platformBestTimes[p.platform]
+                      const uptPct = maxUPH>0 && roi ? Math.round((roi/maxUPH)*100) : 0
+
+                      // Missed revenue warning
+                      const missed = missedRevenueByPlat[p.platform]
+                      const hasWarning = missed && missed.missedRevenue > 10
+
+                      return (
+                        <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", borderRadius: 10, background: isTop ? `${col}08` : "rgba(255,255,255,0.02)", border: `1px solid ${isTop ? col+'25' : 'rgba(255,255,255,0.05)'}` }}>
+                          <div style={{ width: 8, height: 8, borderRadius: "50%", background: col, flexShrink: 0, boxShadow: isTop ? `0 0 6px ${col}` : 'none' }} />
+                          <div style={{ flex: 1 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
+                              <span style={{ fontSize: 13, fontWeight: 700, color: C.white }}>{p.platform.replace('BongaCams','Bonga').replace('MyFreeCams','MFC')}</span>
+                              {isTop && <span style={{ fontSize: 9, color: col, fontWeight: 700 }}>TOP ROI</span>}
+                              {roi !== null && <span style={{ fontSize: 12, color: col, fontWeight: 700 }}>${roi.toFixed(2)}/hr</span>}
+                              {bestTime && <span style={{ fontSize: 11, color: C.muted }}>Best: {fmtH(bestTime.hour)}</span>}
+                            </div>
+                            <div style={{ height: 3, borderRadius: 2, background: "rgba(255,255,255,0.06)", overflow: "hidden", maxWidth: 200 }}>
+                              <div style={{ height: "100%", width: `${uptPct}%`, background: col, borderRadius: 2 }} />
+                            </div>
+                          </div>
+                          {hasWarning && (
+                            <div style={{ fontSize: 10, color: C.orange, fontWeight: 700, whiteSpace: "nowrap" }}>
+                              Bonga ↓{Math.round(missed.missedRevenue > 0 ? ((missed.bestHourAvg - missed.overallAvg)/missed.overallAvg*100) : 0)}% off-peak
+                            </div>
+                          )}
                         </div>
-                      )}
-                      <div style={{ padding:"12px 14px", borderRadius:11, background:"rgba(245,158,11,0.06)", border:"1px solid rgba(245,158,11,0.2)" }}>
-                        <div style={{ fontSize:12, fontWeight:700, color:C.gold, marginBottom:4 }}>⚠️ Revenue Concentration</div>
-                        <div style={{ fontSize:12, color:C.text }}>Top fan = <span style={{ fontWeight:700, color:C.gold }}>{topFanDependency.top1Pct}%</span> of all revenue. Top 3 fans = <span style={{ fontWeight:700 }}>{topFanDependency.top3Pct}%</span>. Moderate concentration — keep building your base.</div>
-                      </div>
-                      <div style={{ padding:"12px 14px", borderRadius:11, background:"rgba(16,185,129,0.06)", border:"1px solid rgba(16,185,129,0.15)" }}>
-                        <div style={{ fontSize:12, fontWeight:700, color:C.green, marginBottom:4 }}>🔁 Retention Intelligence</div>
-                        <div style={{ fontSize:12, color:C.text }}>Returning fans spend <span style={{ color:C.green, fontWeight:700 }}>{returningVsNew.multiplier}x more</span> than new fans. <span style={{ color:C.cyan, fontWeight:700 }}>{returningVsNew.returningPct}%</span> of your tippers have come back more than once.</div>
-                      </div>
-                      {insights.map((ins,i) => (
-                        <div key={i} style={{ display:"flex", alignItems:"flex-start", gap:10, padding:"9px 12px", borderRadius:9, background:"rgba(255,255,255,0.03)", border:"1px solid rgba(255,255,255,0.07)" }}>
-                          <span style={{ fontSize:14, flexShrink:0 }}>{ins.icon}</span>
-                          <span style={{ fontSize:12, color:C.text, lineHeight:1.55 }}>{ins.text}</span>
-                        </div>
-                      ))}
-                    </div>
+                      )
+                    })}
                   </div>
-                )}
-              </div>
+                )
+              })()}
             </div>
-          )}
 
-          {/* ═══════════ TOP FANS TAB ═══════════ */}
+            {/* ═══════════════════════════════════════
+                BONUS — SMART INSIGHTS (collapsed, 2 max)
+                Only show if there's something genuinely new
+            ═══════════════════════════════════════ */}
+            {(insights.length > 0 || topFanDependency || returningVsNew) && (
+              <div style={{ ...glassCard, borderRadius: 16, padding: 20, marginBottom: 24, animation: "fadeUp 0.3s ease 0.2s both" }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>💡 Smart Insights</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {topFanDependency && topFanDependency.top1Pct > 20 && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", borderRadius: 9, background: "rgba(248,113,113,0.06)", border: "1px solid rgba(248,113,113,0.15)" }}>
+                      <span style={{ fontSize: 14 }}>⚠️</span>
+                      <span style={{ fontSize: 12, color: C.text }}>
+                        Top fan is <span style={{ color: C.red, fontWeight: 700 }}>{topFanDependency.top1Pct}%</span> of your revenue — diversify your audience
+                      </span>
+                    </div>
+                  )}
+                  {returningVsNew && returningVsNew.multiplier && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", borderRadius: 9, background: "rgba(16,185,129,0.06)", border: "1px solid rgba(16,185,129,0.12)" }}>
+                      <span style={{ fontSize: 14 }}>🔁</span>
+                      <span style={{ fontSize: 12, color: C.text }}>
+                        Returning fans spend <span style={{ color: C.green, fontWeight: 700 }}>{returningVsNew.multiplier}x more</span> than new fans — focus on retention
+                      </span>
+                    </div>
+                  )}
+                  {insights.slice(0,2).map((ins, i) => (
+                    <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "9px 12px", borderRadius: 9, background: "rgba(34,211,238,0.04)", border: "1px solid rgba(34,211,238,0.1)" }}>
+                      <span style={{ fontSize: 14, flexShrink: 0 }}>{ins.icon}</span>
+                      <span style={{ fontSize: 12, color: C.text, lineHeight: 1.5 }}>{ins.text}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+          </div>
+        )}
+
+
         {activeTab === "platforms" && (() => {
           // ── Time filter
           const now = Date.now()
@@ -3960,20 +4106,7 @@ const handleCSV = async (file, forcePlatform = null) => {
           </div>
         )}
 
-        
-        {activeTab === "calc" && (
-          <div style={{ maxWidth: 600, margin: "0 auto" }}>
-            <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 8 }}>🪙 Token Calculator</h1>
-            <p style={{ fontSize: 13, color: C.muted, marginBottom: 28 }}>Convert tokens to USD instantly across all platforms</p>
-            <div style={{ ...glassCard, borderRadius: 16, padding: 28, marginBottom: 16 }}>
-              <TokenCalcWidget tokenRates={tokenRates} />
-            </div>
-            <div style={{ padding: "14px 18px", borderRadius: 12, background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.2)", fontSize: 12, color: C.muted }}>
-              💡 Rates match your custom token rates set in Edit Data.
-            </div>
-          </div>
-        )}
-{activeTab === "help" && (
+        {activeTab === "help" && (
           <div style={{ maxWidth: 900 }}>
             <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 8 }}>❓ How to Import Your Tips</h1>
             <p style={{ fontSize: 14, color: C.muted, marginBottom: 32 }}>Follow these steps to get your tip data into CamCash in under 2 minutes</p>
