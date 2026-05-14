@@ -2280,7 +2280,6 @@ const handleCSV = async (file, forcePlatform = null) => {
             })()}
 
             
-              {/* ── RE-ENGAGE STRIP ── */}
               {reengageList && reengageList.length > 0 && (
                 <div style={{ marginTop:14, padding:"14px 16px", borderRadius:12, background:"rgba(236,72,153,0.06)", border:"1px solid rgba(236,72,153,0.18)" }}>
                   <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
@@ -2798,7 +2797,7 @@ const handleCSV = async (file, forcePlatform = null) => {
 
             {/* ALL TIPPERS TABLE — shows everyone */}
             <div style={{ ...glassCard, borderRadius: 14, overflow: "hidden", marginBottom: 20 }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 700 }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                 <thead>
                   <tr style={{ background: "rgba(255,255,255,0.04)", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
                     {["#", "Username", "Total $", "Tips", "Avg Tip", "Platform", "Tier", "Last Tip", "Actions"].map(h => (
@@ -2827,13 +2826,12 @@ const handleCSV = async (file, forcePlatform = null) => {
                       </td>
                       <td style={{ padding: "12px 16px", color: C.muted, fontSize: 12 }}>{new Date(w.lastTipDate).toLocaleDateString()}</td>
                       <td style={{ padding: "12px 16px" }}>
-                        <button onClick={() => setSelectedWhale(w)} style={{ padding: "6px 14px", borderRadius: 8, background: "rgba(34,211,238,0.15)", border: "1px solid rgba(34,211,238,0.3)", color: C.cyan, fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>🔍 View Profile</button>
+                        <button onClick={() => setSelectedWhale(w)} style={{ padding: "6px 14px", borderRadius: 8, background: "rgba(34,211,238,0.15)", border: "1px solid rgba(34,211,238,0.3)", color: C.cyan, fontSize: 12, fontWeight:700, cursor: "pointer", whiteSpace:"nowrap" }}>🔍 Profile</button>
                       </td>
                     </tr>
                   ))}
                 </tbody>
-              </table>
-              </div>
+              </table></div>
             </div>
 
             {/* 💎 WHALE INTELLIGENCE PANEL */}
