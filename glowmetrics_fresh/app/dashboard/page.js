@@ -5,6 +5,7 @@ import { supabase } from "../../lib/supabase"
 import { parseCSV, aggregateRows as runEngine } from "../../lib/analytics"
 import CSVImport from "./CSVImport"
 import Sidebar from "./Sidebar"
+import { useDashboard } from "./useDashboard"
 
 // Analytics tracking — works whether or not @vercel/analytics is installed
 let track = (event, props) => {}
@@ -2037,7 +2038,33 @@ const handleCSV = async (file, forcePlatform = null) => {
               )
             })()}
 
-            {/* ═══════════════════════════════════════
+            
+              {/* ── LIVE OPPORTUNITIES ── */}
+              {whatsNextAlerts && whatsNextAlerts.length > 0 && (
+                <div style={{ marginBottom:20 }}>
+                  <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }}>
+                    <div style={{ fontSize:13, fontWeight:700, color:C.white }}>🚨 Live Opportunities <span style={{ fontSize:11, color:C.muted, fontWeight:400 }}>{whatsNextAlerts.length} actions</span></div>
+                    <button onClick={() => handleTabChange("whales")} style={{ fontSize:11, color:C.cyan, background:"none", border:"none", cursor:"pointer" }}>See all →</button>
+                  </div>
+                  <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                    {whatsNextAlerts.slice(0,3).map((a,i) => (
+                      <div key={i} style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 14px", borderRadius:11,
+                        background:a.type==="online_now"?"rgba(16,185,129,0.08)":a.type==="win_back"?"rgba(236,72,153,0.08)":a.type==="milestone"?"rgba(245,158,11,0.08)":"rgba(251,146,60,0.07)",
+                        border:a.type==="online_now"?"1px solid rgba(16,185,129,0.25)":a.type==="win_back"?"1px solid rgba(236,72,153,0.25)":a.type==="milestone"?"1px solid rgba(245,158,11,0.25)":"1px solid rgba(251,146,60,0.2)" }}>
+                        <div style={{ fontSize:18, flexShrink:0 }}>{a.icon||"⚡"}</div>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={{ fontSize:13, fontWeight:700, color:C.white, marginBottom:2 }}>{a.title}</div>
+                          <div style={{ fontSize:11, color:C.muted, lineHeight:1.4 }}>{a.message}</div>
+                        </div>
+                        {a.whale && <button onClick={() => { setMessageTarget(a.whale); setMessageIndex(0) }}
+                          style={{ padding:"5px 10px", borderRadius:8, background:"rgba(34,211,238,0.1)", border:"1px solid rgba(34,211,238,0.25)", color:C.cyan, fontSize:11, fontWeight:700, cursor:"pointer", flexShrink:0 }}>💌</button>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+{/* ═══════════════════════════════════════
                 LAYER 2 — MONEY SNAPSHOT (KPI strip)
             ═══════════════════════════════════════ */}
             {(() => {
@@ -2059,17 +2086,17 @@ const handleCSV = async (file, forcePlatform = null) => {
 
               const kpis = [
                 {
-                  label: "This Month",
-                  value: `$${thisMonthRev.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0})}`,
-                  sub: growthPct !== null ? (isPositive ? `↑ ${growthPct}% vs last month` : `↓ ${Math.abs(growthPct)}% vs last month`) : `$${totalRevenue.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0})} all time`,
-                  subColor: isPositive ? C.green : growthPct !== null ? C.red : C.muted,
+                  label: "Total Earned",
+                  value: `${totalRevenue.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0})}`,
+                  sub: thisMonthRev > 0 ? `${thisMonthRev.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0})} this month` : `across all platforms`,
+                  subColor: thisMonthRev > 0 ? C.green : C.muted,
                   icon: "💰",
                 },
                 {
                   label: "Avg $/Hour",
-                  value: `$${avgPerHour.toFixed(2)}`,
-                  sub: avgPerHour > 20 ? "Above avg — keep it up" : "Stream at peak hours",
-                  subColor: C.muted,
+                  value: `${avgPerHour.toFixed(2)}`,
+                  sub: (() => { const top = Object.entries(platformVelocity).filter(([,v])=>v!=null).sort((a,b)=>(b[1]||0)-(a[1]||0))[0]; return top ? `Best: ${top[0].replace("BongaCams","Bonga").replace("MyFreeCams","MFC").replace("Chaturbate","CB")} ${(top[1]||0).toFixed(0)}/hr` : "Stream at peak hours" })(),
+                  subColor: C.cyan,
                   icon: "⏱️",
                 },
                 {
@@ -2207,6 +2234,10 @@ const handleCSV = async (file, forcePlatform = null) => {
                     <div>
                       <div style={{ fontSize: 16, fontWeight: 800, color: C.white }}>Fans to Focus On</div>
                       <div style={{ fontSize: 11, color: C.muted }}>Sorted by revenue opportunity</div>
+                  <div style={{ display:"flex", gap:8, marginTop:8, flexWrap:"wrap" }}>
+                    {topFanDependency && <div style={{ padding:"3px 10px", borderRadius:20, background:"rgba(248,113,113,0.1)", border:"1px solid rgba(248,113,113,0.2)", fontSize:11, color:C.red, fontWeight:600 }}>⚠️ Top fan = {topFanDependency.top1Pct}% of revenue</div>}
+                    {returningVsNew && <div style={{ padding:"3px 10px", borderRadius:20, background:"rgba(16,185,129,0.08)", border:"1px solid rgba(16,185,129,0.18)", fontSize:11, color:C.green, fontWeight:600 }}>🔁 Returning fans spend {returningVsNew.multiplier}x more</div>}
+                  </div>
                     </div>
                   </div>
 
@@ -2248,7 +2279,26 @@ const handleCSV = async (file, forcePlatform = null) => {
               )
             })()}
 
-            {/* ═══════════════════════════════════════
+            
+              {/* ── RE-ENGAGE STRIP ── */}
+              {reengageList && reengageList.length > 0 && (
+                <div style={{ marginTop:14, padding:"14px 16px", borderRadius:12, background:"rgba(236,72,153,0.06)", border:"1px solid rgba(236,72,153,0.18)" }}>
+                  <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
+                    <div style={{ fontSize:13, fontWeight:700, color:C.white }}>💌 Re-engage <span style={{ fontSize:11, color:C.muted, fontWeight:400 }}>{reengageList.length} fans gone quiet</span></div>
+                    <button onClick={() => handleTabChange("whales")} style={{ fontSize:11, color:C.pink, background:"none", border:"none", cursor:"pointer" }}>See all →</button>
+                  </div>
+                  <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+                    {reengageList.slice(0,4).map((item,i) => (
+                      <button key={i} onClick={() => { setMessageTarget(item.whale); setMessageIndex(0) }}
+                        style={{ padding:"6px 12px", borderRadius:20, background:"rgba(236,72,153,0.1)", border:"1px solid rgba(236,72,153,0.25)", color:C.pink, fontSize:12, fontWeight:600, cursor:"pointer" }}>
+                        {item.whale.username} · {item.whale.daysSinceLastTip}d
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+{/* ═══════════════════════════════════════
                 LAYER 4 — HEATMAP + PLATFORM ROI
                 Hero visual first, then per-platform one-liners
             ═══════════════════════════════════════ */}
@@ -2748,7 +2798,7 @@ const handleCSV = async (file, forcePlatform = null) => {
 
             {/* ALL TIPPERS TABLE — shows everyone */}
             <div style={{ ...glassCard, borderRadius: 14, overflow: "hidden", marginBottom: 20 }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 700 }}>
                 <thead>
                   <tr style={{ background: "rgba(255,255,255,0.04)", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
                     {["#", "Username", "Total $", "Tips", "Avg Tip", "Platform", "Tier", "Last Tip", "Actions"].map(h => (
@@ -2777,12 +2827,13 @@ const handleCSV = async (file, forcePlatform = null) => {
                       </td>
                       <td style={{ padding: "12px 16px", color: C.muted, fontSize: 12 }}>{new Date(w.lastTipDate).toLocaleDateString()}</td>
                       <td style={{ padding: "12px 16px" }}>
-                        <button onClick={() => setSelectedWhale(w)} style={{ padding: "4px 10px", borderRadius: 6, background: "rgba(34,211,238,0.15)", border: "1px solid rgba(34,211,238,0.3)", color: C.cyan, fontSize: 11, cursor: "pointer" }}>🔍 View</button>
+                        <button onClick={() => setSelectedWhale(w)} style={{ padding: "6px 14px", borderRadius: 8, background: "rgba(34,211,238,0.15)", border: "1px solid rgba(34,211,238,0.3)", color: C.cyan, fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>🔍 View Profile</button>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+                </div>
             </div>
 
             {/* 💎 WHALE INTELLIGENCE PANEL */}
