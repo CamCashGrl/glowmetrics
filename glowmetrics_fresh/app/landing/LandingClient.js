@@ -2,7 +2,6 @@
 import React, { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
-import PageFooter from "../../components/PageFooter"
 
 function AuthPanel({
   id, isSignUp, setIsSignUp,
@@ -538,7 +537,16 @@ export default function LandingPage() {
         </div>
       </div>
 
-      <PageFooter variant="landing" />
+      
+      {/* ── LEGAL FOOTER ── */}
+      <div style={{ borderTop:"1px solid rgba(255,255,255,0.06)", marginTop:32, padding:"20px 40px", display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:12 }}>
+        <div style={{ fontSize:11, color:"#1e3a52" }}>© 2026 CamCash — Built for cam models who want to grow</div>
+        <div style={{ display:"flex", gap:16 }}>
+          <a href="#" style={{ fontSize:11, color:"#1e3a52", textDecoration:"none" }}>Privacy Policy</a>
+          <a href="#" style={{ fontSize:11, color:"#1e3a52", textDecoration:"none" }}>Terms</a>
+        </div>
+      </div>
+
     </div>
   )
 }
