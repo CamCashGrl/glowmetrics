@@ -2833,7 +2833,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                   ))}
                 </tbody>
               </table>
-                </div>
+              </div>
             </div>
 
             {/* 💎 WHALE INTELLIGENCE PANEL */}
