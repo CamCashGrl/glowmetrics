@@ -2054,7 +2054,8 @@ const handleCSV = async (file, forcePlatform = null) => {
                 const ret = Object.values(fc).filter(c=>c>1).length
                 return total > 0 ? Math.round((ret/total)*100) : 0
               })()
-              const forecast = dailyBrief ? dailyBrief.predictionLow + '–
+              const forecast = dailyBrief ? `${dailyBrief.predictionLow}–${dailyBrief.predictionHigh}` : null
+
         {activeTab === "platforms" && (() => {
           // ── Time filter
           const now = Date.now()
