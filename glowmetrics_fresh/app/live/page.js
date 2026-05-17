@@ -13,7 +13,6 @@ export default function LiveMode() {
   const [tips, setTips] = useState([]);
   const [earnings, setEarnings] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
 
   useEffect(() => {
     loadSession();
@@ -23,12 +22,11 @@ export default function LiveMode() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        setError('Not logged in. Go to /auth first.');
         setLoading(false);
         return;
       }
 
-      const { data: activeSession, error: sessionError } = await supabase
+      const { data: activeSession } = await supabase
         .from('live_sessions')
         .select('*')
         .eq('user_id', user.id)
@@ -37,8 +35,7 @@ export default function LiveMode() {
         .limit(1)
         .single();
 
-      if (sessionError) {
-        setError('No active streaming session. Start streaming first!');
+      if (!activeSession) {
         setLoading(false);
         return;
       }
@@ -79,30 +76,27 @@ export default function LiveMode() {
 
       return () => supabase.removeChannel(channel);
     } catch (err) {
-      setError(err.message);
+      console.error('Error:', err);
       setLoading(false);
     }
   }
 
   if (loading) {
-    return (
-      <div style={{ padding: '20px', color: '#e2e8f0', background: '#0a0814', minHeight: '100vh' }}>
-        Loading Live Mode...
-      </div>
-    );
+    return <div style={{ padding: '20px', color: '#e2e8f0', background: '#0a0814', minHeight: '100vh' }}>Loading...</div>;
   }
 
-  if (error) {
+  if (!session) {
     return (
-      <div style={{ padding: '20px', color: '#ef4444', background: '#0a0814', minHeight: '100vh' }}>
-        ❌ {error}
+      <div style={{ padding: '20px', color: '#e2e8f0', background: '#0a0814', minHeight: '100vh' }}>
+        <h1>No active streaming session</h1>
+        <p>Go live on Chaturbate to start tracking</p>
       </div>
     );
   }
 
   return (
     <div style={{ padding: '20px', background: '#0a0814', color: '#e2e8f0', minHeight: '100vh' }}>
-      <h1 style={{ marginBottom: '20px' }}>🎬 Live Mode</h1>
+      <h1>🎬 Live Mode</h1>
 
       <div style={{
         background: 'rgba(168, 85, 247, 0.1)',
@@ -111,20 +105,9 @@ export default function LiveMode() {
         borderRadius: '12px',
         marginBottom: '20px',
       }}>
-        <div style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '8px' }}>
-          Session Earnings
-        </div>
-        <div style={{
-          fontSize: '32px',
-          fontWeight: 'bold',
-          color: '#a855f7',
-          marginBottom: '8px',
-        }}>
-          ${earnings.toFixed(2)}
-        </div>
-        <div style={{ fontSize: '12px', color: '#94a3b8' }}>
-          {tips.length} tips received
-        </div>
+        <div style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '8px' }}>Session Earnings</div>
+        <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#a855f7' }}>${earnings.toFixed(2)}</div>
+        <div style={{ fontSize: '12px', color: '#94a3b8' }}>{tips.length} tips</div>
       </div>
 
       <div style={{
@@ -141,40 +124,29 @@ export default function LiveMode() {
           fontSize: '13px',
           color: '#a855f7',
         }}>
-          📝 Live Tips Feed
+          📝 Live Tips
         </div>
 
-        <div style={{ padding: '16px' }}>
+        <div style={{ padding: '16px', maxHeight: '400px', overflowY: 'auto' }}>
           {tips.length === 0 ? (
-            <div style={{ color: '#64748b', textAlign: 'center' }}>
-              Waiting for tips... Go live and start earning!
-            </div>
+            <div style={{ color: '#64748b', textAlign: 'center' }}>Waiting for tips...</div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '400px', overflowY: 'auto' }}>
-              {tips.map((tip, i) => (
-                <div key={i} style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  padding: '10px 12px',
-                  background: 'rgba(0, 0, 0, 0.2)',
-                  borderRadius: '6px',
-                  fontSize: '12px',
-                }}>
-                  <span style={{ fontWeight: 'bold' }}>{tip.username}</span>
-                  <span style={{ color: '#a855f7', fontWeight: 'bold' }}>
-                    ${parseFloat(tip.usd || 0).toFixed(2)}
-                  </span>
-                </div>
-              ))}
-            </div>
+            tips.map((tip, i) => (
+              <div key={i} style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                padding: '10px 12px',
+                background: 'rgba(0, 0, 0, 0.2)',
+                borderRadius: '6px',
+                marginBottom: '8px',
+                fontSize: '12px',
+              }}>
+                <span style={{ fontWeight: 'bold' }}>{tip.username}</span>
+                <span style={{ color: '#a855f7', fontWeight: 'bold' }}>${parseFloat(tip.usd || 0).toFixed(2)}</span>
+              </div>
+            ))
           )}
         </div>
-      </div>
-
-      <div style={{ marginTop: '20px', textAlign: 'center' }}>
-        <a href="/dashboard" style={{ color: '#a855f7', textDecoration: 'none', fontSize: '12px' }}>
-          ← Back to Dashboard
-        </a>
       </div>
     </div>
   );
