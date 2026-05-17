@@ -1,23 +1,8 @@
-// app/live/layout.js - LIVE MODE LAYOUT
-// Minimal sidebar for during-stream navigation
-
 'use client';
-
-import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 export default function LiveLayout({ children }) {
-  const [user, setUser] = useState(null);
   const router = useRouter();
-
-  useEffect(() => {
-    checkAuth();
-  }, []);
-
-  async function checkAuth() {
-    // This would check if user is logged in
-    // If not, redirect to /auth
-  }
 
   return (
     <div style={{
@@ -25,7 +10,6 @@ export default function LiveLayout({ children }) {
       minHeight: '100vh',
       background: '#0a0814',
     }}>
-      {/* Minimal Sidebar */}
       <div style={{
         width: '80px',
         background: 'rgba(10, 8, 20, 0.96)',
@@ -38,7 +22,6 @@ export default function LiveLayout({ children }) {
         top: 0,
         height: '100vh',
       }}>
-        {/* Logo */}
         <div style={{
           fontSize: '24px',
           textAlign: 'center',
@@ -47,38 +30,22 @@ export default function LiveLayout({ children }) {
         }} onClick={() => router.push('/dashboard')}>
           💎
         </div>
-
-        {/* Nav Items */}
-        <NavItem icon="📊" label="Dashboard" href="/dashboard" />
-        <NavItem icon="🎬" label="Live Mode" href="/live" active />
-        <NavItem icon="📈" label="Analytics" href="/dashboard" />
-        <NavItem icon="⚙️" label="Settings" href="/settings" />
+        <NavItem icon="📊" label="Dashboard" href="/dashboard" router={router} />
+        <NavItem icon="🎬" label="Live Mode" href="/live" active router={router} />
+        <NavItem icon="📈" label="Analytics" href="/dashboard" router={router} />
+        <NavItem icon="⚙️" label="Settings" href="/settings" router={router} />
       </div>
-
-      {/* Main Content */}
-      <main style={{
-        flex: 1,
-        overflowY: 'auto',
-      }}>
+      <main style={{ flex: 1, overflowY: 'auto' }}>
         {children}
       </main>
     </div>
   );
 }
 
-function NavItem({ icon, label, href, active }) {
-  const [router, setRouter] = useState(null);
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const { useRouter: useRouterHook } = require('next/navigation');
-      setRouter(useRouterHook());
-    }
-  }, []);
-
+function NavItem({ icon, label, href, active, router }) {
   return (
     <div
-      onClick={() => router?.push(href)}
+      onClick={() => router.push(href)}
       style={{
         padding: '12px 8px',
         textAlign: 'center',
