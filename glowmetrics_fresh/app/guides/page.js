@@ -165,14 +165,6 @@ export default function GuidesPage() {
               textDecoration: 'none',
               transition: 'border-color 0.2s ease, background 0.2s ease',
             }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.borderColor = 'rgba(168,85,247,0.4)'
-              e.currentTarget.style.background = '#110d1a'
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.borderColor = 'rgba(168,85,247,0.12)'
-              e.currentTarget.style.background = '#0d1117'
-            }}
           >
             <h2
               style={{
