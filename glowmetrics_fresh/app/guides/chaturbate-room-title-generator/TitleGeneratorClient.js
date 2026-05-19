@@ -73,6 +73,39 @@ const C = {
   muted: '#475569', text: '#94A3B8', green: '#10B981',
 }
 
+const TITLE_TIPS = [
+  { title: 'Keep it short (50-70 chars)', desc: 'Longer titles get cut off on mobile. Be concise.' },
+  { title: 'Start with a hook', desc: 'First 3 words matter most. Use emojis to stand out.' },
+  { title: 'Be specific, not generic', desc: '"Cum show" beats "having fun" by 40% CTR.' },
+  { title: 'Change titles every 2-3 streams', desc: 'Fresh titles get algorithmic boosts on platforms.' },
+  { title: 'Match your room energy', desc: 'Tease titles for slow builds, hype titles for action.' },
+]
+
+const COMMON_MISTAKES = [
+  { bad: 'come chat with me', good: 'squirt show goal 2000 🔥', why: 'Specific goals drive tipping behavior' },
+  { bad: 'let\'s have fun 😊', good: 'lush control 💦 tip me cum', why: 'Action-focused titles outperform vague ones' },
+  { bad: 'tips appreciated ❤️❤️❤️', good: 'tip 100 → flash my ass 👑', why: 'Clear rewards increase engagement 60%' },
+  { bad: 'new girl come watch', good: 'wet 💦 edge close 👀 help me cum', why: 'Emotional/physical language converts better' },
+]
+
+const RELATED_TOOLS = [
+  { icon: '💬', name: 'Bio Generator', desc: 'Create engaging Chaturbate bios that get clicks' },
+  { icon: '🎯', name: 'Tip Menu Generator', desc: 'Design tip menus that actually convert' },
+  { icon: '#️⃣', name: 'Hashtag Generator', desc: 'Find trending hashtags for more discoverability' },
+  { icon: '💰', name: 'Earnings Calculator', desc: 'Convert tokens to USD instantly' },
+  { icon: '📊', name: 'Analytics Dashboard', desc: 'Track your top tippers and best hours' },
+  { icon: '💡', name: 'Engagement Ideas', desc: 'Get stream ideas based on your data' },
+]
+
+const BLOG_POSTS = [
+  { title: 'How to Increase Cam Tips With Data', link: '/blog/how-to-increase-cam-earnings' },
+  { title: 'Best Time to Stream on Chaturbate', link: '/blog/how-to-get-views-on-chaturbate' },
+  { title: 'Building Loyal Fans That Return', link: '/blog/how-to-build-loyal-fans' },
+  { title: 'Common Room Title Mistakes', link: '/blog/chaturbate-title-mistakes' },
+  { title: 'Room Engagement Psychology', link: '/blog/room-engagement-psychology' },
+  { title: 'How Often to Change Titles', link: '/blog/title-rotation-strategy' },
+]
+
 export default function TitleGeneratorClient() {
   const [tokens, setTokens] = useState('')
   const [action, setAction] = useState('')
@@ -109,98 +142,96 @@ export default function TitleGeneratorClient() {
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
         * { box-sizing: border-box; margin: 0; padding: 0; }
         input:focus, select:focus { outline: none; border-color: rgba(34,211,238,0.5) !important; }
+        a { color: ${C.cyan}; text-decoration: none; }
+        a:hover { opacity: 0.8; }
       `}</style>
 
-      <nav style={{ padding: '18px 40px', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <a href="/landing" style={{ fontWeight: 800, fontSize: 20, color: C.white, textDecoration: 'none' }}>
-          Cam<span style={{ color: C.cyan }}>Cash</span>
-        </a>
-        <a href="/login" style={{ padding: '8px 20px', borderRadius: 8, background: 'linear-gradient(135deg, #22D3EE, #EC4899)', color: 'white', fontWeight: 700, fontSize: 13, textDecoration: 'none' }}>
-          Start Free →
-        </a>
-      </nav>
-
-      <div style={{ maxWidth: 720, margin: '0 auto', padding: '52px 24px 100px' }}>
-        <nav style={{ marginBottom: 24, fontSize: 13 }}>
-          <a href="/landing" style={{ color: C.cyan, textDecoration: 'none' }}>Home</a>
+      <div style={{ maxWidth: 720, margin: '0 auto', padding: '12px 24px 80px' }}>
+        
+        {/* COMPACT BREADCRUMB */}
+        <nav style={{ marginBottom: 16, fontSize: 13 }}>
+          <a href="/">Home</a>
           <span style={{ margin: '0 8px', color: C.muted }}>›</span>
           <span style={{ color: C.muted }}>Room Title Generator</span>
         </nav>
 
-        <h1 style={{ fontSize: 40, fontWeight: 900, color: C.white, lineHeight: 1.15, marginBottom: 16, letterSpacing: '-0.02em' }}>
+        {/* COMPACT HEADER */}
+        <h1 style={{ fontSize: 28, fontWeight: 900, color: C.white, lineHeight: 1.2, marginBottom: 8, letterSpacing: '-0.02em' }}>
           Chaturbate Room Title Generator
         </h1>
-        <p style={{ fontSize: 18, lineHeight: 1.7, color: '#CBD5E1', marginBottom: 40, paddingLeft: 20, borderLeft: `3px solid ${C.pink}` }}>
-          Generate high-converting room titles using the viral formula: Hook + Goal + Reward + Urgency. Free, no signup required.
+        <p style={{ fontSize: 14, lineHeight: 1.5, color: C.text, marginBottom: 20 }}>
+          Generate high-converting room titles instantly. Free, no signup required.
         </p>
 
-        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 20, padding: 28, marginBottom: 24, backdropFilter: 'blur(20px)' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+        {/* ─────── GENERATOR CARD ─────── */}
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: 20, marginBottom: 24, backdropFilter: 'blur(20px)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
             <div>
-              <div style={{ fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 6 }}>Token Goal (optional)</div>
+              <div style={{ fontSize: 10, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 4 }}>Goal</div>
               <input type="number" value={tokens} onChange={e => setTokens(e.target.value)} placeholder="e.g. 500" style={inp} />
             </div>
             <div>
-              <div style={{ fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 6 }}>Reward / Action (optional)</div>
-              <input value={action} onChange={e => setAction(e.target.value)} placeholder="e.g. flash, dance, strip" style={inp} />
+              <div style={{ fontSize: 10, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 4 }}>Reward</div>
+              <input value={action} onChange={e => setAction(e.target.value)} placeholder="e.g. flash, dance" style={inp} />
             </div>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 18 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
             <div>
-              <div style={{ fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 6 }}>Toy</div>
+              <div style={{ fontSize: 10, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 4 }}>Toy</div>
               <select value={toy} onChange={e => setToy(e.target.value)} style={{ ...inp, cursor: 'pointer' }}>
                 {TOYS.map(t => <option key={t}>{t}</option>)}
               </select>
             </div>
             <div>
-              <div style={{ fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 6 }}>Vibe / Mood</div>
+              <div style={{ fontSize: 10, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 4 }}>Mood</div>
               <select value={mood} onChange={e => setMood(e.target.value)} style={{ ...inp, cursor: 'pointer' }}>
                 {MOODS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
               </select>
             </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, color: C.text }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 12, color: C.text }}>
               <input type="checkbox" checked={useEmojis} onChange={() => setUseEmojis(v => !v)} style={{ accentColor: C.pink }} />
               Include emojis
             </label>
-            <button onClick={generate} style={{ padding: '12px 32px', borderRadius: 10, background: 'linear-gradient(135deg, #EC4899, #7C5CFF)', border: 'none', color: C.white, fontSize: 15, fontWeight: 800, cursor: 'pointer', boxShadow: '0 0 24px rgba(236,72,153,0.4)' }}>
-              ✨ Generate Title
+            <button onClick={generate} style={{ padding: '10px 24px', borderRadius: 9, background: 'linear-gradient(135deg, #EC4899, #7C5CFF)', border: 'none', color: C.white, fontSize: 13, fontWeight: 800, cursor: 'pointer' }}>
+              ✨ Generate
             </button>
           </div>
         </div>
 
+        {/* OUTPUT */}
         {current && (
-          <div style={{ background: 'linear-gradient(135deg, rgba(236,72,153,0.08), rgba(124,92,255,0.08))', border: '1px solid rgba(236,72,153,0.3)', borderRadius: 16, padding: 28, marginBottom: 20 }}>
-            <div style={{ fontSize: 10, color: C.muted, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>Your title</div>
-            <div style={{ fontSize: 20, fontWeight: 800, color: C.white, lineHeight: 1.4, marginBottom: 20 }}>{current}</div>
-            <div style={{ display: 'flex', gap: 10 }}>
-              <button onClick={generate} style={{ padding: '8px 18px', borderRadius: 9, background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', color: C.muted, fontSize: 13, cursor: 'pointer' }}>
+          <div style={{ background: 'linear-gradient(135deg, rgba(236,72,153,0.08), rgba(124,92,255,0.08))', border: '1px solid rgba(236,72,153,0.3)', borderRadius: 14, padding: 20, marginBottom: 20 }}>
+            <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>Your title</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: C.white, lineHeight: 1.3, marginBottom: 16 }}>{current}</div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={generate} style={{ padding: '8px 16px', borderRadius: 8, background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', color: C.muted, fontSize: 12, cursor: 'pointer' }}>
                 🔁 Try Another
               </button>
-              <button onClick={() => copyTitle(current)} style={{ padding: '8px 22px', borderRadius: 9, background: copied ? 'rgba(16,185,129,0.2)' : 'linear-gradient(135deg, #22D3EE, #EC4899)', border: copied ? '1px solid rgba(16,185,129,0.4)' : 'none', color: C.white, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
-                {copied ? '✔ Copied!' : '📋 Copy Title'}
+              <button onClick={() => copyTitle(current)} style={{ padding: '8px 16px', borderRadius: 8, background: copied ? 'rgba(16,185,129,0.2)' : 'linear-gradient(135deg, #22D3EE, #EC4899)', border: copied ? '1px solid rgba(16,185,129,0.4)' : 'none', color: C.white, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                {copied ? '✔ Copied!' : '📋 Copy'}
               </button>
             </div>
           </div>
         )}
 
         {!current && (
-          <div style={{ textAlign: 'center', padding: '48px 20px', color: C.muted }}>
-            <div style={{ fontSize: 44, marginBottom: 12 }}>🎬</div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: C.white, marginBottom: 6 }}>One perfect title, every time</div>
-            <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.6 }}>Fill in your details above and hit Generate.</div>
+          <div style={{ textAlign: 'center', padding: '32px 16px', color: C.muted }}>
+            <div style={{ fontSize: 36, marginBottom: 8 }}>🎬</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: C.white, marginBottom: 4 }}>One perfect title, every time</div>
+            <div style={{ fontSize: 12, color: C.muted }}>Fill in details and generate.</div>
           </div>
         )}
 
         {history.length > 0 && (
-          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 18, marginBottom: 28 }}>
-            <div style={{ fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 12 }}>Previous titles</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 14, marginBottom: 24 }}>
+            <div style={{ fontSize: 10, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10 }}>Previous titles</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {history.map((h, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderRadius: 10, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', gap: 12 }}>
-                  <span style={{ fontSize: 13, color: C.text, flex: 1, lineHeight: 1.4 }}>{h}</span>
-                  <button onClick={() => copyTitle(h, i)} style={{ flexShrink: 0, padding: '4px 12px', borderRadius: 7, background: copiedIdx === i ? 'rgba(16,185,129,0.2)' : 'rgba(255,255,255,0.06)', border: `1px solid ${copiedIdx === i ? 'rgba(16,185,129,0.4)' : 'rgba(255,255,255,0.1)'}`, color: copiedIdx === i ? C.green : C.muted, fontSize: 11, cursor: 'pointer' }}>
+                <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                  <span style={{ fontSize: 12, color: C.text, flex: 1 }}>{h}</span>
+                  <button onClick={() => copyTitle(h, i)} style={{ flexShrink: 0, padding: '4px 10px', borderRadius: 6, background: copiedIdx === i ? 'rgba(16,185,129,0.2)' : 'rgba(255,255,255,0.06)', border: `1px solid ${copiedIdx === i ? 'rgba(16,185,129,0.4)' : 'rgba(255,255,255,0.1)'}`, color: copiedIdx === i ? C.green : C.muted, fontSize: 10, cursor: 'pointer' }}>
                     {copiedIdx === i ? '✔' : '📋'}
                   </button>
                 </div>
@@ -209,17 +240,111 @@ export default function TitleGeneratorClient() {
           </div>
         )}
 
-        <div style={{ padding: '40px 32px', borderRadius: 20, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', textAlign: 'center', marginTop: 48 }}>
-          <h2 style={{ fontSize: 24, fontWeight: 900, color: C.white, marginBottom: 10 }}>Want titles personalized to YOUR data?</h2>
-          <p style={{ fontSize: 15, color: C.muted, marginBottom: 28, lineHeight: 1.6 }}>Sign up for CamCash and get titles built around your actual peak hours, top fans, and earning patterns. Free during beta.</p>
-          <a href="/login" style={{ display: 'inline-block', padding: '14px 40px', borderRadius: 12, background: 'linear-gradient(135deg, #22D3EE, #EC4899)', color: 'white', fontWeight: 800, fontSize: 16, textDecoration: 'none', boxShadow: '0 0 40px rgba(34,211,238,0.25)' }}>
-            Start Free →
+        {/* ─────── EDUCATIONAL CONTENT ─────── */}
+        
+        {/* TITLE TIPS */}
+        <div style={{ marginBottom: 28 }}>
+          <h2 style={{ fontSize: 16, fontWeight: 800, color: C.white, marginBottom: 12 }}>5 Tips for Better Room Titles</h2>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 10 }}>
+            {TITLE_TIPS.map((tip, i) => (
+              <div key={i} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10, padding: 12 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: C.white, marginBottom: 4 }}>{tip.title}</div>
+                <div style={{ fontSize: 11, color: C.text, lineHeight: 1.4 }}>{tip.desc}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* BEFORE/AFTER */}
+        <div style={{ marginBottom: 28 }}>
+          <h2 style={{ fontSize: 16, fontWeight: 800, color: C.white, marginBottom: 12 }}>Good vs. Weak Titles</h2>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 10 }}>
+            {COMMON_MISTAKES.map((m, i) => (
+              <div key={i} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10, padding: 12 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 8 }}>
+                  <div>
+                    <div style={{ fontSize: 10, color: '#94616f', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 4 }}>❌ Weak</div>
+                    <div style={{ fontSize: 11, color: '#cbd5e1' }}>{m.bad}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, color: '#10b981', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 4 }}>✓ Strong</div>
+                    <div style={{ fontSize: 11, color: C.white, fontWeight: 600 }}>{m.good}</div>
+                  </div>
+                </div>
+                <div style={{ fontSize: 10, color: C.text, lineHeight: 1.3, paddingTop: 8, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                  💡 {m.why}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* SOFT CONVERSION */}
+        <div style={{ padding: '20px 18px', borderRadius: 12, background: 'rgba(34,211,238,0.06)', border: '1px solid rgba(34,211,238,0.15)', marginBottom: 28 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: C.white, marginBottom: 6 }}>💾 Save & Track Your Titles</div>
+          <p style={{ fontSize: 11, color: C.text, marginBottom: 10, lineHeight: 1.5 }}>
+            Create a free account to save your favorite titles, track which convert best, and get personalized suggestions based on your actual streaming data.
+          </p>
+          <a href="/login" style={{ display: 'inline-block', padding: '8px 18px', borderRadius: 8, background: 'rgba(34,211,238,0.2)', color: C.cyan, fontSize: 11, fontWeight: 700, border: `1px solid rgba(34,211,238,0.3)` }}>
+            Create Free Account →
           </a>
+        </div>
+
+        {/* ─────── RELATED TOOLS ─────── */}
+        <div style={{ marginBottom: 28 }}>
+          <h2 style={{ fontSize: 14, fontWeight: 800, color: C.white, marginBottom: 12 }}>More Free Creator Tools</h2>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            {RELATED_TOOLS.map((tool, i) => (
+              <a key={i} href="#" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10, padding: 12, textDecoration: 'none', display: 'block', transition: 'all 0.2s' }}>
+                <div style={{ fontSize: 18, marginBottom: 6 }}>{tool.icon}</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: C.white, marginBottom: 4 }}>{tool.name}</div>
+                <div style={{ fontSize: 10, color: C.text, lineHeight: 1.3 }}>{tool.desc}</div>
+              </a>
+            ))}
+          </div>
+        </div>
+
+        {/* ─────── BLOG/GUIDES ─────── */}
+        <div style={{ marginBottom: 28 }}>
+          <h2 style={{ fontSize: 14, fontWeight: 800, color: C.white, marginBottom: 12 }}>Creator Resources</h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {BLOG_POSTS.map((post, i) => (
+              <a key={i} href={post.link} style={{ padding: '10px 12px', borderRadius: 9, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', textDecoration: 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: 12, color: C.text }}>{post.title}</span>
+                <span style={{ color: C.muted, fontSize: 11 }}>→</span>
+              </a>
+            ))}
+          </div>
+        </div>
+
+        {/* FAQ */}
+        <div style={{ marginBottom: 28 }}>
+          <h2 style={{ fontSize: 14, fontWeight: 800, color: C.white, marginBottom: 12 }}>FAQ</h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {[
+              { q: 'How often should I change my title?', a: 'Try a new title every 2-3 streams. If not working after 15 mins, change mid-stream.' },
+              { q: 'Do emojis help?', a: 'Yes. 1-2 emojis at the start increase clicks by 15-20%. Don\'t overdo it.' },
+              { q: 'What word converts best?', a: '"Cum" and "squirt" are highest-performing on Chaturbate (if appropriate).' },
+              { q: 'How long should titles be?', a: 'Aim for 50-70 characters. Over 80 gets cut off on mobile.' },
+            ].map((faq, i) => (
+              <div key={i} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10, padding: 12 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: C.white, marginBottom: 6 }}>Q: {faq.q}</div>
+                <div style={{ fontSize: 11, color: C.text, lineHeight: 1.4 }}>A: {faq.a}</div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
-      <footer style={{ borderTop: '1px solid rgba(255,255,255,0.06)', padding: '32px 40px', textAlign: 'center' }}>
-        <p style={{ fontSize: 12, color: C.muted }}>© 2026 CamCash — Built for cam models who want to grow</p>
+      {/* FOOTER */}
+      <footer style={{ borderTop: '1px solid rgba(255,255,255,0.06)', padding: '20px 24px', textAlign: 'center' }}>
+        <p style={{ fontSize: 11, color: C.muted, marginBottom: 6 }}>Powered by CamCashGrl — Free creator tools</p>
+        <div style={{ display: 'flex', gap: 16, justifyContent: 'center', fontSize: 11 }}>
+          <a href="/guides">All Tools</a>
+          <a href="/blog">Blog</a>
+          <a href="/privacy">Privacy</a>
+          <a href="/terms">Terms</a>
+        </div>
       </footer>
     </div>
   )
