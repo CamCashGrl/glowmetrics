@@ -2,6 +2,8 @@
 import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
+import SiteFooter from "../components/SiteFooter"
+import UserCounter from "../components/UserCounter"
 
 // ── AuthPanel defined OUTSIDE LandingPage so React doesn't re-create the
 //    component type on every render (prevents input losing focus)
@@ -350,6 +352,19 @@ export default function LandingPage() {
   return (
     <div style={{ minHeight: "100vh", background: "#05070f", color: "#94A3B8", fontFamily: "'DM Sans', 'Inter', sans-serif", overflowX: "hidden" }}>
 
+      {/* ── EARLY ADOPTER BANNER ── */}
+      <div style={{ background: "rgba(236,72,153,0.12)", borderBottom: "1px solid rgba(236,72,153,0.25)", padding: "14px 32px", textAlign: "center", position: "relative", zIndex: 2 }}>
+        <div style={{ maxWidth: 800, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "center", flexWrap: "wrap", gap: 12 }}>
+          <span style={{ fontSize: 14, color: "#f1f5f9", fontWeight: 600 }}>
+            ⏰ Early Adopter Offer — Lock in <span style={{ color: "#ec4899", fontWeight: 700 }}>$9.99/month forever</span> (regular $19.99/mo)
+          </span>
+          <UserCounter variant="pill" />
+          <a href="/pricing" style={{ fontSize: 13, fontWeight: 600, color: "#ec4899", textDecoration: "none", background: "rgba(236,72,153,0.15)", border: "1px solid rgba(236,72,153,0.3)", borderRadius: 6, padding: "4px 12px" }}>
+            View Pricing →
+          </a>
+        </div>
+      </div>
+
       {/* ── AMBIENT BACKGROUND ── */}
       <div style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 0 }}>
         <div style={{ position: "absolute", width: 700, height: 700, top: "-15%", right: "-5%", background: "radial-gradient(circle,rgba(34,211,238,0.07),transparent 65%)", filter: "blur(60px)" }} />
@@ -434,6 +449,57 @@ export default function LandingPage() {
         </div>
         <div style={{ maxWidth: 480, margin: "0 auto" }}>
           <LiveDemoPanel />
+        </div>
+      </div>
+
+      {/* ── HOW IT WORKS ── */}
+      <div style={{ position: "relative", zIndex: 1, padding: "64px 32px 48px", maxWidth: 960, margin: "0 auto" }}>
+        <div style={{ textAlign: "center", marginBottom: 40 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "#a855f7", marginBottom: 8 }}>How It Works</div>
+          <div style={{ fontSize: "clamp(22px,3vw,32px)", fontWeight: 800, color: "#f1f5f9", marginBottom: 8 }}>Free immediately. Powerful when connected.</div>
+          <div style={{ fontSize: 15, color: "#475569" }}>Use the extension the moment you install it. Add an account when you're ready.</div>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))", gap: 20 }}>
+          <div style={{ background: "rgba(34,211,238,0.06)", border: "1px solid rgba(34,211,238,0.2)", borderRadius: 12, padding: "28px 24px", textAlign: "center" }}>
+            <div style={{ fontSize: 36, marginBottom: 12 }}>🧩</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: "#f1f5f9", marginBottom: 8 }}>Download Extension</div>
+            <div style={{ fontSize: 14, color: "#94a3b8", lineHeight: 1.6, marginBottom: 16 }}>Auto-detect tips instantly. Works without an account. Use immediately.</div>
+            <a href="/extension" style={{ fontSize: 13, fontWeight: 600, color: "#22d3ee", textDecoration: "none" }}>Download free →</a>
+          </div>
+          <div style={{ background: "rgba(168,85,247,0.07)", border: "1px solid rgba(168,85,247,0.2)", borderRadius: 12, padding: "28px 24px", textAlign: "center" }}>
+            <div style={{ fontSize: 36, marginBottom: 12 }}>📊</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: "#f1f5f9", marginBottom: 8 }}>Create Free Account</div>
+            <div style={{ fontSize: 14, color: "#94a3b8", lineHeight: 1.6, marginBottom: 16 }}>Save your analytics, track growth, unlock AI intelligence. Free forever.</div>
+            <span style={{ fontSize: 13, fontWeight: 600, color: "#a855f7" }}>Free forever + Premium optional</span>
+          </div>
+          <div style={{ background: "rgba(236,72,153,0.07)", border: "1px solid rgba(236,72,153,0.2)", borderRadius: 12, padding: "28px 24px", textAlign: "center" }}>
+            <div style={{ fontSize: 36, marginBottom: 12 }}>🚀</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: "#f1f5f9", marginBottom: 8 }}>Lock In Lifetime Pricing</div>
+            <div style={{ fontSize: 14, color: "#94a3b8", lineHeight: 1.6, marginBottom: 16 }}>Early adopter: $9.99/month forever. Limited to first 100 users.</div>
+            <a href="/pricing" style={{ fontSize: 13, fontWeight: 600, color: "#ec4899", textDecoration: "none" }}>Claim early pricing →</a>
+          </div>
+        </div>
+      </div>
+
+      {/* ── TRUST SECTION ── */}
+      <div style={{ position: "relative", zIndex: 1, padding: "0 32px 64px", maxWidth: 960, margin: "0 auto" }}>
+        <div style={{ textAlign: "center", marginBottom: 28 }}>
+          <div style={{ fontSize: 16, fontWeight: 700, color: "#f1f5f9" }}>Why Creators Choose CamCash</div>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 12 }}>
+          {[
+            { icon: "🌿", text: "Free tier always exists" },
+            { icon: "🔍", text: "Transparent about everything" },
+            { icon: "🔒", text: "No surprise feature locks" },
+            { icon: "⏰", text: "Lifetime pricing for early adopters" },
+            { icon: "📢", text: "30-day notice before any changes" },
+            { icon: "💜", text: "Built by cam models, for cam models" },
+          ].map(({ icon, text }) => (
+            <div key={text} style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 10, padding: "14px 16px", display: "flex", alignItems: "center", gap: 10 }}>
+              <span style={{ fontSize: 18 }}>{icon}</span>
+              <span style={{ fontSize: 13, color: "#94a3b8" }}>{text}</span>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -606,6 +672,39 @@ export default function LandingPage() {
         <div style={{ fontSize: 14, color: "#475569", marginBottom: 32 }}>Free during beta. No credit card. Takes 2 minutes.</div>
         <AuthPanel id="lp-auth-bottom-panel" {...authPanelProps} />
       </div>
+
+      {/* ── FREE TOOLS SECTION ── */}
+      <div style={{ position: "relative", zIndex: 1, padding: "0 32px 64px", maxWidth: 860, margin: "0 auto" }}>
+        <div style={{ textAlign: "center", marginBottom: 32 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "#a855f7", marginBottom: 10 }}>Free Tools</div>
+          <div style={{ fontSize: "clamp(20px,2.5vw,28px)", fontWeight: 800, color: "white", marginBottom: 8 }}>Two free tools. No account needed.</div>
+          <div style={{ fontSize: 14, color: "#475569" }}>Use them right now — completely free.</div>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))", gap: 20 }}>
+          <a href="/guides/chaturbate-room-title-generator" style={{ display: "block", background: "rgba(168,85,247,0.07)", border: "1px solid rgba(168,85,247,0.25)", borderRadius: 12, padding: "28px 24px", textDecoration: "none" }}>
+            <div style={{ fontSize: 28, marginBottom: 12 }}>✏️</div>
+            <div style={{ fontSize: 17, fontWeight: 700, color: "#f1f5f9", marginBottom: 8 }}>Room Title Generator</div>
+            <p style={{ fontSize: 14, color: "#94a3b8", margin: "0 0 16px", lineHeight: 1.6 }}>Generate click-worthy Chaturbate room titles that get you more viewers. Free, instant, no login.</p>
+            <span style={{ fontSize: 13, fontWeight: 600, color: "#a855f7" }}>Try it free →</span>
+          </a>
+          <a href="/guides/chaturbate-token-calculator" style={{ display: "block", background: "rgba(34,211,238,0.06)", border: "1px solid rgba(34,211,238,0.2)", borderRadius: 12, padding: "28px 24px", textDecoration: "none" }}>
+            <div style={{ fontSize: 28, marginBottom: 12 }}>💰</div>
+            <div style={{ fontSize: 17, fontWeight: 700, color: "#f1f5f9", marginBottom: 8 }}>Token Calculator</div>
+            <p style={{ fontSize: 14, color: "#94a3b8", margin: "0 0 16px", lineHeight: 1.6 }}>Instantly convert Chaturbate tokens to USD. See your real take-home for any tip amount.</p>
+            <span style={{ fontSize: 13, fontWeight: 600, color: "#22d3ee" }}>Try it free →</span>
+          </a>
+        </div>
+      </div>
+
+      {/* ── SITE FOOTER WITH BLOG / GUIDES LINKS ── */}
+      {/* ── FOOTER PRICING BANNER ── */}
+      <div style={{ background: "rgba(168,85,247,0.06)", borderTop: "1px solid rgba(168,85,247,0.15)", padding: "24px 32px", textAlign: "center" }}>
+        <div style={{ maxWidth: 700, margin: "0 auto", display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "center", gap: 16 }}>
+          <span style={{ fontSize: 14, color: "#94a3b8" }}>🎉 Everything free during launch · Early adopter: <span style={{ color: "#ec4899", fontWeight: 600 }}>$9.99/mo forever</span></span>
+          <a href="/pricing" style={{ fontSize: 13, fontWeight: 600, color: "#a855f7", textDecoration: "none" }}>View transparent pricing →</a>
+        </div>
+      </div>
+      <SiteFooter />
 
       {/* ── FOOTER ── */}
       <div style={{ position: "relative", zIndex: 1, borderTop: "1px solid rgba(255,255,255,0.04)", padding: "24px 32px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
