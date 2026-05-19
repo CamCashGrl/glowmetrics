@@ -5,6 +5,7 @@ import { supabase } from "../../lib/supabase"
 import { parseCSV, aggregateRows as runEngine } from "../../lib/analytics"
 import CSVImport from "./CSVImport"
 import Sidebar from "./Sidebar"
+import SiteFooter from "../components/SiteFooter"
 
 // Analytics tracking — works whether or not @vercel/analytics is installed
 let track = (event, props) => {}
@@ -5029,6 +5030,7 @@ const handleCSV = async (file, forcePlatform = null) => {
         {toast}
         </div>
       )}
+      <SiteFooter />
     </div>
   )
 }

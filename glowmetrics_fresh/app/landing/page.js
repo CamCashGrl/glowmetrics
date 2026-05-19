@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
+import SiteFooter from "../components/SiteFooter"
 
 // ── AuthPanel defined OUTSIDE LandingPage so React doesn't re-create the
 //    component type on every render (prevents input losing focus)
@@ -606,6 +607,9 @@ export default function LandingPage() {
         <div style={{ fontSize: 14, color: "#475569", marginBottom: 32 }}>Free during beta. No credit card. Takes 2 minutes.</div>
         <AuthPanel id="lp-auth-bottom-panel" {...authPanelProps} />
       </div>
+
+      {/* ── SITE FOOTER WITH BLOG / GUIDES LINKS ── */}
+      <SiteFooter />
 
       {/* ── FOOTER ── */}
       <div style={{ position: "relative", zIndex: 1, borderTop: "1px solid rgba(255,255,255,0.04)", padding: "24px 32px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>

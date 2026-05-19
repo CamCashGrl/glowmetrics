@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
+import SiteFooter from '../components/SiteFooter';
 
 const C = {
   bg: '#0a0814',
@@ -258,6 +259,7 @@ export default function LiveMode() {
           50% { opacity: 0.4; }
         }
       `}</style>
+      <SiteFooter />
     </div>
   );
 }
