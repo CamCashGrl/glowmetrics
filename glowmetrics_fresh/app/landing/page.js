@@ -608,6 +608,29 @@ export default function LandingPage() {
         <AuthPanel id="lp-auth-bottom-panel" {...authPanelProps} />
       </div>
 
+      {/* ── FREE TOOLS SECTION ── */}
+      <div style={{ position: "relative", zIndex: 1, padding: "0 32px 64px", maxWidth: 860, margin: "0 auto" }}>
+        <div style={{ textAlign: "center", marginBottom: 32 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "#a855f7", marginBottom: 10 }}>Free Tools</div>
+          <div style={{ fontSize: "clamp(20px,2.5vw,28px)", fontWeight: 800, color: "white", marginBottom: 8 }}>Two free tools. No account needed.</div>
+          <div style={{ fontSize: 14, color: "#475569" }}>Use them right now — completely free.</div>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))", gap: 20 }}>
+          <a href="/guides/chaturbate-room-title-generator" style={{ display: "block", background: "rgba(168,85,247,0.07)", border: "1px solid rgba(168,85,247,0.25)", borderRadius: 12, padding: "28px 24px", textDecoration: "none" }}>
+            <div style={{ fontSize: 28, marginBottom: 12 }}>✏️</div>
+            <div style={{ fontSize: 17, fontWeight: 700, color: "#f1f5f9", marginBottom: 8 }}>Room Title Generator</div>
+            <p style={{ fontSize: 14, color: "#94a3b8", margin: "0 0 16px", lineHeight: 1.6 }}>Generate click-worthy Chaturbate room titles that get you more viewers. Free, instant, no login.</p>
+            <span style={{ fontSize: 13, fontWeight: 600, color: "#a855f7" }}>Try it free →</span>
+          </a>
+          <a href="/guides/chaturbate-token-calculator" style={{ display: "block", background: "rgba(34,211,238,0.06)", border: "1px solid rgba(34,211,238,0.2)", borderRadius: 12, padding: "28px 24px", textDecoration: "none" }}>
+            <div style={{ fontSize: 28, marginBottom: 12 }}>💰</div>
+            <div style={{ fontSize: 17, fontWeight: 700, color: "#f1f5f9", marginBottom: 8 }}>Token Calculator</div>
+            <p style={{ fontSize: 14, color: "#94a3b8", margin: "0 0 16px", lineHeight: 1.6 }}>Instantly convert Chaturbate tokens to USD. See your real take-home for any tip amount.</p>
+            <span style={{ fontSize: 13, fontWeight: 600, color: "#22d3ee" }}>Try it free →</span>
+          </a>
+        </div>
+      </div>
+
       {/* ── SITE FOOTER WITH BLOG / GUIDES LINKS ── */}
       <SiteFooter />
 

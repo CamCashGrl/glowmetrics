@@ -253,6 +253,26 @@ export default function LiveMode() {
         </div>
       </div>
 
+      {/* Free tools strip */}
+      <div style={{ marginTop: '24px', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+        <a href="/guides/chaturbate-room-title-generator" style={{ flex: 1, minWidth: '200px', padding: '16px 20px', background: 'rgba(168,85,247,0.08)', border: '1px solid rgba(168,85,247,0.2)', borderRadius: '10px', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <span style={{ fontSize: '22px' }}>✏️</span>
+          <div>
+            <div style={{ fontSize: '13px', fontWeight: '600', color: '#f1f5f9' }}>Room Title Generator</div>
+            <div style={{ fontSize: '12px', color: '#64748b' }}>Free tool — no login</div>
+          </div>
+          <span style={{ marginLeft: 'auto', fontSize: '12px', color: '#a855f7' }}>Try →</span>
+        </a>
+        <a href="/guides/chaturbate-token-calculator" style={{ flex: 1, minWidth: '200px', padding: '16px 20px', background: 'rgba(34,211,238,0.06)', border: '1px solid rgba(34,211,238,0.18)', borderRadius: '10px', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <span style={{ fontSize: '22px' }}>💰</span>
+          <div>
+            <div style={{ fontSize: '13px', fontWeight: '600', color: '#f1f5f9' }}>Token Calculator</div>
+            <div style={{ fontSize: '12px', color: '#64748b' }}>Tokens → USD instantly</div>
+          </div>
+          <span style={{ marginLeft: 'auto', fontSize: '12px', color: '#22d3ee' }}>Try →</span>
+        </a>
+      </div>
+
       <style>{`
         @keyframes pulse {
           0%, 100% { opacity: 1; }
