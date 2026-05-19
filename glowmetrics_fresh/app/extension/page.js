@@ -14,6 +14,12 @@ const C = {
   text: '#94a3b8', muted: '#475569',
 }
 
+const navLink = {
+  color: '#94a3b8', textDecoration: 'none',
+  fontSize: '14px', fontWeight: '500',
+  padding: '6px 10px',
+}
+
 const freeFeatures = [
   { icon: '📊', title: 'Tip Detection', desc: 'Auto-detects every tip on supported platforms instantly' },
   { icon: '🔴', title: 'Live Overlay', desc: 'See your stats without leaving your stream' },
@@ -597,9 +603,3 @@ function BlogCard({ href, title }) {
   )
 }
 
-// ── Nav link style (static object, referenced above) ──
-const navLink = {
-  color: '#94a3b8', textDecoration: 'none',
-  fontSize: '14px', fontWeight: '500',
-  padding: '6px 10px',
-}
