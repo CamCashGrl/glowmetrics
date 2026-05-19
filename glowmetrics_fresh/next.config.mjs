@@ -9,6 +9,12 @@ const nextConfig = {
         destination: 'https://www.camcashgrl.com/:path*',
         permanent: true,
       },
+      // Fix typo: /exstension → /extension
+      {
+        source: '/exstension',
+        destination: '/extension',
+        permanent: true,
+      },
     ]
   },
 }
