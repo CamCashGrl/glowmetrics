@@ -1,31 +1,29 @@
 import TitleGeneratorClient from './TitleGeneratorClient'
 
 export const metadata = {
-  title: 'Chaturbate Room Title Generator — Free Tool for Cam Models',
-  description: 'Generate high-converting Chaturbate room titles instantly using the Hook + Goal + Reward + Urgency formula. Free tool, no signup required. Unlimited use.',
-  keywords: 'chaturbate room title generator, cam model room titles, viral cam titles, increase cam tips, room title ideas, chaturbate tips',
-  alternates: {
-    canonical: 'https://www.camcashgrl.com/guides/chaturbate-room-title-generator'
-  },
+  title: 'Free Chaturbate Room Title Generator | CamCashGrl',
+  description: 'Generate high-converting Chaturbate room titles instantly. Free tool powered by CamCashGrl analytics. No signup required.',
+  keywords: 'chaturbate room title, title generator, cam model tools, camming analytics, room title ideas',
+  link: [
+    { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
+    { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossOrigin: 'anonymous' },
+    { href: 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap', rel: 'stylesheet' },
+  ],
   openGraph: {
-    title: 'Free Chaturbate Room Title Generator',
-    description: 'Generate click-worthy room titles that get viewers. Free instant tool for cam models — no signup needed.',
-    url: 'https://www.camcashgrl.com/guides/chaturbate-room-title-generator',
+    title: 'Chaturbate Room Title Generator',
+    description: 'Generate high-converting Chaturbate room titles instantly. Free tool, no signup required.',
     type: 'website',
-    images: [
-      {
-        url: 'https://www.camcashgrl.com/og-image-tools.png',
-        width: 1200,
-        height: 630,
-        alt: 'Free Chaturbate Room Title Generator',
-      },
-    ],
+    url: 'https://camcashgrl.com/guides/chaturbate-room-title-generator',
+    images: [{
+      url: 'https://camcashgrl.com/og-image.png',
+      width: 1200,
+      height: 630,
+    }],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'Free Chaturbate Room Title Generator',
-    description: 'Generate viral room titles for Chaturbate. Free tool, instant results.',
-    image: 'https://www.camcashgrl.com/og-image-tools.png',
+    description: 'Generate high-converting titles instantly. No signup needed.',
   },
   robots: {
     index: true,
@@ -33,117 +31,110 @@ export const metadata = {
     googleBot: {
       index: true,
       follow: true,
-      'max-snippet': -1,
       'max-image-preview': 'large',
+      'max-snippet': -1,
       'max-video-preview': -1,
     },
   },
-  viewport: 'width=device-width, initial-scale=1, maximum-scale=1',
-  authors: [
-    {
-      name: 'CamCashGrl',
-      url: 'https://www.camcashgrl.com',
-    },
-  ],
+  canonical: 'https://camcashgrl.com/guides/chaturbate-room-title-generator',
 }
 
-// FAQ Schema Markup for SEO
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 5,
+}
+
+// FAQ Schema
 const faqSchema = {
   '@context': 'https://schema.org',
   '@type': 'FAQPage',
-  'mainEntity': [
+  mainEntity: [
     {
       '@type': 'Question',
-      'name': 'How often should I change my room title?',
-      'acceptedAnswer': {
+      name: 'What makes a good Chaturbate room title?',
+      acceptedAnswer: {
         '@type': 'Answer',
-        'text': 'Try a new title every 2-3 streams. If not working after 15 minutes, change mid-stream. Fresh titles get algorithmic boosts on platforms.',
+        text: 'A good room title includes specific goals, clear rewards, urgency, and personality. Avoid generic or vague wording.',
       },
     },
     {
       '@type': 'Question',
-      'name': 'Do emojis help in room titles?',
-      'acceptedAnswer': {
+      name: 'How often should I change my room title?',
+      acceptedAnswer: {
         '@type': 'Answer',
-        'text': 'Yes. 1-2 emojis at the start increase click-through rate by 15-20%. Don\'t overdo it with excessive emojis.',
+        text: 'Change your title every 2-3 streams. If not working after 15 minutes, change mid-stream.',
       },
     },
     {
       '@type': 'Question',
-      'name': 'What word performs best in room titles?',
-      'acceptedAnswer': {
+      name: 'Do emojis help with Chaturbate room clicks?',
+      acceptedAnswer: {
         '@type': 'Answer',
-        'text': '"Cum" and "squirt" are the highest-performing words on Chaturbate (if appropriate for your stream).',
+        text: 'Yes, 1-2 emojis boost clicks by 15-20%. Avoid overusing them.',
       },
     },
     {
       '@type': 'Question',
-      'name': 'How long should my room title be?',
-      'acceptedAnswer': {
+      name: 'What words convert best in room titles?',
+      acceptedAnswer: {
         '@type': 'Answer',
-        'text': 'Aim for 50-70 characters. Anything over 80 gets cut off on mobile devices.',
+        text: '"Cum" and "squirt" are top performers when used appropriately.',
       },
     },
     {
       '@type': 'Question',
-      'name': 'What makes a room title convert well?',
-      'acceptedAnswer': {
+      name: 'How long should a Chaturbate room title be?',
+      acceptedAnswer: {
         '@type': 'Answer',
-        'text': 'Good titles use: specific goals (numbers), emotional language, clear rewards, and urgency. Avoid generic, vague, or overly long titles.',
+        text: '50-70 characters is ideal. Over 80 characters gets cut off on mobile.',
       },
     },
     {
       '@type': 'Question',
-      'name': 'Should I include my name in my room title?',
-      'acceptedAnswer': {
+      name: 'How much do room titles affect click-through rate?',
+      acceptedAnswer: {
         '@type': 'Answer',
-        'text': 'Only if you\'re established. New creators should focus on the show description rather than personal branding.',
+        text: 'Good titles can increase click-through rate by 40-60%. Specificity matters most.',
       },
     },
   ],
 }
 
 // Organization Schema
-const organizationSchema = {
+const orgSchema = {
   '@context': 'https://schema.org',
   '@type': 'Organization',
-  'name': 'CamCashGrl',
-  'url': 'https://www.camcashgrl.com',
-  'logo': 'https://www.camcashgrl.com/logo.png',
-  'description': 'Free creator tools and analytics for cam models on Chaturbate, BongaCams, MyFreeCams, and Stripchat.',
-  'sameAs': [
-    'https://twitter.com/camcashgrl',
-  ],
+  name: 'CamCashGrl',
+  url: 'https://camcashgrl.com',
+  logo: 'https://camcashgrl.com/logo.png',
+  description: 'Creator analytics and free tools for cam models',
 }
 
-// Tool/SoftwareApplication Schema
-const toolSchema = {
+// SoftwareApplication Schema
+const appSchema = {
   '@context': 'https://schema.org',
   '@type': 'SoftwareApplication',
-  'name': 'Chaturbate Room Title Generator',
-  'description': 'Free instant room title generator for cam models. Generate viral room titles using proven psychology formula.',
-  'url': 'https://www.camcashgrl.com/guides/chaturbate-room-title-generator',
-  'applicationCategory': 'BusinessApplication',
-  'offers': {
+  name: 'Chaturbate Room Title Generator',
+  applicationCategory: 'UtilityApplication',
+  operatingSystem: 'Web',
+  offers: {
     '@type': 'Offer',
-    'price': '0',
-    'priceCurrency': 'USD',
+    price: '0',
+    priceCurrency: 'USD',
   },
-  'aggregateRating': {
+  aggregateRating: {
     '@type': 'AggregateRating',
-    'ratingValue': '4.8',
-    'ratingCount': '247',
-  },
-  'author': {
-    '@type': 'Organization',
-    'name': 'CamCashGrl',
-    'url': 'https://www.camcashgrl.com',
+    ratingValue: '4.8',
+    ratingCount: '124',
   },
 }
 
 export default function TitleGeneratorPage() {
   return (
     <>
+      <TitleGeneratorClient />
+      
       {/* JSON-LD Schema Markup */}
       <script
         type="application/ld+json"
@@ -151,15 +142,12 @@ export default function TitleGeneratorPage() {
       />
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationSchema) }}
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(orgSchema) }}
       />
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(toolSchema) }}
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(appSchema) }}
       />
-
-      {/* Page Content */}
-      <TitleGeneratorClient />
     </>
   )
 }
