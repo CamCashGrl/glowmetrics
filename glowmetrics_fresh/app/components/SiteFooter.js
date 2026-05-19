@@ -119,6 +119,9 @@ export default function SiteFooter() {
             Main Pages
           </h4>
           <FooterLink href="/">Home</FooterLink>
+          <FooterLink href="/pricing">Pricing</FooterLink>
+          <FooterLink href="/extension">Chrome Extension</FooterLink>
+          <FooterLink href="/demo">Live Demo</FooterLink>
           <FooterLink href="/blog">All Blog Posts</FooterLink>
           <FooterLink href="/guides">All Free Tools &amp; Guides</FooterLink>
           <FooterLink href="/dashboard">Dashboard</FooterLink>

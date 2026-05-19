@@ -151,7 +151,25 @@ export default function LiveMode() {
   }
 
   return (
-    <div style={{ padding: '32px 40px', background: C.bg, minHeight: '100vh', fontFamily: 'system-ui' }}>
+    <div style={{ background: C.bg, minHeight: '100vh', fontFamily: 'system-ui' }}>
+      {/* Early adopter banner */}
+      <div style={{
+        background: 'rgba(236,72,153,0.1)',
+        borderBottom: '1px solid rgba(236,72,153,0.22)',
+        padding: '11px 24px',
+        textAlign: 'center',
+      }}>
+        <span style={{ fontSize: '13px', color: '#f1f5f9', fontWeight: 600 }}>
+          ⏰ Early Adopter Offer — Lock in{' '}
+          <span style={{ color: '#ec4899', fontWeight: 700 }}>$9.99/month forever</span>
+          {' '}(regular $19.99/mo) ·{' '}
+          <a href="/pricing" style={{ color: '#ec4899', textDecoration: 'underline', fontWeight: 600 }}>
+            View pricing →
+          </a>
+        </span>
+      </div>
+
+      <div style={{ padding: '32px 40px' }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '32px' }}>
         <div>
@@ -280,6 +298,7 @@ export default function LiveMode() {
         }
       `}</style>
       <SiteFooter />
+      </div>
     </div>
   );
 }

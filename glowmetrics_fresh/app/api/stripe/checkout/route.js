@@ -6,6 +6,7 @@ import { cookies } from 'next/headers'
 
 export async function POST(request) {
   try {
+    const body = await request.json().catch(() => ({}))
     const supabase = createRouteHandlerClient({ cookies })
     const { data: { user } } = await supabase.auth.getUser()
     
@@ -37,19 +38,32 @@ export async function POST(request) {
       })
     }
     
+    // Resolve the correct Stripe price ID based on plan_type
+    const planType = body.plan_type || 'standard_monthly'
+
+    const PRICE_MAP = {
+      early_adopter_monthly: process.env.STRIPE_PRICE_EARLY_ADOPTER_MONTHLY,
+      early_adopter_annual:  process.env.STRIPE_PRICE_EARLY_ADOPTER_ANNUAL,
+      standard_monthly:      process.env.STRIPE_PRICE_STANDARD_MONTHLY || process.env.NEXT_PUBLIC_STRIPE_PRICE_ID,
+      standard_annual:       process.env.STRIPE_PRICE_STANDARD_ANNUAL,
+    }
+
+    const priceId = PRICE_MAP[planType] || process.env.NEXT_PUBLIC_STRIPE_PRICE_ID
+    if (!priceId) {
+      return NextResponse.json({ error: 'Invalid plan or price not configured' }, { status: 400 })
+    }
+
     // Create checkout session
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       mode: 'subscription',
-payment_method_types: ['card'],
-      line_items: [{
-        price: process.env.NEXT_PUBLIC_STRIPE_PRICE_ID,
-        quantity: 1,
-      }],
-      success_url: `${request.headers.get('origin')}/dashboard?success=true`,
-      cancel_url: `${request.headers.get('origin')}/dashboard?canceled=true`,
+      payment_method_types: ['card'],
+      line_items: [{ price: priceId, quantity: 1 }],
+      success_url: `${request.headers.get('origin')}/dashboard?success=true&plan=${planType}`,
+      cancel_url: `${request.headers.get('origin')}/pricing?canceled=true`,
       metadata: {
-        userId: user.id
+        userId: user.id,
+        plan_type: planType,
       }
     })
     
