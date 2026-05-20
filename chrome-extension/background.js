@@ -36,7 +36,14 @@ async function login(email, password) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }),
     });
-    const data = await res.json();
+
+    const text = await res.text();
+    if (!text) return { ok: false, error: `Server returned empty response (${res.status})` };
+
+    let data;
+    try { data = JSON.parse(text); }
+    catch { return { ok: false, error: `Bad server response (${res.status}): ${text.slice(0, 120)}` }; }
+
     if (!res.ok) return { ok: false, error: data.error || 'Login failed' };
 
     session = { access_token: data.session.access_token, user: data.user };
