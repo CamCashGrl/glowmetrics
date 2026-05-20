@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CamCash</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      width: 340px;
+      min-height: 200px;
+      background: #0d0f14;
+      color: #f1f5f9;
+      font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+      font-size: 13px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Header ── */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 14px 10px;
+      border-bottom: 1px solid #1e2232;
+    }
+    .logo {
+      font-size: 15px;
+      font-weight: 800;
+      background: linear-gradient(135deg, #a855f7, #ec4899);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      letter-spacing: -0.3px;
+    }
+    .header-right { display: flex; align-items: center; gap: 8px; }
+    .dash-link {
+      font-size: 11px;
+      color: #7c5cff;
+      text-decoration: none;
+      opacity: 0.8;
+    }
+    .dash-link:hover { opacity: 1; }
+    .btn-logout {
+      font-size: 10px;
+      color: #64748b;
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0;
+    }
+    .btn-logout:hover { color: #94a3b8; }
+
+    /* ── Status pill ── */
+    .status-bar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 14px;
+      border-bottom: 1px solid #1e2232;
+      font-size: 11px;
+      color: #64748b;
+    }
+    .dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: #334155;
+      flex-shrink: 0;
+    }
+    .dot.green  { background: #10b981; box-shadow: 0 0 6px #10b981; }
+    .dot.yellow { background: #f59e0b; }
+
+    /* ── Login form ── */
+    #login-view { padding: 20px 14px; }
+    .login-title {
+      font-size: 14px;
+      font-weight: 700;
+      margin-bottom: 14px;
+      color: #e2e8f0;
+    }
+    .field { margin-bottom: 10px; }
+    .field label {
+      display: block;
+      font-size: 11px;
+      color: #64748b;
+      margin-bottom: 4px;
+    }
+    .field input {
+      width: 100%;
+      padding: 8px 10px;
+      background: #161b2e;
+      border: 1px solid #1e2232;
+      border-radius: 7px;
+      color: #f1f5f9;
+      font-size: 13px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .field input:focus { border-color: #7c5cff; }
+    .btn-login {
+      width: 100%;
+      padding: 10px;
+      background: linear-gradient(135deg, #7c5cff, #ec4899);
+      border: none;
+      border-radius: 8px;
+      color: white;
+      font-weight: 700;
+      font-size: 13px;
+      cursor: pointer;
+      margin-top: 6px;
+    }
+    .btn-login:hover { opacity: 0.9; }
+    .btn-login:disabled { opacity: 0.5; cursor: wait; }
+    .login-error {
+      margin-top: 8px;
+      font-size: 11px;
+      color: #f87171;
+      text-align: center;
+    }
+
+    /* ── Dashboard view ── */
+    #dash-view { display: none; }
+
+    /* Stats row */
+    .stats-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 1px;
+      background: #1e2232;
+      border-bottom: 1px solid #1e2232;
+    }
+    .stat {
+      background: #0d0f14;
+      padding: 10px 10px 8px;
+      text-align: center;
+    }
+    .stat-val {
+      font-size: 18px;
+      font-weight: 800;
+      color: #f1f5f9;
+      line-height: 1;
+    }
+    .stat-val.green { color: #10b981; }
+    .stat-label {
+      font-size: 9px;
+      color: #475569;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-top: 3px;
+    }
+
+    /* Sections */
+    .section { border-bottom: 1px solid #1e2232; }
+    .section-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 7px 14px 5px;
+    }
+    .section-title {
+      font-size: 9px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: #475569;
+    }
+
+    /* Whale alert */
+    #whale-alert {
+      display: none;
+      margin: 0 14px 8px;
+      padding: 8px 10px;
+      background: rgba(234,179,8,0.1);
+      border: 1px solid rgba(234,179,8,0.25);
+      border-radius: 8px;
+      font-size: 12px;
+      color: #fbbf24;
+    }
+
+    /* Coach messages */
+    .coach-list { padding: 0 14px 8px; }
+    .coach-item {
+      padding: 6px 10px;
+      background: #161b2e;
+      border-radius: 7px;
+      margin-bottom: 5px;
+      font-size: 12px;
+      color: #cbd5e1;
+      line-height: 1.4;
+    }
+
+    /* Tip feed */
+    .tip-list { padding: 0 14px 8px; }
+    .tip-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 5px 0;
+      border-bottom: 1px solid #1a2035;
+      font-size: 12px;
+    }
+    .tip-row:last-child { border-bottom: none; }
+    .tip-user { color: #a78bfa; font-weight: 600; }
+    .tip-right { display: flex; gap: 8px; align-items: center; }
+    .tip-tokens { color: #e2e8f0; }
+    .tip-usd { color: #10b981; font-size: 11px; }
+    .tip-time { color: #334155; font-size: 10px; }
+
+    /* Top tipper */
+    .top-tipper {
+      padding: 0 14px 8px;
+      font-size: 11px;
+      color: #64748b;
+    }
+    .top-tipper span { color: #a78bfa; font-weight: 600; }
+
+    .empty { padding: 14px; text-align: center; color: #334155; font-size: 12px; }
+  </style>
+</head>
+<body>
+
+  <!-- Header (always visible) -->
+  <div class="header">
+    <div class="logo">CamCash</div>
+    <div class="header-right" id="header-right">
+      <a class="dash-link" href="https://www.camcashgrl.com/live" target="_blank">Dashboard →</a>
+    </div>
+  </div>
+
+  <!-- Status bar -->
+  <div class="status-bar">
+    <div class="dot" id="status-dot"></div>
+    <span id="status-text">Not connected</span>
+  </div>
+
+  <!-- ── Login view ── -->
+  <div id="login-view">
+    <div class="login-title">Sign in to CamCash</div>
+    <div class="field">
+      <label>Email</label>
+      <input type="email" id="email" placeholder="you@example.com" autocomplete="email" />
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input type="password" id="password" placeholder="••••••••" autocomplete="current-password" />
+    </div>
+    <button class="btn-login" id="btn-login">Sign In</button>
+    <div class="login-error" id="login-error"></div>
+  </div>
+
+  <!-- ── Dashboard view ── -->
+  <div id="dash-view">
+
+    <!-- Stats -->
+    <div class="stats-row">
+      <div class="stat">
+        <div class="stat-val green" id="stat-usd">$0.00</div>
+        <div class="stat-label">Earned</div>
+      </div>
+      <div class="stat">
+        <div class="stat-val" id="stat-tokens">0</div>
+        <div class="stat-label">Tokens</div>
+      </div>
+      <div class="stat">
+        <div class="stat-val" id="stat-count">0</div>
+        <div class="stat-label">Tips</div>
+      </div>
+    </div>
+
+    <!-- Whale alert (hidden until triggered) -->
+    <div class="section">
+      <div id="whale-alert"></div>
+    </div>
+
+    <!-- Coach -->
+    <div class="section" id="coach-section">
+      <div class="section-head">
+        <span class="section-title">Live Coach</span>
+      </div>
+      <div class="coach-list" id="coach-list">
+        <div class="empty">Coaching tips will appear here during your stream</div>
+      </div>
+    </div>
+
+    <!-- Recent tips -->
+    <div class="section">
+      <div class="section-head">
+        <span class="section-title">Recent Tips</span>
+        <span id="top-tipper-label" class="tip-time"></span>
+      </div>
+      <div class="tip-list" id="tip-list">
+        <div class="empty">No tips yet this session</div>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

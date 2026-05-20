@@ -1,17 +1,23 @@
-// app/api/auth/login/route.js
 import { createClient } from '@supabase/supabase-js';
 
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': 'chrome-extension://dbmfnbekgohfemdglbjcefcdkcpccadf',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
-};
+function corsHeaders(req) {
+  const origin = req.headers.get('origin') || '';
+  const allowed = origin.startsWith('chrome-extension://')
+    ? origin
+    : 'https://www.camcashgrl.com';
+  return {
+    'Access-Control-Allow-Origin':  allowed,
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  };
+}
 
-export async function OPTIONS() {
-  return new Response(null, { status: 204, headers: CORS_HEADERS });
+export async function OPTIONS(req) {
+  return new Response(null, { status: 204, headers: corsHeaders(req) });
 }
 
 export async function POST(req) {
+  const cors = corsHeaders(req);
   const supabaseAdmin = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
     process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -27,27 +33,26 @@ export async function POST(req) {
     if (!email || !password) {
       return Response.json(
         { error: 'Email and password required' },
-        { status: 400, headers: CORS_HEADERS }
+        { status: 400, headers: cors }
       );
     }
 
     const { data, error } = await supabaseClient.auth.signInWithPassword({
       email: email.toLowerCase().trim(),
-      password
+      password,
     });
 
     if (error) {
-      console.error('Supabase auth error:', error);
       return Response.json(
         { error: error.message || 'Invalid credentials' },
-        { status: 401, headers: CORS_HEADERS }
+        { status: 401, headers: cors }
       );
     }
 
     if (!data.user || !data.session) {
       return Response.json(
         { error: 'Authentication failed' },
-        { status: 401, headers: CORS_HEADERS }
+        { status: 401, headers: cors }
       );
     }
 
@@ -60,23 +65,23 @@ export async function POST(req) {
     return Response.json({
       success: true,
       session: {
-        access_token: data.session.access_token,
+        access_token:  data.session.access_token,
         refresh_token: data.session.refresh_token,
-        expires_in: data.session.expires_in
+        expires_in:    data.session.expires_in,
       },
       user: {
-        id: data.user.id,
-        email: data.user.email,
-        username: profile?.username || data.user.email?.split('@')[0],
-        avatar_url: profile?.avatar_url
-      }
-    }, { headers: CORS_HEADERS });
+        id:         data.user.id,
+        email:      data.user.email,
+        username:   profile?.username || data.user.email?.split('@')[0],
+        avatar_url: profile?.avatar_url,
+      },
+    }, { headers: cors });
 
-  } catch (error) {
-    console.error('Login endpoint error:', error);
+  } catch (err) {
+    console.error('Login error:', err);
     return Response.json(
-      { error: error.message || 'Internal server error' },
-      { status: 500, headers: CORS_HEADERS }
+      { error: err.message || 'Internal server error' },
+      { status: 500, headers: cors }
     );
   }
 }
