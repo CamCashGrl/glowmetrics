@@ -2,88 +2,59 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>CamCash</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
-      width: 340px;
-      min-height: 200px;
+      width: 320px;
       background: #0d0f14;
       color: #f1f5f9;
-      font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+      font-family: system-ui, -apple-system, sans-serif;
       font-size: 13px;
       -webkit-font-smoothing: antialiased;
     }
 
-    /* ── Header ── */
+    /* Header */
     .header {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 12px 14px 10px;
+      padding: 12px 14px;
       border-bottom: 1px solid #1e2232;
     }
     .logo {
-      font-size: 15px;
+      font-size: 16px;
       font-weight: 800;
       background: linear-gradient(135deg, #a855f7, #ec4899);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
-      letter-spacing: -0.3px;
     }
-    .header-right { display: flex; align-items: center; gap: 8px; }
-    .dash-link {
-      font-size: 11px;
-      color: #7c5cff;
-      text-decoration: none;
-      opacity: 0.8;
-    }
-    .dash-link:hover { opacity: 1; }
-    .btn-logout {
+    #status {
       font-size: 10px;
-      color: #64748b;
-      background: none;
-      border: none;
-      cursor: pointer;
-      padding: 0;
+      font-weight: 600;
+      padding: 3px 8px;
+      border-radius: 20px;
+      background: rgba(107,114,128,0.2);
+      color: #9ca3af;
     }
-    .btn-logout:hover { color: #94a3b8; }
 
-    /* ── Status pill ── */
-    .status-bar {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      padding: 7px 14px;
-      border-bottom: 1px solid #1e2232;
-      font-size: 11px;
-      color: #64748b;
-    }
-    .dot {
-      width: 6px; height: 6px;
-      border-radius: 50%;
-      background: #334155;
-      flex-shrink: 0;
-    }
-    .dot.green  { background: #10b981; box-shadow: 0 0 6px #10b981; }
-    .dot.yellow { background: #f59e0b; }
-
-    /* ── Login form ── */
-    #login-view { padding: 20px 14px; }
-    .login-title {
-      font-size: 14px;
+    /* Auth section */
+    #auth-section { padding: 16px 14px; }
+    .section-title {
+      font-size: 13px;
       font-weight: 700;
-      margin-bottom: 14px;
       color: #e2e8f0;
+      margin-bottom: 12px;
     }
-    .field { margin-bottom: 10px; }
+    .field { margin-bottom: 9px; }
     .field label {
       display: block;
-      font-size: 11px;
+      font-size: 10px;
       color: #64748b;
-      margin-bottom: 4px;
+      margin-bottom: 3px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
     }
     .field input {
       width: 100%;
@@ -94,148 +65,152 @@
       color: #f1f5f9;
       font-size: 13px;
       outline: none;
-      transition: border-color 0.15s;
     }
     .field input:focus { border-color: #7c5cff; }
-    .btn-login {
+
+    #auth-error {
+      display: none;
+      font-size: 11px;
+      color: #f87171;
+      margin: 6px 0;
+    }
+
+    .btn {
       width: 100%;
-      padding: 10px;
-      background: linear-gradient(135deg, #7c5cff, #ec4899);
+      padding: 9px;
       border: none;
       border-radius: 8px;
-      color: white;
-      font-weight: 700;
       font-size: 13px;
+      font-weight: 700;
       cursor: pointer;
       margin-top: 6px;
     }
-    .btn-login:hover { opacity: 0.9; }
-    .btn-login:disabled { opacity: 0.5; cursor: wait; }
-    .login-error {
-      margin-top: 8px;
-      font-size: 11px;
-      color: #f87171;
-      text-align: center;
+    .btn-primary {
+      background: linear-gradient(135deg, #7c5cff, #ec4899);
+      color: white;
     }
+    .btn-primary:hover { opacity: 0.9; }
+    .btn-primary:disabled { opacity: 0.5; cursor: wait; }
+    .btn-ghost {
+      background: #161b2e;
+      color: #64748b;
+      border: 1px solid #1e2232;
+      margin-top: 4px;
+    }
+    .btn-ghost:hover { color: #94a3b8; }
 
-    /* ── Dashboard view ── */
-    #dash-view { display: none; }
+    /* Dashboard section */
+    #dashboard-section { display: none; }
 
-    /* Stats row */
-    .stats-row {
-      display: grid;
-      grid-template-columns: 1fr 1fr 1fr;
-      gap: 1px;
-      background: #1e2232;
+    #user-info {
+      padding: 8px 14px;
+      font-size: 11px;
+      color: #4ade80;
       border-bottom: 1px solid #1e2232;
     }
-    .stat {
-      background: #0d0f14;
-      padding: 10px 10px 8px;
-      text-align: center;
+
+    /* Coach */
+    #coach-box {
+      padding: 10px 14px;
+      border-bottom: 1px solid #1e2232;
     }
-    .stat-val {
-      font-size: 18px;
-      font-weight: 800;
-      color: #f1f5f9;
-      line-height: 1;
-    }
-    .stat-val.green { color: #10b981; }
-    .stat-label {
+    .coach-label {
       font-size: 9px;
-      color: #475569;
+      font-weight: 700;
       text-transform: uppercase;
-      letter-spacing: 0.5px;
-      margin-top: 3px;
+      letter-spacing: 0.8px;
+      color: #475569;
+      margin-bottom: 6px;
+    }
+    #coach-msg {
+      font-size: 12px;
+      color: #cbd5e1;
+      background: #161b2e;
+      padding: 7px 10px;
+      border-radius: 7px;
+      line-height: 1.4;
+      min-height: 32px;
     }
 
-    /* Sections */
-    .section { border-bottom: 1px solid #1e2232; }
-    .section-head {
+    /* Tips */
+    .tips-header {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 7px 14px 5px;
+      padding: 8px 14px 4px;
     }
-    .section-title {
+    .tips-label {
       font-size: 9px;
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.8px;
       color: #475569;
     }
+    #tips-list { padding: 0 14px 10px; }
+
+    .tip-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 5px 0;
+      border-bottom: 1px solid #1a2035;
+      font-size: 12px;
+    }
+    .tip-item:last-child { border-bottom: none; }
+    .tip-username { color: #a78bfa; font-weight: 600; }
+    .tip-amount   { color: #10b981; font-weight: 600; }
+    .tip-time     { color: #334155; font-size: 10px; }
+    .empty-state  { color: #334155; font-size: 12px; padding: 8px 0; text-align: center; }
 
     /* Whale alert */
     #whale-alert {
       display: none;
       margin: 0 14px 8px;
-      padding: 8px 10px;
+      padding: 7px 10px;
       background: rgba(234,179,8,0.1);
-      border: 1px solid rgba(234,179,8,0.25);
-      border-radius: 8px;
+      border: 1px solid rgba(234,179,8,0.3);
+      border-radius: 7px;
       font-size: 12px;
       color: #fbbf24;
     }
 
-    /* Coach messages */
-    .coach-list { padding: 0 14px 8px; }
-    .coach-item {
-      padding: 6px 10px;
-      background: #161b2e;
-      border-radius: 7px;
-      margin-bottom: 5px;
-      font-size: 12px;
-      color: #cbd5e1;
-      line-height: 1.4;
-    }
-
-    /* Tip feed */
-    .tip-list { padding: 0 14px 8px; }
-    .tip-row {
+    /* Footer */
+    .footer {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 5px 0;
-      border-bottom: 1px solid #1a2035;
-      font-size: 12px;
+      padding: 8px 14px;
+      border-top: 1px solid #1e2232;
     }
-    .tip-row:last-child { border-bottom: none; }
-    .tip-user { color: #a78bfa; font-weight: 600; }
-    .tip-right { display: flex; gap: 8px; align-items: center; }
-    .tip-tokens { color: #e2e8f0; }
-    .tip-usd { color: #10b981; font-size: 11px; }
-    .tip-time { color: #334155; font-size: 10px; }
-
-    /* Top tipper */
-    .top-tipper {
-      padding: 0 14px 8px;
+    .footer a {
       font-size: 11px;
-      color: #64748b;
+      color: #7c5cff;
+      text-decoration: none;
+      opacity: 0.8;
     }
-    .top-tipper span { color: #a78bfa; font-weight: 600; }
-
-    .empty { padding: 14px; text-align: center; color: #334155; font-size: 12px; }
+    .footer a:hover { opacity: 1; }
+    #logout-btn {
+      font-size: 10px;
+      color: #475569;
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0;
+    }
+    #logout-btn:hover { color: #94a3b8; }
   </style>
 </head>
 <body>
 
-  <!-- Header (always visible) -->
+  <!-- Header -->
   <div class="header">
     <div class="logo">CamCash</div>
-    <div class="header-right" id="header-right">
-      <a class="dash-link" href="https://www.camcashgrl.com/live" target="_blank">Dashboard →</a>
-    </div>
+    <div id="status">Inactive</div>
   </div>
 
-  <!-- Status bar -->
-  <div class="status-bar">
-    <div class="dot" id="status-dot"></div>
-    <span id="status-text">Not connected</span>
-  </div>
-
-  <!-- ── Login view ── -->
-  <div id="login-view">
-    <div class="login-title">Sign in to CamCash</div>
+  <!-- Auth -->
+  <div id="auth-section">
+    <div class="section-title">Sign in to CamCash</div>
     <div class="field">
       <label>Email</label>
       <input type="email" id="email" placeholder="you@example.com" autocomplete="email" />
@@ -244,55 +219,37 @@
       <label>Password</label>
       <input type="password" id="password" placeholder="••••••••" autocomplete="current-password" />
     </div>
-    <button class="btn-login" id="btn-login">Sign In</button>
-    <div class="login-error" id="login-error"></div>
+    <div id="auth-error"></div>
+    <button class="btn btn-primary" id="login-btn">Sign In</button>
+    <button class="btn btn-ghost" id="guest-btn">Continue as Guest (no sync)</button>
   </div>
 
-  <!-- ── Dashboard view ── -->
-  <div id="dash-view">
+  <!-- Dashboard -->
+  <div id="dashboard-section">
+    <div id="user-info"></div>
 
-    <!-- Stats -->
-    <div class="stats-row">
-      <div class="stat">
-        <div class="stat-val green" id="stat-usd">$0.00</div>
-        <div class="stat-label">Earned</div>
-      </div>
-      <div class="stat">
-        <div class="stat-val" id="stat-tokens">0</div>
-        <div class="stat-label">Tokens</div>
-      </div>
-      <div class="stat">
-        <div class="stat-val" id="stat-count">0</div>
-        <div class="stat-label">Tips</div>
-      </div>
-    </div>
-
-    <!-- Whale alert (hidden until triggered) -->
-    <div class="section">
-      <div id="whale-alert"></div>
-    </div>
+    <!-- Whale alert -->
+    <div id="whale-alert"></div>
 
     <!-- Coach -->
-    <div class="section" id="coach-section">
-      <div class="section-head">
-        <span class="section-title">Live Coach</span>
-      </div>
-      <div class="coach-list" id="coach-list">
-        <div class="empty">Coaching tips will appear here during your stream</div>
-      </div>
+    <div id="coach-box">
+      <div class="coach-label">Live Coach</div>
+      <div id="coach-msg">Coaching tips will appear during your stream</div>
     </div>
 
-    <!-- Recent tips -->
-    <div class="section">
-      <div class="section-head">
-        <span class="section-title">Recent Tips</span>
-        <span id="top-tipper-label" class="tip-time"></span>
-      </div>
-      <div class="tip-list" id="tip-list">
-        <div class="empty">No tips yet this session</div>
-      </div>
+    <!-- Tips -->
+    <div class="tips-header">
+      <span class="tips-label">Recent Tips</span>
+    </div>
+    <div id="tips-list">
+      <div class="empty-state">No tips detected yet this session</div>
     </div>
 
+    <!-- Footer -->
+    <div class="footer">
+      <a href="https://www.camcashgrl.com/live" target="_blank">Dashboard →</a>
+      <button id="logout-btn">Sign out</button>
+    </div>
   </div>
 
   <script src="popup.js"></script>

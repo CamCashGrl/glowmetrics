@@ -18,14 +18,22 @@ let topTipper = null;
 
 // ─── Persistence ─────────────────────────────────────────────────────────────
 async function save() {
-  await chrome.storage.local.set({ session, whales, coachMsgs });
+  await chrome.storage.local.set({ _bg_whales: whales, _bg_coachMsgs: coachMsgs });
 }
 
 async function restore() {
-  const data = await chrome.storage.local.get(['session', 'whales', 'coachMsgs']);
-  session   = data.session   || null;
-  whales    = data.whales    || [];
-  coachMsgs = data.coachMsgs || [];
+  // Support both old format ({ session: {access_token, user} })
+  // and new popup format ({ session: access_token_string, user: {...} })
+  const data = await chrome.storage.local.get(['session', 'user', '_bg_whales', '_bg_coachMsgs']);
+  whales    = data._bg_whales    || [];
+  coachMsgs = data._bg_coachMsgs || [];
+
+  if (data.session && data.user) {
+    const token = typeof data.session === 'string' ? data.session : data.session?.access_token;
+    if (token) {
+      session = { access_token: token, user: data.user };
+    }
+  }
 }
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
@@ -271,6 +279,15 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
   // Content: connected/disconnected
   if (msg.action === 'connected') {
     broadcast({ action: 'state', state: getState() });
+    return false;
+  }
+
+  // Popup: auth changed (new popup.js format)
+  if (msg.type === 'AUTH_CHANGED') {
+    restore().then(() => {
+      if (session) { loadWhales(); scheduleAlarms(); }
+      else { chrome.alarms.clearAll(); }
+    });
     return false;
   }
 });
