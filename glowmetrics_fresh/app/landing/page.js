@@ -392,11 +392,6 @@ export default function LandingPage() {
 
           {/* Left */}
           <div>
-            <div style={{ display: "inline-flex", alignItems: "center", gap: 7, marginBottom: 20, padding: "5px 12px", borderRadius: 20, background: "rgba(124,92,255,0.1)", border: "1px solid rgba(124,92,255,0.25)" }}>
-              <div style={{ width: 5, height: 5, borderRadius: "50%", background: "#10B981", boxShadow: "0 0 5px #10B981", animation: "lp-pulse 2s infinite" }} />
-              <span style={{ fontSize: 11, fontWeight: 700, color: "#A78BFA", letterSpacing: 0.5 }}>63 / 100 beta spots left</span>
-            </div>
-
             <h1 style={{ fontSize: "clamp(36px,4vw,56px)", color: "white", fontWeight: 900, lineHeight: 1.08, marginBottom: 20, letterSpacing: -1.5 }}>
               The operating system<br />
               for cam model<br />

@@ -359,6 +359,27 @@ function AfterLaunchSection() {
 
 // ── Section 5: Early Adopter ──────────────────────────────────────────────────
 function EarlyAdopterSection() {
+  const [loading, setLoading] = useState(null)
+
+  async function handleCheckout(planType) {
+    setLoading(planType)
+    try {
+      const res = await fetch('/api/stripe/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plan_type: planType }),
+      })
+      if (res.status === 401) {
+        window.location.href = `/landing?plan=${planType}`
+        return
+      }
+      const data = await res.json()
+      if (data.url) window.location.href = data.url
+    } finally {
+      setLoading(null)
+    }
+  }
+
   return (
     <section id="early-adopter" style={{
       background:   'rgba(236,72,153,0.06)',
@@ -440,22 +461,24 @@ function EarlyAdopterSection() {
             <CheckLine color={C.pink}>Upgrade/downgrade anytime</CheckLine>
           </div>
 
-          <a href="/landing?plan=early_adopter_monthly" style={{
-            display:        'block',
-            textAlign:      'center',
-            padding:        '14px 0',
-            borderRadius:   10,
-            background:     `linear-gradient(135deg, ${C.pink}, #f97316)`,
-            color:          '#fff',
-            fontWeight:     800,
-            fontSize:       14,
-            textDecoration: 'none',
-            boxShadow:      '0 0 20px rgba(236,72,153,0.3)',
-            width:          '100%',
-            boxSizing:      'border-box',
+          <button onClick={() => handleCheckout('early_adopter_monthly')} disabled={!!loading} style={{
+            display:    'block',
+            textAlign:  'center',
+            padding:    '14px 0',
+            borderRadius: 10,
+            background: `linear-gradient(135deg, ${C.pink}, #f97316)`,
+            color:      '#fff',
+            fontWeight: 800,
+            fontSize:   14,
+            border:     'none',
+            cursor:     loading ? 'wait' : 'pointer',
+            boxShadow:  '0 0 20px rgba(236,72,153,0.3)',
+            width:      '100%',
+            boxSizing:  'border-box',
+            opacity:    loading ? 0.7 : 1,
           }}>
-            Claim Early Adopter Monthly — $9.99/mo
-          </a>
+            {loading === 'early_adopter_monthly' ? 'Redirecting to Stripe...' : 'Claim Early Adopter Monthly — $9.99/mo'}
+          </button>
         </div>
 
         {/* Annual Card */}
@@ -497,22 +520,24 @@ function EarlyAdopterSection() {
             <CheckLine color={C.purple}>Auto-renews at same locked rate</CheckLine>
           </div>
 
-          <a href="/landing?plan=early_adopter_annual" style={{
-            display:        'block',
-            textAlign:      'center',
-            padding:        '14px 0',
-            borderRadius:   10,
-            background:     `linear-gradient(135deg, ${C.purple}, ${C.pink})`,
-            color:          '#fff',
-            fontWeight:     800,
-            fontSize:       14,
-            textDecoration: 'none',
-            boxShadow:      '0 0 20px rgba(168,85,247,0.3)',
-            width:          '100%',
-            boxSizing:      'border-box',
+          <button onClick={() => handleCheckout('early_adopter_annual')} disabled={!!loading} style={{
+            display:    'block',
+            textAlign:  'center',
+            padding:    '14px 0',
+            borderRadius: 10,
+            background: `linear-gradient(135deg, ${C.purple}, ${C.pink})`,
+            color:      '#fff',
+            fontWeight: 800,
+            fontSize:   14,
+            border:     'none',
+            cursor:     loading ? 'wait' : 'pointer',
+            boxShadow:  '0 0 20px rgba(168,85,247,0.3)',
+            width:      '100%',
+            boxSizing:  'border-box',
+            opacity:    loading ? 0.7 : 1,
           }}>
-            Claim Early Adopter Annual — $99.99/yr
-          </a>
+            {loading === 'early_adopter_annual' ? 'Redirecting to Stripe...' : 'Claim Early Adopter Annual — $99.99/yr'}
+          </button>
         </div>
       </div>
 
