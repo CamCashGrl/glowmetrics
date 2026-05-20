@@ -93,7 +93,9 @@ async function logout() {
 async function loadWhales() {
   if (!session) return;
   try {
-    const res = await fetch(`${API}/api/live/tips?limit=200`, {
+    const userId = session.user?.id;
+    if (!userId) return;
+    const res = await fetch(`${API}/api/live/tips?userId=${encodeURIComponent(userId)}&limit=200`, {
       headers: { Authorization: `Bearer ${session.access_token}` },
     });
     if (!res.ok) return;
@@ -120,7 +122,10 @@ async function loadWhales() {
 // ─── Tip sync ─────────────────────────────────────────────────────────────────
 async function syncTip({ username, tokens, platform, timestamp }) {
   if (!session) return;
+  const userId = session.user?.id;
+  if (!userId) return;
   try {
+    const usd = parseFloat((tokens * 0.05).toFixed(2));
     await fetch(`${API}/api/live/tips`, {
       method: 'POST',
       headers: {
@@ -128,9 +133,12 @@ async function syncTip({ username, tokens, platform, timestamp }) {
         Authorization: `Bearer ${session.access_token}`,
       },
       body: JSON.stringify({
+        userId,
         username,
-        amount: tokens,
+        tokens,
+        usd,
         platform,
+        source: 'extension',
         timestamp: timestamp || new Date().toISOString(),
       }),
     });
