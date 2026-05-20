@@ -3782,380 +3782,382 @@ const handleCSV = async (file, forcePlatform = null) => {
 
           return (
             <div>
-              {/* ── SESSION COMMAND CENTER ──────────────────────────────── */}
-              <div style={{ marginBottom: 20 }}>
-                {/* Title row */}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 10 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <div style={{ width: 10, height: 10, borderRadius: '50%', background: liveActive ? C.green : C.muted, boxShadow: liveActive ? `0 0 10px ${C.green}` : 'none', animation: liveActive ? 'pulse-msg 1.5s infinite' : 'none' }} />
-                    <h1 style={{ fontSize: 24, fontWeight: 800, color: C.white, margin: 0 }}>🔴 Live Mode</h1>
-                    {/* Session Phase badge */}
-                    {liveActive && state && (
-                      <div style={{ padding: '3px 10px', borderRadius: 20, background: phaseConfig.bg, border: `1px solid ${phaseConfig.border}`, fontSize: 12, fontWeight: 700, color: phaseConfig.color }}>
-                        {phaseConfig.icon} {phaseConfig.label}
-                      </div>
-                    )}
-                  </div>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                    <select value={livePlatform} onChange={e => setLivePlatform(e.target.value)} style={{ ...inp2, width: 'auto', padding: '7px 10px' }}>
-                      {['Chaturbate','BongaCams','MyFreeCams','CamSoda','Stripchat'].map(p => (
-                        <option key={p} value={p}>{p}</option>
-                      ))}
-                    </select>
-                    <input type="number" value={liveGoalTokens || ''} onChange={e => setLiveGoalTokens(Number(e.target.value)||0)}
-                      placeholder="Token goal" style={{ ...inp2, width: 140 }} />
-                    {/* Strategy mode */}
-                    <select value={liveStrategy} onChange={e => setLiveStrategy(e.target.value)} style={{ ...inp2, width: 'auto', padding: '7px 10px', fontSize: 12 }}>
-                      <option value="balanced">⚖️ Balanced</option>
-                      <option value="aggressive">💰 Aggressive</option>
-                      <option value="retention">🔄 Retention</option>
-                      <option value="engagement">💬 Engagement</option>
-                      <option value="whale">🐋 Whale Focus</option>
-                      <option value="goal">🎯 Goal Focus</option>
-                    </select>
-                    {!liveActive ? (
-                      <button onClick={() => { setLiveActive(true); setLiveStartTime(new Date()); setLiveEvents([]); processedTipIds.current = new Set(); coachingCooldowns.current = {} }}
-                        style={{ padding: '9px 20px', borderRadius: 10, background: 'linear-gradient(135deg, #10B981, #22D3EE)', border: 'none', color: C.white, fontWeight: 800, fontSize: 13, cursor: 'pointer', boxShadow: '0 0 20px rgba(16,185,129,0.4)' }}>
-                        ▶ Start Stream
-                      </button>
-                    ) : (
-                      <button onClick={() => setLiveActive(false)}
-                        style={{ padding: '9px 20px', borderRadius: 10, background: 'rgba(248,113,113,0.2)', border: '1px solid rgba(248,113,113,0.4)', color: C.red, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
-                        ⏹ End Stream
-                      </button>
-                    )}
-                  </div>
+              {/* ── OPERATIONAL STATUS BAR ─────────────────────────────── */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 16px', borderRadius: 10, marginBottom: 16, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', flexWrap: 'wrap', gap: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap' }}>
+                  {[
+                    { label: 'Extension', ok: liveEvents.some(e => e.sourceUsed === 'extension'), okText: 'Connected', offText: 'Not detected' },
+                    { label: 'Realtime', ok: !!liveTipsChannelRef?.current, okText: 'Live', offText: 'Offline' },
+                    { label: 'Sync', ok: liveActive, okText: 'Active', offText: 'Standby' },
+                  ].map(({ label, ok, okText, offText }) => (
+                    <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <div style={{ width: 6, height: 6, borderRadius: '50%', background: ok ? C.green : '#374151', boxShadow: ok ? `0 0 5px ${C.green}` : 'none', flexShrink: 0 }} />
+                      <span style={{ fontSize: 11, color: C.muted }}>{label}</span>
+                      <span style={{ fontSize: 11, color: ok ? C.green : '#475569', fontWeight: 600 }}>{ok ? okText : offText}</span>
+                    </div>
+                  ))}
+                  {liveActive && state && (
+                    <span style={{ fontSize: 11, color: C.muted }}>
+                      Session: {Math.floor(state.elapsedMins)}m {Math.round((state.elapsedMins % 1) * 60)}s
+                    </span>
+                  )}
                 </div>
-
-                {/* Intelligence strip — Room Health · Momentum · Opportunity · Stream Health · Velocity */}
-                {liveActive && state && (
-                  <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                    {/* Room Health */}
-                    <div style={{ flex: '1 1 130px', borderRadius: 10, padding: '10px 14px', background: roomHealth.bg, border: `1px solid ${roomHealth.border}` }}>
-                      <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 4 }}>Room Heat</div>
-                      <div style={{ fontSize: 16, fontWeight: 800, color: roomHealth.color }}>{roomHealth.emoji} {roomHealth.label}</div>
-                      <div style={{ fontSize: 10, color: roomHealth.directionColor, marginTop: 2 }}>{roomHealth.directionLabel}</div>
-                      <div style={{ fontSize: 9, color: C.muted, marginTop: 2 }}>{roomHealth.confidence}% confidence</div>
-                    </div>
-
-                    {/* Opportunity Score */}
-                    <div style={{ flex: '1 1 130px', borderRadius: 10, padding: '10px 14px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-                      <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 4 }}>Opportunity</div>
-                      <div style={{ fontSize: 22, fontWeight: 900, color: opportunityScore.color }}>{opportunityScore.score}<span style={{ fontSize: 11, fontWeight: 400 }}>/100</span></div>
-                      <div style={{ fontSize: 10, color: opportunityScore.color, marginTop: 2 }}>{opportunityScore.label}</div>
-                    </div>
-
-                    {/* Stream Health */}
-                    <div style={{ flex: '1 1 130px', borderRadius: 10, padding: '10px 14px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-                      <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 4 }}>Stream Health</div>
-                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
-                        <span style={{ fontSize: 22, fontWeight: 900, color: streamHealth.grade === 'A' ? C.green : streamHealth.grade === 'B' ? C.cyan : streamHealth.grade === 'C' ? C.gold : C.red }}>{streamHealth.grade}</span>
-                        <span style={{ fontSize: 13, color: C.muted }}>{streamHealth.score}/100</span>
-                      </div>
-                      <div style={{ fontSize: 10, color: streamHealth.trend === 'improving' ? C.green : streamHealth.trend === 'declining' ? C.red : C.muted, marginTop: 2, textTransform: 'capitalize' }}>{streamHealth.trend}</div>
-                    </div>
-
-                    {/* Revenue Velocity */}
-                    <div style={{ flex: '1 1 160px', borderRadius: 10, padding: '10px 14px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-                      <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 4 }}>Revenue Velocity</div>
-                      <div style={{ fontSize: 16, fontWeight: 800, color: velocity.color }}>${velocity.currentUPH.toFixed(2)}/hr</div>
-                      <div style={{ fontSize: 10, color: velocity.color, marginTop: 2 }}>{velocity.label}</div>
-                    </div>
-
-                    {/* Live Comparison */}
-                    {comparison.vsAvgPct !== null && (
-                      <div style={{ flex: '1 1 140px', borderRadius: 10, padding: '10px 14px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-                        <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 4 }}>vs Your Average</div>
-                        <div style={{ fontSize: 18, fontWeight: 900, color: (comparison.vsAvgPct ?? 0) >= 0 ? C.green : C.red }}>
-                          {(comparison.vsAvgPct ?? 0) >= 0 ? '+' : ''}{comparison.vsAvgPct}%
-                        </div>
-                        <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>avg ${comparison.avgUPH.toFixed(2)}/hr</div>
-                      </div>
-                    )}
-                  </div>
-                )}
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <select value={livePlatform} onChange={e => setLivePlatform(e.target.value)} style={{ ...inp2, width: 'auto', padding: '5px 10px', fontSize: 12 }}>
+                    {['Chaturbate','BongaCams','MyFreeCams','CamSoda','Stripchat'].map(p => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                  <input type="number" value={liveGoalTokens || ''} onChange={e => setLiveGoalTokens(Number(e.target.value)||0)} placeholder="Token goal" style={{ ...inp2, width: 120, padding: '5px 10px', fontSize: 12 }} />
+                  <select value={liveStrategy} onChange={e => setLiveStrategy(e.target.value)} style={{ ...inp2, width: 'auto', padding: '5px 10px', fontSize: 12 }}>
+                    <option value="balanced">⚖️ Balanced</option>
+                    <option value="aggressive">💰 Aggressive</option>
+                    <option value="retention">🔄 Retention</option>
+                    <option value="engagement">💬 Engagement</option>
+                    <option value="whale">🐋 Whale Focus</option>
+                    <option value="goal">🎯 Goal Focus</option>
+                  </select>
+                  {!liveActive ? (
+                    <button onClick={() => { setLiveActive(true); setLiveStartTime(new Date()); setLiveEvents([]); processedTipIds.current = new Set(); coachingCooldowns.current = {} }}
+                      style={{ padding: '7px 18px', borderRadius: 8, background: 'linear-gradient(135deg, #10B981, #22D3EE)', border: 'none', color: C.white, fontWeight: 800, fontSize: 12, cursor: 'pointer', boxShadow: '0 0 16px rgba(16,185,129,0.35)' }}>
+                      ▶ Start Stream
+                    </button>
+                  ) : (
+                    <button onClick={() => setLiveActive(false)}
+                      style={{ padding: '7px 18px', borderRadius: 8, background: 'rgba(248,113,113,0.15)', border: '1px solid rgba(248,113,113,0.4)', color: C.red, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
+                      ⏹ End
+                    </button>
+                  )}
+                </div>
               </div>
 
+              {/* Not started */}
               {!liveActive && !liveEvents.length && (
-                <div style={{ ...glassCard, borderRadius: 16, padding: 48, textAlign: 'center', marginBottom: 24 }}>
-                  <div style={{ fontSize: 48, marginBottom: 12 }}>🔴</div>
-                  <div style={{ fontSize: 18, fontWeight: 700, color: C.white, marginBottom: 8 }}>Ready to go live</div>
-                  <div style={{ fontSize: 13, color: C.muted, maxWidth: 400, margin: '0 auto', lineHeight: 1.6 }}>
-                    Set your platform and token goal above, then click Start Stream.<br/>
-                    Log tips as they come in to get real-time coaching, alerts, and pace tracking.
+                <div style={{ ...glassCard, borderRadius: 20, padding: '64px 48px', textAlign: 'center', marginBottom: 24 }}>
+                  <div style={{ fontSize: 56, marginBottom: 16 }}>🔴</div>
+                  <div style={{ fontSize: 22, fontWeight: 800, color: C.white, marginBottom: 10 }}>Live Command Center</div>
+                  <div style={{ fontSize: 14, color: C.muted, maxWidth: 440, margin: '0 auto 28px', lineHeight: 1.75 }}>
+                    Your AI coach watches the room in real time — tracking momentum, spotting opportunities, and telling you exactly what to do next to make more money.
                   </div>
+                  <button onClick={() => { setLiveActive(true); setLiveStartTime(new Date()); setLiveEvents([]); processedTipIds.current = new Set(); coachingCooldowns.current = {} }}
+                    style={{ padding: '13px 36px', borderRadius: 12, background: 'linear-gradient(135deg, #10B981, #22D3EE)', border: 'none', color: C.white, fontWeight: 800, fontSize: 16, cursor: 'pointer', boxShadow: '0 0 32px rgba(16,185,129,0.4)' }}>
+                    ▶ Start Streaming
+                  </button>
                 </div>
               )}
 
               {(liveActive || liveEvents.length > 0) && (
                 <div>
-                  {/* MAIN GRID — stats left, alerts right */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: 20, marginBottom: 20 }}>
 
-                    {/* LEFT — stats */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-
-                      {/* KEY METRICS */}
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
-                        {[
-                          { label: 'Revenue', value: `$${state?.totalRevenue?.toFixed(2) || '0.00'}`, color: C.green, big: true },
-                          { label: 'Tips/min', value: state?.tipsPerMinute?.toFixed(1) || '0', color: C.cyan },
-                          { label: 'Avg Tip', value: `$${state?.avgTipValue?.toFixed(2) || '0.00'}`, color: C.gold },
-                          { label: 'Time', value: state ? `${Math.floor(state.elapsedMins)}m` : '0m', color: C.muted },
-                        ].map(({ label, value, color, big }) => (
-                          <div key={label} style={{ ...glassCard, borderRadius: 12, padding: '14px 16px' }}>
-                            <div style={{ fontSize: 10, color: C.muted, textTransform: 'uppercase', marginBottom: 4 }}>{label}</div>
-                            <div style={{ fontSize: big ? 26 : 20, fontWeight: 900, color }}>{value}</div>
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* PACE + GOAL */}
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                        {/* Pace status */}
-                        <div style={{ borderRadius: 12, padding: '14px 18px', background: pace.bg, border: `1px solid ${pace.border}` }}>
-                          <div style={{ fontSize: 10, color: C.muted, textTransform: 'uppercase', marginBottom: 6 }}>Pace</div>
-                          <div style={{ fontSize: 18, fontWeight: 800, color: pace.color }}>{pace.label}</div>
-                          {state?.firstHalfUPM > 0 && (
-                            <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>
-                              1st half: ${state.firstHalfUPM.toFixed(2)}/min → 2nd: ${state.secondHalfUPM.toFixed(2)}/min
+                  {/* ── ROOM STATE HERO ────────────────────────────────── */}
+                  {(() => {
+                    const rhKey = roomHealth.state || 'COLD'
+                    const rhMap = {
+                      COLD:      { from: 'rgba(15,20,35,0.97)',  to: 'rgba(20,28,48,0.97)',  glow: 'rgba(30,40,80,0.2)',    pulse: 'none' },
+                      WARMING:   { from: 'rgba(14,28,55,0.97)',  to: 'rgba(20,40,70,0.97)',  glow: 'rgba(34,211,238,0.12)', pulse: '3s' },
+                      ACTIVE:    { from: 'rgba(16,30,62,0.97)',  to: 'rgba(26,52,90,0.97)',  glow: 'rgba(34,211,238,0.22)', pulse: '2s' },
+                      HOT:       { from: 'rgba(38,16,72,0.97)',  to: 'rgba(58,22,92,0.97)',  glow: 'rgba(168,85,247,0.32)', pulse: '1.5s' },
+                      EXPLOSIVE: { from: 'rgba(60,12,28,0.98)',  to: 'rgba(88,18,38,0.98)',  glow: 'rgba(248,113,113,0.42)', pulse: '0.9s' },
+                    }
+                    const rg = rhMap[rhKey] || rhMap.COLD
+                    return (
+                      <div style={{ borderRadius: 16, padding: '22px 28px', marginBottom: 14, background: `linear-gradient(135deg, ${rg.from}, ${rg.to})`, border: `1px solid ${roomHealth.border}`, boxShadow: `0 0 48px ${rg.glow}`, position: 'relative', overflow: 'hidden' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 20 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
+                            <div style={{ width: 14, height: 14, borderRadius: '50%', background: liveActive ? C.green : C.muted, boxShadow: liveActive ? `0 0 12px ${C.green}` : 'none', animation: liveActive && rg.pulse !== 'none' ? `pulse-msg ${rg.pulse} infinite` : 'none', flexShrink: 0 }} />
+                            <div>
+                              <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.45)', textTransform: 'uppercase', letterSpacing: 1.2, fontWeight: 700, marginBottom: 3 }}>Room State</div>
+                              <div style={{ fontSize: 30, fontWeight: 900, color: roomHealth.color, letterSpacing: -0.5 }}>{roomHealth.emoji} {roomHealth.label}</div>
                             </div>
-                          )}
-                        </div>
-                        {/* Goal progress */}
-                        <div style={{ ...glassCard, borderRadius: 12, padding: '14px 18px' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                            <div style={{ fontSize: 10, color: C.muted, textTransform: 'uppercase' }}>Goal Progress</div>
-                            <div style={{ fontSize: 13, fontWeight: 700, color: state?.goalProgress >= 100 ? C.green : C.white }}>
-                              {state?.goalProgress || 0}%
-                            </div>
-                          </div>
-                          <div style={{ height: 8, borderRadius: 4, background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
-                            <div style={{ height: '100%', width: `${state?.goalProgress || 0}%`, borderRadius: 4, background: `linear-gradient(90deg, ${C.cyan}, ${C.pink})`, transition: 'width 0.4s ease' }} />
-                          </div>
-                          {liveGoalTokens > 0 && state && (
-                            <div style={{ fontSize: 11, color: C.muted, marginTop: 6 }}>
-                              {state.totalTokens} / {liveGoalTokens} tokens
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* TIP INPUT */}
-                      {liveActive && (
-                        <div style={{ ...glassCard, borderRadius: 12, padding: 16 }}>
-                          <div style={{ fontSize: 11, color: C.muted, marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>Log a tip</div>
-                          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: 8 }}>
-                            <input placeholder="Username" value={liveTipInput.username}
-                              onChange={e => setLiveTipInput(p => ({ ...p, username: e.target.value }))}
-                              onKeyDown={e => e.key === 'Enter' && addTip()}
-                              style={inp2} />
-                            <input type="number" placeholder="Tokens" value={liveTipInput.tokens}
-                              onChange={e => setLiveTipInput(p => ({ ...p, tokens: e.target.value }))}
-                              onKeyDown={e => e.key === 'Enter' && addTip()}
-                              style={inp2} />
-                            <input type="number" placeholder="USD" value={liveTipInput.usd}
-                              onChange={e => setLiveTipInput(p => ({ ...p, usd: e.target.value }))}
-                              onKeyDown={e => e.key === 'Enter' && addTip()}
-                              style={inp2} />
-                            <button onClick={addTip}
-                              style={{ padding: '8px 16px', borderRadius: 8, background: 'linear-gradient(135deg, #22D3EE, #EC4899)', border: 'none', color: C.white, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                              + Add
-                            </button>
-                          </div>
-                          <div style={{ fontSize: 10, color: C.muted, marginTop: 6 }}>Press Enter or click Add — tokens or USD, whichever you have</div>
-                        </div>
-                      )}
-
-                      {/* TIP FEED */}
-                      {liveEvents.length > 0 && (
-                        <div style={{ ...glassCard, borderRadius: 12, padding: 16 }}>
-                          <div style={{ fontSize: 11, color: C.muted, marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>Live Tip Feed</div>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 220, overflowY: 'auto' }}>
-                            {[...liveEvents].reverse().map((ev, i) => {
-                              const isFlash = ev._id && ev._id === flashTipId
-                              return (
-                              <div key={ev._id || i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', borderRadius: 8, background: isFlash ? 'rgba(168,85,247,0.18)' : i === 0 ? 'rgba(34,211,238,0.08)' : 'rgba(255,255,255,0.03)', border: isFlash ? '1px solid rgba(168,85,247,0.5)' : i === 0 ? '1px solid rgba(34,211,238,0.2)' : '1px solid rgba(255,255,255,0.05)', transition: 'all 0.4s ease', boxShadow: isFlash ? '0 0 12px rgba(168,85,247,0.3)' : 'none' }}>
-                                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                                  <span style={{ fontSize: 12, fontWeight: 600, color: isFlash ? '#c084fc' : C.white }}>{ev.username}</span>
-                                  {ev.tokens > 0 && <span style={{ fontSize: 11, color: C.cyan }}>{ev.tokens} tkns</span>}
-                                  {isFlash && <span style={{ fontSize: 10, color: '#c084fc', fontWeight: 700 }}>NEW ✨</span>}
-                                </div>
-                                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                                  <span style={{ fontSize: 13, fontWeight: 700, color: C.green }}>${ev.normalizedRevenue?.toFixed(2) || '0.00'}</span>
-                                  <span style={{ fontSize: 10, color: C.muted }}>{new Date(ev.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                                </div>
+                            {liveActive && state && (
+                              <div style={{ padding: '6px 14px', borderRadius: 20, background: phaseConfig.bg, border: `1px solid ${phaseConfig.border}`, fontSize: 12, fontWeight: 700, color: phaseConfig.color }}>
+                                {phaseConfig.icon} {phaseConfig.label}
                               </div>
-                            )})}
+                            )}
+                          </div>
+                          <div style={{ display: 'flex', gap: 28, alignItems: 'center', flexWrap: 'wrap' }}>
+                            {[
+                              { label: 'Revenue', value: `$${state?.totalRevenue?.toFixed(2) || '0.00'}`, color: C.green, size: 28 },
+                              { label: 'Tokens', value: (state?.totalTokens || 0).toLocaleString(), color: C.cyan, size: 22 },
+                              { label: 'Pace', value: pace.label, color: pace.color, size: 18 },
+                              { label: 'Opportunity', value: `${opportunityScore.score}/100`, color: opportunityScore.color, size: 22 },
+                              ...(comparison.vsAvgPct !== null ? [{ label: 'vs Avg', value: `${(comparison.vsAvgPct ?? 0) >= 0 ? '+' : ''}${comparison.vsAvgPct}%`, color: (comparison.vsAvgPct ?? 0) >= 0 ? C.green : C.red, size: 20 }] : []),
+                            ].map(({ label, value, color, size }) => (
+                              <div key={label} style={{ textAlign: 'center' }}>
+                                <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 3 }}>{label}</div>
+                                <div style={{ fontSize: size, fontWeight: 900, color }}>{value}</div>
+                              </div>
+                            ))}
                           </div>
                         </div>
-                      )}
-                    </div>
-
-                    {/* RIGHT — alerts + next action */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-
-                      {/* NEXT ACTION — prominent */}
-                      <div style={{ borderRadius: 14, padding: 20, background: 'linear-gradient(135deg, rgba(236,72,153,0.12), rgba(124,92,255,0.12))', border: '1px solid rgba(236,72,153,0.3)' }}>
-                        <div style={{ fontSize: 10, color: C.pink, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10, fontWeight: 700 }}>⚡ Do This Now</div>
-                        <div style={{ fontSize: 14, color: C.white, fontWeight: 600, lineHeight: 1.6 }}>{nextAction.text}</div>
-                      </div>
-
-                      {/* LIVE ALERTS */}
-                      <div style={{ ...glassCard, borderRadius: 14, padding: 16, flex: 1 }}>
-                        <div style={{ fontSize: 10, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 12 }}>Live Alerts</div>
-                        {alerts.length === 0 ? (
-                          <div style={{ fontSize: 13, color: C.muted, textAlign: 'center', padding: '20px 0' }}>
-                            {liveActive ? 'All clear — keep going 👍' : 'Start streaming to see alerts'}
+                        {liveActive && state && (
+                          <div style={{ marginTop: 16 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                              <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: 0.8 }}>Room momentum</span>
+                              <span style={{ fontSize: 9, color: roomHealth.directionColor }}>{roomHealth.directionLabel}</span>
+                            </div>
+                            <div style={{ height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.07)', overflow: 'hidden' }}>
+                              <div style={{ height: '100%', width: `${roomHealth.score || 0}%`, borderRadius: 2, background: `linear-gradient(90deg, ${roomHealth.color}, ${C.cyan})`, transition: 'width 0.7s ease' }} />
+                            </div>
                           </div>
-                        ) : (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                            {alerts.map((a, i) => (
-                              <div key={i} style={{ padding: '10px 14px', borderRadius: 10, background: `${ALERT_COLORS[a.level]}10`, border: `1px solid ${ALERT_COLORS[a.level]}30`, display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-                                <span style={{ fontSize: 16, flexShrink: 0 }}>{a.icon}</span>
-                                <span style={{ fontSize: 12, color: ALERT_COLORS[a.level], fontWeight: 600, lineHeight: 1.5 }}>{a.text}</span>
+                        )}
+                      </div>
+                    )
+                  })()}
+
+                  {/* ── AI COACH CENTERPIECE ────────────────────────────── */}
+                  {(() => {
+                    const topAlert = alerts[0]
+                    const restAlerts = alerts.slice(1)
+                    const urgencyMap = {
+                      critical: { bg: 'rgba(248,113,113,0.09)', border: 'rgba(248,113,113,0.38)', badge: 'rgba(248,113,113,0.22)', badgeText: C.red, tag: '🚨 CRITICAL ACTION' },
+                      warning:  { bg: 'rgba(245,158,11,0.09)',  border: 'rgba(245,158,11,0.38)',  badge: 'rgba(245,158,11,0.22)',  badgeText: C.gold, tag: '⚠️ ALERT' },
+                      success:  { bg: 'rgba(16,185,129,0.09)',  border: 'rgba(16,185,129,0.38)',  badge: 'rgba(16,185,129,0.22)',  badgeText: C.green, tag: '🔥 MOMENTUM' },
+                      info:     { bg: 'rgba(34,211,238,0.09)',  border: 'rgba(34,211,238,0.38)',  badge: 'rgba(34,211,238,0.22)',  badgeText: C.cyan, tag: '💡 INSIGHT' },
+                    }
+                    const uc = topAlert ? (urgencyMap[topAlert.level] || urgencyMap.info) : null
+                    const defaultStyle = { bg: 'linear-gradient(135deg, rgba(236,72,153,0.1), rgba(124,92,255,0.1))', border: 'rgba(168,85,247,0.3)', badge: 'rgba(236,72,153,0.2)', badgeText: C.pink, tag: '⚡ DO THIS NOW' }
+                    const style = uc || defaultStyle
+                    return (
+                      <div style={{ borderRadius: 16, padding: '22px 26px', marginBottom: 14, background: topAlert ? style.bg : defaultStyle.bg, border: `1px solid ${topAlert ? style.border : defaultStyle.border}`, boxShadow: topAlert?.level === 'critical' ? '0 0 32px rgba(248,113,113,0.12)' : 'none' }}>
+                        <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+                          <div style={{ flex: 1, minWidth: 260 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                              <div style={{ padding: '3px 10px', borderRadius: 6, background: topAlert ? style.badge : defaultStyle.badge, fontSize: 10, fontWeight: 800, color: topAlert ? style.badgeText : defaultStyle.badgeText, letterSpacing: 0.8, textTransform: 'uppercase' }}>
+                                {topAlert ? style.tag : defaultStyle.tag}
+                              </div>
+                              <div style={{ fontSize: 10, color: C.muted }}>AI Coach · {liveStrategy} mode</div>
+                            </div>
+                            <div style={{ fontSize: 17, fontWeight: 700, color: C.white, lineHeight: 1.65, marginBottom: topAlert && nextAction.text !== topAlert.text ? 12 : 0 }}>
+                              {topAlert ? topAlert.text : nextAction.text}
+                            </div>
+                            {topAlert && nextAction.text !== topAlert.text && (
+                              <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.6, borderTop: '1px solid rgba(255,255,255,0.07)', paddingTop: 10 }}>
+                                <span style={{ color: topAlert ? style.badgeText : C.pink, fontWeight: 700 }}>Next: </span>{nextAction.text}
+                              </div>
+                            )}
+                          </div>
+                          {liveActive && state && goalStrategy && (
+                            <div style={{ minWidth: 170, padding: '14px 18px', borderRadius: 12, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                              <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8 }}>Goal Push Probability</div>
+                              <div style={{ fontSize: 30, fontWeight: 900, color: goalStrategy.probability >= 70 ? C.green : goalStrategy.probability >= 40 ? C.gold : C.red, marginBottom: 6 }}>{goalStrategy.probability}%</div>
+                              <div style={{ height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.08)', overflow: 'hidden', marginBottom: 8 }}>
+                                <div style={{ height: '100%', width: `${goalStrategy.probability}%`, borderRadius: 2, background: goalStrategy.probability >= 70 ? `linear-gradient(90deg, ${C.green}, ${C.cyan})` : `linear-gradient(90deg, ${C.gold}, ${C.orange})`, transition: 'width 0.5s ease' }} />
+                              </div>
+                              <div style={{ fontSize: 10, color: C.muted, lineHeight: 1.5 }}>{goalStrategy.suggestion}</div>
+                            </div>
+                          )}
+                        </div>
+                        {restAlerts.length > 0 && (
+                          <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
+                            {restAlerts.map((a, i) => (
+                              <div key={i} style={{ flex: '1 1 200px', padding: '8px 12px', borderRadius: 9, background: `${ALERT_COLORS[a.level]}10`, border: `1px solid ${ALERT_COLORS[a.level]}28`, display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                                <span style={{ fontSize: 14, flexShrink: 0 }}>{a.icon}</span>
+                                <span style={{ fontSize: 12, color: ALERT_COLORS[a.level], fontWeight: 600, lineHeight: 1.4 }}>{a.text}</span>
                               </div>
                             ))}
                           </div>
                         )}
                       </div>
+                    )
+                  })()}
 
-                      {/* EXTENSION STATUS */}
-                      <div style={{ borderRadius: 12, padding: '14px 16px', background: liveEvents.some(e => e.sourceUsed === 'extension') ? 'rgba(16,185,129,0.08)' : 'rgba(124,92,255,0.08)', border: `1px solid ${liveEvents.some(e => e.sourceUsed === 'extension') ? 'rgba(16,185,129,0.3)' : 'rgba(124,92,255,0.25)'}` }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                          <div style={{ width: 7, height: 7, borderRadius: '50%', background: liveEvents.some(e => e.sourceUsed === 'extension') ? C.green : C.muted, boxShadow: liveEvents.some(e => e.sourceUsed === 'extension') ? `0 0 6px ${C.green}` : 'none' }} />
-                          <div style={{ fontSize: 13, fontWeight: 700, color: C.white }}>
-                            {liveEvents.some(e => e.sourceUsed === 'extension') ? 'Extension Connected' : '⚡ Auto-capture tips'}
+                  {/* ── MAIN GRID ─────────────────────────────────────────── */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 350px', gap: 14, marginBottom: 14 }}>
+
+                    {/* LEFT */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+
+                      {/* MONEY MOMENTUM — 4 stats */}
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+                        {[
+                          { label: 'Revenue', value: `$${state?.totalRevenue?.toFixed(2) || '0.00'}`, color: C.green, sub: velocity.label || null },
+                          { label: 'Tips/min', value: state?.tipsPerMinute?.toFixed(2) || '0.00', color: C.cyan, sub: `${state?.liveOnlyCount || 0} tips live` },
+                          { label: 'Avg Tip', value: `$${state?.avgTipValue?.toFixed(2) || '0.00'}`, color: C.gold, sub: state?.topTipper ? `Top: ${state.topTipper.username}` : null },
+                          { label: 'Rev/hr', value: `$${velocity.currentUPH.toFixed(0)}`, color: velocity.color, sub: comparison.vsAvgPct !== null ? `${(comparison.vsAvgPct ?? 0) >= 0 ? '+' : ''}${comparison.vsAvgPct}% vs avg` : null },
+                        ].map(({ label, value, color, sub }) => (
+                          <div key={label} style={{ ...glassCard, borderRadius: 12, padding: '14px 16px' }}>
+                            <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 4 }}>{label}</div>
+                            <div style={{ fontSize: 22, fontWeight: 900, color }}>{value}</div>
+                            {sub && <div style={{ fontSize: 10, color: C.muted, marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sub}</div>}
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* PACE + GOAL */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                        <div style={{ borderRadius: 12, padding: '14px 18px', background: pace.bg, border: `1px solid ${pace.border}` }}>
+                          <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 6 }}>Pace</div>
+                          <div style={{ fontSize: 20, fontWeight: 800, color: pace.color }}>{pace.label}</div>
+                          {state?.firstHalfUPM > 0 && (
+                            <div style={{ fontSize: 10, color: C.muted, marginTop: 4 }}>1st: ${state.firstHalfUPM.toFixed(2)}/m → 2nd: ${state.secondHalfUPM.toFixed(2)}/m</div>
+                          )}
+                        </div>
+                        <div style={{ ...glassCard, borderRadius: 12, padding: '14px 18px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                            <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8 }}>Goal</div>
+                            <div style={{ fontSize: 14, fontWeight: 800, color: (state?.goalProgress || 0) >= 100 ? C.green : C.white }}>{state?.goalProgress || 0}%</div>
+                          </div>
+                          <div style={{ height: 8, borderRadius: 4, background: 'rgba(255,255,255,0.08)', overflow: 'hidden', marginBottom: 6 }}>
+                            <div style={{ height: '100%', width: `${Math.min(state?.goalProgress || 0, 100)}%`, borderRadius: 4, background: `linear-gradient(90deg, ${C.cyan}, ${C.pink})`, transition: 'width 0.5s ease' }} />
+                          </div>
+                          {liveGoalTokens > 0 && state && <div style={{ fontSize: 10, color: C.muted }}>{state.totalTokens} / {liveGoalTokens} tokens</div>}
+                        </div>
+                      </div>
+
+                      {/* TIP INPUT */}
+                      {liveActive && (
+                        <div style={{ ...glassCard, borderRadius: 12, padding: '14px 16px' }}>
+                          <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10 }}>Log a tip manually</div>
+                          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: 8 }}>
+                            <input placeholder="Username" value={liveTipInput.username} onChange={e => setLiveTipInput(p => ({ ...p, username: e.target.value }))} onKeyDown={e => e.key === 'Enter' && addTip()} style={inp2} />
+                            <input type="number" placeholder="Tokens" value={liveTipInput.tokens} onChange={e => setLiveTipInput(p => ({ ...p, tokens: e.target.value }))} onKeyDown={e => e.key === 'Enter' && addTip()} style={inp2} />
+                            <input type="number" placeholder="USD" value={liveTipInput.usd} onChange={e => setLiveTipInput(p => ({ ...p, usd: e.target.value }))} onKeyDown={e => e.key === 'Enter' && addTip()} style={inp2} />
+                            <button onClick={addTip} style={{ padding: '8px 16px', borderRadius: 8, background: 'linear-gradient(135deg, #22D3EE, #EC4899)', border: 'none', color: C.white, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>+ Add</button>
                           </div>
                         </div>
-                        <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.5 }}>
-                          {liveEvents.some(e => e.sourceUsed === 'extension')
-                            ? `${liveEvents.filter(e => e.sourceUsed === 'extension').length} tip${liveEvents.filter(e => e.sourceUsed === 'extension').length !== 1 ? 's' : ''} auto-captured from your stream`
-                            : 'Install the CamCash Chrome extension — tips appear here automatically as they come in.'}
+                      )}
+
+                      {/* LIVE EVENT FEED */}
+                      {liveEvents.length > 0 && (
+                        <div style={{ ...glassCard, borderRadius: 12, padding: 16, flex: 1 }}>
+                          <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10 }}>
+                            Live Event Feed
+                            <span style={{ marginLeft: 8, color: C.dim, fontWeight: 400, textTransform: 'none', fontSize: 10, letterSpacing: 0 }}>— {liveEvents.filter(e => !e._isHistory).length} live tips</span>
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 5, maxHeight: 280, overflowY: 'auto' }}>
+                            {[...liveEvents].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)).map((ev, i) => {
+                              const isFlash = ev._id && ev._id === flashTipId
+                              const isNew = i === 0 && !ev._isHistory
+                              const isBig = (ev.normalizedRevenue || 0) >= 5
+                              return (
+                                <div key={ev._id || i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 12px', borderRadius: 9, background: isFlash ? 'rgba(168,85,247,0.18)' : isNew ? 'rgba(34,211,238,0.07)' : isBig ? 'rgba(245,158,11,0.06)' : 'rgba(255,255,255,0.02)', border: isFlash ? '1px solid rgba(168,85,247,0.5)' : isNew ? '1px solid rgba(34,211,238,0.18)' : isBig ? '1px solid rgba(245,158,11,0.18)' : '1px solid rgba(255,255,255,0.04)', boxShadow: isFlash ? '0 0 16px rgba(168,85,247,0.25)' : 'none', transition: 'all 0.35s ease', opacity: ev._isHistory ? 0.55 : 1 }}>
+                                  <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                                    <span style={{ fontSize: 14 }}>{isBig ? '🐋' : '💰'}</span>
+                                    <div>
+                                      <span style={{ fontSize: 13, fontWeight: 700, color: isFlash ? '#c084fc' : C.white }}>{ev.username}</span>
+                                      {ev._isHistory && <span style={{ fontSize: 9, color: C.dim, marginLeft: 6 }}>history</span>}
+                                      {isFlash && <span style={{ fontSize: 10, color: '#c084fc', marginLeft: 8, fontWeight: 800 }}>NEW ✨</span>}
+                                    </div>
+                                    {ev.tokens > 0 && <span style={{ fontSize: 11, color: C.cyan }}>{ev.tokens}t</span>}
+                                  </div>
+                                  <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                                    <span style={{ fontSize: 15, fontWeight: 800, color: isBig ? C.gold : C.green }}>${(ev.normalizedRevenue || 0).toFixed(2)}</span>
+                                    <span style={{ fontSize: 9, color: C.muted }}>{new Date(ev.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
                         </div>
-                        <a href="/extension" target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', marginTop: 10, padding: '7px 16px', background: 'linear-gradient(135deg, #a855f7, #7c3aed)', color: '#fff', borderRadius: 8, fontSize: 12, fontWeight: 700, textDecoration: 'none' }}>
-                          📥 Get the Extension →
-                        </a>
+                      )}
+                    </div>
+
+                    {/* RIGHT */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+
+                      {/* STREAM HEALTH */}
+                      {liveActive && state && (
+                        <div style={{ ...glassCard, borderRadius: 14, padding: '16px 18px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                            <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700 }}>Stream Health</div>
+                            <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+                              <span style={{ fontSize: 26, fontWeight: 900, color: streamHealth.grade === 'A' ? C.green : streamHealth.grade === 'B' ? C.cyan : streamHealth.grade === 'C' ? C.gold : C.red }}>{streamHealth.grade}</span>
+                              <span style={{ fontSize: 11, color: C.muted }}>{streamHealth.score}/100</span>
+                            </div>
+                          </div>
+                          {[
+                            { label: 'Momentum',  value: streamHealth.components.momentum,   max: 30, color: C.green },
+                            { label: 'Engagement',value: streamHealth.components.engagement,  max: 30, color: C.cyan },
+                            { label: 'Velocity',  value: streamHealth.components.velocity,    max: 25, color: C.gold },
+                            { label: 'Recovery',  value: streamHealth.components.recovery,    max: 15, color: '#a855f7' },
+                          ].map(({ label, value, max, color }) => (
+                            <div key={label} style={{ marginBottom: 8 }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                                <span style={{ fontSize: 10, color: C.muted }}>{label}</span>
+                                <span style={{ fontSize: 10, color, fontWeight: 700 }}>{value}/{max}</span>
+                              </div>
+                              <div style={{ height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.07)', overflow: 'hidden' }}>
+                                <div style={{ height: '100%', width: `${(value / max) * 100}%`, borderRadius: 2, background: color, transition: 'width 0.4s ease' }} />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* RECOVERY ACTIONS */}
+                      {liveActive && state && (sessionPhase === 'DECLINE' || sessionPhase === 'PLATEAU' || sessionPhase === 'RECOVERY') && (
+                        <div style={{ borderRadius: 14, padding: '16px 18px', background: sessionPhase === 'DECLINE' ? 'rgba(248,113,113,0.07)' : sessionPhase === 'RECOVERY' ? 'rgba(168,85,247,0.07)' : 'rgba(245,158,11,0.07)', border: `1px solid ${sessionPhase === 'DECLINE' ? 'rgba(248,113,113,0.3)' : sessionPhase === 'RECOVERY' ? 'rgba(168,85,247,0.3)' : 'rgba(245,158,11,0.3)'}` }}>
+                          <div style={{ fontSize: 9, color: sessionPhase === 'DECLINE' ? C.red : sessionPhase === 'RECOVERY' ? '#a855f7' : C.gold, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700, marginBottom: 10 }}>
+                            {sessionPhase === 'DECLINE' ? '🚨 Recovery Actions' : sessionPhase === 'RECOVERY' ? '🔄 Rebuilding' : '📊 Boost Tactics'}
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            {recoveryActions.map((action, i) => (
+                              <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '6px 10px', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}>
+                                <span style={{ fontSize: 11, color: sessionPhase === 'DECLINE' ? C.red : sessionPhase === 'RECOVERY' ? '#a855f7' : C.gold, flexShrink: 0, fontWeight: 800 }}>{i + 1}.</span>
+                                <span style={{ fontSize: 11, color: C.white, lineHeight: 1.5 }}>{action}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* OPPORTUNITY SIGNALS */}
+                      {liveActive && state && opportunityScore.signals.length > 0 && (
+                        <div style={{ ...glassCard, borderRadius: 14, padding: '16px 18px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                            <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700 }}>Why These Alerts?</div>
+                            <div style={{ padding: '2px 8px', borderRadius: 6, background: `${opportunityScore.color}18`, fontSize: 11, fontWeight: 800, color: opportunityScore.color }}>{opportunityScore.score}/100</div>
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                            {opportunityScore.signals.map((sig, i) => (
+                              <div key={i} style={{ display: 'flex', gap: 7, alignItems: 'flex-start' }}>
+                                <span style={{ color: opportunityScore.color, fontSize: 12, flexShrink: 0 }}>→</span>
+                                <span style={{ fontSize: 11, color: C.muted, lineHeight: 1.5 }}>{sig}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* EXTENSION STATUS */}
+                      <div style={{ borderRadius: 12, padding: '14px 16px', background: liveEvents.some(e => e.sourceUsed === 'extension') ? 'rgba(16,185,129,0.07)' : 'rgba(124,92,255,0.07)', border: `1px solid ${liveEvents.some(e => e.sourceUsed === 'extension') ? 'rgba(16,185,129,0.22)' : 'rgba(124,92,255,0.2)'}` }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                          <div style={{ width: 7, height: 7, borderRadius: '50%', background: liveEvents.some(e => e.sourceUsed === 'extension') ? C.green : C.muted, boxShadow: liveEvents.some(e => e.sourceUsed === 'extension') ? `0 0 6px ${C.green}` : 'none' }} />
+                          <div style={{ fontSize: 13, fontWeight: 700, color: C.white }}>
+                            {liveEvents.some(e => e.sourceUsed === 'extension') ? 'Extension Auto-Capturing' : 'Auto-capture tips'}
+                          </div>
+                        </div>
+                        <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.5, marginBottom: 8 }}>
+                          {liveEvents.some(e => e.sourceUsed === 'extension')
+                            ? `${liveEvents.filter(e => e.sourceUsed === 'extension').length} tips captured automatically`
+                            : 'Install the CamCash Chrome extension — tips appear here automatically.'}
+                        </div>
+                        {!liveEvents.some(e => e.sourceUsed === 'extension') && (
+                          <a href="/extension" target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', padding: '6px 14px', background: 'linear-gradient(135deg, #a855f7, #7c3aed)', color: '#fff', borderRadius: 7, fontSize: 11, fontWeight: 700, textDecoration: 'none' }}>📥 Get Extension →</a>
+                        )}
                       </div>
                     </div>
                   </div>
 
-                  {/* ── INTELLIGENCE PANELS ─────────────────────────── */}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14 }}>
+                  {/* ── BOTTOM PANELS ─────────────────────────────────── */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 12 }}>
 
-                    {/* GOAL STRATEGY */}
-                    {liveActive && state && (
-                      <div style={{ borderRadius: 14, padding: 18, background: goalStrategy.urgency === 'high' ? 'rgba(245,158,11,0.08)' : 'rgba(255,255,255,0.04)', border: `1px solid ${goalStrategy.urgency === 'high' ? 'rgba(245,158,11,0.35)' : 'rgba(255,255,255,0.08)'}` }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                          <div style={{ fontSize: 10, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700 }}>🎯 Goal Strategy</div>
-                          <div style={{ padding: '2px 8px', borderRadius: 8, background: goalStrategy.urgency === 'high' ? 'rgba(245,158,11,0.2)' : goalStrategy.urgency === 'medium' ? 'rgba(34,211,238,0.15)' : 'rgba(255,255,255,0.06)', fontSize: 10, fontWeight: 700, color: goalStrategy.urgency === 'high' ? C.gold : goalStrategy.urgency === 'medium' ? C.cyan : C.muted }}>
-                            {goalStrategy.timing === 'now' ? '⚡ ACT NOW' : goalStrategy.timing === 'reset' ? '🔄 RESET' : goalStrategy.timing === 'soon' ? '⏱ SOON' : '⏳ WAIT'}
-                          </div>
-                        </div>
-                        <div style={{ fontSize: 13, color: C.white, fontWeight: 600, lineHeight: 1.6, marginBottom: 10 }}>{goalStrategy.suggestion}</div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <div style={{ flex: 1, height: 6, borderRadius: 3, background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
-                            <div style={{ height: '100%', width: `${goalStrategy.probability}%`, borderRadius: 3, background: `linear-gradient(90deg, ${C.cyan}, ${C.pink})`, transition: 'width 0.5s ease' }} />
-                          </div>
-                          <div style={{ fontSize: 11, color: C.muted, whiteSpace: 'nowrap' }}>{goalStrategy.probability}% probability</div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* RECOVERY ACTIONS — shown during DECLINE or PLATEAU */}
-                    {liveActive && state && (sessionPhase === 'DECLINE' || sessionPhase === 'PLATEAU' || sessionPhase === 'RECOVERY') && (
-                      <div style={{ borderRadius: 14, padding: 18, background: sessionPhase === 'DECLINE' ? 'rgba(248,113,113,0.06)' : sessionPhase === 'RECOVERY' ? 'rgba(168,85,247,0.06)' : 'rgba(245,158,11,0.06)', border: `1px solid ${sessionPhase === 'DECLINE' ? 'rgba(248,113,113,0.3)' : sessionPhase === 'RECOVERY' ? 'rgba(168,85,247,0.3)' : 'rgba(245,158,11,0.3)'}` }}>
-                        <div style={{ fontSize: 10, color: sessionPhase === 'DECLINE' ? C.red : sessionPhase === 'RECOVERY' ? '#a855f7' : C.gold, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700, marginBottom: 10 }}>
-                          {sessionPhase === 'DECLINE' ? '🚨 Recovery Actions' : sessionPhase === 'RECOVERY' ? '🔄 Rebuilding Momentum' : '📊 Boost Tactics'}
-                        </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-                          {recoveryActions.map((action, i) => (
-                            <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '7px 10px', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                              <span style={{ fontSize: 12, color: sessionPhase === 'DECLINE' ? C.red : sessionPhase === 'RECOVERY' ? '#a855f7' : C.gold, flexShrink: 0, fontWeight: 700 }}>{i + 1}.</span>
-                              <span style={{ fontSize: 12, color: C.white, lineHeight: 1.5 }}>{action}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* COACHING EXPLANATION — WHY signals fired */}
-                    {liveActive && state && opportunityScore.signals.length > 0 && (
-                      <div style={{ borderRadius: 14, padding: 18, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                          <div style={{ fontSize: 10, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700 }}>💡 Why These Alerts?</div>
-                          <div style={{ padding: '2px 8px', borderRadius: 8, background: `${opportunityScore.color}18`, fontSize: 11, fontWeight: 800, color: opportunityScore.color }}>
-                            {opportunityScore.score}/100
-                          </div>
-                        </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                          {opportunityScore.signals.map((sig, i) => (
-                            <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-                              <span style={{ color: opportunityScore.color, fontSize: 14, flexShrink: 0, lineHeight: 1.4 }}>→</span>
-                              <span style={{ fontSize: 12, color: C.text, lineHeight: 1.5 }}>{sig}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* STREAM HEALTH BREAKDOWN */}
-                    {liveActive && state && (
-                      <div style={{ borderRadius: 14, padding: 18, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
-                        <div style={{ fontSize: 10, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700, marginBottom: 12 }}>📊 Health Breakdown</div>
-                        {[
-                          { label: 'Momentum', value: streamHealth.components.momentum, max: 30, color: C.green },
-                          { label: 'Engagement', value: streamHealth.components.engagement, max: 30, color: C.cyan },
-                          { label: 'Velocity', value: streamHealth.components.velocity, max: 25, color: C.gold },
-                          { label: 'Recovery', value: streamHealth.components.recovery, max: 15, color: '#a855f7' },
-                        ].map(({ label, value, max, color }) => (
-                          <div key={label} style={{ marginBottom: 8 }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-                              <span style={{ fontSize: 11, color: C.muted }}>{label}</span>
-                              <span style={{ fontSize: 11, color, fontWeight: 700 }}>{value}/{max}</span>
-                            </div>
-                            <div style={{ height: 5, borderRadius: 3, background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
-                              <div style={{ height: '100%', width: `${(value / max) * 100}%`, borderRadius: 3, background: color, transition: 'width 0.4s ease' }} />
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* MICRO-TIMELINE */}
+                    {/* SESSION TIMELINE */}
                     {liveActive && (liveEvents.length > 0 || phaseChangeLog.current.length > 0) && (() => {
-                      const tipEntries = liveEvents.filter(e => !e._isHistory).map(e => ({
-                        type: 'tip', ts: new Date(e.timestamp).getTime(),
-                        icon: (e.normalizedRevenue || 0) >= 5 ? '🐋' : '💰',
-                        text: `${e.username} — ${e.tokens > 0 ? e.tokens + ' tkns' : ''} $${(e.normalizedRevenue || 0).toFixed(2)}`,
-                        color: (e.normalizedRevenue || 0) >= 5 ? C.gold : C.green,
-                      }))
-                      const phaseEntries = phaseChangeLog.current.map(p => ({
-                        type: 'phase', ts: p.ts,
-                        icon: p.icon,
-                        text: `Phase changed to ${p.label}`,
-                        color: C.cyan,
-                      }))
-                      const alertEntries = firedAlertsLog.current.slice(0, 5).map(a => ({
-                        type: 'alert', ts: a.ts, icon: a.icon,
-                        text: a.text, color: C.muted,
-                      }))
-                      const merged = [...tipEntries, ...phaseEntries, ...alertEntries]
-                        .sort((a, b) => b.ts - a.ts)
-                        .slice(0, 15)
+                      const tipEntries = liveEvents.filter(e => !e._isHistory).map(e => ({ type: 'tip', ts: new Date(e.timestamp).getTime(), icon: (e.normalizedRevenue || 0) >= 5 ? '🐋' : '💰', text: `${e.username} — ${e.tokens > 0 ? e.tokens + 't' : ''} $${(e.normalizedRevenue || 0).toFixed(2)}`, color: (e.normalizedRevenue || 0) >= 5 ? C.gold : C.green }))
+                      const phaseEntries = phaseChangeLog.current.map(p => ({ type: 'phase', ts: p.ts, icon: p.icon, text: `Phase → ${p.label}`, color: C.cyan }))
+                      const alertEntries = firedAlertsLog.current.slice(0, 6).map(a => ({ type: 'alert', ts: a.ts, icon: a.icon, text: a.text, color: C.muted }))
+                      const merged = [...tipEntries, ...phaseEntries, ...alertEntries].sort((a, b) => b.ts - a.ts).slice(0, 20)
                       return (
-                        <div style={{ borderRadius: 14, padding: 18, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', gridColumn: '1 / -1' }}>
-                          <div style={{ fontSize: 10, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700, marginBottom: 10 }}>⏱ Session Timeline</div>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 5, maxHeight: 240, overflowY: 'auto' }}>
+                        <div style={{ ...glassCard, borderRadius: 14, padding: 18 }}>
+                          <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700, marginBottom: 10 }}>⏱ Session Timeline</div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 240, overflowY: 'auto' }}>
                             {merged.length === 0 ? (
-                              <div style={{ fontSize: 12, color: C.muted, textAlign: 'center', padding: '10px 0' }}>Events will appear here as your session unfolds</div>
+                              <div style={{ fontSize: 12, color: C.muted, textAlign: 'center', padding: '12px 0' }}>Events will appear here as your session unfolds</div>
                             ) : merged.map((entry, i) => (
                               <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '5px 8px', borderRadius: 7, background: i === 0 ? 'rgba(255,255,255,0.04)' : 'transparent' }}>
-                                <span style={{ fontSize: 14, flexShrink: 0 }}>{entry.icon}</span>
+                                <span style={{ fontSize: 13, flexShrink: 0 }}>{entry.icon}</span>
                                 <span style={{ fontSize: 11, color: entry.color, flex: 1, lineHeight: 1.4 }}>{entry.text}</span>
-                                <span style={{ fontSize: 9, color: C.muted, whiteSpace: 'nowrap' }}>
-                                  {new Date(entry.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                </span>
+                                <span style={{ fontSize: 9, color: C.muted, whiteSpace: 'nowrap' }}>{new Date(entry.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                               </div>
                             ))}
                           </div>
@@ -4163,18 +4165,16 @@ const handleCSV = async (file, forcePlatform = null) => {
                       )
                     })()}
 
-                    {/* RECOMMENDATION HISTORY */}
+                    {/* ALERT HISTORY */}
                     {liveActive && firedAlertsLog.current.length > 0 && (
-                      <div style={{ borderRadius: 14, padding: 18, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
-                        <div style={{ fontSize: 10, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700, marginBottom: 10 }}>📋 Alert History</div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 5, maxHeight: 200, overflowY: 'auto' }}>
-                          {firedAlertsLog.current.slice(0, 12).map((entry, i) => (
+                      <div style={{ ...glassCard, borderRadius: 14, padding: 18 }}>
+                        <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700, marginBottom: 10 }}>📋 Alert History</div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 5, maxHeight: 240, overflowY: 'auto' }}>
+                          {firedAlertsLog.current.slice(0, 15).map((entry, i) => (
                             <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '5px 8px', borderRadius: 7, background: 'rgba(255,255,255,0.02)' }}>
                               <span style={{ fontSize: 13, flexShrink: 0, lineHeight: 1.4 }}>{entry.icon}</span>
                               <span style={{ fontSize: 11, color: C.text, flex: 1, lineHeight: 1.4 }}>{entry.text}</span>
-                              <span style={{ fontSize: 9, color: C.muted, whiteSpace: 'nowrap', marginTop: 1 }}>
-                                {new Date(entry.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                              </span>
+                              <span style={{ fontSize: 9, color: C.muted, whiteSpace: 'nowrap', marginTop: 1 }}>{new Date(entry.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                             </div>
                           ))}
                         </div>
@@ -4182,6 +4182,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                     )}
 
                   </div>
+
                 </div>
               )}
             </div>
