@@ -1,71 +1,138 @@
 import { createClient } from '@supabase/supabase-js';
 
-function getSupabase() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
-  );
+function corsHeaders(req) {
+  const origin = req.headers.get('origin') || '';
+  const allowed = origin.startsWith('chrome-extension://')
+    ? origin
+    : 'https://www.camcashgrl.com';
+  return {
+    'Access-Control-Allow-Origin':  allowed,
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  };
+}
+
+export async function OPTIONS(req) {
+  return new Response(null, { status: 204, headers: corsHeaders(req) });
 }
 
 export async function POST(req) {
-  const supabase = getSupabase();
-  try {
-    const { userId, sessionId, username, tokens, usd, platform, source } = await req.json();
+  const cors = corsHeaders(req);
+  const supabaseAdmin = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+  );
+  const supabaseClient = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  );
 
-    if (!userId || !username) {
-      return Response.json({ error: 'userId and username are required' }, { status: 400 });
+  try {
+    const authHeader = req.headers.get('authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return Response.json({ error: 'Missing authorization' }, { status: 401, headers: cors });
     }
 
-    const { data, error } = await supabase
+    const token = authHeader.substring(7);
+    const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token);
+    if (authError || !user) {
+      return Response.json({ error: 'Invalid or expired token' }, { status: 401, headers: cors });
+    }
+
+    const body = await req.json();
+    const { username, amount, platform, timestamp } = body;
+
+    if (!username || !amount || !platform) {
+      return Response.json(
+        { error: 'Missing required fields: username, amount, platform' },
+        { status: 400, headers: cors }
+      );
+    }
+
+    const tipData = {
+      user_id:          user.id,
+      username:         username.trim(),
+      tokens:           parseInt(amount, 10),
+      usd:              parseFloat((parseInt(amount, 10) * 0.05).toFixed(2)),
+      platform:         platform.toLowerCase(),
+      source:           'extension',
+      received_at:      timestamp || new Date().toISOString(),
+      deduplication_key: `${user.id}-${username}-${amount}-${Date.now()}`,
+    };
+
+    const { data, error } = await supabaseAdmin
       .from('live_tips')
-      .insert({
-        user_id: userId,
-        session_id: sessionId || null,
-        username,
-        tokens: parseInt(tokens) || 0,
-        usd: parseFloat(usd) || 0,
-        source: source || platform || 'extension',
-        received_at: new Date().toISOString(),
-        deduplication_key: `${userId}-${username}-${tokens}-${Date.now()}`
-      })
+      .insert(tipData)
       .select();
 
-    if (error) throw error;
-    return Response.json({ success: true, tip: data[0] });
-  } catch (error) {
-    console.error('Live tip POST error:', error);
-    return Response.json({ error: error.message }, { status: 500 });
+    if (error) {
+      console.error('Supabase insert error:', error);
+      return Response.json({ error: 'Failed to save tip' }, { status: 500, headers: cors });
+    }
+
+    // Historical record
+    await supabaseAdmin.from('tips').insert({
+      user_id:   user.id,
+      username:  username.trim(),
+      tokens:    parseInt(amount, 10),
+      platform:  platform.toLowerCase(),
+      date_time: timestamp || new Date().toISOString(),
+    });
+
+    return Response.json(
+      { success: true, tip: data[0], message: `Tip from ${username} synced` },
+      { headers: cors }
+    );
+
+  } catch (err) {
+    console.error('Tip POST error:', err);
+    return Response.json({ error: err.message }, { status: 500, headers: cors });
   }
 }
 
 export async function GET(req) {
-  const supabase = getSupabase();
+  const cors = corsHeaders(req);
+  const supabaseAdmin = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+  );
+  const supabaseClient = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  );
+
   try {
+    const authHeader = req.headers.get('authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return Response.json({ error: 'Missing authorization' }, { status: 401, headers: cors });
+    }
+
+    const token = authHeader.substring(7);
+    const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token);
+    if (authError || !user) {
+      return Response.json({ error: 'Unauthorized' }, { status: 401, headers: cors });
+    }
+
     const { searchParams } = new URL(req.url);
-    const userId = searchParams.get('userId');
+    const limit = Math.min(parseInt(searchParams.get('limit') || '50', 10), 200);
     const since = searchParams.get('since');
 
-    if (!userId) {
-      return Response.json({ error: 'userId is required' }, { status: 400 });
-    }
-
-    let query = supabase
+    let query = supabaseAdmin
       .from('live_tips')
       .select('*')
-      .eq('user_id', userId)
+      .eq('user_id', user.id)
       .order('received_at', { ascending: false })
-      .limit(100);
+      .limit(limit);
 
-    if (since) {
-      query = query.gt('received_at', since);
-    }
+    if (since) query = query.gt('received_at', since);
 
     const { data, error } = await query;
     if (error) throw error;
 
-    return Response.json({ tips: data });
-  } catch (error) {
-    console.error('Live tip GET error:', error);
-    return Response.json({ error: error.message }, { status: 500 });
+    return Response.json({ tips: data, count: data?.length || 0 }, { headers: cors });
+
+  } catch (err) {
+    console.error('Tip GET error:', err);
+    return Response.json({ error: err.message }, { status: 500, headers: cors });
   }
 }

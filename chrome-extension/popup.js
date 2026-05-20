@@ -196,6 +196,26 @@ function escapeHtml(text) {
 
 setInterval(loadTips, 5000);
 
+// Listen for coaching + state broadcasts from background
+chrome.runtime.onMessage.addListener((msg) => {
+  if (msg.action === 'state' && msg.state) {
+    const coaches = msg.state.coaches;
+    if (coaches && coaches.length > 0) {
+      const coachMsg = document.getElementById('coach-msg');
+      if (coachMsg) coachMsg.textContent = coaches[0].text;
+    }
+    loadTips();
+  }
+  if (msg.action === 'whale_alert') {
+    const whaleAlert = document.getElementById('whale-alert');
+    if (whaleAlert) {
+      whaleAlert.textContent = `🐋 ${msg.username} just entered! (${msg.tokens.toLocaleString()} tokens historically)`;
+      whaleAlert.style.display = 'block';
+      setTimeout(() => { whaleAlert.style.display = 'none'; }, 12000);
+    }
+  }
+});
+
 // Test tip button
 document.getElementById('test-tip-btn').addEventListener('click', () => {
   chrome.runtime.sendMessage({

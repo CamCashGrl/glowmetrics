@@ -808,6 +808,10 @@ function CopyButton({ text, label = "📋 Copy", copiedLabel = "✅ Copied!", st
 
 export default function Dashboard() {
   const router = useRouter()
+  // Open directly to a specific tab when ?tab=X is in the URL
+  const initialTab = typeof window !== 'undefined'
+    ? (new URLSearchParams(window.location.search).get('tab') || localStorage.getItem('camcash_tab') || 'overview')
+    : 'overview'
   const [user, setUser] = useState(null)
   const [tips, setTips] = useState([])
   const [analytics, setAnalytics] = useState(null)
@@ -815,7 +819,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [uploadPlatform, setUploadPlatform] = useState("")
-  const [activeTab, setActiveTab] = useState("overview")
+  const [activeTab, setActiveTab] = useState(initialTab)
   const [toast, setToast] = useState("")
   const [uploadCount, setUploadCount] = useState(0)
   const [whaleFilter, setWhaleFilter] = useState("ALL")
@@ -871,28 +875,21 @@ export default function Dashboard() {
   const [lastRefreshed, setLastRefreshed] = useState(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [newTipCount, setNewTipCount] = useState(0)
+  const [flashTipId, setFlashTipId] = useState(null)   // for new-tip highlight animation
   const prevTipCountRef = useRef(0)
   const realtimeChannelRef = useRef(null)
+  const liveTipsChannelRef = useRef(null)
   const refreshTimerRef = useRef(null)
-  // ── LIVE MODE INTELLIGENCE STATE ─────────────────────────────────────
-  const [liveStrategy, setLiveStrategy]     = useState('balanced') // coaching mode
-  const [coachingHistory, setCoachingHistory] = useState([])         // log of fired recommendations
-  const prevPhaseRef = useRef(null) // tracks phase transitions
-
-  // ── LIVE MODE INTEGRITY REFS ─────────────────────────────────────────
-  // Singleton channel — prevents duplicate subscriptions on tab switch / re-render
-  const liveTipsChannelRef  = useRef(null)
-  // True while the initial 12h historical query is still loading — coaching
-  // and alerts are suppressed during this window to prevent fake signals
-  const isHydratingHistory  = useRef(false)
-  // Guards against processing the same tip twice (late duplicates, reconnect
-  // replays, or overlapping realtime + historical payloads)
-  const processedTipIds     = useRef(new Set())
-  // Per-alert cooldown timestamps — { [alertKey]: lastFiredMs }
-  // Prevents the same coaching signal from firing more than once per window
-  const coachingCooldowns   = useRef({})
-  const firedAlertsLog  = useRef([])  // recommendation history
-  const phaseChangeLog  = useRef([])  // phase transitions for micro-timeline
+  const liveTickerRef = useRef(null)
+  // ── LIVE MODE INTELLIGENCE ────────────────────────────────────────────
+  const [liveStrategy, setLiveStrategy]       = useState('balanced')
+  const [coachingHistory, setCoachingHistory] = useState([])
+  const prevPhaseRef       = useRef(null)
+  const isHydratingHistory = useRef(false)
+  const processedTipIds    = useRef(new Set())
+  const coachingCooldowns  = useRef({})
+  const firedAlertsLog     = useRef([])
+  const phaseChangeLog     = useRef([])
 
   const isBetaUser = true
   const isPro = true
@@ -1157,6 +1154,37 @@ export default function Dashboard() {
         .subscribe()
       realtimeChannelRef.current = channel
 
+      // ── EXTENSION LIVE TIPS — realtime feed from chrome extension sync ──
+      const liveTipsChannel = supabase
+        .channel(`live_tips_ext_${user.id}`)
+        .on('postgres_changes', {
+          event: 'INSERT', schema: 'public', table: 'live_tips',
+          filter: `user_id=eq.${user.id}`
+        }, (payload) => {
+          const tip = payload.new
+          const tokens = parseInt(tip.tokens) || 0
+          const usd = parseFloat(tip.usd) || parseFloat((tokens * 0.05).toFixed(2))
+          const normalized = {
+            username: tip.username || 'Unknown',
+            tokens, usd,
+            normalizedRevenue: usd,
+            sourceUsed: 'extension',
+            timestamp: new Date(tip.received_at || Date.now()),
+            platform: tip.platform || 'chaturbate',
+            _id: tip.id || Date.now(),
+          }
+          setLiveActive(true)
+          setLiveStartTime(prev => prev || new Date())
+          setLiveEvents(prev => [...prev, normalized])
+          // Flash animation: highlight the new tip row for 2.5s
+          setFlashTipId(normalized._id)
+          setTimeout(() => setFlashTipId(null), 2500)
+          // Switch to Live Mode tab automatically if user is on another tab
+          setActiveTab('live')
+        })
+        .subscribe()
+      liveTipsChannelRef.current = liveTipsChannel
+
       // ── LIGHTWEIGHT 30s analytics re-run (NO DB calls — just re-runs engine on cached data)
       // Full reloads only happen on: initial load, CSV upload, focus after 5+ min away
       refreshTimerRef.current = setInterval(() => {
@@ -1175,6 +1203,7 @@ export default function Dashboard() {
     })
     return () => {
       if (realtimeChannelRef.current) supabase.removeChannel(realtimeChannelRef.current)
+      if (liveTipsChannelRef.current) supabase.removeChannel(liveTipsChannelRef.current)
       if (refreshTimerRef.current) clearInterval(refreshTimerRef.current)
       // minuteTimer cleared inline
     }
@@ -1200,6 +1229,55 @@ export default function Dashboard() {
     document.addEventListener('visibilitychange', onVisibility)
     return () => document.removeEventListener('visibilitychange', onVisibility)
   }, [user])
+
+  // ── LIVE MODE: load existing tips when tab is activated ───────────────────
+  useEffect(() => {
+    if (activeTab !== 'live' || !user) return
+    let cancelled = false
+
+    const loadRecentLiveTips = async () => {
+      // Load tips from the last 12 hours so the session has real context
+      const since = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString()
+      const { data, error } = await supabase
+        .from('live_tips')
+        .select('*')
+        .eq('user_id', user.id)
+        .gte('received_at', since)
+        .order('received_at', { ascending: true })
+
+      if (cancelled || error || !data || data.length === 0) return
+
+      const normalized = data.map(tip => ({
+        username:          tip.username || 'Unknown',
+        tokens:            parseInt(tip.tokens) || 0,
+        usd:               parseFloat(tip.usd) || parseFloat(((tip.tokens || 0) * 0.05).toFixed(2)),
+        normalizedRevenue: parseFloat(tip.usd) || parseFloat(((tip.tokens || 0) * 0.05).toFixed(2)),
+        sourceUsed:        tip.source || 'extension',
+        timestamp:         new Date(tip.received_at),
+        platform:          tip.platform || 'chaturbate',
+      }))
+
+      setLiveEvents(normalized)
+      setLiveActive(true)
+      // Use earliest tip as session start so pace/coaching calculations are accurate
+      setLiveStartTime(prev => prev || new Date(data[0].received_at))
+    }
+
+    loadRecentLiveTips()
+    return () => { cancelled = true }
+  }, [activeTab, user])
+
+  // ── LIVE TICKER: 1-second interval drives time-based re-renders ─────────────
+  // Without this, computeState() / getAlerts() / coaching never update because
+  // React only re-renders on state changes — Date.now() alone is not enough.
+  useEffect(() => {
+    if (activeTab === 'live' && liveActive) {
+      liveTickerRef.current = setInterval(() => setLiveTick(t => t + 1), 1000)
+    } else {
+      clearInterval(liveTickerRef.current)
+    }
+    return () => clearInterval(liveTickerRef.current)
+  }, [activeTab, liveActive])
 
   useEffect(() => {
     if (analytics) setLiveAnalytics(analytics)
@@ -3665,6 +3743,9 @@ const handleCSV = async (file, forcePlatform = null) => {
             setLiveTipInput({ username: '', tokens: '', usd: '' })
           }
 
+          // liveTick is referenced here so the 1-second interval drives re-renders
+          // which updates elapsed time, tips/min, pace, coaching, and all alerts
+          void liveTick
           const state = computeState()
 
           // ── INTELLIGENCE LAYER — all analytics computed here, never inline ──
@@ -3891,18 +3972,21 @@ const handleCSV = async (file, forcePlatform = null) => {
                         <div style={{ ...glassCard, borderRadius: 12, padding: 16 }}>
                           <div style={{ fontSize: 11, color: C.muted, marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>Live Tip Feed</div>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 220, overflowY: 'auto' }}>
-                            {[...liveEvents].reverse().map((ev, i) => (
-                              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', borderRadius: 8, background: i === 0 ? 'rgba(34,211,238,0.08)' : 'rgba(255,255,255,0.03)', border: i === 0 ? '1px solid rgba(34,211,238,0.2)' : '1px solid rgba(255,255,255,0.05)' }}>
+                            {[...liveEvents].reverse().map((ev, i) => {
+                              const isFlash = ev._id && ev._id === flashTipId
+                              return (
+                              <div key={ev._id || i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', borderRadius: 8, background: isFlash ? 'rgba(168,85,247,0.18)' : i === 0 ? 'rgba(34,211,238,0.08)' : 'rgba(255,255,255,0.03)', border: isFlash ? '1px solid rgba(168,85,247,0.5)' : i === 0 ? '1px solid rgba(34,211,238,0.2)' : '1px solid rgba(255,255,255,0.05)', transition: 'all 0.4s ease', boxShadow: isFlash ? '0 0 12px rgba(168,85,247,0.3)' : 'none' }}>
                                 <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                                  <span style={{ fontSize: 12, fontWeight: 600, color: C.white }}>{ev.username}</span>
+                                  <span style={{ fontSize: 12, fontWeight: 600, color: isFlash ? '#c084fc' : C.white }}>{ev.username}</span>
                                   {ev.tokens > 0 && <span style={{ fontSize: 11, color: C.cyan }}>{ev.tokens} tkns</span>}
+                                  {isFlash && <span style={{ fontSize: 10, color: '#c084fc', fontWeight: 700 }}>NEW ✨</span>}
                                 </div>
                                 <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
                                   <span style={{ fontSize: 13, fontWeight: 700, color: C.green }}>${ev.normalizedRevenue?.toFixed(2) || '0.00'}</span>
                                   <span style={{ fontSize: 10, color: C.muted }}>{new Date(ev.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                                 </div>
                               </div>
-                            ))}
+                            )})}
                           </div>
                         </div>
                       )}
@@ -3936,11 +4020,18 @@ const handleCSV = async (file, forcePlatform = null) => {
                         )}
                       </div>
 
-                      {/* EXTENSION CTA */}
-                      <div style={{ borderRadius: 12, padding: '14px 16px', background: 'rgba(124,92,255,0.08)', border: '1px solid rgba(124,92,255,0.25)', textAlign: 'center' }}>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: C.white, marginBottom: 4 }}>⚡ Auto-capture tips</div>
+                      {/* EXTENSION STATUS */}
+                      <div style={{ borderRadius: 12, padding: '14px 16px', background: liveEvents.some(e => e.sourceUsed === 'extension') ? 'rgba(16,185,129,0.08)' : 'rgba(124,92,255,0.08)', border: `1px solid ${liveEvents.some(e => e.sourceUsed === 'extension') ? 'rgba(16,185,129,0.3)' : 'rgba(124,92,255,0.25)'}` }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                          <div style={{ width: 7, height: 7, borderRadius: '50%', background: liveEvents.some(e => e.sourceUsed === 'extension') ? C.green : C.muted, boxShadow: liveEvents.some(e => e.sourceUsed === 'extension') ? `0 0 6px ${C.green}` : 'none' }} />
+                          <div style={{ fontSize: 13, fontWeight: 700, color: C.white }}>
+                            {liveEvents.some(e => e.sourceUsed === 'extension') ? 'Extension Connected' : '⚡ Auto-capture tips'}
+                          </div>
+                        </div>
                         <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.5 }}>
-                          Install the CamCash Chrome extension to automatically capture tips from your stream — no manual logging needed.
+                          {liveEvents.some(e => e.sourceUsed === 'extension')
+                            ? `${liveEvents.filter(e => e.sourceUsed === 'extension').length} tip${liveEvents.filter(e => e.sourceUsed === 'extension').length !== 1 ? 's' : ''} auto-captured from your stream`
+                            : 'Install the CamCash Chrome extension — tips appear here automatically as they come in.'}
                         </div>
                         <a href="/extension" target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', marginTop: 10, padding: '7px 16px', background: 'linear-gradient(135deg, #a855f7, #7c3aed)', color: '#fff', borderRadius: 8, fontSize: 12, fontWeight: 700, textDecoration: 'none' }}>
                           📥 Get the Extension →

@@ -4,6 +4,31 @@ import { useState, useEffect } from 'react'
 import UserCounter from '../components/UserCounter'
 import SiteFooter from '../components/SiteFooter'
 
+async function startCheckout(planType, setLoading) {
+  setLoading(planType)
+  try {
+    const res = await fetch('/api/stripe/checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ plan_type: planType }),
+    })
+    if (res.status === 401) {
+      window.location.href = `/signup?plan=${planType}`
+      return
+    }
+    const data = await res.json()
+    if (data.url) {
+      window.location.href = data.url
+    } else {
+      alert('Something went wrong. Please try again.')
+    }
+  } catch {
+    alert('Something went wrong. Please try again.')
+  } finally {
+    setLoading(null)
+  }
+}
+
 // ── Color palette ─────────────────────────────────────────────────────────────
 const C = {
   bg:         '#040812',
@@ -217,7 +242,7 @@ function LaunchBanner() {
 }
 
 // ── Section 4: After Launch Comparison ───────────────────────────────────────
-function AfterLaunchSection() {
+function AfterLaunchSection({ checkoutLoading, setCheckoutLoading }) {
   return (
     <section style={{ padding: '0 20px 72px' }}>
       <div style={{ maxWidth: 900, margin: '0 auto' }}>
@@ -336,19 +361,26 @@ function AfterLaunchSection() {
             </div>
 
             <div style={{ marginTop: 20 }}>
-              <a href="#early-adopter" style={{
-                display:        'block',
-                textAlign:      'center',
-                padding:        '12px 0',
-                borderRadius:   10,
-                background:     `linear-gradient(135deg, ${C.purple}, ${C.pink})`,
-                color:          '#fff',
-                fontWeight:     700,
-                fontSize:       14,
-                textDecoration: 'none',
-              }}>
-                View Premium Details ↓
-              </a>
+              <button
+                onClick={() => startCheckout('standard_monthly', setCheckoutLoading)}
+                disabled={checkoutLoading !== null}
+                style={{
+                  display:      'block',
+                  width:        '100%',
+                  textAlign:    'center',
+                  padding:      '12px 0',
+                  borderRadius: 10,
+                  background:   checkoutLoading === 'standard_monthly' ? 'rgba(168,85,247,0.5)' : `linear-gradient(135deg, ${C.purple}, ${C.pink})`,
+                  color:        '#fff',
+                  fontWeight:   700,
+                  fontSize:     14,
+                  border:       'none',
+                  cursor:       checkoutLoading !== null ? 'wait' : 'pointer',
+                  boxSizing:    'border-box',
+                }}
+              >
+                {checkoutLoading === 'standard_monthly' ? 'Redirecting…' : 'Get Standard Plan — $19.99/mo →'}
+              </button>
             </div>
           </div>
         </div>
@@ -358,7 +390,7 @@ function AfterLaunchSection() {
 }
 
 // ── Section 5: Early Adopter ──────────────────────────────────────────────────
-function EarlyAdopterSection() {
+function EarlyAdopterSection({ checkoutLoading, setCheckoutLoading }) {
   return (
     <section id="early-adopter" style={{
       background:   'rgba(236,72,153,0.06)',
@@ -440,22 +472,27 @@ function EarlyAdopterSection() {
             <CheckLine color={C.pink}>Upgrade/downgrade anytime</CheckLine>
           </div>
 
-          <a href="/landing?plan=early_adopter_monthly" style={{
-            display:        'block',
-            textAlign:      'center',
-            padding:        '14px 0',
-            borderRadius:   10,
-            background:     `linear-gradient(135deg, ${C.pink}, #f97316)`,
-            color:          '#fff',
-            fontWeight:     800,
-            fontSize:       14,
-            textDecoration: 'none',
-            boxShadow:      '0 0 20px rgba(236,72,153,0.3)',
-            width:          '100%',
-            boxSizing:      'border-box',
-          }}>
-            Claim Early Adopter Monthly — $9.99/mo
-          </a>
+          <button
+            onClick={() => startCheckout('early_adopter_monthly', setCheckoutLoading)}
+            disabled={checkoutLoading !== null}
+            style={{
+              display:    'block',
+              width:      '100%',
+              textAlign:  'center',
+              padding:    '14px 0',
+              borderRadius: 10,
+              background:  checkoutLoading === 'early_adopter_monthly' ? 'rgba(236,72,153,0.5)' : `linear-gradient(135deg, ${C.pink}, #f97316)`,
+              color:      '#fff',
+              fontWeight: 800,
+              fontSize:   14,
+              border:     'none',
+              cursor:     checkoutLoading !== null ? 'wait' : 'pointer',
+              boxShadow:  '0 0 20px rgba(236,72,153,0.3)',
+              boxSizing:  'border-box',
+            }}
+          >
+            {checkoutLoading === 'early_adopter_monthly' ? 'Redirecting…' : 'Claim Early Adopter Monthly — $9.99/mo'}
+          </button>
         </div>
 
         {/* Annual Card */}
@@ -497,22 +534,27 @@ function EarlyAdopterSection() {
             <CheckLine color={C.purple}>Auto-renews at same locked rate</CheckLine>
           </div>
 
-          <a href="/landing?plan=early_adopter_annual" style={{
-            display:        'block',
-            textAlign:      'center',
-            padding:        '14px 0',
-            borderRadius:   10,
-            background:     `linear-gradient(135deg, ${C.purple}, ${C.pink})`,
-            color:          '#fff',
-            fontWeight:     800,
-            fontSize:       14,
-            textDecoration: 'none',
-            boxShadow:      '0 0 20px rgba(168,85,247,0.3)',
-            width:          '100%',
-            boxSizing:      'border-box',
-          }}>
-            Claim Early Adopter Annual — $99.99/yr
-          </a>
+          <button
+            onClick={() => startCheckout('early_adopter_annual', setCheckoutLoading)}
+            disabled={checkoutLoading !== null}
+            style={{
+              display:    'block',
+              width:      '100%',
+              textAlign:  'center',
+              padding:    '14px 0',
+              borderRadius: 10,
+              background:  checkoutLoading === 'early_adopter_annual' ? 'rgba(168,85,247,0.5)' : `linear-gradient(135deg, ${C.purple}, ${C.pink})`,
+              color:      '#fff',
+              fontWeight: 800,
+              fontSize:   14,
+              border:     'none',
+              cursor:     checkoutLoading !== null ? 'wait' : 'pointer',
+              boxShadow:  '0 0 20px rgba(168,85,247,0.3)',
+              boxSizing:  'border-box',
+            }}
+          >
+            {checkoutLoading === 'early_adopter_annual' ? 'Redirecting…' : 'Claim Early Adopter Annual — $99.99/yr'}
+          </button>
         </div>
       </div>
 
@@ -865,6 +907,7 @@ function FinalCTA() {
 
 // ── Root Component ────────────────────────────────────────────────────────────
 export default function PricingClient() {
+  const [checkoutLoading, setCheckoutLoading] = useState(null)
   return (
     <div style={{
       minHeight:       '100vh',
@@ -878,8 +921,8 @@ export default function PricingClient() {
       <main>
         <HeroSection />
         <LaunchBanner />
-        <AfterLaunchSection />
-        <EarlyAdopterSection />
+        <AfterLaunchSection checkoutLoading={checkoutLoading} setCheckoutLoading={setCheckoutLoading} />
+        <EarlyAdopterSection checkoutLoading={checkoutLoading} setCheckoutLoading={setCheckoutLoading} />
         <PromiseSection />
         <ComparisonTable />
         <FAQSection />

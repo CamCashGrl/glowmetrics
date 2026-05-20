@@ -379,6 +379,9 @@ export default function LandingPage() {
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <span style={{ fontSize: 12, color: "#334155", padding: "3px 10px", borderRadius: 20, background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.2)", color: "#F59E0B", fontWeight: 600 }}>Free Beta</span>
+          <a href="/demo" style={{ padding: "7px 18px", borderRadius: 8, background: "rgba(168,85,247,0.1)", border: "1px solid rgba(168,85,247,0.25)", color: "#a855f7", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>
+            Try Demo
+          </a>
           <button onClick={() => document.getElementById("lp-auth-bottom")?.scrollIntoView({ behavior: "smooth" })}
             style={{ padding: "7px 18px", borderRadius: 8, background: "rgba(34,211,238,0.1)", border: "1px solid rgba(34,211,238,0.25)", color: "#22D3EE", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
             Sign In
@@ -392,11 +395,6 @@ export default function LandingPage() {
 
           {/* Left */}
           <div>
-            <div style={{ display: "inline-flex", alignItems: "center", gap: 7, marginBottom: 20, padding: "5px 12px", borderRadius: 20, background: "rgba(124,92,255,0.1)", border: "1px solid rgba(124,92,255,0.25)" }}>
-              <div style={{ width: 5, height: 5, borderRadius: "50%", background: "#10B981", boxShadow: "0 0 5px #10B981", animation: "lp-pulse 2s infinite" }} />
-              <span style={{ fontSize: 11, fontWeight: 700, color: "#A78BFA", letterSpacing: 0.5 }}>63 / 100 beta spots left</span>
-            </div>
-
             <h1 style={{ fontSize: "clamp(36px,4vw,56px)", color: "white", fontWeight: 900, lineHeight: 1.08, marginBottom: 20, letterSpacing: -1.5 }}>
               The operating system<br />
               for cam model<br />
