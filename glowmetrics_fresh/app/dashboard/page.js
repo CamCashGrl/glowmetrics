@@ -891,6 +891,8 @@ export default function Dashboard() {
   // Per-alert cooldown timestamps — { [alertKey]: lastFiredMs }
   // Prevents the same coaching signal from firing more than once per window
   const coachingCooldowns   = useRef({})
+  const firedAlertsLog  = useRef([])  // recommendation history
+  const phaseChangeLog  = useRef([])  // phase transitions for micro-timeline
 
   const isBetaUser = true
   const isPro = true
@@ -3432,72 +3434,208 @@ const handleCSV = async (file, forcePlatform = null) => {
           // Only one alert per priority tier is shown at a time.
           // Cooldowns prevent the same signal from repeating within the window.
           const getAlerts = (state) => {
-            // Never fire alerts during history hydration or before real tips arrive
             if (!state || isHydratingHistory.current) return []
             if (!liveActive) return []
 
             const { timeSinceLastTip, paceStatus, goalProgress, topTipper,
                     totalRevenue, elapsedMins, liveOnlyCount } = state
+
+            // Strategy-adjusted thresholds
+            const deadAirCrit = liveStrategy === 'aggressive' ? 6 : 8
+            const deadAirHigh = liveStrategy === 'aggressive' ? 4 : 5
+            const goalPushPct = liveStrategy === 'aggressive' || liveStrategy === 'goal' ? 80 : 90
+
             const alerts = []
 
-            // CRITICAL (cooldown: 3 min) — requires immediate action
-            if (timeSinceLastTip !== null && timeSinceLastTip >= 8) {
-              if (canFireAlert('dead_air_critical', 3 * 60 * 1000))
-                alerts.push({ priority: 1, level: 'critical', icon: '🚨',
-                  text: `No tips in ${Math.round(timeSinceLastTip)} min — call out names NOW` })
-            }
-            if (goalProgress >= 90 && goalProgress < 100) {
-              if (canFireAlert('goal_push', 4 * 60 * 1000))
-                alerts.push({ priority: 1, level: 'critical', icon: '🎯',
-                  text: `${goalProgress}% to goal — push NOW, announce the reward` })
+            // Helper: push to history log when an alert fires
+            const logFired = (icon, text) => {
+              firedAlertsLog.current.unshift({ icon, text, ts: Date.now() })
+              if (firedAlertsLog.current.length > 20) firedAlertsLog.current.length = 20
             }
 
-            // HIGH (cooldown: 5 min)
-            if (timeSinceLastTip !== null && timeSinceLastTip >= 5 && timeSinceLastTip < 8) {
-              if (canFireAlert('dead_air_high', 5 * 60 * 1000))
-                alerts.push({ priority: 2, level: 'warning', icon: '⚠️',
-                  text: `${Math.round(timeSinceLastTip)} min silence — restart with a quick goal` })
+            // ── CRITICAL ─────────────────────────────────────────────────────────
+            if (timeSinceLastTip !== null && timeSinceLastTip >= deadAirCrit) {
+              if (canFireAlert('dead_air_critical', 3 * 60 * 1000)) {
+                const text = liveStrategy === 'whale' && topTipper
+                  ? `${Math.round(timeSinceLastTip)} min silence — address ${topTipper.username} directly NOW`
+                  : `No tips in ${Math.round(timeSinceLastTip)} min — call out names NOW`
+                alerts.push({ priority: 1, level: 'critical', icon: '🚨', text })
+                logFired('🚨', text)
+              }
+            }
+            if (goalProgress >= goalPushPct && goalProgress < 100) {
+              if (canFireAlert('goal_push', 4 * 60 * 1000)) {
+                const text = `${goalProgress}% to goal — push NOW, announce the reward`
+                alerts.push({ priority: 1, level: 'critical', icon: '🎯', text })
+                logFired('🎯', text)
+              }
+            }
+
+            // ── HIGH ─────────────────────────────────────────────────────────────
+            if (timeSinceLastTip !== null && timeSinceLastTip >= deadAirHigh && timeSinceLastTip < deadAirCrit) {
+              if (canFireAlert('dead_air_high', 5 * 60 * 1000)) {
+                const text = liveStrategy === 'engagement'
+                  ? `${Math.round(timeSinceLastTip)} min quiet — drop a question or poll in chat now`
+                  : liveStrategy === 'retention'
+                  ? `${Math.round(timeSinceLastTip)} min since last tip — thank a viewer by name to re-engage`
+                  : `${Math.round(timeSinceLastTip)} min silence — restart with a quick goal`
+                alerts.push({ priority: 2, level: 'warning', icon: '⚠️', text })
+                logFired('⚠️', text)
+              }
             }
             if (paceStatus === 'below' && elapsedMins >= 8 && liveOnlyCount >= 3) {
-              if (canFireAlert('pace_below', 5 * 60 * 1000))
-                alerts.push({ priority: 2, level: 'warning', icon: '📉',
-                  text: 'Pace dropping — activate toy or set a micro-goal' })
+              if (canFireAlert('pace_below', 5 * 60 * 1000)) {
+                const text = liveStrategy === 'aggressive'
+                  ? 'Pace slow — announce a limited-time exclusive offer right now'
+                  : 'Pace dropping — activate toy or set a micro-goal'
+                alerts.push({ priority: 2, level: 'warning', icon: '📉', text })
+                logFired('📉', text)
+              }
             }
 
-            // MEDIUM (cooldown: 8 min)
+            // ── Stream Fatigue ────────────────────────────────────────────────────
+            if (elapsedMins > 75 && paceStatus === 'below' && liveOnlyCount >= 5) {
+              if (canFireAlert('stream_fatigue', 15 * 60 * 1000)) {
+                const text = 'Stream fatigue — try a new goal or content angle to reset room energy'
+                alerts.push({ priority: 2, level: 'warning', icon: '😴', text })
+                logFired('😴', text)
+              }
+            }
+
+            // ── MEDIUM ────────────────────────────────────────────────────────────
             if (paceStatus === 'above' && elapsedMins >= 8 && liveOnlyCount >= 3) {
-              if (canFireAlert('pace_above', 8 * 60 * 1000))
-                alerts.push({ priority: 3, level: 'success', icon: '🔥',
-                  text: "Momentum building — don't break the energy" })
+              if (canFireAlert('pace_above', 8 * 60 * 1000)) {
+                const text = liveStrategy === 'aggressive'
+                  ? 'Momentum is hot — raise your goal amount NOW while they are tipping'
+                  : "Momentum building — don't break the energy"
+                alerts.push({ priority: 3, level: 'success', icon: '🔥', text })
+                logFired('🔥', text)
+              }
             }
             if (goalProgress >= 100) {
-              if (canFireAlert('goal_hit', 10 * 60 * 1000))
-                alerts.push({ priority: 3, level: 'success', icon: '🎉',
-                  text: 'Goal hit! Set the next one immediately' })
+              if (canFireAlert('goal_hit', 10 * 60 * 1000)) {
+                const text = 'Goal hit! Set the next one immediately'
+                alerts.push({ priority: 3, level: 'success', icon: '🎉', text })
+                logFired('🎉', text)
+              }
             }
 
-            // INFO (cooldown: 10 min)
+            // ── Whale Proximity — regular tipper is overdue ───────────────────────
+            if (liveOnlyCount >= 4 && liveStrategy !== 'engagement') {
+              const nowMs = Date.now()
+              const liveOnly = liveEvents.filter(e => !e._isHistory)
+              const tipsByUser = {}
+              for (const e of liveOnly) {
+                if (!e.username) continue
+                if (!tipsByUser[e.username]) tipsByUser[e.username] = []
+                tipsByUser[e.username].push(new Date(e.timestamp).getTime())
+              }
+              let surfaced = false
+              for (const [uname, times] of Object.entries(tipsByUser)) {
+                if (surfaced || times.length < 2) continue
+                const sorted = [...times].sort((a, b) => a - b)
+                const gaps = []
+                for (let i = 1; i < sorted.length; i++) gaps.push(sorted[i] - sorted[i - 1])
+                const avgGapMs = gaps.reduce((s, g) => s + g, 0) / gaps.length
+                const sinceLastMs = nowMs - sorted[sorted.length - 1]
+                if (avgGapMs > 15 * 60 * 1000) continue // skip infrequent tippers
+                const ratio = sinceLastMs / avgGapMs
+                if (ratio >= 1.3 && sinceLastMs > 2 * 60 * 1000) {
+                  if (canFireAlert(`whale_prox_${uname}`, 6 * 60 * 1000)) {
+                    const avgMins = Math.round(avgGapMs / 60000)
+                    const sinceMins = Math.round(sinceLastMs / 60000)
+                    const text = `${uname} tips every ~${avgMins} min — ${sinceMins} min since their last. Call them out!`
+                    alerts.push({ priority: 3, level: 'info', icon: '🐋', text })
+                    logFired('🐋', text)
+                    surfaced = true
+                  }
+                }
+              }
+            }
+
+            // ── INFO ──────────────────────────────────────────────────────────────
             if (topTipper && totalRevenue > 0 && topTipper.revenue / totalRevenue >= 0.45) {
-              if (canFireAlert(`whale_dep_${topTipper.username}`, 10 * 60 * 1000))
-                alerts.push({ priority: 4, level: 'info', icon: '🐳',
-                  text: `${topTipper.username} is ${Math.round(topTipper.revenue/totalRevenue*100)}% of revenue — give them attention` })
+              const key = `whale_dep_${topTipper.username}`
+              if (canFireAlert(key, 10 * 60 * 1000)) {
+                const text = `${topTipper.username} is ${Math.round(topTipper.revenue / totalRevenue * 100)}% of revenue — give them attention`
+                alerts.push({ priority: 4, level: 'info', icon: '🐳', text })
+                logFired('🐳', text)
+              }
+            }
+            if (liveStrategy === 'engagement' && elapsedMins >= 5 && liveOnlyCount >= 1) {
+              if (canFireAlert('engagement_tip', 7 * 60 * 1000)) {
+                const text = 'Engagement mode: ask viewers a direct question to boost interaction'
+                alerts.push({ priority: 4, level: 'info', icon: '💬', text })
+                logFired('💬', text)
+              }
+            }
+            if (liveStrategy === 'retention' && elapsedMins >= 10 && liveOnlyCount >= 2) {
+              if (canFireAlert('retention_tip', 8 * 60 * 1000)) {
+                const text = 'Retention mode: welcome regulars back by name — loyalty builds tip habits'
+                alerts.push({ priority: 4, level: 'info', icon: '💜', text })
+                logFired('💜', text)
+              }
             }
 
             return alerts.sort((a, b) => a.priority - b.priority).slice(0, 4)
           }
 
           const getNextAction = (state) => {
-            // No coaching before stream starts, and never from historical data alone
             if (!state || !liveActive) return { text: 'Start your stream to get live coaching' }
             if (isHydratingHistory.current) return { text: 'Loading session data…' }
 
             const { timeSinceLastTip, paceStatus, goalProgress, topTipper,
                     totalRevenue, elapsedMins, liveOnlyCount } = state
 
-            // Only give coaching once there are real live tips, not just history
             if (liveOnlyCount === 0)
               return { text: 'Waiting for your first tip this stream — set a goal to get things started.' }
 
+            // ── Goal Focus ──────────────────────────────────────────────────────
+            if (liveStrategy === 'goal') {
+              if (goalProgress >= 100)
+                return { text: 'Goal hit! Set the next one immediately — keep the momentum alive.' }
+              if (goalProgress >= 75)
+                return { text: `Announce your reward out loud — goal is at ${goalProgress}%. Tell chat exactly what happens when you hit it.` }
+              return { text: `Keep mentioning the goal — you're at ${goalProgress}%. Every reminder drives more tips.` }
+            }
+
+            // ── Whale Focus ─────────────────────────────────────────────────────
+            if (liveStrategy === 'whale') {
+              if (topTipper && totalRevenue > 0 && topTipper.revenue / totalRevenue >= 0.3)
+                return { text: `Focus on ${topTipper.username} — give them a VIP experience. That's your highest-value tipper right now.` }
+              if (timeSinceLastTip !== null && timeSinceLastTip >= 4)
+                return { text: 'Address your top tipper by name. VIP treatment keeps whales coming back.' }
+              return { text: 'Whale mode: every tipper is a VIP. Personal attention creates repeat tips.' }
+            }
+
+            // ── Retention Focus ─────────────────────────────────────────────────
+            if (liveStrategy === 'retention') {
+              if (timeSinceLastTip !== null && timeSinceLastTip >= 5)
+                return { text: 'Call out 3 viewer names right now — recognition keeps people in the room.' }
+              if (topTipper)
+                return { text: `Show ${topTipper.username} real appreciation — loyal fans tip again when they feel seen.` }
+              return { text: 'Greet every viewer by name. Retention starts with acknowledgment.' }
+            }
+
+            // ── Engagement Focus ────────────────────────────────────────────────
+            if (liveStrategy === 'engagement') {
+              if (timeSinceLastTip !== null && timeSinceLastTip >= 4)
+                return { text: 'Drop a poll: "50 tokens or 100 tokens?" — interaction restarts the tipping cycle.' }
+              return { text: 'Ask viewers a yes/no question in chat. Engagement always leads to tips.' }
+            }
+
+            // ── Aggressive ──────────────────────────────────────────────────────
+            if (liveStrategy === 'aggressive') {
+              if (goalProgress >= 80)
+                return { text: `${goalProgress}% to goal — announce the reward NOW. Be loud about what happens when you hit it.` }
+              if (paceStatus === 'above')
+                return { text: 'Momentum is high — raise your goal amount RIGHT NOW while the room is hot.' }
+              if (timeSinceLastTip !== null && timeSinceLastTip >= 4)
+                return { text: 'Push mode: "Next tip in 60 sec gets [reward]" — urgency creates action.' }
+              return { text: 'Stay aggressive — set visible goals, announce rewards, push every 5 minutes.' }
+            }
+
+            // ── Balanced (default) ──────────────────────────────────────────────
             if (goalProgress >= 90 && goalProgress < 100)
               return { text: `Announce your reward out loud — goal is ${goalProgress}%. Tell chat exactly what happens when you hit it.` }
             if (timeSinceLastTip !== null && timeSinceLastTip >= 6)
@@ -3540,7 +3678,13 @@ const handleCSV = async (file, forcePlatform = null) => {
           const recoveryActions = getRecoveryActions(sessionPhase)
           const phaseConfig     = PHASES[sessionPhase] || PHASES.STARTUP
           // Track phase transitions
-          if (sessionPhase !== prevPhaseRef.current) prevPhaseRef.current = sessionPhase
+          if (sessionPhase !== prevPhaseRef.current) {
+            if (prevPhaseRef.current !== null) {
+              phaseChangeLog.current.unshift({ phase: sessionPhase, prev: prevPhaseRef.current, icon: phaseConfig.icon, label: phaseConfig.label, ts: Date.now() })
+              if (phaseChangeLog.current.length > 10) phaseChangeLog.current.length = 10
+            }
+            prevPhaseRef.current = sessionPhase
+          }
 
           const alerts     = getAlerts(state)
           const nextAction = getNextAction(state)
@@ -3884,6 +4028,65 @@ const handleCSV = async (file, forcePlatform = null) => {
                             </div>
                           </div>
                         ))}
+                      </div>
+                    )}
+
+                    {/* MICRO-TIMELINE */}
+                    {liveActive && (liveEvents.length > 0 || phaseChangeLog.current.length > 0) && (() => {
+                      const tipEntries = liveEvents.filter(e => !e._isHistory).map(e => ({
+                        type: 'tip', ts: new Date(e.timestamp).getTime(),
+                        icon: (e.normalizedRevenue || 0) >= 5 ? '🐋' : '💰',
+                        text: `${e.username} — ${e.tokens > 0 ? e.tokens + ' tkns' : ''} $${(e.normalizedRevenue || 0).toFixed(2)}`,
+                        color: (e.normalizedRevenue || 0) >= 5 ? C.gold : C.green,
+                      }))
+                      const phaseEntries = phaseChangeLog.current.map(p => ({
+                        type: 'phase', ts: p.ts,
+                        icon: p.icon,
+                        text: `Phase changed to ${p.label}`,
+                        color: C.cyan,
+                      }))
+                      const alertEntries = firedAlertsLog.current.slice(0, 5).map(a => ({
+                        type: 'alert', ts: a.ts, icon: a.icon,
+                        text: a.text, color: C.muted,
+                      }))
+                      const merged = [...tipEntries, ...phaseEntries, ...alertEntries]
+                        .sort((a, b) => b.ts - a.ts)
+                        .slice(0, 15)
+                      return (
+                        <div style={{ borderRadius: 14, padding: 18, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', gridColumn: '1 / -1' }}>
+                          <div style={{ fontSize: 10, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700, marginBottom: 10 }}>⏱ Session Timeline</div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 5, maxHeight: 240, overflowY: 'auto' }}>
+                            {merged.length === 0 ? (
+                              <div style={{ fontSize: 12, color: C.muted, textAlign: 'center', padding: '10px 0' }}>Events will appear here as your session unfolds</div>
+                            ) : merged.map((entry, i) => (
+                              <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '5px 8px', borderRadius: 7, background: i === 0 ? 'rgba(255,255,255,0.04)' : 'transparent' }}>
+                                <span style={{ fontSize: 14, flexShrink: 0 }}>{entry.icon}</span>
+                                <span style={{ fontSize: 11, color: entry.color, flex: 1, lineHeight: 1.4 }}>{entry.text}</span>
+                                <span style={{ fontSize: 9, color: C.muted, whiteSpace: 'nowrap' }}>
+                                  {new Date(entry.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )
+                    })()}
+
+                    {/* RECOMMENDATION HISTORY */}
+                    {liveActive && firedAlertsLog.current.length > 0 && (
+                      <div style={{ borderRadius: 14, padding: 18, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                        <div style={{ fontSize: 10, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700, marginBottom: 10 }}>📋 Alert History</div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 5, maxHeight: 200, overflowY: 'auto' }}>
+                          {firedAlertsLog.current.slice(0, 12).map((entry, i) => (
+                            <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '5px 8px', borderRadius: 7, background: 'rgba(255,255,255,0.02)' }}>
+                              <span style={{ fontSize: 13, flexShrink: 0, lineHeight: 1.4 }}>{entry.icon}</span>
+                              <span style={{ fontSize: 11, color: C.text, flex: 1, lineHeight: 1.4 }}>{entry.text}</span>
+                              <span style={{ fontSize: 9, color: C.muted, whiteSpace: 'nowrap', marginTop: 1 }}>
+                                {new Date(entry.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     )}
 
