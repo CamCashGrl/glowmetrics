@@ -53,24 +53,59 @@ function sbHeaders(token) {
   };
 }
 
+// ─── Token refresh — called automatically when a 401 is returned ──────────────
+async function refreshSession() {
+  try {
+    const data = await chrome.storage.local.get(['refresh_token']);
+    if (!data.refresh_token) return false;
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON },
+      body: JSON.stringify({ refresh_token: data.refresh_token }),
+    });
+    if (!res.ok) return false;
+    const tokenData = await res.json();
+    if (!tokenData.access_token) return false;
+    await chrome.storage.local.set({
+      session: tokenData.access_token,
+      refresh_token: tokenData.refresh_token || data.refresh_token,
+    });
+    if (session) session.access_token = tokenData.access_token;
+    console.log('[CamCash] token refreshed');
+    return true;
+  } catch (e) {
+    console.error('[CamCash] token refresh failed:', e.message);
+    return false;
+  }
+}
+
 // ─── Tip sync — writes directly to Supabase live_tips table ──────────────────
 async function syncTip({ username, tokens, platform, timestamp }) {
   await restorePromise;
   if (!session) return;
   const usd = parseFloat((tokens * 0.05).toFixed(2));
+  const body = JSON.stringify({
+    user_id:     session.user.id,
+    username:    username.trim(),
+    tokens:      parseInt(tokens, 10),
+    usd,
+    source:      platform ? platform.toLowerCase() : 'extension',
+    received_at: timestamp || new Date().toISOString(),
+  });
+
+  const doInsert = () => fetch(`${SUPABASE_URL}/rest/v1/live_tips`, {
+    method: 'POST',
+    headers: sbHeaders(session.access_token),
+    body,
+  });
+
   try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/live_tips`, {
-      method: 'POST',
-      headers: sbHeaders(session.access_token),
-      body: JSON.stringify({
-        user_id:     session.user.id,
-        username:    username.trim(),
-        tokens:      parseInt(tokens, 10),
-        usd,
-        source:      platform ? platform.toLowerCase() : 'extension',
-        received_at: timestamp || new Date().toISOString(),
-      }),
-    });
+    let res = await doInsert();
+    // If token expired, refresh once and retry
+    if (res.status === 401) {
+      const refreshed = await refreshSession();
+      if (refreshed) res = await doInsert();
+    }
     if (!res.ok) {
       const err = await res.text();
       console.error('[CamCash] live_tips insert failed:', res.status, err);
@@ -85,10 +120,15 @@ async function loadWhales() {
   await restorePromise;
   if (!session) return;
   try {
-    const res = await fetch(
+    const doFetch = () => fetch(
       `${SUPABASE_URL}/rest/v1/tips?select=username,tokens&user_id=eq.${session.user.id}&order=date_time.desc&limit=200`,
       { headers: sbHeaders(session.access_token) }
     );
+    let res = await doFetch();
+    if (res.status === 401) {
+      const refreshed = await refreshSession();
+      if (refreshed) res = await doFetch();
+    }
     if (!res.ok) return;
     const tips = await res.json();
 
@@ -256,8 +296,9 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
     if (isWhale(username)) {
       const w = getWhale(username);
       if (canCoach(`whale_enter_${username}`, 5 * 60 * 1000)) addCoach('whale');
-      chrome.notifications.create({
-        type: 'basic', iconUrl: chrome.runtime.getURL('icon.png'),
+      chrome.notifications.create(`whale_${username}_${Date.now()}`, {
+        type: 'basic',
+        iconUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
         title: '🐋 Whale Alert!',
         message: `${username} just entered (${w.tokens.toLocaleString()} tokens historically)`,
         priority: 2,
