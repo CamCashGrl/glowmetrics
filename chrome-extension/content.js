@@ -168,8 +168,7 @@
 
   function _defaultPos() {
     const w = document.documentElement.clientWidth  || 1200;
-    const h = document.documentElement.clientHeight || 800;
-    return { x: w - 290, y: Math.max(20, h - 420) };
+    return { x: Math.max(0, w - 290), y: 20 };
   }
 
   function _loadPos() {
@@ -522,12 +521,13 @@
   });
 
   // ─── Initial state fetch ──────────────────────────────────────────────────
-  // Small delay so the page has settled before we inject the overlay
+  // Create immediately with loading state, then update with real state
+  _create();
   setTimeout(() => {
     chrome.runtime.sendMessage({ action: 'get_state' }, (state) => {
-      if (chrome.runtime.lastError) { _create(); return; }
+      if (chrome.runtime.lastError) return;
       _update(state || { authed: false });
     });
-  }, 800);
+  }, 1000);
 
 })();
