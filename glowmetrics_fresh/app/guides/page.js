@@ -156,6 +156,7 @@ export default function GuidesPage() {
           <a
             key={guide.slug}
             href={`/guides/${guide.slug}`}
+            className="guide-card"
             style={{
               display: 'block',
               background: '#0d1117',
@@ -164,14 +165,6 @@ export default function GuidesPage() {
               padding: '24px',
               textDecoration: 'none',
               transition: 'border-color 0.2s ease, background 0.2s ease',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.borderColor = 'rgba(168,85,247,0.4)'
-              e.currentTarget.style.background = '#110d1a'
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.borderColor = 'rgba(168,85,247,0.12)'
-              e.currentTarget.style.background = '#0d1117'
             }}
           >
             <h2
@@ -209,6 +202,9 @@ export default function GuidesPage() {
       </div>
 
       <SiteFooter />
+      <style>{`
+        .guide-card:hover { border-color: rgba(168,85,247,0.4) !important; background: #110d1a !important; }
+      `}</style>
     </div>
   )
 }

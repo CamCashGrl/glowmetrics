@@ -3,6 +3,10 @@ import React, { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
 import { parseCSV, aggregateRows as runEngine } from "../../lib/analytics"
+import { computeRoomHealth, ROOM_STATES, MOMENTUM_DIRECTIONS } from "../../lib/analytics/roomHealth"
+import { computeRevenueVelocity, computeLiveComparison } from "../../lib/analytics/velocity"
+import { detectSessionPhase, PHASES, getRecoveryActions, getGoalStrategy } from "../../lib/analytics/sessionPhase"
+import { computeOpportunityScore, computeStreamHealth } from "../../lib/analytics/opportunity"
 import CSVImport from "./CSVImport"
 import Sidebar from "./Sidebar"
 import SiteFooter from "../components/SiteFooter"
@@ -870,6 +874,11 @@ export default function Dashboard() {
   const prevTipCountRef = useRef(0)
   const realtimeChannelRef = useRef(null)
   const refreshTimerRef = useRef(null)
+  // ── LIVE MODE INTELLIGENCE STATE ─────────────────────────────────────
+  const [liveStrategy, setLiveStrategy]     = useState('balanced') // coaching mode
+  const [coachingHistory, setCoachingHistory] = useState([])         // log of fired recommendations
+  const prevPhaseRef = useRef(null) // tracks phase transitions
+
   // ── LIVE MODE INTEGRITY REFS ─────────────────────────────────────────
   // Singleton channel — prevents duplicate subscriptions on tab switch / re-render
   const liveTipsChannelRef  = useRef(null)
@@ -3519,7 +3528,21 @@ const handleCSV = async (file, forcePlatform = null) => {
           }
 
           const state = computeState()
-          const alerts = getAlerts(state)
+
+          // ── INTELLIGENCE LAYER — all analytics computed here, never inline ──
+          const roomHealth      = computeRoomHealth(state)
+          const sessionPhase    = detectSessionPhase(state, prevPhaseRef.current)
+          const opportunityScore = computeOpportunityScore(state, roomHealth)
+          const streamHealth    = computeStreamHealth(state, roomHealth, sessionPhase)
+          const velocity        = computeRevenueVelocity(state?.currentUPM ?? 0, sessions)
+          const comparison      = computeLiveComparison(state, sessions)
+          const goalStrategy    = getGoalStrategy(state, roomHealth)
+          const recoveryActions = getRecoveryActions(sessionPhase)
+          const phaseConfig     = PHASES[sessionPhase] || PHASES.STARTUP
+          // Track phase transitions
+          if (sessionPhase !== prevPhaseRef.current) prevPhaseRef.current = sessionPhase
+
+          const alerts     = getAlerts(state)
           const nextAction = getNextAction(state)
 
           const PACE_CONFIG = {
@@ -3534,39 +3557,98 @@ const handleCSV = async (file, forcePlatform = null) => {
 
           return (
             <div>
-              {/* HEADER */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              {/* ── SESSION COMMAND CENTER ──────────────────────────────── */}
+              <div style={{ marginBottom: 20 }}>
+                {/* Title row */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 10 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                     <div style={{ width: 10, height: 10, borderRadius: '50%', background: liveActive ? C.green : C.muted, boxShadow: liveActive ? `0 0 10px ${C.green}` : 'none', animation: liveActive ? 'pulse-msg 1.5s infinite' : 'none' }} />
-                    <h1 style={{ fontSize: 26, fontWeight: 800, color: C.white }}>🔴 Live Mode</h1>
+                    <h1 style={{ fontSize: 24, fontWeight: 800, color: C.white, margin: 0 }}>🔴 Live Mode</h1>
+                    {/* Session Phase badge */}
+                    {liveActive && state && (
+                      <div style={{ padding: '3px 10px', borderRadius: 20, background: phaseConfig.bg, border: `1px solid ${phaseConfig.border}`, fontSize: 12, fontWeight: 700, color: phaseConfig.color }}>
+                        {phaseConfig.icon} {phaseConfig.label}
+                      </div>
+                    )}
                   </div>
-                  <p style={{ fontSize: 13, color: C.muted, marginTop: 2 }}>Real-time coaching while you stream</p>
-                </div>
-                <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-                  <select value={livePlatform} onChange={e => setLivePlatform(e.target.value)}
-                    style={{ ...inp2, width: 'auto', padding: '8px 12px' }}>
-                    {['Chaturbate','BongaCams','MyFreeCams','CamSoda','Stripchat'].map(p => (
-                      <option key={p} value={p}>{p}</option>
-                    ))}
-                  </select>
-                  <div>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <select value={livePlatform} onChange={e => setLivePlatform(e.target.value)} style={{ ...inp2, width: 'auto', padding: '7px 10px' }}>
+                      {['Chaturbate','BongaCams','MyFreeCams','CamSoda','Stripchat'].map(p => (
+                        <option key={p} value={p}>{p}</option>
+                      ))}
+                    </select>
                     <input type="number" value={liveGoalTokens || ''} onChange={e => setLiveGoalTokens(Number(e.target.value)||0)}
-                      placeholder="Token goal (optional)"
-                      style={{ ...inp2, width: 180 }} />
+                      placeholder="Token goal" style={{ ...inp2, width: 140 }} />
+                    {/* Strategy mode */}
+                    <select value={liveStrategy} onChange={e => setLiveStrategy(e.target.value)} style={{ ...inp2, width: 'auto', padding: '7px 10px', fontSize: 12 }}>
+                      <option value="balanced">⚖️ Balanced</option>
+                      <option value="aggressive">💰 Aggressive</option>
+                      <option value="retention">🔄 Retention</option>
+                      <option value="engagement">💬 Engagement</option>
+                      <option value="whale">🐋 Whale Focus</option>
+                      <option value="goal">🎯 Goal Focus</option>
+                    </select>
+                    {!liveActive ? (
+                      <button onClick={() => { setLiveActive(true); setLiveStartTime(new Date()); setLiveEvents([]); processedTipIds.current = new Set(); coachingCooldowns.current = {} }}
+                        style={{ padding: '9px 20px', borderRadius: 10, background: 'linear-gradient(135deg, #10B981, #22D3EE)', border: 'none', color: C.white, fontWeight: 800, fontSize: 13, cursor: 'pointer', boxShadow: '0 0 20px rgba(16,185,129,0.4)' }}>
+                        ▶ Start Stream
+                      </button>
+                    ) : (
+                      <button onClick={() => setLiveActive(false)}
+                        style={{ padding: '9px 20px', borderRadius: 10, background: 'rgba(248,113,113,0.2)', border: '1px solid rgba(248,113,113,0.4)', color: C.red, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+                        ⏹ End Stream
+                      </button>
+                    )}
                   </div>
-                  {!liveActive ? (
-                    <button onClick={() => { setLiveActive(true); setLiveStartTime(new Date()); setLiveEvents([]) }}
-                      style={{ padding: '10px 24px', borderRadius: 10, background: 'linear-gradient(135deg, #10B981, #22D3EE)', border: 'none', color: C.white, fontWeight: 800, fontSize: 14, cursor: 'pointer', boxShadow: '0 0 20px rgba(16,185,129,0.4)' }}>
-                      ▶ Start Stream
-                    </button>
-                  ) : (
-                    <button onClick={() => { setLiveActive(false) }}
-                      style={{ padding: '10px 24px', borderRadius: 10, background: 'rgba(248,113,113,0.2)', border: '1px solid rgba(248,113,113,0.4)', color: C.red, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
-                      ⏹ End Stream
-                    </button>
-                  )}
                 </div>
+
+                {/* Intelligence strip — Room Health · Momentum · Opportunity · Stream Health · Velocity */}
+                {liveActive && state && (
+                  <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                    {/* Room Health */}
+                    <div style={{ flex: '1 1 130px', borderRadius: 10, padding: '10px 14px', background: roomHealth.bg, border: `1px solid ${roomHealth.border}` }}>
+                      <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 4 }}>Room Heat</div>
+                      <div style={{ fontSize: 16, fontWeight: 800, color: roomHealth.color }}>{roomHealth.emoji} {roomHealth.label}</div>
+                      <div style={{ fontSize: 10, color: roomHealth.directionColor, marginTop: 2 }}>{roomHealth.directionLabel}</div>
+                      <div style={{ fontSize: 9, color: C.muted, marginTop: 2 }}>{roomHealth.confidence}% confidence</div>
+                    </div>
+
+                    {/* Opportunity Score */}
+                    <div style={{ flex: '1 1 130px', borderRadius: 10, padding: '10px 14px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                      <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 4 }}>Opportunity</div>
+                      <div style={{ fontSize: 22, fontWeight: 900, color: opportunityScore.color }}>{opportunityScore.score}<span style={{ fontSize: 11, fontWeight: 400 }}>/100</span></div>
+                      <div style={{ fontSize: 10, color: opportunityScore.color, marginTop: 2 }}>{opportunityScore.label}</div>
+                    </div>
+
+                    {/* Stream Health */}
+                    <div style={{ flex: '1 1 130px', borderRadius: 10, padding: '10px 14px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                      <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 4 }}>Stream Health</div>
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+                        <span style={{ fontSize: 22, fontWeight: 900, color: streamHealth.grade === 'A' ? C.green : streamHealth.grade === 'B' ? C.cyan : streamHealth.grade === 'C' ? C.gold : C.red }}>{streamHealth.grade}</span>
+                        <span style={{ fontSize: 13, color: C.muted }}>{streamHealth.score}/100</span>
+                      </div>
+                      <div style={{ fontSize: 10, color: streamHealth.trend === 'improving' ? C.green : streamHealth.trend === 'declining' ? C.red : C.muted, marginTop: 2, textTransform: 'capitalize' }}>{streamHealth.trend}</div>
+                    </div>
+
+                    {/* Revenue Velocity */}
+                    <div style={{ flex: '1 1 160px', borderRadius: 10, padding: '10px 14px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                      <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 4 }}>Revenue Velocity</div>
+                      <div style={{ fontSize: 16, fontWeight: 800, color: velocity.color }}>${velocity.currentUPH.toFixed(2)}/hr</div>
+                      <div style={{ fontSize: 10, color: velocity.color, marginTop: 2 }}>{velocity.label}</div>
+                    </div>
+
+                    {/* Live Comparison */}
+                    {comparison.vsAvgPct !== null && (
+                      <div style={{ flex: '1 1 140px', borderRadius: 10, padding: '10px 14px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                        <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 4 }}>vs Your Average</div>
+                        <div style={{ fontSize: 18, fontWeight: 900, color: (comparison.vsAvgPct ?? 0) >= 0 ? C.green : C.red }}>
+                          {(comparison.vsAvgPct ?? 0) >= 0 ? '+' : ''}{comparison.vsAvgPct}%
+                        </div>
+                        <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>avg ${comparison.avgUPH.toFixed(2)}/hr</div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {!liveActive && !liveEvents.length && (
@@ -3721,6 +3803,90 @@ const handleCSV = async (file, forcePlatform = null) => {
                         </a>
                       </div>
                     </div>
+                  </div>
+
+                  {/* ── INTELLIGENCE PANELS ─────────────────────────── */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14 }}>
+
+                    {/* GOAL STRATEGY */}
+                    {liveActive && state && (
+                      <div style={{ borderRadius: 14, padding: 18, background: goalStrategy.urgency === 'high' ? 'rgba(245,158,11,0.08)' : 'rgba(255,255,255,0.04)', border: `1px solid ${goalStrategy.urgency === 'high' ? 'rgba(245,158,11,0.35)' : 'rgba(255,255,255,0.08)'}` }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                          <div style={{ fontSize: 10, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700 }}>🎯 Goal Strategy</div>
+                          <div style={{ padding: '2px 8px', borderRadius: 8, background: goalStrategy.urgency === 'high' ? 'rgba(245,158,11,0.2)' : goalStrategy.urgency === 'medium' ? 'rgba(34,211,238,0.15)' : 'rgba(255,255,255,0.06)', fontSize: 10, fontWeight: 700, color: goalStrategy.urgency === 'high' ? C.gold : goalStrategy.urgency === 'medium' ? C.cyan : C.muted }}>
+                            {goalStrategy.timing === 'now' ? '⚡ ACT NOW' : goalStrategy.timing === 'reset' ? '🔄 RESET' : goalStrategy.timing === 'soon' ? '⏱ SOON' : '⏳ WAIT'}
+                          </div>
+                        </div>
+                        <div style={{ fontSize: 13, color: C.white, fontWeight: 600, lineHeight: 1.6, marginBottom: 10 }}>{goalStrategy.suggestion}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <div style={{ flex: 1, height: 6, borderRadius: 3, background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
+                            <div style={{ height: '100%', width: `${goalStrategy.probability}%`, borderRadius: 3, background: `linear-gradient(90deg, ${C.cyan}, ${C.pink})`, transition: 'width 0.5s ease' }} />
+                          </div>
+                          <div style={{ fontSize: 11, color: C.muted, whiteSpace: 'nowrap' }}>{goalStrategy.probability}% probability</div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* RECOVERY ACTIONS — shown during DECLINE or PLATEAU */}
+                    {liveActive && state && (sessionPhase === 'DECLINE' || sessionPhase === 'PLATEAU' || sessionPhase === 'RECOVERY') && (
+                      <div style={{ borderRadius: 14, padding: 18, background: sessionPhase === 'DECLINE' ? 'rgba(248,113,113,0.06)' : sessionPhase === 'RECOVERY' ? 'rgba(168,85,247,0.06)' : 'rgba(245,158,11,0.06)', border: `1px solid ${sessionPhase === 'DECLINE' ? 'rgba(248,113,113,0.3)' : sessionPhase === 'RECOVERY' ? 'rgba(168,85,247,0.3)' : 'rgba(245,158,11,0.3)'}` }}>
+                        <div style={{ fontSize: 10, color: sessionPhase === 'DECLINE' ? C.red : sessionPhase === 'RECOVERY' ? '#a855f7' : C.gold, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700, marginBottom: 10 }}>
+                          {sessionPhase === 'DECLINE' ? '🚨 Recovery Actions' : sessionPhase === 'RECOVERY' ? '🔄 Rebuilding Momentum' : '📊 Boost Tactics'}
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                          {recoveryActions.map((action, i) => (
+                            <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '7px 10px', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                              <span style={{ fontSize: 12, color: sessionPhase === 'DECLINE' ? C.red : sessionPhase === 'RECOVERY' ? '#a855f7' : C.gold, flexShrink: 0, fontWeight: 700 }}>{i + 1}.</span>
+                              <span style={{ fontSize: 12, color: C.white, lineHeight: 1.5 }}>{action}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* COACHING EXPLANATION — WHY signals fired */}
+                    {liveActive && state && opportunityScore.signals.length > 0 && (
+                      <div style={{ borderRadius: 14, padding: 18, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                          <div style={{ fontSize: 10, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700 }}>💡 Why These Alerts?</div>
+                          <div style={{ padding: '2px 8px', borderRadius: 8, background: `${opportunityScore.color}18`, fontSize: 11, fontWeight: 800, color: opportunityScore.color }}>
+                            {opportunityScore.score}/100
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                          {opportunityScore.signals.map((sig, i) => (
+                            <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                              <span style={{ color: opportunityScore.color, fontSize: 14, flexShrink: 0, lineHeight: 1.4 }}>→</span>
+                              <span style={{ fontSize: 12, color: C.text, lineHeight: 1.5 }}>{sig}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* STREAM HEALTH BREAKDOWN */}
+                    {liveActive && state && (
+                      <div style={{ borderRadius: 14, padding: 18, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                        <div style={{ fontSize: 10, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700, marginBottom: 12 }}>📊 Health Breakdown</div>
+                        {[
+                          { label: 'Momentum', value: streamHealth.components.momentum, max: 30, color: C.green },
+                          { label: 'Engagement', value: streamHealth.components.engagement, max: 30, color: C.cyan },
+                          { label: 'Velocity', value: streamHealth.components.velocity, max: 25, color: C.gold },
+                          { label: 'Recovery', value: streamHealth.components.recovery, max: 15, color: '#a855f7' },
+                        ].map(({ label, value, max, color }) => (
+                          <div key={label} style={{ marginBottom: 8 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                              <span style={{ fontSize: 11, color: C.muted }}>{label}</span>
+                              <span style={{ fontSize: 11, color, fontWeight: 700 }}>{value}/{max}</span>
+                            </div>
+                            <div style={{ height: 5, borderRadius: 3, background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
+                              <div style={{ height: '100%', width: `${(value / max) * 100}%`, borderRadius: 3, background: color, transition: 'width 0.4s ease' }} />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
                   </div>
                 </div>
               )}
