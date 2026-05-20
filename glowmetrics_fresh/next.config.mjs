@@ -4,7 +4,7 @@ const nextConfig = {
     return [
       // Redirect non-www to www (handles both http and https non-www)
       {
-        source: '/:path*',
+        source: '/((?!api/).*)',
         has: [{ type: 'host', value: 'camcashgrl.com' }],
         destination: 'https://www.camcashgrl.com/:path*',
         permanent: true,
