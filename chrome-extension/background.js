@@ -172,6 +172,7 @@ function addCoach(type) {
   if (coachMsgs.length > 8) coachMsgs.length = 8;
   save();
   broadcast({ action: 'state', state: getState() });
+  broadcastOverlay();
 }
 
 // ─── Alarms ───────────────────────────────────────────────────────────────────
@@ -212,6 +213,24 @@ function getState() {
 // Send to popup if it's open
 function broadcast(msg) {
   chrome.runtime.sendMessage(msg).catch(() => {});
+}
+
+// Send overlay state to all active cam-site tabs
+async function broadcastOverlay() {
+  const overlayMsg = { action: 'overlay_state', state: getState() };
+  try {
+    const tabs = await chrome.tabs.query({ url: [
+      'https://chaturbate.com/*',
+      'https://*.chaturbate.com/*',
+      'https://bongacams.com/*',
+      'https://*.bongacams.com/*',
+      'https://myfreecams.com/*',
+      'https://*.myfreecams.com/*',
+    ]});
+    for (const tab of tabs) {
+      chrome.tabs.sendMessage(tab.id, overlayMsg).catch(() => {});
+    }
+  } catch (_) {}
 }
 
 function isWhale(username) {
@@ -291,6 +310,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
     if (isWhale(username) && canCoach(`whale_tip_${username}`, 5 * 60 * 1000)) addCoach('whale');
 
     broadcast({ action: 'state', state: getState() });
+    broadcastOverlay();
     return false;
   }
 
@@ -311,6 +331,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
       });
 
       broadcast({ action: 'whale_alert', username, tokens: w.tokens });
+      broadcastOverlay();
     }
     return false;
   }
@@ -318,6 +339,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
   // Content: connected/disconnected
   if (msg.action === 'connected') {
     broadcast({ action: 'state', state: getState() });
+    broadcastOverlay();
     return false;
   }
 
