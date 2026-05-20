@@ -1108,6 +1108,43 @@ export default function Dashboard() {
     return () => document.removeEventListener('visibilitychange', onVisibility)
   }, [user])
 
+  // ── LIVE MODE: load existing tips when tab is activated ───────────────────
+  useEffect(() => {
+    if (activeTab !== 'live' || !user) return
+    let cancelled = false
+
+    const loadRecentLiveTips = async () => {
+      // Load tips from the last 12 hours so the session has real context
+      const since = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString()
+      const { data, error } = await supabase
+        .from('live_tips')
+        .select('*')
+        .eq('user_id', user.id)
+        .gte('received_at', since)
+        .order('received_at', { ascending: true })
+
+      if (cancelled || error || !data || data.length === 0) return
+
+      const normalized = data.map(tip => ({
+        username:          tip.username || 'Unknown',
+        tokens:            parseInt(tip.tokens) || 0,
+        usd:               parseFloat(tip.usd) || parseFloat(((tip.tokens || 0) * 0.05).toFixed(2)),
+        normalizedRevenue: parseFloat(tip.usd) || parseFloat(((tip.tokens || 0) * 0.05).toFixed(2)),
+        sourceUsed:        tip.source || 'extension',
+        timestamp:         new Date(tip.received_at),
+        platform:          tip.platform || 'chaturbate',
+      }))
+
+      setLiveEvents(normalized)
+      setLiveActive(true)
+      // Use earliest tip as session start so pace/coaching calculations are accurate
+      setLiveStartTime(prev => prev || new Date(data[0].received_at))
+    }
+
+    loadRecentLiveTips()
+    return () => { cancelled = true }
+  }, [activeTab, user])
+
   useEffect(() => {
     if (analytics) setLiveAnalytics(analytics)
   }, [analytics])
