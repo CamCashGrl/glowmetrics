@@ -1,23 +1,30 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { ExtensionPreviewSection, ComparisonSection, LockedFeaturesSection, FinalCTASection } from './sections'
+import {
+  CSVImportSection,
+  FanProfilesSection,
+  FanReEngagementSection,
+  RoomTitleSection,
+  ComparisonSection,
+  FinalCTASection,
+} from './sections'
 
 // ─── Color constants ──────────────────────────────────────────────────────────
 const C = {
-  bg:       '#040812',
-  card:     '#0d1424',
-  purple:   '#a855f7',
-  pink:     '#ec4899',
-  cyan:     '#22d3ee',
-  green:    '#10b981',
-  gold:     '#f59e0b',
-  white:    '#f1f5f9',
-  muted:    '#94a3b8',
-  dim:      '#475569',
-  red:      '#ef4444',
-  cardBorder: 'rgba(168,85,247,0.18)',
-  cardBorderHot: 'rgba(168,85,247,0.42)',
+  bg:           '#040812',
+  card:         '#0d1424',
+  purple:       '#a855f7',
+  pink:         '#ec4899',
+  cyan:         '#22d3ee',
+  green:        '#10b981',
+  gold:         '#f59e0b',
+  white:        '#f1f5f9',
+  muted:        '#94a3b8',
+  dim:          '#475569',
+  red:          '#ef4444',
+  cardBorder:   'rgba(168,85,247,0.18)',
+  cardBorderHot:'rgba(168,85,247,0.42)',
 }
 
 // ─── Fake data ────────────────────────────────────────────────────────────────
@@ -31,23 +38,25 @@ const AI_INSIGHTS = [
 ]
 
 const TIP_POOL = [
-  { user: 'xDarkMatter3',  tokens: 150,  note: 'you look amazing tonight 🔥' },
-  { user: 'PurpleRain99',  tokens: 500,  note: '' },
-  { user: 'nightcrawler_k', tokens: 25,  note: '' },
-  { user: 'euro_titan88',  tokens: 200,  note: 'keep going 💜' },
-  { user: 'vaultmaster',   tokens: 75,   note: '' },
-  { user: 'shadow_wolf_x', tokens: 50,   note: 'so good' },
-  { user: 'kingwolf99',    tokens: 1000, note: '💜💜💜' },
-  { user: 'midnightfan',   tokens: 30,   note: '' },
-  { user: 'redstar_tx',    tokens: 100,  note: 'stunning' },
-  { user: 'ghosttip42',    tokens: 25,   note: '' },
+  { user: 'xDarkMatter3',   tokens: 150,  note: 'you look amazing tonight 🔥' },
+  { user: 'PurpleRain99',   tokens: 500,  note: '' },
+  { user: 'nightcrawler_k', tokens: 25,   note: '' },
+  { user: 'euro_titan88',   tokens: 200,  note: 'keep going 💜' },
+  { user: 'vaultmaster',    tokens: 75,   note: '' },
+  { user: 'shadow_wolf_x',  tokens: 50,   note: 'so good' },
+  { user: 'kingwolf99',     tokens: 1000, note: '💜💜💜' },
+  { user: 'midnightfan',    tokens: 30,   note: '' },
+  { user: 'redstar_tx',     tokens: 100,  note: 'stunning' },
+  { user: 'ghosttip42',     tokens: 25,   note: '' },
 ]
 
 const INITIAL_TIPS = [
-  { id: 1000, user: 'euro_titan88',  tokens: 200, note: 'keep going 💜',             isNew: false },
-  { id: 1001, user: 'vaultmaster',   tokens: 75,  note: '',                           isNew: false },
-  { id: 1002, user: 'shadow_wolf_x', tokens: 50,  note: 'so good',                   isNew: false },
-  { id: 1003, user: 'nightcrawler_k', tokens: 25, note: '',                           isNew: false },
+  { id: 1000, user: 'kingwolf99',     tokens: 1000, note: '💜💜💜',                          isNew: false },
+  { id: 1001, user: 'euro_titan88',   tokens: 200,  note: 'keep going 💜',                   isNew: false },
+  { id: 1002, user: 'xDarkMatter3',   tokens: 150,  note: 'you look amazing tonight 🔥',     isNew: false },
+  { id: 1003, user: 'vaultmaster',    tokens: 75,   note: '',                                isNew: false },
+  { id: 1004, user: 'shadow_wolf_x',  tokens: 50,   note: 'so good',                         isNew: false },
+  { id: 1005, user: 'nightcrawler_k', tokens: 25,   note: '',                                isNew: false },
 ]
 
 const MOMENTUM_CYCLE = ['Rising 🚀', 'Hot 🔥', 'Rising 🚀', 'Stable ⚡']
@@ -87,13 +96,12 @@ function StickyBar() {
       WebkitBackdropFilter: 'blur(20px)',
       borderBottom:   '1px solid rgba(168,85,247,0.2)',
     }}>
-      {/* Logo */}
       <a href="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '6px' }}>
         <span style={{ fontSize: '20px' }}>💜</span>
         <span style={{
-          fontWeight: 700,
-          fontSize:   '17px',
-          background: `linear-gradient(90deg, ${C.purple}, ${C.pink})`,
+          fontWeight:           700,
+          fontSize:             '17px',
+          background:           `linear-gradient(90deg, ${C.purple}, ${C.pink})`,
           WebkitBackgroundClip: 'text',
           WebkitTextFillColor:  'transparent',
           backgroundClip:       'text',
@@ -101,7 +109,6 @@ function StickyBar() {
         }}>CamCash</span>
       </a>
 
-      {/* CTA */}
       <a href="/signup" style={{
         display:        'inline-flex',
         alignItems:     'center',
@@ -128,29 +135,21 @@ function StickyBar() {
 function HeroSection() {
   return (
     <section style={{
-      paddingTop:    '56px',
-      position:      'relative',
-      overflow:      'hidden',
-      textAlign:     'center',
-      padding:       '120px 20px 80px',
+      paddingTop: '56px',
+      position:   'relative',
+      overflow:   'hidden',
+      textAlign:  'center',
+      padding:    '120px 20px 80px',
     }}>
-      {/* Background radial glow */}
       <div style={{
-        position:   'absolute',
-        inset:      0,
-        background: 'radial-gradient(ellipse 70% 55% at 50% 0%, rgba(168,85,247,0.18) 0%, rgba(4,8,18,0) 70%)',
+        position:      'absolute',
+        inset:         0,
+        background:    'radial-gradient(ellipse 70% 55% at 50% 0%, rgba(168,85,247,0.18) 0%, rgba(4,8,18,0) 70%)',
         pointerEvents: 'none',
       }} />
 
       <div style={{ position: 'relative', maxWidth: '760px', margin: '0 auto' }}>
-        {/* Eyebrow */}
-        <div style={{
-          display:        'inline-flex',
-          alignItems:     'center',
-          gap:            '8px',
-          marginBottom:   '20px',
-        }}>
-          {/* Pulse dot */}
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', marginBottom: '20px' }}>
           <PulseDot color={C.purple} />
           <span style={{
             fontSize:      '11px',
@@ -161,33 +160,30 @@ function HeroSection() {
           }}>Free · No Signup Needed</span>
         </div>
 
-        {/* H1 */}
         <h1 style={{
-          fontSize:    'clamp(32px, 6vw, 58px)',
-          fontWeight:  800,
-          lineHeight:  1.1,
-          margin:      '0 0 22px',
-          background:  `linear-gradient(135deg, ${C.purple} 0%, ${C.pink} 60%, #f97316 100%)`,
+          fontSize:             'clamp(32px, 6vw, 58px)',
+          fontWeight:           800,
+          lineHeight:           1.1,
+          margin:               '0 0 22px',
+          background:           `linear-gradient(135deg, ${C.purple} 0%, ${C.pink} 60%, #f97316 100%)`,
           WebkitBackgroundClip: 'text',
           WebkitTextFillColor:  'transparent',
           backgroundClip:       'text',
-          letterSpacing: '-1px',
+          letterSpacing:        '-1px',
         }}>
           See your stream analytics<br />come alive
         </h1>
 
-        {/* Subtext */}
         <p style={{
-          fontSize:     'clamp(15px, 2vw, 18px)',
-          color:        C.muted,
-          lineHeight:   1.65,
-          margin:       '0 auto 36px',
-          maxWidth:     '600px',
+          fontSize:   'clamp(15px, 2vw, 18px)',
+          color:      C.muted,
+          lineHeight: 1.65,
+          margin:     '0 auto 36px',
+          maxWidth:   '600px',
         }}>
           CamCash tracks your tips, viewers, and engagement in real time — giving you AI coaching while you're live. Try the demo below, free.
         </p>
 
-        {/* Buttons */}
         <div style={{
           display:        'flex',
           flexWrap:       'wrap',
@@ -227,7 +223,6 @@ function HeroSection() {
           </a>
         </div>
 
-        {/* Platform pills */}
         <div style={{
           display:        'flex',
           flexWrap:       'wrap',
@@ -253,7 +248,7 @@ function HeroSection() {
   )
 }
 
-// ─── Pulse dot ────────────────────────────────────────────────────────────────
+// ─── PulseDot ─────────────────────────────────────────────────────────────────
 function PulseDot({ color = C.red, size = 8 }) {
   const [visible, setVisible] = useState(true)
   useEffect(() => {
@@ -262,15 +257,15 @@ function PulseDot({ color = C.red, size = 8 }) {
   }, [])
   return (
     <span style={{
-      display:       'inline-block',
-      width:         size,
-      height:        size,
-      borderRadius:  '50%',
-      background:    color,
-      boxShadow:     `0 0 ${size + 2}px ${color}`,
-      opacity:       visible ? 1 : 0.25,
-      transition:    'opacity 0.4s',
-      flexShrink:    0,
+      display:      'inline-block',
+      width:        size,
+      height:       size,
+      borderRadius: '50%',
+      background:   color,
+      boxShadow:    `0 0 ${size + 2}px ${color}`,
+      opacity:      visible ? 1 : 0.25,
+      transition:   'opacity 0.4s',
+      flexShrink:   0,
     }} />
   )
 }
@@ -279,14 +274,14 @@ function PulseDot({ color = C.red, size = 8 }) {
 function StatCard({ label, value, color, change }) {
   return (
     <div style={{
-      flex:         '1 1 130px',
-      background:   C.card,
-      border:       `1px solid ${C.cardBorder}`,
-      borderRadius: '10px',
-      padding:      '14px 16px',
-      display:      'flex',
+      flex:          '1 1 130px',
+      background:    C.card,
+      border:        `1px solid ${C.cardBorder}`,
+      borderRadius:  '10px',
+      padding:       '14px 16px',
+      display:       'flex',
       flexDirection: 'column',
-      gap:          '4px',
+      gap:           '4px',
     }}>
       <span style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '1.5px', color: C.dim, textTransform: 'uppercase' }}>
         {label}
@@ -320,24 +315,18 @@ function TipRow({ tip }) {
 
   return (
     <div style={{
-      display:         'flex',
-      alignItems:      'flex-start',
-      gap:             '8px',
-      padding:         '9px 10px',
-      borderRadius:    '8px',
-      background:      highlight ? 'rgba(168,85,247,0.13)' : 'transparent',
-      border:          highlight ? '1px solid rgba(168,85,247,0.3)' : '1px solid transparent',
-      transition:      'background 0.6s, border-color 0.6s',
-      marginBottom:    '3px',
+      display:      'flex',
+      alignItems:   'flex-start',
+      gap:          '8px',
+      padding:      '9px 10px',
+      borderRadius: '8px',
+      background:   highlight ? 'rgba(168,85,247,0.13)' : 'transparent',
+      border:       highlight ? '1px solid rgba(168,85,247,0.3)' : '1px solid transparent',
+      transition:   'background 0.6s, border-color 0.6s',
+      marginBottom: '3px',
     }}>
-      {/* Username + whale badge */}
       <div style={{ flex: 1, minWidth: 0 }}>
-        <span style={{
-          fontWeight:   700,
-          fontSize:     '13px',
-          color:        C.purple,
-          marginRight:  '6px',
-        }}>{tip.user}</span>
+        <span style={{ fontWeight: 700, fontSize: '13px', color: C.purple, marginRight: '6px' }}>{tip.user}</span>
         {isWhale && (
           <span style={{
             fontSize:     '10px',
@@ -353,7 +342,6 @@ function TipRow({ tip }) {
           <div style={{ fontSize: '11px', color: C.muted, marginTop: '2px', lineHeight: 1.4 }}>{tip.note}</div>
         ) : null}
       </div>
-      {/* Token + USD */}
       <div style={{ textAlign: 'right', flexShrink: 0 }}>
         <div style={{ fontWeight: 800, fontSize: '14px', color: C.cyan }}>{tip.tokens} tk</div>
         <div style={{ fontSize: '11px', color: C.green }}>{tokensToUSD(tip.tokens)}</div>
@@ -376,29 +364,14 @@ function AICoachCard({ insight, visible }) {
       flex:         1,
     }}>
       <div style={{ fontSize: '28px', marginBottom: '10px' }}>{insight.icon}</div>
-      <p style={{
-        fontSize:   '13px',
-        color:      C.white,
-        lineHeight: 1.65,
-        margin:     '0 0 14px',
-      }}>{insight.text}</p>
+      <p style={{ fontSize: '13px', color: C.white, lineHeight: 1.65, margin: '0 0 14px' }}>{insight.text}</p>
 
-      {/* Confidence bar */}
       <div style={{ marginBottom: '14px' }}>
-        <div style={{
-          display:        'flex',
-          justifyContent: 'space-between',
-          marginBottom:   '5px',
-        }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
           <span style={{ fontSize: '10px', color: C.dim, letterSpacing: '1px', textTransform: 'uppercase' }}>Confidence</span>
           <span style={{ fontSize: '11px', fontWeight: 700, color: C.purple }}>{insight.confidence}%</span>
         </div>
-        <div style={{
-          height:       '4px',
-          borderRadius: '2px',
-          background:   'rgba(168,85,247,0.15)',
-          overflow:     'hidden',
-        }}>
+        <div style={{ height: '4px', borderRadius: '2px', background: 'rgba(168,85,247,0.15)', overflow: 'hidden' }}>
           <div style={{
             height:       '100%',
             width:        `${insight.confidence}%`,
@@ -424,21 +397,24 @@ function AICoachCard({ insight, visible }) {
   )
 }
 
-// ─── LiveDashboardSection ────────────────────────────────────────────────────
+// ─── LiveDashboardSection ─────────────────────────────────────────────────────
 function LiveDashboardSection() {
-  const [viewers,       setViewers]       = useState(89)
-  const [engagement,    setEngagement]    = useState(74)
-  const [tipVelocity,   setTipVelocity]   = useState(18)
-  const [momentumIdx,   setMomentumIdx]   = useState(0)
-  const [sessionSecs,   setSessionSecs]   = useState(2847)
-  const [recentTips,    setRecentTips]    = useState(INITIAL_TIPS)
-  const [activeInsight, setActiveInsight] = useState(0)
+  const [viewers,        setViewers]        = useState(89)
+  const [engagement,     setEngagement]     = useState(74)
+  const [tipVelocity,    setTipVelocity]    = useState(18)
+  const [momentumIdx,    setMomentumIdx]    = useState(0)
+  const [sessionSecs,    setSessionSecs]    = useState(2847)
+  const [recentTips,     setRecentTips]     = useState(INITIAL_TIPS)
+  const [activeInsight,  setActiveInsight]  = useState(0)
   const [insightVisible, setInsightVisible] = useState(true)
+  const [sessionUSD,     setSessionUSD]     = useState(42.50)
+  const [goalTokens,     setGoalTokens]     = useState(340)
+  const goalTarget = 500
 
-  const tipIdRef       = useRef(2000)
-  const tipTimerRef    = useRef(null)
+  const tipIdRef    = useRef(2000)
+  const tipTimerRef = useRef(null)
 
-  // Session clock — every second
+  // Session clock
   useEffect(() => {
     const id = setInterval(() => setSessionSecs((s) => s + 1), 1000)
     return () => clearInterval(id)
@@ -488,17 +464,16 @@ function LiveDashboardSection() {
     return () => clearInterval(id)
   }, [])
 
-  // Tip feed — random 8–12s interval
+  // Tip feed — random 8–12s interval, also increments earnings + goal
   useEffect(() => {
     function scheduleNext() {
       const delay = 8000 + Math.random() * 4000
       tipTimerRef.current = setTimeout(() => {
-        const pool = TIP_POOL[Math.floor(Math.random() * TIP_POOL.length)]
+        const pool   = TIP_POOL[Math.floor(Math.random() * TIP_POOL.length)]
         const newTip = { ...pool, id: tipIdRef.current++, isNew: true }
-        setRecentTips((prev) => {
-          const next = [newTip, ...prev].slice(0, 8)
-          return next
-        })
+        setRecentTips((prev) => [newTip, ...prev].slice(0, 8))
+        setSessionUSD((prev) => parseFloat((prev + pool.tokens * 0.05).toFixed(2)))
+        setGoalTokens((prev) => Math.min(goalTarget, prev + pool.tokens))
         scheduleNext()
       }, delay)
     }
@@ -506,13 +481,12 @@ function LiveDashboardSection() {
     return () => clearTimeout(tipTimerRef.current)
   }, [])
 
-  const momentum = MOMENTUM_CYCLE[momentumIdx]
+  const momentum      = MOMENTUM_CYCLE[momentumIdx]
+  const goalPct       = Math.min(100, Math.round((goalTokens / goalTarget) * 100))
+  const goalRemaining = Math.max(0, goalTarget - goalTokens)
 
   return (
-    <section id="live-demo" style={{
-      padding:    '60px 20px 80px',
-      background: C.bg,
-    }}>
+    <section id="live-demo" style={{ padding: '60px 20px 80px', background: C.bg }}>
       <div style={{ maxWidth: '900px', margin: '0 auto' }}>
 
         {/* Section title */}
@@ -525,10 +499,10 @@ function LiveDashboardSection() {
         }}>
           <PulseDot color={C.red} size={9} />
           <h2 style={{
-            fontSize:    'clamp(20px, 3.5vw, 26px)',
-            fontWeight:  800,
-            color:       C.white,
-            margin:      0,
+            fontSize:      'clamp(20px, 3.5vw, 26px)',
+            fontWeight:    800,
+            color:         C.white,
+            margin:        0,
             letterSpacing: '-0.4px',
           }}>Live Session Demo</h2>
         </div>
@@ -544,16 +518,15 @@ function LiveDashboardSection() {
 
           {/* Stream header bar */}
           <div style={{
-            display:         'flex',
-            alignItems:      'center',
-            justifyContent:  'space-between',
-            padding:         '12px 18px',
-            background:      'rgba(0,0,0,0.35)',
-            borderBottom:    `1px solid rgba(168,85,247,0.15)`,
-            flexWrap:        'wrap',
-            gap:             '8px',
+            display:        'flex',
+            alignItems:     'center',
+            justifyContent: 'space-between',
+            padding:        '12px 18px',
+            background:     'rgba(0,0,0,0.35)',
+            borderBottom:   `1px solid rgba(168,85,247,0.15)`,
+            flexWrap:       'wrap',
+            gap:            '8px',
           }}>
-            {/* Left: LIVE indicator + channel */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <PulseDot color={C.red} size={8} />
@@ -564,14 +537,13 @@ function LiveDashboardSection() {
               </span>
             </div>
 
-            {/* Right: timer + momentum */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               <span style={{
                 fontVariantNumeric: 'tabular-nums',
-                fontWeight: 700,
-                fontSize:   '14px',
-                color:      C.cyan,
-                fontFamily: 'monospace',
+                fontWeight:         700,
+                fontSize:           '14px',
+                color:              C.cyan,
+                fontFamily:         'monospace',
               }}>
                 {formatTime(sessionSecs)} ↑
               </span>
@@ -589,13 +561,8 @@ function LiveDashboardSection() {
             </div>
           </div>
 
-          {/* 4 Stat cards */}
-          <div style={{
-            display:    'flex',
-            flexWrap:   'wrap',
-            gap:        '10px',
-            padding:    '14px 14px 0',
-          }}>
+          {/* Stat cards row */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', padding: '14px 14px 0' }}>
             <StatCard
               label="Viewers"
               value={viewers}
@@ -615,24 +582,54 @@ function LiveDashboardSection() {
               change="Tokens per minute"
             />
             <StatCard
-              label="Momentum"
-              value={momentum.split(' ')[1] || '⚡'}
-              color={C.pink}
-              change={momentum.split(' ')[0]}
+              label="Session Earnings"
+              value={`$${sessionUSD.toFixed(2)}`}
+              color={C.green}
+              change="This session"
             />
           </div>
 
-          {/* Tips + AI Coach columns */}
-          <div style={{
-            display:  'flex',
-            flexWrap: 'wrap',
-            gap:      '0',
-            padding:  '14px',
-          }}>
-
-            {/* Recent Tips column */}
+          {/* Goal Progress bar */}
+          <div style={{ padding: '12px 14px 0' }}>
             <div style={{
-              flex:        '1 1 280px',
+              background:   'rgba(168,85,247,0.06)',
+              border:       '1px solid rgba(168,85,247,0.2)',
+              borderRadius: '10px',
+              padding:      '12px 14px',
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <span style={{ fontSize: '11px', fontWeight: 700, color: C.dim, letterSpacing: '1.2px', textTransform: 'uppercase' }}>
+                  Token Goal
+                </span>
+                <span style={{ fontSize: '12px', fontWeight: 700, color: C.purple }}>
+                  {goalTokens} / {goalTarget} tk
+                  {goalRemaining > 0
+                    ? <span style={{ color: C.muted, fontWeight: 400 }}> · {goalRemaining} remaining</span>
+                    : <span style={{ color: C.green }}> · Goal reached! 🎉</span>
+                  }
+                </span>
+              </div>
+              <div style={{ height: '8px', borderRadius: '4px', background: 'rgba(168,85,247,0.15)', overflow: 'hidden' }}>
+                <div style={{
+                  height:       '100%',
+                  width:        `${goalPct}%`,
+                  borderRadius: '4px',
+                  background:   goalPct >= 100
+                    ? `linear-gradient(90deg, ${C.green}, ${C.cyan})`
+                    : `linear-gradient(90deg, ${C.purple}, ${C.pink})`,
+                  transition:   'width 0.7s ease',
+                }} />
+              </div>
+              <div style={{ fontSize: '10px', color: C.dim, marginTop: '5px' }}>{goalPct}% complete</div>
+            </div>
+          </div>
+
+          {/* Tips + AI Coach columns */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0', padding: '14px' }}>
+
+            {/* Recent Tips */}
+            <div style={{
+              flex:         '1 1 280px',
               paddingRight: '12px',
               borderRight:  '1px solid rgba(168,85,247,0.1)',
             }}>
@@ -644,7 +641,6 @@ function LiveDashboardSection() {
                 textTransform: 'uppercase',
                 marginBottom:  '10px',
               }}>Recent Tips</div>
-
               <div>
                 {recentTips.map((tip) => (
                   <TipRow key={tip.id} tip={tip} />
@@ -652,11 +648,11 @@ function LiveDashboardSection() {
               </div>
             </div>
 
-            {/* AI Coach column */}
+            {/* AI Coach */}
             <div style={{
-              flex:       '1 1 240px',
-              paddingLeft: '12px',
-              display:    'flex',
+              flex:          '1 1 240px',
+              paddingLeft:   '12px',
+              display:       'flex',
               flexDirection: 'column',
             }}>
               <div style={{
@@ -667,21 +663,16 @@ function LiveDashboardSection() {
                 textTransform: 'uppercase',
                 marginBottom:  '10px',
               }}>AI Coach</div>
-
-              <AICoachCard
-                insight={AI_INSIGHTS[activeInsight]}
-                visible={insightVisible}
-              />
+              <AICoachCard insight={AI_INSIGHTS[activeInsight]} visible={insightVisible} />
             </div>
           </div>
         </div>
 
-        {/* Disclaimer */}
         <p style={{
-          textAlign:  'center',
-          fontSize:   '11px',
-          color:      C.dim,
-          marginTop:  '14px',
+          textAlign:     'center',
+          fontSize:      '11px',
+          color:         C.dim,
+          marginTop:     '14px',
           letterSpacing: '0.3px',
         }}>
           Demo data · Simulates real extension behavior
@@ -691,140 +682,18 @@ function LiveDashboardSection() {
   )
 }
 
-// ─── AIInsightsSection ────────────────────────────────────────────────────────
-function AIInsightsSection() {
-  const [hoveredIdx, setHoveredIdx] = useState(null)
-
-  return (
-    <section style={{
-      padding:    '70px 20px 80px',
-      background: '#080f1e',
-    }}>
-      <div style={{ maxWidth: '900px', margin: '0 auto' }}>
-
-        {/* Header */}
-        <div style={{ textAlign: 'center', marginBottom: '48px' }}>
-          <h2 style={{
-            fontSize:    'clamp(22px, 4vw, 34px)',
-            fontWeight:  800,
-            color:       C.white,
-            margin:      '0 0 12px',
-            letterSpacing: '-0.5px',
-          }}>What CamCash sees in your stream</h2>
-          <p style={{ fontSize: '16px', color: C.muted, margin: 0 }}>
-            AI trained specifically on cam model session patterns
-          </p>
-        </div>
-
-        {/* 2-col grid of insight cards */}
-        <div style={{
-          display:             'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-          gap:                 '16px',
-          marginBottom:        '40px',
-        }}>
-          {AI_INSIGHTS.map((insight, i) => (
-            <div
-              key={i}
-              onMouseEnter={() => setHoveredIdx(i)}
-              onMouseLeave={() => setHoveredIdx(null)}
-              style={{
-                background:   C.card,
-                borderRadius: '12px',
-                border:       `1px solid ${hoveredIdx === i ? C.cardBorderHot : 'rgba(168,85,247,0.15)'}`,
-                padding:      '22px',
-                transition:   'border-color 0.25s, box-shadow 0.25s',
-                boxShadow:    hoveredIdx === i ? `0 0 24px rgba(168,85,247,0.15)` : 'none',
-                cursor:       'default',
-              }}
-            >
-              <div style={{ fontSize: '32px', marginBottom: '12px' }}>{insight.icon}</div>
-              <p style={{
-                fontSize:   '14px',
-                color:      C.white,
-                lineHeight: 1.65,
-                margin:     '0 0 18px',
-              }}>{insight.text}</p>
-
-              {/* Confidence bar */}
-              <div>
-                <div style={{
-                  display:        'flex',
-                  justifyContent: 'space-between',
-                  marginBottom:   '6px',
-                }}>
-                  <span style={{ fontSize: '10px', color: C.dim, letterSpacing: '1px', textTransform: 'uppercase' }}>Confidence</span>
-                  <span style={{ fontSize: '11px', fontWeight: 700, color: C.purple }}>{insight.confidence}%</span>
-                </div>
-                <div style={{
-                  height:       '3px',
-                  borderRadius: '2px',
-                  background:   'rgba(168,85,247,0.12)',
-                  overflow:     'hidden',
-                }}>
-                  <div style={{
-                    height:       '100%',
-                    width:        `${insight.confidence}%`,
-                    borderRadius: '2px',
-                    background:   `linear-gradient(90deg, ${C.purple}, ${C.pink})`,
-                  }} />
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* CTA card */}
-        <div style={{
-          background:   'rgba(168,85,247,0.07)',
-          border:       `1px solid rgba(168,85,247,0.28)`,
-          borderRadius: '14px',
-          padding:      '32px 28px',
-          textAlign:    'center',
-        }}>
-          <p style={{
-            fontSize:     'clamp(15px, 2.5vw, 18px)',
-            color:        C.white,
-            margin:       '0 auto 22px',
-            maxWidth:     '520px',
-            lineHeight:   1.6,
-            fontWeight:   500,
-          }}>
-            These insights run live during your stream. Connect your account to save them across sessions.
-          </p>
-          <a href="/signup" style={{
-            display:        'inline-flex',
-            alignItems:     'center',
-            gap:            '6px',
-            padding:        '14px 32px',
-            borderRadius:   '10px',
-            background:     `linear-gradient(135deg, ${C.purple}, ${C.pink})`,
-            color:          '#fff',
-            fontWeight:     800,
-            fontSize:       '15px',
-            textDecoration: 'none',
-            boxShadow:      `0 0 28px rgba(168,85,247,0.4)`,
-            letterSpacing:  '0.2px',
-          }}>
-            Create Free Account →
-          </a>
-        </div>
-      </div>
-    </section>
-  )
-}
-
-// ─── DemoPage (main export) ───────────────────────────────────────────────────
+// ─── DemoClient (main export) ─────────────────────────────────────────────────
 export default function DemoClient() {
   return (
     <div style={{ background: '#040812', minHeight: '100vh', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
       <StickyBar />
       <HeroSection />
       <LiveDashboardSection />
-      <AIInsightsSection />
-      <ExtensionPreviewSection />
+      <CSVImportSection />
+      <FanProfilesSection />
+      <FanReEngagementSection />
+      <RoomTitleSection />
       <ComparisonSection />
-      <LockedFeaturesSection />
       <FinalCTASection />
     </div>
   )

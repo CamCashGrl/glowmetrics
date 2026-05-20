@@ -1053,3 +1053,542 @@ export function FinalCTASection() {
     </>
   )
 }
+
+// ─── Color constants (shared) ─────────────────────────────────────────────────
+const C = {
+  bg:     '#040812',
+  card:   '#0d1424',
+  purple: '#a855f7',
+  pink:   '#ec4899',
+  cyan:   '#22d3ee',
+  green:  '#10b981',
+  gold:   '#f59e0b',
+  white:  '#f1f5f9',
+  muted:  '#94a3b8',
+  dim:    '#475569',
+  red:    '#ef4444',
+  orange: '#f97316',
+}
+
+// ─── CSVImportSection ─────────────────────────────────────────────────────────
+export function CSVImportSection() {
+  const [active, setActive] = useState('chaturbate')
+
+  const platforms = {
+    chaturbate: {
+      label: 'Chaturbate',
+      color: C.orange,
+      steps: [
+        { step: '1', text: 'Go to chaturbate.com and log into your model account' },
+        { step: '2', text: 'Click your username (top right) → My Profile' },
+        { step: '3', text: 'Scroll down to "Stats & Tokens" → click "Token History"' },
+        { step: '4', text: 'Set the date range (up to 12 months) and click "Export CSV"' },
+        { step: '5', text: 'Upload the downloaded .csv file to CamCash below' },
+      ],
+      note: 'Chaturbate exports tip history with timestamps, token amounts, and viewer usernames — everything CamCash needs.',
+    },
+    bongacams: {
+      label: 'BongaCams',
+      color: C.pink,
+      steps: [
+        { step: '1', text: 'Log into your BongaCams model account' },
+        { step: '2', text: 'Go to Statistics in the top navigation menu' },
+        { step: '3', text: 'Select "Earnings" or "Token History" from the submenu' },
+        { step: '4', text: 'Choose your date range and click "Export" or "Download CSV"' },
+        { step: '5', text: 'Upload the file to CamCash — analysis runs instantly' },
+      ],
+      note: 'BongaCams CSVs include tip amounts, dates, and viewer IDs — fully compatible with CamCash.',
+    },
+    myfreecams: {
+      label: 'MyFreeCams',
+      color: C.cyan,
+      steps: [
+        { step: '1', text: 'Log into your MyFreeCams model account' },
+        { step: '2', text: 'Go to Account → Transaction History' },
+        { step: '3', text: 'Select "Tip & Token History" from the dropdown' },
+        { step: '4', text: 'Set date range → click "Export to CSV"' },
+        { step: '5', text: 'Upload the .csv to CamCash for instant fan insights' },
+      ],
+      note: 'MFC exports include tipper usernames, amounts, and timestamps — CamCash maps these to fan profiles automatically.',
+    },
+  }
+
+  const p = platforms[active]
+
+  return (
+    <section style={{ padding: '80px 20px', background: 'rgba(4,8,18,0.98)' }}>
+      <div style={{ maxWidth: '820px', margin: '0 auto' }}>
+
+        <div style={{ textAlign: 'center', marginBottom: '40px' }}>
+          <div style={{
+            display: 'inline-block', fontSize: '11px', fontWeight: 800,
+            letterSpacing: '2px', color: C.purple, textTransform: 'uppercase',
+            background: 'rgba(168,85,247,0.08)', border: '1px solid rgba(168,85,247,0.2)',
+            borderRadius: '20px', padding: '4px 14px', marginBottom: '14px',
+          }}>How to get your CSV</div>
+          <h2 style={{ fontSize: 'clamp(22px,4vw,30px)', fontWeight: 800, color: C.white, margin: '0 0 10px', letterSpacing: '-0.5px' }}>
+            Import your earnings in 2 minutes
+          </h2>
+          <p style={{ fontSize: '15px', color: C.muted, maxWidth: '520px', margin: '0 auto' }}>
+            CamCash reads your platform's tip history CSV. Here's exactly where to find it for each platform.
+          </p>
+        </div>
+
+        {/* Platform tabs */}
+        <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', marginBottom: '28px', flexWrap: 'wrap' }}>
+          {Object.entries(platforms).map(([key, val]) => (
+            <button key={key} onClick={() => setActive(key)} style={{
+              padding: '8px 20px', borderRadius: '8px', fontSize: '13px', fontWeight: 700,
+              cursor: 'pointer', border: '1px solid',
+              background: active === key ? 'rgba(168,85,247,0.12)' : 'transparent',
+              borderColor: active === key ? val.color : 'rgba(255,255,255,0.1)',
+              color: active === key ? val.color : C.muted,
+              transition: 'all 0.15s',
+            }}>
+              {val.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Steps card */}
+        <div style={{
+          background: C.card, borderRadius: '14px',
+          border: `1px solid ${p.color}33`, overflow: 'hidden',
+        }}>
+          <div style={{
+            padding: '14px 20px', background: 'rgba(0,0,0,0.25)',
+            borderBottom: `1px solid ${p.color}22`,
+            display: 'flex', alignItems: 'center', gap: '10px',
+          }}>
+            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: p.color }} />
+            <span style={{ fontSize: '14px', fontWeight: 700, color: C.white }}>
+              {p.label} — Step-by-step export guide
+            </span>
+          </div>
+
+          <div style={{ padding: '20px' }}>
+            {p.steps.map(({ step, text }) => (
+              <div key={step} style={{ display: 'flex', gap: '14px', marginBottom: '14px', alignItems: 'flex-start' }}>
+                <div style={{
+                  width: '24px', height: '24px', borderRadius: '6px', flexShrink: 0,
+                  background: `${p.color}22`, border: `1px solid ${p.color}44`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: '11px', fontWeight: 800, color: p.color,
+                }}>{step}</div>
+                <span style={{ fontSize: '14px', color: C.muted, lineHeight: 1.6, paddingTop: '2px' }}>{text}</span>
+              </div>
+            ))}
+
+            <div style={{
+              marginTop: '16px', padding: '12px 14px', borderRadius: '8px',
+              background: `${p.color}08`, border: `1px solid ${p.color}22`,
+              fontSize: '13px', color: C.muted, lineHeight: 1.6,
+            }}>
+              <span style={{ color: p.color, fontWeight: 700 }}>Note: </span>{p.note}
+            </div>
+          </div>
+        </div>
+
+        {/* Upload CTA */}
+        <div style={{ textAlign: 'center', marginTop: '28px' }}>
+          <a href="/landing" style={{
+            display: 'inline-block', padding: '12px 32px', borderRadius: '10px',
+            background: `linear-gradient(135deg, ${C.purple}, ${C.pink})`,
+            color: '#fff', fontWeight: 700, fontSize: '15px', textDecoration: 'none',
+            boxShadow: '0 0 24px rgba(168,85,247,0.3)',
+          }}>
+            Upload your CSV free →
+          </a>
+          <p style={{ fontSize: '12px', color: C.dim, marginTop: '10px' }}>
+            No account required to try · Instant analysis · Free forever
+          </p>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// ─── FanProfilesSection ───────────────────────────────────────────────────────
+const FAN_DATA = [
+  { name: 'PurpleRain99',    lifetime: 2840, sessions: 34, avg: 83.5,  lastTip: '2h ago',   interval: '2.1 days', risk: 'low',    riskColor: C.green  },
+  { name: 'xDarkMatter3',    lifetime: 1320, sessions: 21, avg: 62.9,  lastTip: '5h ago',   interval: '3.4 days', risk: 'low',    riskColor: C.green  },
+  { name: 'euro_titan88',    lifetime:  960, sessions: 18, avg: 53.3,  lastTip: '1d ago',   interval: '4.1 days', risk: 'medium', riskColor: C.gold   },
+  { name: 'kingwolf99',      lifetime:  750, sessions: 9,  avg: 83.3,  lastTip: '3d ago',   interval: '5.2 days', risk: 'medium', riskColor: C.gold   },
+  { name: 'shadow_wolf_x',   lifetime:  480, sessions: 14, avg: 34.3,  lastTip: '6d ago',   interval: '3.8 days', risk: 'high',   riskColor: C.red    },
+  { name: 'vaultmaster',     lifetime:  380, sessions: 11, avg: 34.5,  lastTip: '8d ago',   interval: '5.0 days', risk: 'high',   riskColor: C.red    },
+  { name: 'nightcrawler_k',  lifetime:  240, sessions: 8,  avg: 30.0,  lastTip: '12d ago',  interval: '6.1 days', risk: 'high',   riskColor: C.red    },
+  { name: 'redstar_tx',      lifetime:  195, sessions: 7,  avg: 27.9,  lastTip: '4d ago',   interval: '4.5 days', risk: 'medium', riskColor: C.gold   },
+]
+
+export function FanProfilesSection() {
+  const [sort, setSort] = useState('lifetime')
+  const sorted = [...FAN_DATA].sort((a, b) => b[sort] - a[sort])
+
+  return (
+    <section style={{ padding: '80px 20px', background: C.bg }}>
+      <div style={{ maxWidth: '900px', margin: '0 auto' }}>
+
+        <div style={{ textAlign: 'center', marginBottom: '36px' }}>
+          <div style={{
+            display: 'inline-block', fontSize: '11px', fontWeight: 800,
+            letterSpacing: '2px', color: C.cyan, textTransform: 'uppercase',
+            background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.2)',
+            borderRadius: '20px', padding: '4px 14px', marginBottom: '14px',
+          }}>Fan Intelligence</div>
+          <h2 style={{ fontSize: 'clamp(22px,4vw,30px)', fontWeight: 800, color: C.white, margin: '0 0 10px', letterSpacing: '-0.5px' }}>
+            Know every fan who matters
+          </h2>
+          <p style={{ fontSize: '15px', color: C.muted, maxWidth: '520px', margin: '0 auto' }}>
+            CamCash ranks your viewers by lifetime spend, tip frequency, and churn risk — so you know exactly who to focus on.
+          </p>
+        </div>
+
+        {/* Sort controls */}
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
+          {[['lifetime', 'Lifetime $'], ['sessions', 'Sessions'], ['avg', 'Avg/session']].map(([key, label]) => (
+            <button key={key} onClick={() => setSort(key)} style={{
+              padding: '6px 16px', borderRadius: '7px', fontSize: '12px', fontWeight: 700,
+              cursor: 'pointer', border: '1px solid',
+              background: sort === key ? 'rgba(34,211,238,0.1)' : 'transparent',
+              borderColor: sort === key ? C.cyan : 'rgba(255,255,255,0.1)',
+              color: sort === key ? C.cyan : C.muted,
+              transition: 'all 0.15s',
+            }}>{label}</button>
+          ))}
+        </div>
+
+        {/* Fan table */}
+        <div style={{ background: C.card, borderRadius: '14px', border: '1px solid rgba(255,255,255,0.07)', overflow: 'hidden' }}>
+          {/* Header */}
+          <div style={{
+            display: 'grid', gridTemplateColumns: '1fr 80px 70px 80px 90px 70px',
+            padding: '10px 16px', background: 'rgba(0,0,0,0.3)',
+            borderBottom: '1px solid rgba(255,255,255,0.06)',
+            fontSize: '10px', fontWeight: 700, color: C.dim, textTransform: 'uppercase', letterSpacing: '1px',
+            gap: '8px',
+          }}>
+            <span>Fan</span>
+            <span style={{ textAlign: 'right' }}>Lifetime</span>
+            <span style={{ textAlign: 'right' }}>Sessions</span>
+            <span style={{ textAlign: 'right' }}>Avg/session</span>
+            <span style={{ textAlign: 'right' }}>Last tip</span>
+            <span style={{ textAlign: 'right' }}>Risk</span>
+          </div>
+
+          {sorted.map((fan, i) => (
+            <div key={fan.name} style={{
+              display: 'grid', gridTemplateColumns: '1fr 80px 70px 80px 90px 70px',
+              padding: '12px 16px', gap: '8px', alignItems: 'center',
+              borderBottom: i < sorted.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none',
+              background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.01)',
+            }}>
+              <div>
+                <div style={{ fontSize: '13px', fontWeight: 700, color: C.white }}>{fan.name}</div>
+                <div style={{ fontSize: '11px', color: C.dim }}>every {fan.interval}</div>
+              </div>
+              <div style={{ textAlign: 'right', fontSize: '13px', fontWeight: 700, color: C.green }}>${fan.lifetime.toLocaleString()}</div>
+              <div style={{ textAlign: 'right', fontSize: '13px', color: C.muted }}>{fan.sessions}</div>
+              <div style={{ textAlign: 'right', fontSize: '13px', color: C.muted }}>${fan.avg.toFixed(0)}</div>
+              <div style={{ textAlign: 'right', fontSize: '12px', color: C.muted }}>{fan.lastTip}</div>
+              <div style={{ textAlign: 'right' }}>
+                <span style={{
+                  fontSize: '11px', fontWeight: 700, color: fan.riskColor,
+                  background: `${fan.riskColor}18`, border: `1px solid ${fan.riskColor}33`,
+                  borderRadius: '5px', padding: '2px 7px', textTransform: 'capitalize',
+                }}>{fan.risk}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <p style={{ fontSize: '12px', color: C.dim, textAlign: 'center', marginTop: '14px' }}>
+          Demo data · Your real fan list populates after CSV upload
+        </p>
+      </div>
+    </section>
+  )
+}
+
+// ─── FanReEngagementSection ───────────────────────────────────────────────────
+const AT_RISK = [
+  {
+    name: 'shadow_wolf_x',
+    lifetime: 480,
+    lastTip: '6 days ago',
+    interval: '3.8 days',
+    overdue: '2.2 days overdue',
+    message: "Hey shadow_wolf_x 👋 haven't seen you in a bit — I've been doing something new this week that I think you'd love. Come check it out tonight 💜",
+  },
+  {
+    name: 'vaultmaster',
+    lifetime: 380,
+    lastTip: '8 days ago',
+    interval: '5.0 days',
+    overdue: '3.0 days overdue',
+    message: "vaultmaster — you've been one of my best recently and I miss you 😊 Streaming tonight at 10PM, reserved you a spot in my VIP list. Hope to see you 💜",
+  },
+  {
+    name: 'nightcrawler_k',
+    lifetime: 240,
+    lastTip: '12 days ago',
+    interval: '6.1 days',
+    overdue: '5.9 days overdue',
+    message: "nightcrawler_k — it's been way too long! I'm going live tonight with something special planned. First tip gets to pick what happens next 👀",
+  },
+]
+
+export function FanReEngagementSection() {
+  const [copied, setCopied] = useState(null)
+
+  function handleCopy(name, msg) {
+    navigator.clipboard.writeText(msg).catch(() => {})
+    setCopied(name)
+    setTimeout(() => setCopied(null), 2000)
+  }
+
+  return (
+    <section style={{ padding: '80px 20px', background: 'rgba(4,8,18,0.97)' }}>
+      <div style={{ maxWidth: '820px', margin: '0 auto' }}>
+
+        <div style={{ textAlign: 'center', marginBottom: '36px' }}>
+          <div style={{
+            display: 'inline-block', fontSize: '11px', fontWeight: 800,
+            letterSpacing: '2px', color: C.red, textTransform: 'uppercase',
+            background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)',
+            borderRadius: '20px', padding: '4px 14px', marginBottom: '14px',
+          }}>Re-Engagement Alerts</div>
+          <h2 style={{ fontSize: 'clamp(22px,4vw,30px)', fontWeight: 800, color: C.white, margin: '0 0 10px', letterSpacing: '-0.5px' }}>
+            Catch whales before they disappear
+          </h2>
+          <p style={{ fontSize: '15px', color: C.muted, maxWidth: '540px', margin: '0 auto' }}>
+            CamCash tracks tip intervals and flags fans who are overdue. Each alert includes a ready-to-send re-engagement message.
+          </p>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {AT_RISK.map((fan) => (
+            <div key={fan.name} style={{
+              background: C.card, borderRadius: '12px',
+              border: '1px solid rgba(239,68,68,0.2)', overflow: 'hidden',
+            }}>
+              {/* Fan header */}
+              <div style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '12px 16px', background: 'rgba(239,68,68,0.04)',
+                borderBottom: '1px solid rgba(239,68,68,0.12)', flexWrap: 'wrap', gap: '8px',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div style={{
+                    width: '36px', height: '36px', borderRadius: '8px',
+                    background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: '16px',
+                  }}>⚠️</div>
+                  <div>
+                    <div style={{ fontSize: '14px', fontWeight: 700, color: C.white }}>{fan.name}</div>
+                    <div style={{ fontSize: '12px', color: C.dim }}>
+                      Last tip: {fan.lastTip} · Usual interval: {fan.interval}
+                    </div>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontSize: '11px', color: C.dim }}>Lifetime value</div>
+                    <div style={{ fontSize: '14px', fontWeight: 700, color: C.green }}>${fan.lifetime}</div>
+                  </div>
+                  <div style={{
+                    background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)',
+                    borderRadius: '6px', padding: '4px 10px', fontSize: '11px', fontWeight: 700, color: C.red,
+                    display: 'flex', alignItems: 'center',
+                  }}>{fan.overdue}</div>
+                </div>
+              </div>
+
+              {/* Re-engagement message */}
+              <div style={{ padding: '14px 16px' }}>
+                <div style={{ fontSize: '10px', fontWeight: 700, color: C.dim, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '8px' }}>
+                  AI-generated re-engagement message
+                </div>
+                <div style={{
+                  background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)',
+                  borderRadius: '8px', padding: '12px 14px',
+                  fontSize: '13px', color: C.muted, lineHeight: 1.65, marginBottom: '12px',
+                }}>
+                  "{fan.message}"
+                </div>
+                <button onClick={() => handleCopy(fan.name, fan.message)} style={{
+                  padding: '7px 18px', borderRadius: '7px', fontSize: '12px', fontWeight: 700,
+                  cursor: 'pointer', border: '1px solid',
+                  background: copied === fan.name ? 'rgba(16,185,129,0.12)' : 'rgba(168,85,247,0.08)',
+                  borderColor: copied === fan.name ? C.green : 'rgba(168,85,247,0.3)',
+                  color: copied === fan.name ? C.green : C.purple,
+                  transition: 'all 0.2s',
+                }}>
+                  {copied === fan.name ? '✓ Copied!' : 'Copy message'}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <p style={{ fontSize: '12px', color: C.dim, textAlign: 'center', marginTop: '20px' }}>
+          Demo data · Real alerts use your actual tip history and intervals
+        </p>
+      </div>
+    </section>
+  )
+}
+
+// ─── RoomTitleSection ─────────────────────────────────────────────────────────
+const TITLE_SETS = {
+  'chill-chat': {
+    none:   'New model 💜 | come chat with me | getting comfortable tonight',
+    small:  '💜 chill + chat | say hi — I\'ll say hi back | relaxed vibes only',
+    big:    '💜 big goal tonight: 500 tokens = [special show] | tipping = instant attention | chat with me first',
+    urgent: '⏳ LAST HOUR streaming tonight | 💜 big goal active — 500 to go | jump in NOW',
+  },
+  'interactive': {
+    none:   '🎮 Lush is ON | control me with tips | tip menu in bio',
+    small:  '🎮 Lush + tip control | every tip = reaction | tip menu active 💜',
+    big:    '🎮 Lush ACTIVE 🔥 | tip to control me | Goal: 500 = I lose control 😈',
+    urgent: '🎮 LAST SESSION TONIGHT | Lush on max sensitivity | 500 tokens left — hit goal before I go ⏳',
+  },
+  'naughty': {
+    none:   '😈 naughty mode | tip menu open | come play 💜',
+    small:  '😈 Feeling naughty | tip = pick what happens next | goal active 💜',
+    big:    '🔥 Naughty Blonde | Goal: Oil Show @ 500 | Tip Menu Active 💦 | come watch',
+    urgent: '🔥 LAST 45 MIN | oil show at 500 tokens — 120 away | tip NOW and I\'ll say your name 😈',
+  },
+  'goal-grind': {
+    none:   '🎯 Token goal: unlock surprise show | tip to move the bar | tip menu open',
+    small:  '🎯 Goal: 300 = [reward] | 120 tokens left | every tip counts 💜',
+    big:    '🎯 BIG goal night: 1000 tokens = [full show] | tip fast — top tipper gets VIP treatment',
+    urgent: '⏳ GOAL ENDS IN 30 MIN | 1000 tokens or it resets | 200 left — almost there 🔥',
+  },
+}
+
+export function RoomTitleSection() {
+  const [vibe, setVibe] = useState('chill-chat')
+  const [goal, setGoal] = useState('small')
+  const [copied, setCopied] = useState(false)
+
+  const title = TITLE_SETS[vibe]?.[goal] ?? ''
+
+  function handleCopy() {
+    navigator.clipboard.writeText(title).catch(() => {})
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  const vibeOptions = [
+    { key: 'chill-chat',  label: 'Chill & Chat' },
+    { key: 'interactive', label: 'Interactive Toy' },
+    { key: 'naughty',     label: 'Naughty' },
+    { key: 'goal-grind',  label: 'Goal Grind' },
+  ]
+
+  const goalOptions = [
+    { key: 'none',   label: 'No goal' },
+    { key: 'small',  label: 'Small goal' },
+    { key: 'big',    label: 'Big goal' },
+    { key: 'urgent', label: 'Urgent / ending soon' },
+  ]
+
+  return (
+    <section style={{ padding: '80px 20px', background: C.bg }}>
+      <div style={{ maxWidth: '760px', margin: '0 auto' }}>
+
+        <div style={{ textAlign: 'center', marginBottom: '36px' }}>
+          <div style={{
+            display: 'inline-block', fontSize: '11px', fontWeight: 800,
+            letterSpacing: '2px', color: C.gold, textTransform: 'uppercase',
+            background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)',
+            borderRadius: '20px', padding: '4px 14px', marginBottom: '14px',
+          }}>Room Title Generator</div>
+          <h2 style={{ fontSize: 'clamp(22px,4vw,30px)', fontWeight: 800, color: C.white, margin: '0 0 10px', letterSpacing: '-0.5px' }}>
+            High-converting titles in seconds
+          </h2>
+          <p style={{ fontSize: '15px', color: C.muted, maxWidth: '500px', margin: '0 auto' }}>
+            Pick your vibe and goal type — get a proven room title that hooks viewers and drives tips.
+          </p>
+        </div>
+
+        {/* Vibe selector */}
+        <div style={{ marginBottom: '20px' }}>
+          <div style={{ fontSize: '11px', fontWeight: 700, color: C.dim, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '10px' }}>
+            Your vibe
+          </div>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            {vibeOptions.map(({ key, label }) => (
+              <button key={key} onClick={() => setVibe(key)} style={{
+                padding: '8px 18px', borderRadius: '8px', fontSize: '13px', fontWeight: 700,
+                cursor: 'pointer', border: '1px solid',
+                background: vibe === key ? 'rgba(245,158,11,0.12)' : 'transparent',
+                borderColor: vibe === key ? C.gold : 'rgba(255,255,255,0.1)',
+                color: vibe === key ? C.gold : C.muted,
+                transition: 'all 0.15s',
+              }}>{label}</button>
+            ))}
+          </div>
+        </div>
+
+        {/* Goal selector */}
+        <div style={{ marginBottom: '24px' }}>
+          <div style={{ fontSize: '11px', fontWeight: 700, color: C.dim, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '10px' }}>
+            Goal type
+          </div>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            {goalOptions.map(({ key, label }) => (
+              <button key={key} onClick={() => setGoal(key)} style={{
+                padding: '8px 18px', borderRadius: '8px', fontSize: '13px', fontWeight: 700,
+                cursor: 'pointer', border: '1px solid',
+                background: goal === key ? 'rgba(245,158,11,0.12)' : 'transparent',
+                borderColor: goal === key ? C.gold : 'rgba(255,255,255,0.1)',
+                color: goal === key ? C.gold : C.muted,
+                transition: 'all 0.15s',
+              }}>{label}</button>
+            ))}
+          </div>
+        </div>
+
+        {/* Generated title */}
+        <div style={{
+          background: C.card, borderRadius: '12px',
+          border: `1px solid rgba(245,158,11,0.25)`, overflow: 'hidden',
+        }}>
+          <div style={{
+            padding: '10px 16px', background: 'rgba(245,158,11,0.05)',
+            borderBottom: '1px solid rgba(245,158,11,0.12)',
+            fontSize: '10px', fontWeight: 700, color: C.gold, textTransform: 'uppercase', letterSpacing: '1px',
+          }}>Generated title</div>
+          <div style={{ padding: '18px 18px 14px' }}>
+            <div style={{
+              fontSize: '15px', color: C.white, lineHeight: 1.55,
+              fontWeight: 600, marginBottom: '16px', minHeight: '46px',
+            }}>
+              {title}
+            </div>
+            <button onClick={handleCopy} style={{
+              padding: '8px 22px', borderRadius: '8px', fontSize: '13px', fontWeight: 700,
+              cursor: 'pointer', border: '1px solid',
+              background: copied ? 'rgba(16,185,129,0.12)' : 'rgba(245,158,11,0.1)',
+              borderColor: copied ? C.green : 'rgba(245,158,11,0.3)',
+              color: copied ? C.green : C.gold,
+              transition: 'all 0.2s',
+            }}>
+              {copied ? '✓ Copied to clipboard!' : 'Copy this title'}
+            </button>
+          </div>
+        </div>
+
+        <div style={{ textAlign: 'center', marginTop: '24px' }}>
+          <a href="/guides/chaturbate-room-title-generator" style={{
+            fontSize: '13px', color: C.purple, textDecoration: 'none', fontWeight: 600,
+          }}>
+            → Open full Room Title Generator tool
+          </a>
+        </div>
+      </div>
+    </section>
+  )
+}
