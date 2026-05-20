@@ -243,7 +243,31 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
     sessionUsd += usd;
     if (!topTipper || tokens > topTipper.tokens) topTipper = tip;
 
-    syncTip({ username, tokens, platform, timestamp: new Date(lastTipTs).toISOString() });
+    // Write to storage so popup.js loadTips() can read it
+    const storageKey = `tip_${lastTipTs}`;
+    const tipRecord = {
+      username,
+      amount: tokens,
+      platform,
+      timestamp: new Date(lastTipTs).toISOString(),
+      synced: false,
+    };
+    chrome.storage.local.set({ [storageKey]: tipRecord });
+
+    // Prune old tip keys — keep only the 100 newest
+    chrome.storage.local.get(null, (items) => {
+      const tipKeys = Object.keys(items)
+        .filter(k => k.startsWith('tip_'))
+        .sort()
+        .reverse();
+      if (tipKeys.length > 100) {
+        chrome.storage.local.remove(tipKeys.slice(100));
+      }
+    });
+
+    syncTip({ username, tokens, platform, timestamp: new Date(lastTipTs).toISOString() }).then(() => {
+      chrome.storage.local.set({ [storageKey]: { ...tipRecord, synced: true } });
+    });
 
     // Tip streak coaching: 3+ tips in 60s
     const recentCount = sessionTips.filter(t => lastTipTs - t.ts < 60000).length;

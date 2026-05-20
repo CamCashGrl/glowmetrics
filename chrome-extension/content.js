@@ -168,6 +168,14 @@
     }, 1000);
   }
 
+  // Respond to PING from popup (status badge)
+  chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
+    if (msg.type === 'PING') {
+      reply({ pong: true });
+      return true;
+    }
+  });
+
   // Re-init if the page navigates (SPA)
   let lastUrl = location.href;
   new MutationObserver(() => {

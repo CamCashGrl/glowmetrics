@@ -84,9 +84,14 @@ export default function LiveMode() {
 
   const fetchTips = useCallback(async (userId, since = null) => {
     try {
+      const { data: { session: sess } } = await supabase.auth.getSession();
+      const token = sess?.access_token;
+      if (!token) return null;
       const params = new URLSearchParams({ userId });
       if (since) params.set('since', since);
-      const res = await fetch(`/api/live/tips?${params}`);
+      const res = await fetch(`/api/live/tips?${params}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Failed to fetch tips');
       return json.tips || [];
