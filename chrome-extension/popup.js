@@ -17,10 +17,16 @@ const authError = document.getElementById('auth-error');
 const statusBadge = document.getElementById('status');
 
 // On load
-document.addEventListener('DOMContentLoaded', () => {
+function init() {
   checkAuthState();
   loadTips();
-});
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
+}
 
 async function checkAuthState() {
   const stored = await getStoredAuth();
