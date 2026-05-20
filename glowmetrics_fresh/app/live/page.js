@@ -157,6 +157,30 @@ export default function LiveMode() {
 
   return (
     <div style={{ background: C.bg, minHeight: '100vh', fontFamily: 'system-ui' }}>
+      {/* Nav */}
+      <nav style={{
+        position: 'sticky', top: 0, zIndex: 50,
+        background: 'rgba(10,8,20,0.95)',
+        borderBottom: `1px solid ${C.border}`,
+        backdropFilter: 'blur(12px)',
+        padding: '0 28px',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        height: '54px',
+      }}>
+        <a href="/" style={{ fontWeight: 800, fontSize: 17, background: 'linear-gradient(90deg, #a855f7, #ec4899)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', textDecoration: 'none' }}>
+          CamCash
+        </a>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          {user && <span style={{ fontSize: 12, color: C.muted }}>{user.email}</span>}
+          <a href="/dashboard?tab=live" style={{ padding: '6px 14px', background: 'rgba(168,85,247,0.15)', border: `1px solid ${C.border}`, borderRadius: 8, color: C.purple, fontWeight: 600, fontSize: 13, textDecoration: 'none' }}>
+            Full Dashboard →
+          </a>
+          <a href="/extension" style={{ padding: '6px 14px', background: 'linear-gradient(135deg, #a855f7, #7c3aed)', color: '#fff', borderRadius: 8, fontWeight: 700, fontSize: 12, textDecoration: 'none' }}>
+            📥 Extension
+          </a>
+        </div>
+      </nav>
+
       {/* Early adopter banner */}
       <div style={{
         background: 'rgba(236,72,153,0.1)',
@@ -261,18 +285,24 @@ export default function LiveMode() {
         alignItems: 'center',
         justifyContent: 'space-between',
         flexWrap: 'wrap',
-        gap: '12px',
+        gap: '16px',
       }}>
-        <div>
-          <div style={{ color: C.purple, fontWeight: '600', fontSize: '15px' }}>
-            CamCash Extension
+        <div style={{ flex: 1 }}>
+          <div style={{ color: C.purple, fontWeight: '700', fontSize: '15px', marginBottom: '4px' }}>
+            💜 Get the CamCash Extension (Free)
           </div>
-          <div style={{ color: C.muted, fontSize: '13px', marginTop: '4px' }}>
-            Load <strong>CamCashWorking-WithCoaching.zip</strong> in Chrome → Extensions → Developer mode → Load unpacked
+          <div style={{ color: C.muted, fontSize: '13px', lineHeight: 1.5 }}>
+            Auto-detects tips on Chaturbate, BongaCams, MyFreeCams &amp; Stripchat.
+            Syncs here in real time — no manual logging.
           </div>
         </div>
-        <div style={{ color: C.dim, fontSize: '12px' }}>
-          Works on Chaturbate · BongaCams · MyFreeCams · Stripchat
+        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
+          <a href="/extension" style={{ padding: '9px 18px', background: 'linear-gradient(135deg, #a855f7, #7c3aed)', color: '#fff', borderRadius: 8, fontWeight: 700, fontSize: 13, textDecoration: 'none' }}>
+            📥 Download Extension →
+          </a>
+          <a href="/dashboard?tab=live" style={{ padding: '9px 18px', background: 'rgba(168,85,247,0.12)', border: '1px solid rgba(168,85,247,0.3)', color: C.purple, borderRadius: 8, fontWeight: 600, fontSize: 13, textDecoration: 'none' }}>
+            Full Dashboard →
+          </a>
         </div>
       </div>
 

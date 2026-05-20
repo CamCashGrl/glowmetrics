@@ -3527,7 +3527,9 @@ const handleCSV = async (file, forcePlatform = null) => {
                         <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.5 }}>
                           Install the CamCash Chrome extension to automatically capture tips from your stream — no manual logging needed.
                         </div>
-                        <div style={{ marginTop: 8, fontSize: 11, color: C.indigo }}>Coming soon</div>
+                        <a href="/extension" target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', marginTop: 10, padding: '7px 16px', background: 'linear-gradient(135deg, #a855f7, #7c3aed)', color: '#fff', borderRadius: 8, fontSize: 12, fontWeight: 700, textDecoration: 'none' }}>
+                          📥 Get the Extension →
+                        </a>
                       </div>
                     </div>
                   </div>

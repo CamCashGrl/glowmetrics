@@ -150,6 +150,20 @@ export default function ExtensionPage() {
           <div style={{ fontSize: '12px', color: C.muted, letterSpacing: '0.04em' }}>
             v2.1.0 · Chrome · 17 KB · No account needed
           </div>
+
+          {/* QR code — scan to open this page on mobile */}
+          <div style={{ marginTop: '36px', display: 'inline-block', padding: '16px', background: '#fff', borderRadius: '14px', boxShadow: '0 0 32px rgba(168,85,247,0.25)' }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=https%3A%2F%2Fwww.camcashgrl.com%2Fextension&color=7c3aed&bgcolor=ffffff&qzone=1"
+              alt="QR code to download the CamCash extension"
+              width="160" height="160"
+              style={{ display: 'block', borderRadius: '6px' }}
+            />
+          </div>
+          <div style={{ fontSize: '12px', color: C.muted, marginTop: '10px' }}>
+            Scan to open on another device
+          </div>
         </div>
       </section>
 
@@ -249,8 +263,8 @@ export default function ExtensionPage() {
         </div>
       </section>
 
-      {/* ── 6. HOW IT WORKS ── */}
-      <section style={{ padding: '0 24px 72px', textAlign: 'center' }}>
+      {/* ── 6. HOW IT WORKS / DOWNLOAD ── */}
+      <section id="download" style={{ padding: '0 24px 72px', textAlign: 'center' }}>
         <div style={{ maxWidth: '760px', margin: '0 auto' }}>
           <h2 style={{ fontSize: '26px', fontWeight: '800', color: C.white, margin: '0 0 40px' }}>
             Get started in 60 seconds
@@ -280,6 +294,27 @@ export default function ExtensionPage() {
                 <div style={{ fontSize: '13px', color: C.text, lineHeight: '1.6' }}>{s.desc}</div>
               </div>
             ))}
+          </div>
+
+          {/* Download button inside the how-it-works section */}
+          <div style={{ marginTop: '40px' }}>
+            <a
+              href="/camcash-extension.zip"
+              download
+              style={{
+                display: 'inline-block',
+                background: 'linear-gradient(135deg, #a855f7, #7c3aed)',
+                color: '#fff', textDecoration: 'none',
+                padding: '15px 40px', borderRadius: '12px',
+                fontSize: '16px', fontWeight: '800',
+                boxShadow: '0 0 28px rgba(168,85,247,0.3)',
+              }}
+            >
+              📥 Download ZIP — Free
+            </a>
+            <div style={{ fontSize: '12px', color: C.muted, marginTop: '12px' }}>
+              Chrome → Extensions → Developer mode → Load unpacked
+            </div>
           </div>
         </div>
       </section>
