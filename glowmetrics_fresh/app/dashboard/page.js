@@ -869,6 +869,7 @@ export default function Dashboard() {
   const [newTipCount, setNewTipCount] = useState(0)
   const prevTipCountRef = useRef(0)
   const realtimeChannelRef = useRef(null)
+  const liveTipsChannelRef = useRef(null)
   const refreshTimerRef = useRef(null)
 
   const isBetaUser = true
@@ -1035,6 +1036,33 @@ export default function Dashboard() {
         .subscribe()
       realtimeChannelRef.current = channel
 
+      // ── EXTENSION LIVE TIPS — realtime feed from chrome extension sync ──
+      const liveTipsChannel = supabase
+        .channel(`live_tips_ext_${user.id}`)
+        .on('postgres_changes', {
+          event: 'INSERT', schema: 'public', table: 'live_tips',
+          filter: `user_id=eq.${user.id}`
+        }, (payload) => {
+          const tip = payload.new
+          const rate = 0.05
+          const tokens = parseInt(tip.tokens) || 0
+          const usd = parseFloat(tip.usd) || parseFloat((tokens * rate).toFixed(2))
+          const normalized = {
+            username: tip.username || 'Unknown',
+            tokens,
+            usd,
+            normalizedRevenue: usd,
+            sourceUsed: 'extension',
+            timestamp: new Date(tip.received_at || Date.now()),
+            platform: tip.platform || 'chaturbate',
+          }
+          setLiveActive(true)
+          setLiveStartTime(prev => prev || new Date())
+          setLiveEvents(prev => [...prev, normalized])
+        })
+        .subscribe()
+      liveTipsChannelRef.current = liveTipsChannel
+
       // ── LIGHTWEIGHT 30s analytics re-run (NO DB calls — just re-runs engine on cached data)
       // Full reloads only happen on: initial load, CSV upload, focus after 5+ min away
       refreshTimerRef.current = setInterval(() => {
@@ -1053,6 +1081,7 @@ export default function Dashboard() {
     })
     return () => {
       if (realtimeChannelRef.current) supabase.removeChannel(realtimeChannelRef.current)
+      if (liveTipsChannelRef.current) supabase.removeChannel(liveTipsChannelRef.current)
       if (refreshTimerRef.current) clearInterval(refreshTimerRef.current)
       // minuteTimer cleared inline
     }
@@ -3521,13 +3550,19 @@ const handleCSV = async (file, forcePlatform = null) => {
                         )}
                       </div>
 
-                      {/* EXTENSION CTA */}
-                      <div style={{ borderRadius: 12, padding: '14px 16px', background: 'rgba(124,92,255,0.08)', border: '1px solid rgba(124,92,255,0.25)', textAlign: 'center' }}>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: C.white, marginBottom: 4 }}>⚡ Auto-capture tips</div>
-                        <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.5 }}>
-                          Install the CamCash Chrome extension to automatically capture tips from your stream — no manual logging needed.
+                      {/* EXTENSION STATUS */}
+                      <div style={{ borderRadius: 12, padding: '14px 16px', background: liveEvents.some(e => e.sourceUsed === 'extension') ? 'rgba(16,185,129,0.08)' : 'rgba(124,92,255,0.08)', border: `1px solid ${liveEvents.some(e => e.sourceUsed === 'extension') ? 'rgba(16,185,129,0.3)' : 'rgba(124,92,255,0.25)'}` }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                          <div style={{ width: 7, height: 7, borderRadius: '50%', background: liveEvents.some(e => e.sourceUsed === 'extension') ? C.green : C.muted, boxShadow: liveEvents.some(e => e.sourceUsed === 'extension') ? `0 0 6px ${C.green}` : 'none' }} />
+                          <div style={{ fontSize: 13, fontWeight: 700, color: C.white }}>
+                            {liveEvents.some(e => e.sourceUsed === 'extension') ? 'Extension Connected' : '⚡ Auto-capture tips'}
+                          </div>
                         </div>
-                        <div style={{ marginTop: 8, fontSize: 11, color: C.indigo }}>Coming soon</div>
+                        <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.5 }}>
+                          {liveEvents.some(e => e.sourceUsed === 'extension')
+                            ? `${liveEvents.filter(e => e.sourceUsed === 'extension').length} tip${liveEvents.filter(e => e.sourceUsed === 'extension').length !== 1 ? 's' : ''} auto-captured from your stream`
+                            : 'Install the CamCash Chrome extension — tips appear here automatically as they come in.'}
+                        </div>
                       </div>
                     </div>
                   </div>
