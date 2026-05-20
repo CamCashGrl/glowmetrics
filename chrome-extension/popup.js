@@ -195,3 +195,15 @@ function escapeHtml(text) {
 }
 
 setInterval(loadTips, 5000);
+
+// Test tip button
+document.getElementById('test-tip-btn').addEventListener('click', () => {
+  chrome.runtime.sendMessage({
+    action: 'tip',
+    username: 'TestTipper',
+    tokens: 50,
+    platform: 'chaturbate',
+  }, () => {
+    loadTips();
+  });
+});
