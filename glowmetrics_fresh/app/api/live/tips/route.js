@@ -39,16 +39,6 @@ export async function POST(req) {
       return Response.json({ error: 'Invalid or expired token' }, { status: 401, headers: cors });
     }
 
-    const { data: profile, error: profileError } = await supabaseAdmin
-      .from('profiles')
-      .select('username, id')
-      .eq('id', user.id)
-      .single();
-
-    if (profileError || !profile) {
-      return Response.json({ error: 'User profile not found' }, { status: 404, headers: cors });
-    }
-
     const body = await req.json();
     const { username, amount, platform, timestamp } = body;
 
