@@ -379,6 +379,9 @@ export default function LandingPage() {
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <span style={{ fontSize: 12, color: "#334155", padding: "3px 10px", borderRadius: 20, background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.2)", color: "#F59E0B", fontWeight: 600 }}>Free Beta</span>
+          <a href="/demo" style={{ padding: "7px 18px", borderRadius: 8, background: "rgba(168,85,247,0.1)", border: "1px solid rgba(168,85,247,0.25)", color: "#a855f7", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>
+            Try Demo
+          </a>
           <button onClick={() => document.getElementById("lp-auth-bottom")?.scrollIntoView({ behavior: "smooth" })}
             style={{ padding: "7px 18px", borderRadius: 8, background: "rgba(34,211,238,0.1)", border: "1px solid rgba(34,211,238,0.25)", color: "#22D3EE", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
             Sign In
