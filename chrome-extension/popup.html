@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>CamCash</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      width: 320px;
+      background: #0d0f14;
+      color: #f1f5f9;
+      font-family: system-ui, -apple-system, sans-serif;
+      font-size: 13px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Header */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 14px;
+      border-bottom: 1px solid #1e2232;
+    }
+    .logo {
+      font-size: 16px;
+      font-weight: 800;
+      background: linear-gradient(135deg, #a855f7, #ec4899);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    #status {
+      font-size: 10px;
+      font-weight: 600;
+      padding: 3px 8px;
+      border-radius: 20px;
+      background: rgba(107,114,128,0.2);
+      color: #9ca3af;
+    }
+
+    /* Auth section */
+    #auth-section { padding: 16px 14px; }
+    .section-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: #e2e8f0;
+      margin-bottom: 12px;
+    }
+    .field { margin-bottom: 9px; }
+    .field label {
+      display: block;
+      font-size: 10px;
+      color: #64748b;
+      margin-bottom: 3px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .field input {
+      width: 100%;
+      padding: 8px 10px;
+      background: #161b2e;
+      border: 1px solid #1e2232;
+      border-radius: 7px;
+      color: #f1f5f9;
+      font-size: 13px;
+      outline: none;
+    }
+    .field input:focus { border-color: #7c5cff; }
+
+    #auth-error {
+      display: none;
+      font-size: 11px;
+      color: #f87171;
+      margin: 6px 0;
+    }
+
+    .btn {
+      width: 100%;
+      padding: 9px;
+      border: none;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      margin-top: 6px;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #7c5cff, #ec4899);
+      color: white;
+    }
+    .btn-primary:hover { opacity: 0.9; }
+    .btn-primary:disabled { opacity: 0.5; cursor: wait; }
+    .btn-ghost {
+      background: #161b2e;
+      color: #64748b;
+      border: 1px solid #1e2232;
+      margin-top: 4px;
+    }
+    .btn-ghost:hover { color: #94a3b8; }
+
+    /* Dashboard section */
+    #dashboard-section { display: none; }
+
+    #user-info {
+      padding: 8px 14px;
+      font-size: 11px;
+      color: #4ade80;
+      border-bottom: 1px solid #1e2232;
+    }
+
+    /* Coach */
+    #coach-box {
+      padding: 10px 14px;
+      border-bottom: 1px solid #1e2232;
+    }
+    .coach-label {
+      font-size: 9px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: #475569;
+      margin-bottom: 6px;
+    }
+    #coach-msg {
+      font-size: 12px;
+      color: #cbd5e1;
+      background: #161b2e;
+      padding: 7px 10px;
+      border-radius: 7px;
+      line-height: 1.4;
+      min-height: 32px;
+    }
+
+    /* Tips */
+    .tips-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 14px 4px;
+    }
+    .tips-label {
+      font-size: 9px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: #475569;
+    }
+    #tips-list { padding: 0 14px 10px; }
+
+    .tip-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 5px 0;
+      border-bottom: 1px solid #1a2035;
+      font-size: 12px;
+    }
+    .tip-item:last-child { border-bottom: none; }
+    .tip-username { color: #a78bfa; font-weight: 600; }
+    .tip-amount   { color: #10b981; font-weight: 600; }
+    .tip-time     { color: #334155; font-size: 10px; }
+    .empty-state  { color: #334155; font-size: 12px; padding: 8px 0; text-align: center; }
+
+    /* Whale alert */
+    #whale-alert {
+      display: none;
+      margin: 0 14px 8px;
+      padding: 7px 10px;
+      background: rgba(234,179,8,0.1);
+      border: 1px solid rgba(234,179,8,0.3);
+      border-radius: 7px;
+      font-size: 12px;
+      color: #fbbf24;
+    }
+
+    /* Footer */
+    .footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 14px;
+      border-top: 1px solid #1e2232;
+    }
+    .footer a {
+      font-size: 11px;
+      color: #7c5cff;
+      text-decoration: none;
+      opacity: 0.8;
+    }
+    .footer a:hover { opacity: 1; }
+    #logout-btn {
+      font-size: 10px;
+      color: #475569;
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0;
+    }
+    #logout-btn:hover { color: #94a3b8; }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <div class="header">
+    <div class="logo">CamCash</div>
+    <div id="status">Inactive</div>
+  </div>
+
+  <!-- Auth -->
+  <div id="auth-section">
+    <div class="section-title">Sign in to CamCash</div>
+    <div class="field">
+      <label>Email</label>
+      <input type="email" id="email" placeholder="you@example.com" autocomplete="email" />
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input type="password" id="password" placeholder="••••••••" autocomplete="current-password" />
+    </div>
+    <div id="auth-error"></div>
+    <button class="btn btn-primary" id="login-btn">Sign In</button>
+    <button class="btn btn-ghost" id="guest-btn">Continue as Guest (no sync)</button>
+  </div>
+
+  <!-- Dashboard -->
+  <div id="dashboard-section">
+    <div id="user-info"></div>
+
+    <!-- Whale alert -->
+    <div id="whale-alert"></div>
+
+    <!-- Coach -->
+    <div id="coach-box">
+      <div class="coach-label">Live Coach</div>
+      <div id="coach-msg">Coaching tips will appear during your stream</div>
+    </div>
+
+    <!-- Tips -->
+    <div class="tips-header">
+      <span class="tips-label">Recent Tips</span>
+    </div>
+    <div id="tips-list">
+      <div class="empty-state">No tips detected yet this session</div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <a href="https://www.camcashgrl.com/live" target="_blank">Dashboard →</a>
+      <button id="test-tip-btn" style="font-size:10px;color:#7c5cff;background:none;border:1px solid #1e2232;border-radius:5px;padding:3px 8px;cursor:pointer;">Test Tip</button>
+      <button id="logout-btn">Sign out</button>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
