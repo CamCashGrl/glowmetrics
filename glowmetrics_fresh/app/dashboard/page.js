@@ -870,6 +870,18 @@ export default function Dashboard() {
   const prevTipCountRef = useRef(0)
   const realtimeChannelRef = useRef(null)
   const refreshTimerRef = useRef(null)
+  // ── LIVE MODE INTEGRITY REFS ─────────────────────────────────────────
+  // Singleton channel — prevents duplicate subscriptions on tab switch / re-render
+  const liveTipsChannelRef  = useRef(null)
+  // True while the initial 12h historical query is still loading — coaching
+  // and alerts are suppressed during this window to prevent fake signals
+  const isHydratingHistory  = useRef(false)
+  // Guards against processing the same tip twice (late duplicates, reconnect
+  // replays, or overlapping realtime + historical payloads)
+  const processedTipIds     = useRef(new Set())
+  // Per-alert cooldown timestamps — { [alertKey]: lastFiredMs }
+  // Prevents the same coaching signal from firing more than once per window
+  const coachingCooldowns   = useRef({})
 
   const isBetaUser = true
   const isPro = true
@@ -950,30 +962,129 @@ export default function Dashboard() {
       if (event.data?.type !== 'CAMCASH_TIP_EVENT') return
       const { event: tipEvent } = event.data
       if (!tipEvent || !tipEvent.username) return
-      // Only feed into live mode if active
+
+      // Deduplication: extension may fire the same event twice on reload
+      const dedupKey = tipEvent.id || `${tipEvent.username}:${tipEvent.tokens}:${tipEvent.timestamp}`
+      if (processedTipIds.current.has(dedupKey)) return
+      processedTipIds.current.add(dedupKey)
+
+      const rate    = 0.05
+      const tokens  = parseInt(tipEvent.tokens) || 0
+      const usd     = parseFloat(tipEvent.usd)  || 0
+      const normalized = {
+        _id:              dedupKey,
+        _isHistory:       false,
+        username:         tipEvent.username,
+        tokens,
+        usd,
+        normalizedRevenue: usd > 0 ? usd : parseFloat((tokens * rate).toFixed(2)),
+        sourceUsed:       usd > 0 ? 'usd' : 'tokens',
+        timestamp:        new Date(tipEvent.timestamp || Date.now()),
+        platform:         tipEvent.platform || 'Unknown',
+        source:           'extension',
+      }
+      setLiveEvents(prev => [...prev, normalized])
+      // Auto-activate live mode on first real tip
       setLiveActive(active => {
-        if (active) {
-          const rate = 0.05 // will use tokenRates from state in real impl
-          const tokens = parseInt(tipEvent.tokens) || 0
-          const usd    = parseFloat(tipEvent.usd) || 0
-          const normalized = {
-            username: tipEvent.username,
-            tokens,
-            usd,
-            normalizedRevenue: usd > 0 ? usd : parseFloat((tokens * rate).toFixed(2)),
-            sourceUsed: usd > 0 ? 'usd' : 'tokens',
-            timestamp: new Date(tipEvent.timestamp || Date.now()),
-            platform: tipEvent.platform || 'Unknown',
-            source: 'extension',
-          }
-          setLiveEvents(prev => [...prev, normalized])
-        }
-        return active
+        if (!active) setLiveStartTime(prev => prev || new Date())
+        return true
       })
     }
     window.addEventListener('message', handleExtensionMessage)
     return () => window.removeEventListener('message', handleExtensionMessage)
   }, [])
+
+  // ── LIVE TIPS: historical hydration + realtime subscription ─────────────
+  // Runs whenever the live tab is opened and a user is present.
+  // SAFETY RULES:
+  //   1. Singleton — only one channel ever; skips if already subscribed
+  //   2. isHydratingHistory.current = true during the initial DB query so
+  //      coaching / alerts / animations are suppressed for stale data
+  //   3. Every event is checked against processedTipIds before processing
+  //   4. Historical events get _isHistory:true so computeState() excludes
+  //      them from timing/pace calculations (only uses them for totals)
+  useEffect(() => {
+    if (activeTab !== 'live' || !user) return
+    if (liveTipsChannelRef.current) return // singleton guard
+
+    isHydratingHistory.current = true
+    const since = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString()
+
+    supabase
+      .from('live_tips')
+      .select('*')
+      .eq('user_id', user.id)
+      .gte('received_at', since)
+      .order('received_at', { ascending: true })
+      .then(({ data }) => {
+        if (data?.length) {
+          const normalized = data.map(tip => {
+            const id = tip.id
+            processedTipIds.current.add(id)
+            return {
+              _id:              id,
+              _isHistory:       true,
+              username:         tip.username || 'Unknown',
+              tokens:           parseInt(tip.tokens) || 0,
+              usd:              parseFloat(tip.usd) || 0,
+              normalizedRevenue: parseFloat(tip.usd) || parseFloat(((tip.tokens || 0) * 0.05).toFixed(2)),
+              sourceUsed:       tip.source || 'extension',
+              timestamp:        new Date(tip.received_at),
+              platform:         tip.platform || 'extension',
+              source:           'history',
+            }
+          })
+          setLiveEvents(prev => {
+            const existingIds = new Set(prev.map(e => e._id).filter(Boolean))
+            return [...prev, ...normalized.filter(t => !existingIds.has(t._id))]
+          })
+        }
+        isHydratingHistory.current = false
+      })
+
+    const channel = supabase
+      .channel(`live_tips_dash_${user.id}`)
+      .on('postgres_changes', {
+        event: 'INSERT', schema: 'public', table: 'live_tips',
+        filter: `user_id=eq.${user.id}`,
+      }, (payload) => {
+        if (isHydratingHistory.current) return
+        const tip = payload.new
+        if (!tip?.id) return
+        if (processedTipIds.current.has(tip.id)) return
+        processedTipIds.current.add(tip.id)
+
+        const normalized = {
+          _id:              tip.id,
+          _isHistory:       false,
+          username:         tip.username || 'Unknown',
+          tokens:           parseInt(tip.tokens) || 0,
+          usd:              parseFloat(tip.usd) || 0,
+          normalizedRevenue: parseFloat(tip.usd) || parseFloat(((tip.tokens || 0) * 0.05).toFixed(2)),
+          sourceUsed:       tip.source || 'extension',
+          timestamp:        new Date(tip.received_at),
+          platform:         tip.platform || 'extension',
+          source:           'extension',
+        }
+        setLiveEvents(prev => [...prev, normalized])
+        setLiveActive(prev => {
+          if (!prev) setLiveStartTime(st => st || new Date())
+          return true
+        })
+      })
+      .subscribe()
+
+    liveTipsChannelRef.current = channel
+
+    return () => {
+      if (liveTipsChannelRef.current) {
+        supabase.removeChannel(liveTipsChannelRef.current)
+        liveTipsChannelRef.current = null
+      }
+      isHydratingHistory.current = false
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, user])
 
   useEffect(() => {
     // Restore saved tab
@@ -3231,9 +3342,11 @@ const handleCSV = async (file, forcePlatform = null) => {
 
           const computeState = () => {
             if (!liveEvents.length || !liveStartTime) return null
-            const nowMs = Date.now()
+            const nowMs   = Date.now()
             const startMs = new Date(liveStartTime).getTime()
             const elapsedMins = Math.max((nowMs - startMs) / 60000, 0.1)
+
+            // ALL events — used for totals and the tip feed display
             let totalRevenue = 0, totalTokens = 0
             const tipperMap = {}
             liveEvents.forEach(ev => {
@@ -3241,74 +3354,150 @@ const handleCSV = async (file, forcePlatform = null) => {
               totalTokens  += ev.tokens || 0
               tipperMap[ev.username] = (tipperMap[ev.username] || 0) + (ev.normalizedRevenue || 0)
             })
-            const sorted = [...liveEvents].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
-            const lastTip = sorted[0]
-            const timeSinceLast = lastTip
-              ? parseFloat(((nowMs - new Date(lastTip.timestamp).getTime()) / 60000).toFixed(1))
+
+            // LIVE-ONLY events — used for time-sensitive coaching signals
+            // Historical events must NEVER trigger pace/timing alerts
+            const liveOnly = liveEvents.filter(e => !e._isHistory)
+            const sortedLive = [...liveOnly].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+            const lastLiveTip = sortedLive[0]
+            const timeSinceLast = lastLiveTip
+              ? parseFloat(((nowMs - new Date(lastLiveTip.timestamp).getTime()) / 60000).toFixed(1))
               : null
+
             const goalProgress = liveGoalTokens > 0
               ? Math.min(100, Math.round((totalTokens / liveGoalTokens) * 100))
               : 0
-            const tpm = parseFloat((liveEvents.length / elapsedMins).toFixed(2))
-            const avgTip = parseFloat((totalRevenue / liveEvents.length).toFixed(2))
+
+            const tpm = liveOnly.length > 0
+              ? parseFloat((liveOnly.length / elapsedMins).toFixed(2))
+              : 0
+            const avgTip = liveOnly.length > 0
+              ? parseFloat((liveOnly.reduce((s, e) => s + (e.normalizedRevenue||0), 0) / liveOnly.length).toFixed(2))
+              : 0
+
+            // Pace uses only live events split into first/second half of elapsed time
             const midMs = startMs + (nowMs - startMs) / 2
-            const fh = liveEvents.filter(e => new Date(e.timestamp).getTime() <= midMs)
-            const sh = liveEvents.filter(e => new Date(e.timestamp).getTime() > midMs)
+            const fh = liveOnly.filter(e => new Date(e.timestamp).getTime() <= midMs)
+            const sh = liveOnly.filter(e => new Date(e.timestamp).getTime() > midMs)
             const hm = elapsedMins / 2
             const fUPM = hm > 0 ? fh.reduce((s, e) => s + (e.normalizedRevenue||0), 0) / hm : 0
             const sUPM = hm > 0 ? sh.reduce((s, e) => s + (e.normalizedRevenue||0), 0) / hm : 0
+
             let pace = 'unknown'
-            if (elapsedMins >= 5) {
-              if (sUPM > fUPM * 1.15) pace = 'above'
+            if (liveOnly.length >= 3 && elapsedMins >= 5) {
+              if (sUPM > fUPM * 1.15)      pace = 'above'
               else if (sUPM < fUPM * 0.75) pace = 'below'
-              else pace = 'on_track'
+              else                          pace = 'on_track'
             }
             const topEntry = Object.entries(tipperMap).sort((a, b) => b[1] - a[1])[0]
             return {
-              totalRevenue: parseFloat(totalRevenue.toFixed(2)),
-              totalTokens, elapsedMins: parseFloat(elapsedMins.toFixed(1)),
-              tipsPerMinute: tpm, avgTipValue: avgTip,
-              timeSinceLastTip: timeSinceLast, goalProgress, paceStatus: pace,
-              topTipper: topEntry ? { username: topEntry[0], revenue: parseFloat(topEntry[1].toFixed(2)) } : null,
-              firstHalfUPM: parseFloat(fUPM.toFixed(3)),
-              secondHalfUPM: parseFloat(sUPM.toFixed(3)),
-              currentUPM: parseFloat((totalRevenue / elapsedMins).toFixed(3)),
+              totalRevenue:    parseFloat(totalRevenue.toFixed(2)),
+              totalTokens,
+              elapsedMins:     parseFloat(elapsedMins.toFixed(1)),
+              tipsPerMinute:   tpm,
+              avgTipValue:     avgTip,
+              timeSinceLastTip: timeSinceLast,
+              goalProgress,
+              paceStatus:      pace,
+              liveOnlyCount:   liveOnly.length,
+              topTipper:       topEntry ? { username: topEntry[0], revenue: parseFloat(topEntry[1].toFixed(2)) } : null,
+              firstHalfUPM:    parseFloat(fUPM.toFixed(3)),
+              secondHalfUPM:   parseFloat(sUPM.toFixed(3)),
+              currentUPM:      parseFloat((totalRevenue / elapsedMins).toFixed(3)),
             }
           }
 
+          // Coaching cooldown helper — returns true if this alert can fire now.
+          // Each key has its own cooldown window (in milliseconds).
+          const canFireAlert = (key, cooldownMs) => {
+            if (isHydratingHistory.current) return false
+            const last = coachingCooldowns.current[key]
+            if (!last || Date.now() - last > cooldownMs) {
+              coachingCooldowns.current[key] = Date.now()
+              return true
+            }
+            return false
+          }
+
+          // PRIORITY TIERS: CRITICAL → HIGH → MEDIUM → LOW → INFO
+          // Only one alert per priority tier is shown at a time.
+          // Cooldowns prevent the same signal from repeating within the window.
           const getAlerts = (state) => {
-            if (!state) return []
-            const { timeSinceLastTip, paceStatus, goalProgress, topTipper, totalRevenue, elapsedMins } = state
+            // Never fire alerts during history hydration or before real tips arrive
+            if (!state || isHydratingHistory.current) return []
+            if (!liveActive) return []
+
+            const { timeSinceLastTip, paceStatus, goalProgress, topTipper,
+                    totalRevenue, elapsedMins, liveOnlyCount } = state
             const alerts = []
-            if (timeSinceLastTip >= 8)
-              alerts.push({ level: 'critical', icon: '🚨', text: `No tips in ${Math.round(timeSinceLastTip)} min — call out names NOW` })
-            else if (timeSinceLastTip >= 5)
-              alerts.push({ level: 'warning', icon: '⚠️', text: `${Math.round(timeSinceLastTip)} min silence — restart with a quick goal` })
-            if (paceStatus === 'below' && elapsedMins >= 8)
-              alerts.push({ level: 'warning', icon: '📉', text: 'Pace dropping — activate toy or set a micro-goal' })
-            if (paceStatus === 'above' && elapsedMins >= 8)
-              alerts.push({ level: 'success', icon: '🔥', text: "Momentum building — don't break the energy" })
-            if (goalProgress >= 90 && goalProgress < 100)
-              alerts.push({ level: 'critical', icon: '🎯', text: `${goalProgress}% to goal — push NOW, announce the reward` })
-            if (goalProgress >= 100)
-              alerts.push({ level: 'success', icon: '🎉', text: 'Goal hit! Set the next one immediately' })
-            if (topTipper && totalRevenue > 0 && topTipper.revenue / totalRevenue >= 0.45)
-              alerts.push({ level: 'info', icon: '🐳', text: `${topTipper.username} is ${Math.round(topTipper.revenue/totalRevenue*100)}% of revenue — give them attention` })
-            return alerts.slice(0, 4)
+
+            // CRITICAL (cooldown: 3 min) — requires immediate action
+            if (timeSinceLastTip !== null && timeSinceLastTip >= 8) {
+              if (canFireAlert('dead_air_critical', 3 * 60 * 1000))
+                alerts.push({ priority: 1, level: 'critical', icon: '🚨',
+                  text: `No tips in ${Math.round(timeSinceLastTip)} min — call out names NOW` })
+            }
+            if (goalProgress >= 90 && goalProgress < 100) {
+              if (canFireAlert('goal_push', 4 * 60 * 1000))
+                alerts.push({ priority: 1, level: 'critical', icon: '🎯',
+                  text: `${goalProgress}% to goal — push NOW, announce the reward` })
+            }
+
+            // HIGH (cooldown: 5 min)
+            if (timeSinceLastTip !== null && timeSinceLastTip >= 5 && timeSinceLastTip < 8) {
+              if (canFireAlert('dead_air_high', 5 * 60 * 1000))
+                alerts.push({ priority: 2, level: 'warning', icon: '⚠️',
+                  text: `${Math.round(timeSinceLastTip)} min silence — restart with a quick goal` })
+            }
+            if (paceStatus === 'below' && elapsedMins >= 8 && liveOnlyCount >= 3) {
+              if (canFireAlert('pace_below', 5 * 60 * 1000))
+                alerts.push({ priority: 2, level: 'warning', icon: '📉',
+                  text: 'Pace dropping — activate toy or set a micro-goal' })
+            }
+
+            // MEDIUM (cooldown: 8 min)
+            if (paceStatus === 'above' && elapsedMins >= 8 && liveOnlyCount >= 3) {
+              if (canFireAlert('pace_above', 8 * 60 * 1000))
+                alerts.push({ priority: 3, level: 'success', icon: '🔥',
+                  text: "Momentum building — don't break the energy" })
+            }
+            if (goalProgress >= 100) {
+              if (canFireAlert('goal_hit', 10 * 60 * 1000))
+                alerts.push({ priority: 3, level: 'success', icon: '🎉',
+                  text: 'Goal hit! Set the next one immediately' })
+            }
+
+            // INFO (cooldown: 10 min)
+            if (topTipper && totalRevenue > 0 && topTipper.revenue / totalRevenue >= 0.45) {
+              if (canFireAlert(`whale_dep_${topTipper.username}`, 10 * 60 * 1000))
+                alerts.push({ priority: 4, level: 'info', icon: '🐳',
+                  text: `${topTipper.username} is ${Math.round(topTipper.revenue/totalRevenue*100)}% of revenue — give them attention` })
+            }
+
+            return alerts.sort((a, b) => a.priority - b.priority).slice(0, 4)
           }
 
           const getNextAction = (state) => {
-            if (!state) return { text: 'Start your stream to get live coaching' }
-            const { timeSinceLastTip, paceStatus, goalProgress, topTipper, totalRevenue, elapsedMins, tipsPerMinute } = state
+            // No coaching before stream starts, and never from historical data alone
+            if (!state || !liveActive) return { text: 'Start your stream to get live coaching' }
+            if (isHydratingHistory.current) return { text: 'Loading session data…' }
+
+            const { timeSinceLastTip, paceStatus, goalProgress, topTipper,
+                    totalRevenue, elapsedMins, liveOnlyCount } = state
+
+            // Only give coaching once there are real live tips, not just history
+            if (liveOnlyCount === 0)
+              return { text: 'Waiting for your first tip this stream — set a goal to get things started.' }
+
             if (goalProgress >= 90 && goalProgress < 100)
               return { text: `Announce your reward out loud — goal is ${goalProgress}%. Tell chat exactly what happens when you hit it.` }
-            if (timeSinceLastTip >= 6)
+            if (timeSinceLastTip !== null && timeSinceLastTip >= 6)
               return { text: 'Say 3 names in chat right now. "I see [name] — tip to control what I do next."' }
             if (paceStatus === 'below' && elapsedMins >= 8)
               return { text: 'Set a small 50-token goal right now — micro-goals restart momentum when the room slows.' }
             if (topTipper && totalRevenue > 0 && topTipper.revenue / totalRevenue >= 0.4)
               return { text: `Thank ${topTipper.username} by name and offer them something exclusive for their next tip.` }
-            if (elapsedMins < 15 && state.totalRevenue < 2)
+            if (elapsedMins < 15 && liveOnlyCount < 3)
               return { text: 'Set a 200-token opening goal and announce it. Early goals train the room to tip.' }
             return { text: 'Keep energy high — acknowledge every tipper by name. Recognition drives repeat tipping.' }
           }

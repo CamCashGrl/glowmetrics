@@ -12,6 +12,18 @@ let sessionTokens = 0;
 let sessionUsd = 0;
 let topTipper = null;
 
+// Coaching cooldowns — prevents the same signal repeating within its window.
+// { [signalKey]: lastFiredTimestampMs }
+const coachCooldowns = {};
+function canCoach(key, cooldownMs) {
+  const last = coachCooldowns[key];
+  if (!last || Date.now() - last > cooldownMs) {
+    coachCooldowns[key] = Date.now();
+    return true;
+  }
+  return false;
+}
+
 // ─── CORS helper (dynamic origin) ────────────────────────────────────────────
 // All auth/tip API responses now allow any chrome-extension:// origin.
 // The actual extension ID doesn't need to be hardcoded.
@@ -172,7 +184,9 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === 'dead_air' && session) {
     const sinceLastTip = lastTipTs ? Date.now() - lastTipTs : Infinity;
     if (sinceLastTip > 5 * 60 * 1000) {
-      addCoach(sessionTips.length > 0 ? 'quiet' : 'dead_air');
+      // 2-min cooldown prevents the same alarm firing twice in quick succession
+      const type = sessionTips.length > 0 ? 'quiet' : 'dead_air';
+      if (canCoach(`alarm_${type}`, 2 * 60 * 1000)) addCoach(type);
     }
   }
   if (alarm.name === 'whale_refresh') {
@@ -269,12 +283,12 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
       chrome.storage.local.set({ [storageKey]: { ...tipRecord, synced: true } });
     });
 
-    // Tip streak coaching: 3+ tips in 60s
+    // Tip streak coaching: 3+ tips in 60s — cooldown 3 min
     const recentCount = sessionTips.filter(t => lastTipTs - t.ts < 60000).length;
-    if (recentCount >= 3) addCoach('streak');
+    if (recentCount >= 3 && canCoach('streak', 3 * 60 * 1000)) addCoach('streak');
 
-    // Whale check on tip
-    if (isWhale(username)) addCoach('whale');
+    // Whale coach on tip — cooldown 5 min per whale
+    if (isWhale(username) && canCoach(`whale_tip_${username}`, 5 * 60 * 1000)) addCoach('whale');
 
     broadcast({ action: 'state', state: getState() });
     return false;
@@ -285,7 +299,8 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
     const { username } = msg;
     if (isWhale(username)) {
       const w = getWhale(username);
-      addCoach('whale');
+      // 5-min cooldown per whale so re-entries don't spam
+      if (canCoach(`whale_enter_${username}`, 5 * 60 * 1000)) addCoach('whale');
 
       chrome.notifications.create({
         type: 'basic',
