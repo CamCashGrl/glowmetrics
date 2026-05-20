@@ -156,6 +156,7 @@ export default function GuidesPage() {
           <a
             key={guide.slug}
             href={`/guides/${guide.slug}`}
+            className="guide-card"
             style={{
               display: 'block',
               background: '#0d1117',
@@ -201,6 +202,9 @@ export default function GuidesPage() {
       </div>
 
       <SiteFooter />
+      <style>{`
+        .guide-card:hover { border-color: rgba(168,85,247,0.4) !important; background: #110d1a !important; }
+      `}</style>
     </div>
   )
 }

@@ -17,6 +17,17 @@ let topTipper = null;
 // Tip sync always awaits this before trying to use session.
 let restorePromise = null;
 
+// Coaching cooldowns — prevents the same signal repeating within its window.
+const coachCooldowns = {};
+function canCoach(key, cooldownMs) {
+  const last = coachCooldowns[key];
+  if (!last || Date.now() - last > cooldownMs) {
+    coachCooldowns[key] = Date.now();
+    return true;
+  }
+  return false;
+}
+
 // ─── Persistence ─────────────────────────────────────────────────────────────
 async function save() {
   await chrome.storage.local.set({ _bg_whales: whales, _bg_coachMsgs: coachMsgs });
@@ -44,7 +55,7 @@ function sbHeaders(token) {
 
 // ─── Tip sync — writes directly to Supabase live_tips table ──────────────────
 async function syncTip({ username, tokens, platform, timestamp }) {
-  await restorePromise; // wait for session to be loaded (fixes race on worker wake-up)
+  await restorePromise;
   if (!session) return;
   const usd = parseFloat((tokens * 0.05).toFixed(2));
   try {
@@ -56,8 +67,7 @@ async function syncTip({ username, tokens, platform, timestamp }) {
         username:    username.trim(),
         tokens:      parseInt(tokens, 10),
         usd,
-        platform:    platform.toLowerCase(),
-        source:      'extension',
+        source:      platform ? platform.toLowerCase() : 'extension',
         received_at: timestamp || new Date().toISOString(),
       }),
     });
@@ -143,6 +153,7 @@ function addCoach(type) {
   if (coachMsgs.length > 8) coachMsgs.length = 8;
   save();
   broadcast({ action: 'state', state: getState() });
+  broadcastOverlay();
 }
 
 // ─── Alarms ───────────────────────────────────────────────────────────────────
@@ -155,7 +166,8 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === 'dead_air' && session) {
     const sinceLastTip = lastTipTs ? Date.now() - lastTipTs : Infinity;
     if (sinceLastTip > 5 * 60 * 1000) {
-      addCoach(sessionTips.length > 0 ? 'quiet' : 'dead_air');
+      const type = sessionTips.length > 0 ? 'quiet' : 'dead_air';
+      if (canCoach(`alarm_${type}`, 2 * 60 * 1000)) addCoach(type);
     }
   }
   if (alarm.name === 'whale_refresh') await loadWhales();
@@ -172,6 +184,25 @@ function getState() {
 }
 
 function broadcast(msg) { chrome.runtime.sendMessage(msg).catch(() => {}); }
+
+// Send overlay state to all active cam-site tabs
+async function broadcastOverlay() {
+  const overlayMsg = { action: 'overlay_state', state: getState() };
+  try {
+    const tabs = await chrome.tabs.query({ url: [
+      'https://chaturbate.com/*',
+      'https://*.chaturbate.com/*',
+      'https://bongacams.com/*',
+      'https://*.bongacams.com/*',
+      'https://myfreecams.com/*',
+      'https://*.myfreecams.com/*',
+    ]});
+    for (const tab of tabs) {
+      chrome.tabs.sendMessage(tab.id, overlayMsg).catch(() => {});
+    }
+  } catch (_) {}
+}
+
 function isWhale(u) { return whales.some(w => w.username.toLowerCase() === u.toLowerCase()); }
 function getWhale(u) { return whales.find(w => w.username.toLowerCase() === u.toLowerCase()); }
 
@@ -185,7 +216,6 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
     return true;
   }
 
-  // Content / popup: tip detected
   if (msg.action === 'tip') {
     const { username, tokens, platform } = msg;
     lastTipTs = Date.now();
@@ -198,28 +228,26 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
     sessionUsd    += usd;
     if (!topTipper || tokens > topTipper.tokens) topTipper = tip;
 
-    // Write to chrome.storage so popup loadTips() can display it
     const storageKey = `tip_${lastTipTs}`;
     const tipRecord  = { username, amount: tokens, platform, timestamp: new Date(lastTipTs).toISOString(), synced: false };
     chrome.storage.local.set({ [storageKey]: tipRecord });
 
-    // Prune: keep only 100 newest tip keys
     chrome.storage.local.get(null, (items) => {
       const keys = Object.keys(items).filter(k => k.startsWith('tip_')).sort().reverse();
       if (keys.length > 100) chrome.storage.local.remove(keys.slice(100));
     });
 
-    // Sync directly to Supabase (awaits restorePromise to handle worker wake-up race)
     syncTip({ username, tokens, platform, timestamp: new Date(lastTipTs).toISOString() }).then(() => {
       chrome.storage.local.set({ [storageKey]: { ...tipRecord, synced: true } });
     });
 
-    // Coaching
+    // Coaching with cooldowns — prevents spam
     const recentCount = sessionTips.filter(t => lastTipTs - t.ts < 60000).length;
-    if (recentCount >= 3) addCoach('streak');
-    if (isWhale(username)) addCoach('whale');
+    if (recentCount >= 3 && canCoach('streak', 3 * 60 * 1000)) addCoach('streak');
+    if (isWhale(username) && canCoach(`whale_tip_${username}`, 5 * 60 * 1000)) addCoach('whale');
 
     broadcast({ action: 'state', state: getState() });
+    broadcastOverlay();
     return false;
   }
 
@@ -227,7 +255,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
     const { username } = msg;
     if (isWhale(username)) {
       const w = getWhale(username);
-      addCoach('whale');
+      if (canCoach(`whale_enter_${username}`, 5 * 60 * 1000)) addCoach('whale');
       chrome.notifications.create({
         type: 'basic', iconUrl: chrome.runtime.getURL('icon.png'),
         title: '🐋 Whale Alert!',
@@ -235,12 +263,14 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
         priority: 2,
       });
       broadcast({ action: 'whale_alert', username, tokens: w.tokens });
+      broadcastOverlay();
     }
     return false;
   }
 
   if (msg.action === 'connected') {
     broadcast({ action: 'state', state: getState() });
+    broadcastOverlay();
     return false;
   }
 

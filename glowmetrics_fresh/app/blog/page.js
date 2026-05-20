@@ -146,6 +146,7 @@ export default function BlogPage() {
           <a
             key={post.slug}
             href={`/blog/${post.slug}`}
+            className="blog-card"
             style={{
               display: 'block',
               background: '#0d1117',
@@ -191,6 +192,9 @@ export default function BlogPage() {
       </div>
 
       <SiteFooter />
+      <style>{`
+        .blog-card:hover { border-color: rgba(168,85,247,0.4) !important; background: #110d1a !important; }
+      `}</style>
     </div>
   )
 }

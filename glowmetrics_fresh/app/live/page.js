@@ -96,6 +96,9 @@ export default function LiveMode() {
           <a href="/dashboard" style={{ padding: '7px 16px', background: `rgba(168,85,247,0.15)`, border: `1px solid ${C.border}`, borderRadius: 8, color: C.purple, fontWeight: 600, fontSize: 13, textDecoration: 'none' }}>
             Full Dashboard →
           </a>
+          <a href="/extension" style={{ padding: '7px 14px', background: 'linear-gradient(135deg, #a855f7, #7c3aed)', color: '#fff', borderRadius: 8, fontWeight: 700, fontSize: 12, textDecoration: 'none' }}>
+            📥 Extension
+          </a>
         </div>
       </div>
 

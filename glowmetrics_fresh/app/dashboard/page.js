@@ -3,6 +3,10 @@ import React, { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
 import { parseCSV, aggregateRows as runEngine } from "../../lib/analytics"
+import { computeRoomHealth, ROOM_STATES, MOMENTUM_DIRECTIONS } from "../../lib/analytics/roomHealth"
+import { computeRevenueVelocity, computeLiveComparison } from "../../lib/analytics/velocity"
+import { detectSessionPhase, PHASES, getRecoveryActions, getGoalStrategy } from "../../lib/analytics/sessionPhase"
+import { computeOpportunityScore, computeStreamHealth } from "../../lib/analytics/opportunity"
 import CSVImport from "./CSVImport"
 import Sidebar from "./Sidebar"
 import SiteFooter from "../components/SiteFooter"
@@ -877,6 +881,15 @@ export default function Dashboard() {
   const liveTipsChannelRef = useRef(null)
   const refreshTimerRef = useRef(null)
   const liveTickerRef = useRef(null)
+  // ── LIVE MODE INTELLIGENCE ────────────────────────────────────────────
+  const [liveStrategy, setLiveStrategy]       = useState('balanced')
+  const [coachingHistory, setCoachingHistory] = useState([])
+  const prevPhaseRef       = useRef(null)
+  const isHydratingHistory = useRef(false)
+  const processedTipIds    = useRef(new Set())
+  const coachingCooldowns  = useRef({})
+  const firedAlertsLog     = useRef([])
+  const phaseChangeLog     = useRef([])
 
   const isBetaUser = true
   const isPro = true
@@ -957,30 +970,129 @@ export default function Dashboard() {
       if (event.data?.type !== 'CAMCASH_TIP_EVENT') return
       const { event: tipEvent } = event.data
       if (!tipEvent || !tipEvent.username) return
-      // Only feed into live mode if active
+
+      // Deduplication: extension may fire the same event twice on reload
+      const dedupKey = tipEvent.id || `${tipEvent.username}:${tipEvent.tokens}:${tipEvent.timestamp}`
+      if (processedTipIds.current.has(dedupKey)) return
+      processedTipIds.current.add(dedupKey)
+
+      const rate    = 0.05
+      const tokens  = parseInt(tipEvent.tokens) || 0
+      const usd     = parseFloat(tipEvent.usd)  || 0
+      const normalized = {
+        _id:              dedupKey,
+        _isHistory:       false,
+        username:         tipEvent.username,
+        tokens,
+        usd,
+        normalizedRevenue: usd > 0 ? usd : parseFloat((tokens * rate).toFixed(2)),
+        sourceUsed:       usd > 0 ? 'usd' : 'tokens',
+        timestamp:        new Date(tipEvent.timestamp || Date.now()),
+        platform:         tipEvent.platform || 'Unknown',
+        source:           'extension',
+      }
+      setLiveEvents(prev => [...prev, normalized])
+      // Auto-activate live mode on first real tip
       setLiveActive(active => {
-        if (active) {
-          const rate = 0.05 // will use tokenRates from state in real impl
-          const tokens = parseInt(tipEvent.tokens) || 0
-          const usd    = parseFloat(tipEvent.usd) || 0
-          const normalized = {
-            username: tipEvent.username,
-            tokens,
-            usd,
-            normalizedRevenue: usd > 0 ? usd : parseFloat((tokens * rate).toFixed(2)),
-            sourceUsed: usd > 0 ? 'usd' : 'tokens',
-            timestamp: new Date(tipEvent.timestamp || Date.now()),
-            platform: tipEvent.platform || 'Unknown',
-            source: 'extension',
-          }
-          setLiveEvents(prev => [...prev, normalized])
-        }
-        return active
+        if (!active) setLiveStartTime(prev => prev || new Date())
+        return true
       })
     }
     window.addEventListener('message', handleExtensionMessage)
     return () => window.removeEventListener('message', handleExtensionMessage)
   }, [])
+
+  // ── LIVE TIPS: historical hydration + realtime subscription ─────────────
+  // Runs whenever the live tab is opened and a user is present.
+  // SAFETY RULES:
+  //   1. Singleton — only one channel ever; skips if already subscribed
+  //   2. isHydratingHistory.current = true during the initial DB query so
+  //      coaching / alerts / animations are suppressed for stale data
+  //   3. Every event is checked against processedTipIds before processing
+  //   4. Historical events get _isHistory:true so computeState() excludes
+  //      them from timing/pace calculations (only uses them for totals)
+  useEffect(() => {
+    if (activeTab !== 'live' || !user) return
+    if (liveTipsChannelRef.current) return // singleton guard
+
+    isHydratingHistory.current = true
+    const since = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString()
+
+    supabase
+      .from('live_tips')
+      .select('*')
+      .eq('user_id', user.id)
+      .gte('received_at', since)
+      .order('received_at', { ascending: true })
+      .then(({ data }) => {
+        if (data?.length) {
+          const normalized = data.map(tip => {
+            const id = tip.id
+            processedTipIds.current.add(id)
+            return {
+              _id:              id,
+              _isHistory:       true,
+              username:         tip.username || 'Unknown',
+              tokens:           parseInt(tip.tokens) || 0,
+              usd:              parseFloat(tip.usd) || 0,
+              normalizedRevenue: parseFloat(tip.usd) || parseFloat(((tip.tokens || 0) * 0.05).toFixed(2)),
+              sourceUsed:       tip.source || 'extension',
+              timestamp:        new Date(tip.received_at),
+              platform:         tip.platform || 'extension',
+              source:           'history',
+            }
+          })
+          setLiveEvents(prev => {
+            const existingIds = new Set(prev.map(e => e._id).filter(Boolean))
+            return [...prev, ...normalized.filter(t => !existingIds.has(t._id))]
+          })
+        }
+        isHydratingHistory.current = false
+      })
+
+    const channel = supabase
+      .channel(`live_tips_dash_${user.id}`)
+      .on('postgres_changes', {
+        event: 'INSERT', schema: 'public', table: 'live_tips',
+        filter: `user_id=eq.${user.id}`,
+      }, (payload) => {
+        if (isHydratingHistory.current) return
+        const tip = payload.new
+        if (!tip?.id) return
+        if (processedTipIds.current.has(tip.id)) return
+        processedTipIds.current.add(tip.id)
+
+        const normalized = {
+          _id:              tip.id,
+          _isHistory:       false,
+          username:         tip.username || 'Unknown',
+          tokens:           parseInt(tip.tokens) || 0,
+          usd:              parseFloat(tip.usd) || 0,
+          normalizedRevenue: parseFloat(tip.usd) || parseFloat(((tip.tokens || 0) * 0.05).toFixed(2)),
+          sourceUsed:       tip.source || 'extension',
+          timestamp:        new Date(tip.received_at),
+          platform:         tip.platform || 'extension',
+          source:           'extension',
+        }
+        setLiveEvents(prev => [...prev, normalized])
+        setLiveActive(prev => {
+          if (!prev) setLiveStartTime(st => st || new Date())
+          return true
+        })
+      })
+      .subscribe()
+
+    liveTipsChannelRef.current = channel
+
+    return () => {
+      if (liveTipsChannelRef.current) {
+        supabase.removeChannel(liveTipsChannelRef.current)
+        liveTipsChannelRef.current = null
+      }
+      isHydratingHistory.current = false
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, user])
 
   useEffect(() => {
     // Restore saved tab
@@ -3319,9 +3431,11 @@ const handleCSV = async (file, forcePlatform = null) => {
 
           const computeState = () => {
             if (!liveEvents.length || !liveStartTime) return null
-            const nowMs = Date.now()
+            const nowMs   = Date.now()
             const startMs = new Date(liveStartTime).getTime()
             const elapsedMins = Math.max((nowMs - startMs) / 60000, 0.1)
+
+            // ALL events — used for totals and the tip feed display
             let totalRevenue = 0, totalTokens = 0
             const tipperMap = {}
             liveEvents.forEach(ev => {
@@ -3329,74 +3443,286 @@ const handleCSV = async (file, forcePlatform = null) => {
               totalTokens  += ev.tokens || 0
               tipperMap[ev.username] = (tipperMap[ev.username] || 0) + (ev.normalizedRevenue || 0)
             })
-            const sorted = [...liveEvents].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
-            const lastTip = sorted[0]
-            const timeSinceLast = lastTip
-              ? parseFloat(((nowMs - new Date(lastTip.timestamp).getTime()) / 60000).toFixed(1))
+
+            // LIVE-ONLY events — used for time-sensitive coaching signals
+            // Historical events must NEVER trigger pace/timing alerts
+            const liveOnly = liveEvents.filter(e => !e._isHistory)
+            const sortedLive = [...liveOnly].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+            const lastLiveTip = sortedLive[0]
+            const timeSinceLast = lastLiveTip
+              ? parseFloat(((nowMs - new Date(lastLiveTip.timestamp).getTime()) / 60000).toFixed(1))
               : null
+
             const goalProgress = liveGoalTokens > 0
               ? Math.min(100, Math.round((totalTokens / liveGoalTokens) * 100))
               : 0
-            const tpm = parseFloat((liveEvents.length / elapsedMins).toFixed(2))
-            const avgTip = parseFloat((totalRevenue / liveEvents.length).toFixed(2))
+
+            const tpm = liveOnly.length > 0
+              ? parseFloat((liveOnly.length / elapsedMins).toFixed(2))
+              : 0
+            const avgTip = liveOnly.length > 0
+              ? parseFloat((liveOnly.reduce((s, e) => s + (e.normalizedRevenue||0), 0) / liveOnly.length).toFixed(2))
+              : 0
+
+            // Pace uses only live events split into first/second half of elapsed time
             const midMs = startMs + (nowMs - startMs) / 2
-            const fh = liveEvents.filter(e => new Date(e.timestamp).getTime() <= midMs)
-            const sh = liveEvents.filter(e => new Date(e.timestamp).getTime() > midMs)
+            const fh = liveOnly.filter(e => new Date(e.timestamp).getTime() <= midMs)
+            const sh = liveOnly.filter(e => new Date(e.timestamp).getTime() > midMs)
             const hm = elapsedMins / 2
             const fUPM = hm > 0 ? fh.reduce((s, e) => s + (e.normalizedRevenue||0), 0) / hm : 0
             const sUPM = hm > 0 ? sh.reduce((s, e) => s + (e.normalizedRevenue||0), 0) / hm : 0
+
             let pace = 'unknown'
-            if (elapsedMins >= 5) {
-              if (sUPM > fUPM * 1.15) pace = 'above'
+            if (liveOnly.length >= 3 && elapsedMins >= 5) {
+              if (sUPM > fUPM * 1.15)      pace = 'above'
               else if (sUPM < fUPM * 0.75) pace = 'below'
-              else pace = 'on_track'
+              else                          pace = 'on_track'
             }
             const topEntry = Object.entries(tipperMap).sort((a, b) => b[1] - a[1])[0]
             return {
-              totalRevenue: parseFloat(totalRevenue.toFixed(2)),
-              totalTokens, elapsedMins: parseFloat(elapsedMins.toFixed(1)),
-              tipsPerMinute: tpm, avgTipValue: avgTip,
-              timeSinceLastTip: timeSinceLast, goalProgress, paceStatus: pace,
-              topTipper: topEntry ? { username: topEntry[0], revenue: parseFloat(topEntry[1].toFixed(2)) } : null,
-              firstHalfUPM: parseFloat(fUPM.toFixed(3)),
-              secondHalfUPM: parseFloat(sUPM.toFixed(3)),
-              currentUPM: parseFloat((totalRevenue / elapsedMins).toFixed(3)),
+              totalRevenue:    parseFloat(totalRevenue.toFixed(2)),
+              totalTokens,
+              elapsedMins:     parseFloat(elapsedMins.toFixed(1)),
+              tipsPerMinute:   tpm,
+              avgTipValue:     avgTip,
+              timeSinceLastTip: timeSinceLast,
+              goalProgress,
+              paceStatus:      pace,
+              liveOnlyCount:   liveOnly.length,
+              topTipper:       topEntry ? { username: topEntry[0], revenue: parseFloat(topEntry[1].toFixed(2)) } : null,
+              firstHalfUPM:    parseFloat(fUPM.toFixed(3)),
+              secondHalfUPM:   parseFloat(sUPM.toFixed(3)),
+              currentUPM:      parseFloat((totalRevenue / elapsedMins).toFixed(3)),
             }
           }
 
+          // Coaching cooldown helper — returns true if this alert can fire now.
+          // Each key has its own cooldown window (in milliseconds).
+          const canFireAlert = (key, cooldownMs) => {
+            if (isHydratingHistory.current) return false
+            const last = coachingCooldowns.current[key]
+            if (!last || Date.now() - last > cooldownMs) {
+              coachingCooldowns.current[key] = Date.now()
+              return true
+            }
+            return false
+          }
+
+          // PRIORITY TIERS: CRITICAL → HIGH → MEDIUM → LOW → INFO
+          // Only one alert per priority tier is shown at a time.
+          // Cooldowns prevent the same signal from repeating within the window.
           const getAlerts = (state) => {
-            if (!state) return []
-            const { timeSinceLastTip, paceStatus, goalProgress, topTipper, totalRevenue, elapsedMins } = state
+            if (!state || isHydratingHistory.current) return []
+            if (!liveActive) return []
+
+            const { timeSinceLastTip, paceStatus, goalProgress, topTipper,
+                    totalRevenue, elapsedMins, liveOnlyCount } = state
+
+            // Strategy-adjusted thresholds
+            const deadAirCrit = liveStrategy === 'aggressive' ? 6 : 8
+            const deadAirHigh = liveStrategy === 'aggressive' ? 4 : 5
+            const goalPushPct = liveStrategy === 'aggressive' || liveStrategy === 'goal' ? 80 : 90
+
             const alerts = []
-            if (timeSinceLastTip >= 8)
-              alerts.push({ level: 'critical', icon: '🚨', text: `No tips in ${Math.round(timeSinceLastTip)} min — call out names NOW` })
-            else if (timeSinceLastTip >= 5)
-              alerts.push({ level: 'warning', icon: '⚠️', text: `${Math.round(timeSinceLastTip)} min silence — restart with a quick goal` })
-            if (paceStatus === 'below' && elapsedMins >= 8)
-              alerts.push({ level: 'warning', icon: '📉', text: 'Pace dropping — activate toy or set a micro-goal' })
-            if (paceStatus === 'above' && elapsedMins >= 8)
-              alerts.push({ level: 'success', icon: '🔥', text: "Momentum building — don't break the energy" })
-            if (goalProgress >= 90 && goalProgress < 100)
-              alerts.push({ level: 'critical', icon: '🎯', text: `${goalProgress}% to goal — push NOW, announce the reward` })
-            if (goalProgress >= 100)
-              alerts.push({ level: 'success', icon: '🎉', text: 'Goal hit! Set the next one immediately' })
-            if (topTipper && totalRevenue > 0 && topTipper.revenue / totalRevenue >= 0.45)
-              alerts.push({ level: 'info', icon: '🐳', text: `${topTipper.username} is ${Math.round(topTipper.revenue/totalRevenue*100)}% of revenue — give them attention` })
-            return alerts.slice(0, 4)
+
+            // Helper: push to history log when an alert fires
+            const logFired = (icon, text) => {
+              firedAlertsLog.current.unshift({ icon, text, ts: Date.now() })
+              if (firedAlertsLog.current.length > 20) firedAlertsLog.current.length = 20
+            }
+
+            // ── CRITICAL ─────────────────────────────────────────────────────────
+            if (timeSinceLastTip !== null && timeSinceLastTip >= deadAirCrit) {
+              if (canFireAlert('dead_air_critical', 3 * 60 * 1000)) {
+                const text = liveStrategy === 'whale' && topTipper
+                  ? `${Math.round(timeSinceLastTip)} min silence — address ${topTipper.username} directly NOW`
+                  : `No tips in ${Math.round(timeSinceLastTip)} min — call out names NOW`
+                alerts.push({ priority: 1, level: 'critical', icon: '🚨', text })
+                logFired('🚨', text)
+              }
+            }
+            if (goalProgress >= goalPushPct && goalProgress < 100) {
+              if (canFireAlert('goal_push', 4 * 60 * 1000)) {
+                const text = `${goalProgress}% to goal — push NOW, announce the reward`
+                alerts.push({ priority: 1, level: 'critical', icon: '🎯', text })
+                logFired('🎯', text)
+              }
+            }
+
+            // ── HIGH ─────────────────────────────────────────────────────────────
+            if (timeSinceLastTip !== null && timeSinceLastTip >= deadAirHigh && timeSinceLastTip < deadAirCrit) {
+              if (canFireAlert('dead_air_high', 5 * 60 * 1000)) {
+                const text = liveStrategy === 'engagement'
+                  ? `${Math.round(timeSinceLastTip)} min quiet — drop a question or poll in chat now`
+                  : liveStrategy === 'retention'
+                  ? `${Math.round(timeSinceLastTip)} min since last tip — thank a viewer by name to re-engage`
+                  : `${Math.round(timeSinceLastTip)} min silence — restart with a quick goal`
+                alerts.push({ priority: 2, level: 'warning', icon: '⚠️', text })
+                logFired('⚠️', text)
+              }
+            }
+            if (paceStatus === 'below' && elapsedMins >= 8 && liveOnlyCount >= 3) {
+              if (canFireAlert('pace_below', 5 * 60 * 1000)) {
+                const text = liveStrategy === 'aggressive'
+                  ? 'Pace slow — announce a limited-time exclusive offer right now'
+                  : 'Pace dropping — activate toy or set a micro-goal'
+                alerts.push({ priority: 2, level: 'warning', icon: '📉', text })
+                logFired('📉', text)
+              }
+            }
+
+            // ── Stream Fatigue ────────────────────────────────────────────────────
+            if (elapsedMins > 75 && paceStatus === 'below' && liveOnlyCount >= 5) {
+              if (canFireAlert('stream_fatigue', 15 * 60 * 1000)) {
+                const text = 'Stream fatigue — try a new goal or content angle to reset room energy'
+                alerts.push({ priority: 2, level: 'warning', icon: '😴', text })
+                logFired('😴', text)
+              }
+            }
+
+            // ── MEDIUM ────────────────────────────────────────────────────────────
+            if (paceStatus === 'above' && elapsedMins >= 8 && liveOnlyCount >= 3) {
+              if (canFireAlert('pace_above', 8 * 60 * 1000)) {
+                const text = liveStrategy === 'aggressive'
+                  ? 'Momentum is hot — raise your goal amount NOW while they are tipping'
+                  : "Momentum building — don't break the energy"
+                alerts.push({ priority: 3, level: 'success', icon: '🔥', text })
+                logFired('🔥', text)
+              }
+            }
+            if (goalProgress >= 100) {
+              if (canFireAlert('goal_hit', 10 * 60 * 1000)) {
+                const text = 'Goal hit! Set the next one immediately'
+                alerts.push({ priority: 3, level: 'success', icon: '🎉', text })
+                logFired('🎉', text)
+              }
+            }
+
+            // ── Whale Proximity — regular tipper is overdue ───────────────────────
+            if (liveOnlyCount >= 4 && liveStrategy !== 'engagement') {
+              const nowMs = Date.now()
+              const liveOnly = liveEvents.filter(e => !e._isHistory)
+              const tipsByUser = {}
+              for (const e of liveOnly) {
+                if (!e.username) continue
+                if (!tipsByUser[e.username]) tipsByUser[e.username] = []
+                tipsByUser[e.username].push(new Date(e.timestamp).getTime())
+              }
+              let surfaced = false
+              for (const [uname, times] of Object.entries(tipsByUser)) {
+                if (surfaced || times.length < 2) continue
+                const sorted = [...times].sort((a, b) => a - b)
+                const gaps = []
+                for (let i = 1; i < sorted.length; i++) gaps.push(sorted[i] - sorted[i - 1])
+                const avgGapMs = gaps.reduce((s, g) => s + g, 0) / gaps.length
+                const sinceLastMs = nowMs - sorted[sorted.length - 1]
+                if (avgGapMs > 15 * 60 * 1000) continue // skip infrequent tippers
+                const ratio = sinceLastMs / avgGapMs
+                if (ratio >= 1.3 && sinceLastMs > 2 * 60 * 1000) {
+                  if (canFireAlert(`whale_prox_${uname}`, 6 * 60 * 1000)) {
+                    const avgMins = Math.round(avgGapMs / 60000)
+                    const sinceMins = Math.round(sinceLastMs / 60000)
+                    const text = `${uname} tips every ~${avgMins} min — ${sinceMins} min since their last. Call them out!`
+                    alerts.push({ priority: 3, level: 'info', icon: '🐋', text })
+                    logFired('🐋', text)
+                    surfaced = true
+                  }
+                }
+              }
+            }
+
+            // ── INFO ──────────────────────────────────────────────────────────────
+            if (topTipper && totalRevenue > 0 && topTipper.revenue / totalRevenue >= 0.45) {
+              const key = `whale_dep_${topTipper.username}`
+              if (canFireAlert(key, 10 * 60 * 1000)) {
+                const text = `${topTipper.username} is ${Math.round(topTipper.revenue / totalRevenue * 100)}% of revenue — give them attention`
+                alerts.push({ priority: 4, level: 'info', icon: '🐳', text })
+                logFired('🐳', text)
+              }
+            }
+            if (liveStrategy === 'engagement' && elapsedMins >= 5 && liveOnlyCount >= 1) {
+              if (canFireAlert('engagement_tip', 7 * 60 * 1000)) {
+                const text = 'Engagement mode: ask viewers a direct question to boost interaction'
+                alerts.push({ priority: 4, level: 'info', icon: '💬', text })
+                logFired('💬', text)
+              }
+            }
+            if (liveStrategy === 'retention' && elapsedMins >= 10 && liveOnlyCount >= 2) {
+              if (canFireAlert('retention_tip', 8 * 60 * 1000)) {
+                const text = 'Retention mode: welcome regulars back by name — loyalty builds tip habits'
+                alerts.push({ priority: 4, level: 'info', icon: '💜', text })
+                logFired('💜', text)
+              }
+            }
+
+            return alerts.sort((a, b) => a.priority - b.priority).slice(0, 4)
           }
 
           const getNextAction = (state) => {
-            if (!state) return { text: 'Start your stream to get live coaching' }
-            const { timeSinceLastTip, paceStatus, goalProgress, topTipper, totalRevenue, elapsedMins, tipsPerMinute } = state
+            if (!state || !liveActive) return { text: 'Start your stream to get live coaching' }
+            if (isHydratingHistory.current) return { text: 'Loading session data…' }
+
+            const { timeSinceLastTip, paceStatus, goalProgress, topTipper,
+                    totalRevenue, elapsedMins, liveOnlyCount } = state
+
+            if (liveOnlyCount === 0)
+              return { text: 'Waiting for your first tip this stream — set a goal to get things started.' }
+
+            // ── Goal Focus ──────────────────────────────────────────────────────
+            if (liveStrategy === 'goal') {
+              if (goalProgress >= 100)
+                return { text: 'Goal hit! Set the next one immediately — keep the momentum alive.' }
+              if (goalProgress >= 75)
+                return { text: `Announce your reward out loud — goal is at ${goalProgress}%. Tell chat exactly what happens when you hit it.` }
+              return { text: `Keep mentioning the goal — you're at ${goalProgress}%. Every reminder drives more tips.` }
+            }
+
+            // ── Whale Focus ─────────────────────────────────────────────────────
+            if (liveStrategy === 'whale') {
+              if (topTipper && totalRevenue > 0 && topTipper.revenue / totalRevenue >= 0.3)
+                return { text: `Focus on ${topTipper.username} — give them a VIP experience. That's your highest-value tipper right now.` }
+              if (timeSinceLastTip !== null && timeSinceLastTip >= 4)
+                return { text: 'Address your top tipper by name. VIP treatment keeps whales coming back.' }
+              return { text: 'Whale mode: every tipper is a VIP. Personal attention creates repeat tips.' }
+            }
+
+            // ── Retention Focus ─────────────────────────────────────────────────
+            if (liveStrategy === 'retention') {
+              if (timeSinceLastTip !== null && timeSinceLastTip >= 5)
+                return { text: 'Call out 3 viewer names right now — recognition keeps people in the room.' }
+              if (topTipper)
+                return { text: `Show ${topTipper.username} real appreciation — loyal fans tip again when they feel seen.` }
+              return { text: 'Greet every viewer by name. Retention starts with acknowledgment.' }
+            }
+
+            // ── Engagement Focus ────────────────────────────────────────────────
+            if (liveStrategy === 'engagement') {
+              if (timeSinceLastTip !== null && timeSinceLastTip >= 4)
+                return { text: 'Drop a poll: "50 tokens or 100 tokens?" — interaction restarts the tipping cycle.' }
+              return { text: 'Ask viewers a yes/no question in chat. Engagement always leads to tips.' }
+            }
+
+            // ── Aggressive ──────────────────────────────────────────────────────
+            if (liveStrategy === 'aggressive') {
+              if (goalProgress >= 80)
+                return { text: `${goalProgress}% to goal — announce the reward NOW. Be loud about what happens when you hit it.` }
+              if (paceStatus === 'above')
+                return { text: 'Momentum is high — raise your goal amount RIGHT NOW while the room is hot.' }
+              if (timeSinceLastTip !== null && timeSinceLastTip >= 4)
+                return { text: 'Push mode: "Next tip in 60 sec gets [reward]" — urgency creates action.' }
+              return { text: 'Stay aggressive — set visible goals, announce rewards, push every 5 minutes.' }
+            }
+
+            // ── Balanced (default) ──────────────────────────────────────────────
             if (goalProgress >= 90 && goalProgress < 100)
               return { text: `Announce your reward out loud — goal is ${goalProgress}%. Tell chat exactly what happens when you hit it.` }
-            if (timeSinceLastTip >= 6)
+            if (timeSinceLastTip !== null && timeSinceLastTip >= 6)
               return { text: 'Say 3 names in chat right now. "I see [name] — tip to control what I do next."' }
             if (paceStatus === 'below' && elapsedMins >= 8)
               return { text: 'Set a small 50-token goal right now — micro-goals restart momentum when the room slows.' }
             if (topTipper && totalRevenue > 0 && topTipper.revenue / totalRevenue >= 0.4)
               return { text: `Thank ${topTipper.username} by name and offer them something exclusive for their next tip.` }
-            if (elapsedMins < 15 && state.totalRevenue < 2)
+            if (elapsedMins < 15 && liveOnlyCount < 3)
               return { text: 'Set a 200-token opening goal and announce it. Early goals train the room to tip.' }
             return { text: 'Keep energy high — acknowledge every tipper by name. Recognition drives repeat tipping.' }
           }
@@ -3421,7 +3747,27 @@ const handleCSV = async (file, forcePlatform = null) => {
           // which updates elapsed time, tips/min, pace, coaching, and all alerts
           void liveTick
           const state = computeState()
-          const alerts = getAlerts(state)
+
+          // ── INTELLIGENCE LAYER — all analytics computed here, never inline ──
+          const roomHealth      = computeRoomHealth(state)
+          const sessionPhase    = detectSessionPhase(state, prevPhaseRef.current)
+          const opportunityScore = computeOpportunityScore(state, roomHealth)
+          const streamHealth    = computeStreamHealth(state, roomHealth, sessionPhase)
+          const velocity        = computeRevenueVelocity(state?.currentUPM ?? 0, sessions)
+          const comparison      = computeLiveComparison(state, sessions)
+          const goalStrategy    = getGoalStrategy(state, roomHealth)
+          const recoveryActions = getRecoveryActions(sessionPhase)
+          const phaseConfig     = PHASES[sessionPhase] || PHASES.STARTUP
+          // Track phase transitions
+          if (sessionPhase !== prevPhaseRef.current) {
+            if (prevPhaseRef.current !== null) {
+              phaseChangeLog.current.unshift({ phase: sessionPhase, prev: prevPhaseRef.current, icon: phaseConfig.icon, label: phaseConfig.label, ts: Date.now() })
+              if (phaseChangeLog.current.length > 10) phaseChangeLog.current.length = 10
+            }
+            prevPhaseRef.current = sessionPhase
+          }
+
+          const alerts     = getAlerts(state)
           const nextAction = getNextAction(state)
 
           const PACE_CONFIG = {
@@ -3436,39 +3782,98 @@ const handleCSV = async (file, forcePlatform = null) => {
 
           return (
             <div>
-              {/* HEADER */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              {/* ── SESSION COMMAND CENTER ──────────────────────────────── */}
+              <div style={{ marginBottom: 20 }}>
+                {/* Title row */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 10 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                     <div style={{ width: 10, height: 10, borderRadius: '50%', background: liveActive ? C.green : C.muted, boxShadow: liveActive ? `0 0 10px ${C.green}` : 'none', animation: liveActive ? 'pulse-msg 1.5s infinite' : 'none' }} />
-                    <h1 style={{ fontSize: 26, fontWeight: 800, color: C.white }}>🔴 Live Mode</h1>
+                    <h1 style={{ fontSize: 24, fontWeight: 800, color: C.white, margin: 0 }}>🔴 Live Mode</h1>
+                    {/* Session Phase badge */}
+                    {liveActive && state && (
+                      <div style={{ padding: '3px 10px', borderRadius: 20, background: phaseConfig.bg, border: `1px solid ${phaseConfig.border}`, fontSize: 12, fontWeight: 700, color: phaseConfig.color }}>
+                        {phaseConfig.icon} {phaseConfig.label}
+                      </div>
+                    )}
                   </div>
-                  <p style={{ fontSize: 13, color: C.muted, marginTop: 2 }}>Real-time coaching while you stream</p>
-                </div>
-                <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-                  <select value={livePlatform} onChange={e => setLivePlatform(e.target.value)}
-                    style={{ ...inp2, width: 'auto', padding: '8px 12px' }}>
-                    {['Chaturbate','BongaCams','MyFreeCams','CamSoda','Stripchat'].map(p => (
-                      <option key={p} value={p}>{p}</option>
-                    ))}
-                  </select>
-                  <div>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <select value={livePlatform} onChange={e => setLivePlatform(e.target.value)} style={{ ...inp2, width: 'auto', padding: '7px 10px' }}>
+                      {['Chaturbate','BongaCams','MyFreeCams','CamSoda','Stripchat'].map(p => (
+                        <option key={p} value={p}>{p}</option>
+                      ))}
+                    </select>
                     <input type="number" value={liveGoalTokens || ''} onChange={e => setLiveGoalTokens(Number(e.target.value)||0)}
-                      placeholder="Token goal (optional)"
-                      style={{ ...inp2, width: 180 }} />
+                      placeholder="Token goal" style={{ ...inp2, width: 140 }} />
+                    {/* Strategy mode */}
+                    <select value={liveStrategy} onChange={e => setLiveStrategy(e.target.value)} style={{ ...inp2, width: 'auto', padding: '7px 10px', fontSize: 12 }}>
+                      <option value="balanced">⚖️ Balanced</option>
+                      <option value="aggressive">💰 Aggressive</option>
+                      <option value="retention">🔄 Retention</option>
+                      <option value="engagement">💬 Engagement</option>
+                      <option value="whale">🐋 Whale Focus</option>
+                      <option value="goal">🎯 Goal Focus</option>
+                    </select>
+                    {!liveActive ? (
+                      <button onClick={() => { setLiveActive(true); setLiveStartTime(new Date()); setLiveEvents([]); processedTipIds.current = new Set(); coachingCooldowns.current = {} }}
+                        style={{ padding: '9px 20px', borderRadius: 10, background: 'linear-gradient(135deg, #10B981, #22D3EE)', border: 'none', color: C.white, fontWeight: 800, fontSize: 13, cursor: 'pointer', boxShadow: '0 0 20px rgba(16,185,129,0.4)' }}>
+                        ▶ Start Stream
+                      </button>
+                    ) : (
+                      <button onClick={() => setLiveActive(false)}
+                        style={{ padding: '9px 20px', borderRadius: 10, background: 'rgba(248,113,113,0.2)', border: '1px solid rgba(248,113,113,0.4)', color: C.red, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+                        ⏹ End Stream
+                      </button>
+                    )}
                   </div>
-                  {!liveActive ? (
-                    <button onClick={() => { setLiveActive(true); setLiveStartTime(new Date()); setLiveEvents([]) }}
-                      style={{ padding: '10px 24px', borderRadius: 10, background: 'linear-gradient(135deg, #10B981, #22D3EE)', border: 'none', color: C.white, fontWeight: 800, fontSize: 14, cursor: 'pointer', boxShadow: '0 0 20px rgba(16,185,129,0.4)' }}>
-                      ▶ Start Stream
-                    </button>
-                  ) : (
-                    <button onClick={() => { setLiveActive(false) }}
-                      style={{ padding: '10px 24px', borderRadius: 10, background: 'rgba(248,113,113,0.2)', border: '1px solid rgba(248,113,113,0.4)', color: C.red, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
-                      ⏹ End Stream
-                    </button>
-                  )}
                 </div>
+
+                {/* Intelligence strip — Room Health · Momentum · Opportunity · Stream Health · Velocity */}
+                {liveActive && state && (
+                  <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                    {/* Room Health */}
+                    <div style={{ flex: '1 1 130px', borderRadius: 10, padding: '10px 14px', background: roomHealth.bg, border: `1px solid ${roomHealth.border}` }}>
+                      <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 4 }}>Room Heat</div>
+                      <div style={{ fontSize: 16, fontWeight: 800, color: roomHealth.color }}>{roomHealth.emoji} {roomHealth.label}</div>
+                      <div style={{ fontSize: 10, color: roomHealth.directionColor, marginTop: 2 }}>{roomHealth.directionLabel}</div>
+                      <div style={{ fontSize: 9, color: C.muted, marginTop: 2 }}>{roomHealth.confidence}% confidence</div>
+                    </div>
+
+                    {/* Opportunity Score */}
+                    <div style={{ flex: '1 1 130px', borderRadius: 10, padding: '10px 14px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                      <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 4 }}>Opportunity</div>
+                      <div style={{ fontSize: 22, fontWeight: 900, color: opportunityScore.color }}>{opportunityScore.score}<span style={{ fontSize: 11, fontWeight: 400 }}>/100</span></div>
+                      <div style={{ fontSize: 10, color: opportunityScore.color, marginTop: 2 }}>{opportunityScore.label}</div>
+                    </div>
+
+                    {/* Stream Health */}
+                    <div style={{ flex: '1 1 130px', borderRadius: 10, padding: '10px 14px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                      <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 4 }}>Stream Health</div>
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+                        <span style={{ fontSize: 22, fontWeight: 900, color: streamHealth.grade === 'A' ? C.green : streamHealth.grade === 'B' ? C.cyan : streamHealth.grade === 'C' ? C.gold : C.red }}>{streamHealth.grade}</span>
+                        <span style={{ fontSize: 13, color: C.muted }}>{streamHealth.score}/100</span>
+                      </div>
+                      <div style={{ fontSize: 10, color: streamHealth.trend === 'improving' ? C.green : streamHealth.trend === 'declining' ? C.red : C.muted, marginTop: 2, textTransform: 'capitalize' }}>{streamHealth.trend}</div>
+                    </div>
+
+                    {/* Revenue Velocity */}
+                    <div style={{ flex: '1 1 160px', borderRadius: 10, padding: '10px 14px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                      <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 4 }}>Revenue Velocity</div>
+                      <div style={{ fontSize: 16, fontWeight: 800, color: velocity.color }}>${velocity.currentUPH.toFixed(2)}/hr</div>
+                      <div style={{ fontSize: 10, color: velocity.color, marginTop: 2 }}>{velocity.label}</div>
+                    </div>
+
+                    {/* Live Comparison */}
+                    {comparison.vsAvgPct !== null && (
+                      <div style={{ flex: '1 1 140px', borderRadius: 10, padding: '10px 14px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                        <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 4 }}>vs Your Average</div>
+                        <div style={{ fontSize: 18, fontWeight: 900, color: (comparison.vsAvgPct ?? 0) >= 0 ? C.green : C.red }}>
+                          {(comparison.vsAvgPct ?? 0) >= 0 ? '+' : ''}{comparison.vsAvgPct}%
+                        </div>
+                        <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>avg ${comparison.avgUPH.toFixed(2)}/hr</div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {!liveActive && !liveEvents.length && (
@@ -3628,8 +4033,154 @@ const handleCSV = async (file, forcePlatform = null) => {
                             ? `${liveEvents.filter(e => e.sourceUsed === 'extension').length} tip${liveEvents.filter(e => e.sourceUsed === 'extension').length !== 1 ? 's' : ''} auto-captured from your stream`
                             : 'Install the CamCash Chrome extension — tips appear here automatically as they come in.'}
                         </div>
+                        <a href="/extension" target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', marginTop: 10, padding: '7px 16px', background: 'linear-gradient(135deg, #a855f7, #7c3aed)', color: '#fff', borderRadius: 8, fontSize: 12, fontWeight: 700, textDecoration: 'none' }}>
+                          📥 Get the Extension →
+                        </a>
                       </div>
                     </div>
+                  </div>
+
+                  {/* ── INTELLIGENCE PANELS ─────────────────────────── */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14 }}>
+
+                    {/* GOAL STRATEGY */}
+                    {liveActive && state && (
+                      <div style={{ borderRadius: 14, padding: 18, background: goalStrategy.urgency === 'high' ? 'rgba(245,158,11,0.08)' : 'rgba(255,255,255,0.04)', border: `1px solid ${goalStrategy.urgency === 'high' ? 'rgba(245,158,11,0.35)' : 'rgba(255,255,255,0.08)'}` }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                          <div style={{ fontSize: 10, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700 }}>🎯 Goal Strategy</div>
+                          <div style={{ padding: '2px 8px', borderRadius: 8, background: goalStrategy.urgency === 'high' ? 'rgba(245,158,11,0.2)' : goalStrategy.urgency === 'medium' ? 'rgba(34,211,238,0.15)' : 'rgba(255,255,255,0.06)', fontSize: 10, fontWeight: 700, color: goalStrategy.urgency === 'high' ? C.gold : goalStrategy.urgency === 'medium' ? C.cyan : C.muted }}>
+                            {goalStrategy.timing === 'now' ? '⚡ ACT NOW' : goalStrategy.timing === 'reset' ? '🔄 RESET' : goalStrategy.timing === 'soon' ? '⏱ SOON' : '⏳ WAIT'}
+                          </div>
+                        </div>
+                        <div style={{ fontSize: 13, color: C.white, fontWeight: 600, lineHeight: 1.6, marginBottom: 10 }}>{goalStrategy.suggestion}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <div style={{ flex: 1, height: 6, borderRadius: 3, background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
+                            <div style={{ height: '100%', width: `${goalStrategy.probability}%`, borderRadius: 3, background: `linear-gradient(90deg, ${C.cyan}, ${C.pink})`, transition: 'width 0.5s ease' }} />
+                          </div>
+                          <div style={{ fontSize: 11, color: C.muted, whiteSpace: 'nowrap' }}>{goalStrategy.probability}% probability</div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* RECOVERY ACTIONS — shown during DECLINE or PLATEAU */}
+                    {liveActive && state && (sessionPhase === 'DECLINE' || sessionPhase === 'PLATEAU' || sessionPhase === 'RECOVERY') && (
+                      <div style={{ borderRadius: 14, padding: 18, background: sessionPhase === 'DECLINE' ? 'rgba(248,113,113,0.06)' : sessionPhase === 'RECOVERY' ? 'rgba(168,85,247,0.06)' : 'rgba(245,158,11,0.06)', border: `1px solid ${sessionPhase === 'DECLINE' ? 'rgba(248,113,113,0.3)' : sessionPhase === 'RECOVERY' ? 'rgba(168,85,247,0.3)' : 'rgba(245,158,11,0.3)'}` }}>
+                        <div style={{ fontSize: 10, color: sessionPhase === 'DECLINE' ? C.red : sessionPhase === 'RECOVERY' ? '#a855f7' : C.gold, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700, marginBottom: 10 }}>
+                          {sessionPhase === 'DECLINE' ? '🚨 Recovery Actions' : sessionPhase === 'RECOVERY' ? '🔄 Rebuilding Momentum' : '📊 Boost Tactics'}
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                          {recoveryActions.map((action, i) => (
+                            <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '7px 10px', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                              <span style={{ fontSize: 12, color: sessionPhase === 'DECLINE' ? C.red : sessionPhase === 'RECOVERY' ? '#a855f7' : C.gold, flexShrink: 0, fontWeight: 700 }}>{i + 1}.</span>
+                              <span style={{ fontSize: 12, color: C.white, lineHeight: 1.5 }}>{action}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* COACHING EXPLANATION — WHY signals fired */}
+                    {liveActive && state && opportunityScore.signals.length > 0 && (
+                      <div style={{ borderRadius: 14, padding: 18, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                          <div style={{ fontSize: 10, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700 }}>💡 Why These Alerts?</div>
+                          <div style={{ padding: '2px 8px', borderRadius: 8, background: `${opportunityScore.color}18`, fontSize: 11, fontWeight: 800, color: opportunityScore.color }}>
+                            {opportunityScore.score}/100
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                          {opportunityScore.signals.map((sig, i) => (
+                            <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                              <span style={{ color: opportunityScore.color, fontSize: 14, flexShrink: 0, lineHeight: 1.4 }}>→</span>
+                              <span style={{ fontSize: 12, color: C.text, lineHeight: 1.5 }}>{sig}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* STREAM HEALTH BREAKDOWN */}
+                    {liveActive && state && (
+                      <div style={{ borderRadius: 14, padding: 18, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                        <div style={{ fontSize: 10, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700, marginBottom: 12 }}>📊 Health Breakdown</div>
+                        {[
+                          { label: 'Momentum', value: streamHealth.components.momentum, max: 30, color: C.green },
+                          { label: 'Engagement', value: streamHealth.components.engagement, max: 30, color: C.cyan },
+                          { label: 'Velocity', value: streamHealth.components.velocity, max: 25, color: C.gold },
+                          { label: 'Recovery', value: streamHealth.components.recovery, max: 15, color: '#a855f7' },
+                        ].map(({ label, value, max, color }) => (
+                          <div key={label} style={{ marginBottom: 8 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                              <span style={{ fontSize: 11, color: C.muted }}>{label}</span>
+                              <span style={{ fontSize: 11, color, fontWeight: 700 }}>{value}/{max}</span>
+                            </div>
+                            <div style={{ height: 5, borderRadius: 3, background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
+                              <div style={{ height: '100%', width: `${(value / max) * 100}%`, borderRadius: 3, background: color, transition: 'width 0.4s ease' }} />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* MICRO-TIMELINE */}
+                    {liveActive && (liveEvents.length > 0 || phaseChangeLog.current.length > 0) && (() => {
+                      const tipEntries = liveEvents.filter(e => !e._isHistory).map(e => ({
+                        type: 'tip', ts: new Date(e.timestamp).getTime(),
+                        icon: (e.normalizedRevenue || 0) >= 5 ? '🐋' : '💰',
+                        text: `${e.username} — ${e.tokens > 0 ? e.tokens + ' tkns' : ''} $${(e.normalizedRevenue || 0).toFixed(2)}`,
+                        color: (e.normalizedRevenue || 0) >= 5 ? C.gold : C.green,
+                      }))
+                      const phaseEntries = phaseChangeLog.current.map(p => ({
+                        type: 'phase', ts: p.ts,
+                        icon: p.icon,
+                        text: `Phase changed to ${p.label}`,
+                        color: C.cyan,
+                      }))
+                      const alertEntries = firedAlertsLog.current.slice(0, 5).map(a => ({
+                        type: 'alert', ts: a.ts, icon: a.icon,
+                        text: a.text, color: C.muted,
+                      }))
+                      const merged = [...tipEntries, ...phaseEntries, ...alertEntries]
+                        .sort((a, b) => b.ts - a.ts)
+                        .slice(0, 15)
+                      return (
+                        <div style={{ borderRadius: 14, padding: 18, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', gridColumn: '1 / -1' }}>
+                          <div style={{ fontSize: 10, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700, marginBottom: 10 }}>⏱ Session Timeline</div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 5, maxHeight: 240, overflowY: 'auto' }}>
+                            {merged.length === 0 ? (
+                              <div style={{ fontSize: 12, color: C.muted, textAlign: 'center', padding: '10px 0' }}>Events will appear here as your session unfolds</div>
+                            ) : merged.map((entry, i) => (
+                              <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '5px 8px', borderRadius: 7, background: i === 0 ? 'rgba(255,255,255,0.04)' : 'transparent' }}>
+                                <span style={{ fontSize: 14, flexShrink: 0 }}>{entry.icon}</span>
+                                <span style={{ fontSize: 11, color: entry.color, flex: 1, lineHeight: 1.4 }}>{entry.text}</span>
+                                <span style={{ fontSize: 9, color: C.muted, whiteSpace: 'nowrap' }}>
+                                  {new Date(entry.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )
+                    })()}
+
+                    {/* RECOMMENDATION HISTORY */}
+                    {liveActive && firedAlertsLog.current.length > 0 && (
+                      <div style={{ borderRadius: 14, padding: 18, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                        <div style={{ fontSize: 10, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700, marginBottom: 10 }}>📋 Alert History</div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 5, maxHeight: 200, overflowY: 'auto' }}>
+                          {firedAlertsLog.current.slice(0, 12).map((entry, i) => (
+                            <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '5px 8px', borderRadius: 7, background: 'rgba(255,255,255,0.02)' }}>
+                              <span style={{ fontSize: 13, flexShrink: 0, lineHeight: 1.4 }}>{entry.icon}</span>
+                              <span style={{ fontSize: 11, color: C.text, flex: 1, lineHeight: 1.4 }}>{entry.text}</span>
+                              <span style={{ fontSize: 9, color: C.muted, whiteSpace: 'nowrap', marginTop: 1 }}>
+                                {new Date(entry.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                   </div>
                 </div>
               )}
