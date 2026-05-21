@@ -3780,10 +3780,23 @@ const handleCSV = async (file, forcePlatform = null) => {
           const pace = PACE_CONFIG[state?.paceStatus || 'unknown']
           const inp2 = { background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, padding: '8px 12px', color: C.white, fontSize: 13, outline: 'none', width: '100%' }
 
+          // Build revenue history from last 8 live events for sparklines
+          const revenueHistory = [...liveEvents]
+            .filter(e => !e._isHistory)
+            .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
+            .slice(-8)
+            .map(e => e.normalizedRevenue || 0)
+
           return (
-            <div>
+            <div style={{ maxWidth: 1280, margin: '0 auto' }}>
+              <style>{`
+                @keyframes cc-slide-in { from{opacity:0;transform:translateY(-8px);} to{opacity:1;transform:translateY(0);} }
+                @keyframes cc-pulse { 0%,100%{opacity:1;} 50%{opacity:0.35;} }
+                @keyframes cc-glow { 0%,100%{box-shadow:0 0 8px currentColor;} 50%{box-shadow:0 0 18px currentColor;} }
+                @keyframes cc-bar { from{opacity:0.4;} to{opacity:1;} }
+              `}</style>
               {/* ── OPERATIONAL STATUS BAR ─────────────────────────────── */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 16px', borderRadius: 10, marginBottom: 16, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', flexWrap: 'wrap', gap: 8 }}>
+              <div style={{ position: 'sticky', top: 0, zIndex: 40, background: 'rgba(4,8,18,0.85)', backdropFilter: 'blur(20px)', borderBottom: '1px solid rgba(168,85,247,0.15)', marginBottom: 20, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 16px', flexWrap: 'wrap', gap: 8 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap' }}>
                   {[
                     { label: 'Extension', ok: liveEvents.some(e => e.sourceUsed === 'extension'), okText: 'Connected', offText: 'Not detected' },
@@ -3879,7 +3892,8 @@ const handleCSV = async (file, forcePlatform = null) => {
 
               {/* Not started */}
               {!liveActive && !liveEvents.length && (
-                <div style={{ ...glassCard, borderRadius: 20, padding: '64px 48px', textAlign: 'center', marginBottom: 24 }}>
+                <div style={{ ...glassCard, borderRadius: 20, padding: '64px 48px', textAlign: 'center', marginBottom: 24, background: 'linear-gradient(135deg, rgba(168,85,247,0.08), rgba(236,72,153,0.06), rgba(34,211,238,0.05))', backgroundSize: '300% 300%', animation: 'cc-bar 4s ease infinite alternate', position: 'relative', overflow: 'hidden' }}>
+                  <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: 'linear-gradient(90deg, #a855f7, #ec4899, #22d3ee)', animation: 'cc-bar 2s ease infinite alternate' }} />
                   <div style={{ fontSize: 56, marginBottom: 16 }}>🔴</div>
                   <div style={{ fontSize: 22, fontWeight: 800, color: C.white, marginBottom: 10 }}>Live Command Center</div>
                   <div style={{ fontSize: 14, color: C.muted, maxWidth: 440, margin: '0 auto 28px', lineHeight: 1.75 }}>
@@ -3907,10 +3921,10 @@ const handleCSV = async (file, forcePlatform = null) => {
                     }
                     const rg = rhMap[rhKey] || rhMap.COLD
                     return (
-                      <div style={{ borderRadius: 16, padding: '22px 28px', marginBottom: 14, background: `linear-gradient(135deg, ${rg.from}, ${rg.to})`, border: `1px solid ${roomHealth.border}`, boxShadow: `0 0 48px ${rg.glow}`, position: 'relative', overflow: 'hidden' }}>
+                      <div style={{ borderRadius: 16, padding: '22px 28px', marginBottom: 20, background: `linear-gradient(135deg, ${rg.from}, ${rg.to})`, border: `1px solid ${roomHealth.border}`, boxShadow: `0 0 48px ${rg.glow}`, position: 'relative', overflow: 'hidden', transition: 'all 1.2s ease' }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 20 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
-                            <div style={{ width: 14, height: 14, borderRadius: '50%', background: liveActive ? C.green : C.muted, boxShadow: liveActive ? `0 0 12px ${C.green}` : 'none', animation: liveActive && rg.pulse !== 'none' ? `pulse-msg ${rg.pulse} infinite` : 'none', flexShrink: 0 }} />
+                            <div style={{ width: 14, height: 14, borderRadius: '50%', background: liveActive ? C.green : C.muted, boxShadow: liveActive ? `0 0 12px ${C.green}` : 'none', animation: liveActive ? 'cc-pulse 1.2s ease-in-out infinite' : 'none', flexShrink: 0 }} />
                             <div>
                               <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.45)', textTransform: 'uppercase', letterSpacing: 1.2, fontWeight: 700, marginBottom: 3 }}>Room State</div>
                               <div style={{ fontSize: 30, fontWeight: 900, color: roomHealth.color, letterSpacing: -0.5 }}>{roomHealth.emoji} {roomHealth.label}</div>
@@ -3943,7 +3957,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                               <span style={{ fontSize: 9, color: roomHealth.directionColor }}>{roomHealth.directionLabel}</span>
                             </div>
                             <div style={{ height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.07)', overflow: 'hidden' }}>
-                              <div style={{ height: '100%', width: `${roomHealth.score || 0}%`, borderRadius: 2, background: `linear-gradient(90deg, ${roomHealth.color}, ${C.cyan})`, transition: 'width 0.7s ease' }} />
+                              <div style={{ height: '100%', width: `${roomHealth.score || 0}%`, borderRadius: 2, background: `linear-gradient(90deg, ${roomHealth.color}, ${C.cyan})`, transition: 'width 1.5s ease' }} />
                             </div>
                           </div>
                         )}
@@ -3965,7 +3979,9 @@ const handleCSV = async (file, forcePlatform = null) => {
                     const defaultStyle = { bg: 'linear-gradient(135deg, rgba(236,72,153,0.1), rgba(124,92,255,0.1))', border: 'rgba(168,85,247,0.3)', badge: 'rgba(236,72,153,0.2)', badgeText: C.pink, tag: '⚡ DO THIS NOW' }
                     const style = uc || defaultStyle
                     return (
-                      <div style={{ borderRadius: 16, padding: '22px 26px', marginBottom: 14, background: topAlert ? style.bg : defaultStyle.bg, border: `1px solid ${topAlert ? style.border : defaultStyle.border}`, boxShadow: topAlert?.level === 'critical' ? '0 0 32px rgba(248,113,113,0.12)' : 'none' }}>
+                      <div style={{ borderRadius: 16, padding: '26px 28px', marginBottom: 20, background: topAlert ? style.bg : defaultStyle.bg, border: `1px solid ${topAlert ? style.border : defaultStyle.border}`, boxShadow: topAlert?.level === 'critical' ? '0 0 32px rgba(248,113,113,0.12)' : 'none', animation: topAlert?.level === 'critical' ? 'cc-glow 2.5s ease-in-out infinite' : 'none', position: 'relative', overflow: 'hidden' }}>
+                        {/* Animated gradient line at top */}
+                        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: 'linear-gradient(90deg, #ec4899, #a855f7, #22d3ee)', backgroundSize: '200% 100%', animation: 'cc-bar 2s ease infinite alternate' }} />
                         <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'flex-start' }}>
                           <div style={{ flex: 1, minWidth: 260 }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
@@ -3974,7 +3990,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                               </div>
                               <div style={{ fontSize: 10, color: C.muted }}>AI Coach · {liveStrategy} mode</div>
                             </div>
-                            <div style={{ fontSize: 17, fontWeight: 700, color: C.white, lineHeight: 1.65, marginBottom: topAlert && nextAction.text !== topAlert.text ? 12 : 0 }}>
+                            <div style={{ fontSize: 19, fontWeight: 700, color: C.white, lineHeight: 1.65, marginBottom: topAlert && nextAction.text !== topAlert.text ? 12 : 0 }}>
                               {topAlert ? topAlert.text : nextAction.text}
                             </div>
                             {topAlert && nextAction.text !== topAlert.text && (
@@ -4009,22 +4025,30 @@ const handleCSV = async (file, forcePlatform = null) => {
                   })()}
 
                   {/* ── MAIN GRID ─────────────────────────────────────────── */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 350px', gap: 14, marginBottom: 14 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 350px', gap: 20, marginBottom: 20 }}>
 
                     {/* LEFT */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
                       {/* MONEY MOMENTUM — 4 stats */}
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
                         {[
-                          { label: 'Revenue', value: `$${state?.totalRevenue?.toFixed(2) || '0.00'}`, color: C.green, sub: velocity.label || null },
-                          { label: 'Tips/min', value: state?.tipsPerMinute?.toFixed(2) || '0.00', color: C.cyan, sub: `${state?.liveOnlyCount || 0} tips live` },
-                          { label: 'Avg Tip', value: `$${state?.avgTipValue?.toFixed(2) || '0.00'}`, color: C.gold, sub: state?.topTipper ? `Top: ${state.topTipper.username}` : null },
-                          { label: 'Rev/hr', value: `$${velocity.currentUPH.toFixed(0)}`, color: velocity.color, sub: comparison.vsAvgPct !== null ? `${(comparison.vsAvgPct ?? 0) >= 0 ? '+' : ''}${comparison.vsAvgPct}% vs avg` : null },
-                        ].map(({ label, value, color, sub }) => (
-                          <div key={label} style={{ ...glassCard, borderRadius: 12, padding: '14px 16px' }}>
+                          { label: 'Revenue', value: `$${state?.totalRevenue?.toFixed(2) || '0.00'}`, color: C.green, sub: velocity.label || null, showSparkline: true },
+                          { label: 'Tips/min', value: state?.tipsPerMinute?.toFixed(2) || '0.00', color: C.cyan, sub: `${state?.liveOnlyCount || 0} tips live`, showSparkline: false },
+                          { label: 'Avg Tip', value: `$${state?.avgTipValue?.toFixed(2) || '0.00'}`, color: C.gold, sub: state?.topTipper ? `Top: ${state.topTipper.username}` : null, showSparkline: false },
+                          { label: 'Rev/hr', value: `$${velocity.currentUPH.toFixed(0)}`, color: velocity.color, sub: comparison.vsAvgPct !== null ? `${(comparison.vsAvgPct ?? 0) >= 0 ? '+' : ''}${comparison.vsAvgPct}% vs avg` : null, showSparkline: false },
+                        ].map(({ label, value, color, sub, showSparkline }) => (
+                          <div key={label} style={{ ...glassCard, borderRadius: 12, padding: '18px', transition: 'box-shadow 0.2s ease', cursor: 'default' }}
+                            onMouseEnter={e => { e.currentTarget.style.boxShadow = `0 0 20px ${color}28` }}
+                            onMouseLeave={e => { e.currentTarget.style.boxShadow = '' }}>
                             <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 4 }}>{label}</div>
                             <div style={{ fontSize: 22, fontWeight: 900, color }}>{value}</div>
+                            {showSparkline && revenueHistory.length >= 2 && (() => {
+                              const d = revenueHistory, w = 72, h = 28
+                              const mx = Math.max(...d), mn = Math.min(...d), rng = mx - mn || 1
+                              const pts = d.map((v, i) => `${(i/(d.length-1))*w},${h-((v-mn)/rng)*h}`).join(' ')
+                              return <svg width={w} height={h} style={{ display:'block', overflow:'visible', marginTop: 4 }}><polyline points={pts} fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" /></svg>
+                            })()}
                             {sub && <div style={{ fontSize: 10, color: C.muted, marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sub}</div>}
                           </div>
                         ))}
@@ -4051,17 +4075,21 @@ const handleCSV = async (file, forcePlatform = null) => {
                         </div>
                       </div>
 
-                      {/* TIP INPUT */}
+                      {/* TIP INPUT — collapsible */}
                       {liveActive && (
-                        <div style={{ ...glassCard, borderRadius: 12, padding: '14px 16px' }}>
-                          <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10 }}>Log a tip manually</div>
-                          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: 8 }}>
-                            <input placeholder="Username" value={liveTipInput.username} onChange={e => setLiveTipInput(p => ({ ...p, username: e.target.value }))} onKeyDown={e => e.key === 'Enter' && addTip()} style={inp2} />
-                            <input type="number" placeholder="Tokens" value={liveTipInput.tokens} onChange={e => setLiveTipInput(p => ({ ...p, tokens: e.target.value }))} onKeyDown={e => e.key === 'Enter' && addTip()} style={inp2} />
-                            <input type="number" placeholder="USD" value={liveTipInput.usd} onChange={e => setLiveTipInput(p => ({ ...p, usd: e.target.value }))} onKeyDown={e => e.key === 'Enter' && addTip()} style={inp2} />
-                            <button onClick={addTip} style={{ padding: '8px 16px', borderRadius: 8, background: 'linear-gradient(135deg, #22D3EE, #EC4899)', border: 'none', color: C.white, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>+ Add</button>
+                        <details style={{ ...glassCard, borderRadius: 12 }}>
+                          <summary style={{ padding: '11px 16px', cursor: 'pointer', fontSize: 12, color: C.muted, userSelect: 'none', listStyle: 'none', display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{ fontSize: 14 }}>＋</span> Log a tip manually
+                          </summary>
+                          <div style={{ padding: '0 16px 14px' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: 8 }}>
+                              <input placeholder="Username" value={liveTipInput.username} onChange={e => setLiveTipInput(p => ({ ...p, username: e.target.value }))} onKeyDown={e => e.key === 'Enter' && addTip()} style={inp2} />
+                              <input type="number" placeholder="Tokens" value={liveTipInput.tokens} onChange={e => setLiveTipInput(p => ({ ...p, tokens: e.target.value }))} onKeyDown={e => e.key === 'Enter' && addTip()} style={inp2} />
+                              <input type="number" placeholder="USD" value={liveTipInput.usd} onChange={e => setLiveTipInput(p => ({ ...p, usd: e.target.value }))} onKeyDown={e => e.key === 'Enter' && addTip()} style={inp2} />
+                              <button onClick={addTip} style={{ padding: '8px 16px', borderRadius: 8, background: 'linear-gradient(135deg, #22D3EE, #EC4899)', border: 'none', color: C.white, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>+ Add</button>
+                            </div>
                           </div>
-                        </div>
+                        </details>
                       )}
 
                       {/* LIVE EVENT FEED */}
@@ -4077,7 +4105,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                               const isNew = i === 0 && !ev._isHistory
                               const isBig = (ev.normalizedRevenue || 0) >= 5
                               return (
-                                <div key={ev._id || i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 12px', borderRadius: 9, background: isFlash ? 'rgba(168,85,247,0.18)' : isNew ? 'rgba(34,211,238,0.07)' : isBig ? 'rgba(245,158,11,0.06)' : 'rgba(255,255,255,0.02)', border: isFlash ? '1px solid rgba(168,85,247,0.5)' : isNew ? '1px solid rgba(34,211,238,0.18)' : isBig ? '1px solid rgba(245,158,11,0.18)' : '1px solid rgba(255,255,255,0.04)', boxShadow: isFlash ? '0 0 16px rgba(168,85,247,0.25)' : 'none', transition: 'all 0.35s ease', opacity: ev._isHistory ? 0.55 : 1 }}>
+                                <div key={ev._id || i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 12px', borderRadius: 9, background: isFlash ? 'rgba(168,85,247,0.18)' : isNew ? 'rgba(34,211,238,0.07)' : isBig ? 'rgba(245,158,11,0.06)' : 'rgba(255,255,255,0.02)', border: isFlash ? '1px solid rgba(168,85,247,0.5)' : isNew ? '1px solid rgba(34,211,238,0.18)' : isBig ? '1px solid rgba(245,158,11,0.18)' : '1px solid rgba(255,255,255,0.04)', boxShadow: isFlash ? '0 0 16px rgba(168,85,247,0.25)' : 'none', transition: 'all 0.35s ease', opacity: ev._isHistory ? 0.55 : 1, animation: isNew ? 'cc-slide-in 0.35s ease' : 'none' }}>
                                   <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
                                     <span style={{ fontSize: 14 }}>{isBig ? '🐋' : '💰'}</span>
                                     <div>
@@ -4100,7 +4128,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                     </div>
 
                     {/* RIGHT */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
                       {/* STREAM HEALTH */}
                       {liveActive && state && (
@@ -4187,7 +4215,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                   </div>
 
                   {/* ── BOTTOM PANELS ─────────────────────────────────── */}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 12 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 20 }}>
 
                     {/* SESSION TIMELINE */}
                     {liveActive && (liveEvents.length > 0 || phaseChangeLog.current.length > 0) && (() => {
