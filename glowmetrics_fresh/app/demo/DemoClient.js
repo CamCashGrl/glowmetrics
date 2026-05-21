@@ -27,6 +27,7 @@ const STEPS = [
   { id: 'sessions',  icon: '📅', label: 'Session Breakdown'    },
   { id: 'fans',      icon: '👑', label: 'Top Fans'             },
   { id: 'titles',    icon: '🎯', label: 'Room Title Generator' },
+  { id: 'live',      icon: '🔴', label: 'Live Mode'            },
 ]
 
 // ─── Re-engage messages per fan ───────────────────────────────────────────────
@@ -1125,11 +1126,156 @@ function TitlesPanel() {
   )
 }
 
+// ─── LivePanel ────────────────────────────────────────────────────────────────
+function LivePanel() {
+  const [tips, setTips]             = useState([])
+  const [tokenTotal, setTokenTotal] = useState(0)
+  const [usdTotal, setUsdTotal]     = useState(0)
+  const [coach, setCoach]           = useState('👁 Watching for tips — set a goal to get things started.')
+  const [flashId, setFlashId]       = useState(null)
+  const tipIndexRef = useRef(0)
+
+  const FAKE_TIPS = [
+    { username: 'PurpleRain99',  tokens: 200,  usd: 10.00 },
+    { username: 'xDarkMatter3',  tokens: 50,   usd: 2.50  },
+    { username: 'vaultmaster',   tokens: 500,  usd: 25.00 },
+    { username: 'GalaxyQueen',   tokens: 100,  usd: 5.00  },
+    { username: 'midnight_wolf', tokens: 25,   usd: 1.25  },
+    { username: 'PurpleRain99',  tokens: 1000, usd: 50.00 },
+    { username: 'silversurfer88',tokens: 75,   usd: 3.75  },
+    { username: 'vaultmaster',   tokens: 300,  usd: 15.00 },
+    { username: 'xDarkMatter3',  tokens: 150,  usd: 7.50  },
+    { username: 'neon_dreamer',  tokens: 50,   usd: 2.50  },
+  ]
+
+  const COACHES = [
+    '🔥 Room is heating up — PurpleRain99 is active, call them out by name!',
+    '⚡ Tip streak detected — raise your goal while momentum is high',
+    '🐋 vaultmaster just dropped 500 tokens — acknowledge them VIP style NOW',
+    '💰 You\'re 73% to your goal — announce the reward out loud right now',
+    '🎯 Room momentum building — set a countdown timer to create urgency',
+    '🔥 EXPLOSIVE energy — push the next goal immediately, room is ready',
+    '🐋 PurpleRain99 tips every ~4 min — 6 min since their last. Call them out!',
+    '⚡ HIGH CONVERSION WINDOW — momentum +41% above your normal pace',
+  ]
+
+  const ROOM_STATES = [
+    { label: 'WARMING',   emoji: '🌡️', color: '#22d3ee', score: 30, from: 'rgba(14,28,55,0.98)',  to: 'rgba(20,40,70,0.98)',  glow: 'rgba(34,211,238,0.12)' },
+    { label: 'ACTIVE',    emoji: '⚡',  color: '#a855f7', score: 55, from: 'rgba(16,30,62,0.98)',  to: 'rgba(30,55,90,0.98)',  glow: 'rgba(168,85,247,0.22)' },
+    { label: 'HOT',       emoji: '🔥',  color: '#f59e0b', score: 75, from: 'rgba(38,16,72,0.98)',  to: 'rgba(58,22,92,0.98)',  glow: 'rgba(245,158,11,0.30)' },
+    { label: 'HOT',       emoji: '🔥',  color: '#f59e0b', score: 85, from: 'rgba(44,18,76,0.98)',  to: 'rgba(64,24,98,0.98)',  glow: 'rgba(245,158,11,0.38)' },
+    { label: 'EXPLOSIVE', emoji: '💥',  color: '#ef4444', score: 97, from: 'rgba(60,12,28,0.98)',  to: 'rgba(88,18,38,0.98)',  glow: 'rgba(239,68,68,0.42)' },
+  ]
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const tipData = FAKE_TIPS[tipIndexRef.current % FAKE_TIPS.length]
+      const id = Date.now()
+      const tip = { ...tipData, id, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) }
+      setTips(prev => [tip, ...prev].slice(0, 8))
+      setTokenTotal(prev => prev + tipData.tokens)
+      setUsdTotal(prev => prev + tipData.usd)
+      setFlashId(id)
+      setCoach(COACHES[tipIndexRef.current % COACHES.length])
+      setTimeout(() => setFlashId(null), 1800)
+      tipIndexRef.current++
+    }, 2400)
+    return () => clearInterval(interval)
+  }, [])
+
+  const roomState = ROOM_STATES[Math.min(Math.floor(tips.length / 2), ROOM_STATES.length - 1)]
+
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+        <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981', boxShadow: '0 0 8px #10b981', animation: 'livepulse 1.5s infinite' }} />
+        <div style={{ fontSize: 14, fontWeight: 800, color: C.white }}>Live Mode</div>
+        <div style={{ fontSize: 10, color: C.dim, padding: '2px 8px', borderRadius: 20, background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.2)' }}>simulated demo</div>
+      </div>
+
+      {/* Room State Hero */}
+      <div style={{ borderRadius: 12, padding: '16px 20px', marginBottom: 10, background: `linear-gradient(135deg, ${roomState.from}, ${roomState.to})`, border: `1px solid ${roomState.color}35`, boxShadow: `0 0 36px ${roomState.glow}`, transition: 'all 1s ease' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#10b981', boxShadow: '0 0 10px #10b981', animation: 'livepulse 1.5s infinite' }} />
+            <div>
+              <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 2 }}>Room State</div>
+              <div style={{ fontSize: 24, fontWeight: 900, color: roomState.color, transition: 'color 1s ease' }}>{roomState.emoji} {roomState.label}</div>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 22 }}>
+            {[
+              { label: 'Revenue', value: `$${usdTotal.toFixed(2)}`, color: '#10b981' },
+              { label: 'Tokens',  value: tokenTotal.toLocaleString(), color: '#22d3ee' },
+              { label: 'Tips',    value: tips.length, color: '#a855f7' },
+            ].map(({ label, value, color }) => (
+              <div key={label} style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 2 }}>{label}</div>
+                <div style={{ fontSize: 20, fontWeight: 900, color }}>{value}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div style={{ marginTop: 12, height: 3, borderRadius: 2, background: 'rgba(255,255,255,0.07)', overflow: 'hidden' }}>
+          <div style={{ height: '100%', width: `${roomState.score}%`, borderRadius: 2, background: `linear-gradient(90deg, ${roomState.color}, #22d3ee)`, transition: 'width 1.2s ease' }} />
+        </div>
+      </div>
+
+      {/* AI Coach Centerpiece */}
+      <div style={{ borderRadius: 12, padding: '13px 18px', marginBottom: 10, background: 'linear-gradient(135deg, rgba(236,72,153,0.09), rgba(124,92,255,0.09))', border: '1px solid rgba(168,85,247,0.32)' }}>
+        <div style={{ fontSize: 9, color: '#ec4899', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 800, marginBottom: 7 }}>⚡ AI Coach — Do This Now</div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: C.white, lineHeight: 1.65 }}>{coach}</div>
+      </div>
+
+      {/* Stats + Feed */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+          {[
+            { label: 'Revenue', value: `$${usdTotal.toFixed(2)}`, color: '#10b981' },
+            { label: 'Tokens',  value: tokenTotal.toLocaleString(), color: '#22d3ee' },
+            { label: 'Avg Tip', value: tips.length > 0 ? `$${(usdTotal / tips.length).toFixed(2)}` : '$0.00', color: '#f59e0b' },
+            { label: 'Rev/hr',  value: tips.length > 0 ? `$${(usdTotal / (tips.length * 2.4 / 3600) / 1).toFixed(0)}` : '$0', color: '#a855f7' },
+          ].map(({ label, value, color }) => (
+            <div key={label} style={{ borderRadius: 8, padding: '9px 12px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}>
+              <div style={{ fontSize: 9, color: C.dim, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 2 }}>{label}</div>
+              <div style={{ fontSize: 17, fontWeight: 900, color }}>{value}</div>
+            </div>
+          ))}
+        </div>
+        <div style={{ borderRadius: 8, padding: '10px 12px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}>
+          <div style={{ fontSize: 9, color: C.dim, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8 }}>Live Tips</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+            {tips.length === 0 && <div style={{ fontSize: 11, color: C.dim, textAlign: 'center', padding: '12px 0' }}>Starting simulation...</div>}
+            {tips.slice(0, 7).map((tip) => {
+              const isFlash = tip.id === flashId
+              const isBig   = tip.tokens >= 300
+              return (
+                <div key={tip.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '5px 8px', borderRadius: 6, background: isFlash ? 'rgba(168,85,247,0.2)' : isBig ? 'rgba(245,158,11,0.08)' : 'rgba(255,255,255,0.02)', border: isFlash ? '1px solid rgba(168,85,247,0.5)' : isBig ? '1px solid rgba(245,158,11,0.2)' : '1px solid transparent', transition: 'all 0.35s ease', boxShadow: isFlash ? '0 0 10px rgba(168,85,247,0.25)' : 'none' }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: isFlash ? '#c084fc' : C.white, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 82 }}>
+                    {isBig ? '🐋 ' : ''}{tip.username}
+                  </span>
+                  <span style={{ fontSize: 12, fontWeight: 800, color: isBig ? '#f59e0b' : '#10b981', flexShrink: 0 }}>${tip.usd.toFixed(2)}</span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </div>
+
+      <div style={{ marginTop: 12, padding: '10px 14px', borderRadius: 8, background: 'rgba(168,85,247,0.06)', border: '1px solid rgba(168,85,247,0.15)', fontSize: 11, color: C.dim, textAlign: 'center' }}>
+        This is what your dashboard looks like while you stream — tips auto-capture from your Chaturbate chat
+      </div>
+
+      <style>{`@keyframes livepulse { 0%,100%{opacity:1} 50%{opacity:0.3} }`}</style>
+    </div>
+  )
+}
+
 // ─── DashboardWalkthrough ─────────────────────────────────────────────────────
 function DashboardWalkthrough() {
   const [step, setStep] = useState(0)
 
-  const PANELS = [OverviewPanel, InsightsPanel, SessionsPanel, FansPanel, TitlesPanel]
+  const PANELS = [OverviewPanel, InsightsPanel, SessionsPanel, FansPanel, TitlesPanel, LivePanel]
   const ActivePanel = PANELS[step]
 
   return (
