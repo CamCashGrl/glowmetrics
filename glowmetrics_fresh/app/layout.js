@@ -123,6 +123,25 @@ export default function RootLayout({ children }) {
         {children}
         <Analytics />
 
+        {/* Google Ads tag */}
+        <Script
+          id="gtag-src"
+          strategy="afterInteractive"
+          src="https://www.googletagmanager.com/gtag/js?id=AW-18107430539"
+        />
+        <Script
+          id="gtag-config"
+          strategy="afterInteractive"
+          dangerouslySetInnerHTML={{
+            __html: `
+              window.dataLayer = window.dataLayer || [];
+              function gtag(){dataLayer.push(arguments);}
+              gtag('js', new Date());
+              gtag('config', 'AW-18107430539');
+            `,
+          }}
+        />
+
         {/* X (Twitter) Conversion Tracking Pixel */}
         <Script
           id="twitter-pixel"
