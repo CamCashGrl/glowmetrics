@@ -200,6 +200,7 @@ export default function LandingPage() {
       const { error } = await supabase.auth.signUp({ email, password })
       if (error) { setAuthError(error.message); setAuthLoading(false) }
       else {
+        if (typeof twq === 'function') twq('event', 'tw-rc0w2-rcj9h', {})
         const { data: { user } } = await supabase.auth.getUser()
         if (user) router.push("/dashboard")
         else { setAuthMsg("Account created! Check your email to confirm, then log in."); setIsSignUp(false); setAuthLoading(false) }
