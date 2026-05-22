@@ -201,6 +201,7 @@ export default function LandingPage() {
       if (error) { setAuthError(error.message); setAuthLoading(false) }
       else {
         if (typeof twq === 'function') twq('event', 'tw-rc0w2-rcj9h', {})
+        fetch('/api/admin/notify-signup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, source: 'landing' }) }).catch(() => {})
         const { data: { user } } = await supabase.auth.getUser()
         if (user) router.push("/dashboard")
         else { setAuthMsg("Account created! Check your email to confirm, then log in."); setIsSignUp(false); setAuthLoading(false) }
