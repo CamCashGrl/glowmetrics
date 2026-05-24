@@ -1733,7 +1733,7 @@ const handleCSV = async (file, forcePlatform = null) => {
     })
     const peakAvg = sessionsAtPeak.length >= 2
       ? sessionsAtPeak.reduce((s, x) => s + x.totalUSD, 0) / sessionsAtPeak.length
-      : (bestHour?.avg || sessionAvg)
+      : (displayAvg || bestHour?.avg || sessionAvg)
     const predictionLow = Math.round(peakAvg * 0.6)
     const predictionHigh = Math.round(peakAvg * 1.5)
 
@@ -1787,6 +1787,7 @@ const handleCSV = async (file, forcePlatform = null) => {
     const likelyOnline = (whales || [])
       .filter(w => {
         if (!w.tips || w.tips.length < 3) return false
+        if (w.totalUSD < 3) return false
         const hc = {}
         w.tips.forEach(t => { const h = new Date(t.date_time || t.dateRaw).getUTCHours(); hc[h] = (hc[h] || 0) + 1 })
         const peakH = parseInt(Object.entries(hc).sort((a,b) => b[1]-a[1])[0][0])
@@ -2416,6 +2417,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                       <div style={{ fontSize: 10, color: C.muted, marginBottom: 3, textTransform: 'uppercase', letterSpacing: 1 }}>Income Forecast</div>
                       <div style={{ fontSize: 14, fontWeight: 800, color: C.green }}>${predictionLow}–${predictionHigh}</div>
                       <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>if you stream at {bhLabel}</div>
+                      {sessionsAtPeak.length < 2 && <div style={{ fontSize: 10, color: C.muted, marginTop: 3, fontStyle: 'italic' }}>based on limited data</div>}
                     </div>
                   )}
                 </div>
@@ -2451,7 +2453,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                   )}
 
                   {/* Re-engage */}
-                  {reengageFans.length > 0 && (
+                  {!atPeak && reengageFans.length > 0 && (
                     <div style={{ flex: 1, minWidth: 200, padding: '12px 14px', borderRadius: 11, background: 'rgba(236,72,153,0.06)', border: '1px solid rgba(236,72,153,0.18)' }}>
                       <div style={{ fontSize: 11, fontWeight: 700, color: C.pink, marginBottom: 9, display: 'flex', alignItems: 'center', gap: 6 }}>
                         ⚠️ Re-engage Today
