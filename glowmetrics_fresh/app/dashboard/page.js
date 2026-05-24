@@ -33,8 +33,11 @@ const glassCard = {
 }
 
 const formatHour = (hour) => {
-  const h = parseInt(hour)
-  if (isNaN(h)) return "—"
+  const utcHour = parseInt(hour)
+  if (isNaN(utcHour)) return "—"
+  const offsetHours = new Date().getTimezoneOffset() / -60
+  const localHour = ((utcHour + offsetHours) % 24 + 24) % 24
+  const h = Math.round(localHour)
   if (h === 0) return "12 AM"
   if (h < 12) return `${h} AM`
   if (h === 12) return "12 PM"
@@ -580,7 +583,7 @@ function TitleGenerator({ C, glassCard, analytics, tips, sessions, whales }) {
       bestHour = bestHourEntry ? parseInt(bestHourEntry[0]) : null
     }
     const bestHourLabel = bestHour !== null
-      ? (bestHour === 0 ? "12 AM" : bestHour < 12 ? `${bestHour} AM` : bestHour === 12 ? "12 PM" : `${bestHour-12} PM`)
+      ? (() => { const _off = new Date().getTimezoneOffset()/-60; const _lh = Math.round(((bestHour+_off)%24+24)%24); return _lh===0?"12 AM":_lh<12?`${_lh} AM`:_lh===12?"12 PM":`${_lh-12} PM` })()
       : null
     const hoursUntilPeak = bestHour !== null ? (bestHour - currentHour + 24) % 24 : 99
     const isPeakNow = hoursUntilPeak <= 1
@@ -1536,7 +1539,7 @@ const handleCSV = async (file, forcePlatform = null) => {
       const currentUTCHr = new Date().getUTCHours()
       const hoursAway = (peakHour - currentUTCHr + 24) % 24
       const probability = Math.min(95, Math.round((bestHour[1] / fanTips.length) * 100 * 2.5))
-      const label = peakHour === 0 ? '12 AM' : peakHour < 12 ? `${peakHour} AM` : peakHour === 12 ? '12 PM' : `${peakHour - 12} PM`
+      const label = (() => { const _off=new Date().getTimezoneOffset()/-60; const _lh=Math.round(((peakHour+_off)%24+24)%24); return _lh===0?'12 AM':_lh<12?`${_lh} AM`:_lh===12?'12 PM':`${_lh-12} PM` })()
       if (hoursAway <= 2 && probability >= 40) {
         onlineNow.push({
           type: 'online_now', icon: '🟢', color: C.green, severity: 'success',
@@ -1668,7 +1671,7 @@ const handleCSV = async (file, forcePlatform = null) => {
 
     // Best hour: today-specific per platform first, then all-time fallback
     // Formula: SUM(usd) / COUNT(DISTINCT hour-bucket) for THIS day of week on THIS platform
-    const fmtHour = h => h === 0 ? '12 AM' : h < 12 ? `${h} AM` : h === 12 ? '12 PM' : `${h-12} PM`
+    const fmtHour = h => { const _off=new Date().getTimezoneOffset()/-60; const _lh=Math.round(((h+_off)%24+24)%24); return _lh===0?'12 AM':_lh<12?`${_lh} AM`:_lh===12?'12 PM':`${_lh-12} PM` }
     const platBestTimes = analytics?.platformBestTimes || {}
     let todayBestPlat = null, todayBestHourNum = null, todayBestAvg = 0
     Object.entries(platBestTimes).forEach(([plat, times]) => {
@@ -1886,11 +1889,11 @@ const handleCSV = async (file, forcePlatform = null) => {
           const otherVal = platHourAvg[other][currentUTCHour] || 0
           if (hourVal > 0 && otherVal > 0 && hourVal >= otherVal * 1.5) {
             const mult = (hourVal / otherVal).toFixed(1)
-            const label = currentUTCHour === 0 ? '12 AM' : currentUTCHour < 12 ? `${currentUTCHour} AM` : currentUTCHour === 12 ? '12 PM' : `${currentUTCHour - 12} PM`
+            const label = (() => { const _off=new Date().getTimezoneOffset()/-60; const _lh=Math.round(((currentUTCHour+_off)%24+24)%24); return _lh===0?'12 AM':_lh<12?`${_lh} AM`:_lh===12?'12 PM':`${_lh-12} PM` })()
             alerts.push({
               type: 'platform_hour', priority: 1, icon: '⚡', color: '#22D3EE',
               title: `Right now ${plat} earns ${mult}x more than ${other}`,
-              message: `At ${label} UTC, ${plat} historically averages $${hourVal.toFixed(0)} vs $${otherVal.toFixed(0)} on ${other}. Stream on ${plat} now.`
+              message: `At ${label}, ${plat} historically averages $${hourVal.toFixed(0)} vs $${otherVal.toFixed(0)} on ${other}. Stream on ${plat} now.`
             })
           }
         })
@@ -1918,7 +1921,7 @@ const handleCSV = async (file, forcePlatform = null) => {
       const peakHour = parseInt(sortedHours[0][0])
       const hoursAway = (peakHour - new Date().getUTCHours() + 24) % 24
       const confidence = Math.min(95, Math.round((sortedHours[0][1] / fanTips.length) * 100 * 2.5))
-      const label = peakHour === 0 ? '12 AM' : peakHour < 12 ? `${peakHour} AM` : peakHour === 12 ? '12 PM' : `${peakHour - 12} PM`
+      const label = (() => { const _off=new Date().getTimezoneOffset()/-60; const _lh=Math.round(((peakHour+_off)%24+24)%24); return _lh===0?'12 AM':_lh<12?`${_lh} AM`:_lh===12?'12 PM':`${_lh-12} PM` })()
       const daysSince = Math.floor((now - new Date(w.lastTipDate)) / 86400000)
 
       if (hoursAway === 0 || hoursAway === 1) {
@@ -2553,7 +2556,7 @@ const handleCSV = async (file, forcePlatform = null) => {
 
               {/* Platform ROI + Per-Platform Best Time (mandatory: always show platform context) */}
               {(() => {
-                const fmtH = h => h === 0 ? '12 AM' : h < 12 ? `${h} AM` : h === 12 ? '12 PM' : `${h-12} PM`
+                const fmtH = h => { const _off=new Date().getTimezoneOffset()/-60; const _lh=Math.round(((h+_off)%24+24)%24); return _lh===0?'12 AM':_lh<12?`${_lh} AM`:_lh===12?'12 PM':`${_lh-12} PM` }
                 const platColors = { Chaturbate: C.cyan, BongaCams: C.pink, MyFreeCams: C.gold }
                 const allPlats = [...(analytics?.platforms || [])].sort((a,b) => b.totalUSD - a.totalUSD)
                 if (!allPlats.length) return null
@@ -2698,7 +2701,7 @@ const handleCSV = async (file, forcePlatform = null) => {
             ═══════════════════════════════════════ */}
             {(() => {
               const currentUTCHourTE = new Date().getUTCHours()
-              const labelH = h => h === 0 ? '12 AM' : h < 12 ? `${h} AM` : h === 12 ? '12 PM' : `${h-12} PM`
+              const labelH = h => { const _off=new Date().getTimezoneOffset()/-60; const _lh=Math.round(((h+_off)%24+24)%24); return _lh===0?'12 AM':_lh<12?`${_lh} AM`:_lh===12?'12 PM':`${_lh-12} PM` }
 
               const likelyOnline = whales
                 .filter(w => w.tipCount >= 3)
@@ -2838,7 +2841,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                 .filter(([,m]) => m.missedRevenue > 5)
                 .sort((a,b) => b[1].missedRevenue - a[1].missedRevenue)
               if (!allAlerts.length && !missedEntries.length) return null
-              const fmtH2 = h => h === 0 ? '12 AM' : h < 12 ? `${h} AM` : h === 12 ? '12 PM' : `${h-12} PM`
+              const fmtH2 = h => { const _off=new Date().getTimezoneOffset()/-60; const _lh=Math.round(((h+_off)%24+24)%24); return _lh===0?'12 AM':_lh<12?`${_lh} AM`:_lh===12?'12 PM':`${_lh-12} PM` }
               return (
                 <div style={{ ...glassCard, borderRadius: 18, padding: 24, marginBottom: 28, border: "1px solid rgba(251,146,60,0.2)", animation: "fadeUp 0.3s ease 0.25s both" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
@@ -2858,7 +2861,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, flexWrap: "wrap" }}>
                             <div>
                               <div style={{ fontSize: 13, fontWeight: 700, color: C.white, marginBottom: 3 }}>
-                                📉 {plat} — peak hour earns <span style={{ color: C.cyan }}>{m.multiplier || (m.bestHourAvg && m.overallAvg ? (m.bestHourAvg/m.overallAvg).toFixed(1) : "5")}x</span> your avg session. Shift more streams to {m.bestHour < 12 ? m.bestHour === 0 ? "12 AM" : m.bestHour + " AM" : m.bestHour === 12 ? "12 PM" : (m.bestHour-12) + " PM"} to add ~<span style={{ color: C.green }}>${Math.round((m.bestHourAvg||0) - (m.overallAvg||0))}/stream</span>
+                                📉 {plat} — peak hour earns <span style={{ color: C.cyan }}>{m.multiplier || (m.bestHourAvg && m.overallAvg ? (m.bestHourAvg/m.overallAvg).toFixed(1) : "5")}x</span> your avg session. Shift more streams to {fmtH2(m.bestHour)} to add ~<span style={{ color: C.green }}>${Math.round((m.bestHourAvg||0) - (m.overallAvg||0))}/stream</span>
                               </div>
                               <div style={{ fontSize: 12, color: C.muted }}>
                                 {m.sessionsNotAtBestHour} sessions ran off-peak · Best hour is {fmtH2(m.bestHour)} (${m.bestHourAvg.toFixed(0)} avg) vs your overall ${m.overallAvg.toFixed(0)} avg
@@ -3249,7 +3252,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                                 : intensity < 0.66
                                 ? "rgba(34,211,238,0.55)"
                                 : "rgba(34,211,238,0.95)"
-                              const label = h === 0 ? "12a" : h < 12 ? `${h}a` : h === 12 ? "12p" : `${h-12}p`
+                              const label = (() => { const _off=new Date().getTimezoneOffset()/-60; const _lh=Math.round(((h+_off)%24+24)%24); return _lh===0?"12a":_lh<12?`${_lh}a`:_lh===12?"12p":`${_lh-12}p` })()
                               return (
                                 <div key={h} title={`${label}: $${val.toFixed(0)}`} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, flex: "0 0 auto" }}>
                                   <div style={{ width: 18, height: 24, borderRadius: 3, background: bg, border: "1px solid rgba(255,255,255,0.06)" }} />
