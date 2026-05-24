@@ -2053,6 +2053,8 @@ const handleCSV = async (file, forcePlatform = null) => {
         .alert-row { transition: transform 0.12s ease; }
         .alert-row:hover { transform: translateX(3px); }
         button:active { transform: scale(0.96) !important; transition: transform 0.1s ease !important; }
+        .dash-main { margin-left: 240px; width: calc(100% - 240px); overflow-x: hidden; box-sizing: border-box; }
+        @media (max-width: 768px) { .dash-main { margin-left: 0 !important; width: 100% !important; } }
 
         @keyframes shimmer-sweep {
           0%   { background-position: -200% center; }
@@ -2080,7 +2082,7 @@ const handleCSV = async (file, forcePlatform = null) => {
 
       {/* SIDEBAR — desktop only, hidden on mobile via CSS */}
       <Sidebar activeTab={activeTab} onTabChange={(tab) => { setActiveTab(tab); if (typeof window !== "undefined") { localStorage.setItem("camcash_tab", tab); window.scrollTo({ top: 0, behavior: "instant" }); } }} user={user} onSignOut={async () => { await supabase.auth.signOut(); router.replace("/login"); }} />{/* MAIN CONTENT */}
-      <div className="dash-main" style={{ marginLeft: 240, padding: 32, position: "relative", zIndex: 1 }}>
+      <div className="dash-main" style={{ marginLeft: 240, width: "calc(100% - 240px)", minWidth: 0, overflowX: "hidden", boxSizing: "border-box", padding: 32, position: "relative", zIndex: 1 }}>
 
         {/* ── STICKY COMMAND BAR ── */}
         {(() => {
@@ -2093,7 +2095,7 @@ const handleCSV = async (file, forcePlatform = null) => {
           const bestPlat = brief?.displayPlat || (tips.length > 0 ? tips[0]?.platform : null)
           const safeRevenue = (!isNaN(totalRevenue) && isFinite(totalRevenue)) ? totalRevenue : 0
           return (
-            <div style={{ position: 'sticky', top: 0, zIndex: 20, marginBottom: 20, marginLeft: -32, marginRight: -32, padding: '0 32px', background: 'rgba(5,7,15,0.86)', backdropFilter: 'blur(22px)', WebkitBackdropFilter: 'blur(22px)', borderBottom: '1px solid rgba(255,255,255,0.06)', boxShadow: '0 2px 20px rgba(0,0,0,0.4)' }}>
+            <div style={{ position: 'sticky', top: 0, zIndex: 20, marginBottom: 20, marginLeft: -32, marginRight: -32, width: 'calc(100% + 64px)', maxWidth: 'none', padding: '0 32px', background: 'rgba(5,7,15,0.86)', backdropFilter: 'blur(22px)', WebkitBackdropFilter: 'blur(22px)', borderBottom: '1px solid rgba(255,255,255,0.06)', boxShadow: '0 2px 20px rgba(0,0,0,0.4)' }}>
               <div style={{ display: 'flex', alignItems: 'center', height: 58, gap: 0, overflowX: 'auto' }}>
                 <div style={{ display:'flex', flexDirection:'column', justifyContent:'center', paddingRight:24, borderRight:'1px solid rgba(255,255,255,0.07)', flexShrink:0 }}>
                   <div style={{ fontSize:10, color:'#475569', textTransform:'uppercase', letterSpacing:1.2, fontWeight:600, marginBottom:2 }}>Total Earned</div>
@@ -3363,44 +3365,96 @@ const handleCSV = async (file, forcePlatform = null) => {
               )}
             </div>
 
-            {/* ALL TIPPERS TABLE — shows everyone */}
-            <div style={{ ...glassCard, borderRadius: 14, overflow: "hidden", marginBottom: 20 }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                <thead>
-                  <tr style={{ background: "rgba(255,255,255,0.04)", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-                    {["#", "Username", "Total $", "Tips", "Avg Tip", "Platform", "Tier", "Last Tip", "Actions"].map(h => (
-                      <th key={h} style={{ padding: "12px 16px", textAlign: "left", color: C.muted, fontSize: 11, textTransform: "uppercase", fontWeight: 500 }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredWhales.map((w, i) => (
-                    <tr key={i} className="whale-row" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
-                      <td style={{ padding: "12px 16px", color: i < 3 ? C.gold : C.muted, fontWeight: i < 3 ? 700 : 400 }}>#{i + 1}</td>
-                      <td style={{ padding: "12px 16px" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <span style={{ color: C.white, fontWeight: 600 }}>{w.username}</span>
-                          <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }}
-                            style={{ fontSize: 26, background: "none", border: "none", cursor: "pointer", lineHeight: 1, padding: '4px', animation: "pulse-msg 2s infinite" }}
-                            title="Message">💌</button>
+            {/* ALL TIPPERS — CRM Card Grid */}
+            {filteredWhales.length === 0 ? (
+              <div style={{ ...glassCard, borderRadius: 14, padding: 32, textAlign: 'center', marginBottom: 20 }}>
+                <div style={{ fontSize: 32, marginBottom: 12 }}>🔍</div>
+                <div style={{ fontSize: 15, color: C.muted }}>No fans match this filter</div>
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 14, marginBottom: 20 }}>
+                {filteredWhales.map((w, i) => {
+                  const tc = TIER_COLORS[w.tier] || C.cyan
+                  const days = w.daysSinceLastTip ?? Math.floor((Date.now() - new Date(w.lastTipDate)) / 86400000)
+                  const relScore = Math.min(100, Math.round((w.tipCount * 3) + (w.totalUSD / 10) + (days < 7 ? 20 : days < 30 ? 10 : 0)))
+                  const scoreColor = relScore >= 70 ? C.green : relScore >= 40 ? C.gold : C.red
+                  const riskLevel = days < 14 ? { label: 'Low', color: C.green, pct: 20 } : days < 45 ? { label: 'Medium', color: C.gold, pct: 55 } : { label: 'High', color: C.red, pct: 90 }
+                  const tierIcon = w.tier === 'Whale' ? '💎' : w.tier === 'Shark' ? '🦈' : w.tier === 'Regular' ? '⭐' : '💤'
+                  return (
+                    <div key={i}
+                      className="hoverable"
+                      style={{ ...glassCard, borderRadius: 16, padding: 18, border: `1px solid ${tc}33`, cursor: 'default', transition: 'transform 0.18s ease, box-shadow 0.18s ease' }}
+                      onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = `0 0 28px ${tc}22, 0 8px 32px rgba(0,0,0,0.45)` }}
+                      onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = '' }}>
+
+                      {/* TOP ROW — avatar, name, badges, score */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+                        {/* Avatar */}
+                        <div style={{ width: 42, height: 42, borderRadius: 12, background: `linear-gradient(135deg, ${tc}, ${tc}80)`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 17, fontWeight: 800, color: '#fff', flexShrink: 0 }}>
+                          {(w.username || '?').charAt(0).toUpperCase()}
                         </div>
-                      </td>
-                      <td style={{ padding: "12px 16px", color: C.green, fontWeight: 700 }}>${w.totalUSD.toFixed(2)}</td>
-                      <td style={{ padding: "12px 16px", color: C.muted }}>{w.tipCount}</td>
-                      <td style={{ padding: "12px 16px", color: C.cyan }}>${w.avgTipSize.toFixed(2)}</td>
-                      <td style={{ padding: "12px 16px", color: C.muted }}>{w.platform}</td>
-                      <td style={{ padding: "12px 16px" }}>
-                        <span style={{ padding: "4px 10px", borderRadius: 100, background: `${TIER_COLORS[w.tier]}15`, color: TIER_COLORS[w.tier], fontSize: 11, fontWeight: 600 }}>{w.tier}</span>
-                      </td>
-                      <td style={{ padding: "12px 16px", color: C.muted, fontSize: 12 }}>{new Date(w.lastTipDate).toLocaleDateString()}</td>
-                      <td style={{ padding: "12px 16px" }}>
-                        <button onClick={() => setSelectedWhale(w)} style={{ padding: "4px 10px", borderRadius: 6, background: "rgba(34,211,238,0.15)", border: "1px solid rgba(34,211,238,0.3)", color: C.cyan, fontSize: 11, cursor: "pointer" }}>🔍 View</button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                        {/* Name + badges */}
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 14, fontWeight: 700, color: C.white, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginBottom: 4 }}>{w.username}</div>
+                          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                            <span style={{ padding: '2px 7px', borderRadius: 100, background: `${tc}20`, color: tc, fontSize: 10, fontWeight: 700 }}>{w.tier}</span>
+                            <span style={{ padding: '2px 7px', borderRadius: 100, background: 'rgba(255,255,255,0.06)', color: C.muted, fontSize: 10, fontWeight: 600 }}>{w.platform}</span>
+                          </div>
+                        </div>
+                        {/* Relationship score */}
+                        <div style={{ flexShrink: 0, width: 38, height: 38, borderRadius: '50%', background: `${scoreColor}18`, border: `2px solid ${scoreColor}55`, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                          <div style={{ fontSize: 11, fontWeight: 800, color: scoreColor, lineHeight: 1 }}>{relScore}</div>
+                          <div style={{ fontSize: 7, color: scoreColor, opacity: 0.7, lineHeight: 1 }}>REL</div>
+                        </div>
+                      </div>
+
+                      {/* METRIC ROW — 4 pills */}
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 6, marginBottom: 12 }}>
+                        {[
+                          { icon: '💰', val: `$${(w.totalUSD || 0).toFixed(2)}`, label: 'lifetime' },
+                          { icon: '🔁', val: String(w.tipCount || 0), label: 'tips' },
+                          { icon: '⏱', val: `${days}d`, label: 'ago' },
+                          { icon: '📊', val: `$${(w.avgTipSize || 0).toFixed(2)}`, label: 'avg tip' },
+                        ].map(({ icon, val, label }) => (
+                          <div key={label} style={{ padding: '7px 10px', borderRadius: 9, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{ fontSize: 12 }}>{icon}</span>
+                            <div>
+                              <div style={{ fontSize: 12, fontWeight: 700, color: C.white, lineHeight: 1.1 }}>{val}</div>
+                              <div style={{ fontSize: 9, color: C.muted, lineHeight: 1 }}>{label}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* RETENTION RISK BAR */}
+                      <div style={{ marginBottom: 12 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                          <span style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 600 }}>Retention Risk</span>
+                          <span style={{ fontSize: 9, fontWeight: 700, color: riskLevel.color }}>{riskLevel.label}</span>
+                        </div>
+                        <div style={{ height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.07)', overflow: 'hidden' }}>
+                          <div style={{ height: '100%', width: `${riskLevel.pct}%`, borderRadius: 2, background: riskLevel.color, transition: 'width 0.4s ease' }} />
+                        </div>
+                      </div>
+
+                      {/* QUICK ACTIONS */}
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }}
+                          style={{ flex: 1, padding: '7px 0', borderRadius: 8, background: 'rgba(236,72,153,0.1)', border: '1px solid rgba(236,72,153,0.25)', color: C.pink, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+                          title="Message">💌 Message</button>
+                        <button onClick={() => setSelectedWhale(w)}
+                          style={{ flex: 1, padding: '7px 0', borderRadius: 8, background: 'rgba(34,211,238,0.1)', border: '1px solid rgba(34,211,238,0.25)', color: C.cyan, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+                          title="View profile">🔍 View</button>
+                        <button onClick={() => setNoteTarget(w.username)}
+                          style={{ flex: 1, padding: '7px 0', borderRadius: 8, background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.25)', color: '#a78bfa', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+                          title="Add note">📝 Note</button>
+                        <div style={{ width: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, opacity: 0.6 }} title={`${w.tier} tier`}>{tierIcon}</div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
 
             {/* 💎 WHALE INTELLIGENCE PANEL */}
             {filteredWhales.length > 0 && (
