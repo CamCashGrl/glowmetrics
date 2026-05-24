@@ -40,8 +40,9 @@ const accountFeatures = [
 
 const steps = [
   { icon: '📥', title: 'Download', desc: 'Download the ZIP file above' },
-  { icon: '🔧', title: 'Developer Mode', desc: 'Go to Chrome → Extensions → turn on Developer Mode (top right)' },
-  { icon: '📂', title: 'Load Unpacked', desc: 'Click "Load unpacked" → select the unzipped folder' },
+  { icon: '📦', title: 'Unzip', desc: 'Unzip the folder on your computer' },
+  { icon: '🔧', title: 'Developer Mode', desc: 'Go to Chrome → Extensions → turn on Developer Mode (top right toggle)' },
+  { icon: '📂', title: 'Load Unpacked', desc: 'Click Load unpacked → select the unzipped camcash folder' },
   { icon: '🔴', title: 'Go Live', desc: 'Sign in with your CamCash account and go live' },
 ]
 
