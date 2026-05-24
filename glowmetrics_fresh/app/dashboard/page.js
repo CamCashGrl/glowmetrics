@@ -2084,7 +2084,7 @@ const handleCSV = async (file, forcePlatform = null) => {
 
       {/* SIDEBAR — desktop only, hidden on mobile via CSS */}
       <Sidebar activeTab={activeTab} onTabChange={(tab) => { setActiveTab(tab); if (typeof window !== "undefined") { localStorage.setItem("camcash_tab", tab); window.scrollTo({ top: 0, behavior: "instant" }); } }} user={user} onSignOut={async () => { await supabase.auth.signOut(); router.replace("/login"); }} />{/* MAIN CONTENT */}
-      <div className="dash-main" style={{ marginLeft: 240, width: "calc(100% - 240px)", minWidth: 0, overflowX: "hidden", boxSizing: "border-box", padding: 32, position: "relative", zIndex: 1 }}>
+      <div className="dash-main" style={{ marginLeft: 240, width: "calc(100% - 240px)", minWidth: 0, padding: 32, boxSizing: "border-box", overflowX: "hidden" }}>
 
         {/* ── STICKY COMMAND BAR ── */}
         {(() => {
