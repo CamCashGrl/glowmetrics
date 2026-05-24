@@ -667,6 +667,26 @@ export function aggregateRows(tips) {
 
   const sessions = detectSessions(tips)
 
+  // ── SESSION QUALITY CLASSIFICATION ───────────────────────────────────
+  const classifySession = (s) => {
+    const mins = s.durationMinutes || 0
+    const usd  = s.totalUSD || 0
+    if (mins < 2 && usd === 0) return 'invalid'
+    if (mins < 15 && usd < 10) return 'low_signal'
+    return 'meaningful'
+  }
+  const scoreSession = (s) => {
+    const mins = s.durationMinutes || 0
+    const usd  = s.totalUSD || 0
+    const durationScore = Math.min(mins / 120, 1)
+    const revenueScore  = Math.min(usd  / 100, 1)
+    return parseFloat(((durationScore * 0.4) + (revenueScore * 0.6)).toFixed(3))
+  }
+  sessions.forEach(s => { s.sessionQuality = classifySession(s); s.sessionWeight = scoreSession(s) })
+
+  const meaningfulSessions = sessions.filter(s => s.sessionQuality === 'meaningful')
+  const allValidSessions   = sessions.filter(s => s.sessionQuality !== 'invalid')
+
   const dayTipsUSD = {}, dayActiveDates = {}, hourTipsUSD = {}, hourBucketSets = {}
   const UTC_LONG = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
 
@@ -692,17 +712,17 @@ export function aggregateRows(tips) {
   const bestHour = [...hourAvgs].sort((a, b) => b.avg - a.avg)[0] || null
 
   const whales      = identifyWhales(tips)
-  const insights    = generateInsights(tips, sessions, bestDay, worstDay, bestHour)
-  const predictions = predictRevenue(tips, sessions)
+  const insights    = generateInsights(tips, meaningfulSessions, bestDay, worstDay, bestHour)
+  const predictions = predictRevenue(tips, meaningfulSessions)
   const whaleAlerts = generateWhaleAlerts(whales)
-  const lossAlerts  = generateLossAlerts(tips, sessions, whales, bestHour)
-  const nextMoves   = generateNextMoves(tips, sessions, whales, predictions, bestHour)
+  const lossAlerts  = generateLossAlerts(tips, meaningfulSessions, whales, bestHour)
+  const nextMoves   = generateNextMoves(tips, meaningfulSessions, whales, predictions, bestHour)
 
   let totalUSD = 0, totalTokens = 0
   for (const t of tips) { totalUSD += t.usd || 0; totalTokens += t.tokens || 0 }
 
   const platformMap = {}
-  sessions.forEach(s => {
+  meaningfulSessions.forEach(s => {
     if (!platformMap[s.platform]) { platformMap[s.platform] = { platform: s.platform, totalUSD: 0, totalTokens: 0, sessions: 0, hours: 0, tips: 0 } }
     platformMap[s.platform].totalUSD    += s.totalUSD
     platformMap[s.platform].totalTokens += s.totalTokens
@@ -767,7 +787,7 @@ export function aggregateRows(tips) {
   })
 
   // ── EARNINGS VELOCITY ─────────────────────────────────────────────────
-  const timedSessions = sessions.filter(s => !s.durationUnknown)
+  const timedSessions = meaningfulSessions.filter(s => !s.durationUnknown)
   const totalTimedHours = timedSessions.reduce((s, x) => s + x.durationHours, 0)
   const totalTimedUSD = timedSessions.reduce((s, x) => s + x.totalUSD, 0)
   const earningsVelocity = totalTimedHours > 0 ? parseFloat((totalTimedUSD / totalTimedHours).toFixed(2)) : null
@@ -837,7 +857,7 @@ export function aggregateRows(tips) {
     monthMap[key].tips += 1
     monthMap[key].fans.add(t.username.toLowerCase())
   })
-  sessions.forEach(s => {
+  allValidSessions.forEach(s => {
     const dt = new Date(s.startTime)
     const key = `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}`
     if (monthMap[key]) monthMap[key].sessions += 1
@@ -883,7 +903,7 @@ export function aggregateRows(tips) {
     totalTokens,
     totalTips: tips.length,
     avgTipSize: parseFloat((tips.length > 0 ? totalUSD / tips.length : 0).toFixed(2)),
-    topTippers, platforms, sessions,
+    topTippers, platforms, sessions: allValidSessions,
     insights: validateInsights(insights),
     predictions, whaleAlerts, lossAlerts, nextMoves, whales,
     bestDay, bestHour, platformBestTimes,
@@ -891,6 +911,9 @@ export function aggregateRows(tips) {
     tipTypeBreakdown, privateShowFans, spyShowFans,
     earningsVelocity, platformVelocity,
     missedRevenueByPlatform, returningVsNew, topFanDependency,
-    dependencyRisk: null, preTipBehavior: null, trueHourlyAvg: []
+    dependencyRisk: null, preTipBehavior: null, trueHourlyAvg: [],
+    meaningfulSessions, allValidSessions,
+    meaningfulSessionCount: meaningfulSessions.length,
+    lowSignalSessionCount: allValidSessions.length - meaningfulSessions.length,
   }
 }

@@ -828,6 +828,7 @@ export default function Dashboard() {
   const [uploadCount, setUploadCount] = useState(0)
   const [whaleFilter, setWhaleFilter] = useState("ALL")
   const [platformFilter, setPlatformFilter] = useState("ALL")
+  const [meaningfulOnly, setMeaningfulOnly] = useState(true)
   const [platformTimeFilter, setPlatformTimeFilter] = useState("ALL")
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [selectedWhale, setSelectedWhale] = useState(null)
@@ -2253,8 +2254,12 @@ const handleCSV = async (file, forcePlatform = null) => {
                   icon:'👥', badge:null },
                 { label:"Sessions", accent:'#fbbf24', glowClass:'card-glow-gold', sparkData:last6Sess, trend:sessGrowth,
                   value: sessions.length > 0 ? sessions.length.toLocaleString() : '—',
-                  sub: sessionsLast30 > 0 ? `${sessionsLast30} in last 30 days${sessionsLast30 >= 3 ? ' 🔥' : ''}` : 'No sessions in last 30 days',
-                  icon:'🎥', badge: sessionsLast30 >= 5 ? '🔥 On a streak!' : null, badgeColor: C.gold }
+                  sub: (analytics?.meaningfulSessionCount > 0)
+                    ? `${analytics.meaningfulSessionCount} meaningful · ${analytics.lowSignalSessionCount} low-signal`
+                    : (sessionsLast30 > 0 ? `${sessionsLast30} in last 30 days${sessionsLast30 >= 3 ? ' 🔥' : ''}` : 'No sessions in last 30 days'),
+                  icon:'🎥',
+                  badge: sessionsLast30 >= 5 ? '🔥 On a streak!' : null, badgeColor: C.gold,
+                  info: 'Analytics use meaningful sessions only by default' }
               ]
 
               // Earnings velocity per platform for velocity strip
@@ -2278,6 +2283,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                         <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.4 }}>{s.sub}</div>
                         <MiniSpark data={s.sparkData} accent={s.accent} />
                         {s.badge && <div style={{ marginTop: 8, display: "inline-block", padding: "2px 8px", borderRadius: 6, background: `${s.badgeColor}20`, border: `1px solid ${s.badgeColor}40`, fontSize: 10, fontWeight: 700, color: s.badgeColor }}>{s.badge}</div>}
+                        {s.info && <div style={{ marginTop: 6, fontSize: 9, color: C.muted, opacity: 0.7, lineHeight: 1.3 }}>ℹ️ {s.info}</div>}
                       </div>
                     ))}
                   </div>
@@ -4485,6 +4491,10 @@ const handleCSV = async (file, forcePlatform = null) => {
         })()}
 
         {activeTab === "sessions" && (() => {
+          const displaySessions = meaningfulOnly
+            ? (analytics?.meaningfulSessions || sessions)
+            : (analytics?.allValidSessions   || sessions)
+
           // ── SESSION BREAKDOWN ENGINE ────────────────────────────────
           // Pure logic — runs on each session's tips array
           const getSessionBreakdown = (s) => {
@@ -4555,8 +4565,8 @@ const handleCSV = async (file, forcePlatform = null) => {
               }))
 
             // ── PERFORMANCE vs historical avg ────────────────────────
-            const allAvg = sessions.length > 0
-              ? sessions.reduce((s, x) => s + x.totalUSD, 0) / sessions.length
+            const allAvg = displaySessions.length > 0
+              ? displaySessions.reduce((s, x) => s + x.totalUSD, 0) / displaySessions.length
               : 0
             const performance = s.totalUSD >= allAvg * 1.3
               ? "high"
@@ -4623,23 +4633,34 @@ const handleCSV = async (file, forcePlatform = null) => {
             low:     { label: "📉 Underperforming",  color: "#F87171", bg: "rgba(248,113,113,0.1)", border: "rgba(248,113,113,0.25)" },
           }
 
-          const avgSession = sessions.length ? sessions.reduce((s,x) => s+x.totalUSD,0)/sessions.length : 0
+          const avgSession = displaySessions.length ? displaySessions.reduce((s,x) => s+x.totalUSD,0)/displaySessions.length : 0
 
           return (
             <div>
-              <div style={{ marginBottom: 24 }}>
-                <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 4 }}>🎥 Session Breakdown</h1>
-                <p style={{ fontSize: 13, color: C.muted }}>What happened in each stream and how to earn more next time</p>
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 24 }}>
+                <div>
+                  <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 4 }}>🎥 Session Breakdown</h1>
+                  <p style={{ fontSize: 13, color: C.muted }}>What happened in each stream and how to earn more next time</p>
+                </div>
+                <div style={{ display:'flex', alignItems:'center', gap:8, padding:'6px 12px', borderRadius:20, background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.08)', flexShrink:0 }}>
+                  <label style={{ display:'flex', alignItems:'center', gap:6, cursor:'pointer', fontSize:12, color:C.muted }}>
+                    <input type="checkbox" checked={meaningfulOnly} onChange={e => setMeaningfulOnly(e.target.checked)} style={{ accentColor: C.cyan }} />
+                    Meaningful sessions only
+                  </label>
+                  {(analytics?.lowSignalSessionCount > 0) && (
+                    <span style={{ fontSize:11, color:C.muted }}>({analytics.lowSignalSessionCount} low-signal hidden)</span>
+                  )}
+                </div>
               </div>
 
               {/* OVERVIEW STATS BAR */}
-              {sessions.length > 0 && (
+              {displaySessions.length > 0 && (
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 28 }}>
                   {[
-                    { label: "Total Sessions", value: sessions.length, color: C.cyan },
+                    { label: "Total Sessions", value: displaySessions.length, color: C.cyan },
                     { label: "Avg Earnings", value: `$${avgSession.toFixed(2)}`, color: C.green },
-                    { label: "Best Session", value: `$${Math.max(...sessions.map(s => s.totalUSD)).toFixed(2)}`, color: C.gold },
-                    { label: "Total Earned", value: `$${sessions.reduce((s,x) => s+x.totalUSD,0).toFixed(2)}`, color: C.pink },
+                    { label: "Best Session", value: `$${Math.max(...displaySessions.map(s => s.totalUSD)).toFixed(2)}`, color: C.gold },
+                    { label: "Total Earned", value: `$${displaySessions.reduce((s,x) => s+x.totalUSD,0).toFixed(2)}`, color: C.pink },
                   ].map(({ label, value, color }) => (
                     <div key={label} style={{ ...glassCard, borderRadius: 12, padding: "16px 18px" }}>
                       <div style={{ fontSize: 11, color: C.muted, marginBottom: 4, textTransform: "uppercase" }}>{label}</div>
@@ -4649,16 +4670,17 @@ const handleCSV = async (file, forcePlatform = null) => {
                 </div>
               )}
 
-              {/* SESSION CARDS — ALL of them, fully broken down */}
-              {sessions.length === 0 && (
+              {/* SESSION CARDS */}
+              {displaySessions.length === 0 && (
                 <div style={{ ...glassCard, borderRadius: 14, padding: 40, textAlign: "center" }}>
                   <div style={{ fontSize: 40, marginBottom: 12 }}>🎥</div>
-                  <div style={{ fontSize: 16, fontWeight: 700, color: C.white }}>No sessions yet</div>
-                  <div style={{ fontSize: 13, color: C.muted, marginTop: 6 }}>Import your CSV data to see session breakdowns</div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: C.white }}>{sessions.length > 0 ? 'No meaningful sessions match this filter' : 'No sessions yet'}</div>
+                  <div style={{ fontSize: 13, color: C.muted, marginTop: 6 }}>{sessions.length > 0 ? 'Try unchecking "Meaningful sessions only" to see all sessions' : 'Import your CSV data to see session breakdowns'}</div>
+                  {sessions.length > 0 && meaningfulOnly && <button onClick={() => setMeaningfulOnly(false)} style={{ marginTop:12, padding:'7px 18px', borderRadius:8, background:'rgba(34,211,238,0.12)', border:'1px solid rgba(34,211,238,0.3)', color:C.cyan, fontSize:12, cursor:'pointer' }}>Show all sessions</button>}
                 </div>
               )}
 
-              {sessions.map((s, si) => {
+              {displaySessions.map((s, si) => {
                 const bd = getSessionBreakdown(s)
                 if (!bd) return null
                 const perf = PERF[bd.performance]
@@ -4690,7 +4712,7 @@ const handleCSV = async (file, forcePlatform = null) => {
 
                       {/* REVENUE GAP — vs last 5 sessions */}
                       {(() => {
-                        const recentSessions = sessions.filter(x => x.id !== s.id && !x.durationUnknown)
+                        const recentSessions = displaySessions.filter(x => x.id !== s.id && !x.durationUnknown)
                         const comparable = recentSessions.filter(x => x.platform === s.platform).slice(-5)
                         const base = comparable.length >= 3 ? comparable : recentSessions.slice(-5)
                         if (base.length < 2 || s.durationUnknown) return null
