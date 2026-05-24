@@ -39,7 +39,7 @@ export default function SiteFooter() {
     >
       <div
         style={{
-          maxWidth: '1100px',
+          maxWidth: '100%',
           margin: '0 auto',
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
@@ -134,7 +134,7 @@ export default function SiteFooter() {
 
       <div
         style={{
-          maxWidth: '1100px',
+          maxWidth: '100%',
           margin: '40px auto 0',
           paddingTop: '24px',
           borderTop: '1px solid rgba(168,85,247,0.08)',
