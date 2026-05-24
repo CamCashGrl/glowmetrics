@@ -1811,7 +1811,7 @@ const handleCSV = async (file, forcePlatform = null) => {
     })
     return { todayName, bhLabel, bh, atPeak, hoursUntilPeak, displayPlat, displayAvg,
       isBestDay, bestDay, sessionAvg, peakAvg, predictionLow, predictionHigh,
-      reengageFans, likelyOnline, platTodayStats }
+      reengageFans, likelyOnline, platTodayStats, sessionsAtPeakCount: sessionsAtPeak.length }
   }
 
   const buildRealTimeAlerts = () => {
@@ -2322,7 +2322,7 @@ const handleCSV = async (file, forcePlatform = null) => {
         {dailyBrief && (() => {
           const { todayName, bhLabel, bh, atPeak, hoursUntilPeak, displayPlat, displayAvg,
             isBestDay, bestDay, sessionAvg, peakAvg, predictionLow, predictionHigh,
-            reengageFans, likelyOnline, platTodayStats } = dailyBrief
+            reengageFans, likelyOnline, platTodayStats, sessionsAtPeakCount } = dailyBrief
           return (
             <div style={{ marginBottom: 20, borderRadius: 18, overflow: 'hidden', border: `1px solid ${atPeak ? 'rgba(16,185,129,0.45)' : 'rgba(124,92,255,0.3)'}`, background: 'rgba(10,12,24,0.7)', backdropFilter: 'blur(16px)', animation: 'fadeUp 0.3s ease both' }}>
 
@@ -2417,7 +2417,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                       <div style={{ fontSize: 10, color: C.muted, marginBottom: 3, textTransform: 'uppercase', letterSpacing: 1 }}>Income Forecast</div>
                       <div style={{ fontSize: 14, fontWeight: 800, color: C.green }}>${predictionLow}–${predictionHigh}</div>
                       <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>if you stream at {bhLabel}</div>
-                      {sessionsAtPeak.length < 2 && <div style={{ fontSize: 10, color: C.muted, marginTop: 3, fontStyle: 'italic' }}>based on limited data</div>}
+                      {sessionsAtPeakCount < 2 && <div style={{ fontSize: 10, color: C.muted, marginTop: 3, fontStyle: 'italic' }}>based on limited data</div>}
                     </div>
                   )}
                 </div>
