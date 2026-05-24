@@ -34,6 +34,7 @@ const glassCard = {
 
 const formatHour = (hour) => {
   const h = parseInt(hour)
+  if (isNaN(h)) return "—"
   if (h === 0) return "12 AM"
   if (h < 12) return `${h} AM`
   if (h === 12) return "12 PM"
@@ -2049,6 +2050,24 @@ const handleCSV = async (file, forcePlatform = null) => {
         .alert-row { transition: transform 0.12s ease; }
         .alert-row:hover { transform: translateX(3px); }
         button:active { transform: scale(0.96) !important; transition: transform 0.1s ease !important; }
+
+        @keyframes shimmer-sweep {
+          0%   { background-position: -200% center; }
+          100% { background-position: 200% center; }
+        }
+        .hero-revenue-shimmer {
+          background: linear-gradient(90deg, #60a5fa 0%, #f472b6 25%, #a78bfa 50%, #22d3ee 75%, #60a5fa 100%);
+          background-size: 200% auto;
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          animation: shimmer-sweep 5s linear infinite;
+        }
+        .card-glow-pink:hover  { box-shadow: 0 0 38px rgba(244,114,182,0.32), 0 8px 32px rgba(0,0,0,0.5) !important; transform: translateY(-4px) !important; }
+        .card-glow-cyan:hover  { box-shadow: 0 0 38px rgba(34,211,238,0.28), 0 8px 32px rgba(0,0,0,0.5) !important; transform: translateY(-4px) !important; }
+        .card-glow-violet:hover{ box-shadow: 0 0 38px rgba(167,139,250,0.28),0 8px 32px rgba(0,0,0,0.5) !important; transform: translateY(-4px) !important; }
+        .card-glow-gold:hover  { box-shadow: 0 0 38px rgba(251,191,36,0.26), 0 8px 32px rgba(0,0,0,0.5) !important; transform: translateY(-4px) !important; }
+        .stat-card { transition: transform 0.2s ease, box-shadow 0.2s ease; }
+        @keyframes cmd-pulse { 0%,100% { opacity:1; } 50% { opacity:0.55; } }
       `}</style>
 
       <div style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 0 }}>
@@ -2059,6 +2078,49 @@ const handleCSV = async (file, forcePlatform = null) => {
       {/* SIDEBAR — desktop only, hidden on mobile via CSS */}
       <Sidebar activeTab={activeTab} onTabChange={(tab) => { setActiveTab(tab); if (typeof window !== "undefined") { localStorage.setItem("camcash_tab", tab); window.scrollTo({ top: 0, behavior: "instant" }); } }} user={user} onSignOut={async () => { await supabase.auth.signOut(); router.replace("/login"); }} />{/* MAIN CONTENT */}
       <div className="dash-main" style={{ marginLeft: 240, padding: 32, position: "relative", zIndex: 1 }}>
+
+        {/* ── STICKY COMMAND BAR ── */}
+        {(() => {
+          const safeAvg = (!isNaN(avgPerHour) && isFinite(avgPerHour)) ? avgPerHour : 0
+          const brief = dailyBrief
+          const atPeak = brief?.atPeak
+          const momentum = atPeak ? '🔥 AT PEAK' : safeAvg > 20 ? '↑ Strong' : safeAvg > 5 ? '→ Steady' : tips.length === 0 ? '— No data' : '↓ Slow'
+          const momentumColor = atPeak ? '#10B981' : safeAvg > 20 ? '#10B981' : safeAvg > 5 ? '#22D3EE' : tips.length === 0 ? '#475569' : '#f87171'
+          const peakLabel = brief?.hoursUntilPeak === 0 ? 'NOW' : brief?.hoursUntilPeak === 1 ? 'in 1 hr' : (brief?.hoursUntilPeak > 0 && !isNaN(brief?.hoursUntilPeak)) ? `in ${brief.hoursUntilPeak}h` : null
+          const bestPlat = brief?.displayPlat || (tips.length > 0 ? tips[0]?.platform : null)
+          const safeRevenue = (!isNaN(totalRevenue) && isFinite(totalRevenue)) ? totalRevenue : 0
+          return (
+            <div style={{ position: 'sticky', top: 0, zIndex: 20, marginBottom: 20, marginLeft: -32, marginRight: -32, padding: '0 32px', background: 'rgba(5,7,15,0.86)', backdropFilter: 'blur(22px)', WebkitBackdropFilter: 'blur(22px)', borderBottom: '1px solid rgba(255,255,255,0.06)', boxShadow: '0 2px 20px rgba(0,0,0,0.4)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', height: 58, gap: 0, overflowX: 'auto' }}>
+                <div style={{ display:'flex', flexDirection:'column', justifyContent:'center', paddingRight:24, borderRight:'1px solid rgba(255,255,255,0.07)', flexShrink:0 }}>
+                  <div style={{ fontSize:10, color:'#475569', textTransform:'uppercase', letterSpacing:1.2, fontWeight:600, marginBottom:2 }}>Total Earned</div>
+                  <div style={{ fontSize:19, fontWeight:900, background:'linear-gradient(135deg,#60a5fa,#f472b6)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', whiteSpace:'nowrap' }}>${safeRevenue.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+                </div>
+                <div style={{ display:'flex', flexDirection:'column', justifyContent:'center', padding:'0 24px', borderRight:'1px solid rgba(255,255,255,0.07)', flexShrink:0 }}>
+                  <div style={{ fontSize:10, color:'#475569', textTransform:'uppercase', letterSpacing:1.2, fontWeight:600, marginBottom:2 }}>Avg $/Hour</div>
+                  <div style={{ fontSize:19, fontWeight:900, color:'#22D3EE', whiteSpace:'nowrap' }}>{safeAvg > 0 ? `$${safeAvg.toFixed(2)}` : '—'}</div>
+                </div>
+                <div style={{ display:'flex', flexDirection:'column', justifyContent:'center', padding:'0 24px', borderRight:'1px solid rgba(255,255,255,0.07)', flexShrink:0 }}>
+                  <div style={{ fontSize:10, color:'#475569', textTransform:'uppercase', letterSpacing:1.2, fontWeight:600, marginBottom:2 }}>Momentum</div>
+                  <div style={{ fontSize:13, fontWeight:800, color:momentumColor, whiteSpace:'nowrap', animation: atPeak ? 'cmd-pulse 1.5s infinite' : 'none' }}>{momentum}</div>
+                </div>
+                <div style={{ display:'flex', flexDirection:'column', justifyContent:'center', padding:'0 24px', borderRight:'1px solid rgba(255,255,255,0.07)', flexShrink:0 }}>
+                  <div style={{ fontSize:10, color:'#475569', textTransform:'uppercase', letterSpacing:1.2, fontWeight:600, marginBottom:2 }}>Best Platform</div>
+                  <div style={{ fontSize:13, fontWeight:800, color:'#a78bfa', whiteSpace:'nowrap' }}>{bestPlat || '—'}</div>
+                </div>
+                <div style={{ display:'flex', flexDirection:'column', justifyContent:'center', padding:'0 24px', borderRight:'1px solid rgba(255,255,255,0.07)', flexShrink:0 }}>
+                  <div style={{ fontSize:10, color:'#475569', textTransform:'uppercase', letterSpacing:1.2, fontWeight:600, marginBottom:2 }}>Peak Window</div>
+                  <div style={{ fontSize:13, fontWeight:800, color: atPeak ? '#10B981' : '#fbbf24', whiteSpace:'nowrap' }}>{brief?.bhLabel ? `${brief.bhLabel}${peakLabel ? ` · ${peakLabel}` : ''}` : '—'}</div>
+                </div>
+                <div style={{ marginLeft:'auto', paddingLeft:24, flexShrink:0 }}>
+                  <button onClick={() => { setActiveTab('live'); if (typeof window !== 'undefined') { localStorage.setItem('camcash_tab','live'); window.scrollTo({top:0,behavior:'instant'}); } }} style={{ padding:'9px 22px', borderRadius:12, background:'linear-gradient(135deg,#10B981,#22D3EE)', border:'none', color:'#fff', fontWeight:800, fontSize:13, cursor:'pointer', whiteSpace:'nowrap', boxShadow:'0 0 22px rgba(16,185,129,0.4)', letterSpacing:0.3 }}>
+                    ⚡ Go Live
+                  </button>
+                </div>
+              </div>
+            </div>
+          )
+        })()}
 
         {/* ── LIVE STATUS BAR ── */}
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
@@ -2091,6 +2153,19 @@ const handleCSV = async (file, forcePlatform = null) => {
                 1. MONEY SNAPSHOT
             ═══════════════════════════════════════ */}
             {(() => {
+              // ── empty state — no data yet ──
+              if (tips.length === 0) return (
+                <div style={{ ...glassCard, borderRadius: 20, padding: '52px 32px', textAlign: 'center', marginBottom: 24, animation: 'fadeUp 0.3s ease' }}>
+                  <div style={{ fontSize: 48, marginBottom: 16 }}>✨</div>
+                  <div style={{ fontSize: 22, fontWeight: 900, color: C.white, marginBottom: 10 }}>No data yet — let's change that</div>
+                  <div style={{ fontSize: 14, color: C.muted, maxWidth: 400, margin: '0 auto 28px', lineHeight: 1.6 }}>Upload a tip export from Chaturbate, MFC, or BongaCams to see your full earnings dashboard — or start a live session to track tips in real time.</div>
+                  <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
+                    <button onClick={() => { setActiveTab('upload'); localStorage.setItem('camcash_tab','upload'); }} style={{ padding: '11px 26px', borderRadius: 12, background: 'linear-gradient(135deg,#7C5CFF,#22D3EE)', border: 'none', color: '#fff', fontWeight: 800, fontSize: 14, cursor: 'pointer' }}>Upload Tip Data</button>
+                    <button onClick={() => { setActiveTab('live'); localStorage.setItem('camcash_tab','live'); window.scrollTo({top:0,behavior:'instant'}); }} style={{ padding: '11px 26px', borderRadius: 12, background: 'linear-gradient(135deg,#10B981,#22D3EE)', border: 'none', color: '#fff', fontWeight: 800, fontSize: 14, cursor: 'pointer' }}>⚡ Use Live Mode</button>
+                  </div>
+                </div>
+              )
+
               const now = new Date()
               const thisMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
               const prevMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1))
@@ -2098,43 +2173,120 @@ const handleCSV = async (file, forcePlatform = null) => {
               const prevMonthRev = tips.filter(t => { const d = new Date(t.date_time || t.dateRaw); return d >= prevMonthStart && d < thisMonthStart }).reduce((s, t) => s + (t.usd || 0), 0)
               const growthPct = (prevMonthRev > 0 && thisMonthRev > 0) ? Math.round(((thisMonthRev - prevMonthRev) / prevMonthRev) * 100) : null
               const isPositive = growthPct !== null && growthPct >= 0
-              const topPct = Math.max(1, Math.min(25, Math.round(100 - (totalRevenue / 50))))
+              const safeRevenue = (!isNaN(totalRevenue) && isFinite(totalRevenue)) ? totalRevenue : 0
+              const safeAvgHr = (!isNaN(avgPerHour) && isFinite(avgPerHour)) ? avgPerHour : 0
+              const topPct = safeRevenue > 0 ? Math.max(1, Math.min(25, Math.round(100 - (safeRevenue / 50)))) : null
               const sessionsLast30 = sessions.filter(s => (Date.now() - new Date(s.startTime)) / 86400000 <= 30).length
               const fansActiveLast30 = new Set(tips.filter(t => (Date.now() - new Date(t.date_time || t.dateRaw)) / 86400000 <= 30).map(t => t.username)).size
-              const cards = [
-                { label: "Total Earned", value: `$${totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, sub: `Top ${topPct}% of models on this platform`, icon: "💰", badge: growthPct !== null ? (isPositive ? `↑ ${growthPct}% vs last month` : `↓ ${Math.abs(growthPct)}% vs last month`) : null, badgeColor: isPositive ? C.green : C.red, glow: isPositive },
-                { label: "Avg $/Hour", value: `$${avgPerHour.toFixed(2)}`, sub: avgPerHour > 20 ? "Above average — keep it up!" : "Tip: stream at peak hours", icon: "⏱️", badge: null },
-                { label: "Total Fans", value: whales.length.toLocaleString(), sub: `${fansActiveLast30} active in last 30 days`, icon: "👥", badge: null },
-                { label: "Sessions", value: sessions.length.toLocaleString(), sub: `${sessionsLast30} in last 30 days${sessionsLast30 >= 3 ? " 🔥" : ""}`, icon: "🎥", badge: sessionsLast30 >= 5 ? "🔥 On a streak!" : null, badgeColor: C.gold }
+
+              // ── Per-card month-over-month trend ──
+              const thisMonthTimed = timedSessions.filter(s => new Date(s.startTime) >= thisMonthStart)
+              const prevMonthTimed = timedSessions.filter(s => { const d = new Date(s.startTime); return d >= prevMonthStart && d < thisMonthStart })
+              const tmAvgHr = thisMonthTimed.reduce((s,x) => s+(x.durationHours||0),0) > 0 ? thisMonthTimed.reduce((s,x) => s+(x.totalUSD||0),0) / thisMonthTimed.reduce((s,x) => s+(x.durationHours||0),0) : null
+              const pmAvgHr = prevMonthTimed.reduce((s,x) => s+(x.durationHours||0),0) > 0 ? prevMonthTimed.reduce((s,x) => s+(x.totalUSD||0),0) / prevMonthTimed.reduce((s,x) => s+(x.durationHours||0),0) : null
+              const avgHrGrowth = (tmAvgHr !== null && pmAvgHr !== null && pmAvgHr > 0) ? Math.round(((tmAvgHr - pmAvgHr) / pmAvgHr) * 100) : null
+              const thisMonthFans = new Set(tips.filter(t => new Date(t.date_time || t.dateRaw) >= thisMonthStart).map(t => t.username)).size
+              const prevMonthFans = new Set(tips.filter(t => { const d = new Date(t.date_time || t.dateRaw); return d >= prevMonthStart && d < thisMonthStart }).map(t => t.username)).size
+              const fansGrowth = (prevMonthFans > 0 && thisMonthFans > 0) ? Math.round(((thisMonthFans - prevMonthFans) / prevMonthFans) * 100) : null
+              const thisMonthSess = sessions.filter(s => new Date(s.startTime) >= thisMonthStart).length
+              const prevMonthSess = sessions.filter(s => { const d = new Date(s.startTime); return d >= prevMonthStart && d < thisMonthStart }).length
+              const sessGrowth = (prevMonthSess > 0 && thisMonthSess > 0) ? Math.round(((thisMonthSess - prevMonthSess) / prevMonthSess) * 100) : null
+
+              // ── 6-month sparkline data ──
+              const last6Rev = [], last6Fans = [], last6Sess = []
+              for (let i = 5; i >= 0; i--) {
+                const ms = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1))
+                const me = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i + 1, 1))
+                const monthTips = tips.filter(t => { const d = new Date(t.date_time || t.dateRaw); return d >= ms && d < me })
+                last6Rev.push(monthTips.reduce((acc,t) => acc+(t.usd||0),0))
+                last6Fans.push(new Set(monthTips.map(t => t.username)).size)
+                last6Sess.push(sessions.filter(x => { const d = new Date(x.startTime); return d >= ms && d < me }).length)
+              }
+              const last6AvgHr = []
+              for (let i = 5; i >= 0; i--) {
+                const ms = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1))
+                const me = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i + 1, 1))
+                const mts = timedSessions.filter(s => { const d = new Date(s.startTime); return d >= ms && d < me })
+                const mh = mts.reduce((s,x) => s+(x.durationHours||0),0)
+                last6AvgHr.push(mh > 0 ? mts.reduce((s,x) => s+(x.totalUSD||0),0) / mh : 0)
+              }
+
+              // mini sparkline renderer (6 bars)
+              const MiniSpark = ({ data, accent }) => {
+                const max = Math.max(...data, 0.01)
+                const W = 7, H = 24, G = 3
+                return (
+                  <svg width={(W+G)*6-G} height={H} style={{ display:'block', marginTop:10 }}>
+                    {data.map((v, j) => {
+                      const bh = Math.max(2, Math.round((v / max) * H))
+                      return <rect key={j} x={j*(W+G)} y={H-bh} width={W} height={bh} rx={2} fill={j === 5 ? accent : 'rgba(255,255,255,0.10)'} />
+                    })}
+                  </svg>
+                )
+              }
+
+              // trend badge renderer
+              const TrendBadge = ({ pct, color }) => {
+                if (pct === null || isNaN(pct)) return null
+                const up = pct >= 0
+                return <span style={{ fontSize:10, fontWeight:700, color: up ? '#10B981' : '#f87171', marginLeft:6 }}>{up ? '↑' : '↓'}{Math.abs(pct)}%</span>
+              }
+
+              const cardDefs = [
+                { label:"Total Earned", accent:'#f472b6', glowClass:'card-glow-pink', sparkData:last6Rev, trend:growthPct,
+                  value: `$${safeRevenue.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}`,
+                  sub: topPct ? `Top ${topPct}% of models on this platform` : 'Upload more data to rank',
+                  icon:'💰', badge: growthPct !== null ? (isPositive ? `↑ ${growthPct}% vs last month` : `↓ ${Math.abs(growthPct)}% vs last month`) : null,
+                  badgeColor: isPositive ? C.green : C.red, isHero: true },
+                { label:"Avg $/Hour", accent:'#22d3ee', glowClass:'card-glow-cyan', sparkData:last6AvgHr, trend:avgHrGrowth,
+                  value: safeAvgHr > 0 ? `$${safeAvgHr.toFixed(2)}` : '—',
+                  sub: safeAvgHr > 20 ? 'Above average — keep it up!' : safeAvgHr > 0 ? 'Tip: stream at peak hours' : 'Start timed sessions to track',
+                  icon:'⏱️', badge:null },
+                { label:"Total Fans", accent:'#a78bfa', glowClass:'card-glow-violet', sparkData:last6Fans, trend:fansGrowth,
+                  value: whales.length > 0 ? whales.length.toLocaleString() : '—',
+                  sub: fansActiveLast30 > 0 ? `${fansActiveLast30} active in last 30 days` : 'No fan activity tracked yet',
+                  icon:'👥', badge:null },
+                { label:"Sessions", accent:'#fbbf24', glowClass:'card-glow-gold', sparkData:last6Sess, trend:sessGrowth,
+                  value: sessions.length > 0 ? sessions.length.toLocaleString() : '—',
+                  sub: sessionsLast30 > 0 ? `${sessionsLast30} in last 30 days${sessionsLast30 >= 3 ? ' 🔥' : ''}` : 'No sessions in last 30 days',
+                  icon:'🎥', badge: sessionsLast30 >= 5 ? '🔥 On a streak!' : null, badgeColor: C.gold }
               ]
+
               // Earnings velocity per platform for velocity strip
               const velPlatforms = Object.entries(platformVelocity).filter(([,v]) => v !== null).sort((a,b) => (b[1]||0)-(a[1]||0))
               return (
                 <>
-                  <div className="stat-grid-4" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: velPlatforms.length ? 12 : 28 }}>
-                    {cards.map((s, i) => (
-                      <div key={i} className="dash-card" style={{ ...glassCard, borderRadius: 18, padding: "22px 20px", position: "relative", overflow: "hidden", animation: `fadeUp 0.3s ease ${i * 0.06}s both`, boxShadow: s.glow ? `0 0 30px rgba(16,185,129,0.2), ${glassCard.boxShadow}` : glassCard.boxShadow }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
+                  <div className="stat-grid-4" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: velPlatforms.length ? 10 : 24 }}>
+                    {cardDefs.map((s, i) => (
+                      <div key={i} className={`stat-card ${s.glowClass}`} style={{ ...glassCard, borderRadius: 18, padding: "22px 20px", position: "relative", overflow: "hidden", animation: `fadeUp 0.3s ease ${i * 0.06}s both`, cursor:'default' }}>
+                        {/* accent top bar */}
+                        <div style={{ position:'absolute', top:0, left:0, right:0, height:3, background:`linear-gradient(90deg,${s.accent}80,${s.accent}20)`, borderRadius:'18px 18px 0 0' }} />
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
                           <span style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600 }}>{s.label}</span>
                           <span style={{ fontSize: 22 }}>{s.icon}</span>
                         </div>
-                        <div style={{ fontSize: 34, fontWeight: 900, background: "linear-gradient(135deg,#60a5fa,#f472b6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", marginBottom: 6, lineHeight: 1.1 }}>{s.value}</div>
+                        {s.isHero
+                          ? <div className="hero-revenue-shimmer" style={{ fontSize: 42, fontWeight: 900, marginBottom: 4, lineHeight: 1.05 }}>{s.value}</div>
+                          : <div style={{ fontSize: 32, fontWeight: 900, color: s.accent, marginBottom: 4, lineHeight: 1.1 }}>{s.value}<TrendBadge pct={s.trend} /></div>
+                        }
+                        {s.isHero && <div style={{ marginBottom:4 }}><TrendBadge pct={s.trend} /></div>}
                         <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.4 }}>{s.sub}</div>
+                        <MiniSpark data={s.sparkData} accent={s.accent} />
                         {s.badge && <div style={{ marginTop: 8, display: "inline-block", padding: "2px 8px", borderRadius: 6, background: `${s.badgeColor}20`, border: `1px solid ${s.badgeColor}40`, fontSize: 10, fontWeight: 700, color: s.badgeColor }}>{s.badge}</div>}
                       </div>
                     ))}
                   </div>
                   {/* Earnings Velocity strip — formula: totalUSD / totalHours per platform */}
                   {velPlatforms.length > 0 && (
-                    <div className="velocity-strip" style={{ display: "flex", gap: 10, marginBottom: 28, flexWrap: "wrap" }}>
+                    <div className="velocity-strip" style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
                       {velPlatforms.map(([plat, vel], i) => (
                         <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 14px", borderRadius: 20, background: "rgba(34,211,238,0.07)", border: "1px solid rgba(34,211,238,0.2)", animation: `fadeUp 0.3s ease ${0.25 + i*0.05}s both` }}>
                           <span style={{ fontSize: 11, color: C.muted }}>{plat.replace('BongaCams','Bonga').replace('MyFreeCams','MFC').replace('Chaturbate','CB')}</span>
-                         <span style={{ fontSize: 13, fontWeight: 700, color: C.cyan }}>${(vel ?? 0).toFixed(2)}/hr</span>
+                          <span style={{ fontSize: 13, fontWeight: 700, color: C.cyan }}>${(!isNaN(vel) && isFinite(vel) ? vel : 0).toFixed(2)}/hr</span>
                           <span style={{ fontSize: 10, color: C.muted }}>velocity</span>
                         </div>
                       ))}
-                      {earningsVelocity !== null && (
+                      {earningsVelocity !== null && !isNaN(earningsVelocity) && (
                         <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 14px", borderRadius: 20, background: "rgba(16,185,129,0.07)", border: "1px solid rgba(16,185,129,0.2)" }}>
                           <span style={{ fontSize: 11, color: C.muted }}>Overall</span>
                           <span style={{ fontSize: 13, fontWeight: 700, color: C.green }}>${earningsVelocity.toFixed(2)}/hr</span>
@@ -2142,6 +2294,8 @@ const handleCSV = async (file, forcePlatform = null) => {
                       )}
                     </div>
                   )}
+                  {/* section divider */}
+                  <div style={{ height:1, background:'linear-gradient(90deg,transparent,rgba(255,255,255,0.06),transparent)', marginBottom:20 }} />
                 </>
               )
             })()}
@@ -2324,6 +2478,8 @@ const handleCSV = async (file, forcePlatform = null) => {
           )
         })()}
 
+            {/* section divider */}
+            <div style={{ height:1, background:'linear-gradient(90deg,transparent,rgba(255,255,255,0.06),transparent)', margin:'4px 0 24px' }} />
             {/* ═══════════════════════════════════════
                 2. PRIMARY ACTION CENTER — "Make Money Right Now"
                 Merges: What Should I Do + Live Intelligence top alerts
@@ -2378,6 +2534,8 @@ const handleCSV = async (file, forcePlatform = null) => {
               )
             })()}
 
+            {/* section divider */}
+            <div style={{ height:1, background:'linear-gradient(90deg,transparent,rgba(255,255,255,0.06),transparent)', margin:'4px 0 24px' }} />
             {/* ═══════════════════════════════════════
                 3. WHAT'S WORKING — Strategy
                 Platform performance + best time + best day merged
@@ -2532,6 +2690,8 @@ const handleCSV = async (file, forcePlatform = null) => {
               })()}
             </div>
 
+            {/* section divider */}
+            <div style={{ height:1, background:'linear-gradient(90deg,transparent,rgba(255,255,255,0.06),transparent)', margin:'4px 0 24px' }} />
             {/* ═══════════════════════════════════════
                 4. YOUR TOP EARNERS
                 A. Likely Online Now  B. Milestones  C. At Risk
@@ -2664,6 +2824,8 @@ const handleCSV = async (file, forcePlatform = null) => {
               )
             })()}
 
+            {/* section divider */}
+            <div style={{ height:1, background:'linear-gradient(90deg,transparent,rgba(255,255,255,0.06),transparent)', margin:'4px 0 24px' }} />
             {/* ═══════════════════════════════════════
                 5. YOU'RE LOSING MONEY — Risk / Loss + Missed Revenue
             ═══════════════════════════════════════ */}
