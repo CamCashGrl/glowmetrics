@@ -24,7 +24,7 @@ function FooterLink({ href, children }) {
   )
 }
 
-export default function SiteFooter() {
+export default function SiteFooter({ sidebarOffset = 0 }) {
   return (
     <footer
       style={{
@@ -32,8 +32,9 @@ export default function SiteFooter() {
         borderTop: '1px solid rgba(168,85,247,0.15)',
         padding: '48px 40px 32px',
         marginTop: 'auto',
+        marginLeft: sidebarOffset,
         boxSizing: 'border-box',
-        width: '100%',
+        width: sidebarOffset ? `calc(100% - ${sidebarOffset}px)` : '100%',
         overflowX: 'hidden',
       }}
     >
