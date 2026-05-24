@@ -32,6 +32,9 @@ export default function SiteFooter() {
         borderTop: '1px solid rgba(168,85,247,0.15)',
         padding: '48px 40px 32px',
         marginTop: 'auto',
+        boxSizing: 'border-box',
+        width: '100%',
+        overflowX: 'hidden',
       }}
     >
       <div
