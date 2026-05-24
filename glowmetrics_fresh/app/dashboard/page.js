@@ -1975,8 +1975,7 @@ const handleCSV = async (file, forcePlatform = null) => {
     <div style={{
       minHeight: "100vh",
       background: `radial-gradient(circle at 20% 30%, rgba(59,130,246,0.25), transparent 40%), radial-gradient(circle at 80% 70%, rgba(236,72,153,0.25), transparent 40%), radial-gradient(circle at 50% 50%, rgba(168,85,247,0.15), transparent 60%), #05070f`,
-      fontFamily: "'Inter', sans-serif", color: C.text,
-      display: "flex", flexDirection: "row", width: "100%", overflowX: "hidden"
+      fontFamily: "'Inter', sans-serif", color: C.text
     }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
@@ -2056,8 +2055,8 @@ const handleCSV = async (file, forcePlatform = null) => {
         .alert-row { transition: transform 0.12s ease; }
         .alert-row:hover { transform: translateX(3px); }
         button:active { transform: scale(0.96) !important; transition: transform 0.1s ease !important; }
-        .dash-main { margin-left: 240px !important; width: calc(100% - 240px) !important; max-width: calc(100% - 240px) !important; min-width: 0 !important; overflow-x: hidden !important; box-sizing: border-box !important; flex: 1 !important; }
-        @media (max-width: 900px) { .dash-main { margin-left: 0 !important; width: 100% !important; max-width: 100% !important; } }
+        .dash-main { margin-left: 240px; width: calc(100% - 240px); overflow-x: hidden; box-sizing: border-box; }
+        @media (max-width: 768px) { .dash-main { margin-left: 0 !important; width: 100% !important; } }
 
         @keyframes shimmer-sweep {
           0%   { background-position: -200% center; }
@@ -2085,7 +2084,7 @@ const handleCSV = async (file, forcePlatform = null) => {
 
       {/* SIDEBAR — desktop only, hidden on mobile via CSS */}
       <Sidebar activeTab={activeTab} onTabChange={(tab) => { setActiveTab(tab); if (typeof window !== "undefined") { localStorage.setItem("camcash_tab", tab); window.scrollTo({ top: 0, behavior: "instant" }); } }} user={user} onSignOut={async () => { await supabase.auth.signOut(); router.replace("/login"); }} />{/* MAIN CONTENT */}
-      <div className="dash-main" style={{ flex: 1, marginLeft: 240, width: "calc(100% - 240px)", maxWidth: "calc(100% - 240px)", minWidth: 0, padding: 32, position: "relative", zIndex: 1, overflowX: "hidden", boxSizing: "border-box" }}>
+      <div className="dash-main" style={{ marginLeft: 240, width: "calc(100% - 240px)", minWidth: 0, overflowX: "hidden", boxSizing: "border-box", padding: 32, position: "relative", zIndex: 1 }}>
 
         {/* ── STICKY COMMAND BAR ── */}
         {(() => {
@@ -6020,8 +6019,8 @@ const handleCSV = async (file, forcePlatform = null) => {
           </div>
           <span style={{ marginLeft: "auto", fontSize: "12px", color: "#22d3ee" }}>Try →</span>
         </a>
-        <SiteFooter />
       </div>
+      <SiteFooter />
     </div>
   )
 }
