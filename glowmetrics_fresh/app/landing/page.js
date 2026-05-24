@@ -475,7 +475,7 @@ export default function LandingPage() {
           <div style={{ background: "rgba(236,72,153,0.07)", border: "1px solid rgba(236,72,153,0.2)", borderRadius: 12, padding: "28px 24px", textAlign: "center" }}>
             <div style={{ fontSize: 36, marginBottom: 12 }}>🚀</div>
             <div style={{ fontSize: 16, fontWeight: 700, color: "#f1f5f9", marginBottom: 8 }}>Lock In Lifetime Pricing</div>
-            <div style={{ fontSize: 14, color: "#94a3b8", lineHeight: 1.6, marginBottom: 16 }}>Early adopter: $9.99/month forever. Limited to first 100 users.</div>
+            <div style={{ fontSize: 14, color: "#94a3b8", lineHeight: 1.6, marginBottom: 16 }}>Early adopter: $9.99/month forever. <span style={{ color: "#EC4899", fontWeight: 700 }}>80/100 spots left.</span></div>
             <a href="/pricing" style={{ fontSize: 13, fontWeight: 600, color: "#ec4899", textDecoration: "none" }}>Claim early pricing →</a>
           </div>
         </div>
