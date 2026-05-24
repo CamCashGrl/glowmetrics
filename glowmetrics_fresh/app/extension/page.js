@@ -39,9 +39,10 @@ const accountFeatures = [
 ]
 
 const steps = [
-  { icon: '📥', title: 'Download', desc: 'Click the button above to download the ZIP file' },
-  { icon: '🔧', title: 'Install', desc: 'Chrome → Extensions → Developer mode → Load unpacked' },
-  { icon: '🔴', title: 'Go Live', desc: 'Stream as normal. CamCash detects everything automatically.' },
+  { icon: '📥', title: 'Download', desc: 'Download the ZIP file above' },
+  { icon: '🔧', title: 'Developer Mode', desc: 'Go to Chrome → Extensions → turn on Developer Mode (top right)' },
+  { icon: '📂', title: 'Load Unpacked', desc: 'Click "Load unpacked" → select the unzipped folder' },
+  { icon: '🔴', title: 'Go Live', desc: 'Sign in with your CamCash account and go live' },
 ]
 
 const tableRows = [
@@ -314,6 +315,21 @@ export default function ExtensionPage() {
             </a>
             <div style={{ fontSize: '12px', color: C.muted, marginTop: '12px' }}>
               Chrome → Extensions → Developer mode → Load unpacked
+            </div>
+          </div>
+
+          <div style={{ textAlign: 'center', margin: '32px 0' }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: '#94A3B8', marginBottom: 16 }}>
+              Or scan to download on your phone
+            </div>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/qr-extension.png"
+              alt="Scan to download CamCash extension"
+              style={{ width: 160, height: 160, borderRadius: 12, border: '1px solid rgba(255,255,255,0.1)' }}
+            />
+            <div style={{ fontSize: 12, color: '#475569', marginTop: 8 }}>
+              Points to camcashgrl.com/extension
             </div>
           </div>
         </div>
