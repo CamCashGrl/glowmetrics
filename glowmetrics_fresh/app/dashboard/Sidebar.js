@@ -121,7 +121,7 @@ export default function Sidebar({ activeTab, onTabChange, user, onSignOut }) {
 
   return (
     <>
-      <aside style={{ position: "fixed", left: 0, top: 0, bottom: 0, width: 220, background: "rgba(6,9,20,0.97)", borderRight: "1px solid rgba(255,255,255,0.06)", backdropFilter: "blur(20px)", zIndex: 50 }}
+      <aside style={{ position: "fixed", left: 0, top: 0, bottom: 0, width: 240, background: "rgba(6,9,20,0.97)", borderRight: "1px solid rgba(255,255,255,0.06)", backdropFilter: "blur(20px)", zIndex: 50 }}
         className="sidebar-desktop">
         {sidebarContent}
       </aside>

@@ -6019,8 +6019,8 @@ const handleCSV = async (file, forcePlatform = null) => {
           </div>
           <span style={{ marginLeft: "auto", fontSize: "12px", color: "#22d3ee" }}>Try →</span>
         </a>
+        <SiteFooter />
       </div>
-      <SiteFooter />
     </div>
   )
 }
