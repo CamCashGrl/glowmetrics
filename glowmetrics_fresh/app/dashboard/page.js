@@ -1358,6 +1358,17 @@ const handleCSV = async (file, forcePlatform = null) => {
         : `✅ Imported ${result.inserted} tips from ${result.platform}!`
       showToast(msg)
 
+      // Google Ads — CSV Upload conversion
+      try {
+        if (typeof gtag !== 'undefined') {
+          gtag('event', 'conversion', {
+            'send_to': 'AW-18107430539/5qolCPeRnLMcEIvtpbpD',
+            'value': 0.0,
+            'currency': 'USD'
+          })
+        }
+      } catch(e) {}
+
       setUploadCount(c => c + 1)
       // Force reload after upload — bypass cache so new tips appear immediately
       try { sessionStorage.removeItem(`camcash_tips_${user.id}`) } catch(e) {}

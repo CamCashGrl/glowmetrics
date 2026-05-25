@@ -125,7 +125,26 @@ export default function RootLayout({ children }) {
         <Analytics />
 
         {/* Google Ads tag */}
-        <GoogleAdsTag />
+        <Script
+          src="https://www.googletagmanager.com/gtag/js?id=AW-18107430539"
+          strategy="afterInteractive"
+        />
+        <Script id="google-ads-tag" strategy="afterInteractive">
+          {`
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+            gtag('config', 'AW-18107430539');
+
+            function gtag_report_conversion(send_to) {
+              gtag('event', 'conversion', {
+                'send_to': send_to,
+                'value': 0.0,
+                'currency': 'USD'
+              });
+            }
+          `}
+        </Script>
 
         {/* X (Twitter) Conversion Tracking Pixel */}
         <Script

@@ -5,6 +5,7 @@ export const metadata = {
 
 import SiteFooter from '../components/SiteFooter'
 import FreeToolsBanner from '../components/FreeToolsBanner'
+import ExtensionDownloadButton from '../components/ExtensionDownloadButton'
 
 const C = {
   bg: '#040812', card: '#0d1424',
@@ -300,20 +301,14 @@ export default function ExtensionPage() {
 
           {/* Download button inside the how-it-works section */}
           <div style={{ marginTop: '40px' }}>
-            <a
-              href="/camcash-extension.zip"
-              download
-              style={{
+            <ExtensionDownloadButton style={{
                 display: 'inline-block',
                 background: 'linear-gradient(135deg, #a855f7, #7c3aed)',
                 color: '#fff', textDecoration: 'none',
                 padding: '15px 40px', borderRadius: '12px',
                 fontSize: '16px', fontWeight: '800',
                 boxShadow: '0 0 28px rgba(168,85,247,0.3)',
-              }}
-            >
-              📥 Download ZIP — Free
-            </a>
+              }} />
             <div style={{ fontSize: '12px', color: C.muted, marginTop: '12px' }}>
               Chrome → Extensions → Developer mode → Load unpacked
             </div>
