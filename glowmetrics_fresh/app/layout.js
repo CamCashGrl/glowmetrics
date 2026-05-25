@@ -2,6 +2,7 @@
 import './globals.css'
 import { Analytics } from '@vercel/analytics/react'
 import Script from 'next/script'
+import GoogleAdsTag from './components/GoogleAdsTag'
 
 const SITE_URL = 'https://www.camcashgrl.com'
 const TITLE = 'CamCash — Cam Model Analytics That Makes You More Money'
@@ -124,23 +125,7 @@ export default function RootLayout({ children }) {
         <Analytics />
 
         {/* Google Ads tag */}
-        <Script
-          id="gtag-src"
-          strategy="afterInteractive"
-          src="https://www.googletagmanager.com/gtag/js?id=AW-18107430539"
-        />
-        <Script
-          id="gtag-config"
-          strategy="afterInteractive"
-          dangerouslySetInnerHTML={{
-            __html: `
-              window.dataLayer = window.dataLayer || [];
-              function gtag(){dataLayer.push(arguments);}
-              gtag('js', new Date());
-              gtag('config', 'AW-18107430539');
-            `,
-          }}
-        />
+        <GoogleAdsTag />
 
         {/* X (Twitter) Conversion Tracking Pixel */}
         <Script
