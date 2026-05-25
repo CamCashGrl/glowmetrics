@@ -1,5 +1,4 @@
 import PricingClient from './PricingClient'
-import GoogleAdsConversion from '../components/GoogleAdsConversion'
 
 export const metadata = {
   title: 'Transparent Pricing — CamCash Cam Model Analytics',
@@ -15,10 +14,5 @@ export const metadata = {
 }
 
 export default function PricingPage() {
-  return (
-    <>
-      <GoogleAdsConversion />
-      <PricingClient />
-    </>
-  )
+  return <PricingClient />
 }

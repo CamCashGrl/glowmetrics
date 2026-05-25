@@ -2,7 +2,6 @@
 import './globals.css'
 import { Analytics } from '@vercel/analytics/react'
 import Script from 'next/script'
-import GoogleAdsTag from './components/GoogleAdsTag'
 
 const SITE_URL = 'https://www.camcashgrl.com'
 const TITLE = 'CamCash — Cam Model Analytics That Makes You More Money'
@@ -135,14 +134,6 @@ export default function RootLayout({ children }) {
             function gtag(){dataLayer.push(arguments);}
             gtag('js', new Date());
             gtag('config', 'AW-18107430539');
-
-            function gtag_report_conversion(send_to) {
-              gtag('event', 'conversion', {
-                'send_to': send_to,
-                'value': 0.0,
-                'currency': 'USD'
-              });
-            }
           `}
         </Script>
 
