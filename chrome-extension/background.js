@@ -328,3 +328,218 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
 restorePromise = restore().then(() => {
   if (session) { loadWhales(); scheduleAlarms(); }
 });
+// ─── One-Click Sync ───────────────────────────────────────────────────────────
+
+const SYNC_ENDPOINT = 'https://chaturbate.com/api/ts/tipping/token-stats/';
+
+chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
+  if (msg.type === 'SYNC_START') {
+    handleSync(msg.platform, msg.mode || 'incremental');
+    reply({ started: true });
+  }
+  if (msg.type === 'GET_SESSION_STATUS') {
+    getCBSessionStatus().then(reply);
+    return true;
+  }
+});
+
+async function getCBSessionStatus() {
+  const cookie = await chrome.cookies.get({
+    url:  'https://chaturbate.com',
+    name: 'sessionid',
+  });
+  return { chaturbate: !!cookie };
+}
+
+async function handleSync(platform, mode) {
+  await restorePromise;
+  if (!session) {
+    sendSyncProgress({ platform, error: 'NOT_AUTHENTICATED', done: true });
+    return;
+  }
+
+  if (platform === 'chaturbate') {
+    await syncChaturbate(mode);
+  }
+}
+
+async function syncChaturbate(mode) {
+  const platform = 'chaturbate';
+
+  // Get CB session cookies
+  const [sessionCookie, csrfCookie] = await Promise.all([
+    chrome.cookies.get({ url: 'https://chaturbate.com', name: 'sessionid' }),
+    chrome.cookies.get({ url: 'https://chaturbate.com', name: 'csrftoken' }),
+  ]);
+
+  if (!sessionCookie || !csrfCookie) {
+    sendSyncProgress({ platform, error: 'SESSION_NOT_FOUND', done: true });
+    return;
+  }
+
+  // Load cursor for incremental sync
+  const cursorKey = `sync_cursor_${session.user.id}_${platform}`;
+  const stored    = await chrome.storage.local.get(cursorKey);
+  const cursor    = stored[cursorKey] || null;
+
+  let maxTransactionId = '';
+  let totalInserted    = 0;
+  let totalSkipped     = 0;
+  let pagesLoaded      = 0;
+
+  while (true) {
+    // Fetch one page from Chaturbate
+    let data;
+    try {
+      data = await fetchCBPage(maxTransactionId, csrfCookie.value);
+    } catch (err) {
+      sendSyncProgress({ platform, error: err.code || err.message, done: true });
+      return;
+    }
+
+    const { transactions, txns_fully_loaded } = data;
+    if (!transactions || transactions.length === 0) break;
+
+    // Incremental: stop when we hit already-synced data
+    if (cursor && mode === 'incremental') {
+      const oldestOnPage = new Date(transactions[transactions.length - 1].date);
+      if (oldestOnPage <= new Date(cursor.lastSyncedAt)) {
+        // Only send tips newer than cursor
+        const fresh = transactions.filter(t =>
+          t.tokens > 0 &&
+          t.description === 'Tip received' &&
+          new Date(t.date) > new Date(cursor.lastSyncedAt)
+        );
+        if (fresh.length > 0) {
+          const result = await ingestTips(platform, fresh.map(normaliseCBTip));
+          totalInserted += result.inserted || 0;
+          totalSkipped  += result.skipped  || 0;
+        }
+        break;
+      }
+    }
+
+    // Filter to tips only (skip cashouts)
+    const tips = transactions.filter(t =>
+      t.tokens > 0 && t.description === 'Tip received'
+    );
+
+    if (tips.length > 0) {
+      const result = await ingestTips(platform, tips.map(normaliseCBTip));
+      totalInserted += result.inserted || 0;
+      totalSkipped  += result.skipped  || 0;
+    }
+
+    pagesLoaded++;
+    sendSyncProgress({
+      platform,
+      pagesLoaded,
+      tipsFound: totalInserted + totalSkipped,
+      inserted:  totalInserted,
+      done: false,
+    });
+
+    if (txns_fully_loaded) break;
+
+    // Paginate: use lowest id from this batch
+    const ids = transactions.map(t => t.id);
+    maxTransactionId = Math.min(...ids).toString();
+    await sleep(1500); // polite delay
+  }
+
+  // Save cursor
+  if (transactions && transactions.length > 0) {
+    await chrome.storage.local.set({
+      [cursorKey]: {
+        lastSyncedAt: transactions[0].date,
+        lastTipId:    transactions[0].id,
+      }
+    });
+  }
+
+  sendSyncProgress({
+    platform,
+    pagesLoaded,
+    tipsFound: totalInserted + totalSkipped,
+    inserted:  totalInserted,
+    done: true,
+  });
+}
+
+async function fetchCBPage(maxTransactionId, csrfToken) {
+  const url = `${SYNC_ENDPOINT}?max_transaction_id=${maxTransactionId}&cashpage=0`;
+  let delay = 2000;
+
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const res = await fetch(url, {
+      credentials: 'include',
+      headers: {
+        'Accept':           'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-CSRFToken':      csrfToken,
+      },
+    });
+
+    if (res.status === 401 || res.status === 403) {
+      const err = new Error('Session expired');
+      err.code = 'SESSION_EXPIRED';
+      throw err;
+    }
+    if (res.status === 429) {
+      await sleep(delay);
+      delay = Math.min(delay * 2, 32000);
+      continue;
+    }
+    if (!res.ok) {
+      await sleep(delay);
+      delay = Math.min(delay * 2, 32000);
+      continue;
+    }
+    return res.json();
+  }
+  throw new Error('Max retries exceeded');
+}
+
+function normaliseCBTip(t) {
+  return {
+    platform_tip_id: String(t.id),
+    username:        t.username || 'anonymous',
+    tokens:          t.tokens,
+    usd:             null,
+    tip_type:        'tip',
+    date_time:       t.date,
+    tip_note:        t.message && t.message !== 'None' ? t.message : null,
+  };
+}
+
+async function ingestTips(platform, tips) {
+  try {
+    const token = session?.access_token;
+    if (!token) return { inserted: 0, skipped: tips.length };
+
+    const res = await fetch('https://camcashgrl.com/api/sync/ingest', {
+      method: 'POST',
+      headers: {
+        'Content-Type':  'application/json',
+        'Authorization': `Bearer ${token}`,
+        'X-Timestamp':   Date.now().toString(),
+      },
+      body: JSON.stringify({ platform, tips }),
+    });
+
+    if (!res.ok) {
+      console.error('[CamCash] ingest failed:', res.status);
+      return { inserted: 0, skipped: tips.length };
+    }
+    return res.json();
+  } catch (e) {
+    console.error('[CamCash] ingest error:', e.message);
+    return { inserted: 0, skipped: tips.length };
+  }
+}
+
+function sendSyncProgress(data) {
+  chrome.runtime.sendMessage({ type: 'SYNC_PROGRESS', ...data }).catch(() => {});
+}
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
