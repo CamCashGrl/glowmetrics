@@ -1,6 +1,6 @@
 'use client'
 
-export default function ExtensionDownloadButton({ style }) {
+export default function ExtensionDownloadButton({ style, label }) {
   return (
     <a
       href="/camcash-extension.zip"
@@ -18,7 +18,7 @@ export default function ExtensionDownloadButton({ style }) {
         } catch(e) {}
       }}
     >
-      📥 Download ZIP — Free
+      {label ?? '📥 Install Chrome Extension — Free'}
     </a>
   )
 }
