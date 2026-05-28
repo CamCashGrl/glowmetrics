@@ -8,6 +8,7 @@
     "alarms",
     "notifications",
     "tabs"
+    "cookies"
   ],
   "host_permissions": [
     "https://chaturbate.com/*",
