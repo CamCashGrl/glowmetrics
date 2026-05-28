@@ -47,6 +47,7 @@ export default function ExtensionPage() {
         </a>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
           <a href="/" style={{ color: C.muted, fontSize: '13px', fontWeight: '500', textDecoration: 'none' }}>Analytics</a>
+          <a href="/live" style={{ color: C.muted, fontSize: '13px', fontWeight: '500', textDecoration: 'none' }}>Go Live</a>
           <a href="/landing/demo" style={{ color: C.muted, fontSize: '13px', fontWeight: '500', textDecoration: 'none' }}>Demo</a>
           <ExtensionDownloadButton
             label="Install Free"
@@ -125,7 +126,7 @@ export default function ExtensionPage() {
                 boxShadow: '0 0 36px rgba(168,85,247,0.4)',
               }}
             />
-            <a href="/" style={{
+            <a href="/live" style={{
               display: 'inline-block',
               padding: '16px 24px',
               borderRadius: '12px',
@@ -136,7 +137,7 @@ export default function ExtensionPage() {
               fontSize: '15px',
               fontWeight: '600',
             }}>
-              View Analytics →
+              🔴 Open Live Dashboard
             </a>
           </div>
 
@@ -370,9 +371,9 @@ export default function ExtensionPage() {
             }}
           />
           <div style={{ fontSize: '13px', color: C.muted }}>
-            Want full analytics too?{' '}
-            <a href="/" style={{ color: C.purple, fontWeight: '700', textDecoration: 'none' }}>
-              View your dashboard →
+            Already installed?{' '}
+            <a href="/live" style={{ color: C.purple, fontWeight: '700', textDecoration: 'none' }}>
+              Open Live Dashboard →
             </a>
           </div>
         </div>
@@ -387,6 +388,7 @@ export default function ExtensionPage() {
         <div style={{ fontSize: '12px', color: C.muted }}>© 2026 CamCash — Built for cam models who want to grow</div>
         <div style={{ display: 'flex', gap: '20px' }}>
           <a href="/" style={{ fontSize: '12px', color: C.muted, textDecoration: 'none' }}>Analytics Dashboard</a>
+          <a href="/live" style={{ fontSize: '12px', color: C.muted, textDecoration: 'none' }}>Live Dashboard</a>
           <a href="/landing/demo" style={{ fontSize: '12px', color: C.muted, textDecoration: 'none' }}>Demo</a>
           <a href="#" style={{ fontSize: '12px', color: C.muted, textDecoration: 'none' }}>Privacy</a>
           <a href="#" style={{ fontSize: '12px', color: C.muted, textDecoration: 'none' }}>Terms</a>
