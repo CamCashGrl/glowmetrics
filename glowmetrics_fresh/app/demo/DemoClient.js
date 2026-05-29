@@ -273,6 +273,33 @@ function OverviewTab() {
           ))}
         </ul>
       </div>
+
+      {/* CSV upload CTA */}
+      <div style={{
+        background: C.card, border: '1px solid rgba(168,85,247,0.25)',
+        borderRadius: '12px', padding: '18px 20px',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px',
+        flexWrap: 'wrap',
+      }}>
+        <div>
+          <div style={{ fontSize: '14px', fontWeight: 700, color: C.white, marginBottom: '4px' }}>
+            📄 See this with your real data
+          </div>
+          <div style={{ fontSize: '13px', color: C.muted, lineHeight: 1.5 }}>
+            Export your CSV from Chaturbate, BongaCams, or MFC and upload it — your real fan rankings, sessions, and earnings load instantly.{' '}
+            <a href="/landing#how-to-export" style={{ color: C.purple, textDecoration: 'underline', fontWeight: 600 }}>
+              How to export your CSV →
+            </a>
+          </div>
+        </div>
+        <a href="/landing" style={{
+          display: 'inline-flex', alignItems: 'center', gap: '6px', flexShrink: 0,
+          padding: '10px 20px', borderRadius: '8px', textDecoration: 'none',
+          background: `linear-gradient(135deg, ${C.purple}, ${C.pink})`,
+          color: '#fff', fontWeight: 700, fontSize: '13px',
+          boxShadow: '0 0 16px rgba(168,85,247,0.3)',
+        }}>Upload CSV →</a>
+      </div>
     </div>
   )
 }
