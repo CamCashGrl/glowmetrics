@@ -155,9 +155,8 @@
   let _shadow = null;   // shadow root
   let _state  = null;   // latest state from background
 
-  // Drag state (module-level so only one set of document listeners is needed)
+  // Drag state
   let _dragging = false, _dragSX, _dragSY, _dragOX, _dragOY;
-  let _docListenersBound = false;
 
   // Collapsed state persisted in localStorage
   let _collapsed = localStorage.getItem('_cc_col') === '1';
@@ -204,6 +203,8 @@
         background: linear-gradient(135deg, rgba(124,92,255,0.2), rgba(34,211,238,0.08));
         border-bottom: 1px solid rgba(124,92,255,0.22);
         cursor: grab;
+        user-select: none;
+        touch-action: none;
       }
       #hdr:active { cursor: grabbing; }
 
@@ -440,32 +441,29 @@
       };
     }
 
-    // Drag — rebind header mousedown (header element is recreated each render)
+    // Drag — use pointer capture so events aren't stolen by the page
     const hdr = _shadow.getElementById('hdr');
     if (hdr) {
-      hdr.onmousedown = (e) => {
+      hdr.onpointerdown = (e) => {
         if (e.target.id === 'tbtn') return;
         _dragging = true;
         _dragSX = e.clientX;
         _dragSY = e.clientY;
         _dragOX = parseInt(_host.style.left) || 0;
         _dragOY = parseInt(_host.style.top)  || 0;
+        hdr.setPointerCapture(e.pointerId);
         e.preventDefault();
       };
-    }
-
-    // Document-level drag handlers — only bind once ever
-    if (!_docListenersBound) {
-      _docListenersBound = true;
-      document.addEventListener('mousemove', (e) => {
+      hdr.onpointermove = (e) => {
         if (!_dragging) return;
         const nx = _dragOX + (e.clientX - _dragSX);
         const ny = _dragOY + (e.clientY - _dragSY);
         _host.style.left = nx + 'px';
         _host.style.top  = ny + 'px';
         _savePos(nx, ny);
-      });
-      document.addEventListener('mouseup', () => { _dragging = false; });
+      };
+      hdr.onpointerup = () => { _dragging = false; };
+      hdr.onpointercancel = () => { _dragging = false; };
     }
   }
 
