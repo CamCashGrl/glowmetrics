@@ -151,13 +151,12 @@
   // Uses Shadow DOM so page styles never bleed in
   // ═══════════════════════════════════════════════════════════════════════════
 
-  let _host   = null;   // the outer wrapper element appended to body
-  let _shadow = null;   // shadow root
-  let _state  = null;   // latest state from background
+  let _host   = null;
+  let _shadow = null;
+  let _state  = null;
 
-  // Drag state (module-level so only one set of document listeners is needed)
+  // Drag state
   let _dragging = false, _dragSX, _dragSY, _dragOX, _dragOY;
-  let _docListenersBound = false;
 
   // Collapsed state persisted in localStorage
   let _collapsed = localStorage.getItem('_cc_col') === '1';
@@ -179,7 +178,7 @@
     localStorage.setItem('_cc_pos', JSON.stringify({ x, y }));
   }
 
-  // ─── CSS ──────────────────────────────────────────────────────────────────
+  // ─── CSS ─────────────────────────────────────────────────────────────────
   function _css() {
     return `
       *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -204,6 +203,8 @@
         background: linear-gradient(135deg, rgba(124,92,255,0.2), rgba(34,211,238,0.08));
         border-bottom: 1px solid rgba(124,92,255,0.22);
         cursor: grab;
+        user-select: none;
+        touch-action: none;
       }
       #hdr:active { cursor: grabbing; }
 
@@ -375,10 +376,8 @@
       `;
     }
 
-    // Coach message
     const coachText = s.coaches?.[0]?.text || '👁 Watching for tips...';
 
-    // Room heat (passed through from background state if available)
     const heatState = s.roomHeat || null;
     let heatHTML = '';
     if (heatState) {
@@ -389,12 +388,10 @@
       </div>`;
     }
 
-    // Stats
     const usd      = '$' + (s.usd    || 0).toFixed(2);
     const tokens   = (s.tokens || 0).toLocaleString();
     const tipCount = (s.tips   || []).length;
 
-    // Tips — mark whales
     const whaleSet = new Set((s.whales || []).map(w => w.username.toLowerCase()));
     const tips     = (s.tips   || []).slice(0, 4);
     const tipRows  = tips.length === 0
@@ -428,7 +425,6 @@
 
   // ─── Bind events (called after each render) ───────────────────────────────
   function _bindEvents() {
-    // Toggle collapse
     const tbtn = _shadow.getElementById('tbtn');
     if (tbtn) {
       tbtn.onclick = () => {
@@ -440,32 +436,29 @@
       };
     }
 
-    // Drag — rebind header mousedown (header element is recreated each render)
+    // Drag — pointer capture prevents Chaturbate from stealing events
     const hdr = _shadow.getElementById('hdr');
     if (hdr) {
-      hdr.onmousedown = (e) => {
+      hdr.onpointerdown = (e) => {
         if (e.target.id === 'tbtn') return;
         _dragging = true;
         _dragSX = e.clientX;
         _dragSY = e.clientY;
         _dragOX = parseInt(_host.style.left) || 0;
         _dragOY = parseInt(_host.style.top)  || 0;
+        hdr.setPointerCapture(e.pointerId);
         e.preventDefault();
       };
-    }
-
-    // Document-level drag handlers — only bind once ever
-    if (!_docListenersBound) {
-      _docListenersBound = true;
-      document.addEventListener('mousemove', (e) => {
+      hdr.onpointermove = (e) => {
         if (!_dragging) return;
         const nx = _dragOX + (e.clientX - _dragSX);
         const ny = _dragOY + (e.clientY - _dragSY);
         _host.style.left = nx + 'px';
         _host.style.top  = ny + 'px';
         _savePos(nx, ny);
-      });
-      document.addEventListener('mouseup', () => { _dragging = false; });
+      };
+      hdr.onpointerup     = () => { _dragging = false; };
+      hdr.onpointercancel = () => { _dragging = false; };
     }
   }
 
@@ -508,20 +501,16 @@
     _bindEvents();
   }
 
-  // ─── Public update — called when background sends new state ───────────────
   function _update(state) {
     _state = state;
     if (!_host) { _create(); } else { _render(); }
   }
 
-  // ─── Listen for background broadcasts ─────────────────────────────────────
   chrome.runtime.onMessage.addListener((msg) => {
     if (msg.action === 'overlay_state' && msg.state) _update(msg.state);
     return false;
   });
 
-  // ─── Initial state fetch ──────────────────────────────────────────────────
-  // Create immediately with loading state, then update with real state
   _create();
   setTimeout(() => {
     chrome.runtime.sendMessage({ action: 'get_state' }, (state) => {

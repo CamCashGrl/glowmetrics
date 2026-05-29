@@ -1,5 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 
+export const dynamic = 'force-dynamic';
+
 function corsHeaders(req) {
   const origin = req.headers.get('origin') || '';
   const allowed = origin.startsWith('chrome-extension://')
@@ -49,15 +51,21 @@ export async function POST(req) {
       );
     }
 
+    // Use the tip's own timestamp (ms) so back-to-back tips from the same user
+    // with the same amount are only deduped if they share the exact same event time.
+    const receivedAt = timestamp || new Date().toISOString();
+    const tsMs = new Date(receivedAt).getTime();
+    const deduplication_key = `${user.id}-${username.trim().toLowerCase()}-${amount}-${platform.toLowerCase()}-${tsMs}`;
+
     const tipData = {
-      user_id:          user.id,
-      username:         username.trim(),
-      tokens:           parseInt(amount, 10),
-      usd:              parseFloat((parseInt(amount, 10) * 0.05).toFixed(2)),
-      platform:         platform.toLowerCase(),
-      source:           'extension',
-      received_at:      timestamp || new Date().toISOString(),
-      deduplication_key: `${user.id}-${username}-${amount}-${Date.now()}`,
+      user_id:  user.id,
+      username: username.trim(),
+      tokens:   parseInt(amount, 10),
+      usd:      parseFloat((parseInt(amount, 10) * 0.05).toFixed(2)),
+      platform: platform.toLowerCase(),
+      source:   'extension',
+      received_at: receivedAt,
+      deduplication_key,
     };
 
     const { data, error } = await supabaseAdmin
@@ -76,7 +84,7 @@ export async function POST(req) {
       username:  username.trim(),
       tokens:    parseInt(amount, 10),
       platform:  platform.toLowerCase(),
-      date_time: timestamp || new Date().toISOString(),
+      date_time: receivedAt,
     });
 
     return Response.json(
