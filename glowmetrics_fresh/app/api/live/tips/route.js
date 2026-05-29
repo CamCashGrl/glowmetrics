@@ -1,5 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 
+export const dynamic = 'force-dynamic';
+
 function corsHeaders(req) {
   const origin = req.headers.get('origin') || '';
   const allowed = origin.startsWith('chrome-extension://')
