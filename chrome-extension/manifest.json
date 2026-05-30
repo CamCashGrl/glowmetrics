@@ -7,7 +7,7 @@
     "storage",
     "alarms",
     "notifications",
-    "tabs"
+    "tabs",
     "cookies"
   ],
   "host_permissions": [
