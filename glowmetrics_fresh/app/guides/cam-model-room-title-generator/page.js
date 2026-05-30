@@ -13,7 +13,7 @@ export const metadata = {
     title: 'Chaturbate Room Title Generator',
     description: 'Generate high-converting Chaturbate room titles instantly. Free tool, no signup required.',
     type: 'website',
-    url: 'https://camcashgrl.com/guides/chaturbate-room-title-generator',
+    url: 'https://camcashgrl.com/guides/cam-model-room-title-generator',
     images: [{
       url: 'https://camcashgrl.com/og-image.png',
       width: 1200,
@@ -36,7 +36,7 @@ export const metadata = {
       'max-video-preview': -1,
     },
   },
-  canonical: 'https://camcashgrl.com/guides/chaturbate-room-title-generator',
+  canonical: 'https://camcashgrl.com/guides/cam-model-room-title-generator',
 }
 
 export const viewport = {
