@@ -1,0 +1,64 @@
+import { createClient } from '@supabase/supabase-js'
+import { notFound } from 'next/navigation'
+import ArticleLayout from '../../components/ArticleLayout'
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+)
+
+export async function generateMetadata({ params }) {
+  const { data } = await supabase
+    .from('blog_posts')
+    .select('title, meta_description, slug')
+    .eq('slug', params.slug)
+    .single()
+  if (!data) return {}
+  return {
+    title: data.title + ' | CamCash',
+    description: data.meta_description,
+    alternates: { canonical: `https://www.camcashgrl.com/blog/${data.slug}` },
+  }
+}
+
+export default async function DynamicBlogPost({ params }) {
+  const { data: post } = await supabase
+    .from('blog_posts')
+    .select('*')
+    .eq('slug', params.slug)
+    .eq('published', true)
+    .single()
+
+  if (!post) notFound()
+
+  const schema = {
+    '@context': 'https://schema.org',
+    '@type': 'Article',
+    headline: post.title,
+    description: post.meta_description,
+    url: `https://www.camcashgrl.com/blog/${post.slug}`,
+    datePublished: post.created_at,
+    dateModified: post.updated_at,
+    author: { '@type': 'Organization', name: 'CamCashGrl', url: 'https://www.camcashgrl.com' },
+    publisher: { '@type': 'Organization', name: 'CamCashGrl', url: 'https://www.camcashgrl.com' },
+  }
+
+  return (
+    <ArticleLayout
+      schema={schema}
+      breadcrumb={[{ label: 'Blog', href: '/blog' }, { label: post.title }]}
+    >
+      <div style={{ fontSize: '12px', color: '#475569', marginBottom: '28px', display: 'flex', gap: '16px' }}>
+        <span>CamCashGrl</span>
+        <span>{new Date(post.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</span>
+      </div>
+      <h1 style={{ fontSize: '29px', fontWeight: 800, color: '#f1f5f9', lineHeight: 1.2, marginBottom: '24px', letterSpacing: '-0.02em' }}>
+        {post.title}
+      </h1>
+      <div
+        style={{ fontSize: '15px', lineHeight: 1.75, color: '#94a3b8' }}
+        dangerouslySetInnerHTML={{ __html: post.content }}
+      />
+    </ArticleLayout>
+  )
+}
