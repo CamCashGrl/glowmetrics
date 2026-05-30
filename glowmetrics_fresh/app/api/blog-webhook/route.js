@@ -7,6 +7,11 @@ const supabase = createClient(
 )
 
 export async function POST(req) {
+  const authHeader = req.headers.get('authorization')
+  const token = authHeader?.replace('Bearer ', '')
+  if (token !== process.env.BLOG_WEBHOOK_SECRET) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
   try {
     const body = await req.json()
     const { title, content, slug, meta_description, tags } = body
