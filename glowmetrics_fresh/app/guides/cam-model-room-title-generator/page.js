@@ -8,7 +8,7 @@ export const metadata = {
     title: 'Free Cam Room Title Generator + Hashtag Generator (2026)',
     description: 'Generate room titles and hashtags designed to increase clicks, tips, and viewer engagement. Free tool, no signup required.',
     type: 'website',
-    url: 'https://camcashgrl.com/guides/chaturbate-room-title-generator',
+    url: 'https://camcashgrl.com/guides/cam-model-room-title-generator',
     images: [{ url: 'https://camcashgrl.com/og-image.png', width: 1200, height: 630 }],
   },
   twitter: {
@@ -20,7 +20,7 @@ export const metadata = {
     index: true, follow: true,
     googleBot: { index: true, follow: true, 'max-image-preview': 'large', 'max-snippet': -1 },
   },
-  alternates: { canonical: 'https://camcashgrl.com/guides/chaturbate-room-title-generator' },
+  alternates: { canonical: 'https://www.camcashgrl.com/guides/cam-model-room-title-generator' },
 }
 
 export const viewport = { width: 'device-width', initialScale: 1, maximumScale: 5 }
