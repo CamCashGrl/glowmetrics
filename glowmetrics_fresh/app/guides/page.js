@@ -68,14 +68,14 @@ const guides = [
     description: 'Find when you earn the most on Chaturbate.',
   },
   {
-    slug: 'chaturbate-room-title-generator',
+    slug: 'cam-model-room-title-generator',
     title: 'Room Title Generator',
-    description: 'Generate viral Chaturbate room titles that get clicks.',
+    description: 'Generate viral cam model room titles that get clicks.',
   },
   {
-    slug: 'chaturbate-token-calculator',
+    slug: 'cam-model-token-calculator',
     title: 'Token Calculator',
-    description: 'Instantly convert Chaturbate tokens to USD.',
+    description: 'Instantly convert cam tokens to USD across platforms.',
   },
 ]
 

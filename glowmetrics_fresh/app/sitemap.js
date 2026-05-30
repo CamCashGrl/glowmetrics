@@ -13,8 +13,8 @@ export default function sitemap() {
     { url: `${baseUrl}/pricing`,    lastModified: now, changeFrequency: 'monthly', priority: 0.9 },
 
     // Priority 0.95 — free interactive tools
-    { url: `${baseUrl}/guides/chaturbate-room-title-generator`, lastModified: now, changeFrequency: 'monthly', priority: 0.95 },
-    { url: `${baseUrl}/guides/chaturbate-token-calculator`,     lastModified: now, changeFrequency: 'monthly', priority: 0.95 },
+    { url: `${baseUrl}/guides/cam-model-room-title-generator`, lastModified: now, changeFrequency: 'monthly', priority: 0.95 },
+    { url: `${baseUrl}/guides/cam-model-token-calculator`,     lastModified: now, changeFrequency: 'monthly', priority: 0.95 },
 
     // Priority 0.90 — guides
     { url: `${baseUrl}/guides/chaturbate-earnings-tracker`,    lastModified: now, changeFrequency: 'monthly', priority: 0.9 },

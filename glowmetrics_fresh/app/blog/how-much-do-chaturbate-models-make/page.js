@@ -112,7 +112,7 @@ export default function ChaturbateEarningsPost() {
       <div style={s.note}>
         <p style={{ ...s.p, marginBottom: 0 }}>
           <strong style={{ color: '#e2e8f0' }}>Quick calculation:</strong>{' '}
-          Use the <a href="/guides/chaturbate-token-calculator" style={s.iLink}>Chaturbate Token Calculator</a> to convert any token amount to USD instantly — no manual math.
+          Use the <a href="/guides/cam-model-token-calculator" style={s.iLink}>Chaturbate Token Calculator</a> to convert any token amount to USD instantly — no manual math.
         </p>
       </div>
 
@@ -188,11 +188,11 @@ export default function ChaturbateEarningsPost() {
       <div style={s.tools}>
         <div style={s.toolT}>Free Chaturbate tools</div>
         <div style={s.toolGrid}>
-          <a href="/guides/chaturbate-token-calculator" style={s.toolCard}>
+          <a href="/guides/cam-model-token-calculator" style={s.toolCard}>
             <div style={s.toolN}>Token Calculator</div>
             <div style={s.toolD}>Convert tokens to USD, estimate hourly goals</div>
           </a>
-          <a href="/guides/chaturbate-room-title-generator" style={s.toolCard}>
+          <a href="/guides/cam-model-room-title-generator" style={s.toolCard}>
             <div style={s.toolN}>Room Title Generator</div>
             <div style={s.toolD}>High-converting titles using proven formulas</div>
           </a>

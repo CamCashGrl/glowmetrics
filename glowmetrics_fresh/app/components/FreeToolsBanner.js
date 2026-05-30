@@ -32,7 +32,7 @@ export default function FreeToolsBanner() {
         >
           {/* Room Title Generator */}
           <a
-            href="/guides/chaturbate-room-title-generator"
+            href="/guides/cam-model-room-title-generator"
             style={{
               display: 'block',
               background: 'rgba(168,85,247,0.07)',
@@ -53,7 +53,7 @@ export default function FreeToolsBanner() {
           >
             <div style={{ fontSize: '28px', marginBottom: '12px' }}>✏️</div>
             <div style={{ fontSize: '17px', fontWeight: '700', color: '#f1f5f9', marginBottom: '8px' }}>
-              Chaturbate Room Title Generator
+              Cam Model Room Title Generator
             </div>
             <p style={{ fontSize: '14px', color: '#94a3b8', margin: '0 0 16px', lineHeight: '1.6' }}>
               Generate click-worthy room titles that get views. Built specifically for Chaturbate — free to use, no account needed.
@@ -65,7 +65,7 @@ export default function FreeToolsBanner() {
 
           {/* Token Calculator */}
           <a
-            href="/guides/chaturbate-token-calculator"
+            href="/guides/cam-model-token-calculator"
             style={{
               display: 'block',
               background: 'rgba(34,211,238,0.06)',
@@ -86,7 +86,7 @@ export default function FreeToolsBanner() {
           >
             <div style={{ fontSize: '28px', marginBottom: '12px' }}>💰</div>
             <div style={{ fontSize: '17px', fontWeight: '700', color: '#f1f5f9', marginBottom: '8px' }}>
-              Chaturbate Token Calculator
+              Cam Model Token Calculator
             </div>
             <p style={{ fontSize: '14px', color: '#94a3b8', margin: '0 0 16px', lineHeight: '1.6' }}>
               Instantly convert Chaturbate tokens to USD. See exactly what you earned. Works for any token amount or payout rate.

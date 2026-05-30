@@ -6022,7 +6022,7 @@ const handleCSV = async (file, forcePlatform = null) => {
       )}
       {/* Free tools strip */}
       <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", padding: "0 0 8px", marginBottom: "8px" }}>
-        <a href="/guides/chaturbate-room-title-generator" style={{ flex: 1, minWidth: "200px", padding: "14px 18px", background: "rgba(168,85,247,0.07)", border: "1px solid rgba(168,85,247,0.2)", borderRadius: "10px", textDecoration: "none", display: "flex", alignItems: "center", gap: "10px" }}>
+        <a href="/guides/cam-model-room-title-generator" style={{ flex: 1, minWidth: "200px", padding: "14px 18px", background: "rgba(168,85,247,0.07)", border: "1px solid rgba(168,85,247,0.2)", borderRadius: "10px", textDecoration: "none", display: "flex", alignItems: "center", gap: "10px" }}>
           <span style={{ fontSize: "20px" }}>✏️</span>
           <div>
             <div style={{ fontSize: "13px", fontWeight: "600", color: C.white }}>Room Title Generator</div>
@@ -6030,7 +6030,7 @@ const handleCSV = async (file, forcePlatform = null) => {
           </div>
           <span style={{ marginLeft: "auto", fontSize: "12px", color: "#a855f7" }}>Try →</span>
         </a>
-        <a href="/guides/chaturbate-token-calculator" style={{ flex: 1, minWidth: "200px", padding: "14px 18px", background: "rgba(34,211,238,0.05)", border: "1px solid rgba(34,211,238,0.15)", borderRadius: "10px", textDecoration: "none", display: "flex", alignItems: "center", gap: "10px" }}>
+        <a href="/guides/cam-model-token-calculator" style={{ flex: 1, minWidth: "200px", padding: "14px 18px", background: "rgba(34,211,238,0.05)", border: "1px solid rgba(34,211,238,0.15)", borderRadius: "10px", textDecoration: "none", display: "flex", alignItems: "center", gap: "10px" }}>
           <span style={{ fontSize: "20px" }}>💰</span>
           <div>
             <div style={{ fontSize: "13px", fontWeight: "600", color: C.white }}>Token Calculator</div>

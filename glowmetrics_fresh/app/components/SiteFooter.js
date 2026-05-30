@@ -103,8 +103,8 @@ export default function SiteFooter({ sidebarOffset = 0 }) {
           <FooterLink href="/guides/cam-model-revenue-dashboard">Cam Model Revenue Dashboard</FooterLink>
           <FooterLink href="/guides/cam-model-session-breakdown">Cam Model Session Breakdown</FooterLink>
           <FooterLink href="/guides/chaturbate-best-hours">Chaturbate Best Hours to Stream</FooterLink>
-          <FooterLink href="/guides/chaturbate-room-title-generator">Chaturbate Room Title Generator</FooterLink>
-          <FooterLink href="/guides/chaturbate-token-calculator">Chaturbate Token Calculator</FooterLink>
+          <FooterLink href="/guides/cam-model-room-title-generator">Cam Model Room Title Generator</FooterLink>
+          <FooterLink href="/guides/cam-model-token-calculator">Cam Model Token Calculator</FooterLink>
         </div>
 
         {/* Main Pages */}

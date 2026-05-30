@@ -106,7 +106,7 @@ export default function BlogPostChaturbateViewers() {
           <p style={{ ...s.p, marginBottom: 0 }}>The good title works because it creates curiosity, shows activity, includes keywords, and sets clear expectations.</p>
           <div style={s.tip}>
             <div style={s.tipLbl}>Free tool</div>
-            <p style={{ ...s.p, marginBottom: 0 }}>Use the <a href="/guides/chaturbate-room-title-generator" style={s.iLink}>Room Title Generator</a> to create optimized titles based on your vibe and goal — no guessing required.</p>
+            <p style={{ ...s.p, marginBottom: 0 }}>Use the <a href="/guides/cam-model-room-title-generator" style={s.iLink}>Room Title Generator</a> to create optimized titles based on your vibe and goal — no guessing required.</p>
           </div>
         </div>
       </div>
@@ -182,7 +182,7 @@ export default function BlogPostChaturbateViewers() {
       <div style={s.tools}>
         <div style={s.toolT}>Free tools</div>
         <div style={s.toolGrid}>
-          <a href="/guides/chaturbate-room-title-generator" style={s.toolCard}>
+          <a href="/guides/cam-model-room-title-generator" style={s.toolCard}>
             <div style={s.toolN}>Room Title Generator</div>
             <div style={s.toolD}>High-converting titles in seconds</div>
           </a>
