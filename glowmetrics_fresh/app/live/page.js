@@ -622,9 +622,12 @@ export default function LivePage() {
                 <button onClick={() => { setAuthMode('signup'); setShowAuthModal(true); }} style={{ width: '100%', padding: '12px 0', background: `linear-gradient(135deg, ${C.purple}, ${C.pink})`, border: 'none', borderRadius: 10, color: '#fff', fontWeight: 800, fontSize: 14, cursor: 'pointer', marginBottom: 8, boxShadow: '0 0 20px rgba(168,85,247,0.3)' }}>
                   Create Free Account →
                 </button>
-                <button onClick={() => { setAuthMode('signin'); setShowAuthModal(true); }} style={{ width: '100%', padding: '10px 0', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, color: C.muted, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+                <button onClick={() => { setAuthMode('signin'); setShowAuthModal(true); }} style={{ width: '100%', padding: '10px 0', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, color: C.muted, fontWeight: 700, fontSize: 13, cursor: 'pointer', marginBottom: 8 }}>
                   Sign In
                 </button>
+                <a href="/live/demo" style={{ display: 'block', padding: '9px 0', background: 'transparent', border: '1px solid rgba(34,211,238,0.25)', borderRadius: 10, color: C.cyan, fontWeight: 700, fontSize: 13, textDecoration: 'none', textAlign: 'center' }}>
+                  🎬 See Full Live Demo →
+                </a>
               </div>
               <div style={{ borderRadius: 14, padding: '18px 20px', background: 'rgba(34,211,238,0.06)', border: '1px solid rgba(34,211,238,0.2)', textAlign: 'center' }}>
                 <div style={{ fontSize: 20, marginBottom: 8 }}>🧩</div>
