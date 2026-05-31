@@ -1,27 +1,17 @@
-import DemoClient from './DemoClient'
+import { redirect } from 'next/navigation'
 
 export const metadata = {
-  title: 'CamCash Live Demo — See Your Stream Analytics in Real Time',
+  title: 'CamCash Demo — Interactive Dashboard',
   description:
-    'Try CamCash free — no signup needed. See live viewer tracking, AI coaching, tip analytics, and engagement insights for cam models on Chaturbate, BongaCams, and MyFreeCams.',
-  keywords: [
-    'cam model analytics',
-    'live stream analytics',
-    'chaturbate analytics',
-    'creator coaching',
-    'stream optimization',
-    'cam model tools',
-    'webcam creator tools',
-    'creator engagement tools',
-    'livestream analytics',
-  ],
+    'Try CamCash free — no signup needed. Full interactive dashboard with fan intelligence, earnings analytics, session breakdown, platform comparison, and AI coaching.',
   openGraph: {
-    title: 'CamCash Live Demo — See Your Stream Analytics in Real Time',
-    description: 'Try the CamCash live demo free. Real-time viewer tracking, AI coaching, and tip analytics for cam models.',
+    title: 'CamCash Demo — Interactive Dashboard',
+    description: 'Full interactive demo with fan CRM, earnings analytics, and AI coaching. No signup required.',
     url: 'https://www.camcashgrl.com/demo',
   },
+  alternates: { canonical: 'https://www.camcashgrl.com/landing/demo' },
 }
 
 export default function DemoPage() {
-  return <DemoClient />
+  redirect('/landing/demo')
 }
