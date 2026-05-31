@@ -2,12 +2,15 @@ import { createClient } from '@supabase/supabase-js'
 import { notFound } from 'next/navigation'
 import ArticleLayout from '../../components/ArticleLayout'
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-)
+function getSupabase() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+  )
+}
 
 export async function generateMetadata({ params }) {
+  const supabase = getSupabase()
   const { data } = await supabase
     .from('blog_posts')
     .select('title, meta_description, slug')
@@ -22,6 +25,7 @@ export async function generateMetadata({ params }) {
 }
 
 export default async function DynamicBlogPost({ params }) {
+  const supabase = getSupabase()
   const { data: post } = await supabase
     .from('blog_posts')
     .select('*')
