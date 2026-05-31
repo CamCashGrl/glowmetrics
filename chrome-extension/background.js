@@ -1,3 +1,4 @@
+importScripts('connectors/chaturbate.js');
 // CamCash background service worker
 
 const SUPABASE_URL  = 'https://hlsdlaibnayzbfflxclj.supabase.co';
@@ -250,6 +251,18 @@ function getWhale(u) { return whales.find(w => w.username.toLowerCase() === u.to
 chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
 
   if (msg.action === 'get_state') { reply(getState()); return false; }
+
+  if (msg.action === 'start_sync') {
+    (async () => {
+      await restorePromise;
+      if (!session?.user?.id || !session?.access_token) {
+        chrome.runtime.sendMessage({ action: 'sync_progress', error: 'Please sign in first.', done: true }).catch(()=>{});
+        return;
+      }
+      await syncChaturbate('incremental');
+    })();
+    return false;
+  }
 
   if (msg.action === 'logout') {
     logout().then(() => reply({ ok: true }));

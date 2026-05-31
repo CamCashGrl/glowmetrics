@@ -13,6 +13,16 @@ const nextConfig = {
         destination: '/extension',
         permanent: true,
       },
+      {
+        source: '/guides/chaturbate-room-title-generator',
+        destination: '/guides/cam-model-room-title-generator',
+        permanent: true,
+      },
+      {
+        source: '/guides/chaturbate-token-calculator',
+        destination: '/guides/cam-model-token-calculator',
+        permanent: true,
+      },
     ]
   },
 }

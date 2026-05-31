@@ -582,9 +582,9 @@ function TitleGenerator({ C, glassCard, analytics, tips, sessions, whales }) {
       const bestHourEntry = Object.entries(hourUSD).map(([h, usd]) => [h, usd / (hourCount[h] || 1)]).sort((a,b) => b[1]-a[1])[0]
       bestHour = bestHourEntry ? parseInt(bestHourEntry[0]) : null
     }
-    const bestHourLabel = bestHour !== null
-      ? (() => { const _off = new Date().getTimezoneOffset()/-60; const _lh = Math.round(((bestHour+_off)%24+24)%24); return _lh===0?"12 AM":_lh<12?`${_lh} AM`:_lh===12?"12 PM":`${_lh-12} PM` })()
-      : null
+    const bestHourLabel = (bestHour === null || isNaN(bestHour))
+      ? null
+      : (() => { const _off = new Date().getTimezoneOffset()/-60; const _lh = Math.round(((bestHour+_off)%24+24)%24); return _lh===0?"12 AM":_lh<12?`${_lh} AM`:_lh===12?"12 PM":`${_lh-12} PM` })()
     const hoursUntilPeak = bestHour !== null ? (bestHour - currentHour + 24) % 24 : 99
     const isPeakNow = hoursUntilPeak <= 1
     const peakSoon = hoursUntilPeak <= 3 && !isPeakNow
@@ -1421,7 +1421,7 @@ const handleCSV = async (file, forcePlatform = null) => {
   // FIX: use total USD / total hours (not avg of per-session rates — that inflates short sessions)
   const timedTotalUSD = timedSessions.reduce((sum, s) => sum + (s.totalUSD || 0), 0)
   const timedTotalHours = timedSessions.reduce((sum, s) => sum + (s.durationHours || 0), 0)
-  const avgPerHour = timedTotalHours > 0 ? timedTotalUSD / timedTotalHours : 0
+  const avgPerHour = timedTotalHours > 0 ? timedTotalUSD / Math.max(timedTotalHours, 0.5) : 0
   // Single source of truth — pre-computed in aggregateRows, same values used everywhere
   const analyticsbestDay  = analytics?.bestDay  || null
   const analyticsBestHour = analytics?.bestHour || null
@@ -1695,7 +1695,8 @@ const handleCSV = async (file, forcePlatform = null) => {
       }
     })
     const bestHour = analytics?.bestHour
-    const bh = todayBestHourNum !== null ? todayBestHourNum : (bestHour ? parseInt(bestHour.hour) : null)
+    const _bhRaw = todayBestHourNum !== null ? todayBestHourNum : (bestHour ? parseInt(bestHour.hour) : null)
+    const bh = (_bhRaw !== null && !isNaN(_bhRaw)) ? _bhRaw : null
     const bhLabel = bh === null ? null : fmtHour(bh)
     const hoursUntilPeak = bh !== null ? (bh - utcHour + 24) % 24 : null
     const atPeak = hoursUntilPeak === 0 || hoursUntilPeak === 1
@@ -2405,7 +2406,12 @@ const handleCSV = async (file, forcePlatform = null) => {
                     <div style={{ fontSize: 10, color: C.muted, marginBottom: 3, textTransform: 'uppercase', letterSpacing: 1 }}>Today</div>
                     <div style={{ fontSize: 14, fontWeight: 800, color: C.white }}>{todayName}</div>
                     <div style={{ fontSize: 11, color: C.indigo, marginTop: 2 }}>
-                      {isBestDay ? `🏆 Your best day — avg $${(bestDay?.avg || sessionAvg).toFixed(0)}/session` : `avg ~$${sessionAvg.toFixed(0)}/session`}
+                      {(() => {
+                        const _bdA = bestDay?.avg || sessionAvg
+                        const _safeA = (!isNaN(_bdA) && isFinite(_bdA) && _bdA > 0) ? _bdA : null
+                        if (isBestDay) return _safeA ? `🏆 Your best day — avg $${_safeA.toFixed(0)}/session` : '🏆 Your best day'
+                        return _safeA ? `avg ~$${_safeA.toFixed(0)}/session` : 'Not enough data yet'
+                      })()}
                     </div>
                   </div>
 
@@ -2413,14 +2419,14 @@ const handleCSV = async (file, forcePlatform = null) => {
                     <div style={{ fontSize: 10, color: C.muted, marginBottom: 3, textTransform: 'uppercase', letterSpacing: 1 }}>Best Time</div>
                     <div style={{ fontSize: 14, fontWeight: 800, color: atPeak ? C.green : C.white }}>{bhLabel || 'Calculating...'}</div>
                     <div style={{ fontSize: 11, color: atPeak ? C.green : C.cyan, marginTop: 2 }}>
-                      {atPeak ? 'ON RIGHT NOW — stream!' : hoursUntilPeak !== null ? `in ${hoursUntilPeak}h · $${displayAvg.toFixed(0)} avg` : ''}
+                      {atPeak ? 'ON RIGHT NOW — stream!' : hoursUntilPeak !== null ? `in ${hoursUntilPeak}h${(!isNaN(displayAvg) && displayAvg > 0) ? ` · $${displayAvg.toFixed(0)} avg` : ''}` : ''}
                     </div>
                   </div>
 
                   <div style={{ flex: 1, minWidth: 130, padding: '11px 14px', borderRadius: 11, background: 'rgba(245,158,11,0.07)', border: '1px solid rgba(245,158,11,0.18)' }}>
                     <div style={{ fontSize: 10, color: C.muted, marginBottom: 3, textTransform: 'uppercase', letterSpacing: 1 }}>Best Platform</div>
                     <div style={{ fontSize: 14, fontWeight: 800, color: C.white }}>{displayPlat}</div>
-                    <div style={{ fontSize: 11, color: C.gold, marginTop: 2 }}>${displayAvg.toFixed(0)} avg at {bhLabel || 'peak'}</div>
+                    <div style={{ fontSize: 11, color: C.gold, marginTop: 2 }}>{(!isNaN(displayAvg) && displayAvg > 0) ? `$${displayAvg.toFixed(0)} avg at ${bhLabel || 'peak'}` : bhLabel ? `at ${bhLabel}` : 'Not enough data yet'}</div>
                   </div>
 
                   {bhLabel && (
@@ -2587,7 +2593,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                     <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10 }}>Platform ROI ($/hr streamed)</div>
                     <div className="platform-roi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10, marginBottom: 18 }}>
                       {allPlats.map((p, i) => {
-                        const roi = platformVelocity[p.platform] ?? (p.hours > 0 ? parseFloat((p.totalUSD / p.hours).toFixed(2)) : null)
+                        const roi = platformVelocity[p.platform] ?? (p.hours > 0 ? parseFloat((p.totalUSD / Math.max(p.hours, 0.5)).toFixed(2)) : null)
                         const bestTime = platformBestTimes[p.platform]
                         const col = platColors[p.platform] || C.blue
                         const isTop = i === 0
@@ -2633,11 +2639,13 @@ const handleCSV = async (file, forcePlatform = null) => {
                       // Use avg per SESSION on best day (not avg/calendar day)
                       const bdSess = sessions.filter(s => new Date(s.startTime).toLocaleDateString('en-US', { weekday: 'long' }) === analyticsbestDay.day)
                       const bdAvg = bdSess.length ? (bdSess.reduce((a,s) => a+s.totalUSD,0)/bdSess.length) : analyticsbestDay.avg
+                      const bdAvgSafe = (!isNaN(bdAvg) && isFinite(bdAvg) && bdAvg > 0) ? bdAvg : null
                       return (
                         <div style={{ display: "flex", gap: 8, alignItems: "center", padding: "10px 14px", borderRadius: 10, background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.2)", marginBottom: 0 }}>
                           <span style={{ fontSize: 16 }}>📅</span>
                           <div style={{ fontSize: 13, color: C.white }}>
-                            <strong>{analyticsbestDay.day}s</strong> earn the most — ${bdAvg.toFixed(0)} avg per session
+                            <strong>{analyticsbestDay.day}s</strong> earn the most
+                            {bdAvgSafe !== null ? ` — $${bdAvgSafe.toFixed(0)} avg per session` : ' — not enough data yet'}
                             {bdSess.length >= 3 && <span style={{ color: C.muted, marginLeft: 6 }}>across {bdSess.length} {analyticsbestDay.day} sessions</span>}
                           </div>
                         </div>
@@ -3081,7 +3089,7 @@ const handleCSV = async (file, forcePlatform = null) => {
             totalUSD: parseFloat((p.totalUSD || 0).toFixed(2)),
             sessions: p.sessions.size,
             hours: parseFloat((p.hours || 0).toFixed(1)),
-            usdPerHour: p.hours > 0 ? parseFloat((p.totalUSD / p.hours).toFixed(2)) : 0,
+            usdPerHour: p.hours > 0 ? parseFloat((p.totalUSD / Math.max(p.hours, 0.5)).toFixed(2)) : 0,
             avgTipSize: p.tips > 0 ? parseFloat((p.totalUSD / p.tips).toFixed(2)) : 0,
             tipCount: p.tips
           })).sort((a, b) => b.totalUSD - a.totalUSD)

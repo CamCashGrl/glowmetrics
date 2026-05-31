@@ -289,3 +289,44 @@ chrome.runtime.onMessage.addListener((msg) => {
   syncStatus.style.color = '#fbbf24';
   syncStatus.textContent = `Importing · ${(msg.tipsFound || 0).toLocaleString()} tips found…`;
 });
+
+// ─── One-Click Sync (connector path) ─────────────────────────────────────────
+const _syncBtn  = document.getElementById('sync-btn');
+const _syncProg = document.getElementById('sync-progress');
+const _syncBar  = document.getElementById('sync-bar');
+const _syncStat = document.getElementById('sync-status');
+const _syncRes  = document.getElementById('sync-result');
+
+if (_syncBtn && !_syncBtn.dataset.connectorBound) {
+  _syncBtn.dataset.connectorBound = '1';
+  _syncBtn.addEventListener('click', () => {
+    _syncBtn.disabled = true;
+    _syncBtn.textContent = 'Syncing...';
+    if (_syncProg) { _syncProg.style.display = 'block'; }
+    if (_syncRes)  { _syncRes.style.display = 'none'; }
+    if (_syncBar)  { _syncBar.style.width = '5%'; }
+    chrome.runtime.sendMessage({ action: 'start_sync' });
+  });
+}
+
+chrome.runtime.onMessage.addListener(msg => {
+  if (msg.action !== 'sync_progress') return;
+  if (msg.error) {
+    if (_syncProg) _syncProg.style.display = 'none';
+    if (_syncRes)  { _syncRes.style.display = 'block'; _syncRes.style.color = '#f87171'; _syncRes.textContent = '❌ ' + msg.error; }
+    if (_syncBtn)  { _syncBtn.disabled = false; _syncBtn.textContent = 'Sync Earnings →'; }
+    return;
+  }
+  if (msg.done) {
+    if (_syncBar)  _syncBar.style.width = '100%';
+    if (_syncStat) _syncStat.textContent = 'Done! ' + msg.tipsFound + ' tips synced';
+    setTimeout(() => {
+      if (_syncProg) _syncProg.style.display = 'none';
+      if (_syncRes)  { _syncRes.style.display = 'block'; _syncRes.style.color = '#10b981'; _syncRes.textContent = '✅ ' + msg.tipsFound + ' tips imported'; }
+      if (_syncBtn)  { _syncBtn.disabled = false; _syncBtn.textContent = 'Sync Earnings →'; }
+    }, 1500);
+  } else {
+    if (_syncBar)  _syncBar.style.width = Math.min(5 + msg.pagesLoaded * 8, 90) + '%';
+    if (_syncStat) _syncStat.textContent = 'Page ' + msg.pagesLoaded + ' · ' + msg.tipsFound + ' tips...';
+  }
+});

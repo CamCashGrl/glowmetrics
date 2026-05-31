@@ -118,26 +118,25 @@ export default function RootLayout({ children }) {
             }),
           }}
         />
+        <Script id="gtm-head" strategy="afterInteractive">
+          {`(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+  new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+  j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+  'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+  })(window,document,'script','dataLayer','GTM-P4L7DNX6');`}
+        </Script>
       </head>
       <body>
+        <noscript>
+          <iframe
+            src="https://www.googletagmanager.com/ns.html?id=GTM-P4L7DNX6"
+            height="0"
+            width="0"
+            style={{display:'none',visibility:'hidden'}}
+          />
+        </noscript>
         {children}
         <Analytics />
-
-        {/* Google Ads tag */}
-        <Script
-          src="https://www.googletagmanager.com/gtag/js?id=AW-18107430539"
-          strategy="afterInteractive"
-        />
-        <Script id="google-ads-tag" strategy="afterInteractive">
-          {`
-            window.dataLayer = window.dataLayer || [];
-            window.gtag = function gtag(){
-              window.dataLayer.push(arguments);
-            }
-            window.gtag('js', new Date());
-            window.gtag('config', 'AW-18107430539');
-          `}
-        </Script>
 
         {/* X (Twitter) Conversion Tracking Pixel */}
         <Script
