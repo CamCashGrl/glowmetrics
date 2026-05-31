@@ -37,6 +37,20 @@ export default function LivePage() {
   const [liveTick, setLiveTick]       = useState(0);
   const [sessions, setSessions]       = useState([]);
 
+  // ── DEMO / AUTH / EXT MODAL STATE ────────────────────────────────────
+  const [demoTips, setDemoTips]           = useState([]);
+  const [demoRevenue, setDemoRevenue]     = useState(0);
+  const [demoCoachIdx, setDemoCoachIdx]   = useState(0);
+  const [demoDismissed, setDemoDismissed] = useState(false);
+  const [showExtModal, setShowExtModal]   = useState(false);
+  const [extStep, setExtStep]             = useState(0);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [authMode, setAuthMode]           = useState('signin');
+  const [authEmail, setAuthEmail]         = useState('');
+  const [authPassword, setAuthPassword]   = useState('');
+  const [authError, setAuthError]         = useState('');
+  const [authLoading, setAuthLoading]     = useState(false);
+
   const processedTipIds   = useRef(new Set());
   const coachingCooldowns = useRef({});
   const isHydratingHistory = useRef(false);
@@ -195,54 +209,70 @@ export default function LivePage() {
     };
     if (timeSinceLastTip !== null && timeSinceLastTip >= deadAirCrit) {
       if (canFireAlert('dead_air_critical', 3 * 60 * 1000)) {
-        const text = liveStrategy === 'whale' && topTipper
-          ? `${Math.round(timeSinceLastTip)} min silence — address ${topTipper.username} directly NOW`
-          : `No tips in ${Math.round(timeSinceLastTip)} min — call out names NOW`;
-        alerts.push({ priority: 1, level: 'critical', icon: '🚨', text }); logFired('🚨', text);
+        const context = `No tips in ${Math.round(timeSinceLastTip)} minutes`;
+        const action = liveStrategy === 'whale' && topTipper
+          ? `Address ${topTipper.username} directly — call them out by name right now`
+          : `Start a 2,000 token room goal and ask viewers to vote on the reward`;
+        const text = `${context} — ${action}`;
+        alerts.push({ priority: 1, level: 'critical', icon: '🚨', text, context, action }); logFired('🚨', text);
       }
     }
     if (goalProgress >= goalPushPct && goalProgress < 100) {
       if (canFireAlert('goal_push', 4 * 60 * 1000)) {
+        const context = `Goal is at ${goalProgress}% — the room is primed`;
+        const action = `Announce your reward out loud right now and keep the energy high`;
         const text = `${goalProgress}% to goal — push NOW, announce the reward`;
-        alerts.push({ priority: 1, level: 'critical', icon: '🎯', text }); logFired('🎯', text);
+        alerts.push({ priority: 1, level: 'critical', icon: '🎯', text, context, action }); logFired('🎯', text);
       }
     }
     if (timeSinceLastTip !== null && timeSinceLastTip >= deadAirHigh && timeSinceLastTip < deadAirCrit) {
       if (canFireAlert('dead_air_high', 5 * 60 * 1000)) {
-        const text = liveStrategy === 'engagement'
-          ? `${Math.round(timeSinceLastTip)} min quiet — drop a question or poll in chat now`
+        const context = `${Math.round(timeSinceLastTip)} minutes since your last tip`;
+        const action = liveStrategy === 'engagement'
+          ? `Drop a poll in chat — "50 tokens or 100 tokens?" restarts the tipping cycle`
           : liveStrategy === 'retention'
-          ? `${Math.round(timeSinceLastTip)} min since last tip — thank a viewer by name to re-engage`
-          : `${Math.round(timeSinceLastTip)} min silence — restart with a quick goal`;
-        alerts.push({ priority: 2, level: 'warning', icon: '⚠️', text }); logFired('⚠️', text);
+          ? `Thank a viewer by name — recognition re-engages the room`
+          : `Start a quick 200-token goal right now`;
+        const text = `${Math.round(timeSinceLastTip)} min since last tip — ${action}`;
+        alerts.push({ priority: 2, level: 'warning', icon: '⚠️', text, context, action }); logFired('⚠️', text);
       }
     }
     if (paceStatus === 'below' && elapsedMins >= 8 && liveOnlyCount >= 3) {
       if (canFireAlert('pace_below', 5 * 60 * 1000)) {
-        const text = liveStrategy === 'aggressive'
-          ? 'Pace slow — announce a limited-time exclusive offer right now'
-          : 'Pace dropping — activate toy or set a micro-goal';
-        alerts.push({ priority: 2, level: 'warning', icon: '📉', text }); logFired('📉', text);
+        const context = `Revenue pace is below your normal rate`;
+        const action = liveStrategy === 'aggressive'
+          ? `Announce a limited-time exclusive offer right now`
+          : `Activate toy or set a micro-goal to restart momentum`;
+        const text = `Pace dropping — ${action}`;
+        alerts.push({ priority: 2, level: 'warning', icon: '📉', text, context, action }); logFired('📉', text);
       }
     }
     if (elapsedMins > 75 && paceStatus === 'below' && liveOnlyCount >= 5) {
       if (canFireAlert('stream_fatigue', 15 * 60 * 1000)) {
-        const text = 'Stream fatigue — try a new goal or content angle to reset room energy';
-        alerts.push({ priority: 2, level: 'warning', icon: '😴', text }); logFired('😴', text);
+        const context = `${Math.round(elapsedMins)} minutes in and tip rate is dropping`;
+        const action = `Try a new goal or content angle to reset room energy`;
+        const text = `Stream fatigue — ${action}`;
+        alerts.push({ priority: 2, level: 'warning', icon: '😴', text, context, action }); logFired('😴', text);
       }
     }
     if (paceStatus === 'above' && elapsedMins >= 8 && liveOnlyCount >= 3) {
       if (canFireAlert('pace_above', 8 * 60 * 1000)) {
+        const context = `Tip frequency is up — room energy is above your normal pace`;
+        const action = liveStrategy === 'aggressive'
+          ? `Raise your goal amount RIGHT NOW while the room is hot`
+          : `Don't break the energy — keep doing exactly what you're doing`;
         const text = liveStrategy === 'aggressive'
-          ? 'Momentum is hot — raise your goal amount NOW while they are tipping'
-          : "Momentum building — don't break the energy";
-        alerts.push({ priority: 3, level: 'success', icon: '🔥', text }); logFired('🔥', text);
+          ? `Momentum is hot — ${action}`
+          : `Momentum building — ${action}`;
+        alerts.push({ priority: 3, level: 'success', icon: '🔥', text, context, action }); logFired('🔥', text);
       }
     }
     if (goalProgress >= 100) {
       if (canFireAlert('goal_hit', 10 * 60 * 1000)) {
-        const text = 'Goal hit! Set the next one immediately';
-        alerts.push({ priority: 3, level: 'success', icon: '🎉', text }); logFired('🎉', text);
+        const context = `You just hit your room goal!`;
+        const action = `Set the next goal immediately — momentum drops if there's nothing to tip toward`;
+        const text = `Goal hit! ${action}`;
+        alerts.push({ priority: 3, level: 'success', icon: '🎉', text, context, action }); logFired('🎉', text);
       }
     }
     if (liveOnlyCount >= 4 && liveStrategy !== 'engagement') {
@@ -267,8 +297,10 @@ export default function LivePage() {
           if (canFireAlert(`whale_prox_${uname}`, 6 * 60 * 1000)) {
             const avgMins = Math.round(avgGapMs / 60000);
             const sinceMins = Math.round(sinceLastMs / 60000);
+            const context = `${uname} usually tips every ~${avgMins} minutes`;
+            const action = `${sinceMins} min since their last tip — call them out right now!`;
             const text = `${uname} tips every ~${avgMins} min — ${sinceMins} min since their last. Call them out!`;
-            alerts.push({ priority: 3, level: 'info', icon: '🐋', text }); logFired('🐋', text);
+            alerts.push({ priority: 3, level: 'info', icon: '🐋', text, context, action }); logFired('🐋', text);
             surfaced = true;
           }
         }
@@ -276,8 +308,11 @@ export default function LivePage() {
     }
     if (topTipper && totalRevenue > 0 && topTipper.revenue / totalRevenue >= 0.45) {
       if (canFireAlert(`whale_dep_${topTipper.username}`, 10 * 60 * 1000)) {
-        const text = `${topTipper.username} is ${Math.round(topTipper.revenue / totalRevenue * 100)}% of revenue — give them attention`;
-        alerts.push({ priority: 4, level: 'info', icon: '🐳', text }); logFired('🐳', text);
+        const pctStr = Math.round(topTipper.revenue / totalRevenue * 100);
+        const context = `${topTipper.username} is ${pctStr}% of your session revenue`;
+        const action = `Give them personal attention and an exclusive offer for their next tip`;
+        const text = `${topTipper.username} is ${pctStr}% of revenue — give them attention`;
+        alerts.push({ priority: 4, level: 'info', icon: '🐳', text, context, action }); logFired('🐳', text);
       }
     }
     return alerts.sort((a, b) => a.priority - b.priority).slice(0, 4);
@@ -339,6 +374,60 @@ export default function LivePage() {
     setLiveTipInput({ username: '', tokens: '', usd: '' });
   };
 
+  // ── DEMO SIMULATION ──────────────────────────────────────────────────
+  const DEMO_TIPPERS = [
+    { username: 'VenusRain', tokens: 100, usd: 5.00 },
+    { username: 'DarkFox99', tokens: 500, usd: 25.00 },
+    { username: 'PixelKing', tokens: 50,  usd: 2.50 },
+    { username: 'NightBlaze', tokens: 200, usd: 10.00 },
+    { username: 'CrimsonWave', tokens: 1000, usd: 50.00 },
+    { username: 'StarDust7', tokens: 25, usd: 1.25 },
+    { username: 'LunarFox', tokens: 75, usd: 3.75 },
+  ];
+  const DEMO_COACHES = [
+    { icon: '🔥', context: 'Tip frequency is up — room energy above your normal pace', action: "Don't break the energy — keep doing exactly what you're doing" },
+    { icon: '💎', context: 'DarkFox99 is 38% of your session revenue', action: 'Give them personal attention and an exclusive offer for their next tip' },
+    { icon: '🎯', context: 'Goal is at 78% — the room is primed', action: 'Announce your reward out loud right now and keep the energy high' },
+    { icon: '🐋', context: 'CrimsonWave usually tips every ~4 minutes', action: '6 min since their last tip — call them out right now!' },
+    { icon: '⚡', context: 'Revenue pace is above your normal rate', action: 'Raise your goal amount NOW while the room is hot' },
+  ];
+
+  useEffect(() => {
+    if (authStatus !== 'unauthenticated' && authStatus !== 'connecting') return;
+    if (demoDismissed) return;
+    let idx = 0;
+    let rev = 0;
+    const iv = setInterval(() => {
+      const t = DEMO_TIPPERS[idx % DEMO_TIPPERS.length];
+      idx++;
+      rev = parseFloat((rev + t.usd).toFixed(2));
+      setDemoRevenue(rev);
+      setDemoTips(prev => [{ ...t, ts: Date.now(), id: idx }, ...prev].slice(0, 6));
+      setDemoCoachIdx(c => (c + 1) % DEMO_COACHES.length);
+    }, 3200);
+    return () => clearInterval(iv);
+  }, [authStatus, demoDismissed]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── INLINE AUTH HANDLER ──────────────────────────────────────────────
+  const handleAuth = async () => {
+    setAuthError('');
+    setAuthLoading(true);
+    try {
+      const result = authMode === 'signin'
+        ? await supabase.auth.signInWithPassword({ email: authEmail, password: authPassword })
+        : await supabase.auth.signUp({ email: authEmail, password: authPassword });
+      if (result.error) {
+        setAuthError(result.error.message);
+      } else {
+        setShowAuthModal(false);
+        setAuthEmail('');
+        setAuthPassword('');
+      }
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
   // ── CONNECTING / UNAUTHENTICATED SCREENS ─────────────────────────────
 
   if (authStatus === 'connecting') return (
@@ -349,24 +438,220 @@ export default function LivePage() {
     </div>
   );
 
-  if (authStatus === 'unauthenticated') return (
-    <div style={{ minHeight: '100vh', background: C.bg, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', fontFamily: 'system-ui', gap: 20, padding: 24 }}>
-      <style>{`@keyframes cc-pulse { 0%,100%{opacity:1;} 50%{opacity:0.35;} } @keyframes cc-bar { from{opacity:0.5;} to{opacity:1;} }`}</style>
-      <div style={{ fontSize: 56, animation: 'cc-pulse 2s ease-in-out infinite' }}>🔒</div>
-      <h2 style={{ color: C.white, margin: 0, fontSize: 26, fontWeight: 800 }}>Sign in to use Live Mode</h2>
-      <p style={{ color: C.muted, margin: 0, fontSize: 14, textAlign: 'center', maxWidth: 340 }}>
-        Live Mode is your real-time AI coach while you stream. Sign in to get started — it&apos;s free.
-      </p>
-      <a href="/login" style={{ padding: '13px 32px', background: `linear-gradient(135deg, ${C.purple}, ${C.pink})`, color: '#fff', borderRadius: 12, fontWeight: 800, textDecoration: 'none', fontSize: 16, boxShadow: '0 0 24px rgba(168,85,247,0.35)' }}>
-        Sign in →
-      </a>
-      <div style={{ marginTop: 8, display: 'flex', gap: 12 }}>
-        <a href="/signup" style={{ color: C.purple, fontSize: 13, textDecoration: 'underline' }}>Create free account</a>
-        <span style={{ color: C.dim }}>·</span>
-        <a href="/" style={{ color: C.muted, fontSize: 13, textDecoration: 'none' }}>Back to CamCash</a>
+  if (authStatus === 'unauthenticated') {
+    const coach = DEMO_COACHES[demoCoachIdx];
+    return (
+      <div style={{ minHeight: '100vh', background: C.bg, fontFamily: 'system-ui', color: C.white }}>
+        <style>{`
+          @keyframes cc-pulse { 0%,100%{opacity:1;} 50%{opacity:0.35;} }
+          @keyframes cc-bar   { from{opacity:0.5;} to{opacity:1;} }
+          @keyframes cc-slide { from{opacity:0;transform:translateY(-6px);} to{opacity:1;transform:translateY(0);} }
+          @keyframes cc-glow  { 0%,100%{box-shadow:0 0 8px currentColor;} 50%{box-shadow:0 0 20px currentColor;} }
+        `}</style>
+
+        {/* ── AUTH MODAL OVERLAY ── */}
+        {showAuthModal && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(4,8,18,0.88)', backdropFilter: 'blur(12px)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+            <div style={{ background: '#0f1420', border: '1px solid rgba(168,85,247,0.3)', borderRadius: 20, padding: '36px 32px', width: '100%', maxWidth: 380, boxShadow: '0 0 60px rgba(168,85,247,0.2)', position: 'relative' }}>
+              <button onClick={() => setShowAuthModal(false)} style={{ position: 'absolute', top: 14, right: 16, background: 'transparent', border: 'none', color: C.muted, fontSize: 20, cursor: 'pointer', lineHeight: 1 }}>✕</button>
+              <div style={{ textAlign: 'center', marginBottom: 24 }}>
+                <div style={{ fontSize: 32, marginBottom: 8 }}>💎</div>
+                <div style={{ fontSize: 20, fontWeight: 800, color: C.white, marginBottom: 4 }}>
+                  {authMode === 'signin' ? 'Sign in to CamCash' : 'Create free account'}
+                </div>
+                <div style={{ fontSize: 12, color: C.muted }}>Save your data, unlock full analytics</div>
+              </div>
+              <div style={{ display: 'flex', gap: 0, marginBottom: 20, borderRadius: 10, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.08)' }}>
+                {['signin', 'signup'].map(m => (
+                  <button key={m} onClick={() => { setAuthMode(m); setAuthError(''); }} style={{ flex: 1, padding: '9px 0', background: authMode === m ? 'rgba(168,85,247,0.2)' : 'transparent', border: 'none', color: authMode === m ? C.purple : C.muted, fontWeight: authMode === m ? 800 : 500, fontSize: 13, cursor: 'pointer' }}>
+                    {m === 'signin' ? 'Sign In' : 'Sign Up'}
+                  </button>
+                ))}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
+                <input type="email" placeholder="Email address" value={authEmail} onChange={e => setAuthEmail(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAuth()} style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 10, padding: '11px 14px', color: C.white, fontSize: 14, outline: 'none', width: '100%', boxSizing: 'border-box' }} />
+                <input type="password" placeholder="Password" value={authPassword} onChange={e => setAuthPassword(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAuth()} style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 10, padding: '11px 14px', color: C.white, fontSize: 14, outline: 'none', width: '100%', boxSizing: 'border-box' }} />
+              </div>
+              {authError && <div style={{ fontSize: 12, color: C.red, marginBottom: 12, textAlign: 'center' }}>{authError}</div>}
+              <button onClick={handleAuth} disabled={authLoading} style={{ width: '100%', padding: '13px 0', background: `linear-gradient(135deg, ${C.purple}, ${C.pink})`, border: 'none', borderRadius: 10, color: '#fff', fontWeight: 800, fontSize: 15, cursor: authLoading ? 'not-allowed' : 'pointer', opacity: authLoading ? 0.7 : 1, boxShadow: '0 0 24px rgba(168,85,247,0.3)' }}>
+                {authLoading ? 'Please wait…' : authMode === 'signin' ? 'Sign In →' : 'Create Account →'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── EXT MODAL OVERLAY ── */}
+        {showExtModal && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(4,8,18,0.9)', backdropFilter: 'blur(14px)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+            {(() => {
+              const steps = [
+                { icon: '📂', title: 'Open your Downloads folder', body: 'Find the file camcash-extension.zip that just downloaded to your computer.' },
+                { icon: '📦', title: 'Extract / Unzip the file', body: 'Right-click the zip → "Extract All" (Windows) or double-click (Mac). You\'ll get a folder called camcash-extension.' },
+                { icon: '🌐', title: 'Open Chrome Extensions', body: 'In Chrome, go to chrome://extensions in the address bar and press Enter.' },
+                { icon: '🔧', title: 'Enable Developer Mode', body: 'Toggle on "Developer mode" in the top-right corner of the Extensions page.' },
+                { icon: '📁', title: 'Load the extension', body: 'Click "Load unpacked" → navigate to and select the extracted camcash-extension folder.' },
+                { icon: '✅', title: 'You\'re live!', body: 'Click the CamCash icon in your Chrome toolbar. Start streaming on Chaturbate — tips appear in your dashboard automatically.' },
+              ];
+              const isLast = extStep === steps.length - 1;
+              const s = steps[extStep];
+              return (
+                <div style={{ background: '#0f1420', border: '1px solid rgba(168,85,247,0.3)', borderRadius: 20, padding: '36px 32px', width: '100%', maxWidth: 420, boxShadow: '0 0 60px rgba(168,85,247,0.2)', position: 'relative' }}>
+                  <button onClick={() => { setShowExtModal(false); setExtStep(0); }} style={{ position: 'absolute', top: 14, right: 16, background: 'transparent', border: 'none', color: C.muted, fontSize: 20, cursor: 'pointer', lineHeight: 1 }}>✕</button>
+                  <div style={{ fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 20 }}>Step {extStep + 1} of {steps.length}</div>
+                  <div style={{ fontSize: 48, marginBottom: 14, textAlign: 'center' }}>{s.icon}</div>
+                  <div style={{ fontSize: 20, fontWeight: 800, color: C.white, marginBottom: 10, textAlign: 'center' }}>{s.title}</div>
+                  <div style={{ fontSize: 14, color: C.muted, lineHeight: 1.7, textAlign: 'center', marginBottom: 28 }}>{s.body}</div>
+                  <div style={{ display: 'flex', gap: 6, justifyContent: 'center', marginBottom: 24 }}>
+                    {steps.map((_, i) => (
+                      <div key={i} style={{ width: i === extStep ? 20 : 6, height: 6, borderRadius: 3, background: i === extStep ? C.purple : i < extStep ? 'rgba(168,85,247,0.4)' : 'rgba(255,255,255,0.1)', transition: 'all 0.3s ease' }} />
+                    ))}
+                  </div>
+                  <div style={{ display: 'flex', gap: 10 }}>
+                    {extStep > 0 && (
+                      <button onClick={() => setExtStep(s => s - 1)} style={{ flex: 1, padding: '11px 0', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, color: C.muted, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
+                        ← Back
+                      </button>
+                    )}
+                    {!isLast ? (
+                      <button onClick={() => setExtStep(s => s + 1)} style={{ flex: 2, padding: '11px 0', background: `linear-gradient(135deg, ${C.purple}, ${C.pink})`, border: 'none', borderRadius: 10, color: '#fff', fontWeight: 800, fontSize: 14, cursor: 'pointer' }}>
+                        Next →
+                      </button>
+                    ) : (
+                      <div style={{ flex: 2, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        <button onClick={() => { setShowExtModal(false); setExtStep(0); setShowAuthModal(true); setAuthMode('signup'); }} style={{ width: '100%', padding: '11px 0', background: `linear-gradient(135deg, ${C.purple}, ${C.pink})`, border: 'none', borderRadius: 10, color: '#fff', fontWeight: 800, fontSize: 14, cursor: 'pointer', boxShadow: '0 0 20px rgba(168,85,247,0.3)' }}>
+                          Sign up to save & sync data →
+                        </button>
+                        <button onClick={() => { setShowExtModal(false); setExtStep(0); }} style={{ width: '100%', padding: '9px 0', background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, color: C.muted, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+                          Continue in guest mode
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        )}
+
+        {/* ── DEMO HEADER ── */}
+        <div style={{ background: 'rgba(168,85,247,0.08)', borderBottom: '1px solid rgba(168,85,247,0.15)', padding: '10px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ padding: '3px 10px', borderRadius: 6, background: 'rgba(168,85,247,0.2)', fontSize: 10, fontWeight: 800, color: C.purple, letterSpacing: 1 }}>DEMO MODE</div>
+            <span style={{ fontSize: 12, color: C.muted }}>This is a live simulation — sign in to use your real data</span>
+          </div>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button onClick={() => setShowAuthModal(true)} style={{ padding: '7px 18px', background: `linear-gradient(135deg, ${C.purple}, ${C.pink})`, border: 'none', borderRadius: 8, color: '#fff', fontWeight: 800, fontSize: 12, cursor: 'pointer' }}>
+              Sign In / Sign Up
+            </button>
+            <a href="/" style={{ padding: '7px 14px', background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, color: C.muted, fontWeight: 600, fontSize: 12, textDecoration: 'none' }}>
+              ← Home
+            </a>
+          </div>
+        </div>
+
+        <div style={{ padding: '24px 28px', maxWidth: 1100, margin: '0 auto' }}>
+
+          {/* ── DEMO HERO ── */}
+          <div style={{ borderRadius: 16, padding: '28px 32px', marginBottom: 24, background: 'linear-gradient(135deg, rgba(38,16,72,0.97), rgba(58,22,92,0.97))', border: '1px solid rgba(168,85,247,0.4)', boxShadow: '0 0 60px rgba(168,85,247,0.2)', position: 'relative', overflow: 'hidden' }}>
+            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: 'linear-gradient(90deg, #a855f7, #ec4899, #22d3ee)', animation: 'cc-bar 2s ease infinite alternate' }} />
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 24 }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                  <div style={{ width: 10, height: 10, borderRadius: '50%', background: C.green, boxShadow: `0 0 10px ${C.green}`, animation: 'cc-pulse 1.2s ease-in-out infinite' }} />
+                  <span style={{ fontSize: 11, fontWeight: 800, color: C.green, letterSpacing: 1 }}>LIVE AI COACH DEMO</span>
+                </div>
+                <div style={{ fontSize: 13, color: 'rgba(168,85,247,0.7)', fontWeight: 700, marginBottom: 6 }}>{coach.icon} {coach.context}</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: C.white, lineHeight: 1.5, maxWidth: 520, animation: 'cc-slide 0.4s ease' }} key={demoCoachIdx}>
+                  {coach.action}
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+                {[
+                  { label: 'Revenue', value: `$${demoRevenue.toFixed(2)}`, color: C.green },
+                  { label: 'Tips/min', value: '0.94', color: C.cyan },
+                  { label: 'Rev/hr', value: '$68', color: C.gold },
+                  { label: 'Opportunity', value: '74/100', color: C.purple },
+                ].map(({ label, value, color }) => (
+                  <div key={label} style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 2 }}>{label}</div>
+                    <div style={{ fontSize: 22, fontWeight: 900, color }}>{value}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* ── DEMO FEED + CTA ── */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 20, marginBottom: 24 }}>
+
+            {/* Live tip feed simulation */}
+            <div style={{ ...glassCard, borderRadius: 14, padding: 20 }}>
+              <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 12 }}>Live Tip Feed — Demo</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {demoTips.length === 0 && (
+                  <div style={{ fontSize: 12, color: C.muted, textAlign: 'center', padding: '20px 0' }}>Tips will appear here as your stream progresses…</div>
+                )}
+                {demoTips.map((tip, i) => (
+                  <div key={tip.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 12px', borderRadius: 9, background: i === 0 ? 'rgba(168,85,247,0.14)' : 'rgba(255,255,255,0.02)', border: i === 0 ? '1px solid rgba(168,85,247,0.4)' : '1px solid rgba(255,255,255,0.04)', animation: i === 0 ? 'cc-slide 0.35s ease' : 'none', opacity: 1 - i * 0.12 }}>
+                    <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                      <span style={{ fontSize: 14 }}>{tip.usd >= 10 ? '🐋' : '💰'}</span>
+                      <div>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: i === 0 ? '#c084fc' : C.white }}>{tip.username}</span>
+                        {i === 0 && <span style={{ fontSize: 10, color: '#c084fc', marginLeft: 8, fontWeight: 800 }}>NEW ✨</span>}
+                      </div>
+                      <span style={{ fontSize: 11, color: C.cyan }}>{tip.tokens}t</span>
+                    </div>
+                    <span style={{ fontSize: 15, fontWeight: 800, color: tip.usd >= 10 ? C.gold : C.green }}>${tip.usd.toFixed(2)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* CTA panel */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={{ borderRadius: 14, padding: '22px 20px', background: 'linear-gradient(135deg, rgba(168,85,247,0.12), rgba(236,72,153,0.08))', border: '1px solid rgba(168,85,247,0.3)', textAlign: 'center' }}>
+                <div style={{ fontSize: 28, marginBottom: 10 }}>🔐</div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: C.white, marginBottom: 8 }}>This is a demo</div>
+                <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.65, marginBottom: 18 }}>Sign in to connect your real stream. Your actual tips, coaching, and session data will appear here automatically.</div>
+                <button onClick={() => { setAuthMode('signup'); setShowAuthModal(true); }} style={{ width: '100%', padding: '12px 0', background: `linear-gradient(135deg, ${C.purple}, ${C.pink})`, border: 'none', borderRadius: 10, color: '#fff', fontWeight: 800, fontSize: 14, cursor: 'pointer', marginBottom: 8, boxShadow: '0 0 20px rgba(168,85,247,0.3)' }}>
+                  Create Free Account →
+                </button>
+                <button onClick={() => { setAuthMode('signin'); setShowAuthModal(true); }} style={{ width: '100%', padding: '10px 0', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, color: C.muted, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+                  Sign In
+                </button>
+              </div>
+              <div style={{ borderRadius: 14, padding: '18px 20px', background: 'rgba(34,211,238,0.06)', border: '1px solid rgba(34,211,238,0.2)', textAlign: 'center' }}>
+                <div style={{ fontSize: 20, marginBottom: 8 }}>🧩</div>
+                <div style={{ fontSize: 13, fontWeight: 800, color: C.white, marginBottom: 6 }}>Auto-capture tips</div>
+                <div style={{ fontSize: 11, color: C.muted, marginBottom: 12, lineHeight: 1.55 }}>Install the Chrome extension — tips appear here the moment they land.</div>
+                <a href="/camcash-extension.zip" download="camcash-extension.zip" onClick={() => { setShowExtModal(true); setExtStep(0); }} style={{ display: 'block', padding: '9px 0', background: 'linear-gradient(135deg, #a855f7, #7c3aed)', borderRadius: 8, color: '#fff', fontWeight: 800, fontSize: 12, textDecoration: 'none' }}>
+                  📥 Download Extension
+                </a>
+              </div>
+            </div>
+          </div>
+
+          {/* ── FEATURES PREVIEW ── */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+            {[
+              { icon: '⚡', title: 'Real-time coaching', desc: 'AI tells you exactly what to do as your room shifts — goals, whales, silence, momentum.' },
+              { icon: '🎯', title: 'Goal pace predictor', desc: 'See if you\'re on track to hit your token goal at your current tip rate.' },
+              { icon: '🏆', title: 'Personal best tracker', desc: 'Compare today\'s revenue against your all-time session record live.' },
+              { icon: '🐋', title: 'Whale alerts', desc: 'Instantly notified when a high-value tipper is dominating your session revenue.' },
+              { icon: '🚨', title: 'Silence detection', desc: 'Alerts when the room stalls with a ranked list of recovery actions.' },
+              { icon: '⏳', title: 'Peak hour countdown', desc: 'Know when your historically highest-earning window is ending.' },
+            ].map(({ icon, title, desc }) => (
+              <div key={title} style={{ ...glassCard, borderRadius: 12, padding: '16px 16px' }}>
+                <div style={{ fontSize: 22, marginBottom: 6 }}>{icon}</div>
+                <div style={{ fontSize: 13, fontWeight: 800, color: C.white, marginBottom: 4 }}>{title}</div>
+                <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.55 }}>{desc}</div>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
-    </div>
-  );
+    );
+  }
 
   // ── LIVE INTELLIGENCE LAYER ──────────────────────────────────────────
   void liveTick;
@@ -392,6 +677,83 @@ export default function LivePage() {
   const alerts     = getAlerts(state);
   const nextAction = getNextAction(state);
 
+  // ── NEW INTELLIGENCE FEATURES ────────────────────────────────────────
+
+  // Personal Best
+  const personalBest = (() => {
+    const valid = sessions.filter(s => (s.totalUSD || 0) > 0);
+    return valid.length ? parseFloat(Math.max(...valid.map(s => s.totalUSD || 0)).toFixed(2)) : null;
+  })();
+  const personalBestPct = personalBest && state ? Math.min(Math.round((state.totalRevenue / personalBest) * 100), 110) : null;
+
+  // Goal Pace Predictor
+  const goalPaceData = (() => {
+    if (!liveGoalTokens || !state || state.elapsedMins < 1.5 || state.totalTokens === 0) return null;
+    const tpm = state.totalTokens / state.elapsedMins;
+    const projectedAt60 = Math.round(tpm * 60);
+    const willHit = projectedAt60 >= liveGoalTokens;
+    const minsToGoal = tpm > 0 ? Math.round((liveGoalTokens - state.totalTokens) / tpm) : null;
+    const suggestedGoal = Math.round(projectedAt60 * 0.88);
+    return { tpm: parseFloat(tpm.toFixed(1)), projectedAt60, willHit, minsToGoal, suggestedGoal };
+  })();
+
+  // Earnings Milestones
+  const MILESTONES = [5, 10, 25, 50, 75, 100, 150, 200, 300, 500];
+  const nextMilestone = (() => {
+    if (!state || state.totalRevenue <= 0) return null;
+    const next = MILESTONES.find(m => m > state.totalRevenue);
+    if (!next) return null;
+    const remaining = parseFloat((next - state.totalRevenue).toFixed(2));
+    const minsEst = state.currentUPM > 0 ? Math.round(remaining / state.currentUPM) : null;
+    const progress = ((next - remaining) / next) * 100;
+    return { target: next, remaining, minsEst, progress };
+  })();
+
+  // Peak Hour Countdown (computed from sessions history)
+  const peakHourData = (() => {
+    if (sessions.length < 5) return null;
+    const hourRevenue = {};
+    const hourCount = {};
+    sessions.forEach(s => {
+      if (!s.start_time || !(s.totalUSD > 0)) return;
+      const h = new Date(s.start_time).getHours();
+      hourRevenue[h] = (hourRevenue[h] || 0) + (s.totalUSD || 0);
+      hourCount[h] = (hourCount[h] || 0) + 1;
+    });
+    if (!Object.keys(hourRevenue).length) return null;
+    const avgByHour = Object.entries(hourRevenue).map(([h, rev]) => ({ hour: parseInt(h), avg: rev / hourCount[h] }));
+    const sorted = avgByHour.sort((a, b) => b.avg - a.avg);
+    const peakHour = sorted[0].hour;
+    const peakEnd = (peakHour + 2) % 24;
+    const now = new Date();
+    const nowH = now.getHours();
+    const nowM = now.getMinutes();
+    const inPeak = nowH === peakHour || nowH === (peakHour + 1) % 24;
+    if (!inPeak) return null;
+    const peakEndMins = peakEnd * 60 - (nowH * 60 + nowM);
+    const minsRemaining = peakEndMins > 0 ? peakEndMins : peakEndMins + 1440;
+    if (minsRemaining > 120) return null;
+    const peakRevTotal = (hourRevenue[peakHour] || 0) + (hourRevenue[(peakHour + 1) % 24] || 0);
+    const totalRev = Object.values(hourRevenue).reduce((s, v) => s + v, 0);
+    const pct = totalRev > 0 ? Math.round((peakRevTotal / totalRev) * 100) : null;
+    return { minsRemaining, peakHour, pct };
+  })();
+
+  // Silence Detection Card
+  const silenceData = liveActive && state && state.timeSinceLastTip !== null && state.timeSinceLastTip >= 5 ? {
+    minutes: Math.round(state.timeSinceLastTip),
+    severe: state.timeSinceLastTip >= 9,
+    actions: ['Start a new room goal', 'Outfit change', 'Run a viewer poll', 'Spin the wheel', 'Name a public challenge', 'Call out top viewers by name'],
+  } : null;
+
+  // Whale / Top Tipper Alert
+  const whaleAlert = (() => {
+    if (!state?.topTipper || !state?.totalRevenue || !liveActive || state.liveOnlyCount < 3) return null;
+    const pct = Math.round((state.topTipper.revenue / state.totalRevenue) * 100);
+    if (pct < 35) return null;
+    return { username: state.topTipper.username, revenue: state.topTipper.revenue, pct };
+  })();
+
   const PACE_CONFIG = {
     above:    { label: '🔥 Hot',       color: C.green, bg: 'rgba(16,185,129,0.12)',  border: 'rgba(16,185,129,0.3)'  },
     on_track: { label: '✅ On Track',   color: C.cyan,  bg: 'rgba(34,211,238,0.1)',  border: 'rgba(34,211,238,0.25)' },
@@ -414,11 +776,92 @@ export default function LivePage() {
     <div style={{ minHeight: '100vh', background: C.bg, fontFamily: 'system-ui', color: C.white }}>
       <style>{`
         @keyframes cc-slide-in { from{opacity:0;transform:translateY(-8px);} to{opacity:1;transform:translateY(0);} }
+        @keyframes cc-slide    { from{opacity:0;transform:translateY(-6px);} to{opacity:1;transform:translateY(0);} }
         @keyframes cc-pulse    { 0%,100%{opacity:1;} 50%{opacity:0.35;} }
         @keyframes cc-glow     { 0%,100%{box-shadow:0 0 8px currentColor;} 50%{box-shadow:0 0 18px currentColor;} }
         @keyframes cc-bar      { from{opacity:0.4;} to{opacity:1;} }
         .cc-card:hover { box-shadow: 0 0 20px rgba(168,85,247,0.2) !important; }
       `}</style>
+
+      {/* ── AUTH MODAL ── */}
+      {showAuthModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(4,8,18,0.88)', backdropFilter: 'blur(12px)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          <div style={{ background: '#0f1420', border: '1px solid rgba(168,85,247,0.3)', borderRadius: 20, padding: '36px 32px', width: '100%', maxWidth: 380, boxShadow: '0 0 60px rgba(168,85,247,0.2)', position: 'relative' }}>
+            <button onClick={() => setShowAuthModal(false)} style={{ position: 'absolute', top: 14, right: 16, background: 'transparent', border: 'none', color: C.muted, fontSize: 20, cursor: 'pointer', lineHeight: 1 }}>✕</button>
+            <div style={{ textAlign: 'center', marginBottom: 24 }}>
+              <div style={{ fontSize: 32, marginBottom: 8 }}>💎</div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: C.white, marginBottom: 4 }}>
+                {authMode === 'signin' ? 'Sign in to CamCash' : 'Create free account'}
+              </div>
+              <div style={{ fontSize: 12, color: C.muted }}>Save your data, unlock full analytics</div>
+            </div>
+            <div style={{ display: 'flex', gap: 0, marginBottom: 20, borderRadius: 10, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.08)' }}>
+              {['signin', 'signup'].map(m => (
+                <button key={m} onClick={() => { setAuthMode(m); setAuthError(''); }} style={{ flex: 1, padding: '9px 0', background: authMode === m ? 'rgba(168,85,247,0.2)' : 'transparent', border: 'none', color: authMode === m ? C.purple : C.muted, fontWeight: authMode === m ? 800 : 500, fontSize: 13, cursor: 'pointer' }}>
+                  {m === 'signin' ? 'Sign In' : 'Sign Up'}
+                </button>
+              ))}
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
+              <input type="email" placeholder="Email address" value={authEmail} onChange={e => setAuthEmail(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAuth()} style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 10, padding: '11px 14px', color: C.white, fontSize: 14, outline: 'none', width: '100%', boxSizing: 'border-box' }} />
+              <input type="password" placeholder="Password" value={authPassword} onChange={e => setAuthPassword(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAuth()} style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 10, padding: '11px 14px', color: C.white, fontSize: 14, outline: 'none', width: '100%', boxSizing: 'border-box' }} />
+            </div>
+            {authError && <div style={{ fontSize: 12, color: C.red, marginBottom: 12, textAlign: 'center' }}>{authError}</div>}
+            <button onClick={handleAuth} disabled={authLoading} style={{ width: '100%', padding: '13px 0', background: `linear-gradient(135deg, ${C.purple}, ${C.pink})`, border: 'none', borderRadius: 10, color: '#fff', fontWeight: 800, fontSize: 15, cursor: authLoading ? 'not-allowed' : 'pointer', opacity: authLoading ? 0.7 : 1, boxShadow: '0 0 24px rgba(168,85,247,0.3)' }}>
+              {authLoading ? 'Please wait…' : authMode === 'signin' ? 'Sign In →' : 'Create Account →'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── EXT INSTALL MODAL ── */}
+      {showExtModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(4,8,18,0.9)', backdropFilter: 'blur(14px)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          {(() => {
+            const steps = [
+              { icon: '📂', title: 'Open your Downloads folder', body: 'Find camcash-extension.zip — it just downloaded to your computer.' },
+              { icon: '📦', title: 'Extract / Unzip the file', body: 'Right-click → "Extract All" (Windows) or double-click (Mac). You\'ll get a folder called camcash-extension.' },
+              { icon: '🌐', title: 'Open Chrome Extensions', body: 'In Chrome, type chrome://extensions in the address bar and press Enter.' },
+              { icon: '🔧', title: 'Enable Developer Mode', body: 'Toggle on "Developer mode" in the top-right corner of the Extensions page.' },
+              { icon: '📁', title: 'Load unpacked', body: 'Click "Load unpacked" → select the extracted camcash-extension folder.' },
+              { icon: '✅', title: 'You\'re ready!', body: 'Click the CamCash icon in your toolbar. Tips will appear here automatically while you stream.' },
+            ];
+            const isLast = extStep === steps.length - 1;
+            const s = steps[extStep];
+            return (
+              <div style={{ background: '#0f1420', border: '1px solid rgba(168,85,247,0.3)', borderRadius: 20, padding: '36px 32px', width: '100%', maxWidth: 420, boxShadow: '0 0 60px rgba(168,85,247,0.2)', position: 'relative' }}>
+                <button onClick={() => { setShowExtModal(false); setExtStep(0); }} style={{ position: 'absolute', top: 14, right: 16, background: 'transparent', border: 'none', color: C.muted, fontSize: 20, cursor: 'pointer', lineHeight: 1 }}>✕</button>
+                <div style={{ fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 20 }}>Step {extStep + 1} of {steps.length}</div>
+                <div style={{ fontSize: 48, marginBottom: 14, textAlign: 'center' }}>{s.icon}</div>
+                <div style={{ fontSize: 20, fontWeight: 800, color: C.white, marginBottom: 10, textAlign: 'center' }}>{s.title}</div>
+                <div style={{ fontSize: 14, color: C.muted, lineHeight: 1.7, textAlign: 'center', marginBottom: 28 }}>{s.body}</div>
+                <div style={{ display: 'flex', gap: 6, justifyContent: 'center', marginBottom: 24 }}>
+                  {steps.map((_, i) => (
+                    <div key={i} style={{ width: i === extStep ? 20 : 6, height: 6, borderRadius: 3, background: i === extStep ? C.purple : i < extStep ? 'rgba(168,85,247,0.4)' : 'rgba(255,255,255,0.1)', transition: 'all 0.3s ease' }} />
+                  ))}
+                </div>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  {extStep > 0 && (
+                    <button onClick={() => setExtStep(s => s - 1)} style={{ flex: 1, padding: '11px 0', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, color: C.muted, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>← Back</button>
+                  )}
+                  {!isLast ? (
+                    <button onClick={() => setExtStep(s => s + 1)} style={{ flex: 2, padding: '11px 0', background: `linear-gradient(135deg, ${C.purple}, ${C.pink})`, border: 'none', borderRadius: 10, color: '#fff', fontWeight: 800, fontSize: 14, cursor: 'pointer' }}>Next →</button>
+                  ) : (
+                    <div style={{ flex: 2, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <button onClick={() => { setShowExtModal(false); setExtStep(0); setAuthMode('signup'); setShowAuthModal(true); }} style={{ width: '100%', padding: '11px 0', background: `linear-gradient(135deg, ${C.purple}, ${C.pink})`, border: 'none', borderRadius: 10, color: '#fff', fontWeight: 800, fontSize: 14, cursor: 'pointer', boxShadow: '0 0 20px rgba(168,85,247,0.3)' }}>
+                        Sign up to save & sync data →
+                      </button>
+                      <button onClick={() => { setShowExtModal(false); setExtStep(0); }} style={{ width: '100%', padding: '9px 0', background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, color: C.muted, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+                        Continue in guest mode
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+      )}
 
       {/* ── STICKY NAV ────────────────────────────────────────────── */}
       <div style={{ position: 'sticky', top: 0, zIndex: 50, background: 'rgba(4,8,18,0.92)', backdropFilter: 'blur(20px)', borderBottom: '1px solid rgba(168,85,247,0.18)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 28px', flexWrap: 'wrap', gap: 10 }}>
@@ -436,9 +879,12 @@ export default function LivePage() {
           <a href="/dashboard" style={{ padding: '7px 14px', background: 'rgba(168,85,247,0.12)', border: '1px solid rgba(168,85,247,0.2)', borderRadius: 8, color: C.purple, fontWeight: 600, fontSize: 12, textDecoration: 'none' }}>
             Full Dashboard →
           </a>
-          <a href="/extension" style={{ padding: '7px 14px', background: 'linear-gradient(135deg, #a855f7, #7c3aed)', color: '#fff', borderRadius: 8, fontWeight: 700, fontSize: 12, textDecoration: 'none' }}>
+          <a href="/camcash-extension.zip" download="camcash-extension.zip" onClick={() => { setShowExtModal(true); setExtStep(0); }} style={{ padding: '7px 14px', background: 'linear-gradient(135deg, #a855f7, #7c3aed)', color: '#fff', borderRadius: 8, fontWeight: 700, fontSize: 12, textDecoration: 'none' }}>
             📥 Get Extension
           </a>
+          <button onClick={async () => { await supabase.auth.signOut(); window.location.reload(); }} style={{ padding: '7px 14px', background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.25)', borderRadius: 8, color: C.red, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
+            Sign Out
+          </button>
         </div>
       </div>
 
@@ -624,8 +1070,13 @@ export default function LivePage() {
                         </div>
                         <div style={{ fontSize: 10, color: C.muted }}>AI Coach · {liveStrategy} mode</div>
                       </div>
+                      {topAlert?.context && (
+                        <div style={{ fontSize: 13, color: topAlert ? sty.badgeText : C.pink, opacity: 0.85, marginBottom: 6, fontWeight: 600, lineHeight: 1.4 }}>
+                          {topAlert.context}
+                        </div>
+                      )}
                       <div style={{ fontSize: 19, fontWeight: 700, color: C.white, lineHeight: 1.65, marginBottom: topAlert && nextAction.text !== topAlert.text ? 12 : 0 }}>
-                        {topAlert ? topAlert.text : nextAction.text}
+                        {topAlert ? (topAlert.action || topAlert.text) : nextAction.text}
                       </div>
                       {topAlert && nextAction.text !== topAlert.text && (
                         <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.6, borderTop: '1px solid rgba(255,255,255,0.07)', paddingTop: 10 }}>
@@ -708,6 +1159,81 @@ export default function LivePage() {
                     {liveGoalTokens > 0 && state && <div style={{ fontSize: 10, color: C.muted }}>{state.totalTokens} / {liveGoalTokens} tokens</div>}
                   </div>
                 </div>
+
+                {/* ── GOAL PACE PREDICTOR + PERSONAL BEST + MILESTONES ── */}
+                {liveActive && state && (goalPaceData || personalBest !== null || nextMilestone) && (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(175px, 1fr))', gap: 10 }}>
+
+                    {/* Goal Pace Predictor */}
+                    {goalPaceData && liveGoalTokens > 0 && (
+                      <div style={{ borderRadius: 12, padding: '14px 18px', background: goalPaceData.willHit ? 'rgba(16,185,129,0.08)' : 'rgba(245,158,11,0.08)', border: `1px solid ${goalPaceData.willHit ? 'rgba(16,185,129,0.3)' : 'rgba(245,158,11,0.3)'}` }}>
+                        <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8 }}>Goal Pace Predictor</div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                          <span style={{ fontSize: 10, color: C.muted }}>Current pace</span>
+                          <span style={{ fontSize: 11, color: C.white, fontWeight: 700 }}>{goalPaceData.tpm} t/min</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                          <span style={{ fontSize: 10, color: C.muted }}>Projected (60 min)</span>
+                          <span style={{ fontSize: 11, color: C.white, fontWeight: 700 }}>{goalPaceData.projectedAt60.toLocaleString()}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                          <span style={{ fontSize: 10, color: C.muted }}>Goal</span>
+                          <span style={{ fontSize: 11, color: C.white, fontWeight: 700 }}>{liveGoalTokens.toLocaleString()}</span>
+                        </div>
+                        <div style={{ padding: '7px 10px', borderRadius: 8, background: goalPaceData.willHit ? 'rgba(16,185,129,0.15)' : 'rgba(245,158,11,0.15)' }}>
+                          <div style={{ fontSize: 12, fontWeight: 800, color: goalPaceData.willHit ? C.green : C.gold }}>
+                            {goalPaceData.willHit ? '✅ On Track to Hit' : '⚠️ Likely to Miss'}
+                          </div>
+                          <div style={{ fontSize: 10, color: C.muted, marginTop: 3 }}>
+                            {goalPaceData.willHit
+                              ? (goalPaceData.minsToGoal !== null ? `~${goalPaceData.minsToGoal} min remaining` : 'Keep the pace up')
+                              : `Reduce goal to ${goalPaceData.suggestedGoal.toLocaleString()} or increase urgency`}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Session Personal Best */}
+                    {personalBest !== null && state && (
+                      <div style={{ ...glassCard, borderRadius: 12, padding: '14px 18px' }}>
+                        <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8 }}>Session Record</div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                          <span style={{ fontSize: 10, color: C.muted }}>Today</span>
+                          <span style={{ fontSize: 13, fontWeight: 800, color: C.green }}>${state.totalRevenue.toFixed(2)}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                          <span style={{ fontSize: 10, color: C.muted }}>Personal best</span>
+                          <span style={{ fontSize: 13, fontWeight: 800, color: C.gold }}>${personalBest.toFixed(2)}</span>
+                        </div>
+                        {personalBestPct !== null && (
+                          <>
+                            <div style={{ height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.07)', overflow: 'hidden', marginBottom: 6 }}>
+                              <div style={{ height: '100%', width: `${Math.min(personalBestPct, 100)}%`, borderRadius: 2, background: personalBestPct >= 100 ? `linear-gradient(90deg, ${C.green}, ${C.cyan})` : `linear-gradient(90deg, ${C.gold}, ${C.orange})`, transition: 'width 0.5s ease' }} />
+                            </div>
+                            <div style={{ fontSize: 10, color: personalBestPct >= 100 ? C.green : C.muted }}>
+                              {personalBestPct >= 100 ? '🏆 New personal best!' : `${personalBestPct}% of your record · $${(personalBest - state.totalRevenue).toFixed(2)} to beat it`}
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Next Earnings Milestone */}
+                    {nextMilestone && state && (
+                      <div style={{ borderRadius: 12, padding: '14px 18px', background: 'rgba(168,85,247,0.06)', border: '1px solid rgba(168,85,247,0.22)' }}>
+                        <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8 }}>🎉 Next Milestone</div>
+                        <div style={{ fontSize: 26, fontWeight: 900, color: C.purple, marginBottom: 4 }}>${nextMilestone.target}</div>
+                        <div style={{ fontSize: 11, color: C.muted, marginBottom: 8 }}>
+                          Only <span style={{ color: C.white, fontWeight: 700 }}>${nextMilestone.remaining}</span> away
+                          {nextMilestone.minsEst !== null && <span style={{ color: C.muted }}> · ~{nextMilestone.minsEst} min</span>}
+                        </div>
+                        <div style={{ height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.07)', overflow: 'hidden' }}>
+                          <div style={{ height: '100%', width: `${nextMilestone.progress}%`, borderRadius: 2, background: `linear-gradient(90deg, ${C.purple}, ${C.pink})`, transition: 'width 0.5s ease' }} />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Collapsible tip input */}
                 {liveActive && (
@@ -828,6 +1354,64 @@ export default function LivePage() {
                   </div>
                 )}
 
+                {/* Peak Hour Countdown */}
+                {liveActive && peakHourData && (
+                  <div style={{ borderRadius: 14, padding: '16px 18px', background: 'rgba(245,158,11,0.07)', border: '1px solid rgba(245,158,11,0.28)' }}>
+                    <div style={{ fontSize: 9, color: C.gold, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700, marginBottom: 8 }}>⏳ Peak Window Ends In</div>
+                    <div style={{ fontSize: 30, fontWeight: 900, color: C.gold, marginBottom: 4 }}>
+                      {peakHourData.minsRemaining >= 60
+                        ? `${Math.floor(peakHourData.minsRemaining / 60)}h ${peakHourData.minsRemaining % 60}m`
+                        : `${peakHourData.minsRemaining} min`}
+                    </div>
+                    {peakHourData.pct !== null && (
+                      <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.5 }}>
+                        Historically {peakHourData.pct}% of your revenue comes in this window — push hard now.
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Silence Detection */}
+                {silenceData && (
+                  <div style={{ borderRadius: 14, padding: '16px 18px', background: silenceData.severe ? 'rgba(248,113,113,0.08)' : 'rgba(245,158,11,0.07)', border: `1px solid ${silenceData.severe ? 'rgba(248,113,113,0.35)' : 'rgba(245,158,11,0.28)'}`, animation: silenceData.severe ? 'cc-glow 2.5s ease-in-out infinite' : 'none' }}>
+                    <div style={{ fontSize: 9, color: silenceData.severe ? C.red : C.gold, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700, marginBottom: 8 }}>
+                      {silenceData.severe ? '🚨 Room Stalling' : '⚠️ Going Quiet'}
+                    </div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: C.white, marginBottom: 4 }}>
+                      No tips in {silenceData.minutes} minutes
+                    </div>
+                    <div style={{ fontSize: 11, color: C.muted, marginBottom: 10, lineHeight: 1.45 }}>
+                      Historically this is where sessions decline. Pick one now:
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      {silenceData.actions.map((action, i) => (
+                        <div key={i} style={{ padding: '6px 10px', borderRadius: 7, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)', fontSize: 11, color: C.white, display: 'flex', gap: 8, alignItems: 'center' }}>
+                          <span style={{ color: silenceData.severe ? C.red : C.gold, fontWeight: 800, fontSize: 10, flexShrink: 0 }}>{i + 1}.</span>
+                          {action}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Whale / Top Tipper Alert */}
+                {whaleAlert && (
+                  <div style={{ borderRadius: 14, padding: '16px 18px', background: 'rgba(34,211,238,0.07)', border: '1px solid rgba(34,211,238,0.3)' }}>
+                    <div style={{ fontSize: 9, color: C.cyan, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700, marginBottom: 10 }}>💎 Top Tipper This Session</div>
+                    <div style={{ fontSize: 19, fontWeight: 900, color: C.white, marginBottom: 8 }}>{whaleAlert.username}</div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                      <span style={{ fontSize: 11, color: C.muted }}>Tipped this session</span>
+                      <span style={{ fontSize: 14, fontWeight: 800, color: C.cyan }}>${whaleAlert.revenue.toFixed(2)}</span>
+                    </div>
+                    <div style={{ padding: '6px 10px', borderRadius: 8, background: 'rgba(34,211,238,0.1)', marginBottom: 10 }}>
+                      <span style={{ fontSize: 12, color: C.cyan, fontWeight: 700 }}>{whaleAlert.pct}% of your session revenue</span>
+                    </div>
+                    <div style={{ fontSize: 11, color: C.gold, fontWeight: 700, lineHeight: 1.5 }}>
+                      → Thank them publicly and offer something exclusive for their next tip
+                    </div>
+                  </div>
+                )}
+
                 {/* Extension Status */}
                 <div style={{ borderRadius: 12, padding: '14px 16px', background: liveEvents.some(e => e.sourceUsed === 'extension') ? 'rgba(16,185,129,0.07)' : 'rgba(124,92,255,0.07)', border: `1px solid ${liveEvents.some(e => e.sourceUsed === 'extension') ? 'rgba(16,185,129,0.22)' : 'rgba(124,92,255,0.2)'}` }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
@@ -842,7 +1426,7 @@ export default function LivePage() {
                       : 'Install the CamCash Chrome extension — tips appear here automatically.'}
                   </div>
                   {!liveEvents.some(e => e.sourceUsed === 'extension') && (
-                    <a href="/extension" target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', padding: '6px 14px', background: 'linear-gradient(135deg, #a855f7, #7c3aed)', color: '#fff', borderRadius: 7, fontSize: 11, fontWeight: 700, textDecoration: 'none' }}>📥 Get Extension →</a>
+                    <a href="/camcash-extension.zip" download="camcash-extension.zip" style={{ display: 'inline-block', padding: '6px 14px', background: 'linear-gradient(135deg, #a855f7, #7c3aed)', color: '#fff', borderRadius: 7, fontSize: 11, fontWeight: 700, textDecoration: 'none' }}>📥 Download Extension →</a>
                   )}
                 </div>
               </div>
@@ -913,7 +1497,7 @@ export default function LivePage() {
                 </div>
               ))}
             </div>
-            <a href="/extension" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '11px 22px', background: 'linear-gradient(135deg, #a855f7, #7c3aed)', color: '#fff', borderRadius: 10, fontWeight: 800, textDecoration: 'none', fontSize: 14, boxShadow: '0 0 20px rgba(168,85,247,0.35)' }}>
+            <a href="/camcash-extension.zip" download="camcash-extension.zip" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '11px 22px', background: 'linear-gradient(135deg, #a855f7, #7c3aed)', color: '#fff', borderRadius: 10, fontWeight: 800, textDecoration: 'none', fontSize: 14, boxShadow: '0 0 20px rgba(168,85,247,0.35)' }}>
               📥 Download Extension →
             </a>
           </div>
@@ -964,7 +1548,7 @@ export default function LivePage() {
             </div>
             <div style={{ fontSize: 11, color: C.dim }}>camcashgrl.com/live</div>
             <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
-              <a href="/extension" style={{ fontSize: 11, color: C.cyan, textDecoration: 'underline' }}>Get Extension</a>
+              <a href="/camcash-extension.zip" download="camcash-extension.zip" style={{ fontSize: 11, color: C.cyan, textDecoration: 'underline' }}>Get Extension</a>
               <span style={{ color: C.dim }}>·</span>
               <a href="/signup" style={{ fontSize: 11, color: C.purple, textDecoration: 'underline' }}>Sign Up Free</a>
             </div>
