@@ -1,5 +1,5 @@
-// CamCash background service worker
 importScripts('connectors/chaturbate.js');
+// CamCash background service worker
 
 const SUPABASE_URL  = 'https://hlsdlaibnayzbfflxclj.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhsc2RsYWlibmF5emJmZmx4Y2xqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM2MjQwODUsImV4cCI6MjA4OTIwMDA4NX0.5FwPe35UL-o46FvBJX526La5o7jcbFaP1KVoLtI4U_M';
@@ -259,13 +259,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
         chrome.runtime.sendMessage({ action: 'sync_progress', error: 'Please sign in first.', done: true }).catch(()=>{});
         return;
       }
-      await syncChaturbateConnector({
-        userId: session.user.id,
-        accessToken: session.access_token,
-        onProgress: (p) => {
-          chrome.runtime.sendMessage({ action: 'sync_progress', ...p }).catch(()=>{});
-        },
-      });
+      await syncChaturbate('incremental');
     })();
     return false;
   }
