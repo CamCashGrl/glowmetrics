@@ -42,6 +42,7 @@ export default function LivePage() {
   const [demoRevenue, setDemoRevenue]     = useState(0);
   const [demoCoachIdx, setDemoCoachIdx]   = useState(0);
   const [demoDismissed, setDemoDismissed] = useState(false);
+  const [showDemoPreview, setShowDemoPreview] = useState(false);
   const [showExtModal, setShowExtModal]   = useState(false);
   const [extStep, setExtStep]             = useState(0);
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -79,6 +80,11 @@ export default function LivePage() {
   }, [livePlatform]);
 
   useEffect(() => {
+    // ?__demo=1 forces the unauthenticated demo view (used in preview modal)
+    if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('__demo') === '1') {
+      setAuthStatus('unauthenticated');
+      return;
+    }
     supabase.auth.getUser().then(({ data: { user: u } }) => {
       if (!u) { setAuthStatus('unauthenticated'); return; }
       setUser(u);
@@ -876,6 +882,9 @@ export default function LivePage() {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           <span style={{ fontSize: 12, color: C.muted }}>{user?.email}</span>
+          <button onClick={() => setShowDemoPreview(true)} style={{ padding: '7px 14px', background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.2)', borderRadius: 8, color: C.cyan, fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>
+            🎬 Preview Demo
+          </button>
           <a href="/dashboard" style={{ padding: '7px 14px', background: 'rgba(168,85,247,0.12)', border: '1px solid rgba(168,85,247,0.2)', borderRadius: 8, color: C.purple, fontWeight: 600, fontSize: 12, textDecoration: 'none' }}>
             Full Dashboard →
           </a>
@@ -1556,6 +1565,26 @@ export default function LivePage() {
         </div>
 
       </div>
+
+      {/* ── DEMO PREVIEW MODAL ──────────────────────────────────── */}
+      {showDemoPreview && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(4,8,18,0.85)', backdropFilter: 'blur(12px)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div style={{ background: '#0a0f1e', border: '1px solid rgba(168,85,247,0.25)', borderRadius: 20, width: '100%', maxWidth: 900, maxHeight: '90vh', display: 'flex', flexDirection: 'column', boxShadow: '0 0 80px rgba(168,85,247,0.2)', overflow: 'hidden' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 24px', borderBottom: '1px solid rgba(168,85,247,0.15)', background: 'rgba(168,85,247,0.06)', flexShrink: 0 }}>
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: C.white }}>🎬 Live Mode — Interactive Demo</div>
+                <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>This is what a new visitor sees — simulated live session with fake data</div>
+              </div>
+              <button onClick={() => setShowDemoPreview(false)} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, color: C.muted, fontSize: 18, cursor: 'pointer', padding: '4px 12px', lineHeight: 1 }}>✕</button>
+            </div>
+            <iframe
+              src="/live?__demo=1"
+              style={{ flex: 1, border: 'none', width: '100%', minHeight: 560 }}
+              title="Live Mode Demo Preview"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

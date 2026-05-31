@@ -1,6 +1,6 @@
 'use client';
-import { useState, useEffect } from 'react';
-import { usePathname } from 'next/navigation';
+import { useState, useEffect, Suspense } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '../../lib/supabase';
 
 const C = {
@@ -8,15 +8,23 @@ const C = {
   green: '#10b981', muted: '#94a3b8', dim: '#475569', white: '#f1f5f9',
 };
 
-function NavItem({ icon, label, href, active, tooltip, comingSoon }) {
+const TOOLS = {
+  titles:   { label: 'Titles',   icon: '✏️',  url: '/guides/cam-model-room-title-generator' },
+  hashtags: { label: 'Hashtags', icon: '#️⃣', url: '/guides/cam-model-hashtag-generator' },
+  tokens:   { label: 'Tokens',   icon: '🪙',  url: '/guides/cam-model-token-calculator' },
+  names:    { label: 'Names',    icon: '🎲',  url: '/tools/cam-model-name-generator' },
+};
+
+function NavItem({ icon, label, href, active, comingSoon, onClick }) {
   const [hovered, setHovered] = useState(false);
   return (
     <a
-      href={comingSoon ? undefined : href}
-      onClick={comingSoon ? (e) => e.preventDefault() : undefined}
+      href={comingSoon ? undefined : (onClick ? undefined : href)}
+      onClick={comingSoon ? (e) => e.preventDefault() : onClick}
       title={comingSoon ? `${label} — coming soon` : label}
       style={{
-        position: 'relative', padding: '10px 8px', textAlign: 'center', cursor: comingSoon ? 'not-allowed' : 'pointer',
+        position: 'relative', padding: '10px 8px', textAlign: 'center',
+        cursor: comingSoon ? 'not-allowed' : 'pointer',
         borderRadius: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
         background: active ? 'rgba(168,85,247,0.18)' : hovered ? 'rgba(168,85,247,0.1)' : 'transparent',
         border: active ? '1px solid rgba(168,85,247,0.4)' : '1px solid transparent',
@@ -37,9 +45,13 @@ function NavItem({ icon, label, href, active, tooltip, comingSoon }) {
   );
 }
 
-export default function LiveLayout({ children }) {
+function LiveLayoutInner({ children }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [user, setUser] = useState(null);
+
+  const activeTool = searchParams.get('tool');
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user: u } }) => setUser(u));
@@ -51,6 +63,16 @@ export default function LiveLayout({ children }) {
     await supabase.auth.signOut();
     setUser(null);
   };
+
+  const openTool = (key) => {
+    router.push(`/live?tool=${key}`, { scroll: false });
+  };
+
+  const closeTool = () => {
+    router.push('/live', { scroll: false });
+  };
+
+  const tool = activeTool ? TOOLS[activeTool] : null;
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: C.bg }}>
@@ -66,17 +88,22 @@ export default function LiveLayout({ children }) {
         </a>
 
         {/* Main nav */}
-        <NavItem icon="🔴" label="Live" href="/live" active={pathname === '/live'} />
+        <NavItem icon="🔴" label="Live" href="/live" active={pathname === '/live' && !activeTool} onClick={activeTool ? closeTool : undefined} />
         <NavItem icon="📊" label="Dashboard" href="/dashboard" active={pathname?.startsWith('/dashboard')} />
 
         {/* Divider */}
         <div style={{ height: 1, background: 'rgba(255,255,255,0.06)', margin: '6px 4px' }} />
 
-        {/* Tool links */}
-        <NavItem icon="✏️" label="Titles" href="/guides/cam-model-room-title-generator" />
-        <NavItem icon="#️⃣" label="Hashtags" href="/guides/cam-model-hashtag-generator" comingSoon />
-        <NavItem icon="🪙" label="Tokens" href="/guides/cam-model-token-calculator" />
-        <NavItem icon="🎲" label="Names" href="/tools/cam-model-name-generator" />
+        {/* Tool links — open as drawer panels */}
+        {Object.entries(TOOLS).map(([key, t]) => (
+          <NavItem
+            key={key}
+            icon={t.icon}
+            label={t.label}
+            active={activeTool === key}
+            onClick={(e) => { e.preventDefault(); activeTool === key ? closeTool() : openTool(key); }}
+          />
+        ))}
 
         {/* Spacer */}
         <div style={{ flex: 1 }} />
@@ -98,7 +125,81 @@ export default function LiveLayout({ children }) {
         )}
       </div>
 
-      <main style={{ flex: 1, overflowY: 'auto' }}>{children}</main>
+      {/* ── MAIN CONTENT ── */}
+      <main style={{ flex: 1, overflowY: 'auto', position: 'relative' }}>
+        {children}
+      </main>
+
+      {/* ── TOOL DRAWER ── */}
+      {tool && (
+        <>
+          {/* Backdrop */}
+          <div
+            onClick={closeTool}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(4,8,18,0.6)', backdropFilter: 'blur(4px)', zIndex: 50 }}
+          />
+          {/* Drawer panel */}
+          <div style={{
+            position: 'fixed', top: 0, right: 0, bottom: 0,
+            width: 'min(820px, calc(100vw - 72px))',
+            background: '#0a0f1e',
+            borderLeft: '1px solid rgba(168,85,247,0.2)',
+            zIndex: 51,
+            display: 'flex', flexDirection: 'column',
+            boxShadow: '-8px 0 40px rgba(0,0,0,0.6)',
+          }}>
+            {/* Drawer header */}
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '14px 20px',
+              borderBottom: '1px solid rgba(168,85,247,0.15)',
+              background: 'rgba(168,85,247,0.06)',
+              flexShrink: 0,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: 18 }}>{tool.icon}</span>
+                <span style={{ fontSize: 15, fontWeight: 700, color: C.white }}>{tool.label}</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <a
+                  href={tool.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ fontSize: 11, color: C.muted, textDecoration: 'none', padding: '5px 10px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.08)' }}
+                >
+                  Open full page ↗
+                </a>
+                <button
+                  onClick={closeTool}
+                  style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 7, color: C.muted, fontSize: 16, cursor: 'pointer', padding: '4px 10px', lineHeight: 1 }}
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            {/* iframe */}
+            <iframe
+              src={tool.url}
+              style={{ flex: 1, border: 'none', width: '100%' }}
+              title={tool.label}
+            />
+          </div>
+        </>
+      )}
     </div>
+  );
+}
+
+export default function LiveLayout({ children }) {
+  return (
+    <Suspense fallback={
+      <div style={{ display: 'flex', minHeight: '100vh', background: '#040812' }}>
+        <div style={{ width: 72, background: 'rgba(6,8,18,0.97)', borderRight: '1px solid rgba(168,85,247,0.15)' }} />
+        <main style={{ flex: 1 }}>{children}</main>
+      </div>
+    }>
+      <LiveLayoutInner>{children}</LiveLayoutInner>
+    </Suspense>
   );
 }
