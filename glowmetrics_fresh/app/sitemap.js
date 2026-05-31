@@ -5,12 +5,14 @@ export default function sitemap() {
   return [
     // Priority 1.0 — main hub pages
     { url: `${baseUrl}`,            lastModified: now, changeFrequency: 'weekly',  priority: 1.0 },
+    { url: `${baseUrl}/landing`,    lastModified: now, changeFrequency: 'monthly', priority: 1.0 },
+    { url: `${baseUrl}/live`,       lastModified: now, changeFrequency: 'monthly', priority: 1.0 },
+    { url: `${baseUrl}/demo`,       lastModified: now, changeFrequency: 'monthly', priority: 1.0 },
+    { url: `${baseUrl}/extension`,  lastModified: now, changeFrequency: 'monthly', priority: 1.0 },
     { url: `${baseUrl}/blog`,       lastModified: now, changeFrequency: 'monthly', priority: 1.0 },
     { url: `${baseUrl}/guides`,     lastModified: now, changeFrequency: 'monthly', priority: 1.0 },
     { url: `${baseUrl}/tools`,      lastModified: now, changeFrequency: 'monthly', priority: 1.0 },
-    { url: `${baseUrl}/demo`,       lastModified: now, changeFrequency: 'monthly', priority: 0.95 },
-    { url: `${baseUrl}/extension`,  lastModified: now, changeFrequency: 'monthly', priority: 0.9 },
-    { url: `${baseUrl}/pricing`,    lastModified: now, changeFrequency: 'monthly', priority: 0.9 },
+    { url: `${baseUrl}/pricing`,    lastModified: now, changeFrequency: 'monthly', priority: 1.0 },
 
     // Priority 0.95 — free interactive tools
     { url: `${baseUrl}/guides/cam-model-room-title-generator`, lastModified: now, changeFrequency: 'monthly', priority: 0.95 },
