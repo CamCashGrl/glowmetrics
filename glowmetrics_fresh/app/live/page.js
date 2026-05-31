@@ -625,7 +625,7 @@ export default function LivePage() {
                 <button onClick={() => { setAuthMode('signin'); setShowAuthModal(true); }} style={{ width: '100%', padding: '10px 0', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, color: C.muted, fontWeight: 700, fontSize: 13, cursor: 'pointer', marginBottom: 8 }}>
                   Sign In
                 </button>
-                <a href="/live/demo" style={{ display: 'block', padding: '9px 0', background: 'transparent', border: '1px solid rgba(34,211,238,0.25)', borderRadius: 10, color: C.cyan, fontWeight: 700, fontSize: 13, textDecoration: 'none', textAlign: 'center' }}>
+                <a href="/landing/demo" style={{ display: 'block', padding: '9px 0', background: 'transparent', border: '1px solid rgba(34,211,238,0.25)', borderRadius: 10, color: C.cyan, fontWeight: 700, fontSize: 13, textDecoration: 'none', textAlign: 'center' }}>
                   🎬 See Full Live Demo →
                 </a>
               </div>
