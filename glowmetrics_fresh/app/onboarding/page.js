@@ -223,7 +223,7 @@ export default function OnboardingPage() {
               </div>
               <div style={{ position: "relative", paddingBottom: "56.25%", height: 0, background: "#000" }}>
                 <iframe
-                  src="https://www.youtube.com/embed/IJyzM7Pntyc?rel=0&modestbranding=1"
+                  src="https://www.youtube.com/embed/IJyzM7Pntyc?rel=0&modestbranding=1&mute=1"
                   title="How to upload your CSV to CamCash"
                   frameBorder="0"
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
