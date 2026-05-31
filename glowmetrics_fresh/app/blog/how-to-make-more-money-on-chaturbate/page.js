@@ -114,7 +114,7 @@ export default function MakeMoreOnChaturbate() {
       <div style={s.tools}>
         <div style={s.toolT}>Free tools</div>
         <div style={s.toolGrid}>
-          <a href="/guides/chaturbate-room-title-generator" style={s.toolCard}>
+          <a href="/guides/cam-model-room-title-generator" style={s.toolCard}>
             <div style={s.toolN}>Room Title Generator</div>
             <div style={s.toolD}>Hook + Goal + Reward + Urgency formula</div>
           </a>
@@ -122,13 +122,13 @@ export default function MakeMoreOnChaturbate() {
             <div style={s.toolN}>Peak Hours Calculator</div>
             <div style={s.toolD}>Find your personal best streaming windows</div>
           </a>
-          <a href="/guides/chaturbate-token-calculator" style={s.toolCard}>
+          <a href="/guides/cam-model-token-calculator" style={s.toolCard}>
             <div style={s.toolN}>Token Calculator</div>
             <div style={s.toolD}>Convert tokens to USD, set goal amounts</div>
           </a>
-          <a href="/guides/chaturbate-earnings-tracker" style={s.toolCard}>
-            <div style={s.toolN}>Earnings Tracker</div>
-            <div style={s.toolD}>Real $/hr, session breakdowns, fan data</div>
+          <a href="/tools/cam-model-name-generator" style={s.toolCard}>
+            <div style={s.toolN}>Name Generator</div>
+            <div style={s.toolD}>Generate a memorable cam model name + brand check</div>
           </a>
         </div>
       </div>

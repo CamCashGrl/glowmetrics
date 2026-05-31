@@ -189,6 +189,7 @@ export default function BuildLoyalFans() {
           <a href="/blog/why-cam-income-is-inconsistent" style={s.relLink}>→ Why cam income is inconsistent</a>
           <a href="/blog/cam-model-earnings" style={s.relLink}>→ Cam model earnings guide</a>
           <a href="/guides/cam-model-top-tippers" style={s.relLink}>→ Top tipper tracking guide</a>
+          <a href="/tools/cam-model-name-generator" style={s.relLink}>→ Free cam model name generator</a>
         </div>
       </div>
     </ArticleLayout>

@@ -424,6 +424,7 @@ export default function BestCamModelTools() {
           <a href="/blog/how-to-re-engage-whales-and-top-tippers" style={s.relLink}>→ How to re-engage whales and top tippers</a>
           <a href="/blog/how-to-build-loyal-fans" style={s.relLink}>→ How to build loyal fans on cam</a>
           <a href="/blog/how-to-pick-a-cam-name" style={s.relLink}>→ How to pick the perfect cam name</a>
+          <a href="/tools/cam-model-name-generator" style={s.relLink}>→ Free cam model name generator</a>
           <a href="/guides/cam-model-top-tippers" style={s.relLink}>→ Top tipper tracking guide</a>
           <a href="/guides/cam-model-analytics" style={s.relLink}>→ Cam model analytics guide</a>
           <a href="/guides/cam-model-token-calculator" style={s.relLink}>→ Chaturbate token calculator</a>
