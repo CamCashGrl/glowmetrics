@@ -229,7 +229,7 @@ document.getElementById('test-tip-btn').addEventListener('click', () => {
 });
 // ─── Sync UI ──────────────────────────────────────────────────────────────────
 
-
+const syncBtn = document.getElementById('sync-btn')
 
 syncBtn.addEventListener('click', async () => {
   // Check if logged into Chaturbate first
