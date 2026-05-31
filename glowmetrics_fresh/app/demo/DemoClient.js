@@ -653,230 +653,271 @@ function TitlesTab() {
 }
 
 // ─── Live Mode tab ────────────────────────────────────────────────────────────
-function LiveTab() {
-  const [phase, setPhase] = useState('setup') // 'setup' | 'ready' | 'live'
-  const [tips, setTips]   = useState(LIVE_TIPS_SEED)
-  const [tokens, setTokens] = useState(4275)
-  const [roomState, setRoomState] = useState('ACTIVE')
-  const [coachMsg, setCoachMsg]   = useState(COACH_MSGS[0])
-  const [newTipFlash, setNewTipFlash] = useState(null)
-  const poolIdx = useRef(0)
-  const timerRef = useRef(null)
+const LIVE_INSIGHTS = [
+  { icon: '🔥', tag: 'DO THIS NOW',      context: 'No tips in 8 minutes',                   action: 'Try launching a 2,000 token room goal — urgency restarts tipping.' },
+  { icon: '⏳', tag: 'PEAK WINDOW',      context: 'Historically this is your best hour',     action: 'You earn 42% of your revenue in this window. Push hard now.' },
+  { icon: '💎', tag: 'TOP FAN ACTIVE',   context: 'Your highest-value fan is engaged',        action: 'Mention xDarkMatter3 by name — VIP attention keeps whales tipping.' },
+  { icon: '🎯', tag: 'GOAL MOMENTUM',    context: 'Room is at 27% of 2,000-token goal',       action: 'Announce the reward out loud — viewers tip faster when they know what they get.' },
+  { icon: '📈', tag: 'PACE ABOVE AVG',   context: 'Tip rate is 38% above your normal',        action: "Don't break the energy — keep doing exactly what you're doing." },
+  { icon: '🐋', tag: 'WHALE PROXIMITY',  context: 'PurpleRain99 tips every ~6 min on average', action: '5 min since their last tip — call them out right now.' },
+]
 
-  const roomColors = { WARMING: C.cyan, ACTIVE: C.purple, HOT: C.red, EXPLOSIVE: C.pink }
+const DEMO_FAN_CARDS = [
+  { name: 'xDarkMatter3', badge: '👑 Top Tipper', lifetime: '$642', probability: 89, risk: 'Low',  riskColor: '#10b981', lastTip: '3 min ago',  sessions: 21, avgTip: '$30' },
+  { name: 'euro_titan88', badge: '🔄 Regular',    lifetime: '$284', probability: 67, risk: 'Medium', riskColor: '#f59e0b', lastTip: '18 min ago', sessions: 14, avgTip: '$20' },
+  { name: 'newuser_spark', badge: '🌱 New Fan',   lifetime: '$42',  probability: 45, risk: 'High', riskColor: '#f87171', lastTip: '1 hr ago',   sessions: 3,  avgTip: '$14' },
+]
+
+function LiveTab() {
+  const [phase, setPhase]             = useState('live')  // starts in live by default
+  const [tips, setTips]               = useState(LIVE_TIPS_SEED)
+  const [tokens, setTokens]           = useState(536)
+  const [revenue, setRevenue]         = useState(26.30)
+  const [sessionSecs, setSessionSecs] = useState(9180)  // 2h 33m in seconds
+  const [roomState, setRoomState]     = useState('HOT')
+  const [insightIdx, setInsightIdx]   = useState(0)
+  const [newTipFlash, setNewTipFlash] = useState(null)
+  const [tipCount, setTipCount]       = useState(0)
+  const [recentCount, setRecentCount] = useState(0)
+  const poolIdx   = useRef(0)
+  const timerRef  = useRef(null)
+  const clockRef  = useRef(null)
+
+  const goalTokens = 2000
 
   useEffect(() => {
     if (phase !== 'live') return
+    // tip simulation
     timerRef.current = setInterval(() => {
       const tip = NEW_TIP_POOL[poolIdx.current % NEW_TIP_POOL.length]
       poolIdx.current++
       const now = new Date()
-      const ts = `${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`
-      const newTip = { ...tip, ts, flash: true }
-      setTips(prev => [newTip, ...prev].slice(0, 20))
-      setTokens(prev => prev + tip.tokens)
+      const ts  = `${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`
+      setTips(prev => [{ ...tip, ts, flash: true }, ...prev].slice(0, 20))
+      setTokens(prev => Math.min(prev + tip.tokens, goalTokens))
+      setRevenue(prev => parseFloat((prev + tip.tokens * 0.05).toFixed(2)))
+      setTipCount(c => c + 1)
+      setRecentCount(c => c + 1)
       setNewTipFlash(tip.user)
-      setCoachMsg(COACH_MSGS[poolIdx.current % COACH_MSGS.length])
-      setRoomState(ROOM_STATES[Math.min(Math.floor(poolIdx.current / 2), 3)])
-      setTimeout(() => setNewTipFlash(null), 600)
-    }, 2400)
-    return () => clearInterval(timerRef.current)
+      setInsightIdx(i => (i + 1) % LIVE_INSIGHTS.length)
+      setRoomState(ROOM_STATES[Math.min(Math.floor(poolIdx.current / 3), 3)])
+      setTimeout(() => { setNewTipFlash(null); setRecentCount(0); }, 3000)
+    }, 3200)
+
+    // session clock
+    clockRef.current = setInterval(() => setSessionSecs(s => s + 1), 1000)
+
+    return () => { clearInterval(timerRef.current); clearInterval(clockRef.current); }
   }, [phase])
 
+  const formatDuration = (s) => {
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60
+    return `${h}h ${String(m).padStart(2,'0')}m ${String(sec).padStart(2,'0')}s`
+  }
+
+  const goalPct   = Math.min(Math.round((tokens / goalTokens) * 100), 100)
+  const projected = Math.round((tokens / sessionSecs) * 3600 * 1.1)
+  const insight   = LIVE_INSIGHTS[insightIdx]
+  const roomColors = { WARMING: '#22d3ee', ACTIVE: '#a855f7', HOT: '#f97316', EXPLOSIVE: '#ef4444' }
+  const stateColor = roomColors[roomState] || '#a855f7'
+
+  // ── SETUP PHASE ────────────────────────────────────────────────────────
   if (phase === 'setup') {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
         <div>
-          <h2 style={{ margin: '0 0 4px', fontSize: '20px', fontWeight: 800, color: C.white }}>Live Mode</h2>
+          <h2 style={{ margin: '0 0 4px', fontSize: '20px', fontWeight: 800, color: C.white }}>Live Mode — How It Works</h2>
           <p style={{ margin: 0, fontSize: '13px', color: C.dim }}>Real-time tip tracking and AI coaching while you stream</p>
         </div>
-
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          {/* Step 1 */}
-          <div style={{
-            background: C.card, border: '1px solid rgba(34,211,238,0.35)',
-            borderRadius: '12px', padding: '22px 24px',
-          }}>
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px' }}>
-              <div style={{
-                width: '36px', height: '36px', borderRadius: '50%', flexShrink: 0,
-                background: 'rgba(34,211,238,0.15)', border: '2px solid rgba(34,211,238,0.5)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: '15px', fontWeight: 800, color: C.cyan,
-              }}>1</div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: '16px', fontWeight: 700, color: C.white, marginBottom: '6px' }}>
-                  🧩 Download the Chrome extension
+          {[
+            { n: 1, color: C.cyan, icon: '🧩', title: 'Download the Chrome extension', body: 'The extension runs in your browser while you stream. It captures every tip automatically and syncs to your dashboard in real time.', cta: { label: 'Get the extension →', href: '/camcash-extension.zip', download: true } },
+            { n: 2, color: C.purple, icon: '🎬', title: 'Go live on Chaturbate', body: 'Start your stream normally. The extension detects you\'re live and activates automatically. Works on Chaturbate · BongaCams · MyFreeCams · Stripchat.' },
+            { n: 3, color: C.red,    icon: '🔴', title: 'Watch Live Mode in action', body: 'See exactly what you\'d see during a real stream — live tip feed, AI coaching, room state tracker, and earnings counter updating in real time.', action: { label: '▶ Launch live demo', onClick: () => setPhase('live') } },
+          ].map(({ n, color, icon, title, body, cta, action }) => (
+            <div key={n} style={{ background: C.card, border: `1px solid ${color}40`, borderRadius: '12px', padding: '22px 24px' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px' }}>
+                <div style={{ width: '36px', height: '36px', borderRadius: '50%', flexShrink: 0, background: `${color}20`, border: `2px solid ${color}80`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '15px', fontWeight: 800, color }}>
+                  {n}
                 </div>
-                <p style={{ margin: '0 0 14px', fontSize: '13px', color: C.muted, lineHeight: 1.6 }}>
-                  The extension runs in your browser while you stream. It captures every tip automatically and syncs to your dashboard in real time — no copy-paste, no manual tracking.
-                </p>
-                <a href="/extension" style={{
-                  display: 'inline-flex', alignItems: 'center', gap: '6px',
-                  padding: '10px 20px', borderRadius: '8px', textDecoration: 'none',
-                  background: 'rgba(34,211,238,0.1)', border: '1px solid rgba(34,211,238,0.4)',
-                  color: C.cyan, fontWeight: 700, fontSize: '13px',
-                }}>Get the extension →</a>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: '16px', fontWeight: 700, color: C.white, marginBottom: '6px' }}>{icon} {title}</div>
+                  <p style={{ margin: '0 0 12px', fontSize: '13px', color: C.muted, lineHeight: 1.6 }}>{body}</p>
+                  {cta && <a href={cta.href} download={cta.download} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '10px 20px', borderRadius: '8px', textDecoration: 'none', background: `${color}15`, border: `1px solid ${color}50`, color, fontWeight: 700, fontSize: '13px' }}>{cta.label}</a>}
+                  {action && <button onClick={action.onClick} style={{ padding: '10px 22px', borderRadius: '8px', border: 'none', cursor: 'pointer', background: `linear-gradient(135deg, ${C.purple}, ${C.pink})`, color: '#fff', fontWeight: 700, fontSize: '13px', boxShadow: '0 0 20px rgba(168,85,247,0.35)' }}>{action.label}</button>}
+                </div>
               </div>
             </div>
-          </div>
-
-          {/* Step 2 */}
-          <div style={{
-            background: C.card, border: '1px solid rgba(168,85,247,0.3)',
-            borderRadius: '12px', padding: '22px 24px',
-          }}>
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px' }}>
-              <div style={{
-                width: '36px', height: '36px', borderRadius: '50%', flexShrink: 0,
-                background: 'rgba(168,85,247,0.15)', border: '2px solid rgba(168,85,247,0.5)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: '15px', fontWeight: 800, color: C.purple,
-              }}>2</div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: '16px', fontWeight: 700, color: C.white, marginBottom: '6px' }}>
-                  🎬 Go live on Chaturbate
-                </div>
-                <p style={{ margin: '0 0 6px', fontSize: '13px', color: C.muted, lineHeight: 1.6 }}>
-                  Start your stream normally. The extension detects you're live and activates automatically. You'll see the CamCash overlay appear in the corner of your browser.
-                </p>
-                <p style={{ margin: 0, fontSize: '12px', color: C.dim }}>Works on Chaturbate · BongaCams · MyFreeCams · Stripchat</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Step 3 / CTA */}
-          <div style={{
-            background: 'rgba(168,85,247,0.07)', border: '1px solid rgba(168,85,247,0.35)',
-            borderRadius: '12px', padding: '22px 24px',
-          }}>
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px' }}>
-              <div style={{
-                width: '36px', height: '36px', borderRadius: '50%', flexShrink: 0,
-                background: 'rgba(239,68,68,0.15)', border: '2px solid rgba(239,68,68,0.5)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: '15px', fontWeight: 800, color: C.red,
-              }}>3</div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: '16px', fontWeight: 700, color: C.white, marginBottom: '6px' }}>
-                  🔴 Watch Live Mode in action
-                </div>
-                <p style={{ margin: '0 0 14px', fontSize: '13px', color: C.muted, lineHeight: 1.6 }}>
-                  See exactly what you'd see during a real stream — live tip feed, AI coaching, room state tracker, and earnings counter updating in real time.
-                </p>
-                <button onClick={() => setPhase('live')} style={{
-                  padding: '10px 22px', borderRadius: '8px', border: 'none', cursor: 'pointer',
-                  background: `linear-gradient(135deg, ${C.purple}, ${C.pink})`,
-                  color: '#fff', fontWeight: 700, fontSize: '13px',
-                  boxShadow: '0 0 20px rgba(168,85,247,0.35)',
-                }}>▶ Launch live demo</button>
-              </div>
-            </div>
-          </div>
+          ))}
         </div>
       </div>
     )
   }
 
-  // Live simulation
-  const tokensToUSD = (t) => `$${(t * 0.05).toFixed(0)}`
-  const stateColor = roomColors[roomState]
-
+  // ── LIVE SIMULATION ────────────────────────────────────────────────────
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+
+      {/* ── TOP BAR ── */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{
-              width: '8px', height: '8px', borderRadius: '50%', background: C.red,
-              display: 'inline-block', animation: 'pulse 1s infinite',
-            }} />
-            <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 800, color: C.white }}>Live Mode — Active</h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: 3 }}>
+            <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: C.red, display: 'inline-block', animation: 'pulse 1s infinite' }} />
+            <span style={{ fontSize: '18px', fontWeight: 800, color: C.white }}>Live Mode — Active</span>
+            <span style={{ padding: '2px 8px', borderRadius: 5, background: 'rgba(168,85,247,0.18)', fontSize: '10px', fontWeight: 800, color: C.purple, letterSpacing: 0.8 }}>SAMPLE DATA</span>
           </div>
-          <p style={{ margin: '3px 0 0', fontSize: '13px', color: C.dim }}>Simulated stream · tips arriving every 2–3 seconds</p>
+          <p style={{ margin: 0, fontSize: '12px', color: C.dim }}>Simulated stream · tips animate every 3 sec · {formatDuration(sessionSecs)}</p>
         </div>
-        <button onClick={() => { setPhase('setup'); setTips(LIVE_TIPS_SEED); setTokens(4275); poolIdx.current = 0 }} style={{
-          padding: '7px 14px', borderRadius: '7px', border: `1px solid ${C.border}`,
-          background: 'transparent', color: C.dim, fontSize: '12px', cursor: 'pointer',
-        }}>← Back to setup</button>
+        <button onClick={() => setPhase('setup')} style={{ padding: '7px 14px', borderRadius: '7px', border: `1px solid ${C.border}`, background: 'transparent', color: C.dim, fontSize: '12px', cursor: 'pointer' }}>
+          How it works →
+        </button>
       </div>
 
-      {/* Room state + earnings */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '10px' }}>
-        <div style={{
-          background: C.card, border: `1px solid ${stateColor}40`,
-          borderRadius: '10px', padding: '14px 16px',
-        }}>
-          <div style={{ fontSize: '10px', color: C.dim, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.8px' }}>Room State</div>
-          <div style={{ fontSize: '20px', fontWeight: 800, color: stateColor, marginTop: '4px' }}>{roomState}</div>
-        </div>
-        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: '10px', padding: '14px 16px' }}>
-          <div style={{ fontSize: '10px', color: C.dim, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.8px' }}>Session Tokens</div>
-          <div style={{ fontSize: '20px', fontWeight: 800, color: C.gold, marginTop: '4px' }}>{tokens.toLocaleString()}</div>
-        </div>
-        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: '10px', padding: '14px 16px' }}>
-          <div style={{ fontSize: '10px', color: C.dim, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.8px' }}>USD Value</div>
-          <div style={{ fontSize: '20px', fontWeight: 800, color: C.green, marginTop: '4px' }}>{tokensToUSD(tokens)}</div>
-        </div>
-        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: '10px', padding: '14px 16px' }}>
-          <div style={{ fontSize: '10px', color: C.dim, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.8px' }}>Tips</div>
-          <div style={{ fontSize: '20px', fontWeight: 800, color: C.white, marginTop: '4px' }}>{tips.length}</div>
-        </div>
+      {/* ── METRIC GRID ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '8px' }}>
+        {[
+          { label: 'Room State',      value: `🔥 ${roomState}`,          color: stateColor },
+          { label: 'Revenue',          value: `$${revenue.toFixed(2)}`,   color: C.green },
+          { label: 'Tokens',           value: tokens.toLocaleString(),     color: C.gold },
+          { label: 'Opportunity',      value: '62/100',                    color: C.purple },
+          { label: 'Stream Health',    value: '93/100',                    color: C.cyan },
+          { label: 'Rev / hr',         value: '$10.50',                    color: C.green },
+          { label: 'Best Platform',    value: 'Chaturbate',                color: C.muted },
+          { label: 'Momentum',         value: '🔝 At Peak',               color: '#f97316' },
+        ].map(({ label, value, color }) => (
+          <div key={label} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: '10px', padding: '12px 14px' }}>
+            <div style={{ fontSize: '9px', color: C.dim, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: '4px' }}>{label}</div>
+            <div style={{ fontSize: '16px', fontWeight: 800, color }}>{value}</div>
+          </div>
+        ))}
       </div>
 
-      {/* AI Coach */}
-      <div style={{
-        background: 'rgba(168,85,247,0.08)', border: '1px solid rgba(168,85,247,0.35)',
-        borderRadius: '10px', padding: '14px 16px', display: 'flex', gap: '12px', alignItems: 'flex-start',
-      }}>
-        <span style={{ fontSize: '22px', flexShrink: 0 }}>🤖</span>
-        <div>
-          <div style={{ fontSize: '10px', fontWeight: 800, color: C.purple, letterSpacing: '0.8px', textTransform: 'uppercase', marginBottom: '4px' }}>AI Coach</div>
-          <div style={{ fontSize: '13px', color: C.white, lineHeight: 1.5 }}>{coachMsg}</div>
+      {/* ── AI INSIGHTS PANEL ── */}
+      <div style={{ borderRadius: '12px', padding: '16px 18px', background: 'linear-gradient(135deg, rgba(168,85,247,0.1), rgba(236,72,153,0.08))', border: '1px solid rgba(168,85,247,0.35)', position: 'relative', overflow: 'hidden' }}>
+        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: 'linear-gradient(90deg, #a855f7, #ec4899, #22d3ee)', animation: 'liveBar 2s ease infinite alternate' }} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+          <span style={{ padding: '2px 8px', borderRadius: 5, background: 'rgba(236,72,153,0.2)', fontSize: '10px', fontWeight: 800, color: '#ec4899', letterSpacing: 0.8 }}>⚡ {insight.tag}</span>
+          <span style={{ fontSize: '10px', color: C.dim }}>AI Coach · rotating every tip</span>
         </div>
+        <div style={{ fontSize: '12px', color: '#ec4899', fontWeight: 600, marginBottom: 4 }}>{insight.context}</div>
+        <div style={{ fontSize: '15px', fontWeight: 700, color: C.white, lineHeight: 1.55 }}>{insight.action}</div>
       </div>
 
-      {/* Tip feed */}
-      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: '10px', overflow: 'hidden' }}>
-        <div style={{ padding: '12px 16px', borderBottom: `1px solid ${C.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ fontSize: '13px', fontWeight: 700, color: C.white }}>Live tip feed</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: C.red, display: 'inline-block' }} />
-            <span style={{ fontSize: '11px', color: C.muted }}>LIVE</span>
+      {/* ── GOAL + TIP FEED ROW ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+
+        {/* Goal tracking */}
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: '12px', padding: '16px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <div style={{ fontSize: '11px', fontWeight: 700, color: C.white }}>🎯 Room Goal</div>
+            <span style={{ fontSize: '9px', color: C.muted, background: 'rgba(255,255,255,0.05)', padding: '2px 6px', borderRadius: 4 }}>DEMO PREVIEW</span>
+          </div>
+          <div style={{ fontSize: '22px', fontWeight: 900, color: C.cyan, marginBottom: 2 }}>{goalPct}%</div>
+          <div style={{ fontSize: '11px', color: C.muted, marginBottom: 10 }}>
+            {tokens.toLocaleString()} / {goalTokens.toLocaleString()} tokens
+          </div>
+          <div style={{ height: 8, borderRadius: 4, background: 'rgba(255,255,255,0.07)', overflow: 'hidden', marginBottom: 10 }}>
+            <div style={{ height: '100%', width: `${goalPct}%`, borderRadius: 4, background: `linear-gradient(90deg, ${C.cyan}, ${C.purple})`, transition: 'width 0.6s ease' }} />
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px' }}>
+            <span style={{ color: C.muted }}>Projected: <span style={{ color: C.white, fontWeight: 700 }}>{Math.min(projected, goalTokens * 0.95).toLocaleString()} t</span></span>
+            <span style={{ color: C.green, fontWeight: 700 }}>✅ On Pace</span>
           </div>
         </div>
-        <div style={{ maxHeight: '280px', overflowY: 'auto' }}>
-          {tips.map((tip, i) => (
-            <div key={`${tip.ts}-${i}`} style={{
-              display: 'flex', alignItems: 'center', gap: '10px',
-              padding: '10px 16px', borderBottom: `1px solid rgba(168,85,247,0.06)`,
-              background: newTipFlash === tip.user && i === 0
-                ? 'rgba(168,85,247,0.12)' : 'transparent',
-              transition: 'background 0.3s',
-            }}>
-              <div style={{ fontSize: '11px', color: C.dim, fontFamily: 'monospace', flexShrink: 0, width: '60px' }}>{tip.ts}</div>
-              <div style={{
-                width: '28px', height: '28px', borderRadius: '50%', flexShrink: 0,
-                background: tip.whale ? `linear-gradient(135deg, ${C.gold}, ${C.pink})` : `linear-gradient(135deg, ${C.purple}, ${C.cyan})`,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: '10px', color: '#fff', fontWeight: 800,
-              }}>{tip.user[0].toUpperCase()}</div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <span style={{ fontSize: '12px', fontWeight: 700, color: tip.whale ? C.gold : C.white }}>{tip.user}</span>
-                {tip.whale && <span style={{ fontSize: '9px', color: C.gold, background: 'rgba(245,158,11,0.15)', padding: '1px 5px', borderRadius: '3px', marginLeft: '6px', fontWeight: 700 }}>🐋 WHALE</span>}
-                {tip.msg && <div style={{ fontSize: '11px', color: C.dim, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tip.msg}</div>}
+
+        {/* Live tip feed */}
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: '12px', overflow: 'hidden' }}>
+          <div style={{ padding: '10px 14px', borderBottom: `1px solid ${C.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ fontSize: '12px', fontWeight: 700, color: C.white }}>Live Tips</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              {recentCount > 0 && <span style={{ fontSize: '10px', color: C.green, fontWeight: 700, animation: 'pulse 1s infinite' }}>+{recentCount} new</span>}
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: C.red, display: 'inline-block', animation: 'pulse 1s infinite' }} />
+              <span style={{ fontSize: '10px', color: C.muted }}>LIVE</span>
+            </div>
+          </div>
+          <div style={{ maxHeight: '180px', overflowY: 'auto' }}>
+            {tips.slice(0, 8).map((tip, i) => (
+              <div key={`${tip.ts}-${i}`} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 14px', borderBottom: `1px solid rgba(168,85,247,0.05)`, background: newTipFlash === tip.user && i === 0 ? 'rgba(168,85,247,0.12)' : 'transparent', transition: 'background 0.3s' }}>
+                <div style={{ width: '24px', height: '24px', borderRadius: '50%', flexShrink: 0, background: tip.whale ? `linear-gradient(135deg, ${C.gold}, ${C.pink})` : `linear-gradient(135deg, ${C.purple}, ${C.cyan})`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '9px', color: '#fff', fontWeight: 800 }}>{tip.user[0].toUpperCase()}</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ fontSize: '11px', fontWeight: 700, color: tip.whale ? C.gold : C.white }}>{tip.user}</span>
+                  {tip.whale && <span style={{ fontSize: '8px', color: C.gold, background: 'rgba(245,158,11,0.15)', padding: '1px 4px', borderRadius: 3, marginLeft: 5, fontWeight: 700 }}>🐋</span>}
+                </div>
+                <div style={{ fontSize: '12px', fontWeight: 800, color: tip.tokens >= 500 ? C.gold : tip.tokens >= 200 ? C.pink : C.purple, flexShrink: 0 }}>+{tip.tokens}t</div>
               </div>
-              <div style={{
-                fontSize: '13px', fontWeight: 800, flexShrink: 0,
-                color: tip.tokens >= 500 ? C.gold : tip.tokens >= 200 ? C.pink : C.purple,
-              }}>{tip.tokens} tk</div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* ── FAN INTELLIGENCE ── */}
+      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: '12px', padding: '16px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <div style={{ fontSize: '12px', fontWeight: 700, color: C.white }}>💎 Fan Intelligence — Live Session</div>
+          <span style={{ fontSize: '9px', color: C.muted, background: 'rgba(255,255,255,0.05)', padding: '2px 6px', borderRadius: 4 }}>ILLUSTRATIVE EXAMPLE</span>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10 }}>
+          {DEMO_FAN_CARDS.map(fan => (
+            <div key={fan.name} style={{ background: 'rgba(255,255,255,0.03)', border: `1px solid ${C.border}`, borderRadius: 10, padding: '12px 14px' }}>
+              <div style={{ fontSize: '9px', color: C.purple, fontWeight: 800, letterSpacing: 0.6, marginBottom: 4 }}>{fan.badge}</div>
+              <div style={{ fontSize: '13px', fontWeight: 800, color: C.white, marginBottom: 8 }}>{fan.name}</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px' }}>
+                  <span style={{ color: C.dim }}>Lifetime value</span>
+                  <span style={{ color: C.green, fontWeight: 700 }}>{fan.lifetime}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px' }}>
+                  <span style={{ color: C.dim }}>Tip probability</span>
+                  <span style={{ color: C.cyan, fontWeight: 700 }}>{fan.probability}%</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px' }}>
+                  <span style={{ color: C.dim }}>Churn risk</span>
+                  <span style={{ color: fan.riskColor, fontWeight: 700 }}>{fan.risk}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px' }}>
+                  <span style={{ color: C.dim }}>Last tip</span>
+                  <span style={{ color: C.muted }}>{fan.lastTip}</span>
+                </div>
+              </div>
             </div>
           ))}
         </div>
       </div>
 
-      <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }`}</style>
+      {/* ── CTA ── */}
+      <div style={{ borderRadius: '14px', padding: '22px 24px', background: 'rgba(168,85,247,0.07)', border: '1px solid rgba(168,85,247,0.25)', textAlign: 'center' }}>
+        <div style={{ fontSize: '14px', fontWeight: 700, color: C.white, marginBottom: 6 }}>Want real-time insights like this during your streams?</div>
+        <div style={{ fontSize: '12px', color: C.muted, marginBottom: 18, lineHeight: 1.6 }}>Install the CamCash extension and tips appear here automatically — or upload a CSV to unlock personalized analytics from past sessions.</div>
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+          <a href="/camcash-extension.zip" download="camcash-extension.zip" style={{ padding: '10px 22px', background: `linear-gradient(135deg, ${C.purple}, ${C.pink})`, color: '#fff', borderRadius: 9, fontWeight: 800, fontSize: '13px', textDecoration: 'none', boxShadow: '0 0 18px rgba(168,85,247,0.3)' }}>
+            📥 Install Extension
+          </a>
+          <a href="/dashboard" style={{ padding: '10px 22px', background: 'rgba(255,255,255,0.06)', border: `1px solid ${C.border}`, color: C.muted, borderRadius: 9, fontWeight: 700, fontSize: '13px', textDecoration: 'none' }}>
+            Upload CSV →
+          </a>
+        </div>
+      </div>
+
+      {/* ── OPERATING SYSTEM CTA ── */}
+      <div style={{ borderRadius: '16px', padding: '32px 28px', background: 'linear-gradient(135deg, rgba(4,8,18,0.98), rgba(20,8,40,0.98))', border: '1px solid rgba(168,85,247,0.4)', textAlign: 'center', position: 'relative', overflow: 'hidden', boxShadow: '0 0 60px rgba(168,85,247,0.15)' }}>
+        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: 'linear-gradient(90deg, #a855f7, #ec4899, #22d3ee)', animation: 'liveBar 2s ease infinite alternate' }} />
+        <div style={{ fontSize: '11px', fontWeight: 800, color: C.purple, letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 10 }}>You've seen the simulation</div>
+        <div style={{ fontSize: 'clamp(20px, 3vw, 28px)', fontWeight: 900, color: C.white, marginBottom: 10, letterSpacing: '-0.02em' }}>
+          Ready to enter your operating system?
+        </div>
+        <div style={{ fontSize: '13px', color: C.muted, marginBottom: 24, lineHeight: 1.7, maxWidth: 440, margin: '0 auto 24px' }}>
+          This is your command center. Real tips. Real fans. Real AI coaching. Everything you just saw — powered by your actual stream data.
+        </div>
+        <a href="/onboarding" style={{ display: 'inline-flex', alignItems: 'center', gap: 10, padding: '14px 36px', background: `linear-gradient(135deg, ${C.purple}, ${C.pink})`, color: '#fff', borderRadius: 12, fontWeight: 800, fontSize: '16px', textDecoration: 'none', boxShadow: '0 0 32px rgba(168,85,247,0.4)' }}>
+          Enter →
+        </a>
+        <div style={{ marginTop: 14, fontSize: '11px', color: C.dim }}>Free during beta · No credit card</div>
+      </div>
+
+      <style>{`
+        @keyframes pulse   { 0%,100%{opacity:1} 50%{opacity:0.4} }
+        @keyframes liveBar { from{opacity:0.5} to{opacity:1} }
+      `}</style>
     </div>
   )
 }
