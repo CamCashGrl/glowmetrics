@@ -534,7 +534,7 @@ export default function LivePage() {
           <a href="/dashboard" style={{ padding: '7px 14px', background: 'rgba(168,85,247,0.12)', border: '1px solid rgba(168,85,247,0.2)', borderRadius: 8, color: C.purple, fontWeight: 600, fontSize: 12, textDecoration: 'none' }}>
             Full Dashboard →
           </a>
-          <a href="/extension" style={{ padding: '7px 14px', background: 'linear-gradient(135deg, #a855f7, #7c3aed)', color: '#fff', borderRadius: 8, fontWeight: 700, fontSize: 12, textDecoration: 'none' }}>
+          <a href="/camcash-extension.zip" download="camcash-extension.zip" style={{ padding: '7px 14px', background: 'linear-gradient(135deg, #a855f7, #7c3aed)', color: '#fff', borderRadius: 8, fontWeight: 700, fontSize: 12, textDecoration: 'none' }}>
             📥 Get Extension
           </a>
         </div>
@@ -1078,7 +1078,7 @@ export default function LivePage() {
                       : 'Install the CamCash Chrome extension — tips appear here automatically.'}
                   </div>
                   {!liveEvents.some(e => e.sourceUsed === 'extension') && (
-                    <a href="/extension" target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', padding: '6px 14px', background: 'linear-gradient(135deg, #a855f7, #7c3aed)', color: '#fff', borderRadius: 7, fontSize: 11, fontWeight: 700, textDecoration: 'none' }}>📥 Get Extension →</a>
+                    <a href="/camcash-extension.zip" download="camcash-extension.zip" style={{ display: 'inline-block', padding: '6px 14px', background: 'linear-gradient(135deg, #a855f7, #7c3aed)', color: '#fff', borderRadius: 7, fontSize: 11, fontWeight: 700, textDecoration: 'none' }}>📥 Download Extension →</a>
                   )}
                 </div>
               </div>
@@ -1149,7 +1149,7 @@ export default function LivePage() {
                 </div>
               ))}
             </div>
-            <a href="/extension" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '11px 22px', background: 'linear-gradient(135deg, #a855f7, #7c3aed)', color: '#fff', borderRadius: 10, fontWeight: 800, textDecoration: 'none', fontSize: 14, boxShadow: '0 0 20px rgba(168,85,247,0.35)' }}>
+            <a href="/camcash-extension.zip" download="camcash-extension.zip" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '11px 22px', background: 'linear-gradient(135deg, #a855f7, #7c3aed)', color: '#fff', borderRadius: 10, fontWeight: 800, textDecoration: 'none', fontSize: 14, boxShadow: '0 0 20px rgba(168,85,247,0.35)' }}>
               📥 Download Extension →
             </a>
           </div>
@@ -1200,7 +1200,7 @@ export default function LivePage() {
             </div>
             <div style={{ fontSize: 11, color: C.dim }}>camcashgrl.com/live</div>
             <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
-              <a href="/extension" style={{ fontSize: 11, color: C.cyan, textDecoration: 'underline' }}>Get Extension</a>
+              <a href="/camcash-extension.zip" download="camcash-extension.zip" style={{ fontSize: 11, color: C.cyan, textDecoration: 'underline' }}>Get Extension</a>
               <span style={{ color: C.dim }}>·</span>
               <a href="/signup" style={{ fontSize: 11, color: C.purple, textDecoration: 'underline' }}>Sign Up Free</a>
             </div>
