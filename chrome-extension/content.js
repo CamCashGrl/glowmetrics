@@ -192,7 +192,9 @@
         box-shadow: 0 16px 60px rgba(0,0,0,0.75), 0 0 0 1px rgba(255,255,255,0.04);
         overflow: hidden;
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+        cursor: grab;
       }
+      #panel:active { cursor: grabbing; }
 
       /* ── HEADER ── */
       #hdr {
@@ -436,20 +438,23 @@
       };
     }
 
-    // Drag — pointer capture prevents Chaturbate from stealing events
-    const hdr = _shadow.getElementById('hdr');
-    if (hdr) {
-      hdr.onpointerdown = (e) => {
-        if (e.target.id === 'tbtn') return;
+    // Drag — bound to full panel so anywhere is draggable
+    const panel = _shadow.getElementById('panel');
+    if (panel) {
+      panel.onpointerdown = (e) => {
+        if (e.target.id === 'tbtn' ||
+            e.target.id === 'hidebtn' ||
+            e.target.tagName === 'BUTTON' ||
+            e.target.tagName === 'A') return;
         _dragging = true;
         _dragSX = e.clientX;
         _dragSY = e.clientY;
         _dragOX = parseInt(_host.style.left) || 0;
         _dragOY = parseInt(_host.style.top)  || 0;
-        hdr.setPointerCapture(e.pointerId);
+        panel.setPointerCapture(e.pointerId);
         e.preventDefault();
       };
-      hdr.onpointermove = (e) => {
+      panel.onpointermove = (e) => {
         if (!_dragging) return;
         const nx = _dragOX + (e.clientX - _dragSX);
         const ny = _dragOY + (e.clientY - _dragSY);
@@ -457,8 +462,8 @@
         _host.style.top  = ny + 'px';
         _savePos(nx, ny);
       };
-      hdr.onpointerup     = () => { _dragging = false; };
-      hdr.onpointercancel = () => { _dragging = false; };
+      panel.onpointerup     = () => { _dragging = false; };
+      panel.onpointercancel = () => { _dragging = false; };
     }
   }
 
