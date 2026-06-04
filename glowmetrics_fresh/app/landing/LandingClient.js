@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
+import { T } from '../../lib/tracking'
 
 function AuthPanel({
   id, isSignUp, setIsSignUp,
@@ -38,7 +39,7 @@ function AuthPanel({
       </div>
       <form onSubmit={handleAuth}>
         <input type="email" placeholder="Email address" required value={email} onChange={e => setEmail(e.target.value)} style={inp}
-          onFocus={e => e.target.style.borderColor = "rgba(34,211,238,0.5)"}
+          onFocus={e => { e.target.style.borderColor = "rgba(34,211,238,0.5)"; T.signupStarted(window?.location?.pathname) }}
           onBlur={e => e.target.style.borderColor = "rgba(255,255,255,0.1)"} />
         <input type="password" placeholder="Password" required value={password} onChange={e => setPassword(e.target.value)}
           style={{ ...inp, marginBottom: isSignUp ? 4 : 0 }}
@@ -52,7 +53,7 @@ function AuthPanel({
         {isSignUp && <div style={{ height: 10 }} />}
         {authError && <div style={{ fontSize: 11, color: "#f87171", marginBottom: 8, textAlign: "center" }}>{authError}</div>}
         {authMsg   && <div style={{ fontSize: 11, color: "#22D3EE",  marginBottom: 8, textAlign: "center" }}>{authMsg}</div>}
-        <button type="submit" disabled={authLoading} style={{
+        <button type="submit" disabled={authLoading} onClick={() => T.signupCtaClicked(window?.location?.pathname)} style={{
           width: "100%", padding: "11px 0", borderRadius: 9,
           background: authLoading ? "rgba(34,211,238,0.2)" : "linear-gradient(135deg,#22D3EE,#EC4899)",
           color: "white", fontWeight: 700, fontSize: 14, border: "none",
@@ -203,13 +204,27 @@ export default function LandingPage() {
         if (typeof twq === 'function') twq('event', 'tw-rc0w2-rcj9h', {})
         fetch('/api/admin/notify-signup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, source: 'landing' }) }).catch(() => {})
         const { data: { user } } = await supabase.auth.getUser()
-        if (user) router.push("/dashboard")
+        if (user) { T.signupCompleted(window?.location?.pathname); router.push("/onboarding") }
         else { setAuthMsg("Account created! Check your email to confirm, then log in."); setIsSignUp(false); setAuthLoading(false) }
       }
     } else {
       const { error } = await supabase.auth.signInWithPassword({ email, password })
       if (error) { setAuthError(error.message); setAuthLoading(false) }
-      else router.push("/dashboard")
+      else {
+        // Check if onboarding is complete
+        const { data: { user } } = await supabase.auth.getUser()
+        const { data: profile } = await supabase
+          .from('beta_users')
+          .select('onboarding_complete')
+          .eq('user_id', user.id)
+          .single()
+
+        if (profile?.onboarding_complete) {
+          router.push('/dashboard')
+        } else {
+          router.push('/onboarding')
+        }
+      }
     }
   }
 
@@ -262,7 +277,7 @@ export default function LandingPage() {
               <a href="/landing/demo" style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "13px 28px", borderRadius: 11, background: "linear-gradient(135deg,#22D3EE,#EC4899)", color: "white", fontWeight: 800, fontSize: 15, textDecoration: "none", boxShadow: "0 0 32px rgba(34,211,238,0.3)", letterSpacing: 0.1 }}>
                 👀 View Live Demo
               </a>
-              <button className="lp-signup-btn" onClick={() => document.getElementById("lp-auth-bottom")?.scrollIntoView({ behavior: "smooth" })}
+              <button className="lp-signup-btn" onClick={() => { T.signupCtaClicked(window?.location?.pathname); document.getElementById("lp-auth-bottom")?.scrollIntoView({ behavior: "smooth" }) }}
                 style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "13px 24px", borderRadius: 11, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.8)", fontWeight: 600, fontSize: 15, cursor: "pointer" }}>
                 Start Free
               </button>

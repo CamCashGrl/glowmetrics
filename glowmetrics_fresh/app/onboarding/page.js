@@ -2,6 +2,7 @@
 import { useEffect, useState, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
+import { T } from '../../lib/tracking'
 
 const C = {
   bg: "#05070f", card: "#121826", border: "#1e2d45",
@@ -76,6 +77,7 @@ export default function OnboardingPage() {
 
   const handleFile = async (file) => {
     if (!file || !user) return
+    T.csvUploadStarted()
     setUploading(true)
     setUploadError("")
     try {
@@ -91,6 +93,7 @@ export default function OnboardingPage() {
       })
       const result = await res.json()
       if (!res.ok || result.error) {
+        T.csvUploadFailed(result.error || "upload_failed")
         setUploadError(result.error || "Upload failed — check the platform selection and try again")
         setUploading(false)
         return
@@ -99,6 +102,7 @@ export default function OnboardingPage() {
         user_id: user.id, email: user.email,
         onboarding_complete: true, signed_up_at: user.created_at
       }, { onConflict: "user_id" })
+      T.csvUploadCompleted(result?.inserted || 0, 0)
       setUploadResult(result)
       setUploadDone(true)
     } catch (err) {
@@ -338,7 +342,7 @@ export default function OnboardingPage() {
                 <p style={{ fontSize: 13, color: C.muted, lineHeight: 1.65, marginBottom: 14 }}>
                   Install the Chrome extension — tips get tracked automatically while you stream. No CSV needed.
                 </p>
-                <button onClick={skipToLive} style={{
+                <button onClick={() => { T.extensionInstallStart(); skipToLive() }} style={{
                   width: "100%", padding: "10px 0", borderRadius: 10,
                   background: "rgba(168,85,247,0.15)", border: "1px solid rgba(168,85,247,0.4)",
                   color: "#a855f7", fontSize: 13, fontWeight: 700, cursor: "pointer"
