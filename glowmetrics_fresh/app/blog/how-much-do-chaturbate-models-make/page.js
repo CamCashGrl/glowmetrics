@@ -234,7 +234,7 @@ export default function ChaturbateEarningsPost() {
         </div>
         <a href="/landing/demo" style={{ display: 'block', textDecoration: 'none' }}>
           <img
-            src="/blog/dashboard-screenshot.png"
+            src="/blog/topearners.png"
             alt="CamCash platform ROI showing Chaturbate at $29.60/hr, MFC at $15.11/hr, and BongaCams at $8.15/hr"
             style={{ width: '100%', display: 'block' }}
           />
@@ -332,7 +332,7 @@ export default function ChaturbateEarningsPost() {
         <div style={s.hidingImg}>
           <a href="/landing/demo" style={{ display: 'block', textDecoration: 'none' }}>
             <img
-              src="/blog/dashboard-screenshot.png"
+              src="/blog/topearners.png"
               alt="CamCash daily brief showing best time to stream is 6 PM on Chaturbate with $134 avg per session"
               style={{ width: '100%', display: 'block' }}
             />
