@@ -203,13 +203,27 @@ export default function LandingPage() {
         if (typeof twq === 'function') twq('event', 'tw-rc0w2-rcj9h', {})
         fetch('/api/admin/notify-signup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, source: 'landing' }) }).catch(() => {})
         const { data: { user } } = await supabase.auth.getUser()
-        if (user) router.push("/dashboard")
+        if (user) router.push("/onboarding")
         else { setAuthMsg("Account created! Check your email to confirm, then log in."); setIsSignUp(false); setAuthLoading(false) }
       }
     } else {
       const { error } = await supabase.auth.signInWithPassword({ email, password })
       if (error) { setAuthError(error.message); setAuthLoading(false) }
-      else router.push("/dashboard")
+      else {
+        // Check if onboarding is complete
+        const { data: { user } } = await supabase.auth.getUser()
+        const { data: profile } = await supabase
+          .from('beta_users')
+          .select('onboarding_complete')
+          .eq('user_id', user.id)
+          .single()
+
+        if (profile?.onboarding_complete) {
+          router.push('/dashboard')
+        } else {
+          router.push('/onboarding')
+        }
+      }
     }
   }
 
