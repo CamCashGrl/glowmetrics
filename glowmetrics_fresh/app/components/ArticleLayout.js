@@ -1,6 +1,7 @@
 // Shared editorial layout for all blog + guide articles.
 // Provides: compact nav, centered article container, minimal footer.
 // Each article page supplies its own breadcrumb array + children content.
+'use client'
 
 const C = {
   bg:      '#0d0f14',
@@ -49,14 +50,27 @@ export default function ArticleLayout({ children, breadcrumb = [], schema }) {
               {label}
             </a>
           ))}
-          <a href="/landing" style={{
-            marginLeft: '8px',
-            fontSize: '12px', fontWeight: '600', color: C.indigo,
-            border: `1px solid ${C.indigoD}`,
-            background: 'rgba(99,102,241,0.06)',
-            padding: '5px 12px', borderRadius: '6px',
-            textDecoration: 'none',
-          }}>
+          <a
+            href={`/landing?utm_source=blog&utm_content=${typeof window !== 'undefined' ? window.location.pathname : ''}`}
+            onClick={() => {
+              if (typeof window !== 'undefined') {
+                window.dataLayer = window.dataLayer || []
+                window.dataLayer.push({
+                  event: 'blog_cta_clicked',
+                  blog_slug: window.location.pathname,
+                  blog_title: document.title,
+                })
+              }
+            }}
+            style={{
+              marginLeft: '8px',
+              fontSize: '12px', fontWeight: '600', color: C.indigo,
+              border: `1px solid ${C.indigoD}`,
+              background: 'rgba(99,102,241,0.06)',
+              padding: '5px 12px', borderRadius: '6px',
+              textDecoration: 'none',
+            }}
+          >
             Free account
           </a>
         </div>
