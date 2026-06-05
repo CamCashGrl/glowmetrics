@@ -1370,6 +1370,7 @@ const handleCSV = async (file, forcePlatform = null) => {
       } catch(e) {}
 
       setUploadCount(c => c + 1)
+      if (typeof window !== 'undefined') localStorage.setItem('camcash_onboarded', '1')
       // Force reload after upload — bypass cache so new tips appear immediately
       try { sessionStorage.removeItem(`camcash_tips_${user.id}`) } catch(e) {}
       await loadData(user.id, true)
@@ -1404,6 +1405,91 @@ const handleCSV = async (file, forcePlatform = null) => {
       </div>
     )
   }
+
+  // ── FIRST-SESSION ONBOARDING ──────────────────────────
+  const hasSeenOnboarding = typeof window !== 'undefined'
+    && localStorage.getItem('camcash_onboarded');
+
+  if (!loading && tips.length === 0 && user && !hasSeenOnboarding) {
+    return (
+      <div style={{ minHeight: "100vh", background: "#05070f", fontFamily: "'Inter', sans-serif", color: "#f1f5f9", display: "flex", flexDirection: "column" }}>
+        <style>{`
+          @keyframes ob-fade { from{opacity:0;transform:translateY(16px);} to{opacity:1;transform:translateY(0);} }
+          @keyframes ob-pulse { 0%,100%{opacity:1;} 50%{opacity:0.4;} }
+          @keyframes ob-bar { from{opacity:0.4;} to{opacity:1;} }
+        `}</style>
+
+        <div style={{ padding: "16px 32px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+          <div style={{ fontWeight: 900, fontSize: 20, background: "linear-gradient(90deg, #7C5CFF, #EC4899)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>CamCash</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <span style={{ fontSize: 12, color: "#475569" }}>{user?.email}</span>
+            <button onClick={async () => { await supabase.auth.signOut(); router.replace("/login"); }} style={{ padding: "6px 14px", borderRadius: 8, background: "rgba(248,113,113,0.1)", border: "1px solid rgba(248,113,113,0.2)", color: "#f87171", fontSize: 12, cursor: "pointer" }}>Sign Out</button>
+          </div>
+        </div>
+
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "40px 24px", maxWidth: 720, margin: "0 auto", width: "100%", animation: "ob-fade 0.4s ease both" }}>
+          <div style={{ textAlign: "center", marginBottom: 48 }}>
+            <div style={{ fontSize: 56, marginBottom: 16 }}>💎</div>
+            <h1 style={{ fontSize: 32, fontWeight: 900, color: "#f1f5f9", marginBottom: 12, lineHeight: 1.2 }}>
+              Welcome to CamCash,{" "}
+              <span style={{ background: "linear-gradient(90deg, #7C5CFF, #EC4899)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
+                {user?.email?.split("@")[0]}
+              </span>{" "}👋
+            </h1>
+            <p style={{ fontSize: 16, color: "#94a3b8", maxWidth: 480, margin: "0 auto", lineHeight: 1.7 }}>
+              Your analytics dashboard is ready. Load your first data — it takes about 2 minutes.
+            </p>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 40, width: "100%" }}>
+            {[
+              { step: "1", icon: "📁", title: "Upload your CSV", desc: "Export your tip history from Chaturbate, BongaCams, or MFC and upload it here.", color: "#7C5CFF", cta: true, ctaLabel: "Upload CSV Now →" },
+              { step: "2", icon: "🧩", title: "Install the extension", desc: "Get the Chrome extension and tips appear in your dashboard automatically while you stream.", color: "#22D3EE", cta: false },
+              { step: "3", icon: "🔴", title: "Go live", desc: "Open Live Mode while streaming and your AI coach tells you exactly what to do in real time.", color: "#10B981", cta: false },
+            ].map(({ step, icon, title, desc, color, cta, ctaLabel }) => (
+              <div key={step} style={{ background: "rgba(15,20,32,0.75)", border: `1px solid ${color}25`, borderRadius: 16, padding: 24, position: "relative", overflow: "hidden" }}>
+                <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg, ${color}, ${color}60)`, animation: "ob-bar 2s ease infinite alternate" }} />
+                <div style={{ width: 32, height: 32, borderRadius: "50%", background: `${color}20`, border: `1px solid ${color}40`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800, color, marginBottom: 14 }}>{step}</div>
+                <div style={{ fontSize: 28, marginBottom: 10 }}>{icon}</div>
+                <div style={{ fontSize: 15, fontWeight: 800, color: "#f1f5f9", marginBottom: 8 }}>{title}</div>
+                <div style={{ fontSize: 12, color: "#94a3b8", lineHeight: 1.65, marginBottom: cta ? 16 : 0 }}>{desc}</div>
+                {cta && (
+                  <button
+                    onClick={() => {
+                      if (typeof window !== "undefined") {
+                        localStorage.setItem("camcash_tab", "upload");
+                        localStorage.setItem("camcash_onboarded", "1");
+                      }
+                      setActiveTab("upload");
+                    }}
+                    style={{ width: "100%", padding: "10px 0", borderRadius: 10, background: "linear-gradient(135deg, #7C5CFF, #EC4899)", border: "none", color: "#fff", fontWeight: 800, fontSize: 13, cursor: "pointer", boxShadow: `0 0 20px ${color}40` }}
+                  >
+                    {ctaLabel}
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap", justifyContent: "center", marginBottom: 24 }}>
+            <button onClick={() => { if (typeof window !== "undefined") localStorage.setItem("camcash_onboarded", "1"); setActiveTab("live"); }} style={{ padding: "11px 24px", borderRadius: 12, background: "linear-gradient(135deg, #10B981, #22D3EE)", border: "none", color: "#fff", fontWeight: 800, fontSize: 14, cursor: "pointer", boxShadow: "0 0 20px rgba(16,185,129,0.35)" }}>⚡ Try Live Mode First</button>
+            <a href="/live?demo=1" style={{ padding: "11px 24px", borderRadius: 12, background: "rgba(34,211,238,0.08)", border: "1px solid rgba(34,211,238,0.25)", color: "#22D3EE", fontWeight: 700, fontSize: 14, textDecoration: "none" }}>🎬 See Interactive Demo</a>
+            <button onClick={() => { if (typeof window !== "undefined") localStorage.setItem("camcash_onboarded", "1"); setActiveTab("help"); }} style={{ padding: "11px 24px", borderRadius: 12, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "#94a3b8", fontWeight: 600, fontSize: 14, cursor: "pointer" }}>❓ How does this work?</button>
+          </div>
+
+          <div style={{ width: "100%", padding: "18px 24px", borderRadius: 14, background: "rgba(124,92,255,0.06)", border: "1px solid rgba(124,92,255,0.2)", textAlign: "center" }}>
+            <div style={{ fontSize: 13, color: "#94a3b8", marginBottom: 10 }}>After uploading, you'll see:</div>
+            <div style={{ display: "flex", gap: 16, justifyContent: "center", flexWrap: "wrap" }}>
+              {["💰 Total earnings", "📊 Platform ROI", "🐳 Top fans", "⏰ Best hours", "📈 Session breakdown", "💡 AI insights"].map(item => (
+                <span key={item} style={{ fontSize: 12, color: "#a78bfa", padding: "4px 12px", borderRadius: 20, background: "rgba(167,139,250,0.1)", border: "1px solid rgba(167,139,250,0.2)" }}>{item}</span>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  // ── END ONBOARDING ────────────────────────────────────
 
   const sessions = analytics?.sessions || []
   const whales = analytics?.whales || []
