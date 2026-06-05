@@ -10,6 +10,7 @@ import { computeOpportunityScore, computeStreamHealth } from "../../lib/analytic
 import CSVImport from "./CSVImport"
 import Sidebar from "./Sidebar"
 import SiteFooter from "../components/SiteFooter"
+import FeedbackWidget from "../components/FeedbackWidget"
 
 // Analytics tracking — works whether or not @vercel/analytics is installed
 let track = (event, props) => {}
@@ -6126,6 +6127,7 @@ const handleCSV = async (file, forcePlatform = null) => {
         </a>
         <SiteFooter sidebarOffset={240} />
       </div>
+      <FeedbackWidget />
     </div>
   )
 }
