@@ -817,6 +817,7 @@ export default function Dashboard() {
     ? (new URLSearchParams(window.location.search).get('tab') || localStorage.getItem('camcash_tab') || 'overview')
     : 'overview'
   const [user, setUser] = useState(null)
+  const [profile, setProfile] = useState(null)
   const [tips, setTips] = useState([])
   const [analytics, setAnalytics] = useState(null)
   const [liveAnalytics, setLiveAnalytics] = useState(null)
@@ -897,7 +898,7 @@ export default function Dashboard() {
   const phaseChangeLog     = useRef([])
 
   const isBetaUser = true
-  const isPro = true
+  const isPro = profile?.plan === 'pro' || profile?.plan === 'unlimited'
   const uploadLimit = Infinity
 
   const openUpgradeModal = (source) => {
@@ -1108,6 +1109,11 @@ export default function Dashboard() {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) { router.replace("/login"); return }
       setUser(user)
+      supabase.from('profiles')
+        .select('plan, stripe_customer_id')
+        .eq('id', user.id)
+        .maybeSingle()
+        .then(({ data }) => { if (data) setProfile(data) })
       loadData(user.id)
       // Load monthly goal from DB
       supabase.from('user_goals').select('*').eq('user_id', user.id).eq('goal_type', 'monthly').maybeSingle()
