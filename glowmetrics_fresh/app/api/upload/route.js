@@ -166,5 +166,22 @@ export async function POST(req) {
     console.log('[UPLOAD] Complete:', response.message)
   }
 
+  // ── FOUNDER NOTIFICATION (non-blocking) ───────────────────────────────
+  if (errors.length === 0) {
+    try {
+      const origin = new URL(req.url).origin
+      fetch(`${origin}/api/notify/upload`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: user.email,
+          platform: detectedPlatform,
+          tip_count: inserted,
+          user_id: user.id,
+        }),
+      }).catch(err => console.error('[upload] notify failed:', err.message))
+    } catch (_) {}
+  }
+
   return NextResponse.json(response)
 }
