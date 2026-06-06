@@ -6,6 +6,7 @@ import { computeRoomHealth } from '../../lib/analytics/roomHealth';
 import { computeRevenueVelocity, computeLiveComparison } from '../../lib/analytics/velocity';
 import { detectSessionPhase, PHASES, getRecoveryActions, getGoalStrategy } from '../../lib/analytics/sessionPhase';
 import { computeOpportunityScore, computeStreamHealth } from '../../lib/analytics/opportunity';
+import FeedbackWidget from '../components/FeedbackWidget';
 
 const C = {
   bg: '#040812', card: 'rgba(15,20,32,0.75)', border: 'rgba(168,85,247,0.2)',
@@ -1588,6 +1589,7 @@ export default function LivePage() {
           </div>
         </div>
       )}
+      <FeedbackWidget />
     </div>
   );
 }

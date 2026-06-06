@@ -2,6 +2,7 @@
 import './globals.css'
 import { Analytics } from '@vercel/analytics/react'
 import Script from 'next/script'
+import FeedbackWidget from './components/FeedbackWidget'
 
 const SITE_URL = 'https://www.camcashgrl.com'
 const TITLE = 'CamCash — Cam Model Analytics That Makes You More Money'
@@ -136,6 +137,7 @@ export default function RootLayout({ children }) {
           />
         </noscript>
         {children}
+        <FeedbackWidget />
         <Analytics />
 
         {/* X (Twitter) Conversion Tracking Pixel */}
