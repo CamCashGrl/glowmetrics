@@ -81,10 +81,10 @@ function AuthPanel({
 
         {!isSignUp && (
           <div style={{ textAlign: "right", marginBottom: 12 }}>
-            <button type="button" onClick={handleForgotPassword}
-              style={{ fontSize: 12, color: "#475569", background: "none", border: "none", cursor: "pointer" }}>
-              Forgot password?
-            </button>
+            <a href="/forgot-password"
+              style={{ fontSize: 12, color: "#94a3b8", display: "block", textDecoration: "none" }}>
+              Forgot your password?
+            </a>
           </div>
         )}
         {isSignUp && <div style={{ height: 14 }} />}
