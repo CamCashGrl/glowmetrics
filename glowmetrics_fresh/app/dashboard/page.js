@@ -5714,22 +5714,42 @@ const handleCSV = async (file, forcePlatform = null) => {
           </div>
 
           {/* Skip link */}
-          <button
-            onClick={() => {
-              setUploadSpotlight(false)
-              setActiveTab("overview")
-              if (typeof window !== "undefined") {
-                localStorage.setItem("camcash_tab", "overview")
-              }
-            }}
-            style={{
-              background: "none", border: "none",
-              color: C.muted, fontSize: 13, cursor: "pointer",
-              textDecoration: "underline", textUnderlineOffset: 3,
-            }}
-          >
-            Skip for now — explore the dashboard first
-          </button>
+          <div style={{
+            marginTop: 28,
+            padding: "16px 20px",
+            borderRadius: 12,
+            background: "rgba(255,255,255,0.03)",
+            border: "1px solid rgba(255,255,255,0.08)",
+            textAlign: "center",
+            maxWidth: 480,
+            width: "100%",
+          }}>
+            <p style={{
+              fontSize: 13, color: "#475569", marginBottom: 12, lineHeight: 1.6,
+            }}>
+              📊 Your dashboard needs your data to work. Without an upload,
+              everything will be empty. Export takes 2 minutes:<br/>
+              <span style={{ color: "#94A3B8" }}>
+                Chaturbate → Stats &amp; Data → Token Stats → Download CSV
+              </span>
+            </p>
+            <div style={{ width: "100%", height: 1, background: "rgba(255,255,255,0.06)", marginBottom: 12 }} />
+            <p style={{ fontSize: 12, color: "#475569", marginBottom: 8 }}>
+              Already streaming live?
+            </p>
+            <a
+              href="/extension"
+              style={{
+                fontSize: 13, fontWeight: 600,
+                color: "#22D3EE", textDecoration: "none",
+              }}
+            >
+              🧩 Install the Chrome extension instead →
+            </a>
+            <p style={{ fontSize: 11, color: "#475569", marginTop: 6, marginBottom: 0 }}>
+              Captures tips automatically while you stream — no CSV needed to get started.
+            </p>
+          </div>
 
         </div>
       )}
