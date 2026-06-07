@@ -424,8 +424,8 @@ function generateHashtagsHG({ platform, toy, mood, hasGoal, count = 15 }) {
   return Array.from(tags).slice(0, count)
 }
 
-function HashtagGenerator({ C, glassCard }) {
-  const [platform, setPlatform] = useState("Chaturbate")
+function HashtagGenerator({ C, glassCard, defaultPlatform = "Chaturbate" }) {
+  const [platform, setPlatform] = useState(defaultPlatform)
   const [toy, setToy] = useState("None")
   const [mood, setMood] = useState("none")
   const [hasGoal, setHasGoal] = useState(false)
@@ -578,6 +578,17 @@ function scoreTitle(title, ctx) {
 }
 
 function TitleGenerator({ C, glassCard, analytics, tips, sessions, whales }) {
+  // Tab state
+  const [innerTab,  setInnerTab]  = useState("quick")
+
+  // Quick tab state
+  const [qMood,     setQMood]     = useState("none")
+  const [qGoal,     setQGoal]     = useState("")
+  const [qPlatform, setQPlatform] = useState("Chaturbate")
+  const [qTitle,    setQTitle]    = useState(null)   // { title, drivers }
+  const [qCopied,   setQCopied]   = useState(false)
+
+  // Advanced tab state
   const [titles,    setTitles]    = useState([])   // [{title, drivers, score}]
   const [copied,    setCopied]    = useState(null)
   const [tokenGoal, setTokenGoal] = useState(0)
@@ -586,7 +597,7 @@ function TitleGenerator({ C, glassCard, analytics, tips, sessions, whales }) {
   const [mood,      setMood]      = useState("none")
   const [useEmojis, setUseEmojis] = useState(true)
 
-  const buildCtx = () => {
+  const buildCtx = (overrides = {}) => {
     const now = new Date()
     const currentHour = now.getUTCHours()
     const todayDay = now.toLocaleDateString("en-US", { weekday: "long" })
@@ -649,11 +660,31 @@ function TitleGenerator({ C, glassCard, analytics, tips, sessions, whales }) {
       hasWhales, topWhaleName, whaleCount,
       hasReturners, returningPct,
       lowActivity, todayIsBestDay, todayDay,
-      tokenGoal, action, toy, mood, useEmojis, avgSessionUSD,
+      tokenGoal: overrides.tokenGoal !== undefined ? overrides.tokenGoal : tokenGoal,
+      action:    overrides.action    !== undefined ? overrides.action    : action,
+      toy:       overrides.toy       !== undefined ? overrides.toy       : toy,
+      mood:      overrides.mood      !== undefined ? overrides.mood      : mood,
+      useEmojis: overrides.useEmojis !== undefined ? overrides.useEmojis : useEmojis,
+      avgSessionUSD,
     }
   }
 
-  const generate = useCallback(() => {
+  // Quick: generate one title
+  const generateQuick = () => {
+    const ctx = buildCtx({ mood: qMood, tokenGoal: parseInt(qGoal) || 0, action: "", toy: "" })
+    setQTitle(buildOneTitle(ctx))
+    setQCopied(false)
+  }
+
+  const copyQuick = () => {
+    if (!qTitle) return
+    navigator.clipboard.writeText(qTitle.title).catch(() => {})
+    setQCopied(true)
+    setTimeout(() => setQCopied(false), 1800)
+  }
+
+  // Advanced: generate 5 scored titles
+  const generateAdvanced = useCallback(() => {
     const ctx = buildCtx()
     const results = []
     let attempts = 0
@@ -669,45 +700,147 @@ function TitleGenerator({ C, glassCard, analytics, tips, sessions, whales }) {
     setCopied(null)
   }, [tokenGoal, action, toy, mood, useEmojis, analytics, tips, sessions, whales])
 
-  useEffect(() => { generate() }, [])
-
-  const copy = (title, i) => {
+  const copyAdv = (title, i) => {
     navigator.clipboard.writeText(title).catch(() => {})
     setCopied(i)
     setTimeout(() => setCopied(null), 1800)
   }
 
-  const ctx = buildCtx()
-
-  const dataSignals = []
-  if (ctx.isPeakNow && ctx.bestHourLabel)       dataSignals.push({ label: `Peak hour NOW (${ctx.bestHourLabel})`, active: true, color: C.orange })
-  else if (ctx.peakSoon && ctx.bestHourLabel)   dataSignals.push({ label: `Peak in ${ctx.hoursUntilPeak}h (${ctx.bestHourLabel})`, active: false, color: C.gold })
-  if (ctx.hasWhales)                            dataSignals.push({ label: `${ctx.whaleCount} VIP fans`, active: true, color: C.gold })
-  if (ctx.todayIsBestDay)                       dataSignals.push({ label: `${ctx.todayDay} is your best day`, active: true, color: C.green })
-  if (ctx.hasReturners)                         dataSignals.push({ label: `${ctx.returningPct}% return rate`, active: true, color: C.cyan })
-  if (ctx.lowActivity)                          dataSignals.push({ label: "Low recent activity", active: false, color: C.muted })
-
-  const activeSignals = dataSignals.filter(s => s.active)
+  // Compute analytics signals (used in both tabs as compact chips)
+  const ctx0 = buildCtx()
+  const chips = []
+  if (ctx0.isPeakNow && ctx0.bestHourLabel)     chips.push({ label: `🔴 Peak NOW (${ctx0.bestHourLabel})`, color: C.orange })
+  else if (ctx0.peakSoon && ctx0.bestHourLabel) chips.push({ label: `⏳ Peak in ${ctx0.hoursUntilPeak}h (${ctx0.bestHourLabel})`, color: C.gold })
+  if (ctx0.hasWhales)    chips.push({ label: `💎 ${ctx0.whaleCount} VIP fans`, color: C.gold })
+  if (ctx0.todayIsBestDay) chips.push({ label: `📅 Best: ${ctx0.todayDay}`, color: C.green })
+  if (ctx0.hasReturners) chips.push({ label: `🔁 ${ctx0.returningPct}% return`, color: C.cyan })
 
   const inp = {
     background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)",
     padding: "9px 12px", borderRadius: 9, color: C.white, outline: "none",
-    width: "100%", fontSize: 13, boxSizing: "border-box",
+    fontSize: 13, boxSizing: "border-box", width: "100%",
   }
   const lbl = { fontSize: 10, color: C.muted, marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.5 }
+  const tabBtn = (id) => ({
+    padding: "8px 18px", borderRadius: "8px 8px 0 0", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 700,
+    background: innerTab === id ? "rgba(255,255,255,0.07)" : "transparent",
+    color: innerTab === id ? C.white : C.muted,
+    borderBottom: innerTab === id ? `2px solid ${C.pink}` : "2px solid transparent",
+  })
 
   return (
     <div style={{ paddingTop: 8 }}>
 
-      <div style={{ marginBottom: 14 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 800, color: C.white, margin: 0 }}>🎬 Room Title Generator</h1>
+      {/* Header */}
+      <div style={{ marginBottom: 10 }}>
+        <h1 style={{ fontSize: 20, fontWeight: 800, color: C.white, margin: "0 0 8px" }}>🎬 Room Title Generator</h1>
+        {/* Compact analytics chips */}
+        {chips.length > 0 && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {chips.map((c, i) => (
+              <span key={i} style={{ fontSize: 11, fontWeight: 600, color: c.color, padding: "3px 10px", borderRadius: 20, background: `${c.color}14`, border: `1px solid ${c.color}28` }}>{c.label}</span>
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* INPUTS + SIDEBAR */}
-      <div style={{ display: "grid", gridTemplateColumns: dataSignals.length > 0 ? "1fr 210px" : "1fr", gap: 12, marginBottom: 12, alignItems: "start" }}>
+      {/* Tab bar */}
+      <div style={{ display: "flex", gap: 2, borderBottom: "1px solid rgba(255,255,255,0.08)", marginBottom: 16 }}>
+        <button style={tabBtn("quick")}    onClick={() => setInnerTab("quick")}>⚡ Quick</button>
+        <button style={tabBtn("advanced")} onClick={() => setInnerTab("advanced")}>⚙️ Advanced</button>
+        <button style={tabBtn("hashtags")} onClick={() => setInnerTab("hashtags")}># Hashtags</button>
+      </div>
 
-        {/* Inputs card */}
-        <div style={{ ...glassCard, borderRadius: 14, padding: 16 }}>
+      {/* ── QUICK TAB ── */}
+      {innerTab === "quick" && (
+        <div>
+          {/* Controls — one compact row */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 10 }}>
+            <div>
+              <div style={lbl}>Mood</div>
+              <select value={qMood} onChange={e => setQMood(e.target.value)} style={{ ...inp, cursor: "pointer" }}>
+                <option value="none">Auto</option>
+                <option value="tease">Tease</option>
+                <option value="dominant">Dominant</option>
+                <option value="submissive">Submissive</option>
+                <option value="hype">Hype</option>
+                <option value="mystery">Mystery</option>
+              </select>
+            </div>
+            <div>
+              <div style={lbl}>Token goal</div>
+              <input type="number" value={qGoal} onChange={e => setQGoal(e.target.value)} style={inp} placeholder="e.g. 500" />
+            </div>
+            <div>
+              <div style={lbl}>Platform</div>
+              <select value={qPlatform} onChange={e => setQPlatform(e.target.value)} style={{ ...inp, cursor: "pointer" }}>
+                <option>Chaturbate</option>
+                <option>Stripchat</option>
+                <option>BongaCams</option>
+                <option>MyFreeCams</option>
+                <option>CamSoda</option>
+              </select>
+            </div>
+          </div>
+
+          <button onClick={generateQuick} style={{
+            width: "100%", padding: "12px 0", borderRadius: 10, marginBottom: 14,
+            background: "linear-gradient(135deg, #EC4899, #7C5CFF)",
+            border: "none", color: C.white, fontSize: 15, fontWeight: 800,
+            cursor: "pointer", boxShadow: "0 0 24px rgba(236,72,153,0.35)",
+          }}>
+            ✨ Generate Title →
+          </button>
+
+          {/* OUTPUT — the primary focus, always above fold */}
+          {qTitle ? (
+            <div style={{
+              ...glassCard, borderRadius: 14, padding: "22px 20px",
+              border: "1px solid rgba(236,72,153,0.28)",
+              background: "linear-gradient(135deg, rgba(236,72,153,0.07), rgba(124,92,255,0.07))",
+            }}>
+              <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10 }}>Generated Title</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: C.white, lineHeight: 1.45, marginBottom: 16 }}>
+                {qTitle.title}
+              </div>
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", justifyContent: "space-between" }}>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                  {qTitle.drivers.map((d, i) => (
+                    <span key={i} style={{ fontSize: 10, color: C.cyan, padding: "2px 8px", borderRadius: 20, background: "rgba(34,211,238,0.08)", border: "1px solid rgba(34,211,238,0.18)" }}>{d}</span>
+                  ))}
+                </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button onClick={generateQuick} style={{
+                    padding: "8px 16px", borderRadius: 9, fontSize: 13, fontWeight: 600, cursor: "pointer",
+                    background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", color: C.muted,
+                  }}>↻ Another</button>
+                  <button onClick={copyQuick} style={{
+                    padding: "8px 20px", borderRadius: 9, fontSize: 13, fontWeight: 700, cursor: "pointer",
+                    background: qCopied ? "rgba(16,185,129,0.2)" : "linear-gradient(135deg, #22D3EE, #EC4899)",
+                    border: qCopied ? "1px solid rgba(16,185,129,0.4)" : "none", color: C.white,
+                  }}>
+                    {qCopied ? "✔ Copied!" : "📋 Copy Title"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div style={{ textAlign: "center", padding: "32px 20px", color: C.muted, borderRadius: 14, background: "rgba(255,255,255,0.02)", border: "1px dashed rgba(255,255,255,0.08)" }}>
+              <div style={{ fontSize: 32, marginBottom: 8 }}>🎬</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>Your title will appear here</div>
+              <div style={{ fontSize: 12, marginTop: 4 }}>Pick a mood and hit Generate</div>
+            </div>
+          )}
+
+          <div style={{ marginTop: 12, padding: "9px 14px", background: "rgba(245,158,11,0.07)", border: "1px solid rgba(245,158,11,0.15)", borderRadius: 10 }}>
+            <div style={{ fontSize: 11, color: C.gold }}>💡 Refresh every 20–30 min — platforms rank streams higher when titles change frequently.</div>
+          </div>
+        </div>
+      )}
+
+      {/* ── ADVANCED TAB ── */}
+      {innerTab === "advanced" && (
+        <div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 10 }}>
             <div>
               <div style={lbl}>Token goal</div>
@@ -748,84 +881,64 @@ function TitleGenerator({ C, glassCard, analytics, tips, sessions, whales }) {
               </label>
             </div>
           </div>
-          <button onClick={generate} style={{
-            width: "100%", padding: "11px 0", borderRadius: 10,
+
+          <button onClick={generateAdvanced} style={{
+            width: "100%", padding: "11px 0", borderRadius: 10, marginBottom: 14,
             background: "linear-gradient(135deg, #EC4899, #7C5CFF)",
             border: "none", color: C.white, fontSize: 14, fontWeight: 800,
             cursor: "pointer", boxShadow: "0 0 20px rgba(236,72,153,0.3)",
           }}>
             ✨ Generate 5 Titles
           </button>
-        </div>
 
-        {/* Analytics sidebar */}
-        {dataSignals.length > 0 && (
-          <div style={{ ...glassCard, borderRadius: 14, padding: 14 }}>
-            <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10 }}>Influencing Your Titles</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {dataSignals.map((s, i) => (
-                <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
-                  <span style={{ color: s.active ? C.green : C.muted, flexShrink: 0, fontSize: 12 }}>{s.active ? "✓" : "·"}</span>
-                  <span style={{ fontSize: 12, color: s.active ? C.white : C.muted, lineHeight: 1.4 }}>{s.label}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Data-driven banner */}
-      {activeSignals.length > 0 && titles.length > 0 && (
-        <div style={{ marginBottom: 10, padding: "9px 14px", borderRadius: 10, background: "rgba(16,185,129,0.06)", border: "1px solid rgba(16,185,129,0.14)", display: "flex", flexWrap: "wrap", gap: "6px 14px", alignItems: "center" }}>
-          <span style={{ fontSize: 11, fontWeight: 700, color: C.green, textTransform: "uppercase", letterSpacing: 0.5, flexShrink: 0 }}>Based on your data</span>
-          {activeSignals.map((s, i) => (
-            <span key={i} style={{ fontSize: 12, color: C.text }}>✓ {s.label}</span>
-          ))}
-        </div>
-      )}
-
-      {/* TITLES LIST */}
-      {titles.length > 0 && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 7, marginBottom: 12 }}>
-          {titles.map((t, i) => {
-            const scoreColor = t.score >= 85 ? C.green : t.score >= 70 ? C.gold : C.orange
-            return (
-              <div key={i} style={{
-                display: "flex", alignItems: "center", gap: 12,
-                padding: "11px 14px", borderRadius: 10,
-                background: copied === i ? "rgba(16,185,129,0.05)" : "rgba(255,255,255,0.03)",
-                border: `1px solid ${copied === i ? "rgba(16,185,129,0.28)" : "rgba(255,255,255,0.07)"}`,
-                transition: "all 0.18s",
-              }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, color: copied === i ? C.green : C.white, lineHeight: 1.45, marginBottom: 4, wordBreak: "break-word" }}>{t.title}</div>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-                    {t.drivers.map((d, di) => (
-                      <span key={di} style={{ fontSize: 10, color: C.cyan, padding: "2px 7px", borderRadius: 20, background: "rgba(34,211,238,0.07)", border: "1px solid rgba(34,211,238,0.14)" }}>{d}</span>
-                    ))}
+          {titles.length > 0 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 7, marginBottom: 12 }}>
+              {titles.map((t, i) => {
+                const scoreColor = t.score >= 85 ? C.green : t.score >= 70 ? C.gold : C.orange
+                return (
+                  <div key={i} style={{
+                    display: "flex", alignItems: "center", gap: 12,
+                    padding: "11px 14px", borderRadius: 10,
+                    background: copied === i ? "rgba(16,185,129,0.05)" : "rgba(255,255,255,0.03)",
+                    border: `1px solid ${copied === i ? "rgba(16,185,129,0.28)" : "rgba(255,255,255,0.07)"}`,
+                    transition: "all 0.18s",
+                  }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, color: copied === i ? C.green : C.white, lineHeight: 1.45, marginBottom: 4, wordBreak: "break-word" }}>{t.title}</div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                        {t.drivers.map((d, di) => (
+                          <span key={di} style={{ fontSize: 10, color: C.cyan, padding: "2px 7px", borderRadius: 20, background: "rgba(34,211,238,0.07)", border: "1px solid rgba(34,211,238,0.14)" }}>{d}</span>
+                        ))}
+                      </div>
+                    </div>
+                    <div style={{ textAlign: "center", flexShrink: 0, minWidth: 42 }}>
+                      <div style={{ fontSize: 15, fontWeight: 800, color: scoreColor, lineHeight: 1 }}>{t.score}</div>
+                      <div style={{ fontSize: 9, color: C.muted, letterSpacing: 0.4 }}>/100</div>
+                    </div>
+                    <button onClick={() => copyAdv(t.title, i)} style={{
+                      flexShrink: 0, padding: "7px 13px", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer",
+                      background: copied === i ? "rgba(16,185,129,0.18)" : "rgba(255,255,255,0.07)",
+                      border: `1px solid ${copied === i ? "rgba(16,185,129,0.38)" : "rgba(255,255,255,0.1)"}`,
+                      color: copied === i ? C.green : C.muted,
+                    }}>
+                      {copied === i ? "✓" : "📋"}
+                    </button>
                   </div>
-                </div>
-                <div style={{ textAlign: "center", flexShrink: 0, minWidth: 42 }}>
-                  <div style={{ fontSize: 15, fontWeight: 800, color: scoreColor, lineHeight: 1 }}>{t.score}</div>
-                  <div style={{ fontSize: 9, color: C.muted, letterSpacing: 0.4 }}>/100</div>
-                </div>
-                <button onClick={() => copy(t.title, i)} style={{
-                  flexShrink: 0, padding: "7px 13px", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer",
-                  background: copied === i ? "rgba(16,185,129,0.18)" : "rgba(255,255,255,0.07)",
-                  border: `1px solid ${copied === i ? "rgba(16,185,129,0.38)" : "rgba(255,255,255,0.1)"}`,
-                  color: copied === i ? C.green : C.muted,
-                }}>
-                  {copied === i ? "✓" : "📋"}
-                </button>
-              </div>
-            )
-          })}
+                )
+              })}
+            </div>
+          )}
+
+          <div style={{ padding: "10px 14px", background: "rgba(245,158,11,0.07)", border: "1px solid rgba(245,158,11,0.15)", borderRadius: 10 }}>
+            <div style={{ fontSize: 12, color: C.gold }}>💡 Refresh every 20–30 min — platforms rank active streams higher when titles change frequently.</div>
+          </div>
         </div>
       )}
 
-      <div style={{ padding: "10px 14px", background: "rgba(245,158,11,0.07)", border: "1px solid rgba(245,158,11,0.15)", borderRadius: 10 }}>
-        <div style={{ fontSize: 12, color: C.gold }}>💡 Refresh every 20–30 min — platforms rank active streams higher when titles change frequently.</div>
-      </div>
+      {/* ── HASHTAGS TAB ── */}
+      {innerTab === "hashtags" && (
+        <HashtagGenerator C={C} glassCard={glassCard} defaultPlatform={qPlatform} />
+      )}
     </div>
   )
 }
@@ -5477,9 +5590,6 @@ const handleCSV = async (file, forcePlatform = null) => {
         {activeTab === "titles" && (
           <div style={{ maxWidth: 760, margin: "0 auto" }}>
             <TitleGenerator C={C} glassCard={glassCard} analytics={analytics} tips={tips} sessions={sessions} whales={whales} />
-            <div style={{ marginTop: 40, paddingTop: 32, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
-              <HashtagGenerator C={C} glassCard={glassCard} />
-            </div>
           </div>
         )}
 
