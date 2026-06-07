@@ -686,11 +686,12 @@ export function aggregateRows(tips) {
 
   // ── SESSION QUALITY CLASSIFICATION ───────────────────────────────────
   const classifySession = (s) => {
-    const mins = s.durationMinutes || 0
-    const usd  = s.totalUSD || 0
+    const mins  = s.durationMinutes || 0
+    const usd   = s.totalUSD || 0
+    const count = s.tipCount || 0
     if (mins < 2 && usd === 0) return 'invalid'
-    if (mins < 15 && usd < 10) return 'low_signal'
-    return 'meaningful'
+    if (mins >= 20 && count >= 2) return 'meaningful'
+    return 'low_signal'
   }
   const scoreSession = (s) => {
     const mins = s.durationMinutes || 0

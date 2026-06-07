@@ -831,6 +831,8 @@ export default function Dashboard() {
   const [whaleFilter, setWhaleFilter] = useState("ALL")
   const [platformFilter, setPlatformFilter] = useState("ALL")
   const [meaningfulOnly, setMeaningfulOnly] = useState(true)
+  const [minEarnings, setMinEarnings] = useState('')
+  const [minDuration, setMinDuration] = useState('')
   const [platformTimeFilter, setPlatformTimeFilter] = useState("ALL")
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [selectedWhale, setSelectedWhale] = useState(null)
@@ -4605,9 +4607,14 @@ const handleCSV = async (file, forcePlatform = null) => {
         })()}
 
         {activeTab === "sessions" && (() => {
-          const displaySessions = meaningfulOnly
+          const baseSessionsForCount = meaningfulOnly
             ? (analytics?.meaningfulSessions || sessions)
             : (analytics?.allValidSessions   || sessions)
+          const displaySessions = baseSessionsForCount.filter(s => {
+            if (minEarnings !== '' && s.totalUSD < parseFloat(minEarnings)) return false
+            if (minDuration !== '' && s.durationMinutes < parseFloat(minDuration)) return false
+            return true
+          })
 
           // ── SESSION BREAKDOWN ENGINE ────────────────────────────────
           // Pure logic — runs on each session's tips array
@@ -4678,10 +4685,8 @@ const handleCSV = async (file, forcePlatform = null) => {
                 time: new Date(startMs + b.idx * 5 * 60000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
               }))
 
-            // ── PERFORMANCE vs historical avg ────────────────────────
-            const allAvg = displaySessions.length > 0
-              ? displaySessions.reduce((s, x) => s + x.totalUSD, 0) / displaySessions.length
-              : 0
+            // ── PERFORMANCE vs meaningful session avg ────────────────
+            const allAvg = analytics?.avgMeaningfulSessionUSD || 0
             const performance = s.totalUSD >= allAvg * 1.3
               ? "high"
               : s.totalUSD <= allAvg * 0.6
@@ -4708,9 +4713,9 @@ const handleCSV = async (file, forcePlatform = null) => {
             if (durationMins < 20 && s.totalUSD > 0)
               insights.push(`Short session (${Math.round(durationMins)} min) with solid earnings — your hook is working`)
             if (performance === "high")
-              insights.push(`This was one of your top sessions — $${s.totalUSD} vs $${allAvg.toFixed(0)} avg`)
+              insights.push(`This was one of your top sessions — $${s.totalUSD} vs $${allAvg.toFixed(0)} avg meaningful session`)
             if (performance === "low")
-              insights.push(`Below your average session ($${allAvg.toFixed(0)}) — see recommendations below`)
+              insights.push(`Below your avg meaningful session ($${allAvg.toFixed(0)}) — see recommendations below`)
 
             // ── RECOMMENDATIONS ─────────────────────────────────────
             const recommendations = []
@@ -4751,18 +4756,40 @@ const handleCSV = async (file, forcePlatform = null) => {
 
           return (
             <div>
-              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 24 }}>
-                <div>
-                  <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 4 }}>🎥 Session Breakdown</h1>
-                  <p style={{ fontSize: 13, color: C.muted }}>What happened in each stream and how to earn more next time</p>
-                </div>
-                <div style={{ display:'flex', alignItems:'center', gap:8, padding:'6px 12px', borderRadius:20, background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.08)', flexShrink:0 }}>
-                  <label style={{ display:'flex', alignItems:'center', gap:6, cursor:'pointer', fontSize:12, color:C.muted }}>
+              <div style={{ marginBottom: 16 }}>
+                <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 4 }}>🎥 Session Breakdown</h1>
+                <p style={{ fontSize: 13, color: C.muted }}>What happened in each stream and how to earn more next time</p>
+              </div>
+
+              {/* FILTER BAR */}
+              <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 14, padding: '16px 20px', display: 'flex', alignItems: 'flex-start', gap: 20, flexWrap: 'wrap', marginBottom: 24 }}>
+                <div style={{ minWidth: 210 }}>
+                  <label style={{ display:'flex', alignItems:'center', gap:6, cursor:'pointer', fontSize:13, color:C.white, fontWeight:600 }}>
                     <input type="checkbox" checked={meaningfulOnly} onChange={e => setMeaningfulOnly(e.target.checked)} style={{ accentColor: C.cyan }} />
                     Meaningful sessions only
                   </label>
-                  {(analytics?.lowSignalSessionCount > 0) && (
-                    <span style={{ fontSize:11, color:C.muted }}>({analytics.lowSignalSessionCount} low-signal hidden)</span>
+                  <div style={{ fontSize:11, color:C.muted, marginTop:5, lineHeight:1.5 }}>Hides sessions under 20 min with fewer than 2 tips — usually connection tests or very short appearances.</div>
+                </div>
+                <div>
+                  <div style={{ fontSize:11, color:C.muted, marginBottom:5, textTransform:'uppercase', letterSpacing:'0.5px' }}>Min earnings</div>
+                  <div style={{ display:'flex', alignItems:'center', gap:4 }}>
+                    <span style={{ fontSize:13, color:C.muted }}>$</span>
+                    <input type="number" min="0" max="50" step="1" placeholder="Any" value={minEarnings} onChange={e => setMinEarnings(e.target.value)} style={{ width:72, padding:'5px 8px', borderRadius:8, background:'rgba(255,255,255,0.06)', border:'1px solid rgba(255,255,255,0.12)', color:C.white, fontSize:13, outline:'none' }} />
+                  </div>
+                  <div style={{ fontSize:11, color:C.muted, marginTop:4 }}>Only show sessions where you earned at least this amount</div>
+                </div>
+                <div>
+                  <div style={{ fontSize:11, color:C.muted, marginBottom:5, textTransform:'uppercase', letterSpacing:'0.5px' }}>Min length</div>
+                  <div style={{ display:'flex', alignItems:'center', gap:4 }}>
+                    <input type="number" min="0" max="120" step="5" placeholder="Any" value={minDuration} onChange={e => setMinDuration(e.target.value)} style={{ width:72, padding:'5px 8px', borderRadius:8, background:'rgba(255,255,255,0.06)', border:'1px solid rgba(255,255,255,0.12)', color:C.white, fontSize:13, outline:'none' }} />
+                    <span style={{ fontSize:13, color:C.muted }}>min</span>
+                  </div>
+                  <div style={{ fontSize:11, color:C.muted, marginTop:4 }}>Only show sessions at least this long</div>
+                </div>
+                <div style={{ marginLeft:'auto', textAlign:'right', alignSelf:'center' }}>
+                  <div style={{ fontSize:12, color:C.muted }}>Showing {displaySessions.length} of {baseSessionsForCount.length} sessions</div>
+                  {(minEarnings !== '' || minDuration !== '') && (
+                    <button onClick={() => { setMinEarnings(''); setMinDuration(''); }} style={{ fontSize:11, color:C.muted, background:'none', border:'none', cursor:'pointer', textDecoration:'underline', marginTop:4, padding:0 }}>Reset filters</button>
                   )}
                 </div>
               </div>
@@ -4824,15 +4851,12 @@ const handleCSV = async (file, forcePlatform = null) => {
 
                     <div style={{ padding: 24 }}>
 
-                      {/* REVENUE GAP — vs last 5 sessions */}
+                      {/* REVENUE GAP — vs avg meaningful session */}
                       {(() => {
-                        const recentSessions = displaySessions.filter(x => x.id !== s.id && !x.durationUnknown)
-                        const comparable = recentSessions.filter(x => x.platform === s.platform).slice(-5)
-                        const base = comparable.length >= 3 ? comparable : recentSessions.slice(-5)
-                        if (base.length < 2 || s.durationUnknown) return null
-                        const expected = base.reduce((a, x) => a + x.totalUSD, 0) / base.length
-                        const gap = expected - s.totalUSD
-                        const gapPct = expected > 0 ? Math.round((gap / expected) * 100) : 0
+                        const meaningful = analytics?.avgMeaningfulSessionUSD || 0
+                        if (meaningful === 0 || s.durationUnknown) return null
+                        const gap = meaningful - s.totalUSD
+                        const gapPct = meaningful > 0 ? Math.round((gap / meaningful) * 100) : 0
                         if (Math.abs(gapPct) < 10) return null
                         const isUnder = gap > 0
                         const color = isUnder ? C.red : C.green
@@ -4841,7 +4865,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                         return (
                           <div style={{ padding: "10px 14px", borderRadius: 10, background: bg, border: `1px solid ${bdr}`, marginBottom: 14, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                             <span style={{ fontSize: 13, color, fontWeight: 600 }}>
-                              {isUnder ? `⚠️ $${gap.toFixed(0)} below your avg session ($${expected.toFixed(0)}) — ${gapPct}% shortfall` : `✅ $${Math.abs(gap).toFixed(0)} above your avg session — top ${Math.abs(gapPct)}% performance`}
+                              {isUnder ? `⚠️ $${Math.abs(gap).toFixed(0)} below your avg meaningful session ($${meaningful.toFixed(0)}) — ${gapPct}% shortfall` : `✅ $${Math.abs(gap).toFixed(0)} above your avg meaningful session — top ${Math.abs(gapPct)}% performance`}
                             </span>
                           </div>
                         )
