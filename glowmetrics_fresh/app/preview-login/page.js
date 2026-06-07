@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { Suspense, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 
@@ -19,10 +19,17 @@ const ACCOUNTS = [1, 2, 3, 4, 5].map(n => ({
   password: process.env[`NEXT_PUBLIC_PREVIEW_PASSWORD_${n}`] || null,
 })).filter(a => a.email && a.password)
 
-export default function PreviewLogin() {
+const outer = {
+  minHeight: '100vh', display: 'flex', flexDirection: 'column',
+  alignItems: 'center', justifyContent: 'center',
+  background: '#0F1117', fontFamily: 'system-ui, sans-serif',
+  padding: 24,
+}
+
+function PreviewLoginInner() {
   const params     = useSearchParams()
   const redirectTo = params.get('to') || '/dashboard'
-  const [loading, setLoading] = useState(null)  // index of account being signed in
+  const [loading, setLoading] = useState(null)
   const [error,   setError]   = useState(null)
 
   const isProduction = process.env.NEXT_PUBLIC_VERCEL_ENV === 'production'
@@ -101,9 +108,10 @@ export default function PreviewLogin() {
   )
 }
 
-const outer = {
-  minHeight: '100vh', display: 'flex', flexDirection: 'column',
-  alignItems: 'center', justifyContent: 'center',
-  background: '#0F1117', fontFamily: 'system-ui, sans-serif',
-  padding: 24,
+export default function PreviewLogin() {
+  return (
+    <Suspense fallback={<div style={outer}><div style={{ color: '#8B92A0', fontSize: 13 }}>Loading…</div></div>}>
+      <PreviewLoginInner />
+    </Suspense>
+  )
 }
