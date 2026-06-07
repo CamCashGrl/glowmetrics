@@ -21,73 +21,93 @@ const S = {
 }
 
 // ─── Title generator data ──────────────────────────────────────────────────────
-const TOYS = ['None', 'Lush', 'Domi', 'Edge', 'Hush', 'Nora', 'Interactive toy']
-const MOODS = [
-  { value: 'none',       label: 'Auto' },
-  { value: 'tease',      label: 'Tease / buildup' },
+const TOY_OPTIONS = [
+  { value: '', label: 'No toy' },
+  { value: 'Lush', label: 'Lush' },
+  { value: 'Domi', label: 'Domi' },
+  { value: 'Edge', label: 'Edge' },
+  { value: 'Hush', label: 'Hush' },
+  { value: 'Interactive', label: 'Interactive toy' },
+]
+
+const MOOD_OPTIONS = [
+  { value: 'none',       label: 'No mood' },
+  { value: 'tease',      label: 'Tease' },
   { value: 'dominant',   label: 'Dominant' },
-  { value: 'submissive', label: 'Submissive / playful' },
-  { value: 'hype',       label: 'High energy' },
+  { value: 'submissive', label: 'Submissive' },
+  { value: 'hype',       label: 'Hype' },
   { value: 'mystery',    label: 'Mystery' },
 ]
 
-const TOY_PHRASES = {
-  Lush:             { control: 'tip to control my Lush 🎮', react: 'Lush reacts to every tip ⚡', buildup: "so close… don't stop 💦" },
-  Domi:             { control: 'tip to run my Domi ⚡',     react: 'Domi goes full power with every tip', buildup: 'turning it up with every tip 🔥' },
-  Edge:             { control: 'tip to push me to the edge', react: 'Edge reacts instantly ⚡',          buildup: 'building up with every tip 🔥' },
-  Hush:             { control: 'you control my Hush 😈',    react: 'wearing it — tip to activate 🔴',   buildup: "getting harder to stay quiet 🤫" },
-  Nora:             { control: 'tip to control my Nora 🎮', react: 'Nora reacts to every token ⚡',     buildup: 'almost there… keep going 💦' },
-  'Interactive toy':{ control: 'tip to control my toy 🎮',  react: 'toy reacts to every tip ⚡',        buildup: 'building up with every tip 🔥' },
+const TITLE_TEMPLATES = [
+  ({toy,goalStr,reward,moodPhrase}) => toy&&goalStr&&reward ? `tip to control my ${toy} 🎮 → hit ${goalStr} = ${reward}` : null,
+  ({toy,goalStr,reward}) => toy&&goalStr&&reward ? `hit ${goalStr} = ${reward} 🔥 ${toy} active now` : null,
+  ({toy,goalStr,reward}) => toy&&goalStr ? `${toy} on — goal: ${goalStr} → ${reward||'surprise'} 😈` : null,
+  ({toy,goalStr,moodPhrase}) => toy&&goalStr ? `${toy} reacts to every tip ⚡ | goal: ${goalStr} | ${moodPhrase||'tip now'}` : null,
+  ({toy,reward,moodPhrase}) => toy&&reward ? `${moodPhrase||'tip to activate'} my ${toy} → win: ${reward} 👑` : null,
+  ({goalStr,reward,moodPhrase}) => goalStr&&reward ? `${goalStr} = ${reward} 💋 | ${moodPhrase||'tip to push me there'}` : null,
+  ({toy,goalStr,reward}) => goalStr&&reward ? `countdown to ${reward} ⏱ | ${goalStr}${toy?` | ${toy} on`:''}` : null,
+  ({toy,goalStr,moodPhrase}) => toy&&goalStr ? `you run the show — ${toy} + ${goalStr} goal | ${moodPhrase||'tip now'}` : null,
+  ({toy,reward}) => toy&&reward ? `${toy} on, I react to every tip 💦 | win: ${reward}` : null,
+  ({goalStr,reward,toy}) => goalStr ? `${toy?toy+' + ':''}${goalStr} → ${reward||'something special'} 🎯 tip now` : null,
+  ({toy,goalStr,reward,moodPhrase}) => toy&&goalStr ? `${moodPhrase||'bad girl energy 😈'} ${toy} on | ${goalStr} = ${reward||'surprise'}` : null,
+  ({goalStr,reward}) => goalStr&&reward ? `help me hit ${goalStr} 🔥 | prize: ${reward} | don't stop now` : null,
+  ({toy,goalStr}) => toy&&goalStr ? `${toy} vibrates for every tip 💦 | ${goalStr} goal live` : null,
+  ({goalStr,reward,moodPhrase}) => goalStr ? `${moodPhrase||"let's go"} — ${goalStr} goal → ${reward||'you decide what happens'} ⚡` : null,
+  ({toy,moodPhrase}) => toy ? `${moodPhrase||'interactive show'} 🎮 ${toy} responds to tips | tip to control` : null,
+  ({goalStr,reward,toy}) => goalStr&&reward ? `LIVE NOW 🔴 ${toy?toy+' + ':''}${goalStr} goal → ${reward}` : null,
+  ({toy,goalStr,reward}) => goalStr&&reward ? `tip ${goalStr} = unlock ${reward} 🔓${toy?` | ${toy} on`:''}` : null,
+  ({toy,goalStr,moodPhrase}) => toy&&goalStr ? `${toy} is waiting 🎮 | ${goalStr} goal | ${moodPhrase||'tip to activate'}` : null,
+  ({goalStr,reward}) => goalStr ? `almost there — ${goalStr} to go | ${reward||'surprise'} waiting 👀 tip now` : null,
+  ({toy,reward,moodPhrase}) => reward ? `earn it tonight — ${moodPhrase||'tip to decide'} | ${reward}${toy?` | ${toy} on`:''}` : null,
+  ({toy,goalStr,moodPhrase}) => goalStr ? `${moodPhrase||'tip to push me'} | ${toy?toy+' active':''} ${goalStr} tokens` : null,
+  ({toy,goalStr,reward}) => toy&&reward ? `you control my ${toy} 👑 | hit ${goalStr||'the goal'} = ${reward}` : null,
+  ({goalStr,reward,moodPhrase}) => reward ? `${moodPhrase||'tip now'} → ${goalStr?goalStr+' = ':''}${reward} 🔥 tonight only` : null,
+  ({toy,goalStr}) => toy&&goalStr ? `${toy} + tips = 🔥 | ${goalStr} goal | every tip I feel it` : null,
+  ({toy,goalStr,reward,moodPhrase}) => {
+    const parts = [moodPhrase, toy, goalStr?`goal: ${goalStr}`:null, reward].filter(Boolean)
+    return parts.length >= 2 ? parts.join(' | ').slice(0, 75) : null
+  },
+]
+
+const TITLE_MOOD_PHRASES = {
+  tease:      ["you have to earn it 😏", "not giving it up easy 😈", "almost... tip to get me there 💋", "make me want to 💋"],
+  dominant:   ["you obey 👑", "I run the show 🔥", "earn your reward 😈", "top tipper controls everything"],
+  submissive: ["you control everything 🎮", "you decide 👑", "I do what you say 💦", "your wish is my command"],
+  hype:       ["LET'S GO 🔥", "ENERGY IS INSANE ⚡", "WE'RE SO CLOSE 🔥", "DON'T STOP NOW ⚡"],
+  mystery:    ["something unexpected 👀", "you won't believe it 😏", "tonight only 🌙", "secret show tonight 🔒"],
 }
 
-const MOOD_HOOKS = {
-  tease:      ["let's see how far you take me", "I'm not giving it up that easy", "you have to earn it tonight", "almost… not yet"],
-  dominant:   ["top tipper owns this room", "you earn what I give you", "prove you deserve it", "I decide — you tip"],
-  submissive: ["I do what you say tonight", "you're in charge — tip to command me", "your wish is my reaction", "tell me what to do"],
-  hype:       ["WE ARE SO CLOSE 🔥", "the energy in here is insane", "LET'S GOOO — tip to push it", "this room is on fire"],
-  mystery:    ["you won't believe what happens at goal", "something big is coming… tip to find out", "I have a surprise — help me get there", "curious? tip to unlock it"],
-}
+function generateTitles({ toy, tokenGoal, reward, mood, count = 5, seed = 0 }) {
+  const toyName = toy || null
+  const goalStr = tokenGoal ? `${tokenGoal} tokens` : null
+  const rewardStr = reward?.trim() || null
+  const moodPool = TITLE_MOOD_PHRASES[mood] || []
+  const moodPhrase = moodPool.length ? moodPool[seed % moodPool.length] : null
+  const ctx = { toy: toyName, goalStr, reward: rewardStr, moodPhrase }
 
-function buildTitle({ tokenGoal, action, toy, mood, useEmojis }) {
-  const e = (emoji) => useEmojis ? emoji : ''
-  const pick = (arr) => arr[Math.floor(Math.random() * arr.length)]
-  const hasToy = toy && toy !== 'None'
-  const hasMood = mood && mood !== 'none'
-  const toyData = hasToy ? TOY_PHRASES[toy] : null
-  const moodHooks = hasMood ? MOOD_HOOKS[mood] : []
-  const hooks = [
-    ...(moodHooks.length ? moodHooks : []),
-    ...(hasToy ? [toyData.control, `my ${toy} is live ${e('🔴')}`, `you control my ${toy} ${e('👑')}`] : []),
-    `you decide what I do ${e('👑')}`,
-    `tip to take control ${e('😈')}`,
-    `not holding back tonight ${e('🔥')}`,
-    `feeling dangerous tonight ${e('😈')}`,
-    `make me ${e('😏')}`,
-    `prove you want it ${e('👀')}`,
-  ]
-  let goal = ''
-  if (tokenGoal && action && hasToy)  goal = `hit ${tokenGoal} → ${action} + ${toy} reacts`
-  else if (tokenGoal && action)        goal = `hit ${tokenGoal} → ${action}`
-  else if (tokenGoal && hasToy)        goal = `hit ${tokenGoal} → ${toyData.react}`
-  else if (tokenGoal)                  goal = `tip to reach ${tokenGoal}`
-  else if (action && hasToy)           goal = `tip → ${action} + ${toyData.react}`
-  else if (action)                     goal = `tip → ${action} ${e('😏')}`
-  else if (hasToy)                     goal = toyData.react
-  else                                 goal = pick(['tip = instant reaction', 'tip to decide what happens', 'tip to run this room'])
-  const urgencies = ['tonight only', 'this hour only', 'now or never', 'live now', "don't miss it", "while I'm in this mood"]
-  const hook = pick(hooks)
-  const urgency = pick(urgencies)
-  const structures = [
-    `${hook} ${e('💦')} ${goal} (${urgency})`,
-    `${goal} → ${pick(['special reward', 'big reaction', 'you choose everything'])} ${e('🔥')} • ${urgency}`,
-    `${hook}… ${goal} ${e('👀')} (${urgency})`,
-    `${urgency.toUpperCase()} ${e('⚡')} ${hook} — ${goal}`,
-    `${hook} • ${goal} • ${urgency}`,
-  ]
-  let title = pick(structures)
-  title = title.replace(/\s{2,}/g, ' ').trim()
-  if (title.length > 100) title = title.slice(0, 97) + '...'
-  return title
+  const results = []
+  let idx = seed % TITLE_TEMPLATES.length
+  let attempts = 0
+  while (results.length < count && attempts < TITLE_TEMPLATES.length * 2) {
+    try {
+      const title = TITLE_TEMPLATES[idx % TITLE_TEMPLATES.length](ctx)
+      if (title && title.length > 8 && title.length <= 80 && !results.includes(title)) {
+        results.push(title.trim())
+      }
+    } catch (_) {}
+    idx++
+    attempts++
+  }
+  const fallbacks = [
+    toyName && goalStr ? `${toyName} active — tip to control | goal: ${goalStr}` : null,
+    goalStr && rewardStr ? `hit ${goalStr} = ${rewardStr} 🔥 tip now` : null,
+    toyName ? `tip to control my ${toyName} 🎮 | ${moodPhrase || 'live now'}` : null,
+    goalStr ? `${goalStr} goal live | ${rewardStr || 'surprise'} at finish 🎯` : null,
+    `${moodPhrase || 'tip to decide what I do'} | live now 🔴`,
+  ].filter(Boolean)
+  fallbacks.forEach(f => { if (results.length < count && !results.includes(f)) results.push(f) })
+  return results.slice(0, count)
 }
 
 // ─── Hashtag generator data ────────────────────────────────────────────────────
@@ -225,31 +245,48 @@ function GeneratedOutput({ label, value, onNew }) {
 
 // ─── Title Generator component ────────────────────────────────────────────────
 function TitleGenerator() {
-  const [tokenGoal, setTokenGoal] = useState('')
-  const [action,    setAction]    = useState('')
-  const [toy,       setToy]       = useState('None')
-  const [mood,      setMood]      = useState('none')
-  const [useEmojis, setUseEmojis] = useState(true)
-  const [generated, setGenerated] = useState('')
-  const [history,   setHistory]   = useState([])
+  const [toy,        setToy]        = useState('')
+  const [tokenGoal,  setTokenGoal]  = useState('')
+  const [reward,     setReward]     = useState('')
+  const [mood,       setMood]       = useState('none')
+  const [titles,     setTitles]     = useState([])
+  const [copiedIdx,  setCopiedIdx]  = useState(null)
+  const [seed,       setSeed]       = useState(0)
 
-  const generate = useCallback(() => {
-    const title = buildTitle({ tokenGoal, action, toy, mood, useEmojis })
-    setGenerated(title)
-    setHistory(h => [title, ...h].slice(0, 4))
-  }, [tokenGoal, action, toy, mood, useEmojis])
-
-  const QUICK_ACTIONS = ['squirt show', 'oil show', 'strip', 'dance', 'fingering', 'vibrator show', 'roleplay', 'feet show']
   const QUICK_GOALS   = ['200', '300', '500', '750', '1000', '1500']
+  const QUICK_ACTIONS = ['squirt show', 'oil show', 'strip', 'dance', 'fingering', 'vibrator show', 'roleplay', 'feet show']
+
+  const generate = () => {
+    const nextSeed = seed + 1
+    setSeed(nextSeed)
+    setTitles(generateTitles({ toy, tokenGoal: parseInt(tokenGoal) || null, reward, mood, count: 5, seed: nextSeed }))
+  }
+
+  const copy = (text, idx) => {
+    navigator.clipboard.writeText(text).catch(() => {})
+    setCopiedIdx(idx)
+    setTimeout(() => setCopiedIdx(null), 1800)
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
         <div>
+          <FieldLabel>Interactive toy</FieldLabel>
+          <SelectChips options={TOY_OPTIONS} value={toy} onChange={setToy} />
+        </div>
+        <div>
+          <FieldLabel>Vibe / mood</FieldLabel>
+          <SelectChips options={MOOD_OPTIONS} value={mood} onChange={setMood} />
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
+        <div>
           <FieldLabel>Token goal (optional)</FieldLabel>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px', marginBottom: '8px' }}>
             {QUICK_GOALS.map(g => (
-              <button key={g} onClick={() => setTokenGoal(g)} style={{
+              <button key={g} onClick={() => setTokenGoal(tokenGoal === g ? '' : g)} style={{
                 padding: '4px 9px', borderRadius: '5px',
                 border: `1px solid ${tokenGoal === g ? S.accent : S.border}`,
                 background: tokenGoal === g ? S.accentSoft : 'transparent',
@@ -270,15 +307,15 @@ function TitleGenerator() {
           <FieldLabel>Reward / action</FieldLabel>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px', marginBottom: '8px' }}>
             {QUICK_ACTIONS.map(a => (
-              <button key={a} onClick={() => setAction(a)} style={{
+              <button key={a} onClick={() => setReward(reward === a ? '' : a)} style={{
                 padding: '4px 9px', borderRadius: '5px',
-                border: `1px solid ${action === a ? S.accent : S.border}`,
-                background: action === a ? S.accentSoft : 'transparent',
-                color: action === a ? S.textStrong : S.text, fontSize: '12px', cursor: 'pointer',
+                border: `1px solid ${reward === a ? S.accent : S.border}`,
+                background: reward === a ? S.accentSoft : 'transparent',
+                color: reward === a ? S.textStrong : S.text, fontSize: '12px', cursor: 'pointer',
               }}>{a}</button>
             ))}
           </div>
-          <input value={action} onChange={e => setAction(e.target.value)}
+          <input value={reward} onChange={e => setReward(e.target.value)}
             placeholder="or type a custom reward"
             style={{
               width: '100%', padding: '9px 12px', borderRadius: '7px',
@@ -289,44 +326,38 @@ function TitleGenerator() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
-        <div>
-          <FieldLabel>Interactive toy</FieldLabel>
-          <SelectChips options={TOYS} value={toy} onChange={setToy} />
-        </div>
-        <div>
-          <FieldLabel>Vibe / mood</FieldLabel>
-          <SelectChips options={MOODS} value={mood} onChange={v => setMood(v)} />
-        </div>
-      </div>
-
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
-        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px', color: S.textMid }}>
-          <input type="checkbox" checked={useEmojis} onChange={e => setUseEmojis(e.target.checked)} style={{ accentColor: S.accent }} />
-          Include emojis
-        </label>
+        <p style={{ margin: 0, fontSize: '12px', color: S.text, fontStyle: 'italic' }}>
+          💡 Refresh your room title every 15–30 min to test what gets more clicks and tips.
+        </p>
         <button onClick={generate} style={{
           padding: '10px 28px', borderRadius: '8px', border: 'none', cursor: 'pointer',
           background: S.gradient, color: '#fff', fontSize: '14px', fontWeight: 700,
-          boxShadow: '0 0 20px rgba(99,102,241,0.3)',
-        }}>Generate title →</button>
+          boxShadow: '0 0 20px rgba(99,102,241,0.3)', flexShrink: 0,
+        }}>✨ {titles.length > 0 ? 'Generate more' : 'Generate titles'} →</button>
       </div>
 
-      {generated && (
-        <GeneratedOutput label="Generated title" value={generated} onNew={generate} />
-      )}
-
-      {history.length > 1 && (
-        <div style={{ background: S.surface, border: `1px solid ${S.border}`, borderRadius: '10px', padding: '16px 20px' }}>
-          <div style={{ fontSize: '11px', fontWeight: 700, color: S.text, textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: '10px' }}>Recent generations</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {history.slice(1).map((t, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', padding: '8px 10px', background: S.card, borderRadius: '6px' }}>
-                <div style={{ fontSize: '13px', color: S.textMid, flex: 1, lineHeight: 1.4 }}>{t}</div>
-                <CopyButton text={t} style={{ flexShrink: 0, padding: '5px 10px', fontSize: '11px' }} />
-              </div>
-            ))}
+      {titles.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <div style={{ fontSize: '11px', fontWeight: 700, color: S.text, textTransform: 'uppercase', letterSpacing: '0.8px' }}>
+            5 titles — click any to copy
           </div>
+          {titles.map((title, i) => (
+            <div key={i} onClick={() => copy(title, i)} style={{
+              padding: '12px 14px', borderRadius: '8px', cursor: 'pointer',
+              background: copiedIdx === i ? S.greenSoft : S.surface,
+              border: `1px solid ${copiedIdx === i ? 'rgba(16,185,129,0.4)' : S.border}`,
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px',
+              transition: 'all 0.2s',
+            }}>
+              <span style={{ fontSize: '13px', color: copiedIdx === i ? S.green : S.textStrong, lineHeight: 1.4 }}>
+                {title}
+              </span>
+              <span style={{ fontSize: '11px', color: copiedIdx === i ? S.green : S.text, flexShrink: 0 }}>
+                {copiedIdx === i ? '✓ Copied' : '📋'}
+              </span>
+            </div>
+          ))}
         </div>
       )}
     </div>
