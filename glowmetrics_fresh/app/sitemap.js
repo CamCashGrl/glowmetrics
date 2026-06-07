@@ -46,5 +46,9 @@ export default function sitemap() {
     { url: `${baseUrl}/blog/how-to-re-engage-whales-and-top-tippers`, lastModified: now, changeFrequency: 'monthly', priority: 0.85 },
     { url: `${baseUrl}/blog/why-cam-income-is-inconsistent`,          lastModified: now, changeFrequency: 'monthly', priority: 0.85 },
     { url: `${baseUrl}/blog/why-cam-streams-arent-making-money`,      lastModified: now, changeFrequency: 'monthly', priority: 0.85 },
+    { url: `${baseUrl}/blog/how-to-track-cam-tips-automatically`,     lastModified: now, changeFrequency: 'monthly', priority: 0.85 },
+    { url: `${baseUrl}/blog/live-ai-coaching-cam-models`,             lastModified: now, changeFrequency: 'monthly', priority: 0.85 },
+    { url: `${baseUrl}/blog/cam-model-fan-crm`,                       lastModified: now, changeFrequency: 'monthly', priority: 0.85 },
+    { url: `${baseUrl}/blog/viral-cam-room-titles`,                   lastModified: now, changeFrequency: 'monthly', priority: 0.85 },
   ]
 }
