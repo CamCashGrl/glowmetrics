@@ -825,6 +825,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [uploadPlatform, setUploadPlatform] = useState("")
+  const [uploadSpotlight, setUploadSpotlight] = useState(false)
   const [activeTab, setActiveTab] = useState(initialTab)
   const [toast, setToast] = useState("")
   const [uploadCount, setUploadCount] = useState(0)
@@ -1364,6 +1365,7 @@ const handleCSV = async (file, forcePlatform = null) => {
         ? `✅ Imported ${result.inserted} tips (${result.skipped} duplicates skipped)`
         : `✅ Imported ${result.inserted} tips from ${result.platform}!`
       showToast(msg)
+      setUploadSpotlight(false)   // dismiss spotlight on success
 
       // Google Ads — CSV Upload conversion
       try {
@@ -1464,10 +1466,9 @@ const handleCSV = async (file, forcePlatform = null) => {
                   <button
                     onClick={() => {
                       if (typeof window !== "undefined") {
-                        localStorage.setItem("camcash_tab", "upload");
                         localStorage.setItem("camcash_onboarded", "1");
                       }
-                      setActiveTab("upload");
+                      setUploadSpotlight(true);
                     }}
                     style={{ width: "100%", padding: "10px 0", borderRadius: 10, background: "linear-gradient(135deg, #7C5CFF, #EC4899)", border: "none", color: "#fff", fontWeight: 800, fontSize: 13, cursor: "pointer", boxShadow: `0 0 20px ${color}40` }}
                   >
@@ -5535,6 +5536,204 @@ const handleCSV = async (file, forcePlatform = null) => {
           </div>
         )}
       </div>
+
+      {/* ── CSV UPLOAD SPOTLIGHT OVERLAY ── */}
+      {uploadSpotlight && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 2000,
+          background: "rgba(5,7,15,0.97)",
+          backdropFilter: "blur(24px)",
+          display: "flex", flexDirection: "column",
+          alignItems: "center", justifyContent: "center",
+          padding: 24,
+          animation: "fadeUp 0.3s ease",
+        }}>
+
+          {/* Close / skip */}
+          <button
+            onClick={() => setUploadSpotlight(false)}
+            style={{
+              position: "absolute", top: 24, right: 24,
+              width: 36, height: 36, borderRadius: "50%",
+              background: "rgba(255,255,255,0.07)",
+              border: "1px solid rgba(255,255,255,0.12)",
+              color: C.muted, fontSize: 18, cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}
+          >✕</button>
+
+          {/* Header */}
+          <div style={{ textAlign: "center", marginBottom: 40, maxWidth: 520 }}>
+            <div style={{ fontSize: 52, marginBottom: 16 }}>📁</div>
+            <h1 style={{
+              fontSize: 28, fontWeight: 900, color: C.white,
+              marginBottom: 12, lineHeight: 1.25,
+            }}>
+              Upload your tip history
+            </h1>
+            <p style={{ fontSize: 15, color: C.muted, lineHeight: 1.7 }}>
+              Export your CSV from Chaturbate, BongaCams, or MFC —
+              then drop it below. Your full earnings dashboard unlocks instantly.
+            </p>
+          </div>
+
+          {/* Platform selector */}
+          <div style={{ width: "100%", maxWidth: 480, marginBottom: 16 }}>
+            <label style={{
+              fontSize: 11, color: C.muted, textTransform: "uppercase",
+              letterSpacing: 1, marginBottom: 8, display: "block", fontWeight: 600,
+            }}>
+              Platform (optional — helps if auto-detect fails)
+            </label>
+            <select
+              value={uploadPlatform}
+              onChange={e => setUploadPlatform(e.target.value)}
+              style={{
+                width: "100%", padding: "11px 14px", borderRadius: 10,
+                background: "rgba(255,255,255,0.05)",
+                border: "1px solid rgba(255,255,255,0.1)",
+                color: C.white, fontSize: 14, outline: "none",
+              }}
+            >
+              <option value="">Auto-detect (recommended)</option>
+              <option value="Chaturbate">Chaturbate</option>
+              <option value="BongaCams">BongaCams</option>
+              <option value="MyFreeCams">MyFreeCams</option>
+              <option value="Stripchat">Stripchat</option>
+              <option value="CamSoda">CamSoda</option>
+            </select>
+          </div>
+
+          {/* Drop zone */}
+          <label
+            style={{
+              width: "100%", maxWidth: 480,
+              display: "flex", flexDirection: "column",
+              alignItems: "center", justifyContent: "center",
+              gap: 16, padding: "52px 32px",
+              borderRadius: 20,
+              cursor: uploading ? "not-allowed" : "pointer",
+              background: "rgba(124,92,255,0.06)",
+              border: "2px dashed rgba(124,92,255,0.5)",
+              boxShadow: "0 0 40px rgba(124,92,255,0.15), 0 0 80px rgba(236,72,153,0.08)",
+              marginBottom: 24,
+              transition: "all 0.2s",
+            }}
+            onDragOver={e => {
+              e.preventDefault()
+              e.currentTarget.style.borderColor = "rgba(34,211,238,0.8)"
+              e.currentTarget.style.background = "rgba(34,211,238,0.08)"
+            }}
+            onDragLeave={e => {
+              e.currentTarget.style.borderColor = "rgba(124,92,255,0.5)"
+              e.currentTarget.style.background = "rgba(124,92,255,0.06)"
+            }}
+            onDrop={e => {
+              e.preventDefault()
+              e.currentTarget.style.borderColor = "rgba(124,92,255,0.5)"
+              e.currentTarget.style.background = "rgba(124,92,255,0.06)"
+              const file = e.dataTransfer.files[0]
+              if (file) handleCSV(file, uploadPlatform || null)
+            }}
+          >
+            <input
+              type="file"
+              accept=".csv,.txt"
+              style={{ display: "none" }}
+              disabled={uploading}
+              onChange={e => handleCSV(e.target.files[0], uploadPlatform || null)}
+            />
+
+            {uploading ? (
+              <>
+                <div style={{
+                  width: 44, height: 44,
+                  border: "3px solid rgba(124,92,255,0.3)",
+                  borderTop: "3px solid #7C5CFF",
+                  borderRadius: "50%",
+                  animation: "spin 0.8s linear infinite",
+                }} />
+                <div style={{ fontSize: 16, fontWeight: 700, color: C.white }}>
+                  Processing your data...
+                </div>
+                <div style={{ fontSize: 13, color: C.muted }}>
+                  This takes a few seconds
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={{
+                  width: 64, height: 64, borderRadius: 18,
+                  background: "linear-gradient(135deg, rgba(124,92,255,0.3), rgba(236,72,153,0.2))",
+                  border: "1px solid rgba(124,92,255,0.4)",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 28,
+                }}>📂</div>
+                <div style={{ textAlign: "center" }}>
+                  <div style={{ fontSize: 17, fontWeight: 800, color: C.white, marginBottom: 6 }}>
+                    Drop your CSV here
+                  </div>
+                  <div style={{ fontSize: 13, color: C.muted }}>
+                    or click to browse your files
+                  </div>
+                </div>
+                <div style={{
+                  padding: "12px 32px", borderRadius: 12,
+                  background: "linear-gradient(135deg, #7C5CFF, #EC4899)",
+                  boxShadow: "0 0 28px rgba(124,92,255,0.45), 0 0 56px rgba(236,72,153,0.25)",
+                  color: "#fff", fontSize: 15, fontWeight: 800,
+                  letterSpacing: 0.3, pointerEvents: "none",
+                }}>
+                  Choose File
+                </div>
+              </>
+            )}
+          </label>
+
+          {/* Per-platform quick export guide */}
+          <div style={{
+            width: "100%", maxWidth: 480,
+            display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "center",
+            marginBottom: 28,
+          }}>
+            {[
+              { plat: "Chaturbate", hint: "Stats & Data → Token Stats → Export" },
+              { plat: "BongaCams",  hint: "Statistics → Earnings → Export CSV" },
+              { plat: "MFC",        hint: "Model Admin → Token Stats → Export" },
+            ].map(({ plat, hint }) => (
+              <div key={plat} style={{
+                flex: "1 1 140px", padding: "10px 14px", borderRadius: 10,
+                background: "rgba(255,255,255,0.03)",
+                border: "1px solid rgba(255,255,255,0.07)",
+                fontSize: 11,
+              }}>
+                <div style={{ fontWeight: 700, color: C.white, marginBottom: 3 }}>{plat}</div>
+                <div style={{ color: C.muted, lineHeight: 1.5 }}>{hint}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Skip link */}
+          <button
+            onClick={() => {
+              setUploadSpotlight(false)
+              setActiveTab("overview")
+              if (typeof window !== "undefined") {
+                localStorage.setItem("camcash_tab", "overview")
+              }
+            }}
+            style={{
+              background: "none", border: "none",
+              color: C.muted, fontSize: 13, cursor: "pointer",
+              textDecoration: "underline", textUnderlineOffset: 3,
+            }}
+          >
+            Skip for now — explore the dashboard first
+          </button>
+
+        </div>
+      )}
+      {/* ── END CSV UPLOAD SPOTLIGHT ── */}
 
       {/* DELETE MODAL */}
       {showDeleteConfirm && (
