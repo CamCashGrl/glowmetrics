@@ -58,6 +58,11 @@ const posts = [
     description: 'Win back your biggest spenders before they go cold.',
   },
   {
+    slug: 'revenue-per-hour-cam-model',
+    title: 'Revenue Per Hour: The Metric That Matters Most',
+    description: 'Why revenue per hour matters more than total earnings — and how to stream smarter.',
+  },
+  {
     slug: 'why-cam-income-is-inconsistent',
     title: 'Why Cam Income Is Inconsistent',
     description: 'The real reasons earnings fluctuate and how to stabilize them.',
