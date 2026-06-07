@@ -1,6 +1,8 @@
 // app/guides/chaturbate-earnings-tracker/page.js
 // EXPANDED — do not remove existing sections, only add to them
 
+import ChaturbateCalculator from './ChaturbateCalculator'
+
 export const metadata = {
   title: "Chaturbate Earnings Tracker — Analyze, Optimize & Grow Your Revenue",
   description:
@@ -297,82 +299,7 @@ export default function ChaturbateEarningsTrackerPage() {
             <p style={s.p}>
               See exactly what your tokens are worth before diving into your full analytics. Enter a token amount to calculate your take-home earnings.
             </p>
-            <div style={{ padding: "28px 28px", borderRadius: 16, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 }}>
-                <div>
-                  <label style={{ fontSize: 11, color: "#475569", textTransform: "uppercase", letterSpacing: 0.8, fontWeight: 600, display: "block", marginBottom: 8 }}>
-                    Token Amount
-                  </label>
-                  <input
-                    id="calc-tokens"
-                    type="number"
-                    defaultValue="1000"
-                    min="0"
-                    style={{ width: "100%", padding: "11px 14px", borderRadius: 10, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "white", fontSize: 16, fontWeight: 700, outline: "none", boxSizing: "border-box" }}
-                    onInput={(e) => {
-                      const tokens = parseFloat(e.target.value) || 0
-                      const rateEl = document.getElementById("calc-rate")
-                      const rate = rateEl ? parseFloat(rateEl.value) || 0.05 : 0.05
-                      const session = tokens * rate
-                      const weekly = session * 5
-                      const monthly = session * 20
-                      const sEl = document.getElementById("calc-session")
-                      const wEl = document.getElementById("calc-weekly")
-                      const mEl = document.getElementById("calc-monthly")
-                      if (sEl) sEl.textContent = `$${session.toFixed(2)}`
-                      if (wEl) wEl.textContent = `$${weekly.toFixed(2)}`
-                      if (mEl) mEl.textContent = `$${monthly.toFixed(2)}`
-                    }}
-                  />
-                </div>
-                <div>
-                  <label style={{ fontSize: 11, color: "#475569", textTransform: "uppercase", letterSpacing: 0.8, fontWeight: 600, display: "block", marginBottom: 8 }}>
-                    Payout Rate ($/token)
-                  </label>
-                  <select
-                    id="calc-rate"
-                    defaultValue="0.05"
-                    style={{ width: "100%", padding: "11px 14px", borderRadius: 10, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "white", fontSize: 14, outline: "none", boxSizing: "border-box" }}
-                    onChange={(e) => {
-                      const rate = parseFloat(e.target.value) || 0.05
-                      const tokensEl = document.getElementById("calc-tokens")
-                      const tokens = tokensEl ? parseFloat(tokensEl.value) || 0 : 0
-                      const session = tokens * rate
-                      const weekly = session * 5
-                      const monthly = session * 20
-                      const sEl = document.getElementById("calc-session")
-                      const wEl = document.getElementById("calc-weekly")
-                      const mEl = document.getElementById("calc-monthly")
-                      if (sEl) sEl.textContent = `$${session.toFixed(2)}`
-                      if (wEl) wEl.textContent = `$${weekly.toFixed(2)}`
-                      if (mEl) mEl.textContent = `$${monthly.toFixed(2)}`
-                    }}
-                  >
-                    <option value="0.05">$0.05 — Chaturbate standard</option>
-                    <option value="0.06">$0.06 — Chaturbate negotiated</option>
-                    <option value="0.05">$0.05 — BongaCams (full profile)</option>
-                    <option value="0.025">$0.025 — BongaCams (incomplete profile)</option>
-                    <option value="0.05">$0.05 — MyFreeCams</option>
-                    <option value="0.05">$0.05 — Stripchat</option>
-                  </select>
-                </div>
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
-                {[
-                  { label: "This session", id: "calc-session", defaultVal: "$50.00", color: "#22D3EE" },
-                  { label: "Weekly (5 sessions)", id: "calc-weekly", defaultVal: "$250.00", color: "#10B981" },
-                  { label: "Monthly (20 sessions)", id: "calc-monthly", defaultVal: "$1,000.00", color: "#F59E0B" },
-                ].map(({ label, id, defaultVal, color }) => (
-                  <div key={id} style={{ padding: "16px 18px", borderRadius: 12, background: `rgba(255,255,255,0.03)`, border: "1px solid rgba(255,255,255,0.07)", textAlign: "center" }}>
-                    <div style={{ fontSize: 11, color: "#475569", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 6 }}>{label}</div>
-                    <div id={id} style={{ fontSize: 22, fontWeight: 900, color }}>{defaultVal}</div>
-                  </div>
-                ))}
-              </div>
-              <p style={{ fontSize: 12, color: "#475569", marginTop: 14, marginBottom: 0 }}>
-                For precise per-session analytics based on your real history, <a href="/login" style={{ color: "#22D3EE" }}>upload your CSV to CamCash</a>.
-              </p>
-            </div>
+            <ChaturbateCalculator />
           </section>
 
           {/* ── WHAT EARNINGS DATA CAN TELL YOU ───────────────────────── */}
