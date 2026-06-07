@@ -551,15 +551,39 @@ function HashtagGenerator({ C, glassCard }) {
 }
 
 
+function scoreTitle(title, ctx) {
+  let score = 0
+  const t = title.toLowerCase()
+  // Length: 45-80 chars is ideal
+  const len = title.length
+  if (len >= 45 && len <= 80)      score += 20
+  else if (len >= 30 && len < 45)  score += 12
+  else if (len > 80 && len <= 100) score += 10
+  else                             score += 4
+  // Urgency
+  if (/tonight|live now|right now|\d+h left|now or never|this hour|before i|don't miss|limited|starting soon/i.test(t)) score += 25
+  else if (/tonight|live|now|only|soon|miss/i.test(t)) score += 14
+  else score += 5
+  // Token/goal clarity
+  if (ctx.tokenGoal && title.includes(String(ctx.tokenGoal))) score += 25
+  else if (/\d{2,}/.test(title))   score += 14
+  else if (/goal|hit|reach/i.test(t)) score += 8
+  // Action/reward clarity
+  if (ctx.action && t.includes(ctx.action.toLowerCase())) score += 25
+  else if (/tip|control|unlock|react|win|earn|reward/i.test(t)) score += 14
+  else score += 5
+  // Emoji
+  if (/\p{Emoji_Presentation}/u.test(title)) score += 5
+  return Math.min(score, 100)
+}
+
 function TitleGenerator({ C, glassCard, analytics, tips, sessions, whales }) {
-  const [current, setCurrent] = useState(null)   // { title, drivers }
-  const [history, setHistory] = useState([])      // last 5 titles
-  const [copiedCurrent, setCopiedCurrent] = useState(false)
-  const [copiedIdx, setCopiedIdx] = useState(null)
+  const [titles,    setTitles]    = useState([])   // [{title, drivers, score}]
+  const [copied,    setCopied]    = useState(null)
   const [tokenGoal, setTokenGoal] = useState(0)
-  const [action, setAction] = useState("")
-  const [toy, setToy] = useState("")
-  const [mood, setMood] = useState("none")
+  const [action,    setAction]    = useState("")
+  const [toy,       setToy]       = useState("")
+  const [mood,      setMood]      = useState("none")
   const [useEmojis, setUseEmojis] = useState(true)
 
   const buildCtx = () => {
@@ -629,159 +653,177 @@ function TitleGenerator({ C, glassCard, analytics, tips, sessions, whales }) {
     }
   }
 
-  const generate = () => {
+  const generate = useCallback(() => {
     const ctx = buildCtx()
-    const result = buildOneTitle(ctx)
-    // Push previous to history (keep last 5)
-    if (current) setHistory(h => [current, ...h].slice(0, 5))
-    setCurrent(result)
-    setCopiedCurrent(false)
-  }
-
-  const copyTitle = (title, idx = null) => {
-    navigator.clipboard.writeText(title)
-    if (idx === null) {
-      setCopiedCurrent(true)
-      setTimeout(() => setCopiedCurrent(false), 2000)
-    } else {
-      setCopiedIdx(idx)
-      setTimeout(() => setCopiedIdx(null), 2000)
+    const results = []
+    let attempts = 0
+    while (results.length < 5 && attempts < 25) {
+      const { title, drivers } = buildOneTitle(ctx)
+      if (!results.find(r => r.title === title)) {
+        results.push({ title, drivers, score: scoreTitle(title, ctx) })
+      }
+      attempts++
     }
+    results.sort((a, b) => b.score - a.score)
+    setTitles(results)
+    setCopied(null)
+  }, [tokenGoal, action, toy, mood, useEmojis, analytics, tips, sessions, whales])
+
+  useEffect(() => { generate() }, [])
+
+  const copy = (title, i) => {
+    navigator.clipboard.writeText(title).catch(() => {})
+    setCopied(i)
+    setTimeout(() => setCopied(null), 1800)
   }
 
   const ctx = buildCtx()
 
-  // Context badges for display
-  const badges = []
-  if (ctx.isPeakNow && ctx.bestHourLabel)  badges.push({ label: `🔴 Peak hour NOW (${ctx.bestHourLabel})`, color: C.orange })
-  else if (ctx.peakSoon && ctx.bestHourLabel) badges.push({ label: `⏳ Peak in ${ctx.hoursUntilPeak}h (${ctx.bestHourLabel})`, color: C.gold })
-  if (ctx.hasWhales)    badges.push({ label: `💎 ${ctx.whaleCount} VIP fans`, color: C.gold })
-  if (ctx.todayIsBestDay) badges.push({ label: `📅 Best day: ${ctx.todayDay}`, color: C.green })
-  if (ctx.hasReturners) badges.push({ label: `🔁 ${ctx.returningPct}% return rate`, color: C.cyan })
-  if (ctx.lowActivity)  badges.push({ label: `💤 Low recent activity`, color: C.orange })
-  if (ctx.tokenGoal)    badges.push({ label: `🎯 Goal: ${ctx.tokenGoal} tokens`, color: C.pink })
-  if (ctx.mood && ctx.mood !== "none") badges.push({ label: `🎭 Mood: ${ctx.mood}`, color: C.indigo })
+  const dataSignals = []
+  if (ctx.isPeakNow && ctx.bestHourLabel)       dataSignals.push({ label: `Peak hour NOW (${ctx.bestHourLabel})`, active: true, color: C.orange })
+  else if (ctx.peakSoon && ctx.bestHourLabel)   dataSignals.push({ label: `Peak in ${ctx.hoursUntilPeak}h (${ctx.bestHourLabel})`, active: false, color: C.gold })
+  if (ctx.hasWhales)                            dataSignals.push({ label: `${ctx.whaleCount} VIP fans`, active: true, color: C.gold })
+  if (ctx.todayIsBestDay)                       dataSignals.push({ label: `${ctx.todayDay} is your best day`, active: true, color: C.green })
+  if (ctx.hasReturners)                         dataSignals.push({ label: `${ctx.returningPct}% return rate`, active: true, color: C.cyan })
+  if (ctx.lowActivity)                          dataSignals.push({ label: "Low recent activity", active: false, color: C.muted })
 
-  const inp = { background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", padding: "10px 14px", borderRadius: 10, color: C.white, outline: "none", width: "100%", fontSize: 13 }
+  const activeSignals = dataSignals.filter(s => s.active)
+
+  const inp = {
+    background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)",
+    padding: "9px 12px", borderRadius: 9, color: C.white, outline: "none",
+    width: "100%", fontSize: 13, boxSizing: "border-box",
+  }
+  const lbl = { fontSize: 10, color: C.muted, marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.5 }
 
   return (
-    <div style={{ maxWidth: 680, margin: "0 auto", paddingTop: 8 }}>
-      <div style={{ marginBottom: 20 }}>
-        <h1 style={{ fontSize: 26, fontWeight: 800, color: C.white, marginBottom: 4 }}>🎬 Room Title Generator</h1>
-        <p style={{ fontSize: 13, color: C.muted }}>Formula: Hook + Target + Action + Reward + Urgency — one title at a time</p>
+    <div style={{ paddingTop: 8 }}>
+
+      <div style={{ marginBottom: 14 }}>
+        <h1 style={{ fontSize: 22, fontWeight: 800, color: C.white, margin: 0 }}>🎬 Room Title Generator</h1>
       </div>
 
-      {/* LIVE DATA BADGES */}
-      {badges.length > 0 && (
-        <div style={{ ...glassCard, borderRadius: 14, padding: "14px 18px", marginBottom: 20 }}>
-          <div style={{ fontSize: 10, color: C.muted, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.8 }}>Influencing your titles right now</div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
-            {badges.map((b, i) => (
-              <span key={i} style={{ padding: "4px 12px", borderRadius: 20, background: `${b.color}15`, border: `1px solid ${b.color}30`, fontSize: 12, fontWeight: 600, color: b.color }}>{b.label}</span>
-            ))}
-          </div>
-        </div>
-      )}
+      {/* INPUTS + SIDEBAR */}
+      <div style={{ display: "grid", gridTemplateColumns: dataSignals.length > 0 ? "1fr 210px" : "1fr", gap: 12, marginBottom: 12, alignItems: "start" }}>
 
-      {/* INPUTS */}
-      <div style={{ ...glassCard, borderRadius: 14, padding: 18, marginBottom: 20 }}>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
-          <div>
-            <div style={{ fontSize: 10, color: C.muted, marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.5 }}>Token Goal</div>
-            <input type="number" value={tokenGoal || ""} onChange={e => setTokenGoal(Number(e.target.value) || 0)} style={inp} placeholder="e.g. 500 (leave blank to skip)" />
+        {/* Inputs card */}
+        <div style={{ ...glassCard, borderRadius: 14, padding: 16 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 10 }}>
+            <div>
+              <div style={lbl}>Token goal</div>
+              <input type="number" value={tokenGoal || ""} onChange={e => setTokenGoal(Number(e.target.value) || 0)} style={inp} placeholder="e.g. 500" />
+            </div>
+            <div>
+              <div style={lbl}>Reward</div>
+              <input value={action} onChange={e => setAction(e.target.value)} style={inp} placeholder="flash, strip…" />
+            </div>
+            <div>
+              <div style={lbl}>Mood</div>
+              <select value={mood} onChange={e => setMood(e.target.value)} style={{ ...inp, cursor: "pointer" }}>
+                <option value="none">Auto</option>
+                <option value="tease">Tease</option>
+                <option value="dominant">Dominant</option>
+                <option value="submissive">Submissive</option>
+                <option value="hype">Hype</option>
+                <option value="mystery">Mystery</option>
+              </select>
+            </div>
           </div>
-          <div>
-            <div style={{ fontSize: 10, color: C.muted, marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.5 }}>Reward / Action</div>
-            <input value={action} onChange={e => setAction(e.target.value)} style={inp} placeholder="e.g. flash, dance, strip" />
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
+            <div>
+              <div style={lbl}>Toy</div>
+              <select value={toy} onChange={e => setToy(e.target.value)} style={{ ...inp, cursor: "pointer" }}>
+                <option value="">No toy</option>
+                <option value="Lush">Lush</option>
+                <option value="Domi">Domi</option>
+                <option value="Edge">Edge</option>
+                <option value="Hush">Hush</option>
+                <option value="interactive toy">Interactive toy</option>
+              </select>
+            </div>
+            <div style={{ display: "flex", alignItems: "flex-end", paddingBottom: 2 }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 12, color: C.text }}>
+                <input type="checkbox" checked={useEmojis} onChange={() => setUseEmojis(v => !v)} style={{ accentColor: C.pink }} />
+                Include emojis
+              </label>
+            </div>
           </div>
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
-          <div>
-            <div style={{ fontSize: 10, color: C.muted, marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.5 }}>Toy</div>
-            <select value={toy} onChange={e => setToy(e.target.value)} style={{ ...inp, cursor: "pointer" }}>
-              <option value="">No toy</option>
-              <option value="Lush">Lovense Lush (wearable)</option>
-              <option value="Domi">Lovense Domi (wand)</option>
-              <option value="Edge">Lovense Edge (prostate)</option>
-              <option value="Hush">Lovense Hush (plug)</option>
-              <option value="interactive toy">Interactive toy (generic)</option>
-            </select>
-          </div>
-          <div>
-            <div style={{ fontSize: 10, color: C.muted, marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.5 }}>Vibe / Mood</div>
-            <select value={mood} onChange={e => setMood(e.target.value)} style={{ ...inp, cursor: "pointer" }}>
-              <option value="none">No mood (auto)</option>
-              <option value="tease">Tease / buildup</option>
-              <option value="dominant">Dominant / in charge</option>
-              <option value="submissive">Submissive / playful</option>
-              <option value="hype">High energy / hype</option>
-              <option value="mystery">Mystery / curiosity</option>
-            </select>
-          </div>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13, color: C.text }}>
-            <input type="checkbox" checked={useEmojis} onChange={() => setUseEmojis(v => !v)} style={{ accentColor: C.pink }} />
-            Include emojis
-          </label>
-          <button onClick={generate} style={{ padding: "11px 28px", borderRadius: 10, background: "linear-gradient(135deg, #EC4899, #7C5CFF)", border: "none", color: C.white, fontSize: 15, fontWeight: 800, cursor: "pointer", boxShadow: "0 0 24px rgba(236,72,153,0.4)", letterSpacing: 0.3 }}>
-            ✨ Generate Title
+          <button onClick={generate} style={{
+            width: "100%", padding: "11px 0", borderRadius: 10,
+            background: "linear-gradient(135deg, #EC4899, #7C5CFF)",
+            border: "none", color: C.white, fontSize: 14, fontWeight: 800,
+            cursor: "pointer", boxShadow: "0 0 20px rgba(236,72,153,0.3)",
+          }}>
+            ✨ Generate 5 Titles
           </button>
         </div>
-      </div>
 
-      {/* CURRENT TITLE — big, prominent */}
-      {current && (
-        <div style={{ ...glassCard, borderRadius: 16, padding: 28, marginBottom: 20, border: "1px solid rgba(236,72,153,0.3)", background: "linear-gradient(135deg, rgba(236,72,153,0.06), rgba(124,92,255,0.06))" }}>
-          <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 14 }}>Your title</div>
-          <div style={{ fontSize: 20, fontWeight: 800, color: C.white, lineHeight: 1.4, marginBottom: 20 }}>
-            {current.title}
-          </div>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-              {current.drivers.map((d, i) => (
-                <span key={i} style={{ fontSize: 10, color: C.cyan, padding: "3px 9px", borderRadius: 20, background: "rgba(34,211,238,0.1)", border: "1px solid rgba(34,211,238,0.2)" }}>📊 {d}</span>
+        {/* Analytics sidebar */}
+        {dataSignals.length > 0 && (
+          <div style={{ ...glassCard, borderRadius: 14, padding: 14 }}>
+            <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10 }}>Influencing Your Titles</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {dataSignals.map((s, i) => (
+                <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+                  <span style={{ color: s.active ? C.green : C.muted, flexShrink: 0, fontSize: 12 }}>{s.active ? "✓" : "·"}</span>
+                  <span style={{ fontSize: 12, color: s.active ? C.white : C.muted, lineHeight: 1.4 }}>{s.label}</span>
+                </div>
               ))}
             </div>
-            <div style={{ display: "flex", gap: 10 }}>
-              <button onClick={generate} style={{ padding: "8px 18px", borderRadius: 9, background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.12)", color: C.muted, fontSize: 13, cursor: "pointer" }}>
-                🔁 Try Another
-              </button>
-              <button onClick={() => copyTitle(current.title)} style={{ padding: "8px 22px", borderRadius: 9, background: copiedCurrent ? "rgba(16,185,129,0.2)" : "linear-gradient(135deg, #22D3EE, #EC4899)", border: copiedCurrent ? "1px solid rgba(16,185,129,0.4)" : "none", color: C.white, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
-                {copiedCurrent ? "✔ Copied!" : "📋 Copy Title"}
-              </button>
-            </div>
           </div>
+        )}
+      </div>
+
+      {/* Data-driven banner */}
+      {activeSignals.length > 0 && titles.length > 0 && (
+        <div style={{ marginBottom: 10, padding: "9px 14px", borderRadius: 10, background: "rgba(16,185,129,0.06)", border: "1px solid rgba(16,185,129,0.14)", display: "flex", flexWrap: "wrap", gap: "6px 14px", alignItems: "center" }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: C.green, textTransform: "uppercase", letterSpacing: 0.5, flexShrink: 0 }}>Based on your data</span>
+          {activeSignals.map((s, i) => (
+            <span key={i} style={{ fontSize: 12, color: C.text }}>✓ {s.label}</span>
+          ))}
         </div>
       )}
 
-      {/* EMPTY STATE */}
-      {!current && (
-        <div style={{ textAlign: "center", padding: "52px 20px", color: C.muted }}>
-          <div style={{ fontSize: 44, marginBottom: 12 }}>🎬</div>
-          <div style={{ fontSize: 16, fontWeight: 700, color: C.white, marginBottom: 6 }}>One perfect title, every time</div>
-          <div style={{ fontSize: 13, lineHeight: 1.6 }}>Built from the viral formula: Hook + Target + Action + Reward + Urgency.<br/>Your earnings data shapes every title.</div>
-        </div>
-      )}
-
-      {/* HISTORY */}
-      {history.length > 0 && (
-        <div style={{ ...glassCard, borderRadius: 14, padding: 18 }}>
-          <div style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 12 }}>Previous titles</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {history.map((h, i) => (
-              <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", borderRadius: 10, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", gap: 12 }}>
-                <span style={{ fontSize: 13, color: C.text, flex: 1, lineHeight: 1.4 }}>{h.title}</span>
-                <button onClick={() => copyTitle(h.title, i)} style={{ flexShrink: 0, padding: "4px 12px", borderRadius: 7, background: copiedIdx === i ? "rgba(16,185,129,0.2)" : "rgba(255,255,255,0.06)", border: `1px solid ${copiedIdx === i ? "rgba(16,185,129,0.4)" : "rgba(255,255,255,0.1)"}`, color: copiedIdx === i ? C.green : C.muted, fontSize: 11, cursor: "pointer" }}>
-                  {copiedIdx === i ? "✔" : "📋"}
+      {/* TITLES LIST */}
+      {titles.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 7, marginBottom: 12 }}>
+          {titles.map((t, i) => {
+            const scoreColor = t.score >= 85 ? C.green : t.score >= 70 ? C.gold : C.orange
+            return (
+              <div key={i} style={{
+                display: "flex", alignItems: "center", gap: 12,
+                padding: "11px 14px", borderRadius: 10,
+                background: copied === i ? "rgba(16,185,129,0.05)" : "rgba(255,255,255,0.03)",
+                border: `1px solid ${copied === i ? "rgba(16,185,129,0.28)" : "rgba(255,255,255,0.07)"}`,
+                transition: "all 0.18s",
+              }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, color: copied === i ? C.green : C.white, lineHeight: 1.45, marginBottom: 4, wordBreak: "break-word" }}>{t.title}</div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                    {t.drivers.map((d, di) => (
+                      <span key={di} style={{ fontSize: 10, color: C.cyan, padding: "2px 7px", borderRadius: 20, background: "rgba(34,211,238,0.07)", border: "1px solid rgba(34,211,238,0.14)" }}>{d}</span>
+                    ))}
+                  </div>
+                </div>
+                <div style={{ textAlign: "center", flexShrink: 0, minWidth: 42 }}>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: scoreColor, lineHeight: 1 }}>{t.score}</div>
+                  <div style={{ fontSize: 9, color: C.muted, letterSpacing: 0.4 }}>/100</div>
+                </div>
+                <button onClick={() => copy(t.title, i)} style={{
+                  flexShrink: 0, padding: "7px 13px", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer",
+                  background: copied === i ? "rgba(16,185,129,0.18)" : "rgba(255,255,255,0.07)",
+                  border: `1px solid ${copied === i ? "rgba(16,185,129,0.38)" : "rgba(255,255,255,0.1)"}`,
+                  color: copied === i ? C.green : C.muted,
+                }}>
+                  {copied === i ? "✓" : "📋"}
                 </button>
               </div>
-            ))}
-          </div>
+            )
+          })}
         </div>
       )}
 
-      <div style={{ marginTop: 16, padding: "11px 16px", background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.18)", borderRadius: 10 }}>
+      <div style={{ padding: "10px 14px", background: "rgba(245,158,11,0.07)", border: "1px solid rgba(245,158,11,0.15)", borderRadius: 10 }}>
         <div style={{ fontSize: 12, color: C.gold }}>💡 Refresh every 20–30 min — platforms rank active streams higher when titles change frequently.</div>
       </div>
     </div>
