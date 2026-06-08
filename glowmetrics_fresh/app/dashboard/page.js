@@ -3151,7 +3151,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                                 )}
                                 {bestTime && (
                                   <div style={{ padding: '5px 8px', borderRadius: 8, background: `${col}10`, border: `1px solid ${col}25`, fontSize: 11, color: col }}>
-                                    Best hour overall: <strong>{fmtH(bestTime.hour)}</strong> ${(bestTime.avg || 0).toFixed(0)} avg
+                                    Best hour overall: <strong>{(bestTime.hour == null || isNaN(bestTime.hour)) ? 'N/A' : fmtH(bestTime.hour)}</strong> ${(bestTime.avg || 0).toFixed(0)} avg
                                   </div>
                                 )}
                                 {todayHour && (
