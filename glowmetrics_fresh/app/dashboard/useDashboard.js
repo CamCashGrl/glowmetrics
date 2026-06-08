@@ -64,6 +64,7 @@ export function useDashboard() {
   const [noteTarget, setNoteTarget] = useState(null)
   const [noteText, setNoteText] = useState('')
   const [noteSaving, setNoteSaving] = useState(false)
+  const [engineInsights, setEngineInsights] = useState(null)
 
   // ── ANIMATION STATE ──────────────────────────────────────
   const [counterBumping, setCounterBumping] = useState(false)
@@ -323,6 +324,8 @@ export function useDashboard() {
           sessionStorage.setItem(`camcash_tips_time_${uid}`, Date.now().toString())
         } catch(e) {} // quota exceeded — fine, skip cache
       }
+      const { data: engineData } = await supabase.rpc('get_user_insights', { p_user_id: uid })
+      setEngineInsights(engineData)
       setLastRefreshed(new Date())
     } finally { setLoading(false) }
   }
@@ -975,7 +978,7 @@ const handleCSV = async (file, forcePlatform = null) => {
     // Auth + user
     user, loading,
     // Data
-    tips, analytics, liveAnalytics, sessions, whales, insights, platforms,
+    tips, analytics, liveAnalytics, sessions, whales, insights, platforms, engineInsights,
     // Computed metrics
     totalRevenue, avgPerHour, returningPct, fansActiveLast30, thisMonthRev,
     forecast, tokenRates, tipperNotes, userGoals,
