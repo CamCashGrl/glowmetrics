@@ -3115,7 +3115,7 @@ const handleCSV = async (file, forcePlatform = null) => {
 
               {/* Platform ROI + Per-Platform Best Time (mandatory: always show platform context) */}
               {(() => {
-                const fmtH = h => { const _off=new Date().getTimezoneOffset()/-60; const _lh=Math.round(((h+_off)%24+24)%24); return _lh===0?'12 AM':_lh<12?`${_lh} AM`:_lh===12?'12 PM':`${_lh-12} PM` }
+                const fmtH = h => { if (h == null || isNaN(h)) return 'N/A'; const _off=new Date().getTimezoneOffset()/-60; const _lh=Math.round(((h+_off)%24+24)%24); return _lh===0?'12 AM':_lh<12?`${_lh} AM`:_lh===12?'12 PM':`${_lh-12} PM` }
                 const platColors = { Chaturbate: C.cyan, BongaCams: C.pink, MyFreeCams: C.gold }
                 const allPlats = [...(analytics?.platforms || [])].sort((a,b) => b.totalUSD - a.totalUSD)
                 if (!allPlats.length) return null
