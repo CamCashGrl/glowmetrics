@@ -1320,6 +1320,9 @@ export default function Dashboard() {
   const isPro = profile?.plan === 'pro' || profile?.plan === 'unlimited'
   const uploadLimit = Infinity
 
+  const utcToLocal = h => (h == null || isNaN(h)) ? null : (((h - new Date().getTimezoneOffset()/60) % 24) + 24) % 24 | 0
+  const fmtHour = h => { const l = utcToLocal(h); if (l == null) return 'N/A'; return l === 0 ? '12 AM' : l < 12 ? l+' AM' : l === 12 ? '12 PM' : (l-12)+' PM' }
+
   const openUpgradeModal = (source) => {
     track('upgrade_click', { source })
     setShowUpgradeModal(true)
@@ -2618,7 +2621,12 @@ const handleCSV = async (file, forcePlatform = null) => {
           const atPeak = brief?.atPeak
           const momentum = atPeak ? '🔥 AT PEAK' : safeAvg > 20 ? '↑ Strong' : safeAvg > 5 ? '→ Steady' : tips.length === 0 ? '— No data' : '↓ Slow'
           const momentumColor = atPeak ? '#10B981' : safeAvg > 20 ? '#10B981' : safeAvg > 5 ? '#22D3EE' : tips.length === 0 ? '#475569' : '#f87171'
-          const peakLabel = brief?.hoursUntilPeak === 0 ? 'NOW' : brief?.hoursUntilPeak === 1 ? 'in 1 hr' : (brief?.hoursUntilPeak > 0 && !isNaN(brief?.hoursUntilPeak)) ? `in ${brief.hoursUntilPeak}h` : null
+          const localNow = utcToLocal(new Date().getUTCHours())
+          const _eiPeakUTC = engineInsights?.go_live_status?.next_best_hour ?? engineInsights?.summary?.best_hour
+          const _eiPeakLocal = utcToLocal(_eiPeakUTC)
+          const hoursUntilLocal = (_eiPeakLocal != null && localNow != null) ? (_eiPeakLocal - localNow + 24) % 24 : brief?.hoursUntilPeak
+          const peakLabel = hoursUntilLocal === 0 ? 'NOW' : hoursUntilLocal === 1 ? 'in 1 hr' : (hoursUntilLocal > 0 && !isNaN(hoursUntilLocal)) ? `in ${hoursUntilLocal}h` : null
+          const _eiPeakLabel = _eiPeakLocal != null ? fmtHour(_eiPeakUTC) : brief?.bhLabel
           const bestPlat = brief?.displayPlat || (tips.length > 0 ? tips[0]?.platform : null)
           const safeRevenue = (!isNaN(totalRevenue) && isFinite(totalRevenue)) ? totalRevenue : 0
           return (
@@ -2642,7 +2650,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                 </div>
                 <div style={{ display:'flex', flexDirection:'column', justifyContent:'center', padding:'0 24px', borderRight:'1px solid rgba(255,255,255,0.07)', flexShrink:0 }}>
                   <div style={{ fontSize:10, color:'#475569', textTransform:'uppercase', letterSpacing:1.2, fontWeight:600, marginBottom:2 }}>Peak Window</div>
-                  <div style={{ fontSize:13, fontWeight:800, color: atPeak ? '#10B981' : '#fbbf24', whiteSpace:'nowrap' }}>{brief?.bhLabel ? `${brief.bhLabel}${peakLabel ? ` · ${peakLabel}` : ''}` : '—'}</div>
+                  <div style={{ fontSize:13, fontWeight:800, color: atPeak ? '#10B981' : '#fbbf24', whiteSpace:'nowrap' }}>{_eiPeakLabel ? `${_eiPeakLabel}${peakLabel ? ` · ${peakLabel}` : ''}` : '—'}</div>
                 </div>
                 <div style={{ marginLeft:'auto', paddingLeft:24, flexShrink:0 }}>
                   <button onClick={() => { setActiveTab('live'); if (typeof window !== 'undefined') { localStorage.setItem('camcash_tab','live'); window.scrollTo({top:0,behavior:'instant'}); } }} style={{ padding:'9px 22px', borderRadius:12, background:'linear-gradient(135deg,#10B981,#22D3EE)', border:'none', color:'#fff', fontWeight:800, fontSize:13, cursor:'pointer', whiteSpace:'nowrap', boxShadow:'0 0 22px rgba(16,185,129,0.4)', letterSpacing:0.3 }}>
@@ -2895,7 +2903,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                       <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.65 }}>
                         {`Since it's ${todayName}`}
                         {isBestDay ? ` (your highest-earning day)` : ``}
-                        {`, you peak at ${bhLabel} UTC on ${displayPlat} with `}
+                        {`, you peak at ${bhLabel} on ${displayPlat} with `}
                         <span style={{ color: C.gold, fontWeight: 700 }}>${displayAvg.toFixed(0)} avg/session</span>
                         {`. Stream `}
                         <span style={{ color: C.cyan, fontWeight: 700 }}>60+ min</span>
