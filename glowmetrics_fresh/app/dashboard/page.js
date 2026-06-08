@@ -1291,6 +1291,7 @@ export default function Dashboard() {
   const [noteTarget, setNoteTarget] = useState(null)
   const [noteText, setNoteText] = useState('')
   const [noteSaving, setNoteSaving] = useState(false)
+  const [engineInsights, setEngineInsights] = useState(null)
 
   // ── ANIMATION STATE ──────────────────────────────────────
   const [counterBumping, setCounterBumping] = useState(false)
@@ -1747,6 +1748,8 @@ export default function Dashboard() {
           sessionStorage.setItem(`camcash_tips_time_${uid}`, Date.now().toString())
         } catch(e) {} // quota exceeded — fine, skip cache
       }
+      const { data: engineData } = await supabase.rpc('get_user_insights', { p_user_id: uid })
+      setEngineInsights(engineData)
       setLastRefreshed(new Date())
     } finally { setLoading(false) }
   }
@@ -3430,80 +3433,35 @@ const handleCSV = async (file, forcePlatform = null) => {
             {/* ═══════════════════════════════════════
                 6. SMART INSIGHTS — scannable, lower priority
             ═══════════════════════════════════════ */}
-            {(insights.length > 0 || topFanDependency || returningVsNew) && (
-              <div style={{ ...glassCard, borderRadius: 18, padding: 24, marginBottom: 28, animation: "fadeUp 0.3s ease 0.3s both" }}>
+            <div style={{ ...glassCard, borderRadius: 18, padding: 24, marginBottom: 28, animation: "fadeUp 0.3s ease 0.3s both" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
                   <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(34,211,238,0.12)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>💡</div>
                   <div style={{ fontSize: 18, fontWeight: 800, color: C.white }}>Smart Insights</div>
                 </div>
 
-                {/* Top Fan Dependency — formula: topN_revenue / total_revenue */}
-                {topFanDependency && (
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: 8, marginBottom: 14 }}>
-                    {[
-                      { label: "Top fan", value: `${topFanDependency.top1Pct}%`, sub: "of total revenue", risk: topFanDependency.top1Pct > 20 },
-                      { label: "Top 3 fans", value: `${topFanDependency.top3Pct}%`, sub: "of total revenue", risk: topFanDependency.top3Pct > 50 },
-                      { label: "Top 5 fans", value: `${topFanDependency.top5Pct}%`, sub: "of total revenue", risk: false },
-                      { label: "Loss if #1 leaves", value: `$${topFanDependency.lossIfTopFanLeaves.toFixed(0)}`, sub: "estimated impact", risk: topFanDependency.top1Pct > 15 },
-                    ].map(({ label, value, sub, risk }) => (
-                      <div key={label} style={{ padding: "10px 12px", borderRadius: 10, background: risk ? "rgba(248,113,113,0.08)" : "rgba(255,255,255,0.04)", border: `1px solid ${risk ? "rgba(248,113,113,0.2)" : "rgba(255,255,255,0.08)"}` }}>
-                        <div style={{ fontSize: 10, color: C.muted, marginBottom: 3 }}>{label}</div>
-                        <div style={{ fontSize: 16, fontWeight: 800, color: risk ? C.red : C.white }}>{value}</div>
-                        <div style={{ fontSize: 10, color: C.muted }}>{sub}</div>
+                {(!engineInsights || !engineInsights.insights || engineInsights.insights.length === 0) ? (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {[1, 2, 3].map(i => (
+                      <div key={i} style={{ padding: "14px 16px", borderRadius: 10, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)" }}>
+                        <div style={{ height: 11, width: `${55 + i * 12}%`, borderRadius: 6, background: "rgba(255,255,255,0.08)", marginBottom: 6 }} />
+                        <div style={{ height: 9, width: "80%", borderRadius: 6, background: "rgba(255,255,255,0.05)" }} />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {engineInsights.insights.map((ins, i) => (
+                      <div key={i} className="list-slot-in" style={{ padding: "13px 16px", borderRadius: 10, background: "rgba(34,211,238,0.06)", border: "1px solid rgba(34,211,238,0.15)", animationDelay: `${i * 60}ms` }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: C.white, marginBottom: 4, lineHeight: 1.4 }}>{ins.title}</div>
+                        <div style={{ fontSize: 12, color: C.text, lineHeight: 1.55, marginBottom: ins.action ? 8 : 0 }}>{ins.body}</div>
+                        {ins.action && (
+                          <div style={{ fontSize: 11, color: C.cyan, fontWeight: 600 }}>👉 {ins.action}</div>
+                        )}
                       </div>
                     ))}
                   </div>
                 )}
-
-                {/* Returning vs New — formula: avg_repeat_spend vs avg_new_spend */}
-                {returningVsNew && returningVsNew.multiplier && (
-                  <div style={{ padding: "12px 14px", borderRadius: 10, background: "rgba(16,185,129,0.07)", border: "1px solid rgba(16,185,129,0.2)", marginBottom: 14, display: "flex", gap: 16, flexWrap: "wrap" }}>
-                    <div style={{ flex: 1, minWidth: 100 }}>
-                      <div style={{ fontSize: 10, color: C.muted, marginBottom: 2 }}>🔁 Returning fans ({returningVsNew.returningPct}%)</div>
-                      <div style={{ fontSize: 18, fontWeight: 800, color: C.green }}>${returningVsNew.avgReturnSpend.toFixed(0)} avg</div>
-                    </div>
-                    <div style={{ flex: 1, minWidth: 100 }}>
-                      <div style={{ fontSize: 10, color: C.muted, marginBottom: 2 }}>👋 New fans ({100 - returningVsNew.returningPct}%)</div>
-                      <div style={{ fontSize: 18, fontWeight: 800, color: C.blue }}>${returningVsNew.avgNewSpend.toFixed(0)} avg</div>
-                    </div>
-                    <div style={{ flex: 1, minWidth: 100 }}>
-                      <div style={{ fontSize: 10, color: C.muted, marginBottom: 2 }}>💰 Loyalty multiplier</div>
-                      <div style={{ fontSize: 18, fontWeight: 800, color: C.gold }}>{returningVsNew.multiplier}x more</div>
-                    </div>
-                  </div>
-                )}
-
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {insights.slice(0, 3).map((ins, i) => (
-                    <div key={i} className="list-slot-in" style={{ display: "flex", gap: 12, alignItems: "flex-start", padding: "11px 14px", borderRadius: 10, background: "rgba(34,211,238,0.06)", border: "1px solid rgba(34,211,238,0.15)", animationDelay: `${i * 60}ms` }}>
-                      <span style={{ fontSize: 16, flexShrink: 0 }}>{ins.icon}</span>
-                      <div style={{ fontSize: 13, color: C.white, lineHeight: 1.55 }}>{ins.text}</div>
-                    </div>
-                  ))}
-                </div>
-                {insights.length > 3 && (
-                  <div style={{ position: "relative", borderRadius: 10, overflow: "hidden", marginTop: 8 }}>
-                    <div style={{ filter: isPro ? "none" : "blur(3px)", pointerEvents: "none" }}>
-                      {insights.slice(3, 8).map((ins, i) => (
-                        <div key={i} style={{ display: "flex", gap: 12, alignItems: "flex-start", padding: "11px 14px", borderRadius: 10, background: "rgba(34,211,238,0.04)", border: "1px solid rgba(34,211,238,0.1)", marginTop: 6 }}>
-                          <span style={{ fontSize: 16, flexShrink: 0 }}>{ins.icon}</span>
-                          <div style={{ fontSize: 13, color: C.white, lineHeight: 1.55 }}>{ins.text}</div>
-                        </div>
-                      ))}
-                    </div>
-                    {!isPro && (
-                      <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "rgba(5,7,15,0.75)", backdropFilter: "blur(2px)", borderRadius: 10 }}>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: C.white, marginBottom: 4 }}>🔒 {Math.max(0, insights.length - 3)} more insights hidden</div>
-                        <div style={{ fontSize: 12, color: C.muted, marginBottom: 12 }}>Timing patterns, predictions & advanced strategy</div>
-                        <button onClick={() => openUpgradeModal("insights")} style={{ padding: "8px 20px", borderRadius: 8, background: "linear-gradient(135deg,#3b82f6,#ec4899)", border: "none", color: C.white, fontSize: 12, fontWeight: 700, cursor: "pointer", boxShadow: "0 0 20px rgba(59,130,246,0.4)" }}>
-                          🔓 Unlock All Insights
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
               </div>
-            )}
 
             {/* Dependency risk + pre-tip behavior — kept, moved lower */}
             {dependencyRisk && dependencyRisk.level !== 'low' && (
