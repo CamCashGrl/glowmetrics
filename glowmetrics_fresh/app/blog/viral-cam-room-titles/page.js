@@ -51,7 +51,7 @@ export default function Page() {
   ];
 
   const relatedTools = [
-    { icon: '\u2728', name: 'Room Title Generator', description: 'Build scroll-stopping titles from the viral formula', href: '/guides/chaturbate-room-title-generator' },
+    { icon: '\u2728', name: 'Room Title Generator', description: 'Build scroll-stopping titles from the viral formula', href: '/guides/cam-model-room-title-generator' },
     { icon: '\uD83D\uDD52', name: 'Best Time to Stream', description: 'A great title works best at the right hour', href: '/guides/best-time-to-stream-chaturbate' },
   ];
 
@@ -185,6 +185,7 @@ export default function Page() {
           Customization is optional, you can grab a strong title in one click, or dial in the variables when you want a
           title built for a specific show. Either way the formula stays intact.
         </p>
+        <img src="/blog-images/viral-room-title-generator.png" alt="CamCashGrl viral room title generator showing toy, goal, reward, and mood selectors with generated titles" className="w-full rounded-lg border border-slate-200 dark:border-slate-800 my-6" />
 
         <h2>Beating creative burnout</h2>
         <p>
