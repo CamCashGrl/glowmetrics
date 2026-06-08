@@ -9,6 +9,11 @@ const nextConfig = {
         permanent: true,
       },
       {
+        source: '/demo',
+        destination: 'https://www.camcashgrl.com/landing/demo',
+        permanent: true,
+      },
+      {
         source: '/exstension',
         destination: '/extension',
         permanent: true,
