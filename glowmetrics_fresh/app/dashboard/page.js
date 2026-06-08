@@ -1320,8 +1320,7 @@ export default function Dashboard() {
   const isPro = profile?.plan === 'pro' || profile?.plan === 'unlimited'
   const uploadLimit = Infinity
 
-  const utcToLocal = h => (h == null || isNaN(h)) ? null : (((h - new Date().getTimezoneOffset()/60) % 24) + 24) % 24 | 0
-  const fmtHour = h => { const l = utcToLocal(h); if (l == null) return 'N/A'; return l === 0 ? '12 AM' : l < 12 ? l+' AM' : l === 12 ? '12 PM' : (l-12)+' PM' }
+  const fmtHour = h => { if (h == null || isNaN(h)) return 'N/A'; return h === 0 ? '12 AM' : h < 12 ? h+' AM' : h === 12 ? '12 PM' : (h-12)+' PM' }
 
   const openUpgradeModal = (source) => {
     track('upgrade_click', { source })
@@ -2621,12 +2620,11 @@ const handleCSV = async (file, forcePlatform = null) => {
           const atPeak = brief?.atPeak
           const momentum = atPeak ? '🔥 AT PEAK' : safeAvg > 20 ? '↑ Strong' : safeAvg > 5 ? '→ Steady' : tips.length === 0 ? '— No data' : '↓ Slow'
           const momentumColor = atPeak ? '#10B981' : safeAvg > 20 ? '#10B981' : safeAvg > 5 ? '#22D3EE' : tips.length === 0 ? '#475569' : '#f87171'
-          const localNow = utcToLocal(new Date().getUTCHours())
+          const localNow = new Date().getHours()
           const _eiPeakUTC = engineInsights?.go_live_status?.next_best_hour ?? engineInsights?.summary?.best_hour
-          const _eiPeakLocal = utcToLocal(_eiPeakUTC)
-          const hoursUntilLocal = (_eiPeakLocal != null && localNow != null) ? (_eiPeakLocal - localNow + 24) % 24 : brief?.hoursUntilPeak
+          const hoursUntilLocal = (_eiPeakUTC != null && localNow != null) ? (_eiPeakUTC - localNow + 24) % 24 : brief?.hoursUntilPeak
           const peakLabel = hoursUntilLocal === 0 ? 'NOW' : hoursUntilLocal === 1 ? 'in 1 hr' : (hoursUntilLocal > 0 && !isNaN(hoursUntilLocal)) ? `in ${hoursUntilLocal}h` : null
-          const _eiPeakLabel = _eiPeakLocal != null ? fmtHour(_eiPeakUTC) : brief?.bhLabel
+          const _eiPeakLabel = _eiPeakUTC != null ? fmtHour(_eiPeakUTC) : brief?.bhLabel
           const bestPlat = brief?.displayPlat || (tips.length > 0 ? tips[0]?.platform : null)
           const safeRevenue = (!isNaN(totalRevenue) && isFinite(totalRevenue)) ? totalRevenue : 0
           return (
