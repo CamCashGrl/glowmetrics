@@ -100,6 +100,7 @@ export default function HowToIncreaseCamEarnings() {
           Export your CSV from Chaturbate or BongaCams and upload it to <a href="/landing" style={s.iLink}>CamCash</a> — it processes your full tip history and shows all of this in one dashboard.
         </p>
       </div>
+      <p style={s.p}>You can't optimize what you don't measure — <a href="/blog/how-to-track-cam-tips-automatically" style={s.iLink}>automate your tip tracking</a> so the data is always current.</p>
 
       <h2 style={s.h2}>Step 2: Find Your Real Peak Hours</h2>
       <p style={s.p}>The most common tip for increasing cam earnings is "stream at peak traffic times." The problem is that generic peak hours are based on platform-wide traffic — not your specific audience.</p>
@@ -125,6 +126,7 @@ export default function HowToIncreaseCamEarnings() {
         <li style={s.li}>Risk level based on their typical tipping pattern</li>
       </ul>
       <p style={s.p}>When a high-value fan's gap since last tip exceeds their average interval, it's time to reach out. A personalized message has a much higher re-engagement rate than a generic note.</p>
+      <p style={s.p}>Your regulars drive most of your income, so <a href="/blog/cam-model-fan-crm" style={s.iLink}>build profiles on your top tippers</a> (Pro feature — upgrade after signup) and treat them like VIPs.</p>
 
       <h2 style={s.h2}>Step 4: Analyze Every Session Like a Business</h2>
       <p style={s.p}>After each stream, ask three questions:</p>
@@ -137,6 +139,7 @@ export default function HowToIncreaseCamEarnings() {
 
       <h3 style={s.h3}>Who drove the revenue?</h3>
       <p style={s.p}>If one fan contributed 50%+ of a session's income, that's a concentration risk. Focus on engaging multiple tippers rather than depending on one.</p>
+      <p style={s.p}>When a room goes quiet, <a href="/blog/live-ai-coaching-cam-models" style={s.iLink}>live AI coaching</a> hands you the next move before the energy dies.</p>
 
       <h2 style={s.h2}>Step 5: Compare Your Platforms Honestly</h2>
       <p style={s.p}>If you stream on more than one platform, you almost certainly earn more per hour on one than the other. The right metric is USD earned per hour streamed, calculated per platform. Most models who do this analysis find a significant difference — commonly 2–4x more on one platform than the other.</p>
@@ -166,6 +169,9 @@ export default function HowToIncreaseCamEarnings() {
         <div style={s.relLinks}>
           <a href="/blog/why-cam-streams-arent-making-money" style={s.relLink}>→ Why your cam streams aren't making money</a>
           <a href="/blog/how-to-build-loyal-fans" style={s.relLink}>→ How to build loyal fans that actually tip</a>
+          <a href="/blog/how-to-track-cam-tips-automatically" style={s.relLink}>→ How to Track Cam Tips Automatically — Measure earnings without the spreadsheet</a>
+          <a href="/blog/live-ai-coaching-cam-models" style={s.relLink}>→ Live AI Coaching for Cam Models — Real-time cues that boost in-stream tips</a>
+          <a href="/blog/cam-model-fan-crm" style={s.relLink}>→ Cam Model Fan CRM — Profile and prioritize your top tippers</a>
         </div>
       </div>
     </ArticleLayout>

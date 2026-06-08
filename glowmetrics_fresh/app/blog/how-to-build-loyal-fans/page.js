@@ -119,6 +119,7 @@ export default function BuildLoyalFans() {
           <a href="/landing" style={s.iLink}>Free to start →</a>
         </p>
       </div>
+      <p style={s.p}>Fans spend where they feel remembered, so <a href="/blog/cam-model-fan-crm" style={s.iLink}>track and profile your top tippers</a> (Pro feature — upgrade after signup) and greet them like the VIPs they are.</p>
 
       <h2 style={s.h2}>Fan Retention: Keeping Loyal Fans From Going Cold</h2>
       <p style={s.p}>This is the piece most models neglect. Retention is less exciting than acquisition — there's no dopamine hit from a loyal fan staying loyal the way there is from a new whale tipping for the first time. But retention is where the money lives.</p>
@@ -190,6 +191,7 @@ export default function BuildLoyalFans() {
           <a href="/blog/cam-model-earnings" style={s.relLink}>→ Cam model earnings guide</a>
           <a href="/guides/cam-model-top-tippers" style={s.relLink}>→ Top tipper tracking guide</a>
           <a href="/tools/cam-model-name-generator" style={s.relLink}>→ Free cam model name generator</a>
+          <a href="/blog/cam-model-fan-crm" style={s.relLink}>→ Cam Model Fan CRM — Make every fan feel remembered</a>
         </div>
       </div>
     </ArticleLayout>

@@ -329,6 +329,9 @@ export default function CamModelEarnings() {
         <a href="/blog/why-cam-income-is-inconsistent" style={s.iLink}>Why Cam Income Is Inconsistent</a> and{' '}
         <a href="/blog/how-to-increase-cam-earnings" style={s.iLink}>How to Increase Cam Earnings</a> for specific fixes.
       </p>
+      <p style={s.p}>
+        Start by measuring: <a href="/blog/how-to-track-cam-tips-automatically" style={s.iLink}>automatic tip tracking</a> shows where your money actually comes from. Then protect your base — <a href="/blog/cam-model-fan-crm" style={s.iLink}>your top tipper profiles</a> (Pro feature — upgrade after signup) tell you who to look after. And raise your nightly ceiling with <a href="/blog/live-ai-coaching-cam-models" style={s.iLink}>live coaching</a> when the room dips.
+      </p>
 
       {/* ── FAQ Section ── */}
       <div style={s.faqSection}>
@@ -409,6 +412,9 @@ export default function CamModelEarnings() {
           <a href="/guides/cam-model-analytics" style={s.relLink}>→ Cam model analytics guide</a>
           <a href="/guides/best-time-to-stream-chaturbate" style={s.relLink}>→ Best time to stream on Chaturbate</a>
           <a href="/guides/cam-model-top-tippers" style={s.relLink}>→ Cam model top tippers guide</a>
+          <a href="/blog/how-to-track-cam-tips-automatically" style={s.relLink}>→ How to Track Cam Tips Automatically — See where your earnings come from</a>
+          <a href="/blog/cam-model-fan-crm" style={s.relLink}>→ Cam Model Fan CRM — Protect your highest-value fans</a>
+          <a href="/blog/live-ai-coaching-cam-models" style={s.relLink}>→ Live AI Coaching for Cam Models — Lift your earnings mid-stream</a>
         </div>
       </div>
     </ArticleLayout>

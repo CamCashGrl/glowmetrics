@@ -118,6 +118,7 @@ export default function ReEngageWhales() {
         Losing a whale feels like losing a paycheck. One week they're tipping hundreds of tokens every session — the next, they've gone completely quiet.
         The good news? Whales and top tippers rarely disappear forever. In most cases, they just need the right reason to come back.
       </p>
+      <p style={s.p}>Re-engagement starts with knowing who to reach and what they respond to — that's exactly what <a href="/blog/cam-model-fan-crm" style={s.iLink}>a fan CRM</a> (Pro feature — upgrade after signup) gives you.</p>
 
       <h2 style={s.h2}>Why Whales Go Quiet</h2>
       <p style={s.p}>Before you can win them back, you need to understand why they left. Notice that most of these are about connection, not content — whales don't just pay for shows, they pay for the feeling of being special.</p>
@@ -175,6 +176,7 @@ export default function ReEngageWhales() {
         <div style={s.relLinks}>
           <a href="/blog/how-to-build-loyal-fans" style={s.relLink}>→ How to build a loyal fanbase that actually tips</a>
           <a href="/blog/why-cam-income-is-inconsistent" style={s.relLink}>→ Why cam income is inconsistent</a>
+          <a href="/blog/cam-model-fan-crm" style={s.relLink}>→ Cam Model Fan CRM — The profiles that power re-engagement</a>
         </div>
       </div>
     </ArticleLayout>
