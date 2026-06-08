@@ -132,6 +132,7 @@ export default function CamModelTaxes() {
         <li style={s.li}>Use analytics tools for clean earnings records by platform and session — useful for tax reporting</li>
         <li style={s.li}>Schedule one meeting with an accountant before your first tax season</li>
       </ul>
+      <p style={s.p}>Clean records make tax time painless. The easiest way to keep them is to <a href="/blog/how-to-track-cam-tips-automatically" style={s.iLink}>log every payment automatically</a> all year instead of scrambling in April.</p>
 
       <h2 style={s.h2}>Common Tax Myths</h2>
       {[
@@ -169,6 +170,7 @@ export default function CamModelTaxes() {
         <div style={s.relLinks}>
           <a href="/blog/cam-model-earnings" style={s.relLink}>→ Cam model earnings: the complete guide</a>
           <a href="/blog/best-cam-model-tools" style={s.relLink}>→ Best cam model tools for tracking and analytics</a>
+          <a href="/blog/how-to-track-cam-tips-automatically" style={s.relLink}>→ How to Track Cam Tips Automatically — Keep tidy earnings records all year</a>
         </div>
       </div>
     </ArticleLayout>

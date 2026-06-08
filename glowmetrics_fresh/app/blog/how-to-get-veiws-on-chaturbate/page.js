@@ -108,6 +108,7 @@ export default function BlogPostChaturbateViewers() {
             <div style={s.tipLbl}>Free tool</div>
             <p style={{ ...s.p, marginBottom: 0 }}>Use the <a href="/guides/chaturbate-room-title-generator" style={s.iLink}>Room Title Generator</a> to create optimized titles based on your vibe and goal — no guessing required.</p>
           </div>
+          <p style={{ ...s.p, marginBottom: 0, marginTop: '10px' }}>Views start with the click, so <a href="/blog/viral-cam-room-titles" style={s.iLink}>generate scroll-stopping room titles</a> for every stream.</p>
         </div>
       </div>
 
@@ -166,7 +167,8 @@ export default function BlogPostChaturbateViewers() {
       <div style={s.step}>
         <div style={s.stepH}><div style={s.stepNum}>8</div><div style={s.stepT}>Build Momentum Over Time</div></div>
         <div style={s.stepB}>
-          <p style={{ ...s.p, marginBottom: 0 }}>Growth on Chaturbate isn't instant. But once you stay consistent, improve engagement, and optimize your setup, you'll start seeing higher placement, more returning viewers, and bigger tips. Small improvements compound.</p>
+          <p style={s.p}>Growth on Chaturbate isn't instant. But once you stay consistent, improve engagement, and optimize your setup, you'll start seeing higher placement, more returning viewers, and bigger tips. Small improvements compound.</p>
+          <p style={{ ...s.p, marginBottom: 0 }}>Then <a href="/blog/live-ai-coaching-cam-models" style={s.iLink}>keep viewers in the room</a> longer — watch time is what lifts your placement.</p>
         </div>
       </div>
 
@@ -198,6 +200,8 @@ export default function BlogPostChaturbateViewers() {
         <div style={s.relLinks}>
           <a href="/blog/how-to-make-more-money-on-chaturbate" style={s.relLink}>→ 11 strategies to make more money on Chaturbate</a>
           <a href="/blog/why-cam-streams-arent-making-money" style={s.relLink}>→ Why cam streams aren't making money</a>
+          <a href="/blog/viral-cam-room-titles" style={s.relLink}>→ Viral Cam Room Titles — Win the click in a crowded list</a>
+          <a href="/blog/live-ai-coaching-cam-models" style={s.relLink}>→ Live AI Coaching for Cam Models — Hold the room and rank higher</a>
         </div>
       </div>
     </ArticleLayout>
