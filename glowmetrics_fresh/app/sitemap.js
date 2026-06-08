@@ -33,6 +33,11 @@ export default function sitemap() {
     { url: `${baseUrl}/guides/cam-model-session-breakdown`,    lastModified: now, changeFrequency: 'monthly', priority: 0.9 },
     { url: `${baseUrl}/guides/chaturbate-best-hours`,          lastModified: now, changeFrequency: 'monthly', priority: 0.9 },
 
+    // Priority 0.85 — public pages
+    { url: `${baseUrl}/affiliates`, lastModified: now, changeFrequency: 'monthly', priority: 0.85 },
+    { url: `${baseUrl}/contact`,    lastModified: now, changeFrequency: 'monthly', priority: 0.85 },
+    { url: `${baseUrl}/privacy`,    lastModified: now, changeFrequency: 'monthly', priority: 0.85 },
+
     // Priority 0.85 — blog posts
     { url: `${baseUrl}/blog/best-cam-model-tools`,                    lastModified: now, changeFrequency: 'monthly', priority: 0.85 },
     { url: `${baseUrl}/blog/cam-model-earnings`,                      lastModified: now, changeFrequency: 'monthly', priority: 0.85 },
@@ -51,5 +56,9 @@ export default function sitemap() {
     { url: `${baseUrl}/blog/cam-model-fan-crm`,                       lastModified: now, changeFrequency: 'monthly', priority: 0.85 },
     { url: `${baseUrl}/blog/viral-cam-room-titles`,                   lastModified: now, changeFrequency: 'monthly', priority: 0.85 },
     { url: `${baseUrl}/blog/how-to-pick-a-cam-name`,                  lastModified: now, changeFrequency: 'monthly', priority: 0.85 },
+    { url: `${baseUrl}/blog/how-to-get-veiwers-on-chaturbate`,        lastModified: now, changeFrequency: 'monthly', priority: 0.85 },
+    { url: `${baseUrl}/blog/how-to-re-engage-whales-and-high-tipping-fans`, lastModified: now, changeFrequency: 'monthly', priority: 0.85 },
+    { url: `${baseUrl}/blog/revenue-per-hour-cam-model`,              lastModified: now, changeFrequency: 'monthly', priority: 0.85 },
+    { url: `${baseUrl}/blog/why-you-arent-making-money-on-chaturbate`, lastModified: now, changeFrequency: 'monthly', priority: 0.85 },
   ]
 }
