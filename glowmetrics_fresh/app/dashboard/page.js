@@ -2845,9 +2845,15 @@ const handleCSV = async (file, forcePlatform = null) => {
             Refreshes based on UTC time + your real session data
         ═══════════════════════════════════════════════════════ */}
         {dailyBrief && (() => {
-          const { todayName, bhLabel, bh, atPeak, hoursUntilPeak, displayPlat, displayAvg,
+          const { todayName, bhLabel: _bhLabel, bh, atPeak, hoursUntilPeak, displayPlat: _displayPlat, displayAvg,
             isBestDay, bestDay, sessionAvg, peakAvg, predictionLow, predictionHigh,
             reengageFans, likelyOnline, platTodayStats, sessionsAtPeakCount } = dailyBrief
+          // Override best hour + platform from engineInsights when available; fall back to dailyBrief values
+          const _eiBh = engineInsights?.daily_plan?.best_hour
+          const _eiLocalH = _eiBh != null ? (_eiBh - new Date().getTimezoneOffset() / 60 + 24) % 24 : null
+          const _eiLabel = _eiLocalH != null ? (_eiLocalH === 0 ? '12 AM' : _eiLocalH < 12 ? `${Math.floor(_eiLocalH)} AM` : _eiLocalH === 12 ? '12 PM' : `${Math.floor(_eiLocalH) - 12} PM`) : null
+          const bhLabel = _eiLabel || _bhLabel
+          const displayPlat = engineInsights?.summary?.best_platform || _displayPlat
           return (
             <div style={{ marginBottom: 20, borderRadius: 18, overflow: 'hidden', border: `1px solid ${atPeak ? 'rgba(16,185,129,0.45)' : 'rgba(124,92,255,0.3)'}`, background: 'rgba(10,12,24,0.7)', backdropFilter: 'blur(16px)', animation: 'fadeUp 0.3s ease both' }}>
 
@@ -3042,6 +3048,19 @@ const handleCSV = async (file, forcePlatform = null) => {
                 const isDupe = merged.some(m => m.text && a.message && m.text.toLowerCase().includes((a.title || '').toLowerCase().slice(0, 20)))
                 if (!isDupe) merged.push({ icon: a.icon, color: a.color || C.cyan, text: `${a.title} — ${a.message}`, cta: false, source: 'alert' })
               })
+
+              // Prepend engineInsights go_live_status as the top signal when available
+              if (engineInsights?.go_live_status?.status) {
+                const gl = engineInsights.go_live_status
+                const glColor = gl.status === 'peak' ? C.green : gl.status === 'good' ? C.cyan : C.muted
+                const glIcon = gl.status === 'peak' ? '🟢' : gl.status === 'good' ? '⚡' : '⏰'
+                const localHour = (new Date().getUTCHours() - new Date().getTimezoneOffset() / 60 + 24) % 24
+                const localLabel = localHour === 0 ? '12 AM' : localHour < 12 ? `${Math.floor(localHour)} AM` : localHour === 12 ? '12 PM' : `${Math.floor(localHour) - 12} PM`
+                const glText = gl.multiplier
+                  ? `${gl.status === 'peak' ? 'Peak hour right now' : 'Good time to stream'} (${localLabel}) — this window earns ${gl.multiplier}x your average. Go live on ${engineInsights?.summary?.best_platform || 'your top platform'}.`
+                  : `Go-live signal: ${gl.status} — check your stream timing`
+                merged.unshift({ icon: glIcon, color: glColor, text: glText, cta: false, source: 'engine' })
+              }
 
               const actions = merged.slice(0, 3)
               if (!actions.length) return null
