@@ -8,8 +8,8 @@ export const metadata = {
     title: 'Free Cam Room Title Generator + Hashtag Generator (2026)',
     description: 'Generate room titles and hashtags designed to increase clicks, tips, and viewer engagement. Free tool, no signup required.',
     type: 'website',
-    url: 'https://camcashgrl.com/guides/cam-model-room-title-generator',
-    images: [{ url: 'https://camcashgrl.com/og-image.png', width: 1200, height: 630 }],
+    url: 'https://www.camcashgrl.com/guides/cam-model-room-title-generator',
+    images: [{ url: 'https://www.camcashgrl.com/og-image.png', width: 1200, height: 630 }],
   },
   twitter: {
     card: 'summary_large_image',
@@ -52,9 +52,9 @@ const breadcrumbSchema = {
   '@context': 'https://schema.org',
   '@type': 'BreadcrumbList',
   itemListElement: [
-    { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://camcashgrl.com' },
-    { '@type': 'ListItem', position: 2, name: 'Guides', item: 'https://camcashgrl.com/guides' },
-    { '@type': 'ListItem', position: 3, name: 'Cam Room Title Generator', item: 'https://camcashgrl.com/guides/chaturbate-room-title-generator' },
+    { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://www.camcashgrl.com' },
+    { '@type': 'ListItem', position: 2, name: 'Guides', item: 'https://www.camcashgrl.com/guides' },
+    { '@type': 'ListItem', position: 3, name: 'Cam Room Title Generator', item: 'https://www.camcashgrl.com/guides/cam-model-room-title-generator' },
   ],
 }
 
