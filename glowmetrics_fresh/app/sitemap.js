@@ -60,5 +60,6 @@ export default function sitemap() {
     { url: `${baseUrl}/blog/how-to-re-engage-whales-and-high-tipping-fans`, lastModified: now, changeFrequency: 'monthly', priority: 0.85 },
     { url: `${baseUrl}/blog/revenue-per-hour-cam-model`,              lastModified: now, changeFrequency: 'monthly', priority: 0.85 },
     { url: `${baseUrl}/blog/why-you-arent-making-money-on-chaturbate`, lastModified: now, changeFrequency: 'monthly', priority: 0.85 },
+    { url: `${baseUrl}/blog/camcash-vs-camdash-vs-cb-cam-insights`,    lastModified: now, changeFrequency: 'monthly', priority: 0.85 },
   ]
 }
