@@ -2,9 +2,7 @@
 import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
-import SiteFooter from "../components/SiteFooter"
 import FeedbackWidget from "../components/FeedbackWidget"
-import UserCounter from "../components/UserCounter"
 
 // ── AuthPanel defined OUTSIDE LandingPage so React doesn't re-create the
 //    component type on every render (prevents input losing focus)
@@ -44,7 +42,7 @@ function AuthPanel({
         }}>$</div>
         <div style={{ fontSize: 16, fontWeight: 700, color: "white", letterSpacing: -0.3 }}>CamCash</div>
         <div style={{ fontSize: 12, color: "#475569", marginTop: 3 }}>
-          {isSignUp ? "Free during beta · No credit card" : "Welcome back 💋"}
+          {isSignUp ? "No credit card required" : "Welcome back 💋"}
         </div>
       </div>
 
@@ -111,7 +109,7 @@ function AuthPanel({
 
       {isSignUp && (
         <p style={{ fontSize: 11, color: "#334155", textAlign: "center", marginTop: 12, marginBottom: 0 }}>
-          No credit card · Free during beta · Cancel anytime
+          No credit card · Cancel anytime
         </p>
       )}
     </div>
@@ -357,14 +355,11 @@ export default function LandingPage() {
 
       {/* ── EARLY ADOPTER BANNER ── */}
       <div style={{ background: "rgba(236,72,153,0.12)", borderBottom: "1px solid rgba(236,72,153,0.25)", padding: "14px 32px", textAlign: "center", position: "relative", zIndex: 2 }}>
-        <div style={{ maxWidth: 800, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "center", flexWrap: "wrap", gap: 12 }}>
+        <div style={{ maxWidth: 800, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "center", flexWrap: "wrap", gap: 6 }}>
           <span style={{ fontSize: 14, color: "#f1f5f9", fontWeight: 600 }}>
-            ⏰ Early Adopter Offer — Lock in <span style={{ color: "#ec4899", fontWeight: 700 }}>$9.99/month forever</span> (regular $19.99/mo)
+            Early adopter pricing: <span style={{ color: "#ec4899", fontWeight: 700 }}>$9.99/mo forever</span> ·{" "}
+            <a href="/pricing" style={{ color: "#ec4899", fontWeight: 700, textDecoration: "none" }}>Lock in your rate →</a>
           </span>
-          <UserCounter variant="pill" />
-          <a href="/pricing" style={{ fontSize: 13, fontWeight: 600, color: "#ec4899", textDecoration: "none", background: "rgba(236,72,153,0.15)", border: "1px solid rgba(236,72,153,0.3)", borderRadius: 6, padding: "4px 12px" }}>
-            View Pricing →
-          </a>
         </div>
       </div>
 
@@ -483,7 +478,7 @@ export default function LandingPage() {
           <div style={{ background: "rgba(236,72,153,0.07)", border: "1px solid rgba(236,72,153,0.2)", borderRadius: 12, padding: "28px 24px", textAlign: "center" }}>
             <div style={{ fontSize: 36, marginBottom: 12 }}>🚀</div>
             <div style={{ fontSize: 16, fontWeight: 700, color: "#f1f5f9", marginBottom: 8 }}>Lock In Lifetime Pricing</div>
-            <div style={{ fontSize: 14, color: "#94a3b8", lineHeight: 1.6, marginBottom: 16 }}>Early adopter: $9.99/month forever. <span style={{ color: "#EC4899", fontWeight: 700 }}>80/100 spots left.</span></div>
+            <div style={{ fontSize: 14, color: "#94a3b8", lineHeight: 1.6, marginBottom: 16 }}>Early adopter: $9.99/month forever.</div>
             <a href="/pricing" style={{ fontSize: 13, fontWeight: 600, color: "#ec4899", textDecoration: "none" }}>Claim early pricing →</a>
           </div>
         </div>
@@ -500,7 +495,6 @@ export default function LandingPage() {
             { icon: "🔍", text: "Transparent about everything" },
             { icon: "🔒", text: "No surprise feature locks" },
             { icon: "⏰", text: "Lifetime pricing for early adopters" },
-            { icon: "📢", text: "30-day notice before any changes" },
             { icon: "💜", text: "Built by cam models, for cam models" },
           ].map(({ icon, text }) => (
             <div key={text} style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 10, padding: "14px 16px", display: "flex", alignItems: "center", gap: 10 }}>
@@ -677,7 +671,7 @@ export default function LandingPage() {
         <div style={{ fontSize: "clamp(24px,3vw,36px)", fontWeight: 900, color: "white", marginBottom: 10, letterSpacing: -0.8 }}>
           Turn your analytics<br />into income.
         </div>
-        <div style={{ fontSize: 14, color: "#475569", marginBottom: 32 }}>Free during beta. No credit card. Takes 2 minutes.</div>
+        <div style={{ fontSize: 14, color: "#475569", marginBottom: 32 }}>No credit card. Takes 2 minutes.</div>
         <AuthPanel id="lp-auth-bottom-panel" {...authPanelProps} />
       </div>
 
@@ -704,21 +698,100 @@ export default function LandingPage() {
         </div>
       </div>
 
-      {/* ── SITE FOOTER WITH BLOG / GUIDES LINKS ── */}
-      {/* ── FOOTER PRICING BANNER ── */}
-      <div style={{ background: "rgba(168,85,247,0.06)", borderTop: "1px solid rgba(168,85,247,0.15)", padding: "24px 32px", textAlign: "center" }}>
-        <div style={{ maxWidth: 700, margin: "0 auto", display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "center", gap: 16 }}>
-          <span style={{ fontSize: 14, color: "#94a3b8" }}>🎉 Everything free during launch · Early adopter: <span style={{ color: "#ec4899", fontWeight: 600 }}>$9.99/mo forever</span></span>
-          <a href="/pricing" style={{ fontSize: 13, fontWeight: 600, color: "#a855f7", textDecoration: "none" }}>View transparent pricing →</a>
-        </div>
-      </div>
-      <SiteFooter />
-
       {/* ── FOOTER ── */}
-      <div style={{ position: "relative", zIndex: 1, borderTop: "1px solid rgba(255,255,255,0.04)", padding: "24px 32px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
-        <div style={{ fontSize: 13, color: "#1e3a52" }}>© 2026 CamCash — Built for cam models who want to grow</div>
-        <div style={{ fontSize: 12, color: "#1e3a52" }}>Your data is never shared · Encrypted · Private</div>
-      </div>
+      <footer style={{ background: "#050810", borderTop: "1px solid rgba(168,85,247,0.15)", padding: "48px 40px 0", position: "relative", zIndex: 1 }}>
+        <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 40, marginBottom: 40 }}>
+
+            {/* Free Tools */}
+            <div>
+              <h4 style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#a855f7", marginBottom: 16, marginTop: 0 }}>Free Tools</h4>
+              {[
+                ["Token Calculator", "/guides/cam-model-token-calculator"],
+                ["Room Title Generator", "/guides/cam-model-room-title-generator"],
+                ["Name Generator", "/tools/cam-model-name-generator"],
+                ["Earnings Tracker", "/guides/chaturbate-earnings-tracker"],
+              ].map(([label, href]) => (
+                <a key={href} href={href} style={{ display: "block", fontSize: 13, lineHeight: 1.6, marginBottom: 6, color: "#64748b", textDecoration: "none" }}
+                  onMouseEnter={e => e.target.style.color = "#a855f7"}
+                  onMouseLeave={e => e.target.style.color = "#64748b"}
+                >{label}</a>
+              ))}
+            </div>
+
+            {/* Guides */}
+            <div>
+              <h4 style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#a855f7", marginBottom: 16, marginTop: 0 }}>Guides</h4>
+              {[
+                ["BongaCams Analytics", "/guides/bongacams-analytics"],
+                ["MyFreeCams Analytics", "/guides/myfreecams-analytics"],
+                ["Best Time to Stream", "/guides/best-time-to-stream-chaturbate"],
+                ["All Guides →", "/guides"],
+              ].map(([label, href]) => (
+                <a key={href} href={href} style={{ display: "block", fontSize: 13, lineHeight: 1.6, marginBottom: 6, color: "#64748b", textDecoration: "none" }}
+                  onMouseEnter={e => e.target.style.color = "#a855f7"}
+                  onMouseLeave={e => e.target.style.color = "#64748b"}
+                >{label}</a>
+              ))}
+            </div>
+
+            {/* Product */}
+            <div>
+              <h4 style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#a855f7", marginBottom: 16, marginTop: 0 }}>Product</h4>
+              {[
+                ["Dashboard", "/dashboard"],
+                ["Live Mode", "/live"],
+                ["Chrome Extension", "/extension"],
+                ["Pricing", "/pricing"],
+                ["Live Demo", "/demo"],
+              ].map(([label, href]) => (
+                <a key={href} href={href} style={{ display: "block", fontSize: 13, lineHeight: 1.6, marginBottom: 6, color: "#64748b", textDecoration: "none" }}
+                  onMouseEnter={e => e.target.style.color = "#a855f7"}
+                  onMouseLeave={e => e.target.style.color = "#64748b"}
+                >{label}</a>
+              ))}
+            </div>
+
+            {/* Support */}
+            <div>
+              <h4 style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#a855f7", marginBottom: 16, marginTop: 0 }}>Support</h4>
+              {[
+                ["Contact Us", "/contact"],
+                ["Submit a Feature Request", "/feature-request"],
+                ["Privacy Policy", "/privacy"],
+              ].map(([label, href]) => (
+                <a key={href} href={href} style={{ display: "block", fontSize: 13, lineHeight: 1.6, marginBottom: 6, color: "#64748b", textDecoration: "none" }}
+                  onMouseEnter={e => e.target.style.color = "#a855f7"}
+                  onMouseLeave={e => e.target.style.color = "#64748b"}
+                >{label}</a>
+              ))}
+            </div>
+
+          </div>
+
+          {/* Bottom bar */}
+          <div style={{ borderTop: "1px solid rgba(168,85,247,0.08)", padding: "24px 0 32px", display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <span style={{ fontSize: 13, color: "#64748b" }}>© 2026 CamCash — Made for cam models, by a cam model 💜</span>
+              <p style={{ fontSize: 10, color: "#1e3a52", marginTop: 6, marginBottom: 0, textAlign: "center" }}>CamCash™ is a trademark of CamCashGrl. All dashboard features, analytics methodology, streaming plan logic, and Money Map visualizations are proprietary. Unauthorized reproduction or use of CamCash concepts, features, or content is prohibited.</p>
+              <div style={{ display: "flex", gap: 16 }}>
+                <a href="/privacy" style={{ fontSize: 12, color: "#475569", textDecoration: "none" }}
+                  onMouseEnter={e => e.target.style.color = "#a855f7"}
+                  onMouseLeave={e => e.target.style.color = "#475569"}
+                >Privacy Policy</a>
+                <a href="/contact" style={{ fontSize: 12, color: "#475569", textDecoration: "none" }}
+                  onMouseEnter={e => e.target.style.color = "#a855f7"}
+                  onMouseLeave={e => e.target.style.color = "#475569"}
+                >Contact</a>
+              </div>
+            </div>
+            <a href="https://twitter.com/daphneslive" style={{ fontSize: 13, color: "#475569", textDecoration: "none" }}
+              onMouseEnter={e => e.target.style.color = "#a855f7"}
+              onMouseLeave={e => e.target.style.color = "#475569"}
+            >@daphneslive</a>
+          </div>
+        </div>
+      </footer>
 
       <FeedbackWidget />
 
