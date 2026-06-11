@@ -3,16 +3,16 @@ import BlogLayout from '@/components/BlogLayout';
 
 const SLUG = 'cam-model-fan-crm';
 const URL = `https://www.camcashgrl.com/blog/${SLUG}`;
-const TITLE = 'Cam Model Fan CRM: Track, Profile, and Prioritize Your Top Tippers';
+const TITLE = 'Cam Model Fan CRM — Track Your Top Tippers and Whales';
 const DESC =
-  'Your top few fans drive most of your income. Here is how to track every tipper, build a profile on the ones who matter, and rank them by value so you never let a whale slip away.';
+  'Know who your biggest fans are, when they last tipped, and when they\'re overdue. A fan CRM built for cam models on multiple platforms.';
 
 export const metadata = {
   title: TITLE,
   description: DESC,
   alternates: { canonical: URL },
   openGraph: {
-    title: TITLE,
+    title: 'Cam Model Fan CRM — Track Top Tippers',
     description: DESC,
     url: URL,
     type: 'article',
@@ -20,7 +20,7 @@ export const metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: TITLE,
+    title: 'Fan CRM for Cam Models',
     description: DESC,
     images: ['https://www.camcashgrl.com/og-image.png'],
   },

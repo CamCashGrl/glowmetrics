@@ -1,14 +1,19 @@
 import ArticleLayout from '../../components/ArticleLayout'
 
 export const metadata = {
-  title: "Why Your Cam Streams Aren't Making Money (And How to Fix It) | CamCash",
-  description: "Struggling with inconsistent cam earnings? These are the real reasons cam streams underperform — and the data-driven fixes that actually work on Chaturbate and BongaCams.",
+  title: "Why Your Cam Streams Aren't Making Money (Real Reasons)",
+  description: "The most common reasons streams underperform — wrong time slots, platform mismatch, weak titles — and exactly how to fix each one.",
   alternates: { canonical: 'https://www.camcashgrl.com/blog/why-cam-streams-arent-making-money' },
   openGraph: {
-    title: "Why Your Cam Streams Aren't Making Money (And How to Fix It)",
-    description: "The real reasons cam streams underperform and the data-driven fixes that actually work.",
+    title: "Why Cam Streams Aren't Making Money",
+    description: "The most common reasons streams underperform — wrong time slots, platform mismatch, weak titles — and exactly how to fix each one.",
     url: 'https://www.camcashgrl.com/blog/why-cam-streams-arent-making-money',
     type: 'article',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Why Cam Streams Underperform',
+    description: "The most common reasons streams underperform — wrong time slots, platform mismatch, weak titles — and exactly how to fix each one.",
   },
 }
 

@@ -1,14 +1,19 @@
 import ArticleLayout from '../../components/ArticleLayout'
 
 export const metadata = {
-  title: 'How to Re-Engage Whales and Top Tippers (Win Back Your Big Spenders) | CamCash',
-  description: "Your biggest earners going quiet? Learn proven strategies to re-engage whales and top tippers on Chaturbate, MFC, and BongaCams before they disappear for good.",
+  title: 'How to Re-Engage Whale Tippers Before They Go Cold',
+  description: 'What to do when your biggest spenders stop showing up. Room title strategies, timing tactics, and reactivation methods that work.',
   alternates: { canonical: 'https://www.camcashgrl.com/blog/how-to-re-engage-whales-and-top-tippers' },
   openGraph: {
-    title: 'How to Re-Engage Whales and Top Tippers (Win Back Your Big Spenders)',
-    description: 'Proven strategies to win back your highest-spending fans before they disappear for good.',
+    title: 'Re-Engage Whale Tippers on Chaturbate',
+    description: 'What to do when your biggest spenders stop showing up. Room title strategies, timing tactics, and reactivation methods that work.',
     url: 'https://www.camcashgrl.com/blog/how-to-re-engage-whales-and-top-tippers',
     type: 'article',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Re-Engage Your Top Tippers',
+    description: 'What to do when your biggest spenders stop showing up. Room title strategies, timing tactics, and reactivation methods that work.',
   },
 }
 

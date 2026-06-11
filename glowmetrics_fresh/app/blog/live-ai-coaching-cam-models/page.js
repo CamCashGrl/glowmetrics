@@ -3,16 +3,16 @@ import BlogLayout from '@/components/BlogLayout';
 
 const SLUG = 'live-ai-coaching-cam-models';
 const URL = `https://www.camcashgrl.com/blog/${SLUG}`;
-const TITLE = 'Live AI Coaching for Cam Models: Fill a Quiet Room and Earn More';
+const TITLE = 'Live AI Coaching for Cam Models — Real-Time Stream Advice';
 const DESC =
-  'When the room drops to five viewers and the chat goes quiet, knowing what to do next is the difference between a flat night and a great one. Here is how real-time AI coaching works and why it boosts in-stream tips.';
+  'How AI coaching during a live stream tells you when to push a goal, stay live longer, or switch strategy based on your real earnings data.';
 
 export const metadata = {
   title: TITLE,
   description: DESC,
   alternates: { canonical: URL },
   openGraph: {
-    title: TITLE,
+    title: 'Live AI Coaching for Cam Models',
     description: DESC,
     url: URL,
     type: 'article',
@@ -20,7 +20,7 @@ export const metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: TITLE,
+    title: 'AI Coaching While You Stream',
     description: DESC,
     images: ['https://www.camcashgrl.com/og-image.png'],
   },

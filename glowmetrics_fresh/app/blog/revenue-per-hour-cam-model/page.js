@@ -1,9 +1,9 @@
 import ArticleLayout from '../../components/ArticleLayout'
 
 export const metadata = {
-  title: 'Revenue Per Hour: The Cam Model Metric That Matters Most | CamCash',
+  title: "Revenue Per Hour for Cam Models — What's a Good Rate?",
   description:
-    'Learn why revenue per hour matters more than total earnings, how to calculate it, and how cam models can use analytics to find their most profitable streaming windows.',
+    'What does a good $/hr actually look like for cam models in 2026? Platform breakdowns, hourly benchmarks, and how to calculate yours.',
   keywords: [
     'revenue per hour cam model',
     'cam model earnings per hour',
@@ -17,11 +17,16 @@ export const metadata = {
   authors: [{ name: 'CamCash', url: 'https://www.camcashgrl.com' }],
   alternates: { canonical: 'https://www.camcashgrl.com/blog/revenue-per-hour-cam-model' },
   openGraph: {
-    title: 'Revenue Per Hour: The Cam Model Metric That Matters Most',
+    title: 'Revenue Per Hour — Cam Model Benchmarks',
     description:
-      'Why revenue per hour matters more than total earnings — and how to use it to stream smarter.',
+      'What does a good $/hr actually look like for cam models in 2026? Platform breakdowns, hourly benchmarks, and how to calculate yours.',
     url: 'https://www.camcashgrl.com/blog/revenue-per-hour-cam-model',
     type: 'article',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Cam Model Revenue Per Hour',
+    description: 'What does a good $/hr actually look like for cam models in 2026? Platform breakdowns, hourly benchmarks, and how to calculate yours.',
   },
 }
 

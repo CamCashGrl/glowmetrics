@@ -4,9 +4,9 @@
 import ChaturbateCalculator from './ChaturbateCalculator'
 
 export const metadata = {
-  title: "Chaturbate Earnings Tracker — Analyze, Optimize & Grow Your Revenue",
+  title: "Chaturbate Earnings Tracker — Free Tool for Broadcasters",
   description:
-    "Discover your most profitable streaming hours, highest-spending fans, peak earning days, and hidden revenue opportunities inside your Chaturbate earnings history. Free analytics for cam models.",
+    "Track your Chaturbate tips, tokens, and hourly earnings automatically. See your best days, top fans, and peak hours in one dashboard.",
   keywords: [
     "chaturbate earnings tracker",
     "chaturbate analytics",
@@ -41,11 +41,16 @@ export const metadata = {
     },
   },
   openGraph: {
-    title: "Chaturbate Earnings Tracker — Analyze & Grow Your Revenue",
+    title: "Chaturbate Earnings Tracker (Free)",
     description:
-      "Discover your highest-earning hours, top-spending fans, peak streaming days, and hidden revenue opportunities inside your Chaturbate history.",
+      "Track your Chaturbate tips, tokens, and hourly earnings automatically. See your best days, top fans, and peak hours in one dashboard.",
     url: "https://www.camcashgrl.com/guides/chaturbate-earnings-tracker",
     type: "article",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Free Chaturbate Earnings Tracker",
+    description: "Track your Chaturbate tips, tokens, and hourly earnings automatically. See your best days, top fans, and peak hours in one dashboard.",
   },
 };
 

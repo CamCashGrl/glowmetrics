@@ -3,16 +3,16 @@ import BlogLayout from '@/components/BlogLayout';
 
 const SLUG = 'viral-cam-room-titles';
 const URL = `https://www.camcashgrl.com/blog/${SLUG}`;
-const TITLE = 'Viral Cam Room Titles: The Formula That Stops the Scroll';
+const TITLE = 'Viral Cam Room Titles That Get Viewers to Stay and Tip';
 const DESC =
-  'Your thumbnail gets the look, but your room title gets the click. Here is the viral title formula, three template structures, and how to customize titles by niche, mood, and goal so every stream starts strong.';
+  'Room title formulas that actually work — urgency titles, goal titles, bratty titles — with examples from high-earning Chaturbate sessions.';
 
 export const metadata = {
   title: TITLE,
   description: DESC,
   alternates: { canonical: URL },
   openGraph: {
-    title: TITLE,
+    title: 'Viral Cam Room Titles That Convert',
     description: DESC,
     url: URL,
     type: 'article',
@@ -20,7 +20,7 @@ export const metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: TITLE,
+    title: 'Viral Cam Room Titles',
     description: DESC,
     images: ['https://www.camcashgrl.com/og-image.png'],
   },

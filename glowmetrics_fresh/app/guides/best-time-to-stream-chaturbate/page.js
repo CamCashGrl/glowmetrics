@@ -2,9 +2,9 @@
 import { PeakHourCalculator, RevPerHourCalculator } from './BestTimeClient'
 
 export const metadata = {
-  title: 'Best Time to Stream on Chaturbate (2026 Guide) — Find Your Peak Hours',
+  title: 'Best Time to Stream on Chaturbate in 2026 — Peak Hours',
   description:
-    'Discover the best time to stream on Chaturbate in 2026. Covers peak hours by timezone, best days, whale behavior, revenue per hour, session fatigue, and how to find your personal highest-earning windows using real data.',
+    'When are the most viewers and tippers online on Chaturbate? Data on peak streaming windows by day, hour, and audience type.',
   keywords: [
     'best time to stream on chaturbate',
     'best hours on chaturbate',
@@ -37,11 +37,16 @@ export const metadata = {
     googleBot: { index: true, follow: true, 'max-image-preview': 'large', 'max-snippet': -1 },
   },
   openGraph: {
-    title: 'Best Time to Stream on Chaturbate (2026) — Peak Hours & Personal Analytics',
+    title: 'Best Time to Stream on Chaturbate 2026',
     description:
-      'The definitive guide to finding your highest-earning streaming hours on Chaturbate. Covers platform trends, whale behavior, revenue per hour, session fatigue, and personalized peak-hour analysis.',
+      'When are the most viewers and tippers online on Chaturbate? Data on peak streaming windows by day, hour, and audience type.',
     url: 'https://www.camcashgrl.com/guides/best-time-to-stream-chaturbate',
     type: 'article',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Best Chaturbate Streaming Times',
+    description: 'When are the most viewers and tippers online on Chaturbate? Data on peak streaming windows by day, hour, and audience type.',
   },
 }
 
