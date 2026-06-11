@@ -1,14 +1,19 @@
 import ArticleLayout from '../../components/ArticleLayout'
 
 export const metadata = {
-  title: 'Cam Model Earnings: How Much Do Cam Models Actually Make? | CamCash',
-  description: 'Real cam model earnings data — average income, what affects your earnings, how to calculate your own numbers, and how to increase what you make per stream.',
+  title: 'Cam Model Earnings in 2026 — How Much Can You Actually Make?',
+  description: 'Real cam model income data across Chaturbate, BongaCams and MFC. See average hourly rates, top earner numbers, and what actually affects your pay.',
   alternates: { canonical: 'https://www.camcashgrl.com/blog/cam-model-earnings' },
   openGraph: {
-    title: 'Cam Model Earnings: How Much Do Cam Models Actually Make?',
-    description: 'Real cam model earnings data and how to increase what you make per stream.',
+    title: 'Cam Model Earnings in 2026 — How Much Can You Actually Make?',
+    description: 'Real cam model income data across Chaturbate, BongaCams and MFC. See average hourly rates, top earner numbers, and what actually affects your pay.',
     url: 'https://www.camcashgrl.com/blog/cam-model-earnings',
     type: 'article',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Cam Model Earnings 2026',
+    description: 'Real cam model income data across Chaturbate, BongaCams and MFC. See average hourly rates, top earner numbers, and what actually affects your pay.',
   },
 }
 
