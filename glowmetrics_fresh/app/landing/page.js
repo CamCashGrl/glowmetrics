@@ -40,7 +40,7 @@ function AuthPanel({
           fontSize: 18, fontWeight: 900, color: "white", marginBottom: 10,
           boxShadow: "0 0 20px rgba(34,211,238,0.3)",
         }}>$</div>
-        <div style={{ fontSize: 16, fontWeight: 700, color: "white", letterSpacing: -0.3 }}>CamCash</div>
+        <div style={{ fontSize: 16, fontWeight: 700, color: "white", letterSpacing: -0.3 }}>CamCash™</div>
         <div style={{ fontSize: 12, color: "#475569", marginTop: 3 }}>
           {isSignUp ? "No credit card required" : "Welcome back 💋"}
         </div>
@@ -373,7 +373,7 @@ export default function LandingPage() {
       <nav style={{ position: "relative", zIndex: 10, padding: "18px 32px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.04)", backdropFilter: "blur(12px)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
           <div style={{ width: 28, height: 28, borderRadius: 8, background: "linear-gradient(135deg,#22D3EE,#EC4899)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 900, color: "white", boxShadow: "0 0 14px rgba(34,211,238,0.3)" }}>$</div>
-          <span style={{ fontSize: 17, fontWeight: 800, color: "white", letterSpacing: -0.4 }}>Cam<span style={{ background: "linear-gradient(90deg,#22D3EE,#EC4899)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Cash</span></span>
+          <span style={{ fontSize: 17, fontWeight: 800, color: "white", letterSpacing: -0.4 }}>Cam<span style={{ background: "linear-gradient(90deg,#22D3EE,#EC4899)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Cash</span>™</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 20, marginRight: 8 }}>
           <a href="/landing#features" style={{ fontSize: 13, color: "#64748b", textDecoration: "none" }}>Features</a>
@@ -487,7 +487,7 @@ export default function LandingPage() {
       {/* ── TRUST SECTION ── */}
       <div style={{ position: "relative", zIndex: 1, padding: "0 32px 64px", maxWidth: 960, margin: "0 auto" }}>
         <div style={{ textAlign: "center", marginBottom: 28 }}>
-          <div style={{ fontSize: 16, fontWeight: 700, color: "#f1f5f9" }}>Why Creators Choose CamCash</div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: "#f1f5f9" }}>Why Creators Choose CamCash™</div>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 12 }}>
           {[
@@ -526,7 +526,7 @@ export default function LandingPage() {
       <div style={{ position: "relative", zIndex: 1, maxWidth: 1000, margin: "0 auto", padding: "80px 32px 40px" }}>
         <div style={{ textAlign: "center", marginBottom: 48 }}>
           <div style={{ fontSize: 10, fontWeight: 700, color: "#334155", textTransform: "uppercase", letterSpacing: 2, marginBottom: 10 }}>How It Works</div>
-          <div style={{ fontSize: "clamp(24px,3vw,36px)", fontWeight: 800, color: "white", letterSpacing: -0.8 }}>Three ways CamCash makes you more money</div>
+          <div style={{ fontSize: "clamp(24px,3vw,36px)", fontWeight: 800, color: "white", letterSpacing: -0.8 }}>Three ways CamCash™ makes you more money</div>
         </div>
 
         <div className="lp-three-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 20 }}>
@@ -772,7 +772,7 @@ export default function LandingPage() {
           {/* Bottom bar */}
           <div style={{ borderTop: "1px solid rgba(168,85,247,0.08)", padding: "24px 0 32px", display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <span style={{ fontSize: 13, color: "#64748b" }}>© 2026 CamCash — Made for cam models, by a cam model 💜</span>
+              <span style={{ fontSize: 13, color: "#64748b" }}>© 2026 CamCash™ — Made for cam models, by a cam model 💜</span>
               <p style={{ fontSize: 10, color: "#1e3a52", marginTop: 6, marginBottom: 0, textAlign: "center" }}>CamCash™ is a trademark of CamCashGrl. All dashboard features, analytics methodology, streaming plan logic, and Money Map visualizations are proprietary. Unauthorized reproduction or use of CamCash concepts, features, or content is prohibited.</p>
               <div style={{ display: "flex", gap: 16 }}>
                 <a href="/privacy" style={{ fontSize: 12, color: "#475569", textDecoration: "none" }}
