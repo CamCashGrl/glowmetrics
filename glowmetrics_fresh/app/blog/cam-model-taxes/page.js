@@ -1,14 +1,19 @@
 import ArticleLayout from '../../components/ArticleLayout'
 
 export const metadata = {
-  title: 'Cam Model Taxes: What to Track, What to Deduct, and How to File',
-  description: "Cam model income is taxable. Here's exactly what to track, what deductions you can claim, when to pay quarterly, and how to avoid the most common tax mistakes.",
+  title: 'Cam Model Taxes 2026 — What You Owe and How to File',
+  description: 'How cam models handle taxes, what counts as a deduction, and how to avoid surprises at tax time. Written for adult content creators.',
   alternates: { canonical: 'https://www.camcashgrl.com/blog/cam-model-taxes' },
   openGraph: {
-    title: 'Cam Model Taxes: What to Track, What to Deduct, and How to File',
-    description: 'Everything cam models need to know about taxes — deductions, quarterly payments, and record-keeping.',
+    title: 'Cam Model Taxes 2026 — What You Owe',
+    description: 'How cam models handle taxes, what counts as a deduction, and how to avoid surprises at tax time. Written for adult content creators.',
     url: 'https://www.camcashgrl.com/blog/cam-model-taxes',
     type: 'article',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Cam Model Taxes Guide 2026',
+    description: 'How cam models handle taxes, what counts as a deduction, and how to avoid surprises at tax time. Written for adult content creators.',
   },
 }
 

@@ -1,14 +1,19 @@
 import ArticleLayout from '../../components/ArticleLayout'
 
 export const metadata = {
-  title: 'How to Build a Loyal Fanbase as a Cam Model (That Actually Tips)',
-  description: "Loyal fans are the foundation of stable cam income. Here's how to identify, develop, and retain high-value regulars on Chaturbate, BongaCams, and more.",
+  title: 'How to Build Loyal Fans on Chaturbate (That Keep Coming Back)',
+  description: 'What separates one-time tippers from regulars who show up every stream. Strategies that actually work based on real session data.',
   alternates: { canonical: 'https://www.camcashgrl.com/blog/how-to-build-loyal-fans' },
   openGraph: {
-    title: 'How to Build a Loyal Fanbase as a Cam Model (That Actually Tips)',
-    description: 'How to identify, develop, and retain high-value regulars who tip consistently.',
+    title: 'How to Build Loyal Fans on Chaturbate',
+    description: 'What separates one-time tippers from regulars who show up every stream. Strategies that actually work based on real session data.',
     url: 'https://www.camcashgrl.com/blog/how-to-build-loyal-fans',
     type: 'article',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Build Loyal Cam Model Fans',
+    description: 'What separates one-time tippers from regulars who show up every stream. Strategies that actually work based on real session data.',
   },
 }
 
