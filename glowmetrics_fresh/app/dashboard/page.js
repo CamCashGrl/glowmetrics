@@ -11,6 +11,9 @@ import CSVImport from "./CSVImport"
 import Sidebar from "./Sidebar"
 import SiteFooter from "../components/SiteFooter"
 import FeedbackWidget from "../components/FeedbackWidget"
+import AnalyticsCharts from './AnalyticsCharts'
+import StreamPlanner from './StreamPlanner'
+import MoneyMap from './MoneyMap'
 
 // Analytics tracking — works whether or not @vercel/analytics is installed
 let track = (event, props) => {}
@@ -5926,6 +5929,10 @@ const handleCSV = async (file, forcePlatform = null) => {
             </div>
           </div>
         )}
+
+        {activeTab === 'analytics' && <AnalyticsCharts tips={tips} />}
+        {activeTab === 'planner' && <StreamPlanner tips={tips} isPro={isPro} />}
+        {activeTab === 'moneymap' && <MoneyMap tips={tips} isPro={isPro} />}
       </div>
 
       {/* DELETE MODAL */}
