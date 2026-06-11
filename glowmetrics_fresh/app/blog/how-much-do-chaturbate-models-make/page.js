@@ -1,20 +1,20 @@
 import ArticleLayout from '../../components/ArticleLayout'
 
 export const metadata = {
-  title: 'How Much Do Chaturbate Models Make Per Hour? (Real Numbers) | CamCash',
-  description: 'Real Chaturbate model earnings data — average $/hr, token payout rates, what affects your income, and how to calculate your own earnings per hour.',
+  title: 'How Much Do Chaturbate Models Actually Make in 2026? (Real Numbers)',
+  description: 'The real average earnings for Chaturbate models broken down by hours, tokens, and viewer count. Data from actual broadcasters — not guesses.',
   alternates: { canonical: 'https://www.camcashgrl.com/blog/how-much-do-chaturbate-models-make' },
   openGraph: {
-    title: 'How Much Do Chaturbate Models Make Per Hour? (Real Numbers)',
-    description: 'Real Chaturbate earnings data and how to calculate your own $/hr.',
+    title: 'How Much Do Chaturbate Models Actually Make in 2026?',
+    description: 'The real average earnings for Chaturbate models broken down by hours, tokens, and viewer count. Data from actual broadcasters — not guesses.',
     url: 'https://www.camcashgrl.com/blog/how-much-do-chaturbate-models-make',
     type: 'article',
     images: [{ url: 'https://www.camcashgrl.com/og-image.png', width: 1200, height: 630 }],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'How Much Do Chaturbate Models Make Per Hour? (Real Numbers)',
-    description: 'Real Chaturbate earnings data and how to calculate your own $/hr.',
+    title: 'How Much Do Chaturbate Models Actually Make?',
+    description: 'The real average earnings for Chaturbate models broken down by hours, tokens, and viewer count. Data from actual broadcasters — not guesses.',
   },
 }
 

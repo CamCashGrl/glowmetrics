@@ -7,7 +7,7 @@ export const metadata = {
   alternates: { canonical: 'https://www.camcashgrl.com/guides/cam-model-token-calculator' },
   openGraph: {
     title: 'How Much Are Tokens Worth in USD? Chaturbate, BongaCams & MFC',
-    description: 'Free token to USD calculator for cam models. Real broadcaster payout rates for all major platforms.',
+    description: 'Find out exactly what your tokens are worth in real dollars. Instant payout calculator for Chaturbate, BongaCams, MyFreeCams and more. Free, no signup.',
     url: 'https://www.camcashgrl.com/guides/cam-model-token-calculator',
     type: 'article',
     images: [{ url: 'https://www.camcashgrl.com/og-image.png', width: 1200, height: 630 }],
@@ -15,7 +15,7 @@ export const metadata = {
   twitter: {
     card: 'summary_large_image',
     title: 'How Much Are Tokens Worth? Token to USD Calculator',
-    description: 'See exactly what your tokens are worth in USD across all major platforms.',
+    description: 'Find out exactly what your tokens are worth in real dollars. Instant payout calculator for Chaturbate, BongaCams, MyFreeCams and more. Free, no signup.',
   },
   robots: {
     index: true,
