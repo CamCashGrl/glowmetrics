@@ -7,6 +7,7 @@ import { computeRevenueVelocity, computeLiveComparison } from '../../lib/analyti
 import { detectSessionPhase, PHASES, getRecoveryActions, getGoalStrategy } from '../../lib/analytics/sessionPhase';
 import { computeOpportunityScore, computeStreamHealth } from '../../lib/analytics/opportunity';
 import FeedbackWidget from '../components/FeedbackWidget';
+import EventsSync from './EventsSync';
 
 const C = {
   bg: '#040812', card: 'rgba(15,20,32,0.75)', border: 'rgba(168,85,247,0.2)',
@@ -902,6 +903,17 @@ export default function LivePage() {
       </div>
 
       <div style={{ padding: '28px 32px', maxWidth: 1280, margin: '0 auto' }}>
+
+        <EventsSync onNewTip={(events) => {
+          const mapped = events.map(e => normalizeTip({
+            username: e.object?.user?.username ?? 'anonymous',
+            tokens: e.object?.tip?.tokens ?? 0,
+            usd: parseFloat(((e.object?.tip?.tokens ?? 0) * 0.05).toFixed(2)),
+            timestamp: e.timestamp ? new Date(e.timestamp * 1000) : new Date(),
+            platform: 'Chaturbate',
+          }))
+          setLiveEvents(prev => [...prev, ...mapped])
+        }} />
 
         {/* ── OPERATIONAL STATUS BAR ─────────────────────────────── */}
         <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12, padding: '10px 18px', marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
