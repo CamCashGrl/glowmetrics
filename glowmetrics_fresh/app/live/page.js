@@ -7,6 +7,7 @@ import { computeRevenueVelocity, computeLiveComparison } from '../../lib/analyti
 import { detectSessionPhase, PHASES, getRecoveryActions, getGoalStrategy } from '../../lib/analytics/sessionPhase';
 import { computeOpportunityScore, computeStreamHealth } from '../../lib/analytics/opportunity';
 import FeedbackWidget from '../components/FeedbackWidget';
+import EventsSync from './EventsSync';
 
 const C = {
   bg: '#040812', card: 'rgba(15,20,32,0.75)', border: 'rgba(168,85,247,0.2)',
@@ -903,6 +904,17 @@ export default function LivePage() {
 
       <div style={{ padding: '28px 32px', maxWidth: 1280, margin: '0 auto' }}>
 
+        <EventsSync onNewTip={(events) => {
+          const mapped = events.map(e => normalizeTip({
+            username: e.object?.user?.username ?? 'anonymous',
+            tokens: e.object?.tip?.tokens ?? 0,
+            usd: parseFloat(((e.object?.tip?.tokens ?? 0) * 0.05).toFixed(2)),
+            timestamp: e.timestamp ? new Date(e.timestamp * 1000) : new Date(),
+            platform: 'Chaturbate',
+          }))
+          setLiveEvents(prev => [...prev, ...mapped])
+        }} />
+
         {/* ── OPERATIONAL STATUS BAR ─────────────────────────────── */}
         <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12, padding: '10px 18px', marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap' }}>
@@ -936,6 +948,10 @@ export default function LivePage() {
               <option value="whale">🐋 Whale Focus</option>
               <option value="goal">🎯 Goal Focus</option>
             </select>
+            <a href="/camcash-extension.zip" download="camcash-extension.zip" onClick={() => { setShowExtModal(true); setExtStep(0); }}
+              style={{ padding: '7px 14px', borderRadius: 8, background: 'linear-gradient(135deg, #a855f7, #7c3aed)', color: '#fff', fontWeight: 700, fontSize: 12, textDecoration: 'none', whiteSpace: 'nowrap' }}>
+              📥 Download Extension
+            </a>
             {!liveActive ? (
               <button onClick={() => { setLiveActive(true); setLiveStartTime(new Date()); setLiveEvents([]); processedTipIds.current = new Set(); coachingCooldowns.current = {}; }}
                 style={{ padding: '7px 18px', borderRadius: 8, background: 'linear-gradient(135deg, #10B981, #22D3EE)', border: 'none', color: C.white, fontWeight: 800, fontSize: 12, cursor: 'pointer', boxShadow: '0 0 16px rgba(16,185,129,0.35)' }}>
