@@ -45,7 +45,7 @@ const NAV = [
   },
 ]
 
-export default function Sidebar({ activeTab, onTabChange, user, onSignOut }) {
+export default function Sidebar({ activeTab, onTabChange, user, onSignOut, isPro = true }) {
   const [hoveredId, setHoveredId] = useState(null)
   const [mobileOpen, setMobileOpen] = useState(false)
 
@@ -100,10 +100,44 @@ export default function Sidebar({ activeTab, onTabChange, user, onSignOut }) {
                 {group.group}
               </div>
             )}
-            {group.items.map(({ id, icon, label }) => renderItem(id, icon, label))}
+            {group.items.map(({ id, icon, label }) => {
+              const gated = ['planner', 'moneymap', 'analytics']
+              const displayLabel = gated.includes(id) && !isPro ? `${label} 🔒` : label
+              return renderItem(id, icon, displayLabel)
+            })}
           </div>
         ))}
       </div>
+
+      {!isPro && (
+        <div style={{
+          margin: '16px 12px',
+          padding: '14px',
+          borderRadius: '12px',
+          background: 'linear-gradient(135deg, rgba(34,211,238,0.08), rgba(232,121,249,0.08))',
+          border: '1px solid rgba(34,211,238,0.2)',
+        }}>
+          <div style={{ fontSize: '12px', fontWeight: '700', color: '#f1f5f9', marginBottom: '4px' }}>
+            Upgrade to Pro
+          </div>
+          <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '10px', lineHeight: '1.5' }}>
+            Stream Planner, Money Map, unlimited data & more
+          </div>
+          <a href="/pricing" style={{
+            display: 'block',
+            textAlign: 'center',
+            padding: '8px',
+            borderRadius: '8px',
+            background: 'linear-gradient(135deg, #22d3ee, #a855f7)',
+            color: '#0a0e1a',
+            fontWeight: '700',
+            fontSize: '12px',
+            textDecoration: 'none',
+          }}>
+            $9.99/mo Early Adopter →
+          </a>
+        </div>
+      )}
 
       {/* User footer */}
       {user && (

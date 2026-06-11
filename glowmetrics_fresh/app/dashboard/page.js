@@ -1295,6 +1295,7 @@ export default function Dashboard() {
   const [noteText, setNoteText] = useState('')
   const [noteSaving, setNoteSaving] = useState(false)
   const [engineInsights, setEngineInsights] = useState(null)
+  const [csvUploadBlocked, setCsvUploadBlocked] = useState(false)
 
   // ── ANIMATION STATE ──────────────────────────────────────
   const [counterBumping, setCounterBumping] = useState(false)
@@ -1322,6 +1323,7 @@ export default function Dashboard() {
   const isBetaUser = true
   const isPro = profile?.plan === 'pro' || profile?.plan === 'unlimited'
   const uploadLimit = Infinity
+  const displayTips = !isPro ? tips.slice(-500) : tips
 
   const fmtHour = h => { if (h == null || isNaN(h)) return 'N/A'; return h === 0 ? '12 AM' : h < 12 ? h+' AM' : h === 12 ? '12 PM' : (h-12)+' PM' }
 
@@ -1760,6 +1762,10 @@ export default function Dashboard() {
   }
 const handleCSV = async (file, forcePlatform = null) => {
     if (!file || !user) return
+    if (!isPro) {
+      const { count } = await supabase.from('csv_uploads').select('id', { count: 'exact', head: true }).eq('user_id', user.id)
+      if (count >= 3) { setCsvUploadBlocked(true); return }
+    }
     setUploading(true)
     try {
       const { data: { session } } = await supabase.auth.getSession()
@@ -2613,7 +2619,7 @@ const handleCSV = async (file, forcePlatform = null) => {
       </div>
 
       {/* SIDEBAR — desktop only, hidden on mobile via CSS */}
-      <Sidebar activeTab={activeTab} onTabChange={(tab) => { setActiveTab(tab); if (typeof window !== "undefined") { localStorage.setItem("camcash_tab", tab); window.scrollTo({ top: 0, behavior: "instant" }); } }} user={user} onSignOut={async () => { await supabase.auth.signOut(); router.replace("/login"); }} />{/* MAIN CONTENT */}
+      <Sidebar activeTab={activeTab} onTabChange={(tab) => { setActiveTab(tab); if (typeof window !== "undefined") { localStorage.setItem("camcash_tab", tab); window.scrollTo({ top: 0, behavior: "instant" }); } }} user={user} onSignOut={async () => { await supabase.auth.signOut(); router.replace("/login"); }} isPro={isPro} />{/* MAIN CONTENT */}
       <div className="dash-main" style={{ marginLeft: 240, width: "calc(100% - 240px)", minWidth: 0, padding: 32, boxSizing: "border-box", overflowX: "hidden" }}>
 
         {/* ── STICKY COMMAND BAR ── */}
@@ -2662,6 +2668,14 @@ const handleCSV = async (file, forcePlatform = null) => {
             </div>
           )
         })()}
+
+        {/* ── FREE TIER DATA BANNER ── */}
+        {!isPro && tips.length > 500 && (
+          <div style={{ marginBottom: 16, padding: '12px 16px', borderRadius: 10, background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+            <span style={{ fontSize: 13, color: '#f59e0b' }}>You're on the free tier — showing your most recent 500 tips. Upgrade to Pro to unlock your full history.</span>
+            <a href="/pricing" style={{ fontSize: 13, fontWeight: 700, color: '#f59e0b', textDecoration: 'none', background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: 6, padding: '4px 12px', whiteSpace: 'nowrap' }}>Upgrade →</a>
+          </div>
+        )}
 
         {/* ── LIVE STATUS BAR ── */}
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
@@ -5543,14 +5557,21 @@ const handleCSV = async (file, forcePlatform = null) => {
                   <option value="CamSoda">CamSoda</option>
                 </select>
               </div>
-              <div style={{ textAlign: "center" }}>
-                <div style={{ fontSize: 40, marginBottom: 12 }}>📁</div>
-                <label style={{ display: "inline-block", padding: "14px 32px", borderRadius: 10, background: "linear-gradient(135deg, #22D3EE, #EC4899)", boxShadow: "0 0 20px rgba(34,211,238,0.4), 0 0 40px rgba(236,72,153,0.3)", color: C.white, fontSize: 15, fontWeight: 600, cursor: "pointer" }}>
-                  {uploading ? "Processing..." : "Choose CSV File"}
-                  <input type="file" accept=".csv,.txt" style={{ display: "none" }} onChange={e => handleCSV(e.target.files[0], uploadPlatform || null)} disabled={uploading} />
-                </label>
-                <p style={{ fontSize: 12, color: C.muted, marginTop: 12 }}>Supports Chaturbate, BongaCams, MyFreeCams, Stripchat, CamSoda</p>
-              </div>
+              {csvUploadBlocked ? (
+                <div style={{ textAlign: 'center', padding: '16px 0' }}>
+                  <p style={{ fontSize: 14, color: '#f87171', marginBottom: 16 }}>You've used your 3 free CSV uploads. Upgrade to Pro for unlimited imports.</p>
+                  <a href="/pricing" style={{ display: 'inline-block', padding: '10px 24px', borderRadius: 8, background: 'linear-gradient(135deg,#22D3EE,#a855f7)', color: '#fff', fontWeight: 700, fontSize: 13, textDecoration: 'none' }}>Upgrade to Pro →</a>
+                </div>
+              ) : (
+                <div style={{ textAlign: "center" }}>
+                  <div style={{ fontSize: 40, marginBottom: 12 }}>📁</div>
+                  <label style={{ display: "inline-block", padding: "14px 32px", borderRadius: 10, background: "linear-gradient(135deg, #22D3EE, #EC4899)", boxShadow: "0 0 20px rgba(34,211,238,0.4), 0 0 40px rgba(236,72,153,0.3)", color: C.white, fontSize: 15, fontWeight: 600, cursor: "pointer" }}>
+                    {uploading ? "Processing..." : "Choose CSV File"}
+                    <input type="file" accept=".csv,.txt" style={{ display: "none" }} onChange={e => handleCSV(e.target.files[0], uploadPlatform || null)} disabled={uploading} />
+                  </label>
+                  <p style={{ fontSize: 12, color: C.muted, marginTop: 12 }}>Supports Chaturbate, BongaCams, MyFreeCams, Stripchat, CamSoda</p>
+                </div>
+              )}
             </div>
             <div style={{ padding: "12px 16px", borderRadius: 10, background: "rgba(34,211,238,0.05)", border: "1px solid rgba(34,211,238,0.15)", fontSize: 12, color: C.muted }}>
               <strong style={{ color: C.cyan }}>CSV not loading?</strong> Try selecting your platform from the dropdown above, then re-upload. For Chaturbate: export from Stats & Data → Token Stats. For BongaCams: export from Reports.
@@ -5930,7 +5951,7 @@ const handleCSV = async (file, forcePlatform = null) => {
           </div>
         )}
 
-        {activeTab === 'analytics' && <AnalyticsCharts tips={tips} />}
+        {activeTab === 'analytics' && <AnalyticsCharts tips={displayTips} />}
         {activeTab === 'planner' && <StreamPlanner tips={tips} isPro={isPro} />}
         {activeTab === 'moneymap' && <MoneyMap tips={tips} isPro={isPro} />}
       </div>
