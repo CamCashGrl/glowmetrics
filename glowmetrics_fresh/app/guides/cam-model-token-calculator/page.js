@@ -1,12 +1,12 @@
 import TokenCalculatorClient from './TokenCalculatorClient'
 
 export const metadata = {
-  title: 'Cam Model Token Calculator 2026 — Convert Tokens to USD Instantly',
-  description: 'Free token to USD calculator for cam models. See exactly what your tokens are worth on Chaturbate, BongaCams, MyFreeCams, Stripchat, and CamSoda. Real broadcaster payout rates.',
+  title: 'How Much Are Tokens Worth in USD? Chaturbate, BongaCams & MFC',
+  description: 'Find out exactly what your tokens are worth in real dollars. Instant payout calculator for Chaturbate, BongaCams, MyFreeCams and more. Free, no signup.',
   keywords: 'token calculator, chaturbate token calculator, cam model token calculator, tokens to usd, how much are tokens worth, cam model earnings, broadcaster payout rate',
   alternates: { canonical: 'https://www.camcashgrl.com/guides/cam-model-token-calculator' },
   openGraph: {
-    title: 'Cam Model Token Calculator 2026 — Convert Tokens to USD Instantly',
+    title: 'How Much Are Tokens Worth in USD? Chaturbate, BongaCams & MFC',
     description: 'Free token to USD calculator for cam models. Real broadcaster payout rates for all major platforms.',
     url: 'https://www.camcashgrl.com/guides/cam-model-token-calculator',
     type: 'article',
@@ -14,7 +14,7 @@ export const metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Cam Model Token Calculator 2026',
+    title: 'How Much Are Tokens Worth? Token to USD Calculator',
     description: 'See exactly what your tokens are worth in USD across all major platforms.',
   },
   robots: {
@@ -126,7 +126,7 @@ export default function TokenCalculatorPage() {
               ))}
             </div>
             <h1 style={{ fontSize: 48, fontWeight: 900, color: S.white, lineHeight: 1.1, marginBottom: 20, letterSpacing: '-0.03em' }}>
-              Cam Model Token Calculator
+              How Much Are Your Tokens Worth in USD?
             </h1>
             <p style={{ fontSize: 18, lineHeight: 1.7, color: '#CBD5E1', paddingLeft: 20, borderLeft: `3px solid ${S.accent}`, maxWidth: 680 }}>
               Enter any token amount and instantly see your USD earnings across all major cam platforms. Uses real broadcaster payout rates — not what viewers pay.
