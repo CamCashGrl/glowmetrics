@@ -1007,14 +1007,14 @@ function StreamPlannerContent({ tips }) {
 export default function StreamPlanner({ tips = [], isPro = false }) {
   if (!isPro) {
     return (
-      <div style={{ background:BG, minHeight:"100%" }}>
-        <div style={{ textAlign:"center", padding:"60px 24px" }}>
-          <div style={{ fontSize:"40px", marginBottom:"16px" }}>🔒</div>
-          <h2 style={{ color:"#f1f5f9", marginBottom:"8px" }}>Stream Planner is Pro Only</h2>
-          <p style={{ color:"#64748b", marginBottom:"24px" }}>Personalized schedule, whale watch windows, earnings lift tracking and more.</p>
-          <a href="/pricing" style={{ display:"inline-block", background:"linear-gradient(135deg,#22d3ee,#a855f7)", color:"#0a0e1a", fontWeight:"800", padding:"12px 32px", borderRadius:"12px", textDecoration:"none", fontSize:"14px" }}>
-            Upgrade to Pro — $9.99/mo →
-          </a>
+      <div style={{ background:BG, minHeight:"100%", padding:"32px 24px", boxSizing:"border-box" }}>
+        <div style={{ background:"rgba(15,20,32,0.75)", border:"1px solid rgba(255,255,255,0.08)", borderRadius:"16px", padding:"48px 40px", width:"100%", boxSizing:"border-box" }}>
+          <h2 style={{ color:"#f1f5f9", fontSize:"22px", fontWeight:"700", marginBottom:"10px", marginTop:0 }}>Stream Planner</h2>
+          <p style={{ color:"#94a3b8", fontSize:"14px", marginBottom:"32px" }}>Get a personalized streaming schedule with whale watch windows, peak earning times, and lift tracking.</p>
+          <div style={{ display:"flex", gap:"12px", flexWrap:"wrap" }}>
+            <a href="/live/demo" style={{ display:"inline-flex", alignItems:"center", gap:"8px", background:"rgba(34,211,238,0.12)", border:"1px solid rgba(34,211,238,0.3)", color:"#22d3ee", fontWeight:"600", padding:"10px 24px", borderRadius:"10px", textDecoration:"none", fontSize:"14px" }}>▶ Watch Demo</a>
+            <a href="/pricing" style={{ display:"inline-flex", alignItems:"center", background:"linear-gradient(135deg,#22d3ee,#a855f7)", color:"#0a0e1a", fontWeight:"800", padding:"10px 24px", borderRadius:"10px", textDecoration:"none", fontSize:"14px" }}>Upgrade to Pro</a>
+          </div>
         </div>
       </div>
     )
