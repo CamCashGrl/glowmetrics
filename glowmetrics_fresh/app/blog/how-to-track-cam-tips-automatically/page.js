@@ -3,16 +3,16 @@ import BlogLayout from '@/components/BlogLayout';
 
 const SLUG = 'how-to-track-cam-tips-automatically';
 const URL = `https://www.camcashgrl.com/blog/${SLUG}`;
-const TITLE = 'How to Track Your Cam Tips and Earnings Automatically';
+const TITLE = 'How to Track Cam Tips Automatically — No Spreadsheets';
 const DESC =
-  'Stop downloading messy spreadsheets after every stream. Here is how automatic tip tracking works, how it beats manual CSV uploads, and how it syncs your earnings to one dashboard in real time.';
+  'Stop manually logging tips. How cam models automatically track earnings across Chaturbate, BongaCams and MFC in one dashboard.';
 
 export const metadata = {
   title: TITLE,
   description: DESC,
   alternates: { canonical: URL },
   openGraph: {
-    title: TITLE,
+    title: 'Track Cam Tips Automatically',
     description: DESC,
     url: URL,
     type: 'article',
@@ -20,7 +20,7 @@ export const metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: TITLE,
+    title: 'Auto-Track Cam Tips',
     description: DESC,
     images: ['https://www.camcashgrl.com/og-image.png'],
   },

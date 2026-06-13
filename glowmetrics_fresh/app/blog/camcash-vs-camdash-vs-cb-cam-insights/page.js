@@ -7,9 +7,9 @@
 import Link from 'next/link'
 
 export const metadata = {
-  title: 'CamCash vs CamDash vs CB Cam Insights: Best Cam Analytics Tool 2026?',
+  title: 'CamCash vs CamDash vs CB Cam Insights — Which Wins?',
   description:
-    'Direct comparison of the three main cam model analytics dashboards — CamCash, CamDash, and CB Cam Insights. Platforms supported, features, pricing, and which one actually helps you earn more.',
+    'Honest comparison of the top cam model analytics tools in 2026. Features, pricing, platforms supported, and which one is actually worth using.',
   keywords: [
     'CamCash vs CamDash',
     'cam model analytics tool',
@@ -21,10 +21,15 @@ export const metadata = {
     'chaturbate earnings tracker',
   ],
   openGraph: {
-    title: 'CamCash vs CamDash vs CB Cam Insights: Which Is Best in 2026?',
-    description: 'Only one of these tools works on BongaCams and MyFreeCams. Here is the full breakdown.',
+    title: 'CamCash vs CamDash vs CB Cam Insights',
+    description: 'Honest comparison of the top cam model analytics tools in 2026. Features, pricing, platforms supported, and which one is actually worth using.',
     type: 'article',
     url: 'https://www.camcashgrl.com/blog/camcash-vs-camdash-vs-cb-cam-insights',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Best Cam Model Analytics Tool 2026',
+    description: 'Honest comparison of the top cam model analytics tools in 2026. Features, pricing, platforms supported, and which one is actually worth using.',
   },
   alternates: {
     canonical: 'https://www.camcashgrl.com/blog/camcash-vs-camdash-vs-cb-cam-insights',

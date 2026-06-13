@@ -1,14 +1,19 @@
 import ArticleLayout from '../../components/ArticleLayout'
 
 export const metadata = {
-  title: 'How to Get More Tips on MyFreeCams (Proven Strategies) | CamCash',
-  description: 'Struggling to get tips on MyFreeCams? Learn proven strategies to increase tips, engage viewers, and boost your cam income fast.',
+  title: 'How to Get More Tips on MyFreeCams in 2026',
+  description: 'Proven strategies to increase tips on MFC — best times to stream, goal structures, and fan engagement tactics that move tokens.',
   alternates: { canonical: 'https://www.camcashgrl.com/blog/how-to-get-more-tips-on-myfreecams' },
   openGraph: {
-    title: 'How to Get More Tips on MyFreeCams (Proven Strategies)',
-    description: 'Proven strategies to increase tips and boost your cam income on MyFreeCams.',
+    title: 'How to Get More Tips on MyFreeCams',
+    description: 'Proven strategies to increase tips on MFC — best times to stream, goal structures, and fan engagement tactics that move tokens.',
     url: 'https://www.camcashgrl.com/blog/how-to-get-more-tips-on-myfreecams',
     type: 'article',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'More Tips on MyFreeCams',
+    description: 'Proven strategies to increase tips on MFC — best times to stream, goal structures, and fan engagement tactics that move tokens.',
   },
 }
 

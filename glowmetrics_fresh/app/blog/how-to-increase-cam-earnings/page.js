@@ -1,14 +1,19 @@
 import ArticleLayout from '../../components/ArticleLayout'
 
 export const metadata = {
-  title: 'How to Increase Cam Earnings Using Data (Not Guesswork) | CamCash',
-  description: 'Learn the data-driven strategies cam models use to increase cam earnings on Chaturbate and BongaCams. Track your tips, find your peak hours, and grow your income with real numbers.',
+  title: 'How to Increase Cam Earnings — Data-Backed Strategies for 2026',
+  description: 'Stop guessing and start using your own data. How to find your peak hours, best platform, and highest-value fans to earn more per stream.',
   alternates: { canonical: 'https://www.camcashgrl.com/blog/how-to-increase-cam-earnings' },
   openGraph: {
-    title: 'How to Increase Cam Earnings Using Data (Not Guesswork)',
-    description: 'The data-driven strategies cam models use to increase earnings on Chaturbate and BongaCams.',
+    title: 'How to Increase Cam Earnings in 2026',
+    description: 'Stop guessing and start using your own data. How to find your peak hours, best platform, and highest-value fans to earn more per stream.',
     url: 'https://www.camcashgrl.com/blog/how-to-increase-cam-earnings',
     type: 'article',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Increase Cam Earnings 2026',
+    description: 'Stop guessing and start using your own data. How to find your peak hours, best platform, and highest-value fans to earn more per stream.',
   },
 }
 

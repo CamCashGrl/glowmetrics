@@ -1,14 +1,19 @@
 import ArticleLayout from '../../components/ArticleLayout'
 
 export const metadata = {
-  title: 'How to Pick the Perfect Cam Name for Your Brand (2026) | CamCash',
-  description: 'Choosing the right cam name can make or break your brand. Learn how to pick a memorable, searchable cam model name that grows your audience and protects your privacy.',
+  title: 'How to Pick a Cam Name — What Actually Works in 2026',
+  description: 'What makes a great cam model name — memorable, searchable, on-brand. Tips from real broadcasters plus a free name generator tool.',
   alternates: { canonical: 'https://www.camcashgrl.com/blog/how-to-pick-a-cam-name' },
   openGraph: {
-    title: 'How to Pick the Perfect Cam Name for Your Brand (2026)',
-    description: 'Choosing the right cam name can make or break your brand. Learn how to pick a memorable, searchable cam model name that grows your audience and protects your privacy.',
+    title: 'How to Pick a Cam Name in 2026',
+    description: 'What makes a great cam model name — memorable, searchable, on-brand. Tips from real broadcasters plus a free name generator tool.',
     url: 'https://www.camcashgrl.com/blog/how-to-pick-a-cam-name',
     type: 'article',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'How to Pick a Cam Name',
+    description: 'What makes a great cam model name — memorable, searchable, on-brand. Tips from real broadcasters plus a free name generator tool.',
   },
 }
 

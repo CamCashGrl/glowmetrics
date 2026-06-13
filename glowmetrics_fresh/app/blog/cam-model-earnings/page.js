@@ -1,19 +1,19 @@
 import ArticleLayout from '../../components/ArticleLayout'
 
 export const metadata = {
-  title: 'Cam Model Earnings in 2026 — How Much Can You Actually Make?',
-  description: 'Real cam model income data across Chaturbate, BongaCams and MFC. See average hourly rates, top earner numbers, and what actually affects your pay.',
+  title: 'Cam Model Earnings in 2026 — Real Income Data by Platform',
+  description: 'Real average earnings for cam models on Chaturbate, BongaCams and MFC. Hourly rates, top earner data, and what actually moves your income.',
   alternates: { canonical: 'https://www.camcashgrl.com/blog/cam-model-earnings' },
   openGraph: {
-    title: 'Cam Model Earnings in 2026 — How Much Can You Actually Make?',
-    description: 'Real cam model income data across Chaturbate, BongaCams and MFC. See average hourly rates, top earner numbers, and what actually affects your pay.',
+    title: 'Cam Model Earnings in 2026 — Real Income Data',
+    description: 'Real average earnings for cam models on Chaturbate, BongaCams and MFC. Hourly rates, top earner data, and what actually moves your income.',
     url: 'https://www.camcashgrl.com/blog/cam-model-earnings',
     type: 'article',
   },
   twitter: {
     card: 'summary_large_image',
     title: 'Cam Model Earnings 2026',
-    description: 'Real cam model income data across Chaturbate, BongaCams and MFC. See average hourly rates, top earner numbers, and what actually affects your pay.',
+    description: 'Real average earnings for cam models on Chaturbate, BongaCams and MFC. Hourly rates, top earner data, and what actually moves your income.',
   },
 }
 

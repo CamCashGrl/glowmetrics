@@ -1,14 +1,19 @@
 import ArticleLayout from '../../components/ArticleLayout'
 
 export const metadata = {
-  title: 'Why Your Cam Income Is Inconsistent (And How to Fix It) | CamCash',
-  description: "If your cam earnings feel unpredictable, there's usually a data-driven reason. Here's what causes inconsistent cam income and exactly how to fix each one.",
+  title: 'Why Cam Income Is Inconsistent (And How to Fix It)',
+  description: 'The real reasons your earnings vary so much stream to stream — and the data-driven fixes that create more consistent income.',
   alternates: { canonical: 'https://www.camcashgrl.com/blog/why-cam-income-is-inconsistent' },
   openGraph: {
-    title: 'Why Your Cam Income Is Inconsistent (And How to Fix It)',
-    description: "The real causes of unpredictable cam income — and data-driven fixes.",
+    title: 'Why Cam Income Is Inconsistent',
+    description: 'The real reasons your earnings vary so much stream to stream — and the data-driven fixes that create more consistent income.',
     url: 'https://www.camcashgrl.com/blog/why-cam-income-is-inconsistent',
     type: 'article',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Fix Inconsistent Cam Income',
+    description: 'The real reasons your earnings vary so much stream to stream — and the data-driven fixes that create more consistent income.',
   },
 }
 

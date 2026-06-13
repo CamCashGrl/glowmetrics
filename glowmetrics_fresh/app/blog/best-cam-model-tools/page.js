@@ -1,14 +1,19 @@
 import ArticleLayout from '../../components/ArticleLayout'
 
 export const metadata = {
-  title: 'Best Cam Model Analytics Tools (2026): Compare Features, Tip Tracking & Pricing | CamCash',
-  description: 'Compare the best cam model analytics tools for 2026. We tested tip tracking, fan analytics, session performance, and platform comparison across every major tool. CamCash, spreadsheets, built-in stats and more.',
+  title: '7 Best Cam Model Tools in 2026 (Free & Paid)',
+  description: 'The best tools for tracking tips, analyzing earnings, and growing your income as a cam model. Ranked by actual broadcasters.',
   alternates: { canonical: 'https://www.camcashgrl.com/blog/best-cam-model-tools' },
   openGraph: {
-    title: 'Best Cam Model Analytics Tools (2026): Compare Features, Tip Tracking & Pricing',
-    description: 'Compare the best cam model analytics tools for 2026. We tested tip tracking, fan analytics, session performance, and platform comparison across every major tool.',
+    title: '7 Best Cam Model Tools in 2026',
+    description: 'The best tools for tracking tips, analyzing earnings, and growing your income as a cam model. Ranked by actual broadcasters.',
     url: 'https://www.camcashgrl.com/blog/best-cam-model-tools',
     type: 'article',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Best Cam Model Tools 2026',
+    description: 'The best tools for tracking tips, analyzing earnings, and growing your income as a cam model. Ranked by actual broadcasters.',
   },
 }
 
