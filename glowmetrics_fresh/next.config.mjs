@@ -13,6 +13,8 @@ const nextConfig = {
         destination: 'https://www.camcashgrl.com/landing/demo',
         permanent: true,
       },
+      { source: '/live-demo', destination: '/live/demo', permanent: false },
+      { source: '/livedemo',  destination: '/live/demo', permanent: false },
       {
         source: '/exstension',
         destination: '/extension',
