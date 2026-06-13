@@ -15,8 +15,8 @@ export async function generateMetadata({ params }) {
     .from('blog_posts')
     .select('title, meta_description, slug')
     .eq('slug', params.slug)
-    .single()
-  if (!data) return {}
+    .maybeSingle()
+  if (!data) return { title: 'Blog | CamCashGrl', description: 'Cam model tips, analytics guides, and earnings strategies.' }
   return {
     title: data.title + ' | CamCash',
     description: data.meta_description,
@@ -31,7 +31,7 @@ export default async function DynamicBlogPost({ params }) {
     .select('*')
     .eq('slug', params.slug)
     .eq('published', true)
-    .single()
+    .maybeSingle()
 
   if (!post) notFound()
 
