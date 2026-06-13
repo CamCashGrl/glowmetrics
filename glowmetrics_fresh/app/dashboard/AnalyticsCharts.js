@@ -1,31 +1,25 @@
 "use client"
 import React, { useState, useMemo } from "react"
-import {
-  ResponsiveContainer,
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
-  ComposedChart, Line, LineChart,
-  Cell,
-} from "recharts"
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
-const BG      = "#0a0e1a"
-const CARD    = "rgba(255,255,255,0.03)"
-const BORDER  = "rgba(255,255,255,0.08)"
-const TEXT    = "#94A3B8"
-const WHITE   = "#F1F5F9"
-const MUTED   = "#475569"
+const BG     = "#0a0e1a"
+const CARD   = "rgba(255,255,255,0.03)"
+const BORDER = "rgba(255,255,255,0.08)"
+const TEXT   = "#94A3B8"
+const WHITE  = "#F1F5F9"
+const MUTED  = "#475569"
 
-const PLATFORM_COLORS = {
-  Chaturbate:  "#22d3ee",
-  BongaCams:   "#e879f9",
-  MyFreeCams:  "#a855f7",
+// Platform colors for carousel charts
+const CC = {
+  Chaturbate: "#a855f7",
+  BongaCams:  "#ec4899",
+  MyFreeCams: "#22d3ee",
 }
-const PLATFORM_FALLBACKS = ["#60A5FA", "#34D399", "#FB923C", "#F87171", "#FBBF24"]
+const CC_FALLBACK = ["#60A5FA", "#34D399", "#FB923C"]
 
-const UTC_DAYS_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
-const MONTH_NAMES    = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
+const WEEK     = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+const WEEK_UTC = [1, 2, 3, 4, 5, 6, 0] // UTC getUTCDay() index per WEEK entry
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 const card = (extra = {}) => ({
   background: CARD,
   border: `1px solid ${BORDER}`,
@@ -34,98 +28,20 @@ const card = (extra = {}) => ({
   ...extra,
 })
 
-const heatColor = (val, max) => {
-  if (!max || val === 0) return "rgba(255,255,255,0.04)"
-  const t = Math.min(val / max, 1)
-  return `rgba(34,211,238,${(0.08 + t * 0.82).toFixed(2)})`
-}
-
-const fmt$ = (v) => `$${Number(v).toFixed(2)}`
-const fmtPct = (v) => `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`
-
-// ─── Custom Tooltip shells ────────────────────────────────────────────────────
-const tipStyle = {
-  background: "#0f1420",
-  border: `1px solid ${BORDER}`,
-  borderRadius: 8,
-  padding: "8px 12px",
-  color: WHITE,
-  fontSize: 12,
-}
-
-function PlatformTooltip({ active, payload, label }) {
-  if (!active || !payload?.length) return null
-  return (
-    <div style={tipStyle}>
-      <div style={{ color: TEXT, marginBottom: 4 }}>{label}</div>
-      {payload.map((p) => (
-        <div key={p.dataKey} style={{ color: p.color }}>
-          {p.dataKey}: {fmt$(p.value)}
-        </div>
-      ))}
-    </div>
-  )
-}
-
-function TokensTooltip({ active, payload, label }) {
-  if (!active || !payload?.length) return null
-  return (
-    <div style={tipStyle}>
-      <div style={{ color: TEXT, marginBottom: 4 }}>{label}</div>
-      {payload.map((p) => (
-        <div key={p.dataKey} style={{ color: p.color }}>
-          {p.dataKey === "tokens" ? `Tokens: ${p.value.toLocaleString()}` : `Hours: ${p.value}`}
-        </div>
-      ))}
-    </div>
-  )
-}
-
-// ─── Toggle button ────────────────────────────────────────────────────────────
-function Toggle({ options, value, onChange }) {
-  return (
-    <div style={{ display: "flex", gap: 4 }}>
-      {options.map((opt) => (
-        <button
-          key={opt}
-          onClick={() => onChange(opt)}
-          style={{
-            padding: "4px 12px",
-            borderRadius: 6,
-            border: `1px solid ${value === opt ? "#22d3ee" : BORDER}`,
-            background: value === opt ? "rgba(34,211,238,0.12)" : "transparent",
-            color: value === opt ? "#22d3ee" : TEXT,
-            fontSize: 12,
-            cursor: "pointer",
-            transition: "all 0.15s",
-          }}
-        >
-          {opt}
-        </button>
-      ))}
-    </div>
-  )
-}
-
-// ─── Section header ───────────────────────────────────────────────────────────
-function ChartHeader({ title, sub, right }) {
-  return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-      <div>
-        <div style={{ color: WHITE, fontWeight: 600, fontSize: 15 }}>{title}</div>
-        {sub && <div style={{ color: MUTED, fontSize: 12, marginTop: 2 }}>{sub}</div>}
-      </div>
-      {right}
-    </div>
-  )
+function niceMax(v) {
+  if (!v || v <= 0) return 10
+  const mag  = Math.pow(10, Math.floor(Math.log10(v)))
+  const n    = v / mag
+  const nice = n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10
+  return nice * mag
 }
 
 // ─── Empty state ──────────────────────────────────────────────────────────────
 function EmptyState() {
   return (
     <div style={{
-      display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-      minHeight: 320, color: MUTED, gap: 8,
+      display: "flex", flexDirection: "column", alignItems: "center",
+      justifyContent: "center", minHeight: 320, color: MUTED, gap: 8,
     }}>
       <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
         <path d="M3 3v18h18M7 16l4-4 4 4 4-4" strokeLinecap="round" strokeLinejoin="round"/>
@@ -136,382 +52,288 @@ function EmptyState() {
   )
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// CHART 1 — EARNINGS HEATMAP
-// ═══════════════════════════════════════════════════════════════════════════════
-function EarningsHeatmap({ tips }) {
-  const [mode, setMode] = useState("Overall")
+// ─── SVG grouped bar chart (Charts 1 & 3) ────────────────────────────────────
+function SVGGroupedBars({ data, platforms, formatY, colorMap }) {
+  const W = 560, H = 210
+  const ML = 58, MR = 12, MT = 10, MB = 36
+  const plotW = W - ML - MR
+  const plotH = H - MT - MB
 
-  const { grid, maxAvg } = useMemo(() => {
-    let filtered = tips
-    const now = new Date()
-
-    if (mode === "Daily") {
-      const start = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
-      filtered = tips.filter((t) => new Date(t.date_time).getTime() >= start)
-    } else if (mode === "Weekly") {
-      const dow = now.getUTCDay()
-      const start = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - dow)
-      filtered = tips.filter((t) => new Date(t.date_time).getTime() >= start)
-    } else if (mode === "Monthly") {
-      const start = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)
-      filtered = tips.filter((t) => new Date(t.date_time).getTime() >= start)
-    }
-
-    // grid[hour][day]
-    const g = Array.from({ length: 24 }, () =>
-      Array.from({ length: 7 }, () => ({ sum: 0, count: 0 }))
-    )
-
-    filtered.forEach((t) => {
-      const dt  = new Date(t.date_time)
-      const h   = dt.getUTCHours()
-      const d   = dt.getUTCDay()
-      const usd = parseFloat(t.usd) || 0
-      g[h][d].sum   += usd
-      g[h][d].count += 1
-    })
-
-    let mx = 0
-    const result = g.map((row) =>
-      row.map((cell) => {
-        const avg = cell.count > 0 ? cell.sum / cell.count : 0
-        if (avg > mx) mx = avg
-        return { avg, count: cell.count }
-      })
-    )
-
-    return { grid: result, maxAvg: mx }
-  }, [tips, mode])
-
-  const hourLabel = (h) => {
-    if (h === 0)  return "12a"
-    if (h === 12) return "12p"
-    return h < 12 ? `${h}a` : `${h - 12}p`
-  }
+  const maxVal  = Math.max(...data.flatMap(d => platforms.map(p => d[p] || 0)), 0.001)
+  const yMax    = niceMax(maxVal)
+  const YTICKS  = 4
+  const dayW    = plotW / data.length
+  const nP      = Math.max(platforms.length, 1)
+  const barW    = Math.max(4, Math.floor((dayW * 0.7) / nP) - 2)
+  const yScale  = v => plotH * (1 - v / yMax)
+  const ticks   = Array.from({ length: YTICKS + 1 }, (_, i) => (yMax / YTICKS) * i)
 
   return (
-    <div style={card()}>
-      <ChartHeader
-        title="Earnings Heatmap"
-        sub="Average USD earned — hour of day × day of week (UTC)"
-        right={<Toggle options={["Daily","Weekly","Monthly","Overall"]} value={mode} onChange={setMode} />}
-      />
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", display: "block" }}>
+      {ticks.map((v, i) => {
+        const y = MT + yScale(v)
+        return (
+          <g key={i}>
+            <line x1={ML} x2={ML + plotW} y1={y} y2={y} stroke={BORDER} strokeWidth={1} />
+            <text x={ML - 5} y={y + 4} textAnchor="end" fill={TEXT} fontSize={10}>{formatY(v)}</text>
+          </g>
+        )
+      })}
+      {data.map((d, di) => {
+        const cx     = ML + di * dayW + dayW / 2
+        const totalW = nP * barW + (nP - 1) * 2
+        return (
+          <g key={d.day}>
+            {platforms.map((p, pi) => {
+              const val  = d[p] || 0
+              const barH = Math.max(0, (val / yMax) * plotH)
+              const x    = cx - totalW / 2 + pi * (barW + 2)
+              const y    = MT + plotH - barH
+              return (
+                <rect key={p} x={x} y={y} width={barW} height={barH}
+                  fill={colorMap[p] || CC_FALLBACK[pi % CC_FALLBACK.length]} rx={2} />
+              )
+            })}
+            <text x={cx} y={MT + plotH + 16} textAnchor="middle" fill={TEXT} fontSize={11}>
+              {d.day}
+            </text>
+          </g>
+        )
+      })}
+      <line x1={ML} x2={ML + plotW} y1={MT + plotH} y2={MT + plotH} stroke={BORDER} strokeWidth={1} />
+    </svg>
+  )
+}
 
-      {/* Day labels */}
-      <div style={{ display: "grid", gridTemplateColumns: "32px repeat(7, 1fr)", gap: 2, marginBottom: 2 }}>
-        <div />
-        {UTC_DAYS_SHORT.map((d) => (
-          <div key={d} style={{ textAlign: "center", fontSize: 11, color: MUTED }}>{d}</div>
-        ))}
-      </div>
+// ─── SVG single bar chart (Chart 2) ──────────────────────────────────────────
+function SVGSingleBars({ data, color, formatY }) {
+  const W = 560, H = 210
+  const ML = 58, MR = 12, MT = 10, MB = 36
+  const plotW = W - ML - MR
+  const plotH = H - MT - MB
 
-      {/* Grid rows */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-        {grid.map((row, h) => (
-          <div key={h} style={{ display: "grid", gridTemplateColumns: "32px repeat(7, 1fr)", gap: 2, alignItems: "center" }}>
-            <div style={{ fontSize: 10, color: MUTED, textAlign: "right", paddingRight: 4 }}>
-              {h % 3 === 0 ? hourLabel(h) : ""}
-            </div>
-            {row.map((cell, d) => (
-              <div
-                key={d}
-                title={cell.count ? `${UTC_DAYS_SHORT[d]} ${hourLabel(h)}: avg ${fmt$(cell.avg)} (${cell.count} tips)` : ""}
-                style={{
-                  height: 11,
-                  borderRadius: 2,
-                  background: heatColor(cell.avg, maxAvg),
-                  transition: "background 0.2s",
-                  cursor: cell.count ? "pointer" : "default",
-                }}
-              />
-            ))}
-          </div>
-        ))}
-      </div>
+  const maxVal = Math.max(...data.map(d => d.value || 0), 0.001)
+  const yMax   = niceMax(maxVal)
+  const YTICKS = 4
+  const dayW   = plotW / data.length
+  const barW   = Math.max(8, Math.floor(dayW * 0.55))
+  const yScale = v => plotH * (1 - v / yMax)
+  const ticks  = Array.from({ length: YTICKS + 1 }, (_, i) => (yMax / YTICKS) * i)
 
-      {/* Legend */}
-      <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 10, justifyContent: "flex-end" }}>
-        <span style={{ fontSize: 11, color: MUTED }}>Low</span>
-        {[0.1, 0.3, 0.5, 0.7, 0.9].map((t) => (
-          <div
-            key={t}
-            style={{ width: 14, height: 14, borderRadius: 2, background: `rgba(34,211,238,${t})` }}
-          />
-        ))}
-        <span style={{ fontSize: 11, color: MUTED }}>High</span>
-      </div>
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", display: "block" }}>
+      {ticks.map((v, i) => {
+        const y = MT + yScale(v)
+        return (
+          <g key={i}>
+            <line x1={ML} x2={ML + plotW} y1={y} y2={y} stroke={BORDER} strokeWidth={1} />
+            <text x={ML - 5} y={y + 4} textAnchor="end" fill={TEXT} fontSize={10}>{formatY(v)}</text>
+          </g>
+        )
+      })}
+      {data.map((d, di) => {
+        const cx   = ML + di * dayW + dayW / 2
+        const barH = Math.max(0, ((d.value || 0) / yMax) * plotH)
+        return (
+          <g key={d.day}>
+            <rect x={cx - barW / 2} y={MT + plotH - barH} width={barW} height={barH} fill={color} rx={2} />
+            <text x={cx} y={MT + plotH + 16} textAnchor="middle" fill={TEXT} fontSize={11}>
+              {d.day}
+            </text>
+          </g>
+        )
+      })}
+      <line x1={ML} x2={ML + plotW} y1={MT + plotH} y2={MT + plotH} stroke={BORDER} strokeWidth={1} />
+    </svg>
+  )
+}
+
+// ─── Color legend ─────────────────────────────────────────────────────────────
+function ColorLegend({ platforms, colorMap }) {
+  return (
+    <div style={{ display: "flex", gap: 16, justifyContent: "center", marginTop: 12 }}>
+      {platforms.map((p, i) => (
+        <div key={p} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <div style={{ width: 10, height: 10, borderRadius: 2, background: colorMap[p] || CC_FALLBACK[i] }} />
+          <span style={{ color: TEXT, fontSize: 12 }}>{p}</span>
+        </div>
+      ))}
     </div>
   )
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// CHART 2 — PLATFORM COMPARISON BAR CHART
-// ═══════════════════════════════════════════════════════════════════════════════
-function PlatformComparisonChart({ tips }) {
-  const { data, platforms } = useMemo(() => {
-    const plats = [...new Set(tips.map((t) => t.platform).filter(Boolean))]
+// ─── Session inference helper ─────────────────────────────────────────────────
+function inferHoursByUTCDay(tips) {
+  const sorted = [...tips].sort((a, b) => new Date(a.date_time) - new Date(b.date_time))
+  const sessions = []
+  let cur = null
+  sorted.forEach(t => {
+    const dt = new Date(t.date_time)
+    if (!cur || dt - cur.end > 4 * 3600_000) {
+      cur = { start: dt, end: dt }
+      sessions.push(cur)
+    } else {
+      cur.end = dt
+    }
+  })
+  const hours = [0, 0, 0, 0, 0, 0, 0]
+  sessions.forEach(s => {
+    hours[s.start.getUTCDay()] += Math.max(0.5, (s.end - s.start) / 3600_000)
+  })
+  return hours
+}
 
-    const rows = UTC_DAYS_SHORT.map((day, dayIdx) => {
-      const entry = { day }
-      plats.forEach((p) => {
-        entry[p] = tips
-          .filter((t) => new Date(t.date_time).getUTCDay() === dayIdx && t.platform === p)
+// ═══════════════════════════════════════════════════════════════════════════════
+// CHART 1 — EARNINGS BY DAY
+// ═══════════════════════════════════════════════════════════════════════════════
+function EarningsByDayChart({ tips }) {
+  const { data, platforms } = useMemo(() => {
+    const plats = [...new Set(tips.map(t => t.platform).filter(Boolean))]
+    const rows = WEEK.map((day, wi) => {
+      const utcDay = WEEK_UTC[wi]
+      const row = { day }
+      plats.forEach(p => {
+        row[p] = tips
+          .filter(t => new Date(t.date_time).getUTCDay() === utcDay && t.platform === p)
           .reduce((s, t) => s + (parseFloat(t.usd) || 0), 0)
       })
-      return entry
+      return row
     })
-
     return { data: rows, platforms: plats }
   }, [tips])
 
-  const colorFor = (p, i) => PLATFORM_COLORS[p] || PLATFORM_FALLBACKS[i % PLATFORM_FALLBACKS.length]
-
   return (
-    <div style={card()}>
-      <ChartHeader
-        title="Platform Comparison"
-        sub="Total USD per platform by day of week"
+    <>
+      <SVGGroupedBars
+        data={data}
+        platforms={platforms}
+        formatY={v => v === 0 ? "$0" : v >= 100 ? `$${v.toFixed(0)}` : `$${v.toFixed(1)}`}
+        colorMap={CC}
       />
-      <ResponsiveContainer width="100%" height={240}>
-        <BarChart data={data} barGap={2} barCategoryGap="28%">
-          <CartesianGrid stroke={BORDER} vertical={false} />
-          <XAxis dataKey="day" tick={{ fill: TEXT, fontSize: 12 }} axisLine={false} tickLine={false} />
-          <YAxis
-            tick={{ fill: TEXT, fontSize: 11 }}
-            axisLine={false}
-            tickLine={false}
-            tickFormatter={(v) => `$${v}`}
-          />
-          <Tooltip content={<PlatformTooltip />} cursor={{ fill: "rgba(255,255,255,0.03)" }} />
-          <Legend
-            wrapperStyle={{ fontSize: 12, color: TEXT, paddingTop: 8 }}
-            formatter={(val) => <span style={{ color: colorFor(val, platforms.indexOf(val)) }}>{val}</span>}
-          />
-          {platforms.map((p, i) => (
-            <Bar key={p} dataKey={p} fill={colorFor(p, i)} radius={[3, 3, 0, 0]} maxBarSize={28} />
-          ))}
-        </BarChart>
-      </ResponsiveContainer>
-    </div>
+      <ColorLegend platforms={platforms} colorMap={CC} />
+    </>
   )
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// CHART 3 — TOKENS VS HOURS ONLINE
+// CHART 2 — HOURS STREAMED BY DAY
 // ═══════════════════════════════════════════════════════════════════════════════
-function TokensVsHoursChart({ tips }) {
-  const [timeframe, setTimeframe] = useState("Weekly")
-
-  const chartData = useMemo(() => {
-    // Group tips into sessions: tips within 4hr windows
-    const sorted = [...tips].sort((a, b) => new Date(a.date_time) - new Date(b.date_time))
-
-    const sessions = []
-    let cur = null
-    sorted.forEach((t) => {
-      const dt = new Date(t.date_time)
-      if (!cur || dt - cur.end > 4 * 3600_000) {
-        cur = { start: dt, end: dt }
-        sessions.push(cur)
-      } else {
-        cur.end = dt
-      }
-    })
-
-    const bucketKey = (date) => {
-      const d = new Date(date)
-      if (timeframe === "Weekly") {
-        const dow     = d.getUTCDay()
-        const offset  = dow === 0 ? 6 : dow - 1   // Monday-based week
-        const monday  = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - offset))
-        const m       = monday.getUTCMonth()
-        const day     = monday.getUTCDate()
-        return `${MONTH_NAMES[m]} ${day}`
-      } else {
-        return `${MONTH_NAMES[d.getUTCMonth()]} ${d.getUTCFullYear()}`
-      }
-    }
-
-    const buckets = {}
-
-    tips.forEach((t) => {
-      const k = bucketKey(t.date_time)
-      if (!buckets[k]) buckets[k] = { tokens: 0, hours: 0, _ts: new Date(t.date_time).getTime() }
-      buckets[k].tokens += parseFloat(t.tokens) || 0
-    })
-
-    sessions.forEach((s) => {
-      const k = bucketKey(s.start)
-      if (!buckets[k]) buckets[k] = { tokens: 0, hours: 0, _ts: s.start.getTime() }
-      const dur = Math.max(0.5, (s.end - s.start) / 3600_000)
-      buckets[k].hours += dur
-    })
-
-    return Object.entries(buckets)
-      .sort(([, a], [, b]) => a._ts - b._ts)
-      .map(([date, v]) => ({
-        date,
-        tokens: Math.round(v.tokens),
-        hours:  parseFloat(v.hours.toFixed(1)),
-      }))
-  }, [tips, timeframe])
-
-  return (
-    <div style={card()}>
-      <ChartHeader
-        title="Tokens vs Hours Online"
-        sub="Weekly earnings rhythm — tokens (left) and stream hours (right)"
-        right={<Toggle options={["Weekly","Monthly"]} value={timeframe} onChange={setTimeframe} />}
-      />
-      <ResponsiveContainer width="100%" height={240}>
-        <ComposedChart data={chartData}>
-          <CartesianGrid stroke={BORDER} vertical={false} />
-          <XAxis
-            dataKey="date"
-            tick={{ fill: TEXT, fontSize: 11 }}
-            axisLine={false}
-            tickLine={false}
-            interval="preserveStartEnd"
-          />
-          <YAxis
-            yAxisId="tokens"
-            orientation="left"
-            tick={{ fill: "#22d3ee", fontSize: 11 }}
-            axisLine={false}
-            tickLine={false}
-            tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v}
-          />
-          <YAxis
-            yAxisId="hours"
-            orientation="right"
-            tick={{ fill: "#e879f9", fontSize: 11 }}
-            axisLine={false}
-            tickLine={false}
-            tickFormatter={(v) => `${v}h`}
-          />
-          <Tooltip content={<TokensTooltip />} cursor={{ stroke: BORDER }} />
-          <Legend
-            wrapperStyle={{ fontSize: 12, paddingTop: 8 }}
-            formatter={(val) => (
-              <span style={{ color: val === "tokens" ? "#22d3ee" : "#e879f9" }}>
-                {val === "tokens" ? "Tokens" : "Hours Online"}
-              </span>
-            )}
-          />
-          <Line
-            yAxisId="tokens"
-            type="monotone"
-            dataKey="tokens"
-            stroke="#22d3ee"
-            strokeWidth={2}
-            dot={false}
-            activeDot={{ r: 4, fill: "#22d3ee" }}
-          />
-          <Line
-            yAxisId="hours"
-            type="monotone"
-            dataKey="hours"
-            stroke="#e879f9"
-            strokeWidth={2}
-            dot={false}
-            activeDot={{ r: 4, fill: "#e879f9" }}
-          />
-        </ComposedChart>
-      </ResponsiveContainer>
-    </div>
-  )
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// CHART 4 — MONTHLY GROWTH CARD
-// ═══════════════════════════════════════════════════════════════════════════════
-function MonthlyGrowthCard({ tips }) {
-  const { months, delta, deltaPercent, current } = useMemo(() => {
-    const acc = {}
-    tips.forEach((t) => {
-      const dt  = new Date(t.date_time)
-      const key = `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}`
-      acc[key]  = (acc[key] || 0) + (parseFloat(t.usd) || 0)
-    })
-
-    const sorted = Object.entries(acc)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .slice(-6)
-      .map(([key, usd]) => {
-        const [, m] = key.split("-")
-        return { month: MONTH_NAMES[parseInt(m) - 1], usd: parseFloat(usd.toFixed(2)) }
-      })
-
-    let delta       = null
-    let deltaPercent = null
-    if (sorted.length >= 2) {
-      const curr = sorted[sorted.length - 1].usd
-      const prev = sorted[sorted.length - 2].usd
-      delta        = curr - prev
-      deltaPercent = prev > 0 ? ((curr - prev) / prev) * 100 : null
-    }
-
-    return { months: sorted, delta, deltaPercent, current: sorted[sorted.length - 1]?.usd || 0 }
+function HoursStreamedChart({ tips }) {
+  const data = useMemo(() => {
+    const hoursByUTCDay = inferHoursByUTCDay(tips)
+    return WEEK.map((day, wi) => ({
+      day,
+      value: parseFloat(hoursByUTCDay[WEEK_UTC[wi]].toFixed(1)),
+    }))
   }, [tips])
 
-  const isPositive = delta !== null && delta >= 0
-  const deltaColor = isPositive ? "#10B981" : "#F87171"
+  return (
+    <SVGSingleBars
+      data={data}
+      color="#22d3ee"
+      formatY={v => v === 0 ? "0h" : `${v < 10 ? v.toFixed(1) : v.toFixed(0)}h`}
+    />
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CHART 3 — REVENUE PER HOUR BY DAY
+// ═══════════════════════════════════════════════════════════════════════════════
+function RevPerHourChart({ tips }) {
+  const { data, platforms } = useMemo(() => {
+    const plats = [...new Set(tips.map(t => t.platform).filter(Boolean))]
+    const hoursByUTCDay = inferHoursByUTCDay(tips)
+
+    const rows = WEEK.map((day, wi) => {
+      const utcDay = WEEK_UTC[wi]
+      const hours  = hoursByUTCDay[utcDay] || 0
+      const row = { day }
+      plats.forEach(p => {
+        const earnings = tips
+          .filter(t => new Date(t.date_time).getUTCDay() === utcDay && t.platform === p)
+          .reduce((s, t) => s + (parseFloat(t.usd) || 0), 0)
+        row[p] = hours > 0 ? parseFloat((earnings / hours).toFixed(2)) : 0
+      })
+      return row
+    })
+    return { data: rows, platforms: plats }
+  }, [tips])
+
+  return (
+    <>
+      <SVGGroupedBars
+        data={data}
+        platforms={platforms}
+        formatY={v => v === 0 ? "$0" : `$${v.toFixed(1)}`}
+        colorMap={CC}
+      />
+      <ColorLegend platforms={platforms} colorMap={CC} />
+    </>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CAROUSEL
+// ═══════════════════════════════════════════════════════════════════════════════
+const CHARTS = [
+  {
+    title: "Earnings by Day",
+    sub: "Total USD per platform, by day of week",
+    Component: EarningsByDayChart,
+  },
+  {
+    title: "Hours Streamed by Day",
+    sub: "Estimated streaming hours per day (inferred from sessions)",
+    Component: HoursStreamedChart,
+  },
+  {
+    title: "Revenue Per Hour by Day",
+    sub: "USD ÷ hours streamed — true performance per hour",
+    Component: RevPerHourChart,
+  },
+]
+
+const arrowBtn = {
+  width: 32, height: 32,
+  border: `1px solid ${BORDER}`,
+  borderRadius: 6,
+  background: "transparent",
+  color: WHITE,
+  fontSize: 22,
+  lineHeight: "30px",
+  textAlign: "center",
+  cursor: "pointer",
+  userSelect: "none",
+  padding: 0,
+}
+
+function ChartCarousel({ tips }) {
+  const [idx, setIdx] = useState(0)
+  const { title, sub, Component } = CHARTS[idx]
+  const total = CHARTS.length
 
   return (
     <div style={card()}>
-      <ChartHeader title="Monthly Growth" sub="Last 6 months — month-over-month USD change" />
-
-      <div style={{ display: "flex", alignItems: "flex-end", gap: 16, marginBottom: 20 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
         <div>
-          <div style={{ color: MUTED, fontSize: 12, marginBottom: 2 }}>This month</div>
-          <div style={{ color: WHITE, fontSize: 28, fontWeight: 700, lineHeight: 1 }}>
-            {fmt$(current)}
-          </div>
+          <div style={{ color: WHITE, fontWeight: 600, fontSize: 15 }}>{title}</div>
+          <div style={{ color: MUTED, fontSize: 12, marginTop: 2 }}>{sub}</div>
         </div>
-        {delta !== null && (
-          <div style={{ paddingBottom: 2 }}>
-            <div
-              style={{
-                display: "inline-flex", alignItems: "center", gap: 4,
-                background: isPositive ? "rgba(16,185,129,0.10)" : "rgba(248,113,113,0.10)",
-                border: `1px solid ${isPositive ? "rgba(16,185,129,0.25)" : "rgba(248,113,113,0.25)"}`,
-                borderRadius: 6, padding: "4px 10px",
-                color: deltaColor, fontSize: 13, fontWeight: 600,
-              }}
-            >
-              <span>{isPositive ? "▲" : "▼"}</span>
-              <span>{fmt$(Math.abs(delta))}</span>
-              {deltaPercent !== null && (
-                <span style={{ opacity: 0.75 }}>({fmtPct(deltaPercent)})</span>
-              )}
-            </div>
-            <div style={{ color: MUTED, fontSize: 11, marginTop: 3 }}>vs last month</div>
-          </div>
-        )}
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ color: MUTED, fontSize: 12 }}>{idx + 1} of {total}</span>
+          <button
+            onClick={() => setIdx((idx - 1 + total) % total)}
+            style={arrowBtn}
+            aria-label="Previous chart"
+          >‹</button>
+          <button
+            onClick={() => setIdx((idx + 1) % total)}
+            style={arrowBtn}
+            aria-label="Next chart"
+          >›</button>
+        </div>
       </div>
-
-      <ResponsiveContainer width="100%" height={80}>
-        <BarChart data={months} barCategoryGap="20%">
-          <XAxis dataKey="month" tick={{ fill: MUTED, fontSize: 11 }} axisLine={false} tickLine={false} />
-          <Tooltip
-            cursor={{ fill: "rgba(255,255,255,0.04)" }}
-            content={({ active, payload, label }) =>
-              active && payload?.length ? (
-                <div style={tipStyle}>{label}: {fmt$(payload[0].value)}</div>
-              ) : null
-            }
-          />
-          <Bar dataKey="usd" radius={[3, 3, 0, 0]} maxBarSize={32}>
-            {months.map((entry, i) => (
-              <Cell
-                key={i}
-                fill={i === months.length - 1 ? "#22d3ee" : "rgba(34,211,238,0.35)"}
-              />
-            ))}
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
+      <Component tips={tips} />
     </div>
   )
 }
@@ -531,20 +353,8 @@ export default function AnalyticsCharts({ tips = [] }) {
   }
 
   return (
-    <div style={{ background: BG, minHeight: "100%", padding: "24px", display: "flex", flexDirection: "column", gap: 20 }}>
-
-      {/* Row 1 — Heatmap full-width */}
-      <EarningsHeatmap tips={tips} />
-
-      {/* Row 2 — Platform comparison */}
-      <PlatformComparisonChart tips={tips} />
-
-      {/* Row 3 — Tokens vs Hours + Monthly growth side-by-side */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 380px", gap: 20 }}>
-        <TokensVsHoursChart tips={tips} />
-        <MonthlyGrowthCard tips={tips} />
-      </div>
-
+    <div style={{ background: BG, minHeight: "100%", padding: "24px" }}>
+      <ChartCarousel tips={tips} />
     </div>
   )
 }
