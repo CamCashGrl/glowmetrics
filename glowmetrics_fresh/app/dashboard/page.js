@@ -1534,7 +1534,7 @@ export default function Dashboard() {
       if (!user) { router.replace("/login"); return }
       setUser(user)
       supabase.from('profiles')
-        .select('plan, stripe_customer_id')
+        .select('plan')
         .eq('id', user.id)
         .maybeSingle()
         .then(({ data }) => { if (data) setProfile(data) })
