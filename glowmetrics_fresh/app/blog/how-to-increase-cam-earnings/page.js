@@ -1,8 +1,8 @@
 import ArticleLayout from '../../components/ArticleLayout'
 
 export const metadata = {
-  title: 'How to Increase Cam Earnings — Data-Backed Strategies for 2026',
-  description: 'Stop guessing and start using your own data. How to find your peak hours, best platform, and highest-value fans to earn more per stream.',
+  title: 'How to Increase Cam Earnings: 9 Data-Based Fixes for Slow Streams',
+  description: 'Use your cam earnings data to find better hours, stronger platforms, loyal fans, and the exact sessions costing you money..',
   alternates: { canonical: 'https://www.camcashgrl.com/blog/how-to-increase-cam-earnings' },
   openGraph: {
     title: 'How to Increase Cam Earnings in 2026',
