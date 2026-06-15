@@ -1,8 +1,8 @@
 import ArticleLayout from '../../components/ArticleLayout'
 
 export const metadata = {
-  title: 'Cam Model Taxes 2026 — What You Owe and How to File',
-  description: 'How cam models handle taxes, what counts as a deduction, and how to avoid surprises at tax time. Written for adult content creators.',
+  title: 'Cam Model Taxes 2026: 1099s, Deductions, Write-Offs & Quarterly Payments',
+  description: 'A plain-English tax guide for cam models: 1099 income, self-employment tax, write-offs, quarterly payments, and records to keep..',
   alternates: { canonical: 'https://www.camcashgrl.com/blog/cam-model-taxes' },
   openGraph: {
     title: 'Cam Model Taxes 2026 — What You Owe',
