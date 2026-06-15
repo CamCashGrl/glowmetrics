@@ -1,36 +1,40 @@
 import ArticleLayout from '../../components/ArticleLayout'
 
 export const metadata = {
-  title: 'How Much Do Cam Models Make? Earnings by Platform & Hours',
+  title: 'How Much Do Cam Models Make? ($3–$60+/hr Breakdown by Platform)',
   description:
-    'See realistic cam model earnings by platform, hours streamed, tokens, tips, top fans, and why income changes so much between sessions.',
+    'New models average $3–$10/hr. Established models earn $10–$30/hr. Top earners clear $60+/hr. See what actually separates them — by platform, hours, and fan behavior.',
   alternates: { canonical: 'https://www.camcashgrl.com/blog/cam-model-earnings' },
   openGraph: {
-    title: 'How Much Do Cam Models Make? Earnings by Platform & Hours',
+    title: 'How Much Do Cam Models Make? ($3–$60+/hr Breakdown by Platform)',
     description:
-      'See realistic cam model earnings by platform, hours streamed, tokens, tips, top fans, and why income changes so much between sessions.',
+      'New models average $3–$10/hr. Established models earn $10–$30/hr. Top earners clear $60+/hr. See what actually separates them — by platform, hours, and fan behavior.',
     url: 'https://www.camcashgrl.com/blog/cam-model-earnings',
     type: 'article',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'How Much Do Cam Models Make?',
+    title: 'How Much Do Cam Models Make? ($3–$60+/hr by Platform)',
     description:
-      'Realistic cam model earnings by platform, hours, tokens, tips, and fan behavior.',
+      'Real cam model earnings by platform, hours, tokens, and fan behavior. See what separates $10/hr models from $60+/hr models.',
   },
 }
 
 const schema = {
   '@context': 'https://schema.org',
   '@type': 'Article',
-  headline: 'How Much Do Cam Models Make? Realistic Earnings by Platform & Hours',
-  description: 'A practical guide to realistic cam model earnings, including hourly income, platform differences, tokens, tips, fan behavior, and how to track your own numbers.',
+  headline: 'How Much Do Cam Models Make? ($3–$60+/hr Breakdown by Platform)',
+  description:
+    'A practical breakdown of realistic cam model earnings per hour, by platform, experience level, streaming schedule, and fan behavior — with a comparison of what separates low and high earners.',
   url: 'https://www.camcashgrl.com/blog/cam-model-earnings',
   datePublished: '2026-01-01',
   dateModified: '2026-06-14',
   author: { '@type': 'Organization', name: 'CamCash', url: 'https://www.camcashgrl.com' },
   publisher: { '@type': 'Organization', name: 'CamCash', url: 'https://www.camcashgrl.com' },
-  mainEntityOfPage: { '@type': 'WebPage', '@id': 'https://www.camcashgrl.com/blog/cam-model-earnings' },
+  mainEntityOfPage: {
+    '@type': 'WebPage',
+    '@id': 'https://www.camcashgrl.com/blog/cam-model-earnings',
+  },
 }
 
 const faqSchema = {
@@ -42,7 +46,7 @@ const faqSchema = {
       name: 'How much do cam models make per hour?',
       acceptedAnswer: {
         '@type': 'Answer',
-        text: 'Cam model earnings per hour vary widely based on platform, traffic, fan loyalty, stream time, tip activity, and schedule. Instead of only tracking total earnings, models should track revenue per hour to see which sessions are actually profitable.',
+        text: 'New cam models typically earn $3–$10 per hour while building an audience. Established models with regulars and a consistent schedule earn $10–$30 per hour. Top earners on high-traffic platforms clear $60 or more per hour. The biggest variable is not platform choice — it is whether you are streaming during your personal peak hours when your highest-value fans are online.',
       },
     },
     {
@@ -50,15 +54,7 @@ const faqSchema = {
       name: 'How much do beginner cam models make?',
       acceptedAnswer: {
         '@type': 'Answer',
-        text: 'Beginner cam model earnings are usually inconsistent while a model is building an audience and learning which hours perform best. Early data is still useful because it can reveal which platforms, stream times, and fan behaviors are worth focusing on.',
-      },
-    },
-    {
-      '@type': 'Question',
-      name: 'What affects cam model earnings?',
-      acceptedAnswer: {
-        '@type': 'Answer',
-        text: 'The biggest factors that affect cam model income are streaming schedule, platform choice, returning fan behavior, top tippers, session length, token goals, and whether the model is tracking revenue per hour instead of only total tokens.',
+        text: 'Most beginner cam models earn $3–$10 per hour in their first one to three months. Income is inconsistent while you are building a fan base and learning which hours and platforms work best for your audience. Early tracking data is valuable because it reveals patterns faster than guessing.',
       },
     },
     {
@@ -66,15 +62,31 @@ const faqSchema = {
       name: 'Which cam site pays the most?',
       acceptedAnswer: {
         '@type': 'Answer',
-        text: 'The best-paying cam site depends on the model. A platform with higher total earnings is not always the most profitable if it takes more hours to earn that amount. Comparing platform revenue per hour gives a clearer answer than comparing totals.',
+        text: 'Chaturbate and Stripchat have the highest traffic volume, which gives new models faster audience growth. LiveJasmin and private-session platforms often convert better per viewer for models who prefer one-to-one interaction. The best-paying site for you depends on your working style — compare revenue per hour across platforms using the same schedule, not raw payout rates.',
       },
     },
     {
       '@type': 'Question',
-      name: 'Why is cam model income inconsistent?',
+      name: 'How much do Chaturbate models make per hour?',
       acceptedAnswer: {
         '@type': 'Answer',
-        text: 'Cam model income changes because viewer traffic, top tippers, time of day, platform activity, fan return behavior, and session momentum all change. Tracking patterns over time helps models find more reliable earning windows.',
+        text: 'Chaturbate models typically earn $5–$15 per hour in the early months, rising to $15–$40 per hour with an established audience and optimized streaming schedule. Top Chaturbate earners can clear significantly more during peak hours with high-value regulars active. One Chaturbate token equals $0.05 to the model after platform fees.',
+      },
+    },
+    {
+      '@type': 'Question',
+      name: 'What affects cam model earnings the most?',
+      acceptedAnswer: {
+        '@type': 'Answer',
+        text: 'The biggest factors are streaming schedule (whether you are online when your top fans are), fan retention (the top 10–15% of fans typically drive 60–70% of income), platform fit, and session length. Tracking revenue per hour rather than total tokens is the clearest way to identify what is actually working.',
+      },
+    },
+    {
+      '@type': 'Question',
+      name: 'Why is cam model income so inconsistent?',
+      acceptedAnswer: {
+        '@type': 'Answer',
+        text: 'Cam income varies because viewer traffic, top tipper activity, time of day, and session momentum all shift. A single high-value fan going inactive can drop monthly income by $200–$400. Models who track earnings by hour and fan over time find their most reliable earning windows and protect their highest-value relationships before they go cold.',
       },
     },
     {
@@ -82,7 +94,7 @@ const faqSchema = {
       name: 'How do cam models track their earnings?',
       acceptedAnswer: {
         '@type': 'Answer',
-        text: 'Cam models can track earnings by exporting platform CSV files and analyzing tips, sessions, fans, platforms, and hourly performance. CamCash turns those exports into a dashboard showing revenue per hour, best times, top fans, and platform trends.',
+        text: 'The most effective method is exporting your tip history as a CSV from Chaturbate or BongaCams and analyzing it by hour, fan, platform, and session. CamCash processes these exports automatically and shows revenue per hour, top fan rankings, peak streaming windows, and platform performance in one dashboard.',
       },
     },
   ],
@@ -104,46 +116,46 @@ const s = {
   note:     { padding: '12px 16px', borderRadius: '8px', background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.15)', marginBottom: '16px' },
   quickAnswer: { background: 'rgba(99,102,241,0.07)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: '12px', padding: '20px 24px', marginBottom: '32px' },
   quickLabel:  { fontSize: '11px', fontWeight: 700, color: '#6366f1', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '8px' },
-  cta:      { background: 'rgba(99,102,241,0.07)', border: '1px solid rgba(99,102,241,0.18)', borderRadius: '10px', padding: '22px 24px', margin: '36px 0', textAlign: 'center' },
-  ctaT:     { fontSize: '17px', fontWeight: 700, color: '#f1f5f9', marginBottom: '6px' },
-  ctaS:     { fontSize: '13px', color: '#64748b', marginBottom: '16px' },
-  ctaBtn:   { display: 'inline-block', padding: '9px 22px', borderRadius: '7px', background: '#6366f1', color: 'white', fontWeight: 600, fontSize: '14px', textDecoration: 'none' },
-  ctaBtnSec:{ display: 'inline-block', padding: '9px 22px', borderRadius: '7px', background: 'transparent', border: '1px solid rgba(99,102,241,0.4)', color: '#a5b4fc', fontWeight: 600, fontSize: '14px', textDecoration: 'none', marginLeft: '12px' },
-  related:  { marginTop: '36px', paddingTop: '24px', borderTop: '1px solid rgba(255,255,255,0.06)' },
-  relT:     { fontSize: '11px', color: '#475569', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '10px' },
-  relLinks: { display: 'flex', flexDirection: 'column', gap: '6px' },
-  relLink:  { fontSize: '14px', color: '#6366f1', textDecoration: 'none' },
   iLink:    { color: '#a5b4fc', textDecoration: 'none' },
   hero:     { background: 'linear-gradient(135deg, rgba(99,102,241,0.10) 0%, rgba(16,185,129,0.06) 100%)', border: '1px solid rgba(99,102,241,0.22)', borderRadius: '14px', padding: '32px 28px', margin: '28px 0 36px', textAlign: 'center' },
   heroH:    { fontSize: '22px', fontWeight: 800, color: '#f1f5f9', marginBottom: '10px', letterSpacing: '-0.02em' },
   heroSub:  { fontSize: '15px', color: '#94a3b8', lineHeight: 1.65, marginBottom: '20px', maxWidth: '500px', margin: '0 auto 20px' },
-  heroBullets: { display: 'inline-block', textAlign: 'left', marginBottom: '24px' },
   heroBulletItem: { fontSize: '14px', color: '#cbd5e1', lineHeight: 1.8, listStyle: 'none', padding: 0 },
   heroBtnRow: { display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' },
   heroBtnPrimary: { display: 'inline-block', padding: '11px 28px', borderRadius: '8px', background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', color: 'white', fontWeight: 700, fontSize: '15px', textDecoration: 'none' },
   heroBtnSecondary: { display: 'inline-block', padding: '11px 28px', borderRadius: '8px', background: 'transparent', border: '1px solid rgba(99,102,241,0.4)', color: '#a5b4fc', fontWeight: 600, fontSize: '15px', textDecoration: 'none' },
-  screenshotSection: { margin: '36px 0', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.07)', overflow: 'hidden' },
-  screenshotHeader:  { padding: '20px 24px', background: 'rgba(255,255,255,0.02)' },
-  screenshotH:       { fontSize: '18px', fontWeight: 700, color: '#e2e8f0', marginBottom: '6px' },
-  screenshotSub:     { fontSize: '14px', color: '#64748b', lineHeight: 1.6 },
-  screenshotPlaceholder: { background: 'rgba(99,102,241,0.04)', borderTop: '1px solid rgba(255,255,255,0.05)', padding: '48px 24px', textAlign: 'center' },
-  screenshotLabel:   { fontSize: '12px', color: '#334155', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '8px' },
-  screenshotCaption: { fontSize: '13px', color: '#475569', marginBottom: '20px' },
-  screenshotFooter:  { padding: '16px 24px', background: 'rgba(255,255,255,0.015)', borderTop: '1px solid rgba(255,255,255,0.05)', textAlign: 'center' },
+  compareTable: { width: '100%', borderCollapse: 'collapse', marginBottom: '28px', fontSize: '14px' },
+  thCell:   { padding: '10px 14px', textAlign: 'left', fontSize: '11px', fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.06em', borderBottom: '1px solid rgba(255,255,255,0.07)', background: 'rgba(255,255,255,0.02)' },
+  tdCell:   { padding: '11px 14px', color: '#94a3b8', borderBottom: '1px solid rgba(255,255,255,0.04)', lineHeight: 1.55 },
+  tdLabel:  { padding: '11px 14px', color: '#c7d2fe', fontWeight: 600, borderBottom: '1px solid rgba(255,255,255,0.04)' },
+  tdGreen:  { padding: '11px 14px', color: '#10b981', fontWeight: 700, borderBottom: '1px solid rgba(255,255,255,0.04)' },
   midCta:    { background: 'rgba(16,185,129,0.05)', border: '1px solid rgba(16,185,129,0.15)', borderRadius: '10px', padding: '22px 24px', margin: '32px 0' },
   midCtaT:   { fontSize: '16px', fontWeight: 700, color: '#e2e8f0', marginBottom: '8px' },
   midCtaBody:{ fontSize: '14px', color: '#64748b', lineHeight: 1.65, marginBottom: '16px' },
   midCtaBtn: { display: 'inline-block', padding: '9px 22px', borderRadius: '7px', background: '#10b981', color: 'white', fontWeight: 600, fontSize: '14px', textDecoration: 'none' },
+  screenshotSection: { margin: '36px 0', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.07)', overflow: 'hidden' },
+  screenshotHeader:  { padding: '20px 24px', background: 'rgba(255,255,255,0.02)' },
+  screenshotH:       { fontSize: '18px', fontWeight: 700, color: '#e2e8f0', marginBottom: '6px' },
+  screenshotSub:     { fontSize: '14px', color: '#64748b', lineHeight: 1.6 },
+  screenshotFooter:  { padding: '16px 24px', background: 'rgba(255,255,255,0.015)', borderTop: '1px solid rgba(255,255,255,0.05)', textAlign: 'center' },
   finalCta:    { background: 'linear-gradient(135deg, rgba(99,102,241,0.10) 0%, rgba(139,92,246,0.08) 100%)', border: '1px solid rgba(99,102,241,0.25)', borderRadius: '14px', padding: '36px 28px', margin: '44px 0 36px', textAlign: 'center' },
   finalCtaH:   { fontSize: '22px', fontWeight: 800, color: '#f1f5f9', marginBottom: '12px', letterSpacing: '-0.02em' },
   finalCtaSub: { fontSize: '14px', color: '#64748b', lineHeight: 1.7, marginBottom: '20px' },
-  finalCtaFeatures: { display: 'inline-block', textAlign: 'left', marginBottom: '24px' },
   finalCtaBtn: { display: 'inline-block', padding: '13px 36px', borderRadius: '9px', background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', color: 'white', fontWeight: 700, fontSize: '16px', textDecoration: 'none' },
   faqSection: { marginTop: '48px', paddingTop: '32px', borderTop: '1px solid rgba(255,255,255,0.06)' },
   faqH:       { fontSize: '20px', fontWeight: 700, color: '#e2e8f0', marginBottom: '24px', letterSpacing: '-0.01em' },
   faqItem:    { marginBottom: '24px', paddingBottom: '24px', borderBottom: '1px solid rgba(255,255,255,0.04)' },
   faqQ:       { fontSize: '15px', fontWeight: 600, color: '#c7d2fe', marginBottom: '8px' },
   faqA:       { fontSize: '14px', color: '#94a3b8', lineHeight: 1.75 },
+  related:  { marginTop: '36px', paddingTop: '24px', borderTop: '1px solid rgba(255,255,255,0.06)' },
+  relT:     { fontSize: '11px', color: '#475569', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '10px' },
+  relLinks: { display: 'flex', flexDirection: 'column', gap: '6px' },
+  relLink:  { fontSize: '14px', color: '#6366f1', textDecoration: 'none' },
+  earningTier: { padding: '16px 20px', borderRadius: '10px', marginBottom: '10px', display: 'flex', alignItems: 'flex-start', gap: '16px' },
+  tierBadge: { minWidth: '80px', padding: '6px 10px', borderRadius: '6px', textAlign: 'center', fontWeight: 800, fontSize: '15px' },
+  tierBody: { flex: 1 },
+  tierLabel: { fontSize: '13px', fontWeight: 700, color: '#e2e8f0', marginBottom: '4px' },
+  tierDesc: { fontSize: '13px', color: '#64748b', lineHeight: 1.6 },
 }
 
 export default function CamModelEarnings() {
@@ -155,62 +167,39 @@ export default function CamModelEarnings() {
       <div style={s.meta}>
         <span>CamCashGrl team</span>
         <span>Updated June 2026</span>
-        <span>8 min read</span>
+        <span>9 min read</span>
       </div>
 
-      <h1 style={s.h1}>How Much Do Cam Models Make? Realistic Earnings by Platform & Hours</h1>
+      <h1 style={s.h1}>How Much Do Cam Models Make? ($3–$60+/hr Breakdown by Platform)</h1>
 
       <p style={s.intro}>
-        Cam model earnings can vary wildly from one stream to the next. This guide breaks down how much cam models realistically make,
-        what affects hourly income, how tokens and tips add up, and why tracking your best hours and top fans matters more than just streaming longer.
+        New models typically earn $3–$10 per hour. Established models with regulars earn $10–$30/hr. Top earners clear $60+/hr. This guide explains exactly what separates those tiers — by platform, streaming schedule, fan behavior, and what to track to move up faster.
       </p>
 
       <div style={s.quickAnswer}>
-        <div style={s.quickLabel}>Quick Answer</div>
-        <p style={{ ...s.p, marginBottom: 0 }}>
-          Most cam models do not earn a fixed hourly rate. Income depends on platform, stream time, viewer traffic, top tippers,
-          token goals, consistency, and how well a model keeps fans returning. The most useful number to track is revenue per hour,
-          not just total tokens.
-        </p>
-      </div>
-
-      <div style={s.hero}>
-        <div style={s.heroH}>See Your Real Cam Model Earnings Per Hour</div>
-        <p style={s.heroSub}>
-          Upload your Chaturbate, BongaCams, or MFC earnings history and see your best hours, top fans, platform performance, and real income trends.
-        </p>
-        <ul style={{ ...s.heroBullets, listStyle: 'none', padding: 0, marginBottom: '24px' }}>
-          <li style={s.heroBulletItem}>✓ Find your peak earning hours</li>
-          <li style={s.heroBulletItem}>✓ Identify your highest-value fans</li>
-          <li style={s.heroBulletItem}>✓ Compare earnings across platforms</li>
-          <li style={s.heroBulletItem}>✓ Analyze months of tip history automatically</li>
-        </ul>
-        <div style={s.heroBtnRow}>
-          <a href="/landing" style={s.heroBtnPrimary}>Analyze My Earnings Free →</a>
-          <a href="/landing/demo" style={s.heroBtnSecondary}>Try Demo Dashboard →</a>
-        </div>
-      </div>
-
-      <div style={s.screenshotSection}>
-        <div style={s.screenshotHeader}>
-          <div style={s.screenshotH}>What Your Earnings Dashboard Looks Like</div>
-          <p style={{ ...s.screenshotSub, marginBottom: 0 }}>
-            After uploading your CSV, CamCash maps every tip to the hour it came in, ranks your fans by lifetime spend, and breaks down your revenue by platform — no formulas, no spreadsheets required.
-          </p>
-        </div>
-        <div style={{ borderTop: '1px solid rgba(255,255,255,0.05)', overflow: 'hidden', borderRadius: '0 0 0 0' }}>
-          <a href="/landing/demo" style={{ display: 'block', textDecoration: 'none' }}>
-            <img
-              src="/blog/dashboard-screenshot.png"
-              alt="CamCash earnings dashboard showing total earned $6,980, avg $13.38/hr, platform breakdown by Chaturbate, MFC and BongaCams, and peak streaming window"
-              style={{ width: '100%', display: 'block', borderRadius: '0' }}
-            />
-          </a>
-        </div>
-        <div style={s.screenshotFooter}>
-          <span style={{ fontSize: '13px', color: '#475569' }}>Free to use · No credit card · Works with Chaturbate &amp; BongaCams CSV exports</span>
-          {'  '}
-          <a href="/landing/demo" style={{ ...s.iLink, fontSize: '13px' }}>View live demo →</a>
+        <div style={s.quickLabel}>Quick Answer — Cam Model Earnings by Experience Level</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '4px' }}>
+          <div style={{ ...s.earningTier, background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.12)', padding: '12px 16px', borderRadius: '8px' }}>
+            <div style={{ ...s.tierBadge, background: 'rgba(99,102,241,0.15)', color: '#a5b4fc' }}>$3–$10/hr</div>
+            <div style={s.tierBody}>
+              <div style={s.tierLabel}>New models (0–3 months)</div>
+              <div style={s.tierDesc}>Still building an audience, learning platform mechanics, no consistent regulars yet</div>
+            </div>
+          </div>
+          <div style={{ ...s.earningTier, background: 'rgba(16,185,129,0.05)', border: '1px solid rgba(16,185,129,0.12)', padding: '12px 16px', borderRadius: '8px' }}>
+            <div style={{ ...s.tierBadge, background: 'rgba(16,185,129,0.15)', color: '#10b981' }}>$10–$30/hr</div>
+            <div style={s.tierBody}>
+              <div style={s.tierLabel}>Established models</div>
+              <div style={s.tierDesc}>Consistent schedule, returning fans, optimized streaming hours, tracking data</div>
+            </div>
+          </div>
+          <div style={{ ...s.earningTier, background: 'rgba(245,158,11,0.05)', border: '1px solid rgba(245,158,11,0.12)', padding: '12px 16px', borderRadius: '8px' }}>
+            <div style={{ ...s.tierBadge, background: 'rgba(245,158,11,0.15)', color: '#f59e0b' }}>$60+/hr</div>
+            <div style={s.tierBody}>
+              <div style={s.tierLabel}>Top earners</div>
+              <div style={s.tierDesc}>Multiple high-value regulars, peak-hour scheduling, strong fan retention, often multi-platform</div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -229,113 +218,200 @@ export default function CamModelEarnings() {
         </div>
       </div>
 
-      <h2 style={s.h2}>What Actually Determines Cam Model Income</h2>
-      <p style={s.p}>Cam modeling generates significant data with every tip, session, and hour streamed. But almost no one uses it. Most models know roughly how much they made last month. Very few know:</p>
-      <ul style={s.ul}>
-        <li style={s.li}>Which specific hours generate 2–3x more revenue than others</li>
-        <li style={s.li}>Which fans are responsible for 60–70% of their income</li>
-        <li style={s.li}>Whether their streams improve or decay after the first 30 minutes</li>
-        <li style={s.li}>Which platform actually pays more per hour</li>
-      </ul>
+      <h2 style={s.h2}>Cam Model Earnings by Platform (2026)</h2>
       <p style={s.p}>
-        Without this information, you're running your business on feel. You might be scheduling streams at the wrong time, spending energy on the wrong platform, or letting high-value fans go cold without realizing it.
-        The models who grow their <a href="/guides/cam-model-analytics" style={s.iLink}>cam model analytics</a> from day one are the ones who see consistent income growth month over month.
+        Platform traffic affects how fast you build an audience. But platform choice alone does not determine your hourly rate — your schedule, fan retention, and whether you are streaming when your top fans are online matter more. Here is how the major platforms compare for models at different stages.
       </p>
 
-      <h2 style={s.h2}>Step 1: Track Every Tip Across Every Session</h2>
-      <p style={s.p}>The foundation of growing cam income is complete tip tracking — every tip, every session, every platform. Not just your good nights.</p>
-
-      <h3 style={s.h3}>What to track</h3>
-      <ul style={s.ul}>
-        <li style={s.li}>Username, amount in tokens and USD, and timestamp for every tip</li>
-        <li style={s.li}>Which platform the tip came from</li>
-        <li style={s.li}>Session start and end time</li>
-      </ul>
-      <p style={s.p}>
-        When you have complete tip history, patterns emerge. You'll see that specific fans tip on specific days, that Tuesday sessions outperform Friday sessions, that one platform generates $18/hr while another generates $6/hr.
-        Chaturbate models can pull this data directly from their dashboard — see our <a href="/guides/chaturbate-earnings-tracker" style={s.iLink}>Chaturbate earnings tracker guide</a> for the exact steps.
-      </p>
+      <div style={{ overflowX: 'auto', marginBottom: '28px' }}>
+        <table style={s.compareTable}>
+          <thead>
+            <tr>
+              <th style={s.thCell}>Platform</th>
+              <th style={s.thCell}>Model Type</th>
+              <th style={s.thCell}>Typical New Model $/hr</th>
+              <th style={s.thCell}>Established Model $/hr</th>
+              <th style={s.thCell}>Token Rate to Model</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style={s.tdLabel}>Chaturbate</td>
+              <td style={s.tdCell}>Freemium / public room</td>
+              <td style={s.tdGreen}>$5–$15</td>
+              <td style={s.tdGreen}>$15–$40</td>
+              <td style={s.tdCell}>~$0.05/token</td>
+            </tr>
+            <tr>
+              <td style={s.tdLabel}>Stripchat</td>
+              <td style={s.tdCell}>Freemium / public room</td>
+              <td style={s.tdGreen}>$4–$12</td>
+              <td style={s.tdGreen}>$12–$35</td>
+              <td style={s.tdCell}>~$0.05/token</td>
+            </tr>
+            <tr>
+              <td style={s.tdLabel}>LiveJasmin</td>
+              <td style={s.tdCell}>Premium / private session</td>
+              <td style={s.tdGreen}>$8–$20</td>
+              <td style={s.tdGreen}>$20–$50</td>
+              <td style={s.tdCell}>Varies by rate</td>
+            </tr>
+            <tr>
+              <td style={s.tdLabel}>BongaCams</td>
+              <td style={s.tdCell}>Freemium / hybrid</td>
+              <td style={s.tdGreen}>$4–$10</td>
+              <td style={s.tdGreen}>$10–$30</td>
+              <td style={s.tdCell}>~$0.05/token</td>
+            </tr>
+            <tr>
+              <td style={s.tdLabel}>MyFreeCams</td>
+              <td style={s.tdCell}>Freemium / public room</td>
+              <td style={s.tdGreen}>$3–$10</td>
+              <td style={s.tdGreen}>$10–$30</td>
+              <td style={s.tdCell}>~$0.05/token</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
 
       <div style={s.note}>
         <p style={{ ...s.p, marginBottom: 0 }}>
-          <strong style={{ color: '#e2e8f0' }}>Tool to use:</strong>{' '}
-          Export your CSV from Chaturbate or BongaCams and upload it to <a href="/landing" style={s.iLink}>CamCash</a> — it processes your full tip history automatically and shows you everything in one dashboard.
+          <strong style={{ color: '#e2e8f0' }}>Important:</strong> These ranges are averages across many models. Your actual $/hr depends on when you stream, which fans are active, and how well you retain regulars — not just which platform you are on. Two models on the same platform at the same time can earn 4x differently based on fan relationships alone.
         </p>
       </div>
 
-      <h2 style={s.h2}>Step 2: Find Your Real Peak Hours</h2>
+      <div style={s.hero}>
+        <div style={s.heroH}>See Your Real Earnings Per Hour — Not Averages</div>
+        <p style={s.heroSub}>
+          Upload your Chaturbate or BongaCams tip history and see exactly what you earn per hour, which fans drive your income, and when your best sessions actually happen.
+        </p>
+        <ul style={{ listStyle: 'none', padding: 0, marginBottom: '24px', display: 'inline-block', textAlign: 'left' }}>
+          <li style={s.heroBulletItem}>✓ Your personal peak earning hours (not platform averages)</li>
+          <li style={s.heroBulletItem}>✓ Top fans ranked by lifetime spend</li>
+          <li style={s.heroBulletItem}>✓ Platform revenue per hour side by side</li>
+          <li style={s.heroBulletItem}>✓ Fan retention alerts before whales go cold</li>
+        </ul>
+        <div style={s.heroBtnRow}>
+          <a href="/landing" style={s.heroBtnPrimary}>Analyze My Earnings Free →</a>
+          <a href="/landing/demo" style={s.heroBtnSecondary}>Try Demo Dashboard →</a>
+        </div>
+      </div>
+
+      <div style={s.screenshotSection}>
+        <div style={s.screenshotHeader}>
+          <div style={s.screenshotH}>What Your Earnings Dashboard Looks Like</div>
+          <p style={{ ...s.screenshotSub, marginBottom: 0 }}>
+            After uploading your CSV, CamCash maps every tip to the hour it came in, ranks your fans by lifetime spend, and breaks down your revenue by platform — no formulas, no spreadsheets required.
+          </p>
+        </div>
+        <div style={{ borderTop: '1px solid rgba(255,255,255,0.05)', overflow: 'hidden' }}>
+          <a href="/landing/demo" style={{ display: 'block', textDecoration: 'none' }}>
+            <img
+              src="/blog/dashboard-screenshot.png"
+              alt="CamCash earnings dashboard showing total earned $6,980, avg $13.38/hr, platform breakdown by Chaturbate, MFC and BongaCams, and peak streaming window"
+              style={{ width: '100%', display: 'block' }}
+            />
+          </a>
+        </div>
+        <div style={s.screenshotFooter}>
+          <span style={{ fontSize: '13px', color: '#475569' }}>Free to use · No credit card · Works with Chaturbate &amp; BongaCams CSV exports</span>
+          {'  '}
+          <a href="/landing/demo" style={{ ...s.iLink, fontSize: '13px' }}>View live demo →</a>
+        </div>
+      </div>
+
+      <h2 style={s.h2}>What Actually Separates $10/hr Models from $60+/hr Models</h2>
       <p style={s.p}>
-        Generic peak hours are based on platform-wide traffic — not your specific audience. Your top fans have their own schedules. A model whose biggest tippers are in Europe will have completely different peak hours than one whose audience is primarily US-based.
-        Our guide on <a href="/guides/chaturbate-best-hours" style={s.iLink}>best hours to stream on Chaturbate</a> breaks down platform-wide patterns, but your personal data will always be more accurate.
+        The difference between a $10/hr model and a $60+/hr model is almost never platform choice or how many hours they stream. It comes down to four things that most models never track.
       </p>
 
-      <h3 style={s.h3}>How to find your peak hours</h3>
-      <ul style={s.ul}>
-        <li style={s.li}>Export at least 3 months of tip history from your platform</li>
-        <li style={s.li}>Group your tips by hour of day</li>
-        <li style={s.li}>Calculate average earnings per active streaming day at each hour</li>
-      </ul>
-      <p style={s.p}>Most models find 2–3 hours where they earn 40–80% more than their overall average. Shifting your schedule to hit these windows is the single highest-leverage change you can make to increase earnings without changing anything else about your performance.</p>
+      <h3 style={s.h3}>1. They stream when their specific fans are online</h3>
+      <p style={s.p}>
+        Platform-wide peak hours (typically 9pm–1am EST) are based on aggregate traffic, not your audience. A model whose top five tippers are in Germany has completely different peak hours than one whose audience is US-based. Models who find their personal peak hours — using their own tip history, not generic advice — typically earn 40–80% more per hour than when they stream at random times. Our guide on the{' '}
+        <a href="/guides/chaturbate-best-hours" style={s.iLink}>best hours to stream on Chaturbate</a> covers platform-wide patterns, but your own data will always be more accurate.
+      </p>
+
+      <h3 style={s.h3}>2. They know exactly who their high-value fans are</h3>
+      <p style={s.p}>
+        In almost every cam model's earnings history, the top 10–15% of fans account for 60–70% of total income. Losing one whale can drop a monthly income by $200–$400. High earners track their top fans by lifetime spend, average tip size, and days since last tip — and re-engage them before they go cold rather than after. Read:{' '}
+        <a href="/blog/how-to-re-engage-whales-and-top-tippers" style={s.iLink}>How to Re-Engage Whales and Top Tippers</a>.
+      </p>
+
+      <h3 style={s.h3}>3. They track revenue per hour, not total tokens</h3>
+      <p style={s.p}>
+        A $200 session sounds great until you learn it took six hours. A $120 session in two hours is better. Models who track{' '}
+        <a href="/guides/cam-model-income-tracker" style={s.iLink}>earnings per hour</a> by session identify which streams are actually profitable and which ones are burning time. Without this number, you are making scheduling decisions in the dark.
+      </p>
+
+      <h3 style={s.h3}>4. They analyze sessions like a business</h3>
+      <p style={s.p}>
+        After each stream, high earners ask: Did I earn above or below my average? When did the money come in — front-loaded or back-loaded? Did one fan drive 50%+ of the session? Each answer shapes the next session's strategy. See{' '}
+        <a href="/blog/why-cam-streams-arent-making-money" style={s.iLink}>Why Your Cam Streams Aren't Making Money</a> for the patterns to watch.
+      </p>
 
       <div style={s.midCta}>
-        <div style={s.midCtaT}>Want to see your real cam earnings per hour?</div>
+        <div style={s.midCtaT}>Want to know your real earnings per hour?</div>
         <p style={s.midCtaBody}>
-          Upload your earnings CSV and see your best hours, top fans, platform performance, and real income trends without building a spreadsheet.
+          Upload your tip history CSV and CamCash shows you your personal peak hours, top fan rankings, and platform $/hr — automatically. No spreadsheet needed.
         </p>
         <a href="/landing" style={s.midCtaBtn}>Analyze my earnings free →</a>
       </div>
 
-      <h2 style={s.h2}>Step 3: Identify and Protect Your High-Value Fans</h2>
-      <p style={s.p}>In almost every cam model's earning history, the top 10–15% of fans account for 60–70% of total income. These are your whales. Losing one can cost you $50–$300+ in a month. Most models don't realize a whale is going cold until they've already been gone for weeks.</p>
-      <p style={s.p}>For a deep dive on keeping your best fans, read: <a href="/blog/how-to-build-loyal-fans" style={s.iLink}>How to Build a Loyal Fanbase as a Cam Model</a>. And when they do go quiet: <a href="/blog/how-to-re-engage-whales-and-top-tippers" style={s.iLink}>How to Re-Engage Whales and Top Tippers</a>.</p>
-
-      <h3 style={s.h3}>What to track per fan</h3>
-      <ul style={s.ul}>
-        <li style={s.li}>Lifetime spend in USD</li>
-        <li style={s.li}>Number of tips and average tip size</li>
-        <li style={s.li}>Average days between tips</li>
-        <li style={s.li}>Days since last tip</li>
-        <li style={s.li}>Risk level based on their typical tipping pattern</li>
-      </ul>
-
-      <div style={s.midCta}>
-        <div style={s.midCtaT}>Who are your highest-value fans right now?</div>
-        <p style={s.midCtaBody}>
-          CamCash ranks every tipper by lifetime spend, average tip size, and days since last tip — so you always know who to prioritize and who's at risk of going cold.
-        </p>
-        <a href="/landing" style={s.midCtaBtn}>Find my top fans free →</a>
-      </div>
-
-      <h2 style={s.h2}>Step 4: Analyze Every Session Like a Business</h2>
-      <p style={s.p}>After each stream, ask three questions:</p>
-
-      <h3 style={s.h3}>Did I earn above or below my average?</h3>
-      <p style={s.p}>Not in absolute terms — in relative terms. A $40 session might be great if your average is $25, or poor if your average is $65. Knowing your benchmark makes every session meaningful data. Your <a href="/guides/cam-model-income-tracker" style={s.iLink}>cam model income tracker</a> should surface this automatically.</p>
-
-      <h3 style={s.h3}>When did the money come in?</h3>
-      <p style={s.p}>Was it front-loaded (big tips early, then dying off)? Back-loaded (slow start, then a rush)? Each pattern calls for a different strategy. See <a href="/blog/why-cam-streams-arent-making-money" style={s.iLink}>Why Your Cam Streams Aren't Making Money</a> for the patterns to watch for.</p>
-
-      <h3 style={s.h3}>Who drove the revenue?</h3>
-      <p style={s.p}>If one fan contributed 50%+ of a session's income, that's a concentration risk. Focus on engaging multiple tippers rather than depending on one. The <a href="/guides/cam-model-top-tippers" style={s.iLink}>cam model top tippers</a> guide explains how to use this data strategically.</p>
-
-      <h2 style={s.h2}>Step 5: Compare Your Platforms Honestly</h2>
+      <h2 style={s.h2}>How Much Do Chaturbate Models Make Per Hour?</h2>
       <p style={s.p}>
-        If you stream on more than one platform, you almost certainly earn more per hour on one than the other. The right metric is USD earned per hour streamed, calculated per platform. Most models who do this analysis find a significant difference — commonly 2–4x more on one platform than the other.
-        If you're primarily on Chaturbate, tracking <a href="/guides/chaturbate-token-tracker" style={s.iLink}>Chaturbate token earnings</a> per session gives you the clearest view of your real hourly rate.
+        Chaturbate is the highest-traffic freemium platform and the most common starting point for new models. On Chaturbate, one token equals approximately $0.05 to the model after platform fees. A session with 500 tokens earned equals roughly $25 before taxes — meaning a 3-hour stream at that pace produces about $8.33/hr.
       </p>
-
-      <h2 style={s.h2}>How Much Do Chaturbate Models Make Specifically?</h2>
       <p style={s.p}>
-        For a detailed breakdown of Chaturbate-specific earnings, token payout rates, and what affects your $/hr on that platform specifically, read:{' '}
+        Established Chaturbate models with consistent regulars and optimized peak hours typically earn $15–$40/hr. Models in the top earning percentile — with multiple high-value regulars, large tip goals, and strong room momentum — can clear significantly more during their best sessions.
+      </p>
+      <p style={s.p}>
+        For a full breakdown of Chaturbate-specific payout rates, token math, and what affects your $/hr on that platform, read:{' '}
         <a href="/blog/how-much-do-chaturbate-models-make" style={s.iLink}>How Much Do Chaturbate Models Make Per Hour?</a>
       </p>
+
+      <h2 style={s.h2}>How to Track Your Own Cam Model Earnings</h2>
       <p style={s.p}>
-        If your webcam model income feels inconsistent month to month, the causes are usually predictable — read{' '}
-        <a href="/blog/why-cam-income-is-inconsistent" style={s.iLink}>Why Cam Income Is Inconsistent</a> and{' '}
-        <a href="/blog/how-to-increase-cam-earnings" style={s.iLink}>How to Increase Cam Earnings</a> for specific fixes.
+        The fastest way to increase cam income is to understand where it currently comes from. Most models track total monthly earnings. Almost none track the four numbers that actually drive improvement.
       </p>
+
+      <div style={{ overflowX: 'auto', marginBottom: '28px' }}>
+        <table style={s.compareTable}>
+          <thead>
+            <tr>
+              <th style={s.thCell}>Metric</th>
+              <th style={s.thCell}>Why It Matters</th>
+              <th style={s.thCell}>How to Find It</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style={s.tdLabel}>Revenue per hour</td>
+              <td style={s.tdCell}>Shows which sessions are actually profitable</td>
+              <td style={s.tdCell}>Total session earnings ÷ hours streamed</td>
+            </tr>
+            <tr>
+              <td style={s.tdLabel}>Peak earning hours</td>
+              <td style={s.tdCell}>40–80% more per hour vs. off-peak for most models</td>
+              <td style={s.tdCell}>Group tip history by hour of day across 3+ months</td>
+            </tr>
+            <tr>
+              <td style={s.tdLabel}>Top fan lifetime spend</td>
+              <td style={s.tdCell}>Top 10–15% of fans = 60–70% of income</td>
+              <td style={s.tdCell}>Sum tips by username across all sessions</td>
+            </tr>
+            <tr>
+              <td style={s.tdLabel}>Days since last tip (per fan)</td>
+              <td style={s.tdCell}>Catches whales going cold before they're gone</td>
+              <td style={s.tdCell}>Last tip timestamp per username</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
       <p style={s.p}>
-        Start by measuring: <a href="/blog/how-to-track-cam-tips-automatically" style={s.iLink}>automatic tip tracking</a> shows where your money actually comes from. Then protect your base — <a href="/blog/cam-model-fan-crm" style={s.iLink}>your top tipper profiles</a> (Pro feature — upgrade after signup) tell you who to look after. And raise your nightly ceiling with <a href="/blog/live-ai-coaching-cam-models" style={s.iLink}>live coaching</a> when the room dips.
+        You can build this in a spreadsheet using CSV exports from Chaturbate or BongaCams — see our{' '}
+        <a href="/guides/chaturbate-earnings-tracker" style={s.iLink}>Chaturbate earnings tracker guide</a> for the exact steps. Or upload your CSV to{' '}
+        <a href="/landing" style={s.iLink}>CamCash</a> and it calculates all four automatically.
       </p>
 
       <div style={s.faqSection}>
@@ -344,50 +420,52 @@ export default function CamModelEarnings() {
         <div style={s.faqItem}>
           <div style={s.faqQ}>How much do cam models make per hour?</div>
           <p style={{ ...s.faqA, marginBottom: 0 }}>
-            Cam model earnings per hour vary widely based on platform, traffic, fan loyalty, stream time, tip activity, and schedule.
-            Instead of focusing only on total earnings, models should track revenue per hour to see which sessions are actually profitable.
-            See our <a href="/guides/chaturbate-earnings-tracker" style={s.iLink}>Chaturbate earnings tracker</a> for a platform-specific breakdown.
+            New cam models typically earn $3–$10 per hour while building an audience. Established models with returning fans and a consistent schedule earn $10–$30 per hour. Top earners on high-traffic platforms clear $60 or more per hour. The biggest driver is not platform choice — it is whether you stream during your personal peak hours when your highest-value fans are online.
           </p>
         </div>
 
         <div style={s.faqItem}>
           <div style={s.faqQ}>How much do beginner cam models make?</div>
           <p style={{ ...s.faqA, marginBottom: 0 }}>
-            Beginner cam model earnings are usually inconsistent while a model is building an audience and learning which hours perform best.
-            Early data is still valuable because it can show which platforms, stream times, and fan behaviors are worth focusing on first.
-          </p>
-        </div>
-
-        <div style={s.faqItem}>
-          <div style={s.faqQ}>What affects cam model earnings?</div>
-          <p style={{ ...s.faqA, marginBottom: 0 }}>
-            The main factors that affect cam model income are streaming schedule, platform choice, returning fan behavior, top tippers,
-            session length, token goals, and whether the model is tracking revenue per hour instead of only total tokens.
-            Read our guide on <a href="/blog/why-cam-income-is-inconsistent" style={s.iLink}>why cam income is inconsistent</a> for the full breakdown.
+            Most beginners earn $3–$10/hr in their first one to three months. Income is inconsistent while you are building a fan base and learning which hours and platforms perform best for your specific audience. Tracking your early data is valuable because patterns emerge faster than most new models expect — even a few weeks of tip history can show you which hours and fans to prioritize.
           </p>
         </div>
 
         <div style={s.faqItem}>
           <div style={s.faqQ}>Which cam site pays the most?</div>
           <p style={{ ...s.faqA, marginBottom: 0 }}>
-            The best-paying cam site depends on the model. A platform with higher total earnings is not always the most profitable if it takes more hours to earn that amount.
-            Comparing platform revenue per hour gives a clearer answer than comparing totals.
+            Chaturbate and Stripchat have the highest traffic, which helps new models build an audience faster. LiveJasmin and private-session platforms often convert better per viewer for models who prefer one-to-one interaction. The best-paying site for you depends on your working style — compare revenue per hour across platforms using the same schedule rather than comparing raw payout rates.
           </p>
         </div>
 
         <div style={s.faqItem}>
-          <div style={s.faqQ}>Why is cam model income inconsistent?</div>
+          <div style={s.faqQ}>How much do Chaturbate models make per hour?</div>
           <p style={{ ...s.faqA, marginBottom: 0 }}>
-            Cam income changes because viewer traffic, top tippers, time of day, platform activity, fan return behavior, and session momentum all change.
-            Tracking patterns over time helps models find their most reliable earning windows.
+            Chaturbate models typically earn $5–$15/hr early on, rising to $15–$40/hr with an established audience and optimized schedule. One Chaturbate token equals approximately $0.05 to the model. For a full token math breakdown, read our{' '}
+            <a href="/blog/how-much-do-chaturbate-models-make" style={s.iLink}>Chaturbate earnings guide</a>.
           </p>
         </div>
 
         <div style={s.faqItem}>
-          <div style={s.faqQ}>What is the best way to track cam model income?</div>
+          <div style={s.faqQ}>What affects cam model earnings the most?</div>
           <p style={{ ...s.faqA, marginBottom: 0 }}>
-            The best method is to track earnings by session, platform, fan, and hour. CamCash lets models upload their earnings history and see revenue per hour,
-            top fans, best stream times, and platform performance in one dashboard. No spreadsheet formulas needed.
+            The biggest factors are streaming schedule (whether you are live when your top fans are online), fan retention (the top 10–15% of fans typically drive 60–70% of income), platform fit for your working style, and session length. Tracking revenue per hour rather than total tokens is the clearest way to identify what is actually working. Read:{' '}
+            <a href="/blog/why-cam-income-is-inconsistent" style={s.iLink}>Why Cam Income Is Inconsistent</a>.
+          </p>
+        </div>
+
+        <div style={s.faqItem}>
+          <div style={s.faqQ}>Why is cam model income so inconsistent?</div>
+          <p style={{ ...s.faqA, marginBottom: 0 }}>
+            Cam income varies because viewer traffic, top tipper activity, time of day, and session momentum all shift. A single high-value fan going inactive can drop monthly income by $200–$400. Models who track earnings by hour and fan over time find their most reliable earning windows and protect their highest-value relationships before they go cold.
+          </p>
+        </div>
+
+        <div style={s.faqItem}>
+          <div style={s.faqQ}>How do cam models track their earnings?</div>
+          <p style={{ ...s.faqA, marginBottom: 0 }}>
+            The most effective method is exporting your tip history as a CSV from Chaturbate or BongaCams and analyzing it by hour, fan, platform, and session.{' '}
+            <a href="/landing" style={s.iLink}>CamCash</a> processes these exports automatically and shows revenue per hour, top fan rankings, peak streaming windows, and platform performance — no spreadsheet formulas needed.
           </p>
         </div>
       </div>
@@ -395,14 +473,14 @@ export default function CamModelEarnings() {
       <div style={s.finalCta}>
         <div style={s.finalCtaH}>Stop Guessing Where Your Money Comes From</div>
         <p style={s.finalCtaSub}>
-          Upload your Chaturbate or BongaCams CSV and get a full breakdown of your cam model earnings in under two minutes. No credit card. No setup.
+          Upload your Chaturbate or BongaCams CSV and get a full breakdown of your real cam model earnings — per hour, per fan, per platform — in under two minutes. No credit card. No setup.
         </p>
         <ul style={{ listStyle: 'none', padding: 0, marginBottom: '24px', display: 'inline-block', textAlign: 'left' }}>
-          <li style={{ fontSize: '14px', color: '#cbd5e1', lineHeight: 1.9 }}>✓ Peak earning hours</li>
+          <li style={{ fontSize: '14px', color: '#cbd5e1', lineHeight: 1.9 }}>✓ Your real earnings per hour (not platform averages)</li>
           <li style={{ fontSize: '14px', color: '#cbd5e1', lineHeight: 1.9 }}>✓ Top tippers ranked by lifetime spend</li>
-          <li style={{ fontSize: '14px', color: '#cbd5e1', lineHeight: 1.9 }}>✓ Fan retention &amp; at-risk alerts</li>
-          <li style={{ fontSize: '14px', color: '#cbd5e1', lineHeight: 1.9 }}>✓ Revenue trends over time</li>
-          <li style={{ fontSize: '14px', color: '#cbd5e1', lineHeight: 1.9 }}>✓ Historical earnings analysis across all sessions</li>
+          <li style={{ fontSize: '14px', color: '#cbd5e1', lineHeight: 1.9 }}>✓ Personal peak streaming hours</li>
+          <li style={{ fontSize: '14px', color: '#cbd5e1', lineHeight: 1.9 }}>✓ Fan retention and at-risk alerts</li>
+          <li style={{ fontSize: '14px', color: '#cbd5e1', lineHeight: 1.9 }}>✓ Platform comparison — see which site actually pays you more</li>
         </ul>
         <br />
         <a href="/landing" style={s.finalCtaBtn}>Analyze My Earnings Free →</a>
@@ -413,18 +491,19 @@ export default function CamModelEarnings() {
         <div style={s.relLinks}>
           <a href="/blog/how-much-do-chaturbate-models-make" style={s.relLink}>→ How much Chaturbate models make per hour</a>
           <a href="/blog/how-to-increase-cam-earnings" style={s.relLink}>→ How to increase cam earnings</a>
-          <a href="/blog/best-cam-model-tools" style={s.relLink}>→ Best cam model tools</a>
+          <a href="/blog/best-cam-sites-for-models" style={s.relLink}>→ Best cam sites for models in 2026</a>
           <a href="/blog/why-cam-streams-arent-making-money" style={s.relLink}>→ Why your streams aren't making money</a>
           <a href="/blog/why-cam-income-is-inconsistent" style={s.relLink}>→ Why cam income is inconsistent</a>
+          <a href="/blog/how-to-re-engage-whales-and-top-tippers" style={s.relLink}>→ How to re-engage whales and top tippers</a>
           <a href="/guides/chaturbate-earnings-tracker" style={s.relLink}>→ Chaturbate earnings tracker</a>
           <a href="/guides/cam-model-token-calculator" style={s.relLink}>→ Cam model token calculator</a>
           <a href="/guides/cam-model-income-tracker" style={s.relLink}>→ Cam model income tracker</a>
           <a href="/guides/cam-model-analytics" style={s.relLink}>→ Cam model analytics guide</a>
           <a href="/guides/chaturbate-best-hours" style={s.relLink}>→ Best time to stream on Chaturbate</a>
           <a href="/guides/cam-model-top-tippers" style={s.relLink}>→ Cam model top tippers guide</a>
-          <a href="/blog/how-to-track-cam-tips-automatically" style={s.relLink}>→ How to Track Cam Tips Automatically — See where your earnings come from</a>
-          <a href="/blog/cam-model-fan-crm" style={s.relLink}>→ Cam Model Fan CRM — Protect your highest-value fans</a>
-          <a href="/blog/live-ai-coaching-cam-models" style={s.relLink}>→ Live AI Coaching for Cam Models — Lift your earnings mid-stream</a>
+          <a href="/blog/how-to-track-cam-tips-automatically" style={s.relLink}>→ How to track cam tips automatically</a>
+          <a href="/blog/cam-model-fan-crm" style={s.relLink}>→ Cam model fan CRM — protect your highest-value fans</a>
+          <a href="/blog/live-ai-coaching-cam-models" style={s.relLink}>→ Live AI coaching for cam models</a>
         </div>
       </div>
     </ArticleLayout>
