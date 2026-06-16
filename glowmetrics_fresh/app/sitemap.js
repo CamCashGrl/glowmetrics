@@ -57,5 +57,14 @@ export default function sitemap() {
     { url: `${baseUrl}/blog/viral-cam-room-titles`,                   lastModified: now, changeFrequency: 'monthly', priority: 0.85 },
     { url: `${baseUrl}/blog/revenue-per-hour-cam-model`,              lastModified: now, changeFrequency: 'monthly', priority: 0.85 },
     { url: `${baseUrl}/blog/camcash-vs-camdash-vs-cb-cam-insights`,    lastModified: now, changeFrequency: 'monthly', priority: 0.85 },
+    { url: `${baseUrl}/blog/best-cam-sites-for-beginners`,            lastModified: now, changeFrequency: 'monthly', priority: 0.85 },
+    { url: `${baseUrl}/blog/best-cam-sites-for-models`,               lastModified: now, changeFrequency: 'monthly', priority: 0.85 },
+    { url: `${baseUrl}/blog/cam-model-equipment-guide`,               lastModified: now, changeFrequency: 'monthly', priority: 0.85 },
+    { url: `${baseUrl}/blog/cam-model-jobs-from-home`,                lastModified: now, changeFrequency: 'monthly', priority: 0.85 },
+    { url: `${baseUrl}/blog/how-cam-models-stay-anonymous`,           lastModified: now, changeFrequency: 'monthly', priority: 0.85 },
+    { url: `${baseUrl}/blog/how-much-do-cam-models-make`,             lastModified: now, changeFrequency: 'monthly', priority: 0.85 },
+    { url: `${baseUrl}/blog/how-to-get-more-viewers-as-a-cam-model`,  lastModified: now, changeFrequency: 'monthly', priority: 0.85 },
+    { url: `${baseUrl}/blog/how-to-stay-safe-as-a-cam-model`,         lastModified: now, changeFrequency: 'monthly', priority: 0.85 },
+    { url: `${baseUrl}/blog/is-camming-legal`,                        lastModified: now, changeFrequency: 'monthly', priority: 0.85 },
   ]
 }
