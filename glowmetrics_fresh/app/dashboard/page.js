@@ -2497,6 +2497,20 @@ const handleCSV = async (file, forcePlatform = null) => {
   const reengageList = buildReengageList()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const dailyBrief = buildDailyBrief() // re-runs every minuteTick
+
+  // ── CANONICAL PEAK HOUR ──────────────────────────────────────────────────────
+  // Single source of truth used by the header, Daily Brief, and Losing Money.
+  // Prefer engineInsights daily_plan (most specific), then today's analytics best
+  // hour from dailyBrief, then the all-time analytics best hour as final fallback.
+  const canonicalPeakHourUTC = (
+    engineInsights?.daily_plan?.best_hour ??
+    dailyBrief?.bh ??
+    (analytics?.bestHour ? parseInt(analytics.bestHour.hour) : null)
+  )
+  const canonicalPeakLabel = canonicalPeakHourUTC != null
+    ? (() => { const _off = new Date().getTimezoneOffset()/-60; const _lh = Math.round(((canonicalPeakHourUTC+_off)%24+24)%24); return _lh===0?'12 AM':_lh<12?`${_lh} AM`:_lh===12?'12 PM':`${_lh-12} PM` })()
+    : null
+
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const realTimeAlerts = buildRealTimeAlerts() // re-runs every minuteTick
   void minuteTick // ensures re-render when minute changes
@@ -2624,10 +2638,9 @@ const handleCSV = async (file, forcePlatform = null) => {
           const momentum = atPeak ? '🔥 AT PEAK' : safeAvg > 20 ? '↑ Strong' : safeAvg > 5 ? '→ Steady' : tips.length === 0 ? '— No data' : '↓ Slow'
           const momentumColor = atPeak ? '#10B981' : safeAvg > 20 ? '#10B981' : safeAvg > 5 ? '#22D3EE' : tips.length === 0 ? '#475569' : '#f87171'
           const localNow = new Date().getHours()
-          const _eiPeakUTC = engineInsights?.go_live_status?.next_best_hour ?? engineInsights?.summary?.best_hour
-          const hoursUntilLocal = (_eiPeakUTC != null && localNow != null) ? (_eiPeakUTC - localNow + 24) % 24 : brief?.hoursUntilPeak
+          const hoursUntilLocal = canonicalPeakHourUTC != null ? (canonicalPeakHourUTC - localNow + 24) % 24 : brief?.hoursUntilPeak
           const peakLabel = hoursUntilLocal === 0 ? 'NOW' : hoursUntilLocal === 1 ? 'in 1 hr' : (hoursUntilLocal > 0 && !isNaN(hoursUntilLocal)) ? `in ${hoursUntilLocal}h` : null
-          const _eiPeakLabel = _eiPeakUTC != null ? fmtHour(_eiPeakUTC) : brief?.bhLabel
+          const _eiPeakLabel = canonicalPeakLabel || brief?.bhLabel
           const bestPlat = brief?.displayPlat || (tips.length > 0 ? tips[0]?.platform : null)
           const safeRevenue = (!isNaN(totalRevenue) && isFinite(totalRevenue)) ? totalRevenue : 0
           return (
@@ -2857,11 +2870,7 @@ const handleCSV = async (file, forcePlatform = null) => {
           const { todayName, bhLabel: _bhLabel, bh, atPeak, hoursUntilPeak, displayPlat: _displayPlat, displayAvg,
             isBestDay, bestDay, sessionAvg, peakAvg, predictionLow, predictionHigh,
             reengageFans, likelyOnline, platTodayStats, sessionsAtPeakCount } = dailyBrief
-          // Override best hour + platform from engineInsights when available; fall back to dailyBrief values
-          const _eiBh = engineInsights?.daily_plan?.best_hour
-          const _eiLocalH = _eiBh != null ? (_eiBh - new Date().getTimezoneOffset() / 60 + 24) % 24 : null
-          const _eiLabel = _eiLocalH != null ? (_eiLocalH === 0 ? '12 AM' : _eiLocalH < 12 ? `${Math.floor(_eiLocalH)} AM` : _eiLocalH === 12 ? '12 PM' : `${Math.floor(_eiLocalH) - 12} PM`) : null
-          const bhLabel = _eiLabel || _bhLabel
+          const bhLabel = canonicalPeakLabel || _bhLabel
           const displayPlat = engineInsights?.summary?.best_platform || _displayPlat
           return (
             <div style={{ marginBottom: 20, borderRadius: 18, overflow: 'hidden', border: `1px solid ${atPeak ? 'rgba(16,185,129,0.45)' : 'rgba(124,92,255,0.3)'}`, background: 'rgba(10,12,24,0.7)', backdropFilter: 'blur(16px)', animation: 'fadeUp 0.3s ease both' }}>
@@ -3406,7 +3415,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                 .filter(([,m]) => m.missedRevenue > 5)
                 .sort((a,b) => b[1].missedRevenue - a[1].missedRevenue)
               if (!allAlerts.length && !missedEntries.length) return null
-              const fmtH2 = h => { const _off=new Date().getTimezoneOffset()/-60; const _lh=Math.round(((h+_off)%24+24)%24); return _lh===0?'12 AM':_lh<12?`${_lh} AM`:_lh===12?'12 PM':`${_lh-12} PM` }
+              const peakHourLabel = canonicalPeakLabel
               return (
                 <div style={{ ...glassCard, borderRadius: 18, padding: 24, marginBottom: 28, border: "1px solid rgba(251,146,60,0.2)", animation: "fadeUp 0.3s ease 0.25s both" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
@@ -3426,14 +3435,14 @@ const handleCSV = async (file, forcePlatform = null) => {
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, flexWrap: "wrap" }}>
                             <div>
                               <div style={{ fontSize: 13, fontWeight: 700, color: C.white, marginBottom: 3 }}>
-                                📉 {plat} — peak hour earns <span style={{ color: C.cyan }}>{m.multiplier || (m.bestHourAvg && m.overallAvg ? (m.bestHourAvg/m.overallAvg).toFixed(1) : "5")}x</span> your avg session. Shift more streams to {fmtH2(m.bestHour)} to add ~<span style={{ color: C.green }}>${Math.round((m.bestHourAvg||0) - (m.overallAvg||0))}/stream</span>
+                                📉 {plat} — peak hour earns <span style={{ color: C.cyan }}>{m.multiplier || (m.bestHourAvg && m.overallAvg ? (m.bestHourAvg/m.overallAvg).toFixed(1) : "5")}x</span> your avg session. Shift more streams to {peakHourLabel} to add ~<span style={{ color: C.green }}>${Math.round((m.bestHourAvg||0) - (m.overallAvg||0))}/stream</span>
                               </div>
                               <div style={{ fontSize: 12, color: C.muted }}>
-                                {m.sessionsNotAtBestHour} sessions ran off-peak · Best hour is {fmtH2(m.bestHour)} (${m.bestHourAvg.toFixed(0)} avg) vs your overall ${m.overallAvg.toFixed(0)} avg
+                                {m.sessionsNotAtBestHour} sessions ran off-peak · Best hour is {peakHourLabel} (${m.bestHourAvg.toFixed(0)} avg) vs your overall ${m.overallAvg.toFixed(0)} avg
                               </div>
                             </div>
                             <div style={{ fontSize: 11, padding: "3px 9px", borderRadius: 20, background: "rgba(251,146,60,0.2)", color: C.orange, fontWeight: 700, whiteSpace: "nowrap" }}>
-                              Stream at {fmtH2(m.bestHour)}
+                              Stream at {peakHourLabel}
                             </div>
                           </div>
                         </div>
