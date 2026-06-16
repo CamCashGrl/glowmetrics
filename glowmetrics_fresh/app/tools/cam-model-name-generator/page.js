@@ -1,8 +1,8 @@
 import NameGeneratorClient from './NameGeneratorClient'
 
 export const metadata = {
-  title: 'Cam Model Name Generator — 100+ Name Ideas & Brand Checker (2026) | CamCash',
-  description: 'Free cam model name generator with brand strength scoring and platform availability checking. Generate 25–100 stage names instantly. Covers Chaturbate, OnlyFans, TikTok, Instagram and domain availability.',
+  title: 'Cam Girl Name Generator: Find a Cute, Sexy, Brandable Stage Name',
+  description: 'Use this free cam girl name generator to find cute, sexy, luxury, bratty, soft, or playful stage name ideas for your cam model brand.',
   keywords: 'cam model name generator, cam girl name generator, webcam model name generator, cam model names, cam girl names, chaturbate usernames, cam username generator, onlyfans name generator, creator name generator, cam model stage names',
   alternates: { canonical: 'https://www.camcashgrl.com/tools/cam-model-name-generator' },
   openGraph: {
@@ -86,6 +86,12 @@ export default function CamModelNameGeneratorPage() {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(toolSchema) }} />
       <NameGeneratorClient />
+      <div style={{ maxWidth: 860, margin: '0 auto', padding: '0 24px 48px', textAlign: 'center' }}>
+        <p style={{ fontSize: 15, color: '#94a3b8', lineHeight: 1.7 }}>
+          Once you pick your cam name,{' '}
+          <a href="/landing" style={{ color: '#6366f1', textDecoration: 'none' }}>use CamCash to track your tips, best hours, and top fans</a>.
+        </p>
+      </div>
     </>
   )
 }
