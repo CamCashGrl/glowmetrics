@@ -3389,9 +3389,24 @@ const handleCSV = async (file, forcePlatform = null) => {
                 5. YOU'RE LOSING MONEY — Risk / Loss + Missed Revenue
             ═══════════════════════════════════════ */}
             {(() => {
+              // Only show a fan re-engagement warning if the model has actually
+              // been online enough for the fan to have had a realistic chance to tip.
+              // Rule: model must have ≥3 sessions in the last N days, where N = fan's
+              // average tipping frequency. No-shows aren't "at risk" — we just weren't live.
+              const hasStreamedEnough = (whale) => {
+                if (!whale?.avgDaysBetweenTips) return true
+                const windowDays = Math.max(7, Math.round(whale.avgDaysBetweenTips))
+                const cutoff = Date.now() - windowDays * 86400000
+                const sessionsInWindow = sessions.filter(s => new Date(s.startTime).getTime() >= cutoff).length
+                return sessionsInWindow >= 3
+              }
               const allAlerts = [
-                ...(lossAlerts || []),
-                ...(alerts || []).slice(0, 3)
+                ...(lossAlerts || []).filter(a =>
+                  (a.type === 'fan_churn') ? hasStreamedEnough(a.whale) : true
+                ),
+                ...(alerts || []).filter(a =>
+                  (a.type === 'churn_risk') ? hasStreamedEnough(a.whale) : true
+                ).slice(0, 3)
               ].slice(0, 6)
               const missedEntries = Object.entries(missedRevenueByPlat)
                 .filter(([,m]) => m.missedRevenue > 5)
