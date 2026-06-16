@@ -2799,7 +2799,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                 <>
                   <div className="stat-grid-4" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: velPlatforms.length ? 10 : 24 }}>
                     {cardDefs.map((s, i) => (
-                      <div key={i} className={`stat-card ${s.glowClass}`} style={{ ...glassCard, borderRadius: 18, padding: "22px 20px", position: "relative", overflow: "hidden", animation: `fadeUp 0.3s ease ${i * 0.06}s both`, cursor:'default' }}>
+                      <div key={i} className={`stat-card ${s.glowClass}`} style={{ ...glassCard, borderRadius: 18, padding: "16px 20px", position: "relative", overflow: "hidden", animation: `fadeUp 0.3s ease ${i * 0.06}s both`, cursor:'default' }}>
                         {/* accent top bar */}
                         <div style={{ position:'absolute', top:0, left:0, right:0, height:3, background:`linear-gradient(90deg,${s.accent}80,${s.accent}20)`, borderRadius:'18px 18px 0 0' }} />
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
@@ -2807,12 +2807,11 @@ const handleCSV = async (file, forcePlatform = null) => {
                           <span style={{ fontSize: 22 }}>{s.icon}</span>
                         </div>
                         {s.isHero
-                          ? <div className="hero-revenue-shimmer" style={{ fontSize: 42, fontWeight: 900, marginBottom: 4, lineHeight: 1.05 }}>{s.value}</div>
-                          : <div style={{ fontSize: 32, fontWeight: 900, color: s.accent, marginBottom: 4, lineHeight: 1.1 }}>{s.value}<TrendBadge pct={s.trend} /></div>
+                          ? <div className="hero-revenue-shimmer" style={{ fontSize: 34, fontWeight: 900, marginBottom: 4, lineHeight: 1.05 }}>{s.value}</div>
+                          : <div style={{ fontSize: 26, fontWeight: 900, color: s.accent, marginBottom: 4, lineHeight: 1.1 }}>{s.value}<TrendBadge pct={s.trend} /></div>
                         }
                         {s.isHero && <div style={{ marginBottom:4 }}><TrendBadge pct={s.trend} /></div>}
                         <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.4 }}>{s.sub}</div>
-                        <MiniSpark data={s.sparkData} accent={s.accent} />
                         {s.badge && <div style={{ marginTop: 8, display: "inline-block", padding: "2px 8px", borderRadius: 6, background: `${s.badgeColor}20`, border: `1px solid ${s.badgeColor}40`, fontSize: 10, fontWeight: 700, color: s.badgeColor }}>{s.badge}</div>}
                         {s.info && <div style={{ marginTop: 6, fontSize: 9, color: C.muted, opacity: 0.7, lineHeight: 1.3 }}>ℹ️ {s.info}</div>}
                       </div>
