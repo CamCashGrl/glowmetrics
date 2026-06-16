@@ -1,20 +1,20 @@
 import ArticleLayout from '../../components/ArticleLayout'
 
 export const metadata = {
-  title: 'Chaturbate Token Tracker: Log and Track Tokens Across Sessions',
-  description: 'Track your Chaturbate tokens earned per session, convert to USD, and see which streams are most profitable over time.',
+  title: 'Chaturbate Token Tracker: Track Tips, Tokens & Chaturbate Stats',
+  description: 'Track Chaturbate tokens, tips, stats, and earnings over time. See your best hours, top tippers, and real payout data — free for cam models.',
   alternates: { canonical: 'https://www.camcashgrl.com/guides/chaturbate-token-tracker' },
   openGraph: {
-    title: 'Chaturbate Token Tracker: Log and Track Tokens Across Sessions',
-    description: 'Track your Chaturbate tokens earned per session, convert to USD, and see which streams are most profitable over time.',
+    title: 'Chaturbate Token Tracker: Track Tips, Tokens & Chaturbate Stats',
+    description: 'Track Chaturbate tokens, tips, stats, and earnings over time. See your best hours, top tippers, and real payout data — free for cam models.',
     url: 'https://www.camcashgrl.com/guides/chaturbate-token-tracker',
     type: 'article',
     images: [{ url: 'https://www.camcashgrl.com/og-image.png', width: 1200, height: 630 }],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Chaturbate Token Tracker: Log and Track Tokens Across Sessions',
-    description: 'Track your Chaturbate tokens earned per session, convert to USD, and see which streams are most profitable over time.',
+    title: 'Chaturbate Token Tracker: Track Tips, Tokens & Chaturbate Stats',
+    description: 'Track Chaturbate tokens, tips, stats, and earnings over time. See your best hours, top tippers, and real payout data — free for cam models.',
   },
 }
 

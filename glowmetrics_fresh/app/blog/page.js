@@ -72,6 +72,11 @@ const posts = [
     title: "Why Streams Aren't Making Money",
     description: 'Common mistakes that kill cam session earnings.',
   },
+  {
+    slug: 'chaturbate-payout-explained',
+    title: 'Chaturbate Payout Explained',
+    description: 'How Chaturbate pays models — token rates, payout thresholds, payment methods, and timelines.',
+  },
 ]
 
 export default function BlogPage() {

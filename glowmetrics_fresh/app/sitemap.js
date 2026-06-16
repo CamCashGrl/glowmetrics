@@ -66,5 +66,6 @@ export default function sitemap() {
     { url: `${baseUrl}/blog/how-to-get-more-viewers-as-a-cam-model`,  lastModified: now, changeFrequency: 'monthly', priority: 0.85 },
     { url: `${baseUrl}/blog/how-to-stay-safe-as-a-cam-model`,         lastModified: now, changeFrequency: 'monthly', priority: 0.85 },
     { url: `${baseUrl}/blog/is-camming-legal`,                        lastModified: now, changeFrequency: 'monthly', priority: 0.85 },
+    { url: `${baseUrl}/blog/chaturbate-payout-explained`,             lastModified: now, changeFrequency: 'monthly', priority: 0.85 },
   ]
 }

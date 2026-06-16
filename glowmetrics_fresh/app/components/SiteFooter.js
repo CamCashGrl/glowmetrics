@@ -74,6 +74,7 @@ export default function SiteFooter({ sidebarOffset = 0 }) {
           <FooterLink href="/blog/how-to-re-engage-whales-and-top-tippers">Re-Engage Your Top Tippers</FooterLink>
           <FooterLink href="/blog/why-cam-income-is-inconsistent">Why Cam Income Is Inconsistent</FooterLink>
           <FooterLink href="/blog/why-cam-streams-arent-making-money">Why Streams Aren&apos;t Making Money</FooterLink>
+          <FooterLink href="/blog/chaturbate-payout-explained">Chaturbate Payout Explained</FooterLink>
         </div>
 
         {/* Free Guides & Tools */}
