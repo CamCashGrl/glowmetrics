@@ -1,4 +1,4 @@
-import ArticleLayout from '../../../components/ArticleLayout'
+import ArticleLayout from '../../components/ArticleLayout'
 
 export const metadata = {
   title: 'How Much Do Cam Models Make in 2026? (Real Income Ranges)',

@@ -1,4 +1,4 @@
-import ArticleLayout from '../components/ArticleLayout'
+import ArticleLayout from '../../components/ArticleLayout'
 
 export const metadata = {
   title: 'Best Cam Model Analytics Tools 2026: Track Tips & Earnings',
