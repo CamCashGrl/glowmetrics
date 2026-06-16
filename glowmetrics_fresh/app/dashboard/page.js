@@ -2827,7 +2827,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                     <div className="velocity-strip" style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
                       {velPlatforms.map(([plat, vel], i) => (
                         <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 14px", borderRadius: 20, background: "rgba(34,211,238,0.07)", border: "1px solid rgba(34,211,238,0.2)", animation: `fadeUp 0.3s ease ${0.25 + i*0.05}s both` }}>
-                          <span style={{ fontSize: 11, color: C.muted }}>{plat.replace('BongaCams','Bonga').replace('MyFreeCams','MFC').replace('Chaturbate','CB')}</span>
+                          <span style={{ fontSize: 11, color: C.muted }}>{plat.replace('BongaCams','Bonga').replace('MyFreeCams','MFC').replace(/chaturbate/i,'CB')}</span>
                           <span style={{ fontSize: 13, fontWeight: 700, color: C.cyan }}>${(!isNaN(vel) && isFinite(vel) ? vel : 0).toFixed(2)}/hr</span>
                           <span style={{ fontSize: 10, color: C.muted }}>velocity</span>
                         </div>
@@ -3232,7 +3232,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                         const dayVals = UTC_DAYS.map(d => platDayAvg[plat][d] || 0)
                         const maxVal = Math.max(...dayVals, 0.01)
                         return [
-                          <div key={plat + '_l'} style={{ fontSize: 10, fontWeight: 700, color: C.text, display: "flex", alignItems: "center", paddingRight: 4, lineHeight: 1.3 }}>{plat.replace('BongaCams','Bonga').replace('Chaturbate','CB').replace('MyFreeCams','MFC')}</div>,
+                          <div key={plat + '_l'} style={{ fontSize: 10, fontWeight: 700, color: C.text, display: "flex", alignItems: "center", paddingRight: 4, lineHeight: 1.3 }}>{plat.replace('BongaCams','Bonga').replace(/chaturbate/i,'CB').replace('MyFreeCams','MFC')}</div>,
                           ...UTC_DAYS.map(d => {
                             const val = platDayAvg[plat][d] || 0
                             const intensity = maxVal > 0 ? val / maxVal : 0

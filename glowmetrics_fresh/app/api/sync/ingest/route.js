@@ -40,10 +40,11 @@ export async function POST(request) {
     }
 
     // 3. Parse and validate payload
-    const { platform, tips } = JSON.parse(body);
-    if (!platform || !Array.isArray(tips) || tips.length === 0) {
+    const { platform: rawPlatform, tips } = JSON.parse(body);
+    if (!rawPlatform || !Array.isArray(tips) || tips.length === 0) {
       return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
     }
+    const platform = normalisePlatformName(rawPlatform);
     if (tips.length > 500) {
       return NextResponse.json({ error: 'Batch too large (max 500)' }, { status: 400 });
     }
@@ -137,6 +138,19 @@ async function hmacSign(data, secretHex) {
     new TextEncoder().encode(data)
   );
   return bufferToHex(sig);
+}
+
+// ─── Platform name normaliser ─────────────────────────────────
+
+function normalisePlatformName(raw) {
+  const s = (raw || '').toLowerCase().trim();
+  if (s === 'chaturbate' || s === 'cb') return 'Chaturbate';
+  if (s === 'bongacams' || s === 'bc') return 'BongaCams';
+  if (s === 'myfreecams' || s === 'mfc') return 'MyFreeCams';
+  if (s === 'stripchat') return 'Stripchat';
+  if (s === 'camsoda') return 'CamSoda';
+  // Preserve original casing for unknown platforms
+  return raw;
 }
 
 // ─── Normaliser ───────────────────────────────────────────────

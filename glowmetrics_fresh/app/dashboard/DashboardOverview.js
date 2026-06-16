@@ -272,7 +272,7 @@ export default function DashboardOverview({
                     <div style={{ display: "flex", gap: 8, marginBottom: 24, flexWrap: "wrap" }}>
                       {velPlatforms.map(([plat, vel], i) => (
                         <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 12px", borderRadius: 20, background: "rgba(34,211,238,0.06)", border: "1px solid rgba(34,211,238,0.15)" }}>
-                          <span style={{ fontSize: 10, color: C.muted }}>{plat.replace('BongaCams','Bonga').replace('MyFreeCams','MFC').replace('Chaturbate','CB')}</span>
+                          <span style={{ fontSize: 10, color: C.muted }}>{plat.replace('BongaCams','Bonga').replace('MyFreeCams','MFC').replace(/chaturbate/i,'CB')}</span>
                           <span style={{ fontSize: 12, fontWeight: 700, color: C.cyan }}>${(vel??0).toFixed(2)}/hr</span>
                         </div>
                       ))}
@@ -461,7 +461,7 @@ export default function DashboardOverview({
                           const maxVal = Math.max(...dayVals, 0.01)
                           return [
                             <div key={plat+'_l'} style={{ fontSize: 10, fontWeight: 700, color: C.text, display: "flex", alignItems: "center", paddingRight: 4, lineHeight: "30px" }}>
-                              {plat.replace('BongaCams','Bonga').replace('Chaturbate','CB').replace('MyFreeCams','MFC')}
+                              {plat.replace('BongaCams','Bonga').replace(/chaturbate/i,'CB').replace('MyFreeCams','MFC')}
                             </div>,
                             ...UTC_DAYS.map(d => {
                               const val = platDayAvg[plat][d]||0
@@ -513,7 +513,7 @@ export default function DashboardOverview({
                           <div style={{ width: 8, height: 8, borderRadius: "50%", background: col, flexShrink: 0, boxShadow: isTop ? `0 0 6px ${col}` : 'none' }} />
                           <div style={{ flex: 1 }}>
                             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
-                              <span style={{ fontSize: 13, fontWeight: 700, color: C.white }}>{p.platform.replace('BongaCams','Bonga').replace('MyFreeCams','MFC')}</span>
+                              <span style={{ fontSize: 13, fontWeight: 700, color: C.white }}>{p.platform.replace('BongaCams','Bonga').replace('MyFreeCams','MFC').replace(/chaturbate/i,'CB')}</span>
                               {isTop && <span style={{ fontSize: 9, color: col, fontWeight: 700 }}>TOP ROI</span>}
                               {roi !== null && <span style={{ fontSize: 12, color: col, fontWeight: 700 }}>${roi.toFixed(2)}/hr</span>}
                               {bestTime && <span style={{ fontSize: 11, color: C.muted }}>Best: {fmtH(bestTime.hour)}</span>}
