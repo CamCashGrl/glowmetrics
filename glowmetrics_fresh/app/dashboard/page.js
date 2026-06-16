@@ -2316,22 +2316,9 @@ const handleCSV = async (file, forcePlatform = null) => {
       .sort((a, b) => b.totalUSD - a.totalUSD)
       .slice(0, 3)
 
-    const platTodayStats = {}
-    Object.entries(platBestTimes).forEach(([plat, times]) => {
-      const todayHour = times?.bestHourByDay?.[todayName]
-      const bestDayEntry = times?.bestDay
-      platTodayStats[plat] = {
-        todayBestHour: todayHour ? fmtHour(todayHour.hour) : null,
-        todayBestAvg: todayHour?.avg || 0,
-        bestDay: bestDayEntry?.day || null,
-        bestDayAvg: bestDayEntry?.avg || 0,
-        overallBestHour: times?.hour ? fmtHour(times.hour.hour) : null,
-        overallBestHourAvg: times?.hour?.avg || 0,
-      }
-    })
     return { todayName, bhLabel, bh, atPeak, hoursUntilPeak, displayPlat, displayAvg,
       isBestDay, bestDay, sessionAvg, peakAvg, predictionLow, predictionHigh,
-      reengageFans, likelyOnline, platTodayStats, sessionsAtPeakCount: sessionsAtPeak.length }
+      reengageFans, likelyOnline, sessionsAtPeakCount: sessionsAtPeak.length }
   }
 
   const buildRealTimeAlerts = () => {
@@ -2859,7 +2846,7 @@ const handleCSV = async (file, forcePlatform = null) => {
         {dailyBrief && (() => {
           const { todayName, bhLabel: _bhLabel, bh, atPeak, hoursUntilPeak, displayPlat: _displayPlat, displayAvg,
             isBestDay, bestDay, sessionAvg, peakAvg, predictionLow, predictionHigh,
-            reengageFans, likelyOnline, platTodayStats, sessionsAtPeakCount } = dailyBrief
+            reengageFans, likelyOnline, sessionsAtPeakCount } = dailyBrief
           const bhLabel = canonicalPeakLabel || _bhLabel
           const displayPlat = engineInsights?.summary?.best_platform || _displayPlat
           return (
@@ -2879,7 +2866,6 @@ const handleCSV = async (file, forcePlatform = null) => {
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                  {isBestDay && <div style={{ padding: '3px 10px', borderRadius: 20, background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.4)', fontSize: 11, fontWeight: 700, color: C.gold }}>🔥 Your Best Day</div>}
                   {atPeak
                     ? <div style={{ padding: '4px 12px', borderRadius: 20, background: 'rgba(16,185,129,0.2)', border: '1px solid rgba(16,185,129,0.5)', fontSize: 12, fontWeight: 700, color: C.green }}>🟢 Peak Now</div>
                     : bhLabel && <div style={{ padding: '4px 12px', borderRadius: 20, background: 'rgba(124,92,255,0.12)', border: '1px solid rgba(124,92,255,0.3)', fontSize: 12, fontWeight: 600, color: C.indigo }}>⏰ Peak in {hoursUntilPeak}h</div>
@@ -3169,19 +3155,24 @@ const handleCSV = async (file, forcePlatform = null) => {
                         )
                       })}
                     </div>
-                    {/* Best day */}
-                    {analyticsbestDay && (() => {
-                      // Use avg per SESSION on best day (not avg/calendar day)
-                      const bdSess = sessions.filter(s => new Date(s.startTime).toLocaleDateString('en-US', { weekday: 'long' }) === analyticsbestDay.day)
-                      const bdAvg = bdSess.length ? (bdSess.reduce((a,s) => a+s.totalUSD,0)/bdSess.length) : analyticsbestDay.avg
-                      const bdAvgSafe = (!isNaN(bdAvg) && isFinite(bdAvg) && bdAvg > 0) ? bdAvg : null
+                    {/* Best day — use the top per-platform figure so the number matches the platform cards above */}
+                    {(() => {
+                      const platTimes = analytics?.platformBestTimes || {}
+                      let topPlat = null, topDay = null, topAvg = 0
+                      Object.entries(platTimes).forEach(([plat, times]) => {
+                        if (times?.bestDay && times.bestDay.avg > topAvg) {
+                          topAvg = times.bestDay.avg
+                          topDay = times.bestDay.day
+                          topPlat = plat
+                        }
+                      })
+                      if (!topPlat) return null
+                      const platLabel = topPlat.replace('BongaCams','Bonga').replace('MyFreeCams','MFC')
                       return (
                         <div style={{ display: "flex", gap: 8, alignItems: "center", padding: "10px 14px", borderRadius: 10, background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.2)", marginBottom: 0 }}>
                           <span style={{ fontSize: 16 }}>📅</span>
                           <div style={{ fontSize: 13, color: C.white }}>
-                            <strong>{analyticsbestDay.day}s</strong> earn the most
-                            {bdAvgSafe !== null ? ` — $${bdAvgSafe.toFixed(0)} avg per session` : ' — not enough data yet'}
-                            {bdSess.length >= 3 && <span style={{ color: C.muted, marginLeft: 6 }}>across {bdSess.length} {analyticsbestDay.day} sessions</span>}
+                            <strong>{topDay}s on {platLabel}</strong> earn the most — <span style={{ color: C.gold }}>${topAvg.toFixed(0)} avg per session</span>
                           </div>
                         </div>
                       )
