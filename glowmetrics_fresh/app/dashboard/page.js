@@ -2485,6 +2485,14 @@ const handleCSV = async (file, forcePlatform = null) => {
   const realTimeAlerts = buildRealTimeAlerts() // re-runs every minuteTick
   void minuteTick // ensures re-render when minute changes
 
+  // ── MONTH-OVER-MONTH GROWTH ── used by Momentum indicator and KPI cards
+  const _momNow = new Date()
+  const _momThisStart = new Date(Date.UTC(_momNow.getUTCFullYear(), _momNow.getUTCMonth(), 1))
+  const _momPrevStart = new Date(Date.UTC(_momNow.getUTCFullYear(), _momNow.getUTCMonth() - 1, 1))
+  const _momThisRev = tips.reduce((s, t) => new Date(t.date_time || t.dateRaw) >= _momThisStart ? s + (t.usd || 0) : s, 0)
+  const _momPrevRev = tips.reduce((s, t) => { const d = new Date(t.date_time || t.dateRaw); return d >= _momPrevStart && d < _momThisStart ? s + (t.usd || 0) : s }, 0)
+  const growthPct = (_momPrevRev > 0 && _momThisRev > 0) ? Math.round(((_momThisRev - _momPrevRev) / _momPrevRev) * 100) : null
+
   return (
     <div style={{
       minHeight: "100vh",
@@ -2605,8 +2613,18 @@ const handleCSV = async (file, forcePlatform = null) => {
           const safeAvg = (!isNaN(avgPerHour) && isFinite(avgPerHour)) ? avgPerHour : 0
           const brief = dailyBrief
           const atPeak = brief?.atPeak
-          const momentum = atPeak ? '🔥 AT PEAK' : safeAvg > 20 ? '↑ Strong' : safeAvg > 5 ? '→ Steady' : tips.length === 0 ? '— No data' : '↓ Slow'
-          const momentumColor = atPeak ? '#10B981' : safeAvg > 20 ? '#10B981' : safeAvg > 5 ? '#22D3EE' : tips.length === 0 ? '#475569' : '#f87171'
+          const momentum = atPeak ? '🔥 AT PEAK'
+            : (growthPct !== null && growthPct >= 200) ? '🚀 Surging'
+            : (growthPct !== null && growthPct >= 50)  ? '↑ Growing'
+            : safeAvg > 20 ? '↑ Strong'
+            : safeAvg > 5  ? '→ Steady'
+            : tips.length === 0 ? '— No data' : '↓ Slow'
+          const momentumColor = atPeak ? '#10B981'
+            : (growthPct !== null && growthPct >= 200) ? '#f472b6'
+            : (growthPct !== null && growthPct >= 50)  ? '#10B981'
+            : safeAvg > 20 ? '#10B981'
+            : safeAvg > 5  ? '#22D3EE'
+            : tips.length === 0 ? '#475569' : '#f87171'
           const localNow = new Date().getHours()
           const hoursUntilLocal = canonicalPeakHourUTC != null ? (canonicalPeakHourUTC - localNow + 24) % 24 : brief?.hoursUntilPeak
           const peakLabel = hoursUntilLocal === 0 ? 'NOW' : hoursUntilLocal === 1 ? 'in 1 hr' : (hoursUntilLocal > 0 && !isNaN(hoursUntilLocal)) ? `in ${hoursUntilLocal}h` : null
