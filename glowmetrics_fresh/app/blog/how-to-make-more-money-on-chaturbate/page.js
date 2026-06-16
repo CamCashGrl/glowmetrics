@@ -1,4 +1,3 @@
-```js
 // app/blog/how-to-make-more-money-on-chaturbate/page.js
 
 export const metadata = {
@@ -461,4 +460,3 @@ export default function MakeMoreOnChaturbate() {
     </div>
   )
 }
-```
