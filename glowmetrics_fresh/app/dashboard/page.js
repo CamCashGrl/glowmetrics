@@ -2069,7 +2069,9 @@ const handleCSV = async (file, forcePlatform = null) => {
       const peakHour = parseInt(bestHour[0])
       const currentUTCHr = new Date().getUTCHours()
       const hoursAway = (peakHour - currentUTCHr + 24) % 24
-      const probability = Math.min(95, Math.round((bestHour[1] / fanTips.length) * 100 * 2.5))
+      const _pf0 = bestHour[1] / fanTips.length
+      const _pd0 = hoursAway === 0 ? 1.0 : hoursAway === 1 ? 0.65 : 0.35
+      const probability = Math.min(90, Math.max(25, Math.round(_pf0 * 200 * _pd0)))
       const label = (() => { const _off=new Date().getTimezoneOffset()/-60; const _lh=Math.round(((peakHour+_off)%24+24)%24); return _lh===0?'12 AM':_lh<12?`${_lh} AM`:_lh===12?'12 PM':`${_lh-12} PM` })()
       if (hoursAway <= 2 && probability >= 40) {
         onlineNow.push({
@@ -2422,7 +2424,9 @@ const handleCSV = async (file, forcePlatform = null) => {
 
       const peakHour = parseInt(sortedHours[0][0])
       const hoursAway = (peakHour - new Date().getUTCHours() + 24) % 24
-      const confidence = Math.min(95, Math.round((sortedHours[0][1] / fanTips.length) * 100 * 2.5))
+      const _pf1 = sortedHours[0][1] / fanTips.length
+      const _pd1 = hoursAway === 0 ? 1.0 : hoursAway === 1 ? 0.65 : 0.35
+      const confidence = Math.min(90, Math.max(25, Math.round(_pf1 * 200 * _pd1)))
       const label = (() => { const _off=new Date().getTimezoneOffset()/-60; const _lh=Math.round(((peakHour+_off)%24+24)%24); return _lh===0?'12 AM':_lh<12?`${_lh} AM`:_lh===12?'12 PM':`${_lh-12} PM` })()
       const daysSince = Math.floor((now - new Date(w.lastTipDate)) / 86400000)
 
@@ -3269,7 +3273,12 @@ const handleCSV = async (file, forcePlatform = null) => {
                   if (!sorted.length) return null
                   const peakHour = parseInt(sorted[0][0])
                   const hoursAway = (peakHour - currentUTCHourTE + 24) % 24
-                  const confidence = Math.min(95, Math.round((sorted[0][1] / fanTips.length) * 100 * 2.5))
+                  // peakFraction: share of this fan's tips that fall at their peak hour
+                  const peakFraction = sorted[0][1] / fanTips.length
+                  // proximityDecay: current hour vs peak hour (exact match = 1.0, 1h off = 0.65, 2h off = 0.35)
+                  const proximityDecay = hoursAway === 0 ? 1.0 : hoursAway === 1 ? 0.65 : 0.35
+                  // Scale by 200 so a fan with 40% tips at peak + exact match → 80%; 25% + 1h off → 33%
+                  const confidence = Math.min(90, Math.max(25, Math.round(peakFraction * 200 * proximityDecay)))
                   return { ...w, peakHour, hoursAway, confidence, peakLabel: labelH(peakHour) }
                 })
                 .filter(Boolean)
