@@ -458,6 +458,17 @@ export default function CamModelEarnings() {
         </div>
       </div>
 
+      <div style={{ marginTop: '36px', paddingTop: '24px', borderTop: '1px solid rgba(255,255,255,0.06)', marginBottom: '36px' }}>
+        <div style={{ fontSize: '11px', color: '#475569', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '10px' }}>Related cam model tools:</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          <a href="/guides/cam-model-token-calculator" style={{ fontSize: '14px', color: '#6366f1', textDecoration: 'none' }}>→ Free cam model token calculator</a>
+          <a href="/guides/chaturbate-earnings-tracker" style={{ fontSize: '14px', color: '#6366f1', textDecoration: 'none' }}>→ Chaturbate earnings tracker</a>
+          <a href="/guides/chaturbate-token-tracker" style={{ fontSize: '14px', color: '#6366f1', textDecoration: 'none' }}>→ Chaturbate token tracker</a>
+          <a href="/guides/chaturbate-best-hours" style={{ fontSize: '14px', color: '#6366f1', textDecoration: 'none' }}>→ Best hours to stream on Chaturbate</a>
+          <a href="/guides/cam-model-income-tracker" style={{ fontSize: '14px', color: '#6366f1', textDecoration: 'none' }}>→ Cam model income tracker</a>
+        </div>
+      </div>
+
       <div style={s.finalCta}>
         <div style={s.finalCtaH}>Stop Guessing Where Your Money Comes From</div>
         <p style={s.finalCtaSub}>

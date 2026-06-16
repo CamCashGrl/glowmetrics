@@ -455,6 +455,18 @@ export default function TokenCalculatorPage() {
             </div>
           </section>
 
+          {/* INTERNAL LINKS BLOCK */}
+          <div style={{ marginTop: '36px', paddingTop: '24px', borderTop: `1px solid ${S.border}`, marginBottom: '36px' }}>
+            <div style={{ fontSize: 11, color: S.muted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>Related cam model tools:</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <a href="/guides/cam-model-token-calculator" style={{ fontSize: 14, color: S.accent, textDecoration: 'none' }}>→ Free cam model token calculator</a>
+              <a href="/guides/chaturbate-earnings-tracker" style={{ fontSize: 14, color: S.accent, textDecoration: 'none' }}>→ Chaturbate earnings tracker</a>
+              <a href="/guides/chaturbate-token-tracker" style={{ fontSize: 14, color: S.accent, textDecoration: 'none' }}>→ Chaturbate token tracker</a>
+              <a href="/guides/chaturbate-best-hours" style={{ fontSize: 14, color: S.accent, textDecoration: 'none' }}>→ Best hours to stream on Chaturbate</a>
+              <a href="/guides/cam-model-income-tracker" style={{ fontSize: 14, color: S.accent, textDecoration: 'none' }}>→ Cam model income tracker</a>
+            </div>
+          </div>
+
           {/* BOTTOM CTA */}
           <div style={{ padding: '48px 40px', borderRadius: 20, background: `linear-gradient(135deg, ${S.accentLight}, rgba(16,185,129,0.08))`, border: `1px solid ${S.accentBorder}`, textAlign: 'center' }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: S.accent, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 12 }}>Go beyond the calculator</div>
