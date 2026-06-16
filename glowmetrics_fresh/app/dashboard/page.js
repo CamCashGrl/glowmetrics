@@ -1934,12 +1934,13 @@ const handleCSV = async (file, forcePlatform = null) => {
   const lossAlerts = liveAnalytics?.lossAlerts || analytics?.lossAlerts || []
   const nextMoves = liveAnalytics?.nextMoves || analytics?.nextMoves || []
   const totalRevenue = analytics?.totalUSD || 0
-  // Only average sessions with real duration (exclude zero-timestamp BongaCams exports)
-  const timedSessions = sessions.filter(s => !s.durationUnknown && s.usdPerHour !== null && (s.durationMinutes || 0) >= 20)
-  // FIX: use total USD / total hours (not avg of per-session rates — that inflates short sessions)
+  // timedSessions kept for sparkline/MoM trend calculations only (not for avg $/hr)
+  const timedSessions = sessions.filter(s => !s.durationUnknown && (s.durationMinutes || 0) >= 20)
   const timedTotalUSD = timedSessions.reduce((sum, s) => sum + (s.totalUSD || 0), 0)
   const timedTotalHours = timedSessions.reduce((sum, s) => sum + (s.durationHours || 0), 0)
-  const avgPerHour = timedTotalHours > 0 ? timedTotalUSD / Math.max(timedTotalHours, 0.5) : 0
+  // Single canonical $/hr — uses analytics.earningsVelocity (totalUSD / totalHours across all
+  // meaningful sessions) so the header, KPI card, and "Overall" chip all show the same number.
+  const avgPerHour = analytics?.earningsVelocity ?? (timedTotalHours > 0 ? timedTotalUSD / timedTotalHours : 0)
   // Single source of truth — pre-computed in aggregateRows, same values used everywhere
   const analyticsbestDay  = analytics?.bestDay  || null
   const analyticsBestHour = analytics?.bestHour || null
@@ -2103,23 +2104,6 @@ const handleCSV = async (file, forcePlatform = null) => {
       }
     })
 
-    // 6. PERFORMANCE — best day insight
-    const analyticsbestDay = analytics?.bestDay
-    if (analyticsbestDay) {
-      const avgSession = sessions.length ? sessions.reduce((s, x) => s + x.totalUSD, 0) / sessions.length : 0
-      const bestSessions = sessions.filter(s => s.totalUSD >= avgSession * 1.5)
-      const bestDayCount = bestSessions.filter(s =>
-        new Date(s.startTime).toLocaleDateString('en-US', { weekday: 'long' }) === analyticsbestDay.day
-      ).length
-      if (bestDayCount >= 2) {
-        performance.push({
-          type: 'performance', icon: '📈', color: C.pink, severity: 'info',
-          title: `Your best sessions happen on ${analyticsbestDay.day}s`,
-          message: `${bestDayCount} of your top-earning streams were on ${analyticsbestDay.day}s. Plan your next high-effort stream for this day`,
-          cta: null, reengageMsg: ''
-        })
-      }
-    }
 
     // Social mention alerts (keep, they're genuinely useful)
     const socialAlerts = []
@@ -2370,20 +2354,6 @@ const handleCSV = async (file, forcePlatform = null) => {
       if (sorted.length > 0) platBestDay[plat] = { day: sorted[0][0], usd: sorted[0][1] }
     })
 
-    // "Best day of the week" alert — fire if today is the best day for any platform
-    Object.entries(platBestDay).forEach(([plat, { day, usd }]) => {
-      if (day === currentDay) {
-        const otherPlat = Object.entries(platBestDay).find(([p]) => p !== plat)
-        const comparison = otherPlat
-          ? ` — ${(usd / Math.max(otherPlat[1].usd, 1)).toFixed(1)}x more than ${otherPlat[0]}`
-          : ''
-        alerts.push({
-          type: 'best_day', priority: 0, icon: '📅', color: '#F59E0B',
-          title: `${currentDay} is your best day on ${plat}`,
-          message: `You earn more on ${plat} on ${currentDay}s than any other day${comparison}. Go live now.`
-        })
-      }
-    })
 
     // --- PLATFORM vs PLATFORM HOUR COMPARISON ---
     // FIX: use avg USD per hour-session (not raw cumulative totals)
@@ -2845,12 +2815,6 @@ const handleCSV = async (file, forcePlatform = null) => {
                           <span style={{ fontSize: 10, color: C.muted }}>velocity</span>
                         </div>
                       ))}
-                      {earningsVelocity !== null && !isNaN(earningsVelocity) && (
-                        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 14px", borderRadius: 20, background: "rgba(16,185,129,0.07)", border: "1px solid rgba(16,185,129,0.2)" }}>
-                          <span style={{ fontSize: 11, color: C.muted }}>Overall</span>
-                          <span style={{ fontSize: 13, fontWeight: 700, color: C.green }}>${earningsVelocity.toFixed(2)}/hr</span>
-                        </div>
-                      )}
                     </div>
                   )}
                   {/* section divider */}
