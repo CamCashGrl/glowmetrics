@@ -59,7 +59,7 @@ const faqSchema = {
     },
     {
       '@type': 'Question',
-      name: 'What affects cam model earnings the most?',
+      name: 'What affects cam model earnings?',
       acceptedAnswer: {
         '@type': 'Answer',
         text: 'The biggest factors are streaming schedule (whether you are online when your top fans are), fan retention (the top 10–15% of fans typically drive 60–70% of income), platform fit, and session length. Tracking revenue per hour rather than total tokens is the clearest way to identify what is actually working.',
@@ -67,7 +67,7 @@ const faqSchema = {
     },
     {
       '@type': 'Question',
-      name: 'Can you earn more without streaming longer?',
+      name: 'Can cam models earn more without streaming longer?',
       acceptedAnswer: {
         '@type': 'Answer',
         text: 'Yes. Earning more per hour — rather than streaming more hours — is the most effective way to grow cam income. Models who identify their personal peak hours and stream during those windows consistently earn 40–80% more per hour than when they stream at random times. Knowing which two or three hours produce the most income lets you work smarter, not longer.',
@@ -428,14 +428,14 @@ export default function CamModelEarnings() {
         </div>
 
         <div style={s.faqItem}>
-          <div style={s.faqQ}>How much do beginners make?</div>
+          <div style={s.faqQ}>How much do beginner cam models make?</div>
           <p style={{ ...s.faqA, marginBottom: 0 }}>
             Most beginners earn $3–$10/hr in their first one to three months. Income is inconsistent while you are building a fan base and learning which hours and platforms perform best for your specific audience. Tracking your early data is valuable because patterns emerge faster than most new models expect — even a few weeks of tip history can show you which hours and fans to prioritize.
           </p>
         </div>
 
         <div style={s.faqItem}>
-          <div style={s.faqQ}>What affects cam model earnings the most?</div>
+          <div style={s.faqQ}>What affects cam model earnings?</div>
           <p style={{ ...s.faqA, marginBottom: 0 }}>
             The biggest factors are streaming schedule (whether you are live when your top fans are online), fan retention (the top 10–15% of fans typically drive 60–70% of income), platform fit for your working style, and session length. Tracking revenue per hour rather than total tokens is the clearest way to identify what is actually working. Read:{' '}
             <a href="/blog/why-cam-income-is-inconsistent" style={s.iLink}>Why Cam Income Is Inconsistent</a>.
@@ -443,7 +443,7 @@ export default function CamModelEarnings() {
         </div>
 
         <div style={s.faqItem}>
-          <div style={s.faqQ}>Can you earn more without streaming longer?</div>
+          <div style={s.faqQ}>Can cam models earn more without streaming longer?</div>
           <p style={{ ...s.faqA, marginBottom: 0 }}>
             Yes. Earning more per hour — rather than streaming more hours — is the most effective way to grow cam income. Models who identify their personal peak hours and stream during those windows consistently earn 40–80% more per hour than when they stream at random times. Knowing which two or three hours produce the most income lets you work smarter, not longer.
           </p>

@@ -37,6 +37,14 @@ const faqSchema = {
   mainEntity: [
     {
       '@type': 'Question',
+      name: 'How much is 100 tokens on Chaturbate?',
+      acceptedAnswer: {
+        '@type': 'Answer',
+        text: '100 Chaturbate tokens is worth $5.00 to the model at the standard broadcaster rate of $0.05 per token. Viewers pay approximately $10.99 to buy 100 tokens — the difference is Chaturbate\'s platform margin. Your rate stays at $0.05/token regardless of what the viewer paid.',
+      },
+    },
+    {
+      '@type': 'Question',
       name: 'How much do Chaturbate models make per hour?',
       acceptedAnswer: {
         '@type': 'Answer',
@@ -45,34 +53,18 @@ const faqSchema = {
     },
     {
       '@type': 'Question',
-      name: 'How much do beginner Chaturbate models make?',
+      name: 'Do Chaturbate models make more from tips or privates?',
       acceptedAnswer: {
         '@type': 'Answer',
-        text: 'Most beginner Chaturbate models earn $3–$10 per hour in their first one to six months. Income is inconsistent during this phase as you are building a fan base and learning which hours and content types drive tipping. Tracking tip data early helps identify patterns faster.',
+        text: 'Most Chaturbate models earn the majority of their income from public room tips rather than private shows, because private shows require one-on-one attention and remove you from the public room where most discovery happens. High-value regulars who tip large amounts in public often generate more income per hour than private sessions. That said, private shows can be more consistent and predictable — the best mix depends on your audience and working style.',
       },
     },
     {
       '@type': 'Question',
-      name: 'How do Chaturbate tokens convert to money?',
+      name: 'What is the best way to track Chaturbate earnings?',
       acceptedAnswer: {
         '@type': 'Answer',
-        text: 'Chaturbate pays models $0.05 per token at the standard broadcaster rate. So 100 tokens = $5, 500 tokens = $25, and 1,000 tokens = $50. Viewers pay more to buy tokens than models receive — the difference is Chaturbate\'s margin. Your payout rate stays at $0.05/token regardless of what viewers paid.',
-      },
-    },
-    {
-      '@type': 'Question',
-      name: 'What affects Chaturbate earnings the most?',
-      acceptedAnswer: {
-        '@type': 'Answer',
-        text: 'The biggest factors are when you stream relative to your audience\'s timezone, whether your high-value regulars (whales) are active, how you structure your show with goals and interactive toys, and how well you retain top fans. The top 10–15% of tippers typically drive 60–70% of total income.',
-      },
-    },
-    {
-      '@type': 'Question',
-      name: 'How do I track my Chaturbate earnings?',
-      acceptedAnswer: {
-        '@type': 'Answer',
-        text: 'Export your tip history as a CSV from Chaturbate\'s broadcaster dashboard. You can analyze it manually in a spreadsheet or upload it to CamCash, which automatically calculates your real $/hr per session, identifies peak earning hours, and ranks your top fans by lifetime spend.',
+        text: 'Export your tip history as a CSV from Chaturbate\'s broadcaster dashboard and analyze it by session, hour, and tipper. The most useful metrics are revenue per hour (not total tokens), your top fans by lifetime spend, and which time windows consistently earn the most. CamCash processes this CSV automatically and shows all of these metrics without manual spreadsheet work.',
       },
     },
   ],
@@ -400,6 +392,13 @@ export default function ChaturbateEarningsPost() {
         <h2 style={{ ...s.h2, marginTop: 0 }}>Chaturbate Earnings FAQ</h2>
 
         <div style={s.faqItem}>
+          <div style={s.faqQ}>How much is 100 tokens on Chaturbate?</div>
+          <p style={{ ...s.faqA, marginBottom: 0 }}>
+            100 Chaturbate tokens is worth $5.00 to the model at the standard broadcaster rate of $0.05 per token. Viewers pay approximately $10.99 to buy 100 tokens — the difference is Chaturbate's platform margin. Your rate stays at $0.05/token regardless of what the viewer paid. Use the <a href="/guides/cam-model-token-calculator" style={s.iLink}>cam model token calculator</a> to convert any token amount instantly.
+          </p>
+        </div>
+
+        <div style={s.faqItem}>
           <div style={s.faqQ}>How much do Chaturbate models make per hour?</div>
           <p style={{ ...s.faqA, marginBottom: 0 }}>
             Chaturbate models typically earn $3–$10/hr as beginners, $10–$25/hr as established models, and $25–$60+/hr as popular earners with loyal regulars. The biggest factor is not hours streamed but whether you are online when your highest-value fans are active.
@@ -407,30 +406,16 @@ export default function ChaturbateEarningsPost() {
         </div>
 
         <div style={s.faqItem}>
-          <div style={s.faqQ}>How much do beginner Chaturbate models make?</div>
+          <div style={s.faqQ}>Do Chaturbate models make more from tips or privates?</div>
           <p style={{ ...s.faqA, marginBottom: 0 }}>
-            Most beginner Chaturbate models earn $3–$10 per hour in their first one to six months. Income is inconsistent during this phase as you are building a fan base and learning which hours and content types drive tipping. Tracking tip data early helps identify patterns faster.
+            Most Chaturbate models earn the majority of their income from public room tips rather than private shows, because private shows require one-on-one attention and remove you from the public room where most discovery happens. High-value regulars who tip large amounts in public often generate more income per hour than private sessions. The best mix depends on your audience and working style.
           </p>
         </div>
 
         <div style={s.faqItem}>
-          <div style={s.faqQ}>How do Chaturbate tokens convert to money?</div>
+          <div style={s.faqQ}>What is the best way to track Chaturbate earnings?</div>
           <p style={{ ...s.faqA, marginBottom: 0 }}>
-            Chaturbate pays models $0.05 per token at the standard broadcaster rate. So 100 tokens = $5, 500 tokens = $25, and 1,000 tokens = $50. Viewers pay more to buy tokens than models receive — the difference is Chaturbate's margin. Use the <a href="/guides/cam-model-token-calculator" style={s.iLink}>cam model token calculator</a> for instant conversions.
-          </p>
-        </div>
-
-        <div style={s.faqItem}>
-          <div style={s.faqQ}>What affects Chaturbate earnings the most?</div>
-          <p style={{ ...s.faqA, marginBottom: 0 }}>
-            The biggest factors are when you stream relative to your audience's timezone, whether your high-value regulars (whales) are active, how you structure your show with goals and interactive toys, and how well you retain top fans. The top 10–15% of tippers typically drive 60–70% of total income.
-          </p>
-        </div>
-
-        <div style={s.faqItem}>
-          <div style={s.faqQ}>How do I track my Chaturbate earnings?</div>
-          <p style={{ ...s.faqA, marginBottom: 0 }}>
-            Export your tip history as a CSV from Chaturbate's broadcaster dashboard. You can analyze it manually using the <a href="/guides/chaturbate-earnings-tracker" style={s.iLink}>Chaturbate earnings tracker</a>, or upload it to <a href="/landing" style={s.iLink}>CamCash</a> to automatically calculate your real $/hr per session, peak earning hours, and top fan rankings.
+            Export your tip history as a CSV from Chaturbate's broadcaster dashboard and analyze it by session, hour, and tipper. The most useful metrics are revenue per hour (not total tokens), your top fans by lifetime spend, and which time windows consistently earn the most. Use the <a href="/guides/chaturbate-earnings-tracker" style={s.iLink}>Chaturbate earnings tracker</a> for a manual walkthrough, or upload to <a href="/landing" style={s.iLink}>CamCash</a> to calculate everything automatically.
           </p>
         </div>
       </div>
