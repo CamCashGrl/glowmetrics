@@ -1839,10 +1839,8 @@ const handleCSV = async (file, forcePlatform = null) => {
   }
 
   // ── FIRST-SESSION ONBOARDING ──────────────────────────
-  const hasSeenOnboarding = typeof window !== 'undefined'
-    && localStorage.getItem('camcash_onboarded');
-
-  if (!loading && tips.length === 0 && user && !hasSeenOnboarding) {
+  // Show full welcome screen whenever user has zero tips — no localStorage gate.
+  if (!loading && tips.length === 0 && user) {
     return (
       <div style={{ minHeight: "100vh", background: "#05070f", fontFamily: "'Inter', sans-serif", color: "#f1f5f9", display: "flex", flexDirection: "column" }}>
         <style>{`
@@ -1873,40 +1871,47 @@ const handleCSV = async (file, forcePlatform = null) => {
             </p>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 40, width: "100%" }}>
-            {[
-              { step: "1", icon: "📁", title: "Upload your CSV", desc: "Export your tip history from Chaturbate, BongaCams, or MFC and upload it here.", color: "#7C5CFF", cta: true, ctaLabel: "Upload CSV Now →" },
-              { step: "2", icon: "🧩", title: "Install the extension", desc: "Get the Chrome extension and tips appear in your dashboard automatically while you stream.", color: "#22D3EE", cta: false },
-              { step: "3", icon: "🔴", title: "Go live", desc: "Open Live Mode while streaming and your AI coach tells you exactly what to do in real time.", color: "#10B981", cta: false },
-            ].map(({ step, icon, title, desc, color, cta, ctaLabel }) => (
-              <div key={step} style={{ background: "rgba(15,20,32,0.75)", border: `1px solid ${color}25`, borderRadius: 16, padding: 24, position: "relative", overflow: "hidden" }}>
-                <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg, ${color}, ${color}60)`, animation: "ob-bar 2s ease infinite alternate" }} />
-                <div style={{ width: 32, height: 32, borderRadius: "50%", background: `${color}20`, border: `1px solid ${color}40`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800, color, marginBottom: 14 }}>{step}</div>
-                <div style={{ fontSize: 28, marginBottom: 10 }}>{icon}</div>
-                <div style={{ fontSize: 15, fontWeight: 800, color: "#f1f5f9", marginBottom: 8 }}>{title}</div>
-                <div style={{ fontSize: 12, color: "#94a3b8", lineHeight: 1.65, marginBottom: cta ? 16 : 0 }}>{desc}</div>
-                {cta && (
-                  <button
-                    onClick={() => {
-                      if (typeof window !== "undefined") {
-                        localStorage.setItem("camcash_tab", "upload");
-                        localStorage.setItem("camcash_onboarded", "1");
-                      }
-                      setActiveTab("upload");
-                    }}
-                    style={{ width: "100%", padding: "10px 0", borderRadius: 10, background: "linear-gradient(135deg, #7C5CFF, #EC4899)", border: "none", color: "#fff", fontWeight: 800, fontSize: 13, cursor: "pointer", boxShadow: `0 0 20px ${color}40` }}
-                  >
-                    {ctaLabel}
-                  </button>
-                )}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 16, marginBottom: 40, width: "100%" }}>
+            {/* Option 1: Upload CSV */}
+            <div style={{ background: "rgba(15,20,32,0.75)", border: "1px solid rgba(124,92,255,0.25)", borderRadius: 16, padding: 24, position: "relative", overflow: "hidden" }}>
+              <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: "linear-gradient(90deg, #7C5CFF, #EC4899)", animation: "ob-bar 2s ease infinite alternate" }} />
+              <div style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(124,92,255,0.2)", border: "1px solid rgba(124,92,255,0.4)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800, color: "#7C5CFF", marginBottom: 14 }}>1</div>
+              <div style={{ fontSize: 28, marginBottom: 10 }}>📥</div>
+              <div style={{ fontSize: 15, fontWeight: 800, color: "#f1f5f9", marginBottom: 12 }}>Upload Your Chaturbate CSV</div>
+              <div style={{ fontSize: 12, color: "#94a3b8", lineHeight: 1.8, marginBottom: 18 }}>
+                <div style={{ marginBottom: 6, fontWeight: 600, color: "#cbd5e1" }}>How to get it:</div>
+                <div>1. Log into Chaturbate</div>
+                <div>2. Go to <span style={{ color: "#a5b4fc", fontFamily: "monospace" }}>chaturbate.com/statsapi/ts/token-stats/</span></div>
+                <div>3. Click <strong style={{ color: "#e2e8f0" }}>"Export CSV"</strong> at the top right</div>
+                <div>4. Come back here and upload it</div>
               </div>
-            ))}
+              <button
+                onClick={() => { setActiveTab("upload"); }}
+                style={{ width: "100%", padding: "10px 0", borderRadius: 10, background: "linear-gradient(135deg, #7C5CFF, #EC4899)", border: "none", color: "#fff", fontWeight: 800, fontSize: 13, cursor: "pointer", boxShadow: "0 0 20px rgba(124,92,255,0.4)" }}
+              >
+                Upload CSV Now →
+              </button>
+            </div>
+
+            {/* Option 2: Go Live */}
+            <div style={{ background: "rgba(15,20,32,0.75)", border: "1px solid rgba(16,185,129,0.25)", borderRadius: 16, padding: 24, position: "relative", overflow: "hidden" }}>
+              <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: "linear-gradient(90deg, #10B981, #22D3EE)", animation: "ob-bar 2s ease infinite alternate" }} />
+              <div style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(16,185,129,0.2)", border: "1px solid rgba(16,185,129,0.4)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800, color: "#10B981", marginBottom: 14 }}>2</div>
+              <div style={{ fontSize: 28, marginBottom: 10 }}>🔴</div>
+              <div style={{ fontSize: 15, fontWeight: 800, color: "#f1f5f9", marginBottom: 8 }}>Go Live Now</div>
+              <div style={{ fontSize: 12, color: "#94a3b8", lineHeight: 1.65, marginBottom: 18 }}>Open Live Mode while you stream and your AI coach tracks tips in real time, tells you when to go harder, and warns you when a whale goes quiet.</div>
+              <button
+                onClick={() => { setActiveTab("live"); window.scrollTo({ top: 0, behavior: "instant" }); }}
+                style={{ width: "100%", padding: "10px 0", borderRadius: 10, background: "linear-gradient(135deg, #10B981, #22D3EE)", border: "none", color: "#fff", fontWeight: 800, fontSize: 13, cursor: "pointer", boxShadow: "0 0 20px rgba(16,185,129,0.35)" }}
+              >
+                ⚡ Start Live Mode →
+              </button>
+            </div>
           </div>
 
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap", justifyContent: "center", marginBottom: 24 }}>
-            <button onClick={() => { if (typeof window !== "undefined") localStorage.setItem("camcash_onboarded", "1"); setActiveTab("live"); }} style={{ padding: "11px 24px", borderRadius: 12, background: "linear-gradient(135deg, #10B981, #22D3EE)", border: "none", color: "#fff", fontWeight: 800, fontSize: 14, cursor: "pointer", boxShadow: "0 0 20px rgba(16,185,129,0.35)" }}>⚡ Try Live Mode First</button>
             <a href="/live?demo=1" style={{ padding: "11px 24px", borderRadius: 12, background: "rgba(34,211,238,0.08)", border: "1px solid rgba(34,211,238,0.25)", color: "#22D3EE", fontWeight: 700, fontSize: 14, textDecoration: "none" }}>🎬 See Interactive Demo</a>
-            <button onClick={() => { if (typeof window !== "undefined") localStorage.setItem("camcash_onboarded", "1"); setActiveTab("help"); }} style={{ padding: "11px 24px", borderRadius: 12, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "#94a3b8", fontWeight: 600, fontSize: 14, cursor: "pointer" }}>❓ How does this work?</button>
+            <button onClick={() => { setActiveTab("help"); }} style={{ padding: "11px 24px", borderRadius: 12, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "#94a3b8", fontWeight: 600, fontSize: 14, cursor: "pointer" }}>❓ How does this work?</button>
           </div>
 
           <div style={{ width: "100%", padding: "18px 24px", borderRadius: 14, background: "rgba(124,92,255,0.06)", border: "1px solid rgba(124,92,255,0.2)", textAlign: "center" }}>
@@ -2692,13 +2697,29 @@ const handleCSV = async (file, forcePlatform = null) => {
             {(() => {
               // ── empty state — no data yet ──
               if (tips.length === 0) return (
-                <div style={{ ...glassCard, borderRadius: 20, padding: '52px 32px', textAlign: 'center', marginBottom: 24, animation: 'fadeUp 0.3s ease' }}>
-                  <div style={{ fontSize: 48, marginBottom: 16 }}>✨</div>
-                  <div style={{ fontSize: 22, fontWeight: 900, color: C.white, marginBottom: 10 }}>No data yet — let's change that</div>
-                  <div style={{ fontSize: 14, color: C.muted, maxWidth: 400, margin: '0 auto 28px', lineHeight: 1.6 }}>Upload a tip export from Chaturbate, MFC, or BongaCams to see your full earnings dashboard — or start a live session to track tips in real time.</div>
-                  <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
-                    <button onClick={() => { setActiveTab('upload'); localStorage.setItem('camcash_tab','upload'); }} style={{ padding: '11px 26px', borderRadius: 12, background: 'linear-gradient(135deg,#7C5CFF,#22D3EE)', border: 'none', color: '#fff', fontWeight: 800, fontSize: 14, cursor: 'pointer' }}>Upload Tip Data</button>
-                    <button onClick={() => { setActiveTab('live'); localStorage.setItem('camcash_tab','live'); window.scrollTo({top:0,behavior:'instant'}); }} style={{ padding: '11px 26px', borderRadius: 12, background: 'linear-gradient(135deg,#10B981,#22D3EE)', border: 'none', color: '#fff', fontWeight: 800, fontSize: 14, cursor: 'pointer' }}>⚡ Use Live Mode</button>
+                <div style={{ ...glassCard, borderRadius: 20, padding: '40px 32px', marginBottom: 24, animation: 'fadeUp 0.3s ease' }}>
+                  <div style={{ fontSize: 36, marginBottom: 12, textAlign: 'center' }}>✨</div>
+                  <div style={{ fontSize: 20, fontWeight: 900, color: C.white, marginBottom: 8, textAlign: 'center' }}>Your dashboard is ready — just needs your data</div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16, marginTop: 28 }}>
+                    {/* Option 1: Upload CSV */}
+                    <div style={{ background: 'rgba(124,92,255,0.06)', border: '1px solid rgba(124,92,255,0.2)', borderRadius: 14, padding: '20px 22px' }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: '#a78bfa', marginBottom: 10 }}>📥 Option 1 — Upload your Chaturbate CSV (fastest)</div>
+                      <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.8, marginBottom: 16 }}>
+                        <div>1. Log into Chaturbate</div>
+                        <div>2. Go to <span style={{ color: '#a5b4fc', fontFamily: 'monospace', fontSize: 11 }}>chaturbate.com/statsapi/ts/token-stats/</span></div>
+                        <div>3. Click <strong style={{ color: '#e2e8f0' }}>"Export CSV"</strong> at the top right</div>
+                        <div>4. Upload it here</div>
+                      </div>
+                      <button onClick={() => { setActiveTab('upload'); }} style={{ width: '100%', padding: '10px 0', borderRadius: 10, background: 'linear-gradient(135deg,#7C5CFF,#EC4899)', border: 'none', color: '#fff', fontWeight: 800, fontSize: 13, cursor: 'pointer' }}>Upload CSV →</button>
+                    </div>
+
+                    {/* Option 2: Live Mode */}
+                    <div style={{ background: 'rgba(16,185,129,0.05)', border: '1px solid rgba(16,185,129,0.2)', borderRadius: 14, padding: '20px 22px' }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: '#10b981', marginBottom: 10 }}>🔴 Option 2 — Use Live Mode to capture tips as you stream</div>
+                      <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.65, marginBottom: 16 }}>Go live now and your AI coach tracks every tip in real time, coaches you during the session, and saves the data automatically.</div>
+                      <button onClick={() => { setActiveTab('live'); window.scrollTo({ top: 0, behavior: 'instant' }); }} style={{ width: '100%', padding: '10px 0', borderRadius: 10, background: 'linear-gradient(135deg,#10B981,#22D3EE)', border: 'none', color: '#fff', fontWeight: 800, fontSize: 13, cursor: 'pointer' }}>⚡ Go Live →</button>
+                    </div>
                   </div>
                 </div>
               )
