@@ -2034,8 +2034,11 @@ const handleCSV = async (file, forcePlatform = null) => {
     })
 
     // 3. MILESTONE — within 10% of $50 / $100 / $200 / $500
+    // Exclude fans gone > 90 days: they belong in At Risk, not Close to Milestone
     const milestones = [50, 100, 200, 500]
     whales.forEach(w => {
+      const daysSinceMilestone = Math.floor((now - new Date(w.lastTipDate)) / 86400000)
+      if (daysSinceMilestone > 90) return
       for (const m of milestones) {
         const remaining = m - w.totalUSD
         if (remaining > 0 && remaining <= m * 0.10) {
@@ -2294,7 +2297,8 @@ const handleCSV = async (file, forcePlatform = null) => {
         // (accounts for "every 2-3 streams" — if they stream 2-3x/week that's a few days)
         const daysSince = w.daysSinceLastTip
         const overdueThreshold = Math.max(avgDaysBetweenSessions * 1.5, 3)
-        return daysSince >= overdueThreshold
+        // Cap at 90 days: beyond that the fan is "At Risk", not "Re-engage"
+        return daysSince >= overdueThreshold && daysSince <= 90
       })
       .sort((a, b) => b.totalUSD - a.totalUSD)
       .slice(0, 5)
@@ -3286,9 +3290,18 @@ const handleCSV = async (file, forcePlatform = null) => {
                 .sort((a,b) => b.totalUSD - a.totalUSD)
                 .slice(0, 3)
 
-              const milestones = (whatsNextAlerts || []).filter(a => a.type === 'milestone').slice(0, 3)
+              // Deduplicate: a fan should only appear in one category (highest priority wins)
+              // Priority: Likely Online > Close to Milestone > At Risk
+              const seenUsernames = new Set(likelyOnline.map(w => w.username.toLowerCase()))
 
-              const atRisk = reengageList.slice(0, 3)
+              const milestones = (whatsNextAlerts || [])
+                .filter(a => a.type === 'milestone' && !seenUsernames.has((a.username || '').toLowerCase()))
+                .slice(0, 3)
+              milestones.forEach(a => seenUsernames.add((a.username || '').toLowerCase()))
+
+              const atRisk = reengageList
+                .filter(({ whale: w }) => !seenUsernames.has(w.username.toLowerCase()))
+                .slice(0, 3)
 
               const hasAny = likelyOnline.length || milestones.length || atRisk.length
               if (!hasAny) return null
