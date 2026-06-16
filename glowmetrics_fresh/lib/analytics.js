@@ -116,10 +116,21 @@ function detectPlatform(text) {
 
 function normalizeDate(raw) {
   if (!raw) return null
+  // DD.MM.YYYY [HH:MM] — BongaCams dot-format (e.g. 14.06.2024 15:49)
   const euro = raw.match(/^(\d{2})\.(\d{2})\.(\d{4})(?:\s+(\d{2}:\d{2}))?/)
   if (euro) return `${euro[2]}/${euro[1]}/${euro[3]}${euro[4] ? ' ' + euro[4] : ''}`
+  // YYYY/MM/DD... — ISO with slashes
   const slash = raw.match(/^(\d{4})\/(\d{2})\/(\d{2})(.*)/)
   if (slash) return `${slash[1]}-${slash[2]}-${slash[3]}${slash[4]}`
+  // M/D/YY [HH:MM] — BongaCams American short-year format (e.g. 5/1/26 13:22, 7/7/25 23:48)
+  const mdyy = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2})(?:\s+(\d{2}:\d{2}))?$/)
+  if (mdyy) {
+    const year  = 2000 + parseInt(mdyy[3])
+    const month = String(parseInt(mdyy[1])).padStart(2, '0')
+    const day   = String(parseInt(mdyy[2])).padStart(2, '0')
+    const time  = mdyy[4] ? `T${mdyy[4]}:00` : 'T00:00:00'
+    return `${year}-${month}-${day}${time}`
+  }
   return raw.replace('T', ' ').replace('Z', '')
 }
 
@@ -260,7 +271,7 @@ function parseHeaderless(lines, platform) {
       const dateRaw = normalizeDate(vals[0])
       const username = vals[1] || null
       const tokens = parseInt(vals[3]) || 0
-      const usd = parseFloat((vals[4] || '').replace(/[$,]/g, '')) || 0
+      const usd = parseFloat((vals[4] || '').trim().replace(/[$,\s]/g, '')) || 0
       if (!username || (tokens <= 0 && usd <= 0)) continue
       if (!dateRaw || isNaN(new Date(dateRaw).getTime())) continue
       results.push({ dateRaw, date_time: dateRaw, username, platform: platform || 'BongaCams', tokens: tokens > 0 ? tokens : Math.round(usd / 0.05), usd: usd > 0 ? parseFloat(usd.toFixed(2)) : parseFloat((tokens * 0.05).toFixed(2)), tip_type: vals[2] || 'Tip', tip_note: '' })
@@ -530,7 +541,13 @@ export function generateLossAlerts(tips, sessions, whales, bestHour) {
   whales.filter(w => w.totalUSD >= 50 && w.daysSinceLastTip >= 5 && w.daysSinceLastTip < 30).slice(0, 2).forEach(w => {
     alerts.push({ type: 'fan_churn', severity: 'critical', icon: '🚨', message: `${w.username} hasn't tipped in ${w.daysSinceLastTip} days — high churn risk ($${w.totalUSD.toFixed(0)} lifetime value)`, action: 'Send a re-engagement message now' })
   })
-  const lastStreamed = sessions.length ? (now - new Date(sessions[sessions.length - 1].startTime)) / 86400000 : 999
+  const mostRecentTipDate = tips.reduce((latest, t) => {
+    const d = new Date(t.dateRaw || t.date_time)
+    return (!isNaN(d.getTime()) && d > latest) ? d : latest
+  }, new Date(0))
+  const lastStreamed = mostRecentTipDate > new Date(0)
+    ? (now - mostRecentTipDate.getTime()) / 86400000
+    : (sessions.length ? (now - new Date(sessions[sessions.length - 1].startTime)) / 86400000 : 999)
   if (lastStreamed > 2 && sessions.length > 5) {
     alerts.push({ type: 'streak_broken', severity: 'info', icon: '⏸️', message: `You haven't streamed in ${Math.floor(lastStreamed)} days — your audience engagement drops after 3 days off`, action: 'Get back live — consistency is your #1 growth tool' })
   }
@@ -577,7 +594,7 @@ export function generateInsights(tips, sessions, bestDay, worstDay, bestHour) {
     insights.push({ icon: '🐳', text: `Your top ${topWhales.length} fan${topWhales.length > 1 ? 's' : ''} generate${topWhales.length === 1 ? 's' : ''} ${pct}% of your revenue. Losing even one of them would cost you $${(wE / topWhales.length).toFixed(0)} on average — keep them engaged`, type: 'whales', priority: 2 })
   }
 
-  const timedSessionsForLength = sessions.filter(s => !s.durationUnknown)
+  const timedSessionsForLength = sessions.filter(s => !s.durationUnknown && s.durationMinutes < 480)
   const longSessions  = timedSessionsForLength.filter(s => s.durationMinutes > 60)
   const shortSessions = timedSessionsForLength.filter(s => s.durationMinutes > 1 && s.durationMinutes <= 60)
   if (longSessions.length >= 3 && shortSessions.length >= 3) {
@@ -669,11 +686,12 @@ export function aggregateRows(tips) {
 
   // ── SESSION QUALITY CLASSIFICATION ───────────────────────────────────
   const classifySession = (s) => {
-    const mins = s.durationMinutes || 0
-    const usd  = s.totalUSD || 0
+    const mins  = s.durationMinutes || 0
+    const usd   = s.totalUSD || 0
+    const count = s.tipCount || 0
     if (mins < 2 && usd === 0) return 'invalid'
-    if (mins < 15 && usd < 10) return 'low_signal'
-    return 'meaningful'
+    if (mins >= 20 && count >= 2) return 'meaningful'
+    return 'low_signal'
   }
   const scoreSession = (s) => {
     const mins = s.durationMinutes || 0
@@ -827,10 +845,19 @@ export function aggregateRows(tips) {
   const newKeys = Object.keys(fanTipCounts).filter(k => fanTipCounts[k] === 1)
   const avgReturnSpend = returningKeys.length ? returningKeys.reduce((s, k) => s + fanTipUSD2[k], 0) / returningKeys.length : 0
   const avgNewSpend = newKeys.length ? newKeys.reduce((s, k) => s + fanTipUSD2[k], 0) / newKeys.length : 0
+  const totalFanCount = Object.keys(fanTipCounts).length
+  const returningUSDTotal = returningKeys.reduce((s, k) => s + fanTipUSD2[k], 0)
   const returningVsNew = {
-    returningCount: returningKeys.length, newCount: newKeys.length,
-    returningPct: Math.round((returningKeys.length / Math.max(Object.keys(fanTipCounts).length, 1)) * 100),
-    avgReturnSpend: parseFloat(avgReturnSpend.toFixed(2)), avgNewSpend: parseFloat(avgNewSpend.toFixed(2)),
+    returningCount: returningKeys.length,
+    newCount: newKeys.length,
+    // % of unique fans who tipped more than once — correct label: "returning fans"
+    returningFanPct: Math.round((returningKeys.length / Math.max(totalFanCount, 1)) * 100),
+    // % of total tip VOLUME that came from returning fans — distinct from fan count
+    returningUSDPct: totalUSD > 0 ? Math.round((returningUSDTotal / totalUSD) * 100) : 0,
+    // Keep for backwards compat — equals returningFanPct (fan count, NOT volume)
+    returningPct: Math.round((returningKeys.length / Math.max(totalFanCount, 1)) * 100),
+    avgReturnSpend: parseFloat(avgReturnSpend.toFixed(2)),
+    avgNewSpend: parseFloat(avgNewSpend.toFixed(2)),
     multiplier: avgNewSpend > 0 ? parseFloat((avgReturnSpend / avgNewSpend).toFixed(1)) : null
   }
 
@@ -898,11 +925,31 @@ export function aggregateRows(tips) {
   const privateShowFans = Object.values(privateFanMap).sort((a, b) => b.usd - a.usd).map(f => ({ ...f, usd: parseFloat(f.usd.toFixed(2)) }))
   const spyShowFans = [...spyFanSet].filter(u => !privateFanMap[u])
 
+  // Days since last stream — from actual most recent tip date in this dataset
+  const mostRecentTipTs = tips.reduce((latest, t) => {
+    const d = new Date(t.dateRaw || t.date_time)
+    return (!isNaN(d.getTime()) && d > latest) ? d : latest
+  }, new Date(0))
+  const daysSinceLastStream = mostRecentTipTs > new Date(0)
+    ? Math.floor((Date.now() - mostRecentTipTs.getTime()) / 86400000)
+    : null
+
+  // avgSessionUSD — from ALL sessions (not just meaningful) per fix 4A
+  const avgSessionUSD = sessions.length > 0
+    ? parseFloat((totalUSD / sessions.length).toFixed(2))
+    : 0
+  const avgMeaningfulSessionUSD = meaningfulSessions.length > 0
+    ? parseFloat((meaningfulSessions.reduce((s, x) => s + x.totalUSD, 0) / meaningfulSessions.length).toFixed(2))
+    : 0
+
   return {
     totalUSD: parseFloat(totalUSD.toFixed(2)),
     totalTokens,
     totalTips: tips.length,
     avgTipSize: parseFloat((tips.length > 0 ? totalUSD / tips.length : 0).toFixed(2)),
+    daysSinceLastStream,
+    avgSessionUSD,
+    avgMeaningfulSessionUSD,
     topTippers, platforms, sessions: allValidSessions,
     insights: validateInsights(insights),
     predictions, whaleAlerts, lossAlerts, nextMoves, whales,
