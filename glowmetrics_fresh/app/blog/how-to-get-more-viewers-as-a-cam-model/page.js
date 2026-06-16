@@ -1,4 +1,4 @@
-import ArticleLayout from '../../../components/ArticleLayout'
+import ArticleLayout from '../components/ArticleLayout'
 
 export const metadata = {
   title: 'How to Get More Viewers as a Cam Model (Proven Growth Strategies)',
