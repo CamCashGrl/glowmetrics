@@ -55,7 +55,12 @@ export async function POST(req) {
     r.date_time &&
     r.username !== 'Unknown' &&
     (r.tokens > 0 || r.usd > 0)
-  )
+  ).map((r, idx) => ({
+    ...r,
+    // Deterministic dedup key: identical imports deduplicate, distinct same-content rows within
+    // one import (e.g. two BongaCams tips from same user in same minute) do not.
+    tip_ref: `${r.platform}|${r.username}|${r.date_time}|${r.tokens}|${idx}`,
+  }))
 
   if (!rows.length) {
     return NextResponse.json(
