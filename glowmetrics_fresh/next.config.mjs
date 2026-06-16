@@ -30,6 +30,11 @@ const nextConfig = {
         destination: '/guides/cam-model-token-calculator',
         permanent: true,
       },
+      {
+        source: '/guides/best-time-to-stream-on-chaturbate',
+        destination: '/guides/chaturbate-best-hours',
+        permanent: true,
+      },
     ]
   },
 }
