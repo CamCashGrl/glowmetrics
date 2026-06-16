@@ -2797,7 +2797,7 @@ const handleCSV = async (file, forcePlatform = null) => {
               const velPlatforms = Object.entries(platformVelocity).filter(([,v]) => v !== null).sort((a,b) => (b[1]||0)-(a[1]||0))
               return (
                 <>
-                  <div className="stat-grid-4" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: velPlatforms.length ? 10 : 24 }}>
+                  <div className="stat-grid-4" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 20 }}>
                     {cardDefs.map((s, i) => (
                       <div key={i} className={`stat-card ${s.glowClass}`} style={{ ...glassCard, borderRadius: 18, padding: "16px 20px", position: "relative", overflow: "hidden", animation: `fadeUp 0.3s ease ${i * 0.06}s both`, cursor:'default' }}>
                         {/* accent top bar */}
@@ -2807,8 +2807,8 @@ const handleCSV = async (file, forcePlatform = null) => {
                           <span style={{ fontSize: 22 }}>{s.icon}</span>
                         </div>
                         {s.isHero
-                          ? <div className="hero-revenue-shimmer" style={{ fontSize: 34, fontWeight: 900, marginBottom: 4, lineHeight: 1.05 }}>{s.value}</div>
-                          : <div style={{ fontSize: 26, fontWeight: 900, color: s.accent, marginBottom: 4, lineHeight: 1.1 }}>{s.value}<TrendBadge pct={s.trend} /></div>
+                          ? <div className="hero-revenue-shimmer" style={{ fontSize: 'clamp(20px, 3vw, 34px)', fontWeight: 900, marginBottom: 4, lineHeight: 1.05 }}>{s.value}</div>
+                          : <div style={{ fontSize: 'clamp(18px, 2.5vw, 26px)', fontWeight: 900, color: s.accent, marginBottom: 4, lineHeight: 1.1 }}>{s.value}<TrendBadge pct={s.trend} /></div>
                         }
                         {s.isHero && <div style={{ marginBottom:4 }}><TrendBadge pct={s.trend} /></div>}
                         <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.4 }}>{s.sub}</div>
@@ -2817,18 +2817,6 @@ const handleCSV = async (file, forcePlatform = null) => {
                       </div>
                     ))}
                   </div>
-                  {/* Earnings Velocity strip — formula: totalUSD / totalHours per platform */}
-                  {velPlatforms.length > 0 && (
-                    <div className="velocity-strip" style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
-                      {velPlatforms.map(([plat, vel], i) => (
-                        <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 14px", borderRadius: 20, background: "rgba(34,211,238,0.07)", border: "1px solid rgba(34,211,238,0.2)", animation: `fadeUp 0.3s ease ${0.25 + i*0.05}s both` }}>
-                          <span style={{ fontSize: 11, color: C.muted }}>{plat.replace('BongaCams','Bonga').replace('MyFreeCams','MFC').replace(/chaturbate/i,'CB')}</span>
-                          <span style={{ fontSize: 13, fontWeight: 700, color: C.cyan }}>${(!isNaN(vel) && isFinite(vel) ? vel : 0).toFixed(2)}/hr</span>
-                          <span style={{ fontSize: 10, color: C.muted }}>velocity</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
                   {/* section divider */}
                   <div style={{ height:1, background:'linear-gradient(90deg,transparent,rgba(255,255,255,0.06),transparent)', marginBottom:20 }} />
                 </>
@@ -3465,28 +3453,74 @@ const handleCSV = async (file, forcePlatform = null) => {
                   <div style={{ fontSize: 18, fontWeight: 800, color: C.white }}>Smart Insights</div>
                 </div>
 
-                {(!engineInsights || !engineInsights.insights || engineInsights.insights.length === 0) ? (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    {[1, 2, 3].map(i => (
-                      <div key={i} style={{ padding: "14px 16px", borderRadius: 10, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)" }}>
-                        <div style={{ height: 11, width: `${55 + i * 12}%`, borderRadius: 6, background: "rgba(255,255,255,0.08)", marginBottom: 6 }} />
-                        <div style={{ height: 9, width: "80%", borderRadius: 6, background: "rgba(255,255,255,0.05)" }} />
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    {engineInsights.insights.map((ins, i) => (
-                      <div key={i} className="list-slot-in" style={{ padding: "13px 16px", borderRadius: 10, background: "rgba(34,211,238,0.06)", border: "1px solid rgba(34,211,238,0.15)", animationDelay: `${i * 60}ms` }}>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: C.white, marginBottom: 4, lineHeight: 1.4 }}>{ins.title}</div>
-                        <div style={{ fontSize: 12, color: C.text, lineHeight: 1.55, marginBottom: ins.action ? 8 : 0 }}>{ins.body}</div>
-                        {ins.action && (
+                {(() => {
+                  // Build insights from data already in scope — no API call needed
+                  const _ins = []
+
+                  // 1. Peak hour insight
+                  if (canonicalPeakLabel) {
+                    const _pPlat = dailyBrief?.displayPlat || 'your top platform'
+                    const _pAvg = dailyBrief?.displayAvg
+                    _ins.push({
+                      title: `Your peak window is ${canonicalPeakLabel} on ${_pPlat}`,
+                      body: _pAvg > 0
+                        ? `Sessions at this hour average $${_pAvg.toFixed(0)} — ${Math.round(_pAvg / Math.max(avgPerHour, 0.01) * 10) / 10}x your overall rate. Go live during this window to maximise earnings.`
+                        : `This is when your fans are most active. Streaming at this time consistently will grow your peak-hour session count.`,
+                      action: `Schedule your next stream around ${canonicalPeakLabel}`
+                    })
+                  }
+
+                  // 2. Best platform insight
+                  const _topPlatEntry = Object.entries(platformVelocity || {}).filter(([,v]) => v != null).sort((a,b) => b[1]-a[1])[0]
+                  if (_topPlatEntry) {
+                    const [_tp, _tv] = _topPlatEntry
+                    const _tpLabel = _tp.replace('BongaCams','Bonga').replace('MyFreeCams','MFC').replace(/chaturbate/i,'Chaturbate')
+                    _ins.push({
+                      title: `${_tpLabel} is your highest-ROI platform at $${_tv.toFixed(2)}/hr`,
+                      body: Object.keys(platformVelocity).length > 1
+                        ? `Focus your high-effort streams here. Lower-ROI platforms can fill off-peak slots, but ${_tpLabel} should get your peak-hour time.`
+                        : `Your sessions here average $${_tv.toFixed(2)}/hr. Consistent streaming builds compounding fan loyalty — each session raises your baseline.`,
+                      action: `Prioritise ${_tpLabel} for peak-hour streams`
+                    })
+                  }
+
+                  // 3. Session average vs top fan contribution
+                  const _topWhale = whales?.[0]
+                  if (_topWhale && _topWhale.totalUSD > 0) {
+                    const _pct = totalRevenue > 0 ? Math.round((_topWhale.totalUSD / totalRevenue) * 100) : 0
+                    _ins.push({
+                      title: `${_topWhale.username} accounts for ${_pct}% of your lifetime revenue`,
+                      body: _pct >= 30
+                        ? `High fan concentration is a risk — if they churn your earnings drop sharply. Nurture 2–3 backup whales to reduce dependency.`
+                        : `They've spent $${_topWhale.totalUSD.toFixed(0)} lifetime. A personalised message when they've been quiet for 7+ days typically brings them back.`,
+                      action: _topWhale.daysSinceLastTip > 7 ? `Send ${_topWhale.username} a re-engage message now` : `Keep ${_topWhale.username} warm — they tipped recently`
+                    })
+                  } else if (avgPerHour > 0) {
+                    // Fallback: session avg insight
+                    const _sessAvg = sessions.length > 0 ? totalRevenue / sessions.length : 0
+                    _ins.push({
+                      title: `You average $${_sessAvg.toFixed(0)} per session at $${avgPerHour.toFixed(2)}/hr`,
+                      body: `Sessions over 60 minutes earn disproportionately more — longer streams let tipping patterns compound. Aim for at least one 90-min session per week.`,
+                      action: `Try a 90-min stream at your peak hour`
+                    })
+                  }
+
+                  if (_ins.length === 0) return (
+                    <div style={{ fontSize: 13, color: C.muted, padding: '12px 0' }}>Upload more session data to generate personalised insights.</div>
+                  )
+
+                  return (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      {_ins.map((ins, i) => (
+                        <div key={i} style={{ padding: "13px 16px", borderRadius: 10, background: "rgba(34,211,238,0.06)", border: "1px solid rgba(34,211,238,0.15)" }}>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: C.white, marginBottom: 4, lineHeight: 1.4 }}>{ins.title}</div>
+                          <div style={{ fontSize: 12, color: C.text, lineHeight: 1.55, marginBottom: 8 }}>{ins.body}</div>
                           <div style={{ fontSize: 11, color: C.cyan, fontWeight: 600 }}>👉 {ins.action}</div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
+                        </div>
+                      ))}
+                    </div>
+                  )
+                })()}
               </div>
 
             {/* Dependency risk + pre-tip behavior — kept, moved lower */}
