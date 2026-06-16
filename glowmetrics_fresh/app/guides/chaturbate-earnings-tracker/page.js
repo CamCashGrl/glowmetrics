@@ -4,9 +4,9 @@
 import ChaturbateCalculator from './ChaturbateCalculator'
 
 export const metadata = {
-  title: "Chaturbate Earnings Tracker — Free Tool for Broadcasters",
+  title: "Chaturbate Earnings Tracker: Track Tips, Tokens, Fans & Hours",
   description:
-    "Track your Chaturbate tips, tokens, and hourly earnings automatically. See your best days, top fans, and peak hours in one dashboard.",
+    "Track Chaturbate tips, tokens, earnings, repeat fans, and best stream times with a simple earnings tracker built for cam models.",
   keywords: [
     "chaturbate earnings tracker",
     "chaturbate analytics",
@@ -293,9 +293,17 @@ export default function ChaturbateEarningsTrackerPage() {
           </p>
 
           {/* TOP CTA BAR */}
-          <div style={{ padding: "20px 24px", borderRadius: 14, background: "linear-gradient(135deg, rgba(34,211,238,0.08), rgba(236,72,153,0.08))", border: "1px solid rgba(34,211,238,0.25)", marginBottom: 52, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 16 }}>
+          <div style={{ padding: "20px 24px", borderRadius: 14, background: "linear-gradient(135deg, rgba(34,211,238,0.08), rgba(236,72,153,0.08))", border: "1px solid rgba(34,211,238,0.25)", marginBottom: 24, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 16 }}>
             <div style={{ fontSize: 15, fontWeight: 600, color: "white" }}>Free during beta — no credit card, no limits</div>
             <a href="/login" style={s.midCtaBtn}>Find Your Highest-Earning Hours Free →</a>
+          </div>
+
+          {/* UPLOAD CTA */}
+          <div style={{ padding: "18px 22px", borderRadius: 12, background: "rgba(99,102,241,0.07)", border: "1px solid rgba(99,102,241,0.2)", marginBottom: 52 }}>
+            <p style={{ fontSize: 15, color: "#cbd5e1", lineHeight: 1.7, margin: 0 }}>
+              <a href="/landing" style={{ color: "#a5b4fc", textDecoration: "none", fontWeight: 600 }}>Upload your Chaturbate tip history</a>{" "}
+              and see which hours, fans, and room patterns are actually making you money.
+            </p>
           </div>
 
           {/* ── INTERACTIVE EARNINGS CALCULATOR ───────────────────────── */}
