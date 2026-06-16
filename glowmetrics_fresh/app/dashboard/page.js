@@ -1934,12 +1934,13 @@ const handleCSV = async (file, forcePlatform = null) => {
   const lossAlerts = liveAnalytics?.lossAlerts || analytics?.lossAlerts || []
   const nextMoves = liveAnalytics?.nextMoves || analytics?.nextMoves || []
   const totalRevenue = analytics?.totalUSD || 0
-  // Only average sessions with real duration (exclude zero-timestamp BongaCams exports)
-  const timedSessions = sessions.filter(s => !s.durationUnknown && s.usdPerHour !== null && (s.durationMinutes || 0) >= 20)
-  // FIX: use total USD / total hours (not avg of per-session rates — that inflates short sessions)
+  // timedSessions kept for sparkline/MoM trend calculations only (not for avg $/hr)
+  const timedSessions = sessions.filter(s => !s.durationUnknown && (s.durationMinutes || 0) >= 20)
   const timedTotalUSD = timedSessions.reduce((sum, s) => sum + (s.totalUSD || 0), 0)
   const timedTotalHours = timedSessions.reduce((sum, s) => sum + (s.durationHours || 0), 0)
-  const avgPerHour = timedTotalHours > 0 ? timedTotalUSD / Math.max(timedTotalHours, 0.5) : 0
+  // Single canonical $/hr — uses analytics.earningsVelocity (totalUSD / totalHours across all
+  // meaningful sessions) so the header, KPI card, and "Overall" chip all show the same number.
+  const avgPerHour = analytics?.earningsVelocity ?? (timedTotalHours > 0 ? timedTotalUSD / timedTotalHours : 0)
   // Single source of truth — pre-computed in aggregateRows, same values used everywhere
   const analyticsbestDay  = analytics?.bestDay  || null
   const analyticsBestHour = analytics?.bestHour || null
@@ -2033,8 +2034,11 @@ const handleCSV = async (file, forcePlatform = null) => {
     })
 
     // 3. MILESTONE — within 10% of $50 / $100 / $200 / $500
+    // Exclude fans gone > 90 days: they belong in At Risk, not Close to Milestone
     const milestones = [50, 100, 200, 500]
     whales.forEach(w => {
+      const daysSinceMilestone = Math.floor((now - new Date(w.lastTipDate)) / 86400000)
+      if (daysSinceMilestone > 90) return
       for (const m of milestones) {
         const remaining = m - w.totalUSD
         if (remaining > 0 && remaining <= m * 0.10) {
@@ -2068,7 +2072,9 @@ const handleCSV = async (file, forcePlatform = null) => {
       const peakHour = parseInt(bestHour[0])
       const currentUTCHr = new Date().getUTCHours()
       const hoursAway = (peakHour - currentUTCHr + 24) % 24
-      const probability = Math.min(95, Math.round((bestHour[1] / fanTips.length) * 100 * 2.5))
+      const _pf0 = bestHour[1] / fanTips.length
+      const _pd0 = hoursAway === 0 ? 1.0 : hoursAway === 1 ? 0.65 : 0.35
+      const probability = Math.min(90, Math.max(25, Math.round(_pf0 * 200 * _pd0)))
       const label = (() => { const _off=new Date().getTimezoneOffset()/-60; const _lh=Math.round(((peakHour+_off)%24+24)%24); return _lh===0?'12 AM':_lh<12?`${_lh} AM`:_lh===12?'12 PM':`${_lh-12} PM` })()
       if (hoursAway <= 2 && probability >= 40) {
         onlineNow.push({
@@ -2103,23 +2109,6 @@ const handleCSV = async (file, forcePlatform = null) => {
       }
     })
 
-    // 6. PERFORMANCE — best day insight
-    const analyticsbestDay = analytics?.bestDay
-    if (analyticsbestDay) {
-      const avgSession = sessions.length ? sessions.reduce((s, x) => s + x.totalUSD, 0) / sessions.length : 0
-      const bestSessions = sessions.filter(s => s.totalUSD >= avgSession * 1.5)
-      const bestDayCount = bestSessions.filter(s =>
-        new Date(s.startTime).toLocaleDateString('en-US', { weekday: 'long' }) === analyticsbestDay.day
-      ).length
-      if (bestDayCount >= 2) {
-        performance.push({
-          type: 'performance', icon: '📈', color: C.pink, severity: 'info',
-          title: `Your best sessions happen on ${analyticsbestDay.day}s`,
-          message: `${bestDayCount} of your top-earning streams were on ${analyticsbestDay.day}s. Plan your next high-effort stream for this day`,
-          cta: null, reengageMsg: ''
-        })
-      }
-    }
 
     // Social mention alerts (keep, they're genuinely useful)
     const socialAlerts = []
@@ -2308,7 +2297,8 @@ const handleCSV = async (file, forcePlatform = null) => {
         // (accounts for "every 2-3 streams" — if they stream 2-3x/week that's a few days)
         const daysSince = w.daysSinceLastTip
         const overdueThreshold = Math.max(avgDaysBetweenSessions * 1.5, 3)
-        return daysSince >= overdueThreshold
+        // Cap at 90 days: beyond that the fan is "At Risk", not "Re-engage"
+        return daysSince >= overdueThreshold && daysSince <= 90
       })
       .sort((a, b) => b.totalUSD - a.totalUSD)
       .slice(0, 5)
@@ -2326,22 +2316,9 @@ const handleCSV = async (file, forcePlatform = null) => {
       .sort((a, b) => b.totalUSD - a.totalUSD)
       .slice(0, 3)
 
-    const platTodayStats = {}
-    Object.entries(platBestTimes).forEach(([plat, times]) => {
-      const todayHour = times?.bestHourByDay?.[todayName]
-      const bestDayEntry = times?.bestDay
-      platTodayStats[plat] = {
-        todayBestHour: todayHour ? fmtHour(todayHour.hour) : null,
-        todayBestAvg: todayHour?.avg || 0,
-        bestDay: bestDayEntry?.day || null,
-        bestDayAvg: bestDayEntry?.avg || 0,
-        overallBestHour: times?.hour ? fmtHour(times.hour.hour) : null,
-        overallBestHourAvg: times?.hour?.avg || 0,
-      }
-    })
     return { todayName, bhLabel, bh, atPeak, hoursUntilPeak, displayPlat, displayAvg,
       isBestDay, bestDay, sessionAvg, peakAvg, predictionLow, predictionHigh,
-      reengageFans, likelyOnline, platTodayStats, sessionsAtPeakCount: sessionsAtPeak.length }
+      reengageFans, likelyOnline, sessionsAtPeakCount: sessionsAtPeak.length }
   }
 
   const buildRealTimeAlerts = () => {
@@ -2370,20 +2347,6 @@ const handleCSV = async (file, forcePlatform = null) => {
       if (sorted.length > 0) platBestDay[plat] = { day: sorted[0][0], usd: sorted[0][1] }
     })
 
-    // "Best day of the week" alert — fire if today is the best day for any platform
-    Object.entries(platBestDay).forEach(([plat, { day, usd }]) => {
-      if (day === currentDay) {
-        const otherPlat = Object.entries(platBestDay).find(([p]) => p !== plat)
-        const comparison = otherPlat
-          ? ` — ${(usd / Math.max(otherPlat[1].usd, 1)).toFixed(1)}x more than ${otherPlat[0]}`
-          : ''
-        alerts.push({
-          type: 'best_day', priority: 0, icon: '📅', color: '#F59E0B',
-          title: `${currentDay} is your best day on ${plat}`,
-          message: `You earn more on ${plat} on ${currentDay}s than any other day${comparison}. Go live now.`
-        })
-      }
-    })
 
     // --- PLATFORM vs PLATFORM HOUR COMPARISON ---
     // FIX: use avg USD per hour-session (not raw cumulative totals)
@@ -2452,7 +2415,9 @@ const handleCSV = async (file, forcePlatform = null) => {
 
       const peakHour = parseInt(sortedHours[0][0])
       const hoursAway = (peakHour - new Date().getUTCHours() + 24) % 24
-      const confidence = Math.min(95, Math.round((sortedHours[0][1] / fanTips.length) * 100 * 2.5))
+      const _pf1 = sortedHours[0][1] / fanTips.length
+      const _pd1 = hoursAway === 0 ? 1.0 : hoursAway === 1 ? 0.65 : 0.35
+      const confidence = Math.min(90, Math.max(25, Math.round(_pf1 * 200 * _pd1)))
       const label = (() => { const _off=new Date().getTimezoneOffset()/-60; const _lh=Math.round(((peakHour+_off)%24+24)%24); return _lh===0?'12 AM':_lh<12?`${_lh} AM`:_lh===12?'12 PM':`${_lh-12} PM` })()
       const daysSince = Math.floor((now - new Date(w.lastTipDate)) / 86400000)
 
@@ -2497,9 +2462,31 @@ const handleCSV = async (file, forcePlatform = null) => {
   const reengageList = buildReengageList()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const dailyBrief = buildDailyBrief() // re-runs every minuteTick
+
+  // ── CANONICAL PEAK HOUR ──────────────────────────────────────────────────────
+  // Single source of truth used by the header, Daily Brief, and Losing Money.
+  // Prefer engineInsights daily_plan (most specific), then today's analytics best
+  // hour from dailyBrief, then the all-time analytics best hour as final fallback.
+  const canonicalPeakHourUTC = (
+    engineInsights?.daily_plan?.best_hour ??
+    dailyBrief?.bh ??
+    (analytics?.bestHour ? parseInt(analytics.bestHour.hour) : null)
+  )
+  const canonicalPeakLabel = canonicalPeakHourUTC != null
+    ? (() => { const _off = new Date().getTimezoneOffset()/-60; const _lh = Math.round(((canonicalPeakHourUTC+_off)%24+24)%24); return _lh===0?'12 AM':_lh<12?`${_lh} AM`:_lh===12?'12 PM':`${_lh-12} PM` })()
+    : null
+
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const realTimeAlerts = buildRealTimeAlerts() // re-runs every minuteTick
   void minuteTick // ensures re-render when minute changes
+
+  // ── MONTH-OVER-MONTH GROWTH ── used by Momentum indicator and KPI cards
+  const _momNow = new Date()
+  const _momThisStart = new Date(Date.UTC(_momNow.getUTCFullYear(), _momNow.getUTCMonth(), 1))
+  const _momPrevStart = new Date(Date.UTC(_momNow.getUTCFullYear(), _momNow.getUTCMonth() - 1, 1))
+  const _momThisRev = tips.reduce((s, t) => new Date(t.date_time || t.dateRaw) >= _momThisStart ? s + (t.usd || 0) : s, 0)
+  const _momPrevRev = tips.reduce((s, t) => { const d = new Date(t.date_time || t.dateRaw); return d >= _momPrevStart && d < _momThisStart ? s + (t.usd || 0) : s }, 0)
+  const growthPct = (_momPrevRev > 0 && _momThisRev > 0) ? Math.round(((_momThisRev - _momPrevRev) / _momPrevRev) * 100) : null
 
   return (
     <div style={{
@@ -2621,13 +2608,22 @@ const handleCSV = async (file, forcePlatform = null) => {
           const safeAvg = (!isNaN(avgPerHour) && isFinite(avgPerHour)) ? avgPerHour : 0
           const brief = dailyBrief
           const atPeak = brief?.atPeak
-          const momentum = atPeak ? '🔥 AT PEAK' : safeAvg > 20 ? '↑ Strong' : safeAvg > 5 ? '→ Steady' : tips.length === 0 ? '— No data' : '↓ Slow'
-          const momentumColor = atPeak ? '#10B981' : safeAvg > 20 ? '#10B981' : safeAvg > 5 ? '#22D3EE' : tips.length === 0 ? '#475569' : '#f87171'
+          const momentum = atPeak ? '🔥 AT PEAK'
+            : (growthPct !== null && growthPct >= 200) ? '🚀 Surging'
+            : (growthPct !== null && growthPct >= 50)  ? '↑ Growing'
+            : safeAvg > 20 ? '↑ Strong'
+            : safeAvg > 5  ? '→ Steady'
+            : tips.length === 0 ? '— No data' : '↓ Slow'
+          const momentumColor = atPeak ? '#10B981'
+            : (growthPct !== null && growthPct >= 200) ? '#f472b6'
+            : (growthPct !== null && growthPct >= 50)  ? '#10B981'
+            : safeAvg > 20 ? '#10B981'
+            : safeAvg > 5  ? '#22D3EE'
+            : tips.length === 0 ? '#475569' : '#f87171'
           const localNow = new Date().getHours()
-          const _eiPeakUTC = engineInsights?.go_live_status?.next_best_hour ?? engineInsights?.summary?.best_hour
-          const hoursUntilLocal = (_eiPeakUTC != null && localNow != null) ? (_eiPeakUTC - localNow + 24) % 24 : brief?.hoursUntilPeak
+          const hoursUntilLocal = canonicalPeakHourUTC != null ? (canonicalPeakHourUTC - localNow + 24) % 24 : brief?.hoursUntilPeak
           const peakLabel = hoursUntilLocal === 0 ? 'NOW' : hoursUntilLocal === 1 ? 'in 1 hr' : (hoursUntilLocal > 0 && !isNaN(hoursUntilLocal)) ? `in ${hoursUntilLocal}h` : null
-          const _eiPeakLabel = _eiPeakUTC != null ? fmtHour(_eiPeakUTC) : brief?.bhLabel
+          const _eiPeakLabel = canonicalPeakLabel || brief?.bhLabel
           const bestPlat = brief?.displayPlat || (tips.length > 0 ? tips[0]?.platform : null)
           const safeRevenue = (!isNaN(totalRevenue) && isFinite(totalRevenue)) ? totalRevenue : 0
           return (
@@ -2801,9 +2797,9 @@ const handleCSV = async (file, forcePlatform = null) => {
               const velPlatforms = Object.entries(platformVelocity).filter(([,v]) => v !== null).sort((a,b) => (b[1]||0)-(a[1]||0))
               return (
                 <>
-                  <div className="stat-grid-4" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: velPlatforms.length ? 10 : 24 }}>
+                  <div className="stat-grid-4" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 20 }}>
                     {cardDefs.map((s, i) => (
-                      <div key={i} className={`stat-card ${s.glowClass}`} style={{ ...glassCard, borderRadius: 18, padding: "22px 20px", position: "relative", overflow: "hidden", animation: `fadeUp 0.3s ease ${i * 0.06}s both`, cursor:'default' }}>
+                      <div key={i} className={`stat-card ${s.glowClass}`} style={{ ...glassCard, borderRadius: 18, padding: "16px 20px", position: "relative", overflow: "hidden", animation: `fadeUp 0.3s ease ${i * 0.06}s both`, cursor:'default' }}>
                         {/* accent top bar */}
                         <div style={{ position:'absolute', top:0, left:0, right:0, height:3, background:`linear-gradient(90deg,${s.accent}80,${s.accent}20)`, borderRadius:'18px 18px 0 0' }} />
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
@@ -2811,35 +2807,16 @@ const handleCSV = async (file, forcePlatform = null) => {
                           <span style={{ fontSize: 22 }}>{s.icon}</span>
                         </div>
                         {s.isHero
-                          ? <div className="hero-revenue-shimmer" style={{ fontSize: 42, fontWeight: 900, marginBottom: 4, lineHeight: 1.05 }}>{s.value}</div>
-                          : <div style={{ fontSize: 32, fontWeight: 900, color: s.accent, marginBottom: 4, lineHeight: 1.1 }}>{s.value}<TrendBadge pct={s.trend} /></div>
+                          ? <div className="hero-revenue-shimmer" style={{ fontSize: 'clamp(20px, 3vw, 34px)', fontWeight: 900, marginBottom: 4, lineHeight: 1.05 }}>{s.value}</div>
+                          : <div style={{ fontSize: 'clamp(18px, 2.5vw, 26px)', fontWeight: 900, color: s.accent, marginBottom: 4, lineHeight: 1.1 }}>{s.value}<TrendBadge pct={s.trend} /></div>
                         }
                         {s.isHero && <div style={{ marginBottom:4 }}><TrendBadge pct={s.trend} /></div>}
                         <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.4 }}>{s.sub}</div>
-                        <MiniSpark data={s.sparkData} accent={s.accent} />
                         {s.badge && <div style={{ marginTop: 8, display: "inline-block", padding: "2px 8px", borderRadius: 6, background: `${s.badgeColor}20`, border: `1px solid ${s.badgeColor}40`, fontSize: 10, fontWeight: 700, color: s.badgeColor }}>{s.badge}</div>}
                         {s.info && <div style={{ marginTop: 6, fontSize: 9, color: C.muted, opacity: 0.7, lineHeight: 1.3 }}>ℹ️ {s.info}</div>}
                       </div>
                     ))}
                   </div>
-                  {/* Earnings Velocity strip — formula: totalUSD / totalHours per platform */}
-                  {velPlatforms.length > 0 && (
-                    <div className="velocity-strip" style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
-                      {velPlatforms.map(([plat, vel], i) => (
-                        <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 14px", borderRadius: 20, background: "rgba(34,211,238,0.07)", border: "1px solid rgba(34,211,238,0.2)", animation: `fadeUp 0.3s ease ${0.25 + i*0.05}s both` }}>
-                          <span style={{ fontSize: 11, color: C.muted }}>{plat.replace('BongaCams','Bonga').replace('MyFreeCams','MFC').replace('Chaturbate','CB')}</span>
-                          <span style={{ fontSize: 13, fontWeight: 700, color: C.cyan }}>${(!isNaN(vel) && isFinite(vel) ? vel : 0).toFixed(2)}/hr</span>
-                          <span style={{ fontSize: 10, color: C.muted }}>velocity</span>
-                        </div>
-                      ))}
-                      {earningsVelocity !== null && !isNaN(earningsVelocity) && (
-                        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 14px", borderRadius: 20, background: "rgba(16,185,129,0.07)", border: "1px solid rgba(16,185,129,0.2)" }}>
-                          <span style={{ fontSize: 11, color: C.muted }}>Overall</span>
-                          <span style={{ fontSize: 13, fontWeight: 700, color: C.green }}>${earningsVelocity.toFixed(2)}/hr</span>
-                        </div>
-                      )}
-                    </div>
-                  )}
                   {/* section divider */}
                   <div style={{ height:1, background:'linear-gradient(90deg,transparent,rgba(255,255,255,0.06),transparent)', marginBottom:20 }} />
                 </>
@@ -2856,12 +2833,8 @@ const handleCSV = async (file, forcePlatform = null) => {
         {dailyBrief && (() => {
           const { todayName, bhLabel: _bhLabel, bh, atPeak, hoursUntilPeak, displayPlat: _displayPlat, displayAvg,
             isBestDay, bestDay, sessionAvg, peakAvg, predictionLow, predictionHigh,
-            reengageFans, likelyOnline, platTodayStats, sessionsAtPeakCount } = dailyBrief
-          // Override best hour + platform from engineInsights when available; fall back to dailyBrief values
-          const _eiBh = engineInsights?.daily_plan?.best_hour
-          const _eiLocalH = _eiBh != null ? (_eiBh - new Date().getTimezoneOffset() / 60 + 24) % 24 : null
-          const _eiLabel = _eiLocalH != null ? (_eiLocalH === 0 ? '12 AM' : _eiLocalH < 12 ? `${Math.floor(_eiLocalH)} AM` : _eiLocalH === 12 ? '12 PM' : `${Math.floor(_eiLocalH) - 12} PM`) : null
-          const bhLabel = _eiLabel || _bhLabel
+            reengageFans, likelyOnline, sessionsAtPeakCount } = dailyBrief
+          const bhLabel = canonicalPeakLabel || _bhLabel
           const displayPlat = engineInsights?.summary?.best_platform || _displayPlat
           return (
             <div style={{ marginBottom: 20, borderRadius: 18, overflow: 'hidden', border: `1px solid ${atPeak ? 'rgba(16,185,129,0.45)' : 'rgba(124,92,255,0.3)'}`, background: 'rgba(10,12,24,0.7)', backdropFilter: 'blur(16px)', animation: 'fadeUp 0.3s ease both' }}>
@@ -2880,7 +2853,6 @@ const handleCSV = async (file, forcePlatform = null) => {
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                  {isBestDay && <div style={{ padding: '3px 10px', borderRadius: 20, background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.4)', fontSize: 11, fontWeight: 700, color: C.gold }}>🔥 Your Best Day</div>}
                   {atPeak
                     ? <div style={{ padding: '4px 12px', borderRadius: 20, background: 'rgba(16,185,129,0.2)', border: '1px solid rgba(16,185,129,0.5)', fontSize: 12, fontWeight: 700, color: C.green }}>🟢 Peak Now</div>
                     : bhLabel && <div style={{ padding: '4px 12px', borderRadius: 20, background: 'rgba(124,92,255,0.12)', border: '1px solid rgba(124,92,255,0.3)', fontSize: 12, fontWeight: 600, color: C.indigo }}>⏰ Peak in {hoursUntilPeak}h</div>
@@ -3170,19 +3142,24 @@ const handleCSV = async (file, forcePlatform = null) => {
                         )
                       })}
                     </div>
-                    {/* Best day */}
-                    {analyticsbestDay && (() => {
-                      // Use avg per SESSION on best day (not avg/calendar day)
-                      const bdSess = sessions.filter(s => new Date(s.startTime).toLocaleDateString('en-US', { weekday: 'long' }) === analyticsbestDay.day)
-                      const bdAvg = bdSess.length ? (bdSess.reduce((a,s) => a+s.totalUSD,0)/bdSess.length) : analyticsbestDay.avg
-                      const bdAvgSafe = (!isNaN(bdAvg) && isFinite(bdAvg) && bdAvg > 0) ? bdAvg : null
+                    {/* Best day — use the top per-platform figure so the number matches the platform cards above */}
+                    {(() => {
+                      const platTimes = analytics?.platformBestTimes || {}
+                      let topPlat = null, topDay = null, topAvg = 0
+                      Object.entries(platTimes).forEach(([plat, times]) => {
+                        if (times?.bestDay && times.bestDay.avg > topAvg) {
+                          topAvg = times.bestDay.avg
+                          topDay = times.bestDay.day
+                          topPlat = plat
+                        }
+                      })
+                      if (!topPlat) return null
+                      const platLabel = topPlat.replace('BongaCams','Bonga').replace('MyFreeCams','MFC')
                       return (
                         <div style={{ display: "flex", gap: 8, alignItems: "center", padding: "10px 14px", borderRadius: 10, background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.2)", marginBottom: 0 }}>
                           <span style={{ fontSize: 16 }}>📅</span>
                           <div style={{ fontSize: 13, color: C.white }}>
-                            <strong>{analyticsbestDay.day}s</strong> earn the most
-                            {bdAvgSafe !== null ? ` — $${bdAvgSafe.toFixed(0)} avg per session` : ' — not enough data yet'}
-                            {bdSess.length >= 3 && <span style={{ color: C.muted, marginLeft: 6 }}>across {bdSess.length} {analyticsbestDay.day} sessions</span>}
+                            <strong>{topDay}s on {platLabel}</strong> earn the most — <span style={{ color: C.gold }}>${topAvg.toFixed(0)} avg per session</span>
                           </div>
                         </div>
                       )
@@ -3232,7 +3209,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                         const dayVals = UTC_DAYS.map(d => platDayAvg[plat][d] || 0)
                         const maxVal = Math.max(...dayVals, 0.01)
                         return [
-                          <div key={plat + '_l'} style={{ fontSize: 10, fontWeight: 700, color: C.text, display: "flex", alignItems: "center", paddingRight: 4, lineHeight: 1.3 }}>{plat.replace('BongaCams','Bonga').replace('Chaturbate','CB').replace('MyFreeCams','MFC')}</div>,
+                          <div key={plat + '_l'} style={{ fontSize: 10, fontWeight: 700, color: C.text, display: "flex", alignItems: "center", paddingRight: 4, lineHeight: 1.3 }}>{plat.replace('BongaCams','Bonga').replace(/chaturbate/i,'CB').replace('MyFreeCams','MFC')}</div>,
                           ...UTC_DAYS.map(d => {
                             const val = platDayAvg[plat][d] || 0
                             const intensity = maxVal > 0 ? val / maxVal : 0
@@ -3278,7 +3255,12 @@ const handleCSV = async (file, forcePlatform = null) => {
                   if (!sorted.length) return null
                   const peakHour = parseInt(sorted[0][0])
                   const hoursAway = (peakHour - currentUTCHourTE + 24) % 24
-                  const confidence = Math.min(95, Math.round((sorted[0][1] / fanTips.length) * 100 * 2.5))
+                  // peakFraction: share of this fan's tips that fall at their peak hour
+                  const peakFraction = sorted[0][1] / fanTips.length
+                  // proximityDecay: current hour vs peak hour (exact match = 1.0, 1h off = 0.65, 2h off = 0.35)
+                  const proximityDecay = hoursAway === 0 ? 1.0 : hoursAway === 1 ? 0.65 : 0.35
+                  // Scale by 200 so a fan with 40% tips at peak + exact match → 80%; 25% + 1h off → 33%
+                  const confidence = Math.min(90, Math.max(25, Math.round(peakFraction * 200 * proximityDecay)))
                   return { ...w, peakHour, hoursAway, confidence, peakLabel: labelH(peakHour) }
                 })
                 .filter(Boolean)
@@ -3286,9 +3268,18 @@ const handleCSV = async (file, forcePlatform = null) => {
                 .sort((a,b) => b.totalUSD - a.totalUSD)
                 .slice(0, 3)
 
-              const milestones = (whatsNextAlerts || []).filter(a => a.type === 'milestone').slice(0, 3)
+              // Deduplicate: a fan should only appear in one category (highest priority wins)
+              // Priority: Likely Online > Close to Milestone > At Risk
+              const seenUsernames = new Set(likelyOnline.map(w => w.username.toLowerCase()))
 
-              const atRisk = reengageList.slice(0, 3)
+              const milestones = (whatsNextAlerts || [])
+                .filter(a => a.type === 'milestone' && !seenUsernames.has((a.username || '').toLowerCase()))
+                .slice(0, 3)
+              milestones.forEach(a => seenUsernames.add((a.username || '').toLowerCase()))
+
+              const atRisk = reengageList
+                .filter(({ whale: w }) => !seenUsernames.has(w.username.toLowerCase()))
+                .slice(0, 3)
 
               const hasAny = likelyOnline.length || milestones.length || atRisk.length
               if (!hasAny) return null
@@ -3398,15 +3389,30 @@ const handleCSV = async (file, forcePlatform = null) => {
                 5. YOU'RE LOSING MONEY — Risk / Loss + Missed Revenue
             ═══════════════════════════════════════ */}
             {(() => {
+              // Only show a fan re-engagement warning if the model has actually
+              // been online enough for the fan to have had a realistic chance to tip.
+              // Rule: model must have ≥3 sessions in the last N days, where N = fan's
+              // average tipping frequency. No-shows aren't "at risk" — we just weren't live.
+              const hasStreamedEnough = (whale) => {
+                if (!whale?.avgDaysBetweenTips) return true
+                const windowDays = Math.max(7, Math.round(whale.avgDaysBetweenTips))
+                const cutoff = Date.now() - windowDays * 86400000
+                const sessionsInWindow = sessions.filter(s => new Date(s.startTime).getTime() >= cutoff).length
+                return sessionsInWindow >= 3
+              }
               const allAlerts = [
-                ...(lossAlerts || []),
-                ...(alerts || []).slice(0, 3)
+                ...(lossAlerts || []).filter(a =>
+                  (a.type === 'fan_churn') ? hasStreamedEnough(a.whale) : true
+                ),
+                ...(alerts || []).filter(a =>
+                  (a.type === 'churn_risk') ? hasStreamedEnough(a.whale) : true
+                ).slice(0, 3)
               ].slice(0, 6)
               const missedEntries = Object.entries(missedRevenueByPlat)
                 .filter(([,m]) => m.missedRevenue > 5)
                 .sort((a,b) => b[1].missedRevenue - a[1].missedRevenue)
               if (!allAlerts.length && !missedEntries.length) return null
-              const fmtH2 = h => { const _off=new Date().getTimezoneOffset()/-60; const _lh=Math.round(((h+_off)%24+24)%24); return _lh===0?'12 AM':_lh<12?`${_lh} AM`:_lh===12?'12 PM':`${_lh-12} PM` }
+              const peakHourLabel = canonicalPeakLabel
               return (
                 <div style={{ ...glassCard, borderRadius: 18, padding: 24, marginBottom: 28, border: "1px solid rgba(251,146,60,0.2)", animation: "fadeUp 0.3s ease 0.25s both" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
@@ -3426,14 +3432,14 @@ const handleCSV = async (file, forcePlatform = null) => {
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, flexWrap: "wrap" }}>
                             <div>
                               <div style={{ fontSize: 13, fontWeight: 700, color: C.white, marginBottom: 3 }}>
-                                📉 {plat} — peak hour earns <span style={{ color: C.cyan }}>{m.multiplier || (m.bestHourAvg && m.overallAvg ? (m.bestHourAvg/m.overallAvg).toFixed(1) : "5")}x</span> your avg session. Shift more streams to {fmtH2(m.bestHour)} to add ~<span style={{ color: C.green }}>${Math.round((m.bestHourAvg||0) - (m.overallAvg||0))}/stream</span>
+                                📉 {plat} — peak hour earns <span style={{ color: C.cyan }}>{m.multiplier || (m.bestHourAvg && m.overallAvg ? (m.bestHourAvg/m.overallAvg).toFixed(1) : "5")}x</span> your avg session. Shift more streams to {peakHourLabel} to add ~<span style={{ color: C.green }}>${Math.round((m.bestHourAvg||0) - (m.overallAvg||0))}/stream</span>
                               </div>
                               <div style={{ fontSize: 12, color: C.muted }}>
-                                {m.sessionsNotAtBestHour} sessions ran off-peak · Best hour is {fmtH2(m.bestHour)} (${m.bestHourAvg.toFixed(0)} avg) vs your overall ${m.overallAvg.toFixed(0)} avg
+                                {m.sessionsNotAtBestHour} sessions ran off-peak · Best hour is {peakHourLabel} (${m.bestHourAvg.toFixed(0)} avg) vs your overall ${m.overallAvg.toFixed(0)} avg
                               </div>
                             </div>
                             <div style={{ fontSize: 11, padding: "3px 9px", borderRadius: 20, background: "rgba(251,146,60,0.2)", color: C.orange, fontWeight: 700, whiteSpace: "nowrap" }}>
-                              Stream at {fmtH2(m.bestHour)}
+                              Stream at {peakHourLabel}
                             </div>
                           </div>
                         </div>
@@ -3462,28 +3468,74 @@ const handleCSV = async (file, forcePlatform = null) => {
                   <div style={{ fontSize: 18, fontWeight: 800, color: C.white }}>Smart Insights</div>
                 </div>
 
-                {(!engineInsights || !engineInsights.insights || engineInsights.insights.length === 0) ? (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    {[1, 2, 3].map(i => (
-                      <div key={i} style={{ padding: "14px 16px", borderRadius: 10, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)" }}>
-                        <div style={{ height: 11, width: `${55 + i * 12}%`, borderRadius: 6, background: "rgba(255,255,255,0.08)", marginBottom: 6 }} />
-                        <div style={{ height: 9, width: "80%", borderRadius: 6, background: "rgba(255,255,255,0.05)" }} />
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    {engineInsights.insights.map((ins, i) => (
-                      <div key={i} className="list-slot-in" style={{ padding: "13px 16px", borderRadius: 10, background: "rgba(34,211,238,0.06)", border: "1px solid rgba(34,211,238,0.15)", animationDelay: `${i * 60}ms` }}>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: C.white, marginBottom: 4, lineHeight: 1.4 }}>{ins.title}</div>
-                        <div style={{ fontSize: 12, color: C.text, lineHeight: 1.55, marginBottom: ins.action ? 8 : 0 }}>{ins.body}</div>
-                        {ins.action && (
+                {(() => {
+                  // Build insights from data already in scope — no API call needed
+                  const _ins = []
+
+                  // 1. Peak hour insight
+                  if (canonicalPeakLabel) {
+                    const _pPlat = dailyBrief?.displayPlat || 'your top platform'
+                    const _pAvg = dailyBrief?.displayAvg
+                    _ins.push({
+                      title: `Your peak window is ${canonicalPeakLabel} on ${_pPlat}`,
+                      body: _pAvg > 0
+                        ? `Sessions at this hour average $${_pAvg.toFixed(0)} — ${Math.round(_pAvg / Math.max(avgPerHour, 0.01) * 10) / 10}x your overall rate. Go live during this window to maximise earnings.`
+                        : `This is when your fans are most active. Streaming at this time consistently will grow your peak-hour session count.`,
+                      action: `Schedule your next stream around ${canonicalPeakLabel}`
+                    })
+                  }
+
+                  // 2. Best platform insight
+                  const _topPlatEntry = Object.entries(platformVelocity || {}).filter(([,v]) => v != null).sort((a,b) => b[1]-a[1])[0]
+                  if (_topPlatEntry) {
+                    const [_tp, _tv] = _topPlatEntry
+                    const _tpLabel = _tp.replace('BongaCams','Bonga').replace('MyFreeCams','MFC').replace(/chaturbate/i,'Chaturbate')
+                    _ins.push({
+                      title: `${_tpLabel} is your highest-ROI platform at $${_tv.toFixed(2)}/hr`,
+                      body: Object.keys(platformVelocity).length > 1
+                        ? `Focus your high-effort streams here. Lower-ROI platforms can fill off-peak slots, but ${_tpLabel} should get your peak-hour time.`
+                        : `Your sessions here average $${_tv.toFixed(2)}/hr. Consistent streaming builds compounding fan loyalty — each session raises your baseline.`,
+                      action: `Prioritise ${_tpLabel} for peak-hour streams`
+                    })
+                  }
+
+                  // 3. Session average vs top fan contribution
+                  const _topWhale = whales?.[0]
+                  if (_topWhale && _topWhale.totalUSD > 0) {
+                    const _pct = totalRevenue > 0 ? Math.round((_topWhale.totalUSD / totalRevenue) * 100) : 0
+                    _ins.push({
+                      title: `${_topWhale.username} accounts for ${_pct}% of your lifetime revenue`,
+                      body: _pct >= 30
+                        ? `High fan concentration is a risk — if they churn your earnings drop sharply. Nurture 2–3 backup whales to reduce dependency.`
+                        : `They've spent $${_topWhale.totalUSD.toFixed(0)} lifetime. A personalised message when they've been quiet for 7+ days typically brings them back.`,
+                      action: _topWhale.daysSinceLastTip > 7 ? `Send ${_topWhale.username} a re-engage message now` : `Keep ${_topWhale.username} warm — they tipped recently`
+                    })
+                  } else if (avgPerHour > 0) {
+                    // Fallback: session avg insight
+                    const _sessAvg = sessions.length > 0 ? totalRevenue / sessions.length : 0
+                    _ins.push({
+                      title: `You average $${_sessAvg.toFixed(0)} per session at $${avgPerHour.toFixed(2)}/hr`,
+                      body: `Sessions over 60 minutes earn disproportionately more — longer streams let tipping patterns compound. Aim for at least one 90-min session per week.`,
+                      action: `Try a 90-min stream at your peak hour`
+                    })
+                  }
+
+                  if (_ins.length === 0) return (
+                    <div style={{ fontSize: 13, color: C.muted, padding: '12px 0' }}>Upload more session data to generate personalised insights.</div>
+                  )
+
+                  return (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      {_ins.map((ins, i) => (
+                        <div key={i} style={{ padding: "13px 16px", borderRadius: 10, background: "rgba(34,211,238,0.06)", border: "1px solid rgba(34,211,238,0.15)" }}>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: C.white, marginBottom: 4, lineHeight: 1.4 }}>{ins.title}</div>
+                          <div style={{ fontSize: 12, color: C.text, lineHeight: 1.55, marginBottom: 8 }}>{ins.body}</div>
                           <div style={{ fontSize: 11, color: C.cyan, fontWeight: 600 }}>👉 {ins.action}</div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
+                        </div>
+                      ))}
+                    </div>
+                  )
+                })()}
               </div>
 
             {/* Dependency risk + pre-tip behavior — kept, moved lower */}

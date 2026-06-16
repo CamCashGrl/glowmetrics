@@ -95,7 +95,6 @@ export default function SiteFooter({ sidebarOffset = 0 }) {
           <FooterLink href="/guides/cam-model-analytics">Cam Model Analytics Dashboard</FooterLink>
           <FooterLink href="/guides/how-to-increase-cam-tips">How to Increase Cam Tips</FooterLink>
           <FooterLink href="/guides/bongacams-analytics">BongaCams Analytics</FooterLink>
-          <FooterLink href="/guides/best-time-to-stream-chaturbate">Best Time to Stream on Chaturbate</FooterLink>
           <FooterLink href="/guides/cam-model-top-tippers">Cam Model Top Tipper Tracker</FooterLink>
           <FooterLink href="/guides/cam-model-income-tracker">Cam Model Income Tracker</FooterLink>
           <FooterLink href="/guides/myfreecams-analytics">MyFreeCams Analytics</FooterLink>
@@ -103,8 +102,6 @@ export default function SiteFooter({ sidebarOffset = 0 }) {
           <FooterLink href="/guides/cam-model-revenue-dashboard">Cam Model Revenue Dashboard</FooterLink>
           <FooterLink href="/guides/cam-model-session-breakdown">Cam Model Session Breakdown</FooterLink>
           <FooterLink href="/guides/chaturbate-best-hours">Chaturbate Best Hours to Stream</FooterLink>
-          <FooterLink href="/guides/chaturbate-room-title-generator">Chaturbate Room Title Generator</FooterLink>
-          <FooterLink href="/guides/chaturbate-token-calculator">Chaturbate Token Calculator</FooterLink>
         </div>
 
         {/* Main Pages */}

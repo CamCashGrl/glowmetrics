@@ -22,7 +22,6 @@ const BLOG_POSTS = [
 const GUIDES = [
   { slug: "/guides/chaturbate-earnings-tracker",  title: "Chaturbate Earnings Tracker Guide" },
   { slug: "/guides/cam-model-analytics",          title: "Cam Model Analytics Guide" },
-  { slug: "/guides/best-time-to-stream-chaturbate", title: "Best Time to Stream on Chaturbate" },
 ]
 
 export default function PageFooter({ variant = "landing" }) {
@@ -157,7 +156,6 @@ export default function PageFooter({ variant = "landing" }) {
                 ["/blog/cam-model-earnings", "Earnings Guide"],
                 ["/blog/best-cam-model-tools", "Tools"],
                 ["/guides/cam-model-analytics", "Analytics Guide"],
-                ["/guides/best-time-to-stream-chaturbate", "Best Stream Times"],
               ].map(([href, label]) => (
                 <a key={href} href={href} style={{ fontSize: 12, color: "#475569", textDecoration: "none", transition: "color 0.15s" }}
                   onMouseEnter={e => e.currentTarget.style.color = "#94A3B8"}
