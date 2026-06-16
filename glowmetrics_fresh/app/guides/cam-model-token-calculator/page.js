@@ -1,21 +1,21 @@
 import TokenCalculatorClient from './TokenCalculatorClient'
 
 export const metadata = {
-  title: 'How Much Are Tokens Worth in USD? Chaturbate, BongaCams & MFC',
-  description: 'Find out exactly what your tokens are worth in real dollars. Instant payout calculator for Chaturbate, BongaCams, MyFreeCams and more. Free, no signup.',
+  title: 'Cam Model Token Calculator: Convert Tokens to USD Fast',
+  description: 'Free cam model token calculator for converting Chaturbate, BongaCams, MyFreeCams, and Stripchat tokens into estimated USD.',
   keywords: 'token calculator, chaturbate token calculator, cam model token calculator, tokens to usd, how much are tokens worth, cam model earnings, broadcaster payout rate',
   alternates: { canonical: 'https://www.camcashgrl.com/guides/cam-model-token-calculator' },
   openGraph: {
-    title: 'How Much Are Tokens Worth in USD? Chaturbate, BongaCams & MFC',
-    description: 'Find out exactly what your tokens are worth in real dollars. Instant payout calculator for Chaturbate, BongaCams, MyFreeCams and more. Free, no signup.',
+    title: 'Cam Model Token Calculator: Convert Tokens to USD Fast',
+    description: 'Free cam model token calculator for converting Chaturbate, BongaCams, MyFreeCams, and Stripchat tokens into estimated USD.',
     url: 'https://www.camcashgrl.com/guides/cam-model-token-calculator',
     type: 'article',
     images: [{ url: 'https://www.camcashgrl.com/og-image.png', width: 1200, height: 630 }],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'How Much Are Tokens Worth? Token to USD Calculator',
-    description: 'Find out exactly what your tokens are worth in real dollars. Instant payout calculator for Chaturbate, BongaCams, MyFreeCams and more. Free, no signup.',
+    title: 'Cam Model Token Calculator: Convert Tokens to USD Fast',
+    description: 'Free cam model token calculator for converting Chaturbate, BongaCams, MyFreeCams, and Stripchat tokens into estimated USD.',
   },
   robots: {
     index: true,
@@ -126,10 +126,10 @@ export default function TokenCalculatorPage() {
               ))}
             </div>
             <h1 style={{ fontSize: 48, fontWeight: 900, color: S.white, lineHeight: 1.1, marginBottom: 20, letterSpacing: '-0.03em' }}>
-              How Much Are Your Tokens Worth in USD?
+              Cam Model Token Calculator
             </h1>
             <p style={{ fontSize: 18, lineHeight: 1.7, color: '#CBD5E1', paddingLeft: 20, borderLeft: `3px solid ${S.accent}`, maxWidth: 680 }}>
-              Enter any token amount and instantly see your USD earnings across all major cam platforms. Uses real broadcaster payout rates — not what viewers pay.
+              Enter any token amount and instantly see your USD earnings across all major cam platforms. Uses real broadcaster payout rates — not what viewers pay. See also: <a href="/blog/cam-model-earnings" style={{ color: S.accent, textDecoration: 'none' }}>how cam model earnings actually work</a>.
             </p>
           </div>
 
@@ -141,23 +141,25 @@ export default function TokenCalculatorPage() {
             <div style={{ fontSize: 11, fontWeight: 700, color: S.accent, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 16 }}>In this guide</div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '8px 24px' }}>
               {[
-                ['#what-tokens-are-worth', 'What Tokens Are Actually Worth'],
+                ['#convert', 'Convert Cam Tokens to USD'],
+                ['#chaturbate', 'Chaturbate Token Value'],
+                ['#bongacams', 'BongaCams Token Value'],
+                ['#myfreecams', 'MyFreeCams Token Value'],
                 ['#platform-comparison', 'Platform Payout Comparison'],
                 ['#broadcaster-vs-viewer', 'Broadcaster Rate vs Viewer Rate'],
-                ['#maximize-earnings', 'How to Maximize Your Per-Token Earnings'],
-                ['#hourly-rate', 'Calculating Your Real Hourly Rate'],
+                ['#token-tracking', 'Why Token Tracking Helps You Earn More'],
                 ['#taxes', 'Taxes & Deductions for Cam Models'],
                 ['#tip-menu', 'Building a Tip Menu That Converts'],
-                ['#faq', 'Frequently Asked Questions'],
+                ['#faq', 'Token Calculator FAQ'],
               ].map(([href, label]) => (
                 <a key={href} href={href} style={{ fontSize: 14, color: S.accent, textDecoration: 'none', padding: '4px 0', display: 'block' }}>→ {label}</a>
               ))}
             </div>
           </div>
 
-          {/* SECTION: WHAT TOKENS ARE WORTH */}
-          <section id="what-tokens-are-worth" style={{ marginBottom: 52 }}>
-            <h2 style={{ fontSize: 32, fontWeight: 800, color: S.white, marginBottom: 8, letterSpacing: '-0.02em' }}>What Tokens Are Actually Worth</h2>
+          {/* SECTION: CONVERT */}
+          <section id="convert" style={{ marginBottom: 52 }}>
+            <h2 style={{ fontSize: 32, fontWeight: 800, color: S.white, marginBottom: 8, letterSpacing: '-0.02em' }}>Convert Cam Tokens to USD</h2>
             <div style={{ width: 48, height: 3, background: S.accent, borderRadius: 2, marginBottom: 24 }} />
             <p style={{ fontSize: 16, lineHeight: 1.8, color: S.text, marginBottom: 18 }}>
               When viewers buy tokens, they pay the retail price — but you receive a different, lower amount called the broadcaster rate. Understanding this split is fundamental to knowing your real income.
@@ -185,6 +187,70 @@ export default function TokenCalculatorPage() {
 
             <p style={{ fontSize: 16, lineHeight: 1.8, color: S.text }}>
               Notice CamSoda's $0.055 rate — that extra half-cent adds up. On 10,000 tokens, that's $550 vs $500 on Chaturbate. Over a month of streaming, the difference can be meaningful.
+            </p>
+          </section>
+
+          {/* SECTION: CHATURBATE TOKEN VALUE */}
+          <section id="chaturbate" style={{ marginBottom: 52 }}>
+            <h2 style={{ fontSize: 32, fontWeight: 800, color: S.white, marginBottom: 8, letterSpacing: '-0.02em' }}>Chaturbate Token Value</h2>
+            <div style={{ width: 48, height: 3, background: S.accent, borderRadius: 2, marginBottom: 24 }} />
+            <p style={{ fontSize: 16, lineHeight: 1.8, color: S.text, marginBottom: 18 }}>
+              Chaturbate pays models <strong style={{ color: S.white }}>$0.05 per token</strong> at the standard broadcaster rate. Viewers purchase tokens at approximately $0.10 each, meaning Chaturbate keeps 50% and the model receives 50%.
+            </p>
+            <div style={{ background: S.surface, border: `1px solid ${S.accentBorder}`, borderRadius: 14, padding: '24px 28px', marginBottom: 24 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 14 }}>
+                {[[100,'$5'],[500,'$25'],[1000,'$50'],[2000,'$100'],[5000,'$250'],[10000,'$500']].map(([t,u]) => (
+                  <div key={t} style={{ textAlign: 'center', padding: '12px 8px', borderRadius: 10, background: 'rgba(245,158,11,0.07)', border: '1px solid rgba(245,158,11,0.15)' }}>
+                    <div style={{ fontSize: 13, color: S.muted, marginBottom: 4 }}>{t.toLocaleString()} tokens</div>
+                    <div style={{ fontSize: 22, fontWeight: 800, color: S.gold }}>{u}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <p style={{ fontSize: 16, lineHeight: 1.8, color: S.text }}>
+              To track your Chaturbate token earnings over time and see how they translate to $/hr, use the <a href="/guides/chaturbate-token-tracker" style={{ color: S.accent, textDecoration: 'none' }}>Chaturbate token tracker</a>. For a full breakdown of what affects hourly rates, see the <a href="/blog/how-much-do-chaturbate-models-make" style={{ color: S.accent, textDecoration: 'none' }}>Chaturbate earnings guide</a>.
+            </p>
+          </section>
+
+          {/* SECTION: BONGACAMS TOKEN VALUE */}
+          <section id="bongacams" style={{ marginBottom: 52 }}>
+            <h2 style={{ fontSize: 32, fontWeight: 800, color: S.white, marginBottom: 8, letterSpacing: '-0.02em' }}>BongaCams Token Value</h2>
+            <div style={{ width: 48, height: 3, background: S.accent, borderRadius: 2, marginBottom: 24 }} />
+            <p style={{ fontSize: 16, lineHeight: 1.8, color: S.text, marginBottom: 18 }}>
+              BongaCams pays <strong style={{ color: S.white }}>$0.05 per token</strong> for models with a complete profile. Incomplete profiles receive approximately $0.025 per token — half the rate. Completing your profile (photos, bio, verification) is the single easiest way to double your BongaCams income.
+            </p>
+            <div style={{ background: S.surface, border: `1px solid rgba(139,92,246,0.3)`, borderRadius: 14, padding: '24px 28px', marginBottom: 24 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 14 }}>
+                {[[100,'$5'],[500,'$25'],[1000,'$50'],[2000,'$100'],[5000,'$250'],[10000,'$500']].map(([t,u]) => (
+                  <div key={t} style={{ textAlign: 'center', padding: '12px 8px', borderRadius: 10, background: 'rgba(139,92,246,0.07)', border: '1px solid rgba(139,92,246,0.15)' }}>
+                    <div style={{ fontSize: 13, color: S.muted, marginBottom: 4 }}>{t.toLocaleString()} tokens</div>
+                    <div style={{ fontSize: 22, fontWeight: 800, color: '#8B5CF6' }}>{u}</div>
+                  </div>
+                ))}
+              </div>
+              <p style={{ fontSize: 13, color: S.muted, marginTop: 14, marginBottom: 0 }}>Values shown for complete-profile rate ($0.05/token). Incomplete profiles earn half.</p>
+            </div>
+          </section>
+
+          {/* SECTION: MYFREECAMS TOKEN VALUE */}
+          <section id="myfreecams" style={{ marginBottom: 52 }}>
+            <h2 style={{ fontSize: 32, fontWeight: 800, color: S.white, marginBottom: 8, letterSpacing: '-0.02em' }}>MyFreeCams Token Value</h2>
+            <div style={{ width: 48, height: 3, background: S.accent, borderRadius: 2, marginBottom: 24 }} />
+            <p style={{ fontSize: 16, lineHeight: 1.8, color: S.text, marginBottom: 18 }}>
+              MyFreeCams pays approximately <strong style={{ color: S.white }}>$0.05 per token</strong> (about $5.00 per 100 tokens). The exact rate can vary slightly based on model level and promotional periods. MFC has a strong North American audience and is especially popular with models who prefer a freemium-style room format.
+            </p>
+            <div style={{ background: S.surface, border: `1px solid rgba(59,130,246,0.3)`, borderRadius: 14, padding: '24px 28px', marginBottom: 24 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 14 }}>
+                {[[100,'$5'],[500,'$25'],[1000,'$50'],[2000,'$100'],[5000,'$250'],[10000,'$500']].map(([t,u]) => (
+                  <div key={t} style={{ textAlign: 'center', padding: '12px 8px', borderRadius: 10, background: 'rgba(59,130,246,0.07)', border: '1px solid rgba(59,130,246,0.15)' }}>
+                    <div style={{ fontSize: 13, color: S.muted, marginBottom: 4 }}>{t.toLocaleString()} tokens</div>
+                    <div style={{ fontSize: 22, fontWeight: 800, color: '#3B82F6' }}>{u}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <p style={{ fontSize: 16, lineHeight: 1.8, color: S.text }}>
+              To compare what you earn per hour across MFC and other platforms, the <a href="/guides/cam-model-income-tracker" style={{ color: S.accent, textDecoration: 'none' }}>cam model income tracker</a> lets you log earnings by platform and session to find your most profitable site.
             </p>
           </section>
 
@@ -245,10 +311,13 @@ export default function TokenCalculatorPage() {
             </p>
           </section>
 
-          {/* SECTION: MAXIMIZE EARNINGS */}
-          <section id="maximize-earnings" style={{ marginBottom: 52 }}>
-            <h2 style={{ fontSize: 32, fontWeight: 800, color: S.white, marginBottom: 8, letterSpacing: '-0.02em' }}>How to Maximize Your Per-Token Earnings</h2>
+          {/* SECTION: TOKEN TRACKING */}
+          <section id="token-tracking" style={{ marginBottom: 52 }}>
+            <h2 style={{ fontSize: 32, fontWeight: 800, color: S.white, marginBottom: 8, letterSpacing: '-0.02em' }}>Why Token Tracking Helps You Earn More</h2>
             <div style={{ width: 48, height: 3, background: S.accent, borderRadius: 2, marginBottom: 24 }} />
+            <p style={{ fontSize: 16, lineHeight: 1.8, color: S.text, marginBottom: 18 }}>
+              Converting tokens to USD tells you what a session was worth. But knowing <em>when</em> those tokens came in — and which fans sent them — is what actually moves your income up. The <a href="/guides/cam-model-income-tracker" style={{ color: S.accent, textDecoration: 'none' }}>cam model income tracker</a> and <a href="/guides/chaturbate-token-tracker" style={{ color: S.accent, textDecoration: 'none' }}>Chaturbate token tracker</a> log this data across sessions so patterns become visible over time. For a full picture of how earnings stack up, read the <a href="/blog/cam-model-earnings" style={{ color: S.accent, textDecoration: 'none' }}>cam model earnings guide</a>.
+            </p>
             <p style={{ fontSize: 16, lineHeight: 1.8, color: S.text, marginBottom: 24 }}>
               You can't control the platform's base rate — but you can significantly increase how many tokens flow in per hour:
             </p>
@@ -352,7 +421,7 @@ export default function TokenCalculatorPage() {
 
           {/* FAQ SECTION */}
           <section id="faq" style={{ marginBottom: 52 }}>
-            <h2 style={{ fontSize: 32, fontWeight: 800, color: S.white, marginBottom: 8, letterSpacing: '-0.02em' }}>Frequently Asked Questions</h2>
+            <h2 style={{ fontSize: 32, fontWeight: 800, color: S.white, marginBottom: 8, letterSpacing: '-0.02em' }}>Token Calculator FAQ</h2>
             <div style={{ width: 48, height: 3, background: S.accent, borderRadius: 2, marginBottom: 28 }} />
             <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               {faqSchema.mainEntity.map(({ name, acceptedAnswer }) => (
@@ -373,10 +442,10 @@ export default function TokenCalculatorPage() {
             <h2 style={{ fontSize: 24, fontWeight: 800, color: S.white, marginBottom: 20 }}>Related Tools & Guides</h2>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 12 }}>
               {[
-                { href: '/guides/cam-model-room-title-generator', label: 'Room Title Generator', desc: 'Generate high-converting room titles instantly' },
-                { href: '/guides/chaturbate-earnings-tracker', label: 'Earnings Tracker Guide', desc: 'Track and analyze your total cam income' },
+                { href: '/guides/chaturbate-token-tracker', label: 'Chaturbate Token Tracker', desc: 'Log and track tokens earned across sessions' },
+                { href: '/guides/cam-model-income-tracker', label: 'Income Tracker', desc: 'Track $/hr, top fans, and session breakdowns' },
                 { href: '/guides/chaturbate-best-hours', label: 'Best Hours to Stream', desc: 'Find your personal peak streaming times' },
-                { href: '/demo', label: 'Try CamCash Demo', desc: 'See your full analytics dashboard in action' },
+                { href: '/blog/cam-model-earnings', label: 'Cam Model Earnings Guide', desc: 'How much models make and why it changes' },
               ].map(({ href, label, desc }) => (
                 <a key={href} href={href} style={{ background: S.card, border: `1px solid ${S.border}`, borderRadius: 14, padding: '18px 20px', textDecoration: 'none', display: 'block', transition: 'border-color 0.15s' }}>
                   <div style={{ fontSize: 14, fontWeight: 700, color: S.accent, marginBottom: 6 }}>{label}</div>
