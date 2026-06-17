@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
-import { parseCSV, aggregateRows as runEngine } from "../../lib/analytics"
+import { parseCSV, aggregateRows as runEngine, calcMedian } from "../../lib/analytics"
 
 let track = (event, props) => {}
 try { track = require("@vercel/analytics").track } catch (e) {}
@@ -734,11 +734,12 @@ const handleCSV = async (file, forcePlatform = null) => {
       const h = new Date(s.startTime).getUTCHours()
       return bh !== null && Math.abs(h - bh) <= 1
     })
-    const peakAvg = sessionsAtPeak.length >= 2
-      ? sessionsAtPeak.reduce((s, x) => s + x.totalUSD, 0) / sessionsAtPeak.length
-      : (bestHour?.avg || sessionAvg)
-    const predictionLow = Math.round(peakAvg * 0.6)
-    const predictionHigh = Math.round(peakAvg * 1.5)
+    const dailyTotalsForPeakHour = sessionsAtPeak.length >= 2
+      ? sessionsAtPeak.map(s => s.totalUSD)
+      : (bestHour?.avg ? [bestHour.avg] : [sessionAvg])
+    const forecastMedian = calcMedian(dailyTotalsForPeakHour)
+    const forecastLow = Math.max(0, Math.round(forecastMedian * 0.6))
+    const forecastHigh = Math.round(forecastMedian * 1.4)
 
     // Re-engage list — fans who tip 50+ tokens avg per session, appear in 2+ streams, and are overdue
     // "Every 2-3 streams" = session-level frequency, not tip count
@@ -812,7 +813,7 @@ const handleCSV = async (file, forcePlatform = null) => {
       }
     })
     return { todayName, bhLabel, bh, atPeak, hoursUntilPeak, displayPlat, displayAvg,
-      isBestDay, bestDay, sessionAvg, peakAvg, predictionLow, predictionHigh,
+      isBestDay, bestDay, sessionAvg, forecastMedian, forecastLow, forecastHigh,
       reengageFans, likelyOnline, platTodayStats }
   }
 
