@@ -28,6 +28,21 @@ function AuthPanel({
         <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 36, height: 36, borderRadius: 10, background: "linear-gradient(135deg,#22D3EE,#EC4899)", fontSize: 17, fontWeight: 900, color: "white", marginBottom: 8, boxShadow: "0 0 16px rgba(34,211,238,0.35)" }}>$</div>
         <div style={{ fontSize: 15, fontWeight: 800, color: "white", letterSpacing: -0.3 }}>CamCash</div>
         <div style={{ fontSize: 11, color: "#475569", marginTop: 2 }}>{isSignUp ? "Free during beta · No credit card" : "Welcome back 💋"}</div>
+        {isSignUp && (
+          <div style={{
+            display: 'inline-block',
+            background: 'rgba(168,85,247,0.15)',
+            border: '1px solid rgba(168,85,247,0.4)',
+            borderRadius: '100px',
+            padding: '4px 16px',
+            fontSize: '13px',
+            fontWeight: '600',
+            color: '#a855f7',
+            marginTop: '10px',
+          }}>
+            ✨ Free forever · No credit card needed
+          </div>
+        )}
       </div>
       <div style={{ display: "flex", borderRadius: 8, overflow: "hidden", border: "1px solid rgba(255,255,255,0.07)", marginBottom: 16 }}>
         {[["Sign Up", true], ["Log In", false]].map(([label, val]) => (

@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { supabase } from '../../../lib/supabase'
 
-export default function ChaturbateTokenConnector({ user, onConnected }) {
+export default function ChaturbateTokenConnector({ user, onConnected, broadcasterType }) {
   const [username, setUsername] = useState('')
   const [statsToken, setStatsToken] = useState('')
   const [eventsToken, setEventsToken] = useState('')
@@ -26,6 +26,7 @@ export default function ChaturbateTokenConnector({ user, onConnected }) {
         id: user.id,
         chaturbate_username:    username.trim(),
         chaturbate_stats_token: statsToken.trim(),
+        broadcaster_type:       broadcasterType || 'female',
         ...(eventsToken.trim() ? { chaturbate_api_token: eventsToken.trim() } : {}),
       })
     setLoading(false)
