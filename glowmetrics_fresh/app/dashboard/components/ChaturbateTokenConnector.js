@@ -2,10 +2,18 @@
 import { useState } from 'react'
 import { supabase } from '../../../lib/supabase'
 
+const BROADCASTER_TYPES = [
+  { value: 'female', label: '👩 Female' },
+  { value: 'male', label: '👨 Male' },
+  { value: 'trans', label: '⚧ Trans' },
+  { value: 'couple', label: '👫 Couple' },
+]
+
 export default function ChaturbateTokenConnector({ user, onConnected }) {
   const [username, setUsername] = useState('')
   const [statsToken, setStatsToken] = useState('')
   const [eventsToken, setEventsToken] = useState('')
+  const [broadcasterType, setBroadcasterType] = useState('female')
   const [loading, setLoading] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [error, setError] = useState(null)
@@ -26,6 +34,7 @@ export default function ChaturbateTokenConnector({ user, onConnected }) {
         id: user.id,
         chaturbate_username:    username.trim(),
         chaturbate_stats_token: statsToken.trim(),
+        broadcaster_type:       broadcasterType,
         ...(eventsToken.trim() ? { chaturbate_api_token: eventsToken.trim() } : {}),
       })
     setLoading(false)
@@ -135,6 +144,29 @@ export default function ChaturbateTokenConnector({ user, onConnected }) {
           <label style={labelStyle}>Your Chaturbate username</label>
           <input type="text" value={username} onChange={e => setUsername(e.target.value)}
             placeholder="your_username" autoComplete="off" style={inputStyle} />
+        </div>
+
+        {/* Broadcaster type */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <label style={labelStyle}>Broadcaster type</label>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {BROADCASTER_TYPES.map(bt => (
+              <button
+                key={bt.value}
+                type="button"
+                onClick={() => setBroadcasterType(bt.value)}
+                style={{
+                  flex: 1, padding: '8px 4px', borderRadius: 8, fontSize: 12, fontWeight: 700,
+                  cursor: 'pointer', transition: 'all 0.15s',
+                  background: broadcasterType === bt.value ? 'rgba(124,92,255,0.2)' : 'rgba(255,255,255,0.04)',
+                  border: broadcasterType === bt.value ? '1px solid rgba(124,92,255,0.5)' : '1px solid rgba(255,255,255,0.1)',
+                  color: broadcasterType === bt.value ? '#a78bfa' : 'rgba(255,255,255,0.45)',
+                }}
+              >
+                {bt.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* ── SECTION 1: Stats API Token ── */}
