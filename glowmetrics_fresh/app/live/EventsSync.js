@@ -70,7 +70,7 @@ export default function EventsSync({ onNewTip }) {
       gap: '8px',
       marginBottom: '16px',
     }}>
-      ⚡ <span>Connect your <a href="/onboarding" style={{ color: '#22d3ee', textDecoration: 'underline' }}>Chaturbate Events API token</a> for live tip capture</span>
+      ⚡ <span>Connect your <a href="/dashboard?tab=upload" style={{ color: '#22d3ee', textDecoration: 'underline' }}>Chaturbate Events API token</a> for live tip capture</span>
     </div>
   )
 

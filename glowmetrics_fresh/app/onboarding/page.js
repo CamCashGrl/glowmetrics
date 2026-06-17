@@ -3,6 +3,7 @@ import { useEffect, useState, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
 import { T } from '../../lib/tracking'
+import ChaturbateTokenConnector from '../dashboard/components/ChaturbateTokenConnector'
 
 const C = {
   bg: "#05070f", card: "#121826", border: "#1e2d45",
@@ -51,6 +52,7 @@ export default function OnboardingPage() {
   const router = useRouter()
   const [user, setUser] = useState(null)
   const [checking, setChecking] = useState(true)
+  const [step, setStep] = useState('csv') // 'csv' | 'chaturbate_token'
   const [selectedPlatform, setSelectedPlatform] = useState(0)
   const [uploading, setUploading] = useState(false)
   const [uploadDone, setUploadDone] = useState(false)
@@ -105,6 +107,7 @@ export default function OnboardingPage() {
       T.csvUploadCompleted(result?.inserted || 0, 0)
       setUploadResult(result)
       setUploadDone(true)
+      setStep('chaturbate_token')
     } catch (err) {
       setUploadError(err.message || "Something went wrong")
     } finally {
@@ -332,7 +335,34 @@ export default function OnboardingPage() {
               )}
             </div>
 
+            {/* CHATURBATE LIVE SYNC STEP */}
+            {step === 'chaturbate_token' ? (
+              <div style={{ marginBottom: 24, animation: "fadeUp 0.4s ease both" }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: C.cyan, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 14 }}>
+                  Step 2 of 2
+                </div>
+                <div style={{ fontSize: 18, fontWeight: 800, color: C.white, marginBottom: 6 }}>
+                  Connect Chaturbate Live Sync <span style={{ fontSize: 13, fontWeight: 500, color: C.muted }}>(Optional)</span>
+                </div>
+                <p style={{ fontSize: 13, color: C.muted, marginBottom: 20, lineHeight: 1.65 }}>
+                  Get live tips pushed to your dashboard while you stream — no extension needed.
+                </p>
+                <ChaturbateTokenConnector user={user} onConnected={() => goToDashboard()} />
+                <button
+                  onClick={goToDashboard}
+                  style={{
+                    marginTop: 14, background: "none", border: "none",
+                    color: C.muted, fontSize: 13, cursor: "pointer",
+                    textDecoration: "underline", padding: 0
+                  }}
+                >
+                  Skip for now →
+                </button>
+              </div>
+            ) : null}
+
             {/* BOTTOM TWO OPTIONS */}
+            {step === 'csv' && (
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 32, animation: "fadeUp 0.4s ease 0.15s both" }}>
               <div style={{ padding: 22, borderRadius: 16, background: "rgba(15,20,32,0.6)", border: "1px solid rgba(168,85,247,0.2)" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
@@ -368,6 +398,7 @@ export default function OnboardingPage() {
                 </button>
               </div>
             </div>
+            )}
           </>
         )}
 

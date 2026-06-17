@@ -8,6 +8,7 @@ import { computeRevenueVelocity, computeLiveComparison } from "../../lib/analyti
 import { detectSessionPhase, PHASES, getRecoveryActions, getGoalStrategy } from "../../lib/analytics/sessionPhase"
 import { computeOpportunityScore, computeStreamHealth } from "../../lib/analytics/opportunity"
 import CSVImport from "./CSVImport"
+import ChaturbateTokenConnector from './components/ChaturbateTokenConnector'
 import Sidebar from "./Sidebar"
 import SiteFooter from "../components/SiteFooter"
 import FeedbackWidget from "../components/FeedbackWidget"
@@ -5624,6 +5625,15 @@ const handleCSV = async (file, forcePlatform = null) => {
             <div style={{ padding: "12px 16px", borderRadius: 10, background: "rgba(34,211,238,0.05)", border: "1px solid rgba(34,211,238,0.15)", fontSize: 12, color: C.muted }}>
               <strong style={{ color: C.cyan }}>CSV not loading?</strong> Try selecting your platform from the dropdown above, then re-upload. For Chaturbate: export from Stats & Data → Token Stats. For BongaCams: export from Reports.
             </div>
+
+            {user && (
+              <div style={{ marginTop: 28 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 14 }}>
+                  Live Tip Sync
+                </div>
+                <ChaturbateTokenConnector user={user} onConnected={() => { /* live sync now active */ }} />
+              </div>
+            )}
           </div>
         )}
 
