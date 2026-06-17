@@ -55,6 +55,7 @@ export default function OnboardingPage() {
   const [step, setStep] = useState('csv') // 'csv' | 'chaturbate_token' | 'done'
   const [tokenConnected, setTokenConnected] = useState(false)
   const [eventsConnected, setEventsConnected] = useState(false)
+  const [broadcasterType, setBroadcasterType] = useState('female')
   const [selectedPlatform, setSelectedPlatform] = useState(0)
   const [uploading, setUploading] = useState(false)
   const [uploadDone, setUploadDone] = useState(false)
@@ -170,13 +171,41 @@ export default function OnboardingPage() {
             margin: "0 auto 20px",
             boxShadow: "0 12px 32px rgba(34,211,238,0.25)"
           }}>$</div>
-          <h1 style={{ fontSize: 32, fontWeight: 900, color: C.white, marginBottom: 10, lineHeight: 1.2 }}>
+          <h1 style={{ fontSize: 32, fontWeight: 900, color: C.white, marginBottom: 6, lineHeight: 1.2 }}>
             Let's get your stats loaded 💰
           </h1>
+          <p style={{ fontSize: 13, color: "#64748b", marginTop: 4, marginBottom: 8 }}>
+            Takes about 2 minutes
+          </p>
           <p style={{ fontSize: 15, color: C.muted, maxWidth: 440, margin: "0 auto", lineHeight: 1.7 }}>
             Watch the video below, then upload your CSV — your full dashboard unlocks instantly.
           </p>
         </div>
+
+        {/* PROGRESS BAR */}
+        {(() => {
+          const steps = ['Stats', 'Tips', 'Done']
+          const currentStepIndex = step === 'chaturbate_token' ? 0 : step === 'csv' ? 1 : 2
+          return (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '32px', justifyContent: 'center' }}>
+              {steps.map((s, i) => (
+                <div key={s} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{
+                    width: '28px', height: '28px', borderRadius: '50%',
+                    background: i <= currentStepIndex ? '#a855f7' : 'rgba(255,255,255,0.1)',
+                    color: i <= currentStepIndex ? '#fff' : '#64748b',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: '13px', fontWeight: '700'
+                  }}>{i + 1}</div>
+                  <span style={{ fontSize: '13px', color: i <= currentStepIndex ? '#f1f5f9' : '#64748b' }}>{s}</span>
+                  {i < steps.length - 1 && (
+                    <div style={{ width: '40px', height: '1px', background: i < currentStepIndex ? '#a855f7' : 'rgba(255,255,255,0.1)' }} />
+                  )}
+                </div>
+              ))}
+            </div>
+          )
+        })()}
 
         {/* SUCCESS STATE */}
         {uploadDone && uploadResult && step !== 'done' && (
@@ -349,10 +378,82 @@ export default function OnboardingPage() {
                 <p style={{ fontSize: 13, color: C.muted, marginBottom: 20, lineHeight: 1.65 }}>
                   Get live tips pushed to your dashboard while you stream — no extension needed.
                 </p>
+
+                {/* Broadcaster type selector */}
+                {(() => {
+                  const types = [
+                    { id: 'female', label: 'Female', emoji: '👩' },
+                    { id: 'male',   label: 'Male',   emoji: '👨' },
+                    { id: 'trans',  label: 'Trans',  emoji: '🏳️‍⚧️' },
+                    { id: 'couple', label: 'Couple', emoji: '👫' },
+                  ]
+                  return (
+                    <div style={{ marginBottom: '24px' }}>
+                      <label style={{ fontSize: '13px', color: '#94a3b8', marginBottom: '8px', display: 'block' }}>
+                        I broadcast as
+                      </label>
+                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                        {types.map(t => (
+                          <button
+                            key={t.id}
+                            type="button"
+                            onClick={() => setBroadcasterType(t.id)}
+                            style={{
+                              padding: '8px 16px', borderRadius: '100px',
+                              border: broadcasterType === t.id ? '1px solid #a855f7' : '1px solid rgba(255,255,255,0.1)',
+                              background: broadcasterType === t.id ? 'rgba(168,85,247,0.15)' : 'transparent',
+                              color: broadcasterType === t.id ? '#a855f7' : '#94a3b8',
+                              fontSize: '13px', fontWeight: '600', cursor: 'pointer'
+                            }}
+                          >
+                            {t.emoji} {t.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })()}
+
+                {/* Direct link to token page */}
+                <a
+                  href="https://chaturbate.com/statsapi/authtoken/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '8px',
+                    background: 'rgba(168,85,247,0.15)',
+                    border: '1px solid rgba(168,85,247,0.3)',
+                    borderRadius: '10px', padding: '12px 16px',
+                    color: '#a855f7', textDecoration: 'none',
+                    fontSize: '14px', fontWeight: '600',
+                    marginBottom: '20px'
+                  }}
+                >
+                  🔗 Open token page (direct link)
+                  <span style={{ fontSize: '11px', color: '#64748b' }}>chaturbate.com/statsapi/authtoken/</span>
+                </a>
+
                 <ChaturbateTokenConnector
                   user={user}
+                  broadcasterType={broadcasterType}
                   onConnected={({ hasEventsToken } = {}) => { setTokenConnected(true); if (hasEventsToken) setEventsConnected(true); setStep('done') }}
                 />
+
+                {/* Trust section */}
+                <div style={{
+                  marginTop: '24px', padding: '16px',
+                  borderRadius: '12px',
+                  background: 'rgba(255,255,255,0.03)',
+                  border: '1px solid rgba(255,255,255,0.06)'
+                }}>
+                  <p style={{ fontSize: '12px', color: '#64748b', margin: '0 0 8px', fontWeight: '600' }}>
+                    🔒 What CamCash can read with this token:
+                  </p>
+                  <p style={{ fontSize: '12px', color: '#64748b', margin: '0 0 4px' }}>✅ Your tip history and token amounts</p>
+                  <p style={{ fontSize: '12px', color: '#64748b', margin: '0 0 4px' }}>✅ Your stream session times</p>
+                  <p style={{ fontSize: '12px', color: '#64748b', margin: '0' }}>❌ Cannot send tips, change settings, or act on your account</p>
+                </div>
+
                 <button
                   onClick={() => setStep('done')}
                   style={{
