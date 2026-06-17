@@ -68,6 +68,14 @@ export default function ChaturbateOnboardingPage() {
         return
       }
 
+      // Check if a profile row exists for this user
+      const { data: existing } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('id', user.id)
+        .single()
+      console.log('[handleConnect] existing profile row:', existing)
+
       console.log('[handleConnect] saving profile for user:', user.id, {
         chaturbate_username: username.trim(),
         chaturbate_token_type: 'stats',
@@ -76,13 +84,13 @@ export default function ChaturbateOnboardingPage() {
 
       const { data, error } = await supabase
         .from('profiles')
-        .update({
+        .upsert({
+          id: user.id,
           chaturbate_username: username.trim(),
           chaturbate_stats_token: statsToken.trim(),
           chaturbate_token_type: 'stats',
           broadcaster_type: broadcasterType,
         })
-        .eq('id', user.id)
         .select()
 
       if (error) throw error
