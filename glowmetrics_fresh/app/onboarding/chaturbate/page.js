@@ -13,14 +13,22 @@ export default function ChaturbateOnboardingPage() {
   const [username, setUsername] = useState('')
   const [statsToken, setStatsToken] = useState('')
   const [tokenHelpOpen, setTokenHelpOpen] = useState(false)
+  const [subStep, setSubStep] = useState(1) // 1=broadcaster type, 2=username, 3=token
   const [errors, setErrors] = useState({})
   const [loading, setLoading] = useState(false)
+  const [authLoading, setAuthLoading] = useState(true)
   const [user, setUser] = useState(null)
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) setUser(user)
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) setUser(session.user)
+      setAuthLoading(false)
     })
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) setUser(session.user)
+      else setUser(null)
+    })
+    return () => subscription.unsubscribe()
   }, [])
 
   // Auto-extract token from a pasted URL like chaturbate.com/statsapi/?username=...&token=abc
@@ -56,10 +64,17 @@ export default function ChaturbateOnboardingPage() {
     setLoading(true)
     try {
       if (!user) {
-        router.push('/login')
+        setErrors({ submit: 'Session expired. Please refresh the page and try again.' })
         return
       }
-      const { error } = await supabase
+
+      console.log('[handleConnect] saving profile for user:', user.id, {
+        chaturbate_username: username.trim(),
+        chaturbate_token_type: 'stats',
+        broadcaster_type: broadcasterType,
+      })
+
+      const { data, error } = await supabase
         .from('profiles')
         .update({
           chaturbate_username: username.trim(),
@@ -68,8 +83,16 @@ export default function ChaturbateOnboardingPage() {
           broadcaster_type: broadcasterType,
         })
         .eq('id', user.id)
+        .select()
 
       if (error) throw error
+
+      if (!data || data.length === 0) {
+        setErrors({ submit: 'Profile save failed silently. Please try again.' })
+        return
+      }
+
+      console.log('[handleConnect] profile saved:', data)
 
       // Trigger initial stats sync
       fetch('/api/chaturbate/stats-sync', {
@@ -105,6 +128,15 @@ export default function ChaturbateOnboardingPage() {
     { value: 'trans', label: 'Trans' },
     { value: 'couple', label: 'Couple' },
   ]
+
+  if (authLoading) {
+    return (
+      <div style={{ minHeight: '100vh', background: '#080b14', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ width: 32, height: 32, borderRadius: '50%', border: '2px solid #1e2536', borderTopColor: '#00d4c8', animation: 'spin 0.8s linear infinite' }} />
+        <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+      </div>
+    )
+  }
 
   return (
     <>
@@ -528,107 +560,154 @@ export default function ChaturbateOnboardingPage() {
           {/* ── STEP 1 ── */}
           {step === 1 && (
             <>
-              <div className="ob-eyebrow">Step 1 of 3 · Connect Chaturbate</div>
-              <div className="ob-heading">Start tracking your streams</div>
+              {/* ── SUB-STEP 1a: Broadcaster type ── */}
+              {subStep === 1 && (
+                <>
+                  <div className="ob-eyebrow">Step 1a of 3 · Connect Chaturbate</div>
+                  <div className="ob-heading">Start tracking your streams</div>
 
-              {/* Broadcaster type */}
-              <div className="ob-section-label">I broadcast as</div>
-              <div className="ob-type-grid">
-                {BROADCASTER_TYPES.map((t) => (
+                  <div className="ob-section-label">I broadcast as</div>
+                  <div className="ob-type-grid">
+                    {BROADCASTER_TYPES.map((t) => (
+                      <button
+                        key={t.value}
+                        className={`ob-type-btn ${broadcasterType === t.value ? 'selected' : ''}`}
+                        onClick={() => setBroadcasterType(t.value)}
+                      >
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
+
                   <button
-                    key={t.value}
-                    className={`ob-type-btn ${broadcasterType === t.value ? 'selected' : ''}`}
-                    onClick={() => setBroadcasterType(t.value)}
+                    className="ob-btn-primary"
+                    onClick={() => setSubStep(2)}
                   >
-                    {t.label}
+                    Continue →
                   </button>
-                ))}
-              </div>
-
-              {/* Username */}
-              <div className="ob-field">
-                <label className="ob-label">Chaturbate username</label>
-                <input
-                  className={`ob-input ${errors.username ? 'error' : ''}`}
-                  placeholder="your_username"
-                  value={username}
-                  onChange={(e) => {
-                    setUsername(e.target.value)
-                    if (errors.username) setErrors((p) => ({ ...p, username: null }))
-                  }}
-                  autoComplete="off"
-                  spellCheck={false}
-                />
-                {errors.username && <div className="ob-error-msg">{errors.username}</div>}
-              </div>
-
-              {/* Stats token */}
-              <div className="ob-field">
-                <label className="ob-label">Stats API Token</label>
-                <input
-                  className={`ob-input ${errors.statsToken ? 'error' : ''}`}
-                  placeholder="Paste your Stats API token here"
-                  value={statsToken}
-                  onChange={(e) => {
-                    parseTokenInput(e.target.value)
-                    if (errors.statsToken) setErrors((p) => ({ ...p, statsToken: null }))
-                  }}
-                  autoComplete="off"
-                  spellCheck={false}
-                />
-                {errors.statsToken && <div className="ob-error-msg">{errors.statsToken}</div>}
-              </div>
-
-              {/* Token help */}
-              <button
-                className="ob-help-toggle"
-                onClick={() => setTokenHelpOpen((o) => !o)}
-              >
-                <span className={`ob-help-chevron ${tokenHelpOpen ? 'open' : ''}`}>▶</span>
-                How to find your Stats API token
-              </button>
-
-              {tokenHelpOpen && (
-                <div className="ob-help-body">
-                  <ul className="ob-help-list">
-                    <li><span className="ob-help-num">1.</span> Log in to Chaturbate with your broadcaster account.</li>
-                    <li><span className="ob-help-num">2.</span> Go to <strong style={{color:'#c8d0e8'}}>chaturbate.com/statsapi/authtoken/</strong></li>
-                    <li><span className="ob-help-num">3.</span> Find the <strong style={{color:'#c8d0e8'}}>Stats API</strong> section and click <strong style={{color:'#c8d0e8'}}>Generate Token</strong> if empty.</li>
-                    <li><span className="ob-help-num">4.</span> Copy the token or the full URL and paste it above.</li>
-                  </ul>
-                  <a
-                    href="https://chaturbate.com/statsapi/authtoken/"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="ob-help-link"
-                  >
-                    Open token page ↗
-                  </a>
-                </div>
+                </>
               )}
 
-              {/* CTA */}
-              {errors.submit && <div className="ob-submit-error">{errors.submit}</div>}
+              {/* ── SUB-STEP 1b: Username ── */}
+              {subStep === 2 && (
+                <>
+                  <div className="ob-eyebrow">Step 1b of 3 · Connect Chaturbate</div>
+                  <div className="ob-heading">Your Chaturbate username</div>
 
-              <button
-                className="ob-btn-primary"
-                onClick={handleConnect}
-                disabled={loading}
-              >
-                {loading ? 'Connecting…' : 'Connect Chaturbate →'}
-              </button>
+                  <div className="ob-field">
+                    <label className="ob-label">Chaturbate username</label>
+                    <input
+                      className={`ob-input ${errors.username ? 'error' : ''}`}
+                      placeholder="your_username"
+                      value={username}
+                      onChange={(e) => {
+                        setUsername(e.target.value)
+                        if (errors.username) setErrors((p) => ({ ...p, username: null }))
+                      }}
+                      autoComplete="off"
+                      spellCheck={false}
+                      autoFocus
+                    />
+                    {errors.username && <div className="ob-error-msg">{errors.username}</div>}
+                  </div>
 
-              <div className="ob-lock-text">🔒 Your token is stored securely and never shared.</div>
+                  <button
+                    className="ob-btn-primary"
+                    onClick={() => {
+                      if (!username.trim()) {
+                        setErrors((p) => ({ ...p, username: 'Enter your Chaturbate username first.' }))
+                        return
+                      }
+                      setErrors((p) => ({ ...p, username: null }))
+                      setSubStep(3)
+                    }}
+                  >
+                    Continue →
+                  </button>
 
-              <div className="ob-secondary-links">
-                <button className="ob-link-btn" onClick={handleSkipToCSV}>
-                  Upload CSV instead
-                </button>
-                <span style={{ color: '#1e2536' }}>·</span>
-                <button className="ob-link-btn" onClick={handleSkipToken}>
-                  I'll connect my token later
-                </button>
-              </div>
+                  <div className="ob-secondary-links" style={{ marginTop: 12 }}>
+                    <button className="ob-link-btn" onClick={() => setSubStep(1)}>← Back</button>
+                  </div>
+                </>
+              )}
+
+              {/* ── SUB-STEP 1c: Stats API token ── */}
+              {subStep === 3 && (
+                <>
+                  <div className="ob-eyebrow">Step 1c of 3 · Connect Chaturbate</div>
+                  <div className="ob-heading">Your Stats API token</div>
+
+                  <div className="ob-field">
+                    <label className="ob-label">Stats API Token</label>
+                    <input
+                      className={`ob-input ${errors.statsToken ? 'error' : ''}`}
+                      placeholder="Paste your Stats API token here"
+                      value={statsToken}
+                      onChange={(e) => {
+                        parseTokenInput(e.target.value)
+                        if (errors.statsToken) setErrors((p) => ({ ...p, statsToken: null }))
+                      }}
+                      autoComplete="off"
+                      spellCheck={false}
+                      autoFocus
+                    />
+                    {errors.statsToken && <div className="ob-error-msg">{errors.statsToken}</div>}
+                  </div>
+
+                  <button
+                    className="ob-help-toggle"
+                    onClick={() => setTokenHelpOpen((o) => !o)}
+                  >
+                    <span className={`ob-help-chevron ${tokenHelpOpen ? 'open' : ''}`}>▶</span>
+                    How to find your Stats API token
+                  </button>
+
+                  {tokenHelpOpen && (
+                    <div className="ob-help-body">
+                      <ul className="ob-help-list">
+                        <li><span className="ob-help-num">1.</span> Log in to Chaturbate with your broadcaster account.</li>
+                        <li><span className="ob-help-num">2.</span> Go to <strong style={{color:'#c8d0e8'}}>chaturbate.com/statsapi/authtoken/</strong></li>
+                        <li><span className="ob-help-num">3.</span> Find the <strong style={{color:'#c8d0e8'}}>Stats API</strong> section and click <strong style={{color:'#c8d0e8'}}>Generate Token</strong> if empty.</li>
+                        <li><span className="ob-help-num">4.</span> Copy the token or the full URL and paste it above.</li>
+                      </ul>
+                      <a
+                        href="https://chaturbate.com/statsapi/authtoken/"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="ob-help-link"
+                      >
+                        Open token page ↗
+                      </a>
+                    </div>
+                  )}
+
+                  {errors.submit && <div className="ob-submit-error">{errors.submit}</div>}
+
+                  <button
+                    className="ob-btn-primary"
+                    onClick={handleConnect}
+                    disabled={loading}
+                  >
+                    {loading ? 'Connecting…' : 'Connect Chaturbate →'}
+                  </button>
+
+                  <div className="ob-lock-text">🔒 Your token is stored securely and never shared.</div>
+
+                  <div className="ob-secondary-links">
+                    <button className="ob-link-btn" onClick={handleSkipToCSV}>
+                      Upload CSV instead
+                    </button>
+                    <span style={{ color: '#1e2536' }}>·</span>
+                    <button className="ob-link-btn" onClick={handleSkipToken}>
+                      I'll connect my token later
+                    </button>
+                  </div>
+
+                  <div className="ob-secondary-links" style={{ marginTop: 12 }}>
+                    <button className="ob-link-btn" onClick={() => setSubStep(2)}>← Back</button>
+                  </div>
+                </>
+              )}
             </>
           )}
 
