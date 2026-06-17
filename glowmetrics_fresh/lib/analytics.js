@@ -6,6 +6,15 @@
 // TIMEZONE HELPERS
 // ===============================
 
+function calcMedian(arr) {
+  if (!arr || arr.length === 0) return 0
+  const sorted = [...arr].sort((a, b) => a - b)
+  const mid = Math.floor(sorted.length / 2)
+  return sorted.length % 2 === 0
+    ? (sorted[mid - 1] + sorted[mid]) / 2
+    : sorted[mid]
+}
+
 function toLocalHour(dateStr, tz) {
   try {
     const date = new Date(dateStr)
@@ -729,6 +738,7 @@ export function aggregateRows(tips, tz = null) {
   const allValidSessions   = sessions.filter(s => s.sessionQuality !== 'invalid')
 
   const dayTipsUSD = {}, dayActiveDates = {}, hourTipsUSD = {}, hourBucketSets = {}
+  const dayDateAmts = {}, hourBucketAmts = {}
   const UTC_LONG = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
 
   tips.forEach(t => {
@@ -738,16 +748,23 @@ export function aggregateRows(tips, tz = null) {
     const dateKey = toLocalDateStr(t.dateRaw || t.date_time, userTz)
     const h = toLocalHour(t.dateRaw || t.date_time, userTz)
     const hBucket = Math.floor(dt.getTime() / 3600000)
-    if (!dayTipsUSD[dow]) { dayTipsUSD[dow] = 0; dayActiveDates[dow] = new Set() }
-    dayTipsUSD[dow] += t.usd || 0
+    const usd = t.usd || 0
+    if (!dayTipsUSD[dow]) { dayTipsUSD[dow] = 0; dayActiveDates[dow] = new Set(); dayDateAmts[dow] = {} }
+    dayTipsUSD[dow] += usd
     dayActiveDates[dow].add(dateKey)
-    if (!hourTipsUSD[h]) { hourTipsUSD[h] = 0; hourBucketSets[h] = new Set() }
-    hourTipsUSD[h] += t.usd || 0
+    dayDateAmts[dow][dateKey] = (dayDateAmts[dow][dateKey] || 0) + usd
+    if (!hourTipsUSD[h]) { hourTipsUSD[h] = 0; hourBucketSets[h] = new Set(); hourBucketAmts[h] = {} }
+    hourTipsUSD[h] += usd
     hourBucketSets[h].add(hBucket)
+    hourBucketAmts[h][hBucket] = (hourBucketAmts[h][hBucket] || 0) + usd
   })
 
-  const dayAvgs = Object.keys(dayTipsUSD).map(d => ({ day: d, avg: parseFloat((dayTipsUSD[d] / (dayActiveDates[d].size || 1)).toFixed(2)), total: dayTipsUSD[d], count: dayActiveDates[d].size }))
-  const hourAvgs = Object.keys(hourTipsUSD).map(h => ({ hour: h, avg: parseFloat((hourTipsUSD[h] / (hourBucketSets[h].size || 1)).toFixed(2)), total: hourTipsUSD[h], count: hourBucketSets[h].size }))
+  const dayAvgs = Object.keys(dayTipsUSD)
+    .filter(d => dayActiveDates[d].size >= 3)
+    .map(d => ({ day: d, avg: parseFloat(calcMedian(Object.values(dayDateAmts[d])).toFixed(2)), total: dayTipsUSD[d], count: dayActiveDates[d].size }))
+  const hourAvgs = Object.keys(hourTipsUSD)
+    .filter(h => hourBucketSets[h].size >= 3)
+    .map(h => ({ hour: h, avg: parseFloat(calcMedian(Object.values(hourBucketAmts[h])).toFixed(2)), total: hourTipsUSD[h], count: hourBucketSets[h].size }))
   const bestDay  = [...dayAvgs].sort((a, b) => b.avg - a.avg)[0] || null
   const worstDay = [...dayAvgs].sort((a, b) => a.avg - b.avg)[0] || null
   const bestHour = [...hourAvgs].sort((a, b) => b.avg - a.avg)[0] || null
@@ -790,6 +807,7 @@ export function aggregateRows(tips, tz = null) {
   const UTC_DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
   const platHourUSD = {}, platHourBuckets = {}, platDayUSD = {}, platDayDates = {}
   const platDayHourUSD = {}, platDayHourBuckets = {}
+  const platHourBucketAmts = {}, platDayDateAmts = {}, platDayHourBucketAmts = {}
 
   tips.forEach(t => {
     const p = t.platform || 'Chaturbate'
@@ -801,27 +819,50 @@ export function aggregateRows(tips, tz = null) {
     const hBucket = Math.floor(dt.getTime() / 3600000)
     const usd = t.usd || 0
 
-    if (!platHourUSD[p]) { platHourUSD[p] = {}; platHourBuckets[p] = {} }
-    if (!platHourUSD[p][h]) { platHourUSD[p][h] = 0; platHourBuckets[p][h] = new Set() }
+    if (!platHourUSD[p]) { platHourUSD[p] = {}; platHourBuckets[p] = {}; platHourBucketAmts[p] = {} }
+    if (!platHourUSD[p][h]) { platHourUSD[p][h] = 0; platHourBuckets[p][h] = new Set(); platHourBucketAmts[p][h] = {} }
     platHourUSD[p][h] += usd; platHourBuckets[p][h].add(hBucket)
+    platHourBucketAmts[p][h][hBucket] = (platHourBucketAmts[p][h][hBucket] || 0) + usd
 
-    if (!platDayUSD[p]) { platDayUSD[p] = {}; platDayDates[p] = {} }
-    if (!platDayUSD[p][dow]) { platDayUSD[p][dow] = 0; platDayDates[p][dow] = new Set() }
+    if (!platDayUSD[p]) { platDayUSD[p] = {}; platDayDates[p] = {}; platDayDateAmts[p] = {} }
+    if (!platDayUSD[p][dow]) { platDayUSD[p][dow] = 0; platDayDates[p][dow] = new Set(); platDayDateAmts[p][dow] = {} }
     platDayUSD[p][dow] += usd; platDayDates[p][dow].add(dateKey)
+    platDayDateAmts[p][dow][dateKey] = (platDayDateAmts[p][dow][dateKey] || 0) + usd
 
     const dayHourKey = `${dow}__${h}`
-    if (!platDayHourUSD[p]) { platDayHourUSD[p] = {}; platDayHourBuckets[p] = {} }
-    if (!platDayHourUSD[p][dayHourKey]) { platDayHourUSD[p][dayHourKey] = 0; platDayHourBuckets[p][dayHourKey] = new Set() }
+    if (!platDayHourUSD[p]) { platDayHourUSD[p] = {}; platDayHourBuckets[p] = {}; platDayHourBucketAmts[p] = {} }
+    if (!platDayHourUSD[p][dayHourKey]) { platDayHourUSD[p][dayHourKey] = 0; platDayHourBuckets[p][dayHourKey] = new Set(); platDayHourBucketAmts[p][dayHourKey] = {} }
     platDayHourUSD[p][dayHourKey] += usd; platDayHourBuckets[p][dayHourKey].add(hBucket)
+    platDayHourBucketAmts[p][dayHourKey][hBucket] = (platDayHourBucketAmts[p][dayHourKey][hBucket] || 0) + usd
   })
 
   const platformBestTimes = {}
   Object.keys(platHourUSD).forEach(p => {
-    const hourEntries = Object.keys(platHourUSD[p]).map(h => ({ hour: parseInt(h), avg: platHourBuckets[p][h].size > 0 ? parseFloat((platHourUSD[p][h] / platHourBuckets[p][h].size).toFixed(2)) : 0, sessionCount: platHourBuckets[p][h].size, total: platHourUSD[p][h] })).filter(e => e.sessionCount >= 1).sort((a, b) => b.avg - a.avg)
-    const dayEntries = Object.keys(platDayUSD[p]).map(d => ({ day: d, avg: platDayDates[p][d].size > 0 ? parseFloat((platDayUSD[p][d] / platDayDates[p][d].size).toFixed(2)) : 0, activeDays: platDayDates[p][d].size, total: platDayUSD[p][d] })).filter(e => e.activeDays >= 1).sort((a, b) => b.avg - a.avg)
+    const hourEntries = Object.keys(platHourUSD[p])
+      .filter(h => platHourBuckets[p][h].size >= 3)
+      .map(h => ({
+        hour: parseInt(h),
+        avg: parseFloat(calcMedian(Object.values(platHourBucketAmts[p][h])).toFixed(2)),
+        sessionCount: platHourBuckets[p][h].size, total: platHourUSD[p][h]
+      }))
+      .sort((a, b) => b.avg - a.avg)
+    const dayEntries = Object.keys(platDayUSD[p])
+      .filter(d => platDayDates[p][d].size >= 3)
+      .map(d => ({
+        day: d,
+        avg: parseFloat(calcMedian(Object.values(platDayDateAmts[p][d])).toFixed(2)),
+        activeDays: platDayDates[p][d].size, total: platDayUSD[p][d]
+      }))
+      .sort((a, b) => b.avg - a.avg)
     const bestHourByDay = {}
     UTC_DAYS.forEach(dow => {
-      const dayHourEntries = Object.keys(platDayHourUSD[p] || {}).filter(k => k.startsWith(dow + '__')).map(k => { const h = parseInt(k.split('__')[1]); const buckets = platDayHourBuckets[p][k]; return { hour: h, avg: buckets.size > 0 ? parseFloat((platDayHourUSD[p][k] / buckets.size).toFixed(2)) : 0, sessionCount: buckets.size } }).filter(e => e.sessionCount >= 1).sort((a, b) => b.avg - a.avg)
+      const dayHourEntries = Object.keys(platDayHourUSD[p] || {})
+        .filter(k => k.startsWith(dow + '__') && platDayHourBuckets[p][k].size >= 3)
+        .map(k => {
+          const h = parseInt(k.split('__')[1])
+          return { hour: h, avg: parseFloat(calcMedian(Object.values(platDayHourBucketAmts[p][k])).toFixed(2)), sessionCount: platDayHourBuckets[p][k].size }
+        })
+        .sort((a, b) => b.avg - a.avg)
       if (dayHourEntries.length > 0) bestHourByDay[dow] = dayHourEntries[0]
     })
     platformBestTimes[p] = { hour: hourEntries[0] || null, bestDay: dayEntries[0] || null, bestHourByDay, allHours: hourEntries, allDays: dayEntries }

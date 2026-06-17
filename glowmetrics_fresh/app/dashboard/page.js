@@ -2251,16 +2251,14 @@ const handleCSV = async (file, forcePlatform = null) => {
     const sessionAvg = analytics?.sessions?.length
       ? analytics.sessions.reduce((s, x) => s + x.totalUSD, 0) / analytics.sessions.length : 0
 
-    // Income prediction for peak window
+    // Income prediction for peak window — use median-based displayAvg as single source of truth
     const sessionsAtPeak = (analytics?.sessions || []).filter(s => {
       const h = new Date(s.startTime).getUTCHours()
       return bh !== null && Math.abs(h - bh) <= 1
     })
-    const peakAvg = sessionsAtPeak.length >= 2
-      ? sessionsAtPeak.reduce((s, x) => s + x.totalUSD, 0) / sessionsAtPeak.length
-      : (displayAvg || bestHour?.avg || sessionAvg)
-    const predictionLow = Math.round(peakAvg * 0.6)
-    const predictionHigh = Math.round(peakAvg * 1.5)
+    const peakAvg = displayAvg || bestHour?.avg || sessionAvg
+    const predictionLow = Math.max(0, Math.round(peakAvg - (peakAvg * 0.4)))
+    const predictionHigh = Math.round(peakAvg + (peakAvg * 0.4))
 
     // Re-engage list — fans who tip 50+ tokens avg per session, appear in 2+ streams, and are overdue
     // "Every 2-3 streams" = session-level frequency, not tip count
