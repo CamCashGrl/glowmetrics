@@ -3,6 +3,43 @@
 // ============================================
 
 // ===============================
+// TIMEZONE HELPERS
+// ===============================
+
+function toLocalHour(dateStr, tz) {
+  try {
+    const date = new Date(dateStr)
+    const formatted = new Intl.DateTimeFormat('en-US', {
+      timeZone: tz,
+      hour: 'numeric',
+      hour12: false
+    }).format(date)
+    const h = parseInt(formatted)
+    return isNaN(h) ? 0 : h === 24 ? 0 : h
+  } catch { return new Date(dateStr).getUTCHours() }
+}
+
+function toLocalDow(dateStr, tz) {
+  try {
+    const date = new Date(dateStr)
+    const dayName = new Intl.DateTimeFormat('en-US', {
+      timeZone: tz,
+      weekday: 'long'
+    }).format(date)
+    return ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
+      .indexOf(dayName)
+  } catch { return new Date(dateStr).getUTCDay() }
+}
+
+function toLocalDateStr(dateStr, tz) {
+  try {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: tz
+    }).format(new Date(dateStr)) // returns YYYY-MM-DD
+  } catch { return new Date(dateStr).toISOString().slice(0, 10) }
+}
+
+// ===============================
 // SANITY + FILTER HELPERS
 // ===============================
 
@@ -650,7 +687,11 @@ export function generateNextMoves(tips, sessions, whales, predictions, bestHour)
   return moves.sort((a, b) => a.priority - b.priority).slice(0, 5)
 }
 
-export function aggregateRows(tips) {
+export function aggregateRows(tips, tz = null) {
+  const userTz = tz || (typeof Intl !== 'undefined'
+    ? Intl.DateTimeFormat().resolvedOptions().timeZone
+    : 'UTC')
+
   if (!tips || tips.length === 0) {
     return {
       totalUSD: 0, totalTokens: 0, totalTips: 0, avgTipSize: 0,
@@ -693,9 +734,9 @@ export function aggregateRows(tips) {
   tips.forEach(t => {
     const dt = new Date(t.dateRaw || t.date_time)
     if (isNaN(dt.getTime())) return
-    const dow = UTC_LONG[dt.getUTCDay()]
-    const dateKey = `${dt.getUTCFullYear()}-${dt.getUTCMonth()}-${dt.getUTCDate()}`
-    const h = dt.getUTCHours()
+    const dow = UTC_LONG[toLocalDow(t.dateRaw || t.date_time, userTz)]
+    const dateKey = toLocalDateStr(t.dateRaw || t.date_time, userTz)
+    const h = toLocalHour(t.dateRaw || t.date_time, userTz)
     const hBucket = Math.floor(dt.getTime() / 3600000)
     if (!dayTipsUSD[dow]) { dayTipsUSD[dow] = 0; dayActiveDates[dow] = new Set() }
     dayTipsUSD[dow] += t.usd || 0
@@ -754,9 +795,9 @@ export function aggregateRows(tips) {
     const p = t.platform || 'Chaturbate'
     const dt = new Date(t.dateRaw || t.date_time)
     if (isNaN(dt.getTime())) return
-    const h = dt.getUTCHours()
-    const dow = UTC_DAYS[dt.getUTCDay()]
-    const dateKey = `${dt.getUTCFullYear()}-${dt.getUTCMonth()}-${dt.getUTCDate()}`
+    const h = toLocalHour(t.dateRaw || t.date_time, userTz)
+    const dow = UTC_DAYS[toLocalDow(t.dateRaw || t.date_time, userTz)]
+    const dateKey = toLocalDateStr(t.dateRaw || t.date_time, userTz)
     const hBucket = Math.floor(dt.getTime() / 3600000)
     const usd = t.usd || 0
 
@@ -898,6 +939,38 @@ export function aggregateRows(tips) {
   const privateShowFans = Object.values(privateFanMap).sort((a, b) => b.usd - a.usd).map(f => ({ ...f, usd: parseFloat(f.usd.toFixed(2)) }))
   const spyShowFans = [...spyFanSet].filter(u => !privateFanMap[u])
 
+  // Momentum — month over month revenue comparison
+  const now = new Date()
+  const thirtyDaysAgo = new Date(now - 30 * 24 * 60 * 60 * 1000)
+  const sixtyDaysAgo = new Date(now - 60 * 24 * 60 * 60 * 1000)
+
+  const last30USD = tips
+    .filter(t => new Date(t.date_time) >= thirtyDaysAgo)
+    .reduce((sum, t) => sum + (parseFloat(t.usd) || 0), 0)
+
+  const prior30USD = tips
+    .filter(t => new Date(t.date_time) >= sixtyDaysAgo &&
+                 new Date(t.date_time) < thirtyDaysAgo)
+    .reduce((sum, t) => sum + (parseFloat(t.usd) || 0), 0)
+
+  let momentumPct = 0
+  let momentumLabel = 'Steady'
+  let momentumEmoji = '→'
+
+  if (prior30USD === 0 && last30USD === 0) {
+    momentumLabel = 'No data'; momentumEmoji = '—'
+  } else if (prior30USD === 0) {
+    momentumPct = 100; momentumLabel = 'Surging'; momentumEmoji = '🚀'
+  } else {
+    momentumPct = ((last30USD - prior30USD) / prior30USD) * 100
+    if (momentumPct > 50)       { momentumLabel = 'Surging';   momentumEmoji = '🚀' }
+    else if (momentumPct > 10)  { momentumLabel = 'Growing';   momentumEmoji = '📈' }
+    else if (momentumPct > -10) { momentumLabel = 'Steady';    momentumEmoji = '→'  }
+    else                        { momentumLabel = 'Declining'; momentumEmoji = '📉' }
+  }
+
+  const momentum = { pct: momentumPct, label: momentumLabel, emoji: momentumEmoji, last30USD, prior30USD }
+
   return {
     totalUSD: parseFloat(totalUSD.toFixed(2)),
     totalTokens,
@@ -915,5 +988,6 @@ export function aggregateRows(tips) {
     meaningfulSessions, allValidSessions,
     meaningfulSessionCount: meaningfulSessions.length,
     lowSignalSessionCount: allValidSessions.length - meaningfulSessions.length,
+    momentum,
   }
 }

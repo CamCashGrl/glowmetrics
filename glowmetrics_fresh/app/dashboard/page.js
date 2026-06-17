@@ -1577,7 +1577,7 @@ export default function Dashboard() {
             )
             if (exists) return prev
             const updated = [...prev, payload.new].sort((a,b) => new Date(a.date_time)-new Date(b.date_time))
-            try { const r = runEngine(updated); if(r) setAnalytics(r) } catch(e) { console.error('realtime runEngine failed:', e) }
+            try { const userTz = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC'; const r = runEngine(updated, userTz); if(r) setAnalytics(r) } catch(e) { console.error('realtime runEngine failed:', e) }
             return updated
           })
           setNewTipCount(n => n + 1)
@@ -1625,7 +1625,7 @@ export default function Dashboard() {
       refreshTimerRef.current = setInterval(() => {
         setTips(prev => {
           if (!prev.length) return prev
-          try { const r = runEngine(prev); if(r) setAnalytics(r) } catch(e) { console.error('refresh runEngine failed:', e) }
+          try { const userTz = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC'; const r = runEngine(prev, userTz); if(r) setAnalytics(r) } catch(e) { console.error('refresh runEngine failed:', e) }
           return prev
         })
       }, 30000)
@@ -1742,7 +1742,8 @@ export default function Dashboard() {
       if (allData.length) {
         setTips(allData)
         try {
-          const result = runEngine(allData)
+          const userTz = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC'
+          const result = runEngine(allData, userTz)
           setAnalytics(result)
         } catch (engineErr) {
           console.error('[loadData] runEngine failed:', engineErr)
@@ -2613,17 +2614,14 @@ const handleCSV = async (file, forcePlatform = null) => {
           const safeAvg = (!isNaN(avgPerHour) && isFinite(avgPerHour)) ? avgPerHour : 0
           const brief = dailyBrief
           const atPeak = brief?.atPeak
+          const momentumData = analytics?.momentum
           const momentum = atPeak ? '🔥 AT PEAK'
-            : (growthPct !== null && growthPct >= 200) ? '🚀 Surging'
-            : (growthPct !== null && growthPct >= 50)  ? '↑ Growing'
-            : safeAvg > 20 ? '↑ Strong'
-            : safeAvg > 5  ? '→ Steady'
-            : tips.length === 0 ? '— No data' : '↓ Slow'
+            : momentumData ? `${momentumData.emoji} ${momentumData.label}`
+            : tips.length === 0 ? '— No data' : '→ Steady'
           const momentumColor = atPeak ? '#10B981'
-            : (growthPct !== null && growthPct >= 200) ? '#f472b6'
-            : (growthPct !== null && growthPct >= 50)  ? '#10B981'
-            : safeAvg > 20 ? '#10B981'
-            : safeAvg > 5  ? '#22D3EE'
+            : momentumData?.pct > 50 ? '#f472b6'
+            : momentumData?.pct > 10 ? '#10B981'
+            : momentumData?.pct > -10 ? '#22D3EE'
             : tips.length === 0 ? '#475569' : '#f87171'
           const localNow = new Date().getHours()
           const hoursUntilLocal = canonicalPeakHourUTC != null ? (canonicalPeakHourUTC - localNow + 24) % 24 : brief?.hoursUntilPeak
