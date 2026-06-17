@@ -15,6 +15,7 @@ import FeedbackWidget from "../components/FeedbackWidget"
 import AnalyticsCharts from './AnalyticsCharts'
 import StreamPlanner from './StreamPlanner'
 import MoneyMap from './MoneyMap'
+import { track as gtmTrack } from '../../lib/track'
 
 // Analytics tracking — works whether or not @vercel/analytics is installed
 let track = (event, props) => {}
@@ -1328,6 +1329,7 @@ export default function Dashboard() {
 
   const openUpgradeModal = (source) => {
     track('upgrade_click', { source })
+    gtmTrack('paywall_hit', { feature: source })
     setShowUpgradeModal(true)
   }
 
@@ -1372,6 +1374,7 @@ export default function Dashboard() {
 
   // Tab persistence
   const handleTabChange = (tab) => {
+    gtmTrack('tab_switched', { tab_name: tab })
     setActiveTab(tab)
     if (typeof window !== 'undefined') {
       localStorage.setItem('camcash_tab', tab)
@@ -1763,6 +1766,7 @@ export default function Dashboard() {
 const handleCSV = async (file, forcePlatform = null) => {
     if (!file || !user) return
     setUploading(true)
+    gtmTrack('csv_upload_started', { platform: forcePlatform || uploadPlatform || 'unknown' })
     try {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) { showToast("❌ Not logged in"); setUploading(false); return }
@@ -1786,6 +1790,7 @@ const handleCSV = async (file, forcePlatform = null) => {
       }
 
       track('csv_imported', { rows: result.inserted, platform: result.platform || 'Unknown' })
+      gtmTrack('csv_upload_success', { platform: result.platform || 'unknown', row_count: result.inserted })
 
       const msg = result.skipped > 0
         ? `✅ Imported ${result.inserted} tips (${result.skipped} duplicates skipped)`
