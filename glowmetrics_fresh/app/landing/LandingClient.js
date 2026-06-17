@@ -27,7 +27,7 @@ function AuthPanel({
       <div style={{ textAlign: "center", marginBottom: 18 }}>
         <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 36, height: 36, borderRadius: 10, background: "linear-gradient(135deg,#22D3EE,#EC4899)", fontSize: 17, fontWeight: 900, color: "white", marginBottom: 8, boxShadow: "0 0 16px rgba(34,211,238,0.35)" }}>$</div>
         <div style={{ fontSize: 15, fontWeight: 800, color: "white", letterSpacing: -0.3 }}>CamCash</div>
-        <div style={{ fontSize: 11, color: "#475569", marginTop: 2 }}>{isSignUp ? "Free during beta · No credit card" : "Welcome back 💋"}</div>
+        <div style={{ fontSize: 11, color: "#475569", marginTop: 2 }}>{isSignUp ? "No credit card required" : "Welcome back 💋"}</div>
         {isSignUp && (
           <div style={{
             display: 'inline-block',
@@ -78,7 +78,7 @@ function AuthPanel({
           {authLoading ? (isSignUp ? "Creating account…" : "Logging in…") : (isSignUp ? "Start Free →" : "Log In →")}
         </button>
       </form>
-      {isSignUp && <p style={{ fontSize: 10, color: "#334155", textAlign: "center", marginTop: 10, marginBottom: 0 }}>No credit card · Free during beta · Cancel anytime</p>}
+      {isSignUp && <p style={{ fontSize: 10, color: "#334155", textAlign: "center", marginTop: 10, marginBottom: 0 }}>No credit card · Cancel anytime</p>}
     </div>
   )
 }
