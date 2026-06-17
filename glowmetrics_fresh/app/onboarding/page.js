@@ -97,8 +97,14 @@ export default function OnboardingPage() {
     }, { onConflict: "user_id" })
   }
 
-  const advanceTo = async (nextStep) => {
-    if (nextStep === 'done') await markComplete()
+  const advanceTo = async (nextStep, opts = {}) => {
+    if (nextStep === 'done') {
+      await markComplete()
+      const methods = []
+      if (opts.tokenConnected || tokenConnected) methods.push('stats_api')
+      if (opts.uploadDone || uploadDone) methods.push('csv')
+      T.onboardingCompleted(methods)
+    }
     setStep(nextStep)
   }
 
@@ -128,6 +134,7 @@ export default function OnboardingPage() {
         return
       }
       T.csvUploadCompleted(result?.inserted || 0, 0)
+      T.onboardingStepCompleted('history')
       setUploadResult(result)
       setUploadDone(true)
       advanceTo('extension')
@@ -244,13 +251,15 @@ export default function OnboardingPage() {
               onConnected={({ hasEventsToken } = {}) => {
                 setTokenConnected(true)
                 if (hasEventsToken) setEventsConnected(true)
+                T.onboardingTokenConnected(!!hasEventsToken)
+                T.onboardingStepCompleted('connect')
                 advanceTo('history')
               }}
             />
 
             <div style={{ marginTop: 16 }}>
               <button
-                onClick={() => advanceTo('history')}
+                onClick={() => { T.onboardingStepSkipped('connect'); advanceTo('history') }}
                 style={{
                   background: "none", border: "none",
                   color: C.muted, fontSize: 13, cursor: "pointer",
@@ -402,7 +411,7 @@ export default function OnboardingPage() {
 
             <div style={{ marginTop: 8 }}>
               <button
-                onClick={() => advanceTo('extension')}
+                onClick={() => { T.onboardingStepSkipped('history'); advanceTo('extension') }}
                 style={{
                   background: "none", border: "none",
                   color: C.muted, fontSize: 13, cursor: "pointer",
@@ -472,6 +481,7 @@ export default function OnboardingPage() {
                 href="https://chrome.google.com/webstore/detail/camcash"
                 target="_blank"
                 rel="noopener noreferrer"
+                onClick={() => { T.extensionInstallStart(); T.onboardingStepCompleted('extension') }}
                 style={{
                   display: "block", width: "100%", padding: "13px 0", borderRadius: 12,
                   background: "linear-gradient(135deg, #a855f7, #EC4899)",
@@ -485,7 +495,7 @@ export default function OnboardingPage() {
             </div>
 
             <button
-              onClick={() => advanceTo('done')}
+              onClick={() => { T.onboardingStepSkipped('extension'); advanceTo('done') }}
               style={{
                 background: "none", border: "none",
                 color: C.muted, fontSize: 13, cursor: "pointer",
