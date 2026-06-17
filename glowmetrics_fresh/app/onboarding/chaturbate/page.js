@@ -70,9 +70,14 @@ export default function ChaturbateOnboardingPage() {
     try {
       track('onboarding_connect_clicked', { broadcaster_type: broadcasterType })
 
+      const { data: { session } } = await supabase.auth.getSession()
+
       const res = await fetch('/api/onboarding/save-profile', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { 'Authorization': `Bearer ${session.access_token}` } : {}),
+        },
         body: JSON.stringify({
           chaturbate_username: username.trim(),
           chaturbate_stats_token: statsToken.trim(),

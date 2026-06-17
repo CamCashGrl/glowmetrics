@@ -1,14 +1,37 @@
-import { cookies } from 'next/headers'
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { createClient } from '@supabase/supabase-js'
+import { cookies } from 'next/headers'
 
 export async function POST(request) {
   try {
-    // Verify the user is actually logged in
-    const supabase = createRouteHandlerClient({ cookies })
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    const cookieStore = cookies()
 
-    if (authError || !user) {
+    // Read the Supabase auth token directly from cookies
+    const accessToken = cookieStore.get('sb-hlsdlaibnayzbfflxclj-auth-token')?.value
+
+    let userId = null
+
+    if (accessToken) {
+      try {
+        const parsed = JSON.parse(accessToken)
+        userId = parsed?.user?.id || null
+      } catch {}
+    }
+
+    // Fallback: try the supabase admin client to verify via bearer token
+    if (!userId) {
+      const authHeader = request.headers.get('authorization')
+      if (authHeader?.startsWith('Bearer ')) {
+        const token = authHeader.replace('Bearer ', '')
+        const adminClient = createClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL,
+          process.env.SUPABASE_SERVICE_ROLE_KEY
+        )
+        const { data: { user } } = await adminClient.auth.getUser(token)
+        userId = user?.id || null
+      }
+    }
+
+    if (!userId) {
       return Response.json({ error: 'Not authenticated' }, { status: 401 })
     }
 
@@ -19,17 +42,15 @@ export async function POST(request) {
       return Response.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
-    // Initialize admin client lazily (env vars not available at build time)
-    const supabaseAdmin = createClient(
+    const adminClient = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL,
       process.env.SUPABASE_SERVICE_ROLE_KEY
     )
 
-    // Use admin client to bypass RLS
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await adminClient
       .from('profiles')
       .upsert({
-        id: user.id,
+        id: userId,
         chaturbate_username: chaturbate_username.trim(),
         chaturbate_stats_token: chaturbate_stats_token.trim(),
         chaturbate_token_type: 'stats',
@@ -39,7 +60,7 @@ export async function POST(request) {
       .single()
 
     if (error) {
-      console.error('Profile save error:', error)
+      console.error('Profile upsert error:', error)
       return Response.json({ error: error.message }, { status: 500 })
     }
 
