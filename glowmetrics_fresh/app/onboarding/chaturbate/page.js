@@ -702,7 +702,7 @@ export default function ChaturbateOnboardingPage() {
                   <div className="ob-error-msg">{errors.statsToken}</div>
                 ) : (
                   <div className="ob-helper">
-                    This is the token GlowMetrics needs to load your historical stats.
+                    This is the token CamCashGrl needs to load your historical stats.
                   </div>
                 )}
               </div>
