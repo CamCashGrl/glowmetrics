@@ -16,12 +16,19 @@ export default function ChaturbateOnboardingPage() {
   const [subStep, setSubStep] = useState(1) // 1=broadcaster type, 2=username, 3=token
   const [errors, setErrors] = useState({})
   const [loading, setLoading] = useState(false)
+  const [authLoading, setAuthLoading] = useState(true)
   const [user, setUser] = useState(null)
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) setUser(user)
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) setUser(session.user)
+      setAuthLoading(false)
     })
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) setUser(session.user)
+      else setUser(null)
+    })
+    return () => subscription.unsubscribe()
   }, [])
 
   // Auto-extract token from a pasted URL like chaturbate.com/statsapi/?username=...&token=abc
@@ -57,10 +64,17 @@ export default function ChaturbateOnboardingPage() {
     setLoading(true)
     try {
       if (!user) {
-        router.push('/login')
+        setErrors({ submit: 'Session expired. Please refresh the page and try again.' })
         return
       }
-      const { error } = await supabase
+
+      console.log('[handleConnect] saving profile for user:', user.id, {
+        chaturbate_username: username.trim(),
+        chaturbate_token_type: 'stats',
+        broadcaster_type: broadcasterType,
+      })
+
+      const { data, error } = await supabase
         .from('profiles')
         .update({
           chaturbate_username: username.trim(),
@@ -69,8 +83,16 @@ export default function ChaturbateOnboardingPage() {
           broadcaster_type: broadcasterType,
         })
         .eq('id', user.id)
+        .select()
 
       if (error) throw error
+
+      if (!data || data.length === 0) {
+        setErrors({ submit: 'Profile save failed silently. Please try again.' })
+        return
+      }
+
+      console.log('[handleConnect] profile saved:', data)
 
       // Trigger initial stats sync
       fetch('/api/chaturbate/stats-sync', {
@@ -106,6 +128,15 @@ export default function ChaturbateOnboardingPage() {
     { value: 'trans', label: 'Trans' },
     { value: 'couple', label: 'Couple' },
   ]
+
+  if (authLoading) {
+    return (
+      <div style={{ minHeight: '100vh', background: '#080b14', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ width: 32, height: 32, borderRadius: '50%', border: '2px solid #1e2536', borderTopColor: '#00d4c8', animation: 'spin 0.8s linear infinite' }} />
+        <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+      </div>
+    )
+  }
 
   return (
     <>
