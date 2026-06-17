@@ -38,6 +38,7 @@ export default function LivePage() {
   const [flashTipId, setFlashTipId]   = useState(null);
   const [liveTick, setLiveTick]       = useState(0);
   const [sessions, setSessions]       = useState([]);
+  const [currentSessionId, setCurrentSessionId] = useState(null);
 
   // ── DEMO / AUTH / EXT MODAL STATE ────────────────────────────────────
   const [demoTips, setDemoTips]           = useState([]);
@@ -139,6 +140,53 @@ export default function LivePage() {
 
     return () => { if (liveTipsChannelRef.current) supabase.removeChannel(liveTipsChannelRef.current); };
   }, [normalizeTip]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── SESSION DB HANDLERS ───────────────────────────────────────────────
+
+  const handleStartStream = async () => {
+    const startTime = new Date();
+    setLiveActive(true);
+    setLiveStartTime(startTime);
+    setLiveEvents([]);
+    processedTipIds.current = new Set();
+    coachingCooldowns.current = {};
+    if (user) {
+      const { data: session } = await supabase
+        .from('stream_sessions')
+        .insert({
+          user_id: user.id,
+          platform: livePlatform,
+          start_time: startTime.toISOString(),
+          end_time: startTime.toISOString(), // placeholder; updated on stop
+          hours_streamed: 0,
+        })
+        .select()
+        .single();
+      if (session) setCurrentSessionId(session.id);
+    }
+  };
+
+  const handleStopStream = async () => {
+    setLiveActive(false);
+    if (user && currentSessionId && liveStartTime) {
+      const endTime = new Date();
+      const hoursStreamed = (endTime - new Date(liveStartTime)) / 1000 / 60 / 60;
+      const sessionTips = liveEvents.filter(e => !e._isHistory);
+      const totalUsd    = sessionTips.reduce((sum, t) => sum + (t.normalizedRevenue || t.usd || 0), 0);
+      const totalTokens = sessionTips.reduce((sum, t) => sum + (t.tokens || 0), 0);
+      await supabase
+        .from('stream_sessions')
+        .update({
+          end_time:      endTime.toISOString(),
+          hours_streamed: parseFloat(hoursStreamed.toFixed(4)),
+          usd:           parseFloat(totalUsd.toFixed(2)),
+          tokens:        totalTokens,
+          tip_count:     sessionTips.length,
+        })
+        .eq('id', currentSessionId);
+      setCurrentSessionId(null);
+    }
+  };
 
   // ── INLINE LIVE ENGINE (same logic as dashboard live tab) ────────────
 
@@ -735,12 +783,12 @@ export default function LivePage() {
               📥 Download Extension
             </a>
             {!liveActive ? (
-              <button onClick={() => { setLiveActive(true); setLiveStartTime(new Date()); setLiveEvents([]); processedTipIds.current = new Set(); coachingCooldowns.current = {}; }}
+              <button onClick={handleStartStream}
                 style={{ padding: '7px 18px', borderRadius: 8, background: 'linear-gradient(135deg, #10B981, #22D3EE)', border: 'none', color: C.white, fontWeight: 800, fontSize: 12, cursor: 'pointer', boxShadow: '0 0 16px rgba(16,185,129,0.35)' }}>
                 ▶ Start Stream
               </button>
             ) : (
-              <button onClick={() => setLiveActive(false)}
+              <button onClick={handleStopStream}
                 style={{ padding: '7px 18px', borderRadius: 8, background: 'rgba(248,113,113,0.15)', border: '1px solid rgba(248,113,113,0.4)', color: C.red, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
                 ⏹ End
               </button>
@@ -791,7 +839,7 @@ export default function LivePage() {
             <div style={{ fontSize: 14, color: C.muted, maxWidth: 440, margin: '0 auto 28px', lineHeight: 1.75 }}>
               Your AI coach watches the room in real time — tracking momentum, spotting opportunities, and telling you exactly what to do next to make more money.
             </div>
-            <button onClick={() => { setLiveActive(true); setLiveStartTime(new Date()); setLiveEvents([]); processedTipIds.current = new Set(); coachingCooldowns.current = {}; }}
+            <button onClick={handleStartStream}
               style={{ padding: '13px 36px', borderRadius: 12, background: 'linear-gradient(135deg, #10B981, #22D3EE)', border: 'none', color: C.white, fontWeight: 800, fontSize: 16, cursor: 'pointer', boxShadow: '0 0 32px rgba(16,185,129,0.4)' }}>
               ▶ Start Streaming
             </button>
