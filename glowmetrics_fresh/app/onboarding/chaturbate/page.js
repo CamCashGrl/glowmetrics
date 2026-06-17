@@ -21,13 +21,17 @@ export default function ChaturbateOnboardingPage() {
   const [user, setUser] = useState(null)
 
   useEffect(() => {
+    // onAuthStateChange fires first if there's a session in the URL hash (magic link / PKCE)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setUser(session.user)
+        setAuthLoading(false)
+      }
+    })
+    // Fallback: read existing cookie-based session
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) setUser(session.user)
       setAuthLoading(false)
-    })
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) setUser(session.user)
-      else setUser(null)
     })
     return () => subscription.unsubscribe()
   }, [])
