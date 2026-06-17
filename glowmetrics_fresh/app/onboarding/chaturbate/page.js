@@ -89,12 +89,18 @@ export default function ChaturbateOnboardingPage() {
 
       track('onboarding_connect_success')
 
-      // Trigger initial stats sync
-      fetch('/api/chaturbate/stats-sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.id }),
-      }).catch(() => {}) // fire-and-forget
+      // Trigger initial stats sync — pass session token for auth
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (!session?.access_token) return
+        fetch('/api/chaturbate/stats-sync', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({}),
+        }).catch(() => {})
+      })
 
       setStep(2)
     } catch (err) {
