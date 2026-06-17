@@ -128,6 +128,8 @@ export default function SiteFooter({ sidebarOffset = 0 }) {
           <FooterLink href="/guides">All Free Tools &amp; Guides</FooterLink>
           <FooterLink href="/dashboard">Dashboard</FooterLink>
           <FooterLink href="/live">Live Mode</FooterLink>
+          <FooterLink href="/terms">Terms of Service</FooterLink>
+          <FooterLink href="/privacy">Privacy Policy</FooterLink>
         </div>
       </div>
 
