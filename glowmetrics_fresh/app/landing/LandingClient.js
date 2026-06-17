@@ -11,12 +11,22 @@ function AuthPanel({
   setAuthError, setAuthMsg,
   handleAuth, handleForgotPassword,
 }) {
+  const [step, setStep] = useState(1)
+
   const inp = {
     width: "100%", padding: "10px 13px", borderRadius: 8,
     background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)",
     color: "white", fontSize: 13, outline: "none", marginBottom: 9,
     boxSizing: "border-box", fontFamily: "inherit", transition: "border-color 0.15s",
   }
+
+  const handleModeSelect = (val) => {
+    setIsSignUp(val)
+    setAuthError("")
+    setAuthMsg("")
+    setStep(2)
+  }
+
   return (
     <div id={id} style={{
       background: "rgba(6,9,20,0.96)", border: "1px solid rgba(255,255,255,0.08)",
@@ -24,11 +34,11 @@ function AuthPanel({
       boxShadow: "0 0 0 1px rgba(34,211,238,0.06), 0 24px 60px rgba(0,0,0,0.7)",
       width: "100%",
     }}>
-      <div style={{ textAlign: "center", marginBottom: 18 }}>
+      {/* Logo — always visible */}
+      <div style={{ textAlign: "center", marginBottom: step === 1 ? 20 : 14 }}>
         <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 36, height: 36, borderRadius: 10, background: "linear-gradient(135deg,#22D3EE,#EC4899)", fontSize: 17, fontWeight: 900, color: "white", marginBottom: 8, boxShadow: "0 0 16px rgba(34,211,238,0.35)" }}>$</div>
         <div style={{ fontSize: 15, fontWeight: 800, color: "white", letterSpacing: -0.3 }}>CamCash</div>
-        <div style={{ fontSize: 11, color: "#475569", marginTop: 2 }}>{isSignUp ? "No credit card required" : "Welcome back 💋"}</div>
-        {isSignUp && (
+        {step === 1 && (
           <div style={{
             display: 'inline-block',
             background: 'rgba(168,85,247,0.15)',
@@ -43,42 +53,84 @@ function AuthPanel({
             ✨ Free forever · No credit card needed
           </div>
         )}
-      </div>
-      <div style={{ display: "flex", borderRadius: 8, overflow: "hidden", border: "1px solid rgba(255,255,255,0.07)", marginBottom: 16 }}>
-        {[["Sign Up", true], ["Log In", false]].map(([label, val]) => (
-          <button key={label} type="button" onClick={() => { setIsSignUp(val); setAuthError(""); setAuthMsg("") }}
-            style={{ flex: 1, padding: "8px 0", fontSize: 12, fontWeight: 600, background: isSignUp === val ? "rgba(34,211,238,0.12)" : "transparent", color: isSignUp === val ? "#22D3EE" : "rgba(255,255,255,0.3)", border: "none", cursor: "pointer", transition: "all 0.2s" }}>
-            {label}
-          </button>
-        ))}
-      </div>
-      <form onSubmit={handleAuth}>
-        <input type="email" placeholder="Email address" required value={email} onChange={e => setEmail(e.target.value)} style={inp}
-          onFocus={e => { e.target.style.borderColor = "rgba(34,211,238,0.5)"; T.signupStarted(window?.location?.pathname) }}
-          onBlur={e => e.target.style.borderColor = "rgba(255,255,255,0.1)"} />
-        <input type="password" placeholder="Password" required value={password} onChange={e => setPassword(e.target.value)}
-          style={{ ...inp, marginBottom: isSignUp ? 4 : 0 }}
-          onFocus={e => e.target.style.borderColor = "rgba(34,211,238,0.5)"}
-          onBlur={e => e.target.style.borderColor = "rgba(255,255,255,0.1)"} />
-        {!isSignUp && (
-          <div style={{ textAlign: "right", marginBottom: 10 }}>
-            <button type="button" onClick={handleForgotPassword} style={{ fontSize: 11, color: "#475569", background: "none", border: "none", cursor: "pointer" }}>Forgot password?</button>
+        {step === 2 && (
+          <div style={{ fontSize: 11, color: "#475569", marginTop: 2 }}>
+            {isSignUp ? "No credit card required" : "Welcome back 💋"}
           </div>
         )}
-        {isSignUp && <div style={{ height: 10 }} />}
-        {authError && <div style={{ fontSize: 11, color: "#f87171", marginBottom: 8, textAlign: "center" }}>{authError}</div>}
-        {authMsg   && <div style={{ fontSize: 11, color: "#22D3EE",  marginBottom: 8, textAlign: "center" }}>{authMsg}</div>}
-        <button type="submit" disabled={authLoading} onClick={() => T.signupCtaClicked(window?.location?.pathname)} style={{
-          width: "100%", padding: "11px 0", borderRadius: 9,
-          background: authLoading ? "rgba(34,211,238,0.2)" : "linear-gradient(135deg,#22D3EE,#EC4899)",
-          color: "white", fontWeight: 700, fontSize: 14, border: "none",
-          cursor: authLoading ? "not-allowed" : "pointer",
-          boxShadow: authLoading ? "none" : "0 0 20px rgba(34,211,238,0.3)", transition: "all 0.2s",
-        }}>
-          {authLoading ? (isSignUp ? "Creating account…" : "Logging in…") : (isSignUp ? "Start Free →" : "Log In →")}
-        </button>
-      </form>
-      {isSignUp && <p style={{ fontSize: 10, color: "#334155", textAlign: "center", marginTop: 10, marginBottom: 0 }}>No credit card · Cancel anytime</p>}
+      </div>
+
+      {/* STEP 1 — choose mode */}
+      {step === 1 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <button type="button" onClick={() => handleModeSelect(true)} style={{
+            width: "100%", padding: "14px 0", borderRadius: 10,
+            background: "linear-gradient(135deg,#22D3EE,#EC4899)",
+            color: "white", fontWeight: 800, fontSize: 15, border: "none",
+            cursor: "pointer", boxShadow: "0 0 20px rgba(34,211,238,0.25)",
+            letterSpacing: 0.1, transition: "opacity 0.15s",
+          }}
+            onMouseEnter={e => e.currentTarget.style.opacity = "0.88"}
+            onMouseLeave={e => e.currentTarget.style.opacity = "1"}
+          >
+            Sign Up
+          </button>
+          <button type="button" onClick={() => handleModeSelect(false)} style={{
+            width: "100%", padding: "14px 0", borderRadius: 10,
+            background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.12)",
+            color: "rgba(255,255,255,0.75)", fontWeight: 700, fontSize: 15,
+            cursor: "pointer", transition: "background 0.15s",
+          }}
+            onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.09)"}
+            onMouseLeave={e => e.currentTarget.style.background = "rgba(255,255,255,0.05)"}
+          >
+            Log In
+          </button>
+        </div>
+      )}
+
+      {/* STEP 2 — form */}
+      {step === 2 && (
+        <>
+          <button type="button" onClick={() => setStep(1)} style={{
+            display: "flex", alignItems: "center", gap: 5,
+            background: "none", border: "none", color: "#475569",
+            fontSize: 12, cursor: "pointer", padding: "0 0 12px 0",
+            fontFamily: "inherit",
+          }}>
+            ← Back
+          </button>
+          <form onSubmit={handleAuth}>
+            <input type="email" placeholder="Email address" required value={email} onChange={e => setEmail(e.target.value)} style={inp}
+              onFocus={e => { e.target.style.borderColor = "rgba(34,211,238,0.5)"; T.signupStarted(window?.location?.pathname) }}
+              onBlur={e => e.target.style.borderColor = "rgba(255,255,255,0.1)"} />
+            <input type="password" placeholder="Password" required value={password} onChange={e => setPassword(e.target.value)}
+              style={{ ...inp, marginBottom: isSignUp ? 4 : 0 }}
+              onFocus={e => e.target.style.borderColor = "rgba(34,211,238,0.5)"}
+              onBlur={e => e.target.style.borderColor = "rgba(255,255,255,0.1)"} />
+            {!isSignUp && (
+              <div style={{ textAlign: "right", marginBottom: 10 }}>
+                <button type="button" onClick={handleForgotPassword} style={{ fontSize: 11, color: "#475569", background: "none", border: "none", cursor: "pointer" }}>Forgot password?</button>
+              </div>
+            )}
+            {isSignUp && <div style={{ height: 10 }} />}
+            {authError && <div style={{ fontSize: 11, color: "#f87171", marginBottom: 8, textAlign: "center" }}>{authError}</div>}
+            {authMsg   && <div style={{ fontSize: 11, color: "#22D3EE",  marginBottom: 8, textAlign: "center" }}>{authMsg}</div>}
+            <button type="submit" disabled={authLoading} onClick={() => T.signupCtaClicked(window?.location?.pathname)} style={{
+              width: "100%", padding: "11px 0", borderRadius: 9,
+              background: authLoading ? "rgba(34,211,238,0.2)" : "linear-gradient(135deg,#22D3EE,#EC4899)",
+              color: "white", fontWeight: 700, fontSize: 14, border: "none",
+              cursor: authLoading ? "not-allowed" : "pointer",
+              boxShadow: authLoading ? "none" : "0 0 20px rgba(34,211,238,0.3)", transition: "all 0.2s",
+            }}>
+              {authLoading ? (isSignUp ? "Creating account…" : "Logging in…") : (isSignUp ? "Start Free →" : "Log In →")}
+            </button>
+          </form>
+        </>
+      )}
+
+      {/* Footer trust text — always visible */}
+      <p style={{ fontSize: 10, color: "#334155", textAlign: "center", marginTop: 14, marginBottom: 0 }}>No credit card · Cancel anytime</p>
     </div>
   )
 }
