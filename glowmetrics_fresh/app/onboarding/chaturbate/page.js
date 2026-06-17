@@ -21,13 +21,17 @@ export default function ChaturbateOnboardingPage() {
   const [user, setUser] = useState(null)
 
   useEffect(() => {
+    // onAuthStateChange fires first if there's a session in the URL hash (magic link / PKCE)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setUser(session.user)
+        setAuthLoading(false)
+      }
+    })
+    // Fallback: read existing cookie-based session
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) setUser(session.user)
       setAuthLoading(false)
-    })
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) setUser(session.user)
-      else setUser(null)
     })
     return () => subscription.unsubscribe()
   }, [])
@@ -64,54 +68,39 @@ export default function ChaturbateOnboardingPage() {
     if (!validateStep1()) return
     setLoading(true)
     try {
-      if (!user) {
-        setErrors({ submit: 'Session expired. Please refresh the page and try again.' })
-        return
-      }
-
-      // Check if a profile row exists for this user
-      const { data: existing } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('id', user.id)
-        .single()
-      console.log('[handleConnect] existing profile row:', existing)
-
       track('onboarding_connect_clicked', { broadcaster_type: broadcasterType })
 
-      console.log('[handleConnect] saving profile for user:', user.id, {
-        chaturbate_username: username.trim(),
-        chaturbate_token_type: 'stats',
-        broadcaster_type: broadcasterType,
-      })
-
-      const { data, error } = await supabase
-        .from('profiles')
-        .upsert({
-          id: user.id,
-          chaturbate_username: username.trim(),
-          chaturbate_stats_token: statsToken.trim(),
-          chaturbate_token_type: 'stats',
-          broadcaster_type: broadcasterType,
-        })
-        .select()
-
-      if (error) throw error
-
-      if (!data || data.length === 0) {
-        setErrors({ submit: 'Profile save failed silently. Please try again.' })
-        return
-      }
-
-      console.log('[handleConnect] profile saved:', data)
-      track('onboarding_connect_success')
-
-      // Trigger initial stats sync
-      fetch('/api/chaturbate/stats-sync', {
+      const res = await fetch('/api/onboarding/save-profile', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.id }),
-      }).catch(() => {}) // fire-and-forget
+        body: JSON.stringify({
+          chaturbate_username: username.trim(),
+          chaturbate_stats_token: statsToken.trim(),
+          broadcaster_type: broadcasterType,
+        }),
+      })
+
+      const result = await res.json()
+      if (res.status === 401) {
+        setErrors({ submit: 'Session expired — please refresh and try again.' })
+        return
+      }
+      if (!res.ok) throw new Error(result.error || 'Failed to save profile')
+
+      track('onboarding_connect_success')
+
+      // Trigger initial stats sync — pass session token for auth
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (!session?.access_token) return
+        fetch('/api/chaturbate/stats-sync', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({}),
+        }).catch(() => {})
+      })
 
       setStep(2)
     } catch (err) {

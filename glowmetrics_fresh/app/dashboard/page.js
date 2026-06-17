@@ -724,24 +724,25 @@ function TitleGenerator({ C, glassCard, analytics, tips, sessions, whales }) {
 
   const buildCtx = (overrides = {}) => {
     const now = new Date()
-    const currentHour = now.getUTCHours()
+    const currentHour = now.getHours() // local hour, not UTC
     const todayDay = now.toLocaleDateString("en-US", { weekday: "long" })
     const _analyticsBestHourCtx = analytics?.bestHour || null
     let bestHour = null
     if (_analyticsBestHourCtx) {
-      bestHour = parseInt(_analyticsBestHourCtx.hour)
+      bestHour = parseInt(_analyticsBestHourCtx.hour) // already local from analytics.js toLocalHour
     } else {
       const hourUSD = {}; const hourCount = {}
       ;(sessions || []).forEach(s => {
-        const h = new Date(s.startTime).getUTCHours()
+        const h = new Date(s.startTime).getHours() // local hour
         hourUSD[h] = (hourUSD[h] || 0) + s.totalUSD
         hourCount[h] = (hourCount[h] || 0) + 1
       })
       const bestHourEntry = Object.entries(hourUSD).map(([h, usd]) => [h, usd / (hourCount[h] || 1)]).sort((a,b) => b[1]-a[1])[0]
       bestHour = bestHourEntry ? parseInt(bestHourEntry[0]) : null
     }
-    const bestHourLabel = (bestHour === null || isNaN(bestHour)) ? null
-      : (() => { const _off = new Date().getTimezoneOffset()/-60; const _lh = Math.round(((bestHour+_off)%24+24)%24); return _lh===0?"12 AM":_lh<12?`${_lh} AM`:_lh===12?"12 PM":`${_lh-12} PM` })()
+    // bestHour is already a local hour — format directly, no offset needed
+    const fmtLocalHour = h => h === 0 ? "12 AM" : h < 12 ? `${h} AM` : h === 12 ? "12 PM" : `${h - 12} PM`
+    const bestHourLabel = (bestHour === null || isNaN(bestHour)) ? null : fmtLocalHour(bestHour)
     const hoursUntilPeak = bestHour !== null ? (bestHour - currentHour + 24) % 24 : 99
     const isPeakNow = hoursUntilPeak <= 1
     const peakSoon = hoursUntilPeak <= 3 && !isPeakNow
@@ -2111,14 +2112,14 @@ const handleCSV = async (file, forcePlatform = null) => {
   const buildDailyBrief = () => {
     if (!tips || tips.length === 0 || !analytics) return null
     const now = new Date()
-    const utcHour = now.getUTCHours()
-    const utcDay = now.getUTCDay()
+    const utcHour = now.getHours() // local hour — analytics hours are already local
     const DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
-    const todayName = DAYS[utcDay]
+    const todayName = DAYS[now.getDay()] // local day of week
 
     // Best hour: today-specific per platform first, then all-time fallback
     // Formula: SUM(usd) / COUNT(DISTINCT hour-bucket) for THIS day of week on THIS platform
-    const fmtHour = h => { const _off=new Date().getTimezoneOffset()/-60; const _lh=Math.round(((h+_off)%24+24)%24); return _lh===0?'12 AM':_lh<12?`${_lh} AM`:_lh===12?'12 PM':`${_lh-12} PM` }
+    // bestHour values from analytics are already local hours — format directly, no offset
+    const fmtHour = h => h === 0 ? '12 AM' : h < 12 ? `${h} AM` : h === 12 ? '12 PM' : `${h - 12} PM`
     const platBestTimes = analytics?.platformBestTimes || {}
     let todayBestPlat = null, todayBestHourNum = null, todayBestAvg = 0
     Object.entries(platBestTimes).forEach(([plat, times]) => {
@@ -2141,7 +2142,7 @@ const handleCSV = async (file, forcePlatform = null) => {
     tips.forEach(t => {
       const p = t.platform || 'Chaturbate'
       const d = new Date(t.date_time || t.dateRaw)
-      const h = d.getUTCHours()
+      const h = d.getHours() // local hour to match analytics.js toLocalHour
       const bucket = Math.floor(d.getTime() / 3600000)
       if (!platHourUSD[p]) { platHourUSD[p] = {}; platHourSessions[p] = {} }
       if (!platHourUSD[p][h]) { platHourUSD[p][h] = 0; platHourSessions[p][h] = new Set() }
@@ -2175,7 +2176,7 @@ const handleCSV = async (file, forcePlatform = null) => {
 
     // Income prediction for peak window — use median-based displayAvg as single source of truth
     const sessionsAtPeak = (analytics?.sessions || []).filter(s => {
-      const h = new Date(s.startTime).getUTCHours()
+      const h = new Date(s.startTime).getHours() // local hour
       return bh !== null && Math.abs(h - bh) <= 1
     })
     const peakAvg = displayAvg || bestHour?.avg || sessionAvg
@@ -2330,21 +2331,21 @@ const handleCSV = async (file, forcePlatform = null) => {
         : tips.filter(t => t.username.toLowerCase() === w.username.toLowerCase())
       if (fanTips.length < 3) return
 
-      // FIX: use getUTCHours() — tips stored in UTC
+      // Use local hours — tips' date_time is UTC but getHours() converts to browser local
       const hourCounts = {}
       fanTips.forEach(t => {
-        const h = new Date(t.date_time || t.dateRaw).getUTCHours()
+        const h = new Date(t.date_time || t.dateRaw).getHours() // local hour
         hourCounts[h] = (hourCounts[h] || 0) + 1
       })
       const sortedHours = Object.entries(hourCounts).sort((a, b) => b[1] - a[1])
       if (!sortedHours.length) return
 
-      const peakHour = parseInt(sortedHours[0][0])
-      const hoursAway = (peakHour - new Date().getUTCHours() + 24) % 24
+      const peakHour = parseInt(sortedHours[0][0]) // already local
+      const hoursAway = (peakHour - new Date().getHours() + 24) % 24
       const _pf1 = sortedHours[0][1] / fanTips.length
       const _pd1 = hoursAway === 0 ? 1.0 : hoursAway === 1 ? 0.65 : 0.35
       const confidence = Math.min(90, Math.max(25, Math.round(_pf1 * 200 * _pd1)))
-      const label = (() => { const _off=new Date().getTimezoneOffset()/-60; const _lh=Math.round(((peakHour+_off)%24+24)%24); return _lh===0?'12 AM':_lh<12?`${_lh} AM`:_lh===12?'12 PM':`${_lh-12} PM` })()
+      const label = peakHour === 0 ? '12 AM' : peakHour < 12 ? `${peakHour} AM` : peakHour === 12 ? '12 PM' : `${peakHour - 12} PM`
       const daysSince = Math.floor((now - new Date(w.lastTipDate)) / 86400000)
 
       if (hoursAway === 0 || hoursAway === 1) {
