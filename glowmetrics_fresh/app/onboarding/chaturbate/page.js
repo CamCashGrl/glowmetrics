@@ -72,13 +72,17 @@ export default function ChaturbateOnboardingPage() {
 
       const { data: { session } } = await supabase.auth.getSession()
 
+      if (!session?.user?.id) {
+        setErrors({ submit: 'Session expired — please refresh and try again.' })
+        setLoading(false)
+        return
+      }
+
       const res = await fetch('/api/onboarding/save-profile', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(session?.access_token ? { 'Authorization': `Bearer ${session.access_token}` } : {}),
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          user_id: session.user.id,
           chaturbate_username: username.trim(),
           chaturbate_stats_token: statsToken.trim(),
           broadcaster_type: broadcasterType,
@@ -86,10 +90,6 @@ export default function ChaturbateOnboardingPage() {
       })
 
       const result = await res.json()
-      if (res.status === 401) {
-        setErrors({ submit: 'Session expired — please refresh and try again.' })
-        return
-      }
       if (!res.ok) throw new Error(result.error || 'Failed to save profile')
 
       track('onboarding_connect_success')

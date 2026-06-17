@@ -1,72 +1,42 @@
-import { createClient } from '@supabase/supabase-js';
-import { NextResponse } from 'next/server';
-
-// Admin client — initialized lazily inside handler to avoid build-time crash
-function getAdminClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  );
-}
+import { createClient } from '@supabase/supabase-js'
 
 export async function POST(request) {
   try {
-    // Extract Bearer token from Authorization header
-    const authHeader = request.headers.get('authorization') || '';
-    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+    const body = await request.json()
+    const { chaturbate_username, chaturbate_stats_token, broadcaster_type, user_id } = body
 
-    if (!token) {
-      console.error('[save-profile] No Bearer token in Authorization header');
-      return NextResponse.json({ error: 'Unauthorized – no token' }, { status: 401 });
+    if (!user_id || !chaturbate_username || !chaturbate_stats_token) {
+      return Response.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
-    const supabaseAdmin = getAdminClient();
+    const adminClient = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    )
 
-    // Verify the token and get the user — works even before cookies are set (PKCE flow)
-    const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token);
+    console.log('Service role key present:', !!process.env.SUPABASE_SERVICE_ROLE_KEY)
+    console.log('Upserting for user_id:', user_id)
 
-    if (userError || !user) {
-      console.error('[save-profile] Token verification failed:', userError?.message);
-      return NextResponse.json({ error: 'Unauthorized – invalid token' }, { status: 401 });
-    }
-
-    const body = await request.json();
-    const {
-      chaturbate_username,
-      chaturbate_api_token,
-      chaturbate_stats_token,
-      chaturbate_token_type,
-      broadcaster_type,
-    } = body;
-
-    // Upsert profile using admin client — bypasses RLS entirely
-    const { error: upsertError } = await supabaseAdmin
+    const { data, error } = await adminClient
       .from('profiles')
-      .upsert(
-        {
-          id: user.id,
-          ...(chaturbate_username !== undefined && { chaturbate_username }),
-          ...(chaturbate_api_token !== undefined && { chaturbate_api_token }),
-          ...(chaturbate_stats_token !== undefined && { chaturbate_stats_token }),
-          ...(chaturbate_token_type !== undefined && { chaturbate_token_type }),
-          ...(broadcaster_type !== undefined && { broadcaster_type }),
-          onboarding_completed: true,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: 'id' }
-      );
+      .upsert({
+        id: user_id,
+        chaturbate_username: chaturbate_username.trim(),
+        chaturbate_stats_token: chaturbate_stats_token.trim(),
+        chaturbate_token_type: 'stats',
+        broadcaster_type: broadcaster_type || 'female',
+      })
+      .select()
+      .single()
 
-    if (upsertError) {
-      console.error('[save-profile] Upsert error:', upsertError.message);
-      return NextResponse.json({ error: upsertError.message }, { status: 500 });
+    if (error) {
+      console.error('Upsert error:', error)
+      return Response.json({ error: error.message }, { status: 500 })
     }
 
-    console.log('[save-profile] Profile saved for user:', user.id);
-    return NextResponse.json({ success: true });
-
+    return Response.json({ success: true, data })
   } catch (err) {
-    console.error('[save-profile] Unexpected error:', err.message);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    console.error('Unexpected error:', err)
+    return Response.json({ error: err.message }, { status: 500 })
   }
 }
