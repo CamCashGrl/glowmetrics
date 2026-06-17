@@ -7,8 +7,10 @@ export default function ChaturbateTokenConnector({ user, onConnected }) {
   const [statsToken, setStatsToken] = useState('')
   const [eventsToken, setEventsToken] = useState('')
   const [loading, setLoading] = useState(false)
+  const [syncing, setSyncing] = useState(false)
   const [error, setError] = useState(null)
   const [connected, setConnected] = useState(false)
+  const [syncResult, setSyncResult] = useState(null)
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -22,7 +24,7 @@ export default function ChaturbateTokenConnector({ user, onConnected }) {
       .from('profiles')
       .upsert({
         id: user.id,
-        chaturbate_username:   username.trim(),
+        chaturbate_username:    username.trim(),
         chaturbate_stats_token: statsToken.trim(),
         ...(eventsToken.trim() ? { chaturbate_api_token: eventsToken.trim() } : {}),
       })
@@ -31,23 +33,59 @@ export default function ChaturbateTokenConnector({ user, onConnected }) {
     if (dbErr) { setError(dbErr.message); return }
 
     setConnected(true)
-    if (onConnected) onConnected()
+
+    // Trigger stats sync automatically
+    setSyncing(true)
+    try {
+      const syncRes = await fetch('/api/chaturbate/stats-sync', { method: 'POST' })
+      const syncData = await syncRes.json()
+      setSyncResult(syncData)
+    } catch (err) {
+      console.error('Sync failed:', err)
+    } finally {
+      setSyncing(false)
+      if (onConnected) onConnected({ hasEventsToken: !!eventsToken.trim() })
+    }
   }
 
   if (connected) {
+    const noHistory = syncResult && syncResult.inserted === 0 && syncResult.total === 0
     return (
       <div style={{
         borderRadius: 14, border: '1px solid rgba(52,211,153,0.3)',
         background: 'rgba(52,211,153,0.06)', padding: '24px 28px',
-        display: 'flex', alignItems: 'center', gap: 12,
+        display: 'flex', flexDirection: 'column', gap: 12,
       }}>
-        <span style={{ fontSize: 22 }}>✅</span>
-        <div>
-          <div style={{ fontSize: 15, fontWeight: 700, color: '#34d399' }}>Connected! Live sync is now active.</div>
-          <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', marginTop: 3 }}>
-            Chaturbate will now push live tips to your dashboard automatically.
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 22 }}>✅</span>
+          <div style={{ fontSize: 15, fontWeight: 700, color: '#34d399' }}>
+            {noHistory ? 'Connected — no recent tip history found' : `Connected as ${username}`}
           </div>
         </div>
+
+        {syncing && (
+          <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ width: 14, height: 14, borderRadius: '50%', border: '2px solid rgba(34,211,238,0.3)', borderTopColor: '#22d3ee', animation: 'cc-spin 0.8s linear infinite', display: 'inline-block', flexShrink: 0 }} />
+            Syncing your Chaturbate tip history…
+          </div>
+        )}
+
+        {!syncing && syncResult && !noHistory && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>
+              📊 Synced {syncResult.inserted} tips from your Chaturbate history
+            </div>
+            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)' }}>
+              {syncResult.inserted} new tips imported · {syncResult.skipped} already existed
+            </div>
+          </div>
+        )}
+
+        {!syncing && noHistory && (
+          <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)' }}>
+            You can upload a CSV for historical data
+          </div>
+        )}
       </div>
     )
   }

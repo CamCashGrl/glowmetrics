@@ -52,7 +52,9 @@ export default function OnboardingPage() {
   const router = useRouter()
   const [user, setUser] = useState(null)
   const [checking, setChecking] = useState(true)
-  const [step, setStep] = useState('csv') // 'csv' | 'chaturbate_token'
+  const [step, setStep] = useState('csv') // 'csv' | 'chaturbate_token' | 'done'
+  const [tokenConnected, setTokenConnected] = useState(false)
+  const [eventsConnected, setEventsConnected] = useState(false)
   const [selectedPlatform, setSelectedPlatform] = useState(0)
   const [uploading, setUploading] = useState(false)
   const [uploadDone, setUploadDone] = useState(false)
@@ -177,7 +179,7 @@ export default function OnboardingPage() {
         </div>
 
         {/* SUCCESS STATE */}
-        {uploadDone && uploadResult && (
+        {uploadDone && uploadResult && step !== 'done' && (
           <div style={{
             padding: 40, borderRadius: 20, textAlign: "center",
             background: "rgba(16,185,129,0.08)", border: "1px solid rgba(16,185,129,0.35)",
@@ -347,9 +349,12 @@ export default function OnboardingPage() {
                 <p style={{ fontSize: 13, color: C.muted, marginBottom: 20, lineHeight: 1.65 }}>
                   Get live tips pushed to your dashboard while you stream — no extension needed.
                 </p>
-                <ChaturbateTokenConnector user={user} onConnected={() => goToDashboard()} />
+                <ChaturbateTokenConnector
+                  user={user}
+                  onConnected={({ hasEventsToken } = {}) => { setTokenConnected(true); if (hasEventsToken) setEventsConnected(true); setStep('done') }}
+                />
                 <button
-                  onClick={goToDashboard}
+                  onClick={() => setStep('done')}
                   style={{
                     marginTop: 14, background: "none", border: "none",
                     color: C.muted, fontSize: 13, cursor: "pointer",
@@ -400,6 +405,49 @@ export default function OnboardingPage() {
             </div>
             )}
           </>
+        )}
+
+        {/* DONE / ALL SET — outside !uploadDone so it renders regardless */}
+        {step === 'done' && (
+          <div style={{ animation: "fadeUp 0.4s ease both", marginBottom: 24 }}>
+            <div style={{ textAlign: "center", marginBottom: 28 }}>
+              <div style={{ fontSize: 52, marginBottom: 12 }}>🎉</div>
+              <div style={{ fontSize: 24, fontWeight: 900, color: C.white, marginBottom: 8 }}>You&apos;re all set!</div>
+              <p style={{ fontSize: 14, color: C.muted, lineHeight: 1.7 }}>Based on what you connected:</p>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 28 }}>
+              {tokenConnected && (
+                <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", borderRadius: 10, background: "rgba(16,185,129,0.08)", border: "1px solid rgba(16,185,129,0.2)", fontSize: 14, color: C.white }}>
+                  <span>✅</span> <span>Chaturbate tip history synced</span>
+                </div>
+              )}
+              {eventsConnected && (
+                <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", borderRadius: 10, background: "rgba(16,185,129,0.08)", border: "1px solid rgba(16,185,129,0.2)", fontSize: 14, color: C.white }}>
+                  <span>✅</span> <span>Live tip tracking ready</span>
+                </div>
+              )}
+              {uploadDone && (
+                <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", borderRadius: 10, background: "rgba(16,185,129,0.08)", border: "1px solid rgba(16,185,129,0.2)", fontSize: 14, color: C.white }}>
+                  <span>✅</span> <span>Tip history uploaded ({uploadResult?.inserted || 0} tips)</span>
+                </div>
+              )}
+              {!tokenConnected && !eventsConnected && !uploadDone && (
+                <div style={{ padding: "12px 16px", borderRadius: 10, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", fontSize: 13, color: C.muted }}>
+                  → Upload a CSV or connect your token anytime from the dashboard
+                </div>
+              )}
+            </div>
+
+            <button onClick={goToDashboard} style={{
+              width: "100%", padding: "15px 0", borderRadius: 12,
+              background: "linear-gradient(135deg, #10B981, #22D3EE)",
+              border: "none", color: "#fff", fontSize: 16, fontWeight: 800,
+              cursor: "pointer", boxShadow: "0 8px 28px rgba(16,185,129,0.3)"
+            }}>
+              Go to Dashboard →
+            </button>
+          </div>
         )}
 
         <div style={{ textAlign: "center", marginTop: 20, fontSize: 12, color: C.muted }}>
