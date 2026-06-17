@@ -176,9 +176,11 @@ export default function CSVImport({ user, onSuccess, showToast }) {
         background: "rgba(34,211,238,0.05)", border: "1px solid rgba(34,211,238,0.15)",
         fontSize: 12, color: C.muted
       }}>
-        <strong style={{ color: C.cyan }}>CSV not loading?</strong> Try selecting your platform
-        from the dropdown above, then re-upload. For Chaturbate: export from Stats & Data → Token Stats.
-        For BongaCams: export from Reports.
+        <strong style={{ color: C.cyan }}>How to get your CSV:</strong> There is no download button — you need to copy-paste into Google Sheets first.
+        Select all rows on the stats page, copy (Ctrl+C), paste into a new Google Sheet, then File → Download → CSV.
+        Chaturbate: chaturbate.com/stats/token_stats/ &nbsp;·&nbsp;
+        BongaCams: Statistics → Earnings → Token History &nbsp;·&nbsp;
+        MyFreeCams: Model Admin → Token Stats → Transaction History
       </div>
 
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>

@@ -17,34 +17,40 @@ const PLATFORMS = [
     name: "Chaturbate", emoji: "🟣", color: C.cyan,
     steps: [
       "Log into Chaturbate as a broadcaster",
-      "Go to Stats & Data → Token Stats",
-      "Set your date range (last 90 days works great)",
-      'Click "Download CSV" or "Export"',
+      "Navigate to chaturbate.com/stats/token_stats/ (or: Stats & Data → Token Stats)",
+      "Set your date range at the top",
+      "Select all rows in the table (Ctrl+A), copy (Ctrl+C)",
+      "Open a new Google Sheet, paste (Ctrl+V)",
+      "File → Download → Comma-separated values (.csv)",
       "Upload that file below ↓"
     ],
-    tip: "Look for a file named something like chaturbate_token_stats.csv"
+    tip: "Go to chaturbate.com/stats/token_stats/ → select all rows → paste into Google Sheets → download as CSV"
   },
   {
     name: "BongaCams", emoji: "🔴", color: C.pink,
     steps: [
       "Log into your BongaCams model account",
-      "Go to Statistics → Earnings History",
-      "Select your date range and click Export",
-      "Save the CSV file to your computer",
+      "Navigate to Statistics → Earnings → Token History",
+      "Select your date range using the date pickers",
+      "Select all rows, copy (Ctrl+C)",
+      "Open a new Google Sheet, paste (Ctrl+V)",
+      "File → Download → Comma-separated values (.csv)",
       "Upload that file below ↓"
     ],
-    tip: "BongaCams exports include date, username, tokens, and USD"
+    tip: "Statistics → Earnings → Token History → select all rows → paste into Google Sheets → download as CSV"
   },
   {
     name: "MyFreeCams", emoji: "🟠", color: C.gold,
     steps: [
       "Log into your MFC model account",
-      "Go to Model Admin → Token Stats",
-      "Click Transaction History and set your date range",
-      "Click Export CSV",
+      "Navigate to Model Admin → Token Stats → Transaction History",
+      "Set your date range",
+      "Select all rows, copy (Ctrl+C)",
+      "Open a new Google Sheet, paste (Ctrl+V)",
+      "File → Download → Comma-separated values (.csv)",
       "Upload that file below ↓"
     ],
-    tip: "MFC exports are very detailed — all transaction types included"
+    tip: "Model Admin → Token Stats → Transaction History → select all rows → paste into Google Sheets → download as CSV"
   }
 ]
 
@@ -55,7 +61,6 @@ export default function OnboardingPage() {
   const [step, setStep] = useState('csv') // 'csv' | 'chaturbate_token' | 'done'
   const [tokenConnected, setTokenConnected] = useState(false)
   const [eventsConnected, setEventsConnected] = useState(false)
-  const [broadcasterType, setBroadcasterType] = useState('female')
   const [selectedPlatform, setSelectedPlatform] = useState(0)
   const [uploading, setUploading] = useState(false)
   const [uploadDone, setUploadDone] = useState(false)
@@ -379,41 +384,6 @@ export default function OnboardingPage() {
                   Get live tips pushed to your dashboard while you stream — no extension needed.
                 </p>
 
-                {/* Broadcaster type selector */}
-                {(() => {
-                  const types = [
-                    { id: 'female', label: 'Female', emoji: '👩' },
-                    { id: 'male',   label: 'Male',   emoji: '👨' },
-                    { id: 'trans',  label: 'Trans',  emoji: '🏳️‍⚧️' },
-                    { id: 'couple', label: 'Couple', emoji: '👫' },
-                  ]
-                  return (
-                    <div style={{ marginBottom: '24px' }}>
-                      <label style={{ fontSize: '13px', color: '#94a3b8', marginBottom: '8px', display: 'block' }}>
-                        I broadcast as
-                      </label>
-                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                        {types.map(t => (
-                          <button
-                            key={t.id}
-                            type="button"
-                            onClick={() => setBroadcasterType(t.id)}
-                            style={{
-                              padding: '8px 16px', borderRadius: '100px',
-                              border: broadcasterType === t.id ? '1px solid #a855f7' : '1px solid rgba(255,255,255,0.1)',
-                              background: broadcasterType === t.id ? 'rgba(168,85,247,0.15)' : 'transparent',
-                              color: broadcasterType === t.id ? '#a855f7' : '#94a3b8',
-                              fontSize: '13px', fontWeight: '600', cursor: 'pointer'
-                            }}
-                          >
-                            {t.emoji} {t.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )
-                })()}
-
                 {/* Direct link to token page */}
                 <a
                   href="https://chaturbate.com/statsapi/authtoken/"
@@ -435,7 +405,6 @@ export default function OnboardingPage() {
 
                 <ChaturbateTokenConnector
                   user={user}
-                  broadcasterType={broadcasterType}
                   onConnected={({ hasEventsToken } = {}) => { setTokenConnected(true); if (hasEventsToken) setEventsConnected(true); setStep('done') }}
                 />
 

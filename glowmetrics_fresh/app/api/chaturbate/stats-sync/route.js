@@ -1,17 +1,24 @@
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
+import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
 export async function POST(request) {
-  const supabase = createRouteHandlerClient({ cookies })
+  const auth = request.headers.get('Authorization')
+  if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  // Auth check
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const token = auth.replace('Bearer ', '')
+  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    global: { headers: { Authorization: `Bearer ${token}` } }
+  })
 
-  const userId = session.user.id
+  const { data: { user }, error: ue } = await supabase.auth.getUser(token)
+  if (ue || !user) return NextResponse.json({ error: 'Invalid session' }, { status: 401 })
 
-  // Get credentials from profiles
+  const userId = user.id
+
+  // Read credentials from profiles (RLS: own row)
   const { data: profile, error: profileError } = await supabase
     .from('profiles')
     .select('chaturbate_username, chaturbate_stats_token')
@@ -19,69 +26,92 @@ export async function POST(request) {
     .single()
 
   if (profileError || !profile?.chaturbate_stats_token) {
-    return NextResponse.json({ error: 'No Stats API token configured' }, { status: 400 })
+    return NextResponse.json({ error: 'No stats token configured' }, { status: 400 })
   }
 
   const { chaturbate_username, chaturbate_stats_token } = profile
 
+  // Check sync cursor for incremental sync
+  const { data: cursorRow } = await supabase
+    .from('sync_cursors')
+    .select('last_tip_id')
+    .eq('user_id', userId)
+    .eq('platform', 'chaturbate_stats')
+    .single()
+
+  const lastTipTimestamp = cursorRow?.last_tip_id || null
+
   const startedAt = new Date().toISOString()
 
   try {
-    // Paginated fetch — follows `next` until exhausted or MAX_PAGES reached
     let allResults = []
-    let nextUrl = `https://chaturbate.com/statsapi/ts/token-stats/?username=${chaturbate_username}&token=${chaturbate_stats_token}&limit=1000`
-    let pageCount = 0
-    const MAX_PAGES = 10
+    let offset = 0
+    const LIMIT = 500
+    const MAX_PAGES = 20
 
-    while (nextUrl && pageCount < MAX_PAGES) {
+    while (offset / LIMIT < MAX_PAGES) {
+      let url = `https://chaturbate.com/statsapi/tipping/token-stats/?username=${encodeURIComponent(chaturbate_username)}&token=${encodeURIComponent(chaturbate_stats_token)}&limit=${LIMIT}&offset=${offset}`
+      if (lastTipTimestamp) url += `&date_gte=${encodeURIComponent(lastTipTimestamp)}`
+
       try {
-        const res = await fetch(nextUrl, { headers: { 'User-Agent': 'CamCash/1.0' } })
+        const res = await fetch(url, { headers: { 'User-Agent': 'CamCash/1.0' } })
         if (!res.ok) break
         const data = await res.json()
-        const results = data?.results || data?.tips || []
+        const results = data?.results || []
+        if (results.length === 0) break
         allResults = [...allResults, ...results]
-        nextUrl = data?.next || null
-        pageCount++
+        if (results.length < LIMIT) break
+        offset += LIMIT
       } catch {
         break
       }
     }
 
     if (allResults.length === 0) {
-      return NextResponse.json({ message: 'No tips found', inserted: 0, skipped: 0, total: 0 })
+      return NextResponse.json({ message: 'No new tips found', inserted: 0, skipped: 0, total: 0 })
     }
 
-    // Map to tips table schema
-    // tip_ref uses global index across all pages to avoid collisions
-    const tips = allResults.map((r, i) => ({
+    // Map to insert_tips_dedup schema
+    const rows = allResults.map(r => ({
       user_id: userId,
-      date_time: new Date(r.date || r.created_at || r.timestamp).toISOString(),
+      date_time: r.created_at,
       platform: 'Chaturbate',
-      username: r.username || r.from_username || 'unknown',
-      username_lower: (r.username || r.from_username || 'unknown').toLowerCase(),
-      tokens: parseInt(r.tokens || r.amount || 0),
-      usd: parseFloat(((parseInt(r.tokens || r.amount || 0)) * 0.05).toFixed(2)),
-      tip_note: r.note || r.message || '',
-      tip_ref: `cb_stats_${r.date || r.created_at}_${r.username}_${i}`,
-      tip_type: 'tip'
+      username: r.username,
+      tip_type: 'Tip',
+      tokens: parseInt(r.num_tokens || 0),
+      usd: parseFloat(parseFloat(r.value_in_usd || 0).toFixed(2)),
+      tip_note: r.tip_note || null,
     }))
 
-    // Insert with deduplication via tip_ref
-    let inserted = 0
-    let skipped = 0
+    // Use SECURITY DEFINER RPC — bypasses RLS, handles dedup
+    const { data: rpcResult, error: rpcErr } = await supabase.rpc('insert_tips_dedup', {
+      tips: rows
+    })
 
-    for (const tip of tips) {
-      const { error } = await supabase
-        .from('tips')
-        .insert(tip)
-        .onConflict('tip_ref')
-        .ignore()
+    if (rpcErr) throw new Error(rpcErr.message)
 
-      if (error) skipped++
-      else inserted++
+    const inserted = rpcResult?.inserted ?? 0
+    const skipped = rpcResult?.skipped ?? 0
+
+    // Update sync cursor with most recent tip timestamp
+    const mostRecent = allResults
+      .map(r => r.created_at)
+      .filter(Boolean)
+      .sort()
+      .pop()
+
+    if (mostRecent) {
+      await supabase
+        .from('sync_cursors')
+        .upsert({
+          user_id: userId,
+          platform: 'chaturbate_stats',
+          last_tip_id: mostRecent,
+          last_synced_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'user_id,platform' })
     }
 
-    // Log sync job
     await supabase.from('sync_jobs').insert({
       user_id: userId,
       platform: 'Chaturbate',
@@ -94,7 +124,7 @@ export async function POST(request) {
       completed_at: new Date().toISOString()
     })
 
-    return NextResponse.json({ message: 'Sync complete', inserted, skipped, total: tips.length })
+    return NextResponse.json({ inserted, skipped, total: rows.length })
 
   } catch (err) {
     console.error('[stats-sync]', err)
