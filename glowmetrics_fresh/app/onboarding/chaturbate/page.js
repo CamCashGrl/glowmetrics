@@ -70,27 +70,24 @@ export default function ChaturbateOnboardingPage() {
     try {
       track('onboarding_connect_clicked', { broadcaster_type: broadcasterType })
 
-      const { data: { session } } = await supabase.auth.getSession()
-
-      const res = await fetch('/api/onboarding/save-profile', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(session?.access_token ? { 'Authorization': `Bearer ${session.access_token}` } : {}),
-        },
-        body: JSON.stringify({
-          chaturbate_username: username.trim(),
-          chaturbate_stats_token: statsToken.trim(),
-          broadcaster_type: broadcasterType,
-        }),
-      })
-
-      const result = await res.json()
-      if (res.status === 401) {
+      const { data: { user: currentUser } } = await supabase.auth.getUser()
+      if (!currentUser?.id) {
         setErrors({ submit: 'Session expired — please refresh and try again.' })
+        setLoading(false)
         return
       }
-      if (!res.ok) throw new Error(result.error || 'Failed to save profile')
+
+      const { error: upsertError } = await supabase
+        .from('profiles')
+        .upsert({
+          id: currentUser.id,
+          chaturbate_username: username.trim(),
+          chaturbate_stats_token: statsToken.trim(),
+          chaturbate_token_type: 'stats',
+          broadcaster_type: broadcasterType,
+        })
+
+      if (upsertError) throw new Error(upsertError.message || 'Failed to save profile')
 
       track('onboarding_connect_success')
 
