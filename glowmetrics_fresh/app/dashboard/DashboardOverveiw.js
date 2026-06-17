@@ -60,7 +60,7 @@ export default function DashboardOverview({
             {(() => {
               if (!dailyBrief) return null
               const { todayName, bhLabel, bh, atPeak, hoursUntilPeak, displayPlat, displayAvg,
-                isBestDay, predictionLow, predictionHigh, likelyOnline, reengageFans } = dailyBrief
+                isBestDay, forecastLow, forecastHigh, likelyOnline, reengageFans } = dailyBrief
 
               // Compute state: at_peak | before_stream | post_stream
               const lastSession = sessions.length ? [...sessions].sort((a,b) => new Date(b.startTime)-new Date(a.startTime))[0] : null
@@ -160,7 +160,7 @@ export default function DashboardOverview({
                             <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
                               {displayAvg > 0 && <span style={{ fontSize: 12, color: '#64748B' }}>Historically <span style={{ color: '#F59E0B', fontWeight: 700 }}>${displayAvg.toFixed(0)}/session</span></span>}
                               {likelyOnline.length > 0 && <span style={{ fontSize: 12, color: '#64748B' }}><span style={{ color: '#10B981', fontWeight: 700 }}>{likelyOnline.length} whale{likelyOnline.length > 1 ? 's' : ''}</span> likely online</span>}
-                              {predictionLow > 0 && <span style={{ fontSize: 12, color: '#64748B' }}>Expected <span style={{ color: '#10B981', fontWeight: 700 }}>${predictionLow}–${predictionHigh}</span></span>}
+                              {forecastLow > 0 && <span style={{ fontSize: 12, color: '#64748B' }}>Expected <span style={{ color: '#10B981', fontWeight: 700 }}>${forecastLow}–${forecastHigh}</span></span>}
                             </div>
                           </>
                         )}
@@ -219,7 +219,7 @@ export default function DashboardOverview({
                 const ret = Object.values(fc).filter(c=>c>1).length
                 return total > 0 ? Math.round((ret/total)*100) : 0
               })()
-              const forecast = dailyBrief ? dailyBrief.predictionLow + '–$' + dailyBrief.predictionHigh : null
+              const forecast = dailyBrief ? dailyBrief.forecastLow + '–$' + dailyBrief.forecastHigh : null
 
               const kpis = [
                 {
