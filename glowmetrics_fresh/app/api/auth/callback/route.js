@@ -26,7 +26,7 @@ export async function GET(req) {
         }),
       }).catch(err => console.error('[auth/callback] notify/signup failed:', err.message))
 
-      return NextResponse.redirect(`${origin}/dashboard`)
+      return NextResponse.redirect(`${origin}/onboarding`)
     }
   }
 
