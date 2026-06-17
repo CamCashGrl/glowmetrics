@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { track } from '../../../lib/track';
 
 const C = {
   bg: '#05070f',
@@ -120,6 +121,7 @@ export default function LiveDemoPage() {
       lastTipRef.current = demoTimeRef.current;
     }
 
+    track('live_demo_started')
     tickRef.current = setInterval(() => {
       const t = demoTimeRef.current + 0.1 * speedRef.current;
       demoTimeRef.current = t;
@@ -292,7 +294,7 @@ export default function LiveDemoPage() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ fontSize: 10, color: C.dim }}>Speed:</span>
           {[1, 5, 10].map(s => (
-            <button key={s} onClick={() => { setSpeed(s); speedRef.current = s; }} style={{
+            <button key={s} onClick={() => { setSpeed(s); speedRef.current = s; track('live_demo_speed_changed', { speed: s }); }} style={{
               padding: '4px 12px', borderRadius: 6, cursor: 'pointer',
               border: speed === s ? `1px solid ${C.cyan}` : '1px solid rgba(255,255,255,0.1)',
               background: speed === s ? 'rgba(34,211,238,0.12)' : 'transparent',

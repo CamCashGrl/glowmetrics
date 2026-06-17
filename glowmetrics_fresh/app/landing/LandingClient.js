@@ -3,6 +3,7 @@ import React, { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
 import { T } from '../../lib/tracking'
+import { track } from '../../lib/track'
 
 function AuthPanel({
   id, isSignUp, setIsSignUp,
@@ -265,19 +266,21 @@ export default function LandingPage() {
   const handleAuth = async (e) => {
     e.preventDefault(); setAuthLoading(true); setAuthError(""); setAuthMsg("")
     if (isSignUp) {
+      track('signup_started')
       const { error } = await supabase.auth.signUp({ email, password })
       if (error) { setAuthError(error.message); setAuthLoading(false) }
       else {
         if (typeof twq === 'function') twq('event', 'tw-rc0w2-rcj9h', {})
         fetch('/api/admin/notify-signup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, source: 'landing' }) }).catch(() => {})
         const { data: { user } } = await supabase.auth.getUser()
-        if (user) { T.signupCompleted(window?.location?.pathname); router.push("/onboarding") }
+        if (user) { track('signup_success'); T.signupCompleted(window?.location?.pathname); router.push("/onboarding") }
         else { setAuthMsg("Account created! Check your email to confirm, then log in."); setIsSignUp(false); setAuthLoading(false) }
       }
     } else {
       const { error } = await supabase.auth.signInWithPassword({ email, password })
       if (error) { setAuthError(error.message); setAuthLoading(false) }
       else {
+        track('login_success')
         // Check if onboarding is complete
         const { data: { user } } = await supabase.auth.getUser()
         const { data: profile } = await supabase

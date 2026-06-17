@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { track } from '../../../lib/track'
 
 export default function ChaturbateOnboardingPage() {
   const router = useRouter()
@@ -76,6 +77,8 @@ export default function ChaturbateOnboardingPage() {
         .single()
       console.log('[handleConnect] existing profile row:', existing)
 
+      track('onboarding_connect_clicked', { broadcaster_type: broadcasterType })
+
       console.log('[handleConnect] saving profile for user:', user.id, {
         chaturbate_username: username.trim(),
         chaturbate_token_type: 'stats',
@@ -101,6 +104,7 @@ export default function ChaturbateOnboardingPage() {
       }
 
       console.log('[handleConnect] profile saved:', data)
+      track('onboarding_connect_success')
 
       // Trigger initial stats sync
       fetch('/api/chaturbate/stats-sync', {
@@ -111,6 +115,7 @@ export default function ChaturbateOnboardingPage() {
 
       setStep(2)
     } catch (err) {
+      track('onboarding_connect_error', { error: err.message })
       setErrors({ submit: err.message || 'Something went wrong. Try again.' })
     } finally {
       setLoading(false)
@@ -118,14 +123,17 @@ export default function ChaturbateOnboardingPage() {
   }
 
   function handleSkipToCSV() {
+    track('onboarding_skip_to_csv')
     router.push('/dashboard?onboarding=csv')
   }
 
   function handleSkipToken() {
+    track('onboarding_skip_token')
     router.push('/dashboard?onboarding=skipped')
   }
 
   function handleFinish() {
+    track('onboarding_finish')
     setStep(3)
     setTimeout(() => router.push('/dashboard'), 1200)
   }
