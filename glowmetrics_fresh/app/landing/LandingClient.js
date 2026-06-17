@@ -126,6 +126,14 @@ function AuthPanel({
             }}>
               {authLoading ? (isSignUp ? "Creating account…" : "Logging in…") : (isSignUp ? "Start Free →" : "Log In →")}
             </button>
+            {isSignUp && (
+              <p style={{ fontSize: 10, color: "#334155", textAlign: "center", marginTop: 10, marginBottom: 0 }}>
+                By signing up you agree to our{" "}
+                <a href="/terms" style={{ color: "#475569", textDecoration: "underline" }}>Terms</a>
+                {" "}and{" "}
+                <a href="/privacy" style={{ color: "#475569", textDecoration: "underline" }}>Privacy Policy</a>
+              </p>
+            )}
           </form>
         </>
       )}
