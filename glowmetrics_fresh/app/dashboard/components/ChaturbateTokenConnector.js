@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { supabase } from '../../../lib/supabase'
 
-export default function ChaturbateTokenConnector({ user, onConnected, broadcasterType }) {
+export default function ChaturbateTokenConnector({ user, onConnected }) {
   const [username, setUsername] = useState('')
   const [statsToken, setStatsToken] = useState('')
   const [eventsToken, setEventsToken] = useState('')
@@ -26,7 +26,6 @@ export default function ChaturbateTokenConnector({ user, onConnected, broadcaste
         id: user.id,
         chaturbate_username:    username.trim(),
         chaturbate_stats_token: statsToken.trim(),
-        broadcaster_type:       broadcasterType || 'female',
         ...(eventsToken.trim() ? { chaturbate_api_token: eventsToken.trim() } : {}),
       })
     setLoading(false)
@@ -37,7 +36,11 @@ export default function ChaturbateTokenConnector({ user, onConnected, broadcaste
     setSyncing(true)
 
     try {
-      const syncRes = await fetch('/api/chaturbate/stats-sync', { method: 'POST' })
+      const { data: { session } } = await supabase.auth.getSession()
+      const syncRes = await fetch('/api/chaturbate/stats-sync', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session?.access_token}` }
+      })
       const syncData = await syncRes.json()
       setSyncResult(syncData)
     } catch (err) {
