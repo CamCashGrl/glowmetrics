@@ -2,11 +2,6 @@ import { cookies } from 'next/headers'
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-)
-
 export async function POST(request) {
   try {
     // Verify the user is actually logged in
@@ -23,6 +18,12 @@ export async function POST(request) {
     if (!chaturbate_username || !chaturbate_stats_token) {
       return Response.json({ error: 'Missing required fields' }, { status: 400 })
     }
+
+    // Initialize admin client lazily (env vars not available at build time)
+    const supabaseAdmin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    )
 
     // Use admin client to bypass RLS
     const { data, error } = await supabaseAdmin
