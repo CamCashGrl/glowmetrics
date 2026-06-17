@@ -54,11 +54,14 @@ const PLATFORMS = [
   }
 ]
 
+const PROGRESS_STEPS = ['Connect', 'History', 'Extension', 'Done']
+const STEP_INDEX = { connect: 0, history: 1, extension: 2, done: 3 }
+
 export default function OnboardingPage() {
   const router = useRouter()
   const [user, setUser] = useState(null)
   const [checking, setChecking] = useState(true)
-  const [step, setStep] = useState('csv') // 'csv' | 'chaturbate_token' | 'done'
+  const [step, setStep] = useState('connect')
   const [tokenConnected, setTokenConnected] = useState(false)
   const [eventsConnected, setEventsConnected] = useState(false)
   const [selectedPlatform, setSelectedPlatform] = useState(0)
@@ -85,6 +88,22 @@ export default function OnboardingPage() {
     check()
   }, [router])
 
+  const markComplete = async (u) => {
+    const target = u || user
+    if (!target) return
+    await supabase.from("beta_users").upsert({
+      user_id: target.id, email: target.email,
+      onboarding_complete: true, signed_up_at: target.created_at
+    }, { onConflict: "user_id" })
+  }
+
+  const advanceTo = async (nextStep) => {
+    if (nextStep === 'done') await markComplete()
+    setStep(nextStep)
+  }
+
+  const goToDashboard = () => router.push("/dashboard")
+
   const handleFile = async (file) => {
     if (!file || !user) return
     T.csvUploadStarted()
@@ -108,31 +127,16 @@ export default function OnboardingPage() {
         setUploading(false)
         return
       }
-      await supabase.from("beta_users").upsert({
-        user_id: user.id, email: user.email,
-        onboarding_complete: true, signed_up_at: user.created_at
-      }, { onConflict: "user_id" })
       T.csvUploadCompleted(result?.inserted || 0, 0)
       setUploadResult(result)
       setUploadDone(true)
-      setStep('chaturbate_token')
+      advanceTo('extension')
     } catch (err) {
       setUploadError(err.message || "Something went wrong")
     } finally {
       setUploading(false)
     }
   }
-
-  const skipToLive = async () => {
-    if (!user) return
-    await supabase.from("beta_users").upsert({
-      user_id: user.id, email: user.email,
-      onboarding_complete: true, signed_up_at: user.created_at
-    }, { onConflict: "user_id" })
-    router.push("/dashboard?tab=live")
-  }
-
-  const goToDashboard = () => router.push("/dashboard")
 
   if (checking) {
     return (
@@ -144,6 +148,7 @@ export default function OnboardingPage() {
   }
 
   const plat = PLATFORMS[selectedPlatform]
+  const currentStepIndex = STEP_INDEX[step] ?? 0
 
   return (
     <div style={{
@@ -161,7 +166,6 @@ export default function OnboardingPage() {
         @keyframes checkPop{0%{transform:scale(0)}70%{transform:scale(1.2)}100%{transform:scale(1)}}
         .upload-zone:hover{border-color:rgba(34,211,238,0.6)!important;background:rgba(34,211,238,0.07)!important}
         .plat-btn:hover{border-color:rgba(255,255,255,0.2)!important}
-        .tool-card:hover{transform:translateY(-2px);border-color:rgba(124,92,255,0.4)!important}
       `}</style>
 
       <div style={{ maxWidth: 720, margin: "0 auto" }}>
@@ -177,80 +181,108 @@ export default function OnboardingPage() {
             boxShadow: "0 12px 32px rgba(34,211,238,0.25)"
           }}>$</div>
           <h1 style={{ fontSize: 32, fontWeight: 900, color: C.white, marginBottom: 6, lineHeight: 1.2 }}>
-            Let's get your stats loaded 💰
+            Let&apos;s get your stats loaded 💰
           </h1>
-          <p style={{ fontSize: 13, color: "#64748b", marginTop: 4, marginBottom: 8 }}>
+          <p style={{ fontSize: 13, color: "#64748b", marginTop: 4 }}>
             Takes about 2 minutes
-          </p>
-          <p style={{ fontSize: 15, color: C.muted, maxWidth: 440, margin: "0 auto", lineHeight: 1.7 }}>
-            Watch the video below, then upload your CSV — your full dashboard unlocks instantly.
           </p>
         </div>
 
         {/* PROGRESS BAR */}
-        {(() => {
-          const steps = ['Stats', 'Tips', 'Done']
-          const currentStepIndex = step === 'chaturbate_token' ? 0 : step === 'csv' ? 1 : 2
-          return (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '32px', justifyContent: 'center' }}>
-              {steps.map((s, i) => (
-                <div key={s} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <div style={{
-                    width: '28px', height: '28px', borderRadius: '50%',
-                    background: i <= currentStepIndex ? '#a855f7' : 'rgba(255,255,255,0.1)',
-                    color: i <= currentStepIndex ? '#fff' : '#64748b',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: '13px', fontWeight: '700'
-                  }}>{i + 1}</div>
-                  <span style={{ fontSize: '13px', color: i <= currentStepIndex ? '#f1f5f9' : '#64748b' }}>{s}</span>
-                  {i < steps.length - 1 && (
-                    <div style={{ width: '40px', height: '1px', background: i < currentStepIndex ? '#a855f7' : 'rgba(255,255,255,0.1)' }} />
-                  )}
-                </div>
-              ))}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '32px', justifyContent: 'center' }}>
+          {PROGRESS_STEPS.map((s, i) => (
+            <div key={s} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div style={{
+                width: '28px', height: '28px', borderRadius: '50%',
+                background: i <= currentStepIndex ? '#a855f7' : 'rgba(255,255,255,0.1)',
+                color: i <= currentStepIndex ? '#fff' : '#64748b',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: '13px', fontWeight: '700'
+              }}>{i + 1}</div>
+              <span style={{ fontSize: '13px', color: i <= currentStepIndex ? '#f1f5f9' : '#64748b' }}>{s}</span>
+              {i < PROGRESS_STEPS.length - 1 && (
+                <div style={{ width: '40px', height: '1px', background: i < currentStepIndex ? '#a855f7' : 'rgba(255,255,255,0.1)' }} />
+              )}
             </div>
-          )
-        })()}
+          ))}
+        </div>
 
-        {/* SUCCESS STATE */}
-        {uploadDone && uploadResult && step !== 'done' && (
-          <div style={{
-            padding: 40, borderRadius: 20, textAlign: "center",
-            background: "rgba(16,185,129,0.08)", border: "1px solid rgba(16,185,129,0.35)",
-            animation: "fadeUp 0.4s ease both", marginBottom: 24
-          }}>
-            <div style={{ fontSize: 56, marginBottom: 16, animation: "checkPop 0.5s ease both" }}>🎉</div>
-            <div style={{ fontSize: 24, fontWeight: 800, color: C.white, marginBottom: 8 }}>
-              {uploadResult.inserted} tips imported!
-            </div>
-            {uploadResult.skipped > 0 && (
-              <div style={{ fontSize: 13, color: C.muted, marginBottom: 16 }}>
-                ({uploadResult.skipped} duplicates skipped — that's normal)
+        {/* ── STEP 1: CONNECT ── */}
+        {step === 'connect' && (
+          <div style={{ animation: "fadeUp 0.4s ease both" }}>
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: C.cyan, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8 }}>
+                Step 1 of 4
               </div>
-            )}
-            <div style={{ fontSize: 14, color: C.text, marginBottom: 28, lineHeight: 1.6 }}>
-              Your dashboard is ready. You'll see your total earnings, top fans,<br />
-              best hours to stream, and personalized insights.
+              <div style={{ fontSize: 22, fontWeight: 900, color: C.white, marginBottom: 6 }}>
+                Connect your Chaturbate account
+              </div>
+              <p style={{ fontSize: 14, color: C.muted, lineHeight: 1.65 }}>
+                Enter your Stats API token to import your full tip history automatically.
+              </p>
             </div>
-            <button onClick={goToDashboard} style={{
-              padding: "14px 40px", borderRadius: 12,
-              background: "linear-gradient(135deg, #10B981, #22D3EE)",
-              border: "none", color: "#fff", fontSize: 16, fontWeight: 800,
-              cursor: "pointer", boxShadow: "0 8px 28px rgba(16,185,129,0.35)"
-            }}>
-              View My Dashboard →
-            </button>
+
+            <a
+              href="https://chaturbate.com/statsapi/authtoken/"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: '8px',
+                background: 'rgba(168,85,247,0.15)',
+                border: '1px solid rgba(168,85,247,0.3)',
+                borderRadius: '10px', padding: '10px 16px',
+                color: '#a855f7', textDecoration: 'none',
+                fontSize: '13px', fontWeight: '600',
+                marginBottom: '20px'
+              }}
+            >
+              🔗 Open token page — chaturbate.com/statsapi/authtoken/
+            </a>
+
+            <ChaturbateTokenConnector
+              user={user}
+              onConnected={({ hasEventsToken } = {}) => {
+                setTokenConnected(true)
+                if (hasEventsToken) setEventsConnected(true)
+                advanceTo('history')
+              }}
+            />
+
+            <div style={{ marginTop: 16 }}>
+              <button
+                onClick={() => advanceTo('history')}
+                style={{
+                  background: "none", border: "none",
+                  color: C.muted, fontSize: 13, cursor: "pointer",
+                  textDecoration: "underline", padding: 0
+                }}
+              >
+                Skip — I&apos;ll connect my token later →
+              </button>
+            </div>
           </div>
         )}
 
-        {!uploadDone && (
-          <>
+        {/* ── STEP 2: HISTORY (CSV) ── */}
+        {step === 'history' && (
+          <div style={{ animation: "fadeUp 0.4s ease both" }}>
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: C.cyan, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8 }}>
+                Step 2 of 4 — Optional
+              </div>
+              <div style={{ fontSize: 22, fontWeight: 900, color: C.white, marginBottom: 6 }}>
+                Upload your earnings history
+              </div>
+              <p style={{ fontSize: 14, color: C.muted, lineHeight: 1.65 }}>
+                Import your historical tips from Chaturbate, BongaCams, or MyFreeCams. You can skip this and add it later from the dashboard.
+              </p>
+            </div>
+
             {/* VIDEO TUTORIAL */}
             <div style={{
-              marginBottom: 28, borderRadius: 18, overflow: "hidden",
+              marginBottom: 24, borderRadius: 18, overflow: "hidden",
               border: "1px solid rgba(34,211,238,0.2)",
-              boxShadow: "0 0 40px rgba(34,211,238,0.07)",
-              animation: "fadeUp 0.4s ease 0.05s both"
+              boxShadow: "0 0 40px rgba(34,211,238,0.07)"
             }}>
               <div style={{
                 padding: "14px 20px",
@@ -271,20 +303,17 @@ export default function OnboardingPage() {
                   frameBorder="0"
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                   allowFullScreen
-                  style={{
-                    position: "absolute", top: 0, left: 0,
-                    width: "100%", height: "100%"
-                  }}
+                  style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%" }}
                 />
               </div>
             </div>
 
-            {/* CSV UPLOAD */}
+            {/* CSV UPLOAD CARD */}
             <div style={{
               padding: 28, borderRadius: 18,
               background: "rgba(15,20,32,0.8)", backdropFilter: "blur(20px)",
               border: "1px solid rgba(34,211,238,0.25)",
-              marginBottom: 16, animation: "fadeUp 0.4s ease 0.1s both"
+              marginBottom: 16
             }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
                 <div style={{ width: 36, height: 36, borderRadius: 10, background: "linear-gradient(135deg, #22D3EE, #7C5CFF)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>📁</div>
@@ -315,7 +344,7 @@ export default function OnboardingPage() {
                   How to export from {plat.name}
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-                  {plat.steps.map((step, i) => (
+                  {plat.steps.map((s, i) => (
                     <div key={i} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
                       <span style={{
                         width: 20, height: 20, borderRadius: "50%", flexShrink: 0,
@@ -324,7 +353,7 @@ export default function OnboardingPage() {
                         fontSize: 10, fontWeight: 800, color: plat.color, marginTop: 1
                       }}>{i + 1}</span>
                       <span style={{ fontSize: 13, color: i === plat.steps.length - 1 ? C.white : C.text, lineHeight: 1.5, fontWeight: i === plat.steps.length - 1 ? 600 : 400 }}>
-                        {step}
+                        {s}
                       </span>
                     </div>
                   ))}
@@ -371,140 +400,131 @@ export default function OnboardingPage() {
               )}
             </div>
 
-            {/* CHATURBATE LIVE SYNC STEP */}
-            {step === 'chaturbate_token' ? (
-              <div style={{ marginBottom: 24, animation: "fadeUp 0.4s ease both" }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: C.cyan, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 14 }}>
-                  Step 2 of 2
-                </div>
-                <div style={{ fontSize: 18, fontWeight: 800, color: C.white, marginBottom: 6 }}>
-                  Connect Chaturbate Live Sync <span style={{ fontSize: 13, fontWeight: 500, color: C.muted }}>(Optional)</span>
-                </div>
-                <p style={{ fontSize: 13, color: C.muted, marginBottom: 20, lineHeight: 1.65 }}>
-                  Get live tips pushed to your dashboard while you stream — no extension needed.
-                </p>
-
-                {/* Direct link to token page */}
-                <a
-                  href="https://chaturbate.com/statsapi/authtoken/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: '8px',
-                    background: 'rgba(168,85,247,0.15)',
-                    border: '1px solid rgba(168,85,247,0.3)',
-                    borderRadius: '10px', padding: '12px 16px',
-                    color: '#a855f7', textDecoration: 'none',
-                    fontSize: '14px', fontWeight: '600',
-                    marginBottom: '20px'
-                  }}
-                >
-                  🔗 Open token page (direct link)
-                  <span style={{ fontSize: '11px', color: '#64748b' }}>chaturbate.com/statsapi/authtoken/</span>
-                </a>
-
-                <ChaturbateTokenConnector
-                  user={user}
-                  onConnected={({ hasEventsToken } = {}) => { setTokenConnected(true); if (hasEventsToken) setEventsConnected(true); setStep('done') }}
-                />
-
-                {/* Trust section */}
-                <div style={{
-                  marginTop: '24px', padding: '16px',
-                  borderRadius: '12px',
-                  background: 'rgba(255,255,255,0.03)',
-                  border: '1px solid rgba(255,255,255,0.06)'
-                }}>
-                  <p style={{ fontSize: '12px', color: '#64748b', margin: '0 0 8px', fontWeight: '600' }}>
-                    🔒 What CamCash can read with this token:
-                  </p>
-                  <p style={{ fontSize: '12px', color: '#64748b', margin: '0 0 4px' }}>✅ Your tip history and token amounts</p>
-                  <p style={{ fontSize: '12px', color: '#64748b', margin: '0 0 4px' }}>✅ Your stream session times</p>
-                  <p style={{ fontSize: '12px', color: '#64748b', margin: '0' }}>❌ Cannot send tips, change settings, or act on your account</p>
-                </div>
-
-                <button
-                  onClick={() => setStep('done')}
-                  style={{
-                    marginTop: 14, background: "none", border: "none",
-                    color: C.muted, fontSize: 13, cursor: "pointer",
-                    textDecoration: "underline", padding: 0
-                  }}
-                >
-                  Skip for now →
-                </button>
-              </div>
-            ) : null}
-
-            {/* BOTTOM TWO OPTIONS */}
-            {step === 'csv' && (
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 32, animation: "fadeUp 0.4s ease 0.15s both" }}>
-              <div style={{ padding: 22, borderRadius: 16, background: "rgba(15,20,32,0.6)", border: "1px solid rgba(168,85,247,0.2)" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-                  <div style={{ width: 30, height: 30, borderRadius: 8, background: "linear-gradient(135deg, #a855f7, #EC4899)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>📡</div>
-                  <div style={{ fontSize: 14, fontWeight: 800, color: C.white }}>Live Mode Instead</div>
-                </div>
-                <p style={{ fontSize: 13, color: C.muted, lineHeight: 1.65, marginBottom: 14 }}>
-                  Install the Chrome extension — tips get tracked automatically while you stream. No CSV needed.
-                </p>
-                <button onClick={() => { T.extensionInstallStart(); skipToLive() }} style={{
-                  width: "100%", padding: "10px 0", borderRadius: 10,
-                  background: "rgba(168,85,247,0.15)", border: "1px solid rgba(168,85,247,0.4)",
-                  color: "#a855f7", fontSize: 13, fontWeight: 700, cursor: "pointer"
-                }}>
-                  Get Started with Live Mode →
-                </button>
-              </div>
-
-              <div style={{ padding: 22, borderRadius: 16, background: "rgba(15,20,32,0.4)", border: "1px solid rgba(255,255,255,0.07)" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-                  <div style={{ width: 30, height: 30, borderRadius: 8, background: "rgba(255,255,255,0.06)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>🧰</div>
-                  <div style={{ fontSize: 14, fontWeight: 800, color: C.white }}>Free Tools</div>
-                </div>
-                <p style={{ fontSize: 13, color: C.muted, lineHeight: 1.65, marginBottom: 14 }}>
-                  Room Title Generator and Token Calculator work right now — no data needed.
-                </p>
-                <button onClick={goToDashboard} style={{
-                  width: "100%", padding: "10px 0", borderRadius: 10,
-                  background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)",
-                  color: C.muted, fontSize: 13, fontWeight: 600, cursor: "pointer"
-                }}>
-                  Explore Dashboard First →
-                </button>
-              </div>
+            <div style={{ marginTop: 8 }}>
+              <button
+                onClick={() => advanceTo('extension')}
+                style={{
+                  background: "none", border: "none",
+                  color: C.muted, fontSize: 13, cursor: "pointer",
+                  textDecoration: "underline", padding: 0
+                }}
+              >
+                Skip CSV upload →
+              </button>
             </div>
-            )}
-          </>
+          </div>
         )}
 
-        {/* DONE / ALL SET — outside !uploadDone so it renders regardless */}
+        {/* ── STEP 3: EXTENSION ── */}
+        {step === 'extension' && (
+          <div style={{ animation: "fadeUp 0.4s ease both" }}>
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: C.cyan, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8 }}>
+                Step 3 of 4 — Optional
+              </div>
+              <div style={{ fontSize: 22, fontWeight: 900, color: C.white, marginBottom: 6 }}>
+                Live tip tracking
+              </div>
+              <p style={{ fontSize: 14, color: C.muted, lineHeight: 1.65 }}>
+                Install the Chrome extension to see tips appear in real time while you stream — no API token needed.
+              </p>
+            </div>
+
+            {uploadDone && uploadResult && (
+              <div style={{
+                padding: "14px 18px", borderRadius: 12, marginBottom: 20,
+                background: "rgba(16,185,129,0.08)", border: "1px solid rgba(16,185,129,0.25)",
+                display: "flex", alignItems: "center", gap: 12, fontSize: 14, color: C.white
+              }}>
+                <span style={{ fontSize: 22 }}>🎉</span>
+                <span><strong>{uploadResult.inserted}</strong> tips imported from your CSV</span>
+              </div>
+            )}
+
+            <div style={{
+              padding: 28, borderRadius: 18,
+              background: "rgba(15,20,32,0.8)", backdropFilter: "blur(20px)",
+              border: "1px solid rgba(168,85,247,0.25)",
+              marginBottom: 16
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
+                <div style={{ width: 44, height: 44, borderRadius: 12, background: "linear-gradient(135deg, #a855f7, #EC4899)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>📡</div>
+                <div>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: C.white }}>CamCash Chrome Extension</div>
+                  <div style={{ fontSize: 12, color: C.muted }}>Tracks tips automatically while you stream</div>
+                </div>
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 24 }}>
+                {[
+                  "Tips appear in your dashboard the moment they land",
+                  "Works while you stream — no extra steps",
+                  "Viewer insights, tip notes, and session history",
+                ].map((txt, i) => (
+                  <div key={i} style={{ display: "flex", gap: 10, alignItems: "flex-start", fontSize: 13, color: C.text }}>
+                    <span style={{ color: C.green, flexShrink: 0 }}>✓</span>
+                    <span>{txt}</span>
+                  </div>
+                ))}
+              </div>
+
+              <a
+                href="https://chrome.google.com/webstore/detail/camcash"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: "block", width: "100%", padding: "13px 0", borderRadius: 12,
+                  background: "linear-gradient(135deg, #a855f7, #EC4899)",
+                  border: "none", color: "#fff", fontSize: 15, fontWeight: 800,
+                  cursor: "pointer", textAlign: "center", textDecoration: "none",
+                  boxShadow: "0 8px 24px rgba(168,85,247,0.35)"
+                }}
+              >
+                Install Chrome Extension →
+              </a>
+            </div>
+
+            <button
+              onClick={() => advanceTo('done')}
+              style={{
+                background: "none", border: "none",
+                color: C.muted, fontSize: 13, cursor: "pointer",
+                textDecoration: "underline", padding: 0
+              }}
+            >
+              Skip — I&apos;ll install it later →
+            </button>
+          </div>
+        )}
+
+        {/* ── STEP 4: DONE ── */}
         {step === 'done' && (
-          <div style={{ animation: "fadeUp 0.4s ease both", marginBottom: 24 }}>
+          <div style={{ animation: "fadeUp 0.4s ease both" }}>
             <div style={{ textAlign: "center", marginBottom: 28 }}>
-              <div style={{ fontSize: 52, marginBottom: 12 }}>🎉</div>
-              <div style={{ fontSize: 24, fontWeight: 900, color: C.white, marginBottom: 8 }}>You&apos;re all set!</div>
-              <p style={{ fontSize: 14, color: C.muted, lineHeight: 1.7 }}>Based on what you connected:</p>
+              <div style={{ fontSize: 52, marginBottom: 12, animation: "checkPop 0.5s ease both" }}>🎉</div>
+              <div style={{ fontSize: 28, fontWeight: 900, color: C.white, marginBottom: 8 }}>You&apos;re all set!</div>
+              <p style={{ fontSize: 14, color: C.muted, lineHeight: 1.7 }}>Here&apos;s what you connected:</p>
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 28 }}>
               {tokenConnected && (
                 <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", borderRadius: 10, background: "rgba(16,185,129,0.08)", border: "1px solid rgba(16,185,129,0.2)", fontSize: 14, color: C.white }}>
-                  <span>✅</span> <span>Chaturbate tip history synced</span>
+                  <span>✅</span> <span>Chaturbate tip history synced via Stats API</span>
                 </div>
               )}
               {eventsConnected && (
                 <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", borderRadius: 10, background: "rgba(16,185,129,0.08)", border: "1px solid rgba(16,185,129,0.2)", fontSize: 14, color: C.white }}>
-                  <span>✅</span> <span>Live tip tracking ready</span>
+                  <span>✅</span> <span>Live tip tracking ready (Events API connected)</span>
                 </div>
               )}
               {uploadDone && (
                 <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", borderRadius: 10, background: "rgba(16,185,129,0.08)", border: "1px solid rgba(16,185,129,0.2)", fontSize: 14, color: C.white }}>
-                  <span>✅</span> <span>Tip history uploaded ({uploadResult?.inserted || 0} tips)</span>
+                  <span>✅</span> <span>CSV history uploaded ({uploadResult?.inserted || 0} tips)</span>
                 </div>
               )}
-              {!tokenConnected && !eventsConnected && !uploadDone && (
+              {!tokenConnected && !uploadDone && (
                 <div style={{ padding: "12px 16px", borderRadius: 10, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", fontSize: 13, color: C.muted }}>
-                  → Upload a CSV or connect your token anytime from the dashboard
+                  → Connect your token or upload a CSV anytime from the dashboard
                 </div>
               )}
             </div>
@@ -520,7 +540,7 @@ export default function OnboardingPage() {
           </div>
         )}
 
-        <div style={{ textAlign: "center", marginTop: 20, fontSize: 12, color: C.muted }}>
+        <div style={{ textAlign: "center", marginTop: 28, fontSize: 12, color: C.muted }}>
           🔒 Your data is stored securely and never shared with anyone.
         </div>
       </div>
