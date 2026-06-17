@@ -9,15 +9,13 @@ export async function POST(request) {
       return Response.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
-    const adminClient = createClient(
+    // Use anon key — RLS policies (auth.uid() = id) handle authorization
+    const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
     )
 
-    console.log('Service role key present:', !!process.env.SUPABASE_SERVICE_ROLE_KEY)
-    console.log('Upserting for user_id:', user_id)
-
-    const { data, error } = await adminClient
+    const { data, error } = await supabase
       .from('profiles')
       .upsert({
         id: user_id,
