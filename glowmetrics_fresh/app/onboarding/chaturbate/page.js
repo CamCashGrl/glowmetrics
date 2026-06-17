@@ -106,34 +106,6 @@ export default function ChaturbateOnboardingPage() {
     { value: 'couple', label: 'Couple' },
   ]
 
-  const TOKEN_STEPS = [
-    {
-      num: '1',
-      title: 'Log in to Chaturbate',
-      text: 'Use your broadcaster account.',
-    },
-    {
-      num: '2',
-      title: 'Open the token page',
-      text: 'Go to chaturbate.com/statsapi/authtoken/',
-    },
-    {
-      num: '3',
-      title: 'Find Stats API Token',
-      text: 'Look for the section labeled Stats API. Ignore Events API and Broadcast API for now.',
-    },
-    {
-      num: '4',
-      title: 'Generate token',
-      text: 'If the field is empty, click Generate Token.',
-    },
-    {
-      num: '5',
-      title: 'Copy and paste',
-      text: 'Copy the long token or the full token URL and paste it into the field above.',
-    },
-  ]
-
   return (
     <>
       <style>{`
@@ -196,66 +168,31 @@ export default function ChaturbateOnboardingPage() {
         /* ── Card ── */
         .ob-card {
           width: 100%;
-          max-width: 760px;
+          max-width: 520px;
           background: #0d1120;
           border: 1px solid #1a2035;
           border-radius: 20px;
-          padding: 36px 40px;
+          padding: 32px 36px;
           box-shadow:
             0 0 0 1px rgba(0,212,200,0.04),
             0 24px 64px rgba(0,0,0,0.5);
         }
 
         /* ── Header ── */
-        .ob-logo {
-          width: 44px;
-          height: 44px;
-          background: linear-gradient(135deg, #00d4c8, #a050ff);
-          border-radius: 12px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 20px;
-          margin-bottom: 20px;
-        }
         .ob-eyebrow {
           font-size: 11px;
           font-weight: 700;
           letter-spacing: 0.1em;
           text-transform: uppercase;
           color: #00d4c8;
-          margin-bottom: 8px;
+          margin-bottom: 6px;
         }
         .ob-heading {
-          font-size: 24px;
+          font-size: 22px;
           font-weight: 700;
           color: #eef2ff;
           line-height: 1.2;
-          margin-bottom: 8px;
-        }
-        .ob-subheading {
-          font-size: 14px;
-          color: #6b7a9e;
-          line-height: 1.6;
           margin-bottom: 20px;
-        }
-        .ob-safety-pill {
-          display: inline-flex;
-          align-items: center;
-          gap: 6px;
-          padding: 5px 12px;
-          background: rgba(46,199,122,0.1);
-          border: 1px solid rgba(46,199,122,0.25);
-          border-radius: 20px;
-          font-size: 12px;
-          font-weight: 600;
-          color: #2ec77a;
-          margin-bottom: 28px;
-        }
-        .ob-divider {
-          height: 1px;
-          background: #1a2035;
-          margin-bottom: 24px;
         }
 
         /* ── Broadcaster type ── */
@@ -361,85 +298,43 @@ export default function ChaturbateOnboardingPage() {
         .ob-help-body {
           background: #060912;
           border: 1px solid #141928;
-          border-radius: 12px;
-          padding: 16px;
-          margin-bottom: 20px;
-        }
-        .ob-help-steps {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 10px;
-          margin-bottom: 14px;
-        }
-        .ob-help-step {
-          background: #0d1120;
-          border: 1px solid #1a2035;
           border-radius: 10px;
           padding: 12px 14px;
-          display: flex;
-          gap: 10px;
-          align-items: flex-start;
+          margin-bottom: 16px;
         }
-        .ob-help-num {
-          flex-shrink: 0;
-          width: 20px;
-          height: 20px;
-          border-radius: 50%;
-          background: rgba(0,212,200,0.15);
-          color: #00d4c8;
-          font-size: 11px;
-          font-weight: 700;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          margin-top: 1px;
-        }
-        .ob-help-step-title {
-          font-size: 12px;
-          font-weight: 600;
-          color: #c8d0e8;
-          margin-bottom: 2px;
-        }
-        .ob-help-step-text {
-          font-size: 11px;
-          color: #5a6480;
-          line-height: 1.5;
-        }
-        .ob-help-warning {
-          background: rgba(234,179,8,0.07);
-          border: 1px solid rgba(234,179,8,0.2);
-          border-radius: 8px;
-          padding: 10px 12px;
-          font-size: 12px;
-          color: #b8930a;
-          line-height: 1.5;
+        .ob-help-list {
+          list-style: none;
           margin-bottom: 10px;
         }
-        .ob-help-example {
-          background: rgba(0,212,200,0.04);
-          border: 1px solid rgba(0,212,200,0.1);
-          border-radius: 8px;
-          padding: 10px 12px;
-          font-size: 11px;
-          color: #4a7a78;
-          line-height: 1.7;
-          margin-bottom: 12px;
-          font-family: 'Menlo', monospace;
+        .ob-help-list li {
+          display: flex;
+          gap: 8px;
+          align-items: baseline;
+          font-size: 12px;
+          color: #6b7a9e;
+          line-height: 1.6;
+        }
+        .ob-help-list li + li { margin-top: 2px; }
+        .ob-help-num {
+          flex-shrink: 0;
+          font-size: 10px;
+          font-weight: 700;
+          color: #00d4c8;
+          width: 14px;
+          text-align: right;
         }
         .ob-help-link {
           display: inline-flex;
           align-items: center;
-          gap: 5px;
-          font-size: 12px;
+          gap: 4px;
+          font-size: 11px;
           font-weight: 600;
           color: #00d4c8;
           text-decoration: none;
-          padding: 6px 12px;
-          border: 1px solid rgba(0,212,200,0.25);
-          border-radius: 8px;
-          transition: background 0.15s;
+          opacity: 0.85;
+          transition: opacity 0.15s;
         }
-        .ob-help-link:hover { background: rgba(0,212,200,0.08); }
+        .ob-help-link:hover { opacity: 1; }
 
         /* ── CTA ── */
         .ob-submit-error {
@@ -601,11 +496,10 @@ export default function ChaturbateOnboardingPage() {
         }
 
         /* ── Mobile ── */
-        @media (max-width: 600px) {
+        @media (max-width: 560px) {
           .ob-card { padding: 24px 20px; }
-          .ob-help-steps { grid-template-columns: 1fr; }
           .ob-step2-options { grid-template-columns: 1fr; }
-          .ob-heading { font-size: 20px; }
+          .ob-heading { font-size: 19px; }
         }
       `}</style>
 
@@ -634,18 +528,8 @@ export default function ChaturbateOnboardingPage() {
           {/* ── STEP 1 ── */}
           {step === 1 && (
             <>
-              <div className="ob-logo">💰</div>
               <div className="ob-eyebrow">Step 1 of 3 · Connect Chaturbate</div>
               <div className="ob-heading">Start tracking your streams</div>
-              <div className="ob-subheading">
-                Enter your Chaturbate username and Stats API token. This unlocks your session
-                history, earnings, and personalized recommendations.
-              </div>
-              <div className="ob-safety-pill">
-                <span>🔒</span> Read-only · Never acts on your account
-              </div>
-
-              <div className="ob-divider" />
 
               {/* Broadcaster type */}
               <div className="ob-section-label">I broadcast as</div>
@@ -675,13 +559,7 @@ export default function ChaturbateOnboardingPage() {
                   autoComplete="off"
                   spellCheck={false}
                 />
-                {errors.username ? (
-                  <div className="ob-error-msg">{errors.username}</div>
-                ) : (
-                  <div className="ob-helper">
-                    Use the exact username you broadcast with, not your display name.
-                  </div>
-                )}
+                {errors.username && <div className="ob-error-msg">{errors.username}</div>}
               </div>
 
               {/* Stats token */}
@@ -698,13 +576,7 @@ export default function ChaturbateOnboardingPage() {
                   autoComplete="off"
                   spellCheck={false}
                 />
-                {errors.statsToken ? (
-                  <div className="ob-error-msg">{errors.statsToken}</div>
-                ) : (
-                  <div className="ob-helper">
-                    This is the token CamCashGrl needs to load your historical stats.
-                  </div>
-                )}
+                {errors.statsToken && <div className="ob-error-msg">{errors.statsToken}</div>}
               </div>
 
               {/* Token help */}
@@ -718,29 +590,12 @@ export default function ChaturbateOnboardingPage() {
 
               {tokenHelpOpen && (
                 <div className="ob-help-body">
-                  <div className="ob-help-steps">
-                    {TOKEN_STEPS.map((s) => (
-                      <div key={s.num} className="ob-help-step">
-                        <div className="ob-help-num">{s.num}</div>
-                        <div>
-                          <div className="ob-help-step-title">{s.title}</div>
-                          <div className="ob-help-step-text">{s.text}</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="ob-help-warning">
-                    ⚠️ Do not paste the JSON page content. If you see text like{' '}
-                    <code>{'{ "username": "...", "token_balance": ... }'}</code>, that is not the
-                    token.
-                  </div>
-
-                  <div className="ob-help-example">
-                    ✓ Correct token: H0piEMo8j3fTv0d...<br />
-                    ✓ Correct URL: chaturbate.com/statsapi/?username=yourname&token=abc...
-                  </div>
-
+                  <ul className="ob-help-list">
+                    <li><span className="ob-help-num">1.</span> Log in to Chaturbate with your broadcaster account.</li>
+                    <li><span className="ob-help-num">2.</span> Go to <strong style={{color:'#c8d0e8'}}>chaturbate.com/statsapi/authtoken/</strong></li>
+                    <li><span className="ob-help-num">3.</span> Find the <strong style={{color:'#c8d0e8'}}>Stats API</strong> section and click <strong style={{color:'#c8d0e8'}}>Generate Token</strong> if empty.</li>
+                    <li><span className="ob-help-num">4.</span> Copy the token or the full URL and paste it above.</li>
+                  </ul>
                   <a
                     href="https://chaturbate.com/statsapi/authtoken/"
                     target="_blank"
