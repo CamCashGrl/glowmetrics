@@ -1,51 +1,72 @@
-import { cookies } from 'next/headers'
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
-import { createClient } from '@supabase/supabase-js'
+import { createClient } from '@supabase/supabase-js';
+import { NextResponse } from 'next/server';
+
+// Admin client — initialized lazily inside handler to avoid build-time crash
+function getAdminClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  );
+}
 
 export async function POST(request) {
   try {
-    // Verify the user is actually logged in
-    const supabase = createRouteHandlerClient({ cookies })
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    // Extract Bearer token from Authorization header
+    const authHeader = request.headers.get('authorization') || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
 
-    if (authError || !user) {
-      return Response.json({ error: 'Not authenticated' }, { status: 401 })
+    if (!token) {
+      console.error('[save-profile] No Bearer token in Authorization header');
+      return NextResponse.json({ error: 'Unauthorized – no token' }, { status: 401 });
     }
 
-    const body = await request.json()
-    const { chaturbate_username, chaturbate_stats_token, broadcaster_type } = body
+    const supabaseAdmin = getAdminClient();
 
-    if (!chaturbate_username || !chaturbate_stats_token) {
-      return Response.json({ error: 'Missing required fields' }, { status: 400 })
+    // Verify the token and get the user — works even before cookies are set (PKCE flow)
+    const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token);
+
+    if (userError || !user) {
+      console.error('[save-profile] Token verification failed:', userError?.message);
+      return NextResponse.json({ error: 'Unauthorized – invalid token' }, { status: 401 });
     }
 
-    // Initialize admin client lazily (env vars not available at build time)
-    const supabaseAdmin = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY
-    )
+    const body = await request.json();
+    const {
+      chaturbate_username,
+      chaturbate_api_token,
+      chaturbate_stats_token,
+      chaturbate_token_type,
+      broadcaster_type,
+    } = body;
 
-    // Use admin client to bypass RLS
-    const { data, error } = await supabaseAdmin
+    // Upsert profile using admin client — bypasses RLS entirely
+    const { error: upsertError } = await supabaseAdmin
       .from('profiles')
-      .upsert({
-        id: user.id,
-        chaturbate_username: chaturbate_username.trim(),
-        chaturbate_stats_token: chaturbate_stats_token.trim(),
-        chaturbate_token_type: 'stats',
-        broadcaster_type: broadcaster_type || 'female',
-      })
-      .select()
-      .single()
+      .upsert(
+        {
+          id: user.id,
+          ...(chaturbate_username !== undefined && { chaturbate_username }),
+          ...(chaturbate_api_token !== undefined && { chaturbate_api_token }),
+          ...(chaturbate_stats_token !== undefined && { chaturbate_stats_token }),
+          ...(chaturbate_token_type !== undefined && { chaturbate_token_type }),
+          ...(broadcaster_type !== undefined && { broadcaster_type }),
+          onboarding_completed: true,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'id' }
+      );
 
-    if (error) {
-      console.error('Profile save error:', error)
-      return Response.json({ error: error.message }, { status: 500 })
+    if (upsertError) {
+      console.error('[save-profile] Upsert error:', upsertError.message);
+      return NextResponse.json({ error: upsertError.message }, { status: 500 });
     }
 
-    return Response.json({ success: true, data })
+    console.log('[save-profile] Profile saved for user:', user.id);
+    return NextResponse.json({ success: true });
+
   } catch (err) {
-    console.error('Unexpected error:', err)
-    return Response.json({ error: err.message }, { status: 500 })
+    console.error('[save-profile] Unexpected error:', err.message);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
