@@ -68,50 +68,27 @@ export default function ChaturbateOnboardingPage() {
     if (!validateStep1()) return
     setLoading(true)
     try {
-      track('onboarding_connect_clicked', { broadcaster_type: broadcasterType })
+      const { data: { user: currentUser }, error: userError } = await supabase.auth.getUser()
 
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session?.access_token) {
-        setErrors({ submit: 'Session expired — please refresh and try again.' })
+      if (userError || !currentUser) {
+        setErrors({ submit: 'Please refresh the page and try again.' })
         setLoading(false)
         return
       }
 
-      const res = await fetch('/api/onboarding/save-profile', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({
+      const { error } = await supabase
+        .from('profiles')
+        .update({
           chaturbate_username: username.trim(),
           chaturbate_stats_token: statsToken.trim(),
           chaturbate_token_type: 'stats',
           broadcaster_type: broadcasterType,
-        }),
-      })
+        })
+        .eq('id', currentUser.id)
 
-      const result = await res.json()
-      if (!res.ok) throw new Error(result.error || 'Failed to save profile')
-
-      track('onboarding_connect_success')
-
-      // Trigger initial stats sync — pass session token for auth
-      supabase.auth.getSession().then(({ data: { session } }) => {
-        if (!session?.access_token) return
-        fetch('/api/chaturbate/stats-sync', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({}),
-        }).catch(() => {})
-      })
-
+      if (error) throw error
       setStep(2)
     } catch (err) {
-      track('onboarding_connect_error', { error: err.message })
       setErrors({ submit: err.message || 'Something went wrong. Try again.' })
     } finally {
       setLoading(false)
@@ -488,7 +465,7 @@ export default function ChaturbateOnboardingPage() {
         .ob-option-desc { font-size: 12px; color: #4a5568; line-height: 1.5; }
 
         .ob-btn-finish {
-          width: 100%;  
+          width: 100%;
           padding: 13px;
           background: linear-gradient(135deg, #00d4c8, #a050ff);
           border: none;
