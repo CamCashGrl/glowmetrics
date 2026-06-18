@@ -43,7 +43,6 @@ const PLATFORMS = [
   },
 ]
 
-// ── Fake tip feed for live demo ──
 const DEMO_TIPPERS = ['xo_bella', 'darkwolf99', 'tip_king', 'vip_lover', 'night_owl', 'rose_fan', 'bigspender', 'mystery_m']
 const DEMO_AMOUNTS = [5, 10, 15, 25, 50, 100, 25, 10, 5, 20]
 function randomTip() {
@@ -383,6 +382,19 @@ export default function OnboardingPage() {
           border-radius: 12px; padding: 16px; margin-bottom: 20px;
           font-size: 13px; color: #6b8fa8; line-height: 1.6; text-align: center;
         }
+        .ob-download-btn {
+          display: flex; align-items: center; gap: 12px;
+          background: linear-gradient(135deg, rgba(0,212,200,0.12), rgba(160,80,255,0.1));
+          border: 1px solid rgba(0,212,200,0.35);
+          border-radius: 12px; padding: 16px 20px;
+          text-decoration: none; color: #00d4c8;
+          font-size: 14px; font-weight: 700;
+          transition: all 0.15s; margin-bottom: 10px;
+          cursor: pointer;
+        }
+        .ob-download-btn:hover { border-color: #00d4c8; background: linear-gradient(135deg, rgba(0,212,200,0.18), rgba(160,80,255,0.15)); transform: translateY(-1px); }
+        .ob-download-btn-icon { font-size: 22px; flex-shrink: 0; }
+        .ob-download-btn-sub { font-size: 12px; color: #4a7a8a; font-weight: 400; margin-top: 2px; }
         @media (max-width: 560px) {
           .ob-card { padding: 24px 20px; }
           .ob-platform-tabs { flex-direction: column; }
@@ -505,16 +517,14 @@ export default function OnboardingPage() {
               </div>
 
               <a
-                href="https://chrome.google.com/webstore/detail/camcash"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="ob-link-card"
-                style={{ borderColor: 'rgba(0,212,200,0.3)', background: 'rgba(0,212,200,0.04)' }}
+                href="/camcash-extension.zip"
+                download="camcash-extension.zip"
+                className="ob-download-btn"
               >
-                <span className="ob-link-card-icon">⬇️</span>
+                <span className="ob-download-btn-icon">⬇️</span>
                 <div>
-                  <div style={{ color: '#00d4c8' }}>Download CamCash Extension</div>
-                  <div className="ob-link-card-sub">Chrome Web Store · Free</div>
+                  <div>Download CamCash Extension</div>
+                  <div className="ob-download-btn-sub">Free · camcash-extension.zip</div>
                 </div>
               </a>
 
