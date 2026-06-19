@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
-import { parseCSV, aggregateRows as runEngine } from "../../lib/analytics"
+import { parseCSV, aggregateRows as runEngine, toLocalHour, toLocalDow } from "../../lib/analytics"
 
 let track = (event, props) => {}
 try { track = require("@vercel/analytics").track } catch (e) {}
@@ -80,6 +80,7 @@ export function useDashboard() {
   const isBetaUser = true
   const isPro = true
   const uploadLimit = Infinity
+  const userTz = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC'
 
   const openUpgradeModal = (source) => {
     track('upgrade_click', { source })
@@ -324,7 +325,7 @@ export function useDashboard() {
           sessionStorage.setItem(`camcash_tips_time_${uid}`, Date.now().toString())
         } catch(e) {} // quota exceeded — fine, skip cache
       }
-      const { data: engineData } = await supabase.rpc('get_user_insights', { p_user_id: uid })
+      const { data: engineData } = await supabase.rpc('get_user_insights', { p_user_id: uid, p_timezone: userTz })
       setEngineInsights(engineData)
       setLastRefreshed(new Date())
     } finally { setLoading(false) }
@@ -427,14 +428,14 @@ const handleCSV = async (file, forcePlatform = null) => {
 
   // Build platformTimes from INDIVIDUAL TIPS (not session start time)
   // so hour/day reflects when money actually came in, not when the session started
-  // Use UTC to match the database timestamps
-  const UTC_DAYS_LONG = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
+  const DAYS_LONG = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
   const platformTimes = {}
   tips.forEach(t => {
     if (!platformTimes[t.platform]) platformTimes[t.platform] = { hours: {}, days: {} }
-    const dt = new Date(t.date_time || t.dateRaw)
-    const hour = dt.getUTCHours()
-    const day = UTC_DAYS_LONG[dt.getUTCDay()]
+    const dateStr = t.date_time || t.dateRaw
+    const hour = toLocalHour(dateStr, userTz)
+    const dayIdx = toLocalDow(dateStr, userTz)
+    const day = DAYS_LONG[dayIdx >= 0 ? dayIdx : 0]
     platformTimes[t.platform].hours[hour] = (platformTimes[t.platform].hours[hour] || 0) + (t.usd || 0)
     platformTimes[t.platform].days[day]   = (platformTimes[t.platform].days[day]   || 0) + (t.usd || 0)
   })
@@ -445,7 +446,7 @@ const handleCSV = async (file, forcePlatform = null) => {
     if (chartDrillDay) {
       const fanTips = (w.tips && w.tips.length > 0) ? w.tips : tips.filter(t => t.username?.toLowerCase() === w.username?.toLowerCase())
       const tippedOnDay = fanTips.some(t => {
-        const dayShort = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][new Date(t.date_time || t.dateRaw).getUTCDay()]
+        const dayShort = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][toLocalDow(t.date_time || t.dateRaw, userTz)]
         return dayShort === chartDrillDay
       })
       if (!tippedOnDay) return false
@@ -533,15 +534,14 @@ const handleCSV = async (file, forcePlatform = null) => {
       if (fanTips.length < 5) return
       const hourCounts = {}
       fanTips.forEach(t => {
-        // FIX: use getUTCHours() — tips stored in UTC
-        const h = new Date(t.date_time || t.dateRaw).getUTCHours()
+        const h = toLocalHour(t.date_time || t.dateRaw, userTz)
         hourCounts[h] = (hourCounts[h] || 0) + 1
       })
       const bestHour = Object.entries(hourCounts).sort((a, b) => b[1] - a[1])[0]
       if (!bestHour) return
       const peakHour = parseInt(bestHour[0])
-      const currentUTCHr = new Date().getUTCHours()
-      const hoursAway = (peakHour - currentUTCHr + 24) % 24
+      const currentLocalHr = toLocalHour(new Date().toISOString(), userTz)
+      const hoursAway = (peakHour - currentLocalHr + 24) % 24
       const probability = Math.min(95, Math.round((bestHour[1] / fanTips.length) * 100 * 2.5))
       const label = peakHour === 0 ? '12 AM' : peakHour < 12 ? `${peakHour} AM` : peakHour === 12 ? '12 PM' : `${peakHour - 12} PM`
       if (hoursAway <= 2 && probability >= 40) {
@@ -668,10 +668,10 @@ const handleCSV = async (file, forcePlatform = null) => {
   const buildDailyBrief = () => {
     if (!tips || tips.length === 0 || !analytics) return null
     const now = new Date()
-    const utcHour = now.getUTCHours()
-    const utcDay = now.getUTCDay()
+    const localHour = toLocalHour(now.toISOString(), userTz)
+    const localDow = toLocalDow(now.toISOString(), userTz)
     const DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
-    const todayName = DAYS[utcDay]
+    const todayName = DAYS[localDow >= 0 ? localDow : 0]
 
     // Best hour: today-specific per platform first, then all-time fallback
     // Formula: SUM(usd) / COUNT(DISTINCT hour-bucket) for THIS day of week on THIS platform
@@ -689,7 +689,7 @@ const handleCSV = async (file, forcePlatform = null) => {
     const bestHour = analytics?.bestHour
     const bh = todayBestHourNum !== null ? todayBestHourNum : (bestHour ? parseInt(bestHour.hour) : null)
     const bhLabel = bh === null ? null : fmtHour(bh)
-    const hoursUntilPeak = bh !== null ? (bh - utcHour + 24) % 24 : null
+    const hoursUntilPeak = bh !== null ? (bh - localHour + 24) % 24 : null
     const atPeak = hoursUntilPeak === 0 || hoursUntilPeak === 1
 
     // Best platform per hour
@@ -697,7 +697,7 @@ const handleCSV = async (file, forcePlatform = null) => {
     tips.forEach(t => {
       const p = t.platform || 'Chaturbate'
       const d = new Date(t.date_time || t.dateRaw)
-      const h = d.getUTCHours()
+      const h = toLocalHour(t.date_time || t.dateRaw, userTz)
       const bucket = Math.floor(d.getTime() / 3600000)
       if (!platHourUSD[p]) { platHourUSD[p] = {}; platHourSessions[p] = {} }
       if (!platHourUSD[p][h]) { platHourUSD[p][h] = 0; platHourSessions[p][h] = new Set() }
@@ -731,7 +731,7 @@ const handleCSV = async (file, forcePlatform = null) => {
 
     // Income prediction for peak window
     const sessionsAtPeak = (analytics?.sessions || []).filter(s => {
-      const h = new Date(s.startTime).getUTCHours()
+      const h = toLocalHour(s.startTime, userTz)
       return bh !== null && Math.abs(h - bh) <= 1
     })
     const peakAvg = sessionsAtPeak.length >= 2
@@ -791,9 +791,9 @@ const handleCSV = async (file, forcePlatform = null) => {
       .filter(w => {
         if (!w.tips || w.tips.length < 3) return false
         const hc = {}
-        w.tips.forEach(t => { const h = new Date(t.date_time || t.dateRaw).getUTCHours(); hc[h] = (hc[h] || 0) + 1 })
+        w.tips.forEach(t => { const h = toLocalHour(t.date_time || t.dateRaw, userTz); hc[h] = (hc[h] || 0) + 1 })
         const peakH = parseInt(Object.entries(hc).sort((a,b) => b[1]-a[1])[0][0])
-        return (peakH - utcHour + 24) % 24 <= 1
+        return (peakH - localHour + 24) % 24 <= 1
       })
       .sort((a, b) => b.totalUSD - a.totalUSD)
       .slice(0, 3)
@@ -818,18 +818,17 @@ const handleCSV = async (file, forcePlatform = null) => {
 
   const buildRealTimeAlerts = () => {
     const now = Date.now()
-    const alertCurrentHour = new Date().getUTCHours()
-    const currentDay = new Date().toLocaleDateString('en-US', { weekday: 'long' })
+    const alertCurrentHour = toLocalHour(new Date().toISOString(), userTz)
+    const currentDay = new Date().toLocaleDateString('en-US', { weekday: 'long', timeZone: userTz })
     const alerts = []
 
     // --- PLATFORM DAY-OF-WEEK PERFORMANCE ---
-    // Use UTC day to avoid timezone shifts (DB stores UTC timestamps)
-    const UTC_DAYS_LONG = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
+    const LOCAL_DAYS_LONG = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
     const platDayMap = {}
     tips.forEach(t => {
       const p = t.platform
-      const d = new Date(t.date_time || t.dateRaw)
-      const day = UTC_DAYS_LONG[d.getUTCDay()]
+      const dayIdx = toLocalDow(t.date_time || t.dateRaw, userTz)
+      const day = LOCAL_DAYS_LONG[dayIdx >= 0 ? dayIdx : 0]
       if (!platDayMap[p]) platDayMap[p] = {}
       if (!platDayMap[p][day]) platDayMap[p][day] = 0
       platDayMap[p][day] += t.usd || 0
@@ -859,14 +858,12 @@ const handleCSV = async (file, forcePlatform = null) => {
 
     // --- PLATFORM vs PLATFORM HOUR COMPARISON ---
     // FIX: use avg USD per hour-session (not raw cumulative totals)
-    // FIX: use getUTCHours() — tips are stored in UTC
     const platHourUSD = {}; const platHourSessions = {}
     tips.forEach(t => {
       const p = t.platform
       const d = new Date(t.date_time || t.dateRaw)
-      // Floor to UTC hour-bucket key for deduplication
       const bucketKey = Math.floor(d.getTime() / 3600000)
-      const h = d.getUTCHours()
+      const h = toLocalHour(t.date_time || t.dateRaw, userTz)
       if (!platHourUSD[p]) { platHourUSD[p] = {}; platHourSessions[p] = {} }
       if (!platHourUSD[p][h]) { platHourUSD[p][h] = 0; platHourSessions[p][h] = new Set() }
       platHourUSD[p][h] += t.usd || 0
@@ -883,8 +880,7 @@ const handleCSV = async (file, forcePlatform = null) => {
     })
 
     const platNames = Object.keys(platHourAvg)
-    // Use UTC current hour to match stored data
-    const currentUTCHour = new Date().getUTCHours()
+    const currentUTCHour = alertCurrentHour
     if (platNames.length >= 2) {
       platNames.forEach(plat => {
         const hourVal = platHourAvg[plat][currentUTCHour] || 0
@@ -913,17 +909,16 @@ const handleCSV = async (file, forcePlatform = null) => {
         : tips.filter(t => t.username.toLowerCase() === w.username.toLowerCase())
       if (fanTips.length < 3) return
 
-      // FIX: use getUTCHours() — tips stored in UTC
       const hourCounts = {}
       fanTips.forEach(t => {
-        const h = new Date(t.date_time || t.dateRaw).getUTCHours()
+        const h = toLocalHour(t.date_time || t.dateRaw, userTz)
         hourCounts[h] = (hourCounts[h] || 0) + 1
       })
       const sortedHours = Object.entries(hourCounts).sort((a, b) => b[1] - a[1])
       if (!sortedHours.length) return
 
       const peakHour = parseInt(sortedHours[0][0])
-      const hoursAway = (peakHour - new Date().getUTCHours() + 24) % 24
+      const hoursAway = (peakHour - alertCurrentHour + 24) % 24
       const confidence = Math.min(95, Math.round((sortedHours[0][1] / fanTips.length) * 100 * 2.5))
       const label = peakHour === 0 ? '12 AM' : peakHour < 12 ? `${peakHour} AM` : peakHour === 12 ? '12 PM' : `${peakHour - 12} PM`
       const daysSince = Math.floor((now - new Date(w.lastTipDate)) / 86400000)
