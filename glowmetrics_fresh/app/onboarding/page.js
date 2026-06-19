@@ -536,18 +536,62 @@ export default function OnboardingPage() {
 
         /* modal */
         .ob-modal-backdrop {
-          position: fixed; inset: 0; background: rgba(2,3,8,0.94);
-          backdrop-filter: blur(14px);
+          position: fixed; inset: 0;
+          background:
+            radial-gradient(circle at 18% 12%, rgba(0,157,255,0.10), transparent 28%),
+            radial-gradient(circle at 82% 18%, rgba(255,20,147,0.09), transparent 30%),
+            rgba(2,4,12,0.92);
+          backdrop-filter: blur(16px);
           display: flex; align-items: center; justify-content: center;
-          z-index: 100; padding: 16px;
+          z-index: 100; padding: 20px;
         }
         .ob-modal {
-          background: #080c1c;
-          border: 1px solid rgba(255,20,147,0.22);
-          border-radius: 24px; padding: 38px 30px;
-          max-width: 400px; width: 100%;
+          background: rgba(8,12,28,0.78);
+          border: 1px solid rgba(255,255,255,0.10);
+          border-radius: 28px;
+          padding: 44px 44px 40px;
+          max-width: 600px; width: 100%;
           text-align: center;
-          box-shadow: 0 0 60px rgba(255,20,147,0.14), 0 24px 64px rgba(0,0,0,0.7);
+          backdrop-filter: blur(18px);
+          box-shadow:
+            0 24px 80px rgba(0,0,0,0.45),
+            0 0 40px rgba(0,157,255,0.08),
+            0 0 50px rgba(255,20,147,0.08);
+        }
+        .ob-modal-icon {
+          width: 56px; height: 56px; border-radius: 999px;
+          background: rgba(245,158,11,0.12);
+          border: 1px solid rgba(245,158,11,0.28);
+          box-shadow: 0 0 24px rgba(245,158,11,0.12);
+          display: flex; align-items: center; justify-content: center;
+          margin: 0 auto 20px;
+          font-size: 26px;
+        }
+        .ob-modal-btn {
+          display: inline-flex;
+          align-items: center; justify-content: center;
+          gap: 8px;
+          width: auto; min-width: 230px; height: 52px;
+          padding: 0 28px; border: none; border-radius: 12px;
+          background: linear-gradient(90deg, #009DFF 0%, #6D35FF 48%, #FF1493 100%);
+          color: #fff; font-size: 15px; font-weight: 800;
+          cursor: pointer; font-family: inherit;
+          box-shadow:
+            0 0 18px rgba(0,157,255,0.60),
+            0 0 34px rgba(255,20,147,0.42),
+            inset 0 1px 0 rgba(255,255,255,0.25);
+          transition: transform 180ms ease, box-shadow 180ms ease, filter 180ms ease;
+        }
+        .ob-modal-btn:hover {
+          transform: translateY(-2px); filter: brightness(1.08);
+          box-shadow:
+            0 0 24px rgba(0,157,255,0.80),
+            0 0 46px rgba(255,20,147,0.62),
+            inset 0 1px 0 rgba(255,255,255,0.35);
+        }
+        @media (max-width: 640px) {
+          .ob-modal { padding: 32px 22px 28px; }
+          .ob-modal-btn { width: 100%; min-width: unset; }
         }
       `}</style>
 
@@ -787,17 +831,25 @@ export default function OnboardingPage() {
       {showSkip && (
         <div className="ob-modal-backdrop" onClick={() => setShowSkip(false)}>
           <div className="ob-modal" onClick={e => e.stopPropagation()}>
-            <div style={{ fontSize: 38, marginBottom: 14 }}>⚠️</div>
-            <div style={{ fontSize: 20, fontWeight: 800, color: '#fff', marginBottom: 10 }}>Skip importing your data?</div>
-            <div style={{ fontSize: 14, color: 'rgba(226,232,240,0.55)', lineHeight: 1.7, marginBottom: 28 }}>
-              Without a CSV, your earnings history, top fans, and best hours won't show up yet.
-              <br /><br />
-              You can always import from <strong style={{ color: 'rgba(255,255,255,0.8)' }}>Import CSV</strong> in the sidebar whenever you're ready.
+            <div className="ob-modal-icon">⚠</div>
+            <div style={{ fontSize: 32, fontWeight: 900, color: '#fff', marginBottom: 16, lineHeight: 1.15 }}>
+              Skip importing for now?
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <button className="ob-btn-primary-full" onClick={() => setShowSkip(false)}>Go back and upload</button>
-              <button className="ob-skip-link" style={{ padding: '10px 0' }} onClick={() => { setShowSkip(false); setStep(2) }}>
-                Skip for now — I understand
+            <div style={{ fontSize: 16, color: 'rgba(226,232,240,0.72)', lineHeight: 1.7, maxWidth: 460, margin: '0 auto', marginBottom: 10 }}>
+              You can enter your dashboard without a CSV, but CamCash will not be able to show your{' '}
+              <strong style={{ color: '#fff', fontWeight: 600 }}>best hours</strong>,{' '}
+              <strong style={{ color: '#fff', fontWeight: 600 }}>top fans</strong>,{' '}
+              <strong style={{ color: '#fff', fontWeight: 600 }}>earning patterns</strong>, or session history until you import your data.
+            </div>
+            <div style={{ fontSize: 14, color: 'rgba(167,176,197,0.6)', marginBottom: 28 }}>
+              You can import anytime later from the dashboard under <strong style={{ color: 'rgba(226,232,240,0.8)', fontWeight: 600 }}>Import CSV</strong>.
+            </div>
+            <button className="ob-modal-btn" onClick={() => setShowSkip(false)}>
+              Go back and import CSV →
+            </button>
+            <div style={{ marginTop: 18 }}>
+              <button className="ob-skip-link" onClick={() => { setShowSkip(false); setStep(2) }}>
+                Continue without data
               </button>
             </div>
           </div>
