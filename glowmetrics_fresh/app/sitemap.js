@@ -45,7 +45,7 @@ export default function sitemap() {
     { url: `${baseUrl}/blog/how-much-do-chaturbate-models-make`,      lastModified: now, changeFrequency: 'monthly', priority: 0.85 },
     { url: `${baseUrl}/blog/how-to-build-loyal-fans`,                 lastModified: now, changeFrequency: 'monthly', priority: 0.85 },
     { url: `${baseUrl}/blog/how-to-get-more-tips-on-myfreecams`,      lastModified: now, changeFrequency: 'monthly', priority: 0.85 },
-    { url: `${baseUrl}/blog/how-to-get-veiws-on-chaturbate`,          lastModified: now, changeFrequency: 'monthly', priority: 0.85 },
+    { url: `${baseUrl}/blog/how-to-get-views-on-chaturbate`,           lastModified: now, changeFrequency: 'monthly', priority: 0.85 },
     { url: `${baseUrl}/blog/how-to-increase-cam-earnings`,            lastModified: now, changeFrequency: 'monthly', priority: 0.85 },
     { url: `${baseUrl}/blog/how-to-make-more-money-on-chaturbate`,    lastModified: now, changeFrequency: 'monthly', priority: 0.85 },
     { url: `${baseUrl}/blog/how-to-re-engage-whales-and-top-tippers`, lastModified: now, changeFrequency: 'monthly', priority: 0.85 },
