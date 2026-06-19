@@ -2,6 +2,18 @@
 // CAMCASH COMPLETE ANALYTICS ENGINE
 // ============================================
 
+// USD per token by platform
+const PLATFORM_TOKEN_RATES = {
+  Chaturbate: 0.05,
+  BongaCams:  0.025,
+  MyFreeCams: 0.05,
+}
+const DEFAULT_TOKEN_RATE = 0.05
+
+function tokenRate(platform) {
+  return PLATFORM_TOKEN_RATES[platform] ?? DEFAULT_TOKEN_RATE
+}
+
 // ===============================
 // TIMEZONE HELPERS
 // ===============================
@@ -123,7 +135,8 @@ export function parseCSV(text, platform = null) {
 function normalizeTip(row) {
   const tokens = parseInt(row.tokens) || 0
   const rawUsd = parseFloat(row.usd) || 0
-  const usd = rawUsd > 0 ? rawUsd : parseFloat((tokens * 0.05).toFixed(2))
+  const rate = tokenRate(row.platform)
+  const usd = rawUsd > 0 ? rawUsd : parseFloat((tokens * rate).toFixed(2))
   const dateRaw = normalizeDate(row.dateRaw || row.date_time || '')
   const parsedDate = new Date(dateRaw)
   if (isNaN(parsedDate.getTime())) return null
@@ -274,8 +287,8 @@ function parseWithHeaders(lines, platform) {
     results.push({
       dateRaw, date_time: dateRaw, username,
       platform: rowPlatform || 'Unknown',
-      tokens: tokens > 0 ? tokens : Math.round(usd / 0.05),
-      usd: usd > 0 ? parseFloat(usd.toFixed(2)) : parseFloat((tokens * 0.05).toFixed(2)),
+      tokens: tokens > 0 ? tokens : Math.round(usd / tokenRate(rowPlatform)),
+      usd: usd > 0 ? parseFloat(usd.toFixed(2)) : parseFloat((tokens * tokenRate(rowPlatform)).toFixed(2)),
       tip_type: row.tip_type || 'Tip',
       tip_note: row.note || row.tip_note || ''
     })
@@ -298,7 +311,7 @@ function parseHeaderless(lines, platform) {
       if (!username || tokens <= 0) continue
       if (vals[1].toLowerCase().includes('transfer') || vals[1].toLowerCase().includes('cash')) continue
       if (!dateRaw || isNaN(new Date(dateRaw).getTime())) continue
-      results.push({ dateRaw, date_time: dateRaw, username, platform: 'Chaturbate', tokens, usd: parseFloat((tokens * 0.05).toFixed(2)), tip_type: 'Tip', tip_note: '' })
+      results.push({ dateRaw, date_time: dateRaw, username, platform: 'Chaturbate', tokens, usd: parseFloat((tokens * tokenRate('Chaturbate')).toFixed(2)), tip_type: 'Tip', tip_note: '' })
       continue
     }
 
@@ -309,7 +322,7 @@ function parseHeaderless(lines, platform) {
       const usd = parseFloat((vals[4] || '').replace(/[$,]/g, '')) || 0
       if (!username || (tokens <= 0 && usd <= 0)) continue
       if (!dateRaw || isNaN(new Date(dateRaw).getTime())) continue
-      results.push({ dateRaw, date_time: dateRaw, username, platform: platform || 'BongaCams', tokens: tokens > 0 ? tokens : Math.round(usd / 0.05), usd: usd > 0 ? parseFloat(usd.toFixed(2)) : parseFloat((tokens * 0.05).toFixed(2)), tip_type: vals[2] || 'Tip', tip_note: '' })
+      results.push({ dateRaw, date_time: dateRaw, username, platform: platform || 'BongaCams', tokens: tokens > 0 ? tokens : Math.round(usd / tokenRate(platform || 'BongaCams')), usd: usd > 0 ? parseFloat(usd.toFixed(2)) : parseFloat((tokens * tokenRate(platform || 'BongaCams')).toFixed(2)), tip_type: vals[2] || 'Tip', tip_note: '' })
       continue
     }
 
@@ -327,8 +340,8 @@ function parseHeaderless(lines, platform) {
         else if (i === 2 && tokens === 0) { tokens = Math.round(num) }
         else if (i === 3 && usd === 0) { usd = num }
       }
-      if (tokens === 0 && usd > 0) tokens = Math.round(usd / 0.05)
-      if (usd === 0 && tokens > 0) usd = parseFloat((tokens * 0.05).toFixed(2))
+      if (tokens === 0 && usd > 0) tokens = Math.round(usd / tokenRate(platform))
+      if (usd === 0 && tokens > 0) usd = parseFloat((tokens * tokenRate(platform)).toFixed(2))
       if (tokens === 0 && usd === 0) continue
       results.push({ dateRaw, date_time: dateRaw, username, platform: platform || 'Unknown', tokens, usd: parseFloat(usd.toFixed(2)), tip_type: 'Tip', tip_note: '' })
     }
