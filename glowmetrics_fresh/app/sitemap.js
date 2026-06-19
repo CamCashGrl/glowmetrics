@@ -7,6 +7,7 @@ export default function sitemap() {
     { url: `${baseUrl}`,            lastModified: now, changeFrequency: 'weekly',  priority: 1.0 },
     { url: `${baseUrl}/landing`,    lastModified: now, changeFrequency: 'monthly', priority: 1.0 },
     { url: `${baseUrl}/live`,       lastModified: now, changeFrequency: 'monthly', priority: 1.0 },
+    { url: `${baseUrl}/live/demo`,  lastModified: now, changeFrequency: 'monthly', priority: 1.0 },
     { url: `${baseUrl}/landing/demo`, lastModified: now, changeFrequency: 'monthly', priority: 1.0 },
     { url: `${baseUrl}/extension`,  lastModified: now, changeFrequency: 'monthly', priority: 1.0 },
     { url: `${baseUrl}/blog`,       lastModified: now, changeFrequency: 'monthly', priority: 1.0 },
@@ -18,6 +19,7 @@ export default function sitemap() {
     { url: `${baseUrl}/guides/cam-model-room-title-generator`, lastModified: now, changeFrequency: 'monthly', priority: 0.95 },
     { url: `${baseUrl}/guides/cam-model-token-calculator`,     lastModified: now, changeFrequency: 'monthly', priority: 0.95 },
     { url: `${baseUrl}/tools/cam-model-name-generator`,        lastModified: now, changeFrequency: 'monthly', priority: 0.95 },
+    { url: `${baseUrl}/guides/cam-model-name-generator`,      lastModified: now, changeFrequency: 'monthly', priority: 0.95 },
 
     // Priority 0.90 — guides
     { url: `${baseUrl}/guides/chaturbate-earnings-tracker`,    lastModified: now, changeFrequency: 'monthly', priority: 0.9 },
@@ -37,6 +39,7 @@ export default function sitemap() {
     { url: `${baseUrl}/affiliates`, lastModified: now, changeFrequency: 'monthly', priority: 0.85 },
     { url: `${baseUrl}/contact`,    lastModified: now, changeFrequency: 'monthly', priority: 0.85 },
     { url: `${baseUrl}/privacy`,    lastModified: now, changeFrequency: 'monthly', priority: 0.85 },
+    { url: `${baseUrl}/terms`,      lastModified: now, changeFrequency: 'monthly', priority: 0.85 },
 
     // Priority 0.85 — blog posts
     { url: `${baseUrl}/blog/best-cam-model-tools`,                    lastModified: now, changeFrequency: 'monthly', priority: 0.85 },
