@@ -8,30 +8,30 @@ const PLATFORMS = [
   {
     id: 'chaturbate', label: 'Chaturbate',
     steps: [
-      'Log in to your Chaturbate broadcaster account.',
-      'Go to chaturbate.com/stats/ and open your token stats page.',
-      'Click "Export" — select CSV format and download the file.',
-      'Open in Google Sheets: File → Import, then File → Download → CSV.',
+      'Log in to your Chaturbate broadcaster account and go to your Token Stats page.',
+      'Copy your token stats data.',
+      'Paste it into a new Google Sheet.',
+      'In Google Sheets: File → Download → Comma Separated Values (.csv).',
       'Upload that CSV file below.',
     ],
   },
   {
     id: 'bongacams', label: 'BongaCams',
     steps: [
-      'Log in to your BongaCams broadcaster account.',
-      'Go to your Earnings or Statistics page in your broadcaster dashboard.',
-      'Find the export option and download as CSV.',
-      'Open in Google Sheets: File → Import, then File → Download → CSV.',
+      'Log in to your BongaCams broadcaster account and find your Token Stats page.',
+      'Copy your token stats data.',
+      'Paste it into a new Google Sheet.',
+      'In Google Sheets: File → Download → Comma Separated Values (.csv).',
       'Upload that CSV file below.',
     ],
   },
   {
     id: 'myfreecams', label: 'MyFreeCams',
     steps: [
-      'Log in to your MyFreeCams account.',
-      'Navigate to your earnings or token history section.',
-      'Download your data as a CSV file.',
-      'Open in Google Sheets: File → Import, then File → Download → CSV.',
+      'Log in to your MyFreeCams account and find your Token Stats page.',
+      'Copy your token stats data.',
+      'Paste it into a new Google Sheet.',
+      'In Google Sheets: File → Download → Comma Separated Values (.csv).',
       'Upload that CSV file below.',
     ],
   },
@@ -326,6 +326,11 @@ export default function OnboardingPage() {
             <div className="ob-email-note">
               <span style={{ fontSize:16, flexShrink:0 }}>✉️</span>
               <span>An email has been sent to you with full instructions on how to import your historical data.</span>
+            </div>
+
+            <div className="ob-email-note" style={{ marginBottom:20 }}>
+              <span style={{ fontSize:16, flexShrink:0 }}>💡</span>
+              <span>You can always import your CSV later on our dashboard — it's under <strong style={{ color:'#00e5cc' }}>Import CSV</strong> in the side bar navigation.</span>
             </div>
 
             {!uploadDone ? <>
