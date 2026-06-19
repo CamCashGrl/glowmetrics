@@ -1,8 +1,7 @@
 import { Resend } from 'resend'
 
-const resend = new Resend(process.env.RESEND_API_KEY)
-
 export async function POST(req) {
+  const resend = new Resend(process.env.RESEND_API_KEY)
   try {
     const { name, email, message, created_at } = await req.json()
     if (!message) return Response.json({ error: 'No message' }, { status: 400 })

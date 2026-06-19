@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server'
 import { Resend } from 'resend'
 
-const resend = new Resend(process.env.RESEND_API_KEY)
 const FOUNDER_EMAIL = 'daphneoncam@gmail.com'
 
 export async function POST(req) {
+  const resend = new Resend(process.env.RESEND_API_KEY)
   try {
     const { email, platform, tip_count, user_id } = await req.json()
 
