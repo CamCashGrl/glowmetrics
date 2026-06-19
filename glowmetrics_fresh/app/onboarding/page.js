@@ -4,37 +4,12 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 
-const PLATFORMS = [
-  {
-    id: 'chaturbate', label: 'Chaturbate',
-    steps: [
-      'Open your Chaturbate broadcaster account.',
-      'Go to your Token Stats page.',
-      'Copy your token stats into a new Google Sheet.',
-      'In Google Sheets, choose File → Download → Comma Separated Values (.csv).',
-      'Upload that CSV file below.',
-    ],
-  },
-  {
-    id: 'bongacams', label: 'BongaCams',
-    steps: [
-      'Open your BongaCams broadcaster account.',
-      'Go to your Token Stats page.',
-      'Copy your token stats into a new Google Sheet.',
-      'In Google Sheets, choose File → Download → Comma Separated Values (.csv).',
-      'Upload that CSV file below.',
-    ],
-  },
-  {
-    id: 'myfreecams', label: 'MyFreeCams',
-    steps: [
-      'Open your MyFreeCams broadcaster account.',
-      'Go to your Token Stats page.',
-      'Copy your token stats into a new Google Sheet.',
-      'In Google Sheets, choose File → Download → Comma Separated Values (.csv).',
-      'Upload that CSV file below.',
-    ],
-  },
+const IMPORT_STEPS = [
+  'Open your broadcaster account and go to your Token Stats page.',
+  'Copy your token stats data.',
+  'Paste it into a new Google Sheet.',
+  'In Google Sheets, choose File → Download → Comma Separated Values (.csv).',
+  'Upload that CSV file below.',
 ]
 
 const DEMO_TIPPERS = ['darkwolf99','tip_king','xo_bella','vip_lover','rose_fan','goldenfan']
@@ -132,7 +107,6 @@ export default function OnboardingPage() {
   const supabase = createClientComponentClient()
 
   const [step,        setStep]        = useState(1)
-  const [selPlatform, setSelPlatform] = useState('chaturbate')
   const [csvFile,     setCsvFile]     = useState(null)
   const [dragging,    setDragging]    = useState(false)
   const [uploading,   setUploading]   = useState(false)
@@ -162,7 +136,6 @@ export default function OnboardingPage() {
       const { data: { session } } = await supabase.auth.getSession()
       const fd = new FormData()
       fd.append('file', csvFile)
-      fd.append('platform', selPlatform)
       const res = await fetch('/api/upload-csv', {
         method: 'POST',
         headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {},
@@ -289,29 +262,6 @@ export default function OnboardingPage() {
           line-height: 1.6; margin-bottom: 26px;
         }
 
-        /* platform tabs */
-        .ob-pf-tabs { display: flex; gap: 8px; margin-bottom: 20px; }
-        .ob-pf-tab {
-          flex: 1; padding: 11px 8px; border-radius: 12px;
-          background: rgba(255,255,255,0.045);
-          border: 1px solid rgba(255,255,255,0.09);
-          color: rgba(226,232,240,0.55);
-          font-size: 13px; font-weight: 600;
-          cursor: pointer; transition: all 0.18s;
-          text-align: center; font-family: inherit;
-        }
-        .ob-pf-tab:hover {
-          border-color: rgba(255,255,255,0.18);
-          color: #fff;
-          box-shadow: 0 0 16px rgba(255,20,147,0.16);
-        }
-        .ob-pf-tab.active {
-          background: linear-gradient(90deg, rgba(0,157,255,0.16), rgba(255,20,147,0.14));
-          border: 1px solid rgba(0,213,255,0.85);
-          box-shadow: 0 0 18px rgba(0,157,255,0.28), inset 0 1px 0 rgba(255,255,255,0.10);
-          color: #67E8F9;
-        }
-        @media (max-width: 560px) { .ob-pf-tabs { flex-direction: column !important; } }
 
         /* instruction card */
         .ob-steps-wrap {
@@ -628,25 +578,18 @@ export default function OnboardingPage() {
                 <p className="ob-sub">Import your past tip history so CamCash can find your best hours, top fans, whale tippers, and earnings patterns.</p>
                 <p className="ob-sub-minor">Choose your platform, follow the quick steps, and upload your CSV when you're ready.</p>
 
-                {/* Platform tabs */}
-                <div className="ob-pf-tabs">
-                  {PLATFORMS.map(p => (
-                    <button key={p.id}
-                      className={`ob-pf-tab ${selPlatform === p.id ? 'active' : ''}`}
-                      onClick={() => { setSelPlatform(p.id); setCsvFile(null); setUploadError(null); setUploadDone(false) }}>
-                      {p.label}
-                    </button>
-                  ))}
-                </div>
-
                 {/* Instructions */}
                 <div className="ob-steps-wrap">
-                  <div className="ob-steps-label">{platform.label} import steps</div>
+                  <div className="ob-steps-label">Import steps</div>
                   <ul className="ob-steps-list">
-                    {platform.steps.map((s, i) => (
+                    {IMPORT_STEPS.map((s, i) => (
                       <li key={i}><span className="ob-step-num">{i+1}</span><span>{s}</span></li>
                     ))}
                   </ul>
+                  <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.06)', fontSize: 12, color: 'rgba(167,176,197,0.6)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontSize: 13 }}>📺</span>
+                    <span>Multiple platforms supported — <strong style={{ color: 'rgba(226,232,240,0.75)', fontWeight: 600 }}>Chaturbate, BongaCams, MyFreeCams</strong></span>
+                  </div>
                 </div>
 
                 {/* Upload zone */}
