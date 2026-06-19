@@ -1,591 +1,380 @@
-'use client'
-
-import { useState, useEffect, useRef } from 'react'
-import { useRouter } from 'next/navigation'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+"use client"
+import { useEffect, useState, useRef } from "react"
+import { useRouter } from "next/navigation"
+import { supabase } from "../../lib/supabase"
 import { T } from '../../lib/tracking'
 
-// CamCash palette
 const C = {
-  bg:       '#07111F',
-  card:     '#0E1A2B',
-  panel:    '#13233A',
-  border:   '#1E314D',
-  cyan:     '#38D5E8',
-  teal:     '#2DD4BF',
-  blue:     '#3B82F6',
-  white:    '#F8FAFC',
-  text:     '#94A3B8',
+  bg: "#05070f", card: "#121826", border: "#1e2d45",
+  indigo: "#7C5CFF", cyan: "#22D3EE", pink: "#EC4899",
+  gold: "#F59E0B", green: "#10B981", red: "#F87171",
+  white: "#F1F5F9", text: "#94A3B8", muted: "#475569"
 }
 
 const PLATFORMS = [
   {
-    id: 'chaturbate',
-    label: 'Chaturbate',
-    emoji: '🟣',
-    color: C.cyan,
+    name: "Chaturbate", emoji: "🟣", color: C.cyan,
     steps: [
-      'Log into Chaturbate as a broadcaster',
-      'Go to Stats & Data → Token Stats',
-      'Set your date range (last 90 days works great)',
+      "Log into Chaturbate as a broadcaster",
+      "Go to Stats & Data → Token Stats",
+      "Set your date range (last 90 days works great)",
       'Click "Download CSV" or "Export"',
-      'Upload that file below ↓',
+      "Upload that file below ↓"
     ],
-    tip: 'Look for a file named something like chaturbate_token_stats.csv',
+    tip: "Look for a file named something like chaturbate_token_stats.csv"
   },
   {
-    id: 'bongacams',
-    label: 'BongaCams',
-    emoji: '🔴',
-    color: C.teal,
+    name: "BongaCams", emoji: "🔴", color: C.pink,
     steps: [
-      'Log into your BongaCams model account',
-      'Go to Statistics → Earnings History',
-      'Select your date range and click Export',
-      'Save the CSV file to your computer',
-      'Upload that file below ↓',
+      "Log into your BongaCams model account",
+      "Go to Statistics → Earnings History",
+      "Select your date range and click Export",
+      "Save the CSV file to your computer",
+      "Upload that file below ↓"
     ],
-    tip: 'BongaCams exports include date, username, tokens, and USD',
+    tip: "BongaCams exports include date, username, tokens, and USD"
   },
   {
-    id: 'myfreecams',
-    label: 'MyFreeCams',
-    emoji: '🟠',
-    color: C.blue,
+    name: "MyFreeCams", emoji: "🟠", color: C.gold,
     steps: [
-      'Log into your MFC model account',
-      'Go to Model Admin → Token Stats',
-      'Click Transaction History and set your date range',
-      'Click Export CSV',
-      'Upload that file below ↓',
+      "Log into your MFC model account",
+      "Go to Model Admin → Token Stats",
+      "Click Transaction History and set your date range",
+      "Click Export CSV",
+      "Upload that file below ↓"
     ],
-    tip: 'MFC exports are very detailed — all transaction types included',
-  },
+    tip: "MFC exports are very detailed — all transaction types included"
+  }
 ]
 
-const DEMO_TIPPERS = ['xo_bella', 'darkwolf99', 'tip_king', 'vip_lover', 'night_owl', 'rose_fan', 'bigspender', 'mystery_m']
-const DEMO_AMOUNTS = [5, 10, 15, 25, 50, 100, 25, 10, 5, 20]
-function randomTip() {
-  return {
-    id: Math.random().toString(36).slice(2),
-    user: DEMO_TIPPERS[Math.floor(Math.random() * DEMO_TIPPERS.length)],
-    tokens: DEMO_AMOUNTS[Math.floor(Math.random() * DEMO_AMOUNTS.length)],
-    time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-  }
-}
-
-function LiveModeDemo() {
-  const [tips, setTips] = useState([
-    { id: '1', user: 'xo_bella',   tokens: 50,  time: '9:41 PM' },
-    { id: '2', user: 'darkwolf99', tokens: 25,  time: '9:42 PM' },
-    { id: '3', user: 'tip_king',   tokens: 100, time: '9:43 PM' },
-  ])
-  const [totalTokens, setTotalTokens] = useState(175)
-  const [totalUsd, setTotalUsd] = useState(8.75)
-  const [elapsed, setElapsed] = useState(312)
-  const [newTip, setNewTip] = useState(null)
-
-  useEffect(() => {
-    const clock = setInterval(() => setElapsed(e => e + 1), 1000)
-    return () => clearInterval(clock)
-  }, [])
-
-  useEffect(() => {
-    let timeout
-    function scheduleTip() {
-      timeout = setTimeout(() => {
-        const tip = randomTip()
-        setNewTip(tip.id)
-        setTips(prev => [tip, ...prev].slice(0, 12))
-        setTotalTokens(t => t + tip.tokens)
-        setTotalUsd(u => Math.round((u + tip.tokens * 0.05) * 100) / 100)
-        setTimeout(() => setNewTip(null), 800)
-        scheduleTip()
-      }, 2500 + Math.random() * 3500)
-    }
-    scheduleTip()
-    return () => clearTimeout(timeout)
-  }, [])
-
-  const mins = Math.floor(elapsed / 60).toString().padStart(2, '0')
-  const secs = (elapsed % 60).toString().padStart(2, '0')
-  const dph  = elapsed > 0 ? ((totalUsd / elapsed) * 3600).toFixed(2) : '0.00'
-
-  return (
-    <div style={{ background: C.panel, borderRadius: 12, border: `1px solid ${C.border}`, overflow: 'hidden', fontSize: 13 }}>
-      <div style={{ background: `${C.cyan}18`, borderBottom: `1px solid ${C.border}`, padding: '6px 14px', display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span style={{ width: 7, height: 7, borderRadius: '50%', background: C.cyan, display: 'inline-block', animation: 'lm-pulse 1.2s ease-in-out infinite' }} />
-        <span style={{ fontSize: 11, fontWeight: 700, color: C.cyan, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Live Mode Demo</span>
-        <span style={{ marginLeft: 'auto', fontSize: 11, color: C.text }}>Simulated stream</span>
-      </div>
-      <div style={{ display: 'flex', minHeight: 260 }}>
-        <div style={{ width: 130, borderRight: `1px solid ${C.border}`, padding: '16px 12px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {[
-            { label: 'Session', value: `${mins}:${secs}`, color: C.white },
-            { label: 'Tokens',  value: totalTokens.toLocaleString(), color: C.cyan },
-            { label: 'Earned',  value: `$${totalUsd.toFixed(2)}`, color: C.teal },
-            { label: '$/hr pace', value: `$${dph}`, color: C.blue },
-          ].map(({ label, value, color }) => (
-            <div key={label}>
-              <div style={{ fontSize: 10, color: C.text, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 4 }}>{label}</div>
-              <div style={{ fontSize: label === 'Tokens' ? 22 : label === 'Session' ? 20 : 18, fontWeight: 800, color, fontVariantNumeric: 'tabular-nums' }}>{value}</div>
-            </div>
-          ))}
-        </div>
-        <div style={{ flex: 1, padding: '12px 0', overflowY: 'auto', maxHeight: 260 }}>
-          <div style={{ fontSize: 10, color: C.text, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '0 14px 8px' }}>Live Tips</div>
-          {tips.map(tip => (
-            <div key={tip.id} style={{
-              display: 'flex', alignItems: 'center', gap: 10,
-              padding: '7px 14px', borderBottom: `1px solid ${C.border}30`,
-              transition: 'background 0.3s',
-              background: newTip === tip.id ? `${C.cyan}12` : 'transparent',
-            }}>
-              <span style={{ fontSize: 11, fontWeight: 800, minWidth: 36, fontVariantNumeric: 'tabular-nums', color: tip.tokens >= 100 ? C.blue : tip.tokens >= 50 ? C.cyan : C.teal }}>{tip.tokens}tk</span>
-              <span style={{ color: C.white, fontWeight: 600, fontSize: 12, flex: 1 }}>{tip.user}</span>
-              <span style={{ color: C.text, fontSize: 11 }}>{tip.time}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-      <style>{`@keyframes lm-pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }`}</style>
-    </div>
-  )
-}
-
 export default function OnboardingPage() {
-  const router  = useRouter()
-  const supabase = createClientComponentClient()
-
-  const [user,           setUser]           = useState(null)
-  const [loading,        setLoading]        = useState(true)
-  const [step,           setStep]           = useState(1)
-  const [selectedPlatform, setSelectedPlatform] = useState('chaturbate')
-  const [uploading,      setUploading]      = useState(false)
-  const [uploadDone,     setUploadDone]     = useState(false)
-  const [uploadError,    setUploadError]    = useState(null)
-  const [dragOver,       setDragOver]       = useState(false)
-  const [showSkipConfirm, setShowSkipConfirm] = useState(false)
+  const router = useRouter()
+  const [user, setUser] = useState(null)
+  const [checking, setChecking] = useState(true)
+  const [selectedPlatform, setSelectedPlatform] = useState(0)
+  const [uploading, setUploading] = useState(false)
+  const [uploadDone, setUploadDone] = useState(false)
+  const [uploadResult, setUploadResult] = useState(null)
+  const [uploadError, setUploadError] = useState("")
+  const [dragOver, setDragOver] = useState(false)
   const fileRef = useRef()
 
   useEffect(() => {
     const check = async () => {
-      const { data: { user: u } } = await supabase.auth.getUser()
-      if (!u) { router.replace('/login'); return }
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) { router.replace("/login"); return }
       const { data: profile } = await supabase
-        .from('beta_users').select('onboarding_complete').eq('user_id', u.id).single()
-      if (profile?.onboarding_complete) { router.replace('/dashboard'); return }
-      setUser(u)
-      setLoading(false)
+        .from("beta_users")
+        .select("onboarding_complete")
+        .eq("user_id", user.id)
+        .single()
+      if (profile?.onboarding_complete) { router.replace("/dashboard"); return }
+      setUser(user)
+      setChecking(false)
     }
     check()
   }, [router])
-
-  const platform = PLATFORMS.find(p => p.id === selectedPlatform)
 
   const handleFile = async (file) => {
     if (!file || !user) return
     T.csvUploadStarted()
     setUploading(true)
-    setUploadError(null)
+    setUploadError("")
     try {
       const { data: { session } } = await supabase.auth.getSession()
-      if (!session) { setUploadError('Not logged in'); setUploading(false); return }
+      if (!session) { setUploadError("Not logged in"); setUploading(false); return }
       const fd = new FormData()
-      fd.append('file', file)
-      fd.append('platform', platform.label)
-      const res    = await fetch('/api/upload-csv', { method: 'POST', headers: { Authorization: `Bearer ${session.access_token}` }, body: fd })
+      fd.append("file", file)
+      fd.append("platform", PLATFORMS[selectedPlatform].name)
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session.access_token}` },
+        body: fd,
+      })
       const result = await res.json()
       if (!res.ok || result.error) {
-        T.csvUploadFailed(result.error || 'upload_failed')
-        setUploadError(result.error || 'Upload failed — check the platform selection and try again')
+        T.csvUploadFailed(result.error || "upload_failed")
+        setUploadError(result.error || "Upload failed — check the platform selection and try again")
         setUploading(false)
         return
       }
-      await supabase.from('beta_users').upsert(
-        { user_id: user.id, email: user.email, onboarding_complete: true, signed_up_at: user.created_at },
-        { onConflict: 'user_id' }
-      )
+      await supabase.from("beta_users").upsert({
+        user_id: user.id, email: user.email,
+        onboarding_complete: true, signed_up_at: user.created_at
+      }, { onConflict: "user_id" })
       T.csvUploadCompleted(result?.inserted || 0, 0)
+      setUploadResult(result)
       setUploadDone(true)
-      setTimeout(() => setStep(2), 1200)
     } catch (err) {
-      T.csvUploadFailed(err.message || 'exception')
-      setUploadError(err.message || 'Something went wrong')
+      setUploadError(err.message || "Something went wrong")
     } finally {
       setUploading(false)
     }
   }
 
-  const handleFinish = () => { setStep(5); setTimeout(() => router.push('/dashboard'), 1500) }
+  const skipToLive = async () => {
+    if (!user) return
+    await supabase.from("beta_users").upsert({
+      user_id: user.id, email: user.email,
+      onboarding_complete: true, signed_up_at: user.created_at
+    }, { onConflict: "user_id" })
+    router.push("/dashboard?tab=live")
+  }
 
-  const progressSteps = [
-    { label: 'Import Data', active: step === 1, done: step > 1 },
-    { label: 'Live Mode',   active: step === 2, done: step > 2 },
-    { label: 'Extension',   active: step === 3, done: step > 3 },
-    { label: 'Dashboard',   active: step === 4, done: step >= 5 },
-  ]
+  const goToDashboard = () => router.push("/dashboard")
 
-  if (loading) return (
-    <div style={{ minHeight: '100vh', background: C.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ width: 32, height: 32, borderRadius: '50%', border: `2px solid ${C.border}`, borderTopColor: C.cyan, animation: 'spin 0.8s linear infinite' }} />
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-    </div>
-  )
+  if (checking) {
+    return (
+      <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ width: 36, height: 36, borderRadius: "50%", border: "2px solid #1e2d45", borderTopColor: C.cyan, animation: "spin 0.8s linear infinite" }} />
+        <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+      </div>
+    )
+  }
+
+  const plat = PLATFORMS[selectedPlatform]
 
   return (
-    <>
+    <div style={{
+      minHeight: "100vh",
+      background: `radial-gradient(circle at 20% 20%, rgba(34,211,238,0.12), transparent 40%),
+                   radial-gradient(circle at 80% 80%, rgba(236,72,153,0.12), transparent 40%), ${C.bg}`,
+      fontFamily: "'Inter', sans-serif", color: C.text,
+      padding: "40px 20px 80px"
+    }}>
       <style>{`
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-        body { background: ${C.bg}; }
-        .ob-root {
-          min-height: 100vh;
-          background: ${C.bg};
-          background-image:
-            radial-gradient(ellipse 60% 40% at 50% 0%, ${C.cyan}0f 0%, transparent 70%),
-            radial-gradient(ellipse 40% 30% at 85% 85%, ${C.blue}0a 0%, transparent 60%);
-          display: flex; flex-direction: column; align-items: center;
-          padding: 40px 16px 80px;
-          font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-        }
-        .ob-progress { display: flex; align-items: center; margin-bottom: 32px; }
-        .ob-step-pill {
-          display: flex; align-items: center; gap: 6px;
-          padding: 6px 14px; border-radius: 20px;
-          font-size: 12px; font-weight: 600; color: ${C.text};
-          transition: all 0.2s;
-        }
-        .ob-step-pill.active { color: ${C.cyan}; background: ${C.cyan}14; }
-        .ob-step-pill.done   { color: ${C.teal}; background: ${C.teal}14; }
-        .ob-step-dot  { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
-        .ob-step-line { width: 24px; height: 1px; background: ${C.border}; }
-        .ob-card {
-          width: 100%; max-width: 620px;
-          background: ${C.card}; border: 1px solid ${C.border};
-          border-radius: 20px; padding: 36px 40px;
-          box-shadow: 0 24px 64px rgba(0,0,0,0.4);
-        }
-        .ob-eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: ${C.cyan}; margin-bottom: 6px; }
-        .ob-heading  { font-size: 22px; font-weight: 700; color: ${C.white}; line-height: 1.25; margin-bottom: 6px; }
-        .ob-sub      { font-size: 14px; color: ${C.text}; line-height: 1.65; margin-bottom: 24px; }
-        .ob-platform-tabs { display: flex; gap: 8px; margin-bottom: 20px; }
-        .ob-platform-tab {
-          flex: 1; padding: 10px 8px; border-radius: 10px;
-          border: 1px solid ${C.border}; background: ${C.panel};
-          color: ${C.text}; font-size: 13px; font-weight: 600;
-          cursor: pointer; transition: all 0.15s; text-align: center; font-family: inherit;
-        }
-        .ob-platform-tab:hover  { border-color: ${C.cyan}60; color: ${C.white}; }
-        .ob-platform-tab.active { border-color: var(--pc); color: var(--pc); background: ${C.bg}; box-shadow: 0 0 0 1px var(--pc); }
-        .ob-steps-list {
-          list-style: none; margin-bottom: 14px;
-          background: ${C.panel}; border: 1px solid ${C.border};
-          border-radius: 12px; padding: 16px 18px;
-          display: flex; flex-direction: column; gap: 10px;
-        }
-        .ob-steps-list li { display: flex; gap: 10px; font-size: 13px; color: ${C.text}; line-height: 1.55; align-items: flex-start; }
-        .ob-step-num {
-          flex-shrink: 0; width: 20px; height: 20px; border-radius: 50%;
-          font-size: 11px; font-weight: 800;
-          display: flex; align-items: center; justify-content: center; margin-top: 1px;
-        }
-        .ob-plat-tip {
-          margin-bottom: 20px; padding: 9px 12px; border-radius: 9px;
-          font-size: 12px; line-height: 1.5;
-          background: var(--pt-bg); border: 1px solid var(--pt-border); color: var(--pt-color);
-        }
-        .ob-video-wrap {
-          margin-bottom: 24px; border-radius: 14px; overflow: hidden;
-          border: 1px solid ${C.border};
-        }
-        .ob-video-header {
-          padding: 12px 16px; background: ${C.panel};
-          border-bottom: 1px solid ${C.border};
-          display: flex; align-items: center; gap: 10px;
-        }
-        .ob-upload-zone {
-          border: 1.5px dashed ${C.border}; border-radius: 12px;
-          padding: 28px 20px; text-align: center; cursor: pointer;
-          transition: all 0.15s; margin-bottom: 8px; background: ${C.panel};
-        }
-        .ob-upload-zone:hover, .ob-upload-zone.drag { border-color: ${C.cyan}; background: ${C.cyan}08; }
-        .ob-error       { font-size: 13px; color: #f87171; margin: 10px 0; }
-        .ob-success-msg { font-size: 13px; color: ${C.teal}; margin: 10px 0; font-weight: 600; }
-        .ob-btn-primary {
-          width: 100%; padding: 14px;
-          background: linear-gradient(135deg, ${C.cyan}, ${C.blue});
-          border: none; border-radius: 12px; color: #fff;
-          font-size: 15px; font-weight: 700; cursor: pointer;
-          transition: opacity 0.15s, transform 0.1s;
-          margin-bottom: 10px; font-family: inherit;
-          box-shadow: 0 6px 24px ${C.cyan}28;
-        }
-        .ob-btn-primary:hover:not(:disabled) { opacity: 0.9; transform: translateY(-1px); }
-        .ob-btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
-        .ob-btn-ghost {
-          width: 100%; padding: 12px;
-          background: transparent; border: 1px solid ${C.border};
-          border-radius: 12px; color: ${C.text}; font-size: 14px; font-weight: 600;
-          cursor: pointer; transition: all 0.15s; font-family: inherit;
-        }
-        .ob-btn-ghost:hover { border-color: ${C.cyan}60; color: ${C.white}; }
-        .ob-divider { height: 1px; background: ${C.border}; margin: 20px 0; }
-        .ob-modal-backdrop {
-          position: fixed; inset: 0; background: rgba(7,17,31,0.9);
-          backdrop-filter: blur(8px); display: flex;
-          align-items: center; justify-content: center; z-index: 100; padding: 16px;
-        }
-        .ob-modal {
-          background: ${C.card}; border: 1px solid ${C.border};
-          border-radius: 16px; padding: 32px 28px;
-          max-width: 380px; width: 100%; text-align: center;
-        }
-        .ob-link-card {
-          display: flex; align-items: center; gap: 12px;
-          background: ${C.panel}; border: 1px solid ${C.border};
-          border-radius: 10px; padding: 14px 16px;
-          text-decoration: none; color: ${C.white}; font-size: 13px; font-weight: 600;
-          transition: border-color 0.15s; margin-bottom: 10px;
-        }
-        .ob-link-card:hover { border-color: ${C.cyan}; }
-        .ob-link-card-sub { font-size: 12px; color: ${C.text}; font-weight: 400; margin-top: 2px; }
-        .ob-warning-box {
-          display: flex; gap: 12px; align-items: flex-start;
-          background: rgba(59,130,246,0.06); border: 1px solid rgba(59,130,246,0.2);
-          border-radius: 12px; padding: 16px; margin-bottom: 24px;
-        }
-        .ob-warning-text { font-size: 13px; color: ${C.text}; line-height: 1.65; }
-        .ob-warning-text strong { color: ${C.cyan}; font-weight: 700; }
-        .ob-ext-highlight {
-          background: ${C.panel}; border: 1px solid ${C.border};
-          border-radius: 12px; padding: 16px; margin-bottom: 20px;
-          font-size: 13px; color: ${C.text}; line-height: 1.65; text-align: center;
-        }
-        .ob-download-btn {
-          display: flex; align-items: center; gap: 12px;
-          background: linear-gradient(135deg, ${C.cyan}18, ${C.blue}12);
-          border: 1px solid ${C.cyan}50;
-          border-radius: 12px; padding: 16px 20px;
-          text-decoration: none; color: ${C.cyan};
-          font-size: 14px; font-weight: 700;
-          transition: all 0.15s; margin-bottom: 10px;
-        }
-        .ob-download-btn:hover { border-color: ${C.cyan}; transform: translateY(-1px); }
-        .ob-download-btn-sub { font-size: 12px; color: ${C.text}; font-weight: 400; margin-top: 2px; }
-        @keyframes spin   { to { transform: rotate(360deg) } }
-        @keyframes fadeUp { from { opacity:0; transform:translateY(14px) } to { opacity:1; transform:translateY(0) } }
-        @media (max-width: 560px) {
-          .ob-card { padding: 24px 20px; }
-          .ob-platform-tabs { flex-direction: column; }
-          .ob-heading { font-size: 19px; }
-        }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+        *{box-sizing:border-box;margin:0;padding:0}
+        @keyframes spin{to{transform:rotate(360deg)}}
+        @keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+        @keyframes checkPop{0%{transform:scale(0)}70%{transform:scale(1.2)}100%{transform:scale(1)}}
+        .upload-zone:hover{border-color:rgba(34,211,238,0.6)!important;background:rgba(34,211,238,0.07)!important}
+        .plat-btn:hover{border-color:rgba(255,255,255,0.2)!important}
+        .tool-card:hover{transform:translateY(-2px);border-color:rgba(124,92,255,0.4)!important}
       `}</style>
 
-      <div className="ob-root">
+      <div style={{ maxWidth: 720, margin: "0 auto" }}>
 
-        {/* Progress */}
-        <div className="ob-progress">
-          {progressSteps.map((s, i) => (
-            <>
-              <div key={s.label} className={`ob-step-pill ${s.active ? 'active' : ''} ${s.done ? 'done' : ''}`}>
-                <span className="ob-step-dot" />{s.label}
-              </div>
-              {i < progressSteps.length - 1 && <div className="ob-step-line" key={`l${i}`} />}
-            </>
-          ))}
+        {/* HEADER */}
+        <div style={{ textAlign: "center", marginBottom: 40, animation: "fadeUp 0.4s ease both" }}>
+          <div style={{
+            width: 64, height: 64, borderRadius: 18,
+            background: "linear-gradient(135deg, #22D3EE, #EC4899)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 30, fontWeight: 900, color: "#fff",
+            margin: "0 auto 20px",
+            boxShadow: "0 12px 32px rgba(34,211,238,0.25)"
+          }}>$</div>
+          <h1 style={{ fontSize: 32, fontWeight: 900, color: C.white, marginBottom: 10, lineHeight: 1.2 }}>
+            Let's get your stats loaded 💰
+          </h1>
+          <p style={{ fontSize: 15, color: C.muted, maxWidth: 440, margin: "0 auto", lineHeight: 1.7 }}>
+            Watch the video below, then upload your CSV — your full dashboard unlocks instantly.
+          </p>
         </div>
 
-        <div className="ob-card">
+        {/* SUCCESS STATE */}
+        {uploadDone && uploadResult && (
+          <div style={{
+            padding: 40, borderRadius: 20, textAlign: "center",
+            background: "rgba(16,185,129,0.08)", border: "1px solid rgba(16,185,129,0.35)",
+            animation: "fadeUp 0.4s ease both", marginBottom: 24
+          }}>
+            <div style={{ fontSize: 56, marginBottom: 16, animation: "checkPop 0.5s ease both" }}>🎉</div>
+            <div style={{ fontSize: 24, fontWeight: 800, color: C.white, marginBottom: 8 }}>
+              {uploadResult.inserted} tips imported!
+            </div>
+            {uploadResult.skipped > 0 && (
+              <div style={{ fontSize: 13, color: C.muted, marginBottom: 16 }}>
+                ({uploadResult.skipped} duplicates skipped — that's normal)
+              </div>
+            )}
+            <div style={{ fontSize: 14, color: C.text, marginBottom: 28, lineHeight: 1.6 }}>
+              Your dashboard is ready. You'll see your total earnings, top fans,<br />
+              best hours to stream, and personalized insights.
+            </div>
+            <button onClick={goToDashboard} style={{
+              padding: "14px 40px", borderRadius: 12,
+              background: "linear-gradient(135deg, #10B981, #22D3EE)",
+              border: "none", color: "#fff", fontSize: 16, fontWeight: 800,
+              cursor: "pointer", boxShadow: "0 8px 28px rgba(16,185,129,0.35)"
+            }}>
+              View My Dashboard →
+            </button>
+          </div>
+        )}
 
-          {/* ── STEP 1 ── */}
-          {step === 1 && (
-            <>
-              <div className="ob-eyebrow">Step 1 · Import your history</div>
-              <div className="ob-heading">Let&apos;s get your stats loaded</div>
-              <div className="ob-sub">Watch the short video, export your CSV from your platform, and upload it below. Your full dashboard unlocks instantly.</div>
-
-              {/* Video */}
-              <div className="ob-video-wrap">
-                <div className="ob-video-header">
-                  <div style={{ width: 26, height: 26, borderRadius: 7, background: `linear-gradient(135deg,${C.cyan},${C.blue})`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12 }}>▶</div>
-                  <div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: C.white }}>How to upload your CSV</div>
-                    <div style={{ fontSize: 11, color: C.text }}>Watch first — takes 2 minutes</div>
-                  </div>
+        {!uploadDone && (
+          <>
+            {/* VIDEO TUTORIAL */}
+            <div style={{
+              marginBottom: 28, borderRadius: 18, overflow: "hidden",
+              border: "1px solid rgba(34,211,238,0.2)",
+              boxShadow: "0 0 40px rgba(34,211,238,0.07)",
+              animation: "fadeUp 0.4s ease 0.05s both"
+            }}>
+              <div style={{
+                padding: "14px 20px",
+                background: "rgba(15,20,32,0.9)",
+                borderBottom: "1px solid rgba(255,255,255,0.06)",
+                display: "flex", alignItems: "center", gap: 10
+              }}>
+                <div style={{ width: 28, height: 28, borderRadius: 8, background: "linear-gradient(135deg,#EC4899,#7C5CFF)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>▶</div>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: C.white }}>How to upload your CSV</div>
+                  <div style={{ fontSize: 11, color: C.muted }}>Watch first — takes 2 minutes</div>
                 </div>
-                <div style={{ position: 'relative', paddingBottom: '56.25%', height: 0, background: '#000' }}>
-                  <iframe
-                    src="https://www.youtube.com/embed/IJyzM7Pntyc?rel=0&modestbranding=1&mute=1"
-                    title="How to upload your CSV to CamCash"
-                    frameBorder="0"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                    allowFullScreen
-                    style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}
-                  />
+              </div>
+              <div style={{ position: "relative", paddingBottom: "56.25%", height: 0, background: "#000" }}>
+                <iframe
+                  src="https://www.youtube.com/embed/IJyzM7Pntyc?rel=0&modestbranding=1&mute=1"
+                  title="How to upload your CSV to CamCash"
+                  frameBorder="0"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                  style={{
+                    position: "absolute", top: 0, left: 0,
+                    width: "100%", height: "100%"
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* CSV UPLOAD */}
+            <div style={{
+              padding: 28, borderRadius: 18,
+              background: "rgba(15,20,32,0.8)", backdropFilter: "blur(20px)",
+              border: "1px solid rgba(34,211,238,0.25)",
+              marginBottom: 16, animation: "fadeUp 0.4s ease 0.1s both"
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
+                <div style={{ width: 36, height: 36, borderRadius: 10, background: "linear-gradient(135deg, #22D3EE, #7C5CFF)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>📁</div>
+                <div>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: C.white }}>Upload your earnings CSV</div>
+                  <div style={{ fontSize: 12, color: C.muted }}>Select your platform then drop your file</div>
                 </div>
               </div>
 
-              {/* Platform tabs */}
-              <div className="ob-platform-tabs">
-                {PLATFORMS.map(p => (
-                  <button
-                    key={p.id}
-                    className={`ob-platform-tab ${selectedPlatform === p.id ? 'active' : ''}`}
-                    style={{ '--pc': p.color }}
-                    onClick={() => { setSelectedPlatform(p.id); setUploadError(null); setUploadDone(false) }}
-                  >
-                    {p.emoji} {p.label}
+              {/* Platform Tabs */}
+              <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+                {PLATFORMS.map((p, i) => (
+                  <button key={p.name} className="plat-btn" onClick={() => setSelectedPlatform(i)} style={{
+                    flex: 1, padding: "8px 0", borderRadius: 10, fontSize: 12, fontWeight: 700,
+                    cursor: "pointer", transition: "all 0.15s",
+                    background: selectedPlatform === i ? `${p.color}20` : "rgba(255,255,255,0.03)",
+                    border: selectedPlatform === i ? `1px solid ${p.color}60` : "1px solid rgba(255,255,255,0.08)",
+                    color: selectedPlatform === i ? p.color : C.muted
+                  }}>
+                    {p.emoji} {p.name}
                   </button>
                 ))}
               </div>
 
-              {/* Export steps */}
-              <ul className="ob-steps-list">
-                {platform.steps.map((s, i) => (
-                  <li key={i}>
-                    <span className="ob-step-num" style={{ background: `${platform.color}20`, border: `1px solid ${platform.color}40`, color: platform.color }}>{i + 1}</span>
-                    <span style={{ color: i === platform.steps.length - 1 ? C.white : C.text, fontWeight: i === platform.steps.length - 1 ? 600 : 400 }}>{s}</span>
-                  </li>
-                ))}
-              </ul>
-
-              {/* Tip */}
-              <div className="ob-plat-tip" style={{ '--pt-bg': `${platform.color}0d`, '--pt-border': `${platform.color}25`, '--pt-color': platform.color }}>
-                💡 {platform.tip}
+              {/* Steps */}
+              <div style={{ marginBottom: 20, padding: "14px 16px", borderRadius: 12, background: "rgba(0,0,0,0.3)", border: "1px solid rgba(255,255,255,0.06)" }}>
+                <div style={{ fontSize: 11, color: plat.color, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10 }}>
+                  How to export from {plat.name}
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+                  {plat.steps.map((step, i) => (
+                    <div key={i} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                      <span style={{
+                        width: 20, height: 20, borderRadius: "50%", flexShrink: 0,
+                        background: `${plat.color}20`, border: `1px solid ${plat.color}40`,
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        fontSize: 10, fontWeight: 800, color: plat.color, marginTop: 1
+                      }}>{i + 1}</span>
+                      <span style={{ fontSize: 13, color: i === plat.steps.length - 1 ? C.white : C.text, lineHeight: 1.5, fontWeight: i === plat.steps.length - 1 ? 600 : 400 }}>
+                        {step}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ marginTop: 10, padding: "7px 10px", borderRadius: 8, background: `${plat.color}0d`, border: `1px solid ${plat.color}25`, fontSize: 11, color: plat.color }}>
+                  💡 {plat.tip}
+                </div>
               </div>
 
-              {/* Upload */}
-              {!uploadDone ? (
-                <>
-                  <div
-                    className={`ob-upload-zone${dragOver ? ' drag' : ''}`}
-                    onDragOver={e => { e.preventDefault(); setDragOver(true) }}
-                    onDragLeave={() => setDragOver(false)}
-                    onDrop={e => { e.preventDefault(); setDragOver(false); const f = e.dataTransfer.files[0]; if (f) handleFile(f) }}
-                    onClick={() => fileRef.current?.click()}
-                  >
-                    <input ref={fileRef} type="file" accept=".csv,.txt" style={{ display: 'none' }} onChange={e => { const f = e.target.files[0]; if (f) handleFile(f) }} />
-                    {uploading ? (
-                      <>
-                        <div style={{ width: 30, height: 30, borderRadius: '50%', border: `2px solid ${C.border}`, borderTopColor: C.cyan, animation: 'spin 0.8s linear infinite', margin: '0 auto 10px' }} />
-                        <div style={{ fontSize: 14, color: C.cyan, fontWeight: 600 }}>Processing your file…</div>
-                      </>
-                    ) : (
-                      <>
-                        <div style={{ fontSize: 34, marginBottom: 8 }}>📂</div>
-                        <div style={{ fontSize: 15, fontWeight: 700, color: C.white, marginBottom: 4 }}>Drop your CSV here</div>
-                        <div style={{ fontSize: 13, color: C.text }}>or click to browse · .csv files only</div>
-                      </>
-                    )}
-                  </div>
-                  {uploadError && <div className="ob-error">⚠️ {uploadError}</div>}
-                </>
-              ) : (
-                <div className="ob-success-msg">✓ CSV uploaded! Moving to next step…</div>
+              {/* Drop Zone */}
+              <div
+                className="upload-zone"
+                onDragOver={e => { e.preventDefault(); setDragOver(true) }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={e => { e.preventDefault(); setDragOver(false); const f = e.dataTransfer.files[0]; if (f) handleFile(f) }}
+                onClick={() => fileRef.current?.click()}
+                style={{
+                  padding: "28px 20px", borderRadius: 14, textAlign: "center",
+                  border: `2px dashed ${dragOver ? "rgba(34,211,238,0.7)" : "rgba(34,211,238,0.25)"}`,
+                  background: dragOver ? "rgba(34,211,238,0.08)" : "rgba(34,211,238,0.03)",
+                  cursor: uploading ? "not-allowed" : "pointer", transition: "all 0.15s"
+                }}
+              >
+                <input ref={fileRef} type="file" accept=".csv,.txt" style={{ display: "none" }}
+                  onChange={e => { const f = e.target.files[0]; if (f) handleFile(f) }} />
+                {uploading ? (
+                  <>
+                    <div style={{ width: 32, height: 32, borderRadius: "50%", border: "2px solid rgba(34,211,238,0.2)", borderTopColor: C.cyan, animation: "spin 0.8s linear infinite", margin: "0 auto 10px" }} />
+                    <div style={{ fontSize: 14, color: C.cyan, fontWeight: 600 }}>Processing your file...</div>
+                  </>
+                ) : (
+                  <>
+                    <div style={{ fontSize: 36, marginBottom: 10 }}>📂</div>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: C.white, marginBottom: 4 }}>Drop your CSV here</div>
+                    <div style={{ fontSize: 13, color: C.muted }}>or click to browse</div>
+                  </>
+                )}
+              </div>
+
+              {uploadError && (
+                <div style={{ marginTop: 12, padding: "10px 14px", borderRadius: 10, background: "rgba(248,113,113,0.1)", border: "1px solid rgba(248,113,113,0.3)", fontSize: 13, color: C.red }}>
+                  ⚠️ {uploadError}
+                </div>
               )}
-
-              <div className="ob-divider" />
-              <button className="ob-btn-ghost" onClick={() => setShowSkipConfirm(true)}>Skip — I'll import later</button>
-            </>
-          )}
-
-          {/* ── STEP 2: Live Mode ── */}
-          {step === 2 && (
-            <>
-              <div className="ob-eyebrow">Step 2 · Live mode</div>
-              <div className="ob-heading">Your dashboard during a stream</div>
-              <div className="ob-sub">Real-time tips, session earnings, and $/hr pace — all updating live as your stream runs.</div>
-              <LiveModeDemo />
-              <div style={{ marginTop: 20, marginBottom: 20 }}>
-                <a href="/live" target="_blank" rel="noopener noreferrer" className="ob-link-card">
-                  <span style={{ fontSize: 20 }}>🔴</span>
-                  <div>
-                    <div>Open Live Mode</div>
-                    <div className="ob-link-card-sub">camcashgrl.com/live — keep open during streams</div>
-                  </div>
-                </a>
-              </div>
-              <button className="ob-btn-primary" onClick={() => setStep(3)}>Next: Download Extension →</button>
-            </>
-          )}
-
-          {/* ── STEP 3: Extension ── */}
-          {step === 3 && (
-            <>
-              <div className="ob-eyebrow">Step 3 · Browser extension</div>
-              <div className="ob-heading">Auto-import tips every stream</div>
-              <div className="ob-sub">Install the CamCash extension and your tips sync automatically every time you go live — no CSV needed going forward.</div>
-              <div className="ob-ext-highlight">
-                🧩 Once installed, just go live on Chaturbate, BongaCams, or MFC.<br />
-                Your tips appear in your dashboard and live mode in real time.
-              </div>
-              <a href="/camcash-extension.zip" download="camcash-extension.zip" className="ob-download-btn">
-                <span style={{ fontSize: 22 }}>⬇️</span>
-                <div>
-                  <div>Download CamCash Extension</div>
-                  <div className="ob-download-btn-sub">Free · camcash-extension.zip</div>
-                </div>
-              </a>
-              <div className="ob-divider" />
-              <div style={{ fontSize: 13, color: C.text, marginBottom: 14, lineHeight: 1.6 }}>Monitor your streams from anywhere:</div>
-              <a href="/live" target="_blank" rel="noopener noreferrer" className="ob-link-card">
-                <span style={{ fontSize: 20 }}>🔴</span>
-                <div><div>Live Mode</div><div className="ob-link-card-sub">Your private real-time stream view</div></div>
-              </a>
-              <a href="/live" target="_blank" rel="noopener noreferrer" className="ob-link-card">
-                <span style={{ fontSize: 20 }}>🌐</span>
-                <div><div>Public Live Mode</div><div className="ob-link-card-sub">camcashgrl.com/live — shareable during streams</div></div>
-              </a>
-              <button className="ob-btn-primary" style={{ marginTop: 8 }} onClick={() => setStep(4)}>Next: Enter Dashboard →</button>
-            </>
-          )}
-
-          {/* ── STEP 4: Warning ── */}
-          {step === 4 && (
-            <>
-              <div className="ob-eyebrow">Almost there</div>
-              <div className="ob-heading">Before you go in — heads up</div>
-              <div className="ob-sub">Your dashboard is ready. Just one thing to know:</div>
-              <div className="ob-warning-box">
-                <span style={{ fontSize: 18, flexShrink: 0, marginTop: 1 }}>ℹ️</span>
-                <div className="ob-warning-text">
-                  <strong>Your dashboard will be empty until your first stream or CSV import.</strong><br /><br />
-                  To see earnings history, top tippers, and trends right away — import a CSV. Find the <strong>CSV Importer</strong> in the side nav anytime.
-                </div>
-              </div>
-              <button className="ob-btn-primary" onClick={handleFinish}>🚀 Enter my dashboard</button>
-            </>
-          )}
-
-          {/* ── STEP 5: Done ── */}
-          {step === 5 && (
-            <div style={{ textAlign: 'center', padding: '32px 0' }}>
-              <div style={{ fontSize: 52, marginBottom: 16 }}>🎉</div>
-              <div style={{ fontSize: 24, fontWeight: 900, color: C.white, marginBottom: 8 }}>You&apos;re all set!</div>
-              <div style={{ fontSize: 14, color: C.text }}>Taking you to your dashboard…</div>
             </div>
-          )}
 
+            {/* BOTTOM TWO OPTIONS */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 32, animation: "fadeUp 0.4s ease 0.15s both" }}>
+              <div style={{ padding: 22, borderRadius: 16, background: "rgba(15,20,32,0.6)", border: "1px solid rgba(168,85,247,0.2)" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                  <div style={{ width: 30, height: 30, borderRadius: 8, background: "linear-gradient(135deg, #a855f7, #EC4899)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>📡</div>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: C.white }}>Live Mode Instead</div>
+                </div>
+                <p style={{ fontSize: 13, color: C.muted, lineHeight: 1.65, marginBottom: 14 }}>
+                  Install the Chrome extension — tips get tracked automatically while you stream. No CSV needed.
+                </p>
+                <button onClick={() => { T.extensionInstallStart(); skipToLive() }} style={{
+                  width: "100%", padding: "10px 0", borderRadius: 10,
+                  background: "rgba(168,85,247,0.15)", border: "1px solid rgba(168,85,247,0.4)",
+                  color: "#a855f7", fontSize: 13, fontWeight: 700, cursor: "pointer"
+                }}>
+                  Get Started with Live Mode →
+                </button>
+              </div>
+
+              <div style={{ padding: 22, borderRadius: 16, background: "rgba(15,20,32,0.4)", border: "1px solid rgba(255,255,255,0.07)" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                  <div style={{ width: 30, height: 30, borderRadius: 8, background: "rgba(255,255,255,0.06)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>🧰</div>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: C.white }}>Free Tools</div>
+                </div>
+                <p style={{ fontSize: 13, color: C.muted, lineHeight: 1.65, marginBottom: 14 }}>
+                  Room Title Generator and Token Calculator work right now — no data needed.
+                </p>
+                <button onClick={goToDashboard} style={{
+                  width: "100%", padding: "10px 0", borderRadius: 10,
+                  background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)",
+                  color: C.muted, fontSize: 13, fontWeight: 600, cursor: "pointer"
+                }}>
+                  Explore Dashboard First →
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+
+        <div style={{ textAlign: "center", marginTop: 20, fontSize: 12, color: C.muted }}>
+          🔒 Your data is stored securely and never shared with anyone.
         </div>
       </div>
-
-      {/* Skip modal */}
-      {showSkipConfirm && (
-        <div className="ob-modal-backdrop" onClick={() => setShowSkipConfirm(false)}>
-          <div className="ob-modal" onClick={e => e.stopPropagation()}>
-            <div style={{ fontSize: 36, marginBottom: 14 }}>⚠️</div>
-            <div style={{ fontSize: 18, fontWeight: 700, color: C.white, marginBottom: 8 }}>Skip importing your data?</div>
-            <div style={{ fontSize: 14, color: C.text, lineHeight: 1.65, marginBottom: 24 }}>
-              Without a CSV we can&apos;t show your historical tips, earnings history, or top tippers.<br /><br />
-              You can always import a CSV later from the side nav.
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <button className="ob-btn-primary" onClick={() => setShowSkipConfirm(false)}>Go back and upload</button>
-              <button className="ob-btn-ghost" onClick={() => { setShowSkipConfirm(false); setStep(2) }}>Skip anyway — I understand</button>
-            </div>
-          </div>
-        </div>
-      )}
-    </>
+    </div>
   )
 }
