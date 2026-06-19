@@ -15,7 +15,7 @@ function calcMedian(arr) {
     : sorted[mid]
 }
 
-function toLocalHour(dateStr, tz) {
+export function toLocalHour(dateStr, tz) {
   try {
     const date = new Date(dateStr)
     const formatted = new Intl.DateTimeFormat('en-US', {
@@ -28,7 +28,7 @@ function toLocalHour(dateStr, tz) {
   } catch { return new Date(dateStr).getUTCHours() }
 }
 
-function toLocalDow(dateStr, tz) {
+export function toLocalDow(dateStr, tz) {
   try {
     const date = new Date(dateStr)
     const dayName = new Intl.DateTimeFormat('en-US', {
