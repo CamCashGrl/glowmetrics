@@ -101,49 +101,49 @@ function LiveModeDemo() {
 
   return (
     <div style={{
-      background: '#0a0814', borderRadius: 12,
-      border: '1px solid rgba(168,85,247,0.2)',
+      background: '#0a0f1e', borderRadius: 12,
+      border: '1px solid rgba(124,92,255,0.2)',
       overflow: 'hidden', fontFamily: 'Inter, system-ui, sans-serif', fontSize: 13,
     }}>
       <div style={{
-        background: 'rgba(168,85,247,0.15)', borderBottom: '1px solid rgba(168,85,247,0.2)',
+        background: 'rgba(124,92,255,0.15)', borderBottom: '1px solid rgba(124,92,255,0.2)',
         padding: '6px 14px', display: 'flex', alignItems: 'center', gap: 8,
       }}>
-        <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#a855f7', display: 'inline-block', animation: 'lm-pulse 1.2s ease-in-out infinite' }} />
-        <span style={{ fontSize: 11, fontWeight: 700, color: '#a855f7', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Live Mode Demo</span>
-        <span style={{ marginLeft: 'auto', fontSize: 11, color: '#4a3a6a' }}>Simulated stream</span>
+        <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#7C5CFF', display: 'inline-block', animation: 'lm-pulse 1.2s ease-in-out infinite' }} />
+        <span style={{ fontSize: 11, fontWeight: 700, color: '#7C5CFF', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Live Mode Demo</span>
+        <span style={{ marginLeft: 'auto', fontSize: 11, color: '#475569' }}>Simulated stream</span>
       </div>
       <div style={{ display: 'flex', minHeight: 280 }}>
-        <div style={{ width: 130, borderRight: '1px solid rgba(168,85,247,0.12)', padding: '16px 12px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div style={{ width: 130, borderRight: '1px solid rgba(124,92,255,0.12)', padding: '16px 12px', display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div>
-            <div style={{ fontSize: 10, color: '#5a4a7a', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 4 }}>Session</div>
-            <div style={{ fontSize: 20, fontWeight: 800, color: '#e2d9f3', fontVariantNumeric: 'tabular-nums' }}>{mins}:{secs}</div>
+            <div style={{ fontSize: 10, color: '#475569', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 4 }}>Session</div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: '#F1F5F9', fontVariantNumeric: 'tabular-nums' }}>{mins}:{secs}</div>
           </div>
           <div>
-            <div style={{ fontSize: 10, color: '#5a4a7a', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 4 }}>Tokens</div>
-            <div style={{ fontSize: 22, fontWeight: 800, color: '#a855f7', fontVariantNumeric: 'tabular-nums' }}>{totalTokens.toLocaleString()}</div>
+            <div style={{ fontSize: 10, color: '#475569', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 4 }}>Tokens</div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: '#7C5CFF', fontVariantNumeric: 'tabular-nums' }}>{totalTokens.toLocaleString()}</div>
           </div>
           <div>
-            <div style={{ fontSize: 10, color: '#5a4a7a', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 4 }}>Earned</div>
-            <div style={{ fontSize: 18, fontWeight: 800, color: '#2ec77a', fontVariantNumeric: 'tabular-nums' }}>${totalUsd.toFixed(2)}</div>
+            <div style={{ fontSize: 10, color: '#475569', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 4 }}>Earned</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: '#10B981', fontVariantNumeric: 'tabular-nums' }}>${totalUsd.toFixed(2)}</div>
           </div>
           <div>
-            <div style={{ fontSize: 10, color: '#5a4a7a', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 4 }}>$/hr pace</div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: '#00d4c8', fontVariantNumeric: 'tabular-nums' }}>${dph}</div>
+            <div style={{ fontSize: 10, color: '#475569', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 4 }}>$/hr pace</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: '#22D3EE', fontVariantNumeric: 'tabular-nums' }}>${dph}</div>
           </div>
         </div>
         <div style={{ flex: 1, padding: '12px 0', overflowY: 'auto', maxHeight: 280 }}>
-          <div style={{ fontSize: 10, color: '#5a4a7a', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '0 14px 8px' }}>Live Tips</div>
+          <div style={{ fontSize: 10, color: '#475569', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '0 14px 8px' }}>Live Tips</div>
           {tips.map(tip => (
             <div key={tip.id} style={{
               display: 'flex', alignItems: 'center', gap: 10,
               padding: '7px 14px', borderBottom: '1px solid rgba(255,255,255,0.03)',
               transition: 'background 0.3s',
-              background: newTip === tip.id ? 'rgba(168,85,247,0.12)' : 'transparent',
+              background: newTip === tip.id ? 'rgba(124,92,255,0.12)' : 'transparent',
             }}>
-              <span style={{ fontSize: 11, fontWeight: 800, color: tip.tokens >= 100 ? '#f59e0b' : tip.tokens >= 50 ? '#a855f7' : '#00d4c8', minWidth: 36, fontVariantNumeric: 'tabular-nums' }}>{tip.tokens}tk</span>
-              <span style={{ color: '#c4b5e8', fontWeight: 600, fontSize: 12, flex: 1 }}>{tip.user}</span>
-              <span style={{ color: '#3a2a5a', fontSize: 11 }}>{tip.time}</span>
+              <span style={{ fontSize: 11, fontWeight: 800, color: tip.tokens >= 100 ? '#F59E0B' : tip.tokens >= 50 ? '#7C5CFF' : '#22D3EE', minWidth: 36, fontVariantNumeric: 'tabular-nums' }}>{tip.tokens}tk</span>
+              <span style={{ color: '#94A3B8', fontWeight: 600, fontSize: 12, flex: 1 }}>{tip.user}</span>
+              <span style={{ color: '#475569', fontSize: 11 }}>{tip.time}</span>
             </div>
           ))}
         </div>
@@ -237,8 +237,8 @@ export default function OnboardingPage() {
   ]
 
   if (loading) return (
-    <div style={{ minHeight: '100vh', background: '#080b14', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ width: 32, height: 32, borderRadius: '50%', border: '2px solid #1e2536', borderTopColor: '#00d4c8', animation: 'spin 0.8s linear infinite' }} />
+    <div style={{ minHeight: '100vh', background: '#05070f', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ width: 32, height: 32, borderRadius: '50%', border: '2px solid #1e2d45', borderTopColor: '#22D3EE', animation: 'spin 0.8s linear infinite' }} />
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>
   )
@@ -247,13 +247,13 @@ export default function OnboardingPage() {
     <>
       <style>{`
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-        body { background: #080b14; }
+        body { background: #05070f; }
         .ob-root {
           min-height: 100vh;
-          background: #080b14;
+          background: #05070f;
           background-image:
-            radial-gradient(ellipse 60% 40% at 50% 0%, rgba(0,210,200,0.07) 0%, transparent 70%),
-            radial-gradient(ellipse 40% 30% at 85% 85%, rgba(160,80,255,0.06) 0%, transparent 60%);
+            radial-gradient(circle at 20% 20%, rgba(34,211,238,0.12), transparent 40%),
+            radial-gradient(circle at 80% 80%, rgba(236,72,153,0.12), transparent 40%);
           display: flex; flex-direction: column; align-items: center;
           padding: 40px 16px 80px;
           font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
@@ -262,60 +262,57 @@ export default function OnboardingPage() {
         .ob-step-pill {
           display: flex; align-items: center; gap: 6px;
           padding: 6px 14px; border-radius: 20px;
-          font-size: 12px; font-weight: 600; color: #3a4460;
+          font-size: 12px; font-weight: 600; color: #475569;
           background: transparent; transition: all 0.2s;
         }
-        .ob-step-pill.active { color: #00d4c8; background: rgba(0,212,200,0.1); }
-        .ob-step-pill.done   { color: #2ec77a; background: rgba(46,199,122,0.1); }
+        .ob-step-pill.active { color: #22D3EE; background: rgba(34,211,238,0.1); }
+        .ob-step-pill.done   { color: #10B981; background: rgba(16,185,129,0.1); }
         .ob-step-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
-        .ob-step-line { width: 24px; height: 1px; background: #1e2536; }
+        .ob-step-line { width: 24px; height: 1px; background: #1e2d45; }
         .ob-card {
           width: 100%; max-width: 620px;
-          background: #0d1120; border: 1px solid #1a2035;
+          background: #121826; border: 1px solid #1e2d45;
           border-radius: 20px; padding: 36px 40px;
-          box-shadow: 0 0 0 1px rgba(0,212,200,0.03), 0 24px 64px rgba(0,0,0,0.5);
+          box-shadow: 0 0 0 1px rgba(34,211,238,0.03), 0 24px 64px rgba(0,0,0,0.5);
         }
-        .ob-eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #00d4c8; margin-bottom: 6px; }
-        .ob-heading  { font-size: 22px; font-weight: 700; color: #eef2ff; line-height: 1.25; margin-bottom: 6px; }
-        .ob-sub      { font-size: 14px; color: #4a5568; line-height: 1.6; margin-bottom: 24px; }
+        .ob-eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #22D3EE; margin-bottom: 6px; }
+        .ob-heading  { font-size: 22px; font-weight: 700; color: #F1F5F9; line-height: 1.25; margin-bottom: 6px; }
+        .ob-sub      { font-size: 14px; color: #475569; line-height: 1.6; margin-bottom: 24px; }
         .ob-platform-tabs { display: flex; gap: 8px; margin-bottom: 20px; }
         .ob-platform-tab {
           flex: 1; padding: 10px 8px; border-radius: 10px;
-          border: 1px solid #1e2a40; background: #080b14;
-          color: #4a5568; font-size: 13px; font-weight: 600;
+          border: 1px solid #1e2d45; background: #05070f;
+          color: #475569; font-size: 13px; font-weight: 600;
           cursor: pointer; transition: all 0.15s; text-align: center; font-family: inherit;
         }
-        .ob-platform-tab:hover { border-color: #2a3550; color: #6b7a9e; }
+        .ob-platform-tab:hover { border-color: rgba(255,255,255,0.2); color: #94A3B8; }
         .ob-platform-tab.active { border-color: var(--pc); color: var(--pc); background: rgba(0,0,0,0.3); box-shadow: 0 0 0 1px var(--pc); }
         .ob-steps-list {
           list-style: none; margin-bottom: 14px;
-          background: #060912; border: 1px solid #141928;
+          background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.06);
           border-radius: 12px; padding: 16px 18px;
           display: flex; flex-direction: column; gap: 10px;
         }
-        .ob-steps-list li { display: flex; gap: 10px; font-size: 13px; color: #7a8aa8; line-height: 1.55; align-items: flex-start; }
+        .ob-steps-list li { display: flex; gap: 10px; font-size: 13px; color: #94A3B8; line-height: 1.55; align-items: flex-start; }
         .ob-step-num {
           flex-shrink: 0; width: 20px; height: 20px; border-radius: 50%;
-          background: rgba(0,212,200,0.12); color: #00d4c8;
-          font-size: 11px; font-weight: 700;
+          font-size: 11px; font-weight: 800;
           display: flex; align-items: center; justify-content: center; margin-top: 1px;
         }
         .ob-plat-tip {
           margin-bottom: 20px; padding: 9px 12px; border-radius: 9px;
           font-size: 12px; line-height: 1.5;
-          background: var(--pt-bg, rgba(0,212,200,0.06));
-          border: 1px solid var(--pt-border, rgba(0,212,200,0.15));
-          color: var(--pt-color, #00d4c8);
+          background: var(--pt-bg); border: 1px solid var(--pt-border); color: var(--pt-color);
         }
         .ob-video-wrap {
           margin-bottom: 24px; border-radius: 14px; overflow: hidden;
-          border: 1px solid rgba(0,212,200,0.15);
-          box-shadow: 0 0 32px rgba(0,212,200,0.06);
+          border: 1px solid rgba(34,211,238,0.2);
+          box-shadow: 0 0 40px rgba(34,211,238,0.07);
         }
         .ob-video-header {
           padding: 12px 16px; background: rgba(15,20,32,0.95);
           border-bottom: 1px solid rgba(255,255,255,0.05);
-          display: flex; align-items: center; gap: 10;
+          display: flex; align-items: center; gap: 10px;
         }
         .ob-video-icon {
           width: 26px; height: 26px; border-radius: 7px;
@@ -323,78 +320,79 @@ export default function OnboardingPage() {
           display: flex; align-items: center; justify-content: center; font-size: 12px;
         }
         .ob-upload-zone {
-          border: 1.5px dashed #1e2a40; border-radius: 12px;
+          border: 2px dashed rgba(34,211,238,0.25); border-radius: 12px;
           padding: 28px 20px; text-align: center; cursor: pointer;
-          transition: all 0.15s; margin-bottom: 8px; position: relative;
+          transition: all 0.15s; margin-bottom: 8px;
+          background: rgba(34,211,238,0.03);
         }
-        .ob-upload-zone:hover, .ob-upload-zone.drag { border-color: #00d4c8; background: rgba(0,212,200,0.04); }
-        .ob-upload-zone.has-file { border-color: #2ec77a; background: rgba(46,199,122,0.04); }
-        .ob-upload-zone input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
-        .ob-error      { font-size: 13px; color: #e05252; margin: 10px 0; }
-        .ob-success-msg { font-size: 13px; color: #2ec77a; margin: 10px 0; font-weight: 600; }
+        .ob-upload-zone:hover, .ob-upload-zone.drag { border-color: rgba(34,211,238,0.6); background: rgba(34,211,238,0.07); }
+        .ob-error       { font-size: 13px; color: #F87171; margin: 10px 0; }
+        .ob-success-msg { font-size: 13px; color: #10B981; margin: 10px 0; font-weight: 600; }
         .ob-btn-primary {
           width: 100%; padding: 14px;
-          background: linear-gradient(135deg, #00d4c8, #a050ff);
+          background: linear-gradient(135deg, #22D3EE, #7C5CFF);
           border: none; border-radius: 12px; color: #fff;
           font-size: 15px; font-weight: 700; cursor: pointer;
           transition: opacity 0.15s, transform 0.1s;
           margin-bottom: 10px; font-family: inherit; letter-spacing: 0.01em;
+          box-shadow: 0 8px 28px rgba(34,211,238,0.2);
         }
         .ob-btn-primary:hover:not(:disabled) { opacity: 0.9; transform: translateY(-1px); }
         .ob-btn-primary:disabled { opacity: 0.45; cursor: not-allowed; }
         .ob-btn-ghost {
           width: 100%; padding: 12px;
-          background: transparent; border: 1px solid #1e2a40;
-          border-radius: 12px; color: #4a5568; font-size: 14px; font-weight: 600;
+          background: transparent; border: 1px solid #1e2d45;
+          border-radius: 12px; color: #475569; font-size: 14px; font-weight: 600;
           cursor: pointer; transition: all 0.15s; font-family: inherit;
         }
-        .ob-btn-ghost:hover { border-color: #2a3550; color: #6b7a9e; }
-        .ob-divider { height: 1px; background: #1a2035; margin: 20px 0; }
+        .ob-btn-ghost:hover { border-color: rgba(255,255,255,0.2); color: #94A3B8; }
+        .ob-divider { height: 1px; background: #1e2d45; margin: 20px 0; }
         .ob-modal-backdrop {
           position: fixed; inset: 0; background: rgba(5,7,15,0.88);
           backdrop-filter: blur(8px); display: flex;
           align-items: center; justify-content: center; z-index: 100; padding: 16px;
         }
         .ob-modal {
-          background: #0d1120; border: 1px solid #1e2a40;
+          background: #121826; border: 1px solid #1e2d45;
           border-radius: 16px; padding: 32px 28px;
           max-width: 380px; width: 100%; text-align: center;
         }
         .ob-link-card {
           display: flex; align-items: center; gap: 12px;
-          background: #060912; border: 1px solid #141928;
+          background: rgba(0,0,0,0.3); border: 1px solid #1e2d45;
           border-radius: 10px; padding: 14px 16px;
-          text-decoration: none; color: #c8d0e8; font-size: 13px; font-weight: 600;
+          text-decoration: none; color: #F1F5F9; font-size: 13px; font-weight: 600;
           transition: border-color 0.15s; margin-bottom: 10px;
         }
-        .ob-link-card:hover { border-color: #00d4c8; }
-        .ob-link-card-sub { font-size: 12px; color: #3a4460; font-weight: 400; margin-top: 2px; }
+        .ob-link-card:hover { border-color: #22D3EE; }
+        .ob-link-card-sub { font-size: 12px; color: #475569; font-weight: 400; margin-top: 2px; }
         .ob-warning-box {
           display: flex; gap: 12px; align-items: flex-start;
-          background: rgba(251,191,36,0.06); border: 1px solid rgba(251,191,36,0.2);
+          background: rgba(245,158,11,0.06); border: 1px solid rgba(245,158,11,0.2);
           border-radius: 12px; padding: 16px; margin-bottom: 24px;
         }
-        .ob-warning-text { font-size: 13px; color: #9a8060; line-height: 1.6; }
-        .ob-warning-text strong { color: #fbbf24; font-weight: 700; }
+        .ob-warning-text { font-size: 13px; color: #94A3B8; line-height: 1.6; }
+        .ob-warning-text strong { color: #F59E0B; font-weight: 700; }
         .ob-ext-highlight {
-          background: rgba(0,212,200,0.06); border: 1px solid rgba(0,212,200,0.15);
+          background: rgba(34,211,238,0.06); border: 1px solid rgba(34,211,238,0.15);
           border-radius: 12px; padding: 16px; margin-bottom: 20px;
-          font-size: 13px; color: #6b8fa8; line-height: 1.6; text-align: center;
+          font-size: 13px; color: #94A3B8; line-height: 1.6; text-align: center;
         }
         .ob-download-btn {
           display: flex; align-items: center; gap: 12px;
-          background: linear-gradient(135deg, rgba(0,212,200,0.12), rgba(160,80,255,0.1));
-          border: 1px solid rgba(0,212,200,0.35);
+          background: linear-gradient(135deg, rgba(34,211,238,0.12), rgba(124,92,255,0.1));
+          border: 1px solid rgba(34,211,238,0.35);
           border-radius: 12px; padding: 16px 20px;
-          text-decoration: none; color: #00d4c8;
+          text-decoration: none; color: #22D3EE;
           font-size: 14px; font-weight: 700;
           transition: all 0.15s; margin-bottom: 10px;
         }
-        .ob-download-btn:hover { border-color: #00d4c8; background: linear-gradient(135deg, rgba(0,212,200,0.18), rgba(160,80,255,0.15)); transform: translateY(-1px); }
-        .ob-download-btn-sub { font-size: 12px; color: #4a7a8a; font-weight: 400; margin-top: 2px; }
+        .ob-download-btn:hover { border-color: #22D3EE; transform: translateY(-1px); }
+        .ob-download-btn-sub { font-size: 12px; color: #475569; font-weight: 400; margin-top: 2px; }
         .ob-done { text-align: center; padding: 32px 0; }
-        @keyframes spin { to { transform: rotate(360deg) } }
-        @keyframes fadeUp { from { opacity:0; transform:translateY(14px) } to { opacity:1; transform:translateY(0) } }
+        @keyframes spin    { to { transform: rotate(360deg) } }
+        @keyframes fadeUp  { from { opacity:0; transform:translateY(14px) } to { opacity:1; transform:translateY(0) } }
+        @keyframes checkPop { 0%{transform:scale(0)} 70%{transform:scale(1.2)} 100%{transform:scale(1)} }
         @media (max-width: 560px) {
           .ob-card { padding: 24px 20px; }
           .ob-platform-tabs { flex-direction: column; }
@@ -430,9 +428,9 @@ export default function OnboardingPage() {
               <div className="ob-video-wrap">
                 <div className="ob-video-header">
                   <div className="ob-video-icon">▶</div>
-                  <div style={{ marginLeft: 10 }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: '#eef2ff' }}>How to upload your CSV</div>
-                    <div style={{ fontSize: 11, color: '#4a5568' }}>Watch first — takes 2 minutes</div>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#F1F5F9' }}>How to upload your CSV</div>
+                    <div style={{ fontSize: 11, color: '#475569' }}>Watch first — takes 2 minutes</div>
                   </div>
                 </div>
                 <div style={{ position: 'relative', paddingBottom: '56.25%', height: 0, background: '#000' }}>
@@ -465,8 +463,11 @@ export default function OnboardingPage() {
               <ul className="ob-steps-list">
                 {platform.steps.map((s, i) => (
                   <li key={i}>
-                    <span className="ob-step-num" style={{ background: `${platform.color}20`, color: platform.color }}>{i + 1}</span>
-                    <span style={{ fontWeight: i === platform.steps.length - 1 ? 600 : 400, color: i === platform.steps.length - 1 ? '#c8d0e8' : '#7a8aa8' }}>{s}</span>
+                    <span
+                      className="ob-step-num"
+                      style={{ background: `${platform.color}20`, border: `1px solid ${platform.color}40`, color: platform.color }}
+                    >{i + 1}</span>
+                    <span style={{ fontWeight: i === platform.steps.length - 1 ? 600 : 400, color: i === platform.steps.length - 1 ? '#F1F5F9' : '#94A3B8' }}>{s}</span>
                   </li>
                 ))}
               </ul>
@@ -501,14 +502,14 @@ export default function OnboardingPage() {
                     />
                     {uploading ? (
                       <>
-                        <div style={{ width: 30, height: 30, borderRadius: '50%', border: '2px solid rgba(0,212,200,0.2)', borderTopColor: '#00d4c8', animation: 'spin 0.8s linear infinite', margin: '0 auto 10px' }} />
-                        <div style={{ fontSize: 14, color: '#00d4c8', fontWeight: 600 }}>Processing your file…</div>
+                        <div style={{ width: 30, height: 30, borderRadius: '50%', border: '2px solid rgba(34,211,238,0.2)', borderTopColor: '#22D3EE', animation: 'spin 0.8s linear infinite', margin: '0 auto 10px' }} />
+                        <div style={{ fontSize: 14, color: '#22D3EE', fontWeight: 600 }}>Processing your file…</div>
                       </>
                     ) : (
                       <>
-                        <div style={{ fontSize: 34, marginBottom: 8 }}>📂</div>
-                        <div style={{ fontSize: 14, fontWeight: 700, color: '#c8d0e8', marginBottom: 4 }}>Drop your CSV here</div>
-                        <div style={{ fontSize: 12, color: '#3a4460' }}>or click to browse · .csv files only</div>
+                        <div style={{ fontSize: 36, marginBottom: 8 }}>📂</div>
+                        <div style={{ fontSize: 15, fontWeight: 700, color: '#F1F5F9', marginBottom: 4 }}>Drop your CSV here</div>
+                        <div style={{ fontSize: 13, color: '#475569' }}>or click to browse · .csv files only</div>
                       </>
                     )}
                   </div>
@@ -572,7 +573,7 @@ export default function OnboardingPage() {
 
               <div className="ob-divider" />
 
-              <div style={{ fontSize: 13, color: '#4a5568', marginBottom: 14, lineHeight: 1.6 }}>Monitor your streams from anywhere:</div>
+              <div style={{ fontSize: 13, color: '#475569', marginBottom: 14, lineHeight: 1.6 }}>Monitor your streams from anywhere:</div>
 
               <a href="/live" target="_blank" rel="noopener noreferrer" className="ob-link-card">
                 <span style={{ fontSize: 20 }}>🔴</span>
@@ -620,9 +621,9 @@ export default function OnboardingPage() {
           {/* ── STEP 5: Done ── */}
           {step === 5 && (
             <div className="ob-done">
-              <div style={{ fontSize: 52, marginBottom: 16 }}>🎉</div>
-              <div style={{ fontSize: 22, fontWeight: 700, color: '#eef2ff', marginBottom: 8 }}>You&apos;re all set!</div>
-              <div style={{ fontSize: 14, color: '#4a5568' }}>Taking you to your dashboard…</div>
+              <div style={{ fontSize: 52, marginBottom: 16, animation: 'checkPop 0.5s ease both' }}>🎉</div>
+              <div style={{ fontSize: 24, fontWeight: 900, color: '#F1F5F9', marginBottom: 8 }}>You&apos;re all set!</div>
+              <div style={{ fontSize: 14, color: '#475569' }}>Taking you to your dashboard…</div>
             </div>
           )}
 
@@ -634,8 +635,8 @@ export default function OnboardingPage() {
         <div className="ob-modal-backdrop" onClick={() => setShowSkipConfirm(false)}>
           <div className="ob-modal" onClick={e => e.stopPropagation()}>
             <div style={{ fontSize: 36, marginBottom: 14 }}>⚠️</div>
-            <div style={{ fontSize: 18, fontWeight: 700, color: '#eef2ff', marginBottom: 8 }}>Skip importing your data?</div>
-            <div style={{ fontSize: 14, color: '#4a5568', lineHeight: 1.6, marginBottom: 24 }}>
+            <div style={{ fontSize: 18, fontWeight: 700, color: '#F1F5F9', marginBottom: 8 }}>Skip importing your data?</div>
+            <div style={{ fontSize: 14, color: '#475569', lineHeight: 1.6, marginBottom: 24 }}>
               Without a CSV we can&apos;t import your historical tips. Your earnings history, top tippers, and trends won&apos;t show until you upload one.
               <br /><br />
               You can always import a CSV later from the side nav.
