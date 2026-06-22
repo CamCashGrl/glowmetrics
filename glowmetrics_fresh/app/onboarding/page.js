@@ -631,6 +631,8 @@ export default function OnboardingPage() {
       setStep('paste')
     }
   }
+
+  function handlePreview() {
     setParseError('')
     if (!pasteText.trim()) { setParseError('Paste your tip history above first.'); return }
     const preview = previewFromText(pasteText, platformId)
