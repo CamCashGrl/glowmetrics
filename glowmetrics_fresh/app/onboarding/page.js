@@ -84,6 +84,8 @@ const EXTRA_MSGS = [
 ]
 
 // ─── Paste parser ───────────────────────────────────────────────
+// Converts raw paste text into a File/Blob that the existing /api/upload route can handle.
+// We construct a minimal CSV with headers so the existing parser recognises it.
 function pasteToCSVBlob(rawText, platformId) {
   const rate = TOKEN_RATES[platformId] || 0.05
   const lines = rawText.split('\n').map(l => l.trim()).filter(Boolean)
@@ -206,6 +208,7 @@ function previewFromText(rawText, platformId) {
     parsed.reduce((acc, r) => { acc[r.username] = (acc[r.username] || 0) + r.tokens; return acc }, {})
   ).sort((a, b) => b[1] - a[1])[0]
 
+  // best hour
   const hourCounts = parsed.reduce((acc, r) => {
     const h = r.ts.getHours()
     acc[h] = (acc[h] || 0) + r.tokens
@@ -245,6 +248,7 @@ function Sparkle() {
     canvas.width = window.innerWidth
     canvas.height = window.innerHeight
 
+    // sparse sparkle dots — subtle, not confetti
     const COLORS = ['#00e5cc','#2DD4BF','#a855f7','#f59e0b','#ffffff']
     const dots = Array.from({ length: 38 }, () => ({
       x: Math.random() * canvas.width,
@@ -263,16 +267,20 @@ function Sparkle() {
     const draw = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height)
       dots.forEach(d => {
+        // gentle drift
         d.x += d.vx
         d.y += d.vy
+        // alpha pulse
         d.alpha += d.alphaDir * d.alphaSpeed
         if (d.alpha >= 1) { d.alpha = 1; d.alphaDir = -1 }
         if (d.alpha <= 0) { d.alpha = 0; d.alphaDir = 1 }
+        // wrap
         if (d.x < -4) d.x = canvas.width + 4
         if (d.x > canvas.width + 4) d.x = -4
         if (d.y < -4) d.y = canvas.height + 4
         if (d.y > canvas.height + 4) d.y = -4
 
+        // draw a 4-point star sparkle
         ctx.save()
         ctx.globalAlpha = d.alpha
         ctx.translate(d.x, d.y)
@@ -292,9 +300,11 @@ function Sparkle() {
         ctx.restore()
       })
       frame++
+      // run for ~3s (180 frames) then fade out
       if (frame < 220) {
         raf = requestAnimationFrame(draw)
       } else {
+        // fade canvas out
         let op = 1
         const fade = () => {
           op -= 0.05
@@ -353,6 +363,7 @@ function LoadingScreen({ isFirst }) {
       <div style={{ fontSize:13, fontWeight:600, letterSpacing:'0.07em', textTransform:'uppercase', color:C.cyan, marginBottom:24 }}>
         Building your dashboard
       </div>
+      {/* progress bar */}
       <div style={{ position:'relative', height:6, background:C.border2, borderRadius:3, overflow:'hidden', marginBottom:28, maxWidth:400, margin:'0 auto 28px' }}>
         <div style={{
           position:'absolute', left:0, top:0, height:'100%',
@@ -405,6 +416,7 @@ function ProUpsellModal({ platform, onClose, onSkip }) {
         overflow:'hidden',
         position:'relative',
       }}>
+        {/* gradient border */}
         <div style={{
           position:'absolute', inset:0, borderRadius:20, padding:1,
           background:'linear-gradient(135deg, rgba(0,180,255,0.5) 0%, rgba(255,255,255,0.04) 40%, rgba(200,0,255,0.4) 100%)',
@@ -415,6 +427,7 @@ function ProUpsellModal({ platform, onClose, onSkip }) {
         }} />
 
         <div style={{ padding:'28px 28px 24px' }}>
+          {/* header */}
           <div style={{ textAlign:'center', marginBottom:24 }}>
             <div style={{ fontSize:11, fontWeight:600, letterSpacing:'0.08em', textTransform:'uppercase', color:'#a855f7', marginBottom:8 }}>Unlock All Platforms</div>
             <h2 style={{ fontSize:20, fontWeight:700, color:'#f8fafc', marginBottom:6, lineHeight:1.3 }}>
@@ -425,7 +438,10 @@ function ProUpsellModal({ platform, onClose, onSkip }) {
             </p>
           </div>
 
+          {/* plan cards */}
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:20 }}>
+
+            {/* Early Adopter — highlighted */}
             <div style={{
               background:'rgba(168,85,247,0.08)',
               border:'1.5px solid rgba(168,85,247,0.5)',
@@ -468,6 +484,7 @@ function ProUpsellModal({ platform, onClose, onSkip }) {
               </button>
             </div>
 
+            {/* Standard */}
             <div style={{
               background:'rgba(255,255,255,0.03)',
               border:'1px solid rgba(255,255,255,0.08)',
@@ -501,10 +518,12 @@ function ProUpsellModal({ platform, onClose, onSkip }) {
             </div>
           </div>
 
+          {/* free tier reminder */}
           <div style={{ background:'rgba(34,197,94,0.06)', border:'1px solid rgba(34,197,94,0.18)', borderRadius:10, padding:'10px 14px', marginBottom:16, fontSize:12, color:'#94a3b8', textAlign:'center' }}>
             ✅ <span style={{ color:'#f8fafc' }}>Free tier always exists</span> — your current platform stays free forever.
           </div>
 
+          {/* skip */}
           <div style={{ textAlign:'center' }}>
             <button onClick={onSkip}
               style={{ background:'none', border:'none', fontSize:12, color:'#64748b', cursor:'pointer', textDecoration:'underline' }}>
@@ -631,6 +650,7 @@ export default function OnboardingPage() {
       const { blob } = pasteToCSVBlob(pasteText, platformId)
       const file = new File([blob], 'pasted_import.csv', { type: 'text/csv' })
 
+      // simulate minimum loading time for first import feel
       const minWait = isFirstImport ? 5500 : 1800
       const [res] = await Promise.all([
         fetch('/api/upload', {
@@ -704,6 +724,7 @@ export default function OnboardingPage() {
     router.push('/dashboard')
   }
 
+  // step index for progress bar
   const STEP_ORDER = ['platform','paste','preview','done']
   const stepIdx = { platform:0, username:1, paste:1, csv:1, preview:2, loading:2, step4:3, done:3 }[step] ?? 0
 
@@ -727,6 +748,7 @@ export default function OnboardingPage() {
       fontFamily:"'Inter', system-ui, sans-serif", color:C.text, padding:'40px 20px 100px',
       overflow:'hidden',
     }}>
+      {/* dust/particle texture overlay */}
       <div style={{
         position:'fixed', inset:0, pointerEvents:'none', zIndex:0,
         backgroundImage:`
@@ -943,6 +965,7 @@ export default function OnboardingPage() {
               </p>
             </div>
 
+            {/* how-to */}
             <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:12, padding:'16px 18px', marginBottom:16 }}>
               <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10 }}>
                 <div style={{ fontSize:11, fontWeight:700, letterSpacing:'0.07em', textTransform:'uppercase', color:platform.color }}>
@@ -964,6 +987,7 @@ export default function OnboardingPage() {
               </div>
             </div>
 
+            {/* paste box */}
             <textarea
               className="paste-area"
               value={pasteText}
@@ -984,6 +1008,7 @@ export default function OnboardingPage() {
               </div>
             )}
 
+            {/* numbered instructions */}
             <div style={{ display:'flex', gap:16, marginBottom:20 }}>
               {['Open your earnings or tip history','Highlight the rows you want','Copy and paste them here'].map((t,i) => (
                 <div key={i} style={{ display:'flex', alignItems:'flex-start', gap:8, flex:1 }}>
@@ -1081,6 +1106,7 @@ export default function OnboardingPage() {
               <p style={{ fontSize:14, color:C.muted }}>Review before importing.</p>
             </div>
 
+            {/* stat cards */}
             <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10, marginBottom:16 }}>
               {[
                 { label:'Tips found', value:previewData.count.toLocaleString(), color:C.cyan },
@@ -1102,6 +1128,7 @@ export default function OnboardingPage() {
               )}
             </div>
 
+            {/* teaser insights */}
             {(previewData.topSpender || previewData.bestHour) && (
               <div style={{ background:C.cyanDim, border:`1px solid ${C.cyanBorder}`, borderRadius:12, padding:'14px 16px', marginBottom:16 }}>
                 <div style={{ fontSize:11, fontWeight:700, letterSpacing:'0.07em', textTransform:'uppercase', color:C.cyan, marginBottom:10 }}>First insights detected</div>
@@ -1120,6 +1147,7 @@ export default function OnboardingPage() {
               </div>
             )}
 
+            {/* sample rows */}
             <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:12, marginBottom:16, overflow:'hidden' }}>
               <div style={{ padding:'10px 16px', borderBottom:`1px solid ${C.border}`, fontSize:11, fontWeight:600, color:C.muted2, textTransform:'uppercase', letterSpacing:'0.06em' }}>Sample rows</div>
               {previewData.sample.map((r, i) => (
@@ -1204,6 +1232,7 @@ export default function OnboardingPage() {
         ══════════════════════════════════════ */}
         {step === 'done' && importResult && (
           <div style={{ animation:'fadeUp 0.4s ease both', textAlign:'center' }}>
+            {/* success icon — subtle glow ring instead of emoji */}
             <div style={{ position:'relative', display:'inline-flex', alignItems:'center', justifyContent:'center', marginBottom:20 }}>
               <div style={{
                 width:72, height:72, borderRadius:'50%',
@@ -1220,6 +1249,7 @@ export default function OnboardingPage() {
               We imported your tip history and found your first insights.
             </p>
 
+            {/* animated stat cards with shimmer */}
             <div style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:10, marginBottom:24 }}>
               {[
                 { label:'Tips imported',    value:importResult.inserted,          color:C.cyan,   prefix:'',  suffix:'',        delay:'0s' },
