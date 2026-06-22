@@ -603,7 +603,7 @@ export default function OnboardingPage() {
     }
   }
 
-  function handleUsernameSubmit() {
+  async function handleUsernameSubmit() {
     setCbUsernameError('')
     const cleaned = cbUsername.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '')
     if (!cleaned) {
@@ -611,6 +611,12 @@ export default function OnboardingPage() {
       return
     }
     setCbUsername(cleaned)
+    // save to profiles immediately so it's available everywhere
+    if (user) {
+      await supabase
+        .from('profiles')
+        .upsert({ id: user.id, chaturbate_username: cleaned }, { onConflict: 'id' })
+    }
     setStep('paste')
   }
 
@@ -625,8 +631,6 @@ export default function OnboardingPage() {
       setStep('paste')
     }
   }
-
-  function handlePreview() {
     setParseError('')
     if (!pasteText.trim()) { setParseError('Paste your tip history above first.'); return }
     const preview = previewFromText(pasteText, platformId)
