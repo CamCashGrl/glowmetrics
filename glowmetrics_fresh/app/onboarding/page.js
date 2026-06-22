@@ -44,37 +44,27 @@ const C = {
 const PLATFORMS = [
   {
     id: 'chaturbate', name: 'Chaturbate', short: 'CB', color: '#ff6b35',
-    earningsUrl: 'https://chaturbate.com/stats/',
-    hint: 'Go to Stats → Token Stats. Select All Time. Highlight the table, copy, and paste below.',
+    earningsUrl: (username) => username
+      ? `https://chaturbate.com/p/${username}/?tab=tokens`
+      : 'https://chaturbate.com/accounts/settings/',
+    hint: 'Go to your profile → Token Stats tab. Select All Time. Highlight the table, copy, and paste below.',
     placeholder: `06/18/2026 2:32 PM\tusername123\t500\tspin the wheel\n06/18/2026 3:14 PM\twhaleking99\t1000\t\n06/18/2026 3:45 PM\tregularfan\t25\tgreat show`,
   },
   {
     id: 'bongacams', name: 'BongaCams', short: 'BC', color: '#e53935',
-    earningsUrl: 'https://bongacams.com/studio/statistics',
-    hint: 'Go to Statistics → Token History. Select your date range. Highlight all rows, copy, and paste below.',
+    earningsUrl: () => 'https://bongamodels.com/reports/general',
+    hint: 'Go to Reports → General. Select your date range. Highlight all rows, copy, and paste below.',
     placeholder: `18.06.2026 14:32\tusername123\t500\t25.00\n18.06.2026 15:14\twhaleking99\t1000\t50.00\n18.06.2026 15:45\tregularfan\t25\t1.25`,
   },
   {
     id: 'myfreecams', name: 'MyFreeCams', short: 'MFC', color: '#ed8936',
-    earningsUrl: 'https://www.myfreecams.com/#logout',
-    hint: 'Go to Model Admin → Token Stats → Transaction History. Set your date range, highlight all, copy and paste below.',
+    earningsUrl: () => 'https://profiles.myfreecams.com/_/ext/token_sessions',
+    hint: 'Go to Token Sessions. Set your date range, highlight all rows, copy and paste below.',
     placeholder: `2026-06-18 14:32:00\tusername123\t500\tspin the wheel\n2026-06-18 15:14:00\twhaleking99\t1000\t\n2026-06-18 15:45:00\tregularfan\t25\tgreat show`,
-  },
-  {
-    id: 'stripchat', name: 'Stripchat', short: 'SC', color: '#9c27b0',
-    earningsUrl: 'https://stripchat.com/model/statistics',
-    hint: 'Go to Statistics → Tips History. Highlight all rows, copy, and paste below.',
-    placeholder: `06/18/2026 14:32\tusername123\t500\tawesome\n06/18/2026 15:14\twhaleking99\t1000\t\n06/18/2026 15:45\tregularfan\t25\t`,
-  },
-  {
-    id: 'camsoda', name: 'CamSoda', short: 'CS', color: '#00bcd4',
-    earningsUrl: 'https://www.camsoda.com/model/stats',
-    hint: 'Go to Stats → Token History. Highlight all rows, copy, and paste below.',
-    placeholder: `06/18/2026 14:32\tusername123\t500\n06/18/2026 15:14\twhaleking99\t1000\n06/18/2026 15:45\tregularfan\t25`,
   },
 ]
 
-const TOKEN_RATES = { chaturbate: 0.05, bongacams: 0.04, myfreecams: 0.05, stripchat: 0.05, camsoda: 0.05 }
+const TOKEN_RATES = { chaturbate: 0.05, bongacams: 0.04, myfreecams: 0.05 }
 
 // ─── Loading messages ───────────────────────────────────────────
 const FIRST_MSGS = [
@@ -408,6 +398,144 @@ function LoadingScreen({ isFirst }) {
   )
 }
 
+// ─── Pro Upsell Modal ───────────────────────────────────────────
+function ProUpsellModal({ platform, onClose, onSkip }) {
+  return (
+    <div style={{
+      position:'fixed', inset:0, zIndex:9998,
+      background:'rgba(8,10,20,0.85)',
+      backdropFilter:'blur(6px)',
+      display:'flex', alignItems:'center', justifyContent:'center',
+      padding:'20px',
+      animation:'fadeUp 0.25s ease both',
+    }}>
+      <div style={{
+        width:'100%', maxWidth:520,
+        background:'#0d0f1e',
+        borderRadius:20,
+        overflow:'hidden',
+        position:'relative',
+      }}>
+        {/* gradient border */}
+        <div style={{
+          position:'absolute', inset:0, borderRadius:20, padding:1,
+          background:'linear-gradient(135deg, rgba(0,180,255,0.5) 0%, rgba(255,255,255,0.04) 40%, rgba(200,0,255,0.4) 100%)',
+          WebkitMask:'linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0)',
+          WebkitMaskComposite:'xor',
+          maskComposite:'exclude',
+          pointerEvents:'none',
+        }} />
+
+        <div style={{ padding:'28px 28px 24px' }}>
+          {/* header */}
+          <div style={{ textAlign:'center', marginBottom:24 }}>
+            <div style={{ fontSize:11, fontWeight:600, letterSpacing:'0.08em', textTransform:'uppercase', color:'#a855f7', marginBottom:8 }}>Unlock All Platforms</div>
+            <h2 style={{ fontSize:20, fontWeight:700, color:'#f8fafc', marginBottom:6, lineHeight:1.3 }}>
+              You're adding {platform.name}
+            </h2>
+            <p style={{ fontSize:13, color:'#94a3b8', lineHeight:1.6 }}>
+              Multi-platform tracking is a Pro feature. Upgrade to sync all your platforms and unlock your full earning picture.
+            </p>
+          </div>
+
+          {/* plan cards */}
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:20 }}>
+
+            {/* Early Adopter — highlighted */}
+            <div style={{
+              background:'rgba(168,85,247,0.08)',
+              border:'1.5px solid rgba(168,85,247,0.5)',
+              borderRadius:14, padding:'18px 16px',
+              position:'relative', overflow:'hidden',
+            }}>
+              <div style={{
+                position:'absolute', top:0, right:0,
+                background:'linear-gradient(135deg,#a855f7,#7c3aed)',
+                borderRadius:'0 14px 0 10px',
+                padding:'3px 10px', fontSize:10, fontWeight:700, color:'#fff',
+                letterSpacing:'0.05em',
+              }}>BEST DEAL</div>
+              <div style={{ fontSize:11, color:'#a855f7', fontWeight:600, marginBottom:6, textTransform:'uppercase', letterSpacing:'0.07em' }}>Early Adopter</div>
+              <div style={{ fontSize:26, fontWeight:700, color:'#f8fafc', lineHeight:1 }}>$9.99</div>
+              <div style={{ fontSize:11, color:'#94a3b8', marginBottom:4 }}>/month · locked forever</div>
+              <div style={{ fontSize:11, color:'#64748b', textDecoration:'line-through', marginBottom:14 }}>$19.99/mo after 100 users</div>
+              {[
+                'All 5 platforms',
+                'Save history forever',
+                'AI learns your patterns',
+                'Fan behavior analysis',
+                'Predictive coaching',
+                'Lifetime price lock ✦',
+              ].map(f => (
+                <div key={f} style={{ display:'flex', gap:6, alignItems:'center', fontSize:12, color:'#cbd5e1', marginBottom:5 }}>
+                  <span style={{ color:'#a855f7', fontSize:13 }}>✓</span> {f}
+                </div>
+              ))}
+              <button
+                onClick={() => window.open('https://www.camcashgrl.com/pricing', '_blank')}
+                style={{
+                  width:'100%', marginTop:14, padding:'10px',
+                  borderRadius:10, border:'none', cursor:'pointer',
+                  background:'linear-gradient(135deg,#a855f7,#7c3aed)',
+                  color:'#fff', fontSize:13, fontWeight:700,
+                  transition:'opacity 0.15s',
+                }}>
+                Lock in $9.99/mo →
+              </button>
+            </div>
+
+            {/* Standard */}
+            <div style={{
+              background:'rgba(255,255,255,0.03)',
+              border:'1px solid rgba(255,255,255,0.08)',
+              borderRadius:14, padding:'18px 16px',
+            }}>
+              <div style={{ fontSize:11, color:'#94a3b8', fontWeight:600, marginBottom:6, textTransform:'uppercase', letterSpacing:'0.07em' }}>Standard</div>
+              <div style={{ fontSize:26, fontWeight:700, color:'#f8fafc', lineHeight:1 }}>$19.99</div>
+              <div style={{ fontSize:11, color:'#94a3b8', marginBottom:20 }}>/month</div>
+              {[
+                'All 5 platforms',
+                'Save history forever',
+                'AI learns your patterns',
+                'Fan behavior analysis',
+                'Predictive coaching',
+              ].map(f => (
+                <div key={f} style={{ display:'flex', gap:6, alignItems:'center', fontSize:12, color:'#94a3b8', marginBottom:5 }}>
+                  <span style={{ color:'#22c55e', fontSize:13 }}>✓</span> {f}
+                </div>
+              ))}
+              <button
+                onClick={() => window.open('https://www.camcashgrl.com/pricing', '_blank')}
+                style={{
+                  width:'100%', marginTop:14, padding:'10px',
+                  borderRadius:10, border:'1px solid rgba(255,255,255,0.12)', cursor:'pointer',
+                  background:'rgba(255,255,255,0.05)',
+                  color:'#94a3b8', fontSize:13, fontWeight:600,
+                  transition:'opacity 0.15s',
+                }}>
+                Get Standard →
+              </button>
+            </div>
+          </div>
+
+          {/* free tier reminder */}
+          <div style={{ background:'rgba(34,197,94,0.06)', border:'1px solid rgba(34,197,94,0.18)', borderRadius:10, padding:'10px 14px', marginBottom:16, fontSize:12, color:'#94a3b8', textAlign:'center' }}>
+            ✅ <span style={{ color:'#f8fafc' }}>Free tier always exists</span> — your current platform stays free forever.
+          </div>
+
+          {/* skip */}
+          <div style={{ textAlign:'center' }}>
+            <button onClick={onSkip}
+              style={{ background:'none', border:'none', fontSize:12, color:'#64748b', cursor:'pointer', textDecoration:'underline' }}>
+              Skip for now — continue with one platform
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ═══════════════════════════════════════════════════════════════
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════════
@@ -416,9 +544,11 @@ export default function OnboardingPage() {
   const [user, setUser] = useState(null)
   const [booting, setBooting] = useState(true)
 
-  // step: 'platform' | 'paste' | 'csv' | 'preview' | 'loading' | 'step4' | 'done'
+  // step: 'platform' | 'username' | 'paste' | 'csv' | 'preview' | 'loading' | 'step4' | 'done'
   const [step, setStep] = useState('platform')
   const [platformId, setPlatformId] = useState('chaturbate')
+  const [cbUsername, setCbUsername] = useState('')
+  const [cbUsernameError, setCbUsernameError] = useState('')
   const [pasteText, setPasteText] = useState('')
   const [previewData, setPreviewData] = useState(null)
   const [parseError, setParseError] = useState('')
@@ -426,6 +556,9 @@ export default function OnboardingPage() {
   const [importError, setImportError] = useState('')
   const [isFirstImport, setIsFirstImport] = useState(true)
   const [showSparkle, setShowSparkle] = useState(false)
+  const [importedPlatforms, setImportedPlatforms] = useState([])
+  const [showUpsell, setShowUpsell] = useState(false)
+  const [pendingPlatform, setPendingPlatform] = useState(null)
 
   // CSV state
   const [csvUploading, setCsvUploading] = useState(false)
@@ -454,6 +587,43 @@ export default function OnboardingPage() {
       onboarding_complete: true,
       signed_up_at: user.created_at,
     }, { onConflict: 'user_id' })
+  }
+
+  function handlePlatformSelect(id) {
+    if (importedPlatforms.length > 0 && !importedPlatforms.includes(id)) {
+      setPendingPlatform(id)
+      setShowUpsell(true)
+      return
+    }
+    setPlatformId(id)
+    if (id === 'chaturbate') {
+      setStep('username')
+    } else {
+      setStep('paste')
+    }
+  }
+
+  function handleUsernameSubmit() {
+    setCbUsernameError('')
+    const cleaned = cbUsername.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '')
+    if (!cleaned) {
+      setCbUsernameError('Enter your Chaturbate username to continue.')
+      return
+    }
+    setCbUsername(cleaned)
+    setStep('paste')
+  }
+
+  function handleUpsellSkip() {
+    setPlatformId(pendingPlatform)
+    setShowUpsell(false)
+    setPendingPlatform(null)
+    setPasteText('')
+    if (pendingPlatform === 'chaturbate') {
+      setStep('username')
+    } else {
+      setStep('paste')
+    }
   }
 
   function handlePreview() {
@@ -496,6 +666,7 @@ export default function OnboardingPage() {
 
       await markOnboardingComplete()
       setImportResult({ inserted: json.inserted || 0, skipped: json.skipped || 0 })
+      setImportedPlatforms(prev => prev.includes(platformId) ? prev : [...prev, platformId])
 
       if (isFirstImport) {
         setIsFirstImport(false)
@@ -531,6 +702,7 @@ export default function OnboardingPage() {
       if (!res.ok || json.error) throw new Error(json.error || 'Upload failed')
       await markOnboardingComplete()
       setImportResult({ inserted: json.inserted || 0, skipped: json.skipped || 0 })
+      setImportedPlatforms(prev => prev.includes(platformId) ? prev : [...prev, platformId])
       if (isFirstImport) {
         setIsFirstImport(false)
         setShowSparkle(true)
@@ -554,7 +726,7 @@ export default function OnboardingPage() {
 
   // step index for progress bar
   const STEP_ORDER = ['platform','paste','preview','done']
-  const stepIdx = { platform:0, paste:1, csv:1, preview:2, loading:2, step4:3, done:3 }[step] ?? 0
+  const stepIdx = { platform:0, username:1, paste:1, csv:1, preview:2, loading:2, step4:3, done:3 }[step] ?? 0
 
   if (booting) return (
     <div style={{ minHeight:'100vh', background:'#06070f', display:'flex', alignItems:'center', justifyContent:'center' }}>
@@ -636,6 +808,13 @@ export default function OnboardingPage() {
       `}</style>
 
       {showSparkle && <Sparkle />}
+      {showUpsell && pendingPlatform && (
+        <ProUpsellModal
+          platform={PLATFORMS.find(p => p.id === pendingPlatform)}
+          onClose={() => { setShowUpsell(false); setPendingPlatform(null) }}
+          onSkip={handleUpsellSkip}
+        />
+      )}
 
       <div style={{ maxWidth:640, margin:'0 auto', position:'relative', zIndex:1 }}>
         <div className="inner-card">
@@ -672,10 +851,10 @@ export default function OnboardingPage() {
               <p style={{ fontSize:14, color:C.muted, lineHeight:1.6 }}>Choose your platform to get started.</p>
             </div>
 
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:8, marginBottom:24 }}>
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10, marginBottom:24 }}>
               {PLATFORMS.map(p => (
                 <button key={p.id} className="plat-card"
-                  onClick={() => setPlatformId(p.id)}
+                  onClick={() => handlePlatformSelect(p.id)}
                   style={{
                     background: platformId === p.id ? `rgba(${hexRgb(p.color)},0.12)` : C.card,
                     border: platformId === p.id ? `1.5px solid ${p.color}` : `1px solid ${C.border}`,
@@ -696,7 +875,7 @@ export default function OnboardingPage() {
               </div>
             </div>
 
-            <button className="btn-primary" onClick={() => setStep('paste')}
+            <button className="btn-primary" onClick={() => handlePlatformSelect(platformId)}
               style={{ width:'100%', padding:'14px', borderRadius:12, background:C.cyan, border:'none', color:'#0a0b14', fontSize:15, fontWeight:700, cursor:'pointer', transition:'opacity 0.15s' }}>
               Continue with {platform.name} →
             </button>
@@ -704,6 +883,69 @@ export default function OnboardingPage() {
               <button className="skip-link" onClick={skipToDashboard}
                 style={{ background:'none', border:'none', fontSize:12, color:C.muted2, cursor:'pointer', transition:'color 0.15s' }}>
                 Skip — explore dashboard without importing
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ══════════════════════════════════════
+            STEP 1b: Chaturbate username
+        ══════════════════════════════════════ */}
+        {step === 'username' && (
+          <div style={{ animation:'fadeUp 0.3s ease both' }}>
+            <div style={{ textAlign:'center', marginBottom:28 }}>
+              <div style={{ fontSize:11, fontWeight:600, letterSpacing:'0.08em', textTransform:'uppercase', color:'#ff6b35', marginBottom:10 }}>Step 1 of 3 — Chaturbate</div>
+              <h1 style={{ fontSize:24, fontWeight:700, color:C.text, marginBottom:8 }}>What's your Chaturbate username?</h1>
+              <p style={{ fontSize:14, color:C.muted, lineHeight:1.6 }}>
+                We'll open your token stats page directly so you can copy your tip history.
+              </p>
+            </div>
+
+            <div style={{ marginBottom:20 }}>
+              <div style={{ fontSize:12, fontWeight:500, color:C.muted, marginBottom:8 }}>Chaturbate username</div>
+              <div style={{ position:'relative' }}>
+                <span style={{
+                  position:'absolute', left:14, top:'50%', transform:'translateY(-50%)',
+                  fontSize:14, color:C.muted2, fontWeight:500, pointerEvents:'none',
+                }}>chaturbate.com/p/</span>
+                <input
+                  type="text"
+                  value={cbUsername}
+                  onChange={e => { setCbUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g,'')); setCbUsernameError('') }}
+                  onKeyDown={e => e.key === 'Enter' && handleUsernameSubmit()}
+                  placeholder="yourname"
+                  autoFocus
+                  style={{
+                    width:'100%', padding:'13px 14px 13px 168px',
+                    background:C.card, border:`1px solid ${cbUsernameError ? C.red : C.border2}`,
+                    borderRadius:10, color:C.text, fontSize:14,
+                    fontFamily:'monospace', outline:'none', transition:'border-color 0.15s',
+                  }}
+                />
+              </div>
+              {cbUsernameError && (
+                <div style={{ marginTop:8, fontSize:12, color:C.red }}>⚠️ {cbUsernameError}</div>
+              )}
+              {cbUsername && (
+                <div style={{ marginTop:8, fontSize:12, color:C.muted2 }}>
+                  Your stats page: <span style={{ color:C.cyan }}>chaturbate.com/p/{cbUsername}/?tab=tokens</span>
+                </div>
+              )}
+            </div>
+
+            <button className="btn-primary" onClick={handleUsernameSubmit}
+              style={{ width:'100%', padding:'14px', borderRadius:12, background:'#ff6b35', border:'none', color:'#fff', fontSize:15, fontWeight:700, cursor:'pointer', transition:'opacity 0.15s', marginBottom:12 }}>
+              Continue →
+            </button>
+            <div style={{ display:'flex', gap:10, justifyContent:'center' }}>
+              <button className="skip-link" onClick={() => setStep('platform')}
+                style={{ background:'none', border:'none', fontSize:12, color:C.muted2, cursor:'pointer' }}>
+                ← Back
+              </button>
+              <span style={{ color:C.muted2, fontSize:12 }}>·</span>
+              <button className="skip-link" onClick={() => { setCbUsername(''); setStep('paste') }}
+                style={{ background:'none', border:'none', fontSize:12, color:C.muted2, cursor:'pointer' }}>
+                Skip — I'll navigate there myself
               </button>
             </div>
           </div>
@@ -730,7 +972,7 @@ export default function OnboardingPage() {
                   How to copy from {platform.name}
                 </div>
                 <button
-                  onClick={() => window.open(platform.earningsUrl, '_blank')}
+                  onClick={() => window.open(platform.earningsUrl(cbUsername), '_blank')}
                   style={{ padding:'5px 12px', borderRadius:6, background:`rgba(${hexRgb(platform.color)},0.12)`, border:`1px solid rgba(${hexRgb(platform.color)},0.3)`, color:platform.color, fontSize:11, fontWeight:600, cursor:'pointer' }}>
                   Open earnings page ↗
                 </button>
