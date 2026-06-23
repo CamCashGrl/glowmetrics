@@ -2,6 +2,20 @@
 const nextConfig = {
   async redirects() {
     return [
+      // Non-www variants that skip the chain by going directly to final destination
+      {
+        source: '/demo',
+        has: [{ type: 'host', value: 'camcashgrl.com' }],
+        destination: 'https://www.camcashgrl.com/landing/demo',
+        permanent: true,
+      },
+      {
+        source: '/exstension',
+        has: [{ type: 'host', value: 'camcashgrl.com' }],
+        destination: 'https://www.camcashgrl.com/extension',
+        permanent: true,
+      },
+      // Catch-all www redirect (must come after the specific non-www rules above)
       {
         source: '/:path((?!api/).*)',
         has: [{ type: 'host', value: 'camcashgrl.com' }],
