@@ -1,3 +1,13 @@
+export const metadata = {
+  title: 'How Much Do Cam Models Make? Realistic Webcam Model Earnings in 2026 | CamCash',
+  description: 'How much do cam models actually make? Real webcam model income ranges for 2026 — by platform, experience level, and what separates $500/month earners from $5,000+ earners.',
+  alternates: { canonical: 'https://www.camcashgrl.com/blog/cam-model-earnings' },
+  openGraph: {
+    title: 'How Much Do Cam Models Make? Realistic Webcam Model Earnings in 2026',
+    description: 'Real webcam model income data for 2026 — Chaturbate, BongaCams, MFC earnings ranges by experience level.',
+  }
+}
+
 # How Much Do Cam Models Make? Realistic Webcam Model Earnings in 2026
 
 **SEO Title:** How Much Do Cam Models Make? Realistic Webcam Model Earnings in 2026  
