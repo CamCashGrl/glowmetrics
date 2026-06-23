@@ -49,12 +49,7 @@ const nextConfig = {
         destination: '/guides/chaturbate-best-hours',
         permanent: true,
       },
-      {
-        source: '/blog/why-youre-not-making-money-on-chaturbate',
-        destination: '/blog/how-to-make-more-money-on-chaturbate',
-        permanent: true,
-      },
-      {
+{
         source: '/blog/how-to-get-veiws-on-chaturbate',
         destination: '/blog/how-to-get-views-on-chaturbate',
         permanent: true,
