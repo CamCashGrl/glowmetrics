@@ -745,72 +745,92 @@ export default function OnboardingPage() {
     <div style={{
       minHeight:'100vh',
       position:'relative',
+      display:'flex',
+      alignItems:'center',
+      justifyContent:'center',
       background:`
-        radial-gradient(ellipse 80% 60% at 5% 0%, rgba(0,100,255,0.28) 0%, rgba(0,60,180,0.10) 40%, transparent 65%),
-        radial-gradient(ellipse 70% 58% at 95% 100%, rgba(220,0,255,0.30) 0%, rgba(180,0,200,0.12) 40%, transparent 65%),
-        radial-gradient(ellipse 50% 40% at 50% 50%, rgba(0,20,60,0.6) 0%, transparent 100%),
-        #06070f
+        radial-gradient(circle at 15% 15%, rgba(0,245,212,0.18) 0%, transparent 40%),
+        radial-gradient(circle at 85% 85%, rgba(255,62,165,0.16) 0%, transparent 40%),
+        radial-gradient(circle at 50% 50%, rgba(109,53,255,0.08) 0%, transparent 60%),
+        linear-gradient(135deg, #07111f 0%, #0b0d18 45%, #120e1f 100%)
       `,
-      fontFamily:"'Inter', system-ui, sans-serif", color:C.text, padding:'40px 20px 100px',
+      fontFamily:"'Inter', system-ui, sans-serif", color:C.text,
+      padding:'24px 20px',
       overflow:'hidden',
     }}>
-      {/* dust/particle texture overlay */}
-      <div style={{
-        position:'fixed', inset:0, pointerEvents:'none', zIndex:0,
-        backgroundImage:`
-          radial-gradient(circle, rgba(255,255,255,0.18) 1px, transparent 1px),
-          radial-gradient(circle, rgba(255,255,255,0.10) 1px, transparent 1px)
-        `,
-        backgroundSize:'120px 120px, 60px 60px',
-        backgroundPosition:'0 0, 30px 30px',
-        opacity:0.18,
-      }} />
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
         *{box-sizing:border-box;margin:0;padding:0}
         @keyframes spin{to{transform:rotate(360deg)}}
-        @keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+        @keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
         @keyframes shimmer{0%{transform:translateX(-120%)}100%{transform:translateX(220%)}}
         @keyframes cardShimmer{0%{transform:translateX(-120%)}100%{transform:translateX(220%)}}
-        @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}
-        @keyframes countUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
-        @keyframes glowPulse{0%,100%{box-shadow:0 0 24px 2px rgba(0,229,204,0.12),0 0 0 1px rgba(0,229,204,0.15)}50%{box-shadow:0 0 40px 8px rgba(0,229,204,0.22),0 0 0 1px rgba(0,229,204,0.28)}}
-        @keyframes borderGlow{0%,100%{opacity:0.7}50%{opacity:1}}
-        .plat-card:hover{border-color:rgba(255,255,255,0.2)!important;background:${C.card2}!important}
-        .paste-area:focus{outline:none;border-color:${C.cyanBorder}!important}
-        .btn-primary:hover{opacity:0.87}
-        .btn-ghost:hover{background:rgba(255,255,255,0.06)!important}
-        .skip-link:hover{color:${C.muted}!important}
-        .action-card:hover{border-color:rgba(255,255,255,0.16)!important;background:${C.card2}!important}
+        @keyframes glowPulse{0%,100%{box-shadow:0 0 24px rgba(0,245,212,0.15),0 0 0 1px rgba(0,245,212,0.2)}50%{box-shadow:0 0 48px rgba(0,245,212,0.28),0 0 0 1px rgba(0,245,212,0.35)}}
+        @keyframes borderPulse{0%,100%{opacity:0.75}50%{opacity:1}}
+        @keyframes progressGlow{0%,100%{box-shadow:0 0 8px rgba(0,245,212,0.6)}50%{box-shadow:0 0 16px rgba(0,245,212,0.9),0 0 32px rgba(255,62,165,0.4)}}
+
+        .plat-card{transition:all 0.2s ease!important;cursor:pointer;}
+        .plat-card:hover{
+          transform:translateY(-2px)!important;
+          border-color:rgba(0,245,212,0.35)!important;
+          box-shadow:0 0 20px rgba(0,245,212,0.16),0 8px 24px rgba(0,0,0,0.3)!important;
+          background:rgba(0,245,212,0.06)!important;
+        }
+        .plat-card.selected{
+          background:linear-gradient(180deg,rgba(0,245,212,0.1),rgba(255,62,165,0.06))!important;
+          border-color:rgba(0,245,212,0.6)!important;
+          box-shadow:0 0 28px rgba(0,245,212,0.22),0 0 60px rgba(255,62,165,0.08),inset 0 0 20px rgba(0,245,212,0.04)!important;
+        }
+        .paste-area:focus{outline:none;border-color:rgba(0,245,212,0.5)!important;box-shadow:0 0 0 3px rgba(0,245,212,0.08)!important;}
+        .btn-cta{
+          width:100%;padding:16px;border-radius:16px;border:none;
+          background:linear-gradient(90deg,#00f5d4,#00d4ff);
+          color:#06070f;font-size:16px;font-weight:800;cursor:pointer;
+          box-shadow:0 0 32px rgba(0,245,212,0.4),0 4px 24px rgba(0,0,0,0.3),inset 0 1px 0 rgba(255,255,255,0.4);
+          transition:all 0.2s ease;
+          letter-spacing:0.01em;
+        }
+        .btn-cta:hover{
+          transform:translateY(-1px);
+          box-shadow:0 0 48px rgba(0,245,212,0.55),0 8px 32px rgba(0,0,0,0.3),inset 0 1px 0 rgba(255,255,255,0.4);
+        }
+        .btn-cta:active{transform:translateY(0px);}
+        .btn-ghost:hover{background:rgba(255,255,255,0.07)!important;border-color:rgba(255,255,255,0.18)!important;}
+        .skip-link{background:none;border:none;font-size:13px;color:rgba(148,163,184,0.7);cursor:pointer;transition:color 0.2s;}
+        .skip-link:hover{color:#00f5d4!important;}
+        .action-card:hover{border-color:rgba(0,245,212,0.25)!important;background:rgba(0,245,212,0.05)!important;transform:translateY(-1px);}
         .stat-card{position:relative;overflow:hidden;}
         .stat-card::after{content:'';position:absolute;top:0;left:0;width:60%;height:100%;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.055),transparent);animation:cardShimmer 2.2s ease 0.4s both;}
         .inner-card{
           position:relative;
-          background:rgba(13,15,30,0.82);
-          border-radius:20px;
-          border:1px solid rgba(255,255,255,0.09);
+          width:100%;
+          max-width:860px;
+          background:linear-gradient(180deg,rgba(14,18,38,0.94) 0%,rgba(8,10,26,0.97) 100%);
+          border-radius:28px;
           box-shadow:
-            0 0 0 1px rgba(0,180,255,0.15),
-            0 0 40px 0 rgba(0,80,255,0.12),
+            0 0 0 1px rgba(0,245,212,0.18),
+            0 0 48px rgba(0,245,212,0.1),
+            0 0 96px rgba(255,62,165,0.07),
+            0 32px 80px rgba(0,0,0,0.5),
             inset 0 1px 0 rgba(255,255,255,0.07);
-          backdrop-filter:blur(12px);
-          padding:32px 28px;
-          margin-bottom:0;
+          backdrop-filter:blur(24px);
+          -webkit-backdrop-filter:blur(24px);
+          padding:40px 44px;
         }
         .inner-card::before{
           content:'';
           position:absolute;
           inset:0;
-          border-radius:20px;
+          border-radius:28px;
           padding:1px;
-          background:linear-gradient(135deg, rgba(0,180,255,0.5) 0%, rgba(255,255,255,0.04) 40%, rgba(200,0,255,0.4) 100%);
+          background:linear-gradient(135deg,rgba(0,245,212,0.55) 0%,rgba(109,53,255,0.3) 40%,rgba(255,62,165,0.5) 100%);
           -webkit-mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);
           -webkit-mask-composite:xor;
           mask-composite:exclude;
           pointer-events:none;
-          animation:borderGlow 3s ease-in-out infinite;
+          animation:borderPulse 3s ease-in-out infinite;
         }
-        textarea::placeholder{color:${C.muted2};font-family:monospace;font-size:12px}
+        textarea::placeholder{color:#475569;font-family:monospace;font-size:12px}
       `}</style>
 
       {showSparkle && <Sparkle />}
@@ -822,25 +842,52 @@ export default function OnboardingPage() {
         />
       )}
 
-      <div style={{ maxWidth:640, margin:'0 auto', position:'relative', zIndex:1 }}>
+      <div style={{ width:'100%', maxWidth:860, position:'relative', zIndex:1 }}>
         <div className="inner-card">
 
         {/* ── Logo + progress ── */}
-        <div style={{ textAlign:'center', marginBottom:36 }}>
-          <div style={{ display:'inline-flex', alignItems:'center', gap:8, marginBottom:20 }}>
-            <div style={{ width:30, height:30, borderRadius:8, background:C.cyan, display:'flex', alignItems:'center', justifyContent:'center', fontSize:15, fontWeight:700, color:'#0a0b14' }}>$</div>
-            <span style={{ fontSize:15, fontWeight:600, color:C.cyan }}>CamCash</span>
+        <div style={{ textAlign:'center', marginBottom:32 }}>
+          <div style={{ display:'inline-flex', alignItems:'center', gap:10, marginBottom:20 }}>
+            <div style={{
+              width:38, height:38, borderRadius:10,
+              background:'linear-gradient(135deg,#00f5d4,#00b8ff)',
+              display:'flex', alignItems:'center', justifyContent:'center',
+              fontSize:18, fontWeight:800, color:'#06070f',
+              boxShadow:'0 0 20px rgba(0,245,212,0.5)',
+            }}>$</div>
+            <span style={{ fontSize:17, fontWeight:700, background:'linear-gradient(90deg,#00f5d4,#60a5fa)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent' }}>CamCash</span>
           </div>
 
           {step !== 'done' && step !== 'loading' && (
-            <div style={{ display:'flex', gap:6, justifyContent:'center' }}>
-              {['platform','paste','preview'].map((_, i) => (
-                <div key={i} style={{
-                  height:3, width:56, borderRadius:2,
-                  background: i < stepIdx ? C.cyan : i === stepIdx ? C.cyan : C.border2,
-                  opacity: i <= stepIdx ? 1 : 0.35,
-                  transition:'all 0.4s',
-                }} />
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:0, marginBottom:4 }}>
+              {[1,2,3].map((n, i) => (
+                <div key={n} style={{ display:'flex', alignItems:'center' }}>
+                  <div style={{
+                    width:36, height:36, borderRadius:'50%',
+                    background: i <= stepIdx
+                      ? 'linear-gradient(135deg,#00f5d4,#00b8ff)'
+                      : 'rgba(255,255,255,0.06)',
+                    border: i <= stepIdx
+                      ? 'none'
+                      : '1px solid rgba(255,255,255,0.15)',
+                    display:'flex', alignItems:'center', justifyContent:'center',
+                    fontSize:13, fontWeight:700,
+                    color: i <= stepIdx ? '#06070f' : 'rgba(255,255,255,0.4)',
+                    boxShadow: i <= stepIdx ? '0 0 16px rgba(0,245,212,0.5)' : 'none',
+                    transition:'all 0.4s',
+                    flexShrink:0,
+                  }}>{n}</div>
+                  {i < 2 && (
+                    <div style={{
+                      width:80, height:1,
+                      background: i < stepIdx
+                        ? 'linear-gradient(90deg,#00f5d4,#00b8ff)'
+                        : 'rgba(255,255,255,0.1)',
+                      boxShadow: i < stepIdx ? '0 0 8px rgba(0,245,212,0.4)' : 'none',
+                      transition:'all 0.4s',
+                    }} />
+                  )}
+                </div>
               ))}
             </div>
           )}
@@ -852,44 +899,102 @@ export default function OnboardingPage() {
         {step === 'platform' && (
           <div style={{ animation:'fadeUp 0.3s ease both' }}>
             <div style={{ textAlign:'center', marginBottom:28 }}>
-              <div style={{ fontSize:11, fontWeight:600, letterSpacing:'0.08em', textTransform:'uppercase', color:C.cyan, marginBottom:10 }}>Step 1 of 3</div>
-              <h1 style={{ fontSize:24, fontWeight:700, color:C.text, marginBottom:8, lineHeight:1.3 }}>Where do you stream?</h1>
-              <p style={{ fontSize:14, color:C.muted, lineHeight:1.6 }}>Choose your platform to get started.</p>
+              <div style={{ fontSize:11, fontWeight:700, letterSpacing:'0.1em', textTransform:'uppercase', color:'#00f5d4', marginBottom:12 }}>Step 1 of 3</div>
+              <h1 style={{ fontSize:28, fontWeight:800, color:'#ffffff', marginBottom:10, lineHeight:1.2 }}>Where do you stream?</h1>
+              <p style={{ fontSize:14, color:'rgba(148,163,184,0.85)', lineHeight:1.65, maxWidth:480, margin:'0 auto' }}>
+                Choose your platform so CamCash can import your tip history and turn it into insights in under a minute.
+              </p>
             </div>
 
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10, marginBottom:24 }}>
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:12, marginBottom:20 }}>
               {PLATFORMS.map(p => (
-                <button key={p.id} className="plat-card"
+                <button key={p.id}
+                  className={`plat-card${platformId === p.id ? ' selected' : ''}`}
                   onClick={() => handlePlatformSelect(p.id)}
                   style={{
-                    background: platformId === p.id ? `rgba(${hexRgb(p.color)},0.12)` : C.card,
-                    border: platformId === p.id ? `1.5px solid ${p.color}` : `1px solid ${C.border}`,
-                    borderRadius:12, padding:'14px 6px 12px', cursor:'pointer',
-                    display:'flex', flexDirection:'column', alignItems:'center', gap:8,
-                    transition:'all 0.15s',
+                    position:'relative',
+                    background: platformId === p.id
+                      ? 'linear-gradient(180deg,rgba(0,245,212,0.08) 0%,rgba(0,184,255,0.05) 100%)'
+                      : 'rgba(255,255,255,0.03)',
+                    border: platformId === p.id
+                      ? '1.5px solid rgba(0,245,212,0.7)'
+                      : '1px solid rgba(255,255,255,0.09)',
+                    borderRadius:18, padding:'28px 16px 22px',
+                    display:'flex', flexDirection:'column', alignItems:'center', gap:12,
                   }}>
-                  <div style={{ width:32, height:32, borderRadius:8, background:`rgba(${hexRgb(p.color)},0.15)`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, fontWeight:700, color:p.color }}>{p.short}</div>
-                  <span style={{ fontSize:11, fontWeight:500, color: platformId === p.id ? C.text : C.muted, textAlign:'center', lineHeight:1.3 }}>{p.name}</span>
+                  {/* checkmark */}
+                  {platformId === p.id && (
+                    <div style={{
+                      position:'absolute', top:12, right:12,
+                      width:22, height:22, borderRadius:'50%',
+                      background:'linear-gradient(135deg,#00f5d4,#00b8ff)',
+                      display:'flex', alignItems:'center', justifyContent:'center',
+                      fontSize:11, fontWeight:800, color:'#06070f',
+                      boxShadow:'0 0 10px rgba(0,245,212,0.6)',
+                    }}>✓</div>
+                  )}
+                  {/* platform icon */}
+                  <div style={{
+                    width:60, height:60, borderRadius:16,
+                    background: platformId === p.id
+                      ? `linear-gradient(135deg,${p.color},${p.color}cc)`
+                      : `rgba(${hexRgb(p.color)},0.15)`,
+                    border: platformId === p.id
+                      ? 'none'
+                      : `1px solid rgba(${hexRgb(p.color)},0.25)`,
+                    display:'flex', alignItems:'center', justifyContent:'center',
+                    fontSize:16, fontWeight:800,
+                    color: platformId === p.id ? '#fff' : p.color,
+                    boxShadow: platformId === p.id ? `0 4px 20px rgba(${hexRgb(p.color)},0.4)` : 'none',
+                    transition:'all 0.2s',
+                  }}>{p.short}</div>
+                  <span style={{
+                    fontSize:13, fontWeight:700,
+                    color: platformId === p.id ? '#ffffff' : 'rgba(148,163,184,0.8)',
+                    textAlign:'center',
+                  }}>{p.name}</span>
                 </button>
               ))}
             </div>
 
-            <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:12, padding:'14px 16px', marginBottom:20 }}>
-              <div style={{ fontSize:12, color:C.muted, lineHeight:1.6, textAlign:'center' }}>
-                <span style={{ color:C.cyan, fontWeight:600 }}>Copy your tip history. Paste it once.</span> CamCash turns it into analytics.<br />
-                <span style={{ color:C.muted2 }}>Unlock your first insights in about 60 seconds.</span>
+            {/* helper box */}
+            <div style={{
+              background:'rgba(255,255,255,0.03)',
+              border:'1px solid rgba(255,255,255,0.08)',
+              borderRadius:16, padding:'18px 20px', marginBottom:20,
+              display:'flex', alignItems:'center', gap:16,
+            }}>
+              <div style={{
+                width:48, height:48, borderRadius:14, flexShrink:0,
+                background:'rgba(0,245,212,0.1)',
+                border:'1px solid rgba(0,245,212,0.2)',
+                display:'flex', alignItems:'center', justifyContent:'center',
+                fontSize:22,
+              }}>⚡</div>
+              <div>
+                <div style={{ fontSize:14, fontWeight:700, color:'#00f5d4', marginBottom:4 }}>Paste once. Get insights fast.</div>
+                <div style={{ fontSize:13, color:'rgba(148,163,184,0.75)', lineHeight:1.5 }}>
+                  Copy and paste your tip history one time. We'll handle the rest and unlock powerful analytics in about 60 seconds.
+                </div>
               </div>
             </div>
 
-            <button className="btn-primary" onClick={() => handlePlatformSelect(platformId)}
-              style={{ width:'100%', padding:'14px', borderRadius:12, background:C.cyan, border:'none', color:'#0a0b14', fontSize:15, fontWeight:700, cursor:'pointer', transition:'opacity 0.15s' }}>
+            <button className="btn-cta" onClick={() => handlePlatformSelect(platformId)}>
               Continue with {platform.name} →
             </button>
+
             <div style={{ textAlign:'center', marginTop:14 }}>
               <button className="skip-link" onClick={skipToDashboard}
-                style={{ background:'none', border:'none', fontSize:12, color:C.muted2, cursor:'pointer', transition:'color 0.15s' }}>
-                Skip — explore dashboard without importing
+                style={{ background:'none', border:'none', fontSize:13, color:'#00f5d4', cursor:'pointer', display:'inline-flex', alignItems:'center', gap:4 }}>
+                Skip for now <span style={{ fontSize:11 }}>›</span>
               </button>
+            </div>
+
+            <div style={{ textAlign:'center', marginTop:20, display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
+              <span style={{ fontSize:14 }}>🔒</span>
+              <div style={{ fontSize:12, color:'rgba(148,163,184,0.55)', lineHeight:1.5 }}>
+                Your data is encrypted, private, and never shared.
+              </div>
             </div>
           </div>
         )}
