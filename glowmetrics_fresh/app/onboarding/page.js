@@ -403,7 +403,7 @@ const CSS=`
   @keyframes camcashLoad{0%{transform:translateX(-100%)}100%{transform:translateX(180%)}}
   @keyframes glowPulse{0%,100%{box-shadow:0 0 24px rgba(0,217,255,0.15)}50%{box-shadow:0 0 48px rgba(0,217,255,0.35),0 0 80px rgba(255,43,170,0.2)}}
   @keyframes flashPulse{0%{background:rgba(255,255,255,0)}20%{background:rgba(255,255,255,0.06)}100%{background:rgba(255,255,255,0)}}
-  textarea::placeholder{color:rgba(71,85,105,0.9);font-family:monospace;font-size:12px}
+  textarea::placeholder{color:rgba(148,163,184,0.6);font-family:monospace;font-size:12px;line-height:1.6}
   input::placeholder{color:rgba(71,85,105,0.9)}
 `
 
@@ -542,15 +542,16 @@ export default function OnboardingPage(){
   const msgs=isFirstImport?LOADING_MESSAGES:EXTRA_MSGS
 
   return(
-    <main style={{position:'relative',minHeight:'100vh',overflow:'hidden',background:'#050712',padding:'16px',display:'flex',alignItems:'center',justifyContent:'center',fontFamily:"'Inter',system-ui,sans-serif",color:'#fff'}}>
+    <main style={{position:'relative',minHeight:'100vh',overflow:'hidden',background:'#050712',padding:'20px',display:'flex',alignItems:'center',justifyContent:'center',fontFamily:"'Inter',system-ui,sans-serif",color:'#fff'}}>
       <style>{CSS}</style>
 
       {/* Background glows */}
       <div style={{position:'fixed',inset:0,pointerEvents:'none',zIndex:0}}>
-        <div style={{position:'absolute',left:'-15%',top:'5%',width:520,height:520,borderRadius:'50%',background:'rgba(0,217,255,0.20)',filter:'blur(120px)'}}/>
-        <div style={{position:'absolute',right:'-15%',top:'18%',width:560,height:560,borderRadius:'50%',background:'rgba(255,43,170,0.18)',filter:'blur(130px)'}}/>
-        <div style={{position:'absolute',inset:0,background:'radial-gradient(circle at 20% 20%,rgba(0,217,255,0.08),transparent 28%),radial-gradient(circle at 80% 45%,rgba(255,43,170,0.10),transparent 30%)'}}/>
-        <div style={{position:'absolute',inset:0,opacity:0.16,backgroundImage:'radial-gradient(rgba(255,255,255,0.38) 1px,transparent 1px)',backgroundSize:'34px 34px'}}/>
+        <div style={{position:'absolute',left:'-20%',top:'-5%',width:700,height:700,borderRadius:'50%',background:'rgba(0,217,255,0.35)',filter:'blur(100px)'}}/>
+        <div style={{position:'absolute',right:'-20%',bottom:'-5%',width:750,height:750,borderRadius:'50%',background:'rgba(255,43,170,0.32)',filter:'blur(110px)'}}/>
+        <div style={{position:'absolute',left:'30%',top:'40%',width:400,height:400,borderRadius:'50%',background:'rgba(108,92,255,0.18)',filter:'blur(80px)'}}/>
+        <div style={{position:'absolute',inset:0,background:'radial-gradient(circle at 15% 15%,rgba(0,217,255,0.15),transparent 35%),radial-gradient(circle at 85% 80%,rgba(255,43,170,0.18),transparent 35%)'}}/>
+        <div style={{position:'absolute',inset:0,opacity:0.18,backgroundImage:'radial-gradient(rgba(255,255,255,0.38) 1px,transparent 1px)',backgroundSize:'34px 34px'}}/>
       </div>
 
       {showSparkle&&<Sparkle/>}
@@ -558,9 +559,9 @@ export default function OnboardingPage(){
       <FeedbackBubble/>
 
       {/* Main card */}
-      <div style={{position:'relative',zIndex:1,width:'100%',maxWidth:920}}>
-        <div style={{position:'relative',borderRadius:28,padding:1,background:'linear-gradient(135deg,rgba(0,217,255,0.65),rgba(108,92,255,0.16),rgba(255,43,170,0.7))',boxShadow:'0 0 80px rgba(0,217,255,0.16),0 0 90px rgba(255,43,170,0.10)'}}>
-          <div style={{borderRadius:27,border:'1px solid rgba(255,255,255,0.05)',background:'rgba(8,11,26,0.95)',padding:'28px 36px 24px',boxShadow:'inset 0 1px 0 rgba(255,255,255,0.08)'}}>
+      <div style={{position:'relative',zIndex:1,width:'100%',maxWidth:860}}>
+        <div style={{position:'relative',borderRadius:28,padding:1,background:'linear-gradient(135deg,rgba(0,217,255,0.9),rgba(108,92,255,0.4),rgba(255,43,170,0.9))',boxShadow:'0 0 120px rgba(0,217,255,0.4),0 0 180px rgba(255,43,170,0.3),0 0 60px rgba(108,92,255,0.3)'}}>
+          <div style={{borderRadius:27,border:'1px solid rgba(255,255,255,0.06)',background:'rgba(6,8,20,0.97)',padding:'28px 36px 24px',boxShadow:'inset 0 1px 0 rgba(255,255,255,0.08)'}}>
 
             {/* Header */}
             <header style={{display:'flex',flexDirection:'column',alignItems:'center',marginBottom:step==='loading'?8:20}}>
@@ -660,7 +661,7 @@ export default function OnboardingPage(){
                 </div>
 
                 <textarea value={pasteText} onChange={e=>setPasteText(e.target.value)} placeholder={platform.placeholder}
-                  style={{width:'100%',height:145,resize:'none',borderRadius:20,border:'1px solid rgba(255,255,255,0.1)',background:'rgba(5,8,22,0.80)',padding:16,fontFamily:'monospace',fontSize:12,lineHeight:1.5,color:'#e2e8f0',outline:'none',boxShadow:'inset 0 1px 0 rgba(255,255,255,0.04)',marginBottom:parseError?10:14,transition:'border-color 0.2s,box-shadow 0.2s'}}
+                  style={{width:'100%',height:145,resize:'none',borderRadius:20,border:'1px solid rgba(255,255,255,0.12)',background:'rgba(8,12,30,0.90)',padding:16,fontFamily:'monospace',fontSize:12,lineHeight:1.6,color:'#e2e8f0',outline:'none',boxShadow:'inset 0 1px 0 rgba(255,255,255,0.05)',marginBottom:parseError?10:14,transition:'border-color 0.2s,box-shadow 0.2s'}}
                   onFocus={e=>{e.target.style.borderColor='rgba(0,217,255,0.7)';e.target.style.boxShadow='0 0 26px rgba(0,217,255,0.16)'}}
                   onBlur={e=>{e.target.style.borderColor='rgba(255,255,255,0.1)';e.target.style.boxShadow='inset 0 1px 0 rgba(255,255,255,0.04)'}}
                 />
