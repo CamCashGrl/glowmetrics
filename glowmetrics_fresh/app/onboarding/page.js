@@ -813,7 +813,7 @@ export default function OnboardingPage(){
                   {[
                     {label:'Tips detected',value:preview.tipsDetected.toLocaleString()},
                     {label:'Est. earnings',value:`$${preview.estimatedEarnings.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`},
-                    {label:'Fans detected',value:preview.fansDetected.toLocaleString()},
+                    { label: 'Fans detected', value: (preview?.fansDetected || 0).toLocaleString() },
                     {label:'Date range',value:preview.dateRange},
                     {label:'Platform',value:platform.label},
                   ].map(s=>(
