@@ -810,11 +810,31 @@ export default function OnboardingPage(){
                 </div>
 
                 <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:10,marginBottom:10,gridAutoRows:'auto'}}>
-                  {[
-                    {label:'Tips detected',value:preview.tipsDetected.toLocaleString()},
-                    {label:'Est. earnings',value:`$${preview.estimatedEarnings.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`},
-                    {label:'Fans detected',value:preview?.fansDetected||0.toLocaleString()},
-                    {label:'Date range',value:preview.dateRange},
+                 {[
+  {
+    label: 'Tips detected',
+    value: (preview?.tipsDetected || 0).toLocaleString(),
+  },
+  {
+    label: 'Est. earnings',
+    value: `$${(preview?.estimatedEarnings || 0).toLocaleString(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`,
+  },
+  {
+    label: 'Fans detected',
+    value: (preview?.fansDetected || 0).toLocaleString(),
+  },
+  {
+    label: 'Date range',
+    value: preview?.dateRange || 'Not detected yet',
+  },
+  {
+    label: 'Platform',
+    value: platform?.label || 'Selected platform',
+  },
+].map((s) => (
                     {label:'Platform',value:platform.label},
                   ].map(s=>(
                     <div key={s.label} style={{borderRadius:20,border:'1px solid rgba(255,255,255,0.1)',background:'rgba(255,255,255,0.035)',padding:'14px 16px',boxShadow:'inset 0 1px 0 rgba(255,255,255,0.05)'}}>
