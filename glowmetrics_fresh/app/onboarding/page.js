@@ -3,6 +3,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@supabase/supabase-js'
+// Token rates — single source of truth, never hardcode below this line
+import { PLATFORM_TOKEN_RATES, tokenRate } from '../../lib/constants'
 
 const supabase = createClient(
   'https://hlsdlaibnayzbfflxclj.supabase.co',
@@ -34,7 +36,12 @@ const PLATFORMS = {
   },
 }
 
-const TOKEN_RATES={chaturbate:0.05,bongacams:0.04,myfreecams:0.05}
+// Token rates come from lib/constants.js — do not define here
+const TOKEN_RATES = {
+  chaturbate: PLATFORM_TOKEN_RATES.Chaturbate,
+  bongacams:  PLATFORM_TOKEN_RATES.BongaCams,
+  myfreecams: PLATFORM_TOKEN_RATES.MyFreeCams,
+}
 const LOADING_MESSAGES=['Cleaning your tip history…','Finding your top fans…','Calculating your average earnings per hour…','Detecting your best stream windows…','Building your dashboard…']
 const EXTRA_MSGS=['Importing additional tip history…','Merging with your dashboard…','Updating your insights…']
 
@@ -89,7 +96,7 @@ function parseBCPaidSessions(rawText){
       }
     }
     if(!ts||!username||tokens<1){skipped++;continue}
-    sessions.push({ts,username,sessionType,tokens,usd:usd>0?usd:+(tokens*0.04).toFixed(4)})
+    sessions.push({ts,username,sessionType,tokens,usd:usd>0?usd:+(tokens*tokenRate('BongaCams')).toFixed(4)})
   }
   return{sessions,skipped}
 }
