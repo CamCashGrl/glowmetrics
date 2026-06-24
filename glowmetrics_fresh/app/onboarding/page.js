@@ -158,7 +158,13 @@ function parseRows(rawText, platformId){
   }
 
   // Original single-line CSV/TSV parser (kept for BongaCams/MFC CSV uploads)
-  const headerKw = ['date','time','user','token','usd','tip','amount','note','message','from','type','stamp','earning']
+  const headerKw = [
+    'date','time','user','token','usd','tip','amount','note',
+    'message','from','type','stamp','earning','reference',
+    'private','voyeur','group','xfer','returned','fines',
+    'total','mfc','away','club','display','sort','period',
+    'payment','month','search'
+  ]
   for(const line of lines){
     const cols = line.split(/\t|,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map(c => c.trim().replace(/^"|"$/g,''))
     if(cols.length < 2){ skipped++; continue }
