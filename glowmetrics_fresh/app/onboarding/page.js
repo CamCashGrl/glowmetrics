@@ -48,18 +48,55 @@ const LOADING_MESSAGES = [
 const EXTRA_MSGS = ['Importing additional tip history…','Merging with your dashboard…','Updating your insights…']
 
 // ── Paste parser ───────────────────────────────────────────────
-function tryParseDate(str){
-  if(!str||str.length<8)return null
-  let m
-  m=str.match(/^(\d{4})-(\d{2})-(\d{2})[\sT](\d{2}):(\d{2})/)
-  if(m)return new Date(`${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:00`)
-  m=str.match(/^(\d{2})\.(\d{2})\.(\d{4})\s(\d{2}):(\d{2})/)
-  if(m)return new Date(`${m[3]}-${m[2]}-${m[1]}T${m[4]}:${m[5]}:00`)
-  m=str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s(\d{1,2}):(\d{2})(?:\s?(AM|PM))?/i)
-  if(m){let h=parseInt(m[4]);if(m[6]?.toUpperCase()==='PM'&&h<12)h+=12;if(m[6]?.toUpperCase()==='AM'&&h===12)h=0;return new Date(`${m[3]}-${m[1].padStart(2,'0')}-${m[2].padStart(2,'0')}T${String(h).padStart(2,'0')}:${m[5]}:00`)}
-  m=str.match(/^(\d{4})-(\d{2})-(\d{2})$/)
-  if(m)return new Date(`${m[1]}-${m[2]}-${m[3]}T00:00:00`)
-  const d=new Date(str);return isNaN(d.getTime())?null:d
+function tryParseDate(str) {
+  if (!str) return null;
+  const s = str.trim();
+
+  // Chaturbate: "Jun 14, 2026, 8:27 PM"
+  const cbMatch = s.match(
+    /^([A-Za-z]{3})\s+(\d{1,2}),\s+(\d{4}),\s+(\d{1,2}):(\d{2})\s+(AM|PM)$/i
+  );
+  if (cbMatch) {
+    const [, mon, day, year, hr, min, ampm] = cbMatch;
+    const months = {jan:0,feb:1,mar:2,apr:3,may:4,jun:5,
+                    jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
+    let h = parseInt(hr, 10);
+    if (ampm.toUpperCase() === 'PM' && h !== 12) h += 12;
+    if (ampm.toUpperCase() === 'AM' && h === 12) h = 0;
+    const d = new Date(parseInt(year), months[mon.toLowerCase()],
+                       parseInt(day), h, parseInt(min));
+    if (!isNaN(d.getTime())) return d;
+  }
+
+  // BongaCams: "14.06.2026 14:43"
+  const bcMatch = s.match(/^(\d{2})\.(\d{2})\.(\d{4})\s+(\d{2}):(\d{2})$/);
+  if (bcMatch) {
+    const [, day, mon, year, hr, min] = bcMatch;
+    const d = new Date(parseInt(year), parseInt(mon) - 1,
+                       parseInt(day), parseInt(hr), parseInt(min));
+    if (!isNaN(d.getTime())) return d;
+  }
+
+  // MFC: "Jan 31st, 2024 10:40 PM"
+  const mfcMatch = s.match(
+    /^([A-Za-z]{3})\s+(\d{1,2})(?:st|nd|rd|th),\s+(\d{4})\s+(\d{1,2}):(\d{2})\s+(AM|PM)$/i
+  );
+  if (mfcMatch) {
+    const [, mon, day, year, hr, min, ampm] = mfcMatch;
+    const months = {jan:0,feb:1,mar:2,apr:3,may:4,jun:5,
+                    jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
+    let h = parseInt(hr, 10);
+    if (ampm.toUpperCase() === 'PM' && h !== 12) h += 12;
+    if (ampm.toUpperCase() === 'AM' && h === 12) h = 0;
+    const d = new Date(parseInt(year), months[mon.toLowerCase()],
+                       parseInt(day), h, parseInt(min));
+    if (!isNaN(d.getTime())) return d;
+  }
+
+  // Generic fallback
+  const d = new Date(s);
+  if (!isNaN(d.getTime())) return d;
+  return null;
 }
 
 function parseRows(rawText, platformId){
