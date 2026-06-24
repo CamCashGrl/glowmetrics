@@ -509,7 +509,7 @@ export default function OnboardingPage(){
   const router=useRouter()
   const[user,setUser]=useState(null)
   const[booting,setBooting]=useState(true)
-  const[step,setStep]=useState('platform') // platform|username|paste|csv|preview|loading|live|done|step4
+  const[step,setStep]=useState('platform') // platform|username|paste|csv|preview|loading|insights|done|step4
   const[platformId,setPlatformId]=useState('chaturbate')
   const[cbUsername,setCbUsername]=useState('')
   const[cbUsernameError,setCbUsernameError]=useState('')
@@ -530,8 +530,8 @@ export default function OnboardingPage(){
   const csvRef=useRef()
 
   const platform=PLATFORMS[platformId]
-  const stepNum={platform:1,username:1,paste:2,csv:2,preview:3,loading:3,live:3,step4:3,done:3}[step]||1
-  const showDots=!['loading','done','live'].includes(step)
+  const stepNum={platform:1,username:1,paste:2,csv:2,preview:2,loading:3,insights:3,live:3,step4:3,done:3}[step]||1
+  const showDots=true
 
   useEffect(()=>{
     ;(async()=>{
@@ -599,8 +599,8 @@ export default function OnboardingPage(){
       await markDone()
       setImportResult({inserted:json.inserted||0,skipped:json.skipped||0})
       setImportedPlatforms(prev=>prev.includes(platformId)?prev:[...prev,platformId])
-      if(isFirstImport){setIsFirstImport(false);setShowSparkle(true);setTimeout(()=>setShowSparkle(false),4000);setStep('live')}
-      else setStep('step4')
+      if(isFirstImport){setIsFirstImport(false);setShowSparkle(true);setTimeout(()=>setShowSparkle(false),4000);setStep('insights')}
+      else setStep('insights')
     }catch(e){setImportError(e.message||'Import failed');setStep('preview')}
   }
 
@@ -621,8 +621,8 @@ export default function OnboardingPage(){
       await markDone()
       setImportResult({inserted:json.inserted||0,skipped:json.skipped||0})
       setImportedPlatforms(prev=>prev.includes(platformId)?prev:[...prev,platformId])
-      if(isFirstImport){setIsFirstImport(false);setShowSparkle(true);setTimeout(()=>setShowSparkle(false),4000);setStep('live')}
-      else setStep('step4')
+      if(isFirstImport){setIsFirstImport(false);setShowSparkle(true);setTimeout(()=>setShowSparkle(false),4000);setStep('insights')}
+      else setStep('insights')
     }catch(e){setCsvError(e.message||'Upload failed');setStep('csv')}
     finally{setCsvUploading(false)}
   }
@@ -656,9 +656,9 @@ export default function OnboardingPage(){
       <FeedbackBubble/>
 
       {/* Main card */}
-      <div style={{position:'relative',zIndex:1,width:'100%',maxWidth:860}}>
+      <div style={{position:'relative',zIndex:1,width:'100%',maxWidth:680}}>
         <div style={{position:'relative',borderRadius:28,padding:1,background:'linear-gradient(135deg,rgba(0,217,255,0.9),rgba(108,92,255,0.4),rgba(255,43,170,0.9))',boxShadow:'0 0 120px rgba(0,217,255,0.4),0 0 180px rgba(255,43,170,0.3),0 0 60px rgba(108,92,255,0.3)'}}>
-          <div style={{borderRadius:27,border:'1px solid rgba(255,255,255,0.06)',background:'rgba(6,8,20,0.97)',padding:'28px 36px 24px',boxShadow:'inset 0 1px 0 rgba(255,255,255,0.08)'}}>
+          <div style={{borderRadius:27,border:'1px solid rgba(255,255,255,0.06)',background:'rgba(6,8,20,0.97)',padding:'26px 30px 24px',boxShadow:'inset 0 1px 0 rgba(255,255,255,0.08)'}}>
 
             {/* Header */}
             <header style={{display:'flex',flexDirection:'column',alignItems:'center',marginBottom:step==='loading'?8:20}}>
@@ -813,7 +813,7 @@ export default function OnboardingPage(){
                   {[
                     {label:'Tips detected',value:preview.tipsDetected.toLocaleString()},
                     {label:'Est. earnings',value:`$${preview.estimatedEarnings.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`},
-                    {label:'Fans detected',value:preview.fansDetected.toLocaleString()},
+                    {label:'Fans detected',value:preview?.fansDetected||0.toLocaleString()},
                     {label:'Date range',value:preview.dateRange},
                     {label:'Platform',value:platform.label},
                   ].map(s=>(
@@ -871,16 +871,105 @@ export default function OnboardingPage(){
               </div>
             )}
 
-            {/* ── LOADING ── */}
+            {/* ── LOADING / ANALYZING ── */}
             {step==='loading'&&(
-              <div style={{textAlign:'center',padding:'40px 0'}}>
-                <div style={{width:64,height:64,borderRadius:24,background:'linear-gradient(135deg,#00D9FF,#6C5CFF,#FF2BAA)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:28,fontWeight:900,color:'#fff',margin:'0 auto 20px',boxShadow:'0 0 40px rgba(0,217,255,0.26)'}}>$</div>
-                <h1 style={{fontSize:26,fontWeight:900,color:'#fff',marginBottom:10,letterSpacing:'-0.02em'}}>Building your CamCash dashboard</h1>
-                <p style={{fontSize:14,color:'rgba(148,163,184,0.85)',marginBottom:24,minHeight:20}}>{(isFirstImport?LOADING_MESSAGES:EXTRA_MSGS)[loadingMsgIdx]}</p>
-                <div style={{height:12,borderRadius:100,border:'1px solid rgba(255,255,255,0.1)',background:'rgba(255,255,255,0.04)',maxWidth:480,margin:'0 auto 10px',overflow:'hidden'}}>
-                  <div style={{height:'100%',width:`${loadingProgress}%`,background:'linear-gradient(90deg,#00D9FF,#6C5CFF,#FF2BAA)',borderRadius:100,boxShadow:'0 0 24px rgba(0,217,255,0.28)',transition:'width 0.1s linear'}}/>
+              <div style={{textAlign:'center',padding:'18px 0 4px',animation:'fadeUp 0.35s ease both'}}>
+                <div style={{position:'relative',width:76,height:76,margin:'0 auto 18px'}}>
+                  <div style={{position:'absolute',inset:-10,borderRadius:30,background:'conic-gradient(from 90deg,#00D9FF,#6C5CFF,#FF2BAA,#00D9FF)',filter:'blur(18px)',opacity:0.55,animation:'spin 3.2s linear infinite'}}/>
+                  <div style={{position:'relative',width:76,height:76,borderRadius:26,background:'linear-gradient(135deg,#00D9FF,#6C5CFF,#FF2BAA)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:30,fontWeight:900,color:'#fff',boxShadow:'inset 0 1px 0 rgba(255,255,255,0.35)'}}>$</div>
                 </div>
-                <div style={{fontSize:12,color:'rgba(100,116,139,0.7)',marginBottom:28}}>{loadingProgress}% complete</div>
+                <StepTitle eyebrow="STEP 3 OF 3" title="Analyzing your data" subtitle="CamCash is cleaning your paste, finding your best fans, and building your first earnings insights."/>
+                <div style={{height:12,borderRadius:100,border:'1px solid rgba(255,255,255,0.1)',background:'rgba(255,255,255,0.04)',maxWidth:480,margin:'0 auto 12px',overflow:'hidden',boxShadow:'inset 0 1px 0 rgba(255,255,255,0.04)'}}>
+                  <div style={{height:'100%',width:`${loadingProgress}%`,background:'linear-gradient(90deg,#00D9FF,#6C5CFF,#FF2BAA)',borderRadius:100,boxShadow:'0 0 28px rgba(0,217,255,0.35)',transition:'width 0.1s linear'}}/>
+                </div>
+                <div style={{fontSize:12,fontWeight:800,letterSpacing:'0.12em',textTransform:'uppercase',color:'rgba(34,211,238,0.85)',marginBottom:16}}>{loadingProgress}% complete</div>
+
+                <div style={{display:'grid',gap:8,marginBottom:16}}>
+                  {(isFirstImport?LOADING_MESSAGES:EXTRA_MSGS).map((msg,i)=>{
+                    const complete=loadingProgress >= ((i+1)/((isFirstImport?LOADING_MESSAGES:EXTRA_MSGS).length))*100 - 8
+                    const active=i===loadingMsgIdx
+                    return(
+                      <div key={msg} style={{display:'flex',alignItems:'center',gap:10,borderRadius:14,border:`1px solid ${complete?'rgba(0,217,255,0.26)':active?'rgba(255,43,170,0.22)':'rgba(255,255,255,0.08)'}`,background:complete?'rgba(0,217,255,0.055)':active?'rgba(255,43,170,0.04)':'rgba(255,255,255,0.025)',padding:'10px 12px',textAlign:'left',transition:'all 0.25s'}}>
+                        <div style={{width:24,height:24,borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,background:complete?'#22d3ee':'rgba(255,255,255,0.05)',color:complete?'#04101b':'rgba(148,163,184,0.6)',fontSize:12,fontWeight:900,boxShadow:complete?'0 0 18px rgba(0,217,255,0.42)':'none'}}>{complete?'✓':'•'}</div>
+                        <div style={{fontSize:13,fontWeight:700,color:complete?'#fff':'rgba(203,213,225,0.82)'}}>{msg}</div>
+                      </div>
+                    )
+                  })}
+                </div>
+
+                <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:8}}>
+                  {[
+                    {label:'Earnings',value:Math.round(preview?.estimatedEarnings||0),prefix:'$',suffix:''},
+                    {label:'Fans',value:preview?.fansDetected||0,prefix:'',suffix:''},
+                    {label:'Tips',value:preview?.tipsDetected||0,prefix:'',suffix:''},
+                    {label:'Best hour',value:0,prefix:'',suffix:preview?.bestHour?` ${preview.bestHour}`:' calculating…'},
+                  ].map((s,i)=>(
+                    <div key={s.label} style={{borderRadius:16,border:'1px solid rgba(255,255,255,0.08)',background:'rgba(255,255,255,0.035)',padding:'12px 8px',boxShadow:'inset 0 1px 0 rgba(255,255,255,0.04)'}}>
+                      <div style={{fontSize:9,fontWeight:800,textTransform:'uppercase',letterSpacing:'0.10em',color:'rgba(100,116,139,0.85)',marginBottom:6}}>{s.label}</div>
+                      <div style={{fontSize:16,fontWeight:900,color:i===3?'#C9B8FF':'#22d3ee',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{i===3?s.suffix:<CountUp to={s.value} prefix={s.prefix} suffix={s.suffix} duration={1100}/>}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+
+            {/* ── FIRST INSIGHTS ── */}
+            {step==='insights'&&importResult&&(
+              <div style={{animation:'fadeUp 0.35s ease both'}}>
+                <div style={{textAlign:'center',marginBottom:18}}>
+                  <div style={{position:'relative',width:74,height:74,margin:'0 auto 18px'}}>
+                    <div style={{position:'absolute',inset:-14,borderRadius:30,background:'radial-gradient(circle,rgba(255,43,170,0.42),transparent 60%)',filter:'blur(16px)'}}/>
+                    <div style={{position:'relative',width:74,height:74,borderRadius:26,background:'linear-gradient(135deg,#00D9FF,#6C5CFF,#FF2BAA)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:30,fontWeight:900,color:'#fff',boxShadow:'0 0 42px rgba(0,217,255,0.25),0 0 48px rgba(255,43,170,0.20),inset 0 1px 0 rgba(255,255,255,0.35)'}}>✓</div>
+                  </div>
+                  <StepTitle eyebrow="FIRST INSIGHTS" title="Your first insights are ready" subtitle="Here’s what CamCash found from your imported tip history. Import more data anytime to make these stats smarter."/>
+                </div>
+
+                <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:10,marginBottom:14}}>
+                  {[
+                    {label:'Tips imported',value:importResult.inserted||preview?.tipsDetected||0,color:'#00D9FF',prefix:'',suffix:''},
+                    {label:'Unique fans',value:preview?.fansDetected||0,color:'#FF2BAA',prefix:'',suffix:''},
+                    {label:'Est. earnings',value:Math.round(preview?.estimatedEarnings||0),color:'#4ade80',prefix:'$',suffix:''},
+                    {label:'Top spender',text:preview?.topSpender?.name||'Import more',color:'#C9B8FF'},
+                  ].map((s)=>(
+                    <div key={s.label} style={{borderRadius:20,border:'1px solid rgba(255,255,255,0.10)',background:'linear-gradient(180deg,rgba(255,255,255,0.055),rgba(255,255,255,0.025))',padding:'16px 14px',boxShadow:'inset 0 1px 0 rgba(255,255,255,0.06)'}}>
+                      <div style={{fontSize:10,fontWeight:800,textTransform:'uppercase',letterSpacing:'0.12em',color:'rgba(100,116,139,0.88)',marginBottom:7}}>{s.label}</div>
+                      <div style={{fontSize:22,fontWeight:900,color:s.color,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{s.text || <CountUp to={s.value} prefix={s.prefix} suffix={s.suffix} duration={900}/>}</div>
+                    </div>
+                  ))}
+                </div>
+
+                <div style={{borderRadius:24,padding:1,background:'linear-gradient(135deg,rgba(0,217,255,0.5),rgba(255,43,170,0.45))',boxShadow:'0 0 34px rgba(0,217,255,0.13),0 0 34px rgba(255,43,170,0.10)',marginBottom:14}}>
+                  <div style={{borderRadius:23,background:'rgba(8,12,30,0.92)',padding:18}}>
+                    <div style={{display:'flex',alignItems:'flex-start',gap:14}}>
+                      <div style={{width:46,height:46,borderRadius:16,background:'rgba(0,217,255,0.10)',border:'1px solid rgba(0,217,255,0.25)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:22,flexShrink:0}}>💎</div>
+                      <div style={{flex:1}}>
+                        <div style={{fontSize:11,fontWeight:900,letterSpacing:'0.16em',textTransform:'uppercase',color:'#22d3ee',marginBottom:7}}>Best first insight</div>
+                        <div style={{fontSize:15,fontWeight:900,color:'#fff',lineHeight:1.45,marginBottom:6}}>
+                          {preview?.bestHour?`Your highest tip activity was around ${preview.bestHour}.`:'Not enough history yet for a peak streaming window.'}
+                        </div>
+                        <p style={{fontSize:13,color:'rgba(148,163,184,0.86)',lineHeight:1.55}}>
+                          {preview?.bestHour?'Import more history to compare weekdays, platforms, and your strongest earning windows with better accuracy.':'Import more rows or another date range to unlock best hours, platform comparisons, and stronger fan patterns.'}
+                        </p>
+                      </div>
+                    </div>
+                    <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:6,marginTop:16,alignItems:'end',height:54}}>
+                      {[30,46,34,62,44,75,52].map((h,i)=>(
+                        <div key={i} style={{height:`${h}%`,borderRadius:'10px 10px 4px 4px',background:i===5?'linear-gradient(180deg,#FF2BAA,#6C5CFF)':'linear-gradient(180deg,#00D9FF55,#00D9FF18)',boxShadow:i===5?'0 0 20px rgba(255,43,170,0.22)':'none'}}/>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{borderRadius:18,border:'1px solid rgba(255,255,255,0.08)',background:'rgba(255,255,255,0.035)',padding:'13px 14px',fontSize:12,color:'rgba(148,163,184,0.82)',lineHeight:1.55,marginBottom:14}}>
+                  <span style={{color:'#fff',fontWeight:800}}>Recommended:</span> import more history to make your stats smarter and more accurate. You can do this later from your dashboard too.
+                </div>
+
+                <PrimaryBtn onClick={()=>{setShowSparkle(true);setTimeout(()=>setShowSparkle(false),3500);setStep('done')}} style={{marginBottom:10}}>Finish onboarding</PrimaryBtn>
+                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+                  <button onClick={()=>{setPasteText('');setStep('paste')}} style={{padding:'12px',borderRadius:14,border:'1px solid rgba(255,255,255,0.1)',background:'rgba(255,255,255,0.035)',color:'rgba(203,213,225,0.9)',fontSize:13,fontWeight:800,cursor:'pointer'}}>Import more data</button>
+                  <button onClick={()=>window.open('https://chrome.google.com/webstore','_blank')} style={{padding:'12px',borderRadius:14,border:'1px solid rgba(255,43,170,0.22)',background:'rgba(255,43,170,0.055)',color:'rgba(255,255,255,0.92)',fontSize:13,fontWeight:800,cursor:'pointer'}}>Install Pretty Profits</button>
+                </div>
               </div>
             )}
 
