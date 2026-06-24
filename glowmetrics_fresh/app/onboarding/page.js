@@ -21,7 +21,7 @@ const PLATFORMS = {
   bongacams:{
     label:'BongaCams',short:'BC',
     iconStyle:{background:'#311222',color:'#FF3B6E',border:'1px solid rgba(255,59,110,0.25)'},
-    instructions:'Go to Reports → General. Select your date range. Highlight all rows, copy, and paste below.',
+    instructions:'Go to Reports → General. Select your date range. Highlight all rows, copy, and paste below. You can also paste your Paid Chat section separately.',
     earningsUrl:()=>'https://bongamodels.com/reports/general',
     placeholder:'Paste your BongaCams tip history here...\n\nExample:\n14.06.2026 14:43\thaverford35\tTips\t1\t$0.024',
   },
@@ -38,7 +38,10 @@ const TOKEN_RATES={chaturbate:0.05,bongacams:0.04,myfreecams:0.05}
 const LOADING_MESSAGES=['Cleaning your tip history…','Finding your top fans…','Calculating your average earnings per hour…','Detecting your best stream windows…','Building your dashboard…']
 const EXTRA_MSGS=['Importing additional tip history…','Merging with your dashboard…','Updating your insights…']
 
-// ── Parsers (PRESERVED) ────────────────────────────────────────
+// BongaCams paid chat session types
+const BC_PAID_TYPES=['Private Chat','Full-Private Chat','Group Chat','Spy Mode']
+
+// ── Parsers ────────────────────────────────────────────────────
 function tryParseDate(str){
   if(!str)return null;const s=str.trim()
   const cbMatch=s.match(/^([A-Za-z]{3})\s+(\d{1,2}),\s+(\d{4}),\s+(\d{1,2}):(\d{2})\s+(AM|PM)$/i)
@@ -48,6 +51,47 @@ function tryParseDate(str){
   const mfcMatch=s.match(/^([A-Za-z]{3})\s+(\d{1,2})(?:st|nd|rd|th),\s+(\d{4})\s+(\d{1,2}):(\d{2})\s+(AM|PM)$/i)
   if(mfcMatch){const[,mon,day,year,hr,min,ampm]=mfcMatch;const months={jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};let h=parseInt(hr,10);if(ampm.toUpperCase()==='PM'&&h!==12)h+=12;if(ampm.toUpperCase()==='AM'&&h===12)h=0;const d=new Date(parseInt(year),months[mon.toLowerCase()],parseInt(day),h,parseInt(min));if(!isNaN(d.getTime()))return d}
   const d=new Date(s);if(!isNaN(d.getTime()))return d;return null
+}
+
+// Detects if a BongaCams tab-separated row is a paid chat session
+// Returns session_type string or null
+function detectBCPaidRow(cols){
+  if(!cols||cols.length<4)return null
+  for(const t of BC_PAID_TYPES){
+    if(cols.some(c=>c.trim()===t))return t
+  }
+  return null
+}
+
+// Parse BongaCams paid chat rows into paid_session objects
+function parseBCPaidSessions(rawText){
+  const lines=rawText.split('\n').map(l=>l.trim()).filter(Boolean)
+  const sessions=[];let skipped=0
+  const headerKw=['date','time','member','chat','type','tokens','payout','earned']
+  for(const line of lines){
+    const cols=line.split(/\t/).map(c=>c.trim().replace(/^"|"$/g,''))
+    if(cols.length<4){skipped++;continue}
+    const lower=cols.map(c=>c.toLowerCase())
+    if(lower.filter(c=>headerKw.some(k=>c.includes(k))).length>=2)continue
+    const sessionType=detectBCPaidRow(cols)
+    if(!sessionType){skipped++;continue}
+    let ts=null,username=null,tokens=0,usd=0
+    for(const col of cols){
+      const d=tryParseDate(col)
+      if(d&&!ts){ts=d;continue}
+      if(col===sessionType)continue
+      const n=parseFloat(col.replace(/[$,]/g,''))
+      if(!isNaN(n)&&n>0){
+        if(Number.isInteger(n)&&n<100000&&tokens===0)tokens=Math.round(n)
+        else if(n<50000&&usd===0)usd=n
+      } else if(col.length>1&&col.length<=50&&isNaN(parseFloat(col))&&!username){
+        username=col
+      }
+    }
+    if(!ts||!username||tokens<1){skipped++;continue}
+    sessions.push({ts,username,sessionType,tokens,usd:usd>0?usd:+(tokens*0.04).toFixed(4)})
+  }
+  return{sessions,skipped}
 }
 
 function parseRows(rawText,platformId){
@@ -80,6 +124,8 @@ function parseRows(rawText,platformId){
     if(cols.length<2){skipped++;continue}
     const lower=cols.map(c=>c.toLowerCase())
     if(lower.filter(c=>headerKw.some(k=>c.includes(k))).length>=2)continue
+    // Skip BongaCams paid chat rows from the free tips parser
+    if(detectBCPaidRow(cols)){skipped++;continue}
     let ts=null,tsIdx=-1
     for(let i=0;i<cols.length;i++){const d=tryParseDate(cols[i]);if(d){ts=d;tsIdx=i;break}}
     if(!ts){skipped++;continue}
@@ -110,10 +156,29 @@ function pasteToCSVBlob(rawText,platformId){
   return{blob:new Blob([csvRows.join('\n')],{type:'text/csv'}),rowCount:rows.length,skipped}
 }
 
+// Convert paid sessions to CSV blob for upload via /api/upload-paid-sessions
+function paidSessionsToCSVBlob(sessions){
+  const csvRows=['date_time,username,session_type,tokens,usd']
+  for(const s of sessions){
+    const isoTs=s.ts.toISOString().replace('T',' ').slice(0,19)
+    csvRows.push(`${isoTs},${s.username.replace(/,/g,'')},${s.sessionType.replace(/,/g,'')},${s.tokens},${s.usd}`)
+  }
+  return new Blob([csvRows.join('\n')],{type:'text/csv'})
+}
+
 function buildPreview(rawText,platformId,platformLabel){
   const{rows,skipped}=parseRows(rawText,platformId)
-  if(!rows.length)return null
+
+  // Also detect paid sessions for BongaCams so we can show them in preview
+  let paidSessions=[]
+  if(platformId==='bongacams'){
+    const res=parseBCPaidSessions(rawText)
+    paidSessions=res.sessions
+  }
+
+  if(!rows.length&&!paidSessions.length)return null
   const totalUsd=rows.reduce((s,r)=>s+r.usd,0)
+  const paidUsd=paidSessions.reduce((s,r)=>s+r.usd,0)
   const fans=new Set(rows.map(r=>r.username)).size
   const dates=rows.map(r=>r.ts).sort((a,b)=>a-b)
   const topSpender=Object.entries(rows.reduce((acc,r)=>{acc[r.username]=(acc[r.username]||0)+r.tokens;return acc},{})).sort((a,b)=>b[1]-a[1])[0]
@@ -121,8 +186,13 @@ function buildPreview(rawText,platformId,platformLabel){
   const bestHour=Object.entries(hourCounts).sort((a,b)=>b[1]-a[1])[0]
   const fmtHour=h=>{const n=parseInt(h);return n===0?'12am':n<12?`${n}am`:n===12?'12pm':`${n-12}pm`}
   return{
-    tipsDetected:rows.length,estimatedEarnings:+totalUsd.toFixed(2),fansDetected:fans,
-    dateRange:`${dates[0].toLocaleDateString('en-US',{month:'short',day:'numeric'})} – ${dates[dates.length-1].toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}`,
+    tipsDetected:rows.length,
+    paidSessionsDetected:paidSessions.length,
+    paidSessions,
+    estimatedEarnings:+totalUsd.toFixed(2),
+    paidEarnings:+paidUsd.toFixed(2),
+    fansDetected:fans,
+    dateRange:dates.length?`${dates[0].toLocaleDateString('en-US',{month:'short',day:'numeric'})} – ${dates[dates.length-1].toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}`:'—',
     topSpender:topSpender?{name:topSpender[0],tokens:topSpender[1]}:null,
     bestHour:bestHour?fmtHour(bestHour[0]):null,
     sampleRows:rows.slice(0,5).map(r=>({date:r.ts.toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}),fan:r.username,tokens:r.tokens,amount:r.usd,platform:platformLabel})),
@@ -162,7 +232,6 @@ function AmbientParticles(){
         ctx.arc(p.x,p.y,p.r,0,Math.PI*2)
         ctx.fillStyle=`${p.col}${p.alpha.toFixed(2)})`
         ctx.fill()
-        // subtle cross sparkle on brighter ones
         if(p.alpha>0.4&&p.r>1){
           ctx.strokeStyle=`${p.col}${(p.alpha*0.4).toFixed(2)})`
           ctx.lineWidth=0.5
@@ -214,7 +283,7 @@ function CountUp({to,prefix='',suffix='',duration=1000,decimals=0}){
   return<>{prefix}{decimals?val.toFixed(decimals):val.toLocaleString()}{suffix}</>
 }
 
-// ── Pro Upsell Modal (PRESERVED) ──────────────────────────────
+// ── Pro Upsell Modal ───────────────────────────────────────────
 function ProUpsellModal({platform,onSkip}){
   return(
     <div style={{position:'fixed',inset:0,zIndex:9998,background:'rgba(3,5,15,0.92)',backdropFilter:'blur(12px)',display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
@@ -250,7 +319,7 @@ function ProUpsellModal({platform,onSkip}){
   )
 }
 
-// ── Live Mode Demo (PRESERVED) ─────────────────────────────────
+// ── Live Mode Demo ─────────────────────────────────────────────
 function LiveModeDemo({onInstall,onSkip}){
   const PROMPTS=[{icon:'🐋',title:'Greet Returning Fan',body:'whaleking99 just entered. He tipped $180 last stream. Say hi by name.',impact:'+$40 avg when acknowledged'},{icon:'💡',title:'Mention Your Tip Menu',body:'22 active viewers, no tip in 7 min. Mention your toy or wheel menu.',impact:'+34% tip rate after prompt'},{icon:'🎯',title:'Refresh the Room Goal',body:'Tips slowed down. Try a smaller, faster goal to restart momentum.',impact:'Recovers dead zones in ~4 min'}]
   const[idx,setIdx]=useState(0)
@@ -281,7 +350,7 @@ function LiveModeDemo({onInstall,onSkip}){
   )
 }
 
-// ── Feedback bubble (single instance only) ─────────────────────
+// ── Feedback bubble ────────────────────────────────────────────
 function FeedbackBubble(){
   const[open,setOpen]=useState(false)
   if(!open)return(<button onClick={()=>setOpen(true)} style={{position:'fixed',bottom:20,right:20,zIndex:200,display:'flex',alignItems:'center',gap:7,padding:'8px 16px',borderRadius:100,background:'rgba(6,8,20,0.92)',border:'1px solid rgba(255,255,255,0.1)',color:'rgba(148,163,184,0.9)',fontSize:12,fontWeight:700,cursor:'pointer',backdropFilter:'blur(20px)'}}>💬 Feedback</button>)
@@ -302,7 +371,7 @@ const CSS=`
   @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
   @keyframes shimmer{0%{transform:translateX(-100%)}100%{transform:translateX(200%)}}
   @keyframes cardShimmer{0%,92%{opacity:0}94%{opacity:1}100%{opacity:0}}
-  @keyframes glowPulse{0%,100%{box-shadow:0 0 42px rgba(33,230,243,0.28),0 0 90px rgba(255,47,174,0.20),0 0 180px rgba(33,230,243,0.10)}50%{box-shadow:0 0 70px rgba(33,230,243,0.50),0 0 140px rgba(255,47,174,0.36),0 0 240px rgba(33,230,243,0.18)}}
+  @keyframes glowPulse{0%,100%{box-shadow:0 0 28px rgba(33,230,243,0.18),0 0 60px rgba(255,47,174,0.12),0 0 120px rgba(33,230,243,0.06)}50%{box-shadow:0 0 45px rgba(33,230,243,0.30),0 0 90px rgba(255,47,174,0.20),0 0 160px rgba(33,230,243,0.10)}}
   @keyframes checkIn{from{transform:scale(0) rotate(-20deg);opacity:0}to{transform:scale(1) rotate(0);opacity:1}}
   @keyframes flashPulse{0%{opacity:0}20%{opacity:1}100%{opacity:0}}
   @keyframes statCardIn{from{opacity:0;transform:translateY(8px) scale(0.97)}to{opacity:1;transform:translateY(0) scale(1)}}
@@ -330,7 +399,7 @@ const CSS=`
   .ob-btn-primary{
     position:relative;overflow:hidden;
     background:linear-gradient(90deg,#20E3F3,#7C5CFF,#FF2FAE);
-    box-shadow:0 0 28px rgba(32,227,243,0.22),0 0 32px rgba(255,47,174,0.18),inset 0 1px 0 rgba(255,255,255,0.35);
+    box-shadow:0 0 14px rgba(32,227,243,0.16),0 0 28px rgba(255,47,174,0.10),inset 0 1px 0 rgba(255,255,255,0.35);
   }
   .ob-btn-primary::after{
     content:'';position:absolute;top:0;left:-100%;width:60%;height:100%;
@@ -354,7 +423,7 @@ function OBLogo({showSub=false}){
   return(
     <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',marginBottom:12}}>
       <div style={{display:'flex',alignItems:'center',gap:9,marginBottom:showSub?4:0}}>
-        <div style={{width:34,height:34,borderRadius:11,background:GRAD,display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,fontWeight:900,color:'#fff',boxShadow:`0 0 28px rgba(33,230,243,0.55),0 0 55px rgba(255,47,174,0.28),0 0 8px rgba(33,230,243,0.8)`}}>$</div>
+        <div style={{width:34,height:34,borderRadius:11,background:GRAD,display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,fontWeight:900,color:'#fff',boxShadow:`0 0 14px rgba(33,230,243,0.25),0 0 28px rgba(255,47,174,0.12)`}}>$</div>
         <div style={{fontSize:22,fontWeight:900,letterSpacing:'-0.03em'}}>
           <span style={{color:'#fff'}}>Cam</span>
           <span style={{background:GRAD,WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent'}}>Cash</span>
@@ -365,7 +434,6 @@ function OBLogo({showSub=false}){
   )
 }
 
-// Single progress bar — rendered ONCE in the header
 function OBProgress({current}){
   const steps=[{n:1,label:'Stats'},{n:2,label:'Tips'},{n:3,label:'Done'}]
   return(
@@ -401,13 +469,13 @@ function OBBtn({onClick,children,disabled=false,style={}}){
       background:disabled?'rgba(255,255,255,0.07)':GRAD,
       color:disabled?'rgba(255,255,255,0.25)':'#fff',
       fontSize:14,fontWeight:900,cursor:disabled?'not-allowed':'pointer',
-      boxShadow:disabled?'none':'0 0 24px rgba(33,230,243,0.28),0 0 55px rgba(255,47,174,0.18)',
+      boxShadow:disabled?'none':'0 0 14px rgba(33,230,243,0.16),0 0 28px rgba(255,47,174,0.10)',
       transition:'all 0.18s',display:'flex',alignItems:'center',justifyContent:'center',gap:7,
       letterSpacing:'-0.01em',
       ...style
     }}
-    onMouseEnter={e=>{if(!disabled){e.currentTarget.style.transform='translateY(-2px)';e.currentTarget.style.boxShadow='0 0 40px rgba(33,230,243,0.45),0 0 80px rgba(255,47,174,0.30),inset 0 1px 0 rgba(255,255,255,0.4)'}}}
-    onMouseLeave={e=>{e.currentTarget.style.transform='';e.currentTarget.style.boxShadow=disabled?'none':'0 0 24px rgba(33,230,243,0.28),0 0 55px rgba(255,47,174,0.18)'}}
+    onMouseEnter={e=>{if(!disabled){e.currentTarget.style.transform='translateY(-2px)';e.currentTarget.style.boxShadow='0 0 22px rgba(33,230,243,0.28),0 0 44px rgba(255,47,174,0.18),inset 0 1px 0 rgba(255,255,255,0.3)'}}}
+    onMouseLeave={e=>{e.currentTarget.style.transform='';e.currentTarget.style.boxShadow=disabled?'none':'0 0 14px rgba(33,230,243,0.16),0 0 28px rgba(255,47,174,0.10)'}}
     onMouseDown={e=>{if(!disabled)e.currentTarget.style.transform='translateY(0)'}}
     >{children}</button>
   )
@@ -440,7 +508,6 @@ export default function OnboardingPage(){
   const[user,setUser]=useState(null)
   const[booting,setBooting]=useState(true)
 
-
   const[step,setStep]=useState('platform')
   const[platformId,setPlatformId]=useState('chaturbate')
   const[cbUsername,setCbUsername]=useState('')
@@ -462,7 +529,6 @@ export default function OnboardingPage(){
   const csvRef=useRef()
 
   const platform=PLATFORMS[platformId]
-  // Progress step — single source of truth, no duplicates
   const stepNum={platform:1,username:1,paste:2,csv:2,preview:2,loading:3,live:3,step4:3,done:3}[step]||1
   const showProgress=!['loading','live'].includes(step)
 
@@ -505,7 +571,7 @@ export default function OnboardingPage(){
     setParseError('')
     if(!pasteText.trim()){setParseError('Paste your tip history above first.');return}
     const p=buildPreview(pasteText,platformId,platform.label)
-    if(!p||p.tipsDetected===0){setParseError("We couldn't find any tip rows. Make sure you copied the full table including dates and token amounts.");return}
+    if(!p||( p.tipsDetected===0&&p.paidSessionsDetected===0)){setParseError("We couldn't find any tip rows. Make sure you copied the full table including dates and token amounts.");return}
     setPreview(p);setStep('preview')
   }
 
@@ -522,15 +588,39 @@ export default function OnboardingPage(){
       const start=Date.now()
       const pi=setInterval(()=>{const p=Math.min((Date.now()-start)/minWait,0.95);setLoadingProgress(Math.round(p*100))},60)
       const mi=setInterval(()=>setLoadingMsgIdx(i=>(i+1)%msgs.length),900)
-      const[res]=await Promise.all([
-        fetch('/api/upload',{method:'POST',headers:{Authorization:`Bearer ${session.access_token}`},body:(()=>{const f=new FormData();f.append('file',file);f.append('platform',platform.label);return f})()}),
+
+      // Upload free tips
+      const tipUploadPromise=fetch('/api/upload',{
+        method:'POST',
+        headers:{Authorization:`Bearer ${session.access_token}`},
+        body:(()=>{const f=new FormData();f.append('file',file);f.append('platform',platform.label);return f})()
+      })
+
+      // Upload BongaCams paid sessions if any detected
+      let paidUploadPromise=Promise.resolve(null)
+      if(platformId==='bongacams'&&preview?.paidSessionsDetected>0){
+        const paidBlob=paidSessionsToCSVBlob(preview.paidSessions)
+        const paidFile=new File([paidBlob],'paid_sessions_import.csv',{type:'text/csv'})
+        const paidForm=new FormData()
+        paidForm.append('file',paidFile)
+        paidForm.append('platform','BongaCams')
+        paidUploadPromise=fetch('/api/upload-paid-sessions',{
+          method:'POST',
+          headers:{Authorization:`Bearer ${session.access_token}`},
+          body:paidForm
+        })
+      }
+
+      const[res,,]=await Promise.all([
+        tipUploadPromise,
+        paidUploadPromise,
         new Promise(r=>setTimeout(r,minWait)),
       ])
       clearInterval(pi);clearInterval(mi);setLoadingProgress(100)
       const json=await res.json()
       if(!res.ok||json.error)throw new Error(json.error||'Import failed')
       await markDone()
-      setImportResult({inserted:json.inserted||preview?.tipsDetected||0,skipped:json.skipped||0})
+      setImportResult({inserted:json.inserted||preview?.tipsDetected||0,skipped:json.skipped||0,paidInserted:preview?.paidSessionsDetected||0})
       setImportedPlatforms(prev=>prev.includes(platformId)?prev:[...prev,platformId])
       if(isFirstImport){setIsFirstImport(false);setShowSparkle(true);setTimeout(()=>setShowSparkle(false),4000);setStep('live')}
       else setStep('step4')
@@ -570,39 +660,28 @@ export default function OnboardingPage(){
   )
 
   const msgs=isFirstImport?LOADING_MESSAGES:EXTRA_MSGS
-  // Tips displayed: API result OR preview count as fallback
   const tipsDisplayed=importResult?.inserted>0?importResult.inserted:(preview?.tipsDetected||0)
 
   return(
     <main style={{position:'relative',minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',padding:'12px',background:'#050812',fontFamily:"'Inter',system-ui,sans-serif",color:'#fff',overflow:'hidden'}}>
       <style>{CSS}</style>
 
-      {/* ── BACKGROUND — much more dramatic ── */}
+      {/* ── BACKGROUND ── */}
       <div style={{position:'fixed',inset:0,pointerEvents:'none',zIndex:0}}>
-        {/* Deep navy base */}
         <div style={{position:'absolute',inset:0,background:'radial-gradient(ellipse at 20% 50%,rgba(33,230,243,0.18) 0%,transparent 55%),radial-gradient(ellipse at 80% 50%,rgba(255,47,174,0.16) 0%,transparent 55%),radial-gradient(ellipse at 50% 100%,rgba(139,92,246,0.12) 0%,transparent 50%)'}}/>
-        {/* Bright cyan orb left */}
         <div style={{position:'absolute',left:'-8%',top:'15%',width:560,height:560,borderRadius:'50%',background:'rgba(33,230,243,0.22)',filter:'blur(100px)'}}/>
-        {/* Bright pink orb right */}
         <div style={{position:'absolute',right:'-8%',bottom:'10%',width:600,height:600,borderRadius:'50%',background:'rgba(255,47,174,0.20)',filter:'blur(110px)'}}/>
-        {/* Violet mid */}
         <div style={{position:'absolute',left:'35%',top:'30%',width:420,height:420,borderRadius:'50%',background:'rgba(139,92,246,0.12)',filter:'blur(90px)'}}/>
-        {/* Top cyan accent */}
         <div style={{position:'absolute',left:'50%',top:'-5%',transform:'translateX(-50%)',width:400,height:300,borderRadius:'50%',background:'rgba(33,230,243,0.10)',filter:'blur(80px)'}}/>
-        {/* Star grid */}
         <div style={{position:'absolute',inset:0,opacity:0.10,backgroundImage:'radial-gradient(rgba(255,255,255,0.6) 1px,transparent 1px)',backgroundSize:'28px 28px'}}/>
       </div>
 
-      {/* Ambient floating particles — always on */}
       <AmbientParticles/>
-
       {showSparkle&&<Sparkle/>}
       {showUpsell&&pendingPlatform&&<ProUpsellModal platform={PLATFORMS[pendingPlatform]} onSkip={handleUpsellSkip}/>}
-
-      {/* Single feedback bubble */}
       <FeedbackBubble/>
 
-      {/* ── CARD — 480px premium glass ── */}
+      {/* ── CARD ── */}
       <div style={{position:'relative',zIndex:10,width:'100%',maxWidth:480}}>
         <div style={{position:'absolute',inset:-2,borderRadius:33,background:'linear-gradient(135deg,rgba(33,230,243,0.9) 0%,rgba(124,92,255,0.45) 45%,rgba(255,47,174,0.9) 100%)',zIndex:-1,filter:'blur(1.5px)',animation:'glowPulse 3.5s ease-in-out infinite'}}/>
         <div style={{position:'absolute',inset:-60,borderRadius:'50%',background:'radial-gradient(circle,rgba(124,92,255,0.10) 0%,transparent 70%)',zIndex:-2,pointerEvents:'none'}}/>
@@ -611,7 +690,6 @@ export default function OnboardingPage(){
           <div style={{position:'absolute',top:-50,left:-50,width:220,height:220,borderRadius:'50%',background:'rgba(33,230,243,0.055)',filter:'blur(40px)',pointerEvents:'none'}}/>
           <div style={{position:'absolute',bottom:-50,right:-50,width:220,height:220,borderRadius:'50%',background:'rgba(255,47,174,0.045)',filter:'blur(40px)',pointerEvents:'none'}}/>
 
-          {/* ── HEADER: logo + ONE progress bar ── */}
           {!['loading'].includes(step)&&(
             <header>
               <OBLogo showSub={step==='platform'}/>
@@ -627,7 +705,6 @@ export default function OnboardingPage(){
                 <h1 style={{fontSize:22,fontWeight:900,color:'#F8FAFC',letterSpacing:'-0.025em',lineHeight:1.15,marginBottom:7}}>Start tracking your streams</h1>
                 <p style={{fontSize:13,color:'rgba(166,168,189,0.85)',lineHeight:1.65,maxWidth:380,margin:'0 auto'}}>Choose your platform so CamCash can import your tip history and build your first insights.</p>
               </div>
-
               <div style={{marginBottom:18}}>
                 <div style={{fontSize:10,fontWeight:700,color:'rgba(166,168,189,0.6)',marginBottom:9,letterSpacing:'0.08em',textTransform:'uppercase'}}>Your platform</div>
                 <div className="ob-plat-row" style={{display:'flex',gap:9}}>
@@ -652,7 +729,6 @@ export default function OnboardingPage(){
                   })}
                 </div>
               </div>
-
               <OBBtn onClick={()=>selectPlatform(platformId)} style={{marginBottom:10}}>Continue with {platform.label} →</OBBtn>
               <div style={{textAlign:'center'}}><button onClick={skipToDashboard} style={{background:'none',border:'none',fontSize:12,color:`rgba(33,230,243,0.65)`,cursor:'pointer'}} onMouseEnter={e=>e.currentTarget.style.color=CYAN} onMouseLeave={e=>e.currentTarget.style.color='rgba(33,230,243,0.65)'}>Skip for now</button></div>
             </div>
@@ -666,7 +742,6 @@ export default function OnboardingPage(){
                 <h1 style={{fontSize:22,fontWeight:900,color:'#F8FAFC',letterSpacing:'-0.025em',lineHeight:1.15,marginBottom:7}}>Start tracking your streams</h1>
                 <p style={{fontSize:13,color:'rgba(166,168,189,0.85)',lineHeight:1.65,maxWidth:380,margin:'0 auto'}}>Enter your username so we can link you directly to your token stats page.</p>
               </div>
-
               <div style={{marginBottom:18}}>
                 <div style={{fontSize:10,fontWeight:700,color:'rgba(166,168,189,0.6)',marginBottom:7,letterSpacing:'0.08em',textTransform:'uppercase'}}>Chaturbate username</div>
                 <div style={{position:'relative'}}>
@@ -680,7 +755,6 @@ export default function OnboardingPage(){
                 {cbUsername&&<div style={{marginTop:6,fontSize:11,color:'rgba(100,116,139,0.7)'}}>Your stats page: <span style={{color:CYAN}}>chaturbate.com/p/{cbUsername}/?tab=tokens</span></div>}
                 <div style={{marginTop:5,fontSize:10,color:'rgba(100,116,139,0.45)'}}>Exact username you use to broadcast (not display name)</div>
               </div>
-
               <OBBtn onClick={handleUsernameSubmit} style={{marginBottom:10}}>Continue to Tip Import →</OBBtn>
               <OBLinks links={[{label:'← Back',onClick:()=>setStep('platform')},{label:"Skip — I'll navigate there myself",onClick:()=>{setCbUsername('');setStep('paste')}}]}/>
               <OBTrust/>
@@ -696,7 +770,13 @@ export default function OnboardingPage(){
                 <p style={{fontSize:13,color:'rgba(166,168,189,0.85)',lineHeight:1.65,maxWidth:380,margin:'0 auto'}}>Copy your earning rows from {platform.label} and paste them below. CamCash will clean and organize everything automatically.</p>
               </div>
 
-              {/* Instruction card */}
+              {/* BongaCams paid chat notice */}
+              {platformId==='bongacams'&&(
+                <div style={{borderRadius:11,border:'1px solid rgba(255,47,174,0.2)',background:'rgba(255,47,174,0.04)',padding:'10px 13px',marginBottom:10,fontSize:11,color:'rgba(203,213,225,0.8)',lineHeight:1.55}}>
+                  <span style={{color:PINK,fontWeight:700}}>💳 Tip:</span> You can paste your <strong style={{color:'#fff'}}>Free Chat</strong> and <strong style={{color:'#fff'}}>Paid Chat</strong> sections together — CamCash automatically separates tips from private sessions.
+                </div>
+              )}
+
               <div style={{borderRadius:13,border:'1px solid rgba(33,230,243,0.18)',background:'rgba(33,230,243,0.04)',padding:'12px 14px',marginBottom:12}}>
                 <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:12,marginBottom:10}}>
                   <div style={{fontSize:10,fontWeight:900,letterSpacing:'0.18em',textTransform:'uppercase',color:'rgba(33,230,243,0.85)'}}>How to copy from {platform.label}</div>
@@ -756,11 +836,28 @@ export default function OnboardingPage(){
                 <p style={{fontSize:13,color:'rgba(166,168,189,0.85)',lineHeight:1.65}}>Confirm everything looks right, then CamCash will build your dashboard.</p>
               </div>
 
-              {/* Confirmed banner */}
               <div style={{borderRadius:13,border:'1px solid rgba(33,230,243,0.28)',background:'rgba(33,230,243,0.06)',padding:'12px 14px',marginBottom:12,display:'flex',alignItems:'center',gap:10,boxShadow:'0 0 20px rgba(33,230,243,0.08)'}}>
                 <div style={{width:32,height:32,borderRadius:11,background:'rgba(33,230,243,0.18)',border:'1px solid rgba(33,230,243,0.35)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:15,flexShrink:0,animation:'checkIn 0.35s ease both'}}>✓</div>
-                <div><div style={{fontSize:14,fontWeight:900,color:'#fff'}}>{preview.tipsDetected.toLocaleString()} tips found</div><div style={{fontSize:11,color:'rgba(148,163,184,0.7)'}}>CamCash detected earnings, fans, dates, and platform data.</div></div>
+                <div>
+                  <div style={{fontSize:14,fontWeight:900,color:'#fff'}}>
+                    {preview.tipsDetected.toLocaleString()} tips found
+                    {preview.paidSessionsDetected>0&&<span style={{fontSize:12,color:PINK,marginLeft:8}}>+ {preview.paidSessionsDetected} paid sessions</span>}
+                  </div>
+                  <div style={{fontSize:11,color:'rgba(148,163,184,0.7)'}}>CamCash detected earnings, fans, dates, and platform data.</div>
+                </div>
               </div>
+
+              {/* Paid sessions breakdown for BongaCams */}
+              {preview.paidSessionsDetected>0&&(
+                <div style={{borderRadius:11,border:'1px solid rgba(255,47,174,0.2)',background:'rgba(255,47,174,0.04)',padding:'10px 13px',marginBottom:12,fontSize:12,color:'rgba(203,213,225,0.8)',lineHeight:1.55}}>
+                  <div style={{fontWeight:700,color:PINK,marginBottom:4}}>💳 Paid Chat Sessions Detected</div>
+                  <div style={{display:'flex',gap:20}}>
+                    <span>{preview.paidSessionsDetected} sessions</span>
+                    <span style={{color:'#4ade80'}}>+${preview.paidEarnings.toFixed(2)} earned</span>
+                  </div>
+                  <div style={{fontSize:10,color:'rgba(148,163,184,0.55)',marginTop:3}}>These will be saved separately from your tips for accurate analytics.</div>
+                </div>
+              )}
 
               <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:9,marginBottom:12}}>
                 {[
@@ -772,7 +869,6 @@ export default function OnboardingPage(){
                 ].map(s=>(<div key={s.label} className="stat-card" style={{padding:'11px 13px'}}><div style={{position:'absolute',top:0,left:0,right:0,height:'2px',borderRadius:'14px 14px 0 0',background:`linear-gradient(90deg,${s.color}00,${s.color}70,${s.color}00)`}}/><div style={{fontSize:9,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.14em',color:'rgba(148,163,184,0.6)',marginBottom:5}}>{s.label}</div><div style={{fontSize:15,fontWeight:900,color:s.color,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{s.value}</div></div>))}
               </div>
 
-              {/* Sample rows */}
               <div style={{borderRadius:13,border:'1px solid rgba(255,255,255,0.08)',background:'rgba(255,255,255,0.025)',marginBottom:12,overflow:'hidden'}}>
                 <div style={{padding:'9px 13px',borderBottom:'1px solid rgba(255,255,255,0.06)',fontSize:11,fontWeight:800,color:'#fff'}}>Sample rows</div>
                 <div style={{overflowX:'auto'}}>
@@ -798,7 +894,6 @@ export default function OnboardingPage(){
           {step==='loading'&&(
             <div style={{animation:'fadeUp 0.3s ease both'}}>
               <OBLogo/>
-              {/* Loading-specific progress — all 3 active/done */}
               <div style={{marginBottom:16}}>
                 <div style={{display:'flex',alignItems:'center',justifyContent:'center',maxWidth:240,margin:'0 auto 6px'}}>
                   {[{n:1},{n:2},{n:3}].map((s,i)=>(<div key={s.n} style={{display:'flex',alignItems:'center',flex:i<2?1:'none'}}>
@@ -810,13 +905,10 @@ export default function OnboardingPage(){
                   {['Stats','Tips','Done'].map((l,i)=>(<div key={l} style={{width:28,textAlign:'center',fontSize:9,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.1em',color:i<2?`rgba(33,230,243,0.55)`:`rgba(33,230,243,0.9)`}}>{l}</div>))}
                 </div>
               </div>
-
               <div style={{textAlign:'center',marginBottom:16}}>
                 <h1 style={{fontSize:22,fontWeight:900,color:'#F8FAFC',letterSpacing:'-0.025em',marginBottom:7}}>Building your CamCash dashboard</h1>
                 <p style={{fontSize:13,color:'rgba(148,163,184,0.75)',minHeight:18}}>{msgs[loadingMsgIdx]}</p>
               </div>
-
-              {/* Progress bar */}
               <div style={{marginBottom:18}}>
                 <div style={{display:'flex',justifyContent:'space-between',marginBottom:6}}>
                   <span style={{fontSize:10,color:'rgba(148,163,184,0.55)'}}>Progress</span>
@@ -827,8 +919,6 @@ export default function OnboardingPage(){
                 </div>
                 <div style={{fontSize:10,color:'rgba(100,116,139,0.5)',textAlign:'center',marginTop:4}}>{loadingProgress}% complete</div>
               </div>
-
-              {/* Checklist */}
               <div style={{marginBottom:12}}>
                 {LOADING_MESSAGES.map((m,i)=>{
                   const done=loadingProgress>=((i+1)/LOADING_MESSAGES.length)*95
@@ -844,8 +934,6 @@ export default function OnboardingPage(){
                   </div>)
                 })}
               </div>
-
-              {/* Live mini stats */}
               <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:7}}>
                 {[
                   {icon:'💵',label:'Earnings',value:`$${((preview?.estimatedEarnings||0)*(loadingProgress/100)).toFixed(0)}`,color:CYAN},
@@ -883,17 +971,14 @@ export default function OnboardingPage(){
             </div>
           )}
 
-          {/* ══ DONE — First Insights ══ */}
+          {/* ══ DONE ══ */}
           {step==='done'&&importResult&&(
             <div style={{animation:'fadeUp 0.4s ease both',textAlign:'center',position:'relative',overflow:'hidden'}}>
               <div style={{position:'absolute',inset:0,animation:'flashPulse 1s ease-out 1',background:'rgba(33,230,243,0)',pointerEvents:'none'}}/>
-
               <div style={{width:64,height:64,borderRadius:22,background:GRAD,display:'flex',alignItems:'center',justifyContent:'center',fontSize:26,fontWeight:900,color:'#fff',margin:'0 auto 16px',boxShadow:'0 0 55px rgba(255,47,174,0.45),0 0 100px rgba(33,230,243,0.3)',animation:'glowPulse 2.5s ease-in-out infinite'}}>✓</div>
-
               <div style={EYE}>First Insights</div>
               <h1 style={{fontSize:22,fontWeight:900,color:'#F8FAFC',letterSpacing:'-0.025em',marginBottom:7}}>Your first insights are ready</h1>
               <p style={{fontSize:13,color:'rgba(166,168,189,0.85)',lineHeight:1.65,marginBottom:20}}>Here's a beautiful preview of what we found.</p>
-
               <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:9,marginBottom:14}}>
                 {[
                   {label:'Tips Imported',value:tipsDisplayed,color:CYAN,prefix:'',suffix:' tips',delay:'0s'},
@@ -909,7 +994,16 @@ export default function OnboardingPage(){
                 </div>))}
               </div>
 
-              {/* Best insight */}
+              {/* Paid sessions callout on done screen */}
+              {importResult.paidInserted>0&&(
+                <div style={{borderRadius:12,border:'1px solid rgba(255,47,174,0.2)',background:'rgba(255,47,174,0.04)',padding:'10px 13px',marginBottom:12,textAlign:'left',display:'flex',gap:9,alignItems:'flex-start'}}>
+                  <span style={{fontSize:14,flexShrink:0}}>💳</span>
+                  <div style={{fontSize:11,color:'rgba(203,213,225,0.8)',lineHeight:1.55}}>
+                    <strong style={{color:PINK}}>{importResult.paidInserted} paid chat sessions</strong> were also imported and are tracked separately in your dashboard under Private Sessions.
+                  </div>
+                </div>
+              )}
+
               <div style={{borderRadius:14,border:`1px solid ${PINK}33`,background:`rgba(255,47,174,0.05)`,padding:'13px 15px',marginBottom:14,textAlign:'left',display:'flex',gap:10}}>
                 <span style={{fontSize:18,flexShrink:0}}>⚡</span>
                 <div>
@@ -922,19 +1016,18 @@ export default function OnboardingPage(){
                 </div>
               </div>
 
-              {/* Email */}
               <div style={{borderRadius:14,border:'1px solid rgba(255,255,255,0.07)',background:'rgba(255,255,255,0.03)',padding:'12px 14px',marginBottom:16,textAlign:'left',display:'flex',alignItems:'flex-start',gap:10}}>
                 <div style={{fontSize:18,flexShrink:0}}>📧</div>
                 <div><div style={{fontSize:12,fontWeight:800,color:'#fff',marginBottom:2}}>Check your email</div><div style={{fontSize:11,color:'rgba(148,163,184,0.7)',lineHeight:1.55}}>We sent you a walkthrough on importing more data. Use the <span style={{color:CYAN,fontWeight:600}}>CSV Importer</span> in your sidebar anytime.</div></div>
               </div>
 
-              {/* Advisory */}
               <div style={{borderRadius:12,border:'1px solid rgba(124,92,255,0.2)',background:'rgba(124,92,255,0.06)',padding:'10px 13px',marginBottom:12,textAlign:'left',display:'flex',gap:9,alignItems:'flex-start'}}>
                 <span style={{fontSize:14,flexShrink:0}}>💡</span>
                 <div style={{fontSize:11,color:'rgba(148,163,184,0.75)',lineHeight:1.55}}>
                   <strong style={{color:'rgba(203,213,225,0.9)'}}>To get the full potential of CamCash,</strong> import as much tip history as possible. Until you have a substantial number of sessions, your insights won't be as deep or accurate — but you can always add more later using the CSV Importer in your dashboard.
                 </div>
               </div>
+
               <OBBtn onClick={()=>router.push('/dashboard')} style={{marginBottom:10}}>Go to Dashboard →</OBBtn>
               <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:9}}>
                 {[{label:'Add more history',onClick:()=>{setPasteText('');setStep('paste')}},{label:'Set up live tracking',onClick:()=>window.open('https://www.camcashgrl.com/extension','_blank')}].map(b=>(<OBSecBtn key={b.label} onClick={b.onClick} style={{width:'100%',height:40,fontSize:12}}>{b.label}</OBSecBtn>))}
