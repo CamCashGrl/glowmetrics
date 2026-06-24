@@ -172,9 +172,9 @@ function parseRows(rawText, platformId){
     for(const col of rest){
       const n = parseFloat(col.replace(/[$,]/g,''))
       if(!isNaN(n) && n > 0){
-        if(Number.isInteger(n) && n >= 1 && tokens === null) tokens = n
+        if(Number.isInteger(n) && n >= 1 && n < 100000 && tokens === null) tokens = n
         else if(!Number.isInteger(n) && n < 5000 && usd === null) usd = n
-        else if(Number.isInteger(n) && n >= 1 && tokens === null) tokens = n
+        else if(Number.isInteger(n) && n >= 1 && n < 100000 && tokens === null) tokens = n
       } else if(col.length > 0 && isNaN(parseFloat(col))){
         if(username === null && col.length <= 50 && col.length > 1) username = col
         else if(note === '' && col.length > 0) note = col
