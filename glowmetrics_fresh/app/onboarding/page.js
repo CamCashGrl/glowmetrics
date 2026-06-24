@@ -48,52 +48,149 @@ const LOADING_MESSAGES = [
 const EXTRA_MSGS = ['Importing additional tip history…','Merging with your dashboard…','Updating your insights…']
 
 // ── Paste parser ───────────────────────────────────────────────
-function tryParseDate(str){
-  if(!str||str.length<8)return null
-  let m
-  m=str.match(/^(\d{4})-(\d{2})-(\d{2})[\sT](\d{2}):(\d{2})/)
-  if(m)return new Date(`${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:00`)
-  m=str.match(/^(\d{2})\.(\d{2})\.(\d{4})\s(\d{2}):(\d{2})/)
-  if(m)return new Date(`${m[3]}-${m[2]}-${m[1]}T${m[4]}:${m[5]}:00`)
-  m=str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s(\d{1,2}):(\d{2})(?:\s?(AM|PM))?/i)
-  if(m){let h=parseInt(m[4]);if(m[6]?.toUpperCase()==='PM'&&h<12)h+=12;if(m[6]?.toUpperCase()==='AM'&&h===12)h=0;return new Date(`${m[3]}-${m[1].padStart(2,'0')}-${m[2].padStart(2,'0')}T${String(h).padStart(2,'0')}:${m[5]}:00`)}
-  m=str.match(/^(\d{4})-(\d{2})-(\d{2})$/)
-  if(m)return new Date(`${m[1]}-${m[2]}-${m[3]}T00:00:00`)
-  const d=new Date(str);return isNaN(d.getTime())?null:d
+function tryParseDate(str) {
+  if (!str) return null;
+  const s = str.trim();
+
+  // Chaturbate: "Jun 14, 2026, 8:27 PM"
+  const cbMatch = s.match(
+    /^([A-Za-z]{3})\s+(\d{1,2}),\s+(\d{4}),\s+(\d{1,2}):(\d{2})\s+(AM|PM)$/i
+  );
+  if (cbMatch) {
+    const [, mon, day, year, hr, min, ampm] = cbMatch;
+    const months = {jan:0,feb:1,mar:2,apr:3,may:4,jun:5,
+                    jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
+    let h = parseInt(hr, 10);
+    if (ampm.toUpperCase() === 'PM' && h !== 12) h += 12;
+    if (ampm.toUpperCase() === 'AM' && h === 12) h = 0;
+    const d = new Date(parseInt(year), months[mon.toLowerCase()],
+                       parseInt(day), h, parseInt(min));
+    if (!isNaN(d.getTime())) return d;
+  }
+
+  // BongaCams: "14.06.2026 14:43"
+  const bcMatch = s.match(/^(\d{2})\.(\d{2})\.(\d{4})\s+(\d{2}):(\d{2})$/);
+  if (bcMatch) {
+    const [, day, mon, year, hr, min] = bcMatch;
+    const d = new Date(parseInt(year), parseInt(mon) - 1,
+                       parseInt(day), parseInt(hr), parseInt(min));
+    if (!isNaN(d.getTime())) return d;
+  }
+
+  // MFC: "Jan 31st, 2024 10:40 PM"
+  const mfcMatch = s.match(
+    /^([A-Za-z]{3})\s+(\d{1,2})(?:st|nd|rd|th),\s+(\d{4})\s+(\d{1,2}):(\d{2})\s+(AM|PM)$/i
+  );
+  if (mfcMatch) {
+    const [, mon, day, year, hr, min, ampm] = mfcMatch;
+    const months = {jan:0,feb:1,mar:2,apr:3,may:4,jun:5,
+                    jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
+    let h = parseInt(hr, 10);
+    if (ampm.toUpperCase() === 'PM' && h !== 12) h += 12;
+    if (ampm.toUpperCase() === 'AM' && h === 12) h = 0;
+    const d = new Date(parseInt(year), months[mon.toLowerCase()],
+                       parseInt(day), h, parseInt(min));
+    if (!isNaN(d.getTime())) return d;
+  }
+
+  // Generic fallback
+  const d = new Date(s);
+  if (!isNaN(d.getTime())) return d;
+  return null;
 }
 
 function parseRows(rawText, platformId){
-  const rate=TOKEN_RATES[platformId]||0.05
-  const lines=rawText.split('\n').map(l=>l.trim()).filter(Boolean)
-  const headerKw=['date','time','user','token','usd','tip','amount','note','message','from','type','stamp','earning']
-  const rows=[]
-  let skipped=0
-  for(const line of lines){
-    const cols=line.split(/\t|,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map(c=>c.trim().replace(/^"|"$/g,''))
-    if(cols.length<2){skipped++;continue}
-    const lower=cols.map(c=>c.toLowerCase())
-    if(lower.filter(c=>headerKw.some(k=>c.includes(k))).length>=2)continue
-    let ts=null,tsIdx=-1
-    for(let i=0;i<cols.length;i++){const d=tryParseDate(cols[i]);if(d){ts=d;tsIdx=i;break}}
-    if(!ts){skipped++;continue}
-    const rest=cols.filter((_,i)=>i!==tsIdx)
-    let tokens=null,usd=null,username=null,note=''
-    for(const col of rest){
-      const n=parseFloat(col.replace(/[$,]/g,''))
-      if(!isNaN(n)&&n>0){
-        if(Number.isInteger(n)&&n>=1&&tokens===null)tokens=n
-        else if(!Number.isInteger(n)&&n<5000&&usd===null)usd=n
-        else if(Number.isInteger(n)&&n>=1&&tokens===null)tokens=n
-      }else if(col.length>0&&isNaN(parseFloat(col))){
-        if(username===null&&col.length<=50&&col.length>1)username=col
-        else if(note===''&&col.length>0)note=col
+  const rate = TOKEN_RATES[platformId] || 0.05
+  const lines = rawText.split('\n').map(l => l.trim()).filter(Boolean)
+  const rows = []
+  let skipped = 0
+
+  // Detect Chaturbate multi-line format:
+  // Line 1: date
+  // Line 2: "Tip From: username" or other action
+  // Line 3: optional note text
+  // Line 4: "tokens  balance" (two numbers separated by whitespace)
+  const dateLineRe = /^([A-Za-z]{3}\s+\d{1,2},\s+\d{4},\s+\d{1,2}:\d{2}\s+[AP]M)/i
+  const tipFromRe = /^Tip From:\s*(.+)/i
+  const tokensLineRe = /^(\d+)\s+(\d+)$/
+
+  // Check if this looks like multi-line Chaturbate format
+  const isMultiLine = lines.some(l => tipFromRe.test(l))
+
+  if(isMultiLine){
+    let i = 0
+    while(i < lines.length){
+      const dateMatch = lines[i].match(dateLineRe)
+      if(dateMatch){
+        const ts = tryParseDate(dateMatch[1])
+        const actionLine = lines[i+1] || ''
+        const tipMatch = actionLine.match(tipFromRe)
+
+        if(ts && tipMatch){
+          const username = tipMatch[1].trim()
+          // Next line is either tokens or a note
+          let tokensLine = lines[i+2] || ''
+          let note = ''
+          let tMatch = tokensLine.match(tokensLineRe)
+
+          // If not tokens, it's a note — tokens are on the line after
+          if(!tMatch && lines[i+3]){
+            note = tokensLine
+            tokensLine = lines[i+3] || ''
+            tMatch = tokensLine.match(tokensLineRe)
+          }
+
+          if(tMatch){
+            const tokens = parseInt(tMatch[1], 10)
+            if(tokens >= 1){
+              const usd = +(tokens * rate).toFixed(2)
+              rows.push({ ts, username, tokens, usd, note })
+            } else { skipped++ }
+          } else { skipped++ }
+        }
+        // Skip outbound/transfer/purchase lines
+        i++
+      } else {
+        i++
       }
     }
-    if(!tokens||tokens<1){skipped++;continue}
-    if(!usd)usd=+(tokens*rate).toFixed(2)
-    rows.push({ts,username:username||'anonymous',tokens,usd,note})
+    return { rows, skipped }
   }
-  return{rows,skipped}
+
+  // Original single-line CSV/TSV parser (kept for BongaCams/MFC CSV uploads)
+  const headerKw = [
+    'date','time','user','token','usd','tip','amount','note',
+    'message','from','type','stamp','earning','reference',
+    'private','voyeur','group','xfer','returned','fines',
+    'total','mfc','away','club','display','sort','period',
+    'payment','month','search'
+  ]
+  for(const line of lines){
+    const cols = line.split(/\t|,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map(c => c.trim().replace(/^"|"$/g,''))
+    if(cols.length < 2){ skipped++; continue }
+    const lower = cols.map(c => c.toLowerCase())
+    if(lower.filter(c => headerKw.some(k => c.includes(k))).length >= 2) continue
+    let ts = null, tsIdx = -1
+    for(let i = 0; i < cols.length; i++){ const d = tryParseDate(cols[i]); if(d){ ts = d; tsIdx = i; break } }
+    if(!ts){ skipped++; continue }
+    const rest = cols.filter((_,i) => i !== tsIdx)
+    let tokens = null, usd = null, username = null, note = ''
+    for(const col of rest){
+      const n = parseFloat(col.replace(/[$,]/g,''))
+      if(!isNaN(n) && n > 0){
+        if(Number.isInteger(n) && n >= 1 && n < 100000 && tokens === null) tokens = n
+        else if(!Number.isInteger(n) && n < 5000 && usd === null) usd = n
+        else if(Number.isInteger(n) && n >= 1 && n < 100000 && tokens === null) tokens = n
+      } else if(col.length > 0 && isNaN(parseFloat(col))){
+        if(username === null && col.length <= 50 && col.length > 1) username = col
+        else if(note === '' && col.length > 0) note = col
+      }
+    }
+    if(!tokens || tokens < 1){ skipped++; continue }
+    if(!usd) usd = +(tokens * rate).toFixed(2)
+    rows.push({ ts, username: username || 'anonymous', tokens, usd, note })
+  }
+  return { rows, skipped }
 }
 
 function pasteToCSVBlob(rawText, platformId){
