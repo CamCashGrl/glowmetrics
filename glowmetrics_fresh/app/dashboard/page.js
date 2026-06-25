@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
-import { parseCSV, aggregateRows as runEngine } from "../../lib/analytics"
+import { parseCSV, aggregateRows as runEngine, computePaidSessionAnalytics } from "../../lib/analytics"
 import { computeRoomHealth, ROOM_STATES, MOMENTUM_DIRECTIONS } from "../../lib/analytics/roomHealth"
 import { computeRevenueVelocity, computeLiveComparison } from "../../lib/analytics/velocity"
 import { detectSessionPhase, PHASES, getRecoveryActions, getGoalStrategy } from "../../lib/analytics/sessionPhase"
@@ -1287,7 +1287,9 @@ export default function Dashboard() {
   const [tipPage, setTipPage] = useState(0)
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
-  const [tokenRates, setTokenRates] = useState({ Chaturbate: 0.05, BongaCams: 0.05, MyFreeCams: 0.05, Stripchat: 0.05, CamSoda: 0.05 })
+  // Token rates — single source of truth is lib/constants.js
+  // These must always match PLATFORM_TOKEN_RATES in constants.js
+  const [tokenRates, setTokenRates] = useState({ Chaturbate: 0.05, BongaCams: 0.025, MyFreeCams: 0.05, Stripchat: 0.05, CamSoda: 0.05 })
   const [showRateEditor, setShowRateEditor] = useState(false)
   // ── ROUND 1 FEATURES ─────────────────────────────────────────────
   const [monthlyGoal, setMonthlyGoal] = useState(null)
@@ -1298,6 +1300,9 @@ export default function Dashboard() {
   const [noteText, setNoteText] = useState('')
   const [noteSaving, setNoteSaving] = useState(false)
   const [engineInsights, setEngineInsights] = useState(null)
+  // ── PAID SESSIONS STATE (BongaCams private/group/spy — never mixed with tips) ──
+  const [paidSessions, setPaidSessions] = useState([])
+  const [paidSessionAnalytics, setPaidSessionAnalytics] = useState(null)
 
   // ── ANIMATION STATE ──────────────────────────────────────
   const [counterBumping, setCounterBumping] = useState(false)
@@ -1729,11 +1734,9 @@ export default function Dashboard() {
   }
 
   const loadData = async (uid, force = false) => {
-    
-    
-
     setLoading(true)
     try {
+      // ── TIPS ──────────────────────────────────────────────
       let allData = []
       let from = 0
       const PAGE = 1000
@@ -1753,12 +1756,38 @@ export default function Dashboard() {
         } catch (engineErr) {
           console.error('[loadData] runEngine failed:', engineErr)
         }
-        // Save to cache
         try {
           sessionStorage.setItem(`camcash_tips_${uid}`, JSON.stringify(allData))
           sessionStorage.setItem(`camcash_tips_time_${uid}`, Date.now().toString())
-        } catch(e) {} // quota exceeded — fine, skip cache
+        } catch(e) {}
       }
+
+      // ── PAID SESSIONS (BongaCams private/group/spy) ───────
+      // Fetched separately — never mixed with tips
+      let allPaidSessions = []
+      let psFrom = 0
+      while (true) {
+        const { data, error } = await supabase
+          .from("paid_sessions")
+          .select("*")
+          .eq("user_id", uid)
+          .order("date_time", { ascending: true })
+          .range(psFrom, psFrom + PAGE - 1)
+        if (error) break
+        if (data?.length) allPaidSessions = [...allPaidSessions, ...data]
+        if (!data || data.length < PAGE) break
+        psFrom += PAGE
+      }
+      if (allPaidSessions.length) {
+        setPaidSessions(allPaidSessions)
+        try {
+          const psAnalytics = computePaidSessionAnalytics(allPaidSessions)
+          setPaidSessionAnalytics(psAnalytics)
+        } catch (e) {
+          console.error('[loadData] computePaidSessionAnalytics failed:', e)
+        }
+      }
+
       const { data: engineData } = await supabase.rpc('get_user_insights', { p_user_id: uid })
       setEngineInsights(engineData)
       setLastRefreshed(new Date())
@@ -4120,7 +4149,8 @@ const handleCSV = async (file, forcePlatform = null) => {
           const normalizeTip = (ev) => {
             const tokens = parseInt(ev.tokens) || 0
             const usd    = parseFloat(ev.usd) || 0
-            const rate   = tokenRates[livePlatform] || 0.05
+            // Rate comes from tokenRates state which mirrors constants.js — never hardcode here
+            const rate   = tokenRates[livePlatform] ?? tokenRates['Chaturbate']
             let rev = 0, src = 'unknown', conf = 0
             if (usd > 0 && tokens > 0) {
               rev = usd; src = 'usd'; conf = 0.9
