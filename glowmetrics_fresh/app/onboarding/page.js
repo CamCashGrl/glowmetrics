@@ -181,17 +181,18 @@ function buildPreview(rawText,platformId,platformLabel){
   if(!rows.length&&!paidSessions.length)return null
   const totalUsd=rows.reduce((s,r)=>s+r.usd,0)
   const paidUsd=paidSessions.reduce((s,r)=>s+r.usd,0)
-  const fans=new Set(rows.map(r=>r.username)).size
-  const dates=rows.map(r=>r.ts).sort((a,b)=>a-b)
-  const topSpender=Object.entries(rows.reduce((acc,r)=>{acc[r.username]=(acc[r.username]||0)+r.tokens;return acc},{})).sort((a,b)=>b[1]-a[1])[0]
-  const hourCounts=rows.reduce((acc,r)=>{const h=r.ts.getHours();acc[h]=(acc[h]||0)+r.tokens;return acc},{})
+  const allRows=[...rows,...paidSessions.map(s=>({...s,ts:s.ts,username:s.username,tokens:s.tokens,usd:s.usd}))]
+  const fans=new Set(allRows.map(r=>r.username)).size
+  const dates=allRows.map(r=>r.ts).sort((a,b)=>a-b)
+  const topSpender=Object.entries(allRows.reduce((acc,r)=>{acc[r.username]=(acc[r.username]||0)+r.tokens;return acc},{})).sort((a,b)=>b[1]-a[1])[0]
+  const hourCounts=allRows.reduce((acc,r)=>{const h=r.ts.getHours();acc[h]=(acc[h]||0)+r.tokens;return acc},{})
   const bestHour=Object.entries(hourCounts).sort((a,b)=>b[1]-a[1])[0]
   const fmtHour=h=>{const n=parseInt(h);return n===0?'12am':n<12?`${n}am`:n===12?'12pm':`${n-12}pm`}
   return{
     tipsDetected:rows.length,
     paidSessionsDetected:paidSessions.length,
     paidSessions,
-    estimatedEarnings:+totalUsd.toFixed(2),
+    estimatedEarnings:+(totalUsd+paidUsd).toFixed(2),
     paidEarnings:+paidUsd.toFixed(2),
     fansDetected:fans,
     dateRange:dates.length?`${dates[0].toLocaleDateString('en-US',{month:'short',day:'numeric'})} – ${dates[dates.length-1].toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}`:'—',
@@ -863,7 +864,7 @@ export default function OnboardingPage(){
 
               <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:9,marginBottom:12}}>
                 {[
-                  {label:'Tips detected',value:preview.tipsDetected.toLocaleString(),color:CYAN},
+                  {label:preview.tipsDetected>0?'Tips detected':'Sessions detected',value:(preview.tipsDetected||preview.paidSessionsDetected).toLocaleString(),color:CYAN},
                   {label:'Est. earnings',value:`$${preview.estimatedEarnings.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`,color:'#4ade80'},
                   {label:'Fans detected',value:preview.fansDetected.toLocaleString(),color:'#a78bfa'},
                   {label:'Date range',value:preview.dateRange,color:'#F8FAFC'},
