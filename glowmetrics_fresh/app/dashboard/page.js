@@ -16,6 +16,7 @@ import AnalyticsCharts from './AnalyticsCharts'
 import StreamPlanner from './StreamPlanner'
 import MoneyMap from './MoneyMap'
 import { track as gtmTrack } from '../../lib/track'
+import { getDashboardStage, EmptyDashboard, DashboardPreview } from './DashboardPreview'
 
 // Analytics tracking — works whether or not @vercel/analytics is installed
 let track = (event, props) => {}
@@ -2414,6 +2415,33 @@ const handleCSV = async (file, forcePlatform = null) => {
   const _momThisRev = tips.reduce((s, t) => new Date(t.date_time || t.dateRaw) >= _momThisStart ? s + (t.usd || 0) : s, 0)
   const _momPrevRev = tips.reduce((s, t) => { const d = new Date(t.date_time || t.dateRaw); return d >= _momPrevStart && d < _momThisStart ? s + (t.usd || 0) : s }, 0)
   const growthPct = (_momPrevRev > 0 && _momThisRev > 0) ? Math.round(((_momThisRev - _momPrevRev) / _momPrevRev) * 100) : null
+
+  // ── DASHBOARD STAGE — decides which experience to render ────
+  // Force full dashboard if user clicked "Continue to Dashboard" from preview
+  const forceFull = typeof window !== 'undefined' && sessionStorage.getItem('camcash_force_full_dash') === '1'
+  const dashboardStage = forceFull ? 'ready' : getDashboardStage({
+    tipCount:      tips.length,
+    sessionCount:  analytics?.meaningfulSessionCount || 0,
+    totalEarnings: analytics?.totalUSD || 0,
+  })
+
+  if (!loading && dashboardStage === 'empty') {
+    return <EmptyDashboard onImport={() => router.push('/onboarding')} />
+  }
+
+  if (!loading && dashboardStage === 'preview') {
+    return (
+      <DashboardPreview
+        tips={tips}
+        analytics={analytics}
+        onAddHistory={() => router.push('/onboarding')}
+        onContinue={() => {
+          if (typeof window !== 'undefined') sessionStorage.setItem('camcash_force_full_dash', '1')
+          window.location.reload()
+        }}
+      />
+    )
+  }
 
   return (
     <div style={{
