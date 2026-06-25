@@ -2,17 +2,9 @@
 // CAMCASH COMPLETE ANALYTICS ENGINE
 // ============================================
 
-// USD per token by platform
-const PLATFORM_TOKEN_RATES = {
-  Chaturbate: 0.05,
-  BongaCams:  0.025,
-  MyFreeCams: 0.05,
-}
-const DEFAULT_TOKEN_RATE = 0.05
-
-function tokenRate(platform) {
-  return PLATFORM_TOKEN_RATES[platform] ?? DEFAULT_TOKEN_RATE
-}
+// Token rates live in ONE place — lib/constants.js
+// Do not define rates here. Import only.
+import { PLATFORM_TOKEN_RATES, DEFAULT_TOKEN_RATE, tokenRate } from './constants'
 
 // ===============================
 // TIMEZONE HELPERS
@@ -1043,5 +1035,179 @@ export function aggregateRows(tips, tz = null) {
     meaningfulSessionCount: meaningfulSessions.length,
     lowSignalSessionCount: allValidSessions.length - meaningfulSessions.length,
     momentum,
+  }
+}
+
+// ============================================================
+// PAID SESSION ANALYTICS
+// Operates on rows from the paid_sessions table (BongaCams).
+// Completely separate from tip analytics — never mixed.
+// ============================================================
+
+export function computePaidSessionAnalytics(sessions) {
+  if (!sessions || sessions.length === 0) return null
+
+  const totalUSD     = sessions.reduce((s, r) => s + (parseFloat(r.usd) || 0), 0)
+  const totalTokens  = sessions.reduce((s, r) => s + (parseInt(r.tokens) || 0), 0)
+  const totalCount   = sessions.length
+
+  // ── SESSION TYPE BREAKDOWN ─────────────────────────────────
+  const typeMap = {}
+  sessions.forEach(s => {
+    const t = s.session_type || 'Unknown'
+    if (!typeMap[t]) typeMap[t] = { usd: 0, count: 0, clients: new Set() }
+    typeMap[t].usd     += parseFloat(s.usd) || 0
+    typeMap[t].count   += 1
+    typeMap[t].clients.add((s.username || '').toLowerCase())
+  })
+  const sessionTypeBreakdown = Object.entries(typeMap)
+    .map(([type, d]) => ({
+      type,
+      usd:      parseFloat(d.usd.toFixed(2)),
+      count:    d.count,
+      clients:  d.clients.size,
+      pct:      totalUSD > 0 ? Math.round((d.usd / totalUSD) * 100) : 0,
+      avgUsd:   d.count > 0 ? parseFloat((d.usd / d.count).toFixed(2)) : 0,
+    }))
+    .sort((a, b) => b.usd - a.usd)
+
+  // ── TOP PRIVATE CLIENTS ────────────────────────────────────
+  const clientMap = {}
+  sessions.forEach(s => {
+    const k = (s.username || 'unknown').toLowerCase()
+    if (!clientMap[k]) clientMap[k] = {
+      username: s.username || 'unknown',
+      usd: 0, tokens: 0, count: 0,
+      sessionTypes: new Set(),
+      dates: [],
+    }
+    clientMap[k].usd    += parseFloat(s.usd) || 0
+    clientMap[k].tokens += parseInt(s.tokens) || 0
+    clientMap[k].count  += 1
+    clientMap[k].sessionTypes.add(s.session_type || 'Unknown')
+    clientMap[k].dates.push(new Date(s.date_time))
+  })
+
+  const topClients = Object.values(clientMap)
+    .map(c => {
+      const sorted = [...c.dates].sort((a, b) => a - b)
+      return {
+        username:     c.username,
+        totalUSD:     parseFloat(c.usd.toFixed(2)),
+        totalTokens:  c.tokens,
+        sessionCount: c.count,
+        avgSessionUSD: parseFloat((c.usd / c.count).toFixed(2)),
+        sessionTypes: [...c.sessionTypes],
+        lastSession:  sorted[sorted.length - 1]?.toISOString() || null,
+        firstSession: sorted[0]?.toISOString() || null,
+        daysSinceLast: sorted.length
+          ? Math.floor((Date.now() - sorted[sorted.length - 1]) / 86400000)
+          : null,
+      }
+    })
+    .sort((a, b) => b.totalUSD - a.totalUSD)
+    .slice(0, 20)
+
+  // ── PEAK HOURS FOR PAID SESSIONS ───────────────────────────
+  const hourMap = {}
+  sessions.forEach(s => {
+    const h = new Date(s.date_time).getUTCHours()
+    if (!hourMap[h]) hourMap[h] = { usd: 0, count: 0 }
+    hourMap[h].usd   += parseFloat(s.usd) || 0
+    hourMap[h].count += 1
+  })
+  const peakHours = Object.entries(hourMap)
+    .map(([h, d]) => ({
+      hour:     parseInt(h),
+      usd:      parseFloat(d.usd.toFixed(2)),
+      count:    d.count,
+      avgUsd:   parseFloat((d.usd / d.count).toFixed(2)),
+    }))
+    .sort((a, b) => b.usd - a.usd)
+
+  const bestHour = peakHours[0] || null
+
+  // ── MONTHLY TREND ──────────────────────────────────────────
+  const monthMap = {}
+  sessions.forEach(s => {
+    const dt  = new Date(s.date_time)
+    const key = `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}`
+    if (!monthMap[key]) monthMap[key] = { usd: 0, count: 0, clients: new Set() }
+    monthMap[key].usd     += parseFloat(s.usd) || 0
+    monthMap[key].count   += 1
+    monthMap[key].clients.add((s.username || '').toLowerCase())
+  })
+  const monthlyTrend = Object.entries(monthMap)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([month, d]) => ({
+      month,
+      usd:     parseFloat(d.usd.toFixed(2)),
+      count:   d.count,
+      clients: d.clients.size,
+    }))
+
+  const bestMonth = monthlyTrend.length
+    ? [...monthlyTrend].sort((a, b) => b.usd - a.usd)[0]
+    : null
+
+  // ── MOMENTUM (last 30 vs prior 30 days) ───────────────────
+  const now         = Date.now()
+  const ms30        = 30 * 24 * 60 * 60 * 1000
+  const last30USD   = sessions
+    .filter(s => now - new Date(s.date_time) <= ms30)
+    .reduce((sum, s) => sum + (parseFloat(s.usd) || 0), 0)
+  const prior30USD  = sessions
+    .filter(s => {
+      const age = now - new Date(s.date_time)
+      return age > ms30 && age <= ms30 * 2
+    })
+    .reduce((sum, s) => sum + (parseFloat(s.usd) || 0), 0)
+
+  let momentumPct   = 0
+  let momentumLabel = 'Steady'
+  if (prior30USD === 0 && last30USD > 0)    { momentumPct = 100; momentumLabel = 'Surging' }
+  else if (prior30USD > 0) {
+    momentumPct = ((last30USD - prior30USD) / prior30USD) * 100
+    if      (momentumPct >  50) momentumLabel = 'Surging'
+    else if (momentumPct >  10) momentumLabel = 'Growing'
+    else if (momentumPct > -10) momentumLabel = 'Steady'
+    else                        momentumLabel = 'Declining'
+  }
+
+  // ── REPEAT CLIENT RATE ─────────────────────────────────────
+  const repeatClients   = Object.values(clientMap).filter(c => c.count > 1).length
+  const totalClients    = Object.keys(clientMap).length
+  const repeatClientPct = totalClients > 0
+    ? Math.round((repeatClients / totalClients) * 100)
+    : 0
+
+  // ── DATE RANGE ─────────────────────────────────────────────
+  const allDates  = sessions.map(s => new Date(s.date_time)).filter(d => !isNaN(d))
+  const dateRange = allDates.length ? {
+    from: new Date(Math.min(...allDates)).toISOString(),
+    to:   new Date(Math.max(...allDates)).toISOString(),
+  } : null
+
+  return {
+    totalUSD:            parseFloat(totalUSD.toFixed(2)),
+    totalTokens,
+    totalCount,
+    avgSessionUSD:       totalCount > 0 ? parseFloat((totalUSD / totalCount).toFixed(2)) : 0,
+    uniqueClients:       totalClients,
+    repeatClients,
+    repeatClientPct,
+    sessionTypeBreakdown,
+    topClients,
+    peakHours,
+    bestHour,
+    monthlyTrend,
+    bestMonth,
+    momentum: {
+      pct:        parseFloat(momentumPct.toFixed(1)),
+      label:      momentumLabel,
+      last30USD:  parseFloat(last30USD.toFixed(2)),
+      prior30USD: parseFloat(prior30USD.toFixed(2)),
+    },
+    dateRange,
   }
 }
