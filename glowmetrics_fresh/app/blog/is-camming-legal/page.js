@@ -123,7 +123,7 @@ export default function IsCammingLegal() {
 
       <div style={s.layer}>
         <div style={s.layerN}>Layer 4 — Tax and business law</div>
-        <p style={{...s.p, marginBottom:0}}>Operating as an independent contractor creates self-employment tax obligations (see <a href="/blog/cam-model-taxes-explained" style={s.iLink}>Cam Model Taxes Explained</a>) and may intersect with local business licensing requirements. These are separate from content law but part of the same full compliance picture.</p>
+        <p style={{...s.p, marginBottom:0}}>Operating as an independent contractor creates self-employment tax obligations (see <a href="/blog/cam-model-taxes" style={s.iLink}>Cam Model Taxes Explained</a>) and may intersect with local business licensing requirements. These are separate from content law but part of the same full compliance picture.</p>
       </div>
 
       <h2 id="age-verification" style={s.h2}>2025–2026 Age Verification Developments</h2>
@@ -170,8 +170,8 @@ export default function IsCammingLegal() {
         <div style={s.relT}>Related reading</div>
         <div style={s.relLinks}>
           <a href="/blog/how-cam-models-stay-anonymous" style={s.relLink}>→ How Cam Models Stay Anonymous</a>
-          <a href="/blog/cam-model-taxes-explained" style={s.relLink}>→ Cam Model Taxes Explained</a>
-          <a href="/blog/how-to-become-a-cam-model" style={s.relLink}>→ How to Become a Cam Model</a>
+          <a href="/blog/cam-model-taxes" style={s.relLink}>→ Cam Model Taxes Explained</a>
+          <a href="/blog/cam-model-jobs-from-home" style={s.relLink}>→ How to Become a Cam Model</a>
           <a href="/blog/best-cam-model-tools" style={s.relLink}>→ Best Cam Model Analytics Tools</a>
         </div>
       </div>

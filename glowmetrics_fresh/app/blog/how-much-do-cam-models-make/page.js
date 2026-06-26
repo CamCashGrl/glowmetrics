@@ -173,7 +173,7 @@ export default function HowMuchDoCamModelsMake() {
       <p style={s.p}>A model grossing $50,000 annually could realistically owe $12,000–$18,000 combined in taxes depending on state and deductions. That is why "what can I gross?" is the wrong planning question. "What do I actually keep?" is the right one.</p>
       <div style={s.callout}>
         <div style={s.calloutL}>Practical savings baseline</div>
-        <p style={{...s.p, marginBottom:0}}>Save 25–30% of every payout immediately into a dedicated tax account. This is a planning baseline, not a precise number — your actual liability depends on income, deductions, filing status, and state. See <a href="/blog/cam-model-taxes-explained" style={s.iLink}>Cam Model Taxes Explained</a> for the full breakdown.</p>
+        <p style={{...s.p, marginBottom:0}}>Save 25–30% of every payout immediately into a dedicated tax account. This is a planning baseline, not a precise number — your actual liability depends on income, deductions, filing status, and state. See <a href="/blog/cam-model-taxes" style={s.iLink}>Cam Model Taxes Explained</a> for the full breakdown.</p>
       </div>
 
       <h2 id="faq" style={s.h2}>Frequently Asked Questions</h2>
@@ -200,7 +200,7 @@ export default function HowMuchDoCamModelsMake() {
       <div style={s.related}>
         <div style={s.relT}>Related reading</div>
         <div style={s.relLinks}>
-          <a href="/blog/cam-model-taxes-explained" style={s.relLink}>→ Cam Model Taxes Explained</a>
+          <a href="/blog/cam-model-taxes" style={s.relLink}>→ Cam Model Taxes Explained</a>
           <a href="/blog/how-to-get-more-viewers-as-a-cam-model" style={s.relLink}>→ How to Get More Viewers as a Cam Model</a>
           <a href="/blog/cam-model-jobs-from-home" style={s.relLink}>→ Cam Model Jobs From Home</a>
           <a href="/blog/best-cam-sites-for-models" style={s.relLink}>→ Best Cam Sites for Models in 2026</a>

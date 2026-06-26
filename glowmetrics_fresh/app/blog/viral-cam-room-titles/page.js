@@ -56,7 +56,7 @@ export default function Page() {
   ];
 
   const relatedBlogs = [
-    { title: 'Cam Model Room Titles', description: 'More on writing titles that pull viewers in', href: '/blog/cam-model-room-titles' },
+    { title: 'Cam Model Room Titles', description: 'More on writing titles that pull viewers in', href: '/blog/viral-cam-room-titles' },
     { title: 'Live AI Coaching for Cam Models', description: 'Get them in the room, then keep them there', href: '/blog/live-ai-coaching-cam-models' },
     { title: 'How to Get Views on Chaturbate', description: 'Where titles fit in the bigger traffic picture', href: '/blog/how-to-get-views-on-chaturbate' },
   ];
@@ -166,7 +166,7 @@ export default function Page() {
         <p>
           The pattern across all three: replace the vague word with a specific, vivid one, and attach a reason to act now.
           For more angles on writing titles by hand, see our companion guide on{' '}
-          <a href="/blog/cam-model-room-titles">cam model room titles</a>.
+          <a href="/blog/viral-cam-room-titles">cam model room titles</a>.
         </p>
 
         <h2>Customizing by niche, mood, toy, and goal</h2>

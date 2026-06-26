@@ -282,7 +282,7 @@ export default function CamModelSelfEmploymentTaxPrep() {
       <div style={s.related}>
         <div style={s.relT}>Related reading</div>
         <div style={s.relLinks}>
-          <a href="/blog/track-cam-model-daily-revenue" style={s.relLink}>→ How to Track Your Cam Model Income</a>
+          <a href="/blog/how-to-track-cam-tips-automatically" style={s.relLink}>→ How to Track Your Cam Model Income</a>
           <a href="/blog/why-cam-model-data-prevents-overspending" style={s.relLink}>→ Why Cam Model Data Prevents Overspending</a>
           <a href="/blog/benefits-of-cam-model-bookkeeping" style={s.relLink}>→ Benefits of Cam Model Bookkeeping</a>
         </div>

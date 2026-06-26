@@ -131,7 +131,7 @@ export default function CamModelJobsFromHome() {
 
       <h2 id="reframe" style={s.h2}>Reframing "Work From Home"</h2>
       <p style={s.p}>Home means you are your own IT department, floor manager, scheduler, bookkeeper, and safety officer — unless someone credible is taking those responsibilities on. The glamour angle may sell recruiter clicks, but the actual job is operational until you make it repeatable.</p>
-      <p style={s.p}>Legitimate entry planning includes room setup, payment setup, identity and privacy separation, and tax planning before you focus on income projections. See <a href="/blog/how-to-become-a-cam-model" style={s.iLink}>How to Become a Cam Model</a> for a full operational checklist, and <a href="/blog/cam-model-taxes-explained" style={s.iLink}>Cam Model Taxes Explained</a> for the financial admin side.</p>
+      <p style={s.p}>Legitimate entry planning includes room setup, payment setup, identity and privacy separation, and tax planning before you focus on income projections. See <a href="/blog/cam-model-jobs-from-home" style={s.iLink}>How to Become a Cam Model</a> for a full operational checklist, and <a href="/blog/cam-model-taxes" style={s.iLink}>Cam Model Taxes Explained</a> for the financial admin side.</p>
       <p style={s.p}>The best approach to cam model jobs is to treat the market as a range of different business arrangements, not a single job category. A direct signup may be better for someone who wants full control and learns quickly. A strong agency may be useful for someone who values coaching and genuinely understands the cost of that support. A weak intermediary is usually the worst of both: you pay the revenue share without getting the service.</p>
       <p style={s.p}>When you choose your route with the same care you would apply to any freelance contract, you stop behaving like a lead and start behaving like a business owner.</p>
 
@@ -159,9 +159,9 @@ export default function CamModelJobsFromHome() {
       <div style={s.related}>
         <div style={s.relT}>Related reading</div>
         <div style={s.relLinks}>
-          <a href="/blog/how-to-become-a-cam-model" style={s.relLink}>→ How to Become a Cam Model</a>
+          <a href="/blog/cam-model-jobs-from-home" style={s.relLink}>→ How to Become a Cam Model</a>
           <a href="/blog/how-much-do-cam-models-make" style={s.relLink}>→ How Much Do Cam Models Make</a>
-          <a href="/blog/cam-model-taxes-explained" style={s.relLink}>→ Cam Model Taxes Explained</a>
+          <a href="/blog/cam-model-taxes" style={s.relLink}>→ Cam Model Taxes Explained</a>
           <a href="/blog/best-cam-sites-for-models" style={s.relLink}>→ Best Cam Sites for Models in 2026</a>
           <a href="/blog/best-cam-model-tools" style={s.relLink}>→ Best Cam Model Analytics Tools</a>
         </div>

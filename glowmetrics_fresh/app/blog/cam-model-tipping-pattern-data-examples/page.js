@@ -110,7 +110,7 @@ export default function CamModelTippingPatternDataExamples() {
         <div style={s.patternLabel}>What it means</div>
         <p style={{ ...s.p, marginBottom: '8px' }}>You have a high-concentration fan base. Your growth is strong but fragile. If one or two of those top fans disappear, your income drops significantly.</p>
         <div style={s.patternLabel}>What to do</div>
-        <p style={{ ...s.p, marginBottom: 0 }}>CamCash shows your top tippers over time so you can see exactly how concentrated your income is. Use that information to deliberately cultivate the next tier: fans who tip $5–$20 regularly. Your whales are a gift; they shouldn’t be a single point of failure. See also: <a href="/blog/how-to-build-a-loyal-fanbase-as-a-cam-model" style={s.iLink}>how to build loyal fans</a>.</p>
+        <p style={{ ...s.p, marginBottom: 0 }}>CamCash shows your top tippers over time so you can see exactly how concentrated your income is. Use that information to deliberately cultivate the next tier: fans who tip $5–$20 regularly. Your whales are a gift; they shouldn’t be a single point of failure. See also: <a href="/blog/how-to-build-loyal-fans" style={s.iLink}>how to build loyal fans</a>.</p>
       </div>
 
       <div style={s.patternCard}>
@@ -221,8 +221,8 @@ export default function CamModelTippingPatternDataExamples() {
         <div style={s.relT}>Related reading</div>
         <div style={s.relLinks}>
           <a href="/blog/cam-model-self-employment-tax-prep" style={s.relLink}>→ Cam Model Self-Employment Tax Prep</a>
-          <a href="/blog/why-data-helps-cam-model-pricing" style={s.relLink}>→ Why Data Helps Cam Model Pricing</a>
-          <a href="/blog/track-cam-model-daily-revenue" style={s.relLink}>→ How to Track Your Cam Model Daily Revenue</a>
+          <a href="/blog/why-cam-model-data-prevents-overspending" style={s.relLink}>→ Why Data Helps Cam Model Pricing</a>
+          <a href="/blog/how-to-track-cam-tips-automatically" style={s.relLink}>→ How to Track Your Cam Model Daily Revenue</a>
         </div>
       </div>
     </ArticleLayout>
