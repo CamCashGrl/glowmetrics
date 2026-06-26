@@ -2426,7 +2426,12 @@ const handleCSV = async (file, forcePlatform = null) => {
   })
 
   if (!loading && dashboardStage === 'empty') {
-    return <EmptyDashboard onImport={() => router.push('/onboarding')} />
+    return (
+      <EmptyDashboard
+        onImport={() => router.push('/onboarding')}
+        onLiveMode={() => { if (typeof window !== 'undefined') sessionStorage.setItem('camcash_force_full_dash', '1'); window.location.reload() }}
+      />
+    )
   }
 
   if (!loading && dashboardStage === 'preview') {
@@ -2434,8 +2439,14 @@ const handleCSV = async (file, forcePlatform = null) => {
       <DashboardPreview
         tips={tips}
         analytics={analytics}
+        userPlan={profile?.plan || 'free'}
         onAddHistory={() => router.push('/onboarding')}
         onContinue={() => {
+          if (typeof window !== 'undefined') sessionStorage.setItem('camcash_force_full_dash', '1')
+          window.location.reload()
+        }}
+        onUpgrade={() => window.open('https://www.camcashgrl.com/pricing', '_blank')}
+        onLiveMode={() => {
           if (typeof window !== 'undefined') sessionStorage.setItem('camcash_force_full_dash', '1')
           window.location.reload()
         }}
