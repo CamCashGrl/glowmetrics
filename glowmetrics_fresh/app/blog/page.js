@@ -217,6 +217,11 @@ const posts = [
     title: 'Live AI Coaching for Cam Models',
     description: 'How AI coaching helps cam models identify patterns, fix weak sessions, and make smarter decisions in real time.',
   },
+  {
+    slug: 'how-to-pick-a-cam-name',
+    title: 'How to Pick a Cam Name — What Actually Works in 2026',
+    description: 'What makes a great cam model name — memorable, searchable, on-brand. Tips from real broadcasters plus a free name generator tool.',
+  },
 ]
 
 export default function BlogPage() {
