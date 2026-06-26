@@ -3,18 +3,18 @@ export default function sitemap() {
   const today = '2026-06-26'
 
   const staticPages = [
-    { url: base, priority: 1.0, changeFrequency: 'weekly' },
-    { url: `${base}/pricing`, priority: 0.9, changeFrequency: 'monthly' },
-    { url: `${base}/blog`, priority: 0.9, changeFrequency: 'weekly' },
-    { url: `${base}/landing`, priority: 0.8, changeFrequency: 'monthly' },
-    { url: `${base}/contact`, priority: 0.6, changeFrequency: 'monthly' },
-    { url: `${base}/privacy`, priority: 0.5, changeFrequency: 'yearly' },
-    { url: `${base}/terms`, priority: 0.5, changeFrequency: 'yearly' },
-    { url: `${base}/extension`, priority: 0.7, changeFrequency: 'monthly' },
-    { url: `${base}/affiliates`, priority: 0.7, changeFrequency: 'monthly' },
-    { url: `${base}/analytics`, priority: 0.7, changeFrequency: 'monthly' },
-    { url: `${base}/tools`, priority: 0.7, changeFrequency: 'monthly' },
-    { url: `${base}/tools/cam-model-name-generator`, priority: 0.7, changeFrequency: 'monthly' },
+    { url: base,                                          priority: 1.0, changeFrequency: 'weekly'  },
+    { url: `${base}/pricing`,                             priority: 0.9, changeFrequency: 'monthly' },
+    { url: `${base}/blog`,                                priority: 0.9, changeFrequency: 'weekly'  },
+    { url: `${base}/landing`,                             priority: 0.8, changeFrequency: 'monthly' },
+    { url: `${base}/extension`,                           priority: 0.8, changeFrequency: 'monthly' },
+    { url: `${base}/affiliates`,                          priority: 0.7, changeFrequency: 'monthly' },
+    { url: `${base}/analytics`,                           priority: 0.7, changeFrequency: 'monthly' },
+    { url: `${base}/tools`,                               priority: 0.7, changeFrequency: 'monthly' },
+    { url: `${base}/tools/cam-model-name-generator`,      priority: 0.7, changeFrequency: 'monthly' },
+    { url: `${base}/contact`,                             priority: 0.6, changeFrequency: 'monthly' },
+    { url: `${base}/privacy`,                             priority: 0.5, changeFrequency: 'yearly'  },
+    { url: `${base}/terms`,                               priority: 0.5, changeFrequency: 'yearly'  },
   ].map(p => ({ ...p, lastModified: today }))
 
   const blogSlugs = [
@@ -47,12 +47,9 @@ export default function sitemap() {
     'how-to-get-views-on-chaturbate',
     'how-to-increase-cam-earnings',
     'how-to-increase-chaturbate-tips',
-    'how-to-make-money-on-chaturbate',
     'how-to-make-more-money-on-chaturbate',
-    'how-to-make-more-money-on-chaturbate/why-youre-not-making-money-on-chaturbate',
     'how-to-pick-a-cam-name',
     'how-to-re-engage-whales-and-high-tipping-fans',
-    'how-to-re-engage-whales-and-top-tippers',
     'how-to-stay-safe-as-a-cam-model',
     'how-to-track-cam-tips-automatically',
     'is-camming-legal',
@@ -63,7 +60,6 @@ export default function sitemap() {
     'why-cam-model-data-prevents-overspending',
     'why-cam-streams-arent-making-money',
     'why-you-arent-making-money-on-chaturbate',
-    'why-youre-not-making-money-on-chaturbate',
   ]
 
   const guideSlugs = [
