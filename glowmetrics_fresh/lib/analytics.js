@@ -121,6 +121,13 @@ export function parseCSV(text, platform = null) {
   )
 
   const raw = hasHeaders ? parseWithHeaders(lines, platform) : parseHeaderless(lines, platform)
+  // Per-row format-based platform fallback — runs after both parsers
+  raw.forEach(r => {
+    if (r.platform && r.platform !== 'Unknown') return
+    if (/tip from:/i.test(text)) { r.platform = 'Chaturbate'; return }
+    if (/^\d{2}\.\d{2}\.\d{4}/.test(r.dateRaw || '')) { r.platform = 'BongaCams'; return }
+    if (/^\d{10,13}$/.test(String(r.dateRaw || '').trim())) { r.platform = 'MyFreeCams'; return }
+  })
   return raw.map(normalizeTip).filter(isValidTip)
 }
 
