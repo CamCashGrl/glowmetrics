@@ -123,6 +123,8 @@ function parseRows(rawText,platformId){
   const headerKw=['date','time','user','token','usd','tip','amount','note','message','from','type','stamp','earning','reference','private','voyeur','group','xfer','returned','fines','total','mfc','away','club','display','sort','period','payment','month','search']
   for(const line of lines){
     const cols=line.split(/\t|,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map(c=>c.trim().replace(/^"|"$/g,''))
+    // Skip reference IDs (MFC format — long numeric first column)
+    if(cols[0]&&/^\d{8,}$/.test(cols[0].trim()))cols.shift()
     if(cols.length<2){skipped++;continue}
     const lower=cols.map(c=>c.toLowerCase())
     if(lower.filter(c=>headerKw.some(k=>c.includes(k))).length>=2)continue
