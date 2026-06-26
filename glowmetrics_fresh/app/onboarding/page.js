@@ -184,7 +184,7 @@ function buildPreview(rawText,platformId,platformLabel){
   const totalUsd=rows.reduce((s,r)=>s+r.usd,0)
   const paidUsd=paidSessions.reduce((s,r)=>s+r.usd,0)
   const allRows=[...rows,...paidSessions.map(s=>({...s,ts:s.ts,username:s.username,tokens:s.tokens,usd:s.usd}))]
-  const fans=new Set(allRows.map(r=>r.username)).size
+  const fans=new Set([...rows,...paidSessions].map(r=>(r.username||'').toLowerCase().trim()).filter(Boolean)).size
   const dates=allRows.map(r=>r.ts).sort((a,b)=>a-b)
   const topSpender=Object.entries(allRows.reduce((acc,r)=>{acc[r.username]=(acc[r.username]||0)+r.tokens;return acc},{})).sort((a,b)=>b[1]-a[1])[0]
   const hourCounts=allRows.reduce((acc,r)=>{const h=r.ts.getHours();acc[h]=(acc[h]||0)+r.tokens;return acc},{})
@@ -586,8 +586,7 @@ export default function OnboardingPage(){
     try{
       const{data:{session}}=await supabase.auth.getSession()
       if(!session)throw new Error('Not logged in')
-      const{blob}=pasteToCSVBlob(pasteText,platformId)
-      const file=new File([blob],'pasted_import.csv',{type:'text/csv'})
+      const file=new File([pasteText],'pasted_import.txt',{type:'text/plain'})
       const minWait=isFirstImport?5500:1800
       const msgs=isFirstImport?LOADING_MESSAGES:EXTRA_MSGS
       const start=Date.now()
