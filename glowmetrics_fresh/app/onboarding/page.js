@@ -548,6 +548,11 @@ export default function OnboardingPage(){
     })()
   },[router])
 
+  async function handleSignOut(){
+    await supabase.auth.signOut()
+    router.push('/landing')
+  }
+
   async function markDone(){
     if(!user)return
     await supabase.from('beta_users').upsert({user_id:user.id,email:user.email,onboarding_complete:true,signed_up_at:user.created_at},{onConflict:'user_id'})
@@ -682,6 +687,13 @@ export default function OnboardingPage(){
         <div style={{position:'absolute',left:'50%',top:'-5%',transform:'translateX(-50%)',width:400,height:300,borderRadius:'50%',background:'rgba(33,230,243,0.10)',filter:'blur(80px)'}}/>
         <div style={{position:'absolute',inset:0,opacity:0.10,backgroundImage:'radial-gradient(rgba(255,255,255,0.6) 1px,transparent 1px)',backgroundSize:'28px 28px'}}/>
       </div>
+
+      <button
+        onClick={handleSignOut}
+        style={{position:'fixed',top:16,right:20,zIndex:300,background:'rgba(6,8,20,0.85)',border:'1px solid rgba(255,255,255,0.1)',borderRadius:100,padding:'7px 16px',color:'rgba(148,163,184,0.7)',fontSize:12,fontWeight:600,cursor:'pointer',backdropFilter:'blur(20px)',WebkitBackdropFilter:'blur(20px)'}}
+        onMouseEnter={e=>{e.currentTarget.style.color='#fff';e.currentTarget.style.borderColor='rgba(255,255,255,0.25)'}}
+        onMouseLeave={e=>{e.currentTarget.style.color='rgba(148,163,184,0.7)';e.currentTarget.style.borderColor='rgba(255,255,255,0.1)'}}
+      >→ Sign out</button>
 
       <AmbientParticles/>
       {showSparkle&&<Sparkle/>}
