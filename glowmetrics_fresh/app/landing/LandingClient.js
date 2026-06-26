@@ -345,11 +345,11 @@ export default function LandingPage() {
               <span style={{ fontSize: 11, fontWeight: 600, color: "#64748B" }}>AI-powered creator intelligence platform</span>
             </div>
             <h1 style={{ fontSize: "clamp(34px,3.8vw,52px)", color: "white", fontWeight: 900, lineHeight: 1.06, marginBottom: 20, letterSpacing: -1.5 }}>
-              Know Exactly When To<br />Stream, Who To<br />
-              <span style={{ background: "linear-gradient(135deg,#22D3EE 20%,#EC4899)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Prioritize, And Where<br />You Earn Most.</span>
+              Stop Guessing Where Your<br />
+              <span style={{ background: "linear-gradient(135deg,#22D3EE 20%,#EC4899)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Cam Money Comes From.</span>
             </h1>
             <p style={{ fontSize: 16, lineHeight: 1.75, color: "#64748B", marginBottom: 32, maxWidth: 480 }}>
-              CamCash analyzes your streaming history to surface peak hours, track high-value fans, compare platform ROI, and tell you exactly what to do next — so you stop guessing and start earning more.
+              CamCash tracks and compares your tips, earnings, top spenders, best hours, and platform ROI across multiple freemium cam sites — so you can finally see who matters, what works, and where to stream next.
             </p>
             <div style={{ display: "flex", gap: 12, marginBottom: 14, flexWrap: "wrap" }}>
               <a href="/landing/demo" style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "13px 28px", borderRadius: 11, background: "linear-gradient(135deg,#22D3EE,#EC4899)", color: "white", fontWeight: 800, fontSize: 15, textDecoration: "none", boxShadow: "0 0 32px rgba(34,211,238,0.3)", letterSpacing: 0.1 }}>
