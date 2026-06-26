@@ -194,7 +194,7 @@ export default function CamModelEquipmentGuide() {
       <div style={s.related}>
         <div style={s.relT}>Related reading</div>
         <div style={s.relLinks}>
-          <a href="/blog/how-to-become-a-cam-model" style={s.relLink}>→ How to Become a Cam Model</a>
+          <a href="/blog/cam-model-jobs-from-home" style={s.relLink}>→ How to Become a Cam Model</a>
           <a href="/blog/best-cam-sites-for-beginners" style={s.relLink}>→ Best Cam Sites for Beginners</a>
           <a href="/blog/how-cam-models-stay-anonymous" style={s.relLink}>→ How Cam Models Stay Anonymous</a>
           <a href="/blog/best-cam-model-tools" style={s.relLink}>→ Best Cam Model Analytics Tools</a>

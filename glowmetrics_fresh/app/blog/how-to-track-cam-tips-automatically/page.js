@@ -56,7 +56,7 @@ export default function Page() {
   ];
 
   const relatedBlogs = [
-    { title: 'Cam Model Income Tracking', description: 'The full picture: manual and automatic earnings tracking', href: '/blog/cam-model-income-tracking' },
+    { title: 'Cam Model Income Tracking', description: 'The full picture: manual and automatic earnings tracking', href: '/blog/how-to-track-cam-tips-automatically' },
     { title: 'Live AI Coaching for Cam Models', description: 'Turn live data into more tips while you stream', href: '/blog/live-ai-coaching-cam-models' },
     { title: 'Cam Model Fan CRM', description: 'Track and profile your top tippers automatically', href: '/blog/cam-model-fan-crm' },
   ];
@@ -180,7 +180,7 @@ export default function Page() {
           earnings, the months that happened before you started tracking live. Think of it as the one-time catch-up, and
           automatic tracking as everything from here forward. The two work together. If you want the deeper dive on
           importing your back catalog, see our guide to{' '}
-          <a href="/blog/cam-model-income-tracking">cam model income tracking</a>.
+          <a href="/blog/how-to-track-cam-tips-automatically">cam model income tracking</a>.
         </p>
 
         <h2>What &quot;automatic&quot; actually means under the hood</h2>

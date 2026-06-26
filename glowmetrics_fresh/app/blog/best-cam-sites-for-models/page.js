@@ -443,7 +443,7 @@ export default function BestCamSitesForModels() {
         <div style={s.relT}>Related reading</div>
         <div style={s.relLinks}>
           <a href="/blog/best-cam-sites-for-beginners" style={s.relLink}>→ Best cam sites for beginners</a>
-          <a href="/blog/how-to-become-a-cam-model" style={s.relLink}>→ How to become a cam model</a>
+          <a href="/blog/cam-model-jobs-from-home" style={s.relLink}>→ How to become a cam model</a>
           <a href="/blog/how-to-get-more-viewers-as-a-cam-model" style={s.relLink}>→ How to get more viewers as a cam model</a>
           <a href="/blog/cam-model-earnings" style={s.relLink}>→ How much do cam models make? Earnings by platform and hours</a>
           <a href="/blog/how-much-do-chaturbate-models-make" style={s.relLink}>→ How much do Chaturbate models make per hour?</a>
