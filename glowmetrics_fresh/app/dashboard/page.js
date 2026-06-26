@@ -2428,7 +2428,7 @@ const handleCSV = async (file, forcePlatform = null) => {
   if (!loading && dashboardStage === 'empty') {
     return (
       <EmptyDashboard
-        onImport={() => router.push('/onboarding')}
+        onImport={() => handleTabChange('import')}
         onLiveMode={() => { if (typeof window !== 'undefined') sessionStorage.setItem('camcash_force_full_dash', '1'); window.location.reload() }}
       />
     )
