@@ -34,17 +34,30 @@ export async function POST(req) {
   const raw = await file.text()
   const parsed = parseCSV(raw)
 
+  // Detect platform from raw text before mapping rows
+  // BongaCams: DD.MM.YYYY date format
+  // Chaturbate: "Tip From:" pattern
+  // MFC: Unix timestamp
+  const rawTextForDetection = raw
+  let textDetectedPlatform = 'Unknown'
+  if (/Tip From:/i.test(rawTextForDetection)) textDetectedPlatform = 'Chaturbate'
+  else if (/\d{2}\.\d{2}\.\d{4}\s+\d{2}:\d{2}/.test(rawTextForDetection)) textDetectedPlatform = 'BongaCams'
+  else if (/^\d{10,13}\t/m.test(rawTextForDetection)) textDetectedPlatform = 'MyFreeCams'
+
+  const PLATFORM_RATES = { Chaturbate: 0.05, BongaCams: 0.025, MyFreeCams: 0.05 }
+  const platformRate = PLATFORM_RATES[textDetectedPlatform] || 0.05
+
   const rows = parsed.map((row) => {
     const tokens = Number(row.tokens) || 0
     const rawUsd = Number(row.usd) || 0
     const usd = rawUsd > 0
       ? parseFloat(rawUsd.toFixed(2))
-      : parseFloat((tokens * 0.05).toFixed(2))
+      : parseFloat((tokens * (platformRate)).toFixed(2))
 
     return {
       user_id:   user.id,
       date_time: row.dateRaw || row.date_time || null,
-      platform:  row.platform  || 'Unknown',
+      platform:  row.platform && row.platform !== 'Unknown' ? row.platform : textDetectedPlatform,
       username:  row.username  || 'Unknown',
       tip_type:  row.tip_type  || 'Tip',
       tip_note:  row.tip_note  || row.note || row.message || '',
@@ -76,14 +89,7 @@ export async function POST(req) {
   }
 
   // ── DETECT PLATFORM ─────────────────────────────────────────────────────
-  // Use the most common platform from parsed rows
-  const platformCounts = {}
-  rows.forEach(r => {
-    platformCounts[r.platform] = (platformCounts[r.platform] || 0) + 1
-  })
-  const detectedPlatform = Object.entries(platformCounts)
-    .sort((a, b) => b[1] - a[1])[0]?.[0] || 'Unknown'
-  // Stamp detected platform back onto every row that has Unknown
+  const detectedPlatform = textDetectedPlatform
   rows.forEach(r => { if (!r.platform || r.platform === 'Unknown') r.platform = detectedPlatform })
 
   // ── BATCH INSERT via dedup RPC ─────────────────────────────────────────
