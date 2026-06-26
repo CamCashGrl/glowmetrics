@@ -83,6 +83,8 @@ export async function POST(req) {
   })
   const detectedPlatform = Object.entries(platformCounts)
     .sort((a, b) => b[1] - a[1])[0]?.[0] || 'Unknown'
+  // Stamp detected platform back onto every row that has Unknown
+  rows.forEach(r => { if (!r.platform || r.platform === 'Unknown') r.platform = detectedPlatform })
 
   // ── BATCH INSERT via dedup RPC ─────────────────────────────────────────
   let inserted = 0
