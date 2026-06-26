@@ -32,7 +32,7 @@ export default function AdminPage() {
   const [error, setError]   = useState("")
 
   useEffect(() => {
-    if (!document.cookie.includes("gm_admin=")) { router.replace("/login"); return }
+    if (!document.cookie.includes("gm_admin=")) { router.replace("/admin/login"); return }
     load()
   }, [])
 
@@ -48,7 +48,7 @@ export default function AdminPage() {
     finally { setLoading(false) }
   }
 
-  const signOut = () => { document.cookie="gm_admin=;path=/;max-age=0"; router.replace("/login") }
+  const signOut = () => { document.cookie="gm_admin=;path=/;max-age=0"; router.replace("/admin/login") }
 
   if (loading) return (
     <div style={{ minHeight:"100vh", background:G.bg, display:"flex", alignItems:"center", justifyContent:"center" }}>
