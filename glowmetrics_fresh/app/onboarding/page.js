@@ -518,7 +518,6 @@ export default function OnboardingPage(){
   const[cbUsername,setCbUsername]=useState('')
   const[cbUsernameError,setCbUsernameError]=useState('')
   const[pasteText,setPasteText]=useState('')
-  const[paidPasteText,setPaidPasteText]=useState('')
   const[preview,setPreview]=useState(null)
   const[parseError,setParseError]=useState('')
   const[importResult,setImportResult]=useState(null)
@@ -548,11 +547,6 @@ export default function OnboardingPage(){
     })()
   },[router])
 
-  async function handleSignOut(){
-    await supabase.auth.signOut()
-    router.push('/landing')
-  }
-
   async function markDone(){
     if(!user)return
     await supabase.from('beta_users').upsert({user_id:user.id,email:user.email,onboarding_complete:true,signed_up_at:user.created_at},{onConflict:'user_id'})
@@ -581,8 +575,7 @@ export default function OnboardingPage(){
   function handlePreview(){
     setParseError('')
     if(!pasteText.trim()){setParseError('Paste your tip history above first.');return}
-    const combinedText=platformId==='bongacams'?(pasteText+(paidPasteText?'\n'+paidPasteText:'')):pasteText
-    const p=buildPreview(combinedText,platformId,platform.label)
+    const p=buildPreview(pasteText,platformId,platform.label)
     if(!p||( p.tipsDetected===0&&p.paidSessionsDetected===0)){setParseError("We couldn't find any tip rows. Make sure you copied the full table including dates and token amounts.");return}
     setPreview(p);setStep('preview')
   }
@@ -593,8 +586,7 @@ export default function OnboardingPage(){
     try{
       const{data:{session}}=await supabase.auth.getSession()
       if(!session)throw new Error('Not logged in')
-      const importText=platformId==='bongacams'&&paidPasteText?pasteText+'\n'+paidPasteText:pasteText
-      const file=new File([importText],'pasted_import.txt',{type:'text/plain'})
+      const file=new File([pasteText],'pasted_import.txt',{type:'text/plain'})
       const minWait=isFirstImport?5500:1800
       const msgs=isFirstImport?LOADING_MESSAGES:EXTRA_MSGS
       const start=Date.now()
@@ -687,13 +679,6 @@ export default function OnboardingPage(){
         <div style={{position:'absolute',left:'50%',top:'-5%',transform:'translateX(-50%)',width:400,height:300,borderRadius:'50%',background:'rgba(33,230,243,0.10)',filter:'blur(80px)'}}/>
         <div style={{position:'absolute',inset:0,opacity:0.10,backgroundImage:'radial-gradient(rgba(255,255,255,0.6) 1px,transparent 1px)',backgroundSize:'28px 28px'}}/>
       </div>
-
-      <button
-        onClick={handleSignOut}
-        style={{position:'fixed',top:16,right:20,zIndex:300,background:'rgba(6,8,20,0.85)',border:'1px solid rgba(255,255,255,0.1)',borderRadius:100,padding:'7px 16px',color:'rgba(148,163,184,0.7)',fontSize:12,fontWeight:600,cursor:'pointer',backdropFilter:'blur(20px)',WebkitBackdropFilter:'blur(20px)'}}
-        onMouseEnter={e=>{e.currentTarget.style.color='#fff';e.currentTarget.style.borderColor='rgba(255,255,255,0.25)'}}
-        onMouseLeave={e=>{e.currentTarget.style.color='rgba(148,163,184,0.7)';e.currentTarget.style.borderColor='rgba(255,255,255,0.1)'}}
-      >→ Sign out</button>
 
       <AmbientParticles/>
       {showSparkle&&<Sparkle/>}
@@ -807,29 +792,11 @@ export default function OnboardingPage(){
                 </div>
               </div>
 
-              {platformId==='bongacams'?(
-                <>
-                  <div style={{fontSize:10,fontWeight:700,color:'rgba(166,168,189,0.6)',marginBottom:5,letterSpacing:'0.08em',textTransform:'uppercase'}}>1. Free Chat Tips</div>
-                  <textarea value={pasteText} onChange={e=>setPasteText(e.target.value)} placeholder={platform.placeholder}
-                    style={{width:'100%',height:128,resize:'none',borderRadius:13,border:'1px solid rgba(33,230,243,0.18)',borderTop:'1.5px solid rgba(33,230,243,0.35)',background:'rgba(2,4,14,0.97)',padding:'12px 14px',fontFamily:'monospace',fontSize:11,lineHeight:1.65,color:'#a5f3fc',outline:'none',transition:'border-color 0.2s,box-shadow 0.2s',marginBottom:12,boxShadow:'inset 0 2px 12px rgba(0,0,0,0.4),inset 0 1px 0 rgba(33,230,243,0.08)'}}
-                    onFocus={e=>{e.target.style.borderColor='rgba(33,230,243,0.6)';e.target.style.boxShadow='0 0 0 3px rgba(33,230,243,0.08)'}}
-                    onBlur={e=>{e.target.style.borderColor='rgba(255,255,255,0.1)';e.target.style.boxShadow='none'}}
-                  />
-                  <div style={{fontSize:10,fontWeight:700,color:'rgba(166,168,189,0.6)',marginBottom:3,letterSpacing:'0.08em',textTransform:'uppercase'}}>2. Private Chat Tips — Optional but recommended</div>
-                  <div style={{fontSize:10,color:'rgba(148,163,184,0.6)',marginBottom:5,lineHeight:1.5}}>Private tips help CamCash calculate your real hourly rate, top spenders, and total session earnings more accurately.</div>
-                  <textarea value={paidPasteText} onChange={e=>setPaidPasteText(e.target.value)} placeholder="Paste your BongaCams private chat history here..."
-                    style={{width:'100%',height:128,resize:'none',borderRadius:13,border:'1px solid rgba(33,230,243,0.18)',borderTop:'1.5px solid rgba(33,230,243,0.35)',background:'rgba(2,4,14,0.97)',padding:'12px 14px',fontFamily:'monospace',fontSize:11,lineHeight:1.65,color:'#a5f3fc',outline:'none',transition:'border-color 0.2s,box-shadow 0.2s',marginBottom:parseError?9:12,boxShadow:'inset 0 2px 12px rgba(0,0,0,0.4),inset 0 1px 0 rgba(33,230,243,0.08)'}}
-                    onFocus={e=>{e.target.style.borderColor='rgba(33,230,243,0.6)';e.target.style.boxShadow='0 0 0 3px rgba(33,230,243,0.08)'}}
-                    onBlur={e=>{e.target.style.borderColor='rgba(255,255,255,0.1)';e.target.style.boxShadow='none'}}
-                  />
-                </>
-              ):(
-                <textarea value={pasteText} onChange={e=>setPasteText(e.target.value)} placeholder={platform.placeholder}
-                  style={{width:'100%',height:128,resize:'none',borderRadius:13,border:'1px solid rgba(33,230,243,0.18)',borderTop:'1.5px solid rgba(33,230,243,0.35)',background:'rgba(2,4,14,0.97)',padding:'12px 14px',fontFamily:'monospace',fontSize:11,lineHeight:1.65,color:'#a5f3fc',outline:'none',transition:'border-color 0.2s,box-shadow 0.2s',marginBottom:parseError?9:12,boxShadow:'inset 0 2px 12px rgba(0,0,0,0.4),inset 0 1px 0 rgba(33,230,243,0.08)'}}
-                  onFocus={e=>{e.target.style.borderColor='rgba(33,230,243,0.6)';e.target.style.boxShadow='0 0 0 3px rgba(33,230,243,0.08)'}}
-                  onBlur={e=>{e.target.style.borderColor='rgba(255,255,255,0.1)';e.target.style.boxShadow='none'}}
-                />
-              )}
+              <textarea value={pasteText} onChange={e=>setPasteText(e.target.value)} placeholder={platform.placeholder}
+                style={{width:'100%',height:128,resize:'none',borderRadius:13,border:'1px solid rgba(33,230,243,0.18)',borderTop:'1.5px solid rgba(33,230,243,0.35)',background:'rgba(2,4,14,0.97)',padding:'12px 14px',fontFamily:'monospace',fontSize:11,lineHeight:1.65,color:'#a5f3fc',outline:'none',transition:'border-color 0.2s,box-shadow 0.2s',marginBottom:parseError?9:12,boxShadow:'inset 0 2px 12px rgba(0,0,0,0.4),inset 0 1px 0 rgba(33,230,243,0.08)'}}
+                onFocus={e=>{e.target.style.borderColor='rgba(33,230,243,0.6)';e.target.style.boxShadow='0 0 0 3px rgba(33,230,243,0.08)'}}
+                onBlur={e=>{e.target.style.borderColor='rgba(255,255,255,0.1)';e.target.style.boxShadow='none'}}
+              />
 
               {parseError&&<div style={{marginBottom:10,padding:'9px 12px',borderRadius:11,background:'rgba(248,113,113,0.07)',border:'1px solid rgba(248,113,113,0.22)',fontSize:12,color:'#f87171'}}>⚠️ {parseError}</div>}
 
