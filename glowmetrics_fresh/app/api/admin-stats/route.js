@@ -12,19 +12,27 @@ export async function GET(req) {
   }
   const sb = adminClient()
 
-  const [
-    { count: totalUsers },
-    { count: totalTips },
-    { count: newUsers },
-    { data: platformData },
-    { data: recentTips },
-  ] = await Promise.all([
+  const results = await Promise.all([
     sb.from('profiles').select('*', { count:'exact', head:true }),
     sb.from('tips').select('*', { count:'exact', head:true }),
     sb.from('profiles').select('*', { count:'exact', head:true }).gte('created_at', new Date(Date.now() - 30*86400000).toISOString()),
     sb.from('tips').select('platform, tokens, usd'),
     sb.from('tips').select('date_time, usd').order('date_time', { ascending:false }).limit(500),
   ])
+
+  const errors = results.map(r => r.error).filter(Boolean)
+  if (errors.length) {
+    console.error('admin-stats supabase errors:', errors.map(e => e.message))
+    return NextResponse.json({ error: 'Failed to load stats. Check SUPABASE_SERVICE_ROLE_KEY.' }, { status: 500 })
+  }
+
+  const [
+    { count: totalUsers },
+    { count: totalTips },
+    { count: newUsers },
+    { data: platformData },
+    { data: recentTips },
+  ] = results
 
   // Platform aggregation
   const platforms = {}

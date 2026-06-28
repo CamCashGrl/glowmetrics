@@ -40,7 +40,7 @@ export default function AdminPage() {
     setLoading(true)
     try {
       const res = await fetch("/api/admin-stats")
-      if (res.status===401) { router.replace("/login"); return }
+      if (res.status===401) { router.replace("/admin/login"); return }
       const d = await res.json()
       if (d.error) { setError(d.error); return }
       setStats(d)
