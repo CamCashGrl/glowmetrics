@@ -117,7 +117,7 @@ export default function AdminPage() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch("/api/admin-stats")
+      const res = await fetch("/api/admin/stats")
       if (res.status === 401) { router.replace("/admin/login"); return }
       const d = await res.json()
       if (d.error) { setError(d.error); return }
@@ -155,7 +155,7 @@ export default function AdminPage() {
     </div>
   )
 
-  const { kpis, funnel, stageBreakdown, users=[], importHealth, liveMode, subscriptions, feedback, generatedAt } = data || {}
+  const { kpis, funnel, stageBreakdown, platformBreakdown, users=[], importHealth, liveMode, subscriptions, feedback, signupsByDay=[], generatedAt } = data || {}
 
   // Filter + sort users
   const filtered = users
@@ -213,16 +213,27 @@ export default function AdminPage() {
 
       <div style={{ maxWidth:1400, margin:"0 auto", padding:"28px 32px" }}>
 
-        {/* KPI Cards */}
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))", gap:12, marginBottom:28 }}>
-          <KpiCard label="Total Users"        value={kpis?.totalUsers}        accent={C.cyan}   sub="all time" />
-          <KpiCard label="New Today"          value={kpis?.newUsers24h}       accent={C.green}  sub="last 24h" />
-          <KpiCard label="New This Week"      value={kpis?.newUsers7d}        accent={C.cyan}   sub="last 7d" />
-          <KpiCard label="New This Month"     value={kpis?.newUsers30d}       accent={C.purple} sub="last 30d" />
-          <KpiCard label="Onboarding Done"    value={kpis?.onboardingComplete} accent={C.green} sub={`of ${kpis?.totalUsers}`} />
-          <KpiCard label="Have Imports"       value={kpis?.usersWithImports}  accent={C.cyan}   sub="imported data" />
+        {/* KPI Cards — Row 1: User counts */}
+        <div style={{ fontSize:10, fontWeight:700, color:C.muted, letterSpacing:"0.12em", textTransform:"uppercase", marginBottom:10 }}>Users</div>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))", gap:12, marginBottom:20 }}>
+          <KpiCard label="Real Users"         value={kpis?.totalRealUsers}    accent={C.cyan}   sub={`${kpis?.testUsers ?? 0} test excluded`} />
+          <KpiCard label="New This Month"     value={kpis?.newUsers30d}       accent={C.green}  sub="last 30 days" />
+          <KpiCard label="New This Week"      value={kpis?.newUsers7d}        accent={C.cyan}   sub="last 7 days" />
+          <KpiCard label="New Today"          value={kpis?.newUsers24h}       accent={C.purple} sub="last 24h" />
+          <KpiCard label="Have Tip Data"      value={kpis?.usersWithTipData}  accent={C.green}  sub="imported tips" />
+          <KpiCard label="Zero Tips"          value={kpis?.usersWithZeroTips} accent={C.gold}   sub="never imported" />
           <KpiCard label="Live Mode Users"    value={kpis?.liveModeUsers}     accent={C.pink}   sub="ever used live" />
           <KpiCard label="Active 24h"         value={kpis?.activeUsers24h}    accent={C.gold}   sub="tip or live activity" />
+        </div>
+
+        {/* KPI Cards — Row 2: Data health */}
+        <div style={{ fontSize:10, fontWeight:700, color:C.muted, letterSpacing:"0.12em", textTransform:"uppercase", marginBottom:10 }}>Data Health</div>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))", gap:12, marginBottom:28 }}>
+          <KpiCard label="Total Tip Rows"     value={kpis?.totalTipRows}      accent={C.cyan}   sub="in tips table" />
+          <KpiCard label="Live Tips"          value={kpis?.totalLiveTips}     accent={C.pink}   sub="in live_tips table" />
+          <KpiCard label="CSV Uploads"        value={kpis?.totalCsvUploads}   accent={C.purple} sub="all time" />
+          <KpiCard label="Beta Users"         value={kpis?.betaUsers}         accent={C.gold}   sub="in beta_users" />
+          <KpiCard label="Onboarding Done"    value={kpis?.onboardingComplete} accent={C.green} sub={`of ${kpis?.totalRealUsers ?? 0} real users`} />
         </div>
 
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:20, marginBottom:20 }}>
@@ -337,6 +348,55 @@ export default function AdminPage() {
           </Card>
         </div>
 
+        {/* Platform Breakdown + Signup Trend */}
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:20, marginBottom:20 }}>
+
+          {/* Platform Breakdown (from tips) */}
+          <Card>
+            <SectionTitle>Platform Breakdown (from tips)</SectionTitle>
+            {Object.keys(platformBreakdown || {}).length === 0
+              ? <div style={{ fontSize:12, color:C.muted }}>No tip data yet</div>
+              : Object.entries(platformBreakdown || {})
+                  .sort((a, b) => b[1] - a[1])
+                  .map(([platform, count]) => {
+                    const total = Object.values(platformBreakdown).reduce((s, n) => s + n, 0)
+                    const pct   = total ? Math.round((count / total) * 100) : 0
+                    return (
+                      <div key={platform} style={{ marginBottom:10 }}>
+                        <div style={{ display:"flex", justifyContent:"space-between", marginBottom:3 }}>
+                          <span style={{ fontSize:12, color:C.text, textTransform:"capitalize" }}>{platform}</span>
+                          <span style={{ fontSize:12, fontWeight:700, color:C.cyan, fontFamily:"'DM Mono',monospace" }}>{count.toLocaleString()} tips <span style={{ color:C.muted, fontWeight:400 }}>({pct}%)</span></span>
+                        </div>
+                        <div style={{ height:4, background:"rgba(255,255,255,0.07)", borderRadius:99, overflow:"hidden" }}>
+                          <div style={{ height:"100%", width:`${pct}%`, background:`linear-gradient(90deg, ${C.cyan}, ${C.pink})`, borderRadius:99 }}/>
+                        </div>
+                      </div>
+                    )
+                  })
+            }
+          </Card>
+
+          {/* Signup Trend */}
+          <Card>
+            <SectionTitle>Signup Trend — Last 30 Days</SectionTitle>
+            {signupsByDay.length === 0
+              ? <div style={{ fontSize:12, color:C.muted }}>No signups in last 30 days</div>
+              : (() => {
+                  const max = Math.max(...signupsByDay.map(d => d.count), 1)
+                  return signupsByDay.slice(-20).map(({ date, count }) => (
+                    <div key={date} style={{ display:"flex", alignItems:"center", gap:8, marginBottom:5 }}>
+                      <span style={{ fontSize:10, color:C.muted, fontFamily:"'DM Mono',monospace", minWidth:72 }}>{date.slice(5)}</span>
+                      <div style={{ flex:1, height:14, background:"rgba(255,255,255,0.04)", borderRadius:4, overflow:"hidden" }}>
+                        <div style={{ height:"100%", width:`${(count/max)*100}%`, background:`linear-gradient(90deg, ${C.cyan}99, ${C.purple}99)`, borderRadius:4, minWidth: count > 0 ? 4 : 0 }}/>
+                      </div>
+                      <span style={{ fontSize:11, fontWeight:700, color:C.white, fontFamily:"'DM Mono',monospace", minWidth:16, textAlign:"right" }}>{count}</span>
+                    </div>
+                  ))
+                })()
+            }
+          </Card>
+        </div>
+
         {/* Recent Imports */}
         {importHealth?.recent?.length > 0 && (
           <Card style={{ marginBottom:20 }}>
@@ -367,7 +427,7 @@ export default function AdminPage() {
         {/* Users Table */}
         <Card style={{ marginBottom:20 }}>
           <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14, flexWrap:"wrap", gap:10 }}>
-            <SectionTitle>All Users ({filtered.length} of {users.length})</SectionTitle>
+            <SectionTitle>Real Users ({filtered.length} of {users.length} — test accounts excluded)</SectionTitle>
             <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
               <input
                 placeholder="Search email…"
