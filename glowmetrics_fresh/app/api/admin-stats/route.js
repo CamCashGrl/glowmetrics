@@ -46,7 +46,7 @@ export async function GET(req) {
     paidSessionsResult,
   ] = await Promise.all([
     client.auth.admin.listUsers({ perPage: 1000 }),
-    client.from('profiles').select('id, created_at, plan'),
+    client.from('profiles').select('id, created_at, plan, utm_source, utm_medium, utm_campaign'),
     client.from('beta_users').select('user_id, email, onboarding_complete, csv_upload_count, signed_up_at'),
     client.from('csv_uploads').select('user_id, platform, status, total_rows, inserted_rows, total_usd, uploaded_at').order('uploaded_at', { ascending: false }),
     client.from('tips').select('user_id, usd, created_at'),
@@ -186,6 +186,17 @@ export async function GET(req) {
     stageBreakdown[u.dashboardStage] = (stageBreakdown[u.dashboardStage] || 0) + 1
   }
 
+  // UTM source breakdown from profiles
+  const utmMap = {}
+  for (const p of profiles) {
+    const key = [p.utm_source || null, p.utm_medium || null, p.utm_campaign || null].join('|')
+    if (!utmMap[key]) utmMap[key] = { utm_source: p.utm_source || null, utm_medium: p.utm_medium || null, utm_campaign: p.utm_campaign || null, count: 0 }
+    utmMap[key].count++
+  }
+  const utmBreakdown = Object.values(utmMap)
+    .filter(r => r.utm_source !== null)
+    .sort((a, b) => b.count - a.count)
+
   return NextResponse.json({
     kpis: { totalUsers, newUsers24h, newUsers7d, newUsers30d, onboardingComplete, usersWithImports, liveModeUsers, activeUsers24h },
     funnel,
@@ -195,6 +206,7 @@ export async function GET(req) {
     liveMode,
     subscriptions: subBreakdown,
     feedback,
+    utmBreakdown,
     generatedAt: now.toISOString(),
   })
 }

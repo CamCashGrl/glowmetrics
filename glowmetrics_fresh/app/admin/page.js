@@ -155,7 +155,7 @@ export default function AdminPage() {
     </div>
   )
 
-  const { kpis, funnel, stageBreakdown, platformBreakdown, users=[], importHealth, liveMode, subscriptions, feedback, signupsByDay=[], generatedAt } = data || {}
+  const { kpis, funnel, stageBreakdown, platformBreakdown, users=[], importHealth, liveMode, subscriptions, feedback, signupsByDay=[], utmBreakdown={}, generatedAt } = data || {}
 
   // Filter + sort users
   const filtered = users
@@ -206,6 +206,7 @@ export default function AdminPage() {
           <div style={{ display:"flex", alignItems:"center", gap:16 }}>
             <span style={{ fontSize:11, color:C.muted }}>Updated {fmtTime(generatedAt)}</span>
             <button onClick={load} style={{ padding:"5px 14px", borderRadius:8, background:`${C.cyan}18`, border:`1px solid ${C.cyan}33`, color:C.cyan, cursor:"pointer", fontSize:11, fontWeight:700 }}>↻ Refresh</button>
+            <button onClick={() => router.push("/admin/preview")} style={{ padding:"5px 14px", borderRadius:8, background:`${C.purple}18`, border:`1px solid ${C.purple}44`, color:C.purple, cursor:"pointer", fontSize:11, fontWeight:700 }}>👁 Stage Preview</button>
             <button onClick={logout} style={{ padding:"5px 14px", borderRadius:8, background:"rgba(255,255,255,0.05)", border:`1px solid ${C.border}`, color:C.muted, cursor:"pointer", fontSize:11 }}>Sign out</button>
           </div>
         </div>
@@ -418,6 +419,42 @@ export default function AdminPage() {
                       <td style={{ color:C.muted }}>{fmtTime(imp.at)}</td>
                     </tr>
                   ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        )}
+
+        {/* UTM Source Breakdown */}
+        {Object.keys(utmBreakdown).length > 0 && (
+          <Card style={{ marginBottom:20 }}>
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14 }}>
+              <SectionTitle>Signups by Source</SectionTitle>
+              <span style={{ fontSize:10, color:C.muted }}>First-touch attribution</span>
+            </div>
+            <div style={{ overflowX:"auto" }}>
+              <table style={{ width:"100%", borderCollapse:"collapse" }}>
+                <thead><tr>
+                  <th>Source</th><th>Medium</th><th>Campaign</th><th>Signups</th><th>Share</th>
+                </tr></thead>
+                <tbody>
+                  {utmBreakdown.map((row, i) => {
+                    const maxCount = utmBreakdown[0]?.count || 1
+                    const pct = Math.round((row.count / maxCount) * 100)
+                    return (
+                      <tr key={i}>
+                        <td style={{ color:C.cyan, fontWeight:700 }}>{row.utm_source || <span style={{color:C.muted}}>direct</span>}</td>
+                        <td style={{ color:C.text }}>{row.utm_medium || <span style={{color:C.muted}}>—</span>}</td>
+                        <td style={{ color:C.text, fontSize:11 }}>{row.utm_campaign || <span style={{color:C.muted}}>—</span>}</td>
+                        <td style={{ fontFamily:"'DM Mono',monospace", fontWeight:700, color:C.white }}>{row.count}</td>
+                        <td style={{ width:120 }}>
+                          <div style={{ height:5, background:"rgba(255,255,255,0.07)", borderRadius:99, overflow:"hidden" }}>
+                            <div style={{ height:"100%", width:`${pct}%`, background:`linear-gradient(90deg,${C.cyan},${C.purple})`, borderRadius:99 }}/>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>

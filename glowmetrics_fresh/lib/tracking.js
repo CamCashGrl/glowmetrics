@@ -55,4 +55,26 @@ export const T = {
   upgradeClicked:        (feature)       => track('upgrade_clicked',           { feature_name: feature }),
 }
 
+export function captureAttribution() {
+  try {
+    if (typeof window === 'undefined') return
+    if (localStorage.getItem('camcash_attribution')) return // first touch wins
+    const p = new URLSearchParams(window.location.search)
+    const utm_source   = p.get('utm_source')   || null
+    const utm_medium   = p.get('utm_medium')   || null
+    const utm_campaign = p.get('utm_campaign') || null
+    const utm_content  = p.get('utm_content')  || null
+    const utm_term     = p.get('utm_term')     || null
+    const ref = document.referrer || null
+    const isExternal = ref && (() => { try { return !new URL(ref).hostname.includes('camcashgrl.com') } catch { return false } })()
+    if (!utm_source && !isExternal) return
+    localStorage.setItem('camcash_attribution', JSON.stringify({
+      utm_source, utm_medium, utm_campaign, utm_content, utm_term,
+      referrer: ref,
+      landing_page: window.location.pathname,
+      captured_at: new Date().toISOString(),
+    }))
+  } catch {}
+}
+
 export default T
