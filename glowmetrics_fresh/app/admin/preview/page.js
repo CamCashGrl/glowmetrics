@@ -1,7 +1,7 @@
 "use client"
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import DashboardPreview from "../../dashboard/DashboardPreview"
+import { DashboardPreview } from "../../dashboard/DashboardPreview"
 
 const C = {
   bg:     "#050713",
@@ -48,7 +48,7 @@ function StageBtn({ label, color, active, onClick }) {
   )
 }
 
-export default function AdminPreviewPage() {
+function AdminPreviewInner() {
   const router       = useRouter()
   const searchParams = useSearchParams()
   const initFlow     = searchParams.get("flow") || "dashboard"
@@ -179,5 +179,13 @@ export default function AdminPreviewPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function AdminPreviewPage() {
+  return (
+    <Suspense fallback={null}>
+      <AdminPreviewInner />
+    </Suspense>
   )
 }
