@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
+import { captureAttribution } from "../../lib/tracking"
 import FeedbackWidget from "../components/FeedbackWidget"
 
 // ── AuthPanel defined OUTSIDE LandingPage so React doesn't re-create the
@@ -319,13 +320,32 @@ export default function LandingPage() {
     e.preventDefault()
     setAuthLoading(true); setAuthError(""); setAuthMsg("")
     if (isSignUp) {
+      let attribution = null
+      try { attribution = JSON.parse(localStorage.getItem('camcash_attribution') || 'null') } catch {}
       const { error } = await supabase.auth.signUp({ email, password })
       if (error) { setAuthError(error.message); setAuthLoading(false) }
       else {
         if (typeof twq === 'function') twq('event', 'tw-rc0w2-rcj9h', {})
         fetch('/api/admin/notify-signup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, source: 'landing-demo' }) }).catch(() => {})
         const { data: { user } } = await supabase.auth.getUser()
-        if (user) router.push("/dashboard")
+        if (user) {
+          if (attribution) {
+            supabase.from('profiles').update({
+              utm_source: attribution.utm_source || null,
+              utm_medium: attribution.utm_medium || null,
+              utm_campaign: attribution.utm_campaign || null,
+              utm_content: attribution.utm_content || null,
+              utm_term: attribution.utm_term || null,
+              referrer: attribution.referrer || null,
+              attributed_landing_page: attribution.landing_page || null,
+              attributed_at: new Date().toISOString(),
+            }).eq('id', user.id).then(({ error: e }) => {
+              if (e) console.warn('[UTM] profile update failed:', e.message)
+              else try { localStorage.removeItem('camcash_attribution') } catch {}
+            })
+          }
+          router.push("/dashboard")
+        }
         else { setAuthMsg("Account created! Check your email to confirm, then log in."); setIsSignUp(false); setAuthLoading(false) }
       }
     } else {
