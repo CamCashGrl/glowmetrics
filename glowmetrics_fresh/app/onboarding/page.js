@@ -376,21 +376,23 @@ const CSS=`
   @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
   @keyframes shimmer{0%{transform:translateX(-100%)}100%{transform:translateX(200%)}}
   @keyframes cardShimmer{0%,92%{opacity:0}94%{opacity:1}100%{opacity:0}}
-  @keyframes glowPulse{0%,100%{box-shadow:0 0 28px rgba(33,230,243,0.18),0 0 60px rgba(255,47,174,0.12),0 0 120px rgba(33,230,243,0.06)}50%{box-shadow:0 0 45px rgba(33,230,243,0.30),0 0 90px rgba(255,47,174,0.20),0 0 160px rgba(33,230,243,0.10)}}
+  @keyframes glowPulse{0%,100%{box-shadow:0 0 28px rgba(0,229,204,0.15),0 0 60px rgba(224,64,251,0.10)}50%{box-shadow:0 0 45px rgba(0,229,204,0.25),0 0 90px rgba(224,64,251,0.18)}}
   @keyframes checkIn{from{transform:scale(0) rotate(-20deg);opacity:0}to{transform:scale(1) rotate(0);opacity:1}}
   @keyframes flashPulse{0%{opacity:0}20%{opacity:1}100%{opacity:0}}
   @keyframes statCardIn{from{opacity:0;transform:translateY(8px) scale(0.97)}to{opacity:1;transform:translateY(0) scale(1)}}
   @keyframes progressSweep{0%{transform:translateX(-100%)}100%{transform:translateX(200%)}}
+  @keyframes cardFadeIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+  @keyframes orbPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
   textarea::placeholder{color:rgba(100,116,139,0.4);font-family:monospace;font-size:11px;line-height:1.6}
   input::placeholder{color:rgba(100,116,139,0.4)}
   input:focus,textarea:focus{outline:none}
   button{font-family:inherit;cursor:pointer}
   ::-webkit-scrollbar{width:4px}
-  ::-webkit-scrollbar-thumb{background:rgba(33,230,243,0.25);border-radius:2px}
+  ::-webkit-scrollbar-thumb{background:rgba(0,229,204,0.25);border-radius:2px}
   .stat-card{
     background:linear-gradient(160deg,rgba(255,255,255,0.055),rgba(255,255,255,0.022));
     border:1px solid rgba(255,255,255,0.10);
-    box-shadow:inset 0 1px 0 rgba(255,255,255,0.07),0 0 22px rgba(0,217,255,0.05);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,0.07),0 0 22px rgba(0,229,204,0.05);
     border-radius:14px;
     position:relative;
     overflow:hidden;
@@ -400,25 +402,23 @@ const CSS=`
     content:'';position:absolute;top:0;left:0;right:0;height:1px;
     background:linear-gradient(90deg,transparent,rgba(255,255,255,0.18),transparent);
   }
-  .stat-card:hover{border-color:rgba(255,255,255,0.16);box-shadow:inset 0 1px 0 rgba(255,255,255,0.09),0 0 32px rgba(0,217,255,0.09)}
+  .stat-card:hover{border-color:rgba(0,229,204,0.2);box-shadow:inset 0 1px 0 rgba(255,255,255,0.09),0 0 32px rgba(0,229,204,0.08)}
   .ob-btn-primary{
     position:relative;overflow:hidden;
-    background:linear-gradient(90deg,#20E3F3,#7C5CFF,#FF2FAE);
-    box-shadow:0 0 14px rgba(32,227,243,0.16),0 0 28px rgba(255,47,174,0.10),inset 0 1px 0 rgba(255,255,255,0.35);
-  }
-  .ob-btn-primary::after{
-    content:'';position:absolute;top:0;left:-100%;width:60%;height:100%;
-    background:linear-gradient(90deg,transparent,rgba(255,255,255,0.18),transparent);
-    animation:shimmer 3s ease-in-out infinite 1.5s;
+    background:linear-gradient(135deg,#00e5cc,#e040fb);
+    box-shadow:0 0 18px rgba(0,229,204,0.2);
   }
   .ob-card-inner::before{
     content:'';position:absolute;top:0;left:-100%;right:0;height:1px;
-    background:linear-gradient(90deg,transparent,rgba(255,255,255,0.35),transparent);
+    background:linear-gradient(90deg,transparent,rgba(0,229,204,0.3),transparent);
     animation:cardShimmer 7s ease-in-out infinite;
     pointer-events:none;z-index:1;
   }
+  .ob-card{animation:cardFadeIn 0.4s ease-out both}
+  .bg-orb-cyan{animation:orbPulse 8s ease-in-out infinite alternate}
+  .bg-orb-magenta{animation:orbPulse 8s ease-in-out infinite alternate 4s}
   @media(max-width:600px){
-    .ob-card{padding:18px 14px!important;border-radius:22px!important}
+    .ob-card{padding:18px 14px!important;border-radius:20px!important}
     .ob-plat-row{flex-direction:column!important}
   }
 `
@@ -443,25 +443,25 @@ function OBProgress({current}){
   const steps=[{n:1,label:'Stats'},{n:2,label:'Tips'},{n:3,label:'Done'}]
   return(
     <div style={{marginBottom:18}}>
-      <div style={{display:'flex',alignItems:'center',justifyContent:'center',maxWidth:240,margin:'0 auto 6px'}}>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'center',maxWidth:240,margin:'0 auto'}}>
         {steps.map((s,i)=>(
           <div key={s.n} style={{display:'flex',alignItems:'center',flex:i<2?1:'none'}}>
             <div style={{
               width:28,height:28,borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',
               fontSize:11,fontWeight:800,flexShrink:0,transition:'all 0.35s',
-              background:s.n<current?CYAN:s.n===current?GRAD:'rgba(255,255,255,0.05)',
-              border:s.n>current?'1px solid rgba(255,255,255,0.12)':'none',
-              color:s.n<=current?'#04101b':'rgba(255,255,255,0.25)',
-              boxShadow:s.n===current?`0 0 22px rgba(33,230,243,0.65),0 0 45px rgba(33,230,243,0.25)`:s.n<current?`0 0 14px rgba(33,230,243,0.4)`:'none',
+              background:s.n<current?'#00e5cc':s.n===current?'transparent':'rgba(13,15,30,0.9)',
+              border:s.n<current?'none':s.n===current?'2px solid transparent':'1px solid rgba(148,163,184,0.4)',
+              backgroundImage:s.n===current?'linear-gradient(#0d0f1e,#0d0f1e),linear-gradient(135deg,#00e5cc,#7c3aed)':undefined,
+              backgroundOrigin:s.n===current?'border-box':undefined,
+              backgroundClip:s.n===current?'padding-box,border-box':undefined,
+              color:s.n<current?'#fff':s.n===current?'#fff':'rgba(148,163,184,0.6)',
+              boxShadow:s.n===current?'0 0 16px rgba(0,229,204,0.4)':s.n<current?'0 0 10px rgba(0,229,204,0.35)':'none',
             }}>
               {s.n<current?'✓':s.n}
             </div>
-            {i<2&&<div style={{height:1.5,flex:1,background:current>s.n?GRAD:'rgba(255,255,255,0.1)',transition:'all 0.35s',margin:'0 3px',boxShadow:current>s.n?'0 0 6px rgba(33,230,243,0.3)':'none'}}/>}
+            {i<2&&<div style={{height:1.5,flex:1,background:current>s.n?'#00e5cc':'rgba(148,163,184,0.3)',transition:'all 0.35s',margin:'0 3px',boxShadow:current>s.n?'0 0 4px rgba(0,229,204,0.4)':'none'}}/>}
           </div>
         ))}
-      </div>
-      <div style={{display:'flex',justifyContent:'space-between',maxWidth:240,margin:'0 auto'}}>
-        {steps.map(s=>(<div key={s.n} style={{width:28,textAlign:'center',fontSize:9,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.1em',color:s.n<=current?`rgba(33,230,243,0.9)`:'rgba(255,255,255,0.2)',transition:'all 0.35s'}}>{s.label}</div>))}
       </div>
     </div>
   )
@@ -470,27 +470,27 @@ function OBProgress({current}){
 function OBBtn({onClick,children,disabled=false,style={}}){
   return(
     <button onClick={onClick} disabled={disabled} className={disabled?'':'ob-btn-primary'} style={{
-      width:'100%',height:48,borderRadius:14,border:'none',
-      background:disabled?'rgba(255,255,255,0.07)':GRAD,
+      width:'100%',height:48,borderRadius:12,border:'none',
+      background:disabled?'rgba(255,255,255,0.07)':'linear-gradient(135deg,#00e5cc,#e040fb)',
       color:disabled?'rgba(255,255,255,0.25)':'#fff',
-      fontSize:14,fontWeight:900,cursor:disabled?'not-allowed':'pointer',
-      boxShadow:disabled?'none':'0 0 14px rgba(33,230,243,0.16),0 0 28px rgba(255,47,174,0.10)',
-      transition:'all 0.18s',display:'flex',alignItems:'center',justifyContent:'center',gap:7,
+      fontSize:14,fontWeight:700,cursor:disabled?'not-allowed':'pointer',
+      boxShadow:disabled?'none':'0 0 18px rgba(0,229,204,0.2)',
+      transition:'all 0.2s ease',display:'flex',alignItems:'center',justifyContent:'center',gap:7,
       letterSpacing:'-0.01em',
       ...style
     }}
-    onMouseEnter={e=>{if(!disabled){e.currentTarget.style.transform='translateY(-2px)';e.currentTarget.style.boxShadow='0 0 22px rgba(33,230,243,0.28),0 0 44px rgba(255,47,174,0.18),inset 0 1px 0 rgba(255,255,255,0.3)'}}}
-    onMouseLeave={e=>{e.currentTarget.style.transform='';e.currentTarget.style.boxShadow=disabled?'none':'0 0 14px rgba(33,230,243,0.16),0 0 28px rgba(255,47,174,0.10)'}}
-    onMouseDown={e=>{if(!disabled)e.currentTarget.style.transform='translateY(0)'}}
+    onMouseEnter={e=>{if(!disabled){e.currentTarget.style.filter='brightness(1.1)';e.currentTarget.style.transform='scale(1.02)';e.currentTarget.style.boxShadow='0 0 28px rgba(0,229,204,0.3)'}}}
+    onMouseLeave={e=>{e.currentTarget.style.filter='';e.currentTarget.style.transform='';e.currentTarget.style.boxShadow=disabled?'none':'0 0 18px rgba(0,229,204,0.2)'}}
+    onMouseDown={e=>{if(!disabled){e.currentTarget.style.filter='';e.currentTarget.style.transform='scale(1)'}}}
     >{children}</button>
   )
 }
 
 function OBSecBtn({onClick,children,style={}}){
   return(
-    <button onClick={onClick} style={{height:44,padding:'0 16px',borderRadius:12,border:'1px solid rgba(255,255,255,0.12)',background:'rgba(255,255,255,0.04)',color:'rgba(203,213,225,0.85)',fontSize:13,fontWeight:700,transition:'all 0.18s',...style}}
-    onMouseEnter={e=>{e.currentTarget.style.borderColor='rgba(33,230,243,0.45)';e.currentTarget.style.color='#fff';e.currentTarget.style.background='rgba(33,230,243,0.07)'}}
-    onMouseLeave={e=>{e.currentTarget.style.borderColor='rgba(255,255,255,0.12)';e.currentTarget.style.color='rgba(203,213,225,0.85)';e.currentTarget.style.background='rgba(255,255,255,0.04)'}}
+    <button onClick={onClick} style={{height:44,padding:'0 16px',borderRadius:12,border:'1px solid rgba(255,255,255,0.15)',background:'transparent',color:'#F8FAFC',fontSize:13,fontWeight:700,transition:'all 0.18s',...style}}
+    onMouseEnter={e=>{e.currentTarget.style.borderColor='rgba(0,229,204,0.4)';e.currentTarget.style.color='#00e5cc'}}
+    onMouseLeave={e=>{e.currentTarget.style.borderColor='rgba(255,255,255,0.15)';e.currentTarget.style.color='#F8FAFC'}}
     >{children}</button>
   )
 }
@@ -504,7 +504,7 @@ function OBLinks({links}){
 }
 
 function OBTrust(){
-  return(<div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:5,marginTop:14,fontSize:10,color:'rgba(100,116,139,0.55)'}}><span>🔒</span><span>Your data is stored securely and never shared.</span></div>)
+  return(<div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:5,marginTop:14,fontSize:13,color:'#94A3B8',textAlign:'center'}}><span style={{color:'#00e5cc'}}>🔒</span><span>Your data is stored securely and never shared.</span></div>)
 }
 
 // ── Main component ─────────────────────────────────────────────
@@ -657,7 +657,7 @@ export default function OnboardingPage(){
   async function skipToDashboard(){await markDone();router.push('/dashboard')}
 
   if(booting)return(
-    <div style={{minHeight:'100vh',background:'#050812',display:'flex',alignItems:'center',justifyContent:'center'}}>
+    <div style={{minHeight:'100vh',background:'#0a0b14',display:'flex',alignItems:'center',justifyContent:'center'}}>
       <div style={{width:28,height:28,borderRadius:'50%',border:'2px solid rgba(255,255,255,0.08)',borderTopColor:CYAN,animation:'spin 0.8s linear infinite'}}/>
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>
@@ -667,32 +667,25 @@ export default function OnboardingPage(){
   const tipsDisplayed=importResult?.inserted>0?importResult.inserted:(preview?.tipsDetected||0)
 
   return(
-    <main style={{position:'relative',minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',padding:'12px',background:'#050812',fontFamily:"'Inter',system-ui,sans-serif",color:'#fff',overflow:'hidden'}}>
+    <main style={{position:'relative',minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',padding:'12px',background:'#0a0b14',fontFamily:"'Inter',system-ui,sans-serif",color:'#fff',overflow:'hidden'}}>
       <style>{CSS}</style>
 
       {/* ── BACKGROUND ── */}
-      <div style={{position:'fixed',inset:0,pointerEvents:'none',zIndex:0}}>
-        <div style={{position:'absolute',inset:0,background:'radial-gradient(ellipse at 20% 50%,rgba(33,230,243,0.18) 0%,transparent 55%),radial-gradient(ellipse at 80% 50%,rgba(255,47,174,0.16) 0%,transparent 55%),radial-gradient(ellipse at 50% 100%,rgba(139,92,246,0.12) 0%,transparent 50%)'}}/>
-        <div style={{position:'absolute',left:'-8%',top:'15%',width:560,height:560,borderRadius:'50%',background:'rgba(33,230,243,0.22)',filter:'blur(100px)'}}/>
-        <div style={{position:'absolute',right:'-8%',bottom:'10%',width:600,height:600,borderRadius:'50%',background:'rgba(255,47,174,0.20)',filter:'blur(110px)'}}/>
-        <div style={{position:'absolute',left:'35%',top:'30%',width:420,height:420,borderRadius:'50%',background:'rgba(139,92,246,0.12)',filter:'blur(90px)'}}/>
-        <div style={{position:'absolute',left:'50%',top:'-5%',transform:'translateX(-50%)',width:400,height:300,borderRadius:'50%',background:'rgba(33,230,243,0.10)',filter:'blur(80px)'}}/>
-        <div style={{position:'absolute',inset:0,opacity:0.10,backgroundImage:'radial-gradient(rgba(255,255,255,0.6) 1px,transparent 1px)',backgroundSize:'28px 28px'}}/>
+      <div style={{position:'fixed',inset:0,pointerEvents:'none',zIndex:0,background:'#0a0b14'}}>
+        <div className="bg-orb-cyan" style={{position:'absolute',left:'-5%',top:'-5%',width:600,height:600,borderRadius:'50%',background:'rgba(0,229,204,0.18)',filter:'blur(400px)'}}/>
+        <div className="bg-orb-magenta" style={{position:'absolute',right:'-5%',bottom:'-5%',width:600,height:600,borderRadius:'50%',background:'rgba(224,64,251,0.18)',filter:'blur(400px)'}}/>
       </div>
 
       <AmbientParticles/>
-      {showSparkle&&<Sparkle/>}
+      {showSparkle&&step==='done'&&<Sparkle/>}
       {showUpsell&&pendingPlatform&&<ProUpsellModal platform={PLATFORMS[pendingPlatform]} onSkip={handleUpsellSkip}/>}
       <FeedbackBubble/>
 
       {/* ── CARD ── */}
       <div style={{position:'relative',zIndex:10,width:'100%',maxWidth:480}}>
-        <div style={{position:'absolute',inset:-2,borderRadius:33,background:'linear-gradient(135deg,rgba(33,230,243,0.9) 0%,rgba(124,92,255,0.45) 45%,rgba(255,47,174,0.9) 100%)',zIndex:-1,filter:'blur(1.5px)',animation:'glowPulse 3.5s ease-in-out infinite'}}/>
-        <div style={{position:'absolute',inset:-60,borderRadius:'50%',background:'radial-gradient(circle,rgba(124,92,255,0.10) 0%,transparent 70%)',zIndex:-2,pointerEvents:'none'}}/>
-        <div className="ob-card ob-card-inner" style={{position:'relative',borderRadius:31,border:'1px solid rgba(255,255,255,0.11)',background:'rgba(7,10,24,0.88)',backdropFilter:'blur(32px)',WebkitBackdropFilter:'blur(32px)',padding:'22px 26px 18px',overflow:'hidden',boxShadow:'0 0 42px rgba(33,230,243,0.18),0 0 54px rgba(255,47,174,0.16),0 24px 90px rgba(0,0,0,0.50),inset 0 1px 0 rgba(255,255,255,0.09)'}}>
-          <div style={{position:'absolute',top:0,left:'8%',right:'8%',height:'1px',background:'linear-gradient(90deg,transparent,rgba(255,255,255,0.22),transparent)',pointerEvents:'none'}}/>
-          <div style={{position:'absolute',top:-50,left:-50,width:220,height:220,borderRadius:'50%',background:'rgba(33,230,243,0.055)',filter:'blur(40px)',pointerEvents:'none'}}/>
-          <div style={{position:'absolute',bottom:-50,right:-50,width:220,height:220,borderRadius:'50%',background:'rgba(255,47,174,0.045)',filter:'blur(40px)',pointerEvents:'none'}}/>
+        <div style={{position:'absolute',inset:-2,borderRadius:22,background:'linear-gradient(135deg,rgba(0,229,204,0.7) 0%,rgba(224,64,251,0.7) 100%)',zIndex:-1,filter:'blur(1.5px)',animation:'glowPulse 3.5s ease-in-out infinite'}}/>
+        <div className="ob-card ob-card-inner" style={{position:'relative',borderRadius:20,border:'1px solid rgba(0,229,204,0.3)',background:'rgba(13,15,30,0.85)',backdropFilter:'blur(32px)',WebkitBackdropFilter:'blur(32px)',padding:'22px 26px 18px',overflow:'hidden',boxShadow:'0 0 40px rgba(0,229,204,0.08),0 0 80px rgba(224,64,251,0.06)'}}>
+          <div style={{position:'absolute',top:0,left:'8%',right:'8%',height:'1px',background:'linear-gradient(90deg,transparent,rgba(0,229,204,0.2),transparent)',pointerEvents:'none'}}/>
 
           {!['loading'].includes(step)&&(
             <header>
@@ -781,27 +774,27 @@ export default function OnboardingPage(){
                 </div>
               )}
 
-              <div style={{borderRadius:13,border:'1px solid rgba(33,230,243,0.18)',background:'rgba(33,230,243,0.04)',padding:'12px 14px',marginBottom:12}}>
+              <div style={{borderRadius:13,border:'1px solid rgba(0,229,204,0.2)',background:'rgba(0,229,204,0.06)',padding:'12px 14px',marginBottom:12}}>
                 <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:12,marginBottom:10}}>
-                  <div style={{fontSize:10,fontWeight:900,letterSpacing:'0.18em',textTransform:'uppercase',color:'rgba(33,230,243,0.85)'}}>How to copy from {platform.label}</div>
-                  <a href={platform.earningsUrl(cbUsername)} target="_blank" rel="noreferrer" style={{flexShrink:0,padding:'5px 11px',borderRadius:9,border:'1px solid rgba(255,47,174,0.35)',background:'rgba(255,255,255,0.03)',color:'rgba(203,213,225,0.85)',fontSize:10,fontWeight:700,textDecoration:'none',whiteSpace:'nowrap',transition:'all 0.2s'}} onMouseEnter={e=>{e.currentTarget.style.borderColor='rgba(33,230,243,0.55)';e.currentTarget.style.color='#fff'}} onMouseLeave={e=>{e.currentTarget.style.borderColor='rgba(255,47,174,0.35)';e.currentTarget.style.color='rgba(203,213,225,0.85)'}}>Open earnings page ↗</a>
+                  <div style={{fontSize:10,fontWeight:900,letterSpacing:'0.18em',textTransform:'uppercase',color:'#00e5cc'}}>How to copy from {platform.label}</div>
+                  <a href={platform.earningsUrl(cbUsername)} target="_blank" rel="noreferrer" style={{flexShrink:0,padding:'5px 11px',borderRadius:9,border:'1px solid #00e5cc',background:'rgba(0,0,0,0.3)',color:'#00e5cc',fontSize:10,fontWeight:700,textDecoration:'none',whiteSpace:'nowrap',transition:'all 0.2s'}} onMouseEnter={e=>{e.currentTarget.style.background='rgba(0,229,204,0.1)';e.currentTarget.style.color='#fff'}} onMouseLeave={e=>{e.currentTarget.style.background='rgba(0,0,0,0.3)';e.currentTarget.style.color='#00e5cc'}}>Open earnings page ↗</a>
                 </div>
-                <p style={{fontSize:12,color:'rgba(148,163,184,0.8)',lineHeight:1.6,marginBottom:10}}>{platform.instructions}</p>
+                <p style={{fontSize:12,color:'#94A3B8',lineHeight:1.6,marginBottom:10}}>{platform.instructions}</p>
                 <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:8}}>
-                  {['No password required','You control what gets imported','Takes about 60 seconds'].map(t=>(<div key={t} style={{display:'flex',alignItems:'center',gap:5,fontSize:10,color:'rgba(148,163,184,0.75)'}}><span style={{color:CYAN,fontSize:11}}>✓</span>{t}</div>))}
+                  {['No password required','You control what gets imported','Takes about 60 seconds'].map(t=>(<div key={t} style={{display:'flex',alignItems:'center',gap:5,fontSize:10,color:'#94A3B8'}}><span style={{color:'#00e5cc',fontSize:11}}>✓</span>{t}</div>))}
                 </div>
               </div>
 
               <textarea value={pasteText} onChange={e=>setPasteText(e.target.value)} placeholder={platform.placeholder}
-                style={{width:'100%',height:128,resize:'none',borderRadius:13,border:'1px solid rgba(33,230,243,0.18)',borderTop:'1.5px solid rgba(33,230,243,0.35)',background:'rgba(2,4,14,0.97)',padding:'12px 14px',fontFamily:'monospace',fontSize:11,lineHeight:1.65,color:'#a5f3fc',outline:'none',transition:'border-color 0.2s,box-shadow 0.2s',marginBottom:parseError?9:12,boxShadow:'inset 0 2px 12px rgba(0,0,0,0.4),inset 0 1px 0 rgba(33,230,243,0.08)'}}
-                onFocus={e=>{e.target.style.borderColor='rgba(33,230,243,0.6)';e.target.style.boxShadow='0 0 0 3px rgba(33,230,243,0.08)'}}
-                onBlur={e=>{e.target.style.borderColor='rgba(255,255,255,0.1)';e.target.style.boxShadow='none'}}
+                style={{width:'100%',height:128,resize:'none',borderRadius:13,border:'1px solid rgba(255,255,255,0.08)',background:'rgba(0,0,0,0.4)',padding:'12px 14px',fontFamily:'monospace',fontSize:11,lineHeight:1.65,color:'#94A3B8',outline:'none',transition:'border-color 0.2s,box-shadow 0.2s',marginBottom:parseError?9:12}}
+                onFocus={e=>{e.target.style.borderColor='rgba(0,229,204,0.4)';e.target.style.boxShadow='none'}}
+                onBlur={e=>{e.target.style.borderColor='rgba(255,255,255,0.08)';e.target.style.boxShadow='none'}}
               />
 
               {parseError&&<div style={{marginBottom:10,padding:'9px 12px',borderRadius:11,background:'rgba(248,113,113,0.07)',border:'1px solid rgba(248,113,113,0.22)',fontSize:12,color:'#f87171'}}>⚠️ {parseError}</div>}
 
               <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:9,marginBottom:16}}>
-                {['Open your earnings page','Highlight the rows you want','Copy and paste them here'].map((t,i)=>(<div key={i} style={{display:'flex',alignItems:'center',gap:7,fontSize:10,color:'rgba(148,163,184,0.8)'}}><div style={{width:19,height:19,borderRadius:'50%',border:'1px solid rgba(33,230,243,0.35)',background:'rgba(33,230,243,0.08)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,fontWeight:900,color:CYAN,flexShrink:0}}>{i+1}</div><span>{t}</span></div>))}
+                {['Open your earnings page','Highlight the rows you want','Copy and paste them here'].map((t,i)=>(<div key={i} style={{display:'flex',alignItems:'center',gap:7,fontSize:10,color:'#F8FAFC'}}><div style={{width:19,height:19,borderRadius:'50%',border:'1px solid rgba(0,229,204,0.4)',background:'rgba(0,229,204,0.15)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,fontWeight:900,color:'#00e5cc',flexShrink:0}}>{i+1}</div><span style={{color:'#94A3B8'}}>{t}</span></div>))}
               </div>
 
               <div style={{display:'grid',gridTemplateColumns:'auto 1fr',gap:9,marginBottom:4}}>
@@ -956,12 +949,7 @@ export default function OnboardingPage(){
           )}
 
           {/* ══ LIVE MODE ══ */}
-          {step==='live'&&(
-            <LiveModeDemo
-              onInstall={()=>{window.open('https://www.camcashgrl.com/extension','_blank');setStep('done')}}
-              onSkip={()=>setStep('done')}
-            />
-          )}
+          {step==='live'&&null}
 
           {/* ══ STEP4 ══ */}
           {step==='step4'&&(
