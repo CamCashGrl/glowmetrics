@@ -104,19 +104,18 @@ function LockChip({ type }) {
 // HELPER FUNCTIONS
 // ============================================================
 
-export function getDashboardReadiness({ totalTips = 0, totalSessions = 0, totalFans = 0, totalEarnings = 0 }) {
-  if (!totalTips || totalTips === 0) return 'no_data'
-  if (totalTips < 25 || totalSessions < 3 || totalFans < 5 || totalEarnings < 10) return 'very_low_data'
-  if (totalTips < 100 || totalSessions < 8 || totalFans < 20 || totalEarnings < 50) return 'partial_data'
-  return 'full_data'
+export function getDashboardReadiness({ totalTips = 0, totalSessions = 0, totalFans = 0, totalEarnings = 0, dateRangeDays = 0, streamDays = 0 }) {
+  if (!totalTips || totalTips === 0) return 'setup'
+  if (totalTips < 25 || totalSessions < 3 || totalFans < 5 || totalEarnings < 10) return 'building'
+  if (totalTips < 50 || totalSessions < 5 || totalFans < 10 || totalEarnings < 25) return 'starter'
+  if (totalTips < 100 || totalSessions < 8 || totalFans < 20 || totalEarnings < 50) return 'warming'
+  if (dateRangeDays < 7 && streamDays < 3) return 'warming'
+  return 'ready'
 }
 
-// Legacy compat for page.js getDashboardStage calls
+// Legacy compat — page.js now uses getDashboardReadiness directly; real dashboard always renders
 export function getDashboardStage({ tipCount = 0, sessionCount = 0, totalEarnings = 0 }) {
-  if (tipCount === 0) return 'empty'
-  const r = getDashboardReadiness({ totalTips: tipCount, totalSessions: sessionCount, totalEarnings })
-  if (r === 'full_data') return 'ready'
-  return 'preview'
+  return 'ready'
 }
 
 export function getPlanAccess(userPlan = 'free', trackedPlatformCount = 0) {
@@ -160,6 +159,110 @@ export const canShowPlatformComp = ({ platformCount, sessionCount }) => platform
 export const canShowSessionPerf  = ({ sessionCount }) => sessionCount >= 3
 export const canShowRetention    = ({ uniqueFanCount, dateRangeDays }) => uniqueFanCount >= 10 && dateRangeDays >= 7
 export const canShowHourlyRate   = ({ sessionCount, totalStreamMinutes }) => sessionCount >= 3 && totalStreamMinutes >= 60
+
+// ── MODULE LOCK STATE ─────────────────────────────────────────────────────────
+// Single source of truth for per-module data thresholds.
+// Only platformROI and multiPlatformTracking are ever Pro-gated.
+// Money Map and Stream Planner are data-gated only — never paywalled.
+export function getModuleLockState({ module, totalTips = 0, totalSessions = 0, totalFans = 0, totalEarnings = 0, totalStreamMinutes = 0, importedPlatformCount = 0, isPro = false, liveModeSessions = 0 }) {
+  const rules = {
+    bestStreamingTimes:   { needsData: totalTips < 25 || totalSessions < 3,          message: 'Peak Earning Windows unlock after 25+ tips and 3+ meaningful sessions.' },
+    avgHourlyRate:        { needsData: totalSessions < 3 || totalStreamMinutes < 60,  message: 'Average $/Hour unlocks after 3+ sessions and 60+ tracked minutes.' },
+    topFans:              { needsData: totalTips < 10 || totalFans < 5,               message: 'Top Fans unlock after more fan and tip activity.' },
+    whales:               { needsData: totalFans < 10 || totalEarnings < 50,          message: 'Whale detection unlocks after enough repeat fan history.' },
+    sessionBreakdown:     { needsData: totalSessions < 3,                             message: 'Session Breakdown unlocks after multiple completed sessions.' },
+    platformROI:          { needsData: importedPlatformCount < 2, requiresPro: !isPro && importedPlatformCount >= 1, message: !isPro ? 'Platform ROI unlocks after upgrading to Pro and importing at least 2 platforms.' : 'Import at least 2 platforms to compare earnings.' },
+    multiPlatformTracking:{ needsData: false, requiresPro: !isPro,                   message: 'Upgrade to Pro to track more than one platform.' },
+    fanRecovery:          { needsData: totalFans < 20 || totalEarnings < 50,          message: 'Fan Recovery unlocks after enough repeat fan history.' },
+    moneyMap:             { needsData: totalTips < 50 || totalSessions < 5,           message: 'Money Map unlocks after 50+ tips and 5+ meaningful sessions.' },
+    streamPlanner:        { needsData: totalTips < 25 || totalSessions < 3,           message: 'Stream Planner unlocks after 25+ tips and 3+ meaningful sessions.' },
+    forecasting:          { needsData: totalSessions < 8 || totalEarnings < 50,       message: 'Forecasting unlocks after more earnings history.' },
+    liveScore:            { needsData: liveModeSessions < 1,                          message: 'Live Mode Score unlocks after your first Live Mode stream.' },
+  }
+  const rule = rules[module]
+  if (!rule) return { locked: false, lockType: null, message: null }
+  if (rule.requiresPro) return { locked: true, lockType: 'requires_pro', message: rule.message }
+  if (rule.needsData)   return { locked: true, lockType: 'needs_data',   message: rule.message }
+  return { locked: false, lockType: null, message: null }
+}
+
+// ── UNLOCK PROGRESS ───────────────────────────────────────────────────────────
+export function getUnlockProgress({ totalTips = 0, totalSessions = 0, totalFans = 0, totalEarnings = 0, dateRangeDays = 0, streamDays = 0 }) {
+  const p = (v, t) => Math.min(100, Math.round(v / Math.max(t, 1) * 100))
+  return {
+    starter: {
+      tips:     { current: totalTips,     target: 25,   pct: p(totalTips, 25) },
+      sessions: { current: totalSessions, target: 3,    pct: p(totalSessions, 3) },
+      fans:     { current: totalFans,     target: 5,    pct: p(totalFans, 5) },
+      earnings: { current: `$${Math.floor(totalEarnings)}`, target: '$10', pct: p(totalEarnings, 10) },
+    },
+    full: {
+      tips:       { current: totalTips,     target: 100,  pct: p(totalTips, 100) },
+      sessions:   { current: totalSessions, target: 8,    pct: p(totalSessions, 8) },
+      fans:       { current: totalFans,     target: 20,   pct: p(totalFans, 20) },
+      earnings:   { current: `$${Math.floor(totalEarnings)}`, target: '$50', pct: p(totalEarnings, 50) },
+      dateDays:   { current: dateRangeDays, target: 7,    pct: p(dateRangeDays, 7) },
+      streamDays: { current: streamDays,    target: 3,    pct: p(streamDays, 3) },
+    },
+  }
+}
+
+// ── DASHBOARD PROGRESS CARD ───────────────────────────────────────────────────
+// Shown inside the real dashboard when data is still warming up.
+// Never shown when readiness === 'ready'.
+export function DashboardProgressCard({ totalTips = 0, totalSessions = 0, totalFans = 0, totalEarnings = 0, readiness = 'building', onImport }) {
+  const grad = 'linear-gradient(90deg,#16F4FF,#7C5CFF,#FF2BAE)'
+  const progress = getUnlockProgress({ totalTips, totalSessions, totalFans, totalEarnings })
+  const isEarly  = readiness === 'setup' || readiness === 'building'
+  const target   = isEarly ? progress.starter : progress.full
+  const overall  = Math.round((target.tips.pct + target.sessions.pct + target.fans.pct + target.earnings.pct) / 4)
+  const stageLabel = { setup: 'Setup', building: 'Building', starter: 'Starter insights unlocked', warming: 'Warming up', ready: 'Full confidence' }[readiness] || readiness
+  const nextTarget = isEarly ? 'starter insights (25 tips · 3 sessions · 5 fans · $10)' : 'full confidence (100 tips · 8 sessions · 20 fans · $50)'
+
+  const items = [
+    { label: 'Tips',     pct: target.tips.pct,     cur: target.tips.current,     tgt: target.tips.target,     unit: ' tips' },
+    { label: 'Sessions', pct: target.sessions.pct, cur: target.sessions.current, tgt: target.sessions.target, unit: ' sessions' },
+    { label: 'Fans',     pct: target.fans.pct,     cur: target.fans.current,     tgt: target.fans.target,     unit: ' fans' },
+    { label: 'Earnings', pct: target.earnings.pct, cur: target.earnings.current, tgt: target.earnings.target, unit: '' },
+  ]
+
+  return (
+    <div style={{ borderRadius: 22, border: '1px solid rgba(255,255,255,0.09)', background: 'rgba(12,16,34,0.78)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', padding: '18px 22px', marginBottom: 20, position: 'relative', overflow: 'hidden', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06), 0 12px 32px rgba(0,0,0,0.28)' }}>
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: grad }} />
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, marginBottom: 12 }}>
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 800, color: '#FFFFFF', marginBottom: 2 }}>
+            Dashboard warming up — <span style={{ color: '#16F4FF' }}>{stageLabel}</span>
+          </div>
+          <div style={{ fontSize: 11, color: '#8D93AA' }}>Progress toward {nextTarget} · {overall}% complete</div>
+        </div>
+        {onImport && (
+          <button onClick={onImport} style={{ padding: '8px 18px', borderRadius: 100, background: grad, border: 'none', color: '#fff', fontWeight: 700, fontSize: 12, cursor: 'pointer', boxShadow: '0 0 20px rgba(22,244,255,0.2)', whiteSpace: 'nowrap' }}>
+            Upload More Data
+          </button>
+        )}
+      </div>
+      <div style={{ height: 5, borderRadius: 100, background: 'rgba(255,255,255,0.06)', marginBottom: 14, overflow: 'hidden' }}>
+        <div style={{ height: '100%', width: `${overall}%`, background: grad, borderRadius: 100, transition: 'width 0.6s ease' }} />
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: 8 }}>
+        {items.map(item => (
+          <div key={item.label} style={{ background: 'rgba(255,255,255,0.03)', borderRadius: 12, padding: '9px 12px', border: '1px solid rgba(255,255,255,0.06)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5, alignItems: 'center' }}>
+              <span style={{ fontSize: 10, color: '#8D93AA', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em' }}>{item.label}</span>
+              <span style={{ fontSize: 10, color: item.pct >= 100 ? '#10B981' : '#D7D9EA', fontWeight: 700 }}>
+                {item.pct >= 100 ? '✓' : `${item.cur}${item.unit} / ${item.tgt}${item.unit}`}
+              </span>
+            </div>
+            <div style={{ height: 3, borderRadius: 100, background: 'rgba(255,255,255,0.06)', overflow: 'hidden' }}>
+              <div style={{ height: '100%', width: `${item.pct}%`, background: item.pct >= 100 ? '#10B981' : grad, borderRadius: 100, transition: 'width 0.5s ease' }} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 // ============================================================
 // REUSABLE COMPONENTS

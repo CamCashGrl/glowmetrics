@@ -16,7 +16,7 @@ import AnalyticsCharts from './AnalyticsCharts'
 import StreamPlanner from './StreamPlanner'
 import MoneyMap from './MoneyMap'
 import { track as gtmTrack } from '../../lib/track'
-import { getDashboardStage, EmptyDashboard, DashboardPreview } from './DashboardPreview'
+import { getDashboardReadiness, getModuleLockState, LockedInsightCard, DashboardProgressCard } from './DashboardPreview'
 
 // Analytics tracking — works whether or not @vercel/analytics is installed
 let track = (event, props) => {}
@@ -2416,43 +2416,23 @@ const handleCSV = async (file, forcePlatform = null) => {
   const _momPrevRev = tips.reduce((s, t) => { const d = new Date(t.date_time || t.dateRaw); return d >= _momPrevStart && d < _momThisStart ? s + (t.usd || 0) : s }, 0)
   const growthPct = (_momPrevRev > 0 && _momThisRev > 0) ? Math.round(((_momThisRev - _momPrevRev) / _momPrevRev) * 100) : null
 
-  // ── DASHBOARD STAGE — decides which experience to render ────
-  // Force full dashboard if user clicked "Continue to Dashboard" from preview
-  const forceFull = typeof window !== 'undefined' && sessionStorage.getItem('camcash_force_full_dash') === '1'
-  const dashboardStage = forceFull ? 'ready' : getDashboardStage({
-    tipCount:      tips.length,
-    sessionCount:  analytics?.meaningfulSessionCount || 0,
+  // ── DASHBOARD READINESS — always renders real dashboard, module-level locking ─
+  const _drDates      = tips.map(t => new Date(t.date_time || t.dateRaw)).filter(d => !isNaN(d)).sort((a, b) => a - b)
+  const _drRangeDays  = _drDates.length >= 2 ? Math.round((_drDates[_drDates.length - 1] - _drDates[0]) / 86400000) : 0
+  const _drStreamDays = new Set(_drDates.map(d => d.toDateString())).size
+  const _drPlatCount  = [...new Set(tips.map(t => t.platform).filter(p => p && p !== 'Unknown'))].length
+  const dashboardReadiness = getDashboardReadiness({
+    totalTips:     tips.length,
+    totalSessions: analytics?.meaningfulSessionCount || 0,
+    totalFans:     analytics?.uniqueFanCount || [...new Set(tips.map(t => (t.username || '').toLowerCase()).filter(Boolean))].length,
     totalEarnings: analytics?.totalUSD || 0,
+    dateRangeDays: _drRangeDays,
+    streamDays:    _drStreamDays,
   })
-
-  if (!loading && dashboardStage === 'empty') {
-    return (
-      <EmptyDashboard
-        onImport={() => handleTabChange('import')}
-        onLiveMode={() => { if (typeof window !== 'undefined') sessionStorage.setItem('camcash_force_full_dash', '1'); window.location.reload() }}
-      />
-    )
-  }
-
-  if (!loading && dashboardStage === 'preview') {
-    return (
-      <DashboardPreview
-        tips={tips}
-        analytics={analytics}
-        userPlan={profile?.plan || 'free'}
-        onAddHistory={() => router.push('/onboarding')}
-        onContinue={() => {
-          if (typeof window !== 'undefined') sessionStorage.setItem('camcash_force_full_dash', '1')
-          window.location.reload()
-        }}
-        onUpgrade={() => window.open('https://www.camcashgrl.com/pricing', '_blank')}
-        onLiveMode={() => {
-          if (typeof window !== 'undefined') sessionStorage.setItem('camcash_force_full_dash', '1')
-          window.location.reload()
-        }}
-      />
-    )
-  }
+  const _isLowData   = dashboardReadiness !== 'ready'
+  const _modLockArgs = { totalTips: tips.length, totalSessions: analytics?.meaningfulSessionCount || 0, totalFans: analytics?.uniqueFanCount || 0, totalEarnings: analytics?.totalUSD || 0, totalStreamMinutes: analytics?.totalStreamMinutes || 0, importedPlatformCount: _drPlatCount, isPro, liveModeSessions: 0 }
+  const _plannerLock  = getModuleLockState({ module: 'streamPlanner',  ..._modLockArgs })
+  const _moneyMapLock = getModuleLockState({ module: 'moneyMap',       ..._modLockArgs })
 
   return (
     <div style={{
@@ -2646,6 +2626,18 @@ const handleCSV = async (file, forcePlatform = null) => {
           )}
         </div>
 
+        {/* ── DASHBOARD PROGRESS CARD — visible on all tabs when data is warming up ── */}
+        {_isLowData && (
+          <DashboardProgressCard
+            totalTips={tips.length}
+            totalSessions={analytics?.meaningfulSessionCount || 0}
+            totalFans={analytics?.uniqueFanCount || 0}
+            totalEarnings={analytics?.totalUSD || 0}
+            readiness={dashboardReadiness}
+            onImport={() => handleTabChange('import')}
+          />
+        )}
+
         {activeTab === "overview" && (
           <div style={{ animation: "fadeUp 0.3s ease" }}>
 
@@ -2653,7 +2645,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                 1. MONEY SNAPSHOT
             ═══════════════════════════════════════ */}
             {(() => {
-              // ── empty state — redirect handled above at component level ──
+              // ── empty state — show null; DashboardProgressCard above covers zero-data ──
               if (tips.length === 0) return null
 
               const now = new Date()
@@ -5945,8 +5937,16 @@ const handleCSV = async (file, forcePlatform = null) => {
         )}
 
         {activeTab === 'analytics' && <AnalyticsCharts tips={tips} />}
-        {activeTab === 'planner' && <StreamPlanner tips={tips} isPro={isPro} />}
-        {activeTab === 'moneymap' && <MoneyMap tips={tips} isPro={isPro} />}
+        {activeTab === 'planner' && (
+          _plannerLock.locked
+            ? <div style={{ padding: '32px 0' }}><LockedInsightCard title="Stream Planner" description="Plan your schedule around your best earning windows." lockType="needs_data" requirement={_plannerLock.message} ctaLabel="Upload More Data" ctaAction={() => handleTabChange('import')} /></div>
+            : <StreamPlanner tips={tips} isPro={true} />
+        )}
+        {activeTab === 'moneymap' && (
+          _moneyMapLock.locked
+            ? <div style={{ padding: '32px 0' }}><LockedInsightCard title="Money Map" description="See where and when your money comes from across sessions and platforms." lockType="needs_data" requirement={_moneyMapLock.message} ctaLabel="Upload More Data" ctaAction={() => handleTabChange('import')} /></div>
+            : <MoneyMap tips={tips} isPro={true} />
+        )}
       </div>
 
       {/* DELETE MODAL */}
