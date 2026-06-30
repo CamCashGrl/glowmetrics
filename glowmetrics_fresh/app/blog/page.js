@@ -227,11 +227,6 @@ const posts = [
     title: 'How to Re-Engage Whales and High-Tipping Fans (And Get Them Spending Again)',
     description: "Whales don't just randomly leave. They disengage for specific reasons — and if you understand those reasons, you can bring them back.",
   },
-  {
-    slug: 'why-you-arent-making-money-on-chaturbate',
-    title: "Why You Aren't Making Money on Chaturbate (And Exactly How to Fix It)",
-    description: "Most cam models aren't failing because of looks or effort — they're failing because they don't understand how the system actually works.",
-  },
 ]
 
 export default function BlogPage() {
