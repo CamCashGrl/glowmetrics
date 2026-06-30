@@ -162,13 +162,17 @@ function isValidTip(t) {
   )
 }
 
-function detectPlatform(text) {
+export function detectPlatform(text) {
   const lower = text.toLowerCase()
+  // Keyword detection — platform name or signature phrase present in text
   if (lower.includes('chaturbate') || lower.includes('tip from:') || lower.includes('token balance') || lower.includes('token change')) return 'Chaturbate'
   if (lower.includes('bongacams') || lower.includes('bonga') || lower.includes('your payout')) return 'BongaCams'
   if (lower.includes('myfreecams') || lower.includes('mfc')) return 'MyFreeCams'
   if (lower.includes('stripchat')) return 'Stripchat'
   if (lower.includes('camsoda')) return 'CamSoda'
+  // Structural detection — platform-unique data format when no platform name appears in the text
+  if (/^\d{2}\.\d{2}\.\d{4}\s+\d{2}:\d{2}/m.test(text)) return 'BongaCams'
+  if (/^\d{10,13}\t/m.test(text)) return 'MyFreeCams'
   return 'Unknown'
 }
 

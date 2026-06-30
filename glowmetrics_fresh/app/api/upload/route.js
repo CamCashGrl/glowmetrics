@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { parseCSV } from '../../../lib/analytics'
+import { parseCSV, detectPlatform } from '../../../lib/analytics'
 
 const BATCH_SIZE = 250 // Safe batch size — never hit Supabase limits
 
@@ -32,27 +32,12 @@ export async function POST(req) {
 
   // ── PARSE + NORMALIZE ──────────────────────────────────────────────────
   const raw = await file.text()
+  const textDetectedPlatform = detectPlatform(raw)
   const parsed = parseCSV(raw)
-
-  // Detect platform from raw text before mapping rows
-  // BongaCams: DD.MM.YYYY date format
-  // Chaturbate: "Tip From:" pattern
-  // MFC: Unix timestamp
-  const rawTextForDetection = raw
-  let textDetectedPlatform = 'Unknown'
-  if (/Tip From:/i.test(rawTextForDetection)) textDetectedPlatform = 'Chaturbate'
-  else if (/\d{2}\.\d{2}\.\d{4}\s+\d{2}:\d{2}/.test(rawTextForDetection)) textDetectedPlatform = 'BongaCams'
-  else if (/^\d{10,13}\t/m.test(rawTextForDetection)) textDetectedPlatform = 'MyFreeCams'
-
-  const PLATFORM_RATES = { Chaturbate: 0.05, BongaCams: 0.025, MyFreeCams: 0.05 }
-  const platformRate = PLATFORM_RATES[textDetectedPlatform] || 0.05
 
   const rows = parsed.map((row) => {
     const tokens = Number(row.tokens) || 0
-    const rawUsd = Number(row.usd) || 0
-    const usd = rawUsd > 0
-      ? parseFloat(rawUsd.toFixed(2))
-      : parseFloat((tokens * (platformRate)).toFixed(2))
+    const usd = parseFloat((Number(row.usd) || 0).toFixed(2))
 
     return {
       user_id:   user.id,
