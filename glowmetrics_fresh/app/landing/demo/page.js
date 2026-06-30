@@ -227,10 +227,13 @@ const SECTIONS = [
     { id:"platforms", icon:"🎯", label:"Platforms" },
     { id:"sessions",  icon:"🎥", label:"Sessions"  },
     { id:"monthly",   icon:"📈", label:"Monthly"   },
+    { id:"moneymap",  icon:"🗺️", label:"Money Map" },
+    { id:"plan",      icon:"📅", label:"Streaming Plan" },
   ]},
   { id:"tools", label:"TOOLS", items:[
     { id:"live",   icon:"🔴", label:"Live Mode"   },
     { id:"titles", icon:"🎬", label:"Room Titles" },
+    { id:"upload", icon:"📥", label:"Upload Data" },
   ]},
 ]
 const BOTTOM_ITEMS = [{ id:"demo_cta", icon:"🚀", label:"Start Free" }]
@@ -447,8 +450,55 @@ export default function DemoDashboard() {
   const [expandInsights, setExpandInsights] = useState(false)
   const [showWalkthrough, setShowWalkthrough] = useState(true)
 
+  // Live Mode demo state
+  const [liveActive, setLiveActive]   = useState(false)
+  const [liveTips, setLiveTips]       = useState([])
+  const [liveTotal, setLiveTotal]     = useState(0)
+  const [liveElapsed, setLiveElapsed] = useState(0)
+  const [liveGoal, setLiveGoal]       = useState(500)
+
+  // Room Title Generator demo state
+  const [titleMood, setTitleMood]           = useState("tease")
+  const [titleGoal, setTitleGoal]           = useState("500")
+  const [titleIdx, setTitleIdx]             = useState(0)
+  const [titleGenerating, setTitleGenerating] = useState(false)
+
+  // Upload Data demo state
+  const [uploadPlatform, setUploadPlatform] = useState("Chaturbate")
+
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(""), 3000) }
   const handleTabChange = (tab) => { setActiveTab(tab); window.scrollTo({ top:0, behavior:"instant" }) }
+
+  // Simulated live tip ticker — fires while liveActive is true
+  useEffect(() => {
+    if (!liveActive) return
+    const names = ["diamondkingx","vaultmaster99","highroller88","euro_titan","mfc_godfather","cbwhale_elite"]
+    const secTimer = setInterval(() => setLiveElapsed(e => e + 1), 1000)
+    const tipTimer = setInterval(() => {
+      const amt = [25,50,75,100,150,250,500][Math.floor(Math.random()*7)]
+      const name = names[Math.floor(Math.random()*names.length)]
+      setLiveTips(prev => [{ name, amt, id: Date.now()+Math.random() }, ...prev].slice(0, 8))
+      setLiveTotal(prev => prev + amt)
+    }, 3200)
+    return () => { clearInterval(secTimer); clearInterval(tipTimer) }
+  }, [liveActive])
+
+  const startLiveDemo = () => { setLiveActive(true); setLiveTips([]); setLiveTotal(0); setLiveElapsed(0) }
+  const stopLiveDemo  = () => { setLiveActive(false) }
+
+  // Room title generator — mood + goal driven, cycles through canned variants
+  const TITLE_BANK = {
+    tease:     (g) => [`let's see how far you take me 💦 hit ${g} → full control (tonight only)`, `I'm not giving it up that easy 😏 ${g} tokens and you decide what's next`, `almost… not yet 👀 tip to ${g} and find out`],
+    dominant:  (g) => [`top tipper owns this room 👑 ${g} = exclusive access (live now)`, `prove you deserve it — tip to ${g} and earn your reward 🔥`, `I decide — you tip. ${g} unlocks everything tonight`],
+    hype:      (g) => [`WE ARE SO CLOSE 🔥 ${g} tokens and this room explodes`, `the energy in here is insane right now — push to ${g} 💥`, `LET'S GOOO — tip to ${g}, this is happening tonight`],
+    mystery:   (g) => [`you won't believe what happens at ${g} 👀 tip to find out`, `something big is coming… ${g} unlocks it 🎁`, `curious? tip to ${g} and see for yourself 🔒`],
+  }
+  const generateTitle = () => {
+    setTitleGenerating(true)
+    setTimeout(() => { setTitleIdx(i => i + 1); setTitleGenerating(false) }, 550)
+  }
+  const titleVariants = (TITLE_BANK[titleMood] || TITLE_BANK.tease)(titleGoal || "500")
+  const currentTitle = titleVariants[titleIdx % titleVariants.length]
 
   const tips      = DEMO_TIPS
   const sessions  = DEMO_SESSIONS
@@ -1187,67 +1237,309 @@ export default function DemoDashboard() {
             )
           })()}
 
+          {/* ═══════════ MONEY MAP TAB ═══════════ */}
+          {activeTab === "moneymap" && (() => {
+            const DAY_ORDER = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]
+            const allDayEntries = DAY_ORDER.map(day => {
+              let bestPlat = null, bestVal = 0, bestHourNum = null
+              Object.entries(platformBestTimes).forEach(([plat, times]) => {
+                const entry = times?.bestHourByDay?.[day]
+                if (entry && entry.avg > bestVal) { bestVal = entry.avg; bestPlat = plat; bestHourNum = entry.hour }
+              })
+              return { day, bestPlat, bestVal, bestHourNum }
+            })
+            const maxVal = Math.max(...allDayEntries.map(d=>d.bestVal), 1)
+            const hottest = [...allDayEntries].sort((a,b)=>b.bestVal-a.bestVal)[0]
+            return (
+              <div style={{ animation:"fadeUp 0.3s ease" }}>
+                <div style={{ marginBottom:24 }}>
+                  <h1 style={{ fontSize:28, fontWeight:800, color:C.white, display:"flex", alignItems:"center", gap:10 }}>🗺️ Money Map</h1>
+                  <p style={{ fontSize:13, color:C.muted }}>Your earnings heat map — exactly when and where your room performs best</p>
+                </div>
+
+                <div style={{ ...glassCard, borderRadius:18, padding:24, marginBottom:20 }}>
+                  <div style={{ fontSize:13, fontWeight:700, color:C.white, marginBottom:16 }}>Best earning window by day (across all platforms)</div>
+                  <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", gap:8 }}>
+                    {allDayEntries.map(d => {
+                      const intensity = d.bestVal / maxVal
+                      const col = platColors2[d.bestPlat] || C.cyan
+                      const isHot = d.day === hottest.day
+                      return (
+                        <div key={d.day} style={{
+                          padding:"14px 8px", borderRadius:12, textAlign:"center",
+                          background: d.bestVal===0 ? "rgba(255,255,255,0.03)" : `${col}${Math.round(intensity*40+8).toString(16).padStart(2,'0')}`,
+                          border: isHot ? `1.5px solid ${col}` : "1px solid rgba(255,255,255,0.07)",
+                          boxShadow: isHot ? `0 0 16px ${col}40` : "none",
+                        }}>
+                          <div style={{ fontSize:11, fontWeight:700, color:C.muted, marginBottom:6 }}>{d.day.slice(0,3)}</div>
+                          {d.bestVal>0 ? (
+                            <>
+                              <div style={{ fontSize:15, fontWeight:900, color:C.white }}>${Math.round(d.bestVal)}</div>
+                              <div style={{ fontSize:9, color:col, fontWeight:700, marginTop:3 }}>{formatHour(d.bestHourNum)}</div>
+                              <div style={{ fontSize:8, color:C.muted, marginTop:2 }}>{d.bestPlat?.replace("BongaCams","Bonga").replace("Chaturbate","CB").replace("MyFreeCams","MFC")}</div>
+                              {isHot && <div style={{ fontSize:13, marginTop:4 }}>🔥</div>}
+                            </>
+                          ) : <div style={{ fontSize:11, color:C.muted }}>—</div>}
+                        </div>
+                      )
+                    })}
+                  </div>
+                  <div style={{ marginTop:16, padding:"10px 14px", borderRadius:10, background:"rgba(245,158,11,0.07)", border:"1px solid rgba(245,158,11,0.2)", fontSize:12, color:C.text }}>
+                    🔥 Your hottest window is <strong style={{ color:C.gold }}>{hottest.day} {formatHour(hottest.bestHourNum)}</strong> on <strong style={{ color:C.white }}>{hottest.bestPlat}</strong> — historically ${Math.round(hottest.bestVal)}/session.
+                  </div>
+                </div>
+
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:14 }}>
+                  {Object.entries(platformBestTimes).map(([plat, times]) => {
+                    const col = platColors2[plat] || C.blue
+                    return (
+                      <div key={plat} style={{ ...glassCard, borderRadius:14, padding:18, border:`1px solid ${col}25` }}>
+                        <div style={{ fontSize:13, fontWeight:800, color:C.white, marginBottom:10 }}>{plat}</div>
+                        <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                          <div style={{ padding:"8px 10px", borderRadius:8, background:`${col}10` }}>
+                            <div style={{ fontSize:9, color:C.muted, textTransform:"uppercase" }}>Peak Hour</div>
+                            <div style={{ fontSize:14, fontWeight:700, color:col }}>{formatHour(times?.hour?.hour)}</div>
+                          </div>
+                          <div style={{ padding:"8px 10px", borderRadius:8, background:`${col}10` }}>
+                            <div style={{ fontSize:9, color:C.muted, textTransform:"uppercase" }}>Best Day</div>
+                            <div style={{ fontSize:14, fontWeight:700, color:col }}>{times?.bestDay?.day} · ${Math.round(times?.bestDay?.avg||0)}</div>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })()}
+
+          {/* ═══════════ STREAMING PLAN TAB ═══════════ */}
+          {activeTab === "plan" && (() => {
+            const TAG_BY_RANK = ["Top Pick","Peak","High $/hr","Reliable","Good","Steady"]
+            const planRows = []
+            Object.entries(platformBestTimes).forEach(([plat, times]) => {
+              if (!times?.bestDay) return
+              planRows.push({ plat, day: times.bestDay.day, hour: times.hour?.hour ?? null, avg: times.bestDay.avg })
+            })
+            // also add a couple of secondary days for the top platform
+            const topPlat = Object.entries(platformVelocity).sort((a,b)=>b[1]-a[1])[0]?.[0]
+            if (topPlat && platformBestTimes[topPlat]) {
+              Object.entries(platformBestTimes[topPlat].bestHourByDay || {}).forEach(([day, entry]) => {
+                if (day !== platformBestTimes[topPlat].bestDay.day) {
+                  planRows.push({ plat: topPlat, day, hour: entry.hour, avg: entry.avg })
+                }
+              })
+            }
+            const sortedRows = planRows.sort((a,b)=>b.avg-a.avg).slice(0,6)
+            return (
+              <div style={{ animation:"fadeUp 0.3s ease" }}>
+                <div style={{ marginBottom:24 }}>
+                  <h1 style={{ fontSize:28, fontWeight:800, color:C.white, display:"flex", alignItems:"center", gap:10 }}>📅 Personalized Streaming Plan</h1>
+                  <p style={{ fontSize:13, color:C.muted }}>Built from your Money Map — a suggested weekly schedule designed around when you actually earn the most</p>
+                </div>
+                <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                  {sortedRows.map((r,i) => {
+                    const col = platColors2[r.plat] || C.cyan
+                    const tag = TAG_BY_RANK[i] || "Good"
+                    const winStart = r.hour, winEnd = (r.hour + 3) % 24
+                    return (
+                      <div key={i} style={{ ...glassCard, borderRadius:14, padding:"16px 18px", display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:10 }}>
+                        <div style={{ display:"flex", alignItems:"center", gap:14 }}>
+                          <div style={{ width:38, height:38, borderRadius:10, background:`${col}20`, border:`1px solid ${col}40`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:800, color:col }}>{r.day.slice(0,2)}</div>
+                          <div>
+                            <div style={{ fontWeight:800, fontSize:15, color:C.white }}>{r.day}</div>
+                            <div style={{ fontSize:12, color:C.muted, marginTop:2 }}>{r.plat} · expected ${Math.round(r.avg)}/session</div>
+                          </div>
+                        </div>
+                        <div style={{ display:"flex", alignItems:"center", gap:14 }}>
+                          <span style={{ fontSize:13, fontWeight:700, color:C.text }}>{formatHour(winStart)} – {formatHour(winEnd)}</span>
+                          <span style={{ fontSize:11, fontWeight:800, padding:"5px 10px", borderRadius:999, background: i===0?"rgba(255,43,174,0.18)":`${col}18`, color: i===0?C.pink:col, border:`1px solid ${i===0?"rgba(255,43,174,0.4)":col+"40"}` }}>{tag}</span>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+                <div style={{ marginTop:16, padding:"12px 16px", borderRadius:12, background:"rgba(34,211,238,0.06)", border:"1px solid rgba(34,211,238,0.18)", fontSize:12, color:C.text }}>
+                  💡 This plan updates automatically as you stream more — the more sessions you log, the sharper these windows get.
+                </div>
+              </div>
+            )
+          })()}
+
           {/* ═══════════ LIVE MODE TAB ═══════════ */}
-          {activeTab === "live" && (
-            <div style={{ animation:"fadeUp 0.3s ease" }}>
-              <div style={{ marginBottom:24 }}>
-                <h1 style={{ fontSize:28, fontWeight:800, color:C.white }}>🔴 Live Mode</h1>
-                <p style={{ fontSize:13, color:C.muted }}>Real-time coaching while you stream — sign up to use with your actual stream</p>
-              </div>
-              <div style={{ ...glassCard, borderRadius:16, padding:48, textAlign:"center", marginBottom:24 }}>
-                <div style={{ fontSize:48, marginBottom:16 }}>🔴</div>
-                <div style={{ fontSize:20, fontWeight:700, color:C.white, marginBottom:8 }}>Live Mode is available when you sign up</div>
-                <div style={{ fontSize:14, color:C.muted, marginBottom:28, maxWidth:480, margin:"0 auto 28px" }}>
-                  In your real dashboard, Live Mode lets you log tips as they come in, tracks your pace vs your historical average, fires alerts when momentum is dropping, and tells you exactly what to say to restart tipping.
+          {activeTab === "live" && (() => {
+            const pace = liveElapsed > 0 ? (liveTotal / Math.max(liveElapsed/60,0.2)) : 0
+            const benchmarkPerMin = avgPerHour / 60
+            const paceState = liveElapsed < 15 ? "warming" : pace >= benchmarkPerMin*1.15 ? "hot" : pace <= benchmarkPerMin*0.7 ? "slow" : "steady"
+            const paceCfg = {
+              warming: { label:"⏳ Warming up", color:C.muted },
+              hot:     { label:"🔥 Hot — above your average pace", color:C.green },
+              steady:  { label:"✅ On track", color:C.cyan },
+              slow:    { label:"📉 Slowing — try a micro-goal", color:C.orange },
+            }[paceState]
+            const mm = Math.floor(liveElapsed/60), ss = liveElapsed%60
+            return (
+              <div style={{ animation:"fadeUp 0.3s ease" }}>
+                <div style={{ marginBottom:24, display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:10 }}>
+                  <div>
+                    <h1 style={{ fontSize:28, fontWeight:800, color:C.white, display:"flex", alignItems:"center", gap:10 }}>
+                      🔴 Live Mode
+                      {liveActive && <span style={{ fontSize:11, fontWeight:800, color:C.red, background:"rgba(248,113,113,0.12)", border:"1px solid rgba(248,113,113,0.35)", padding:"3px 10px", borderRadius:999 }}>● LIVE DEMO</span>}
+                    </h1>
+                    <p style={{ fontSize:13, color:C.muted }}>Simulated tip ticker — sign up to track your real stream</p>
+                  </div>
+                  {!liveActive ? (
+                    <button onClick={startLiveDemo} style={{ padding:"10px 22px", borderRadius:10, background:"linear-gradient(135deg,#10B981,#22D3EE)", border:"none", color:"white", fontWeight:800, fontSize:13, cursor:"pointer", boxShadow:"0 0 18px rgba(16,185,129,0.35)" }}>▶ Start Demo Stream</button>
+                  ) : (
+                    <button onClick={stopLiveDemo} style={{ padding:"10px 22px", borderRadius:10, background:"rgba(248,113,113,0.15)", border:"1px solid rgba(248,113,113,0.4)", color:C.red, fontWeight:700, fontSize:13, cursor:"pointer" }}>⏹ End Demo Stream</button>
+                  )}
                 </div>
-                <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:14, maxWidth:600, margin:"0 auto 32px" }}>
-                  {[
-                    { icon:"⚡", label:"Real-time pace tracking", sub:"vs your historical avg" },
-                    { icon:"🚨", label:"Momentum alerts", sub:"fire when tips slow down" },
-                    { icon:"🎯", label:"Goal tracking", sub:"token goal progress live" },
-                  ].map(({icon,label,sub}) => (
-                    <div key={label} style={{ padding:"16px", borderRadius:14, background:"rgba(255,255,255,0.03)", border:"1px solid rgba(255,255,255,0.07)" }}>
-                      <div style={{ fontSize:24, marginBottom:8 }}>{icon}</div>
-                      <div style={{ fontSize:13, fontWeight:700, color:C.white, marginBottom:4 }}>{label}</div>
-                      <div style={{ fontSize:11, color:C.muted }}>{sub}</div>
+
+                {!liveActive && liveTips.length===0 ? (
+                  <div style={{ ...glassCard, borderRadius:16, padding:48, textAlign:"center" }}>
+                    <div style={{ fontSize:44, marginBottom:14 }}>🔴</div>
+                    <div style={{ fontSize:18, fontWeight:700, color:C.white, marginBottom:8 }}>Hit "Start Demo Stream" to see Live Mode in action</div>
+                    <div style={{ fontSize:13, color:C.muted, maxWidth:440, margin:"0 auto" }}>Tips will start coming in automatically — watch your pace, total, and coaching message update in real time, just like your real dashboard.</div>
+                  </div>
+                ) : (
+                  <>
+                    <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:14, marginBottom:18 }}>
+                      <div style={{ ...glassCard, borderRadius:14, padding:18 }}>
+                        <div style={{ fontSize:10, color:C.muted, textTransform:"uppercase", marginBottom:6 }}>Session Total</div>
+                        <div style={{ fontSize:28, fontWeight:900, color:C.green }}>${liveTotal}</div>
+                      </div>
+                      <div style={{ ...glassCard, borderRadius:14, padding:18 }}>
+                        <div style={{ fontSize:10, color:C.muted, textTransform:"uppercase", marginBottom:6 }}>Time Live</div>
+                        <div style={{ fontSize:28, fontWeight:900, color:C.white }}>{mm}:{String(ss).padStart(2,"0")}</div>
+                      </div>
+                      <div style={{ ...glassCard, borderRadius:14, padding:18 }}>
+                        <div style={{ fontSize:10, color:C.muted, textTransform:"uppercase", marginBottom:6 }}>Pace</div>
+                        <div style={{ fontSize:16, fontWeight:800, color:paceCfg.color }}>{paceCfg.label}</div>
+                      </div>
                     </div>
-                  ))}
-                </div>
-                <a href="/landing" style={{ display:"inline-block", padding:"13px 36px", borderRadius:12, background:"linear-gradient(135deg,#22D3EE,#EC4899)", color:"white", fontWeight:700, fontSize:15, textDecoration:"none", boxShadow:"0 0 28px rgba(34,211,238,0.3)" }}>
-                  Sign Up Free to Use Live Mode →
-                </a>
+
+                    <div style={{ ...glassCard, borderRadius:14, padding:18, marginBottom:18 }}>
+                      <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
+                        <span style={{ fontSize:12, color:C.muted, textTransform:"uppercase" }}>Goal: {liveGoal} tokens</span>
+                        <span style={{ fontSize:12, fontWeight:700, color:C.cyan }}>{Math.min(100,Math.round((liveTotal/liveGoal)*100))}%</span>
+                      </div>
+                      <div style={{ height:8, borderRadius:4, background:"rgba(255,255,255,0.08)", overflow:"hidden" }}>
+                        <div style={{ height:"100%", width:`${Math.min(100,(liveTotal/liveGoal)*100)}%`, borderRadius:4, background:"linear-gradient(90deg,#22D3EE,#EC4899)", transition:"width 0.5s ease" }} />
+                      </div>
+                    </div>
+
+                    <div style={{ ...glassCard, borderRadius:14, padding:18 }}>
+                      <div style={{ fontSize:11, color:C.muted, textTransform:"uppercase", marginBottom:10 }}>Tip Ticker</div>
+                      <div style={{ display:"flex", flexDirection:"column", gap:7, minHeight:140 }}>
+                        {liveTips.length===0 && <div style={{ fontSize:12, color:C.muted, textAlign:"center", padding:"24px 0" }}>Waiting for the first tip…</div>}
+                        {liveTips.map(t => (
+                          <div key={t.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"9px 13px", borderRadius:10, background:"rgba(34,211,238,0.06)", border:"1px solid rgba(34,211,238,0.16)" }}>
+                            <span style={{ fontSize:13, fontWeight:600, color:C.white }}>{t.name}</span>
+                            <span style={{ fontSize:13, fontWeight:800, color:C.gold }}>+{t.amt} tokens</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
-            </div>
-          )}
+            )
+          })()}
 
           {/* ═══════════ ROOM TITLES TAB ═══════════ */}
           {activeTab === "titles" && (
             <div style={{ animation:"fadeUp 0.3s ease" }}>
               <div style={{ marginBottom:24 }}>
                 <h1 style={{ fontSize:28, fontWeight:800, color:C.white }}>🎬 Room Title Generator</h1>
-                <p style={{ fontSize:13, color:C.muted }}>AI-generated titles using your real data — sign up to personalize</p>
+                <p style={{ fontSize:13, color:C.muted }}>Pick a mood and a goal — generate a title live, right here</p>
               </div>
-              <div style={{ ...glassCard, borderRadius:16, padding:28, marginBottom:20 }}>
-                <div style={{ fontSize:14, fontWeight:700, color:C.white, marginBottom:16 }}>Sample titles generated from this account's data:</div>
-                {[
-                  { title:"you control my lush 😈 hit 500 tokens = full control + flash · 1 AM peak · live now 🔴", drivers:["peak hour timing","500 token goal","Lush toy","tease mood"] },
-                  { title:"kingwhale99 knows how to run this room 👑 tip to prove you're next · thursday energy 🔥", drivers:["Thursday best day","VIP fan data","dominant mood"] },
-                  { title:"4 platforms tonight, ONE room wins 💎 tip to decide what I do next · top tipper controls everything", drivers:["multi-platform","tip control","mystery mood"] },
-                ].map((t,i) => (
-                  <div key={i} style={{ padding:"16px 18px", borderRadius:12, background:"linear-gradient(135deg,rgba(236,72,153,0.06),rgba(124,92,255,0.06))", border:"1px solid rgba(236,72,153,0.2)", marginBottom:12 }}>
-                    <div style={{ fontSize:16, fontWeight:800, color:C.white, marginBottom:10 }}>{t.title}</div>
-                    <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
-                      {t.drivers.map((d,j) => <span key={j} style={{ fontSize:10, color:C.cyan, padding:"2px 8px", borderRadius:20, background:"rgba(34,211,238,0.1)", border:"1px solid rgba(34,211,238,0.2)" }}>📊 {d}</span>)}
-                    </div>
+
+              <div style={{ ...glassCard, borderRadius:16, padding:24, marginBottom:20 }}>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:16 }}>
+                  <div>
+                    <div style={{ fontSize:10, color:C.muted, textTransform:"uppercase", marginBottom:5 }}>Mood</div>
+                    <select value={titleMood} onChange={e=>{ setTitleMood(e.target.value); setTitleIdx(0) }} style={{ width:"100%", padding:"9px 11px", borderRadius:9, background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.12)", color:C.white, fontSize:13, outline:"none" }}>
+                      <option value="tease">Tease</option>
+                      <option value="dominant">Dominant</option>
+                      <option value="hype">Hype</option>
+                      <option value="mystery">Mystery</option>
+                    </select>
                   </div>
-                ))}
+                  <div>
+                    <div style={{ fontSize:10, color:C.muted, textTransform:"uppercase", marginBottom:5 }}>Token Goal</div>
+                    <input type="number" value={titleGoal} onChange={e=>{ setTitleGoal(e.target.value); setTitleIdx(0) }} placeholder="e.g. 500"
+                      style={{ width:"100%", padding:"9px 11px", borderRadius:9, background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.12)", color:C.white, fontSize:13, outline:"none", boxSizing:"border-box" }} />
+                  </div>
+                </div>
+                <div style={{
+                  background:"rgba(5,9,24,0.6)", border:"1px solid rgba(236,72,153,0.25)", borderRadius:14, padding:"18px",
+                  fontSize:16, fontWeight:800, color:C.white, textAlign:"center", minHeight:30,
+                  opacity: titleGenerating?0.35:1, transition:"opacity 180ms ease", marginBottom:16,
+                }}>
+                  {titleGenerating ? "Thinking of something good…" : `"${currentTitle}"`}
+                </div>
+                <div style={{ display:"flex", justifyContent:"center" }}>
+                  <button onClick={generateTitle} disabled={titleGenerating} style={{
+                    padding:"11px 26px", borderRadius:11, background:"linear-gradient(135deg,#EC4899,#7C5CFF)", border:"none",
+                    color:"white", fontWeight:800, fontSize:14, cursor:titleGenerating?"default":"pointer", opacity:titleGenerating?0.7:1,
+                    boxShadow:"0 0 20px rgba(236,72,153,0.3)",
+                  }}>
+                    {titleGenerating ? "Generating…" : "✨ Generate New Title"}
+                  </button>
+                </div>
               </div>
-              <div style={{ textAlign:"center", padding:"32px", ...glassCard, borderRadius:16 }}>
-                <div style={{ fontSize:16, fontWeight:700, color:C.white, marginBottom:8 }}>Sign up to generate titles from your own data</div>
-                <div style={{ fontSize:13, color:C.muted, marginBottom:20 }}>The generator uses your real peak hours, fan names, and tipping patterns to create personalized titles</div>
-                <a href="/landing" style={{ display:"inline-block", padding:"11px 32px", borderRadius:10, background:"linear-gradient(135deg,#EC4899,#7C5CFF)", color:"white", fontWeight:700, fontSize:14, textDecoration:"none" }}>
+
+              <div style={{ textAlign:"center", padding:"24px", ...glassCard, borderRadius:16 }}>
+                <div style={{ fontSize:14, fontWeight:700, color:C.white, marginBottom:6 }}>Sign up to generate titles from your own peak hours and fan data</div>
+                <div style={{ fontSize:12, color:C.muted, marginBottom:16 }}>The real generator factors in your actual best hours, top fans, and tipping history</div>
+                <a href="/landing" style={{ display:"inline-block", padding:"10px 28px", borderRadius:10, background:"linear-gradient(135deg,#EC4899,#7C5CFF)", color:"white", fontWeight:700, fontSize:13, textDecoration:"none" }}>
                   Start Free →
                 </a>
+              </div>
+            </div>
+          )}
+
+          {/* ═══════════ UPLOAD DATA TAB ═══════════ */}
+          {activeTab === "upload" && (
+            <div style={{ animation:"fadeUp 0.3s ease", maxWidth:640 }}>
+              <div style={{ marginBottom:24 }}>
+                <h1 style={{ fontSize:28, fontWeight:800, color:C.white, display:"flex", alignItems:"center", gap:10 }}>📥 Upload Your Data</h1>
+                <p style={{ fontSize:13, color:C.muted }}>Paste once. Get insights fast. Pick your platform, then paste your tip history.</p>
+              </div>
+
+              <div style={{ display:"flex", gap:10, marginBottom:18, flexWrap:"wrap" }}>
+                {[
+                  { name:"Chaturbate",  initials:"CB",  color:C.cyan },
+                  { name:"BongaCams",   initials:"BC",  color:C.pink },
+                  { name:"MyFreeCams",  initials:"MFC", color:C.indigo },
+                ].map(p => {
+                  const isSel = uploadPlatform === p.name
+                  return (
+                    <button key={p.name} onClick={() => setUploadPlatform(p.name)} style={{
+                      flex:1, minWidth:150, padding:16, borderRadius:14, cursor:"pointer", textAlign:"left",
+                      background: isSel ? `${p.color}14` : "rgba(255,255,255,0.03)",
+                      border: isSel ? `1px solid ${p.color}` : "1px solid rgba(255,255,255,0.08)",
+                      boxShadow: isSel ? `0 0 16px ${p.color}30` : "none",
+                    }}>
+                      <div style={{ width:32, height:32, borderRadius:9, display:"flex", alignItems:"center", justifyContent:"center", background:`${p.color}20`, color:p.color, fontWeight:800, fontSize:11, marginBottom:8 }}>{p.initials}</div>
+                      <div style={{ fontWeight:700, fontSize:13, color:C.white }}>{p.name}</div>
+                    </button>
+                  )
+                })}
+              </div>
+
+              <div style={{ ...glassCard, borderRadius:16, border:"1.5px dashed rgba(34,211,238,0.3)", background:"rgba(34,211,238,0.025)", padding:"40px 20px", textAlign:"center", marginBottom:16 }}>
+                <div style={{ fontSize:30, marginBottom:10 }}>📁</div>
+                <div style={{ fontWeight:700, color:C.white, marginBottom:4 }}>Paste your {uploadPlatform} tip history</div>
+                <div style={{ fontSize:12, color:C.muted, marginBottom:18 }}>Drag a CSV here, or paste raw text — we detect the format automatically</div>
+                <button onClick={() => showToast("Sign up free to import your real tip history →")} style={{
+                  padding:"11px 26px", borderRadius:11, background:"linear-gradient(135deg,#22D3EE,#EC4899)", border:"none",
+                  color:"white", fontWeight:800, fontSize:13, cursor:"pointer", boxShadow:"0 0 18px rgba(34,211,238,0.3)",
+                }}>Preview My Import</button>
+              </div>
+
+              <div style={{ fontSize:12, color:C.text, display:"flex", alignItems:"center", gap:6, borderTop:"1px solid rgba(255,255,255,0.08)", paddingTop:14 }}>
+                🔒 Your data is stored securely and never shared.
               </div>
             </div>
           )}
