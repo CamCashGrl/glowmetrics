@@ -13,21 +13,21 @@ const PLATFORMS = {
     iconStyle:{background:'#F05A2A',color:'#fff'},
     instructions:'Go to your profile → Token Stats tab. Select All Time. Highlight the table, copy, and paste below.',
     earningsUrl:(u)=>u?`https://chaturbate.com/p/${u}/?tab=tokens`:'https://chaturbate.com/accounts/settings/',
-    placeholder:'Paste your Chaturbate tip history here...\n\nExample:\nJun 14, 2026, 8:27 PM\nTip From: username123\n500  12345',
+    placeholder:'Paste your Chaturbate tip history here...\n\nExample:\nJun 18, 2026, 8:27 PM\nTip From: username123\n500  12345\n\nJun 18, 2026, 9:14 PM\nTip From: whaleking99\n1000  12346',
   },
   bongacams:{
     label:'BongaCams',short:'BC',
     iconStyle:{background:'#311222',color:'#FF3B6E',border:'1px solid rgba(255,59,110,0.25)'},
     instructions:'Go to Reports → General. Select your date range. Highlight all rows, copy, and paste below. You can also paste your Paid Chat section separately.',
     earningsUrl:()=>'https://bongamodels.com/reports/general',
-    placeholder:'Paste your BongaCams tip history here...\n\nExample:\n14.06.2026 14:43\thaverford35\tTips\t1\t$0.024',
+    placeholder:'Paste your BongaCams tip history here...\n\nExample:\n18.06.2026 14:32\tusername123\t500\t25.00\n18.06.2026 15:14\twhaleking99\t1000\t50.00\n18.06.2026 15:45\tregularfan\t25\t1.25',
   },
   myfreecams:{
     label:'MyFreeCams',short:'MFC',
     iconStyle:{background:'#2D2226',color:'#FF8B2C',border:'1px solid rgba(255,139,44,0.25)'},
     instructions:'Go to Token Sessions. Set your date range, highlight all rows, copy and paste below.',
     earningsUrl:()=>'https://profiles.myfreecams.com/_/ext/token_sessions',
-    placeholder:'Paste your MyFreeCams tip history here...\n\nExample:\n1746555770\tJan 31st, 2024 10:40 PM\t10\tSkunk_Ape\tTip',
+    placeholder:'Paste your MyFreeCams tip history here...\n\nExample:\n1746555770\tJun 18th, 2026 10:40 PM\t500\tusername123\tTip\n1746555771\tJun 18th, 2026 11:02 PM\t1000\twhaleking99\tTip',
   },
 }
 
@@ -443,11 +443,11 @@ function OBLogo({showSub=false}){
 function OBProgress({current}){
   const steps=[{n:1,label:'Stats'},{n:2,label:'Tips'},{n:3,label:'Done'}]
   return(
-    <div style={{marginBottom:22}}>
+    <div className="ob-stepper" style={{marginBottom:22}}>
       <div style={{display:'flex',alignItems:'center',justifyContent:'center',maxWidth:250,margin:'0 auto 8px'}}>
         {steps.map((s,i)=>(
           <div key={s.n} style={{display:'flex',alignItems:'center',flex:i<2?1:'none'}}>
-            <div style={{
+            <div className="ob-stepper-circle" style={{
               width:30,height:30,borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',
               fontSize:11,fontWeight:800,flexShrink:0,transition:'all 0.35s',
               background:s.n<current?CYAN:s.n===current?GRAD:'rgba(255,255,255,0.05)',
@@ -457,11 +457,11 @@ function OBProgress({current}){
             }}>
               {s.n<current?'✓':s.n}
             </div>
-            {i<2&&<div style={{height:2,flex:1,background:current>s.n?GRAD:'rgba(255,255,255,0.1)',transition:'all 0.35s',margin:'0 3px',boxShadow:current>s.n?'0 0 6px rgba(33,230,243,0.3)':'none'}}/>}
+            {i<2&&<div className="ob-stepper-line" style={{height:2,flex:1,background:current>s.n?GRAD:'rgba(255,255,255,0.1)',transition:'all 0.35s',margin:'0 3px',boxShadow:current>s.n?'0 0 6px rgba(33,230,243,0.3)':'none'}}/>}
           </div>
         ))}
       </div>
-      <div style={{display:'flex',justifyContent:'space-between',maxWidth:250,margin:'0 auto'}}>
+      <div className="ob-stepper-labels" style={{display:'flex',justifyContent:'space-between',maxWidth:250,margin:'0 auto'}}>
         {steps.map(s=>(<div key={s.n} style={{width:28,textAlign:'center',fontSize:9,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.1em',color:s.n<=current?`rgba(33,230,243,0.9)`:'rgba(255,255,255,0.2)',transition:'all 0.35s'}}>{s.label}</div>))}
       </div>
     </div>
@@ -782,7 +782,7 @@ export default function OnboardingPage(){
                 </div>
               )}
 
-              <div style={{borderRadius:13,border:'1px solid rgba(33,230,243,0.22)',background:'rgba(33,230,243,0.055)',padding:'14px 16px',marginBottom:12}}>
+              <div className="ob-howto-card" style={{borderRadius:13,border:'1px solid rgba(33,230,243,0.22)',background:'rgba(33,230,243,0.055)',padding:'14px 16px',marginBottom:12}}>
                 <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:12,marginBottom:10}}>
                   <div style={{fontSize:10,fontWeight:900,letterSpacing:'0.18em',textTransform:'uppercase',color:'rgba(33,230,243,0.85)'}}>How to copy from {platform.label}</div>
                   <a href={platform.earningsUrl(cbUsername)} target="_blank" rel="noreferrer" style={{flexShrink:0,padding:'5px 11px',borderRadius:9,border:'1px solid rgba(255,47,174,0.35)',background:'rgba(255,255,255,0.03)',color:'rgba(203,213,225,0.85)',fontSize:10,fontWeight:700,textDecoration:'none',whiteSpace:'nowrap',transition:'all 0.2s'}} onMouseEnter={e=>{e.currentTarget.style.borderColor='rgba(33,230,243,0.55)';e.currentTarget.style.color='#fff'}} onMouseLeave={e=>{e.currentTarget.style.borderColor='rgba(255,47,174,0.35)';e.currentTarget.style.color='rgba(203,213,225,0.85)'}}>Open earnings page ↗</a>
