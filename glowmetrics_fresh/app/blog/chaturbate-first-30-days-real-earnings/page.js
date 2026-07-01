@@ -343,6 +343,14 @@ export default function First30DaysPost() {
         </div>
       </div>
 
+      <div style={{ margin: '36px 0', borderRadius: '12px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.07)' }}>
+        <img
+          src="/blog-images/camcash-dashboard-blog.webp"
+          alt="CamCash dashboard showing earnings overview, tips, and daily earnings chart"
+          style={{ width: '100%', display: 'block' }}
+        />
+      </div>
+
       <div style={s.finalCta}>
         <div style={s.finalCtaH}>Know Your Numbers From Day One</div>
         <div style={s.finalCtaSub}>
