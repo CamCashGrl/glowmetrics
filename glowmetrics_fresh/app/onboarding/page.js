@@ -292,7 +292,7 @@ function CountUp({to,prefix='',suffix='',duration=1000,decimals=0}){
 function ProUpsellModal({platform,onSkip}){
   return(
     <div style={{position:'fixed',inset:0,zIndex:9998,background:'rgba(3,5,15,0.92)',backdropFilter:'blur(12px)',display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
-      <div style={{width:'100%',maxWidth:480,background:'linear-gradient(180deg,rgba(12,15,35,0.98),rgba(6,8,20,0.99))',borderRadius:24,boxShadow:'0 0 60px rgba(33,230,243,0.15),0 0 120px rgba(255,47,174,0.1)',border:'1px solid rgba(255,255,255,0.08)',padding:28}}>
+      <div style={{width:'100%',maxWidth:430,background:'linear-gradient(180deg,rgba(12,15,35,0.98),rgba(6,8,20,0.99))',borderRadius:24,boxShadow:'0 0 60px rgba(33,230,243,0.15),0 0 120px rgba(255,47,174,0.1)',border:'1px solid rgba(255,255,255,0.08)',padding:28}}>
         <div style={{textAlign:'center',marginBottom:16}}>
           <div style={{fontSize:11,fontWeight:900,letterSpacing:'0.1em',textTransform:'uppercase',color:'#a78bfa',marginBottom:8}}>Unlock All Platforms</div>
           <h2 style={{fontSize:20,fontWeight:900,color:'#fff',marginBottom:6}}>You're adding {platform.label}</h2>
@@ -332,7 +332,7 @@ function LiveModeDemo({onInstall,onSkip}){
   const cur=PROMPTS[idx]
   return(
     <div style={{animation:'fadeUp 0.3s ease both'}}>
-      <div style={{textAlign:'center',marginBottom:18}}>
+      <div style={{textAlign:'center',marginBottom:22}}>
         <div style={EYE}>Live Mode Preview</div>
         <h1 style={{fontSize:20,fontWeight:900,color:'#fff',letterSpacing:'-0.02em',marginBottom:6}}>CamCash during your stream</h1>
         <p style={{fontSize:13,color:'rgba(166,168,189,0.85)',lineHeight:1.6}}>While you stream, CamCash watches your room and tells you exactly what to do to earn more.</p>
@@ -366,7 +366,7 @@ function FeedbackBubble(){
 const CYAN='#21E6F3'
 const PINK='#FF2FAE'
 const GRAD='linear-gradient(90deg,#21E6F3,#6C5CFF,#FF2FAE)'
-const EYE={fontSize:9,fontWeight:900,letterSpacing:'0.28em',textTransform:'uppercase',color:CYAN,marginBottom:8,textAlign:'center'}
+const EYE={fontSize:10,fontWeight:900,letterSpacing:'0.22em',textTransform:'uppercase',color:CYAN,marginBottom:10,textAlign:'center'}
 
 const CSS=`
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
@@ -418,7 +418,8 @@ const CSS=`
     pointer-events:none;z-index:1;
   }
   @media(max-width:600px){
-    .ob-card{padding:18px 14px!important;border-radius:22px!important}
+    main{padding:18px 12px 28px!important;align-items:flex-start!important}
+    .ob-card{padding:22px 16px!important;border-radius:24px!important}
     .ob-plat-row{flex-direction:column!important}
   }
 `
@@ -428,8 +429,8 @@ function OBLogo({showSub=false}){
   return(
     <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',marginBottom:12}}>
       <div style={{display:'flex',alignItems:'center',gap:9,marginBottom:showSub?4:0}}>
-        <div style={{width:34,height:34,borderRadius:11,background:GRAD,display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,fontWeight:900,color:'#fff',boxShadow:`0 0 14px rgba(33,230,243,0.25),0 0 28px rgba(255,47,174,0.12)`}}>$</div>
-        <div style={{fontSize:22,fontWeight:900,letterSpacing:'-0.03em'}}>
+        <div style={{width:32,height:32,borderRadius:12,background:GRAD,display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,fontWeight:900,color:'#fff',boxShadow:`0 0 14px rgba(33,230,243,0.25),0 0 28px rgba(255,47,174,0.12)`}}>$</div>
+        <div style={{fontSize:20,fontWeight:900,letterSpacing:'-0.035em'}}>
           <span style={{color:'#fff'}}>Cam</span>
           <span style={{background:GRAD,WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent'}}>Cash</span>
         </div>
@@ -442,12 +443,12 @@ function OBLogo({showSub=false}){
 function OBProgress({current}){
   const steps=[{n:1,label:'Stats'},{n:2,label:'Tips'},{n:3,label:'Done'}]
   return(
-    <div style={{marginBottom:18}}>
-      <div style={{display:'flex',alignItems:'center',justifyContent:'center',maxWidth:240,margin:'0 auto 6px'}}>
+    <div style={{marginBottom:22}}>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'center',maxWidth:250,margin:'0 auto 8px'}}>
         {steps.map((s,i)=>(
           <div key={s.n} style={{display:'flex',alignItems:'center',flex:i<2?1:'none'}}>
             <div style={{
-              width:28,height:28,borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',
+              width:30,height:30,borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',
               fontSize:11,fontWeight:800,flexShrink:0,transition:'all 0.35s',
               background:s.n<current?CYAN:s.n===current?GRAD:'rgba(255,255,255,0.05)',
               border:s.n>current?'1px solid rgba(255,255,255,0.12)':'none',
@@ -456,11 +457,11 @@ function OBProgress({current}){
             }}>
               {s.n<current?'✓':s.n}
             </div>
-            {i<2&&<div style={{height:1.5,flex:1,background:current>s.n?GRAD:'rgba(255,255,255,0.1)',transition:'all 0.35s',margin:'0 3px',boxShadow:current>s.n?'0 0 6px rgba(33,230,243,0.3)':'none'}}/>}
+            {i<2&&<div style={{height:2,flex:1,background:current>s.n?GRAD:'rgba(255,255,255,0.1)',transition:'all 0.35s',margin:'0 3px',boxShadow:current>s.n?'0 0 6px rgba(33,230,243,0.3)':'none'}}/>}
           </div>
         ))}
       </div>
-      <div style={{display:'flex',justifyContent:'space-between',maxWidth:240,margin:'0 auto'}}>
+      <div style={{display:'flex',justifyContent:'space-between',maxWidth:250,margin:'0 auto'}}>
         {steps.map(s=>(<div key={s.n} style={{width:28,textAlign:'center',fontSize:9,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.1em',color:s.n<=current?`rgba(33,230,243,0.9)`:'rgba(255,255,255,0.2)',transition:'all 0.35s'}}>{s.label}</div>))}
       </div>
     </div>
@@ -658,7 +659,7 @@ export default function OnboardingPage(){
 
   if(booting)return(
     <div style={{minHeight:'100vh',background:'#050812',display:'flex',alignItems:'center',justifyContent:'center'}}>
-      <div style={{width:28,height:28,borderRadius:'50%',border:'2px solid rgba(255,255,255,0.08)',borderTopColor:CYAN,animation:'spin 0.8s linear infinite'}}/>
+      <div style={{width:30,height:30,borderRadius:'50%',border:'2px solid rgba(255,255,255,0.08)',borderTopColor:CYAN,animation:'spin 0.8s linear infinite'}}/>
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>
   )
@@ -667,17 +668,17 @@ export default function OnboardingPage(){
   const tipsDisplayed=importResult?.inserted>0?importResult.inserted:(preview?.tipsDetected||0)
 
   return(
-    <main style={{position:'relative',minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',padding:'12px',background:'#050812',fontFamily:"'Inter',system-ui,sans-serif",color:'#fff',overflow:'hidden'}}>
+    <main style={{position:'relative',minHeight:'100vh',display:'flex',alignItems:'flex-start',justifyContent:'center',padding:'28px 16px 34px',background:'#070b18',fontFamily:"'Inter',system-ui,sans-serif",color:'#fff',overflow:'hidden'}}>
       <style>{CSS}</style>
 
       {/* ── BACKGROUND ── */}
       <div style={{position:'fixed',inset:0,pointerEvents:'none',zIndex:0}}>
-        <div style={{position:'absolute',inset:0,background:'radial-gradient(ellipse at 20% 50%,rgba(33,230,243,0.18) 0%,transparent 55%),radial-gradient(ellipse at 80% 50%,rgba(255,47,174,0.16) 0%,transparent 55%),radial-gradient(ellipse at 50% 100%,rgba(139,92,246,0.12) 0%,transparent 50%)'}}/>
-        <div style={{position:'absolute',left:'-8%',top:'15%',width:560,height:560,borderRadius:'50%',background:'rgba(33,230,243,0.22)',filter:'blur(100px)'}}/>
-        <div style={{position:'absolute',right:'-8%',bottom:'10%',width:600,height:600,borderRadius:'50%',background:'rgba(255,47,174,0.20)',filter:'blur(110px)'}}/>
+        <div style={{position:'absolute',inset:0,background:'linear-gradient(90deg,rgba(7,178,207,0.22) 0%,rgba(8,14,31,0.92) 48%,rgba(29,12,45,0.88) 72%,rgba(255,47,174,0.16) 100%),radial-gradient(ellipse at 14% 46%,rgba(33,230,243,0.24) 0%,transparent 54%),radial-gradient(ellipse at 86% 50%,rgba(255,47,174,0.22) 0%,transparent 58%),radial-gradient(ellipse at 50% 100%,rgba(139,92,246,0.12) 0%,transparent 50%)'}}/>
+        <div style={{position:'absolute',left:'-12%',top:'8%',width:620,height:620,borderRadius:'50%',background:'rgba(33,230,243,0.22)',filter:'blur(100px)'}}/>
+        <div style={{position:'absolute',right:'-14%',bottom:'2%',width:640,height:640,borderRadius:'50%',background:'rgba(255,47,174,0.20)',filter:'blur(110px)'}}/>
         <div style={{position:'absolute',left:'35%',top:'30%',width:420,height:420,borderRadius:'50%',background:'rgba(139,92,246,0.12)',filter:'blur(90px)'}}/>
         <div style={{position:'absolute',left:'50%',top:'-5%',transform:'translateX(-50%)',width:400,height:300,borderRadius:'50%',background:'rgba(33,230,243,0.10)',filter:'blur(80px)'}}/>
-        <div style={{position:'absolute',inset:0,opacity:0.10,backgroundImage:'radial-gradient(rgba(255,255,255,0.6) 1px,transparent 1px)',backgroundSize:'28px 28px'}}/>
+        <div style={{position:'absolute',inset:0,opacity:0.13,backgroundImage:'radial-gradient(rgba(255,255,255,0.58) 1px,transparent 1px)',backgroundSize:'28px 28px'}}/>
       </div>
 
       <AmbientParticles/>
@@ -686,10 +687,10 @@ export default function OnboardingPage(){
       <FeedbackBubble/>
 
       {/* ── CARD ── */}
-      <div style={{position:'relative',zIndex:10,width:'100%',maxWidth:480}}>
-        <div style={{position:'absolute',inset:-2,borderRadius:33,background:'linear-gradient(135deg,rgba(33,230,243,0.9) 0%,rgba(124,92,255,0.45) 45%,rgba(255,47,174,0.9) 100%)',zIndex:-1,filter:'blur(1.5px)',animation:'glowPulse 3.5s ease-in-out infinite'}}/>
+      <div style={{position:'relative',zIndex:10,width:'100%',maxWidth:430}}>
+        <div style={{position:'absolute',inset:-2,borderRadius:30,background:'linear-gradient(135deg,rgba(33,230,243,0.9) 0%,rgba(124,92,255,0.45) 45%,rgba(255,47,174,0.9) 100%)',zIndex:-1,filter:'blur(1.5px)',animation:'glowPulse 3.5s ease-in-out infinite'}}/>
         <div style={{position:'absolute',inset:-60,borderRadius:'50%',background:'radial-gradient(circle,rgba(124,92,255,0.10) 0%,transparent 70%)',zIndex:-2,pointerEvents:'none'}}/>
-        <div className="ob-card ob-card-inner" style={{position:'relative',borderRadius:31,border:'1px solid rgba(255,255,255,0.11)',background:'rgba(7,10,24,0.88)',backdropFilter:'blur(32px)',WebkitBackdropFilter:'blur(32px)',padding:'22px 26px 18px',overflow:'hidden',boxShadow:'0 0 42px rgba(33,230,243,0.18),0 0 54px rgba(255,47,174,0.16),0 24px 90px rgba(0,0,0,0.50),inset 0 1px 0 rgba(255,255,255,0.09)'}}>
+        <div className="ob-card ob-card-inner" style={{position:'relative',borderRadius:28,border:'1px solid rgba(255,255,255,0.12)',background:'linear-gradient(180deg,rgba(10,15,35,0.94),rgba(6,9,24,0.96))',backdropFilter:'blur(34px)',WebkitBackdropFilter:'blur(34px)',padding:'26px 28px 24px',overflow:'hidden',boxShadow:'0 0 46px rgba(33,230,243,0.25),0 0 70px rgba(255,47,174,0.15),0 26px 96px rgba(0,0,0,0.58),inset 0 1px 0 rgba(255,255,255,0.10)'}}>
           <div style={{position:'absolute',top:0,left:'8%',right:'8%',height:'1px',background:'linear-gradient(90deg,transparent,rgba(255,255,255,0.22),transparent)',pointerEvents:'none'}}/>
           <div style={{position:'absolute',top:-50,left:-50,width:220,height:220,borderRadius:'50%',background:'rgba(33,230,243,0.055)',filter:'blur(40px)',pointerEvents:'none'}}/>
           <div style={{position:'absolute',bottom:-50,right:-50,width:220,height:220,borderRadius:'50%',background:'rgba(255,47,174,0.045)',filter:'blur(40px)',pointerEvents:'none'}}/>
@@ -706,10 +707,10 @@ export default function OnboardingPage(){
             <div style={{animation:'fadeUp 0.3s ease both'}}>
               <div style={EYE}>Step 1 of 3</div>
               <div style={{textAlign:'center',marginBottom:16}}>
-                <h1 style={{fontSize:22,fontWeight:900,color:'#F8FAFC',letterSpacing:'-0.025em',lineHeight:1.15,marginBottom:7}}>Start tracking your streams</h1>
-                <p style={{fontSize:13,color:'rgba(166,168,189,0.85)',lineHeight:1.65,maxWidth:380,margin:'0 auto'}}>Choose your platform so CamCash can import your tip history and build your first insights.</p>
+                <h1 style={{fontSize:23,fontWeight:900,color:'#F8FAFC',letterSpacing:'-0.025em',lineHeight:1.15,marginBottom:7}}>Start tracking your streams</h1>
+                <p style={{fontSize:13,color:'rgba(166,168,189,0.88)',lineHeight:1.7,maxWidth:360,margin:'0 auto'}}>Choose your platform so CamCash can import your tip history and build your first insights.</p>
               </div>
-              <div style={{marginBottom:18}}>
+              <div style={{marginBottom:22}}>
                 <div style={{fontSize:10,fontWeight:700,color:'rgba(166,168,189,0.6)',marginBottom:9,letterSpacing:'0.08em',textTransform:'uppercase'}}>Your platform</div>
                 <div className="ob-plat-row" style={{display:'flex',gap:9}}>
                   {Object.entries(PLATFORMS).map(([key,p])=>{
@@ -742,11 +743,11 @@ export default function OnboardingPage(){
           {step==='username'&&(
             <div style={{animation:'fadeUp 0.3s ease both'}}>
               <div style={EYE}>Step 1 of 3 — Chaturbate</div>
-              <div style={{textAlign:'center',marginBottom:18}}>
-                <h1 style={{fontSize:22,fontWeight:900,color:'#F8FAFC',letterSpacing:'-0.025em',lineHeight:1.15,marginBottom:7}}>Start tracking your streams</h1>
-                <p style={{fontSize:13,color:'rgba(166,168,189,0.85)',lineHeight:1.65,maxWidth:380,margin:'0 auto'}}>Enter your username so we can link you directly to your token stats page.</p>
+              <div style={{textAlign:'center',marginBottom:22}}>
+                <h1 style={{fontSize:23,fontWeight:900,color:'#F8FAFC',letterSpacing:'-0.025em',lineHeight:1.15,marginBottom:7}}>Start tracking your streams</h1>
+                <p style={{fontSize:13,color:'rgba(166,168,189,0.88)',lineHeight:1.7,maxWidth:360,margin:'0 auto'}}>Enter your username so we can link you directly to your token stats page.</p>
               </div>
-              <div style={{marginBottom:18}}>
+              <div style={{marginBottom:22}}>
                 <div style={{fontSize:10,fontWeight:700,color:'rgba(166,168,189,0.6)',marginBottom:7,letterSpacing:'0.08em',textTransform:'uppercase'}}>Chaturbate username</div>
                 <div style={{position:'relative'}}>
                   <input value={cbUsername} onChange={e=>{setCbUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g,''));setCbUsernameError('')}} onKeyDown={e=>e.key==='Enter'&&handleUsernameSubmit()} placeholder="your_username" autoFocus
@@ -770,18 +771,18 @@ export default function OnboardingPage(){
             <div style={{animation:'fadeUp 0.3s ease both'}}>
               <div style={EYE}>Step 2 of 3 — {platform.label}</div>
               <div style={{textAlign:'center',marginBottom:16}}>
-                <h1 style={{fontSize:22,fontWeight:900,color:'#F8FAFC',letterSpacing:'-0.025em',lineHeight:1.15,marginBottom:7}}>Paste your tip history</h1>
-                <p style={{fontSize:13,color:'rgba(166,168,189,0.85)',lineHeight:1.65,maxWidth:380,margin:'0 auto'}}>Copy your earning rows from {platform.label} and paste them below. CamCash will clean and organize everything automatically.</p>
+                <h1 style={{fontSize:23,fontWeight:900,color:'#F8FAFC',letterSpacing:'-0.025em',lineHeight:1.15,marginBottom:7}}>Paste your tip history</h1>
+                <p style={{fontSize:13,color:'rgba(166,168,189,0.88)',lineHeight:1.7,maxWidth:360,margin:'0 auto'}}>Copy your earning rows from {platform.label} and paste them below. CamCash will clean and organize everything automatically.</p>
               </div>
 
               {/* BongaCams paid chat notice */}
               {platformId==='bongacams'&&(
-                <div style={{borderRadius:11,border:'1px solid rgba(255,47,174,0.2)',background:'rgba(255,47,174,0.04)',padding:'10px 13px',marginBottom:10,fontSize:11,color:'rgba(203,213,225,0.8)',lineHeight:1.55}}>
+                <div style={{borderRadius:12,border:'1px solid rgba(255,47,174,0.22)',background:'rgba(255,47,174,0.055)',padding:'12px 14px',marginBottom:12,fontSize:11,color:'rgba(203,213,225,0.8)',lineHeight:1.55}}>
                   <span style={{color:PINK,fontWeight:700}}>💳 Tip:</span> You can paste your <strong style={{color:'#fff'}}>Free Chat</strong> and <strong style={{color:'#fff'}}>Paid Chat</strong> sections together — CamCash automatically separates tips from private sessions.
                 </div>
               )}
 
-              <div style={{borderRadius:13,border:'1px solid rgba(33,230,243,0.18)',background:'rgba(33,230,243,0.04)',padding:'12px 14px',marginBottom:12}}>
+              <div style={{borderRadius:13,border:'1px solid rgba(33,230,243,0.22)',background:'rgba(33,230,243,0.055)',padding:'14px 16px',marginBottom:12}}>
                 <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:12,marginBottom:10}}>
                   <div style={{fontSize:10,fontWeight:900,letterSpacing:'0.18em',textTransform:'uppercase',color:'rgba(33,230,243,0.85)'}}>How to copy from {platform.label}</div>
                   <a href={platform.earningsUrl(cbUsername)} target="_blank" rel="noreferrer" style={{flexShrink:0,padding:'5px 11px',borderRadius:9,border:'1px solid rgba(255,47,174,0.35)',background:'rgba(255,255,255,0.03)',color:'rgba(203,213,225,0.85)',fontSize:10,fontWeight:700,textDecoration:'none',whiteSpace:'nowrap',transition:'all 0.2s'}} onMouseEnter={e=>{e.currentTarget.style.borderColor='rgba(33,230,243,0.55)';e.currentTarget.style.color='#fff'}} onMouseLeave={e=>{e.currentTarget.style.borderColor='rgba(255,47,174,0.35)';e.currentTarget.style.color='rgba(203,213,225,0.85)'}}>Open earnings page ↗</a>
@@ -793,7 +794,7 @@ export default function OnboardingPage(){
               </div>
 
               <textarea value={pasteText} onChange={e=>setPasteText(e.target.value)} placeholder={platform.placeholder}
-                style={{width:'100%',height:128,resize:'none',borderRadius:13,border:'1px solid rgba(33,230,243,0.18)',borderTop:'1.5px solid rgba(33,230,243,0.35)',background:'rgba(2,4,14,0.97)',padding:'12px 14px',fontFamily:'monospace',fontSize:11,lineHeight:1.65,color:'#a5f3fc',outline:'none',transition:'border-color 0.2s,box-shadow 0.2s',marginBottom:parseError?9:12,boxShadow:'inset 0 2px 12px rgba(0,0,0,0.4),inset 0 1px 0 rgba(33,230,243,0.08)'}}
+                style={{width:'100%',height:156,resize:'none',borderRadius:13,border:'1px solid rgba(33,230,243,0.18)',borderTop:'1.5px solid rgba(33,230,243,0.48)',background:'rgba(1,3,12,0.98)',padding:'12px 14px',fontFamily:'monospace',fontSize:11,lineHeight:1.65,color:'#a5f3fc',outline:'none',transition:'border-color 0.2s,box-shadow 0.2s',marginBottom:parseError?9:12,boxShadow:'inset 0 2px 12px rgba(0,0,0,0.4),inset 0 1px 0 rgba(33,230,243,0.08)'}}
                 onFocus={e=>{e.target.style.borderColor='rgba(33,230,243,0.6)';e.target.style.boxShadow='0 0 0 3px rgba(33,230,243,0.08)'}}
                 onBlur={e=>{e.target.style.borderColor='rgba(255,255,255,0.1)';e.target.style.boxShadow='none'}}
               />
@@ -804,7 +805,7 @@ export default function OnboardingPage(){
                 {['Open your earnings page','Highlight the rows you want','Copy and paste them here'].map((t,i)=>(<div key={i} style={{display:'flex',alignItems:'center',gap:7,fontSize:10,color:'rgba(148,163,184,0.8)'}}><div style={{width:19,height:19,borderRadius:'50%',border:'1px solid rgba(33,230,243,0.35)',background:'rgba(33,230,243,0.08)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,fontWeight:900,color:CYAN,flexShrink:0}}>{i+1}</div><span>{t}</span></div>))}
               </div>
 
-              <div style={{display:'grid',gridTemplateColumns:'auto 1fr',gap:9,marginBottom:4}}>
+              <div style={{display:'grid',gridTemplateColumns:'auto 1fr',gap:10,marginBottom:6}}>
                 <OBSecBtn onClick={()=>setStep('platform')} style={{height:46}}>← Back</OBSecBtn>
                 <OBBtn onClick={handlePreview} disabled={!pasteText.trim()} style={{height:46,fontSize:13}}>Preview Import →</OBBtn>
               </div>
@@ -818,7 +819,7 @@ export default function OnboardingPage(){
             <div style={{animation:'fadeUp 0.3s ease both'}}>
               <div style={EYE}>Step 2 of 3 — {platform.label}</div>
               <div style={{textAlign:'center',marginBottom:16}}>
-                <h1 style={{fontSize:22,fontWeight:900,color:'#F8FAFC',letterSpacing:'-0.025em',marginBottom:7}}>Upload your CSV</h1>
+                <h1 style={{fontSize:23,fontWeight:900,color:'#F8FAFC',letterSpacing:'-0.025em',marginBottom:7}}>Upload your CSV</h1>
                 <p style={{fontSize:13,color:'rgba(166,168,189,0.85)',lineHeight:1.65}}>Export your earnings as a CSV file and drop it below.</p>
               </div>
               <div onClick={()=>!csvUploading&&csvRef.current?.click()} style={{border:'2px dashed rgba(255,255,255,0.1)',borderRadius:16,padding:'40px 20px',textAlign:'center',cursor:csvUploading?'not-allowed':'pointer',background:'rgba(255,255,255,0.02)',marginBottom:12,transition:'all 0.2s'}} onMouseEnter={e=>{if(!csvUploading){e.currentTarget.style.borderColor='rgba(33,230,243,0.4)';e.currentTarget.style.background='rgba(33,230,243,0.03)'}}} onMouseLeave={e=>{e.currentTarget.style.borderColor='rgba(255,255,255,0.1)';e.currentTarget.style.background='rgba(255,255,255,0.02)'}}>
@@ -836,7 +837,7 @@ export default function OnboardingPage(){
             <div style={{animation:'fadeUp 0.3s ease both'}}>
               <div style={EYE}>Review Import</div>
               <div style={{textAlign:'center',marginBottom:16}}>
-                <h1 style={{fontSize:22,fontWeight:900,color:'#F8FAFC',letterSpacing:'-0.025em',marginBottom:7}}>Your data looks great</h1>
+                <h1 style={{fontSize:23,fontWeight:900,color:'#F8FAFC',letterSpacing:'-0.025em',marginBottom:7}}>Your data looks great</h1>
                 <p style={{fontSize:13,color:'rgba(166,168,189,0.85)',lineHeight:1.65}}>Confirm everything looks right, then CamCash will build your dashboard.</p>
               </div>
 
@@ -885,7 +886,7 @@ export default function OnboardingPage(){
 
               {importError&&<div style={{marginBottom:10,padding:'9px 12px',borderRadius:11,background:'rgba(248,113,113,0.07)',border:'1px solid rgba(248,113,113,0.22)',fontSize:12,color:'#f87171'}}>⚠️ {importError}</div>}
 
-              <div style={{display:'grid',gridTemplateColumns:'auto 1fr',gap:9,marginBottom:4}}>
+              <div style={{display:'grid',gridTemplateColumns:'auto 1fr',gap:10,marginBottom:6}}>
                 <OBSecBtn onClick={()=>setStep('paste')} style={{height:46}}>← Back</OBSecBtn>
                 <OBBtn onClick={handleImport} style={{height:46,fontSize:13}}>Import & build dashboard →</OBBtn>
               </div>
@@ -899,21 +900,21 @@ export default function OnboardingPage(){
             <div style={{animation:'fadeUp 0.3s ease both'}}>
               <OBLogo/>
               <div style={{marginBottom:16}}>
-                <div style={{display:'flex',alignItems:'center',justifyContent:'center',maxWidth:240,margin:'0 auto 6px'}}>
+                <div style={{display:'flex',alignItems:'center',justifyContent:'center',maxWidth:250,margin:'0 auto 8px'}}>
                   {[{n:1},{n:2},{n:3}].map((s,i)=>(<div key={s.n} style={{display:'flex',alignItems:'center',flex:i<2?1:'none'}}>
-                    <div style={{width:28,height:28,borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,fontWeight:800,flexShrink:0,background:s.n<3?CYAN:GRAD,color:'#04101b',boxShadow:s.n===3?`0 0 20px rgba(33,230,243,0.6)`:`0 0 14px rgba(33,230,243,0.4)`}}>{s.n<3?'✓':s.n}</div>
-                    {i<2&&<div style={{height:1.5,flex:1,background:GRAD,margin:'0 3px',boxShadow:'0 0 6px rgba(33,230,243,0.3)'}}/>}
+                    <div style={{width:30,height:30,borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,fontWeight:800,flexShrink:0,background:s.n<3?CYAN:GRAD,color:'#04101b',boxShadow:s.n===3?`0 0 20px rgba(33,230,243,0.6)`:`0 0 14px rgba(33,230,243,0.4)`}}>{s.n<3?'✓':s.n}</div>
+                    {i<2&&<div style={{height:2,flex:1,background:GRAD,margin:'0 3px',boxShadow:'0 0 6px rgba(33,230,243,0.3)'}}/>}
                   </div>))}
                 </div>
-                <div style={{display:'flex',justifyContent:'space-between',maxWidth:240,margin:'0 auto'}}>
+                <div style={{display:'flex',justifyContent:'space-between',maxWidth:250,margin:'0 auto'}}>
                   {['Stats','Tips','Done'].map((l,i)=>(<div key={l} style={{width:28,textAlign:'center',fontSize:9,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.1em',color:i<2?`rgba(33,230,243,0.55)`:`rgba(33,230,243,0.9)`}}>{l}</div>))}
                 </div>
               </div>
               <div style={{textAlign:'center',marginBottom:16}}>
-                <h1 style={{fontSize:22,fontWeight:900,color:'#F8FAFC',letterSpacing:'-0.025em',marginBottom:7}}>Building your CamCash dashboard</h1>
+                <h1 style={{fontSize:23,fontWeight:900,color:'#F8FAFC',letterSpacing:'-0.025em',marginBottom:7}}>Building your CamCash dashboard</h1>
                 <p style={{fontSize:13,color:'rgba(148,163,184,0.75)',minHeight:18}}>{msgs[loadingMsgIdx]}</p>
               </div>
-              <div style={{marginBottom:18}}>
+              <div style={{marginBottom:22}}>
                 <div style={{display:'flex',justifyContent:'space-between',marginBottom:6}}>
                   <span style={{fontSize:10,color:'rgba(148,163,184,0.55)'}}>Progress</span>
                   <span style={{fontSize:10,color:CYAN,fontWeight:700}}>{loadingProgress}%</span>
@@ -981,7 +982,7 @@ export default function OnboardingPage(){
               <div style={{position:'absolute',inset:0,animation:'flashPulse 1s ease-out 1',background:'rgba(33,230,243,0)',pointerEvents:'none'}}/>
               <div style={{width:64,height:64,borderRadius:22,background:GRAD,display:'flex',alignItems:'center',justifyContent:'center',fontSize:26,fontWeight:900,color:'#fff',margin:'0 auto 16px',boxShadow:'0 0 55px rgba(255,47,174,0.45),0 0 100px rgba(33,230,243,0.3)',animation:'glowPulse 2.5s ease-in-out infinite'}}>✓</div>
               <div style={EYE}>First Insights</div>
-              <h1 style={{fontSize:22,fontWeight:900,color:'#F8FAFC',letterSpacing:'-0.025em',marginBottom:7}}>Your first insights are ready</h1>
+              <h1 style={{fontSize:23,fontWeight:900,color:'#F8FAFC',letterSpacing:'-0.025em',marginBottom:7}}>Your first insights are ready</h1>
               <p style={{fontSize:13,color:'rgba(166,168,189,0.85)',lineHeight:1.65,marginBottom:20}}>Here's a beautiful preview of what we found.</p>
               <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:9,marginBottom:14}}>
                 {[
