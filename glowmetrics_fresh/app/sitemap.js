@@ -34,6 +34,8 @@ export default function sitemap() {
     'cam-model-tipping-pattern-data-examples',
     'cam-model-token-to-dollar-ratio-explained',
     'camcash-vs-camdash-vs-cb-cam-insights',
+    'chaturbate-best-month-real-numbers',
+    'chaturbate-first-30-days-real-earnings',
     'chaturbate-payout-explained',
     'freemium-vs-premium-cam-model',
     'girlfriend-experience-gfe-cam-modeling-strategy',
