@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
 import { captureAttribution } from "../../lib/tracking"
 import FeedbackWidget from "../components/FeedbackWidget"
+import { Turnstile } from '@marsidev/react-turnstile'
 
 // ── AuthPanel defined OUTSIDE LandingPage so React doesn't re-create the
 //    component type on every render (prevents input losing focus)
@@ -14,6 +15,7 @@ function AuthPanel({
   authLoading, authMsg, authError,
   setAuthError, setAuthMsg,
   handleAuth, handleForgotPassword,
+  onTurnstileSuccess,
 }) {
   const inputStyle = {
     width: "100%", padding: "11px 14px", borderRadius: 8,
@@ -88,6 +90,15 @@ function AuthPanel({
           </div>
         )}
         {isSignUp && <div style={{ height: 14 }} />}
+        {isSignUp && (
+          <div style={{ marginBottom: 10 }}>
+            <Turnstile
+              siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || '1x00000000000000000000AA'}
+              onSuccess={onTurnstileSuccess}
+              options={{ theme: 'dark', size: 'flexible' }}
+            />
+          </div>
+        )}
 
         {authError && <div style={{ fontSize: 12, color: "#f87171", marginBottom: 10, textAlign: "center" }}>{authError}</div>}
         {authMsg   && <div style={{ fontSize: 12, color: "#22D3EE",  marginBottom: 10, textAlign: "center" }}>{authMsg}</div>}
@@ -280,6 +291,7 @@ export default function LandingPage() {
   const [authLoading, setAuthLoading] = useState(false)
   const [authMsg, setAuthMsg]         = useState("")
   const [authError, setAuthError]     = useState("")
+  const [turnstileToken, setTurnstileToken] = useState(null)
 
   // Demo cycling state for feature cards
   const [msgIndex, setMsgIndex]       = useState(0)
@@ -310,6 +322,8 @@ export default function LandingPage() {
     })
   }, [])
 
+  useEffect(() => { captureAttribution() }, [])
+
   const handleCopy = () => {
     navigator.clipboard.writeText(messages[msgIndex])
     setCopied(true)
@@ -320,6 +334,13 @@ export default function LandingPage() {
     e.preventDefault()
     setAuthLoading(true); setAuthError(""); setAuthMsg("")
     if (isSignUp) {
+      const captchaRes = await fetch('/api/auth/verify-captcha', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: turnstileToken, email }),
+      })
+      const captchaData = await captchaRes.json()
+      if (!captchaData.ok) { setAuthError(captchaData.error || 'Security check failed.'); setAuthLoading(false); return }
       let attribution = null
       try { attribution = JSON.parse(localStorage.getItem('camcash_attribution') || 'null') } catch {}
       const { error } = await supabase.auth.signUp({ email, password })
@@ -367,7 +388,7 @@ export default function LandingPage() {
   const authPanelProps = {
     isSignUp, setIsSignUp, email, setEmail, password, setPassword,
     authLoading, authMsg, authError, setAuthError, setAuthMsg,
-    handleAuth, handleForgotPassword,
+    handleAuth, handleForgotPassword, onTurnstileSuccess: setTurnstileToken,
   }
 
   return (

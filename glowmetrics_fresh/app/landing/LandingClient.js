@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
 import { T, captureAttribution } from '../../lib/tracking'
 import { track } from '../../lib/track'
+import { Turnstile } from '@marsidev/react-turnstile'
 
 function AuthPanel({
   id, isSignUp, setIsSignUp,
@@ -11,6 +12,7 @@ function AuthPanel({
   authLoading, authMsg, authError,
   setAuthError, setAuthMsg,
   handleAuth, handleForgotPassword,
+  onTurnstileSuccess,
 }) {
   const [step, setStep] = useState(1)
 
@@ -115,6 +117,15 @@ function AuthPanel({
               </div>
             )}
             {isSignUp && <div style={{ height: 10 }} />}
+            {isSignUp && (
+              <div style={{ marginBottom: 10 }}>
+                <Turnstile
+                  siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || '1x00000000000000000000AA'}
+                  onSuccess={onTurnstileSuccess}
+                  options={{ theme: 'dark', size: 'flexible' }}
+                />
+              </div>
+            )}
             {authError && <div style={{ fontSize: 11, color: "#f87171", marginBottom: 8, textAlign: "center" }}>{authError}</div>}
             {authMsg   && <div style={{ fontSize: 11, color: "#22D3EE",  marginBottom: 8, textAlign: "center" }}>{authMsg}</div>}
             <button type="submit" disabled={authLoading} onClick={() => T.signupCtaClicked(window?.location?.pathname)} style={{
@@ -252,6 +263,7 @@ export default function LandingPage() {
   const [authLoading, setAuthLoading] = useState(false)
   const [authMsg, setAuthMsg]   = useState("")
   const [authError, setAuthError] = useState("")
+  const [turnstileToken, setTurnstileToken] = useState(null)
 
   const messages = ["Hey 😘 I've been thinking about you... I'm live tonight ❤️","Miss you 💕 come make tonight fun 🔥","It's been a while… come back 😈"]
   const whales = [
@@ -269,12 +281,21 @@ export default function LandingPage() {
     supabase.auth.getUser().then(({ data: { user } }) => { if (user) router.replace("/dashboard") })
   }, [])
 
+  useEffect(() => { captureAttribution() }, [])
+
   const handleCopy = () => { navigator.clipboard.writeText(messages[msgIndex]); setCopied(true); setTimeout(() => setCopied(false), 1200) }
 
   const handleAuth = async (e) => {
     e.preventDefault(); setAuthLoading(true); setAuthError(""); setAuthMsg("")
     if (isSignUp) {
       track('signup_started')
+      const captchaRes = await fetch('/api/auth/verify-captcha', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: turnstileToken, email }),
+      })
+      const captchaData = await captchaRes.json()
+      if (!captchaData.ok) { setAuthError(captchaData.error || 'Security check failed.'); setAuthLoading(false); return }
       let attribution = null
       try { attribution = JSON.parse(localStorage.getItem('camcash_attribution') || 'null') } catch {}
       const { error } = await supabase.auth.signUp({ email, password })
@@ -332,7 +353,7 @@ export default function LandingPage() {
     else setAuthMsg("Password reset email sent — check your inbox.")
   }
 
-  const authPanelProps = { isSignUp, setIsSignUp, email, setEmail, password, setPassword, authLoading, authMsg, authError, setAuthError, setAuthMsg, handleAuth, handleForgotPassword }
+  const authPanelProps = { isSignUp, setIsSignUp, email, setEmail, password, setPassword, authLoading, authMsg, authError, setAuthError, setAuthMsg, handleAuth, handleForgotPassword, onTurnstileSuccess: setTurnstileToken }
 
   return (
     <div style={{ minHeight: "100vh", background: "#05070f", color: "#94A3B8", fontFamily: "'Inter', sans-serif", overflowX: "hidden" }}>
