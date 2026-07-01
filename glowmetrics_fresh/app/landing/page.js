@@ -93,7 +93,7 @@ function AuthPanel({
         {isSignUp && (
           <div style={{ marginBottom: 10 }}>
             <Turnstile
-              siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || '1x00000000000000000000AA'}
+              siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY}
               onSuccess={onTurnstileSuccess}
               options={{ theme: 'dark', size: 'flexible' }}
             />
