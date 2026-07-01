@@ -1,10 +1,75 @@
 "use client"
 import React, { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
+import dynamic from "next/dynamic"
 import { supabase } from "../../lib/supabase"
 import { T, captureAttribution } from '../../lib/tracking'
 import { track } from '../../lib/track'
-import { Turnstile } from '@marsidev/react-turnstile'
+
+// Only needed once a visitor reaches the signup step of AuthPanel — deferred
+// so its JS isn't downloaded/parsed for every landing page visit.
+const Turnstile = dynamic(
+  () => import('@marsidev/react-turnstile').then(mod => mod.Turnstile),
+  { ssr: false }
+)
+
+// Static data / style objects hoisted out of component bodies so they aren't
+// recreated on every render.
+const AUTH_INPUT_STYLE = {
+  width: "100%", padding: "10px 13px", borderRadius: 8,
+  background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)",
+  color: "white", fontSize: 13, outline: "none", marginBottom: 9,
+  boxSizing: "border-box", fontFamily: "inherit", transition: "border-color 0.15s",
+}
+
+const LIVE_PREVIEW_ALERTS = [
+  { dot: "#10B981", text: "diamondkingx likely online — $9,750 lifetime" },
+  { dot: "#F59E0B", text: "vaultmaster99 inactive 14d — re-engage now" },
+  { dot: "#22D3EE", text: "Chaturbate outperforming MFC by 2.6x tonight" },
+  { dot: "#EC4899", text: "Thursday peak window opens in 2h 14m" },
+]
+
+const MESSAGES = ["Hey 😘 I've been thinking about you... I'm live tonight ❤️","Miss you 💕 come make tonight fun 🔥","It's been a while… come back 😈"]
+const WHALES = [
+  { name: "diamondkingx",  spent: "$9,750", inactive: "2 days" },
+  { name: "vaultmaster99", spent: "$4,400",  inactive: "2 days" },
+  { name: "private_king",  spent: "$3,500",  inactive: "28 days" },
+]
+
+const FEATURE_PILLARS = [
+  { icon:"💰", color:"#10B981", title:"Revenue Intelligence", desc:"Track earnings across every platform. See $/hr by platform, session performance vs your own baseline, and monthly revenue trends.", stats:[["$1,211/hr","Chaturbate peak"],["2.6x","CB vs MFC ratio"]] },
+  { icon:"👑", color:"#F59E0B", title:"Fan Relationship System", desc:"Every high-value fan ranked by lifetime spend, churn risk, and tip probability. Know who's about to go cold before they disappear.", stats:[["72%","Revenue from top 3 fans"],["5.8x","Returning vs new spend"]] },
+  { icon:"⏰", color:"#22D3EE", title:"Stream Timing Engine", desc:"Your peak hours calculated from your actual tip history — not industry averages. Know the exact hour and day to maximize every stream.", stats:[["1 AM UTC","Detected peak"],["+210%","Thursday vs avg"]] },
+  { icon:"⚡", color:"#EC4899", title:"Creator Command Center", desc:"A daily brief that tells you exactly what to do: who to message, when to go live, which platform to prioritize, and which fans are at risk.", stats:[["Live Mode","Real-time coaching"],["AI Titles","Built from your data"]] },
+]
+
+const FREE_TOOLS = [
+  { icon: "🪙", title: "Token Calculator", desc: "Convert tokens to USD instantly across all platforms", href: "/landing/demo#tools", color: "#22D3EE" },
+  { icon: "🎬", title: "Room Title Generator", desc: "AI-powered titles using your peak hours and fan data", href: "/dashboard", color: "#EC4899", badge: "Requires account" },
+  { icon: "#", title: "Hashtag Generator", desc: "Platform-specific hashtags for Chaturbate, MFC, Bonga", href: "/dashboard", color: "#7C5CFF", badge: "Requires account" },
+  { icon: "📊", title: "Earnings Dashboard", desc: "Upload your CSV and see your full analytics in minutes", href: "/dashboard", color: "#10B981", badge: "Free beta" },
+  { icon: "💌", title: "Fan Message Generator", desc: "Personalized re-engagement messages for your top fans", href: "/dashboard", color: "#F59E0B", badge: "Requires account" },
+  { icon: "📈", title: "Platform ROI Tracker", desc: "See exactly which platform earns you more per hour", href: "/dashboard", color: "#60A5FA", badge: "Free beta" },
+]
+
+// Shared card shell for BLOG_LINK_CARDS — identical across every card in the
+// original hand-duplicated markup, so it's hoisted once here.
+const BLOG_CARD_STYLE = { padding: "12px 14px", borderRadius: 12, background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.06)", transition: "all 0.15s", display: "flex", alignItems: "center", gap: 12 }
+
+const BLOG_LINK_CARDS = [
+  { href: "/blog/cam-model-earnings", icon: "💰", tag: "Earnings", color: "#10B981", title: "How Much Do Cam Models Actually Make?" },
+  { href: "/blog/how-much-do-chaturbate-models-make", icon: "📊", tag: "Chaturbate", color: "#22D3EE", title: "How Much Do Chaturbate Models Make Per Hour?" },
+  { href: "/blog/how-to-make-more-money-on-chaturbate", icon: "🔥", tag: "Strategy", color: "#EC4899", title: "How to Make More Money on Chaturbate" },
+  { href: "/blog/how-to-re-engage-whales-and-top-tippers", icon: "🐳", tag: "Fan CRM", color: "#F59E0B", title: "How to Re-Engage Whales and Top Tippers" },
+  { href: "/blog/how-to-build-loyal-fans", icon: "👑", tag: "Retention", color: "#7C5CFF", title: "How to Build a Loyal Fanbase" },
+  { href: "/blog/why-cam-income-is-inconsistent", icon: "📈", tag: "Income", color: "#60A5FA", title: "Why Cam Income Is Inconsistent" },
+  { href: "/blog/best-cam-model-tools", icon: "⚡", tag: "Tools", color: "#F59E0B", title: "Best Cam Model Tools" },
+  { href: "/blog/cam-model-taxes", icon: "🧾", tag: "Business", color: "#64748B", title: "Cam Model Taxes Guide" },
+  { href: "/blog/how-to-increase-cam-earnings", icon: "📈", tag: "Income", color: "#60A5FA", title: "How to Increase Cam Earnings" },
+  { href: "/blog/why-cam-streams-arent-making-money", icon: "🚫", tag: "Earnings", color: "#10B981", title: "Why Your Streams Aren't Making Money" },
+  { href: "/blog/how-to-get-veiws-on-chaturbate", icon: "👁", tag: "Growth", color: "#FB923C", title: "How to Get More Views on Chaturbate" },
+  { href: "/blog/how-to-get-more-tips-on-myfreecams", icon: "💎", tag: "MFC", color: "#A78BFA", title: "How to Get More Tips on MyFreeCams" },
+]
 
 function AuthPanel({
   id, isSignUp, setIsSignUp,
@@ -15,13 +80,6 @@ function AuthPanel({
   onTurnstileSuccess,
 }) {
   const [step, setStep] = useState(1)
-
-  const inp = {
-    width: "100%", padding: "10px 13px", borderRadius: 8,
-    background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)",
-    color: "white", fontSize: 13, outline: "none", marginBottom: 9,
-    boxSizing: "border-box", fontFamily: "inherit", transition: "border-color 0.15s",
-  }
 
   const handleModeSelect = (val) => {
     setIsSignUp(val)
@@ -104,11 +162,11 @@ function AuthPanel({
             ← Back
           </button>
           <form onSubmit={handleAuth}>
-            <input type="email" placeholder="Email address" required value={email} onChange={e => setEmail(e.target.value)} style={inp}
+            <input type="email" placeholder="Email address" required value={email} onChange={e => setEmail(e.target.value)} style={AUTH_INPUT_STYLE}
               onFocus={e => { e.target.style.borderColor = "rgba(34,211,238,0.5)"; T.signupStarted(window?.location?.pathname) }}
               onBlur={e => e.target.style.borderColor = "rgba(255,255,255,0.1)"} />
             <input type="password" placeholder="Password" required value={password} onChange={e => setPassword(e.target.value)}
-              style={{ ...inp, marginBottom: isSignUp ? 4 : 0 }}
+              style={{ ...AUTH_INPUT_STYLE, marginBottom: isSignUp ? 4 : 0 }}
               onFocus={e => e.target.style.borderColor = "rgba(34,211,238,0.5)"}
               onBlur={e => e.target.style.borderColor = "rgba(255,255,255,0.1)"} />
             {!isSignUp && (
@@ -158,13 +216,7 @@ function AuthPanel({
 function LiveDashboardPreview() {
   const [tick, setTick] = React.useState(0)
   React.useEffect(() => { const t = setInterval(() => setTick(n => n + 1), 3200); return () => clearInterval(t) }, [])
-  const alerts = [
-    { dot: "#10B981", text: "diamondkingx likely online — $9,750 lifetime" },
-    { dot: "#F59E0B", text: "vaultmaster99 inactive 14d — re-engage now" },
-    { dot: "#22D3EE", text: "Chaturbate outperforming MFC by 2.6x tonight" },
-    { dot: "#EC4899", text: "Thursday peak window opens in 2h 14m" },
-  ]
-  const a = alerts[tick % alerts.length]
+  const a = LIVE_PREVIEW_ALERTS[tick % LIVE_PREVIEW_ALERTS.length]
   return (
     <div style={{ borderRadius: 18, overflow: "hidden", background: "rgba(6,9,20,0.95)", border: "1px solid rgba(255,255,255,0.07)", boxShadow: "0 0 0 1px rgba(34,211,238,0.05), 0 40px 100px rgba(0,0,0,0.8)" }}>
       <div style={{ padding: "9px 16px", borderBottom: "1px solid rgba(255,255,255,0.05)", display: "flex", alignItems: "center", gap: 7, background: "rgba(255,255,255,0.02)" }}>
@@ -265,15 +317,8 @@ export default function LandingPage() {
   const [authError, setAuthError] = useState("")
   const [turnstileToken, setTurnstileToken] = useState(null)
 
-  const messages = ["Hey 😘 I've been thinking about you... I'm live tonight ❤️","Miss you 💕 come make tonight fun 🔥","It's been a while… come back 😈"]
-  const whales = [
-    { name: "diamondkingx",  spent: "$9,750", inactive: "2 days" },
-    { name: "vaultmaster99", spent: "$4,400",  inactive: "2 days" },
-    { name: "private_king",  spent: "$3,500",  inactive: "28 days" },
-  ]
-
   useEffect(() => {
-    const a = setInterval(() => { setMsgIndex(p => (p+1)%messages.length); setWhaleIdx(p => (p+1)%whales.length) }, 5000)
+    const a = setInterval(() => { setMsgIndex(p => (p+1)%MESSAGES.length); setWhaleIdx(p => (p+1)%WHALES.length) }, 5000)
     return () => clearInterval(a)
   }, [])
 
@@ -283,7 +328,7 @@ export default function LandingPage() {
 
   useEffect(() => { captureAttribution() }, [])
 
-  const handleCopy = () => { navigator.clipboard.writeText(messages[msgIndex]); setCopied(true); setTimeout(() => setCopied(false), 1200) }
+  const handleCopy = () => { navigator.clipboard.writeText(MESSAGES[msgIndex]); setCopied(true); setTimeout(() => setCopied(false), 1200) }
 
   const handleAuth = async (e) => {
     e.preventDefault(); setAuthLoading(true); setAuthError(""); setAuthMsg("")
@@ -356,7 +401,7 @@ export default function LandingPage() {
   const authPanelProps = { isSignUp, setIsSignUp, email, setEmail, password, setPassword, authLoading, authMsg, authError, setAuthError, setAuthMsg, handleAuth, handleForgotPassword, onTurnstileSuccess: setTurnstileToken }
 
   return (
-    <div style={{ minHeight: "100vh", background: "#05070f", color: "#94A3B8", fontFamily: "'Inter', sans-serif", overflowX: "hidden" }}>
+    <div style={{ minHeight: "100vh", background: "#05070f", color: "#94A3B8", overflowX: "hidden" }}>
       <div style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 0 }}>
         <div style={{ position: "absolute", width: 900, height: 900, top: "-20%", right: "-15%", background: "radial-gradient(circle,rgba(34,211,238,0.055),transparent 60%)", filter: "blur(100px)" }} />
         <div style={{ position: "absolute", width: 700, height: 700, bottom: "0%", left: "-20%", background: "radial-gradient(circle,rgba(236,72,153,0.055),transparent 60%)", filter: "blur(100px)" }} />
@@ -495,12 +540,7 @@ export default function LandingPage() {
           <div style={{ fontSize: "clamp(24px,3vw,36px)", fontWeight: 900, color: "white", letterSpacing: -0.8 }}>Everything a top creator needs to earn more</div>
         </div>
         <div className="pillars-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 16 }}>
-          {[
-            { icon:"💰", color:"#10B981", title:"Revenue Intelligence", desc:"Track earnings across every platform. See $/hr by platform, session performance vs your own baseline, and monthly revenue trends.", stats:[["$1,211/hr","Chaturbate peak"],["2.6x","CB vs MFC ratio"]] },
-            { icon:"👑", color:"#F59E0B", title:"Fan Relationship System", desc:"Every high-value fan ranked by lifetime spend, churn risk, and tip probability. Know who's about to go cold before they disappear.", stats:[["72%","Revenue from top 3 fans"],["5.8x","Returning vs new spend"]] },
-            { icon:"⏰", color:"#22D3EE", title:"Stream Timing Engine", desc:"Your peak hours calculated from your actual tip history — not industry averages. Know the exact hour and day to maximize every stream.", stats:[["1 AM UTC","Detected peak"],["+210%","Thursday vs avg"]] },
-            { icon:"⚡", color:"#EC4899", title:"Creator Command Center", desc:"A daily brief that tells you exactly what to do: who to message, when to go live, which platform to prioritize, and which fans are at risk.", stats:[["Live Mode","Real-time coaching"],["AI Titles","Built from your data"]] },
-          ].map(({ icon, color, title, desc, stats }) => (
+          {FEATURE_PILLARS.map(({ icon, color, title, desc, stats }) => (
             <div key={title} style={{ padding: "26px 24px", borderRadius: 18, background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", transition: "all 0.2s" }}
               onMouseEnter={e => { e.currentTarget.style.background="rgba(255,255,255,0.04)"; e.currentTarget.style.borderColor=`${color}25` }}
               onMouseLeave={e => { e.currentTarget.style.background="rgba(255,255,255,0.02)"; e.currentTarget.style.borderColor="rgba(255,255,255,0.06)" }}>
@@ -530,9 +570,9 @@ export default function LandingPage() {
               <span style={{ fontSize: 18 }}>💌</span>
               <div><div style={{ fontSize: 13, fontWeight: 700, color: "white" }}>Fan Re-engagement</div><div style={{ fontSize: 10, color: "#334155" }}>AI-generated · personalized per fan</div></div>
             </div>
-            <div style={{ padding: "12px 14px", borderRadius: 10, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)", fontSize: 13, color: "#94A3B8", lineHeight: 1.6, minHeight: 65, marginBottom: 12 }}>{messages[msgIndex]}</div>
+            <div style={{ padding: "12px 14px", borderRadius: 10, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)", fontSize: 13, color: "#94A3B8", lineHeight: 1.6, minHeight: 65, marginBottom: 12 }}>{MESSAGES[msgIndex]}</div>
             <div style={{ display: "flex", gap: 8 }}>
-              <button onClick={() => setMsgIndex(p => (p+1)%messages.length)} style={{ flex:1, padding:"8px", borderRadius:8, background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.08)", color:"#64748B", fontSize:12, cursor:"pointer" }}>Regenerate</button>
+              <button onClick={() => setMsgIndex(p => (p+1)%MESSAGES.length)} style={{ flex:1, padding:"8px", borderRadius:8, background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.08)", color:"#64748B", fontSize:12, cursor:"pointer" }}>Regenerate</button>
               <button onClick={handleCopy} style={{ flex:1, padding:"8px", borderRadius:8, background:copied?"rgba(16,185,129,0.15)":"rgba(34,211,238,0.1)", border:`1px solid ${copied?"rgba(16,185,129,0.3)":"rgba(34,211,238,0.25)"}`, color:copied?"#10B981":"#22D3EE", fontSize:12, fontWeight:700, cursor:"pointer" }}>{copied?"✓ Copied":"Copy"}</button>
             </div>
           </div>
@@ -555,11 +595,11 @@ export default function LandingPage() {
               <div><div style={{ fontSize: 13, fontWeight: 700, color: "white" }}>Top Spender</div><div style={{ fontSize: 10, color: "#334155" }}>Ranked by lifetime value</div></div>
             </div>
             <div style={{ padding: "12px", borderRadius: 10, background: "rgba(245,158,11,0.07)", border: "1px solid rgba(245,158,11,0.18)" }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: "#94A3B8", marginBottom: 6, fontFamily: "monospace" }}>{whales[whaleIdx].name}</div>
-              <div style={{ fontSize: 26, fontWeight: 900, color: "#F59E0B", marginBottom: 4 }}>{whales[whaleIdx].spent}</div>
-              <div style={{ fontSize: 10, color: "#64748B" }}>last active {whales[whaleIdx].inactive} ago</div>
-              <div style={{ marginTop: 8, fontSize: 10, color: whales[whaleIdx].inactive==="28 days"?"#F87171":"#10B981", fontWeight: 700 }}>
-                {whales[whaleIdx].inactive==="28 days"?"⚠️ At risk of churning":"✓ Active — high tip probability"}
+              <div style={{ fontSize: 11, fontWeight: 700, color: "#94A3B8", marginBottom: 6, fontFamily: "monospace" }}>{WHALES[whaleIdx].name}</div>
+              <div style={{ fontSize: 26, fontWeight: 900, color: "#F59E0B", marginBottom: 4 }}>{WHALES[whaleIdx].spent}</div>
+              <div style={{ fontSize: 10, color: "#64748B" }}>last active {WHALES[whaleIdx].inactive} ago</div>
+              <div style={{ marginTop: 8, fontSize: 10, color: WHALES[whaleIdx].inactive==="28 days"?"#F87171":"#10B981", fontWeight: 700 }}>
+                {WHALES[whaleIdx].inactive==="28 days"?"⚠️ At risk of churning":"✓ Active — high tip probability"}
               </div>
             </div>
           </div>
@@ -605,14 +645,7 @@ export default function LandingPage() {
         <div style={{ fontSize: 14, color: "#475569", marginBottom: 36 }}>No account required — free forever</div>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16, marginBottom: 16 }}>
-          {[
-            { icon: "🪙", title: "Token Calculator", desc: "Convert tokens to USD instantly across all platforms", href: "/landing/demo#tools", color: "#22D3EE" },
-            { icon: "🎬", title: "Room Title Generator", desc: "AI-powered titles using your peak hours and fan data", href: "/dashboard", color: "#EC4899", badge: "Requires account" },
-            { icon: "#", title: "Hashtag Generator", desc: "Platform-specific hashtags for Chaturbate, MFC, Bonga", href: "/dashboard", color: "#7C5CFF", badge: "Requires account" },
-            { icon: "📊", title: "Earnings Dashboard", desc: "Upload your CSV and see your full analytics in minutes", href: "/dashboard", color: "#10B981", badge: "Free beta" },
-            { icon: "💌", title: "Fan Message Generator", desc: "Personalized re-engagement messages for your top fans", href: "/dashboard", color: "#F59E0B", badge: "Requires account" },
-            { icon: "📈", title: "Platform ROI Tracker", desc: "See exactly which platform earns you more per hour", href: "/dashboard", color: "#60A5FA", badge: "Free beta" },
-          ].map(({ icon, title, desc, href, color, badge }) => (
+          {FREE_TOOLS.map(({ icon, title, desc, href, color, badge }) => (
             <a key={title} href={href} style={{ textDecoration: "none", display: "block" }}>
               <div style={{ padding: "20px", borderRadius: 14, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", textAlign: "left", transition: "all 0.15s", height: "100%" }}
                 onMouseEnter={e => { e.currentTarget.style.background = "rgba(255,255,255,0.06)"; e.currentTarget.style.borderColor = color + "30" }}
@@ -657,18 +690,20 @@ export default function LandingPage() {
           <a href="/blog" style={{ fontSize:12, color:"#22D3EE", textDecoration:"none", fontWeight:600 }}>View all →</a>
         </div>
         <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(260px, 1fr))", gap:8, marginBottom:8 }}>
-            <a href="/blog/cam-model-earnings" style={{ textDecoration:"none" }}><div style={{ padding:"12px 14px", borderRadius:12, background:"rgba(255,255,255,0.025)", border:"1px solid rgba(255,255,255,0.06)", transition:"all 0.15s", display:"flex", alignItems:"center", gap:12 }} onMouseEnter={e=>{e.currentTarget.style.background="rgba(255,255,255,0.05)"}} onMouseLeave={e=>{e.currentTarget.style.background="rgba(255,255,255,0.025)"}}><span style={{fontSize:18,flexShrink:0}}>💰</span><div style={{flex:1,minWidth:0}}><span style={{fontSize:9,padding:"1px 6px",borderRadius:20,background:"#10B98118",color:"#10B981",fontWeight:700,display:"inline-block",marginBottom:3}}>Earnings</span><div style={{fontSize:12,fontWeight:700,color:"#F1F5F9",lineHeight:1.4}}>How Much Do Cam Models Actually Make?</div></div><span style={{fontSize:12,color:"#10B981",flexShrink:0}}>→</span></div></a>
-            <a href="/blog/how-much-do-chaturbate-models-make" style={{ textDecoration:"none" }}><div style={{ padding:"12px 14px", borderRadius:12, background:"rgba(255,255,255,0.025)", border:"1px solid rgba(255,255,255,0.06)", transition:"all 0.15s", display:"flex", alignItems:"center", gap:12 }} onMouseEnter={e=>{e.currentTarget.style.background="rgba(255,255,255,0.05)"}} onMouseLeave={e=>{e.currentTarget.style.background="rgba(255,255,255,0.025)"}}><span style={{fontSize:18,flexShrink:0}}>📊</span><div style={{flex:1,minWidth:0}}><span style={{fontSize:9,padding:"1px 6px",borderRadius:20,background:"#22D3EE18",color:"#22D3EE",fontWeight:700,display:"inline-block",marginBottom:3}}>Chaturbate</span><div style={{fontSize:12,fontWeight:700,color:"#F1F5F9",lineHeight:1.4}}>How Much Do Chaturbate Models Make Per Hour?</div></div><span style={{fontSize:12,color:"#22D3EE",flexShrink:0}}>→</span></div></a>
-            <a href="/blog/how-to-make-more-money-on-chaturbate" style={{ textDecoration:"none" }}><div style={{ padding:"12px 14px", borderRadius:12, background:"rgba(255,255,255,0.025)", border:"1px solid rgba(255,255,255,0.06)", transition:"all 0.15s", display:"flex", alignItems:"center", gap:12 }} onMouseEnter={e=>{e.currentTarget.style.background="rgba(255,255,255,0.05)"}} onMouseLeave={e=>{e.currentTarget.style.background="rgba(255,255,255,0.025)"}}><span style={{fontSize:18,flexShrink:0}}>🔥</span><div style={{flex:1,minWidth:0}}><span style={{fontSize:9,padding:"1px 6px",borderRadius:20,background:"#EC489918",color:"#EC4899",fontWeight:700,display:"inline-block",marginBottom:3}}>Strategy</span><div style={{fontSize:12,fontWeight:700,color:"#F1F5F9",lineHeight:1.4}}>How to Make More Money on Chaturbate</div></div><span style={{fontSize:12,color:"#EC4899",flexShrink:0}}>→</span></div></a>
-            <a href="/blog/how-to-re-engage-whales-and-top-tippers" style={{ textDecoration:"none" }}><div style={{ padding:"12px 14px", borderRadius:12, background:"rgba(255,255,255,0.025)", border:"1px solid rgba(255,255,255,0.06)", transition:"all 0.15s", display:"flex", alignItems:"center", gap:12 }} onMouseEnter={e=>{e.currentTarget.style.background="rgba(255,255,255,0.05)"}} onMouseLeave={e=>{e.currentTarget.style.background="rgba(255,255,255,0.025)"}}><span style={{fontSize:18,flexShrink:0}}>🐳</span><div style={{flex:1,minWidth:0}}><span style={{fontSize:9,padding:"1px 6px",borderRadius:20,background:"#F59E0B18",color:"#F59E0B",fontWeight:700,display:"inline-block",marginBottom:3}}>Fan CRM</span><div style={{fontSize:12,fontWeight:700,color:"#F1F5F9",lineHeight:1.4}}>How to Re-Engage Whales and Top Tippers</div></div><span style={{fontSize:12,color:"#F59E0B",flexShrink:0}}>→</span></div></a>
-            <a href="/blog/how-to-build-loyal-fans" style={{ textDecoration:"none" }}><div style={{ padding:"12px 14px", borderRadius:12, background:"rgba(255,255,255,0.025)", border:"1px solid rgba(255,255,255,0.06)", transition:"all 0.15s", display:"flex", alignItems:"center", gap:12 }} onMouseEnter={e=>{e.currentTarget.style.background="rgba(255,255,255,0.05)"}} onMouseLeave={e=>{e.currentTarget.style.background="rgba(255,255,255,0.025)"}}><span style={{fontSize:18,flexShrink:0}}>👑</span><div style={{flex:1,minWidth:0}}><span style={{fontSize:9,padding:"1px 6px",borderRadius:20,background:"#7C5CFF18",color:"#7C5CFF",fontWeight:700,display:"inline-block",marginBottom:3}}>Retention</span><div style={{fontSize:12,fontWeight:700,color:"#F1F5F9",lineHeight:1.4}}>How to Build a Loyal Fanbase</div></div><span style={{fontSize:12,color:"#7C5CFF",flexShrink:0}}>→</span></div></a>
-            <a href="/blog/why-cam-income-is-inconsistent" style={{ textDecoration:"none" }}><div style={{ padding:"12px 14px", borderRadius:12, background:"rgba(255,255,255,0.025)", border:"1px solid rgba(255,255,255,0.06)", transition:"all 0.15s", display:"flex", alignItems:"center", gap:12 }} onMouseEnter={e=>{e.currentTarget.style.background="rgba(255,255,255,0.05)"}} onMouseLeave={e=>{e.currentTarget.style.background="rgba(255,255,255,0.025)"}}><span style={{fontSize:18,flexShrink:0}}>📈</span><div style={{flex:1,minWidth:0}}><span style={{fontSize:9,padding:"1px 6px",borderRadius:20,background:"#60A5FA18",color:"#60A5FA",fontWeight:700,display:"inline-block",marginBottom:3}}>Income</span><div style={{fontSize:12,fontWeight:700,color:"#F1F5F9",lineHeight:1.4}}>Why Cam Income Is Inconsistent</div></div><span style={{fontSize:12,color:"#60A5FA",flexShrink:0}}>→</span></div></a>
-            <a href="/blog/best-cam-model-tools" style={{ textDecoration:"none" }}><div style={{ padding:"12px 14px", borderRadius:12, background:"rgba(255,255,255,0.025)", border:"1px solid rgba(255,255,255,0.06)", transition:"all 0.15s", display:"flex", alignItems:"center", gap:12 }} onMouseEnter={e=>{e.currentTarget.style.background="rgba(255,255,255,0.05)"}} onMouseLeave={e=>{e.currentTarget.style.background="rgba(255,255,255,0.025)"}}><span style={{fontSize:18,flexShrink:0}}>⚡</span><div style={{flex:1,minWidth:0}}><span style={{fontSize:9,padding:"1px 6px",borderRadius:20,background:"#F59E0B18",color:"#F59E0B",fontWeight:700,display:"inline-block",marginBottom:3}}>Tools</span><div style={{fontSize:12,fontWeight:700,color:"#F1F5F9",lineHeight:1.4}}>Best Cam Model Tools</div></div><span style={{fontSize:12,color:"#F59E0B",flexShrink:0}}>→</span></div></a>
-            <a href="/blog/cam-model-taxes" style={{ textDecoration:"none" }}><div style={{ padding:"12px 14px", borderRadius:12, background:"rgba(255,255,255,0.025)", border:"1px solid rgba(255,255,255,0.06)", transition:"all 0.15s", display:"flex", alignItems:"center", gap:12 }} onMouseEnter={e=>{e.currentTarget.style.background="rgba(255,255,255,0.05)"}} onMouseLeave={e=>{e.currentTarget.style.background="rgba(255,255,255,0.025)"}}><span style={{fontSize:18,flexShrink:0}}>🧾</span><div style={{flex:1,minWidth:0}}><span style={{fontSize:9,padding:"1px 6px",borderRadius:20,background:"#64748B18",color:"#64748B",fontWeight:700,display:"inline-block",marginBottom:3}}>Business</span><div style={{fontSize:12,fontWeight:700,color:"#F1F5F9",lineHeight:1.4}}>Cam Model Taxes Guide</div></div><span style={{fontSize:12,color:"#64748B",flexShrink:0}}>→</span></div></a>
-            <a href="/blog/how-to-increase-cam-earnings" style={{ textDecoration:"none" }}><div style={{ padding:"12px 14px", borderRadius:12, background:"rgba(255,255,255,0.025)", border:"1px solid rgba(255,255,255,0.06)", transition:"all 0.15s", display:"flex", alignItems:"center", gap:12 }} onMouseEnter={e=>{e.currentTarget.style.background="rgba(255,255,255,0.05)"}} onMouseLeave={e=>{e.currentTarget.style.background="rgba(255,255,255,0.025)"}}><span style={{fontSize:18,flexShrink:0}}>📈</span><div style={{flex:1,minWidth:0}}><span style={{fontSize:9,padding:"1px 6px",borderRadius:20,background:"#60A5FA18",color:"#60A5FA",fontWeight:700,display:"inline-block",marginBottom:3}}>Income</span><div style={{fontSize:12,fontWeight:700,color:"#F1F5F9",lineHeight:1.4}}>How to Increase Cam Earnings</div></div><span style={{fontSize:12,color:"#60A5FA",flexShrink:0}}>→</span></div></a>
-            <a href="/blog/why-cam-streams-arent-making-money" style={{ textDecoration:"none" }}><div style={{ padding:"12px 14px", borderRadius:12, background:"rgba(255,255,255,0.025)", border:"1px solid rgba(255,255,255,0.06)", transition:"all 0.15s", display:"flex", alignItems:"center", gap:12 }} onMouseEnter={e=>{e.currentTarget.style.background="rgba(255,255,255,0.05)"}} onMouseLeave={e=>{e.currentTarget.style.background="rgba(255,255,255,0.025)"}}><span style={{fontSize:18,flexShrink:0}}>🚫</span><div style={{flex:1,minWidth:0}}><span style={{fontSize:9,padding:"1px 6px",borderRadius:20,background:"#10B98118",color:"#10B981",fontWeight:700,display:"inline-block",marginBottom:3}}>Earnings</span><div style={{fontSize:12,fontWeight:700,color:"#F1F5F9",lineHeight:1.4}}>Why Your Streams Aren't Making Money</div></div><span style={{fontSize:12,color:"#10B981",flexShrink:0}}>→</span></div></a>
-            <a href="/blog/how-to-get-veiws-on-chaturbate" style={{ textDecoration:"none" }}><div style={{ padding:"12px 14px", borderRadius:12, background:"rgba(255,255,255,0.025)", border:"1px solid rgba(255,255,255,0.06)", transition:"all 0.15s", display:"flex", alignItems:"center", gap:12 }} onMouseEnter={e=>{e.currentTarget.style.background="rgba(255,255,255,0.05)"}} onMouseLeave={e=>{e.currentTarget.style.background="rgba(255,255,255,0.025)"}}><span style={{fontSize:18,flexShrink:0}}>👁</span><div style={{flex:1,minWidth:0}}><span style={{fontSize:9,padding:"1px 6px",borderRadius:20,background:"#FB923C18",color:"#FB923C",fontWeight:700,display:"inline-block",marginBottom:3}}>Growth</span><div style={{fontSize:12,fontWeight:700,color:"#F1F5F9",lineHeight:1.4}}>How to Get More Views on Chaturbate</div></div><span style={{fontSize:12,color:"#FB923C",flexShrink:0}}>→</span></div></a>
-            <a href="/blog/how-to-get-more-tips-on-myfreecams" style={{ textDecoration:"none" }}><div style={{ padding:"12px 14px", borderRadius:12, background:"rgba(255,255,255,0.025)", border:"1px solid rgba(255,255,255,0.06)", transition:"all 0.15s", display:"flex", alignItems:"center", gap:12 }} onMouseEnter={e=>{e.currentTarget.style.background="rgba(255,255,255,0.05)"}} onMouseLeave={e=>{e.currentTarget.style.background="rgba(255,255,255,0.025)"}}><span style={{fontSize:18,flexShrink:0}}>💎</span><div style={{flex:1,minWidth:0}}><span style={{fontSize:9,padding:"1px 6px",borderRadius:20,background:"#A78BFA18",color:"#A78BFA",fontWeight:700,display:"inline-block",marginBottom:3}}>MFC</span><div style={{fontSize:12,fontWeight:700,color:"#F1F5F9",lineHeight:1.4}}>How to Get More Tips on MyFreeCams</div></div><span style={{fontSize:12,color:"#A78BFA",flexShrink:0}}>→</span></div></a>
+          {BLOG_LINK_CARDS.map(({ href, icon, tag, color, title }) => (
+            <a key={href} href={href} style={{ textDecoration:"none" }}>
+              <div style={BLOG_CARD_STYLE}
+                onMouseEnter={e=>{e.currentTarget.style.background="rgba(255,255,255,0.05)"}}
+                onMouseLeave={e=>{e.currentTarget.style.background="rgba(255,255,255,0.025)"}}>
+                <span style={{fontSize:18,flexShrink:0}}>{icon}</span>
+                <div style={{flex:1,minWidth:0}}>
+                  <span style={{fontSize:9,padding:"1px 6px",borderRadius:20,background:color+"18",color,fontWeight:700,display:"inline-block",marginBottom:3}}>{tag}</span>
+                  <div style={{fontSize:12,fontWeight:700,color:"#F1F5F9",lineHeight:1.4}}>{title}</div>
+                </div>
+                <span style={{fontSize:12,color,flexShrink:0}}>→</span>
+              </div>
+            </a>
+          ))}
         </div>
       </div>
 

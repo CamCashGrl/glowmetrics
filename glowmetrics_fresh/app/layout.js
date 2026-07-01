@@ -2,7 +2,17 @@
 import './globals.css'
 import { Analytics } from '@vercel/analytics/react'
 import Script from 'next/script'
-import FeedbackWidget from './components/FeedbackWidget'
+import { Inter } from 'next/font/google'
+import FeedbackWidgetGate from './components/FeedbackWidgetGate'
+
+// Weights confirmed via `grep -roh "fontWeight: ..."` across app/lib/components:
+// 400, 500, 600, 700, 800, 900 are all in active use (dashboard/landing/onboarding/blog).
+// This matches the weight set the previous manual Google Fonts <link> already requested.
+const inter = Inter({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700', '800', '900'],
+  display: 'swap',
+})
 
 const SITE_URL = 'https://www.camcashgrl.com'
 const TITLE = 'CamCash — Cam Model Analytics That Makes You More Money'
@@ -81,15 +91,9 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en">
+    <html lang="en" className={inter.className}>
       <head>
         <meta name="copyright" content="© 2026 CamCash™ / CamCashGrl. All rights reserved." />
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="true" />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap"
-          rel="stylesheet"
-        />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
@@ -138,7 +142,7 @@ export default function RootLayout({ children }) {
           />
         </noscript>
         {children}
-        <FeedbackWidget />
+        <FeedbackWidgetGate />
         <Analytics />
 
         {/* X (Twitter) Conversion Tracking Pixel */}
