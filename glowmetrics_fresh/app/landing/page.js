@@ -16,6 +16,7 @@ function AuthPanel({
   setAuthError, setAuthMsg,
   handleAuth, handleForgotPassword,
   onTurnstileSuccess,
+  pendingPlan,
 }) {
   const inputStyle = {
     width: "100%", padding: "11px 14px", borderRadius: 8,
@@ -47,6 +48,11 @@ function AuthPanel({
         <div style={{ fontSize: 12, color: "#475569", marginTop: 3 }}>
           {isSignUp ? "No credit card required" : "Welcome back 💋"}
         </div>
+        {pendingPlan && (
+          <div style={{ fontSize: 12, color: "#22D3EE", marginTop: 8 }}>
+            {isSignUp ? "Sign up" : "Log in"} to continue to checkout
+          </div>
+        )}
       </div>
 
       <div style={{
@@ -292,6 +298,7 @@ export default function LandingPage() {
   const [authMsg, setAuthMsg]         = useState("")
   const [authError, setAuthError]     = useState("")
   const [turnstileToken, setTurnstileToken] = useState(null)
+  const [pendingPlan, setPendingPlan] = useState(null)
 
   // Demo cycling state for feature cards
   const [msgIndex, setMsgIndex]       = useState(0)
@@ -317,12 +324,33 @@ export default function LandingPage() {
   }, [])
 
   useEffect(() => {
+    const plan = new URLSearchParams(window.location.search).get('plan')
+    if (plan) { setPendingPlan(plan); setIsSignUp(true) }
+  }, [])
+
+  useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) router.replace("/dashboard")
+      if (!user) return
+      const plan = new URLSearchParams(window.location.search).get('plan')
+      if (plan) goToCheckout(plan)
+      else router.replace("/dashboard")
     })
   }, [])
 
   useEffect(() => { captureAttribution() }, [])
+
+  const goToCheckout = async (planType) => {
+    try {
+      const res = await fetch('/api/stripe/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plan_type: planType }),
+      })
+      const data = await res.json()
+      if (data.url) { window.location.href = data.url; return true }
+    } catch {}
+    return false
+  }
 
   const handleCopy = () => {
     navigator.clipboard.writeText(messages[msgIndex])
@@ -365,6 +393,7 @@ export default function LandingPage() {
               else try { localStorage.removeItem('camcash_attribution') } catch {}
             })
           }
+          if (pendingPlan && await goToCheckout(pendingPlan)) return
           router.push("/dashboard")
         }
         else { setAuthMsg("Account created! Check your email to confirm, then log in."); setIsSignUp(false); setAuthLoading(false) }
@@ -372,7 +401,10 @@ export default function LandingPage() {
     } else {
       const { error } = await supabase.auth.signInWithPassword({ email, password })
       if (error) { setAuthError(error.message); setAuthLoading(false) }
-      else router.push("/dashboard")
+      else {
+        if (pendingPlan && await goToCheckout(pendingPlan)) return
+        router.push("/dashboard")
+      }
     }
   }
 
@@ -389,6 +421,7 @@ export default function LandingPage() {
     isSignUp, setIsSignUp, email, setEmail, password, setPassword,
     authLoading, authMsg, authError, setAuthError, setAuthMsg,
     handleAuth, handleForgotPassword, onTurnstileSuccess: setTurnstileToken,
+    pendingPlan,
   }
 
   return (

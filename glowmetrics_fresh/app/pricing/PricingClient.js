@@ -13,7 +13,7 @@ async function startCheckout(planType, setLoading) {
       body: JSON.stringify({ plan_type: planType }),
     })
     if (res.status === 401) {
-      window.location.href = `/signup?plan=${planType}`
+      window.location.href = `/landing?plan=${planType}`
       return
     }
     const data = await res.json()
