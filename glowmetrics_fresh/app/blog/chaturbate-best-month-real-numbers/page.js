@@ -359,6 +359,14 @@ export default function BestMonthPost() {
         </p>
       </div>
 
+      <div style={{ margin: '36px 0', borderRadius: '12px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.07)' }}>
+        <img
+          src="/blog-images/camcash-platform-comparsion-dashboard.png"
+          alt="CamCash platform comparison dashboard showing earnings across Chaturbate, BongaCams, and MyFreeCams"
+          style={{ width: '100%', display: 'block' }}
+        />
+      </div>
+
       <div style={s.finalCta}>
         <div style={s.finalCtaH}>Know Your Numbers in Real Time</div>
         <div style={s.finalCtaSub}>
