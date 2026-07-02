@@ -1,25 +1,11 @@
-import { createClient } from '@supabase/supabase-js'
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 
-export const supabase = createClient(
-  'https://hlsdlaibnayzbfflxclj.supabase.co',
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhsc2RsYWlibmF5emJmZmx4Y2xqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM2MjQwODUsImV4cCI6MjA4OTIwMDA4NX0.5FwPe35UL-o46FvBJX526La5o7jcbFaP1KVoLtI4U_M',
-  {
-    auth: {
-      onAuthStateChange: (event, session) => {
-        if (event === 'TOKEN_REFRESHED' && !session) {
-          // Refresh failed — clear everything and send to login
-          supabase.auth.signOut()
-          if (typeof window !== 'undefined') {
-            window.location.href = '/landing'
-          }
-        }
-      },
-      autoRefreshToken: true,
-      persistSession: true,
-      detectSessionInUrl: true,
-    },
-  }
-)
+// createClientComponentClient (not the plain supabase-js createClient) so the
+// session is persisted in a cookie the server route handlers can read via
+// createRouteHandlerClient — localStorage-only sessions are invisible to
+// /api/stripe/checkout, /api/stripe/portal, /api/track, and
+// /api/complete-onboarding, which all read auth from cookies.
+export const supabase = createClientComponentClient()
 
 // Global handler — catches the refresh_token_not_found 400 loop
 // that was hammering auth logs and locking out returning users
