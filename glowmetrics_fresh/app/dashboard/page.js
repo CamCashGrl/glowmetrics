@@ -1916,7 +1916,6 @@ const handleCSV = async (file, forcePlatform = null) => {
   })
 
   const allPlatforms = [...new Set(tips.map(t => t.platform))]
-  const isPro = profile?.plan === 'pro'
   const freePlatformLimitReached = !isPro && allPlatforms.length > 0
 
   // ── Build "What's Next" alerts — smarter, personalized, prioritized
@@ -2553,7 +2552,7 @@ const handleCSV = async (file, forcePlatform = null) => {
       </div>
 
       {/* SIDEBAR — desktop only, hidden on mobile via CSS */}
-      <Sidebar activeTab={activeTab} onTabChange={(tab) => { setActiveTab(tab); if (typeof window !== "undefined") { localStorage.setItem("camcash_tab", tab); window.scrollTo({ top: 0, behavior: "instant" }); } }} user={user} onSignOut={async () => { await supabase.auth.signOut(); router.replace("/login"); }} isPro={profile?.plan === 'pro'} />{/* MAIN CONTENT */}
+      <Sidebar activeTab={activeTab} onTabChange={(tab) => { setActiveTab(tab); if (typeof window !== "undefined") { localStorage.setItem("camcash_tab", tab); window.scrollTo({ top: 0, behavior: "instant" }); } }} user={user} onSignOut={async () => { await supabase.auth.signOut(); router.replace("/login"); }} isPro={isPro} />{/* MAIN CONTENT */}
       <div className="dash-main" style={{ marginLeft: 240, width: "calc(100% - 240px)", minWidth: 0, padding: 32, boxSizing: "border-box", overflowX: "hidden" }}>
 
         {/* ── STICKY COMMAND BAR ── */}
