@@ -89,11 +89,70 @@ function validateInsights(insights = []) {
   });
 }
 
+// Chaturbate's "Token Stats" page copies as a 3-line block per tip:
+//   Jun 18, 2026, 8:27 PM
+//   Tip From: username123
+//   500  12345
+// (date line / "Tip From: user" line / "tokens  running_balance" line)
+const CB_DATE_LINE_RE = /^([A-Za-z]{3})\s+(\d{1,2}),\s+(\d{4}),\s+(\d{1,2}):(\d{2})\s+(AM|PM)$/i
+const CB_TIP_FROM_RE = /^Tip From:\s*(.+)$/i
+const CB_TOKENS_LINE_RE = /^(\d+)\s+(\d+)$/
+const CB_MONTHS = { jan:1, feb:2, mar:3, apr:4, may:5, jun:6, jul:7, aug:8, sep:9, oct:10, nov:11, dec:12 }
+
+function parseChaturbateMultiLine(lines) {
+  const results = []
+  let i = 0
+  while (i < lines.length) {
+    const dateMatch = lines[i].trim().match(CB_DATE_LINE_RE)
+    if (!dateMatch) { i++; continue }
+
+    const [, mon, day, year, hr, min, ampm] = dateMatch
+    const actionLine = (lines[i + 1] || '').trim()
+    const tipMatch = actionLine.match(CB_TIP_FROM_RE)
+    if (!tipMatch) { i++; continue }
+
+    const username = tipMatch[1].trim()
+    let tokensLine = (lines[i + 2] || '').trim()
+    let note = ''
+    let tMatch = tokensLine.match(CB_TOKENS_LINE_RE)
+    if (!tMatch && lines[i + 3]) {
+      note = tokensLine
+      tokensLine = (lines[i + 3] || '').trim()
+      tMatch = tokensLine.match(CB_TOKENS_LINE_RE)
+    }
+
+    if (tMatch) {
+      const tokens = parseInt(tMatch[1], 10)
+      if (username && tokens >= 1) {
+        let h = parseInt(hr, 10)
+        if (/pm/i.test(ampm) && h !== 12) h += 12
+        if (/am/i.test(ampm) && h === 12) h = 0
+        const monthNum = CB_MONTHS[mon.toLowerCase()] || 1
+        const dateRaw = `${year}-${String(monthNum).padStart(2, '0')}-${String(parseInt(day, 10)).padStart(2, '0')} ${String(h).padStart(2, '0')}:${min}:00`
+        results.push({
+          dateRaw, date_time: dateRaw, username, platform: 'Chaturbate',
+          tokens, usd: parseFloat((tokens * tokenRate('Chaturbate')).toFixed(2)),
+          tip_type: 'Tip', tip_note: note,
+        })
+      }
+    }
+    i++
+  }
+  return results
+}
+
 export function parseCSV(text, platform = null) {
   const allLines = text.trim().split('\n')
   if (allLines.length === 0) return []
 
   if (!platform) platform = detectPlatform(text)
+
+  // Raw multi-line Chaturbate paste (not a proper CSV) — needs block-based stitching
+  // instead of the line-by-line parsers below, which mangle date/"Tip From:"/tokens
+  // onto separate rows.
+  if (allLines.some(l => CB_TIP_FROM_RE.test(l.trim()))) {
+    return parseChaturbateMultiLine(allLines).map(normalizeTip).filter(isValidTip)
+  }
 
   let startIdx = 0
   for (let i = 0; i < Math.min(5, allLines.length); i++) {
