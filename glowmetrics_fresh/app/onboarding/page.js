@@ -655,8 +655,6 @@ export default function OnboardingPage(){
     finally{setCsvUploading(false)}
   }
 
-  async function skipToDashboard(){await markDone();router.push('/dashboard')}
-
   if(booting)return(
     <div style={{minHeight:'100vh',background:'#050812',display:'flex',alignItems:'center',justifyContent:'center'}}>
       <div style={{width:30,height:30,borderRadius:'50%',border:'2px solid rgba(255,255,255,0.08)',borderTopColor:CYAN,animation:'spin 0.8s linear infinite'}}/>
@@ -735,7 +733,6 @@ export default function OnboardingPage(){
                 </div>
               </div>
               <OBBtn onClick={()=>selectPlatform(platformId)} style={{marginBottom:10}}>Continue with {platform.label} →</OBBtn>
-              <div style={{textAlign:'center'}}><button onClick={skipToDashboard} style={{background:'none',border:'none',fontSize:12,color:`rgba(33,230,243,0.65)`,cursor:'pointer'}} onMouseEnter={e=>e.currentTarget.style.color=CYAN} onMouseLeave={e=>e.currentTarget.style.color='rgba(33,230,243,0.65)'}>Skip for now</button></div>
             </div>
           )}
 
@@ -809,7 +806,7 @@ export default function OnboardingPage(){
                 <OBSecBtn onClick={()=>setStep('platform')} style={{height:46}}>← Back</OBSecBtn>
                 <OBBtn onClick={handlePreview} disabled={!pasteText.trim()} style={{height:46,fontSize:13}}>Preview Import →</OBBtn>
               </div>
-              <OBLinks links={[{label:'Upload CSV instead',onClick:()=>setStep('csv')},{label:'Track future tips instead',onClick:skipToDashboard}]}/>
+              <OBLinks links={[{label:'Upload CSV instead',onClick:()=>setStep('csv')}]}/>
               <OBTrust/>
             </div>
           )}
@@ -890,7 +887,7 @@ export default function OnboardingPage(){
                 <OBSecBtn onClick={()=>setStep('paste')} style={{height:46}}>← Back</OBSecBtn>
                 <OBBtn onClick={handleImport} style={{height:46,fontSize:13}}>Import & build dashboard →</OBBtn>
               </div>
-              <OBLinks links={[{label:'Paste more rows',onClick:()=>setStep('paste')},{label:'Upload CSV instead',onClick:()=>setStep('csv')},{label:'Track future tips instead',onClick:skipToDashboard}]}/>
+              <OBLinks links={[{label:'Paste more rows',onClick:()=>setStep('paste')},{label:'Upload CSV instead',onClick:()=>setStep('csv')}]}/>
               <OBTrust/>
             </div>
           )}
