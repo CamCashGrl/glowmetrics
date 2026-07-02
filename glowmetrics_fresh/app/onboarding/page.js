@@ -513,6 +513,7 @@ export default function OnboardingPage(){
   const router=useRouter()
   const[user,setUser]=useState(null)
   const[booting,setBooting]=useState(true)
+  const[userPlan,setUserPlan]=useState('free')
 
   const[step,setStep]=useState('platform')
   const[platformId,setPlatformId]=useState('chaturbate')
@@ -544,6 +545,8 @@ export default function OnboardingPage(){
       if(!user){router.replace('/login');return}
       const{data}=await supabase.from('beta_users').select('onboarding_complete').eq('user_id',user.id).single()
       if(data?.onboarding_complete){router.replace('/dashboard');return}
+      const{data:profile}=await supabase.from('profiles').select('plan').eq('id',user.id).single()
+      setUserPlan(profile?.plan==='pro'?'pro':'free')
       setUser(user);setBooting(false)
     })()
   },[router])
@@ -554,7 +557,7 @@ export default function OnboardingPage(){
   }
 
   function selectPlatform(id){
-    if(importedPlatforms.length>0&&!importedPlatforms.includes(id)){setPendingPlatform(id);setShowUpsell(true);return}
+    if(userPlan!=='pro'&&importedPlatforms.length>0&&!importedPlatforms.includes(id)){setPendingPlatform(id);setShowUpsell(true);return}
     setPlatformId(id)
     if(id==='chaturbate')setStep('username');else setStep('paste')
   }
@@ -569,8 +572,9 @@ export default function OnboardingPage(){
   }
 
   function handleUpsellSkip(){
-    setPlatformId(pendingPlatform);setShowUpsell(false);setPendingPlatform(null);setPasteText('')
-    if(pendingPlatform==='chaturbate')setStep('username');else setStep('paste')
+    // "Skip" means stay on the already-imported platform — do NOT advance into pendingPlatform's flow
+    setShowUpsell(false);setPendingPlatform(null)
+    if(importedPlatforms.length)setPlatformId(importedPlatforms[0])
   }
 
   function handlePreview(){

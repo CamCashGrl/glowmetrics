@@ -1767,6 +1767,11 @@ export default function Dashboard() {
   }
 const handleCSV = async (file, forcePlatform = null) => {
     if (!file || !user) return
+    // Free plan tracks a single platform — block explicit uploads for a different platform
+    if (freePlatformLimitReached && forcePlatform && !allPlatforms.includes(forcePlatform)) {
+      showToast("🔒 Free plan tracks 1 platform. Upgrade to Pro to add another (see sidebar).")
+      return
+    }
     setUploading(true)
     gtmTrack('csv_upload_started', { platform: forcePlatform || uploadPlatform || 'unknown' })
     try {
@@ -1911,6 +1916,8 @@ const handleCSV = async (file, forcePlatform = null) => {
   })
 
   const allPlatforms = [...new Set(tips.map(t => t.platform))]
+  const isPro = profile?.plan === 'pro'
+  const freePlatformLimitReached = !isPro && allPlatforms.length > 0
 
   // ── Build "What's Next" alerts — smarter, personalized, prioritized
   const buildWhatsNextAlerts = () => {
@@ -2546,7 +2553,7 @@ const handleCSV = async (file, forcePlatform = null) => {
       </div>
 
       {/* SIDEBAR — desktop only, hidden on mobile via CSS */}
-      <Sidebar activeTab={activeTab} onTabChange={(tab) => { setActiveTab(tab); if (typeof window !== "undefined") { localStorage.setItem("camcash_tab", tab); window.scrollTo({ top: 0, behavior: "instant" }); } }} user={user} onSignOut={async () => { await supabase.auth.signOut(); router.replace("/login"); }} />{/* MAIN CONTENT */}
+      <Sidebar activeTab={activeTab} onTabChange={(tab) => { setActiveTab(tab); if (typeof window !== "undefined") { localStorage.setItem("camcash_tab", tab); window.scrollTo({ top: 0, behavior: "instant" }); } }} user={user} onSignOut={async () => { await supabase.auth.signOut(); router.replace("/login"); }} isPro={profile?.plan === 'pro'} />{/* MAIN CONTENT */}
       <div className="dash-main" style={{ marginLeft: 240, width: "calc(100% - 240px)", minWidth: 0, padding: 32, boxSizing: "border-box", overflowX: "hidden" }}>
 
         {/* ── STICKY COMMAND BAR ── */}
@@ -5526,18 +5533,28 @@ const handleCSV = async (file, forcePlatform = null) => {
         {activeTab === "upload" && (
           <div style={{ maxWidth: 600, margin: "0 auto" }}>
             <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 8 }}>📥 Import CSV</h1>
-            <p style={{ fontSize: 14, color: C.muted, marginBottom: 32 }}>Unlimited uploads during free beta • Auto-removes duplicates</p>
+            <p style={{ fontSize: 14, color: C.muted, marginBottom: freePlatformLimitReached ? 16 : 32 }}>
+              {isPro ? "Unlimited platforms • Auto-removes duplicates" : freePlatformLimitReached ? `Free plan — tracking ${allPlatforms[0]}. Auto-removes duplicates.` : "Free plan tracks 1 platform. Auto-removes duplicates."}
+            </p>
+            {freePlatformLimitReached && (
+              <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", borderRadius: 12, background: "rgba(168,85,247,0.08)", border: "1px solid rgba(168,85,247,0.25)", marginBottom: 16 }}>
+                <span style={{ fontSize: 18 }}>🔒</span>
+                <div style={{ flex: 1, fontSize: 12.5, color: C.text, lineHeight: 1.5 }}>
+                  You're on the free plan (1 platform). Upgrade to Pro to add BongaCams, MyFreeCams, and more.
+                </div>
+                <a href="/pricing" style={{ flexShrink: 0, padding: "8px 14px", borderRadius: 9, background: "linear-gradient(135deg,#22D3EE,#a855f7,#EC4899)", color: "#fff", fontSize: 12, fontWeight: 700, textDecoration: "none", whiteSpace: "nowrap" }}>Upgrade →</a>
+              </div>
+            )}
             <div style={{ ...glassCard, borderRadius: 14, padding: 32, marginBottom: 16 }}>
               <div style={{ marginBottom: 20 }}>
                 <label style={{ fontSize: 12, color: C.muted, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8, display: "block" }}>Platform (optional — helps if auto-detect fails)</label>
                 <select value={uploadPlatform} onChange={e => setUploadPlatform(e.target.value)}
                   style={{ width: "100%", padding: "10px 14px", borderRadius: 9, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: C.white, fontSize: 14, outline: "none" }}>
                   <option value="">Auto-detect (recommended)</option>
-                  <option value="Chaturbate">Chaturbate</option>
-                  <option value="BongaCams">BongaCams</option>
-                  <option value="MyFreeCams">MyFreeCams</option>
-                  <option value="Stripchat">Stripchat</option>
-                  <option value="CamSoda">CamSoda</option>
+                  {["Chaturbate", "BongaCams", "MyFreeCams", "Stripchat", "CamSoda"].map(p => {
+                    const locked = freePlatformLimitReached && !allPlatforms.includes(p)
+                    return <option key={p} value={p} disabled={locked}>{locked ? `🔒 ${p} — requires Pro` : p}</option>
+                  })}
                 </select>
               </div>
               <div style={{ textAlign: "center" }}>
