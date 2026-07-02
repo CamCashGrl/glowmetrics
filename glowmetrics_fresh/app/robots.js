@@ -7,7 +7,6 @@ export default function robots() {
         disallow: [
           '/dashboard',
           '/admin',
-          '/analytics',
           '/api/',
           '/login',
           '/onboarding',
