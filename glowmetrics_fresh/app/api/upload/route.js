@@ -91,9 +91,13 @@ export async function POST(req) {
       tips: batch
     })
 
-    if (error) {
-      console.error(`[UPLOAD] Batch ${batchNum}/${totalBatches} error:`, error.message)
-      errors.push({ batch: batchNum, error: error.message })
+    // insert_tips_dedup catches its own exceptions and returns them inside the
+    // jsonb payload (data.error) rather than as a PostgREST-level error, so a
+    // failed batch can otherwise look like a clean { inserted: 0, skipped: 0 }.
+    if (error || data?.error) {
+      const message = error?.message || data?.error
+      console.error(`[UPLOAD] Batch ${batchNum}/${totalBatches} error:`, message)
+      errors.push({ batch: batchNum, error: message })
       continue
     }
 
