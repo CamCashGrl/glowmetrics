@@ -1,15 +1,13 @@
 export default function sitemap() {
   const base = 'https://www.camcashgrl.com'
-  const today = '2026-06-26'
+  const today = '2026-07-02'
 
   const staticPages = [
     { url: base,                                          priority: 1.0, changeFrequency: 'weekly'  },
     { url: `${base}/pricing`,                             priority: 0.9, changeFrequency: 'monthly' },
     { url: `${base}/blog`,                                priority: 0.9, changeFrequency: 'weekly'  },
-    { url: `${base}/landing`,                             priority: 0.8, changeFrequency: 'monthly' },
     { url: `${base}/extension`,                           priority: 0.8, changeFrequency: 'monthly' },
     { url: `${base}/affiliates`,                          priority: 0.7, changeFrequency: 'monthly' },
-    { url: `${base}/analytics`,                           priority: 0.7, changeFrequency: 'monthly' },
     { url: `${base}/tools`,                               priority: 0.7, changeFrequency: 'monthly' },
     { url: `${base}/tools/cam-model-name-generator`,      priority: 0.7, changeFrequency: 'monthly' },
     { url: `${base}/contact`,                             priority: 0.6, changeFrequency: 'monthly' },
@@ -23,7 +21,6 @@ export default function sitemap() {
     'best-cam-sites-for-beginners',
     'best-cam-sites-for-models',
     'cam-model-boundaries-toxic-chat',
-    'cam-model-earnings',
     'cam-model-equipment-guide',
     'cam-model-fan-crm',
     'cam-model-income-diversification',
@@ -49,6 +46,7 @@ export default function sitemap() {
     'how-to-get-views-on-chaturbate',
     'how-to-increase-cam-earnings',
     'how-to-increase-chaturbate-tips',
+    'how-to-make-money-on-chaturbate',
     'how-to-make-more-money-on-chaturbate',
     'how-to-pick-a-cam-name',
     'how-to-re-engage-whales-and-high-tipping-fans',
@@ -61,7 +59,7 @@ export default function sitemap() {
     'why-cam-income-is-inconsistent',
     'why-cam-model-data-prevents-overspending',
     'why-cam-streams-arent-making-money',
-    'why-you-arent-making-money-on-chaturbate',
+    'why-youre-not-making-money-on-chaturbate',
   ]
 
   const guideSlugs = [
@@ -73,10 +71,7 @@ export default function sitemap() {
     'cam-model-session-breakdown',
     'cam-model-token-calculator',
     'cam-model-top-tippers',
-    'chaturbate-best-hours',
     'chaturbate-earnings-tracker',
-    'chaturbate-room-title-generator',
-    'chaturbate-token-calculator',
     'chaturbate-token-tracker',
   ]
 

@@ -78,11 +78,11 @@ export default function HomePage() {
         <p>1. Export your earnings CSV from Chaturbate, BongaCams, or MyFreeCams. 2. Upload it to CamCash — takes under 2 minutes. 3. Your full analytics dashboard is ready instantly.</p>
         <p>No credit card required.</p>
         <nav>
-          <a href="/blog/cam-model-earnings">Cam Model Earnings Guide</a>
+          <a href="/blog/how-much-do-cam-models-make">Cam Model Earnings Guide</a>
           <a href="/blog/how-to-make-more-money-on-chaturbate">How to Make More Money on Chaturbate</a>
           <a href="/blog/how-much-do-chaturbate-models-make">How Much Do Chaturbate Models Make</a>
           <a href="/blog/how-to-build-loyal-fans">How to Build a Loyal Fanbase</a>
-          <a href="/blog/how-to-re-engage-whales-and-top-tippers">How to Re-Engage Whales and Top Tippers</a>
+          <a href="/blog/how-to-re-engage-whales-and-high-tipping-fans">How to Re-Engage Whales and Top Tippers</a>
           <a href="/blog/why-cam-income-is-inconsistent">Why Cam Income Is Inconsistent</a>
           <a href="/blog/best-cam-model-tools">Best Cam Model Tools</a>
           <a href="/guides/chaturbate-earnings-tracker">Chaturbate Earnings Tracker</a>

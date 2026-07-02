@@ -1,21 +1,19 @@
-import NameGeneratorClient from '../../tools/cam-model-name-generator/NameGeneratorClient'
-
 export const metadata = {
-  title: 'Cam Model Name Generator — Find Your Perfect Streaming Name | CamCash',
-  description: 'Free cam model name generator with brand strength scoring. Find a memorable, searchable streaming name that builds your brand across Chaturbate, OnlyFans, and every major platform. Instant results, no signup.',
-  keywords: 'cam model name generator, cam girl name generator, chaturbate username ideas, streaming name generator, cam model stage name, onlyfans name generator, cam name ideas, webcam model name',
+  title: 'How to Choose a Cam Model Name — Branding & Safety Guide | CamCash',
+  description: 'How to pick a cam model name that protects your anonymity and builds a memorable brand: what makes a name stick, safety considerations, persona tips, and name ideas by vibe. Free generator linked inside.',
+  keywords: 'how to choose a cam model name, cam model stage name ideas, cam name safety, anonymous cam model name, cam girl branding, choosing a streaming name',
   alternates: { canonical: 'https://www.camcashgrl.com/guides/cam-model-name-generator' },
   openGraph: {
-    title: 'Cam Model Name Generator — Find Your Perfect Streaming Name',
-    description: 'Free cam model name generator with brand strength scoring. Find a memorable, searchable streaming name instantly.',
+    title: 'How to Choose a Cam Model Name — Branding & Safety Guide',
+    description: 'What makes a cam name memorable, how to protect your anonymity, and how to build a brand around it — plus name ideas by vibe.',
     url: 'https://www.camcashgrl.com/guides/cam-model-name-generator',
     type: 'article',
     images: [{ url: 'https://www.camcashgrl.com/og-image.png', width: 1200, height: 630 }],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Cam Model Name Generator — Find Your Perfect Streaming Name',
-    description: 'Free cam model name generator with brand strength scoring and availability checking.',
+    title: 'How to Choose a Cam Model Name — Branding & Safety Guide',
+    description: 'What makes a cam name memorable, how to protect your anonymity, and how to build a brand around it.',
   },
   robots: {
     index: true,
@@ -29,10 +27,10 @@ export const viewport = { width: 'device-width', initialScale: 1, maximumScale: 
 const articleSchema = {
   '@context': 'https://schema.org',
   '@type': 'Article',
-  headline: 'Cam Model Name Generator — Find Your Perfect Streaming Name',
-  description: 'Free cam model name generator. Learn how to pick a name that builds a searchable, memorable brand across every streaming platform.',
+  headline: 'How to Choose a Cam Model Name — Branding & Safety Guide',
+  description: 'How to pick a cam model name that protects your anonymity and builds a memorable brand, with safety considerations, persona tips, and name ideas by vibe.',
   datePublished: '2026-06-06',
-  dateModified: '2026-06-06',
+  dateModified: '2026-07-02',
   author: {
     '@type': 'Organization',
     name: 'CamCash',
@@ -130,18 +128,25 @@ export default function CamModelNameGeneratorPage() {
 
       <div style={{ background: S.bg, minHeight: '100vh', fontFamily: 'system-ui, -apple-system, sans-serif', color: S.text }}>
 
-        {/* TOOL — untouched */}
-        <NameGeneratorClient />
-
         {/* ARTICLE SECTION */}
         <div style={{ maxWidth: 860, margin: '0 auto', padding: '80px 24px 100px' }}>
 
           <h1 style={{ fontSize: 'clamp(28px,4.5vw,44px)', fontWeight: 900, color: S.white, lineHeight: 1.15, marginBottom: 16, letterSpacing: '-0.03em' }}>
-            Cam Model Name Generator — Find Your Perfect Streaming Name
+            How to Choose a Cam Model Name
           </h1>
-          <p style={{ fontSize: 18, lineHeight: 1.7, color: S.textMid, paddingLeft: 20, borderLeft: `3px solid ${S.accent}`, marginBottom: 64, maxWidth: 680 }}>
-            Your cam model name is the foundation of your entire brand. It affects how fans find you on Google, whether they remember you between sessions, and how easily you can grow across platforms. Here's how to pick one that works long-term.
+          <p style={{ fontSize: 18, lineHeight: 1.7, color: S.textMid, paddingLeft: 20, borderLeft: `3px solid ${S.accent}`, marginBottom: 32, maxWidth: 680 }}>
+            Your cam model name is the foundation of your entire brand. It affects how fans find you on Google, whether they remember you between sessions, how easily you grow across platforms — and, done wrong, whether strangers can trace it back to you. Here's how to pick one that works long-term.
           </p>
+
+          <div style={{ background: S.accentLight, border: `1px solid ${S.accentBorder}`, borderRadius: 16, padding: '24px 28px', marginBottom: 64, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
+            <div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: S.white, marginBottom: 4 }}>Ready to generate names?</div>
+              <div style={{ fontSize: 14, color: S.text }}>Use the free tool for instant name ideas with brand strength scoring and domain checks.</div>
+            </div>
+            <a href="/tools/cam-model-name-generator" style={{ display: 'inline-block', padding: '13px 26px', borderRadius: 10, background: S.accent, color: 'white', fontWeight: 700, fontSize: 15, textDecoration: 'none', whiteSpace: 'nowrap' }}>
+              Open Name Generator →
+            </a>
+          </div>
 
           <article>
 
@@ -159,6 +164,30 @@ export default function CamModelNameGeneratorPage() {
               <p style={{ fontSize: 16, lineHeight: 1.8, color: S.text }}>
                 Treat your name selection like the business decision it is. Use the generator, check availability across all platforms before committing, and pick something you can build on for years.
               </p>
+            </section>
+
+            <section style={{ marginBottom: 52 }}>
+              <h2 style={{ fontSize: 'clamp(22px,3.5vw,30px)', fontWeight: 800, color: S.textStrong, marginBottom: 8, letterSpacing: '-0.02em' }}>
+                Safety and Anonymity Considerations
+              </h2>
+              <div style={{ width: 48, height: 3, background: S.accent, borderRadius: 2, marginBottom: 24 }} />
+              <p style={{ fontSize: 16, lineHeight: 1.8, color: S.text, marginBottom: 18 }}>
+                Before branding, your name has one job: keeping your real identity separate from your cam identity. A few rules keep that separation intact.
+              </p>
+              <ul style={{ paddingLeft: 20, marginBottom: 0 }}>
+                <li style={{ fontSize: 16, lineHeight: 1.8, color: S.text, marginBottom: 10 }}>
+                  <strong style={{ color: S.white }}>Never use any variation of your legal name</strong> — not a nickname family uses, not your real initials plus a hometown, nothing a coworker or ex could connect back to you.
+                </li>
+                <li style={{ fontSize: 16, lineHeight: 1.8, color: S.text, marginBottom: 10 }}>
+                  <strong style={{ color: S.white }}>Avoid identifying details</strong> in the name itself — your actual city, employer, school, or birth year make you easier to locate.
+                </li>
+                <li style={{ fontSize: 16, lineHeight: 1.8, color: S.text, marginBottom: 10 }}>
+                  <strong style={{ color: S.white }}>Search the name before you commit</strong> — Google it, reverse-image-search any photo you plan to pair with it, and check it isn't already tied to your real accounts anywhere.
+                </li>
+                <li style={{ fontSize: 16, lineHeight: 1.8, color: S.text, marginBottom: 0 }}>
+                  <strong style={{ color: S.white }}>Keep your persona's details fictional</strong> — a consistent but invented backstory (location, age range, interests) is easier to maintain than accidentally leaking real ones over time.
+                </li>
+              </ul>
             </section>
 
             <section style={{ marginBottom: 52 }}>
@@ -221,20 +250,55 @@ export default function CamModelNameGeneratorPage() {
 
             <section style={{ marginBottom: 52 }}>
               <h2 style={{ fontSize: 'clamp(22px,3.5vw,30px)', fontWeight: 800, color: S.textStrong, marginBottom: 8, letterSpacing: '-0.02em' }}>
+                Cam Model Name Ideas by Vibe
+              </h2>
+              <div style={{ width: 48, height: 3, background: S.accent, borderRadius: 2, marginBottom: 24 }} />
+              <p style={{ fontSize: 16, lineHeight: 1.8, color: S.text, marginBottom: 24 }}>
+                The right name usually starts with the vibe you want fans to feel before you've said a word. A few starting points — use the generator to riff on any of these:
+              </p>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 14 }}>
+                {[
+                  { vibe: 'Cute', color: S.pink, names: ['Ava Quinn', 'Mia Belle', 'Lily Reed'] },
+                  { vibe: 'Sexy', color: '#EF4444', names: ['Scarlett Reed', 'Vivienne Cross', 'Roxy Blake'] },
+                  { vibe: 'Luxury', color: S.gold, names: ['Crystal Hart', 'Aurelia Stone', 'Bianca Frost'] },
+                  { vibe: 'Bratty', color: '#A78BFA', names: ['Nova Lane', 'Rebel Rose', 'Sassy Sloane'] },
+                  { vibe: 'Soft / GFE', color: S.green, names: ['Willow Reed', 'Nova Blake', 'Ivy Stone'] },
+                  { vibe: 'Playful', color: '#22D3EE', names: ['Pixie Frost', 'Ruby Cross', 'Coco Lane'] },
+                ].map(({ vibe, color, names }) => (
+                  <div key={vibe} style={{ background: S.card, border: `1px solid ${S.border}`, borderRadius: 12, overflow: 'hidden' }}>
+                    <div style={{ padding: '12px 18px', borderBottom: `1px solid ${S.border}`, fontSize: 13, fontWeight: 700, color }}>
+                      {vibe}
+                    </div>
+                    <div style={{ padding: '12px 18px' }}>
+                      {names.map((n, i) => (
+                        <div key={i} style={{ fontSize: 14, color: S.textMid, padding: '4px 0' }}>{n}</div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <p style={{ fontSize: 14, lineHeight: 1.7, color: S.muted, marginTop: 18 }}>
+                These are starting points, not availability-checked picks — run any name you like through the{' '}
+                <a href="/tools/cam-model-name-generator" style={{ color: S.accent, textDecoration: 'none' }}>free name generator</a> for brand scoring and domain availability.
+              </p>
+            </section>
+
+            <section style={{ marginBottom: 52 }}>
+              <h2 style={{ fontSize: 'clamp(22px,3.5vw,30px)', fontWeight: 800, color: S.textStrong, marginBottom: 8, letterSpacing: '-0.02em' }}>
                 Track Your Earnings Once You Start Streaming
               </h2>
               <div style={{ width: 48, height: 3, background: S.accent, borderRadius: 2, marginBottom: 24 }} />
               <p style={{ fontSize: 16, lineHeight: 1.8, color: S.text, marginBottom: 18 }}>
-                Once your name and brand are set, focus on growing your income intelligently. The <a href="/dashboard" style={{ color: S.accent, textDecoration: 'none', fontWeight: 600 }}>CamCash income tracker</a> connects your Chaturbate earnings data to a full analytics dashboard — showing your top fans, peak hours, session history, and hourly rate trends.
+                Once your name and brand are set, focus on growing your income intelligently. <a href="/landing" style={{ color: S.accent, textDecoration: 'none', fontWeight: 600 }}>CamCash</a> connects your Chaturbate earnings data to a full analytics dashboard — showing your top fans, peak hours, session history, and hourly rate trends.
               </p>
               <p style={{ fontSize: 16, lineHeight: 1.8, color: S.text, marginBottom: 24 }}>
                 Upload your Chaturbate CSV and see which sessions earned the most, which fans are your most loyal, and when you should be streaming to maximize your hourly rate. It's free during beta.
               </p>
               <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                <a href="/dashboard" style={{ display: 'inline-block', padding: '13px 28px', borderRadius: 10, background: S.accent, color: 'white', fontWeight: 700, fontSize: 15, textDecoration: 'none' }}>
+                <a href="/landing" style={{ display: 'inline-block', padding: '13px 28px', borderRadius: 10, background: S.accent, color: 'white', fontWeight: 700, fontSize: 15, textDecoration: 'none' }}>
                   Open Income Tracker →
                 </a>
-                <a href="/demo" style={{ display: 'inline-block', padding: '13px 28px', borderRadius: 10, background: 'transparent', border: `1px solid ${S.border}`, color: S.textMid, fontWeight: 600, fontSize: 15, textDecoration: 'none' }}>
+                <a href="/landing/demo" style={{ display: 'inline-block', padding: '13px 28px', borderRadius: 10, background: 'transparent', border: `1px solid ${S.border}`, color: S.textMid, fontWeight: 600, fontSize: 15, textDecoration: 'none' }}>
                   Try the demo first →
                 </a>
               </div>
@@ -266,10 +330,12 @@ export default function CamModelNameGeneratorPage() {
               <h2 style={{ fontSize: 24, fontWeight: 800, color: S.textStrong, marginBottom: 20 }}>Related Tools & Guides</h2>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
                 {[
-                  { href: '/dashboard', label: 'Income Tracker', desc: 'Upload your CSV and see your full session history in USD' },
-                  { href: '/guides/chaturbate-token-calculator', label: 'Token Calculator', desc: 'Convert Chaturbate tokens to USD at the real payout rate' },
-                  { href: '/guides/chaturbate-room-title-generator', label: 'Room Title Generator', desc: 'Generate high-converting room titles that get more clicks and tips' },
-                  { href: '/demo', label: 'CamCash Demo', desc: 'See your analytics dashboard with real sample data' },
+                  { href: '/tools/cam-model-name-generator', label: 'Name Generator Tool', desc: 'Generate name ideas instantly with brand strength scoring' },
+                  { href: '/blog/how-to-pick-a-cam-name', label: 'How to Pick a Cam Name', desc: 'More on choosing a name that builds a lasting brand' },
+                  { href: '/landing', label: 'Income Tracker', desc: 'Upload your CSV and see your full session history in USD' },
+                  { href: '/guides/cam-model-token-calculator', label: 'Token Calculator', desc: 'Convert Chaturbate tokens to USD at the real payout rate' },
+                  { href: '/guides/cam-model-room-title-generator', label: 'Room Title Generator', desc: 'Generate high-converting room titles that get more clicks and tips' },
+                  { href: '/landing/demo', label: 'CamCash Demo', desc: 'See your analytics dashboard with real sample data' },
                 ].map(({ href, label, desc }) => (
                   <a key={href} href={href} style={{ background: S.card, border: `1px solid ${S.border}`, borderRadius: 12, padding: '18px 20px', textDecoration: 'none', display: 'block' }}>
                     <div style={{ fontSize: 14, fontWeight: 700, color: S.accent, marginBottom: 6 }}>{label}</div>

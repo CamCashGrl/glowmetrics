@@ -2,11 +2,11 @@
 import { useState } from "react"
 
 const BLOG_POSTS = [
-  { slug: "/blog/cam-model-earnings",                    icon: "💰", tag: "Earnings",   tagColor: "#10B981", title: "Cam Model Earnings: How Much Do Cam Models Actually Make?",         desc: "Real earnings data — average income, what affects your numbers, and how to increase what you make per stream." },
+  { slug: "/blog/how-much-do-cam-models-make",                    icon: "💰", tag: "Earnings",   tagColor: "#10B981", title: "Cam Model Earnings: How Much Do Cam Models Actually Make?",         desc: "Real earnings data — average income, what affects your numbers, and how to increase what you make per stream." },
   { slug: "/blog/how-much-do-chaturbate-models-make",    icon: "📊", tag: "Chaturbate", tagColor: "#22D3EE", title: "How Much Do Chaturbate Models Make Per Hour?",                       desc: "Real Chaturbate model earnings data — average $/hr, token payout rates, and what affects your income." },
   { slug: "/blog/how-to-make-more-money-on-chaturbate",  icon: "🔥", tag: "Strategy",   tagColor: "#EC4899", title: "How to Make More Money on Chaturbate",                               desc: "Proven strategies to increase your Chaturbate earnings — timing, titles, fan engagement, and platform optimization." },
   { slug: "/blog/how-to-increase-cam-earnings",          icon: "📈", tag: "Income",     tagColor: "#60A5FA", title: "How to Increase Cam Earnings (What Actually Works)",                 desc: "Actionable strategies for increasing your income across any cam platform." },
-  { slug: "/blog/how-to-re-engage-whales-and-top-tippers", icon: "🐳", tag: "Fan CRM", tagColor: "#F59E0B", title: "How to Re-Engage Whales and Top Tippers",                            desc: "Your biggest spenders go quiet — here's the playbook to bring them back before they disappear for good." },
+  { slug: "/blog/how-to-re-engage-whales-and-high-tipping-fans", icon: "🐳", tag: "Fan CRM", tagColor: "#F59E0B", title: "How to Re-Engage Whales and Top Tippers",                            desc: "Your biggest spenders go quiet — here's the playbook to bring them back before they disappear for good." },
   { slug: "/blog/how-to-build-loyal-fans",               icon: "👑", tag: "Retention",  tagColor: "#7C5CFF", title: "How to Build a Loyal Fanbase as a Cam Model",                        desc: "The difference between a one-time tipper and a whale who tips every stream — and how to create more of the latter." },
   { slug: "/blog/how-to-get-veiws-on-chaturbate",        icon: "👁️", tag: "Growth",    tagColor: "#FB923C", title: "How to Get More Views on Chaturbate",                                desc: "What actually drives viewers to your room — tags, titles, timing, and the algorithm." },
   { slug: "/blog/how-to-get-more-tips-on-myfreecams",    icon: "💎", tag: "MFC",        tagColor: "#A78BFA", title: "How to Get More Tips on MyFreeCams",                                 desc: "MFC-specific strategies for increasing tips, growing your fanbase, and maximizing token earnings." },
@@ -153,7 +153,7 @@ export default function PageFooter({ variant = "landing" }) {
                 ["/landing/demo", "Live Demo"],
                 ["/dashboard", "Dashboard"],
                 ["/blog", "Blog"],
-                ["/blog/cam-model-earnings", "Earnings Guide"],
+                ["/blog/how-much-do-cam-models-make", "Earnings Guide"],
                 ["/blog/best-cam-model-tools", "Tools"],
                 ["/guides/cam-model-analytics", "Analytics Guide"],
               ].map(([href, label]) => (

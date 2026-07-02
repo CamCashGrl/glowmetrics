@@ -95,13 +95,13 @@ export default function ChaturbateTokenTracker() {
       <ul style={s.ul}>
         <li style={s.li}><strong style={{ color: '#e2e8f0' }}>Tokens per hour:</strong> Divide session tokens by hours streamed. This is your real efficiency metric.</li>
         <li style={s.li}><strong style={{ color: '#e2e8f0' }}>Top tippers by session:</strong> Which fans drove the most tokens? Which sessions had no regular presence?</li>
-        <li style={s.li}><strong style={{ color: '#e2e8f0' }}>Best time windows:</strong> Which hours consistently produce the most tokens per hour? See <a href="/guides/chaturbate-best-hours" style={s.iLink}>Chaturbate best hours</a>.</li>
+        <li style={s.li}><strong style={{ color: '#e2e8f0' }}>Best time windows:</strong> Which hours consistently produce the most tokens per hour? See <a href="/guides/best-time-to-stream-chaturbate" style={s.iLink}>Chaturbate best hours</a>.</li>
         <li style={s.li}><strong style={{ color: '#e2e8f0' }}>Session trends:</strong> Are earnings improving or declining week over week? A downward trend usually means a whale has gone quiet.</li>
       </ul>
 
       <h2 style={s.h2}>Automating Token Tracking with CamCash</h2>
       <p style={s.p}>
-        Manual tracking works but takes time. CamCash processes your Chaturbate CSV automatically and outputs revenue per hour, top fan rankings, peak streaming windows, and platform comparisons — without any spreadsheet work. For context on what the numbers mean, read the <a href="/blog/cam-model-earnings" style={s.iLink}>cam model earnings guide</a> or the <a href="/blog/how-much-do-chaturbate-models-make" style={s.iLink}>Chaturbate earnings breakdown</a>.
+        Manual tracking works but takes time. CamCash processes your Chaturbate CSV automatically and outputs revenue per hour, top fan rankings, peak streaming windows, and platform comparisons — without any spreadsheet work. For context on what the numbers mean, read the <a href="/blog/how-much-do-cam-models-make" style={s.iLink}>cam model earnings guide</a> or the <a href="/blog/how-much-do-chaturbate-models-make" style={s.iLink}>Chaturbate earnings breakdown</a>.
       </p>
 
       <div style={{ marginTop: '36px', paddingTop: '24px', borderTop: '1px solid rgba(255,255,255,0.06)', marginBottom: '36px' }}>
@@ -110,7 +110,7 @@ export default function ChaturbateTokenTracker() {
           <a href="/guides/cam-model-token-calculator" style={s.relLink}>→ Free cam model token calculator</a>
           <a href="/guides/chaturbate-earnings-tracker" style={s.relLink}>→ Chaturbate earnings tracker</a>
           <a href="/guides/chaturbate-token-tracker" style={s.relLink}>→ Chaturbate token tracker</a>
-          <a href="/guides/chaturbate-best-hours" style={s.relLink}>→ Best hours to stream on Chaturbate</a>
+          <a href="/guides/best-time-to-stream-chaturbate" style={s.relLink}>→ Best hours to stream on Chaturbate</a>
           <a href="/guides/cam-model-income-tracker" style={s.relLink}>→ Cam model income tracker</a>
         </div>
       </div>
@@ -128,10 +128,10 @@ export default function ChaturbateTokenTracker() {
         <div style={s.relLinks}>
           <a href="/guides/chaturbate-earnings-tracker" style={s.relLink}>→ Chaturbate earnings tracker</a>
           <a href="/guides/cam-model-token-calculator" style={s.relLink}>→ Cam model token calculator</a>
-          <a href="/guides/chaturbate-best-hours" style={s.relLink}>→ Best hours to stream on Chaturbate</a>
+          <a href="/guides/best-time-to-stream-chaturbate" style={s.relLink}>→ Best hours to stream on Chaturbate</a>
           <a href="/guides/cam-model-income-tracker" style={s.relLink}>→ Cam model income tracker</a>
           <a href="/blog/how-much-do-chaturbate-models-make" style={s.relLink}>→ How much Chaturbate models make per hour</a>
-          <a href="/blog/cam-model-earnings" style={s.relLink}>→ Cam model earnings: the complete guide</a>
+          <a href="/blog/how-much-do-cam-models-make" style={s.relLink}>→ Cam model earnings: the complete guide</a>
         </div>
       </div>
     </ArticleLayout>

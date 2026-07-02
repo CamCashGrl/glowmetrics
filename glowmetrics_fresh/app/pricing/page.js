@@ -11,6 +11,7 @@ export const metadata = {
     'early adopter discount',
     'cam model tools pricing',
   ],
+  alternates: { canonical: 'https://www.camcashgrl.com/pricing' },
 }
 
 export default function PricingPage() {

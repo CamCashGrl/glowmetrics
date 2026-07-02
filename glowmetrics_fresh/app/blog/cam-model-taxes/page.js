@@ -173,7 +173,7 @@ export default function CamModelTaxes() {
       <div style={s.related}>
         <div style={s.relT}>Related reading</div>
         <div style={s.relLinks}>
-          <a href="/blog/cam-model-earnings" style={s.relLink}>→ Cam model earnings: the complete guide</a>
+          <a href="/blog/how-much-do-cam-models-make" style={s.relLink}>→ Cam model earnings: the complete guide</a>
           <a href="/blog/best-cam-model-tools" style={s.relLink}>→ Best cam model tools for tracking and analytics</a>
           <a href="/blog/how-to-track-cam-tips-automatically" style={s.relLink}>→ How to Track Cam Tips Automatically — Keep tidy earnings records all year</a>
         </div>

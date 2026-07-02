@@ -806,7 +806,7 @@ export default function NameGeneratorClient() {
 
         <div style={{ background: 'rgba(34,211,238,0.05)', border: '1px solid rgba(34,211,238,0.15)', borderRadius: 12, padding: '18px 22px', marginBottom: 0 }}>
           <p style={{ fontSize: 14, lineHeight: 1.7, color: C.text, margin: 0 }}>
-            Once you start streaming, knowing your actual numbers — which fans tip the most, which hours are most profitable, which platform has the best ROI — is what separates models who plateau from models who grow. <a href="/landing" style={{ color: C.cyan, textDecoration: 'none', fontWeight: 600 }}>CamCash</a> tracks all of this automatically. <a href="/blog/cam-model-earnings" style={{ color: C.cyan, textDecoration: 'none' }}>See what cam models actually earn →</a>
+            Once you start streaming, knowing your actual numbers — which fans tip the most, which hours are most profitable, which platform has the best ROI — is what separates models who plateau from models who grow. <a href="/landing" style={{ color: C.cyan, textDecoration: 'none', fontWeight: 600 }}>CamCash</a> tracks all of this automatically. <a href="/blog/how-much-do-cam-models-make" style={{ color: C.cyan, textDecoration: 'none' }}>See what cam models actually earn →</a>
           </p>
         </div>
 
@@ -863,7 +863,7 @@ export default function NameGeneratorClient() {
               ['/blog/how-to-build-loyal-fans','Build Loyal Fans'],
               ['/blog/how-to-make-more-money-on-chaturbate','Make More on Chaturbate'],
               ['/guides/cam-model-analytics','Analytics Guide'],
-              ['/blog/cam-model-earnings','Earnings Guide'],
+              ['/blog/how-much-do-cam-models-make','Earnings Guide'],
             ].map(([href,label]) => (
               <a key={href} href={href} style={{ fontSize: 13, padding: '6px 14px', borderRadius: 20, background: 'rgba(255,255,255,0.04)', border: `1px solid ${C.border}`, color: C.cyan, textDecoration: 'none' }}>→ {label}</a>
             ))}

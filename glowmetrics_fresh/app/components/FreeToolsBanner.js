@@ -32,7 +32,7 @@ export default function FreeToolsBanner() {
         >
           {/* Room Title Generator */}
           <a
-            href="/guides/chaturbate-room-title-generator"
+            href="/guides/cam-model-room-title-generator"
             style={{
               display: 'block',
               background: 'rgba(168,85,247,0.07)',
@@ -65,7 +65,7 @@ export default function FreeToolsBanner() {
 
           {/* Token Calculator */}
           <a
-            href="/guides/chaturbate-token-calculator"
+            href="/guides/cam-model-token-calculator"
             style={{
               display: 'block',
               background: 'rgba(34,211,238,0.06)',

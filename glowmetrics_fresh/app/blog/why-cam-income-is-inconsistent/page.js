@@ -134,7 +134,7 @@ export default function WhyCamIncomeIsInconsistent() {
 
       <h2 style={s.h2}>The Pattern Behind All 6 Causes</h2>
       <p style={s.p}>Every cause of inconsistent cam income comes down to the same thing: making decisions without enough information. None of these are failures of effort or talent — they're information gaps. And information gaps are fixable.</p>
-      <p style={s.p}>For a deeper look at growing your overall income, see <a href="/blog/cam-model-earnings" style={s.iLink}>Cam Model Earnings: How Much Do Cam Models Actually Make?</a></p>
+      <p style={s.p}>For a deeper look at growing your overall income, see <a href="/blog/how-much-do-cam-models-make" style={s.iLink}>Cam Model Earnings: How Much Do Cam Models Actually Make?</a></p>
       <p style={s.p}>Flat nights often come from quiet rooms you couldn't restart — <a href="/blog/live-ai-coaching-cam-models" style={s.iLink}>in-stream coaching</a> fixes that in the moment.</p>
       <p style={s.p}>Income also dips when whales drift off unnoticed, which is why <a href="/blog/cam-model-fan-crm" style={s.iLink}>tracking your whales</a> (Pro feature — upgrade after signup) matters.</p>
 
@@ -161,7 +161,7 @@ export default function WhyCamIncomeIsInconsistent() {
       <div style={s.related}>
         <div style={s.relT}>Related reading</div>
         <div style={s.relLinks}>
-          <a href="/blog/cam-model-earnings" style={s.relLink}>→ Cam model earnings: the complete guide</a>
+          <a href="/blog/how-much-do-cam-models-make" style={s.relLink}>→ Cam model earnings: the complete guide</a>
           <a href="/blog/why-cam-streams-arent-making-money" style={s.relLink}>→ Why cam streams underperform</a>
           <a href="/blog/live-ai-coaching-cam-models" style={s.relLink}>→ Live AI Coaching for Cam Models — Stop quiet rooms from killing a night</a>
           <a href="/blog/cam-model-fan-crm" style={s.relLink}>→ Cam Model Fan CRM — Catch whales before they go quiet</a>

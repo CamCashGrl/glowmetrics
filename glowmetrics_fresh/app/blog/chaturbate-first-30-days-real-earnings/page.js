@@ -390,7 +390,7 @@ export default function First30DaysPost() {
           <a href="/blog/how-much-do-chaturbate-models-make" style={s.relLink}>How Much Do Chaturbate Models Make? Realistic Earnings Guide</a>
           <a href="/blog/why-cam-income-is-inconsistent" style={s.relLink}>Why Cam Income Is Inconsistent (And How to Fix It)</a>
           <a href="/blog/how-to-build-loyal-fans" style={s.relLink}>How to Build Loyal Fans Who Keep Coming Back</a>
-          <a href="/blog/cam-model-earnings" style={s.relLink}>Real Cam Model Earnings Data: What the Numbers Show</a>
+          <a href="/blog/how-much-do-cam-models-make" style={s.relLink}>Real Cam Model Earnings Data: What the Numbers Show</a>
         </div>
       </div>
 

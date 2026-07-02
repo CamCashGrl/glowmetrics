@@ -119,7 +119,7 @@ export default function HowToIncreaseChaturbateTips() {
         Chaturbate peaks 9pm–1am EST across the platform. But your peak is when <em>your</em> fans are online — and that’s different for every model. Models who identify and protect their personal peak hours earn 40–80% more per hour with zero change in content.
       </p>
       <p style={s.p}>
-        How to find yours: export your Chaturbate CSV, group earnings by hour of day, and look for the 2–3 hour windows where $/hr is consistently highest. <a href="/landing" style={s.iLink}>CamCash</a> does this automatically. Full guide at <a href="/guides/chaturbate-best-hours" style={s.iLink}>chaturbate-best-hours</a>.
+        How to find yours: export your Chaturbate CSV, group earnings by hour of day, and look for the 2–3 hour windows where $/hr is consistently highest. <a href="/landing" style={s.iLink}>CamCash</a> does this automatically. Full guide at <a href="/guides/best-time-to-stream-chaturbate" style={s.iLink}>chaturbate-best-hours</a>.
       </p>
 
       <h2 style={s.h2}>2. Fix Your Tip Menu Structure</h2>
@@ -271,7 +271,7 @@ export default function HowToIncreaseChaturbateTips() {
       <div style={s.related}>
         <div style={s.relT}>Related reading</div>
         <div style={s.relLinks}>
-          <a href="/guides/chaturbate-best-hours" style={s.relLink}>→ Best Hours to Stream on Chaturbate</a>
+          <a href="/guides/best-time-to-stream-chaturbate" style={s.relLink}>→ Best Hours to Stream on Chaturbate</a>
           <a href="/blog/how-much-do-chaturbate-models-make" style={s.relLink}>→ How Much Do Chaturbate Models Make Per Hour?</a>
           <a href="/blog/cam-model-tipping-pattern-data-examples" style={s.relLink}>→ Cam Model Tipping Pattern Data Examples</a>
           <a href="/blog/how-to-make-money-on-chaturbate" style={s.relLink}>→ How to Make Money on Chaturbate</a>

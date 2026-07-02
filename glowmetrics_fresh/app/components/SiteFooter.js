@@ -63,7 +63,7 @@ export default function SiteFooter({ sidebarOffset = 0 }) {
             Blog Posts
           </h4>
           <FooterLink href="/blog/best-cam-model-tools">Best Cam Model Tools to Track Tips</FooterLink>
-          <FooterLink href="/blog/cam-model-earnings">How Much Do Cam Models Make?</FooterLink>
+          <FooterLink href="/blog/how-much-do-cam-models-make">How Much Do Cam Models Make?</FooterLink>
           <FooterLink href="/blog/cam-model-taxes">Cam Model Taxes Guide</FooterLink>
           <FooterLink href="/blog/how-much-do-chaturbate-models-make">How Much Do Chaturbate Models Make?</FooterLink>
           <FooterLink href="/blog/how-to-build-loyal-fans">How to Build Loyal Fans</FooterLink>
@@ -71,7 +71,7 @@ export default function SiteFooter({ sidebarOffset = 0 }) {
           <FooterLink href="/blog/how-to-get-views-on-chaturbate">Get More Viewers on Chaturbate</FooterLink>
           <FooterLink href="/blog/how-to-increase-cam-earnings">Increase Cam Earnings With Data</FooterLink>
           <FooterLink href="/blog/how-to-make-more-money-on-chaturbate">Make More Money on Chaturbate</FooterLink>
-          <FooterLink href="/blog/how-to-re-engage-whales-and-top-tippers">Re-Engage Your Top Tippers</FooterLink>
+          <FooterLink href="/blog/how-to-re-engage-whales-and-high-tipping-fans">Re-Engage Your Top Tippers</FooterLink>
           <FooterLink href="/blog/why-cam-income-is-inconsistent">Why Cam Income Is Inconsistent</FooterLink>
           <FooterLink href="/blog/why-cam-streams-arent-making-money">Why Streams Aren&apos;t Making Money</FooterLink>
           <FooterLink href="/blog/chaturbate-payout-explained">Chaturbate Payout Explained</FooterLink>
@@ -102,7 +102,7 @@ export default function SiteFooter({ sidebarOffset = 0 }) {
           <FooterLink href="/guides/chaturbate-token-tracker">Chaturbate Token Tracker</FooterLink>
           <FooterLink href="/guides/cam-model-revenue-dashboard">Cam Model Revenue Dashboard</FooterLink>
           <FooterLink href="/guides/cam-model-session-breakdown">Cam Model Session Breakdown</FooterLink>
-          <FooterLink href="/guides/chaturbate-best-hours">Chaturbate Best Hours to Stream</FooterLink>
+          <FooterLink href="/guides/best-time-to-stream-chaturbate">Chaturbate Best Hours to Stream</FooterLink>
         </div>
 
         {/* Main Pages */}

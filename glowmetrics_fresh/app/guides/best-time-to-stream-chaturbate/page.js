@@ -925,12 +925,13 @@ export default function BestTimeToStreamPage() {
               {[
                 { href: '/guides/chaturbate-earnings-tracker',  label: 'Chaturbate Earnings Tracker', desc: 'Full earnings history analysis' },
                 { href: '/blog/how-much-do-chaturbate-models-make', label: 'How Much Do Chaturbate Models Make?', desc: 'Income benchmarks and data' },
+                { href: '/blog/how-to-make-more-money-on-chaturbate', label: 'How to Make More Money on Chaturbate', desc: 'Strategies beyond scheduling' },
+                { href: '/blog/how-to-get-views-on-chaturbate', label: 'How to Get Views on Chaturbate', desc: 'Grow your discovery traffic' },
                 { href: '/guides/cam-model-analytics',          label: 'Cam Model Analytics Guide', desc: 'Complete analytics overview' },
                 { href: '/guides/cam-model-top-tippers',        label: 'Top Tippers Guide', desc: 'Whale detection and fan analysis' },
-                { href: '/guides/chaturbate-token-calculator',  label: 'Chaturbate Token Calculator', desc: 'Token-to-USD conversion' },
+                { href: '/guides/cam-model-token-calculator',  label: 'Chaturbate Token Calculator', desc: 'Token-to-USD conversion' },
                 { href: '/guides/cam-model-session-breakdown',  label: 'Session Breakdown Guide', desc: 'Per-session revenue analysis' },
                 { href: '/guides/cam-model-income-tracker',     label: 'Cam Model Income Tracker', desc: 'Multi-platform earnings dashboard' },
-                { href: '/guides/chaturbate-best-hours',        label: 'Chaturbate Best Hours', desc: 'Heatmap and hour analysis' },
               ].map(({ href, label, desc }) => (
                 <a key={href} href={href} style={{ display: 'block', padding: '14px 16px', borderRadius: 12, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', textDecoration: 'none' }}>
                   <div style={{ fontSize: 13, fontWeight: 700, color: '#22D3EE', marginBottom: 4 }}>{label}</div>
@@ -989,11 +990,12 @@ export default function BestTimeToStreamPage() {
                 { href: '/guides/chaturbate-earnings-tracker', label: 'Chaturbate Earnings Tracker' },
                 { href: '/guides/cam-model-analytics',         label: 'Cam Model Analytics' },
                 { href: '/guides/cam-model-top-tippers',       label: 'Top Tipper Tracker' },
-                { href: '/guides/chaturbate-token-calculator', label: 'Token Calculator' },
+                { href: '/guides/cam-model-token-calculator', label: 'Token Calculator' },
                 { href: '/guides/cam-model-session-breakdown', label: 'Session Breakdown' },
                 { href: '/guides/cam-model-income-tracker',    label: 'Income Tracker' },
-                { href: '/guides/chaturbate-best-hours',       label: 'Chaturbate Best Hours' },
                 { href: '/blog/how-much-do-chaturbate-models-make', label: 'How Much Do Models Make?' },
+                { href: '/blog/how-to-make-more-money-on-chaturbate', label: 'How to Make More Money on Chaturbate' },
+                { href: '/blog/how-to-get-views-on-chaturbate', label: 'How to Get Views on Chaturbate' },
               ].map(({ href, label }) => (
                 <a key={href} href={href} style={s.pill}>{label}</a>
               ))}

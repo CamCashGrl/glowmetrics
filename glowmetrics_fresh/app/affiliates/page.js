@@ -1,6 +1,7 @@
 export const metadata = {
   title: 'Affiliates & Partners',
   description: 'Partner with CamCash — explore affiliate and partnership opportunities for creators, educators, and communities.',
+  alternates: { canonical: 'https://www.camcashgrl.com/affiliates' },
 }
 
 export default function AffiliatesPage() {

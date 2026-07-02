@@ -191,9 +191,9 @@ export default function BuildLoyalFans() {
       <div style={s.related}>
         <div style={s.relT}>Related reading</div>
         <div style={s.relLinks}>
-          <a href="/blog/how-to-re-engage-whales-and-top-tippers" style={s.relLink}>→ How to re-engage whales and top tippers</a>
+          <a href="/blog/how-to-re-engage-whales-and-high-tipping-fans" style={s.relLink}>→ How to re-engage whales and top tippers</a>
           <a href="/blog/why-cam-income-is-inconsistent" style={s.relLink}>→ Why cam income is inconsistent</a>
-          <a href="/blog/cam-model-earnings" style={s.relLink}>→ Cam model earnings guide</a>
+          <a href="/blog/how-much-do-cam-models-make" style={s.relLink}>→ Cam model earnings guide</a>
           <a href="/guides/cam-model-top-tippers" style={s.relLink}>→ Top tipper tracking guide</a>
           <a href="/tools/cam-model-name-generator" style={s.relLink}>→ Free cam model name generator</a>
           <a href="/blog/cam-model-fan-crm" style={s.relLink}>→ Cam Model Fan CRM — Make every fan feel remembered</a>

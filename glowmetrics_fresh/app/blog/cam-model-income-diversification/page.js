@@ -265,7 +265,7 @@ export default function CamModelIncomeDiversification() {
           <a href="/blog/cam-model-tipping-pattern-data-examples" style={s.relLink}>→ Cam Model Tipping Pattern Data Examples</a>
           <a href="/blog/benefits-of-cam-model-bookkeeping" style={s.relLink}>→ Benefits of Cam Model Bookkeeping</a>
           <a href="/blog/why-cam-model-data-prevents-overspending" style={s.relLink}>→ Why Cam Model Data Prevents Overspending</a>
-          <a href="/blog/cam-model-earnings" style={s.relLink}>→ How Much Do Cam Models Make?</a>
+          <a href="/blog/how-much-do-cam-models-make" style={s.relLink}>→ How Much Do Cam Models Make?</a>
         </div>
       </div>
     </ArticleLayout>

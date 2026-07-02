@@ -60,7 +60,22 @@ const nextConfig = {
       },
       {
         source: '/guides/best-time-to-stream-on-chaturbate',
-        destination: '/guides/chaturbate-best-hours',
+        destination: '/guides/best-time-to-stream-chaturbate',
+        permanent: true,
+      },
+      {
+        source: '/guides/chaturbate-best-hours',
+        destination: '/guides/best-time-to-stream-chaturbate',
+        permanent: true,
+      },
+      {
+        source: '/blog/cam-model-earnings',
+        destination: '/blog/how-much-do-cam-models-make',
+        permanent: true,
+      },
+      {
+        source: '/blog/how-to-re-engage-whales-and-top-tippers',
+        destination: '/blog/how-to-re-engage-whales-and-high-tipping-fans',
         permanent: true,
       },
 {

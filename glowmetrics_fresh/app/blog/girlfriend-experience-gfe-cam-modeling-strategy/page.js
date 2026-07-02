@@ -242,7 +242,7 @@ export default function GFEStrategy() {
             <div style={s.relatedLabel}>Related reading</div>
             <div style={s.relatedLinks}>
               <a href="/blog/how-to-find-your-cam-model-niche" style={s.relatedLink}>→ Cam model niche guide: GFE, dom, sub, JOI, DDlg explained</a>
-              <a href="/blog/how-to-re-engage-whales-and-top-tippers" style={s.relatedLink}>→ How to re-engage your top tippers before they go cold</a>
+              <a href="/blog/how-to-re-engage-whales-and-high-tipping-fans" style={s.relatedLink}>→ How to re-engage your top tippers before they go cold</a>
               <a href="/blog/cam-model-mental-health-burnout-prevention" style={s.relatedLink}>→ Cam model burnout prevention</a>
               <a href="/blog/how-to-build-loyal-fans" style={s.relatedLink}>→ How to build loyal fans who tip consistently</a>
               <a href="/blog/cam-model-income-diversification" style={s.relatedLink}>→ How to diversify your cam income</a>
