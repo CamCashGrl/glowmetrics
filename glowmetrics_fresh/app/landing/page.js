@@ -4,7 +4,6 @@ import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
 import { captureAttribution } from "../../lib/tracking"
 import FeedbackWidget from "../components/FeedbackWidget"
-import { Turnstile } from '@marsidev/react-turnstile'
 
 // ── AuthPanel defined OUTSIDE LandingPage so React doesn't re-create the
 //    component type on every render (prevents input losing focus)
@@ -15,7 +14,6 @@ function AuthPanel({
   authLoading, authMsg, authError,
   setAuthError, setAuthMsg,
   handleAuth, handleForgotPassword,
-  onTurnstileSuccess,
   pendingPlan,
 }) {
   const inputStyle = {
@@ -95,17 +93,6 @@ function AuthPanel({
             </a>
           </div>
         )}
-        {isSignUp && <div style={{ height: 14 }} />}
-        {isSignUp && (
-          <div style={{ marginBottom: 10 }}>
-            <Turnstile
-              siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY}
-              onSuccess={onTurnstileSuccess}
-              options={{ theme: 'dark', size: 'flexible' }}
-            />
-          </div>
-        )}
-
         {authError && <div style={{ fontSize: 12, color: "#f87171", marginBottom: 10, textAlign: "center" }}>{authError}</div>}
         {authMsg   && <div style={{ fontSize: 12, color: "#22D3EE",  marginBottom: 10, textAlign: "center" }}>{authMsg}</div>}
 
@@ -297,7 +284,6 @@ export default function LandingPage() {
   const [authLoading, setAuthLoading] = useState(false)
   const [authMsg, setAuthMsg]         = useState("")
   const [authError, setAuthError]     = useState("")
-  const [turnstileToken, setTurnstileToken] = useState(null)
   const [pendingPlan, setPendingPlan] = useState(null)
 
   // Demo cycling state for feature cards
@@ -365,7 +351,7 @@ export default function LandingPage() {
       const captchaRes = await fetch('/api/auth/verify-captcha', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: turnstileToken, email }),
+        body: JSON.stringify({ email }),
       })
       const captchaData = await captchaRes.json()
       if (!captchaData.ok) { setAuthError(captchaData.error || 'Security check failed.'); setAuthLoading(false); return }
@@ -420,7 +406,7 @@ export default function LandingPage() {
   const authPanelProps = {
     isSignUp, setIsSignUp, email, setEmail, password, setPassword,
     authLoading, authMsg, authError, setAuthError, setAuthMsg,
-    handleAuth, handleForgotPassword, onTurnstileSuccess: setTurnstileToken,
+    handleAuth, handleForgotPassword,
     pendingPlan,
   }
 

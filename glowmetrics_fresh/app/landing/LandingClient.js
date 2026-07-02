@@ -1,17 +1,9 @@
 "use client"
 import React, { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import dynamic from "next/dynamic"
 import { supabase } from "../../lib/supabase"
 import { T, captureAttribution } from '../../lib/tracking'
 import { track } from '../../lib/track'
-
-// Only needed once a visitor reaches the signup step of AuthPanel — deferred
-// so its JS isn't downloaded/parsed for every landing page visit.
-const Turnstile = dynamic(
-  () => import('@marsidev/react-turnstile').then(mod => mod.Turnstile),
-  { ssr: false }
-)
 
 // Static data / style objects hoisted out of component bodies so they aren't
 // recreated on every render.
@@ -77,7 +69,6 @@ function AuthPanel({
   authLoading, authMsg, authError,
   setAuthError, setAuthMsg,
   handleAuth, handleForgotPassword,
-  onTurnstileSuccess,
 }) {
   const [step, setStep] = useState(1)
 
@@ -172,16 +163,6 @@ function AuthPanel({
             {!isSignUp && (
               <div style={{ textAlign: "right", marginBottom: 10 }}>
                 <button type="button" onClick={handleForgotPassword} style={{ fontSize: 11, color: "#475569", background: "none", border: "none", cursor: "pointer" }}>Forgot password?</button>
-              </div>
-            )}
-            {isSignUp && <div style={{ height: 10 }} />}
-            {isSignUp && (
-              <div style={{ marginBottom: 10 }}>
-                <Turnstile
-                  siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY}
-                  onSuccess={onTurnstileSuccess}
-                  options={{ theme: 'dark', size: 'flexible' }}
-                />
               </div>
             )}
             {authError && <div style={{ fontSize: 11, color: "#f87171", marginBottom: 8, textAlign: "center" }}>{authError}</div>}
@@ -315,7 +296,6 @@ export default function LandingPage() {
   const [authLoading, setAuthLoading] = useState(false)
   const [authMsg, setAuthMsg]   = useState("")
   const [authError, setAuthError] = useState("")
-  const [turnstileToken, setTurnstileToken] = useState(null)
 
   useEffect(() => {
     const a = setInterval(() => { setMsgIndex(p => (p+1)%MESSAGES.length); setWhaleIdx(p => (p+1)%WHALES.length) }, 5000)
@@ -337,7 +317,7 @@ export default function LandingPage() {
       const captchaRes = await fetch('/api/auth/verify-captcha', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: turnstileToken, email }),
+        body: JSON.stringify({ email }),
       })
       const captchaData = await captchaRes.json()
       if (!captchaData.ok) { setAuthError(captchaData.error || 'Security check failed.'); setAuthLoading(false); return }
@@ -398,7 +378,7 @@ export default function LandingPage() {
     else setAuthMsg("Password reset email sent — check your inbox.")
   }
 
-  const authPanelProps = { isSignUp, setIsSignUp, email, setEmail, password, setPassword, authLoading, authMsg, authError, setAuthError, setAuthMsg, handleAuth, handleForgotPassword, onTurnstileSuccess: setTurnstileToken }
+  const authPanelProps = { isSignUp, setIsSignUp, email, setEmail, password, setPassword, authLoading, authMsg, authError, setAuthError, setAuthMsg, handleAuth, handleForgotPassword }
 
   return (
     <div style={{ minHeight: "100vh", background: "#05070f", color: "#94A3B8", overflowX: "hidden" }}>
