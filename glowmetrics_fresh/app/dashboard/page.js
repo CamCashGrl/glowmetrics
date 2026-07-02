@@ -1741,7 +1741,7 @@ export default function Dashboard() {
       while (true) {
         const { data, error } = await supabase.from("tips").select("*").eq("user_id", uid).order("date_time", { ascending: true }).range(from, from + PAGE - 1)
         if (error) break
-        if (data?.length) allData = [...allData, ...data]
+        if (data?.length) allData.push(...data)
         if (!data || data.length < PAGE) break
         from += PAGE
       }
