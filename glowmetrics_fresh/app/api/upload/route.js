@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { parseCSV, detectPlatform } from '../../../lib/analytics'
 
 const BATCH_SIZE = 250 // Safe batch size — never hit Supabase limits
+const BATCH_CONCURRENCY = 4 // Run a few batches in parallel instead of one at a time
 
 export async function POST(req) {
   const auth = req.headers.get('Authorization')
@@ -78,33 +79,41 @@ export async function POST(req) {
   rows.forEach(r => { if (!r.platform || r.platform === 'Unknown') r.platform = detectedPlatform })
 
   // ── BATCH INSERT via dedup RPC ─────────────────────────────────────────
+  // Batches are independent (no ordering requirement between them), so run a
+  // bounded number concurrently instead of awaiting each one sequentially —
+  // this is what was making large CSVs take so long that users thought the
+  // upload had hung.
   let inserted = 0
   let skipped  = 0
   const errors = []
-  const totalBatches = Math.ceil(rows.length / BATCH_SIZE)
+  const batches = []
+  for (let i = 0; i < rows.length; i += BATCH_SIZE) batches.push(rows.slice(i, i + BATCH_SIZE))
+  const totalBatches = batches.length
 
-  for (let i = 0; i < rows.length; i += BATCH_SIZE) {
-    const batch    = rows.slice(i, i + BATCH_SIZE)
-    const batchNum = Math.floor(i / BATCH_SIZE) + 1
+  for (let i = 0; i < batches.length; i += BATCH_CONCURRENCY) {
+    const group = batches.slice(i, i + BATCH_CONCURRENCY)
+    const results = await Promise.all(group.map(async (batch, idx) => {
+      const batchNum = i + idx + 1
+      const { data, error } = await supabase.rpc('insert_tips_dedup', { tips: batch })
+      return { data, error, batchNum }
+    }))
 
-    const { data, error } = await supabase.rpc('insert_tips_dedup', {
-      tips: batch
-    })
+    for (const { data, error, batchNum } of results) {
+      // insert_tips_dedup catches its own exceptions and returns them inside the
+      // jsonb payload (data.error) rather than as a PostgREST-level error, so a
+      // failed batch can otherwise look like a clean { inserted: 0, skipped: 0 }.
+      if (error || data?.error) {
+        const message = error?.message || data?.error
+        console.error(`[UPLOAD] Batch ${batchNum}/${totalBatches} error:`, message)
+        errors.push({ batch: batchNum, error: message })
+        continue
+      }
 
-    // insert_tips_dedup catches its own exceptions and returns them inside the
-    // jsonb payload (data.error) rather than as a PostgREST-level error, so a
-    // failed batch can otherwise look like a clean { inserted: 0, skipped: 0 }.
-    if (error || data?.error) {
-      const message = error?.message || data?.error
-      console.error(`[UPLOAD] Batch ${batchNum}/${totalBatches} error:`, message)
-      errors.push({ batch: batchNum, error: message })
-      continue
+      inserted += data?.inserted || 0
+      skipped  += data?.skipped  || 0
+
+      console.log(`[UPLOAD] Batch ${batchNum}/${totalBatches} — inserted: ${data?.inserted}, skipped: ${data?.skipped}`)
     }
-
-    inserted += data?.inserted || 0
-    skipped  += data?.skipped  || 0
-
-    console.log(`[UPLOAD] Batch ${batchNum}/${totalBatches} — inserted: ${data?.inserted}, skipped: ${data?.skipped}`)
   }
 
   // ── LOG TO csv_uploads ─────────────────────────────────────────────────
