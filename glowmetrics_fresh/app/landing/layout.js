@@ -3,7 +3,18 @@ export const metadata = {
   description:
     "Upload your cam site CSV and see your best hours, top fans, session breakdowns, and platform earnings in one dashboard. Free during beta.",
   alternates: {
-    canonical: "https://www.camcashgrl.com/landing",
+    // /landing renders the same signup/auth experience as the homepage and is
+    // used site-wide as the CTA/checkout-resume destination (pricing, demo,
+    // footer, etc). It should not compete with "/" in organic search.
+    canonical: "https://www.camcashgrl.com",
+  },
+  robots: {
+    index: false,
+    follow: true,
+    googleBot: {
+      index: false,
+      follow: true,
+    },
   },
   openGraph: {
     title: "Cam Model Analytics Dashboard for Chaturbate, BongaCams and MFC",

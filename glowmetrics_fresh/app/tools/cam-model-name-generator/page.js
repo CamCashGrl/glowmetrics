@@ -87,10 +87,15 @@ export default function CamModelNameGeneratorPage() {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(toolSchema) }} />
       <NameGeneratorClient />
       <div style={{ maxWidth: 860, margin: '0 auto', padding: '0 24px 48px', textAlign: 'center' }}>
-        <p style={{ fontSize: 15, color: '#94a3b8', lineHeight: 1.7 }}>
+        <p style={{ fontSize: 15, color: '#94a3b8', lineHeight: 1.7, marginBottom: 24 }}>
           Once you pick your cam name,{' '}
           <a href="/landing" style={{ color: '#6366f1', textDecoration: 'none' }}>use CamCash to track your tips, best hours, and top fans</a>.
         </p>
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
+          <a href="/blog/how-to-pick-a-cam-name" style={{ fontSize: 14, color: '#6366f1', textDecoration: 'none', padding: '8px 16px', borderRadius: 8, border: '1px solid rgba(99,102,241,0.25)' }}>→ How to Pick a Cam Name</a>
+          <a href="/guides/cam-model-room-title-generator" style={{ fontSize: 14, color: '#6366f1', textDecoration: 'none', padding: '8px 16px', borderRadius: 8, border: '1px solid rgba(99,102,241,0.25)' }}>→ Room Title Generator</a>
+          <a href="/tools" style={{ fontSize: 14, color: '#6366f1', textDecoration: 'none', padding: '8px 16px', borderRadius: 8, border: '1px solid rgba(99,102,241,0.25)' }}>→ All Free Tools</a>
+        </div>
       </div>
     </>
   )

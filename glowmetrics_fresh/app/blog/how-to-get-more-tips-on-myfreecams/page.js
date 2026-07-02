@@ -161,7 +161,7 @@ export default function MoreTipsOnMFC() {
         <div style={s.relT}>Related reading</div>
         <div style={s.relLinks}>
           <a href="/blog/how-to-build-loyal-fans" style={s.relLink}>→ How to build a loyal fanbase that actually tips</a>
-          <a href="/blog/how-to-re-engage-whales-and-top-tippers" style={s.relLink}>→ How to re-engage whales and top tippers</a>
+          <a href="/blog/how-to-re-engage-whales-and-high-tipping-fans" style={s.relLink}>→ How to re-engage whales and top tippers</a>
         </div>
       </div>
     </ArticleLayout>

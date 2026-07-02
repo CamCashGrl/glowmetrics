@@ -1,6 +1,7 @@
 export const metadata = {
   title: 'Free Cam Model Tools — Room Title Generator & Token Calculator | CamCash',
   description: 'Free tools for cam models. Generate viral Chaturbate room titles and instantly convert tokens to USD. No account required.',
+  alternates: { canonical: 'https://www.camcashgrl.com/tools' },
 }
 
 import SiteFooter from '../components/SiteFooter'
@@ -25,7 +26,7 @@ export default function ToolsPage() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(300px,1fr))', gap: '24px', marginBottom: '48px' }}>
 
           {/* Room Title Generator */}
-          <a href="/guides/chaturbate-room-title-generator" style={{ textDecoration: 'none' }}>
+          <a href="/guides/cam-model-room-title-generator" style={{ textDecoration: 'none' }}>
             <div style={{
               background: 'rgba(168,85,247,0.07)',
               border: '1px solid rgba(168,85,247,0.25)',
@@ -46,7 +47,7 @@ export default function ToolsPage() {
           </a>
 
           {/* Token Calculator */}
-          <a href="/guides/chaturbate-token-calculator" style={{ textDecoration: 'none' }}>
+          <a href="/guides/cam-model-token-calculator" style={{ textDecoration: 'none' }}>
             <div style={{
               background: 'rgba(34,211,238,0.06)',
               border: '1px solid rgba(34,211,238,0.2)',

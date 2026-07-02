@@ -563,7 +563,7 @@ export default function ChaturbateEarningsTrackerPage() {
               CamCash uses the correct Chaturbate payout rate ($0.05/token for broadcasters) and lets you adjust this in settings if your rate differs. Every dollar figure you see is your actual take-home — not Chaturbate's gross revenue figure.
             </p>
             <p style={{ ...s.p, marginBottom: 0 }}>
-              This matters for session analysis and revenue forecasting. Projections based on the wrong rate will be consistently off. If you've negotiated a custom rate with Chaturbate, updating the rate in CamCash settings takes 10 seconds and corrects every calculation retroactively. For token conversion without signing up, use the <a href="/guides/chaturbate-token-calculator" style={{ color: "#22D3EE" }}>Chaturbate Token Calculator</a>.
+              This matters for session analysis and revenue forecasting. Projections based on the wrong rate will be consistently off. If you've negotiated a custom rate with Chaturbate, updating the rate in CamCash settings takes 10 seconds and corrects every calculation retroactively. For token conversion without signing up, use the <a href="/guides/cam-model-token-calculator" style={{ color: "#22D3EE" }}>Chaturbate Token Calculator</a>.
             </p>
           </section>
 
@@ -678,7 +678,7 @@ export default function ChaturbateEarningsTrackerPage() {
                 { href: "/guides/how-to-increase-cam-tips",          label: "How to Increase Cam Tips" },
                 { href: "/guides/bongacams-analytics",               label: "BongaCams Analytics" },
                 { href: "/guides/best-time-to-stream-on-chaturbate", label: "Best Time to Stream on Chaturbate" },
-                { href: "/guides/chaturbate-token-calculator",       label: "Token Calculator" },
+                { href: "/guides/cam-model-token-calculator",       label: "Token Calculator" },
                 { href: "/guides/cam-model-income-tracker",          label: "Cam Model Income Tracker" },
                 { href: "/blog/how-much-do-chaturbate-models-make",  label: "How Much Do Chaturbate Models Make?" },
                 { href: "/blog/how-much-do-cam-models-make",         label: "How Much Do Cam Models Make?" },

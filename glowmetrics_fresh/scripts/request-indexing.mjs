@@ -41,8 +41,8 @@ const URLS = [
   'https://www.camcashgrl.com/guides',
 
   // Free tools
-  'https://www.camcashgrl.com/guides/chaturbate-room-title-generator',
-  'https://www.camcashgrl.com/guides/chaturbate-token-calculator',
+  'https://www.camcashgrl.com/guides/cam-model-room-title-generator',
+  'https://www.camcashgrl.com/guides/cam-model-token-calculator',
 
   // Guides
   'https://www.camcashgrl.com/guides/chaturbate-earnings-tracker',
@@ -56,11 +56,10 @@ const URLS = [
   'https://www.camcashgrl.com/guides/chaturbate-token-tracker',
   'https://www.camcashgrl.com/guides/cam-model-revenue-dashboard',
   'https://www.camcashgrl.com/guides/cam-model-session-breakdown',
-  'https://www.camcashgrl.com/guides/chaturbate-best-hours',
 
   // Blog posts
   'https://www.camcashgrl.com/blog/best-cam-model-tools',
-  'https://www.camcashgrl.com/blog/cam-model-earnings',
+  'https://www.camcashgrl.com/blog/how-much-do-cam-models-make',
   'https://www.camcashgrl.com/blog/cam-model-taxes',
   'https://www.camcashgrl.com/blog/how-much-do-chaturbate-models-make',
   'https://www.camcashgrl.com/blog/how-to-build-loyal-fans',
@@ -68,7 +67,7 @@ const URLS = [
   'https://www.camcashgrl.com/blog/how-to-get-veiws-on-chaturbate',
   'https://www.camcashgrl.com/blog/how-to-increase-cam-earnings',
   'https://www.camcashgrl.com/blog/how-to-make-more-money-on-chaturbate',
-  'https://www.camcashgrl.com/blog/how-to-re-engage-whales-and-top-tippers',
+  'https://www.camcashgrl.com/blog/how-to-re-engage-whales-and-high-tipping-fans',
   'https://www.camcashgrl.com/blog/why-cam-income-is-inconsistent',
   'https://www.camcashgrl.com/blog/why-cam-streams-arent-making-money',
 ]

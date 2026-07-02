@@ -304,7 +304,7 @@ export default function BestCamSitesForModels() {
         <div style={s.profileTitle}>Profile 1: The Public Room Performer</div>
         <p style={{ ...s.p, marginBottom: 0 }}>
           You are expressive, enjoy crowd energy, and are good at reading public chat momentum to trigger tips. You can sustain energy in a free room long enough for viewers to convert into tippers. <strong style={{ color: '#e2e8f0' }}>Best fit: large freemium platforms</strong> like Chaturbate or Stripchat where discoverability is highest and token goals, countdowns, and tip menus drive the room. Track your{' '}
-          <a href="/guides/chaturbate-best-hours" style={s.iLink}>best streaming hours</a> from day one because session timing has an outsized effect on results here.
+          <a href="/guides/best-time-to-stream-chaturbate" style={s.iLink}>best streaming hours</a> from day one because session timing has an outsized effect on results here.
         </p>
       </div>
 
@@ -371,7 +371,7 @@ export default function BestCamSitesForModels() {
       </p>
       <p style={s.p}>
         A smaller platform that converts your strengths efficiently will outperform a larger platform that does not. A professional test beats a forum recommendation every time. The data from your own sessions is always more reliable than aggregate advice — because your fans, your hours, and your working style are specific to you. For more on tracking that data, see our guide on{' '}
-        <a href="/blog/cam-model-earnings" style={s.iLink}>cam model earnings by platform and hours</a> and our{' '}
+        <a href="/blog/how-much-do-cam-models-make" style={s.iLink}>cam model earnings by platform and hours</a> and our{' '}
         <a href="/guides/cam-model-analytics" style={s.iLink}>cam model analytics guide</a>.
       </p>
 
@@ -418,7 +418,7 @@ export default function BestCamSitesForModels() {
           <div style={s.faqQ}>Which cam site pays the best?</div>
           <p style={{ ...s.faqA, marginBottom: 0 }}>
             The best-paying cam site depends on your working style, schedule, and audience. A platform with high total traffic is not always the most profitable per hour for you specifically. Compare revenue per hour streamed across platforms using the same schedule — not raw payout rates on paper. Our{' '}
-            <a href="/blog/cam-model-earnings" style={s.iLink}>cam model earnings guide</a> explains exactly how to run that comparison.
+            <a href="/blog/how-much-do-cam-models-make" style={s.iLink}>cam model earnings guide</a> explains exactly how to run that comparison.
           </p>
         </div>
       </div>
@@ -445,13 +445,13 @@ export default function BestCamSitesForModels() {
           <a href="/blog/best-cam-sites-for-beginners" style={s.relLink}>→ Best cam sites for beginners</a>
           <a href="/blog/cam-model-jobs-from-home" style={s.relLink}>→ How to become a cam model</a>
           <a href="/blog/how-to-get-more-viewers-as-a-cam-model" style={s.relLink}>→ How to get more viewers as a cam model</a>
-          <a href="/blog/cam-model-earnings" style={s.relLink}>→ How much do cam models make? Earnings by platform and hours</a>
+          <a href="/blog/how-much-do-cam-models-make" style={s.relLink}>→ How much do cam models make? Earnings by platform and hours</a>
           <a href="/blog/how-much-do-chaturbate-models-make" style={s.relLink}>→ How much do Chaturbate models make per hour?</a>
           <a href="/blog/why-cam-income-is-inconsistent" style={s.relLink}>→ Why cam income is inconsistent</a>
           <a href="/blog/how-to-increase-cam-earnings" style={s.relLink}>→ How to increase cam earnings</a>
           <a href="/guides/cam-model-analytics" style={s.relLink}>→ Cam model analytics guide</a>
           <a href="/guides/chaturbate-earnings-tracker" style={s.relLink}>→ Chaturbate earnings tracker</a>
-          <a href="/guides/chaturbate-best-hours" style={s.relLink}>→ Best time to stream on Chaturbate</a>
+          <a href="/guides/best-time-to-stream-chaturbate" style={s.relLink}>→ Best time to stream on Chaturbate</a>
           <a href="/guides/cam-model-top-tippers" style={s.relLink}>→ Cam model top tippers guide</a>
           <a href="/blog/cam-model-fan-crm" style={s.relLink}>→ Cam Model Fan CRM — Protect your highest-value fans</a>
         </div>

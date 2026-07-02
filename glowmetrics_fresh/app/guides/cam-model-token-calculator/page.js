@@ -129,7 +129,7 @@ export default function TokenCalculatorPage() {
               Cam Model Token Calculator
             </h1>
             <p style={{ fontSize: 18, lineHeight: 1.7, color: '#CBD5E1', paddingLeft: 20, borderLeft: `3px solid ${S.accent}`, maxWidth: 680 }}>
-              Enter any token amount and instantly see your USD earnings across all major cam platforms. Uses real broadcaster payout rates — not what viewers pay. See also: <a href="/blog/cam-model-earnings" style={{ color: S.accent, textDecoration: 'none' }}>how cam model earnings actually work</a>.
+              Enter any token amount and instantly see your USD earnings across all major cam platforms. Uses real broadcaster payout rates — not what viewers pay. See also: <a href="/blog/how-much-do-cam-models-make" style={{ color: S.accent, textDecoration: 'none' }}>how cam model earnings actually work</a>.
             </p>
           </div>
 
@@ -316,7 +316,7 @@ export default function TokenCalculatorPage() {
             <h2 style={{ fontSize: 32, fontWeight: 800, color: S.white, marginBottom: 8, letterSpacing: '-0.02em' }}>Why Token Tracking Helps You Earn More</h2>
             <div style={{ width: 48, height: 3, background: S.accent, borderRadius: 2, marginBottom: 24 }} />
             <p style={{ fontSize: 16, lineHeight: 1.8, color: S.text, marginBottom: 18 }}>
-              Converting tokens to USD tells you what a session was worth. But knowing <em>when</em> those tokens came in — and which fans sent them — is what actually moves your income up. The <a href="/guides/cam-model-income-tracker" style={{ color: S.accent, textDecoration: 'none' }}>cam model income tracker</a> and <a href="/guides/chaturbate-token-tracker" style={{ color: S.accent, textDecoration: 'none' }}>Chaturbate token tracker</a> log this data across sessions so patterns become visible over time. For a full picture of how earnings stack up, read the <a href="/blog/cam-model-earnings" style={{ color: S.accent, textDecoration: 'none' }}>cam model earnings guide</a>.
+              Converting tokens to USD tells you what a session was worth. But knowing <em>when</em> those tokens came in — and which fans sent them — is what actually moves your income up. The <a href="/guides/cam-model-income-tracker" style={{ color: S.accent, textDecoration: 'none' }}>cam model income tracker</a> and <a href="/guides/chaturbate-token-tracker" style={{ color: S.accent, textDecoration: 'none' }}>Chaturbate token tracker</a> log this data across sessions so patterns become visible over time. For a full picture of how earnings stack up, read the <a href="/blog/how-much-do-cam-models-make" style={{ color: S.accent, textDecoration: 'none' }}>cam model earnings guide</a>.
             </p>
             <p style={{ fontSize: 16, lineHeight: 1.8, color: S.text, marginBottom: 24 }}>
               You can't control the platform's base rate — but you can significantly increase how many tokens flow in per hour:
@@ -444,8 +444,8 @@ export default function TokenCalculatorPage() {
               {[
                 { href: '/guides/chaturbate-token-tracker', label: 'Chaturbate Token Tracker', desc: 'Log and track tokens earned across sessions' },
                 { href: '/guides/cam-model-income-tracker', label: 'Income Tracker', desc: 'Track $/hr, top fans, and session breakdowns' },
-                { href: '/guides/chaturbate-best-hours', label: 'Best Hours to Stream', desc: 'Find your personal peak streaming times' },
-                { href: '/blog/cam-model-earnings', label: 'Cam Model Earnings Guide', desc: 'How much models make and why it changes' },
+                { href: '/guides/best-time-to-stream-chaturbate', label: 'Best Hours to Stream', desc: 'Find your personal peak streaming times' },
+                { href: '/blog/how-much-do-cam-models-make', label: 'Cam Model Earnings Guide', desc: 'How much models make and why it changes' },
               ].map(({ href, label, desc }) => (
                 <a key={href} href={href} style={{ background: S.card, border: `1px solid ${S.border}`, borderRadius: 14, padding: '18px 20px', textDecoration: 'none', display: 'block', transition: 'border-color 0.15s' }}>
                   <div style={{ fontSize: 14, fontWeight: 700, color: S.accent, marginBottom: 6 }}>{label}</div>
@@ -462,7 +462,7 @@ export default function TokenCalculatorPage() {
               <a href="/guides/cam-model-token-calculator" style={{ fontSize: 14, color: S.accent, textDecoration: 'none' }}>→ Free cam model token calculator</a>
               <a href="/guides/chaturbate-earnings-tracker" style={{ fontSize: 14, color: S.accent, textDecoration: 'none' }}>→ Chaturbate earnings tracker</a>
               <a href="/guides/chaturbate-token-tracker" style={{ fontSize: 14, color: S.accent, textDecoration: 'none' }}>→ Chaturbate token tracker</a>
-              <a href="/guides/chaturbate-best-hours" style={{ fontSize: 14, color: S.accent, textDecoration: 'none' }}>→ Best hours to stream on Chaturbate</a>
+              <a href="/guides/best-time-to-stream-chaturbate" style={{ fontSize: 14, color: S.accent, textDecoration: 'none' }}>→ Best hours to stream on Chaturbate</a>
               <a href="/guides/cam-model-income-tracker" style={{ fontSize: 14, color: S.accent, textDecoration: 'none' }}>→ Cam model income tracker</a>
             </div>
           </div>

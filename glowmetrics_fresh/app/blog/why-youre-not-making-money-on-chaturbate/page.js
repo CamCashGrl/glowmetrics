@@ -120,7 +120,7 @@ export default function Page() {
         <nav style={{ marginBottom: 24, fontSize: 13 }}>
           <Link href="/" style={{ color: '#22D3EE', textDecoration: 'none' }}>Home</Link>
           <span style={{ margin: '0 8px', color: '#475569' }}>›</span>
-          <Link href="/blog/cam-model-earnings" style={{ color: '#22D3EE', textDecoration: 'none' }}>Cam Model Earnings</Link>
+          <Link href="/blog/how-much-do-cam-models-make" style={{ color: '#22D3EE', textDecoration: 'none' }}>Cam Model Earnings</Link>
           <span style={{ margin: '0 8px', color: '#475569' }}>›</span>
           <span style={{ color: '#475569' }}>Why You're Not Making Money on Chaturbate</span>
         </nav>
@@ -172,7 +172,7 @@ export default function Page() {
             {[
               { href: '/blog/how-to-make-more-money-on-chaturbate', label: 'How to Make More Money on Chaturbate' },
               { href: '/blog/how-much-do-chaturbate-models-make', label: 'Chaturbate Model Earnings' },
-              { href: '/guides/chaturbate-best-hours', label: 'Best Hours to Stream' },
+              { href: '/guides/best-time-to-stream-chaturbate', label: 'Best Hours to Stream' },
               { href: '/blog/why-cam-streams-arent-making-money', label: 'Why Streams Underperform' },
               { href: '/guides/chaturbate-earnings-tracker', label: 'Chaturbate Earnings Tracker' },
             ].map(link => (

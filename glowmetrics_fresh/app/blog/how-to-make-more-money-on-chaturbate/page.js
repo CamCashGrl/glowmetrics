@@ -356,7 +356,7 @@ export default function MakeMoreOnChaturbate() {
         <nav style={s.breadcrumb}>
           <a href="/" style={s.breadLink}>Home</a>
           <span style={s.breadSep}>›</span>
-          <a href="/blog/cam-model-earnings" style={s.breadLink}>Cam Model Earnings</a>
+          <a href="/blog/how-much-do-cam-models-make" style={s.breadLink}>Cam Model Earnings</a>
           <span style={s.breadSep}>›</span>
           <span style={{ color: '#475569' }}>Make More on Chaturbate</span>
         </nav>
@@ -413,7 +413,7 @@ export default function MakeMoreOnChaturbate() {
           Chaturbate growth is not only about being online more. It is about learning which hours, fans, titles, goals, and platform choices actually move your income.
         </p>
 
-        <a href="/blog/cam-model-earnings" style={s.pillarLink}>
+        <a href="/blog/how-much-do-cam-models-make" style={s.pillarLink}>
           <div
             style={{
               fontSize: 11,
@@ -443,7 +443,7 @@ export default function MakeMoreOnChaturbate() {
         <div style={s.related}>
           <div style={s.relatedTitle}>Related articles</div>
           <div style={s.relatedLinks}>
-            <a href="/blog/cam-model-earnings" style={s.relatedLink}>
+            <a href="/blog/how-much-do-cam-models-make" style={s.relatedLink}>
               Cam Model Earnings Guide
             </a>
             <a href="/blog/how-much-do-chaturbate-models-make" style={s.relatedLink}>
@@ -455,7 +455,7 @@ export default function MakeMoreOnChaturbate() {
             <a href="/blog/why-cam-streams-arent-making-money" style={s.relatedLink}>
               Why Streams Underperform
             </a>
-            <a href="/guides/chaturbate-best-hours" style={s.relatedLink}>
+            <a href="/guides/best-time-to-stream-chaturbate" style={s.relatedLink}>
               Best Hours to Stream
             </a>
           </div>

@@ -730,7 +730,7 @@ export function DashboardPreview({ tips = [], analytics, userPlan = 'free', onAd
         <SectionLabel>Use CamCash while your dashboard learns</SectionLabel>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 12, marginBottom: 20 }}>
           {[
-            { icon: '🎬', title: 'Room Title Generator', desc: 'Create clickable stream titles in one click.', cta: 'Open Tool', action: () => router.push('/guides/chaturbate-room-title-generator') },
+            { icon: '🎬', title: 'Room Title Generator', desc: 'Create clickable stream titles in one click.', cta: 'Open Tool', action: () => router.push('/guides/cam-model-room-title-generator') },
             { icon: '🪙', title: 'Token Calculator',     desc: 'Convert tokens to estimated USD instantly.',  cta: 'Open Tool', action: () => router.push('/dashboard?tab=token-calc') },
             { icon: '🔴', title: 'Live Mode',            desc: 'Track tips and get coaching while you stream.', cta: 'Start Live Mode', action: onLiveMode },
             { icon: '🗓️', title: 'Stream Planner',       desc: 'Plan your schedule around your best earning windows.', cta: 'Open Planner', action: () => router.push('/dashboard?tab=stream-planner') },

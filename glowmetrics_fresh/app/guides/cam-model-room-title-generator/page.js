@@ -521,7 +521,7 @@ export default function TitleGeneratorPage() {
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px' }}>
               {[
-                { icon: '💰', title: 'Token Calculator', desc: 'Convert tokens to USD across platforms instantly.', href: '/guides/chaturbate-token-calculator' },
+                { icon: '💰', title: 'Token Calculator', desc: 'Convert tokens to USD across platforms instantly.', href: '/guides/cam-model-token-calculator' },
                 { icon: '📊', title: 'Earnings Dashboard', desc: 'Track earnings, fan rankings, and session history with real data.', href: '/dashboard' },
                 { icon: '🏷️', title: 'Cam Name Generator', desc: 'Generate cam names that are memorable and searchable.', href: '/guides' },
                 { icon: '📈', title: 'Session Analytics', desc: 'Understand your peak hours, best days, and top fans.', href: '/demo' },

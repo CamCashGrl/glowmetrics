@@ -285,8 +285,8 @@ export default function FreemiumVsPremium() {
             <div style={s.relatedLinks}>
               <a href="/blog/cam-model-income-diversification" style={s.relatedLink}>→ How to diversify your cam income: multistreaming, clips, and more</a>
               <a href="/blog/how-to-find-your-cam-model-niche" style={s.relatedLink}>→ Cam model niche guide: JOI, SPH, dom, sub, DDlg explained</a>
-              <a href="/blog/cam-model-earnings" style={s.relatedLink}>→ How much do cam models make? Real hourly rates by experience level</a>
-              <a href="/guides/chaturbate-best-hours" style={s.relatedLink}>→ Best hours to stream on Chaturbate</a>
+              <a href="/blog/how-much-do-cam-models-make" style={s.relatedLink}>→ How much do cam models make? Real hourly rates by experience level</a>
+              <a href="/guides/best-time-to-stream-chaturbate" style={s.relatedLink}>→ Best hours to stream on Chaturbate</a>
             </div>
           </div>
         </article>

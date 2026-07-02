@@ -4,6 +4,7 @@ export const metadata = {
   title: 'Free Cam Model Tools & Guides — Earnings Trackers, Analytics | CamCash',
   description:
     'Free tools and guides for cam models: earnings trackers, token calculators, analytics dashboards, and platform-specific guides for Chaturbate, BongaCams, and MyFreeCams.',
+  alternates: { canonical: 'https://www.camcashgrl.com/guides' },
 }
 
 const guides = [
@@ -63,17 +64,12 @@ const guides = [
     description: 'See exactly what happened in each of your streams.',
   },
   {
-    slug: 'chaturbate-best-hours',
-    title: 'Chaturbate Best Hours',
-    description: 'Find when you earn the most on Chaturbate.',
-  },
-  {
-    slug: 'chaturbate-room-title-generator',
+    slug: 'cam-model-room-title-generator',
     title: 'Room Title Generator',
     description: 'Generate viral Chaturbate room titles that get clicks.',
   },
   {
-    slug: 'chaturbate-token-calculator',
+    slug: 'cam-model-token-calculator',
     title: 'Token Calculator',
     description: 'Instantly convert Chaturbate tokens to USD.',
   },

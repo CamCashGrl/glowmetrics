@@ -223,7 +223,7 @@ export default function HowToPickACamName() {
           <a href="/blog/how-to-increase-cam-earnings" style={s.relLink}>→ How to increase cam earnings with data</a>
           <a href="/blog/how-to-make-more-money-on-chaturbate" style={s.relLink}>→ How to make more money on Chaturbate</a>
           <a href="/blog/why-cam-income-is-inconsistent" style={s.relLink}>→ Why cam income is inconsistent</a>
-          <a href="/guides/chaturbate-room-title-generator" style={s.relLink}>→ Free room title generator</a>
+          <a href="/guides/cam-model-room-title-generator" style={s.relLink}>→ Free room title generator</a>
         </div>
       </div>
     </ArticleLayout>

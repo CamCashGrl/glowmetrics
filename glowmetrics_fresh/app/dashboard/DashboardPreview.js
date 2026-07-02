@@ -776,7 +776,7 @@ export function DashboardPreview({ tips = [], analytics, userPlan = 'free', onAd
         {/* ── 9. QUICK TOOLS ── */}
         <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.18em', textTransform: 'uppercase', color: C.muted, marginBottom: 10 }}>Use CamCash while your dashboard learns</div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 12, marginBottom: 16 }}>
-          <QuickToolCard icon="🎬" title="Room Title Generator" description="Create clickable stream titles in one click." ctaLabel="Open Tool" ctaAction={() => router.push('/guides/chaturbate-room-title-generator')} />
+          <QuickToolCard icon="🎬" title="Room Title Generator" description="Create clickable stream titles in one click." ctaLabel="Open Tool" ctaAction={() => router.push('/guides/cam-model-room-title-generator')} />
           <QuickToolCard icon="🪙" title="Token Calculator" description="Convert tokens to estimated USD instantly." ctaLabel="Open Tool" ctaAction={() => router.push('/dashboard?tab=token-calc')} />
           <QuickToolCard icon="🔴" title="Live Mode" description="Track tips and get coaching while you stream." ctaLabel="Start Live Mode" ctaAction={onLiveMode} />
           <QuickToolCard icon="🗓️" title="Stream Planner" description="Plan your schedule around your best earning windows." ctaLabel="Open Planner" ctaAction={() => router.push('/dashboard?tab=stream-planner')} />

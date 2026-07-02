@@ -4,6 +4,7 @@ export const metadata = {
   title: 'Cam Model Blog — Tips, Strategies & Earnings Guides | CamCash',
   description:
     'Free guides for cam models: how to increase earnings, track tips, build loyal fans, handle taxes, and grow on Chaturbate, MyFreeCams, and BongaCams.',
+  alternates: { canonical: 'https://www.camcashgrl.com/blog' },
 }
 
 const posts = [
@@ -11,11 +12,6 @@ const posts = [
     slug: 'best-cam-model-tools',
     title: 'Best Cam Model Tools',
     description: 'The top tools cam models use to track tips, analyze earnings, and grow income.',
-  },
-  {
-    slug: 'cam-model-earnings',
-    title: 'How Much Do Cam Models Make?',
-    description: 'Real numbers on cam model income across platforms.',
   },
   {
     slug: 'how-much-do-cam-models-make',
@@ -91,11 +87,6 @@ const posts = [
     slug: 'cam-model-token-to-dollar-ratio-explained',
     title: 'Cam Model Token to Dollar Ratio Explained: What Your Tips Are Really Worth',
     description: 'How the token-to-dollar conversion works on Chaturbate, BongaCams, and MyFreeCams — and why it matters for your income.',
-  },
-  {
-    slug: 'how-to-re-engage-whales-and-top-tippers',
-    title: 'Re-Engage Your Top Tippers',
-    description: 'Win back your biggest spenders before they go cold.',
   },
   {
     slug: 'cam-model-tipping-pattern-data-examples',

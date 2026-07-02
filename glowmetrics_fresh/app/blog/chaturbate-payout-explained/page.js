@@ -329,7 +329,7 @@ export default function ChaturbatePayoutExplained() {
           <a href="/guides/chaturbate-earnings-tracker" style={s.relLink}>→ Chaturbate earnings tracker</a>
           <a href="/guides/cam-model-token-calculator" style={s.relLink}>→ Cam model token calculator</a>
           <a href="/guides/chaturbate-token-tracker" style={s.relLink}>→ Chaturbate token tracker</a>
-          <a href="/guides/chaturbate-best-hours" style={s.relLink}>→ Best hours to stream on Chaturbate</a>
+          <a href="/guides/best-time-to-stream-chaturbate" style={s.relLink}>→ Best hours to stream on Chaturbate</a>
           <a href="/guides/cam-model-income-tracker" style={s.relLink}>→ Cam model income tracker</a>
         </div>
       </div>
@@ -348,7 +348,7 @@ export default function ChaturbatePayoutExplained() {
           <a href="/blog/how-much-do-chaturbate-models-make" style={s.relLink}>→ How much Chaturbate models make per hour</a>
           <a href="/guides/chaturbate-earnings-tracker" style={s.relLink}>→ Chaturbate earnings tracker</a>
           <a href="/guides/cam-model-token-calculator" style={s.relLink}>→ Cam model token calculator</a>
-          <a href="/blog/cam-model-earnings" style={s.relLink}>→ Cam model earnings: the complete guide</a>
+          <a href="/blog/how-much-do-cam-models-make" style={s.relLink}>→ Cam model earnings: the complete guide</a>
           <a href="/blog/how-to-increase-cam-earnings" style={s.relLink}>→ How to increase cam earnings</a>
           <a href="/blog/why-cam-income-is-inconsistent" style={s.relLink}>→ Why cam income is inconsistent</a>
         </div>

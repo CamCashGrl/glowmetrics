@@ -192,7 +192,6 @@ export default function ReEngageWhalesHighTippers() {
       <div style={s.related}>
         <div style={s.relT}>Related reading</div>
         <div style={s.relLinks}>
-          <a href="/blog/how-to-re-engage-whales-and-top-tippers" style={s.relLink}>→ Re-Engage Your Top Tippers — timing tactics and reactivation methods</a>
           <a href="/blog/how-to-build-loyal-fans" style={s.relLink}>→ How to build a loyal fanbase that tips consistently</a>
           <a href="/blog/cam-model-fan-crm" style={s.relLink}>→ Cam Model Fan CRM — track and manage your top spenders</a>
           <a href="/blog/cam-model-tipping-pattern-data-examples" style={s.relLink}>→ 7 tipping pattern examples: what your data is telling you</a>

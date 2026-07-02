@@ -49,10 +49,10 @@ const FREE_TOOLS = [
 const BLOG_CARD_STYLE = { padding: "12px 14px", borderRadius: 12, background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.06)", transition: "all 0.15s", display: "flex", alignItems: "center", gap: 12 }
 
 const BLOG_LINK_CARDS = [
-  { href: "/blog/cam-model-earnings", icon: "💰", tag: "Earnings", color: "#10B981", title: "How Much Do Cam Models Actually Make?" },
+  { href: "/blog/how-much-do-cam-models-make", icon: "💰", tag: "Earnings", color: "#10B981", title: "How Much Do Cam Models Actually Make?" },
   { href: "/blog/how-much-do-chaturbate-models-make", icon: "📊", tag: "Chaturbate", color: "#22D3EE", title: "How Much Do Chaturbate Models Make Per Hour?" },
   { href: "/blog/how-to-make-more-money-on-chaturbate", icon: "🔥", tag: "Strategy", color: "#EC4899", title: "How to Make More Money on Chaturbate" },
-  { href: "/blog/how-to-re-engage-whales-and-top-tippers", icon: "🐳", tag: "Fan CRM", color: "#F59E0B", title: "How to Re-Engage Whales and Top Tippers" },
+  { href: "/blog/how-to-re-engage-whales-and-high-tipping-fans", icon: "🐳", tag: "Fan CRM", color: "#F59E0B", title: "How to Re-Engage Whales and Top Tippers" },
   { href: "/blog/how-to-build-loyal-fans", icon: "👑", tag: "Retention", color: "#7C5CFF", title: "How to Build a Loyal Fanbase" },
   { href: "/blog/why-cam-income-is-inconsistent", icon: "📈", tag: "Income", color: "#60A5FA", title: "Why Cam Income Is Inconsistent" },
   { href: "/blog/best-cam-model-tools", icon: "⚡", tag: "Tools", color: "#F59E0B", title: "Best Cam Model Tools" },
