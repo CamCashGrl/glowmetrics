@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import UserCounter from '../components/UserCounter'
 import SiteFooter from '../components/SiteFooter'
 
 async function startCheckout(planType, setLoading) {
@@ -13,7 +12,7 @@ async function startCheckout(planType, setLoading) {
       body: JSON.stringify({ plan_type: planType }),
     })
     if (res.status === 401) {
-      window.location.href = `/signup?plan=${planType}`
+      window.location.href = `/landing?plan=${planType}`
       return
     }
     const data = await res.json()
@@ -209,14 +208,9 @@ function LaunchBanner() {
               letterSpacing: '-2px',
             }}>FREE</p>
             <p style={{ color: C.muted, fontSize: 13, margin: '4px 0 0', fontWeight: 600 }}>
-              Until 100 users
+              No credit card required
             </p>
           </div>
-        </div>
-
-        {/* Counter */}
-        <div style={{ marginBottom: 28 }}>
-          <UserCounter variant="full" />
         </div>
 
         {/* CTA */}
@@ -421,9 +415,8 @@ function EarlyAdopterSection({ checkoutLoading, setCheckoutLoading }) {
           Lock in lifetime pricing before we launch
         </h2>
         <p style={{ color: C.text, fontSize: 15, margin: '0 auto 24px', maxWidth: 540 }}>
-          Limited to the first 100 users. You help us launch — we reward you forever.
+          You help us launch — we reward you forever.
         </p>
-        <UserCounter variant="full" />
       </div>
 
       {/* Cards */}
@@ -560,10 +553,9 @@ function EarlyAdopterSection({ checkoutLoading, setCheckoutLoading }) {
 
       {/* Below cards note */}
       <div style={{ textAlign: 'center' }}>
-        <p style={{ color: C.muted, fontSize: 13, margin: '0 0 12px' }}>
-          This offer expires when we reach 100 users. Early adopters keep their rate forever after that.
+        <p style={{ color: C.muted, fontSize: 13, margin: 0 }}>
+          Early adopters keep their locked rate forever.
         </p>
-        <UserCounter variant="compact" />
       </div>
     </section>
   )
@@ -640,7 +632,7 @@ function ComparisonTable() {
     { feature: 'Price',                   free: '$0', premium: '$19.99/mo', early: '$9.99/mo*' },
     { feature: 'Annual option',           free: '—', premium: '$199.99/yr', early: '$99.99/yr*' },
     { feature: 'Lifetime price lock',     free: '—', premium: '❌', early: '✅ FOREVER', earlySpecial: true },
-    { feature: 'Availability',            free: 'Always', premium: 'After 100 users', early: 'First 100 only' },
+    { feature: 'Availability',            free: 'Always', premium: 'Anytime', early: 'Limited time' },
   ]
 
   const thStyle = {
@@ -740,7 +732,7 @@ const FAQ_ITEMS = [
   },
   {
     q: 'When does the early adopter offer close?',
-    a: 'The early adopter offer closes automatically when we reach 100 registered users. After that, new users pay the standard rate. Current early adopters keep their locked rate forever.',
+    a: 'The early adopter offer is only available for a limited time. After it closes, new users pay the standard rate. Current early adopters keep their locked rate forever.',
   },
   {
     q: 'Is there a free trial for premium?',
@@ -892,10 +884,6 @@ function FinalCTA() {
         }}>
           View Extension →
         </a>
-      </div>
-
-      <div style={{ marginBottom: 24 }}>
-        <UserCounter variant="pill" />
       </div>
 
       <p style={{ color: C.muted, fontSize: 13, margin: 0 }}>

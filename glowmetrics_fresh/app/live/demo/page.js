@@ -605,7 +605,7 @@ export default function LiveDemoPage() {
             <div style={{ fontSize: 14, color: C.muted, maxWidth: 460, margin: '0 auto 30px', lineHeight: 1.7 }}>
               Every tip tracked. Every whale flagged. Every dip caught — automatically across Chaturbate, BongaCams, and MyFreeCams.
             </div>
-            <a href="/signup" style={{
+            <a href="/landing" style={{
               display: 'inline-block', padding: '16px 52px',
               background: `linear-gradient(135deg, ${C.purple}, ${C.pink})`,
               borderRadius: 12, color: '#fff', fontWeight: 900, fontSize: 16,
