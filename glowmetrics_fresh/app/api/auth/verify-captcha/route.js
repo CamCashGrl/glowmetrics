@@ -145,11 +145,10 @@ export async function POST(req) {
       }
     }
 
+    // CAPTCHA widget disabled for now — skip Turnstile verification entirely,
+    // but keep the disposable-email check above.
     if (!token) {
-      return NextResponse.json(
-        { ok: false, error: 'Security check required. Please complete the CAPTCHA.' },
-        { status: 400 }
-      )
+      return NextResponse.json({ ok: true })
     }
 
     const secret = process.env.TURNSTILE_SECRET_KEY
