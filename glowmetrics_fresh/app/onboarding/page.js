@@ -861,16 +861,6 @@ export default function OnboardingPage(){
                 </div>
               )}
 
-              <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:9,marginBottom:12}}>
-                {[
-                  {label:preview.tipsDetected>0?'Tips detected':'Sessions detected',value:(preview.tipsDetected||preview.paidSessionsDetected).toLocaleString(),color:CYAN},
-                  {label:'Est. earnings',value:`$${preview.estimatedEarnings.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`,color:'#4ade80'},
-                  {label:'Fans detected',value:preview.fansDetected.toLocaleString(),color:'#a78bfa'},
-                  {label:'Date range',value:preview.dateRange,color:'#F8FAFC'},
-                  {label:'Platform',value:platform.label,color:'#F8FAFC'},
-                ].map(s=>(<div key={s.label} className="stat-card" style={{padding:'11px 13px'}}><div style={{position:'absolute',top:0,left:0,right:0,height:'2px',borderRadius:'14px 14px 0 0',background:`linear-gradient(90deg,${s.color}00,${s.color}70,${s.color}00)`}}/><div style={{fontSize:9,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.14em',color:'rgba(148,163,184,0.6)',marginBottom:5}}>{s.label}</div><div style={{fontSize:15,fontWeight:900,color:s.color,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{s.value}</div></div>))}
-              </div>
-
               <div style={{borderRadius:13,border:'1px solid rgba(255,255,255,0.08)',background:'rgba(255,255,255,0.025)',marginBottom:12,overflow:'hidden'}}>
                 <div style={{padding:'9px 13px',borderBottom:'1px solid rgba(255,255,255,0.06)',fontSize:11,fontWeight:800,color:'#fff'}}>Sample rows</div>
                 <div style={{overflowX:'auto'}}>
