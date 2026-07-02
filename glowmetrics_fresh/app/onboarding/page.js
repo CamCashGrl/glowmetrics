@@ -655,8 +655,6 @@ export default function OnboardingPage(){
     finally{setCsvUploading(false)}
   }
 
-  async function skipToDashboard(){await markDone();router.push('/dashboard')}
-
   if(booting)return(
     <div style={{minHeight:'100vh',background:'#050812',display:'flex',alignItems:'center',justifyContent:'center'}}>
       <div style={{width:30,height:30,borderRadius:'50%',border:'2px solid rgba(255,255,255,0.08)',borderTopColor:CYAN,animation:'spin 0.8s linear infinite'}}/>
@@ -735,7 +733,6 @@ export default function OnboardingPage(){
                 </div>
               </div>
               <OBBtn onClick={()=>selectPlatform(platformId)} style={{marginBottom:10}}>Continue with {platform.label} →</OBBtn>
-              <div style={{textAlign:'center'}}><button onClick={skipToDashboard} style={{background:'none',border:'none',fontSize:12,color:`rgba(33,230,243,0.65)`,cursor:'pointer'}} onMouseEnter={e=>e.currentTarget.style.color=CYAN} onMouseLeave={e=>e.currentTarget.style.color='rgba(33,230,243,0.65)'}>Skip for now</button></div>
             </div>
           )}
 
@@ -809,7 +806,7 @@ export default function OnboardingPage(){
                 <OBSecBtn onClick={()=>setStep('platform')} style={{height:46}}>← Back</OBSecBtn>
                 <OBBtn onClick={handlePreview} disabled={!pasteText.trim()} style={{height:46,fontSize:13}}>Preview Import →</OBBtn>
               </div>
-              <OBLinks links={[{label:'Upload CSV instead',onClick:()=>setStep('csv')},{label:'Track future tips instead',onClick:skipToDashboard}]}/>
+              <OBLinks links={[{label:'Upload CSV instead',onClick:()=>setStep('csv')}]}/>
               <OBTrust/>
             </div>
           )}
@@ -864,16 +861,6 @@ export default function OnboardingPage(){
                 </div>
               )}
 
-              <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:9,marginBottom:12}}>
-                {[
-                  {label:preview.tipsDetected>0?'Tips detected':'Sessions detected',value:(preview.tipsDetected||preview.paidSessionsDetected).toLocaleString(),color:CYAN},
-                  {label:'Est. earnings',value:`$${preview.estimatedEarnings.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`,color:'#4ade80'},
-                  {label:'Fans detected',value:preview.fansDetected.toLocaleString(),color:'#a78bfa'},
-                  {label:'Date range',value:preview.dateRange,color:'#F8FAFC'},
-                  {label:'Platform',value:platform.label,color:'#F8FAFC'},
-                ].map(s=>(<div key={s.label} className="stat-card" style={{padding:'11px 13px'}}><div style={{position:'absolute',top:0,left:0,right:0,height:'2px',borderRadius:'14px 14px 0 0',background:`linear-gradient(90deg,${s.color}00,${s.color}70,${s.color}00)`}}/><div style={{fontSize:9,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.14em',color:'rgba(148,163,184,0.6)',marginBottom:5}}>{s.label}</div><div style={{fontSize:15,fontWeight:900,color:s.color,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{s.value}</div></div>))}
-              </div>
-
               <div style={{borderRadius:13,border:'1px solid rgba(255,255,255,0.08)',background:'rgba(255,255,255,0.025)',marginBottom:12,overflow:'hidden'}}>
                 <div style={{padding:'9px 13px',borderBottom:'1px solid rgba(255,255,255,0.06)',fontSize:11,fontWeight:800,color:'#fff'}}>Sample rows</div>
                 <div style={{overflowX:'auto'}}>
@@ -890,7 +877,7 @@ export default function OnboardingPage(){
                 <OBSecBtn onClick={()=>setStep('paste')} style={{height:46}}>← Back</OBSecBtn>
                 <OBBtn onClick={handleImport} style={{height:46,fontSize:13}}>Import & build dashboard →</OBBtn>
               </div>
-              <OBLinks links={[{label:'Paste more rows',onClick:()=>setStep('paste')},{label:'Upload CSV instead',onClick:()=>setStep('csv')},{label:'Track future tips instead',onClick:skipToDashboard}]}/>
+              <OBLinks links={[{label:'Paste more rows',onClick:()=>setStep('paste')},{label:'Upload CSV instead',onClick:()=>setStep('csv')}]}/>
               <OBTrust/>
             </div>
           )}
