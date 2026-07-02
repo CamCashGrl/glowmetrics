@@ -1398,7 +1398,7 @@ export default function LivePage() {
               ))}
             </div>
             <div style={{ display: 'flex', gap: 10 }}>
-              <a href="/signup" style={{ flex: 1, display: 'inline-block', textAlign: 'center', padding: '11px 0', background: `linear-gradient(135deg, ${C.pink}, ${C.purple})`, color: '#fff', borderRadius: 10, fontWeight: 800, textDecoration: 'none', fontSize: 14, boxShadow: '0 0 20px rgba(236,72,153,0.3)' }}>
+              <a href="/landing" style={{ flex: 1, display: 'inline-block', textAlign: 'center', padding: '11px 0', background: `linear-gradient(135deg, ${C.pink}, ${C.purple})`, color: '#fff', borderRadius: 10, fontWeight: 800, textDecoration: 'none', fontSize: 14, boxShadow: '0 0 20px rgba(236,72,153,0.3)' }}>
                 Create Free Account →
               </a>
               <a href="/dashboard" style={{ display: 'inline-block', textAlign: 'center', padding: '11px 16px', background: 'rgba(168,85,247,0.12)', border: '1px solid rgba(168,85,247,0.2)', color: C.purple, borderRadius: 10, fontWeight: 700, textDecoration: 'none', fontSize: 14 }}>
@@ -1429,7 +1429,7 @@ export default function LivePage() {
             <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
               <a href="/camcash-extension.zip" download="camcash-extension.zip" style={{ fontSize: 11, color: C.cyan, textDecoration: 'underline' }}>Get Extension</a>
               <span style={{ color: C.dim }}>·</span>
-              <a href="/signup" style={{ fontSize: 11, color: C.purple, textDecoration: 'underline' }}>Sign Up Free</a>
+              <a href="/landing" style={{ fontSize: 11, color: C.purple, textDecoration: 'underline' }}>Sign Up Free</a>
             </div>
           </div>
         </div>

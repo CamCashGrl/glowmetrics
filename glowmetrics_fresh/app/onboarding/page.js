@@ -18,7 +18,7 @@ const PLATFORMS = {
   bongacams:{
     label:'BongaCams',short:'BC',
     iconStyle:{background:'#311222',color:'#FF3B6E',border:'1px solid rgba(255,59,110,0.25)'},
-    instructions:'Go to Reports → General. Select your date range. Highlight all rows, copy, and paste below. You can also paste your Paid Chat section separately.',
+    instructions:'Go to Reports → General. Select your date range. Highlight all rows, copy, and paste below.',
     earningsUrl:()=>'https://bongamodels.com/reports/general',
     placeholder:'Paste your BongaCams tip history here...\n\nExample:\n14.06.2026 14:43\thaverford35\tTips\t1\t$0.024',
   },
@@ -498,8 +498,13 @@ function OBSecBtn({onClick,children,style={}}){
 
 function OBLinks({links}){
   return(
-    <div style={{display:'flex',justifyContent:'center',gap:18,marginTop:12,flexWrap:'wrap'}}>
-      {links.map((l,i)=>(<button key={i} onClick={l.onClick} style={{background:'none',border:'none',fontSize:11,color:'rgba(100,116,139,0.7)',cursor:'pointer',transition:'color 0.2s'}} onMouseEnter={e=>e.currentTarget.style.color=CYAN} onMouseLeave={e=>e.currentTarget.style.color='rgba(100,116,139,0.7)'}>{l.label}</button>))}
+    <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:8,marginTop:12,flexWrap:'wrap'}}>
+      {links.map((l,i)=>(
+        <span key={i} style={{display:'flex',alignItems:'center',gap:8}}>
+          {i>0&&<span style={{color:'rgba(100,116,139,0.4)',fontSize:11}}>·</span>}
+          <button onClick={l.onClick} style={{background:'none',border:'none',fontSize:11,color:'rgba(100,116,139,0.7)',cursor:'pointer',transition:'color 0.2s'}} onMouseEnter={e=>e.currentTarget.style.color=CYAN} onMouseLeave={e=>e.currentTarget.style.color='rgba(100,116,139,0.7)'}>{l.label}</button>
+        </span>
+      ))}
     </div>
   )
 }
@@ -772,20 +777,13 @@ export default function OnboardingPage(){
               <div style={EYE}>Step 2 of 3 — {platform.label}</div>
               <div style={{textAlign:'center',marginBottom:16}}>
                 <h1 style={{fontSize:23,fontWeight:900,color:'#F8FAFC',letterSpacing:'-0.025em',lineHeight:1.15,marginBottom:7}}>Paste your tip history</h1>
-                <p style={{fontSize:13,color:'rgba(166,168,189,0.88)',lineHeight:1.7,maxWidth:360,margin:'0 auto'}}>Copy your earning rows from {platform.label} and paste them below. CamCash will clean and organize everything automatically.</p>
+                <p style={{fontSize:13,color:'rgba(166,168,189,0.88)',lineHeight:1.7,maxWidth:360,margin:'0 auto'}}>Copy your earnings rows from {platform.label} and paste them below. CamCash will clean the data automatically.</p>
               </div>
-
-              {/* BongaCams paid chat notice */}
-              {platformId==='bongacams'&&(
-                <div style={{borderRadius:12,border:'1px solid rgba(255,47,174,0.22)',background:'rgba(255,47,174,0.055)',padding:'12px 14px',marginBottom:12,fontSize:11,color:'rgba(203,213,225,0.8)',lineHeight:1.55}}>
-                  <span style={{color:PINK,fontWeight:700}}>💳 Tip:</span> You can paste your <strong style={{color:'#fff'}}>Free Chat</strong> and <strong style={{color:'#fff'}}>Paid Chat</strong> sections together — CamCash automatically separates tips from private sessions.
-                </div>
-              )}
 
               <div style={{borderRadius:13,border:'1px solid rgba(33,230,243,0.22)',background:'rgba(33,230,243,0.055)',padding:'14px 16px',marginBottom:12}}>
                 <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:12,marginBottom:10}}>
                   <div style={{fontSize:10,fontWeight:900,letterSpacing:'0.18em',textTransform:'uppercase',color:'rgba(33,230,243,0.85)'}}>How to copy from {platform.label}</div>
-                  <a href={platform.earningsUrl(cbUsername)} target="_blank" rel="noreferrer" style={{flexShrink:0,padding:'5px 11px',borderRadius:9,border:'1px solid rgba(255,47,174,0.35)',background:'rgba(255,255,255,0.03)',color:'rgba(203,213,225,0.85)',fontSize:10,fontWeight:700,textDecoration:'none',whiteSpace:'nowrap',transition:'all 0.2s'}} onMouseEnter={e=>{e.currentTarget.style.borderColor='rgba(33,230,243,0.55)';e.currentTarget.style.color='#fff'}} onMouseLeave={e=>{e.currentTarget.style.borderColor='rgba(255,47,174,0.35)';e.currentTarget.style.color='rgba(203,213,225,0.85)'}}>Open earnings page ↗</a>
+                  <a href={platform.earningsUrl(cbUsername)} target="_blank" rel="noreferrer" style={{flexShrink:0,padding:'5px 11px',borderRadius:9,border:'1px solid rgba(33,230,243,0.4)',background:'rgba(255,255,255,0.03)',color:'rgba(203,213,225,0.85)',fontSize:10,fontWeight:700,textDecoration:'none',whiteSpace:'nowrap',transition:'all 0.2s'}} onMouseEnter={e=>{e.currentTarget.style.borderColor='rgba(33,230,243,0.7)';e.currentTarget.style.color='#fff'}} onMouseLeave={e=>{e.currentTarget.style.borderColor='rgba(33,230,243,0.4)';e.currentTarget.style.color='rgba(203,213,225,0.85)'}}>Open earnings page ↗</a>
                 </div>
                 <p style={{fontSize:12,color:'rgba(148,163,184,0.8)',lineHeight:1.6,marginBottom:10}}>{platform.instructions}</p>
                 <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:8}}>
@@ -802,7 +800,7 @@ export default function OnboardingPage(){
               {parseError&&<div style={{marginBottom:10,padding:'9px 12px',borderRadius:11,background:'rgba(248,113,113,0.07)',border:'1px solid rgba(248,113,113,0.22)',fontSize:12,color:'#f87171'}}>⚠️ {parseError}</div>}
 
               <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:9,marginBottom:16}}>
-                {['Open your earnings page','Highlight the rows you want','Copy and paste them here'].map((t,i)=>(<div key={i} style={{display:'flex',alignItems:'center',gap:7,fontSize:10,color:'rgba(148,163,184,0.8)'}}><div style={{width:19,height:19,borderRadius:'50%',border:'1px solid rgba(33,230,243,0.35)',background:'rgba(33,230,243,0.08)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,fontWeight:900,color:CYAN,flexShrink:0}}>{i+1}</div><span>{t}</span></div>))}
+                {['Open your earnings or tip history','Highlight the rows you want','Copy and paste them here'].map((t,i)=>(<div key={i} style={{display:'flex',alignItems:'center',gap:7,fontSize:10,color:'rgba(148,163,184,0.8)'}}><div style={{width:19,height:19,borderRadius:'50%',border:'1px solid rgba(33,230,243,0.35)',background:'rgba(33,230,243,0.08)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,fontWeight:900,color:CYAN,flexShrink:0}}>{i+1}</div><span>{t}</span></div>))}
               </div>
 
               <div style={{display:'grid',gridTemplateColumns:'auto 1fr',gap:10,marginBottom:6}}>
