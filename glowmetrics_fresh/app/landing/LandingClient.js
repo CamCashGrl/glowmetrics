@@ -14,6 +14,49 @@ const AUTH_INPUT_STYLE = {
   boxSizing: "border-box", fontFamily: "inherit", transition: "border-color 0.15s",
 }
 
+// Button style shared with the onboarding flow (same gradient, shimmer sweep,
+// and hover-lift as app/onboarding/page.js's OBBtn/OBSecBtn) so the CTA
+// language is consistent from landing → onboarding. Keyframes + the shimmer
+// pseudo-element live in globals.css (.lp-btn-primary) — a raw <style> tag
+// here would cause an SSR/hydration text mismatch since quotes inside a
+// <style> element aren't entity-decoded the same way client vs server.
+const LP_GRAD = "linear-gradient(90deg,#21E6F3,#6C5CFF,#FF2FAE)"
+
+function LPBtn({ as = "button", href, type, onClick, children, variant = "primary", disabled = false, style = {} }) {
+  const Comp = as
+  const isPrimary = variant === "primary"
+  const baseStyle = isPrimary ? {
+    display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8,
+    padding: "13px 28px", borderRadius: 12, border: "none",
+    background: disabled ? "rgba(255,255,255,0.07)" : LP_GRAD,
+    color: disabled ? "rgba(255,255,255,0.25)" : "white",
+    fontWeight: 800, fontSize: 15, letterSpacing: "-0.01em",
+    textDecoration: "none", cursor: disabled ? "not-allowed" : "pointer",
+    boxShadow: disabled ? "none" : "0 0 14px rgba(33,230,243,0.16),0 0 28px rgba(255,47,174,0.10)",
+    transition: "all 0.18s",
+  } : {
+    display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8,
+    padding: "12px 22px", borderRadius: 11, border: "1px solid rgba(255,255,255,0.12)",
+    background: "rgba(255,255,255,0.04)", color: "rgba(203,213,225,0.85)",
+    fontWeight: 700, fontSize: 14, textDecoration: "none", cursor: "pointer",
+    transition: "all 0.18s",
+  }
+  const handlers = isPrimary ? {
+    onMouseEnter: e => { if (!disabled) { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 0 22px rgba(33,230,243,0.28),0 0 44px rgba(255,47,174,0.18),inset 0 1px 0 rgba(255,255,255,0.3)" } },
+    onMouseLeave: e => { e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = disabled ? "none" : "0 0 14px rgba(33,230,243,0.16),0 0 28px rgba(255,47,174,0.10)" },
+    onMouseDown: e => { if (!disabled) e.currentTarget.style.transform = "translateY(0)" },
+  } : {
+    onMouseEnter: e => { e.currentTarget.style.borderColor = "rgba(33,230,243,0.45)"; e.currentTarget.style.color = "#fff"; e.currentTarget.style.background = "rgba(33,230,243,0.07)" },
+    onMouseLeave: e => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.12)"; e.currentTarget.style.color = "rgba(203,213,225,0.85)"; e.currentTarget.style.background = "rgba(255,255,255,0.04)" },
+  }
+  const extra = as === "a" ? { href } : { type: type || "button", disabled }
+  return (
+    <Comp className={isPrimary && !disabled ? "lp-btn-primary" : undefined} onClick={onClick} style={{ ...baseStyle, ...style }} {...handlers} {...extra}>
+      {children}
+    </Comp>
+  )
+}
+
 const LIVE_PREVIEW_ALERTS = [
   { dot: "#10B981", text: "diamondkingx likely online — $9,750 lifetime" },
   { dot: "#F59E0B", text: "vaultmaster99 inactive 14d — re-engage now" },
@@ -115,29 +158,12 @@ function AuthPanel({
       {/* STEP 1 — choose mode */}
       {step === 1 && (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          <button type="button" onClick={() => handleModeSelect(true)} style={{
-            width: "100%", padding: "14px 0", borderRadius: 10,
-            background: "linear-gradient(135deg,#22D3EE,#EC4899)",
-            color: "white", fontWeight: 800, fontSize: 15, border: "none",
-            cursor: "pointer", boxShadow: "0 0 20px rgba(34,211,238,0.25)",
-            letterSpacing: 0.1, transition: "opacity 0.15s",
-          }}
-            onMouseEnter={e => e.currentTarget.style.opacity = "0.88"}
-            onMouseLeave={e => e.currentTarget.style.opacity = "1"}
-          >
+          <LPBtn onClick={() => handleModeSelect(true)} style={{ width: "100%", padding: "14px 0", borderRadius: 10 }}>
             Sign Up
-          </button>
-          <button type="button" onClick={() => handleModeSelect(false)} style={{
-            width: "100%", padding: "14px 0", borderRadius: 10,
-            background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.12)",
-            color: "rgba(255,255,255,0.75)", fontWeight: 700, fontSize: 15,
-            cursor: "pointer", transition: "background 0.15s",
-          }}
-            onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.09)"}
-            onMouseLeave={e => e.currentTarget.style.background = "rgba(255,255,255,0.05)"}
-          >
+          </LPBtn>
+          <LPBtn variant="secondary" onClick={() => handleModeSelect(false)} style={{ width: "100%", padding: "14px 0", borderRadius: 10 }}>
             Log In
-          </button>
+          </LPBtn>
         </div>
       )}
 
@@ -167,15 +193,9 @@ function AuthPanel({
             )}
             {authError && <div style={{ fontSize: 11, color: "#f87171", marginBottom: 8, textAlign: "center" }}>{authError}</div>}
             {authMsg   && <div style={{ fontSize: 11, color: "#22D3EE",  marginBottom: 8, textAlign: "center" }}>{authMsg}</div>}
-            <button type="submit" disabled={authLoading} onClick={() => T.signupCtaClicked(window?.location?.pathname)} style={{
-              width: "100%", padding: "11px 0", borderRadius: 9,
-              background: authLoading ? "rgba(34,211,238,0.2)" : "linear-gradient(135deg,#22D3EE,#EC4899)",
-              color: "white", fontWeight: 700, fontSize: 14, border: "none",
-              cursor: authLoading ? "not-allowed" : "pointer",
-              boxShadow: authLoading ? "none" : "0 0 20px rgba(34,211,238,0.3)", transition: "all 0.2s",
-            }}>
+            <LPBtn type="submit" disabled={authLoading} onClick={() => T.signupCtaClicked(window?.location?.pathname)} style={{ width: "100%", padding: "11px 0", borderRadius: 9, fontSize: 14 }}>
               {authLoading ? (isSignUp ? "Creating account…" : "Logging in…") : (isSignUp ? "Start Free →" : "Log In →")}
-            </button>
+            </LPBtn>
             {isSignUp && (
               <p style={{ fontSize: 10, color: "#334155", textAlign: "center", marginTop: 10, marginBottom: 0 }}>
                 By signing up you agree to our{" "}
@@ -396,8 +416,8 @@ export default function LandingPage() {
           <div style={{ marginLeft: 8, padding: "3px 8px", borderRadius: 20, background: "rgba(34,211,238,0.08)", border: "1px solid rgba(34,211,238,0.2)", fontSize: 10, color: "#22D3EE", fontWeight: 600 }}>Beta</div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <a href="/landing/demo" style={{ fontSize: 13, fontWeight: 600, color: "#22D3EE", textDecoration: "none", padding: "6px 14px", borderRadius: 8, border: "1px solid rgba(34,211,238,0.25)", background: "rgba(34,211,238,0.05)" }}>View Demo</a>
-          <button onClick={() => document.getElementById("lp-auth-bottom")?.scrollIntoView({ behavior: "smooth" })} style={{ fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,0.6)", background: "transparent", border: "none", cursor: "pointer", padding: "6px 12px" }}>Sign In</button>
+          <LPBtn as="a" href="/landing/demo" variant="secondary" style={{ padding: "6px 14px", borderRadius: 8, fontSize: 13 }}>View Demo</LPBtn>
+          <LPBtn variant="secondary" onClick={() => document.getElementById("lp-auth-bottom")?.scrollIntoView({ behavior: "smooth" })} style={{ padding: "6px 14px", borderRadius: 8, fontSize: 13 }}>Sign In</LPBtn>
         </div>
       </nav>
 
@@ -417,13 +437,13 @@ export default function LandingPage() {
               CamCash analyzes your streaming history to surface peak hours, track high-value fans, compare platform ROI, and tell you exactly what to do next — so you stop guessing and start earning more.
             </p>
             <div style={{ display: "flex", gap: 12, marginBottom: 14, flexWrap: "wrap" }}>
-              <a href="/landing/demo" style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "13px 28px", borderRadius: 11, background: "linear-gradient(135deg,#22D3EE,#EC4899)", color: "white", fontWeight: 800, fontSize: 15, textDecoration: "none", boxShadow: "0 0 32px rgba(34,211,238,0.3)", letterSpacing: 0.1 }}>
+              <LPBtn as="a" href="/landing/demo" style={{ padding: "13px 28px", fontSize: 15 }}>
                 👀 View Live Demo
-              </a>
-              <button className="lp-signup-btn" onClick={() => { T.signupCtaClicked(window?.location?.pathname); document.getElementById("lp-auth-bottom")?.scrollIntoView({ behavior: "smooth" }) }}
-                style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "13px 24px", borderRadius: 11, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.8)", fontWeight: 600, fontSize: 15, cursor: "pointer" }}>
+              </LPBtn>
+              <LPBtn variant="secondary" onClick={() => { T.signupCtaClicked(window?.location?.pathname); document.getElementById("lp-auth-bottom")?.scrollIntoView({ behavior: "smooth" }) }}
+                style={{ padding: "13px 24px", fontSize: 15 }}>
                 Start Free
-              </button>
+              </LPBtn>
             </div>
             <div style={{ fontSize: 11, color: "#1e3a52" }}>No signup needed for the demo · Free account takes 2 minutes</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 20px", marginTop: 32 }}>
@@ -469,9 +489,9 @@ export default function LandingPage() {
                   <div key={t} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#64748B" }}><span>{i}</span><span>{t}</span></div>
                 ))}
               </div>
-              <a href="/landing/demo" style={{ display: "inline-flex", alignItems: "center", gap: 10, padding: "14px 32px", borderRadius: 12, background: "linear-gradient(135deg,#22D3EE,#EC4899)", color: "white", fontWeight: 800, fontSize: 16, textDecoration: "none", boxShadow: "0 0 40px rgba(34,211,238,0.35)" }}>
+              <LPBtn as="a" href="/landing/demo" style={{ padding: "14px 32px", fontSize: 16 }}>
                 👀 Open Live Demo →
-              </a>
+              </LPBtn>
               <div style={{ fontSize: 11, color: "#334155", marginTop: 10 }}>No account needed · Explore every tab · 30 seconds</div>
             </div>
             {/* Mini heatmap preview */}
