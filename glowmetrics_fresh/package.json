@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "indexnow": "node scripts/indexnow-submit.mjs"
   },
   "dependencies": {
     "@marsidev/react-turnstile": "^1.1.0",
