@@ -7,7 +7,6 @@ import { computeRevenueVelocity, computeLiveComparison } from '../../lib/analyti
 import { detectSessionPhase, PHASES, getRecoveryActions, getGoalStrategy } from '../../lib/analytics/sessionPhase';
 import { computeOpportunityScore, computeStreamHealth } from '../../lib/analytics/opportunity';
 import FeedbackWidget from '../components/FeedbackWidget';
-import { Turnstile } from '@marsidev/react-turnstile';
 import EventsSync from './EventsSync';
 
 const C = {
@@ -55,7 +54,6 @@ export default function LivePage() {
   const [authPassword, setAuthPassword]   = useState('');
   const [authError, setAuthError]         = useState('');
   const [authLoading, setAuthLoading]     = useState(false);
-  const [turnstileToken, setTurnstileToken] = useState(null);
 
   const processedTipIds   = useRef(new Set());
   const coachingCooldowns = useRef({});
@@ -475,7 +473,7 @@ export default function LivePage() {
         const captchaRes = await fetch('/api/auth/verify-captcha', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ token: turnstileToken, email: authEmail }),
+          body: JSON.stringify({ email: authEmail }),
         })
         const captchaData = await captchaRes.json()
         if (!captchaData.ok) { setAuthError(captchaData.error || 'Security check failed.'); setAuthLoading(false); return }
@@ -658,15 +656,6 @@ export default function LivePage() {
               <input type="email" placeholder="Email address" value={authEmail} onChange={e => setAuthEmail(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAuth()} style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 10, padding: '11px 14px', color: C.white, fontSize: 14, outline: 'none', width: '100%', boxSizing: 'border-box' }} />
               <input type="password" placeholder="Password" value={authPassword} onChange={e => setAuthPassword(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAuth()} style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 10, padding: '11px 14px', color: C.white, fontSize: 14, outline: 'none', width: '100%', boxSizing: 'border-box' }} />
             </div>
-            {authMode === 'signup' && (
-              <div style={{ marginBottom: 12 }}>
-                <Turnstile
-                  siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY}
-                  onSuccess={setTurnstileToken}
-                  options={{ theme: 'dark', size: 'flexible' }}
-                />
-              </div>
-            )}
             {authError && <div style={{ fontSize: 12, color: C.red, marginBottom: 12, textAlign: 'center' }}>{authError}</div>}
             <button onClick={handleAuth} disabled={authLoading} style={{ width: '100%', padding: '13px 0', background: `linear-gradient(135deg, ${C.purple}, ${C.pink})`, border: 'none', borderRadius: 10, color: '#fff', fontWeight: 800, fontSize: 15, cursor: authLoading ? 'not-allowed' : 'pointer', opacity: authLoading ? 0.7 : 1, boxShadow: '0 0 24px rgba(168,85,247,0.3)' }}>
               {authLoading ? 'Please wait…' : authMode === 'signin' ? 'Sign In →' : 'Create Account →'}
