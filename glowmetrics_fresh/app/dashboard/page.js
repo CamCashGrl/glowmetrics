@@ -1847,12 +1847,6 @@ const handleCSV = async (file, forcePlatform = null) => {
     )
   }
 
-  // ── NO TIPS: redirect to onboarding ──────────────────
-  if (!loading && tips.length === 0 && user) {
-    router.replace('/onboarding')
-    return null
-  }
-
   const sessions = analytics?.sessions || []
   const whales = analytics?.whales || []
   const insights = analytics?.insights || []
