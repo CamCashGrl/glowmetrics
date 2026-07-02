@@ -15,6 +15,12 @@ const nextConfig = {
         destination: 'https://www.camcashgrl.com/extension',
         permanent: true,
       },
+      {
+        source: '/signup',
+        has: [{ type: 'host', value: 'camcashgrl.com' }],
+        destination: 'https://www.camcashgrl.com/landing',
+        permanent: true,
+      },
       // Catch-all www redirect (must come after the specific non-www rules above)
       {
         source: '/:path((?!api/).*)',
@@ -32,6 +38,14 @@ const nextConfig = {
       {
         source: '/exstension',
         destination: '/extension',
+        permanent: true,
+      },
+      {
+        // Legacy signup links (ads, emails, bookmarks) still point at /signup,
+        // which was never a real route. /landing is the actual sign-up page
+        // and already reads ?plan= to resume checkout after auth.
+        source: '/signup',
+        destination: '/landing',
         permanent: true,
       },
       {
