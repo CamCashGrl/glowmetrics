@@ -1,12 +1,13 @@
 'use client'
 import { useState } from 'react'
+import { PLATFORM_TOKEN_RATES, PLATFORM_VIEWER_RATES } from '../../../lib/constants'
 
 const RATES = {
-  Chaturbate:  { broadcaster: 0.05,   viewer: 0.10, note: 'Standard broadcaster rate' },
-  BongaCams:   { broadcaster: 0.05,   viewer: 0.10, note: 'Completed profile. Incomplete = $0.025/token' },
-  MyFreeCams:  { broadcaster: 0.05,   viewer: 0.10, note: 'Standard MFC rate' },
-  Stripchat:   { broadcaster: 0.05,   viewer: 0.09, note: 'Approximate broadcaster rate' },
-  CamSoda:     { broadcaster: 0.055,  viewer: 0.10, note: 'Slightly higher standard rate' },
+  Chaturbate:  { broadcaster: PLATFORM_TOKEN_RATES.Chaturbate,  viewer: PLATFORM_VIEWER_RATES.Chaturbate,  note: 'Standard broadcaster rate' },
+  BongaCams:   { broadcaster: PLATFORM_TOKEN_RATES.BongaCams,   viewer: PLATFORM_VIEWER_RATES.BongaCams,   note: 'Standard broadcaster rate' },
+  MyFreeCams:  { broadcaster: PLATFORM_TOKEN_RATES.MyFreeCams,  viewer: PLATFORM_VIEWER_RATES.MyFreeCams,  note: 'Standard MFC rate' },
+  Stripchat:   { broadcaster: PLATFORM_TOKEN_RATES.Stripchat,   viewer: PLATFORM_VIEWER_RATES.Stripchat,   note: 'Approximate broadcaster rate' },
+  CamSoda:     { broadcaster: PLATFORM_TOKEN_RATES.CamSoda,     viewer: PLATFORM_VIEWER_RATES.CamSoda,     note: 'Slightly higher standard rate' },
 }
 
 const COMMON = [50, 100, 200, 500, 1000, 2000, 5000, 10000]
@@ -152,7 +153,7 @@ export default function TokenCalculatorClient() {
       {/* BongaCams note */}
       {platform === 'BongaCams' && !useCustom && (
         <div style={{ padding: '12px 18px', borderRadius: 10, background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)', marginBottom: 16, fontSize: 13, color: S.gold }}>
-          ⚠️ BongaCams: completed profile = $0.05/token, incomplete = ~$0.025/token. Use the Custom rate button if your rate differs.
+          ⚠️ BongaCams pays $0.025/token to broadcasters — lower than Chaturbate's $0.05. Use the Custom rate button if your dashboard shows a different rate.
         </div>
       )}
 

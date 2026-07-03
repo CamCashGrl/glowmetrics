@@ -11,6 +11,7 @@ import CSVImport from "./CSVImport"
 import ChaturbateTokenConnector from './components/ChaturbateTokenConnector'
 import Sidebar from "./Sidebar"
 import SiteFooter from "../components/SiteFooter"
+import { PLATFORM_TOKEN_RATES } from "../../lib/constants"
 import AnalyticsCharts from './AnalyticsCharts'
 import StreamPlanner from './StreamPlanner'
 import MoneyMap from './MoneyMap'
@@ -1287,7 +1288,7 @@ export default function Dashboard() {
   const [tipPage, setTipPage] = useState(0)
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
-  const [tokenRates, setTokenRates] = useState({ Chaturbate: 0.05, BongaCams: 0.05, MyFreeCams: 0.05, Stripchat: 0.05, CamSoda: 0.05 })
+  const [tokenRates, setTokenRates] = useState({ ...PLATFORM_TOKEN_RATES })
   const [showRateEditor, setShowRateEditor] = useState(false)
   // ── ROUND 1 FEATURES ─────────────────────────────────────────────
   const [monthlyGoal, setMonthlyGoal] = useState(null)
