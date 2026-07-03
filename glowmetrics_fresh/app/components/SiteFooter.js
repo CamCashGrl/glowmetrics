@@ -24,20 +24,94 @@ function FooterLink({ href, children }) {
   )
 }
 
-export default function SiteFooter({ sidebarOffset = 0 }) {
-  return (
-    <footer
+const HEADING_STYLE = {
+  fontSize: '11px',
+  fontWeight: '700',
+  letterSpacing: '0.1em',
+  textTransform: 'uppercase',
+  color: '#a855f7',
+  marginBottom: '16px',
+  marginTop: '0',
+}
+
+const DASHBOARD_NAV_LINKS = [
+  { href: '/', label: 'Home' },
+  { href: '/pricing', label: 'Pricing' },
+  { href: '/extension', label: 'Chrome Extension' },
+  { href: '/demo', label: 'Live Demo' },
+  { href: '/guides', label: 'Free Guides & Tools' },
+  { href: '/contact', label: 'Contact' },
+  { href: '/privacy', label: 'Privacy Policy' },
+  { href: '/terms', label: 'Terms of Service' },
+]
+
+const DASHBOARD_FEATURED_POSTS = [
+  { href: '/blog/cam-model-earnings', label: 'How Much Do Cam Models Make?' },
+  { href: '/blog/best-cam-model-tools', label: 'Best Cam Model Tools to Track Tips' },
+  { href: '/blog/how-to-increase-cam-earnings', label: 'Increase Cam Earnings With Data' },
+]
+
+export default function SiteFooter({ sidebarOffset = 0, variant = 'full' }) {
+  const footerStyle = {
+    background: '#050810',
+    borderTop: '1px solid rgba(168,85,247,0.15)',
+    padding: variant === 'simple' ? '48px 40px 96px' : '48px 40px 32px',
+    marginTop: 'auto',
+    marginLeft: sidebarOffset,
+    boxSizing: 'border-box',
+    width: sidebarOffset ? `calc(100% - ${sidebarOffset}px)` : '100%',
+    overflowX: 'hidden',
+  }
+
+  const copyright = (
+    <div
       style={{
-        background: '#050810',
-        borderTop: '1px solid rgba(168,85,247,0.15)',
-        padding: '48px 40px 32px',
-        marginTop: 'auto',
-        marginLeft: sidebarOffset,
-        boxSizing: 'border-box',
-        width: sidebarOffset ? `calc(100% - ${sidebarOffset}px)` : '100%',
-        overflowX: 'hidden',
+        maxWidth: '100%',
+        margin: '40px auto 0',
+        paddingTop: '24px',
+        borderTop: '1px solid rgba(168,85,247,0.08)',
+        textAlign: 'center',
+        fontSize: '12px',
+        color: '#64748b',
       }}
     >
+      &copy; 2026 CamCash &middot; camcashgrl.com
+    </div>
+  )
+
+  if (variant === 'simple') {
+    return (
+      <footer style={footerStyle}>
+        <div
+          style={{
+            maxWidth: '100%',
+            margin: '0 auto',
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+            gap: '40px',
+          }}
+        >
+          <div>
+            <h4 style={HEADING_STYLE}>Navigate</h4>
+            {DASHBOARD_NAV_LINKS.map(link => (
+              <FooterLink key={link.href} href={link.href}>{link.label}</FooterLink>
+            ))}
+          </div>
+          <div>
+            <h4 style={HEADING_STYLE}>From the Blog</h4>
+            {DASHBOARD_FEATURED_POSTS.map(post => (
+              <FooterLink key={post.href} href={post.href}>{post.label}</FooterLink>
+            ))}
+            <FooterLink href="/blog">View all posts &rarr;</FooterLink>
+          </div>
+        </div>
+        {copyright}
+      </footer>
+    )
+  }
+
+  return (
+    <footer style={footerStyle}>
       <div
         style={{
           maxWidth: '100%',
@@ -133,19 +207,7 @@ export default function SiteFooter({ sidebarOffset = 0 }) {
         </div>
       </div>
 
-      <div
-        style={{
-          maxWidth: '100%',
-          margin: '40px auto 0',
-          paddingTop: '24px',
-          borderTop: '1px solid rgba(168,85,247,0.08)',
-          textAlign: 'center',
-          fontSize: '12px',
-          color: '#64748b',
-        }}
-      >
-        &copy; 2026 CamCash &middot; camcashgrl.com
-      </div>
+      {copyright}
     </footer>
   )
 }

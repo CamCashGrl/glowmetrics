@@ -1,35 +1,13 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
-import { usePathname } from 'next/navigation'
+import { useState } from 'react'
 import { supabase } from '../../lib/supabase'
-
-const SMART_TRIGGER_PATHS = ['/dashboard', '/onboarding', '/upload']
-const SMART_TRIGGER_DELAY = 3 * 60 * 1000 // 3 minutes
 
 export default function FeedbackWidget() {
   const [open, setOpen] = useState(false)
   const [message, setMessage] = useState('')
   const [submitted, setSubmitted] = useState(false)
   const [submitting, setSubmitting] = useState(false)
-  const [bannerVisible, setBannerVisible] = useState(false)
-  const bannerShownRef = useRef(false)
-  const timerRef = useRef(null)
-  const pathname = usePathname()
-
-  useEffect(() => {
-    const isSmartPage = SMART_TRIGGER_PATHS.some(p => pathname?.startsWith(p))
-    if (!isSmartPage || bannerShownRef.current) return
-
-    timerRef.current = setTimeout(() => {
-      if (!bannerShownRef.current && !open) {
-        setBannerVisible(true)
-        bannerShownRef.current = true
-      }
-    }, SMART_TRIGGER_DELAY)
-
-    return () => clearTimeout(timerRef.current)
-  }, [pathname]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleSubmit() {
     if (!message.trim()) return
@@ -82,7 +60,6 @@ export default function FeedbackWidget() {
   }
 
   function openPanel() {
-    setBannerVisible(false)
     setOpen(true)
   }
 
@@ -96,37 +73,6 @@ export default function FeedbackWidget() {
 
   return (
     <>
-      {/* Smart trigger banner */}
-      {bannerVisible && (
-        <div
-          onClick={openPanel}
-          style={{
-            position: 'fixed',
-            bottom: 80,
-            right: 24,
-            zIndex: 9997,
-            background: 'rgba(15,20,32,0.97)',
-            border: '1px solid rgba(124,92,255,0.35)',
-            borderRadius: 12,
-            padding: '10px 16px',
-            fontSize: 13,
-            color: '#c4b5fd',
-            fontWeight: 600,
-            cursor: 'pointer',
-            maxWidth: 280,
-            lineHeight: 1.5,
-            boxShadow: '0 4px 24px rgba(0,0,0,0.5)',
-            animation: 'fw-fade 0.3s ease both',
-          }}
-        >
-          Having trouble with this step? We'd love your feedback. 💬
-          <button
-            onClick={e => { e.stopPropagation(); setBannerVisible(false) }}
-            style={{ position: 'absolute', top: 6, right: 8, background: 'none', border: 'none', color: '#64748b', fontSize: 14, cursor: 'pointer', lineHeight: 1 }}
-          >✕</button>
-        </div>
-      )}
-
       {/* Floating pill button */}
       <button
         onClick={openPanel}
@@ -193,7 +139,6 @@ export default function FeedbackWidget() {
           >
             <style>{`
               @keyframes fw-slide { from { transform: translateX(100%); } to { transform: translateX(0); } }
-              @keyframes fw-fade  { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
             `}</style>
 
             {/* Header */}
