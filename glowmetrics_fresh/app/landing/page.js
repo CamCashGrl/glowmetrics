@@ -1,9 +1,22 @@
 "use client"
 import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
+import dynamic from "next/dynamic"
+import { DM_Sans } from "next/font/google"
 import { supabase } from "../../lib/supabase"
 import { captureAttribution } from "../../lib/tracking"
-import FeedbackWidget from "../components/FeedbackWidget"
+
+// Self-hosted (was a render-blocking `@import url(fonts.googleapis.com/...)`
+// in the <style jsx> block below — same weights that @import requested).
+const dmSans = DM_Sans({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700', '800', '900'],
+  display: 'swap',
+})
+
+// Only needed once a visitor scrolls this far — deferred so its JS isn't
+// downloaded/parsed on every /landing visit.
+const FeedbackWidget = dynamic(() => import('../components/FeedbackWidget'), { ssr: false })
 
 // ── CAMCASH BRAND TOKENS (exact values from /mnt/skills/user/branding) ────
 const T = {
@@ -49,7 +62,7 @@ function AuthPanel({
     background: T.bgInput,
     border: "1px solid rgba(255,255,255,0.10)",
     color: "white", fontSize: 14, outline: "none", marginBottom: 10,
-    boxSizing: "border-box", fontFamily: "'DM Sans', sans-serif",
+    boxSizing: "border-box",
     transition: "border-color 0.15s, box-shadow 0.15s",
   }
 
@@ -468,7 +481,7 @@ export default function LandingPage() {
   ]
 
   return (
-    <div style={{ minHeight: "100vh", background: T.bgMain, color: T.textMuted, fontFamily: "'DM Sans', 'Inter', sans-serif", overflowX: "hidden" }}>
+    <div className={dmSans.className} style={{ minHeight: "100vh", background: T.bgMain, color: T.textMuted, overflowX: "hidden" }}>
 
       {/* ── EARLY ADOPTER BANNER ── */}
       <div style={{ background: "rgba(255,43,174,0.10)", borderBottom: "1px solid rgba(255,43,174,0.22)", padding: "14px 32px", textAlign: "center", position: "relative", zIndex: 2 }}>
@@ -1060,8 +1073,6 @@ export default function LandingPage() {
 
       {/* ── GLOBAL STYLES ── */}
       <style jsx>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800;900&display=swap');
-
         @keyframes lp-pulse {
           0%, 100% { opacity: 1; transform: scale(1); }
           50%       { opacity: 0.5; transform: scale(1.4); }

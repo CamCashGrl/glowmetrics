@@ -7,16 +7,25 @@ import { computeRoomHealth, ROOM_STATES, MOMENTUM_DIRECTIONS } from "../../lib/a
 import { computeRevenueVelocity, computeLiveComparison } from "../../lib/analytics/velocity"
 import { detectSessionPhase, PHASES, getRecoveryActions, getGoalStrategy } from "../../lib/analytics/sessionPhase"
 import { computeOpportunityScore, computeStreamHealth } from "../../lib/analytics/opportunity"
-import CSVImport from "./CSVImport"
-import ChaturbateTokenConnector from './components/ChaturbateTokenConnector'
+import dynamic from "next/dynamic"
 import Sidebar from "./Sidebar"
 import SiteFooter from "../components/SiteFooter"
 import { PLATFORM_TOKEN_RATES } from "../../lib/constants"
-import AnalyticsCharts from './AnalyticsCharts'
-import StreamPlanner from './StreamPlanner'
-import MoneyMap from './MoneyMap'
 import { track as gtmTrack } from '../../lib/track'
 import { getDashboardReadiness, getModuleLockState, LockedInsightCard, DashboardProgressCard } from './DashboardPreview'
+
+// Tab-only components loaded on demand instead of in the initial dashboard
+// bundle — each is only ever rendered behind an `activeTab === '...'` check,
+// and StreamPlanner/MoneyMap alone pull in all of recharts.
+const TAB_LOADING = (
+  <div style={{ padding: "80px 0", textAlign: "center" }}>
+    <div style={{ width: 40, height: 40, border: "2px solid #1e2d45", borderTop: "2px solid #22D3EE", borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto" }} />
+  </div>
+)
+const ChaturbateTokenConnector = dynamic(() => import('./components/ChaturbateTokenConnector'), { ssr: false, loading: () => TAB_LOADING })
+const AnalyticsCharts = dynamic(() => import('./AnalyticsCharts'), { ssr: false, loading: () => TAB_LOADING })
+const StreamPlanner = dynamic(() => import('./StreamPlanner'), { ssr: false, loading: () => TAB_LOADING })
+const MoneyMap = dynamic(() => import('./MoneyMap'), { ssr: false, loading: () => TAB_LOADING })
 
 // Analytics tracking — works whether or not @vercel/analytics is installed
 let track = (event, props) => {}
