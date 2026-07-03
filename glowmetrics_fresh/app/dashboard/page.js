@@ -8,7 +8,7 @@ import { computeRevenueVelocity, computeLiveComparison } from "../../lib/analyti
 import { detectSessionPhase, PHASES, getRecoveryActions, getGoalStrategy } from "../../lib/analytics/sessionPhase"
 import { computeOpportunityScore, computeStreamHealth } from "../../lib/analytics/opportunity"
 import CSVImport from "./CSVImport"
-import ChaturbateTokenConnector from './components/ChaturbateTokenConnector'
+import ImportProgress from './components/ImportProgress'
 import Sidebar from "./Sidebar"
 import SiteFooter from "../components/SiteFooter"
 import { PLATFORM_TOKEN_RATES } from "../../lib/constants"
@@ -1247,7 +1247,10 @@ export default function Dashboard() {
   const [analytics, setAnalytics] = useState(null)
   const [liveAnalytics, setLiveAnalytics] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [uploading, setUploading] = useState(false)
+  const [isImporting, setIsImporting] = useState(false)
+  const [importStatus, setImportStatus] = useState("idle") // idle | validating | parsing | importing | success | error
+  const [importError, setImportError] = useState("")
+  const [importResult, setImportResult] = useState(null)
   const [uploadPlatform, setUploadPlatform] = useState("")
   const [activeTab, setActiveTab] = useState(initialTab)
   const [toast, setToast] = useState("")
@@ -1281,10 +1284,6 @@ export default function Dashboard() {
   const [earlyAccessEmail, setEarlyAccessEmail] = useState('')
   const [earlyAccessSubmitted, setEarlyAccessSubmitted] = useState(false)
   const [earlyAccessSubmitting, setEarlyAccessSubmitting] = useState(false)
-  const [showFeedback, setShowFeedback] = useState(false)
-  const [feedbackType, setFeedbackType] = useState('feature')
-  const [feedbackText, setFeedbackText] = useState('')
-  const [feedbackSent, setFeedbackSent] = useState(false)
   const [tipPage, setTipPage] = useState(0)
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
@@ -1729,11 +1728,8 @@ export default function Dashboard() {
     router.replace('/login')
   }
 
-  const loadData = async (uid, force = false) => {
-    
-    
-
-    setLoading(true)
+  const loadData = async (uid, force = false, silent = false) => {
+    if (!silent) setLoading(true)
     try {
       let allData = []
       let from = 0
@@ -1763,7 +1759,7 @@ export default function Dashboard() {
       const { data: engineData } = await supabase.rpc('get_user_insights', { p_user_id: uid })
       setEngineInsights(engineData)
       setLastRefreshed(new Date())
-    } finally { setLoading(false) }
+    } finally { if (!silent) setLoading(false) }
   }
 const handleCSV = async (file, forcePlatform = null) => {
     if (!file || !user) return
@@ -1772,15 +1768,31 @@ const handleCSV = async (file, forcePlatform = null) => {
       showToast("🔒 Free plan tracks 1 platform. Upgrade to Pro to add another (see sidebar).")
       return
     }
-    setUploading(true)
+
+    // Reset any previous result/error so a new file always starts clean
+    setImportError("")
+    setImportResult(null)
+    setIsImporting(true)
+    setImportStatus("validating")
     gtmTrack('csv_upload_started', { platform: forcePlatform || uploadPlatform || 'unknown' })
+
     try {
+      if (!/\.(csv|txt)$/i.test(file.name)) {
+        throw new Error("Unsupported file type. Please upload a .csv file.")
+      }
+
       const { data: { session } } = await supabase.auth.getSession()
-      if (!session) { showToast("❌ Not logged in"); setUploading(false); return }
+      if (!session) throw new Error("Not logged in")
+
+      await new Promise(r => setTimeout(r, 400))
+      setImportStatus("parsing")
 
       const fd = new FormData()
       fd.append('file', file)
       if (forcePlatform) fd.append('platform', forcePlatform)
+
+      await new Promise(r => setTimeout(r, 400))
+      setImportStatus("importing")
 
       const res = await fetch('/api/upload', {
         method: 'POST',
@@ -1791,18 +1803,11 @@ const handleCSV = async (file, forcePlatform = null) => {
       const result = await res.json()
 
       if (!res.ok || result.error) {
-        showToast("❌ " + (result.error || 'Upload failed'))
-        setUploading(false)
-        return
+        throw new Error(result.error || 'Import failed. Please check your file format and try again.')
       }
 
       track('csv_imported', { rows: result.inserted, platform: result.platform || 'Unknown' })
       gtmTrack('csv_upload_success', { platform: result.platform || 'unknown', row_count: result.inserted })
-
-      const msg = result.skipped > 0
-        ? `✅ Imported ${result.inserted} tips (${result.skipped} duplicates skipped)`
-        : `✅ Imported ${result.inserted} tips from ${result.platform}!`
-      showToast(msg)
 
       // Google Ads — CSV Upload conversion
       try {
@@ -1817,14 +1822,34 @@ const handleCSV = async (file, forcePlatform = null) => {
 
       setUploadCount(c => c + 1)
       if (typeof window !== 'undefined') localStorage.setItem('camcash_onboarded', '1')
-      // Force reload after upload — bypass cache so new tips appear immediately
+      // Force reload after upload — bypass cache so new tips appear immediately.
+      // Loaded silently so the import progress card stays visible instead of being
+      // replaced by the full-page loading spinner.
       try { sessionStorage.removeItem(`camcash_tips_${user.id}`) } catch(e) {}
-      await loadData(user.id, true)
+      await loadData(user.id, true, true)
+
+      setImportResult({
+        inserted: result.inserted || 0,
+        skipped: result.skipped || 0,
+        platform: result.platform || 'Unknown',
+        dateFrom: result.dateFrom || null,
+        dateTo: result.dateTo || null,
+        totalUsd: result.totalUsd,
+      })
+      setImportStatus("success")
+
+      const msg = result.skipped > 0
+        ? `✅ Imported ${result.inserted} tips (${result.skipped} duplicates skipped)`
+        : `✅ Imported ${result.inserted} tips from ${result.platform}!`
+      showToast(msg)
 
     } catch (err) {
-      showToast("❌ " + err.message)
+      console.error('[handleCSV] import failed:', err)
+      setImportStatus("error")
+      setImportError(err.message || 'Import failed. Please check your file format and try again.')
+      showToast("❌ " + (err.message || 'Import failed'))
     } finally {
-      setUploading(false)
+      setIsImporting(false)
     }
   }
 
@@ -2634,7 +2659,7 @@ const handleCSV = async (file, forcePlatform = null) => {
             totalFans={analytics?.uniqueFanCount || 0}
             totalEarnings={analytics?.totalUSD || 0}
             readiness={dashboardReadiness}
-            onImport={() => handleTabChange('import')}
+            onImport={() => handleTabChange('upload')}
           />
         )}
 
@@ -5526,14 +5551,13 @@ const handleCSV = async (file, forcePlatform = null) => {
         {activeTab === "upload" && (
           <div style={{ maxWidth: 600, margin: "0 auto" }}>
             <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 8 }}>📥 Import CSV</h1>
-            <p style={{ fontSize: 14, color: C.muted, marginBottom: freePlatformLimitReached ? 16 : 32 }}>
+            <p style={{ fontSize: 14, color: C.muted, marginBottom: 16 }}>
               {isPro ? "Unlimited platforms • Auto-removes duplicates" : freePlatformLimitReached ? `Free plan — tracking ${allPlatforms[0]}. Auto-removes duplicates.` : "Free plan tracks 1 platform. Auto-removes duplicates."}
             </p>
-            {freePlatformLimitReached && (
-              <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", borderRadius: 12, background: "rgba(168,85,247,0.08)", border: "1px solid rgba(168,85,247,0.25)", marginBottom: 16 }}>
-                <span style={{ fontSize: 18 }}>🔒</span>
-                <div style={{ flex: 1, fontSize: 12.5, color: C.text, lineHeight: 1.5 }}>
-                  You're on the free plan (1 platform). Upgrade to Pro to add BongaCams, MyFreeCams, and more.
+            {!isPro && (
+              <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 16px", borderRadius: 12, background: "rgba(168,85,247,0.08)", border: "1px solid rgba(168,85,247,0.25)", marginBottom: 16, flexWrap: "wrap" }}>
+                <div style={{ flex: 1, fontSize: 12.5, color: C.text, lineHeight: 1.5, minWidth: 200 }}>
+                  You're on the free plan: track 1 platform. Upgrade to Pro to add BongaCams, MyFreeCams, and more.
                 </div>
                 <a href="/pricing" style={{ flexShrink: 0, padding: "8px 14px", borderRadius: 9, background: "linear-gradient(135deg,#22D3EE,#a855f7,#EC4899)", color: "#fff", fontSize: 12, fontWeight: 700, textDecoration: "none", whiteSpace: "nowrap" }}>Upgrade →</a>
               </div>
@@ -5552,71 +5576,25 @@ const handleCSV = async (file, forcePlatform = null) => {
               </div>
               <div style={{ textAlign: "center" }}>
                 <div style={{ fontSize: 40, marginBottom: 12 }}>📁</div>
-                <label style={{ display: "inline-block", padding: "14px 32px", borderRadius: 10, background: "linear-gradient(135deg, #22D3EE, #EC4899)", boxShadow: "0 0 20px rgba(34,211,238,0.4), 0 0 40px rgba(236,72,153,0.3)", color: C.white, fontSize: 15, fontWeight: 600, cursor: "pointer" }}>
-                  {uploading ? "Processing..." : "Choose CSV File"}
-                  <input type="file" accept=".csv,.txt" style={{ display: "none" }} onChange={e => handleCSV(e.target.files[0], uploadPlatform || null)} disabled={uploading} />
+                <label style={{ display: "inline-block", padding: "14px 32px", borderRadius: 10, background: "linear-gradient(135deg, #22D3EE, #EC4899)", boxShadow: "0 0 20px rgba(34,211,238,0.4), 0 0 40px rgba(236,72,153,0.3)", color: C.white, fontSize: 15, fontWeight: 600, cursor: isImporting ? "default" : "pointer", opacity: isImporting ? 0.85 : 1 }}>
+                  {importStatus === "success" ? "✓ Import Complete" : isImporting ? "Processing import…" : "Choose CSV File"}
+                  <input type="file" accept=".csv,.txt" style={{ display: "none" }} onChange={e => e.target.files[0] && handleCSV(e.target.files[0], uploadPlatform || null)} disabled={isImporting} />
                 </label>
-                <p style={{ fontSize: 12, color: C.muted, marginTop: 12 }}>Supports Chaturbate, BongaCams, MyFreeCams, Stripchat, CamSoda</p>
+                <p style={{ fontSize: 12, color: C.muted, marginTop: 12 }}>Supports Chaturbate, BongaCams, MyFreeCams, Stripchat, and CamSoda.</p>
+                <p style={{ fontSize: 11, color: C.muted, marginTop: 4, opacity: 0.75 }}>CSV files only</p>
               </div>
             </div>
 
-            {/* Plan explainer + subscribe CTA */}
-            <div style={{ ...glassCard, borderRadius: 14, padding: 24, marginBottom: 16 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 12 }}>
-                Your plan
-              </div>
-              {isPro ? (
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontSize: 13, fontWeight: 800, color: C.indigo }}>✦ Subscription active</span>
-                  <span style={{ fontSize: 12, color: C.text }}>— track and compare unlimited platforms</span>
-                </div>
-              ) : (
-                <>
-                  <p style={{ fontSize: 13, color: C.text, lineHeight: 1.65, marginBottom: 16 }}>
-                    The <strong style={{ color: C.white }}>free plan</strong> tracks <strong style={{ color: C.cyan }}>1 platform</strong> — import as much history as you want from it, no limits. A <strong style={{ color: C.white }}>subscription</strong> unlocks tracking <strong style={{ color: C.pink }}>multiple platforms at once</strong> and lets you compare which cam site pays you best by hour, day, and fan type.
-                  </p>
-                  <button onClick={() => router.push('/pricing')} style={{ padding: "12px 26px", borderRadius: 10, background: "linear-gradient(135deg, #22D3EE, #EC4899)", boxShadow: "0 0 20px rgba(34,211,238,0.35), 0 0 40px rgba(236,72,153,0.25)", border: "none", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
-                    View Plans & Subscribe →
-                  </button>
-                </>
-              )}
-
-              <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)", margin: "20px 0 14px" }} />
-
-              <div style={{ fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 10 }}>
-                Some insights unlock as you upload more data
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 8 }}>
-                {[
-                  ["Peak earning hours", "25+ tips & 3+ sessions"],
-                  ["Average $/hour", "3+ sessions & 60+ tracked minutes"],
-                  ["Top fans", "10+ tips & 5+ fans"],
-                  ["Whale detection", "10+ fans & $50+ earned"],
-                  ["Session breakdown", "3+ sessions"],
-                  ["Fan re-engagement", "20+ fans & $50+ earned"],
-                  ["Earnings forecasting", "8+ sessions & $50+ earned"],
-                  ["Platform comparison", isPro ? "2+ platforms imported" : "Subscription + 2+ platforms"],
-                ].map(([label, req]) => (
-                  <div key={label} style={{ fontSize: 12, padding: "8px 10px", borderRadius: 8, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
-                    <div style={{ color: C.white, fontWeight: 600, marginBottom: 2 }}>{label}</div>
-                    <div style={{ color: C.muted, fontSize: 11 }}>Unlocks at {req}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div style={{ padding: "12px 16px", borderRadius: 10, background: "rgba(34,211,238,0.05)", border: "1px solid rgba(34,211,238,0.15)", fontSize: 12, color: C.muted }}>
-              <strong style={{ color: C.cyan }}>CSV not loading?</strong> Try selecting your platform from the dropdown above, then re-upload. For Chaturbate: export from Stats & Data → Token Stats. For BongaCams: export from Reports.
-            </div>
-
-            {user && (
-              <div style={{ marginTop: 28 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 14 }}>
-                  Live Tip Sync
-                </div>
-                <ChaturbateTokenConnector user={user} onConnected={() => { /* live sync now active */ }} />
-              </div>
-            )}
+            <ImportProgress
+              status={importStatus}
+              result={importResult}
+              error={importError}
+              onViewDashboard={() => {
+                setActiveTab("overview")
+                if (typeof window !== "undefined") { localStorage.setItem("camcash_tab", "overview"); window.scrollTo({ top: 0, behavior: "instant" }) }
+              }}
+              onUploadAnother={() => { setImportStatus("idle"); setImportResult(null); setImportError("") }}
+            />
           </div>
         )}
 
@@ -5995,12 +5973,12 @@ const handleCSV = async (file, forcePlatform = null) => {
         {activeTab === 'analytics' && <AnalyticsCharts tips={tips} />}
         {activeTab === 'planner' && (
           _plannerLock.locked
-            ? <div style={{ padding: '32px 0' }}><LockedInsightCard title="Stream Planner" description="Plan your schedule around your best earning windows." lockType="needs_data" requirement={_plannerLock.message} ctaLabel="Upload More Data" ctaAction={() => handleTabChange('import')} /></div>
+            ? <div style={{ padding: '32px 0' }}><LockedInsightCard title="Stream Planner" description="Plan your schedule around your best earning windows." lockType="needs_data" requirement={_plannerLock.message} ctaLabel="Upload More Data" ctaAction={() => handleTabChange('upload')} /></div>
             : <StreamPlanner tips={tips} isPro={true} />
         )}
         {activeTab === 'moneymap' && (
           _moneyMapLock.locked
-            ? <div style={{ padding: '32px 0' }}><LockedInsightCard title="Money Map" description="See where and when your money comes from across sessions and platforms." lockType="needs_data" requirement={_moneyMapLock.message} ctaLabel="Upload More Data" ctaAction={() => handleTabChange('import')} /></div>
+            ? <div style={{ padding: '32px 0' }}><LockedInsightCard title="Money Map" description="See where and when your money comes from across sessions and platforms." lockType="needs_data" requirement={_moneyMapLock.message} ctaLabel="Upload More Data" ctaAction={() => handleTabChange('upload')} /></div>
             : <MoneyMap tips={tips} isPro={true} />
         )}
       </div>
@@ -6362,74 +6340,7 @@ const handleCSV = async (file, forcePlatform = null) => {
         </div>
       )}
 
-      {/* FLOATING FEEDBACK BUTTON */}
-      <button
-        onClick={() => { setShowFeedback(true); setFeedbackSent(false); setFeedbackText('') }}
-        style={{
-          position: "fixed", bottom: 24, right: 24, zIndex: 998,
-          display: "flex", alignItems: "center", gap: 8,
-          padding: "10px 18px", borderRadius: 100,
-          background: "rgba(15,20,32,0.95)", backdropFilter: "blur(20px)",
-          border: "1px solid rgba(255,255,255,0.12)",
-          color: C.text, fontSize: 13, fontWeight: 600, cursor: "pointer",
-          boxShadow: "0 4px 24px rgba(0,0,0,0.5)", transition: "all 0.2s"
-        }}
-        onMouseEnter={e => { e.currentTarget.style.borderColor = "rgba(34,211,238,0.4)"; e.currentTarget.style.color = C.white }}
-        onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.12)"; e.currentTarget.style.color = C.text }}
-      >
-        <span style={{ fontSize: 16 }}>💬</span> Feedback
-      </button>
-
-      {/* FEEDBACK MODAL */}
-      {showFeedback && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "flex-end", justifyContent: "flex-start", zIndex: 1003, padding: 24, paddingBottom: 80 }}>
-          <div style={{ width: 400, background: "rgba(15,20,32,0.98)", backdropFilter: "blur(24px)", borderRadius: 20, border: "1px solid rgba(255,255,255,0.1)", boxShadow: "0 0 60px rgba(59,130,246,0.15)", overflow: "hidden" }}>
-            <div style={{ padding: "18px 20px", borderBottom: "1px solid rgba(255,255,255,0.08)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div>
-                <div style={{ fontSize: 15, fontWeight: 800, color: C.white }}>Share Feedback 💬</div>
-                <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>Help us build what you actually need</div>
-              </div>
-              <button onClick={() => setShowFeedback(false)} style={{ width: 28, height: 28, borderRadius: "50%", background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.1)", color: C.muted, fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
-            </div>
-            <div style={{ padding: 20 }}>
-              {feedbackSent ? (
-                <div style={{ textAlign: "center", padding: "20px 0" }}>
-                  <div style={{ fontSize: 40, marginBottom: 12 }}>🙏</div>
-                  <div style={{ fontSize: 15, fontWeight: 700, color: C.white, marginBottom: 6 }}>Thank you!</div>
-                  <div style={{ fontSize: 13, color: C.muted, marginBottom: 20 }}>Your feedback helps us build better features for you.</div>
-                  <button onClick={() => setShowFeedback(false)} style={{ padding: "9px 24px", borderRadius: 10, background: "linear-gradient(135deg, #22D3EE, #EC4899)", border: "none", color: C.white, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Close</button>
-                </div>
-              ) : (
-                <>
-                  <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-                    {[{ id: 'feature', label: '✨ Feature Request', color: C.cyan }, { id: 'bug', label: '🐛 Bug Report', color: C.red }].map(({ id, label, color }) => (
-                      <button key={id} onClick={() => setFeedbackType(id)} style={{ flex: 1, padding: "9px 12px", borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "all 0.15s", background: feedbackType === id ? `${color}20` : "rgba(255,255,255,0.04)", border: feedbackType === id ? `1px solid ${color}50` : "1px solid rgba(255,255,255,0.08)", color: feedbackType === id ? color : C.muted }}>{label}</button>
-                    ))}
-                  </div>
-                  <div style={{ fontSize: 12, color: C.muted, marginBottom: 8 }}>
-                    {feedbackType === 'feature' ? "What feature would make CamCash more useful for you?" : "What's broken or not working as expected?"}
-                  </div>
-                  <textarea
-                    value={feedbackText}
-                    onChange={e => setFeedbackText(e.target.value)}
-                    placeholder={feedbackType === 'feature' ? "e.g. I wish I could see my earnings by day of week..." : "e.g. When I upload a CSV from Chaturbate, it shows an error..."}
-                    rows={4}
-                    style={{ width: "100%", padding: "12px 14px", borderRadius: 10, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: C.white, fontSize: 13, lineHeight: 1.6, resize: "none", outline: "none", fontFamily: "inherit", marginBottom: 14 }}
-                    onFocus={e => e.target.style.borderColor = "rgba(34,211,238,0.4)"}
-                    onBlur={e => e.target.style.borderColor = "rgba(255,255,255,0.1)"}
-                  />
-                  <button
-                    disabled={!feedbackText.trim()}
-                    onClick={() => { track('feedback_submitted', { type: feedbackType, length: feedbackText.length }); setFeedbackSent(true) }}
-                    style={{ width: "100%", padding: "12px", borderRadius: 10, background: feedbackText.trim() ? "linear-gradient(135deg, #22D3EE, #EC4899)" : "rgba(255,255,255,0.08)", border: "none", color: feedbackText.trim() ? C.white : C.muted, fontSize: 14, fontWeight: 700, cursor: feedbackText.trim() ? "pointer" : "not-allowed", boxShadow: feedbackText.trim() ? "0 0 20px rgba(34,211,238,0.3)" : "none", transition: "all 0.2s" }}>
-                    {feedbackType === 'feature' ? '✨ Submit Feature Request' : '🐛 Submit Bug Report'}
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Floating Feedback button is rendered globally via FeedbackWidgetGate (app/layout.js) for /dashboard routes — no local copy needed here. */}
 
       {/* FAN SEARCH MODAL */}
       {fanSearchOpen && (() => {
