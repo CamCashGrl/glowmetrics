@@ -11,21 +11,21 @@ const PLATFORMS = {
   chaturbate:{
     label:'Chaturbate',short:'CB',
     iconStyle:{background:'#F05A2A',color:'#fff'},
-    instructions:'Go to your profile → Token Stats tab. Select All Time. Highlight the table, copy, and paste below.',
+    steps:[{label:'Open Token Stats'},{label:'Select All Time'},{label:'Highlight rows → copy → paste here'}],
     earningsUrl:(u)=>u?`https://chaturbate.com/p/${u}/?tab=tokens`:'https://chaturbate.com/accounts/settings/',
     placeholder:'Paste your Chaturbate tip history here...\n\nExample:\nJun 18, 2026, 8:27 PM\nTip From: username123\n500  12345\n\nJun 18, 2026, 9:14 PM\nTip From: whaleking99\n1000  12346',
   },
   bongacams:{
     label:'BongaCams',short:'BC',
     iconStyle:{background:'#311222',color:'#FF3B6E',border:'1px solid rgba(255,59,110,0.25)'},
-    instructions:'Go to Reports → General. Select your date range. Highlight all rows, copy, and paste below. You can also paste your Paid Chat section separately.',
+    steps:[{label:'Open Reports → General'},{label:'Select your date range'},{label:'Highlight rows → copy → paste here'}],
     earningsUrl:()=>'https://bongamodels.com/reports/general',
     placeholder:'Paste your BongaCams tip history here...\n\nExample:\n18.06.2026 14:32\tusername123\t500\t25.00\n18.06.2026 15:14\twhaleking99\t1000\t50.00\n18.06.2026 15:45\tregularfan\t25\t1.25',
   },
   myfreecams:{
     label:'MyFreeCams',short:'MFC',
     iconStyle:{background:'#2D2226',color:'#FF8B2C',border:'1px solid rgba(255,139,44,0.25)'},
-    instructions:'Go to Token Sessions. Set your date range, highlight all rows, copy and paste below.',
+    steps:[{label:'Open Token Sessions'},{label:'Set your date range'},{label:'Highlight rows → copy → paste here'}],
     earningsUrl:()=>'https://profiles.myfreecams.com/_/ext/token_sessions',
     placeholder:'Paste your MyFreeCams tip history here...\n\nExample:\n1746555770\tJun 18th, 2026 10:40 PM\t500\tusername123\tTip\n1746555771\tJun 18th, 2026 11:02 PM\t1000\twhaleking99\tTip',
   },
@@ -355,13 +355,6 @@ function LiveModeDemo({onInstall,onSkip}){
   )
 }
 
-// ── Feedback bubble ────────────────────────────────────────────
-function FeedbackBubble(){
-  const[open,setOpen]=useState(false)
-  if(!open)return(<button onClick={()=>setOpen(true)} style={{position:'fixed',bottom:20,right:20,zIndex:200,display:'flex',alignItems:'center',gap:7,padding:'8px 16px',borderRadius:100,background:'rgba(6,8,20,0.92)',border:'1px solid rgba(255,255,255,0.1)',color:'rgba(148,163,184,0.9)',fontSize:12,fontWeight:700,cursor:'pointer',backdropFilter:'blur(20px)'}}>💬 Feedback</button>)
-  return(<div style={{position:'fixed',bottom:20,right:20,zIndex:200,maxWidth:280,borderRadius:18,border:'1px solid rgba(200,43,255,0.25)',background:'rgba(6,8,20,0.96)',padding:14,backdropFilter:'blur(20px)'}}><button onClick={()=>setOpen(false)} style={{position:'absolute',top:8,right:8,background:'none',border:'none',color:'rgba(100,116,139,0.7)',cursor:'pointer',fontSize:14}}>✕</button><p style={{fontSize:13,fontWeight:700,color:'#C9B8FF',paddingRight:16,marginBottom:10,lineHeight:1.6}}>Having trouble with this step? We'd love your feedback.</p><button style={{display:'flex',alignItems:'center',gap:5,padding:'5px 12px',borderRadius:100,border:'1px solid rgba(255,255,255,0.1)',background:'rgba(255,255,255,0.035)',color:'rgba(148,163,184,0.9)',fontSize:11,fontWeight:700,cursor:'pointer'}}>💬 Feedback</button></div>)
-}
-
 // ── Design tokens ──────────────────────────────────────────────
 const CYAN='#21E6F3'
 const PINK='#FF2FAE'
@@ -381,7 +374,7 @@ const CSS=`
   @keyframes flashPulse{0%{opacity:0}20%{opacity:1}100%{opacity:0}}
   @keyframes statCardIn{from{opacity:0;transform:translateY(8px) scale(0.97)}to{opacity:1;transform:translateY(0) scale(1)}}
   @keyframes progressSweep{0%{transform:translateX(-100%)}100%{transform:translateX(200%)}}
-  textarea::placeholder{color:rgba(100,116,139,0.4);font-family:monospace;font-size:11px;line-height:1.6}
+  textarea::placeholder{color:rgba(148,163,184,0.55);font-family:monospace;font-size:11px;line-height:1.6}
   input::placeholder{color:rgba(100,116,139,0.4)}
   input:focus,textarea:focus{outline:none}
   button{font-family:inherit;cursor:pointer}
@@ -419,8 +412,14 @@ const CSS=`
   }
   @media(max-width:600px){
     main{padding:18px 12px 28px!important;align-items:flex-start!important}
-    .ob-card{padding:22px 16px!important;border-radius:24px!important}
+    .ob-card{padding:22px 16px 78px!important;border-radius:24px!important}
     .ob-plat-row{flex-direction:column!important}
+    .ob-howto-steps{flex-direction:column!important;align-items:flex-start!important;gap:10px!important}
+    .ob-howto-step{flex:none!important;width:100%!important}
+    .ob-howto-arrow{display:none!important}
+  }
+  @media(max-width:900px){
+    .ob-chart-silhouette{display:none!important}
   }
 `
 
@@ -438,6 +437,12 @@ function OBLogo({showSub=false}){
       {showSub&&<div style={{fontSize:10,color:'rgba(148,163,184,0.5)',letterSpacing:'0.06em',fontWeight:500}}>Creator intelligence for your cam income</div>}
     </div>
   )
+}
+
+function StepIcon({idx}){
+  if(idx===0)return(<svg width="15" height="15" viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="16" rx="2" stroke={CYAN} strokeWidth="1.8"/><path d="M3 9h18M8 13h3M8 16h6" stroke={CYAN} strokeWidth="1.8" strokeLinecap="round"/></svg>)
+  if(idx===1)return(<svg width="15" height="15" viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="16" rx="2" stroke={CYAN} strokeWidth="1.8"/><path d="M3 10h18M8 3v4M16 3v4" stroke={CYAN} strokeWidth="1.8" strokeLinecap="round"/></svg>)
+  return(<svg width="15" height="15" viewBox="0 0 24 24" fill="none"><rect x="3.5" y="3.5" width="17" height="17" rx="2" stroke={CYAN} strokeWidth="1.8" strokeDasharray="3 2.5"/></svg>)
 }
 
 function OBProgress({current}){
@@ -681,15 +686,21 @@ export default function OnboardingPage(){
         <div style={{position:'absolute',left:'35%',top:'30%',width:420,height:420,borderRadius:'50%',background:'rgba(139,92,246,0.12)',filter:'blur(90px)'}}/>
         <div style={{position:'absolute',left:'50%',top:'-5%',transform:'translateX(-50%)',width:400,height:300,borderRadius:'50%',background:'rgba(33,230,243,0.10)',filter:'blur(80px)'}}/>
         <div style={{position:'absolute',inset:0,opacity:0.13,backgroundImage:'radial-gradient(rgba(255,255,255,0.58) 1px,transparent 1px)',backgroundSize:'28px 28px'}}/>
+        <svg className="ob-chart-silhouette" style={{position:'absolute',left:'2%',top:'18%',width:280,height:180,opacity:0.35}} viewBox="0 0 280 180" fill="none">
+          <polyline points="0,150 35,120 70,135 105,70 140,95 175,40 210,55 245,15 280,30" stroke={CYAN} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          {[[0,150],[70,135],[140,95],[210,55],[280,30]].map(([x,y])=>(<circle key={`${x}-${y}`} cx={x} cy={y} r="3.5" fill={CYAN}/>))}
+        </svg>
+        <svg className="ob-chart-silhouette" style={{position:'absolute',right:'2%',bottom:'14%',width:300,height:200,opacity:0.32}} viewBox="0 0 300 200" fill="none">
+          <path d="M0,60 Q40,10 80,70 T160,90 T240,30 T300,80" stroke={PINK} strokeWidth="2" fill="none" strokeLinecap="round"/>
+        </svg>
       </div>
 
       <AmbientParticles/>
       {showSparkle&&<Sparkle/>}
       {showUpsell&&pendingPlatform&&<ProUpsellModal platform={PLATFORMS[pendingPlatform]} onSkip={handleUpsellSkip}/>}
-      <FeedbackBubble/>
 
       {/* ── CARD ── */}
-      <div style={{position:'relative',zIndex:10,width:'100%',maxWidth:430}}>
+      <div style={{position:'relative',zIndex:10,width:'100%',maxWidth:step==='paste'?660:430,transition:'max-width 0.3s ease'}}>
         <div style={{position:'absolute',inset:-2,borderRadius:30,background:'linear-gradient(135deg,rgba(33,230,243,0.9) 0%,rgba(124,92,255,0.45) 45%,rgba(255,47,174,0.9) 100%)',zIndex:-1,filter:'blur(1.5px)',animation:'glowPulse 3.5s ease-in-out infinite'}}/>
         <div style={{position:'absolute',inset:-60,borderRadius:'50%',background:'radial-gradient(circle,rgba(124,92,255,0.10) 0%,transparent 70%)',zIndex:-2,pointerEvents:'none'}}/>
         <div className="ob-card ob-card-inner" style={{position:'relative',borderRadius:28,border:'1px solid rgba(255,255,255,0.12)',background:'linear-gradient(180deg,rgba(10,15,35,0.94),rgba(6,9,24,0.96))',backdropFilter:'blur(34px)',WebkitBackdropFilter:'blur(34px)',padding:'26px 28px 24px',overflow:'hidden',boxShadow:'0 0 46px rgba(33,230,243,0.25),0 0 70px rgba(255,47,174,0.15),0 26px 96px rgba(0,0,0,0.58),inset 0 1px 0 rgba(255,255,255,0.10)'}}>
@@ -783,34 +794,58 @@ export default function OnboardingPage(){
                 </div>
               )}
 
-              <div className="ob-howto-card" style={{borderRadius:13,border:'1px solid rgba(33,230,243,0.22)',background:'rgba(33,230,243,0.055)',padding:'14px 16px',marginBottom:12}}>
-                <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:12,marginBottom:10}}>
+              <div className="ob-howto-card" style={{borderRadius:13,border:'1px solid rgba(33,230,243,0.22)',background:'rgba(33,230,243,0.055)',padding:'16px 18px',marginBottom:16}}>
+                <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:12,marginBottom:14}}>
                   <div style={{fontSize:10,fontWeight:900,letterSpacing:'0.18em',textTransform:'uppercase',color:'rgba(33,230,243,0.85)'}}>How to copy from {platform.label}</div>
                   <a href={platform.earningsUrl(cbUsername)} target="_blank" rel="noreferrer" style={{flexShrink:0,padding:'5px 11px',borderRadius:9,border:'1px solid rgba(255,47,174,0.35)',background:'rgba(255,255,255,0.03)',color:'rgba(203,213,225,0.85)',fontSize:10,fontWeight:700,textDecoration:'none',whiteSpace:'nowrap',transition:'all 0.2s'}} onMouseEnter={e=>{e.currentTarget.style.borderColor='rgba(33,230,243,0.55)';e.currentTarget.style.color='#fff'}} onMouseLeave={e=>{e.currentTarget.style.borderColor='rgba(255,47,174,0.35)';e.currentTarget.style.color='rgba(203,213,225,0.85)'}}>Open earnings page ↗</a>
                 </div>
-                <p style={{fontSize:12,color:'rgba(148,163,184,0.8)',lineHeight:1.6,marginBottom:10}}>{platform.instructions}</p>
+                <div className="ob-howto-steps" style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:6,marginBottom:14}}>
+                  {platform.steps.map((s,i)=>(
+                    <div key={i} className="ob-howto-step" style={{display:'flex',alignItems:'center',gap:14,flex:i<platform.steps.length-1?1:'none',minWidth:0}}>
+                      <div style={{display:'flex',alignItems:'center',gap:8,minWidth:0}}>
+                        <div style={{width:24,height:24,borderRadius:8,border:'1px solid rgba(33,230,243,0.45)',background:'rgba(33,230,243,0.12)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,fontWeight:900,color:CYAN,flexShrink:0}}>{i+1}</div>
+                        <div style={{width:30,height:30,borderRadius:9,background:'rgba(255,255,255,0.05)',border:'1px solid rgba(255,255,255,0.09)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}><StepIcon idx={i}/></div>
+                        <span style={{fontSize:12,fontWeight:700,color:'rgba(241,245,249,0.95)',lineHeight:1.28,maxWidth:100}}>{s.label}</span>
+                      </div>
+                      {i<platform.steps.length-1&&<span className="ob-howto-arrow" style={{color:'rgba(33,230,243,0.55)',fontSize:14,flexShrink:0}}>→</span>}
+                    </div>
+                  ))}
+                </div>
                 <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:8}}>
-                  {['No password required','You control what gets imported','Takes about 60 seconds'].map(t=>(<div key={t} style={{display:'flex',alignItems:'center',gap:5,fontSize:10,color:'rgba(148,163,184,0.75)'}}><span style={{color:CYAN,fontSize:11}}>✓</span>{t}</div>))}
+                  {['No password required','You control what imports','Takes about 60 seconds'].map(t=>(<div key={t} style={{display:'flex',alignItems:'center',gap:5,fontSize:10,color:'rgba(148,163,184,0.75)'}}><span style={{color:CYAN,fontSize:11}}>✓</span>{t}</div>))}
                 </div>
               </div>
 
-              <textarea value={pasteText} onChange={e=>setPasteText(e.target.value)} placeholder={platform.placeholder}
-                style={{width:'100%',height:156,resize:'none',borderRadius:13,border:'1px solid rgba(33,230,243,0.18)',borderTop:'1.5px solid rgba(33,230,243,0.48)',background:'rgba(1,3,12,0.98)',padding:'12px 14px',fontFamily:'monospace',fontSize:11,lineHeight:1.65,color:'#a5f3fc',outline:'none',transition:'border-color 0.2s,box-shadow 0.2s',marginBottom:parseError?9:12,boxShadow:'inset 0 2px 12px rgba(0,0,0,0.4),inset 0 1px 0 rgba(33,230,243,0.08)'}}
-                onFocus={e=>{e.target.style.borderColor='rgba(33,230,243,0.6)';e.target.style.boxShadow='0 0 0 3px rgba(33,230,243,0.08)'}}
-                onBlur={e=>{e.target.style.borderColor='rgba(255,255,255,0.1)';e.target.style.boxShadow='none'}}
-              />
+              <div style={{fontSize:13,fontWeight:800,color:'#F1F5F9',marginBottom:8}}>Paste your copied earnings rows here</div>
+              <div style={{position:'relative'}}>
+                <textarea value={pasteText} onChange={e=>setPasteText(e.target.value)} placeholder={platform.placeholder}
+                  style={{width:'100%',height:190,resize:'none',borderRadius:13,border:'1.5px solid rgba(33,230,243,0.4)',background:'rgba(1,3,12,0.98)',padding:'14px 16px',fontFamily:'monospace',fontSize:11,lineHeight:1.65,color:'#a5f3fc',outline:'none',transition:'border-color 0.2s,box-shadow 0.2s',marginBottom:parseError?9:16,boxShadow:'inset 0 2px 16px rgba(0,0,0,0.4),inset 0 1px 0 rgba(33,230,243,0.1)'}}
+                  onFocus={e=>{e.target.style.borderColor='rgba(33,230,243,0.75)';e.target.style.boxShadow='0 0 0 3px rgba(33,230,243,0.14),0 0 26px rgba(255,47,174,0.14),inset 0 2px 16px rgba(0,0,0,0.4)'}}
+                  onBlur={e=>{e.target.style.borderColor='rgba(33,230,243,0.4)';e.target.style.boxShadow='inset 0 2px 16px rgba(0,0,0,0.4),inset 0 1px 0 rgba(33,230,243,0.1)'}}
+                />
+                <div style={{position:'absolute',right:12,bottom:parseError?21:28,width:26,height:26,borderRadius:8,background:'rgba(33,230,243,0.1)',border:'1px solid rgba(33,230,243,0.3)',display:'flex',alignItems:'center',justifyContent:'center',pointerEvents:'none'}}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><rect x="7" y="4" width="10" height="15" rx="2" stroke={CYAN} strokeWidth="1.8"/><path d="M10 4V3a1 1 0 011-1h2a1 1 0 011 1v1" stroke={CYAN} strokeWidth="1.8"/><path d="M5 8H4a1 1 0 00-1 1v10a1 1 0 001 1h11a1 1 0 001-1v-1" stroke={CYAN} strokeWidth="1.8"/></svg>
+                </div>
+              </div>
 
               {parseError&&<div style={{marginBottom:10,padding:'9px 12px',borderRadius:11,background:'rgba(248,113,113,0.07)',border:'1px solid rgba(248,113,113,0.22)',fontSize:12,color:'#f87171'}}>⚠️ {parseError}</div>}
 
-              <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:9,marginBottom:16}}>
-                {['Open your earnings page','Highlight the rows you want','Copy and paste them here'].map((t,i)=>(<div key={i} style={{display:'flex',alignItems:'center',gap:7,fontSize:10,color:'rgba(148,163,184,0.8)'}}><div style={{width:19,height:19,borderRadius:'50%',border:'1px solid rgba(33,230,243,0.35)',background:'rgba(33,230,243,0.08)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,fontWeight:900,color:CYAN,flexShrink:0}}>{i+1}</div><span>{t}</span></div>))}
+              <div style={{marginBottom:18}}>
+                <div style={{fontSize:9,fontWeight:800,letterSpacing:'0.14em',textTransform:'uppercase',color:'rgba(33,230,243,0.65)',marginBottom:9}}>After import, CamCash will show:</div>
+                <div style={{display:'flex',flexWrap:'wrap',gap:9}}>
+                  {[{icon:'📊',label:'Best Times',bg:'rgba(33,230,243,0.14)',border:'rgba(33,230,243,0.32)'},{icon:'👑',label:'Top Fans',bg:'rgba(255,47,174,0.14)',border:'rgba(255,47,174,0.32)'},{icon:'📈',label:'Earnings Trends',bg:'rgba(124,92,255,0.16)',border:'rgba(124,92,255,0.35)'},{icon:'🥧',label:'Platform Breakdown',bg:'rgba(255,159,67,0.16)',border:'rgba(255,159,67,0.35)'}].map(p=>(
+                    <div key={p.label} style={{display:'flex',alignItems:'center',gap:8,padding:'6px 12px 6px 6px',borderRadius:100,background:'rgba(255,255,255,0.035)',border:'1px solid rgba(255,255,255,0.09)',fontSize:11,fontWeight:700,color:'rgba(226,232,240,0.92)'}}>
+                      <span style={{width:22,height:22,borderRadius:7,background:p.bg,border:`1px solid ${p.border}`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,flexShrink:0}}>{p.icon}</span>{p.label}
+                    </div>
+                  ))}
+                </div>
               </div>
 
               <div style={{display:'grid',gridTemplateColumns:'auto 1fr',gap:10,marginBottom:6}}>
                 <OBSecBtn onClick={()=>setStep('platform')} style={{height:46}}>← Back</OBSecBtn>
-                <OBBtn onClick={handlePreview} disabled={!pasteText.trim()} style={{height:46,fontSize:13}}>Preview Import →</OBBtn>
+                <OBBtn onClick={handlePreview} disabled={!pasteText.trim()} style={{height:46,fontSize:13}}>{pasteText.trim()?'Preview My Earnings →':'Paste tip history to preview import →'}</OBBtn>
               </div>
-              <OBLinks links={[{label:'Upload CSV instead',onClick:()=>setStep('csv')}]}/>
+              <OBLinks links={[{label:'Prefer CSV? Upload file instead',onClick:()=>setStep('csv')}]}/>
               <OBTrust/>
             </div>
           )}
