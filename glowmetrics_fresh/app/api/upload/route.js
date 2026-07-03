@@ -108,19 +108,18 @@ export async function POST(req) {
   }
 
   // ── LOG TO csv_uploads ─────────────────────────────────────────────────
-  try {
-    const dates = rows.map(r => new Date(r.date_time)).filter(d => !isNaN(d))
-    const dateFrom = dates.length ? new Date(Math.min(...dates)) : null
-    const dateTo   = dates.length ? new Date(Math.max(...dates)) : null
+  const dates = rows.map(r => new Date(r.date_time)).filter(d => !isNaN(d))
+  const dateFrom = dates.length ? new Date(Math.min(...dates)) : null
+  const dateTo   = dates.length ? new Date(Math.max(...dates)) : null
+  const totalUsd = rows.reduce((sum, r) => sum + (r.usd || 0), 0)
+  const totalTokens = rows.reduce((sum, r) => sum + (r.tokens || 0), 0)
 
+  try {
     // Build sorted array of unique "YYYY-MM" strings covered
     const monthsSet = new Set(
       dates.map(d => `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`)
     )
     const monthsCovered = [...monthsSet].sort()
-
-    const totalUsd = rows.reduce((sum, r) => sum + (r.usd || 0), 0)
-    const totalTokens = rows.reduce((sum, r) => sum + (r.tokens || 0), 0)
 
     await supabase.from('csv_uploads').insert({
       user_id:        user.id,
@@ -152,6 +151,9 @@ export async function POST(req) {
     batches:   totalBatches,
     batchSize: BATCH_SIZE,
     platform:  detectedPlatform, // ← used by dashboard toast
+    dateFrom:  dateFrom ? dateFrom.toISOString() : null,
+    dateTo:    dateTo ? dateTo.toISOString() : null,
+    totalUsd:  parseFloat(totalUsd.toFixed(2)),
   }
 
   if (errors.length > 0) {
