@@ -3,11 +3,11 @@ import { useState } from 'react'
 import { PLATFORM_TOKEN_RATES, PLATFORM_VIEWER_RATES } from '../../../lib/constants'
 
 const RATES = {
-  Chaturbate:  { broadcaster: PLATFORM_TOKEN_RATES.Chaturbate,  viewer: PLATFORM_VIEWER_RATES.Chaturbate,  note: 'Standard broadcaster rate' },
-  BongaCams:   { broadcaster: PLATFORM_TOKEN_RATES.BongaCams,   viewer: PLATFORM_VIEWER_RATES.BongaCams,   note: 'Standard broadcaster rate' },
-  MyFreeCams:  { broadcaster: PLATFORM_TOKEN_RATES.MyFreeCams,  viewer: PLATFORM_VIEWER_RATES.MyFreeCams,  note: 'Standard MFC rate' },
-  Stripchat:   { broadcaster: PLATFORM_TOKEN_RATES.Stripchat,   viewer: PLATFORM_VIEWER_RATES.Stripchat,   note: 'Approximate broadcaster rate' },
-  CamSoda:     { broadcaster: PLATFORM_TOKEN_RATES.CamSoda,     viewer: PLATFORM_VIEWER_RATES.CamSoda,     note: 'Slightly higher standard rate' },
+  Chaturbate:  { broadcaster: PLATFORM_TOKEN_RATES.Chaturbate,  viewer: PLATFORM_VIEWER_RATES.Chaturbate,  note: 'Estimated broadcaster rate' },
+  BongaCams:   { broadcaster: PLATFORM_TOKEN_RATES.BongaCams,   viewer: PLATFORM_VIEWER_RATES.BongaCams,   note: 'Estimated broadcaster rate' },
+  MyFreeCams:  { broadcaster: PLATFORM_TOKEN_RATES.MyFreeCams,  viewer: PLATFORM_VIEWER_RATES.MyFreeCams,  note: 'Estimated MFC rate' },
+  Stripchat:   { broadcaster: PLATFORM_TOKEN_RATES.Stripchat,   viewer: PLATFORM_VIEWER_RATES.Stripchat,   note: 'Estimated broadcaster rate' },
+  CamSoda:     { broadcaster: PLATFORM_TOKEN_RATES.CamSoda,     viewer: PLATFORM_VIEWER_RATES.CamSoda,     note: 'Estimated broadcaster rate' },
 }
 
 const COMMON = [50, 100, 200, 500, 1000, 2000, 5000, 10000]
@@ -16,9 +16,11 @@ const S = {
   bg: '#14171C',
   surface: '#1C2028',
   card: '#21262F',
-  accent: '#6366F1',
-  accentLight: 'rgba(99,102,241,0.12)',
-  accentBorder: 'rgba(99,102,241,0.3)',
+  accent: '#22D3EE',
+  accentLight: 'rgba(34,211,238,0.12)',
+  accentBorder: 'rgba(34,211,238,0.35)',
+  pink: '#EC4899',
+  pinkLight: 'rgba(236,72,153,0.12)',
   green: '#10B981',
   gold: '#F59E0B',
   white: '#F1F5F9',
@@ -27,17 +29,20 @@ const S = {
   border: 'rgba(255,255,255,0.07)',
 }
 
-function QuickChip({ label, active, onClick }) {
+function QuickChip({ label, active, onClick, glow }) {
   return (
     <button
       onClick={onClick}
       style={{
-        padding: '6px 14px', borderRadius: 8, fontSize: 13, fontWeight: 600,
+        padding: glow ? '8px 18px' : '6px 14px', borderRadius: glow ? 10 : 8, fontSize: 13, fontWeight: 700,
         cursor: 'pointer', transition: 'all 0.15s', border: 'none',
-        background: active ? S.accent : S.surface,
+        background: active
+          ? (glow ? `linear-gradient(135deg, ${S.accent}, ${S.pink})` : S.accent)
+          : S.surface,
         color: active ? '#fff' : S.muted,
         outline: active ? `2px solid ${S.accentBorder}` : '2px solid transparent',
         outlineOffset: 1,
+        boxShadow: active && glow ? `0 0 0 1px rgba(255,255,255,0.06), 0 4px 18px rgba(34,211,238,0.35), 0 4px 18px rgba(236,72,153,0.2)` : 'none',
       }}
     >{label}</button>
   )
@@ -67,13 +72,13 @@ export default function TokenCalculatorClient() {
       `}</style>
 
       {/* PLATFORM SELECTOR */}
-      <div style={{ background: S.card, border: `1px solid ${S.border}`, borderRadius: 20, padding: '28px 32px', marginBottom: 16 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: S.accent, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 14 }}>Platform</div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
+      <div id="calculator" style={{ background: S.card, border: `1px solid ${S.accentBorder}`, borderRadius: 20, padding: '28px 32px', marginBottom: 16, boxShadow: '0 0 40px rgba(34,211,238,0.06)', scrollMarginTop: 90 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: S.accent, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 16 }}>Cam Model Token Calculator · Platform</div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 20 }}>
           {Object.keys(RATES).map(p => (
-            <QuickChip key={p} label={p} active={platform === p && !useCustom} onClick={() => { setPlatform(p); setUseCustom(false) }} />
+            <QuickChip key={p} label={p} active={platform === p && !useCustom} glow onClick={() => { setPlatform(p); setUseCustom(false) }} />
           ))}
-          <QuickChip label="Custom rate" active={useCustom} onClick={() => setUseCustom(v => !v)} />
+          <QuickChip label="Custom rate" active={useCustom} glow onClick={() => setUseCustom(v => !v)} />
         </div>
 
         {/* CUSTOM RATE INPUT */}
@@ -130,23 +135,42 @@ export default function TokenCalculatorClient() {
 
         {/* RESULT */}
         <div style={{
-          padding: '24px 28px', borderRadius: 16,
-          background: tokenNum > 0 ? S.accentLight : 'rgba(255,255,255,0.02)',
+          padding: '32px 28px', borderRadius: 18, textAlign: 'center',
+          background: tokenNum > 0 ? `linear-gradient(135deg, ${S.accentLight}, ${S.pinkLight})` : 'rgba(255,255,255,0.02)',
           border: tokenNum > 0 ? `1px solid ${S.accentBorder}` : `1px solid ${S.border}`,
+          boxShadow: tokenNum > 0 ? '0 0 50px rgba(34,211,238,0.1)' : 'none',
           transition: 'all 0.2s',
         }}>
-          <div style={{ fontSize: 11, color: S.muted, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8 }}>You earn</div>
-          <div style={{ fontSize: 60, fontWeight: 900, color: tokenNum > 0 ? S.green : S.muted, lineHeight: 1, transition: 'color 0.2s' }}>
+          <div style={{ fontSize: 12, color: S.muted, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 10, fontWeight: 700 }}>Estimated Earnings</div>
+          <div style={{ fontSize: 68, fontWeight: 900, color: tokenNum > 0 ? S.green : S.muted, lineHeight: 1, transition: 'color 0.2s', letterSpacing: '-0.02em' }}>
             ${usd.toFixed(2)}
           </div>
           {tokenNum > 0 && (
-            <div style={{ fontSize: 14, color: S.muted, marginTop: 10 }}>
+            <div style={{ fontSize: 14, color: S.muted, marginTop: 12 }}>
               {tokenNum.toLocaleString()} tokens × ${rate.toFixed(4)}/token
               {useCustom ? ' (custom rate)' : ` on ${platform}`}
               {' · '}
               <span style={{ color: S.text }}>Viewer paid ~${(tokenNum * (useCustom ? rate * 2 : RATES[platform].viewer)).toFixed(2)}</span>
             </div>
           )}
+        </div>
+
+        {/* CTA */}
+        <div style={{ marginTop: 22, textAlign: 'center' }}>
+          <a
+            href="/login"
+            style={{
+              display: 'inline-block', padding: '15px 36px', borderRadius: 12,
+              background: `linear-gradient(135deg, ${S.accent}, ${S.pink})`, color: '#0b0e13',
+              fontWeight: 800, fontSize: 15, textDecoration: 'none',
+              boxShadow: '0 4px 24px rgba(34,211,238,0.25)',
+            }}
+          >
+            Track My Real Earnings Free →
+          </a>
+          <div style={{ fontSize: 12, color: S.muted, marginTop: 10 }}>
+            Estimates only — actual payout may vary by platform, region, tier, or payout method.
+          </div>
         </div>
       </div>
 
@@ -158,7 +182,7 @@ export default function TokenCalculatorClient() {
       )}
 
       {/* COMMON AMOUNTS TABLE */}
-      <div style={{ background: S.card, border: `1px solid ${S.border}`, borderRadius: 20, overflow: 'hidden', marginBottom: 16 }}>
+      <div id="common-amounts" style={{ background: S.card, border: `1px solid ${S.border}`, borderRadius: 20, overflow: 'hidden', marginBottom: 16, scrollMarginTop: 90 }}>
         <div style={{ padding: '20px 28px', borderBottom: `1px solid ${S.border}` }}>
           <div style={{ fontSize: 15, fontWeight: 700, color: S.white }}>Common Token Amounts</div>
           <div style={{ fontSize: 13, color: S.muted, marginTop: 3 }}>
@@ -167,7 +191,7 @@ export default function TokenCalculatorClient() {
         </div>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
-            <tr style={{ background: 'rgba(99,102,241,0.05)' }}>
+            <tr style={{ background: 'rgba(34,211,238,0.05)' }}>
               {['Tokens', 'You Earn (USD)', 'Viewer Pays', ''].map(h => (
                 <th key={h} style={{ padding: '10px 24px', textAlign: 'left', fontSize: 11, color: S.accent, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700 }}>{h}</th>
               ))}
@@ -208,7 +232,7 @@ export default function TokenCalculatorClient() {
         </div>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
-            <tr style={{ background: 'rgba(99,102,241,0.05)' }}>
+            <tr style={{ background: 'rgba(34,211,238,0.05)' }}>
               {['Platform', 'Rate/Token', `${tokenNum > 0 ? tokenNum.toLocaleString() : '1,000'} Tokens = $`, 'Note'].map(h => (
                 <th key={h} style={{ padding: '10px 20px', textAlign: 'left', fontSize: 11, color: S.accent, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700 }}>{h}</th>
               ))}
