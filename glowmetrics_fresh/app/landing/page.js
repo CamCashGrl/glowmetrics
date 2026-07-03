@@ -422,7 +422,7 @@ export default function LandingPage() {
             })
           }
           if (pendingPlan && await goToCheckout(pendingPlan)) return
-          router.push("/dashboard")
+          router.push("/onboarding")
         }
         else { setAuthMsg("Account created! Check your email to confirm, then log in."); setIsSignUp(false); setAuthLoading(false) }
       }
@@ -431,7 +431,13 @@ export default function LandingPage() {
       if (error) { setAuthError(error.message); setAuthLoading(false) }
       else {
         if (pendingPlan && await goToCheckout(pendingPlan)) return
-        router.push("/dashboard")
+        const { data: { user } } = await supabase.auth.getUser()
+        const { data: betaProfile } = await supabase
+          .from('beta_users')
+          .select('onboarding_complete')
+          .eq('user_id', user.id)
+          .single()
+        router.push(betaProfile?.onboarding_complete ? "/dashboard" : "/onboarding")
       }
     }
   }
