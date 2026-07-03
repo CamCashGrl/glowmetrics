@@ -5,7 +5,6 @@ import { usePathname } from 'next/navigation'
 
 const FeedbackWidget = dynamic(() => import('./FeedbackWidget'), { ssr: false })
 
-// Keep in sync with SMART_TRIGGER_PATHS in FeedbackWidget.jsx
 const FEEDBACK_WIDGET_PATHS = ['/dashboard', '/onboarding', '/upload']
 
 export default function FeedbackWidgetGate() {
