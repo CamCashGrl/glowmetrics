@@ -11,6 +11,7 @@
 
 import { NextResponse } from 'next/server';
 import { createClient }  from '@supabase/supabase-js';
+import { tokenRate } from '../../../../lib/constants';
 
 export const dynamic = 'force-dynamic';
 
@@ -161,8 +162,8 @@ function normaliseTip(t, userId, platform) {
   // tip_ref = 'platform:nativeId' — globally unique dedup key
   const tipRef = `${platform}:${t.platform_tip_id}`;
 
-  // CB token → USD conversion (standard rate: 1 token = $0.05)
-  const usd = t.usd ?? (t.tokens * 0.05);
+  // Token → USD conversion using the per-platform broadcaster rate
+  const usd = t.usd ?? (t.tokens * tokenRate(platform));
 
   return {
     user_id:        userId,

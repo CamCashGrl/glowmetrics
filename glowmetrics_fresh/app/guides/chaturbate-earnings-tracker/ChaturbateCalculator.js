@@ -36,7 +36,7 @@ export default function ChaturbateCalculator() {
           >
             <option value="0.05">$0.05 — Chaturbate standard</option>
             <option value="0.06">$0.06 — Chaturbate negotiated</option>
-            <option value="0.025">$0.025 — BongaCams (incomplete profile)</option>
+            <option value="0.025">$0.025 — BongaCams standard</option>
             <option value="0.05">$0.05 — MyFreeCams</option>
             <option value="0.05">$0.05 — Stripchat</option>
           </select>

@@ -31,13 +31,13 @@ const faqSchema = {
   '@type': 'FAQPage',
   mainEntity: [
     { '@type': 'Question', name: 'How much is one Chaturbate token worth?', acceptedAnswer: { '@type': 'Answer', text: 'One Chaturbate token is worth $0.05 to the broadcaster. Viewers purchase tokens at $0.10 each, meaning Chaturbate keeps 50% and the model receives 50%.' } },
-    { '@type': 'Question', name: 'How much does BongaCams pay per token?', acceptedAnswer: { '@type': 'Answer', text: 'BongaCams pays $0.05 per token for models with a complete profile. Incomplete profiles receive approximately $0.025 per token. Completing your profile doubles your payout.' } },
+    { '@type': 'Question', name: 'How much does BongaCams pay per token?', acceptedAnswer: { '@type': 'Answer', text: 'BongaCams pays approximately $0.025 per token to broadcasters — half of Chaturbate\'s rate. Viewers buy BongaCams tokens at roughly $0.068 each, so the model receives about 37% of what the viewer pays.' } },
     { '@type': 'Question', name: 'What is the MyFreeCams token rate?', acceptedAnswer: { '@type': 'Answer', text: 'MyFreeCams pays approximately $0.05 per token (about $5.00 per 100 tokens). The exact rate can vary slightly based on model level and promotional periods.' } },
     { '@type': 'Question', name: 'How much does Stripchat pay per token?', acceptedAnswer: { '@type': 'Answer', text: 'Stripchat pays approximately $0.05 per token. Rates can vary based on model tier and payment method, so always check your current rate in your Stripchat dashboard.' } },
     { '@type': 'Question', name: 'What is CamSoda\'s token payout rate?', acceptedAnswer: { '@type': 'Answer', text: 'CamSoda pays approximately $0.055 per token — slightly higher than most competitors at the standard tier. This makes 1,000 CamSoda tokens worth about $55 versus $50 on Chaturbate.' } },
     { '@type': 'Question', name: 'Do cam models pay taxes on token earnings?', acceptedAnswer: { '@type': 'Answer', text: 'Yes. In the United States, cam model earnings are self-employment income. You will typically receive a 1099-NEC from platforms paying over $600/year. You are responsible for self-employment tax (15.3%) plus income tax. Keep detailed records of all earnings, and consider quarterly estimated tax payments.' } },
     { '@type': 'Question', name: 'What is the difference between viewer rate and broadcaster rate?', acceptedAnswer: { '@type': 'Answer', text: 'The viewer rate is what fans pay to purchase tokens. The broadcaster rate is the lower amount models actually receive. For example, on Chaturbate viewers pay $0.10/token but models receive $0.05/token. This split funds platform operations.' } },
-    { '@type': 'Question', name: 'How can I increase my per-token earnings?', acceptedAnswer: { '@type': 'Answer', text: 'Strategies include: completing your platform profile (especially on BongaCams), negotiating a higher rate directly with your platform after reaching high traffic milestones, optimizing tip menu pricing, and using platform bonuses or promotional rate periods.' } },
+    { '@type': 'Question', name: 'How can I increase my per-token earnings?', acceptedAnswer: { '@type': 'Answer', text: 'The per-token rate itself is fixed by the platform, but you can increase total earnings by negotiating a higher rate directly with your platform after reaching high traffic milestones, optimizing tip menu pricing, and using platform bonuses or promotional rate periods.' } },
     { '@type': 'Question', name: 'How do I calculate my hourly rate as a cam model?', acceptedAnswer: { '@type': 'Answer', text: 'Divide your total USD earnings for a session by the number of hours you streamed. For example, if you earned 2,000 tokens in 2 hours on Chaturbate: 2,000 × $0.05 = $100 ÷ 2 hours = $50/hr. Tools like CamCash track this automatically.' } },
     { '@type': 'Question', name: 'Which cam platform pays models the most?', acceptedAnswer: { '@type': 'Answer', text: 'CamSoda has a slightly higher standard rate ($0.055/token vs $0.05). However, overall earnings depend more on audience size, tip menu strategy, and streaming hours than the per-token rate. The best platform is the one where your audience is largest.' } },
     { '@type': 'Question', name: 'What is a tip menu and how does it affect earnings?', acceptedAnswer: { '@type': 'Answer', text: 'A tip menu is a list of actions tied to specific token amounts (e.g., 50 tokens = song request, 500 tokens = special request). Well-priced tip menus increase average tip size and give viewers clear goals — which directly increases your token income.' } },
@@ -165,14 +165,14 @@ export default function TokenCalculatorPage() {
               When viewers buy tokens, they pay the retail price — but you receive a different, lower amount called the broadcaster rate. Understanding this split is fundamental to knowing your real income.
             </p>
             <p style={{ fontSize: 16, lineHeight: 1.8, color: S.text, marginBottom: 28 }}>
-              On Chaturbate, viewers pay approximately $0.10 per token. You receive $0.05 per token. That's a 50/50 split between you and the platform. Across most cam sites, this split ranges from 40–55% in the model's favor.
+              On Chaturbate, viewers pay approximately $0.10 per token. You receive $0.05 per token. That's a 50/50 split between you and the platform. Across most cam sites, this split ranges from roughly 35–55% in the model's favor — BongaCams sits at the lower end of that range.
             </p>
 
             {/* Quick reference cards */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 14, marginBottom: 28 }}>
               {[
                 { platform: 'Chaturbate', rate: '$0.05', per: 'per token', color: '#F59E0B' },
-                { platform: 'BongaCams', rate: '$0.05', per: 'completed profile', color: '#8B5CF6' },
+                { platform: 'BongaCams', rate: '$0.025', per: 'per token', color: '#8B5CF6' },
                 { platform: 'MyFreeCams', rate: '$0.05', per: 'per token', color: '#3B82F6' },
                 { platform: 'Stripchat', rate: '~$0.05', per: 'per token', color: '#EF4444' },
                 { platform: 'CamSoda', rate: '$0.055', per: 'per token', color: '#10B981' },
@@ -217,18 +217,18 @@ export default function TokenCalculatorPage() {
             <h2 style={{ fontSize: 32, fontWeight: 800, color: S.white, marginBottom: 8, letterSpacing: '-0.02em' }}>BongaCams Token Value</h2>
             <div style={{ width: 48, height: 3, background: S.accent, borderRadius: 2, marginBottom: 24 }} />
             <p style={{ fontSize: 16, lineHeight: 1.8, color: S.text, marginBottom: 18 }}>
-              BongaCams pays <strong style={{ color: S.white }}>$0.05 per token</strong> for models with a complete profile. Incomplete profiles receive approximately $0.025 per token — half the rate. Completing your profile (photos, bio, verification) is the single easiest way to double your BongaCams income.
+              BongaCams pays models <strong style={{ color: S.white }}>$0.025 per token</strong> — half of Chaturbate's rate. Viewers buy BongaCams tokens at roughly $0.068 each, so the platform keeps a larger share of the split than Chaturbate does.
             </p>
             <div style={{ background: S.surface, border: `1px solid rgba(139,92,246,0.3)`, borderRadius: 14, padding: '24px 28px', marginBottom: 24 }}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 14 }}>
-                {[[100,'$5'],[500,'$25'],[1000,'$50'],[2000,'$100'],[5000,'$250'],[10000,'$500']].map(([t,u]) => (
+                {[[100,'$2.50'],[500,'$12.50'],[1000,'$25'],[2000,'$50'],[5000,'$125'],[10000,'$250']].map(([t,u]) => (
                   <div key={t} style={{ textAlign: 'center', padding: '12px 8px', borderRadius: 10, background: 'rgba(139,92,246,0.07)', border: '1px solid rgba(139,92,246,0.15)' }}>
                     <div style={{ fontSize: 13, color: S.muted, marginBottom: 4 }}>{t.toLocaleString()} tokens</div>
                     <div style={{ fontSize: 22, fontWeight: 800, color: '#8B5CF6' }}>{u}</div>
                   </div>
                 ))}
               </div>
-              <p style={{ fontSize: 13, color: S.muted, marginTop: 14, marginBottom: 0 }}>Values shown for complete-profile rate ($0.05/token). Incomplete profiles earn half.</p>
+              <p style={{ fontSize: 13, color: S.muted, marginTop: 14, marginBottom: 0 }}>Values shown at the standard $0.025/token broadcaster rate.</p>
             </div>
           </section>
 
@@ -274,7 +274,7 @@ export default function TokenCalculatorPage() {
                 <tbody>
                   {[
                     { platform: 'Chaturbate', rate: 0.05, note: 'Most popular platform globally' },
-                    { platform: 'BongaCams', rate: 0.05, note: 'Higher rate for complete profiles' },
+                    { platform: 'BongaCams', rate: 0.025, note: 'Lower broadcaster rate than Chaturbate' },
                     { platform: 'MyFreeCams', rate: 0.05, note: 'Strong North American audience' },
                     { platform: 'Stripchat', rate: 0.05, note: 'Growing EU/global audience' },
                     { platform: 'CamSoda', rate: 0.055, note: 'Slightly higher rate' },
@@ -323,7 +323,7 @@ export default function TokenCalculatorPage() {
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {[
-                { n: '01', title: 'Complete your profile', body: 'On BongaCams especially, an incomplete profile halves your rate. On all platforms, a complete bio, quality photos, and a real profile picture increase discoverability and trust.' },
+                { n: '01', title: 'Complete your profile', body: 'A complete bio, quality photos, and a real profile picture increase discoverability and trust, which brings in more viewers and tips — even though the per-token rate itself stays fixed.' },
                 { n: '02', title: 'Negotiate your rate', body: 'After reaching consistent high traffic, you can contact Chaturbate model support to negotiate a higher per-token rate. This is rarely advertised but happens regularly for top performers.' },
                 { n: '03', title: 'Price your tip menu strategically', body: 'Low-entry items at 25–50 tokens bring hesitant viewers into the tipping habit. High-ticket goals at 5,000–10,000 tokens create excitement and community momentum. Both ends of the menu matter.' },
                 { n: '04', title: 'Use platform bonuses', body: 'Many platforms run promotional rate boosts for certain streaming hours, new models, or special events. Check your platform\'s model support page regularly.' },
