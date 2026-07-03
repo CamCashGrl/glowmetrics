@@ -22,6 +22,47 @@ const AUTH_INPUT_STYLE = {
 // <style> element aren't entity-decoded the same way client vs server.
 const LP_GRAD = "linear-gradient(90deg,#21E6F3,#6C5CFF,#FF2FAE)"
 
+// Live password requirement checklist shown under the signup password field —
+// keeps validation feedback readable instead of dumping Supabase's raw
+// "Password should contain at least one character of each: abc...!@#..."
+// error text on the page.
+const PASSWORD_REQUIREMENTS = [
+  { label: "8+ characters", test: pw => pw.length >= 8 },
+  { label: "Uppercase letter", test: pw => /[A-Z]/.test(pw) },
+  { label: "Lowercase letter", test: pw => /[a-z]/.test(pw) },
+  { label: "Number", test: pw => /[0-9]/.test(pw) },
+  { label: "Symbol", test: pw => /[^A-Za-z0-9]/.test(pw) },
+]
+
+const PASSWORD_ERROR_PATTERN = /password should be at least|password should contain/i
+const FRIENDLY_PASSWORD_ERROR = "Password must include 8+ characters, uppercase, lowercase, a number, and a symbol."
+
+// Supabase's password policy error spells out the entire allowed character
+// set inline — swap it for a short, human message. Every other auth error
+// (bad credentials, rate limits, etc.) passes through unchanged.
+function friendlyAuthError(message) {
+  if (!message) return message
+  return PASSWORD_ERROR_PATTERN.test(message) ? FRIENDLY_PASSWORD_ERROR : message
+}
+
+function PasswordChecklist({ password }) {
+  const touched = password.length > 0
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: "3px 12px", margin: "6px 0 10px", padding: "0 1px" }}>
+      {PASSWORD_REQUIREMENTS.map(({ label, test }) => {
+        const met = test(password)
+        const color = met ? "#22D3EE" : touched ? "rgba(251,113,133,0.85)" : "#475569"
+        return (
+          <span key={label} style={{ fontSize: 11, lineHeight: 1.6, color, display: "inline-flex", alignItems: "center", gap: 5, transition: "color 0.2s ease" }}>
+            <span style={{ fontSize: 8 }}>{met ? "●" : "○"}</span>
+            {label}
+          </span>
+        )
+      })}
+    </div>
+  )
+}
+
 function LPBtn({ as = "button", href, type, onClick, children, variant = "primary", disabled = false, style = {} }) {
   const Comp = as
   const isPrimary = variant === "primary"
@@ -114,6 +155,7 @@ function AuthPanel({
   handleAuth, handleForgotPassword,
 }) {
   const [step, setStep] = useState(1)
+  const [showPassword, setShowPassword] = useState(false)
 
   const handleModeSelect = (val) => {
     setIsSignUp(val)
@@ -182,17 +224,24 @@ function AuthPanel({
             <input type="email" placeholder="Email address" required value={email} onChange={e => setEmail(e.target.value)} style={AUTH_INPUT_STYLE}
               onFocus={e => { e.target.style.borderColor = "rgba(34,211,238,0.5)"; T.signupStarted(window?.location?.pathname) }}
               onBlur={e => e.target.style.borderColor = "rgba(255,255,255,0.1)"} />
-            <input type="password" placeholder="Password" required value={password} onChange={e => setPassword(e.target.value)}
-              style={{ ...AUTH_INPUT_STYLE, marginBottom: isSignUp ? 4 : 0 }}
-              onFocus={e => e.target.style.borderColor = "rgba(34,211,238,0.5)"}
-              onBlur={e => e.target.style.borderColor = "rgba(255,255,255,0.1)"} />
+            <div style={{ position: "relative" }}>
+              <input type={showPassword ? "text" : "password"} placeholder={isSignUp ? "Create a password" : "Password"} required value={password} onChange={e => setPassword(e.target.value)}
+                style={{ ...AUTH_INPUT_STYLE, marginBottom: isSignUp ? 4 : 0, paddingRight: 38 }}
+                onFocus={e => { e.target.style.borderColor = "rgba(34,211,238,0.5)"; e.target.style.boxShadow = "0 0 0 3px rgba(34,211,238,0.12)" }}
+                onBlur={e => { e.target.style.borderColor = "rgba(255,255,255,0.1)"; e.target.style.boxShadow = "none" }} />
+              <button type="button" onClick={() => setShowPassword(s => !s)} aria-label={showPassword ? "Hide password" : "Show password"}
+                style={{ position: "absolute", right: 8, top: isSignUp ? 14 : 10, background: "none", border: "none", cursor: "pointer", color: "#475569", fontSize: 13, padding: 4, lineHeight: 1, display: "flex", alignItems: "center" }}>
+                {showPassword ? "🙈" : "👁"}
+              </button>
+            </div>
+            {isSignUp && <PasswordChecklist password={password} />}
             {!isSignUp && (
               <div style={{ textAlign: "right", marginBottom: 10 }}>
                 <button type="button" onClick={handleForgotPassword} style={{ fontSize: 11, color: "#475569", background: "none", border: "none", cursor: "pointer" }}>Forgot password?</button>
               </div>
             )}
-            {authError && <div style={{ fontSize: 11, color: "#f87171", marginBottom: 8, textAlign: "center" }}>{authError}</div>}
-            {authMsg   && <div style={{ fontSize: 11, color: "#22D3EE",  marginBottom: 8, textAlign: "center" }}>{authMsg}</div>}
+            {authError && <div style={{ fontSize: 11.5, color: "rgba(251,113,133,0.9)", lineHeight: 1.5, marginTop: 2, marginBottom: 8, textAlign: "center" }}>{authError}</div>}
+            {authMsg   && <div style={{ fontSize: 11.5, color: "#22D3EE", lineHeight: 1.5, marginTop: 2, marginBottom: 8, textAlign: "center" }}>{authMsg}</div>}
             <LPBtn type="submit" disabled={authLoading} onClick={() => T.signupCtaClicked(window?.location?.pathname)} style={{ width: "100%", padding: "11px 0", borderRadius: 9, fontSize: 14 }}>
               {authLoading ? (isSignUp ? "Creating account…" : "Logging in…") : (isSignUp ? "Start Free →" : "Log In →")}
             </LPBtn>
@@ -344,7 +393,7 @@ export default function LandingPage() {
       let attribution = null
       try { attribution = JSON.parse(localStorage.getItem('camcash_attribution') || 'null') } catch {}
       const { error } = await supabase.auth.signUp({ email, password })
-      if (error) { setAuthError(error.message); setAuthLoading(false) }
+      if (error) { setAuthError(friendlyAuthError(error.message)); setAuthLoading(false) }
       else {
         if (typeof twq === 'function') twq('event', 'tw-rc0w2-rcj9h', {})
         fetch('/api/admin/notify-signup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, source: 'landing' }) }).catch(() => {})
@@ -371,7 +420,7 @@ export default function LandingPage() {
       }
     } else {
       const { error } = await supabase.auth.signInWithPassword({ email, password })
-      if (error) { setAuthError(error.message); setAuthLoading(false) }
+      if (error) { setAuthError(friendlyAuthError(error.message)); setAuthLoading(false) }
       else {
         track('login_success')
         // Check if onboarding is complete
@@ -394,7 +443,7 @@ export default function LandingPage() {
   const handleForgotPassword = async () => {
     if (!email) { setAuthError("Enter your email first."); return }
     const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: "https://www.camcashgrl.com/reset-password" })
-    if (error) setAuthError(error.message)
+    if (error) setAuthError(friendlyAuthError(error.message))
     else setAuthMsg("Password reset email sent — check your inbox.")
   }
 
