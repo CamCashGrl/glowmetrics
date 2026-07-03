@@ -328,6 +328,56 @@ function LiveDemoPanel() {
   )
 }
 
+// ── Ambient spark particles (same drift/twinkle as onboarding) ────────────
+function AmbientParticles() {
+  const ref = useRef()
+  useEffect(() => {
+    const c = ref.current
+    if (!c) return
+    const ctx = c.getContext("2d")
+    const resize = () => { c.width = window.innerWidth; c.height = window.innerHeight }
+    resize()
+    window.addEventListener("resize", resize)
+    const COLS = ["rgba(22,244,255,", "rgba(255,43,174,", "rgba(124,92,255,", "rgba(255,255,255,"]
+    const pts = Array.from({ length: 55 }, () => ({
+      x: Math.random() * c.width, y: Math.random() * c.height,
+      r: Math.random() * 1.5 + 0.3,
+      col: COLS[Math.floor(Math.random() * COLS.length)],
+      alpha: Math.random() * 0.5 + 0.1,
+      aDir: Math.random() > 0.5 ? 1 : -1,
+      aSpd: Math.random() * 0.008 + 0.003,
+      vx: (Math.random() - 0.5) * 0.18,
+      vy: (Math.random() - 0.5) * 0.18,
+    }))
+    let raf
+    const draw = () => {
+      ctx.clearRect(0, 0, c.width, c.height)
+      pts.forEach(p => {
+        p.x += p.vx; p.y += p.vy
+        p.alpha += p.aDir * p.aSpd
+        if (p.alpha >= 0.65) { p.alpha = 0.65; p.aDir = -1 }
+        if (p.alpha <= 0.05) { p.alpha = 0.05; p.aDir = 1 }
+        if (p.x < -4) p.x = c.width + 4; if (p.x > c.width + 4) p.x = -4
+        if (p.y < -4) p.y = c.height + 4; if (p.y > c.height + 4) p.y = -4
+        ctx.beginPath()
+        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2)
+        ctx.fillStyle = `${p.col}${p.alpha.toFixed(2)})`
+        ctx.fill()
+        if (p.alpha > 0.4 && p.r > 1) {
+          ctx.strokeStyle = `${p.col}${(p.alpha * 0.4).toFixed(2)})`
+          ctx.lineWidth = 0.5
+          ctx.beginPath(); ctx.moveTo(p.x - p.r * 2.5, p.y); ctx.lineTo(p.x + p.r * 2.5, p.y); ctx.stroke()
+          ctx.beginPath(); ctx.moveTo(p.x, p.y - p.r * 2.5); ctx.lineTo(p.x, p.y + p.r * 2.5); ctx.stroke()
+        }
+      })
+      raf = requestAnimationFrame(draw)
+    }
+    raf = requestAnimationFrame(draw)
+    return () => { cancelAnimationFrame(raf); window.removeEventListener("resize", resize) }
+  }, [])
+  return <canvas ref={ref} style={{ position: "fixed", top: 0, left: 0, width: "100%", height: "100%", pointerEvents: "none", zIndex: 0 }} />
+}
+
 // ── MAIN LANDING PAGE ────────────────────────────────────────────────────────
 export default function LandingPage() {
   const router = useRouter()
@@ -499,6 +549,7 @@ export default function LandingPage() {
         <div style={{ position: "absolute", width: 700, height: 700, top: "-15%", right: "-5%", background: "radial-gradient(circle,rgba(22,244,255,0.08),transparent 65%)", filter: "blur(60px)" }} />
         <div style={{ position: "absolute", width: 600, height: 600, bottom: "10%", left: "-10%", background: "radial-gradient(circle,rgba(255,43,174,0.08),transparent 65%)", filter: "blur(60px)" }} />
         <div style={{ position: "absolute", width: 600, height: 600, top: "40%", left: "40%", background: "radial-gradient(circle,rgba(124,92,255,0.06),transparent 65%)", filter: "blur(60px)" }} />
+        <AmbientParticles />
       </div>
 
       {/* ── NAV ── */}
