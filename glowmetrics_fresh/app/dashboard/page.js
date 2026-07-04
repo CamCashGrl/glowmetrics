@@ -22,7 +22,6 @@ const TAB_LOADING = (
     <div style={{ width: 40, height: 40, border: "2px solid #1e2d45", borderTop: "2px solid #22D3EE", borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto" }} />
   </div>
 )
-const ChaturbateTokenConnector = dynamic(() => import('./components/ChaturbateTokenConnector'), { ssr: false, loading: () => TAB_LOADING })
 const AnalyticsCharts = dynamic(() => import('./AnalyticsCharts'), { ssr: false, loading: () => TAB_LOADING })
 const StreamPlanner = dynamic(() => import('./StreamPlanner'), { ssr: false, loading: () => TAB_LOADING })
 const MoneyMap = dynamic(() => import('./MoneyMap'), { ssr: false, loading: () => TAB_LOADING })
@@ -1258,6 +1257,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [uploadPlatform, setUploadPlatform] = useState("")
+  const [lastUploadResult, setLastUploadResult] = useState(null)
   const [activeTab, setActiveTab] = useState(initialTab)
   const [toast, setToast] = useState("")
   const [uploadCount, setUploadCount] = useState(0)
@@ -1782,6 +1782,7 @@ const handleCSV = async (file, forcePlatform = null) => {
       return
     }
     setUploading(true)
+    setLastUploadResult(null)
     gtmTrack('csv_upload_started', { platform: forcePlatform || uploadPlatform || 'unknown' })
     try {
       const { data: { session } } = await supabase.auth.getSession()
@@ -1801,6 +1802,7 @@ const handleCSV = async (file, forcePlatform = null) => {
 
       if (!res.ok || result.error) {
         showToast("❌ " + (result.error || 'Upload failed'))
+        setLastUploadResult({ success: false, error: result.error || 'Upload failed' })
         setUploading(false)
         return
       }
@@ -1812,6 +1814,7 @@ const handleCSV = async (file, forcePlatform = null) => {
         ? `✅ Imported ${result.inserted} tips (${result.skipped} duplicates skipped)`
         : `✅ Imported ${result.inserted} tips from ${result.platform}!`
       showToast(msg)
+      setLastUploadResult({ success: true, inserted: result.inserted, skipped: result.skipped, platform: result.platform })
 
       // Google Ads — CSV Upload conversion
       try {
@@ -1832,6 +1835,7 @@ const handleCSV = async (file, forcePlatform = null) => {
 
     } catch (err) {
       showToast("❌ " + err.message)
+      setLastUploadResult({ success: false, error: err.message })
     } finally {
       setUploading(false)
     }
@@ -5567,6 +5571,35 @@ const handleCSV = async (file, forcePlatform = null) => {
                 </label>
                 <p style={{ fontSize: 12, color: C.muted, marginTop: 12 }}>Supports Chaturbate, BongaCams, MyFreeCams, Stripchat, CamSoda</p>
               </div>
+
+              {lastUploadResult && (
+                <div style={{
+                  marginTop: 20, padding: "14px 16px", borderRadius: 10,
+                  background: lastUploadResult.success ? "rgba(16,185,129,0.1)" : "rgba(248,113,113,0.1)",
+                  border: `1px solid ${lastUploadResult.success ? "rgba(16,185,129,0.3)" : "rgba(248,113,113,0.3)"}`,
+                  fontSize: 13,
+                  color: lastUploadResult.success ? C.green : C.red,
+                  display: "flex", alignItems: "center", gap: 10
+                }}>
+                  <span style={{ fontSize: 18 }}>{lastUploadResult.success ? "✅" : "❌"}</span>
+                  <div>
+                    {lastUploadResult.success ? (
+                      <>
+                        <div style={{ fontWeight: 700 }}>
+                          {lastUploadResult.inserted} tips imported from {lastUploadResult.platform}
+                        </div>
+                        {lastUploadResult.skipped > 0 && (
+                          <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>
+                            {lastUploadResult.skipped} duplicates skipped
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <div style={{ fontWeight: 700 }}>{lastUploadResult.error}</div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Plan explainer + subscribe CTA */}
@@ -5617,15 +5650,6 @@ const handleCSV = async (file, forcePlatform = null) => {
             <div style={{ padding: "12px 16px", borderRadius: 10, background: "rgba(34,211,238,0.05)", border: "1px solid rgba(34,211,238,0.15)", fontSize: 12, color: C.muted }}>
               <strong style={{ color: C.cyan }}>CSV not loading?</strong> Try selecting your platform from the dropdown above, then re-upload. For Chaturbate: export from Stats & Data → Token Stats. For BongaCams: export from Reports.
             </div>
-
-            {user && (
-              <div style={{ marginTop: 28 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 14 }}>
-                  Live Tip Sync
-                </div>
-                <ChaturbateTokenConnector user={user} onConnected={() => { /* live sync now active */ }} />
-              </div>
-            )}
           </div>
         )}
 
