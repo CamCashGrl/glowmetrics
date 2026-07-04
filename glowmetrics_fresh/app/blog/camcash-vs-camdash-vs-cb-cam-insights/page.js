@@ -232,7 +232,7 @@ export default function CamCashVsCamDashPost() {
                 {[
                   ['Platforms supported', '5 platforms', 'CB only', 'CB only'],
                   ['Free tier', '✓ Full access', '✓ Limited', '✓ Limited'],
-                  ['Paid price', '$9.99/mo', '$3.99/mo', '~$14.99/mo'],
+                  ['Paid price', '$19.99/mo*', '$3.99/mo', '~$14.99/mo'],
                   ['AI coaching', '✓', '✓', '✗'],
                   ['Multi-platform earnings', '✓', '✗', '✗'],
                   ['Real-time live stats', '✓ Extension', '✓ API', '✓ API + Extension'],
@@ -254,6 +254,9 @@ export default function CamCashVsCamDashPost() {
               </tbody>
             </table>
           </div>
+          <p style={{ color: '#64748b', fontSize: '13px', marginTop: '12px' }}>
+            * CamCash&apos;s standard rate is $19.99/mo. Early adopters (first 100 users only) lock in $9.99/mo forever.
+          </p>
         </section>
 
         {/* Pricing */}
@@ -261,7 +264,7 @@ export default function CamCashVsCamDashPost() {
           <h2 style={{ fontSize: '22px', fontWeight: '700', color: '#f1f5f9', marginBottom: '20px' }}>Pricing</h2>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '16px' }}>
             {[
-              { name: 'CamCash', price: 'Free during beta', sub: 'Pro $9.99/mo · Unlimited $19.99/mo', highlight: true },
+              { name: 'CamCash', price: 'Free during beta', sub: '$19.99/mo · Early adopters lock in $9.99/mo forever (first 100 users only)', highlight: true },
               { name: 'CamDash', price: '$3.99/mo', sub: 'Free tier available · $49 lifetime', highlight: false },
               { name: 'CB Cam Insights', price: '~$14.99/mo', sub: 'Free tier available · Annual option', highlight: false },
             ].map(({ name, price, sub, highlight }) => (
