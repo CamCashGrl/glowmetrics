@@ -124,7 +124,7 @@ export default function RootLayout({ children }) {
             }),
           }}
         />
-        <Script id="gtm-head" strategy="afterInteractive">
+        <Script id="gtm-head" strategy="lazyOnload">
           {`(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
   new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
   j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
@@ -148,7 +148,7 @@ export default function RootLayout({ children }) {
         {/* X (Twitter) Conversion Tracking Pixel */}
         <Script
           id="twitter-pixel"
-          strategy="afterInteractive"
+          strategy="lazyOnload"
           dangerouslySetInnerHTML={{
             __html: `
               !function(e,t,n,s,u,a){e.twq||(s=e.twq=function(){s.exe?s.exe.apply(s,arguments):s.queue.push(arguments);
