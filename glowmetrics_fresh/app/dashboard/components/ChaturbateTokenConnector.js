@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { supabase } from '../../../lib/supabase';
+import Button from '../../../components/ui/Button';
 
 const BROADCASTER_TYPES = [
   { value: 'female', label: '👩 Female' },
@@ -309,17 +310,9 @@ export default function ChaturbateTokenConnector({ user, onConnected }) {
         )}
 
         {/* Submit */}
-        <button
-          type="submit"
-          disabled={loading}
-          style={{
-            ...styles.button,
-            opacity: loading ? 0.6 : 1,
-            cursor: loading ? 'not-allowed' : 'pointer',
-          }}
-        >
+        <Button type="submit" disabled={loading} style={{ width: '100%' }}>
           {loading ? 'Connecting…' : 'Connect Chaturbate →'}
-        </button>
+        </Button>
 
         <p style={{ textAlign: 'center', fontSize: 12, color: '#475569', margin: 0 }}>
           🔒 Your token is stored securely and never shared with anyone.
@@ -523,19 +516,6 @@ const styles = {
     padding: '10px 14px',
     fontSize: 13,
     color: '#f87171',
-  },
-  button: {
-    background: 'linear-gradient(135deg, #22D3EE, #EC4899)',
-    color: '#fff',
-    fontWeight: 800,
-    fontSize: 15,
-    border: 'none',
-    borderRadius: 10,
-    padding: '14px 20px',
-    width: '100%',
-    transition: 'opacity 0.15s',
-    boxShadow: '0 8px 24px rgba(34,211,238,0.25)',
-    letterSpacing: 0.2,
   },
   code: {
     fontFamily: 'monospace',

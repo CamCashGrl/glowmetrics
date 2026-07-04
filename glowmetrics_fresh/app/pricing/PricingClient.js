@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import UserCounter from '../components/UserCounter'
 import SiteFooter from '../components/SiteFooter'
+import Button from '../../components/ui/Button'
 
 async function startCheckout(planType, setLoading) {
   setLoading(planType)
@@ -87,23 +88,9 @@ function TopBar() {
           letterSpacing:        '-0.3px',
         }}>CamCash</span>
       </a>
-      <a href="/landing" style={{
-        display:        'inline-flex',
-        alignItems:     'center',
-        gap:            4,
-        padding:        '8px 18px',
-        borderRadius:   8,
-        background:     `linear-gradient(135deg, ${C.purple}, ${C.pink})`,
-        color:          '#fff',
-        fontWeight:     700,
-        fontSize:       13,
-        textDecoration: 'none',
-        letterSpacing:  '0.2px',
-        whiteSpace:     'nowrap',
-        boxShadow:      `0 0 16px rgba(168,85,247,0.35)`,
-      }}>
+      <Button as="a" href="/landing" style={{ padding: '8px 18px', fontSize: 13 }}>
         Create Free Account →
-      </a>
+      </Button>
     </div>
   )
 }
@@ -304,20 +291,9 @@ function AfterLaunchSection({ checkoutLoading, setCheckoutLoading }) {
               Free tier will ALWAYS exist and be useful
             </p>
 
-            <a href="/landing" style={{
-              display:        'block',
-              textAlign:      'center',
-              padding:        '12px 0',
-              borderRadius:   10,
-              border:         `1px solid ${C.cyan}`,
-              color:          C.cyan,
-              fontWeight:     700,
-              fontSize:       14,
-              textDecoration: 'none',
-              background:     'transparent',
-            }}>
+            <Button as="a" href="/landing" variant="secondary" style={{ display: 'block', width: '100%' }}>
               Start with Free Tier →
-            </a>
+            </Button>
           </div>
 
           {/* Premium Tier Card */}
@@ -361,26 +337,13 @@ function AfterLaunchSection({ checkoutLoading, setCheckoutLoading }) {
             </div>
 
             <div style={{ marginTop: 20 }}>
-              <button
+              <Button
                 onClick={() => startCheckout('standard_monthly', setCheckoutLoading)}
                 disabled={checkoutLoading !== null}
-                style={{
-                  display:      'block',
-                  width:        '100%',
-                  textAlign:    'center',
-                  padding:      '12px 0',
-                  borderRadius: 10,
-                  background:   checkoutLoading === 'standard_monthly' ? 'rgba(168,85,247,0.5)' : `linear-gradient(135deg, ${C.purple}, ${C.pink})`,
-                  color:        '#fff',
-                  fontWeight:   700,
-                  fontSize:     14,
-                  border:       'none',
-                  cursor:       checkoutLoading !== null ? 'wait' : 'pointer',
-                  boxSizing:    'border-box',
-                }}
+                style={{ display: 'block', width: '100%', padding: '12px 0', fontSize: 14 }}
               >
                 {checkoutLoading === 'standard_monthly' ? 'Redirecting…' : 'Get Standard Plan — $19.99/mo →'}
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -472,27 +435,13 @@ function EarlyAdopterSection({ checkoutLoading, setCheckoutLoading }) {
             <CheckLine color={C.pink}>Upgrade/downgrade anytime</CheckLine>
           </div>
 
-          <button
+          <Button
             onClick={() => startCheckout('early_adopter_monthly', setCheckoutLoading)}
             disabled={checkoutLoading !== null}
-            style={{
-              display:    'block',
-              width:      '100%',
-              textAlign:  'center',
-              padding:    '14px 0',
-              borderRadius: 10,
-              background:  checkoutLoading === 'early_adopter_monthly' ? 'rgba(236,72,153,0.5)' : `linear-gradient(135deg, ${C.pink}, #f97316)`,
-              color:      '#fff',
-              fontWeight: 800,
-              fontSize:   14,
-              border:     'none',
-              cursor:     checkoutLoading !== null ? 'wait' : 'pointer',
-              boxShadow:  '0 0 20px rgba(236,72,153,0.3)',
-              boxSizing:  'border-box',
-            }}
+            style={{ display: 'block', width: '100%', padding: '14px 0', fontSize: 14 }}
           >
             {checkoutLoading === 'early_adopter_monthly' ? 'Redirecting…' : 'Claim Early Adopter Monthly — $9.99/mo'}
-          </button>
+          </Button>
         </div>
 
         {/* Annual Card */}
@@ -534,27 +483,13 @@ function EarlyAdopterSection({ checkoutLoading, setCheckoutLoading }) {
             <CheckLine color={C.purple}>Auto-renews at same locked rate</CheckLine>
           </div>
 
-          <button
+          <Button
             onClick={() => startCheckout('early_adopter_annual', setCheckoutLoading)}
             disabled={checkoutLoading !== null}
-            style={{
-              display:    'block',
-              width:      '100%',
-              textAlign:  'center',
-              padding:    '14px 0',
-              borderRadius: 10,
-              background:  checkoutLoading === 'early_adopter_annual' ? 'rgba(168,85,247,0.5)' : `linear-gradient(135deg, ${C.purple}, ${C.pink})`,
-              color:      '#fff',
-              fontWeight: 800,
-              fontSize:   14,
-              border:     'none',
-              cursor:     checkoutLoading !== null ? 'wait' : 'pointer',
-              boxShadow:  '0 0 20px rgba(168,85,247,0.3)',
-              boxSizing:  'border-box',
-            }}
+            style={{ display: 'block', width: '100%', padding: '14px 0', fontSize: 14 }}
           >
             {checkoutLoading === 'early_adopter_annual' ? 'Redirecting…' : 'Claim Early Adopter Annual — $99.99/yr'}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -862,36 +797,12 @@ function FinalCTA() {
         justifyContent: 'center',
         marginBottom:   20,
       }}>
-        <a href="/landing" style={{
-          display:        'inline-flex',
-          alignItems:     'center',
-          gap:            6,
-          padding:        '14px 28px',
-          borderRadius:   10,
-          background:     `linear-gradient(135deg, ${C.purple}, ${C.pink})`,
-          color:          '#fff',
-          fontWeight:     800,
-          fontSize:       15,
-          textDecoration: 'none',
-          boxShadow:      `0 0 24px rgba(168,85,247,0.4)`,
-        }}>
+        <Button as="a" href="/landing" style={{ padding: '14px 28px' }}>
           Create Free Account →
-        </a>
-        <a href="/extension" style={{
-          display:        'inline-flex',
-          alignItems:     'center',
-          gap:            6,
-          padding:        '14px 28px',
-          borderRadius:   10,
-          background:     'transparent',
-          border:         `1px solid ${C.purple}`,
-          color:          C.purple,
-          fontWeight:     700,
-          fontSize:       15,
-          textDecoration: 'none',
-        }}>
+        </Button>
+        <Button as="a" href="/extension" variant="secondary" style={{ padding: '14px 28px', fontSize: 15 }}>
           View Extension →
-        </a>
+        </Button>
       </div>
 
       <div style={{ marginBottom: 24 }}>

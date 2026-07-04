@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../../lib/supabase'
+import Button from '../../components/ui/Button'
 
 export default function ResetPasswordPage() {
   const router = useRouter()
@@ -126,19 +127,9 @@ export default function ResetPasswordPage() {
               <div style={{ fontSize: 14, color: '#94a3b8', lineHeight: 1.7, marginBottom: 24 }}>
                 This reset link has expired. Request a new one.
               </div>
-              <a href="/forgot-password" style={{
-                display: 'inline-block',
-                padding: '11px 28px',
-                borderRadius: 10,
-                background: 'linear-gradient(135deg, #7C5CFF, #EC4899)',
-                color: 'white',
-                fontWeight: 700,
-                fontSize: 14,
-                textDecoration: 'none',
-                boxShadow: '0 0 20px rgba(124,92,255,0.3)',
-              }}>
+              <Button as="a" href="/forgot-password" style={{ padding: '11px 28px', fontSize: 14 }}>
                 Request new link →
-              </a>
+              </Button>
             </div>
           ) : success ? (
             /* ── Success state ── */
@@ -191,28 +182,13 @@ export default function ResetPasswordPage() {
                   </div>
                 )}
 
-                <button
+                <Button
                   type="submit"
                   disabled={loading || !sessionReady}
-                  style={{
-                    width: '100%',
-                    marginTop: 16,
-                    padding: '13px 0',
-                    borderRadius: 10,
-                    background: (loading || !sessionReady)
-                      ? 'rgba(124,92,255,0.2)'
-                      : 'linear-gradient(135deg, #7C5CFF, #EC4899)',
-                    color: 'white',
-                    fontWeight: 700,
-                    fontSize: 15,
-                    border: 'none',
-                    cursor: (loading || !sessionReady) ? 'not-allowed' : 'pointer',
-                    boxShadow: (loading || !sessionReady) ? 'none' : '0 0 24px rgba(124,92,255,0.3)',
-                    transition: 'all 0.2s',
-                  }}
+                  style={{ width: '100%', marginTop: 16, padding: '13px 0' }}
                 >
                   {loading ? 'Updating…' : 'Update Password'}
-                </button>
+                </Button>
               </form>
             </>
           )}

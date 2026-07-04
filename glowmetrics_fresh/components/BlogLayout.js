@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import Button from './ui/Button'
 
 const S = {
   bg:         '#0F1117',
@@ -13,7 +14,6 @@ const S = {
   accentSoft: 'rgba(99,102,241,0.12)',
   green:      '#10B981',
   pink:       '#EC4899',
-  gradient:   'linear-gradient(135deg, #6366F1, #EC4899)',
 }
 
 function FAQItem({ q, a }) {
@@ -71,10 +71,7 @@ export default function BlogLayout({
             ))}
           </ol>
         </nav>
-        <a href="/landing" style={{
-          padding: '6px 14px', borderRadius: '7px', textDecoration: 'none',
-          background: S.gradient, color: '#fff', fontSize: '12px', fontWeight: 700,
-        }}>Try GlowMetrics free →</a>
+        <Button as="a" href="/landing" style={{ padding: '6px 14px', fontSize: '12px' }}>Try GlowMetrics free →</Button>
       </div>
 
       {/* Hero */}

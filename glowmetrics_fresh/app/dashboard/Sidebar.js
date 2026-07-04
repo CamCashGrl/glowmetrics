@@ -1,5 +1,6 @@
 "use client"
 import { useState } from "react"
+import Button from "../../components/ui/Button"
 
 const C = {
   bg: "#05070f", card: "#0d1322", border: "#1e2d45",
@@ -198,12 +199,9 @@ export default function Sidebar({ activeTab, onTabChange, user, onSignOut, isPro
           <span style={{ fontSize: 12, fontWeight: 700, color: C.purple }}>Pro plan active</span>
         </div>
       ) : (
-        <button onClick={() => setShowUpgrade(true)}
-          style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 7, padding: "11px 12px", borderRadius: 12, border: "none", cursor: "pointer", background: `linear-gradient(135deg, ${C.cyan}, ${C.purple}, ${C.pink})`, color: "#fff", fontSize: 13, fontWeight: 800, marginBottom: 10, boxShadow: "0 0 18px rgba(236,72,153,0.28)", transition: "transform 0.15s" }}
-          onMouseEnter={e => e.currentTarget.style.transform = "translateY(-1px)"}
-          onMouseLeave={e => e.currentTarget.style.transform = ""}>
+        <Button onClick={() => setShowUpgrade(true)} style={{ width: "100%", marginBottom: 10, fontSize: 13, padding: "11px 12px" }}>
           ✦ Upgrade to Pro
-        </button>
+        </Button>
       )}
       {showUpgrade && <UpgradeModal onClose={() => setShowUpgrade(false)} />}
 

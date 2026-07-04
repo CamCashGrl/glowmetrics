@@ -1,5 +1,6 @@
 'use client'
 import { useState, useCallback, useEffect } from 'react'
+import Button from '../../../components/ui/Button'
 
 const C = {
   bg: '#030711', surface: '#0a0f1e', glass: 'rgba(255,255,255,0.03)',
@@ -591,9 +592,9 @@ export default function NameGeneratorClient() {
             </div>
           </div>
 
-          <button
+          <Button
             onClick={handleGenerate} disabled={loading}
-            style={{ width: '100%', padding: '17px', borderRadius: 13, fontSize: 16, fontWeight: 800, cursor: loading ? 'not-allowed' : 'pointer', border: 'none', transition: 'all 0.2s', background: loading ? 'rgba(255,255,255,0.07)' : `linear-gradient(135deg, ${C.indigo}, ${C.pink})`, color: loading ? C.muted : '#fff', boxShadow: loading ? 'none' : `0 0 36px ${C.indigo}50`, animation: loading ? 'none' : 'glowPulse 3s ease infinite' }}
+            style={{ width: '100%', padding: '17px', fontSize: 16 }}
           >
             {loading
               ? <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
@@ -602,7 +603,7 @@ export default function NameGeneratorClient() {
                 </span>
               : `⚡ Generate ${count} ${MODES.find(m=>m.id===mode)?.label || ''} Names`
             }
-          </button>
+          </Button>
         </div>
 
         {/* ── RESULTS ──────────────────────────────────────────────────────── */}
@@ -667,12 +668,12 @@ export default function NameGeneratorClient() {
                   You have your name. Now track which hours make you the most money, who your top fans are, and how to grow your brand — all from your existing platform data.
                 </p>
                 <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                  <a href="/login" style={{ padding: '13px 28px', borderRadius: 11, background: `linear-gradient(135deg, ${C.indigo}, ${C.pink})`, color: '#fff', fontWeight: 800, fontSize: 15, textDecoration: 'none', boxShadow: `0 0 28px ${C.indigo}44` }}>
+                  <Button as="a" href="/login" style={{ padding: '13px 28px', fontSize: 15 }}>
                     Start Tracking Your Creator Business →
-                  </a>
-                  <a href="/demo" style={{ padding: '13px 28px', borderRadius: 11, background: 'transparent', border: `1px solid ${C.border}`, color: C.text, fontWeight: 700, fontSize: 15, textDecoration: 'none' }}>
+                  </Button>
+                  <Button as="a" href="/demo" variant="secondary" style={{ padding: '13px 28px', fontSize: 15 }}>
                     See Live Demo →
-                  </a>
+                  </Button>
                 </div>
                 <div style={{ display: 'flex', gap: 24, marginTop: 18, flexWrap: 'wrap' }}>
                   {['Find Your Best Hours','Analyze Top Tippers','Compare Platforms','Live Coaching'].map(t => (
@@ -840,8 +841,8 @@ export default function NameGeneratorClient() {
             The models who grow fastest are the ones who know their numbers. CamCash shows you your top tippers, best hours, and most profitable platform — free.
           </p>
           <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap', marginBottom: 20 }}>
-            <a href="/login" style={{ padding: '14px 32px', borderRadius: 11, background: `linear-gradient(135deg, ${C.indigo}, ${C.pink})`, color: '#fff', fontWeight: 800, fontSize: 15, textDecoration: 'none', boxShadow: `0 0 28px ${C.indigo}44` }}>Start Tracking Free →</a>
-            <a href="/demo" style={{ padding: '14px 32px', borderRadius: 11, background: 'transparent', border: `1px solid ${C.border}`, color: C.text, fontWeight: 700, fontSize: 15, textDecoration: 'none' }}>See How It Works →</a>
+            <Button as="a" href="/login" style={{ padding: '14px 32px', fontSize: 15 }}>Start Tracking Free →</Button>
+            <Button as="a" href="/demo" variant="secondary" style={{ padding: '14px 32px', fontSize: 15 }}>See How It Works →</Button>
           </div>
           <div style={{ display: 'flex', gap: 6, justifyContent: 'center', flexWrap: 'wrap' }}>
             {['Top Tippers','Peak Hours','Platform Comparison','AI Live Coaching','Free Forever'].map(t => (

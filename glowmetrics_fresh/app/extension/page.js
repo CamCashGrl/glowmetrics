@@ -13,6 +13,10 @@ export const metadata = {
 
 import ExtensionDownloadButton from '../components/ExtensionDownloadButton'
 
+// Matches the gradient in components/ui/Button.js — single source of truth
+// for the app's signature CTA gradient.
+const BRAND_GRADIENT = 'linear-gradient(90deg,#21E6F3,#6C5CFF,#FF2FAE)'
+
 const C = {
   bg: '#040812',
   card: '#0d1424',
@@ -52,7 +56,7 @@ export default function ExtensionPage() {
           <ExtensionDownloadButton
             label="Install Free"
             style={{
-              background: 'linear-gradient(135deg, #a855f7, #7c3aed)',
+              background: BRAND_GRADIENT,
               color: '#fff',
               textDecoration: 'none',
               padding: '7px 16px',
@@ -116,14 +120,14 @@ export default function ExtensionPage() {
               label="📥 Install Chrome Extension — Free"
               style={{
                 display: 'inline-block',
-                background: 'linear-gradient(135deg, #a855f7, #7c3aed)',
+                background: BRAND_GRADIENT,
                 color: '#fff',
                 textDecoration: 'none',
                 padding: '16px 32px',
                 borderRadius: '12px',
                 fontSize: '17px',
                 fontWeight: '800',
-                boxShadow: '0 0 36px rgba(168,85,247,0.4)',
+                boxShadow: '0 0 14px rgba(33,230,243,0.16),0 0 28px rgba(255,47,174,0.10)',
               }}
             />
             <a href="/live" style={{
@@ -204,7 +208,7 @@ export default function ExtensionPage() {
             </div>
           </div>
           <div style={{ padding: '12px 16px' }}>
-            <div style={{ background: 'linear-gradient(135deg, #a855f7, #7c3aed)', color: '#fff', padding: '9px 0', borderRadius: '8px', textAlign: 'center', fontSize: '12px', fontWeight: '700' }}>
+            <div style={{ background: BRAND_GRADIENT, color: '#fff', padding: '9px 0', borderRadius: '8px', textAlign: 'center', fontSize: '12px', fontWeight: '700' }}>
               Open Dashboard →
             </div>
           </div>
@@ -244,7 +248,7 @@ export default function ExtensionPage() {
               }}>
                 <div style={{
                   width: '36px', height: '36px', borderRadius: '50%',
-                  background: 'linear-gradient(135deg, #a855f7, #7c3aed)',
+                  background: BRAND_GRADIENT,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   fontSize: '14px', fontWeight: '800', color: '#fff',
                   margin: '0 auto 14px',
@@ -263,7 +267,7 @@ export default function ExtensionPage() {
               label="📥 Download Extension — Free"
               style={{
                 display: 'inline-block',
-                background: 'linear-gradient(135deg, #a855f7, #7c3aed)',
+                background: BRAND_GRADIENT,
                 color: '#fff',
                 textDecoration: 'none',
                 padding: '14px 32px',
@@ -359,14 +363,14 @@ export default function ExtensionPage() {
             label="📥 Install CamCash — Free"
             style={{
               display: 'inline-block',
-              background: 'linear-gradient(135deg, #a855f7, #7c3aed)',
+              background: BRAND_GRADIENT,
               color: '#fff',
               textDecoration: 'none',
               padding: '18px 48px',
               borderRadius: '14px',
               fontSize: '18px',
               fontWeight: '800',
-              boxShadow: '0 0 44px rgba(168,85,247,0.38)',
+              boxShadow: '0 0 14px rgba(33,230,243,0.16),0 0 28px rgba(255,47,174,0.10)',
               marginBottom: '18px',
             }}
           />

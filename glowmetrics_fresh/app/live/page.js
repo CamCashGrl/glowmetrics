@@ -8,6 +8,7 @@ import { detectSessionPhase, PHASES, getRecoveryActions, getGoalStrategy } from 
 import { computeOpportunityScore, computeStreamHealth } from '../../lib/analytics/opportunity';
 import FeedbackWidget from '../components/FeedbackWidget';
 import EventsSync from './EventsSync';
+import Button from '../../components/ui/Button';
 
 const C = {
   bg: '#040812', card: 'rgba(15,20,32,0.75)', border: 'rgba(168,85,247,0.2)',
@@ -657,9 +658,9 @@ export default function LivePage() {
               <input type="password" placeholder="Password" value={authPassword} onChange={e => setAuthPassword(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAuth()} style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 10, padding: '11px 14px', color: C.white, fontSize: 14, outline: 'none', width: '100%', boxSizing: 'border-box' }} />
             </div>
             {authError && <div style={{ fontSize: 12, color: C.red, marginBottom: 12, textAlign: 'center' }}>{authError}</div>}
-            <button onClick={handleAuth} disabled={authLoading} style={{ width: '100%', padding: '13px 0', background: `linear-gradient(135deg, ${C.purple}, ${C.pink})`, border: 'none', borderRadius: 10, color: '#fff', fontWeight: 800, fontSize: 15, cursor: authLoading ? 'not-allowed' : 'pointer', opacity: authLoading ? 0.7 : 1, boxShadow: '0 0 24px rgba(168,85,247,0.3)' }}>
+            <Button onClick={handleAuth} disabled={authLoading} style={{ width: '100%', padding: '13px 0' }}>
               {authLoading ? 'Please wait…' : authMode === 'signin' ? 'Sign In →' : 'Create Account →'}
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -695,12 +696,12 @@ export default function LivePage() {
                     <button onClick={() => setExtStep(s => s - 1)} style={{ flex: 1, padding: '11px 0', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, color: C.muted, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>← Back</button>
                   )}
                   {!isLast ? (
-                    <button onClick={() => setExtStep(s => s + 1)} style={{ flex: 2, padding: '11px 0', background: `linear-gradient(135deg, ${C.purple}, ${C.pink})`, border: 'none', borderRadius: 10, color: '#fff', fontWeight: 800, fontSize: 14, cursor: 'pointer' }}>Next →</button>
+                    <Button onClick={() => setExtStep(s => s + 1)} style={{ flex: 2, padding: '11px 0', fontSize: 14 }}>Next →</Button>
                   ) : (
                     <div style={{ flex: 2, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      <button onClick={() => { setShowExtModal(false); setExtStep(0); setAuthMode('signup'); setShowAuthModal(true); }} style={{ width: '100%', padding: '11px 0', background: `linear-gradient(135deg, ${C.purple}, ${C.pink})`, border: 'none', borderRadius: 10, color: '#fff', fontWeight: 800, fontSize: 14, cursor: 'pointer', boxShadow: '0 0 20px rgba(168,85,247,0.3)' }}>
+                      <Button onClick={() => { setShowExtModal(false); setExtStep(0); setAuthMode('signup'); setShowAuthModal(true); }} style={{ width: '100%', padding: '11px 0', fontSize: 14 }}>
                         Sign up to save & sync data →
-                      </button>
+                      </Button>
                       <button onClick={() => { setShowExtModal(false); setExtStep(0); }} style={{ width: '100%', padding: '9px 0', background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, color: C.muted, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
                         Continue in guest mode
                       </button>
@@ -732,9 +733,9 @@ export default function LivePage() {
           <a href="/dashboard" style={{ padding: '7px 14px', background: 'rgba(168,85,247,0.12)', border: '1px solid rgba(168,85,247,0.2)', borderRadius: 8, color: C.purple, fontWeight: 600, fontSize: 12, textDecoration: 'none' }}>
             Full Dashboard →
           </a>
-          <a href="/camcash-extension.zip" download="camcash-extension.zip" onClick={() => { setShowExtModal(true); setExtStep(0); }} style={{ padding: '7px 14px', background: 'linear-gradient(135deg, #a855f7, #7c3aed)', color: '#fff', borderRadius: 8, fontWeight: 700, fontSize: 12, textDecoration: 'none' }}>
+          <Button as="a" href="/camcash-extension.zip" download="camcash-extension.zip" onClick={() => { setShowExtModal(true); setExtStep(0); }} style={{ padding: '7px 14px', fontSize: 12 }}>
             📥 Get Extension
-          </a>
+          </Button>
           <button onClick={async () => { await supabase.auth.signOut(); window.location.reload(); }} style={{ padding: '7px 14px', background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.25)', borderRadius: 8, color: C.red, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
             Sign Out
           </button>
@@ -787,10 +788,10 @@ export default function LivePage() {
               <option value="whale">🐋 Whale Focus</option>
               <option value="goal">🎯 Goal Focus</option>
             </select>
-            <a href="/camcash-extension.zip" download="camcash-extension.zip" onClick={() => { setShowExtModal(true); setExtStep(0); }}
-              style={{ padding: '7px 14px', borderRadius: 8, background: 'linear-gradient(135deg, #a855f7, #7c3aed)', color: '#fff', fontWeight: 700, fontSize: 12, textDecoration: 'none', whiteSpace: 'nowrap' }}>
+            <Button as="a" href="/camcash-extension.zip" download="camcash-extension.zip" onClick={() => { setShowExtModal(true); setExtStep(0); }}
+              style={{ padding: '7px 14px', fontSize: 12, whiteSpace: 'nowrap' }}>
               📥 Download Extension
-            </a>
+            </Button>
             {!liveActive ? (
               <button onClick={handleStartStream}
                 style={{ padding: '7px 18px', borderRadius: 8, background: 'linear-gradient(135deg, #10B981, #22D3EE)', border: 'none', color: C.white, fontWeight: 800, fontSize: 12, cursor: 'pointer', boxShadow: '0 0 16px rgba(16,185,129,0.35)' }}>
@@ -1114,7 +1115,7 @@ export default function LivePage() {
                         <input placeholder="Username" value={liveTipInput.username} onChange={e => setLiveTipInput(p => ({ ...p, username: e.target.value }))} onKeyDown={e => e.key === 'Enter' && addTip()} style={inp2} />
                         <input type="number" placeholder="Tokens" value={liveTipInput.tokens} onChange={e => setLiveTipInput(p => ({ ...p, tokens: e.target.value }))} onKeyDown={e => e.key === 'Enter' && addTip()} style={inp2} />
                         <input type="number" placeholder="USD" value={liveTipInput.usd} onChange={e => setLiveTipInput(p => ({ ...p, usd: e.target.value }))} onKeyDown={e => e.key === 'Enter' && addTip()} style={inp2} />
-                        <button onClick={addTip} style={{ padding: '8px 16px', borderRadius: 8, background: 'linear-gradient(135deg, #22D3EE, #EC4899)', border: 'none', color: C.white, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>+ Add</button>
+                        <Button onClick={addTip} style={{ padding: '8px 16px', fontSize: 14, whiteSpace: 'nowrap' }}>+ Add</Button>
                       </div>
                     </div>
                   </details>
@@ -1294,7 +1295,7 @@ export default function LivePage() {
                       : 'Install the CamCash Chrome extension — tips appear here automatically.'}
                   </div>
                   {!liveEvents.some(e => e.sourceUsed === 'extension') && (
-                    <a href="/camcash-extension.zip" download="camcash-extension.zip" style={{ display: 'inline-block', padding: '6px 14px', background: 'linear-gradient(135deg, #a855f7, #7c3aed)', color: '#fff', borderRadius: 7, fontSize: 11, fontWeight: 700, textDecoration: 'none' }}>📥 Download Extension →</a>
+                    <Button as="a" href="/camcash-extension.zip" download="camcash-extension.zip" style={{ padding: '6px 14px', fontSize: 11 }}>📥 Download Extension →</Button>
                   )}
                 </div>
               </div>
@@ -1365,9 +1366,9 @@ export default function LivePage() {
                 </div>
               ))}
             </div>
-            <a href="/camcash-extension.zip" download="camcash-extension.zip" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '11px 22px', background: 'linear-gradient(135deg, #a855f7, #7c3aed)', color: '#fff', borderRadius: 10, fontWeight: 800, textDecoration: 'none', fontSize: 14, boxShadow: '0 0 20px rgba(168,85,247,0.35)' }}>
+            <Button as="a" href="/camcash-extension.zip" download="camcash-extension.zip" style={{ padding: '11px 22px', fontSize: 14 }}>
               📥 Download Extension →
-            </a>
+            </Button>
           </div>
 
           {/* Full Access card */}
@@ -1387,9 +1388,9 @@ export default function LivePage() {
               ))}
             </div>
             <div style={{ display: 'flex', gap: 10 }}>
-              <a href="/signup" style={{ flex: 1, display: 'inline-block', textAlign: 'center', padding: '11px 0', background: `linear-gradient(135deg, ${C.pink}, ${C.purple})`, color: '#fff', borderRadius: 10, fontWeight: 800, textDecoration: 'none', fontSize: 14, boxShadow: '0 0 20px rgba(236,72,153,0.3)' }}>
+              <Button as="a" href="/signup" style={{ flex: 1, display: 'block', padding: '11px 0', fontSize: 14 }}>
                 Create Free Account →
-              </a>
+              </Button>
               <a href="/dashboard" style={{ display: 'inline-block', textAlign: 'center', padding: '11px 16px', background: 'rgba(168,85,247,0.12)', border: '1px solid rgba(168,85,247,0.2)', color: C.purple, borderRadius: 10, fontWeight: 700, textDecoration: 'none', fontSize: 14 }}>
                 Dashboard
               </a>

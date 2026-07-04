@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { FinalCTASection } from './sections'
+import Button from '../../components/ui/Button'
 
 const C = {
   bg:      '#040812',
@@ -114,11 +115,7 @@ function TopNav() {
       </a>
       <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
         <a href="/extension" style={{ fontSize: '13px', color: C.muted, textDecoration: 'none' }}>Extension</a>
-        <a href="/landing" style={{
-          padding: '7px 16px', borderRadius: '8px',
-          background: `linear-gradient(135deg, ${C.purple}, ${C.pink})`,
-          color: '#fff', fontWeight: 700, fontSize: '13px', textDecoration: 'none',
-        }}>Start free →</a>
+        <Button as="a" href="/landing" style={{ padding: '7px 16px', fontSize: '13px' }}>Start free →</Button>
       </div>
     </div>
   )
@@ -292,13 +289,7 @@ function OverviewTab() {
             </a>
           </div>
         </div>
-        <a href="/landing" style={{
-          display: 'inline-flex', alignItems: 'center', gap: '6px', flexShrink: 0,
-          padding: '10px 20px', borderRadius: '8px', textDecoration: 'none',
-          background: `linear-gradient(135deg, ${C.purple}, ${C.pink})`,
-          color: '#fff', fontWeight: 700, fontSize: '13px',
-          boxShadow: '0 0 16px rgba(168,85,247,0.3)',
-        }}>Upload CSV →</a>
+        <Button as="a" href="/landing" style={{ flexShrink: 0, padding: '10px 20px', fontSize: '13px' }}>Upload CSV →</Button>
       </div>
     </div>
   )
@@ -744,7 +735,7 @@ function LiveTab() {
                   <div style={{ fontSize: '16px', fontWeight: 700, color: C.white, marginBottom: '6px' }}>{icon} {title}</div>
                   <p style={{ margin: '0 0 12px', fontSize: '13px', color: C.muted, lineHeight: 1.6 }}>{body}</p>
                   {cta && <a href={cta.href} download={cta.download} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '10px 20px', borderRadius: '8px', textDecoration: 'none', background: `${color}15`, border: `1px solid ${color}50`, color, fontWeight: 700, fontSize: '13px' }}>{cta.label}</a>}
-                  {action && <button onClick={action.onClick} style={{ padding: '10px 22px', borderRadius: '8px', border: 'none', cursor: 'pointer', background: `linear-gradient(135deg, ${C.purple}, ${C.pink})`, color: '#fff', fontWeight: 700, fontSize: '13px', boxShadow: '0 0 20px rgba(168,85,247,0.35)' }}>{action.label}</button>}
+                  {action && <Button onClick={action.onClick} style={{ padding: '10px 22px', fontSize: '13px' }}>{action.label}</Button>}
                 </div>
               </div>
             </div>
@@ -889,12 +880,12 @@ function LiveTab() {
         <div style={{ fontSize: '14px', fontWeight: 700, color: C.white, marginBottom: 6 }}>Want real-time insights like this during your streams?</div>
         <div style={{ fontSize: '12px', color: C.muted, marginBottom: 18, lineHeight: 1.6 }}>Install the CamCash extension and tips appear here automatically — or upload a CSV to unlock personalized analytics from past sessions.</div>
         <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
-          <a href="/camcash-extension.zip" download="camcash-extension.zip" style={{ padding: '10px 22px', background: `linear-gradient(135deg, ${C.purple}, ${C.pink})`, color: '#fff', borderRadius: 9, fontWeight: 800, fontSize: '13px', textDecoration: 'none', boxShadow: '0 0 18px rgba(168,85,247,0.3)' }}>
+          <Button as="a" href="/camcash-extension.zip" download="camcash-extension.zip" style={{ padding: '10px 22px', fontSize: '13px' }}>
             📥 Install Extension
-          </a>
-          <a href="/dashboard" style={{ padding: '10px 22px', background: 'rgba(255,255,255,0.06)', border: `1px solid ${C.border}`, color: C.muted, borderRadius: 9, fontWeight: 700, fontSize: '13px', textDecoration: 'none' }}>
+          </Button>
+          <Button as="a" href="/dashboard" variant="secondary" style={{ padding: '10px 22px', fontSize: '13px' }}>
             Upload CSV →
-          </a>
+          </Button>
         </div>
       </div>
 
@@ -908,9 +899,9 @@ function LiveTab() {
         <div style={{ fontSize: '13px', color: C.muted, marginBottom: 24, lineHeight: 1.7, maxWidth: 440, margin: '0 auto 24px' }}>
           This is your command center. Real tips. Real fans. Real AI coaching. Everything you just saw — powered by your actual stream data.
         </div>
-        <a href="/onboarding" style={{ display: 'inline-flex', alignItems: 'center', gap: 10, padding: '14px 36px', background: `linear-gradient(135deg, ${C.purple}, ${C.pink})`, color: '#fff', borderRadius: 12, fontWeight: 800, fontSize: '16px', textDecoration: 'none', boxShadow: '0 0 32px rgba(168,85,247,0.4)' }}>
+        <Button as="a" href="/onboarding" style={{ padding: '14px 36px', fontSize: '16px' }}>
           Enter →
-        </a>
+        </Button>
         <div style={{ marginTop: 14, fontSize: '11px', color: C.dim }}>Free during beta · No credit card</div>
       </div>
 

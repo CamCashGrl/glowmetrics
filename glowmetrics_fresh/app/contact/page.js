@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../../lib/supabase'
+import Button from '../../components/ui/Button'
 
 export default function ContactPage() {
   const router = useRouter()
@@ -110,9 +111,9 @@ export default function ContactPage() {
                 <textarea value={form.message} onChange={set('message')} placeholder="How can we help?" style={{ ...inputStyle, minHeight: 130, resize: 'vertical' }} />
               </div>
               {error && <div style={{ fontSize: 13, color: '#f87171' }}>{error}</div>}
-              <button type="submit" disabled={submitting} style={{ width: '100%', padding: '13px 0', borderRadius: 10, background: 'linear-gradient(135deg, #7C5CFF, #EC4899)', border: 'none', color: '#fff', fontSize: 15, fontWeight: 800, cursor: submitting ? 'not-allowed' : 'pointer', opacity: submitting ? 0.7 : 1, fontFamily: 'inherit', transition: 'opacity 0.2s ease' }}>
+              <Button type="submit" disabled={submitting} style={{ width: '100%', padding: '13px 0' }}>
                 {submitting ? 'Sending…' : 'Send Message'}
-              </button>
+              </Button>
             </form>
           )}
         </div>

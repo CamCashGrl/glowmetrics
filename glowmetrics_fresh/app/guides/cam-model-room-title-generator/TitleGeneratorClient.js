@@ -1,5 +1,6 @@
 'use client'
 import { useState, useCallback } from 'react'
+import Button from '../../../components/ui/Button'
 
 // ─── Design tokens ─────────────────────────────────────────────────────────────
 const S = {
@@ -17,7 +18,7 @@ const S = {
   gold:      '#F59E0B',
   pink:      '#EC4899',
   cyan:      '#22D3EE',
-  gradient:  'linear-gradient(135deg, #6366F1, #EC4899)',
+  gradient:  'linear-gradient(135deg, #6C5CFF, #EC4899)',
 }
 
 // ─── Title generator data ──────────────────────────────────────────────────────
@@ -330,11 +331,7 @@ function TitleGenerator() {
         <p style={{ margin: 0, fontSize: '12px', color: S.text, fontStyle: 'italic' }}>
           💡 Refresh your room title every 15–30 min to test what gets more clicks and tips.
         </p>
-        <button onClick={generate} style={{
-          padding: '10px 28px', borderRadius: '8px', border: 'none', cursor: 'pointer',
-          background: S.gradient, color: '#fff', fontSize: '14px', fontWeight: 700,
-          boxShadow: '0 0 20px rgba(99,102,241,0.3)', flexShrink: 0,
-        }}>✨ {titles.length > 0 ? 'Generate more' : 'Generate titles'} →</button>
+        <Button onClick={generate} style={{ padding: '10px 28px', fontSize: '14px', flexShrink: 0 }}>✨ {titles.length > 0 ? 'Generate more' : 'Generate titles'} →</Button>
       </div>
 
       {titles.length > 0 && (
@@ -475,10 +472,7 @@ export default function TitleGeneratorClient() {
             ))}
           </ol>
         </nav>
-        <a href="/landing" style={{
-          padding: '6px 14px', borderRadius: '7px', textDecoration: 'none',
-          background: S.gradient, color: '#fff', fontSize: '12px', fontWeight: 700,
-        }}>Try CamCash free →</a>
+        <Button as="a" href="/landing" style={{ padding: '6px 14px', fontSize: '12px' }}>Try CamCash free →</Button>
       </div>
 
       {/* Hero */}

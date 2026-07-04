@@ -1,5 +1,6 @@
 "use client"
 import { useState } from "react"
+import Button from "./ui/Button"
 
 const TOY_OPTIONS = [
   { value: '', label: 'No toy' },
@@ -256,13 +257,9 @@ export default function RoomTitleGenerator({ C = {}, platform = 'Chaturbate' }) 
 
       {/* Buttons */}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        <button onClick={generate} style={{
-          padding: '9px 22px', borderRadius: 8, border: 'none',
-          background: `linear-gradient(135deg, ${cyan}, ${pink})`,
-          color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer',
-        }}>
+        <Button onClick={generate} style={{ padding: '9px 22px', fontSize: 13 }}>
           ✨ {titles.length > 0 ? 'Generate more' : 'Generate titles'}
-        </button>
+        </Button>
         <button onClick={toggleHash} style={{
           padding: '9px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer',
           background: showHash ? 'rgba(34,211,238,0.12)' : 'rgba(255,255,255,0.05)',
