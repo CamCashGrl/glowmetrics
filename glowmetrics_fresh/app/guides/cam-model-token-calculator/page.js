@@ -1,4 +1,5 @@
 import TokenCalculatorClient from './TokenCalculatorClient'
+import Button from '../../../components/ui/Button'
 
 export const metadata = {
   title: 'Cam Model Token Calculator: Convert Tokens to USD Fast',
@@ -96,14 +97,14 @@ export default function TokenCalculatorPage() {
 
         {/* NAV */}
         <nav style={{ padding: '18px 40px', borderBottom: `1px solid ${S.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, background: S.bg, zIndex: 50 }}>
-          <a href="/landing" style={{ fontWeight: 800, fontSize: 20, color: S.white, textDecoration: 'none' }}>
-            Cam<span style={{ color: S.accent }}>Cash</span>
+          <a href="/landing" style={{ fontWeight: 700, fontSize: 15, color: S.white, textDecoration: 'none', letterSpacing: '-0.2px' }}>
+            💜 CamCash
           </a>
           <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
             <a href="/guides/cam-model-room-title-generator" style={{ fontSize: 13, color: S.muted, textDecoration: 'none' }}>Title Generator</a>
-            <a href="/login" style={{ padding: '8px 20px', borderRadius: 8, background: S.accent, color: 'white', fontWeight: 700, fontSize: 13, textDecoration: 'none' }}>
+            <Button as="a" href="/login" style={{ padding: '8px 20px', fontSize: 13 }}>
               Start Free →
-            </a>
+            </Button>
           </div>
         </nav>
 

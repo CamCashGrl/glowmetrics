@@ -1,4 +1,5 @@
 // app/blog/cam-model-boundaries-toxic-chat/page.js
+import Button from '../../../components/ui/Button'
 // Target keywords: how to set boundaries as a cam model, toxic chat cam model, cam model dealing with difficult viewers
 
 export const metadata = {
@@ -21,7 +22,6 @@ export default function BoundariesToxicChat() {
     navLogo: { textDecoration: 'none', fontWeight: 700, fontSize: '15px', color: '#f1f5f9', letterSpacing: '-0.2px' },
     navLinks: { display: 'flex', alignItems: 'center', gap: '4px' },
     navLink: { color: '#475569', fontSize: '13px', textDecoration: 'none', padding: '4px 10px', borderRadius: '6px' },
-    navCta: { marginLeft: '8px', fontSize: '12px', fontWeight: '600', color: '#6366f1', border: '1px solid rgba(99,102,241,0.18)', background: 'rgba(99,102,241,0.06)', padding: '5px 12px', borderRadius: '6px', textDecoration: 'none' },
     container: { maxWidth: '680px', margin: '0 auto', padding: '36px 20px 80px' },
     breadcrumb: { fontSize: '12px', color: '#475569', marginBottom: '20px', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '4px' },
     breadcrumbLink: { color: '#475569', textDecoration: 'none' },
@@ -36,7 +36,6 @@ export default function BoundariesToxicChat() {
     callout: { padding: '14px 18px', borderRadius: '8px', background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.15)', marginBottom: '20px' },
     warning: { padding: '14px 18px', borderRadius: '8px', background: 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.2)', marginBottom: '20px' },
     ctaBox: { background: 'linear-gradient(135deg, rgba(99,102,241,0.10) 0%, rgba(139,92,246,0.08) 100%)', border: '1px solid rgba(99,102,241,0.25)', borderRadius: '14px', padding: '36px 28px', margin: '44px 0 36px', textAlign: 'center' },
-    ctaBtn: { display: 'inline-block', padding: '13px 36px', borderRadius: '9px', background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', color: 'white', fontWeight: 700, fontSize: '16px', textDecoration: 'none' },
     faqItem: { marginBottom: '24px', paddingBottom: '24px', borderBottom: '1px solid rgba(255,255,255,0.04)' },
     faqQ: { fontSize: '15px', fontWeight: 600, color: '#c7d2fe', marginBottom: '8px' },
     faqA: { fontSize: '14px', color: '#94a3b8', lineHeight: 1.75, marginBottom: 0 },
@@ -83,7 +82,7 @@ export default function BoundariesToxicChat() {
           {[['/', 'Home'], ['/blog', 'Blog'], ['/tools', 'Free tools']].map(([href, label]) => (
             <a key={href} href={href} style={s.navLink}>{label}</a>
           ))}
-          <a href="/landing" style={s.navCta}>Free account</a>
+          <Button as="a" href="/landing" variant="secondary" style={{ marginLeft: '8px', padding: '5px 12px', fontSize: '12px' }}>Free account</Button>
         </div>
       </nav>
 
@@ -214,7 +213,7 @@ export default function BoundariesToxicChat() {
           <div style={s.ctaBox}>
             <div style={{ fontSize: '22px', fontWeight: 800, color: '#f1f5f9', marginBottom: '12px', letterSpacing: '-0.02em' }}>Know which fans are actually worth your energy</div>
             <p style={{ fontSize: '14px', color: '#64748b', lineHeight: 1.7, marginBottom: '20px' }}>CamCash shows your top fans by lifetime spend so you know exactly who to protect and who isn't worth the headache.</p>
-            <a href="/landing" style={s.ctaBtn}>See My Fan Data Free →</a>
+            <Button as="a" href="/landing" style={{ padding: '13px 36px', fontSize: '16px' }}>See My Fan Data Free →</Button>
           </div>
 
           <div style={s.related}>

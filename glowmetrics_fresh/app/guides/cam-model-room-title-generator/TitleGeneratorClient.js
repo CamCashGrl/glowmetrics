@@ -458,9 +458,12 @@ export default function TitleGeneratorClient() {
       <div style={{
         borderBottom: `1px solid ${S.border}`, padding: '14px 20px',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        background: S.surface,
+        background: S.surface, gap: 16,
       }}>
-        <nav aria-label="Breadcrumb">
+        <a href="/" style={{ textDecoration: 'none', fontWeight: 700, fontSize: '15px', color: S.textStrong, letterSpacing: '-0.2px', flexShrink: 0 }}>
+          💜 CamCash
+        </a>
+        <nav aria-label="Breadcrumb" style={{ minWidth: 0 }}>
           <ol style={{ display: 'flex', gap: '6px', alignItems: 'center', listStyle: 'none', margin: 0, padding: 0 }}>
             {[['Home', '/'], ['Guides', '/guides'], ['Room Title Generator', null]].map(([label, href], i) => (
               <li key={label} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>

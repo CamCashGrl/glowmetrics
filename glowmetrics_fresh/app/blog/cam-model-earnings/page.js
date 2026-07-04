@@ -1,4 +1,5 @@
 import ArticleLayout from '../../components/ArticleLayout'
+import Button from '../../../components/ui/Button'
 
 export const metadata = {
   title: 'How Much Do Cam Models Make? Real Hourly Rates by Experience Level',
@@ -170,8 +171,6 @@ const s = {
   heroSub:  { fontSize: '15px', color: '#94a3b8', lineHeight: 1.65, marginBottom: '20px', maxWidth: '500px', margin: '0 auto 20px' },
   heroBulletItem: { fontSize: '14px', color: '#cbd5e1', lineHeight: 1.8, listStyle: 'none', padding: 0 },
   heroBtnRow: { display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' },
-  heroBtnPrimary: { display: 'inline-block', padding: '11px 28px', borderRadius: '8px', background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', color: 'white', fontWeight: 700, fontSize: '15px', textDecoration: 'none' },
-  heroBtnSecondary: { display: 'inline-block', padding: '11px 28px', borderRadius: '8px', background: 'transparent', border: '1px solid rgba(99,102,241,0.4)', color: '#a5b4fc', fontWeight: 600, fontSize: '15px', textDecoration: 'none' },
   compareTable: { width: '100%', borderCollapse: 'collapse', marginBottom: '28px', fontSize: '14px' },
   thCell:   { padding: '10px 14px', textAlign: 'left', fontSize: '11px', fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.06em', borderBottom: '1px solid rgba(255,255,255,0.07)', background: 'rgba(255,255,255,0.02)' },
   tdCell:   { padding: '11px 14px', color: '#94a3b8', borderBottom: '1px solid rgba(255,255,255,0.04)', lineHeight: 1.55 },
@@ -385,8 +384,8 @@ export default function CamModelEarnings() {
           <li style={s.heroBulletItem}>✓ Fan retention alerts before whales go cold</li>
         </ul>
         <div style={s.heroBtnRow}>
-          <a href="/landing" style={s.heroBtnPrimary}>Analyze My Earnings Free →</a>
-          <a href="/landing/demo" style={s.heroBtnSecondary}>Try Demo Dashboard →</a>
+          <Button as="a" href="/landing" style={{ padding: '11px 28px', fontSize: '15px' }}>Analyze My Earnings Free →</Button>
+          <Button as="a" href="/landing/demo" variant="secondary" style={{ padding: '11px 28px', fontSize: '15px' }}>Try Demo Dashboard →</Button>
         </div>
       </div>
 

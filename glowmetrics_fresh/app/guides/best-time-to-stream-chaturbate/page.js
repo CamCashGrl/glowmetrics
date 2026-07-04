@@ -1,5 +1,6 @@
 // app/guides/best-time-to-stream-chaturbate/page.js
 import { PeakHourCalculator, RevPerHourCalculator } from './BestTimeClient'
+import Button from '../../../components/ui/Button'
 
 export const metadata = {
   title: 'Best Time to Stream on Chaturbate in 2026 — Peak Hours',
@@ -291,12 +292,12 @@ export default function BestTimeToStreamPage() {
 
         {/* NAV */}
         <nav style={{ padding: '20px 40px', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <a href="/landing" style={{ fontWeight: 800, fontSize: 20, color: 'white', textDecoration: 'none' }}>
-            Cam<span style={{ color: '#22D3EE' }}>Cash</span>
+          <a href="/landing" style={{ fontWeight: 700, fontSize: 15, color: 'white', textDecoration: 'none', letterSpacing: '-0.2px' }}>
+            💜 CamCash
           </a>
-          <a href="/login" style={{ padding: '8px 20px', borderRadius: 8, background: 'linear-gradient(135deg, #22D3EE, #EC4899)', color: 'white', fontWeight: 700, fontSize: 13, textDecoration: 'none' }}>
+          <Button as="a" href="/login" style={{ padding: '8px 20px', fontSize: 13 }}>
             Start Free →
-          </a>
+          </Button>
         </nav>
 
         <article style={{ maxWidth: 780, margin: '0 auto', padding: '60px 24px 100px' }}>

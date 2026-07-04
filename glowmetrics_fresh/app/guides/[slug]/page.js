@@ -1,6 +1,7 @@
 // app/guides/[slug]/page.js
 // 12 keyword-targeted pages. Each one ranks for a specific search term
 // and converts visitors directly to signups.
+import Button from '../../../components/ui/Button'
 
 const BASE = 'https://www.camcashgrl.com'
 
@@ -378,9 +379,7 @@ export default function GuidePage({ params }) {
   const s = {
     page: { background: '#05070f', minHeight: '100vh', color: '#94A3B8', fontFamily: 'Inter, sans-serif' },
     nav: { padding: '20px 40px', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
-    logo: { fontWeight: 800, fontSize: 20, color: 'white', textDecoration: 'none' },
-    logoAccent: { color: '#22D3EE' },
-    navCta: { padding: '8px 20px', borderRadius: 8, background: 'linear-gradient(135deg, #22D3EE, #EC4899)', color: 'white', fontWeight: 700, fontSize: 13, textDecoration: 'none' },
+    logo: { fontWeight: 700, fontSize: 15, color: 'white', textDecoration: 'none', letterSpacing: '-0.2px' },
     article: { maxWidth: 760, margin: '0 auto', padding: '60px 24px 100px' },
     breadcrumb: { marginBottom: 24, fontSize: 13 },
     breadLink: { color: '#22D3EE', textDecoration: 'none' },
@@ -412,8 +411,8 @@ export default function GuidePage({ params }) {
   return (
     <div style={s.page}>
       <nav style={s.nav}>
-        <a href="/landing" style={s.logo}>Cam<span style={s.logoAccent}>Cash</span></a>
-        <a href="/login" style={s.navCta}>Start Free →</a>
+        <a href="/landing" style={s.logo}>💜 CamCash</a>
+        <Button as="a" href="/login" style={{ padding: '8px 20px', fontSize: 13 }}>Start Free →</Button>
       </nav>
 
       <article style={s.article}>

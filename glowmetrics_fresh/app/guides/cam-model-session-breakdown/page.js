@@ -1,3 +1,5 @@
+import Button from '../../../components/ui/Button'
+
 export const metadata = {
   title: 'Cam Model Session Breakdown',
   description: 'Break down each cam session by earnings, tips, top fans, and timing — so you know exactly what made a session strong or slow.',
@@ -8,8 +10,8 @@ export default function CamModelSessionBreakdown() {
   return (
     <div style={{ background: '#05070f', minHeight: '100vh', color: '#94a3b8', fontFamily: 'Inter, sans-serif' }}>
       <nav style={{ padding: '20px 40px', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <a href="/landing" style={{ fontWeight: 800, fontSize: 20, color: 'white', textDecoration: 'none' }}>Cam<span style={{ color: '#6366f1' }}>Cash</span></a>
-        <a href="/login" style={{ padding: '8px 20px', borderRadius: 8, background: '#6366f1', color: 'white', fontWeight: 700, fontSize: 13, textDecoration: 'none' }}>Start Free →</a>
+        <a href="/landing" style={{ fontWeight: 700, fontSize: 15, color: 'white', textDecoration: 'none', letterSpacing: '-0.2px' }}>💜 CamCash</a>
+        <Button as="a" href="/login" style={{ padding: '8px 20px', fontSize: 13 }}>Start Free →</Button>
       </nav>
       <div style={{ maxWidth: 780, margin: '0 auto', padding: '60px 24px 100px' }}>
         <h1 style={{ fontSize: 40, fontWeight: 900, color: 'white', lineHeight: 1.15, marginBottom: 20, letterSpacing: '-0.02em' }}>

@@ -497,12 +497,12 @@ export default function NameGeneratorClient() {
 
       {/* NAV */}
       <nav style={{ padding: '16px 32px', borderBottom: `1px solid ${C.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, background: 'rgba(3,7,17,0.95)', backdropFilter: 'blur(16px)', zIndex: 40 }}>
-        <a href="/landing" style={{ fontWeight: 800, fontSize: 18, color: C.white, textDecoration: 'none' }}>Cam<span style={{ color: C.cyan }}>Cash</span></a>
+        <a href="/landing" style={{ fontWeight: 700, fontSize: 15, color: C.white, textDecoration: 'none', letterSpacing: '-0.2px' }}>💜 CamCash</a>
         <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
           <a href="/tools" style={{ fontSize: 13, color: C.muted, textDecoration: 'none' }}>All Tools</a>
           <a href="/guides/cam-model-room-title-generator" style={{ fontSize: 13, color: C.muted, textDecoration: 'none' }}>Title Generator</a>
           <a href="/guides/cam-model-token-calculator" style={{ fontSize: 13, color: C.muted, textDecoration: 'none' }}>Token Calc</a>
-          <a href="/login" style={{ padding: '7px 18px', borderRadius: 8, background: C.indigo, color: '#fff', fontWeight: 700, fontSize: 13, textDecoration: 'none' }}>Sign in</a>
+          <Button as="a" href="/login" style={{ padding: '7px 18px', fontSize: 13 }}>Sign in</Button>
         </div>
       </nav>
 

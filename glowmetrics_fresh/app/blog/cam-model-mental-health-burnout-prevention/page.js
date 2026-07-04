@@ -1,4 +1,5 @@
 // app/blog/cam-model-mental-health-burnout-prevention/page.js
+import Button from '../../../components/ui/Button'
 // Target keywords: cam model burnout, cam model mental health, how to avoid burnout camming, cam model self care
 
 export const metadata = {
@@ -21,7 +22,6 @@ export default function BurnoutPrevention() {
     navLogo: { textDecoration: 'none', fontWeight: 700, fontSize: '15px', color: '#f1f5f9', letterSpacing: '-0.2px' },
     navLinks: { display: 'flex', alignItems: 'center', gap: '4px' },
     navLink: { color: '#475569', fontSize: '13px', textDecoration: 'none', padding: '4px 10px', borderRadius: '6px' },
-    navCta: { marginLeft: '8px', fontSize: '12px', fontWeight: '600', color: '#6366f1', border: '1px solid rgba(99,102,241,0.18)', background: 'rgba(99,102,241,0.06)', padding: '5px 12px', borderRadius: '6px', textDecoration: 'none' },
     container: { maxWidth: '680px', margin: '0 auto', padding: '36px 20px 80px' },
     breadcrumb: { fontSize: '12px', color: '#475569', marginBottom: '20px', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '4px' },
     breadcrumbLink: { color: '#475569', textDecoration: 'none' },
@@ -35,7 +35,6 @@ export default function BurnoutPrevention() {
     ul: { paddingLeft: '20px', marginBottom: '16px' },
     callout: { padding: '14px 18px', borderRadius: '8px', background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.15)', marginBottom: '20px' },
     ctaBox: { background: 'linear-gradient(135deg, rgba(99,102,241,0.10) 0%, rgba(139,92,246,0.08) 100%)', border: '1px solid rgba(99,102,241,0.25)', borderRadius: '14px', padding: '36px 28px', margin: '44px 0 36px', textAlign: 'center' },
-    ctaBtn: { display: 'inline-block', padding: '13px 36px', borderRadius: '9px', background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', color: 'white', fontWeight: 700, fontSize: '16px', textDecoration: 'none' },
     faqItem: { marginBottom: '24px', paddingBottom: '24px', borderBottom: '1px solid rgba(255,255,255,0.04)' },
     faqQ: { fontSize: '15px', fontWeight: 600, color: '#c7d2fe', marginBottom: '8px' },
     faqA: { fontSize: '14px', color: '#94a3b8', lineHeight: 1.75, marginBottom: 0 },
@@ -82,7 +81,7 @@ export default function BurnoutPrevention() {
           {[['/', 'Home'], ['/blog', 'Blog'], ['/tools', 'Free tools']].map(([href, label]) => (
             <a key={href} href={href} style={s.navLink}>{label}</a>
           ))}
-          <a href="/landing" style={s.navCta}>Free account</a>
+          <Button as="a" href="/landing" variant="secondary" style={{ marginLeft: '8px', padding: '5px 12px', fontSize: '12px' }}>Free account</Button>
         </div>
       </nav>
 
@@ -230,7 +229,7 @@ export default function BurnoutPrevention() {
           <div style={s.ctaBox}>
             <div style={{ fontSize: '22px', fontWeight: 800, color: '#f1f5f9', marginBottom: '12px', letterSpacing: '-0.02em' }}>Work smarter, not longer</div>
             <p style={{ fontSize: '14px', color: '#64748b', lineHeight: 1.7, marginBottom: '20px' }}>Knowing your peak earning hours means fewer sessions for the same income. Upload your tip history and see exactly when your time is worth the most.</p>
-            <a href="/landing" style={s.ctaBtn}>Start Tracking Free →</a>
+            <Button as="a" href="/landing" style={{ padding: '13px 36px', fontSize: '16px' }}>Start Tracking Free →</Button>
           </div>
 
           <div style={s.related}>
