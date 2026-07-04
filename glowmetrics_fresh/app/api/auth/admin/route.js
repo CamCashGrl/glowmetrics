@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import crypto from 'crypto'
+import { signAdminToken } from '../../../../lib/adminAuth'
 
 export async function POST(req) {
   const body = await req.json()
@@ -10,8 +10,6 @@ export async function POST(req) {
   if (!email || !password || email !== adminEmail || password !== adminPassword) {
     return NextResponse.json({ error: 'Invalid credentials.' }, { status: 401 })
   }
-  const token = crypto.createHmac('sha256', process.env.ADMIN_SECRET || 'fallback')
-    .update(`${email}:${Date.now()}`)
-    .digest('hex')
+  const token = signAdminToken()
   return NextResponse.json({ token, ok: true })
 }

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { cookies } from "next/headers"
+import { verifyAdminToken } from "../../../../lib/adminAuth"
 
 const STAGE_DATA = {
   "no-data": {
@@ -112,7 +113,7 @@ const STAGE_DATA = {
 export async function GET(req) {
   const cookieStore = cookies()
   const adminCookie = cookieStore.get("gm_admin")
-  if (!adminCookie?.value) {
+  if (!verifyAdminToken(adminCookie?.value)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
