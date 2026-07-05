@@ -347,6 +347,18 @@
       }
       #noauth a { color: #a78bfa; font-weight: 700; }
 
+      /* Free plan notice — tips are live-only, not saved to history */
+      #planNotice {
+        padding: 7px 10px;
+        border-radius: 8px;
+        font-size: 10px;
+        line-height: 1.5;
+        background: rgba(245,158,11,0.08);
+        border: 1px solid rgba(245,158,11,0.25);
+        color: #fbbf24;
+      }
+      #planNotice a { color: #fbbf24; font-weight: 700; text-decoration: underline; }
+
       /* Collapsed: hide everything except header */
       #panel.collapsed #body,
       #panel.collapsed #foot { display: none; }
@@ -408,6 +420,13 @@
           </div>`;
         }).join('');
 
+    const planNotice = s.isPro ? '' : `
+      <div id="planNotice">
+        🔓 Free plan: live coaching + this tip feed, always. Tips aren't saved to
+        your permanent history — <a href="https://www.camcashgrl.com/pricing" target="_blank">upgrade to keep them forever →</a>
+      </div>
+    `;
+
     return hdr + `
       <div id="body">
         <div id="coach">${_esc(coachText)}</div>
@@ -418,6 +437,7 @@
           <div class="st"><div class="stl">Tips</div><div class="stv o">${tipCount}</div></div>
         </div>
         <div id="tips">${tipRows}</div>
+        ${planNotice}
       </div>
       <div id="foot">
         <a class="dashbtn" href="https://www.camcashgrl.com/dashboard" target="_blank">📊 Open Dashboard →</a>
