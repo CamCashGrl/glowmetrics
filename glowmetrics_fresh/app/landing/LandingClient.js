@@ -3,9 +3,17 @@ import { useState, useEffect, useRef, Fragment } from "react"
 import { useRouter } from "next/navigation"
 import dynamic from "next/dynamic"
 import { DM_Sans } from "next/font/google"
-import { supabase } from "../../lib/supabase"
 import { T as TrackEvents, captureAttribution } from "../../lib/tracking"
 import { track } from "../../lib/track"
+
+// Supabase (and its ~85KB of JS) is only needed once a visitor checks their
+// auth state or touches the signup/login form — not for the initial paint.
+// Dynamic import splits it into its own chunk instead of the homepage bundle.
+let supabasePromise
+function getSupabase() {
+  if (!supabasePromise) supabasePromise = import("../../lib/supabase").then(m => m.supabase)
+  return supabasePromise
+}
 
 // Self-hosted (was a render-blocking `@import url(fonts.googleapis.com/...)`
 // in the <style jsx> block below — same weights that @import requested).
@@ -607,8 +615,9 @@ export default function LandingClient() {
   }, [])
 
   useEffect(() => {
-    supabase.auth.getUser().then(async ({ data: { user } }) => {
+    getSupabase().then(supabase => supabase.auth.getUser()).then(async ({ data: { user } }) => {
       if (!user) return
+      const supabase = await getSupabase()
       const plan = new URLSearchParams(window.location.search).get('plan')
       if (plan) { goToCheckout(plan); return }
       const { data: profile } = await supabase
@@ -644,6 +653,7 @@ export default function LandingClient() {
   const handleAuth = async (e) => {
     e.preventDefault()
     setAuthLoading(true); setAuthError(""); setAuthMsg("")
+    const supabasePromise = getSupabase()
     if (isSignUp) {
       track('signup_started')
       const captchaRes = await fetch('/api/auth/verify-captcha', {
@@ -655,6 +665,7 @@ export default function LandingClient() {
       if (!captchaData.ok) { setAuthError(captchaData.error || 'Security check failed.'); setAuthLoading(false); return }
       let attribution = null
       try { attribution = JSON.parse(localStorage.getItem('camcash_attribution') || 'null') } catch {}
+      const supabase = await supabasePromise
       const { error } = await supabase.auth.signUp({ email, password })
       if (error) { setAuthError(friendlyAuthError(error.message)); setAuthLoading(false) }
       else {
@@ -685,6 +696,7 @@ export default function LandingClient() {
         else { setAuthMsg("Account created! Check your email to confirm, then log in."); setIsSignUp(false); setAuthLoading(false) }
       }
     } else {
+      const supabase = await supabasePromise
       const { error } = await supabase.auth.signInWithPassword({ email, password })
       if (error) { setAuthError(friendlyAuthError(error.message)); setAuthLoading(false) }
       else {
@@ -703,6 +715,7 @@ export default function LandingClient() {
 
   const handleForgotPassword = async () => {
     if (!email) { setAuthError("Enter your email first."); return }
+    const supabase = await getSupabase()
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: "https://www.camcashgrl.com/reset-password",
     })
