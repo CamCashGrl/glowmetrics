@@ -1,5 +1,5 @@
 "use client"
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, Fragment } from "react"
 import { useRouter } from "next/navigation"
 import dynamic from "next/dynamic"
 import { DM_Sans } from "next/font/google"
@@ -328,6 +328,204 @@ function LiveDemoPanel() {
   )
 }
 
+// ── DEMO PREVIEW GRID — mini interactive cards for features not covered
+//    by the Live Demo widget or the Message Generator Preview section ───────
+const LP_PLATFORMS = [
+  { name: "Chaturbate",  rate: "$61/hr", pct: 100, color: T.cyan },
+  { name: "BongaCams",   rate: "$38/hr", pct: 62,  color: T.pink },
+  { name: "MyFreeCams",  rate: "$28/hr", pct: 46,  color: T.gold },
+]
+
+const LP_SESSIONS = [
+  { day: "Mon", usd: 210 }, { day: "Tue", usd: 95 },  { day: "Wed", usd: 340 },
+  { day: "Thu", usd: 610 }, { day: "Fri", usd: 180 }, { day: "Sat", usd: 520 }, { day: "Sun", usd: 140 },
+]
+
+const LP_MONEYMAP_SLOTS = ["12–6am", "6am–12pm", "12–6pm", "6pm–12am"]
+const LP_MONEYMAP_DAYS  = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+const LP_MONEYMAP_GRID  = [
+  [0, 0, 2, 18], [0, 0, 3, 22], [0, 0, 2, 16], [0, 0, 4, 28],
+  [0, 0, 5, 62], [0, 0, 3, 34], [0, 0, 6, 38],
+]
+
+const LP_PLAN = [
+  { day: "Thursday", window: "9–11 PM", rate: "$62/hr", tag: "Top Pick" },
+  { day: "Saturday", window: "8–11 PM", rate: "$41/hr", tag: "Peak"     },
+  { day: "Monday",   window: "9–10 PM", rate: "$29/hr", tag: "Steady"   },
+]
+
+const LP_TITLES = {
+  Tease:     (g) => [`let's see how far you take me 💦 hit ${g} → full control`, `I'm not giving it up that easy 😏 ${g} tokens and you decide`],
+  Hype:      (g) => [`WE ARE SO CLOSE 🔥 ${g} tokens and this room explodes`, `the energy in here is insane — push to ${g} 💥`],
+  Mystery:   (g) => [`you won't believe what happens at ${g} 👀 tip to find out`, `something big is coming… ${g} unlocks it 🎁`],
+}
+
+function DemoMiniCard({ icon, title, sub, children }) {
+  return (
+    <div style={{ padding: "20px 18px", borderRadius: 18, background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.07)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+        <span style={{ fontSize: 17 }}>{icon}</span>
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "white" }}>{title}</div>
+          <div style={{ fontSize: 11, color: T.textFaint }}>{sub}</div>
+        </div>
+      </div>
+      {children}
+    </div>
+  )
+}
+
+function PlatformCompareMini() {
+  return (
+    <DemoMiniCard icon="🎯" title="Platform Comparison" sub="See where your time is worth more">
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {LP_PLATFORMS.map(p => (
+          <div key={p.name}>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11.5, marginBottom: 4, color: T.textSoft }}>
+              <span>{p.name}</span><span style={{ color: p.color, fontWeight: 700 }}>{p.rate}</span>
+            </div>
+            <div style={{ height: 6, borderRadius: 999, background: "rgba(255,255,255,0.06)", overflow: "hidden" }}>
+              <div style={{ height: "100%", width: `${p.pct}%`, borderRadius: 999, background: p.color }} />
+            </div>
+          </div>
+        ))}
+      </div>
+      <div style={{ marginTop: 12, fontSize: 11, color: T.textFaint }}>Chaturbate earns <strong style={{ color: T.cyanSoft }}>2.2x more</strong> per hour than MyFreeCams here.</div>
+    </DemoMiniCard>
+  )
+}
+
+function SessionsMini() {
+  const max = Math.max(...LP_SESSIONS.map(s => s.usd))
+  return (
+    <DemoMiniCard icon="🎥" title="Sessions Breakdown" sub="Every session, timed and totaled">
+      <div style={{ display: "flex", alignItems: "flex-end", gap: 6, height: 70 }}>
+        {LP_SESSIONS.map(s => (
+          <div key={s.day} style={{ flex: 1, textAlign: "center" }}>
+            <div style={{ height: 54, display: "flex", alignItems: "flex-end" }}>
+              <div style={{ width: "100%", borderRadius: "3px 3px 0 0", height: `${(s.usd / max) * 100}%`, background: s.usd === max ? T.cyan : "rgba(22,244,255,0.18)" }} />
+            </div>
+            <div style={{ fontSize: 9, color: T.textFaint, marginTop: 4 }}>{s.day}</div>
+          </div>
+        ))}
+      </div>
+      <div style={{ marginTop: 10, fontSize: 11, color: T.textFaint }}>Thursday's session earned <strong style={{ color: T.cyanSoft }}>${max}</strong> — your best of the week.</div>
+    </DemoMiniCard>
+  )
+}
+
+function MoneyMapMini() {
+  const maxVal = Math.max(...LP_MONEYMAP_GRID.flat())
+  return (
+    <DemoMiniCard icon="🗺️" title="Money Map" sub="Exactly when your earnings land">
+      <div style={{ display: "grid", gridTemplateColumns: `28px repeat(${LP_MONEYMAP_SLOTS.length},1fr)`, gap: 3 }}>
+        <div />
+        {LP_MONEYMAP_SLOTS.map(s => <div key={s} style={{ fontSize: 7, color: T.textFaint, textAlign: "center" }}>{s.split("–")[0]}</div>)}
+        {LP_MONEYMAP_DAYS.map((day, d) => (
+          <Fragment key={day}>
+            <div style={{ fontSize: 9, color: T.textFaint, display: "flex", alignItems: "center" }}>{day}</div>
+            {LP_MONEYMAP_SLOTS.map((s, i) => {
+              const val = LP_MONEYMAP_GRID[d][i]
+              const t = val ? val / maxVal : 0
+              return <div key={s} title={`${day} ${s}: $${val}`} style={{ height: 12, borderRadius: 3, background: val ? `rgba(22,244,255,${(0.12 + t * 0.75).toFixed(2)})` : "rgba(255,255,255,0.04)" }} />
+            })}
+          </Fragment>
+        ))}
+      </div>
+      <div style={{ marginTop: 10, fontSize: 11, color: T.textFaint }}>Hottest window: <strong style={{ color: T.cyanSoft }}>Thursday, 6pm–12am</strong>.</div>
+    </DemoMiniCard>
+  )
+}
+
+function StreamingPlanMini() {
+  return (
+    <DemoMiniCard icon="📅" title="Streaming Plan" sub="Your personalized weekly schedule">
+      <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+        {LP_PLAN.map(row => (
+          <div key={row.day} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 10px", borderRadius: 9, background: "rgba(255,255,255,0.03)" }}>
+            <div>
+              <div style={{ fontSize: 11.5, fontWeight: 700, color: T.textSoft }}>{row.day}</div>
+              <div style={{ fontSize: 10, color: T.textFaint }}>{row.window}</div>
+            </div>
+            <div style={{ textAlign: "right" }}>
+              <div style={{ fontSize: 11.5, fontWeight: 800, color: T.cyanSoft }}>{row.rate}</div>
+              <div style={{ fontSize: 9, color: T.gold }}>{row.tag}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </DemoMiniCard>
+  )
+}
+
+function RoomTitleMini() {
+  const [mood, setMood]   = useState("Tease")
+  const [goal, setGoal]   = useState("500")
+  const [idx, setIdx]     = useState(0)
+  const variants = (LP_TITLES[mood] || LP_TITLES.Tease)(goal || "500")
+  return (
+    <DemoMiniCard icon="🎬" title="Room Title Generator" sub="Pick a mood, generate a title live">
+      <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+        <select value={mood} onChange={e => { setMood(e.target.value); setIdx(0) }} style={{ flex: 1, padding: "7px 8px", borderRadius: 8, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "white", fontSize: 11 }}>
+          {Object.keys(LP_TITLES).map(m => <option key={m} value={m}>{m}</option>)}
+        </select>
+        <input type="number" value={goal} onChange={e => { setGoal(e.target.value); setIdx(0) }} placeholder="Goal" style={{ width: 70, padding: "7px 8px", borderRadius: 8, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "white", fontSize: 11 }} />
+      </div>
+      <div style={{ padding: "10px 12px", borderRadius: 10, background: "rgba(255,43,174,0.06)", border: "1px solid rgba(255,43,174,0.2)", fontSize: 12, color: T.textSoft, minHeight: 44, marginBottom: 10, fontStyle: "italic" }}>
+        "{variants[idx % variants.length]}"
+      </div>
+      <button onClick={() => setIdx(i => i + 1)} style={{ width: "100%", padding: "9px", borderRadius: 9, background: "linear-gradient(135deg,#FF2BAE,#7C5CFF)", border: "none", color: "white", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>✨ Generate New Title</button>
+    </DemoMiniCard>
+  )
+}
+
+function LiveModeMini() {
+  const [active, setActive]   = useState(false)
+  const [tips, setTips]       = useState([])
+  const [total, setTotal]     = useState(0)
+
+  useEffect(() => {
+    if (!active) return
+    const names = ["diamondkingx", "euro_titan", "mfc_godfather", "vaultmaster99"]
+    let count = 0
+    const t = setInterval(() => {
+      const amt = [25, 50, 100, 250][Math.floor(Math.random() * 4)]
+      const name = names[Math.floor(Math.random() * names.length)]
+      setTips(prev => [{ name, amt, id: Date.now() + Math.random() }, ...prev].slice(0, 4))
+      setTotal(prev => prev + amt)
+      count += 1
+      if (count >= 8) clearInterval(t)
+    }, 1100)
+    return () => clearInterval(t)
+  }, [active])
+
+  const start = () => { setActive(true); setTips([]); setTotal(0) }
+
+  return (
+    <DemoMiniCard icon="🔴" title="Live Mode" sub="Watch tips arrive during a real stream">
+      {!active ? (
+        <button onClick={start} style={{ width: "100%", padding: "10px", borderRadius: 9, background: "linear-gradient(135deg,#10B981,#22D3EE)", border: "none", color: "white", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>▶ Start Demo Stream</button>
+      ) : (
+        <>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
+            <span style={{ fontSize: 11, color: T.textFaint }}>Session Total</span>
+            <span style={{ fontSize: 15, fontWeight: 800, color: T.green }}>${total}</span>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, minHeight: 90 }}>
+            {tips.length === 0 && <div style={{ fontSize: 11, color: T.textFaint, textAlign: "center", padding: "20px 0" }}>Waiting for the first tip…</div>}
+            {tips.map(t => (
+              <div key={t.id} style={{ display: "flex", justifyContent: "space-between", padding: "6px 10px", borderRadius: 8, background: "rgba(34,211,238,0.06)", border: "1px solid rgba(34,211,238,0.16)" }}>
+                <span style={{ fontSize: 11.5, color: T.textSoft }}>{t.name}</span>
+                <span style={{ fontSize: 11.5, fontWeight: 800, color: T.gold }}>+{t.amt}t</span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </DemoMiniCard>
+  )
+}
+
 // ── MAIN LANDING PAGE ────────────────────────────────────────────────────────
 export default function LandingPage() {
   const router = useRouter()
@@ -352,9 +550,10 @@ export default function LandingPage() {
     "Hey love 💕 I'm going live soon and always have more fun when you're around 💋",
   ]
   const whales = [
-    { name: "user_ULTRAVIP999", spent: "$41,820", days: "520 days ago", pct: "23%" },
-    { name: "user_TOPSPENDERX", spent: "$33,140", days: "300 days ago", pct: "18%" },
+    { name: "user_ULTRAVIP999", spent: "$41,820", days: "520 days ago", pct: "23%", churn: "Critical", nextTip: "$2,140" },
+    { name: "user_TOPSPENDERX", spent: "$33,140", days: "300 days ago", pct: "18%", churn: "High",     nextTip: "$1,680" },
   ]
+  const [showFanProfile, setShowFanProfile] = useState(false)
 
   useEffect(() => {
     const a = setInterval(() => {
@@ -467,10 +666,15 @@ export default function LandingPage() {
 
   // Feature strip data (additive — new section, matches redesign reference)
   const featureStrip = [
-    { icon: "⏱", accent: T.cyan, title: "Best hours", body: "Discover the exact hours when you earn the most.", href: "/dashboard", cta: "See peak times →" },
-    { icon: "★", accent: T.pink, title: "Top spenders", body: "Identify your biggest tippers and loyal fans.", href: "/dashboard", cta: "See top spenders →" },
-    { icon: "📊", accent: T.purple, title: "Platform ROI", body: "Compare platforms and focus on what pays more.", href: "/dashboard", cta: "See ROI breakdown →" },
-    { icon: "📅", accent: T.gold, title: "Daily stream plan", body: "Get a personalized plan for your next stream.", href: "/dashboard", cta: "Build your plan →" },
+    { icon: "⏱", accent: T.cyan,    title: "Best hours",         body: "Discover the exact hours when you earn the most.",           href: "/demo", cta: "See peak times →" },
+    { icon: "★", accent: T.pink,    title: "Top fans & profiles",body: "Every high-value fan, ranked, with churn risk and AI predictions.", href: "/demo", cta: "See fan profiles →" },
+    { icon: "💌", accent: T.magenta,title: "Message re-generator",body: "AI-written re-engagement messages for fans going cold.",      href: "/demo", cta: "Try the generator →" },
+    { icon: "📊", accent: T.purple, title: "Platform comparison", body: "Compare platforms and focus on what pays more.",              href: "/demo", cta: "See ROI breakdown →" },
+    { icon: "🎥", accent: T.blue,   title: "Sessions breakdown",  body: "Every session, timed and totaled, so you see what worked.",   href: "/demo", cta: "See sessions →" },
+    { icon: "🗺️", accent: T.cyan,   title: "Money Map",           body: "A heat map of exactly when and where your earnings land.",   href: "/demo", cta: "Explore the map →" },
+    { icon: "📅", accent: T.gold,   title: "Streaming plan",      body: "A personalized weekly schedule built from your own data.",    href: "/demo", cta: "Build your plan →" },
+    { icon: "🎬", accent: T.pink,   title: "Room title generator",body: "Mood + goal in, a scroll-stopping title out — instantly.",    href: "/demo", cta: "Generate a title →" },
+    { icon: "🔴", accent: T.red,    title: "Live Mode",           body: "Watch tips arrive during a real stream — pace, goal, coaching.", href: "/demo", cta: "Watch live mode →" },
   ]
 
   const faqs = [
@@ -598,7 +802,7 @@ export default function LandingPage() {
 
       {/* ── FEATURE STRIP ── */}
       <div style={{ position: "relative", zIndex: 1, maxWidth: 1100, margin: "0 auto", padding: "0 32px 64px" }}>
-        <div className="lp-feature-strip" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }}>
+        <div className="lp-feature-strip" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16 }}>
           {featureStrip.map(({ icon, accent, title, body, href, cta }) => (
             <a key={title} href={href} style={{
               display: "block", textDecoration: "none",
@@ -627,6 +831,11 @@ export default function LandingPage() {
         </div>
         <div style={{ maxWidth: 480, margin: "0 auto" }}>
           <LiveDemoPanel />
+        </div>
+        <div style={{ textAlign: "center", marginTop: 24 }}>
+          <a href="/demo" style={{ fontSize: 13.5, fontWeight: 700, color: T.cyanSoft, textDecoration: "none" }}>
+            This is just a taste — see fan profiles, the message re-generator, platform comparison, sessions, Money Map, Streaming Plan, live tip tracking & the room title generator in the full demo →
+          </a>
         </div>
       </div>
 
@@ -877,12 +1086,12 @@ export default function LandingPage() {
             </div>
           </div>
 
-          {/* Whale card */}
+          {/* Whale card / Fan Profile */}
           <div style={{ padding: "22px 20px", borderRadius: 18, background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.07)" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
               <span style={{ fontSize: 18 }}>🐳</span>
               <div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: "white" }}>High-Value Fan</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "white" }}>Top Fans & Profiles</div>
                 <div style={{ fontSize: 11, color: T.textFaint }}>Your real tippers, ranked</div>
               </div>
             </div>
@@ -893,8 +1102,38 @@ export default function LandingPage() {
               <div style={{ marginTop: 8, fontSize: 11, color: T.textMuted }}>
                 <span style={{ color: T.red, fontWeight: 700 }}>{whales[whaleIndex].pct} of your revenue</span> — at risk of churning
               </div>
+              {showFanProfile && (
+                <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,0.08)", display: "flex", flexDirection: "column", gap: 6 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11 }}>
+                    <span style={{ color: T.textFaint }}>Churn risk</span>
+                    <span style={{ color: T.red, fontWeight: 700 }}>{whales[whaleIndex].churn}</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11 }}>
+                    <span style={{ color: T.textFaint }}>Predicted next tip</span>
+                    <span style={{ color: T.gold, fontWeight: 700 }}>{whales[whaleIndex].nextTip}</span>
+                  </div>
+                </div>
+              )}
             </div>
+            <button onClick={() => setShowFanProfile(v => !v)} style={{ width: "100%", marginTop: 10, padding: "8px", borderRadius: 9, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.09)", color: T.textMuted, fontSize: 11.5, cursor: "pointer" }}>
+              {showFanProfile ? "Hide full profile" : "🔍 View full fan profile"}
+            </button>
           </div>
+        </div>
+
+        <div className="lp-demo-mini-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginTop: 20 }}>
+          <PlatformCompareMini />
+          <SessionsMini />
+          <MoneyMapMini />
+          <StreamingPlanMini />
+          <RoomTitleMini />
+          <LiveModeMini />
+        </div>
+
+        <div style={{ textAlign: "center", marginTop: 24 }}>
+          <a href="/demo" style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 22px", borderRadius: 12, background: T.gradientPrimary, fontSize: 14, fontWeight: 800, color: "#06101A", textDecoration: "none", boxShadow: "0 0 20px rgba(22,244,255,0.24), 0 0 26px rgba(255,43,174,0.22)" }}>
+            Explore the full interactive demo →
+          </a>
         </div>
       </div>
 
@@ -1084,6 +1323,7 @@ export default function LandingPage() {
           .lp-showcase-grid  { grid-template-columns: 1fr !important; }
           .lp-feature-strip  { grid-template-columns: repeat(2, 1fr) !important; }
           .lp-dash-charts    { grid-template-columns: 1fr !important; }
+          .lp-demo-mini-grid { grid-template-columns: repeat(2, 1fr) !important; }
         }
 
         @media (max-width: 768px) {
@@ -1094,6 +1334,7 @@ export default function LandingPage() {
           .lp-three-grid     { grid-template-columns: 1fr !important; }
           .lp-msg-grid       { grid-template-columns: 1fr !important; }
           .lp-faq-grid       { grid-template-columns: 1fr !important; }
+          .lp-demo-mini-grid { grid-template-columns: 1fr !important; }
         }
 
         @media (max-width: 600px) {
