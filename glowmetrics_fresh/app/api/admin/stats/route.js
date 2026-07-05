@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { verifyAdminToken, getAdminTokenFromCookieHeader } from '../../../../lib/adminAuth'
 
 const TEST_EMAIL_PATTERNS = [
   'daphneoncam+test',
@@ -37,7 +38,8 @@ function getOnboardingStage(beta, uploadCount) {
 }
 
 export async function GET(req) {
-  if (!req.headers.get('cookie')?.includes('gm_admin=')) {
+  const token = getAdminTokenFromCookieHeader(req.headers.get('cookie'))
+  if (!verifyAdminToken(token)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
