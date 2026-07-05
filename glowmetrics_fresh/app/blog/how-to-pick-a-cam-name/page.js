@@ -103,6 +103,12 @@ export default function HowToPickACamName() {
         <p style={{ ...s.p, marginBottom: 0, color: '#a5b4fc' }}>💡 <strong style={{ color: '#e2e8f0' }}>Pro tip:</strong> Claim your name on every platform before you launch — even ones you're not using yet. A dormant Twitter with your name is still a ranking signal for Google.</p>
       </div>
 
+      <div style={s.tip}>
+        <p style={{ ...s.p, marginBottom: 0 }}>
+          <strong style={{ color: '#e2e8f0' }}>Stuck on ideas?</strong> Try our free <a href="/guides/cam-model-name-generator" style={{ color: '#a5b4fc', textDecoration: 'none' }}>camgirl name generator</a> — it scores every name for brand strength and checks how searchable it is before you commit.
+        </p>
+      </div>
+
       <h2 style={s.h2}>How Branding Affects Audience Growth</h2>
       <p style={s.p}>Consistent branding compounds over time. Every time a viewer sees your name, your aesthetic, and your content in the same recognizable package, they're building a mental association. That's what turns a one-time visitor into a loyal regular.</p>
       <p style={s.p}>Creators with strong brand identities tend to get recognized more often in communities, convert casual viewers into paying fans faster, and rank higher in search results as their name accumulates mentions. Your cam name is the anchor of all of this.</p>
@@ -216,6 +222,11 @@ export default function HowToPickACamName() {
         <p style={s.faqA}>Focus on names that are 2–3 syllables, easy to spell, and hint at your vibe. Examples like VelvetRayne, LunaVex, CrimsonDoll, or NightJade all work because they're distinctive, memorable, and searchable. Avoid anything generic or that sounds like a hundred other profiles.</p>
       </div>
 
+      <div style={s.faq}>
+        <div style={s.faqQ}>Is there a free camgirl name generator?</div>
+        <p style={s.faqA}>Yes — the <a href="/guides/cam-model-name-generator" style={{ color: '#a5b4fc', textDecoration: 'none' }}>cam girl name generator</a> is free and gives every suggestion a brand-strength score based on the same rules covered in this guide: length, spellability, and searchability. It's a fast starting point, but still check availability across platforms before you commit.</p>
+      </div>
+
       <div style={s.related}>
         <div style={s.relT}>Related reading</div>
         <div style={s.relLinks}>
@@ -223,6 +234,7 @@ export default function HowToPickACamName() {
           <a href="/blog/how-to-increase-cam-earnings" style={s.relLink}>→ How to increase cam earnings with data</a>
           <a href="/blog/how-to-make-more-money-on-chaturbate" style={s.relLink}>→ How to make more money on Chaturbate</a>
           <a href="/blog/why-cam-income-is-inconsistent" style={s.relLink}>→ Why cam income is inconsistent</a>
+          <a href="/guides/cam-model-name-generator" style={s.relLink}>→ Free camgirl name generator</a>
           <a href="/guides/chaturbate-room-title-generator" style={s.relLink}>→ Free room title generator</a>
         </div>
       </div>

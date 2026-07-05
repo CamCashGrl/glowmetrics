@@ -340,7 +340,7 @@ export default function ChaturbateEarningsPost() {
       <p style={s.p}>For a complete tactical breakdown: <a href="/blog/how-to-make-more-money-on-chaturbate" style={s.iLink}>How to Make More Money on Chaturbate: 11 Data-Proven Strategies</a></p>
 
       <h2 style={s.h2}>How to Track Chaturbate Earnings Over Time</h2>
-      <p style={s.p}>Total monthly tokens is the number most models track. It is also the least useful. The metrics that actually drive income growth are:</p>
+      <p style={s.p}>Total monthly tokens is the Chaturbate stat most models track. It is also the least useful. The Chaturbate statistics that actually drive income growth are:</p>
 
       <div style={s.failList}>
         <div style={s.failH}>What most models never track:</div>

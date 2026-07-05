@@ -198,7 +198,7 @@ export default function First30DaysPost() {
       <h2 style={s.h2}>The Numbers (Yes, All of Them)</h2>
 
       <p style={s.p}>
-        $88.90 total. That came from 507 tips across 146 unique fans over 17 days where I had any tip activity.
+        Here are the real Chaturbate stats from that first month, no rounding up. $88.90 total. That came from 507 tips across 146 unique fans over 17 days where I had any tip activity.
         Chaturbate pays $0.05 per token, so 1,778 tokens = $88.90. The hourly rate is an estimate because
         Chaturbate's export only records tip timestamps, not when you actually went live — I reverse-engineered it
         from the gaps between tips.

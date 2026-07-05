@@ -114,6 +114,12 @@ export default function Page() {
           works, how it compares to manual CSV tracking, and what it unlocks once your earnings track themselves.
         </p>
 
+        <p>
+          Whether you think of it as a Chaturbate tip tracker or a{' '}
+          <a href="/guides/chaturbate-token-tracker">Chaturbate token tracker</a>, the goal is the same: know what you
+          earned, per session and per fan, without doing the math yourself.
+        </p>
+
         <h2>The 3 AM spreadsheet problem</h2>
         <p>
           If you have been camming for any length of time, you know the routine. You wrap a six-hour stream, you are
