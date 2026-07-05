@@ -1,7 +1,5 @@
 import { Resend } from 'resend'
 
-const resend = new Resend(process.env.RESEND_API_KEY)
-
 export async function POST(req) {
   try {
     const body = await req.json()
@@ -9,6 +7,7 @@ export async function POST(req) {
 
     if (!message) return Response.json({ error: 'No message' }, { status: 400 })
 
+    const resend = new Resend(process.env.RESEND_API_KEY)
     await resend.emails.send({
       from: 'CamCash Feedback <welcome@camcashgrl.com>',
       to: 'daphneoncam@gmail.com',
