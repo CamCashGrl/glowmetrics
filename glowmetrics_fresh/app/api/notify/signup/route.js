@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server'
 import { Resend } from 'resend'
 import { createClient } from '@supabase/supabase-js'
 
-const resend = new Resend(process.env.RESEND_API_KEY)
 const FOUNDER_EMAIL = 'daphneoncam@gmail.com'
 
 export async function POST(req) {
@@ -84,6 +83,7 @@ export async function POST(req) {
 </body>
 </html>`
 
+    const resend = new Resend(process.env.RESEND_API_KEY)
     await resend.emails.send({
       from: 'CamCash Notifications <notifications@camcashgrl.com>',
       to: FOUNDER_EMAIL,
