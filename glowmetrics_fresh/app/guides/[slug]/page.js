@@ -2,6 +2,8 @@
 // 12 keyword-targeted pages. Each one ranks for a specific search term
 // and converts visitors directly to signups.
 
+import { notFound } from 'next/navigation'
+
 const BASE = 'https://www.camcashgrl.com'
 
 const GUIDES = {
@@ -367,12 +369,7 @@ export default function GuidePage({ params }) {
   const guide = GUIDES[params.slug]
 
   if (!guide) {
-    return (
-      <div style={{ padding: 40, color: 'white', background: '#05070f', minHeight: '100vh', fontFamily: 'Inter, sans-serif' }}>
-        <h1 style={{ color: 'white' }}>Guide not found</h1>
-        <a href="/landing" style={{ color: '#22D3EE' }}>← Back to CamCash</a>
-      </div>
-    )
+    notFound()
   }
 
   const s = {

@@ -65,7 +65,7 @@ const URLS = [
   'https://www.camcashgrl.com/blog/how-much-do-chaturbate-models-make',
   'https://www.camcashgrl.com/blog/how-to-build-loyal-fans',
   'https://www.camcashgrl.com/blog/how-to-get-more-tips-on-myfreecams',
-  'https://www.camcashgrl.com/blog/how-to-get-veiws-on-chaturbate',
+  'https://www.camcashgrl.com/blog/how-to-get-views-on-chaturbate',
   'https://www.camcashgrl.com/blog/how-to-increase-cam-earnings',
   'https://www.camcashgrl.com/blog/how-to-make-more-money-on-chaturbate',
   'https://www.camcashgrl.com/blog/how-to-re-engage-whales-and-top-tippers',
