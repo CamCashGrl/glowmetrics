@@ -57,8 +57,8 @@ export function PeakHourCalculator() {
     <div style={{ padding: '28px', borderRadius: 16, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 16, marginBottom: 24 }}>
         <div>
-          <label style={labelStyle}>Your Timezone</label>
-          <select value={tz} onChange={e => setTz(e.target.value)} style={selectStyle}>
+          <label htmlFor="your-timezone" style={labelStyle}>Your Timezone</label>
+          <select id="your-timezone" value={tz} onChange={e => setTz(e.target.value)} style={selectStyle}>
             <option value="EST">EST — North America East</option>
             <option value="PST">PST — North America West</option>
             <option value="GMT">GMT — UK / West Europe</option>

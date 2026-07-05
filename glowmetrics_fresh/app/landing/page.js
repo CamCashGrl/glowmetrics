@@ -504,10 +504,10 @@ function RoomTitleMini() {
   return (
     <DemoMiniCard icon="🎬" title="Room Title Generator" sub="Pick a mood, generate a title live">
       <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-        <select value={mood} onChange={e => { setMood(e.target.value); setIdx(0) }} style={{ flex: 1, padding: "7px 8px", borderRadius: 8, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "white", fontSize: 11 }}>
+        <select aria-label="Room title mood" value={mood} onChange={e => { setMood(e.target.value); setIdx(0) }} style={{ flex: 1, padding: "7px 8px", borderRadius: 8, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "white", fontSize: 11 }}>
           {Object.keys(LP_TITLES).map(m => <option key={m} value={m}>{m}</option>)}
         </select>
-        <input type="number" value={goal} onChange={e => { setGoal(e.target.value); setIdx(0) }} placeholder="Goal" style={{ width: 70, padding: "7px 8px", borderRadius: 8, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "white", fontSize: 11 }} />
+        <input type="number" aria-label="Tip goal" value={goal} onChange={e => { setGoal(e.target.value); setIdx(0) }} placeholder="Goal" style={{ width: 70, padding: "7px 8px", borderRadius: 8, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "white", fontSize: 11 }} />
       </div>
       <div style={{ padding: "10px 12px", borderRadius: 10, background: "rgba(255,43,174,0.06)", border: "1px solid rgba(255,43,174,0.2)", fontSize: 12, color: T.textSoft, minHeight: 44, marginBottom: 10, fontStyle: "italic" }}>
         "{variants[idx % variants.length]}"
