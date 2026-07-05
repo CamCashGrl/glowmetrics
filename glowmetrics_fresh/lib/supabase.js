@@ -1,11 +1,14 @@
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { createBrowserClient } from '@supabase/ssr'
 
-// createClientComponentClient (not the plain supabase-js createClient) so the
+// createBrowserClient (not the plain supabase-js createClient) so the
 // session is persisted in a cookie the server route handlers can read via
-// createRouteHandlerClient — localStorage-only sessions are invisible to
-// /api/stripe/checkout, /api/stripe/portal, /api/track, and
+// createServerClient (lib/supabase-server.js) — localStorage-only sessions
+// are invisible to /api/stripe/checkout, /api/stripe/portal, /api/track, and
 // /api/complete-onboarding, which all read auth from cookies.
-export const supabase = createClientComponentClient()
+export const supabase = createBrowserClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+)
 
 // Global handler — catches the refresh_token_not_found 400 loop
 // that was hammering auth logs and locking out returning users

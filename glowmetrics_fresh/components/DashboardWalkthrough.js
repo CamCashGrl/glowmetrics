@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { createBrowserClient } from '@supabase/ssr'
 import Button from './ui/Button'
 
 const WALKTHROUGH_KEY = 'camcash_walkthrough_done'
@@ -74,7 +74,10 @@ const STEPS = [
 export default function DashboardWalkthrough({ onTabChange }) {
   const [visible, setVisible] = useState(false)
   const [step, setStep] = useState(0)
-  const supabase = createClientComponentClient()
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  )
 
   useEffect(() => {
     const checkShouldShow = async () => {

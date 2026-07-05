@@ -1,12 +1,11 @@
 // app/api/stripe/portal/route.js
 import { NextResponse } from 'next/server'
 import { stripe } from '../../../../lib/stripe'
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
+import { createSupabaseRouteClient } from '../../../../lib/supabase-server'
 
 export async function POST(request) {
   try {
-    const supabase = createRouteHandlerClient({ cookies })
+    const supabase = createSupabaseRouteClient()
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) {
