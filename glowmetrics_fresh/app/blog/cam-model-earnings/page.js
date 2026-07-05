@@ -146,6 +146,22 @@ const faqSchema = {
         text: 'Cam models typically earn $3–$10/hr as beginners, $10–$30/hr as active models, and $60+/hr as top earners with loyal high-value fans.',
       },
     },
+    {
+      '@type': 'Question',
+      name: 'How much money can you make as a cam girl?',
+      acceptedAnswer: {
+        '@type': 'Answer',
+        text: 'A cam girl can make anywhere from a few hundred dollars a month as a beginner to $10,000+ a month as an established performer with loyal regulars. The spread is wide because fan retention and schedule consistency matter more than platform choice or hours streamed.',
+      },
+    },
+    {
+      '@type': 'Question',
+      name: 'How do I make money as a cam model?',
+      acceptedAnswer: {
+        '@type': 'Answer',
+        text: 'Set up a tip menu, stream on a consistent schedule, and track your session data so you learn which hours and fans drive most of your webcam earnings. Most new models see slow, inconsistent income for the first 1–3 months before regulars start forming — the models who stick with a consistent schedule during that window are the ones who make it to reliable income.',
+      },
+    },
   ],
 }
 
@@ -617,6 +633,20 @@ export default function CamModelEarnings() {
           <div style={s.faqQ}>How much can a cam model make per hour?</div>
           <p style={{ ...s.faqA, marginBottom: 0 }}>
             Cam models typically earn $3–$10/hr as beginners, $10–$30/hr as active models, and $60+/hr as top earners with loyal high-value fans.
+          </p>
+        </div>
+
+        <div style={s.faqItem}>
+          <div style={s.faqQ}>How much money can you make as a cam girl?</div>
+          <p style={{ ...s.faqA, marginBottom: 0 }}>
+            A cam girl can make anywhere from a few hundred dollars a month as a beginner to $10,000+ a month as an established performer with loyal regulars. The spread is wide because fan retention and schedule consistency matter more than platform choice or hours streamed.
+          </p>
+        </div>
+
+        <div style={s.faqItem}>
+          <div style={s.faqQ}>How do I make money as a cam model?</div>
+          <p style={{ ...s.faqA, marginBottom: 0 }}>
+            Set up a tip menu, stream on a consistent schedule, and track your session data so you learn which hours and fans drive most of your webcam earnings. Most new models see slow, inconsistent income for the first 1–3 months before regulars start forming — the models who stick with a consistent schedule during that window are the ones who make it to reliable income.
           </p>
         </div>
       </div>

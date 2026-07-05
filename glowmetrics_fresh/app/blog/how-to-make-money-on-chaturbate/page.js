@@ -66,7 +66,7 @@ const faqSchema = {
     },
     {
       '@type': 'Question',
-      name: 'When does Chaturbate pay models in 2026?',
+      name: 'When does Chaturbate pay models in 2025 or 2026?',
       acceptedAnswer: {
         '@type': 'Answer',
         text: 'Chaturbate pays on-request — you initiate a withdrawal when your balance exceeds the minimum threshold (~$50 for most methods). Payouts process within 1–5 business days depending on payment method. Tokens have a 1–3 day clearing period before they\'re available to withdraw.',
@@ -175,7 +175,7 @@ export default function HowToMakeMoneyOnChaturbate() {
         </table>
       </div>
 
-      <h2 style={s.h2}>When Does Chaturbate Pay Models in 2026?</h2>
+      <h2 style={s.h2}>When Does Chaturbate Pay Models in 2025 or 2026?</h2>
       <p style={s.p}>
         Chaturbate pays <strong style={{ color: '#e2e8f0' }}>on-request</strong> — no fixed weekly or monthly schedule. You initiate a withdrawal when your balance exceeds the minimum threshold. Tokens have a 1–3 day clearing period after earning before they’re available to withdraw.
       </p>
@@ -371,7 +371,7 @@ export default function HowToMakeMoneyOnChaturbate() {
         </div>
 
         <div style={s.faqItem}>
-          <div style={s.faqQ}>When does Chaturbate pay models in 2026?</div>
+          <div style={s.faqQ}>When does Chaturbate pay models in 2025 or 2026?</div>
           <p style={{ ...s.faqA, marginBottom: 0 }}>
             Chaturbate pays on-request — you initiate a withdrawal when your balance exceeds the minimum threshold (~$50 for most methods). Payouts process within 1–5 business days depending on payment method. Tokens have a 1–3 day clearing period before they’re available to withdraw.
           </p>

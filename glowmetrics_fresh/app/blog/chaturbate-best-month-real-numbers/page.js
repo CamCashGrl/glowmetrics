@@ -202,6 +202,8 @@ export default function BestMonthPost() {
         </div>
       </div>
 
+      <p style={s.p}>Here are the full Chaturbate stats behind that number — session by session, not just the headline total.</p>
+
       <h2 style={s.h2}>The Day That Changed Everything: August 6th</h2>
 
       <p style={s.p}>

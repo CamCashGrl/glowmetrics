@@ -173,7 +173,7 @@ export default function CamCashVsCamDashPost() {
                   'Top tipper tracking with full tip history per fan',
                   'Peak hours heatmap based on your actual data',
                   'Session breakdown and momentum trend',
-                  'AI-powered Smart Insights and Daily Brief',
+                  'CamCash Daily — AI-powered daily brief with Smart Insights',
                   'Stream Planner with revenue projections',
                   'Fan CRM — recurring tipper tags, active hours',
                   'Real-time tip capture via Chrome extension',
@@ -371,6 +371,7 @@ export default function CamCashVsCamDashPost() {
             { '@type': 'Question', name: 'How is CamCash different from CamDash?', acceptedAnswer: { '@type': 'Answer', text: 'CamCash supports 5 platforms including BongaCams and MyFreeCams. CamDash supports Chaturbate only. CamCash uses CSV import; CamDash uses the Chaturbate Stats API token. CamCash is free during beta; CamDash costs $3.99/month for Pro features.' } },
             { '@type': 'Question', name: 'Is there a free cam model analytics tool?', acceptedAnswer: { '@type': 'Answer', text: 'Yes. CamCash is completely free during beta — no credit card required, all features included. CamDash and CB Cam Insights both have free tiers but with limited features and session history.' } },
             { '@type': 'Question', name: 'What is a CamDash alternative that supports BongaCams?', acceptedAnswer: { '@type': 'Answer', text: 'CamCash is the main CamDash alternative that supports BongaCams. CamDash only tracks Chaturbate. CamCash supports Chaturbate, BongaCams, MyFreeCams, Stripchat, and CamSoda — the better choice for models who stream on multiple platforms.' } },
+            { '@type': 'Question', name: 'What is CamCash Daily?', acceptedAnswer: { '@type': 'Answer', text: 'CamCash Daily is a free daily brief inside the CamCash dashboard that tells you the single best time to stream today, based on your own session history — not platform-wide averages. It also flags which top tippers are likely to return this week and whether one platform is outperforming another, so you get a decision instead of just another chart.' } },
           ],
         })}} />
 
