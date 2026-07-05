@@ -293,6 +293,7 @@ function AfterLaunchSection({ checkoutLoading, setCheckoutLoading }) {
             </div>
 
             <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 20, marginTop: 12, flexGrow: 1 }}>
+              <CheckLine color={C.cyan}>Track 1 platform — live via the extension or by uploading your tip data</CheckLine>
               <CheckLine color={C.cyan}>Live tip detection</CheckLine>
               <CheckLine color={C.cyan}>Real-time alerts</CheckLine>
               <CheckLine color={C.cyan}>Basic session coaching</CheckLine>
@@ -350,6 +351,7 @@ function AfterLaunchSection({ checkoutLoading, setCheckoutLoading }) {
 
             <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 20, marginTop: 12, flexGrow: 1 }}>
               <CheckLine color={C.purple}>Everything in Free tier, plus:</CheckLine>
+              <CheckLine color={C.purple}>Track multiple platforms at once (Chaturbate, BongaCams, MyFreeCams &amp; more)</CheckLine>
               <CheckLine color={C.purple}>Save analytics history forever</CheckLine>
               <CheckLine color={C.purple}>AI learns your patterns</CheckLine>
               <CheckLine color={C.purple}>Performance trends &amp; insights</CheckLine>
@@ -630,6 +632,7 @@ function ComparisonTable() {
     { feature: 'Real-time alerts',        free: '✅', premium: '✅', early: '✅' },
     { feature: 'Basic coaching',          free: '✅', premium: '✅', early: '✅' },
     { feature: 'Session analytics',       free: '✅', premium: '✅', early: '✅' },
+    { feature: 'Platforms tracked',       free: '1', premium: 'Unlimited', early: 'Unlimited' },
     { feature: 'Save analytics history',  free: '❌', premium: '✅', early: '✅' },
     { feature: 'Performance trends',      free: '❌', premium: '✅', early: '✅' },
     { feature: 'AI learning',             free: '❌', premium: '✅', early: '✅' },
@@ -733,6 +736,10 @@ const FAQ_ITEMS = [
   {
     q: 'Will the free tier always be available?',
     a: 'Yes, absolutely. The free tier will always exist and always be genuinely useful. Live tip detection, real-time alerts, basic coaching, and session analytics are free forever. We built this for cam models and we mean it.',
+  },
+  {
+    q: 'How many platforms can I track on the free tier?',
+    a: 'The free tier tracks 1 platform — either live through the Chrome extension or by uploading your tip data as a CSV. If you stream or want to track more than one platform (say, Chaturbate and BongaCams), upgrade to the Standard plan at $19.99/month to track them all at once.',
   },
   {
     q: 'What happens to my early adopter pricing if I cancel and re-subscribe?',

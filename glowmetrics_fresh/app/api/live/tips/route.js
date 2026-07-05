@@ -75,6 +75,13 @@ export async function POST(req) {
 
     if (error) {
       console.error('Supabase insert error:', error);
+      if (error.message?.includes('PLATFORM_LIMIT_REACHED')) {
+        return Response.json({
+          error: 'Free tier tracks 1 platform. Upgrade to Standard ($19.99/mo) to track multiple platforms.',
+          code: 'platform_limit_reached',
+          upgradeUrl: '/pricing',
+        }, { status: 402, headers: cors });
+      }
       return Response.json({ error: 'Failed to save tip' }, { status: 500, headers: cors });
     }
 

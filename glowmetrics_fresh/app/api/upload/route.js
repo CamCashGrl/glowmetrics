@@ -102,6 +102,15 @@ export async function POST(req) {
     if (error || data?.error) {
       const message = error?.message || data?.error
       console.error(`[UPLOAD] Batch ${batchNum}/${totalBatches} error:`, message)
+
+      if (message?.includes('PLATFORM_LIMIT_REACHED')) {
+        return NextResponse.json({
+          error: 'Free tier tracks 1 platform. Upgrade to Standard ($19.99/mo) to track multiple platforms.',
+          code: 'platform_limit_reached',
+          upgradeUrl: '/pricing',
+        }, { status: 402 })
+      }
+
       errors.push({ batch: batchNum, error: message })
       continue
     }
