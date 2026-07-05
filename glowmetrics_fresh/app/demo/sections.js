@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import SiteFooter from '../components/SiteFooter'
+import Button from '../../components/ui/Button'
 
 // ─── Color constants ───────────────────────────────────────────────────────────
 const C = {
@@ -154,21 +155,9 @@ export function CSVImportSection() {
             <p style={{ fontSize: '14px', color: C.muted, lineHeight: 1.6, margin: '0 0 22px' }}>
               Upload your CSV from Chaturbate, BongaCams, or MFC to see ALL your historical data — fan rankings, peak hours, and session breakdowns going back to day one.
             </p>
-            <a href="/landing" style={{
-              display:        'inline-flex',
-              alignItems:     'center',
-              gap:            '6px',
-              padding:        '11px 20px',
-              borderRadius:   '9px',
-              background:     `linear-gradient(135deg, ${C.purple}, ${C.pink})`,
-              color:          '#fff',
-              fontWeight:     700,
-              fontSize:       '14px',
-              textDecoration: 'none',
-              boxShadow:      '0 0 20px rgba(168,85,247,0.3)',
-            }}>
+            <Button as="a" href="/landing" style={{ padding: '11px 20px', fontSize: '14px' }}>
               Upload CSV →
-            </a>
+            </Button>
           </div>
         </div>
 
@@ -386,21 +375,9 @@ export function HowItWorksSection() {
         </div>
 
         <div style={{ textAlign: 'center', marginTop: '40px' }}>
-          <a href="/landing" style={{
-            display:        'inline-flex',
-            alignItems:     'center',
-            gap:            '6px',
-            padding:        '13px 32px',
-            borderRadius:   '10px',
-            background:     `linear-gradient(135deg, ${C.purple}, ${C.pink})`,
-            color:          '#fff',
-            fontWeight:     700,
-            fontSize:       '15px',
-            textDecoration: 'none',
-            boxShadow:      '0 0 24px rgba(168,85,247,0.35)',
-          }}>
+          <Button as="a" href="/landing" style={{ padding: '13px 32px', fontSize: '15px' }}>
             Try it with your data →
-          </a>
+          </Button>
         </div>
       </div>
     </section>
@@ -451,20 +428,9 @@ export function FinalCTASection() {
           </p>
 
           <div style={{ marginBottom: '32px' }}>
-            <a href="/landing" style={{
-              display:        'inline-block',
-              background:     `linear-gradient(135deg, ${C.purple}, ${C.pink})`,
-              color:          '#fff',
-              fontSize:       '16px',
-              fontWeight:     700,
-              padding:        '15px 40px',
-              borderRadius:   '12px',
-              textDecoration: 'none',
-              boxShadow:      '0 4px 28px rgba(168,85,247,0.4)',
-              letterSpacing:  '0.01em',
-            }}>
+            <Button as="a" href="/landing" style={{ padding: '15px 40px', fontSize: '16px', letterSpacing: '0.01em' }}>
               Start free →
-            </a>
+            </Button>
           </div>
 
           <p style={{ fontSize: '13px', color: C.dim, margin: 0 }}>

@@ -13,6 +13,7 @@ import SiteFooter from "../components/SiteFooter"
 import { PLATFORM_TOKEN_RATES } from "../../lib/constants"
 import { track as gtmTrack } from '../../lib/track'
 import { getDashboardReadiness, getModuleLockState, LockedInsightCard, DashboardProgressCard } from './DashboardPreview'
+import Button from '../../components/ui/Button'
 
 // Tab-only components loaded on demand instead of in the initial dashboard
 // bundle — each is only ever rendered behind an `activeTab === '...'` check,
@@ -960,9 +961,9 @@ function TitleGenerator({ C, glassCard, analytics, tips, sessions, whales }) {
             </div>
           </div>
 
-          <button onClick={generateQuick} style={{ width: "100%", padding: "11px 0", borderRadius: 10, marginBottom: 10, background: "linear-gradient(135deg, #EC4899, #7C5CFF)", border: "none", color: C.white, fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: "0 0 20px rgba(236,72,153,0.35)" }}>
+          <Button onClick={generateQuick} style={{ width: "100%", marginBottom: 10 }}>
             ✨ Generate Title →
-          </button>
+          </Button>
 
           {/* OUTPUT — above fold */}
           {qTitle ? (
@@ -1009,7 +1010,7 @@ function TitleGenerator({ C, glassCard, analytics, tips, sessions, whales }) {
           {/* 5-title mode when toggled */}
           {show5Mode && (
             <div style={{ marginTop: 14 }}>
-              <button onClick={generateAdvanced} style={{ width: "100%", padding: "10px 0", borderRadius: 10, marginBottom: 10, background: "linear-gradient(135deg, #EC4899, #7C5CFF)", border: "none", color: C.white, fontSize: 13, fontWeight: 800, cursor: "pointer" }}>✨ Generate 5 Titles</button>
+              <Button onClick={generateAdvanced} style={{ width: "100%", padding: "10px 0", fontSize: 13, marginBottom: 10 }}>✨ Generate 5 Titles</Button>
               {titles.length > 0 && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                   {titles.map((t, i) => {
@@ -1128,9 +1129,9 @@ function TitleGenerator({ C, glassCard, analytics, tips, sessions, whales }) {
             </div>
           </div>
 
-          <button onClick={generateAdvanced} style={{ width: "100%", padding: "11px 0", borderRadius: 10, marginBottom: 12, background: "linear-gradient(135deg, #EC4899, #7C5CFF)", border: "none", color: C.white, fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: "0 0 20px rgba(236,72,153,0.3)" }}>
+          <Button onClick={generateAdvanced} style={{ width: "100%", padding: "11px 0", marginBottom: 12 }}>
             {gameType !== "none" ? `🎲 Generate ${gameType} Titles` : "✨ Generate 5 Titles"}
-          </button>
+          </Button>
 
           {/* GAME TITLES OUTPUT */}
           {gameType !== "none" && gameTitles.length > 0 && (
@@ -4833,7 +4834,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                               <input placeholder="Username" value={liveTipInput.username} onChange={e => setLiveTipInput(p => ({ ...p, username: e.target.value }))} onKeyDown={e => e.key === 'Enter' && addTip()} style={inp2} />
                               <input type="number" placeholder="Tokens" value={liveTipInput.tokens} onChange={e => setLiveTipInput(p => ({ ...p, tokens: e.target.value }))} onKeyDown={e => e.key === 'Enter' && addTip()} style={inp2} />
                               <input type="number" placeholder="USD" value={liveTipInput.usd} onChange={e => setLiveTipInput(p => ({ ...p, usd: e.target.value }))} onKeyDown={e => e.key === 'Enter' && addTip()} style={inp2} />
-                              <button onClick={addTip} style={{ padding: '8px 16px', borderRadius: 8, background: 'linear-gradient(135deg, #22D3EE, #EC4899)', border: 'none', color: C.white, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>+ Add</button>
+                              <Button onClick={addTip} style={{ padding: '8px 16px', fontSize: 14, whiteSpace: 'nowrap' }}>+ Add</Button>
                             </div>
                           </div>
                         </details>
@@ -4955,7 +4956,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                             : 'Install the CamCash Chrome extension — tips appear here automatically.'}
                         </div>
                         {!liveEvents.some(e => e.sourceUsed === 'extension') && (
-                          <a href="/extension" target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', padding: '6px 14px', background: 'linear-gradient(135deg, #a855f7, #7c3aed)', color: '#fff', borderRadius: 7, fontSize: 11, fontWeight: 700, textDecoration: 'none' }}>📥 Get Extension →</a>
+                          <Button as="a" href="/extension" target="_blank" rel="noopener noreferrer" style={{ padding: '6px 14px', fontSize: 11 }}>📥 Get Extension →</Button>
                         )}
                       </div>
                     </div>
@@ -5548,7 +5549,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                 <div style={{ flex: 1, fontSize: 12.5, color: C.text, lineHeight: 1.5 }}>
                   You're on the free plan (1 platform). Upgrade to Pro to add BongaCams, MyFreeCams, and more.
                 </div>
-                <a href="/pricing" style={{ flexShrink: 0, padding: "8px 14px", borderRadius: 9, background: "linear-gradient(135deg,#22D3EE,#a855f7,#EC4899)", color: "#fff", fontSize: 12, fontWeight: 700, textDecoration: "none", whiteSpace: "nowrap" }}>Upgrade →</a>
+                <Button as="a" href="/pricing" style={{ flexShrink: 0, padding: "8px 14px", fontSize: 12, whiteSpace: "nowrap" }}>Upgrade →</Button>
               </div>
             )}
             <div style={{ ...glassCard, borderRadius: 14, padding: 32, marginBottom: 16 }}>
@@ -5565,10 +5566,10 @@ const handleCSV = async (file, forcePlatform = null) => {
               </div>
               <div style={{ textAlign: "center" }}>
                 <div style={{ fontSize: 40, marginBottom: 12 }}>📁</div>
-                <label style={{ display: "inline-block", padding: "14px 32px", borderRadius: 10, background: "linear-gradient(135deg, #22D3EE, #EC4899)", boxShadow: "0 0 20px rgba(34,211,238,0.4), 0 0 40px rgba(236,72,153,0.3)", color: C.white, fontSize: 15, fontWeight: 600, cursor: "pointer" }}>
+                <Button as="label" disabled={uploading} style={{ padding: "14px 32px", fontSize: 15 }}>
                   {uploading ? "Processing..." : "Choose CSV File"}
                   <input type="file" accept=".csv,.txt" style={{ display: "none" }} onChange={e => handleCSV(e.target.files[0], uploadPlatform || null)} disabled={uploading} />
-                </label>
+                </Button>
                 <p style={{ fontSize: 12, color: C.muted, marginTop: 12 }}>Supports Chaturbate, BongaCams, MyFreeCams, Stripchat, CamSoda</p>
               </div>
 
@@ -5617,9 +5618,9 @@ const handleCSV = async (file, forcePlatform = null) => {
                   <p style={{ fontSize: 13, color: C.text, lineHeight: 1.65, marginBottom: 16 }}>
                     The <strong style={{ color: C.white }}>free plan</strong> tracks <strong style={{ color: C.cyan }}>1 platform</strong> — import as much history as you want from it, no limits. A <strong style={{ color: C.white }}>subscription</strong> unlocks tracking <strong style={{ color: C.pink }}>multiple platforms at once</strong> and lets you compare which cam site pays you best by hour, day, and fan type.
                   </p>
-                  <button onClick={() => router.push('/pricing')} style={{ padding: "12px 26px", borderRadius: 10, background: "linear-gradient(135deg, #22D3EE, #EC4899)", boxShadow: "0 0 20px rgba(34,211,238,0.35), 0 0 40px rgba(236,72,153,0.25)", border: "none", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                  <Button onClick={() => router.push('/pricing')} style={{ padding: "12px 26px", fontSize: 13 }}>
                     View Plans & Subscribe →
-                  </button>
+                  </Button>
                 </>
               )}
 
@@ -6237,7 +6238,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                 </div>
                 <div style={{ display: "flex", gap: 10 }}>
                   <button onClick={() => { setMessageIndex(i => i + 1); setMessageCopied(false) }} style={{ flex: 1, padding: "12px", borderRadius: 10, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: C.white, fontSize: 14, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>🔄 Generate Another</button>
-                  <button onClick={() => { navigator.clipboard.writeText(currentMsg); setMessageCopied(true); setTimeout(() => setMessageCopied(false), 2500) }} style={{ flex: 1, padding: "12px", borderRadius: 10, background: messageCopied ? "rgba(16,185,129,0.2)" : "linear-gradient(135deg, #22D3EE, #EC4899)", boxShadow: messageCopied ? "none" : "0 0 20px rgba(34,211,238,0.3), 0 0 40px rgba(236,72,153,0.2)", border: messageCopied ? "1px solid rgba(16,185,129,0.4)" : "none", color: C.white, fontSize: 14, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, transition: "all 0.2s" }}>{messageCopied ? "✅ Copied!" : "📋 Copy Message"}</button>
+                  <Button onClick={() => { navigator.clipboard.writeText(currentMsg); setMessageCopied(true); setTimeout(() => setMessageCopied(false), 2500) }} style={{ flex: 1, padding: "12px", fontSize: 14, ...(messageCopied ? { background: "rgba(16,185,129,0.2)", boxShadow: "none", border: "1px solid rgba(16,185,129,0.4)" } : {}) }}>{messageCopied ? "✅ Copied!" : "📋 Copy Message"}</Button>
                 </div>
                 <div style={{ marginTop: 12, fontSize: 11, color: C.muted, textAlign: "center" }}>Tip: paste directly into Chaturbate, BongaCams, or your DM platform</div>
               </div>
@@ -6293,7 +6294,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                     onFocus={e => e.target.style.borderColor = "rgba(34,211,238,0.5)"}
                     onBlur={e => e.target.style.borderColor = "rgba(255,255,255,0.15)"}
                   />
-                  <button
+                  <Button
                     disabled={!earlyAccessEmail.trim() || earlyAccessSubmitting}
                     onClick={async () => {
                       if (!earlyAccessEmail.trim()) return
@@ -6311,9 +6312,9 @@ const handleCSV = async (file, forcePlatform = null) => {
                       setEarlyAccessSubmitting(false)
                       showToast("🎉 You're on the founding user list!")
                     }}
-                    style={{ width: "100%", padding: "16px", borderRadius: 14, background: earlyAccessEmail.trim() ? "linear-gradient(135deg, #3b82f6, #ec4899)" : "rgba(255,255,255,0.08)", border: "none", color: earlyAccessEmail.trim() ? C.white : C.muted, fontSize: 16, fontWeight: 800, cursor: earlyAccessEmail.trim() ? "pointer" : "not-allowed", boxShadow: earlyAccessEmail.trim() ? "0 0 30px rgba(59,130,246,0.5), 0 0 60px rgba(236,72,153,0.3)" : "none", marginBottom: 12, transition: "all 0.2s" }}>
+                    style={{ width: "100%", padding: "16px", borderRadius: 14, fontSize: 16, marginBottom: 12 }}>
                     {earlyAccessSubmitting ? "Saving..." : "🔓 Get Early Access"}
-                  </button>
+                  </Button>
                   <div style={{ textAlign: "center", fontSize: 12, color: C.muted, marginBottom: 20 }}>Launching soon • Founding users get lifetime discount</div>
                   <button onClick={() => setShowUpgradeModal(false)} style={{ width: "100%", padding: "11px", borderRadius: 10, background: "transparent", border: "1px solid rgba(255,255,255,0.1)", color: C.muted, fontSize: 13, cursor: "pointer" }}>
                     Maybe later
@@ -6365,7 +6366,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                 onFocus={e => e.target.style.borderColor = "rgba(34,211,238,0.5)"}
                 onBlur={e => e.target.style.borderColor = "rgba(255,255,255,0.15)"}
               />
-              <button
+              <Button
                 disabled={!earlyAccessEmail.trim() || earlyAccessSubmitting}
                 onClick={async () => {
                   if (!earlyAccessEmail.trim()) return
@@ -6382,9 +6383,9 @@ const handleCSV = async (file, forcePlatform = null) => {
                   showToast("🎉 Redirecting to checkout...")
                   setTimeout(() => window.open("https://buy.stripe.com/8x228r3Qu8dj7zQ1F5f7i01", "_blank"), 500)
                 }}
-                style={{ width: "100%", padding: "14px", borderRadius: 12, background: earlyAccessEmail.trim() ? "linear-gradient(135deg, #22D3EE, #EC4899)" : "rgba(255,255,255,0.08)", border: "none", color: earlyAccessEmail.trim() ? C.white : C.muted, fontSize: 14, fontWeight: 800, cursor: earlyAccessEmail.trim() ? "pointer" : "not-allowed", boxShadow: earlyAccessEmail.trim() ? "0 0 30px rgba(34,211,238,0.4)" : "none", marginBottom: 8, transition: "all 0.2s" }}>
+                style={{ width: "100%", padding: "14px", fontSize: 14, marginBottom: 8 }}>
                 {earlyAccessSubmitting ? "Saving..." : "🔒 Lock In My Early Access"}
-              </button>
+              </Button>
               <div style={{ fontSize: 11, color: C.muted, textAlign: "center", marginBottom: 10 }}>Secure Stripe checkout — cancel anytime</div>
               <button onClick={() => { setShowBetaPrompt(false); track('beta_prompt_dismissed', { uploadCount }) }}
                 style={{ width: "100%", padding: "10px", borderRadius: 10, background: "transparent", border: "1px solid rgba(255,255,255,0.08)", color: C.muted, fontSize: 13, cursor: "pointer" }}>
@@ -6430,7 +6431,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                   <div style={{ fontSize: 40, marginBottom: 12 }}>🙏</div>
                   <div style={{ fontSize: 15, fontWeight: 700, color: C.white, marginBottom: 6 }}>Thank you!</div>
                   <div style={{ fontSize: 13, color: C.muted, marginBottom: 20 }}>Your feedback helps us build better features for you.</div>
-                  <button onClick={() => setShowFeedback(false)} style={{ padding: "9px 24px", borderRadius: 10, background: "linear-gradient(135deg, #22D3EE, #EC4899)", border: "none", color: C.white, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Close</button>
+                  <Button onClick={() => setShowFeedback(false)} style={{ padding: "9px 24px", fontSize: 13 }}>Close</Button>
                 </div>
               ) : (
                 <>
@@ -6451,12 +6452,12 @@ const handleCSV = async (file, forcePlatform = null) => {
                     onFocus={e => e.target.style.borderColor = "rgba(34,211,238,0.4)"}
                     onBlur={e => e.target.style.borderColor = "rgba(255,255,255,0.1)"}
                   />
-                  <button
+                  <Button
                     disabled={!feedbackText.trim()}
                     onClick={() => { track('feedback_submitted', { type: feedbackType, length: feedbackText.length }); setFeedbackSent(true) }}
-                    style={{ width: "100%", padding: "12px", borderRadius: 10, background: feedbackText.trim() ? "linear-gradient(135deg, #22D3EE, #EC4899)" : "rgba(255,255,255,0.08)", border: "none", color: feedbackText.trim() ? C.white : C.muted, fontSize: 14, fontWeight: 700, cursor: feedbackText.trim() ? "pointer" : "not-allowed", boxShadow: feedbackText.trim() ? "0 0 20px rgba(34,211,238,0.3)" : "none", transition: "all 0.2s" }}>
+                    style={{ width: "100%", padding: "12px", fontSize: 14 }}>
                     {feedbackType === 'feature' ? '✨ Submit Feature Request' : '🐛 Submit Bug Report'}
-                  </button>
+                  </Button>
                 </>
               )}
             </div>
@@ -6539,11 +6540,11 @@ const handleCSV = async (file, forcePlatform = null) => {
               style={{ width:"100%", padding:"10px 12px", borderRadius:10, background:"rgba(255,255,255,0.05)", border:"1px solid rgba(245,158,11,0.3)", color:C.white, fontSize:13, outline:"none", resize:"vertical", fontFamily:"inherit", boxSizing:"border-box" }}
             />
             <div style={{ display:"flex", gap:10, marginTop:14 }}>
-              <button onClick={() => saveTipperNote(noteTarget, noteText)}
+              <Button onClick={() => saveTipperNote(noteTarget, noteText)}
                 disabled={noteSaving}
-                style={{ flex:1, padding:"10px 0", borderRadius:10, background:"linear-gradient(135deg,#F59E0B,#EC4899)", border:"none", color:C.white, fontSize:14, fontWeight:700, cursor:"pointer" }}>
+                style={{ flex:1, padding:"10px 0", fontSize:14 }}>
                 {noteSaving ? "Saving..." : "Save Note"}
-              </button>
+              </Button>
               {tipperNotes[noteTarget?.toLowerCase()]?.note && (
                 <button onClick={() => saveTipperNote(noteTarget, '')}
                   style={{ padding:"10px 14px", borderRadius:10, background:"rgba(248,113,113,0.15)", border:"1px solid rgba(248,113,113,0.3)", color:C.red, fontSize:13, cursor:"pointer" }}>
@@ -6589,11 +6590,11 @@ const handleCSV = async (file, forcePlatform = null) => {
                 </div>
 
                 <div style={{ display: "flex", gap: 10 }}>
-                  <button
+                  <Button
                     onClick={() => { navigator.clipboard.writeText(cardLines); setShareModalOpen(false); setToast("Copied to clipboard! 🎉") }}
-                    style={{ flex: 1, padding: "12px", borderRadius: 12, background: "linear-gradient(135deg, #ec4899, #a855f7)", border: "none", color: C.white, fontSize: 14, fontWeight: 700, cursor: "pointer", boxShadow: "0 0 20px rgba(236,72,153,0.3)" }}>
+                    style={{ flex: 1, padding: "12px", fontSize: 14 }}>
                     📋 Copy to Clipboard
-                  </button>
+                  </Button>
                   <button
                     onClick={() => { const encoded = encodeURIComponent(cardLines); window.open(`https://twitter.com/intent/tweet?text=${encoded}`, "_blank") }}
                     style={{ flex: 1, padding: "12px", borderRadius: 12, background: "rgba(29,161,242,0.15)", border: "1px solid rgba(29,161,242,0.4)", color: "#1DA1F2", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>

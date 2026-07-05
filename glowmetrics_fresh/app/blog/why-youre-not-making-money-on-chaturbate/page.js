@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import Button from '../../../components/ui/Button'
 
 export const metadata = {
   title: "Why You're Not Making Money on Chaturbate (And How to Fix It) | CamCash",
@@ -111,8 +112,8 @@ export default function Page() {
       })}} />
 
       <nav style={{ padding: '20px 40px', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Link href="/" style={{ fontWeight: 800, fontSize: 20, color: 'white', textDecoration: 'none' }}>Cam<span style={{ color: '#22D3EE' }}>Cash</span></Link>
-        <Link href="/" style={{ padding: '8px 20px', borderRadius: 8, background: 'linear-gradient(135deg, #22D3EE, #EC4899)', color: 'white', fontWeight: 700, fontSize: 13, textDecoration: 'none' }}>Start Free with CamCash →</Link>
+        <Link href="/" style={{ fontWeight: 700, fontSize: 15, color: 'white', textDecoration: 'none', letterSpacing: '-0.2px' }}>💜 CamCash</Link>
+        <Button as="a" href="/" style={{ padding: '8px 20px', fontSize: 13 }}>Start Free with CamCash →</Button>
       </nav>
 
       <article style={{ maxWidth: 760, margin: '0 auto', padding: '60px 24px 100px' }}>
@@ -162,7 +163,7 @@ export default function Page() {
         <div style={{ padding: '32px', borderRadius: 20, background: 'linear-gradient(135deg, rgba(236,72,153,0.10), rgba(34,211,238,0.08))', border: '1px solid rgba(236,72,153,0.3)', margin: '48px 0', textAlign: 'center' }}>
           <div style={{ fontSize: 22, fontWeight: 900, color: 'white', marginBottom: 10 }}>See exactly why your earnings are where they are</div>
           <p style={{ fontSize: 14, color: '#94A3B8', marginBottom: 24, lineHeight: 1.7 }}>CamCash analyzes your Chaturbate tip history and shows you your best hours, top fans, earnings per session, and exactly what to change. Copy your tip history, paste it once, and get your first insights in 60 seconds. Free to start — no card required.</p>
-          <Link href="/" style={{ display: 'inline-block', padding: '14px 36px', borderRadius: 12, background: 'linear-gradient(135deg, #22D3EE, #EC4899)', color: 'white', fontWeight: 800, fontSize: 15, textDecoration: 'none' }}>Start Free with CamCash →</Link>
+          <Button as="a" href="/" style={{ padding: '14px 36px' }}>Start Free with CamCash →</Button>
           <div style={{ fontSize: 12, color: '#475569', marginTop: 12 }}>Free to start. No card required. 60 seconds to first insights.</div>
         </div>
 

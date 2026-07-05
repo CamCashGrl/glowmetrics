@@ -5,6 +5,7 @@
 //                 /guides/bongacams-analytics, /guides/myfreecams-analytics
 
 import Link from 'next/link'
+import Button from '../../../components/ui/Button'
 
 export const metadata = {
   title: 'CamCash vs CamDash vs CB Cam Insights — Which Wins?',
@@ -39,6 +40,16 @@ export const metadata = {
 export default function CamCashVsCamDashPost() {
   return (
     <div style={{ minHeight: '100vh', background: '#0a0e1a', color: '#e2e8f0', fontFamily: 'inherit' }}>
+
+      {/* Nav */}
+      <nav style={{
+        borderBottom: '1px solid rgba(255,255,255,0.07)', padding: '0 24px', height: '52px',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      }}>
+        <Link href="/" style={{ textDecoration: 'none', fontWeight: 700, fontSize: '15px', color: '#f1f5f9', letterSpacing: '-0.2px' }}>
+          💜 CamCash
+        </Link>
+      </nav>
 
       {/* Breadcrumb */}
       <nav style={{ maxWidth: '760px', margin: '0 auto', padding: '32px 24px 8px', fontSize: '13px', color: '#64748b', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
@@ -332,18 +343,9 @@ export default function CamCashVsCamDashPost() {
         }}>
           <h3 style={{ fontSize: '20px', fontWeight: '800', color: '#f1f5f9', marginBottom: '10px' }}>Try CamCash Free</h3>
           <p style={{ color: '#94a3b8', fontSize: '14px', marginBottom: '24px' }}>No credit card. No download. Upload your first CSV in under 2 minutes and see your data instantly.</p>
-          <Link href="/login" style={{
-            display: 'inline-block',
-            background: 'linear-gradient(90deg, #22d3ee, #e879f9)',
-            color: '#0a0e1a',
-            fontWeight: '800',
-            padding: '14px 36px',
-            borderRadius: '12px',
-            textDecoration: 'none',
-            fontSize: '15px',
-          }}>
+          <Button as="a" href="/login" style={{ padding: '14px 36px', fontSize: '15px' }}>
             Start Free →
-          </Link>
+          </Button>
         </div>
 
         {/* Schema: Article */}

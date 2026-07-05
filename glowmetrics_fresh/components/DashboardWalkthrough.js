@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import Button from './ui/Button'
 
 const WALKTHROUGH_KEY = 'camcash_walkthrough_done'
 
@@ -173,9 +174,9 @@ export default function DashboardWalkthrough({ onTabChange }) {
                 Back
               </button>
             )}
-            <button onClick={handleNext} style={{ background: 'linear-gradient(135deg, #7c3aed, #a855f7)', border: 'none', color: '#fff', padding: '8px 18px', borderRadius: 8, fontSize: 13, cursor: 'pointer', fontWeight: 600, boxShadow: '0 4px 15px rgba(168,85,247,0.35)' }}>
+            <Button onClick={handleNext} style={{ padding: '8px 18px', fontSize: 13 }}>
               {isLast ? "Let's go! 🚀" : 'Next →'}
-            </button>
+            </Button>
           </div>
         </div>
       </div>

@@ -1,8 +1,8 @@
-importScripts('connectors/chaturbate.js');
 // CamCash background service worker
 
 const SUPABASE_URL  = 'https://hlsdlaibnayzbfflxclj.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhsc2RsYWlibmF5emJmZmx4Y2xqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM2MjQwODUsImV4cCI6MjA4OTIwMDA4NX0.5FwPe35UL-o46FvBJX526La5o7jcbFaP1KVoLtI4U_M';
+const API_BASE       = 'https://www.camcashgrl.com';
 
 // ─── State ────────────────────────────────────────────────────────────────────
 let session = null;
@@ -13,6 +13,7 @@ let sessionTips = [];
 let sessionTokens = 0;
 let sessionUsd = 0;
 let topTipper = null;
+let plan = 'free'; // 'free' | 'pro' | 'unlimited' — controls whether tips save to permanent history
 
 // restorePromise resolves once the initial restore() call completes.
 // Tip sync always awaits this before trying to use session.
@@ -80,40 +81,69 @@ async function refreshSession() {
   }
 }
 
-// ─── Tip sync — writes directly to Supabase live_tips table ──────────────────
+// ─── Tip sync ──────────────────────────────────────────────────────────────────
+// Always saved to the live feed (free, on every supported platform). Permanent
+// history — the data behind the dashboard's historical analytics — is a Pro
+// feature, so the plan check happens server-side in this route rather than
+// here; the extension can't be trusted to gate its own writes.
 async function syncTip({ username, tokens, platform, timestamp }) {
   await restorePromise;
   if (!session) return;
-  const usd = parseFloat((tokens * 0.05).toFixed(2));
+
   const body = JSON.stringify({
-    user_id:     session.user.id,
-    username:    username.trim(),
-    tokens:      parseInt(tokens, 10),
-    usd,
-    source:      platform ? platform.toLowerCase() : 'extension',
-    received_at: timestamp || new Date().toISOString(),
+    username,
+    amount:    parseInt(tokens, 10),
+    platform:  platform ? platform.toLowerCase() : 'extension',
+    timestamp: timestamp || new Date().toISOString(),
   });
 
-  const doInsert = () => fetch(`${SUPABASE_URL}/rest/v1/live_tips`, {
+  const doPost = () => fetch(`${API_BASE}/api/live/tips`, {
     method: 'POST',
-    headers: sbHeaders(session.access_token),
+    headers: {
+      'Content-Type':  'application/json',
+      'Authorization': `Bearer ${session.access_token}`,
+    },
     body,
   });
 
   try {
-    let res = await doInsert();
+    let res = await doPost();
     // If token expired, refresh once and retry
     if (res.status === 401) {
       const refreshed = await refreshSession();
-      if (refreshed) res = await doInsert();
+      if (refreshed) res = await doPost();
     }
     if (!res.ok) {
       const err = await res.text();
-      console.error('[CamCash] live_tips insert failed:', res.status, err);
+      console.error('[CamCash] tip sync failed:', res.status, err);
+      return { savedToHistory: false };
     }
+    const data = await res.json();
+    return { savedToHistory: !!data.savedToHistory };
   } catch (e) {
     console.error('[CamCash] sync failed:', e.message);
+    return { savedToHistory: false };
   }
+}
+
+// ─── Plan loading — determines whether tips save to permanent history ────────
+async function loadPlan() {
+  await restorePromise;
+  if (!session) { plan = 'free'; return; }
+  try {
+    const doFetch = () => fetch(
+      `${SUPABASE_URL}/rest/v1/profiles?select=plan&id=eq.${session.user.id}`,
+      { headers: sbHeaders(session.access_token) }
+    );
+    let res = await doFetch();
+    if (res.status === 401) {
+      const refreshed = await refreshSession();
+      if (refreshed) res = await doFetch();
+    }
+    if (!res.ok) return;
+    const rows = await res.json();
+    plan = rows?.[0]?.plan || 'free';
+  } catch (_) {}
 }
 
 // ─── Whale loading — reads historical tips directly from Supabase ─────────────
@@ -211,7 +241,7 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
       if (canCoach(`alarm_${type}`, 2 * 60 * 1000)) addCoach(type);
     }
   }
-  if (alarm.name === 'whale_refresh') await loadWhales();
+  if (alarm.name === 'whale_refresh') { await loadWhales(); await loadPlan(); }
 });
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -221,6 +251,7 @@ function getState() {
     tips: sessionTips.slice(0, 20), tokens: sessionTokens,
     usd: sessionUsd, topTipper, coaches: coachMsgs,
     whales: whales.slice(0, 10), connected: true,
+    plan, isPro: plan === 'pro' || plan === 'unlimited',
   };
 }
 
@@ -252,18 +283,6 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
 
   if (msg.action === 'get_state') { reply(getState()); return false; }
 
-  if (msg.action === 'start_sync') {
-    (async () => {
-      await restorePromise;
-      if (!session?.user?.id || !session?.access_token) {
-        chrome.runtime.sendMessage({ action: 'sync_progress', error: 'Please sign in first.', done: true }).catch(()=>{});
-        return;
-      }
-      await syncChaturbate('incremental');
-    })();
-    return false;
-  }
-
   if (msg.action === 'logout') {
     logout().then(() => reply({ ok: true }));
     return true;
@@ -282,7 +301,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
     if (!topTipper || tokens > topTipper.tokens) topTipper = tip;
 
     const storageKey = `tip_${lastTipTs}`;
-    const tipRecord  = { username, amount: tokens, platform, timestamp: new Date(lastTipTs).toISOString(), synced: false };
+    const tipRecord  = { username, amount: tokens, platform, timestamp: new Date(lastTipTs).toISOString(), synced: false, savedToHistory: false };
     chrome.storage.local.set({ [storageKey]: tipRecord });
 
     chrome.storage.local.get(null, (items) => {
@@ -290,8 +309,8 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
       if (keys.length > 100) chrome.storage.local.remove(keys.slice(100));
     });
 
-    syncTip({ username, tokens, platform, timestamp: new Date(lastTipTs).toISOString() }).then(() => {
-      chrome.storage.local.set({ [storageKey]: { ...tipRecord, synced: true } });
+    syncTip({ username, tokens, platform, timestamp: new Date(lastTipTs).toISOString() }).then((result) => {
+      chrome.storage.local.set({ [storageKey]: { ...tipRecord, synced: true, savedToHistory: !!result?.savedToHistory } });
     });
 
     // Coaching with cooldowns — prevents spam
@@ -330,8 +349,8 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
 
   if (msg.type === 'AUTH_CHANGED') {
     restorePromise = restore().then(() => {
-      if (session) { loadWhales(); scheduleAlarms(); }
-      else { chrome.alarms.clearAll(); }
+      if (session) { loadWhales(); loadPlan(); scheduleAlarms(); }
+      else { plan = 'free'; chrome.alarms.clearAll(); }
     });
     return false;
   }
@@ -339,220 +358,5 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 restorePromise = restore().then(() => {
-  if (session) { loadWhales(); scheduleAlarms(); }
+  if (session) { loadWhales(); loadPlan(); scheduleAlarms(); }
 });
-// ─── One-Click Sync ───────────────────────────────────────────────────────────
-
-const SYNC_ENDPOINT = 'https://chaturbate.com/api/ts/tipping/token-stats/';
-
-chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
-  if (msg.type === 'SYNC_START') {
-    handleSync(msg.platform, msg.mode || 'incremental');
-    reply({ started: true });
-  }
-  if (msg.type === 'GET_SESSION_STATUS') {
-    getCBSessionStatus().then(reply);
-    return true;
-  }
-});
-
-async function getCBSessionStatus() {
-  const cookie = await chrome.cookies.get({
-    url:  'https://chaturbate.com',
-    name: 'sessionid',
-  });
-  return { chaturbate: !!cookie };
-}
-
-async function handleSync(platform, mode) {
-  await restorePromise;
-  if (!session) {
-    sendSyncProgress({ platform, error: 'NOT_AUTHENTICATED', done: true });
-    return;
-  }
-
-  if (platform === 'chaturbate') {
-    await syncChaturbate(mode);
-  }
-}
-
-async function syncChaturbate(mode) {
-  const platform = 'chaturbate';
-
-  // Get CB session cookies
-  const [sessionCookie, csrfCookie] = await Promise.all([
-    chrome.cookies.get({ url: 'https://chaturbate.com', name: 'sessionid' }),
-    chrome.cookies.get({ url: 'https://chaturbate.com', name: 'csrftoken' }),
-  ]);
-
-  if (!sessionCookie || !csrfCookie) {
-    sendSyncProgress({ platform, error: 'SESSION_NOT_FOUND', done: true });
-    return;
-  }
-
-  // Load cursor for incremental sync
-  const cursorKey = `sync_cursor_${session.user.id}_${platform}`;
-  const stored    = await chrome.storage.local.get(cursorKey);
-  const cursor    = stored[cursorKey] || null;
-
-  let maxTransactionId = '';
-  let totalInserted    = 0;
-  let totalSkipped     = 0;
-  let pagesLoaded      = 0;
-
-  while (true) {
-    // Fetch one page from Chaturbate
-    let data;
-    try {
-      data = await fetchCBPage(maxTransactionId, csrfCookie.value);
-    } catch (err) {
-      sendSyncProgress({ platform, error: err.code || err.message, done: true });
-      return;
-    }
-
-    const { transactions, txns_fully_loaded } = data;
-    if (!transactions || transactions.length === 0) break;
-
-    // Incremental: stop when we hit already-synced data
-    if (cursor && mode === 'incremental') {
-      const oldestOnPage = new Date(transactions[transactions.length - 1].date);
-      if (oldestOnPage <= new Date(cursor.lastSyncedAt)) {
-        // Only send tips newer than cursor
-        const fresh = transactions.filter(t =>
-          t.tokens > 0 &&
-          t.description === 'Tip received' &&
-          new Date(t.date) > new Date(cursor.lastSyncedAt)
-        );
-        if (fresh.length > 0) {
-          const result = await ingestTips(platform, fresh.map(normaliseCBTip));
-          totalInserted += result.inserted || 0;
-          totalSkipped  += result.skipped  || 0;
-        }
-        break;
-      }
-    }
-
-    // Filter to tips only (skip cashouts)
-    const tips = transactions.filter(t =>
-      t.tokens > 0 && t.description === 'Tip received'
-    );
-
-    if (tips.length > 0) {
-      const result = await ingestTips(platform, tips.map(normaliseCBTip));
-      totalInserted += result.inserted || 0;
-      totalSkipped  += result.skipped  || 0;
-    }
-
-    pagesLoaded++;
-    sendSyncProgress({
-      platform,
-      pagesLoaded,
-      tipsFound: totalInserted + totalSkipped,
-      inserted:  totalInserted,
-      done: false,
-    });
-
-    if (txns_fully_loaded) break;
-
-    // Paginate: use lowest id from this batch
-    const ids = transactions.map(t => t.id);
-    maxTransactionId = Math.min(...ids).toString();
-    await sleep(1500); // polite delay
-  }
-
-  // Save cursor
-  if (transactions && transactions.length > 0) {
-    await chrome.storage.local.set({
-      [cursorKey]: {
-        lastSyncedAt: transactions[0].date,
-        lastTipId:    transactions[0].id,
-      }
-    });
-  }
-
-  sendSyncProgress({
-    platform,
-    pagesLoaded,
-    tipsFound: totalInserted + totalSkipped,
-    inserted:  totalInserted,
-    done: true,
-  });
-}
-
-async function fetchCBPage(maxTransactionId, csrfToken) {
-  const url = `${SYNC_ENDPOINT}?max_transaction_id=${maxTransactionId}&cashpage=0`;
-  let delay = 2000;
-
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const res = await fetch(url, {
-      credentials: 'include',
-      headers: {
-        'Accept':           'application/json',
-        'X-Requested-With': 'XMLHttpRequest',
-        'X-CSRFToken':      csrfToken,
-      },
-    });
-
-    if (res.status === 401 || res.status === 403) {
-      const err = new Error('Session expired');
-      err.code = 'SESSION_EXPIRED';
-      throw err;
-    }
-    if (res.status === 429) {
-      await sleep(delay);
-      delay = Math.min(delay * 2, 32000);
-      continue;
-    }
-    if (!res.ok) {
-      await sleep(delay);
-      delay = Math.min(delay * 2, 32000);
-      continue;
-    }
-    return res.json();
-  }
-  throw new Error('Max retries exceeded');
-}
-
-function normaliseCBTip(t) {
-  return {
-    platform_tip_id: String(t.id),
-    username:        t.username || 'anonymous',
-    tokens:          t.tokens,
-    usd:             null,
-    tip_type:        'tip',
-    date_time:       t.date,
-    tip_note:        t.message && t.message !== 'None' ? t.message : null,
-  };
-}
-
-async function ingestTips(platform, tips) {
-  try {
-    const token = session?.access_token;
-    if (!token) return { inserted: 0, skipped: tips.length };
-
-    const res = await fetch('https://camcashgrl.com/api/sync/ingest', {
-      method: 'POST',
-      headers: {
-        'Content-Type':  'application/json',
-        'Authorization': `Bearer ${token}`,
-        'X-Timestamp':   Date.now().toString(),
-      },
-      body: JSON.stringify({ platform, tips }),
-    });
-
-    if (!res.ok) {
-      console.error('[CamCash] ingest failed:', res.status);
-      return { inserted: 0, skipped: tips.length };
-    }
-    return res.json();
-  } catch (e) {
-    console.error('[CamCash] ingest error:', e.message);
-    return { inserted: 0, skipped: tips.length };
-  }
-}
-
-function sendSyncProgress(data) {
-  chrome.runtime.sendMessage({ type: 'SYNC_PROGRESS', ...data }).catch(() => {});
-}
-
-const sleep = ms => new Promise(r => setTimeout(r, ms));

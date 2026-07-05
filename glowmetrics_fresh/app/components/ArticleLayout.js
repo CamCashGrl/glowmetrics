@@ -1,6 +1,7 @@
 // Shared editorial layout for all blog + guide articles.
 // Provides: compact nav, centered article container, minimal footer.
 // Each article page supplies its own breadcrumb array + children content.
+import Button from '../../components/ui/Button'
 
 const C = {
   bg:      '#0d0f14',
@@ -8,8 +9,6 @@ const C = {
   muted:   '#475569',
   text:    '#94a3b8',
   white:   '#f1f5f9',
-  indigo:  '#6366f1',
-  indigoD: 'rgba(99,102,241,0.18)',
 }
 
 export default function ArticleLayout({ children, breadcrumb = [], schema }) {
@@ -49,16 +48,9 @@ export default function ArticleLayout({ children, breadcrumb = [], schema }) {
               {label}
             </a>
           ))}
-          <a href="/landing" style={{
-            marginLeft: '8px',
-            fontSize: '12px', fontWeight: '600', color: C.indigo,
-            border: `1px solid ${C.indigoD}`,
-            background: 'rgba(99,102,241,0.06)',
-            padding: '5px 12px', borderRadius: '6px',
-            textDecoration: 'none',
-          }}>
+          <Button as="a" href="/landing" variant="secondary" style={{ marginLeft: '8px', padding: '5px 12px', fontSize: '12px' }}>
             Free account
-          </a>
+          </Button>
         </div>
       </nav>
 

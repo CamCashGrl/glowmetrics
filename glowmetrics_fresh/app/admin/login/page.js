@@ -1,6 +1,7 @@
 "use client"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
+import Button from "../../../components/ui/Button"
 
 export default function AdminLoginPage() {
   const router = useRouter()
@@ -67,13 +68,9 @@ export default function AdminLoginPage() {
               {error}
             </div>
           )}
-          <button
-            type="submit"
-            disabled={loading}
-            style={{ width:"100%", padding:"13px", borderRadius:10, border:"none", background:"linear-gradient(135deg,#c084fc,#e879f9)", color:"#05050f", fontSize:13, fontWeight:800, cursor:loading?"not-allowed":"pointer", opacity:loading?0.7:1 }}
-          >
+          <Button type="submit" disabled={loading} style={{ width:"100%" }}>
             {loading ? "Signing in…" : "Sign in →"}
-          </button>
+          </Button>
         </form>
       </div>
     </div>

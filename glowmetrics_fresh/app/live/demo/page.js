@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { track } from '../../../lib/track';
+import Button from '../../../components/ui/Button';
 
 const C = {
   bg: '#05070f',
@@ -605,16 +606,9 @@ export default function LiveDemoPage() {
             <div style={{ fontSize: 14, color: C.muted, maxWidth: 460, margin: '0 auto 30px', lineHeight: 1.7 }}>
               Every tip tracked. Every whale flagged. Every dip caught — automatically across Chaturbate, BongaCams, and MyFreeCams.
             </div>
-            <a href="/signup" style={{
-              display: 'inline-block', padding: '16px 52px',
-              background: `linear-gradient(135deg, ${C.purple}, ${C.pink})`,
-              borderRadius: 12, color: '#fff', fontWeight: 900, fontSize: 16,
-              textDecoration: 'none', letterSpacing: 0.3,
-              boxShadow: '0 0 40px rgba(168,85,247,0.4)',
-              animation: 'cc-bar 2s ease infinite alternate',
-            }}>
+            <Button as="a" href="/signup" style={{ padding: '16px 52px', fontSize: 16, letterSpacing: 0.3 }}>
               Start for free →
-            </a>
+            </Button>
             <div style={{ marginTop: 14, fontSize: 11, color: C.dim }}>
               No credit card &nbsp;·&nbsp; No extension required to start &nbsp;·&nbsp; Takes under 2 minutes
             </div>

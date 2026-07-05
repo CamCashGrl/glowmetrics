@@ -1,4 +1,5 @@
 "use client"
+import Button from "../../components/ui/Button"
 
 // ============================================
 // CONFIRMATION MODAL COMPONENT
@@ -108,14 +109,9 @@ const ConfirmationModal = ({ result, onConfirm, onCancel }) => {
           }}>
             Cancel
           </button>
-          <button onClick={() => onConfirm(result.data)} style={{
-            flex: 1, padding: "14px 24px", borderRadius: 8,
-            background: `linear-gradient(135deg, ${C.cyan}, ${C.pink})`,
-            border: "none", color: C.white, fontSize: 15, fontWeight: 600,
-            cursor: "pointer", boxShadow: "0 4px 12px rgba(34,211,238,0.3)"
-          }}>
+          <Button onClick={() => onConfirm(result.data)} style={{ flex: 1 }}>
             ✓ Confirm & Import
-          </button>
+          </Button>
         </div>
 
         <div style={{ textAlign: "center", marginTop: 16, fontSize: 12, color: C.muted }}>
@@ -185,13 +181,9 @@ const ErrorModal = ({ error, suggestions, issues, onClose }) => {
           </div>
         )}
 
-        <button onClick={onClose} style={{
-          width: "100%", padding: "14px 24px", borderRadius: 8,
-          background: `linear-gradient(135deg, ${C.cyan}, ${C.pink})`,
-          border: "none", color: C.white, fontSize: 15, fontWeight: 600, cursor: "pointer"
-        }}>
+        <Button onClick={onClose} style={{ width: "100%" }}>
           Got It - I'll Fix My CSV
-        </button>
+        </Button>
       </div>
     </div>
   )

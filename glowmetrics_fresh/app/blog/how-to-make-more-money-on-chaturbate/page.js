@@ -1,4 +1,5 @@
 // app/blog/how-to-make-more-money-on-chaturbate/page.js
+import Button from '../../../components/ui/Button'
 
 export const metadata = {
   title: 'How to Make More Money on Chaturbate: Advanced Strategies for Models Already Streaming | CamCash',
@@ -68,20 +69,11 @@ export default function MakeMoreOnChaturbate() {
       alignItems: 'center',
     },
     logo: {
-      fontWeight: 800,
-      fontSize: 20,
-      color: 'white',
-      textDecoration: 'none',
-    },
-    logoAccent: { color: '#22D3EE' },
-    navCta: {
-      padding: '8px 20px',
-      borderRadius: 8,
-      background: 'linear-gradient(135deg, #22D3EE, #EC4899)',
-      color: 'white',
       fontWeight: 700,
-      fontSize: 13,
+      fontSize: 15,
+      color: 'white',
       textDecoration: 'none',
+      letterSpacing: '-0.2px',
     },
     article: {
       maxWidth: 760,
@@ -345,11 +337,11 @@ export default function MakeMoreOnChaturbate() {
 
       <nav style={s.nav}>
         <a href="/" style={s.logo}>
-          Cam<span style={s.logoAccent}>Cash</span>
+          💜 CamCash
         </a>
-        <a href="/" style={s.navCta}>
+        <Button as="a" href="/" style={{ padding: '8px 20px', fontSize: 13 }}>
           Start Free with CamCash →
-        </a>
+        </Button>
       </nav>
 
       <article style={s.article}>

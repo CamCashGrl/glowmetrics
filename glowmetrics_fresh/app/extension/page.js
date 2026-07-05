@@ -1,6 +1,6 @@
 export const metadata = {
   title: 'CamCash Chrome Extension — Automatically Track Cam Earnings',
-  description: 'Install once and automatically sync live tips on Chaturbate, BongaCams, MyFreeCams, and Stripchat. Free cam earnings tracker. No spreadsheets.',
+  description: 'Install once and automatically sync live tips on Chaturbate, BongaCams, and MyFreeCams. Free cam earnings tracker. No spreadsheets.',
   alternates: { canonical: 'https://www.camcashgrl.com/extension' },
   openGraph: {
     title: 'CamCash Chrome Extension — Automatically Track Cam Earnings',
@@ -12,6 +12,10 @@ export const metadata = {
 }
 
 import ExtensionDownloadButton from '../components/ExtensionDownloadButton'
+
+// Matches the gradient in components/ui/Button.js — single source of truth
+// for the app's signature CTA gradient.
+const BRAND_GRADIENT = 'linear-gradient(90deg,#21E6F3,#6C5CFF,#FF2FAE)'
 
 const C = {
   bg: '#040812',
@@ -52,7 +56,7 @@ export default function ExtensionPage() {
           <ExtensionDownloadButton
             label="Install Free"
             style={{
-              background: 'linear-gradient(135deg, #a855f7, #7c3aed)',
+              background: BRAND_GRADIENT,
               color: '#fff',
               textDecoration: 'none',
               padding: '7px 16px',
@@ -116,14 +120,14 @@ export default function ExtensionPage() {
               label="📥 Install Chrome Extension — Free"
               style={{
                 display: 'inline-block',
-                background: 'linear-gradient(135deg, #a855f7, #7c3aed)',
+                background: BRAND_GRADIENT,
                 color: '#fff',
                 textDecoration: 'none',
                 padding: '16px 32px',
                 borderRadius: '12px',
                 fontSize: '17px',
                 fontWeight: '800',
-                boxShadow: '0 0 36px rgba(168,85,247,0.4)',
+                boxShadow: '0 0 14px rgba(33,230,243,0.16),0 0 28px rgba(255,47,174,0.10)',
               }}
             />
             <a href="/live" style={{
@@ -153,7 +157,7 @@ export default function ExtensionPage() {
           {/* Platform logos */}
           <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', flexWrap: 'wrap' }}>
             <span style={{ fontSize: '11px', color: C.muted, alignSelf: 'center', marginRight: '4px' }}>Works on:</span>
-            {['Chaturbate', 'BongaCams', 'MyFreeCams', 'Stripchat'].map(p => (
+            {['Chaturbate', 'BongaCams', 'MyFreeCams'].map(p => (
               <span key={p} style={{
                 fontSize: '12px', fontWeight: '600', color: C.muted,
                 padding: '5px 13px', borderRadius: '20px',
@@ -204,7 +208,7 @@ export default function ExtensionPage() {
             </div>
           </div>
           <div style={{ padding: '12px 16px' }}>
-            <div style={{ background: 'linear-gradient(135deg, #a855f7, #7c3aed)', color: '#fff', padding: '9px 0', borderRadius: '8px', textAlign: 'center', fontSize: '12px', fontWeight: '700' }}>
+            <div style={{ background: BRAND_GRADIENT, color: '#fff', padding: '9px 0', borderRadius: '8px', textAlign: 'center', fontSize: '12px', fontWeight: '700' }}>
               Open Dashboard →
             </div>
           </div>
@@ -244,7 +248,7 @@ export default function ExtensionPage() {
               }}>
                 <div style={{
                   width: '36px', height: '36px', borderRadius: '50%',
-                  background: 'linear-gradient(135deg, #a855f7, #7c3aed)',
+                  background: BRAND_GRADIENT,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   fontSize: '14px', fontWeight: '800', color: '#fff',
                   margin: '0 auto 14px',
@@ -263,7 +267,7 @@ export default function ExtensionPage() {
               label="📥 Download Extension — Free"
               style={{
                 display: 'inline-block',
-                background: 'linear-gradient(135deg, #a855f7, #7c3aed)',
+                background: BRAND_GRADIENT,
                 color: '#fff',
                 textDecoration: 'none',
                 padding: '14px 32px',
@@ -334,7 +338,7 @@ export default function ExtensionPage() {
               { icon: '🔒', title: 'No Passwords Stored',   desc: 'We never touch your platform login.' },
               { icon: '👑', title: 'Creator-Focused',       desc: 'Built for cam models — nothing else.' },
               { icon: '🛡️', title: 'Privacy-Safe',          desc: 'Your data stays yours. No selling.' },
-              { icon: '🆓', title: 'Free Forever',          desc: 'Core tracking is always free.' },
+              { icon: '🆓', title: 'Free Forever',          desc: 'Live coaching + tip feed, always free.' },
             ].map(t => (
               <div key={t.title}>
                 <div style={{ fontSize: '26px', marginBottom: '8px' }}>{t.icon}</div>
@@ -343,6 +347,47 @@ export default function ExtensionPage() {
               </div>
             ))}
           </div>
+        </div>
+      </section>
+
+      {/* FREE VS PRO — set expectations up front so nothing looks "broken" */}
+      <section style={{ padding: '0 24px 72px' }}>
+        <div style={{ maxWidth: '720px', margin: '0 auto' }}>
+          <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+            <div style={{ fontSize: '11px', fontWeight: '700', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: '10px' }}>What's free vs. what's Pro</div>
+            <div style={{ fontSize: 'clamp(20px, 2.5vw, 26px)', fontWeight: '800', color: C.white }}>No surprises — here's exactly what you get</div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '20px' }}>
+            <div style={{ padding: '26px', borderRadius: '16px', background: 'rgba(16,185,129,0.05)', border: '1px solid rgba(16,185,129,0.2)' }}>
+              <div style={{ fontSize: '13px', fontWeight: '800', color: C.green, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '14px' }}>🆓 Free, forever</div>
+              {[
+                'Live tip feed while you stream',
+                'Real-time AI coaching (whale alerts, dead-air prompts, streak tips)',
+                'Works on Chaturbate, BongaCams, and MyFreeCams',
+                'No account required to install',
+              ].map(t => (
+                <div key={t} style={{ display: 'flex', gap: '8px', fontSize: '13px', color: C.text, lineHeight: '1.6', marginBottom: '8px' }}>
+                  <span style={{ color: C.green, flexShrink: 0 }}>✓</span><span>{t}</span>
+                </div>
+              ))}
+            </div>
+            <div style={{ padding: '26px', borderRadius: '16px', background: 'rgba(245,158,11,0.05)', border: '1px solid rgba(245,158,11,0.2)' }}>
+              <div style={{ fontSize: '13px', fontWeight: '800', color: C.amber, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '14px' }}>🔒 Requires Pro</div>
+              {[
+                'Tips saved permanently to your dashboard',
+                'Historical trends — best hours, best days, revenue over time',
+                'Top-fan tracking with churn-risk alerts',
+                'Platform comparison ($/hr across sites)',
+              ].map(t => (
+                <div key={t} style={{ display: 'flex', gap: '8px', fontSize: '13px', color: C.text, lineHeight: '1.6', marginBottom: '8px' }}>
+                  <span style={{ color: C.amber, flexShrink: 0 }}>✓</span><span>{t}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <p style={{ fontSize: '12px', color: C.muted, textAlign: 'center', marginTop: '20px', lineHeight: '1.6' }}>
+            Without Pro, your live tip feed and coaching still work every session — your tips just aren't kept after the session ends. If tips seem to "disappear" between streams, that's expected on the free plan, not a bug.
+          </p>
         </div>
       </section>
 
@@ -359,14 +404,14 @@ export default function ExtensionPage() {
             label="📥 Install CamCash — Free"
             style={{
               display: 'inline-block',
-              background: 'linear-gradient(135deg, #a855f7, #7c3aed)',
+              background: BRAND_GRADIENT,
               color: '#fff',
               textDecoration: 'none',
               padding: '18px 48px',
               borderRadius: '14px',
               fontSize: '18px',
               fontWeight: '800',
-              boxShadow: '0 0 44px rgba(168,85,247,0.38)',
+              boxShadow: '0 0 14px rgba(33,230,243,0.16),0 0 28px rgba(255,47,174,0.10)',
               marginBottom: '18px',
             }}
           />

@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import Button from './ui/Button'
 
 const S = {
   bg:         '#0F1117',
@@ -13,7 +14,6 @@ const S = {
   accentSoft: 'rgba(99,102,241,0.12)',
   green:      '#10B981',
   pink:       '#EC4899',
-  gradient:   'linear-gradient(135deg, #6366F1, #EC4899)',
 }
 
 function FAQItem({ q, a }) {
@@ -57,9 +57,12 @@ export default function BlogLayout({
       <div style={{
         borderBottom: `1px solid ${S.border}`, padding: '14px 20px',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        background: S.surface,
+        background: S.surface, gap: 16,
       }}>
-        <nav aria-label="Breadcrumb">
+        <a href="/" style={{ textDecoration: 'none', fontWeight: 700, fontSize: '15px', color: S.textStrong, letterSpacing: '-0.2px', flexShrink: 0 }}>
+          💜 CamCash
+        </a>
+        <nav aria-label="Breadcrumb" style={{ minWidth: 0 }}>
           <ol style={{ display: 'flex', gap: '6px', alignItems: 'center', listStyle: 'none', margin: 0, padding: 0 }}>
             {[['Home', '/'], ['Blog', '/blog'], [title, null]].map(([label, href], i) => (
               <li key={i} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -71,10 +74,7 @@ export default function BlogLayout({
             ))}
           </ol>
         </nav>
-        <a href="/landing" style={{
-          padding: '6px 14px', borderRadius: '7px', textDecoration: 'none',
-          background: S.gradient, color: '#fff', fontSize: '12px', fontWeight: 700,
-        }}>Try GlowMetrics free →</a>
+        <Button as="a" href="/landing" style={{ padding: '6px 14px', fontSize: '12px' }}>Try CamCash free →</Button>
       </div>
 
       {/* Hero */}

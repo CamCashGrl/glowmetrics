@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { supabase } from '../../lib/supabase'
+import Button from '../../components/ui/Button'
 
 export default function ForgotPasswordPage() {
   const [email, setEmail]       = useState('')
@@ -117,28 +118,13 @@ export default function ForgotPasswordPage() {
                   </div>
                 )}
 
-                <button
+                <Button
                   type="submit"
                   disabled={loading}
-                  style={{
-                    width: '100%',
-                    marginTop: 16,
-                    padding: '13px 0',
-                    borderRadius: 10,
-                    background: loading
-                      ? 'rgba(124,92,255,0.2)'
-                      : 'linear-gradient(135deg, #7C5CFF, #EC4899)',
-                    color: 'white',
-                    fontWeight: 700,
-                    fontSize: 15,
-                    border: 'none',
-                    cursor: loading ? 'not-allowed' : 'pointer',
-                    boxShadow: loading ? 'none' : '0 0 24px rgba(124,92,255,0.3)',
-                    transition: 'all 0.2s',
-                  }}
+                  style={{ width: '100%', marginTop: 16, padding: '13px 0' }}
                 >
                   {loading ? 'Sending…' : 'Send Reset Link'}
-                </button>
+                </Button>
               </form>
             </>
           )}
