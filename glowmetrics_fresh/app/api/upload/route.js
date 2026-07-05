@@ -32,7 +32,12 @@ export async function POST(req) {
 
   // ── PARSE + NORMALIZE ──────────────────────────────────────────────────
   const raw = await file.text()
-  const textDetectedPlatform = detectPlatform(raw)
+  // Prefer the platform the user explicitly selected in the UI — text-based
+  // detection is a fallback for callers that don't pass one, and can't find
+  // any platform keywords in a clean, already-normalized CSV (e.g. the
+  // onboarding paste flow, which sends parsed rows rather than raw text).
+  const explicitPlatform = (fd.get('platform') || '').toString().trim()
+  const textDetectedPlatform = explicitPlatform || detectPlatform(raw)
   const parsed = parseCSV(raw)
 
   const rows = parsed.map((row) => {

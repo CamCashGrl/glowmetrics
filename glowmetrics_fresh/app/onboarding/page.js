@@ -591,7 +591,12 @@ export default function OnboardingPage(){
     try{
       const{data:{session}}=await supabase.auth.getSession()
       if(!session)throw new Error('Not logged in')
-      const file=new File([pasteText],'pasted_import.txt',{type:'text/plain'})
+      // Send the already-parsed rows as a clean CSV instead of the raw paste —
+      // the server has its own independent parser, and re-parsing the raw text
+      // there can disagree with what this page's parseRows() already validated
+      // and showed in the preview.
+      const{blob:csvBlob}=pasteToCSVBlob(pasteText,platformId)
+      const file=new File([csvBlob],'pasted_import.csv',{type:'text/csv'})
       const minWait=isFirstImport?5500:1800
       const msgs=isFirstImport?LOADING_MESSAGES:EXTRA_MSGS
       const start=Date.now()
@@ -629,7 +634,7 @@ export default function OnboardingPage(){
       const json=await res.json()
       if(!res.ok||json.error)throw new Error(json.error||'Import failed')
       await markDone()
-      setImportResult({inserted:json.inserted||preview?.tipsDetected||0,skipped:json.skipped||0,paidInserted:preview?.paidSessionsDetected||0})
+      setImportResult({inserted:json.inserted??preview?.tipsDetected??0,skipped:json.skipped??0,paidInserted:preview?.paidSessionsDetected??0})
       setImportedPlatforms(prev=>prev.includes(platformId)?prev:[...prev,platformId])
       if(isFirstImport){setIsFirstImport(false);setShowSparkle(true);setTimeout(()=>setShowSparkle(false),4000);setStep('live')}
       else setStep('step4')
@@ -651,7 +656,7 @@ export default function OnboardingPage(){
       const json=await res.json()
       if(!res.ok||json.error)throw new Error(json.error||'Upload failed')
       await markDone()
-      setImportResult({inserted:json.inserted||preview?.tipsDetected||0,skipped:json.skipped||0})
+      setImportResult({inserted:json.inserted??preview?.tipsDetected??0,skipped:json.skipped??0})
       setImportedPlatforms(prev=>prev.includes(platformId)?prev:[...prev,platformId])
       if(isFirstImport){setIsFirstImport(false);setShowSparkle(true);setTimeout(()=>setShowSparkle(false),4000);setStep('live')}
       else setStep('step4')
