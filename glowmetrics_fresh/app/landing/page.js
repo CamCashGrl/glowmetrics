@@ -4,7 +4,8 @@ import { useRouter } from "next/navigation"
 import dynamic from "next/dynamic"
 import { DM_Sans } from "next/font/google"
 import { supabase } from "../../lib/supabase"
-import { captureAttribution } from "../../lib/tracking"
+import { T as TrackEvents, captureAttribution } from "../../lib/tracking"
+import { track } from "../../lib/track"
 
 // Self-hosted (was a render-blocking `@import url(fonts.googleapis.com/...)`
 // in the <style jsx> block below — same weights that @import requested).
@@ -44,6 +45,42 @@ const T = {
 
   gradientPrimary: "linear-gradient(90deg, #16F4FF 0%, #55B8FF 28%, #7C5CFF 52%, #FF2BAE 100%)",
   panelBorderGradient: "linear-gradient(135deg, rgba(22,244,255,0.95), rgba(124,92,255,0.45), rgba(255,43,174,0.95))",
+}
+
+// ── Password validation feedback — mirrors app/landing/LandingClient.js so
+//    the signup UX (and onboarding funnel behind it) is identical everywhere.
+const PASSWORD_REQUIREMENTS = [
+  { label: "8+ characters", test: pw => pw.length >= 8 },
+  { label: "Uppercase letter", test: pw => /[A-Z]/.test(pw) },
+  { label: "Lowercase letter", test: pw => /[a-z]/.test(pw) },
+  { label: "Number", test: pw => /[0-9]/.test(pw) },
+  { label: "Symbol", test: pw => /[^A-Za-z0-9]/.test(pw) },
+]
+
+const PASSWORD_ERROR_PATTERN = /password should be at least|password should contain/i
+const FRIENDLY_PASSWORD_ERROR = "Password must include 8+ characters, uppercase, lowercase, a number, and a symbol."
+
+function friendlyAuthError(message) {
+  if (!message) return message
+  return PASSWORD_ERROR_PATTERN.test(message) ? FRIENDLY_PASSWORD_ERROR : message
+}
+
+function PasswordChecklist({ password }) {
+  const touched = password.length > 0
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: "3px 12px", margin: "6px 0 10px", padding: "0 1px" }}>
+      {PASSWORD_REQUIREMENTS.map(({ label, test }) => {
+        const met = test(password)
+        const color = met ? T.cyan : touched ? "rgba(251,113,133,0.85)" : T.textFaint
+        return (
+          <span key={label} style={{ fontSize: 11, lineHeight: 1.6, color, display: "inline-flex", alignItems: "center", gap: 5, transition: "color 0.2s ease" }}>
+            <span style={{ fontSize: 8 }}>{met ? "●" : "○"}</span>
+            {label}
+          </span>
+        )
+      })}
+    </div>
+  )
 }
 
 // ── AuthPanel defined OUTSIDE LandingPage so React doesn't re-create the
@@ -124,15 +161,16 @@ function AuthPanel({
         <form onSubmit={handleAuth}>
           <input type="email" placeholder="Email address" required
             value={email} onChange={e => setEmail(e.target.value)} style={inputStyle}
-            onFocus={e => { e.target.style.borderColor = "rgba(22,244,255,0.6)"; e.target.style.boxShadow = "0 0 0 3px rgba(22,244,255,0.10)" }}
+            onFocus={e => { e.target.style.borderColor = "rgba(22,244,255,0.6)"; e.target.style.boxShadow = "0 0 0 3px rgba(22,244,255,0.10)"; TrackEvents.signupStarted(window?.location?.pathname) }}
             onBlur={e => { e.target.style.borderColor = "rgba(255,255,255,0.10)"; e.target.style.boxShadow = "none" }}
           />
-          <input type="password" placeholder="Password" required
+          <input type="password" placeholder={isSignUp ? "Create a password" : "Password"} required
             value={password} onChange={e => setPassword(e.target.value)}
             style={{ ...inputStyle, marginBottom: isSignUp ? 4 : 0 }}
             onFocus={e => { e.target.style.borderColor = "rgba(22,244,255,0.6)"; e.target.style.boxShadow = "0 0 0 3px rgba(22,244,255,0.10)" }}
             onBlur={e => { e.target.style.borderColor = "rgba(255,255,255,0.10)"; e.target.style.boxShadow = "none" }}
           />
+          {isSignUp && <PasswordChecklist password={password} />}
 
           {!isSignUp && (
             <div style={{ textAlign: "right", marginBottom: 12 }}>
@@ -145,7 +183,7 @@ function AuthPanel({
           {authError && <div style={{ fontSize: 12, color: T.red, marginBottom: 10, textAlign: "center" }}>{authError}</div>}
           {authMsg   && <div style={{ fontSize: 12, color: T.cyanSoft,  marginBottom: 10, textAlign: "center" }}>{authMsg}</div>}
 
-          <button type="submit" disabled={authLoading} style={{
+          <button type="submit" disabled={authLoading} onClick={() => isSignUp && TrackEvents.signupCtaClicked(window?.location?.pathname)} style={{
             width: "100%", padding: "13px 0", borderRadius: 12,
             background: authLoading
               ? "rgba(22,244,255,0.2)"
@@ -569,11 +607,16 @@ export default function LandingPage() {
   }, [])
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
       if (!user) return
       const plan = new URLSearchParams(window.location.search).get('plan')
-      if (plan) goToCheckout(plan)
-      else router.replace("/dashboard")
+      if (plan) { goToCheckout(plan); return }
+      const { data: profile } = await supabase
+        .from('beta_users')
+        .select('onboarding_complete')
+        .eq('user_id', user.id)
+        .single()
+      router.replace(profile?.onboarding_complete ? '/dashboard' : '/onboarding')
     })
   }, [])
 
@@ -602,6 +645,7 @@ export default function LandingPage() {
     e.preventDefault()
     setAuthLoading(true); setAuthError(""); setAuthMsg("")
     if (isSignUp) {
+      track('signup_started')
       const captchaRes = await fetch('/api/auth/verify-captcha', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -612,10 +656,10 @@ export default function LandingPage() {
       let attribution = null
       try { attribution = JSON.parse(localStorage.getItem('camcash_attribution') || 'null') } catch {}
       const { error } = await supabase.auth.signUp({ email, password })
-      if (error) { setAuthError(error.message); setAuthLoading(false) }
+      if (error) { setAuthError(friendlyAuthError(error.message)); setAuthLoading(false) }
       else {
         if (typeof twq === 'function') twq('event', 'tw-rc0w2-rcj9h', {})
-        fetch('/api/admin/notify-signup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, source: 'landing-demo' }) }).catch(() => {})
+        fetch('/api/admin/notify-signup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, source: 'landing' }) }).catch(() => {})
         const { data: { user } } = await supabase.auth.getUser()
         if (user) {
           if (attribution) {
@@ -633,17 +677,26 @@ export default function LandingPage() {
               else try { localStorage.removeItem('camcash_attribution') } catch {}
             })
           }
+          track('signup_success'); TrackEvents.signupCompleted(window?.location?.pathname)
           if (pendingPlan && await goToCheckout(pendingPlan)) return
-          router.push("/dashboard")
+          // New signups always go through onboarding first — never straight to /dashboard.
+          router.push("/onboarding")
         }
         else { setAuthMsg("Account created! Check your email to confirm, then log in."); setIsSignUp(false); setAuthLoading(false) }
       }
     } else {
       const { error } = await supabase.auth.signInWithPassword({ email, password })
-      if (error) { setAuthError(error.message); setAuthLoading(false) }
+      if (error) { setAuthError(friendlyAuthError(error.message)); setAuthLoading(false) }
       else {
+        track('login_success')
         if (pendingPlan && await goToCheckout(pendingPlan)) return
-        router.push("/dashboard")
+        const { data: { user } } = await supabase.auth.getUser()
+        const { data: profile } = await supabase
+          .from('beta_users')
+          .select('onboarding_complete')
+          .eq('user_id', user.id)
+          .single()
+        router.push(profile?.onboarding_complete ? '/dashboard' : '/onboarding')
       }
     }
   }
@@ -653,7 +706,7 @@ export default function LandingPage() {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: "https://www.camcashgrl.com/reset-password",
     })
-    if (error) setAuthError(error.message)
+    if (error) setAuthError(friendlyAuthError(error.message))
     else setAuthMsg("Password reset email sent — check your inbox.")
   }
 
