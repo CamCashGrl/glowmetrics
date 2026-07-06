@@ -1548,6 +1548,21 @@ export default function Dashboard() {
     }
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) { router.replace("/login"); return }
+      // Users who never finished importing any data (abandoned onboarding
+      // right after entering their username, or landed here directly) would
+      // otherwise sit on a permanently empty dashboard with no forcing
+      // function to go back and connect a data source — send them to the
+      // guided import flow instead. Gated on onboarding_complete too, so a
+      // returning user who finished onboarding and later deleted all their
+      // uploads isn't bounced into a redirect loop (/onboarding sends
+      // onboarding_complete=true users straight back to /dashboard) — they
+      // just see the normal empty-state dashboard with its Import CTA.
+      Promise.all([
+        supabase.from('tips').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
+        supabase.from('beta_users').select('onboarding_complete').eq('user_id', user.id).maybeSingle(),
+      ]).then(([{ count }, { data: beta }]) => {
+        if (count === 0 && !beta?.onboarding_complete) router.replace('/onboarding')
+      })
       setUser(user)
       supabase.from('profiles')
         .select('plan')

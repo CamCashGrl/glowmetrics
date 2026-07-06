@@ -82,6 +82,24 @@ export async function POST(req) {
   const detectedPlatform = textDetectedPlatform
   rows.forEach(r => { if (!r.platform || r.platform === 'Unknown') r.platform = detectedPlatform })
 
+  // ── ASSIGN DEDUP SEQUENCE ACROSS THE WHOLE FILE ─────────────────────────
+  // Two rows can legitimately share the same (user, username, tokens, usd,
+  // date_time) — e.g. the same fan tipping the same amount at the same
+  // recorded minute — and insert_tips_dedup relies on tip_seq to tell them
+  // apart instead of dropping the second one as a duplicate. That sequence
+  // has to be assigned here, over the full file, rather than inside the RPC:
+  // the RPC is called once per BATCH_SIZE-row chunk below, so a duplicate-key
+  // group split across a batch boundary would otherwise get renumbered from 1
+  // in the second batch and collide with the first batch's already-inserted
+  // rows, silently dropping real tips.
+  const dedupSeq = new Map()
+  rows.forEach(r => {
+    const key = `${r.user_id}|${r.username.toLowerCase()}|${r.tokens}|${r.usd.toFixed(2)}|${r.date_time}`
+    const next = (dedupSeq.get(key) || 0) + 1
+    dedupSeq.set(key, next)
+    r.tip_seq = next
+  })
+
   // ── BATCH INSERT via dedup RPC ─────────────────────────────────────────
   let inserted = 0
   let skipped  = 0
