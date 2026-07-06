@@ -68,6 +68,13 @@ const nextConfig = {
         destination: '/blog/how-to-get-views-on-chaturbate',
         permanent: true,
       },
+      {
+        // /guides/how-to-increase-cam-earnings was indexed by Google but never
+        // had a corresponding page in this app — only the /blog/ version is real.
+        source: '/guides/how-to-increase-cam-earnings',
+        destination: '/blog/how-to-increase-cam-earnings',
+        permanent: true,
+      },
     ]
   },
 }
