@@ -26,10 +26,11 @@ export default function ChaturbateCalculator() {
           />
         </div>
         <div>
-          <label style={{ fontSize: 11, color: "#475569", textTransform: "uppercase", letterSpacing: 0.8, fontWeight: 600, display: "block", marginBottom: 8 }}>
+          <label htmlFor="payout-rate" style={{ fontSize: 11, color: "#475569", textTransform: "uppercase", letterSpacing: 0.8, fontWeight: 600, display: "block", marginBottom: 8 }}>
             Payout Rate ($/token)
           </label>
           <select
+            id="payout-rate"
             value={rate}
             style={{ width: "100%", padding: "11px 14px", borderRadius: 10, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "white", fontSize: 14, outline: "none", boxSizing: "border-box" }}
             onChange={(e) => setRate(parseFloat(e.target.value) || 0.05)}
