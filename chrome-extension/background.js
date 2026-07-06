@@ -116,6 +116,7 @@ async function syncTip({ username, tokens, platform, timestamp }) {
     if (!res.ok) {
       const err = await res.text();
       console.error('[CamCash] tip sync failed:', res.status, err);
+      if (err.includes('PLATFORM_LIMIT_REACHED')) notifyPlatformLimit(platform);
       return { savedToHistory: false };
     }
     const data = await res.json();
@@ -124,6 +125,21 @@ async function syncTip({ username, tokens, platform, timestamp }) {
     console.error('[CamCash] sync failed:', e.message);
     return { savedToHistory: false };
   }
+}
+
+// Free plan tracks 1 platform — this fires when the server rejects a tip for
+// a platform the user hasn't already tracked. Throttled so a blocked stream
+// doesn't spam a notification per tip.
+function notifyPlatformLimit(platform) {
+  if (!canCoach('platform_limit', 30 * 60 * 1000)) return;
+  chrome.notifications.create(`platform_limit_${Date.now()}`, {
+    type: 'basic',
+    iconUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+    title: '🔒 Free plan tracks 1 platform',
+    message: `Tips on ${platform} aren't being saved — upgrade to Standard ($19.99/mo) to track multiple platforms.`,
+    priority: 2,
+  });
+  broadcast({ action: 'platform_limit_reached', platform });
 }
 
 // ─── Plan loading — determines whether tips save to permanent history ────────

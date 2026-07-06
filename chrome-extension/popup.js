@@ -215,6 +215,13 @@ chrome.runtime.onMessage.addListener((msg) => {
       setTimeout(() => { whaleAlert.style.display = 'none'; }, 12000);
     }
   }
+  if (msg.action === 'platform_limit_reached') {
+    const limitAlert = document.getElementById('platform-limit-alert');
+    if (limitAlert) {
+      limitAlert.innerHTML = `🔒 Tips on ${msg.platform} aren't being saved — free plan tracks 1 platform. <a href="https://www.camcashgrl.com/pricing" target="_blank" style="color:#a78bfa;">Upgrade →</a>`;
+      limitAlert.style.display = 'block';
+    }
+  }
 });
 
 // Free plan: live coaching + tip feed always work, but tips aren't saved to
