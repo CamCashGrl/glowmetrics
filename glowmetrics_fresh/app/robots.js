@@ -11,8 +11,6 @@ export default function robots() {
           '/login',
           '/onboarding',
           '/reset-password',
-          '/test',
-          '/testt',
         ],
       },
     ],
