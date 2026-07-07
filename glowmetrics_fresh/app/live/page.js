@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
+import { tokenRate } from '../../lib/constants';
 import { computeRoomHealth } from '../../lib/analytics/roomHealth';
 import { computeRevenueVelocity, computeLiveComparison } from '../../lib/analytics/velocity';
 import { detectSessionPhase, PHASES, getRecoveryActions, getGoalStrategy } from '../../lib/analytics/sessionPhase';
@@ -23,8 +24,6 @@ const glassCard = {
   backdropFilter: 'blur(20px)',
   boxShadow: '0 0 40px rgba(59,130,246,0.15), 0 0 80px rgba(236,72,153,0.08)',
 };
-
-const TOKEN_RATES = { Chaturbate: 0.05, BongaCams: 0.05, MyFreeCams: 0.05, CamSoda: 0.05, Stripchat: 0.05 };
 
 export default function LivePage() {
   const [user, setUser]               = useState(null);
@@ -74,7 +73,7 @@ export default function LivePage() {
   const normalizeTip = useCallback((ev) => {
     const tokens = parseInt(ev.tokens) || 0;
     const usd    = parseFloat(ev.usd) || 0;
-    const rate   = TOKEN_RATES[livePlatform] || 0.05;
+    const rate   = tokenRate(livePlatform);
     let rev = 0, src = 'unknown', conf = 0;
     if (usd > 0 && tokens > 0)      { rev = usd; src = 'usd'; conf = 0.9; }
     else if (usd > 0)                { rev = usd; src = 'usd'; conf = 0.95; }
