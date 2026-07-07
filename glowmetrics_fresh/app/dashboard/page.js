@@ -11,7 +11,7 @@ import dynamic from "next/dynamic"
 import Sidebar from "./Sidebar"
 import SiteFooter from "../components/SiteFooter"
 import { PLATFORM_TOKEN_RATES } from "../../lib/constants"
-import { track as gtmTrack } from '../../lib/track'
+import { track as logEvent } from '../../lib/track'
 import { getDashboardReadiness, getModuleLockState, LockedInsightCard, DashboardProgressCard } from './DashboardPreview'
 import Button from '../../components/ui/Button'
 import EarlyAdopterOffer from './EarlyAdopterOffer'
@@ -1342,7 +1342,7 @@ export default function Dashboard() {
 
   const openUpgradeModal = (source) => {
     track('upgrade_click', { source })
-    gtmTrack('paywall_hit', { feature: source })
+    logEvent('paywall_hit', { feature: source })
     setShowUpgradeModal(true)
   }
 
@@ -1387,7 +1387,7 @@ export default function Dashboard() {
 
   // Tab persistence
   const handleTabChange = (tab) => {
-    gtmTrack('tab_switched', { tab_name: tab })
+    logEvent('tab_switched', { tab_name: tab })
     setActiveTab(tab)
     if (typeof window !== 'undefined') {
       localStorage.setItem('camcash_tab', tab)
@@ -1800,7 +1800,7 @@ const handleCSV = async (file, forcePlatform = null) => {
     }
     setUploading(true)
     setLastUploadResult(null)
-    gtmTrack('csv_upload_started', { platform: forcePlatform || uploadPlatform || 'unknown' })
+    logEvent('csv_upload_started', { platform: forcePlatform || uploadPlatform || 'unknown' })
     try {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) { showToast("❌ Not logged in"); setUploading(false); return }
@@ -1825,24 +1825,13 @@ const handleCSV = async (file, forcePlatform = null) => {
       }
 
       track('csv_imported', { rows: result.inserted, platform: result.platform || 'Unknown' })
-      gtmTrack('csv_upload_success', { platform: result.platform || 'unknown', row_count: result.inserted })
+      logEvent('csv_upload_success', { platform: result.platform || 'unknown', row_count: result.inserted })
 
       const msg = result.skipped > 0
         ? `✅ Imported ${result.inserted} tips (${result.skipped} duplicates skipped)`
         : `✅ Imported ${result.inserted} tips from ${result.platform}!`
       showToast(msg)
       setLastUploadResult({ success: true, inserted: result.inserted, skipped: result.skipped, platform: result.platform })
-
-      // Google Ads — CSV Upload conversion
-      try {
-        if (typeof window.gtag !== 'undefined') {
-          window.gtag('event', 'conversion', {
-            'send_to': 'AW-18107430539/5qolCPeRnLMcEIvtpbpD',
-            'value': 0.0,
-            'currency': 'USD'
-          })
-        }
-      } catch(e) {}
 
       setUploadCount(c => c + 1)
       if (typeof window !== 'undefined') localStorage.setItem('camcash_onboarded', '1')
