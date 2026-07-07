@@ -60,21 +60,6 @@ function UpgradeModal({ onClose }) {
             ))}
           </div>
 
-          <div style={{ background: "rgba(236,72,153,0.08)", border: "1px solid rgba(236,72,153,0.3)", borderRadius: 14, padding: 16, marginBottom: 10, position: "relative" }}>
-            <div style={{ position: "absolute", top: 0, right: 0, background: `linear-gradient(135deg, ${C.pink}, ${C.purple})`, borderRadius: "0 14px 0 10px", padding: "3px 10px", fontSize: 10, fontWeight: 700, color: "#fff" }}>BEST DEAL</div>
-            <div style={{ fontSize: 11, color: C.pink, fontWeight: 700, marginBottom: 4, textTransform: "uppercase" }}>Early Adopter — locked for life</div>
-            <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 10 }}>
-              <span style={{ fontSize: 28, fontWeight: 900, color: C.white }}>$9.99</span>
-              <span style={{ fontSize: 12, color: C.muted }}>/month</span>
-            </div>
-            <button
-              onClick={() => startCheckout('early_adopter_monthly', setLoading)}
-              disabled={loading !== null}
-              style={{ width: "100%", padding: "13px", borderRadius: 12, border: "none", cursor: loading ? "wait" : "pointer", background: `linear-gradient(135deg, ${C.pink}, ${C.purple})`, color: "#fff", fontSize: 14, fontWeight: 800, boxShadow: "0 0 20px rgba(236,72,153,0.35)" }}>
-              {loading === 'early_adopter_monthly' ? 'Redirecting…' : 'Subscribe — $9.99/mo →'}
-            </button>
-          </div>
-
           <button
             onClick={() => startCheckout('standard_monthly', setLoading)}
             disabled={loading !== null}

@@ -14,6 +14,7 @@ import { PLATFORM_TOKEN_RATES } from "../../lib/constants"
 import { track as gtmTrack } from '../../lib/track'
 import { getDashboardReadiness, getModuleLockState, LockedInsightCard, DashboardProgressCard } from './DashboardPreview'
 import Button from '../../components/ui/Button'
+import EarlyAdopterOffer from './EarlyAdopterOffer'
 
 // Tab-only components loaded on demand instead of in the initial dashboard
 // bundle — each is only ever rendered behind an `activeTab === '...'` check,
@@ -3568,6 +3569,8 @@ const handleCSV = async (file, forcePlatform = null) => {
                 )}
               </div>
             )}
+
+            <EarlyAdopterOffer isPro={isPro} />
 
           </div>
         )}
