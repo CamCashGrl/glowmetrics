@@ -366,6 +366,161 @@ function LiveDemoPanel() {
   )
 }
 
+// ── DASHBOARD SHOWCASE — animates in (count-up stats, drawn-in line chart,
+//    filling platform bars) the first time it scrolls into view ───────────
+const LP_DASH_STATS = [
+  { label: "Total earnings", target: 12842, prefix: "$", delta: "+18.6%" },
+  { label: "Tips received",  target: 6231,  prefix: "",  delta: "+22.4%" },
+  { label: "Transactions",   target: 3421,  prefix: "",  delta: "+14.3%" },
+  { label: "Avg. per hour",  target: 146,   prefix: "$", delta: "+16.7%" },
+]
+
+const LP_DASH_PLATFORMS = [
+  { name: "BongaCams",  value: "$6,124", pct: 47.6, color: T.pink },
+  { name: "Chaturbate", value: "$4,231", pct: 32.9, color: T.cyan },
+  { name: "MFC",        value: "$2,487", pct: 19.5, color: T.purple },
+]
+
+function useInViewOnce(threshold = 0.25) {
+  const ref = useRef(null)
+  const [inView, setInView] = useState(false)
+  useEffect(() => {
+    const el = ref.current
+    if (!el || inView) return
+    const io = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) { setInView(true); io.disconnect() }
+    }, { threshold })
+    io.observe(el)
+    return () => io.disconnect()
+  }, [inView, threshold])
+  return [ref, inView]
+}
+
+function useCountUp(target, active, duration = 1300) {
+  const [value, setValue] = useState(0)
+  useEffect(() => {
+    if (!active) return
+    let raf
+    const startTime = performance.now()
+    const step = now => {
+      const progress = Math.min((now - startTime) / duration, 1)
+      const eased = 1 - Math.pow(1 - progress, 3)
+      setValue(Math.round(target * eased))
+      if (progress < 1) raf = requestAnimationFrame(step)
+    }
+    raf = requestAnimationFrame(step)
+    return () => cancelAnimationFrame(raf)
+  }, [active, target, duration])
+  return value
+}
+
+function DashStatCard({ label, target, prefix, delta, active, delay }) {
+  const value = useCountUp(target, active)
+  return (
+    <div style={{
+      background: "rgba(13,17,38,0.7)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 14, padding: 14,
+      opacity: active ? 1 : 0, transform: active ? "translateY(0)" : "translateY(8px)",
+      transition: `opacity 0.5s ease ${delay}ms, transform 0.5s ease ${delay}ms`,
+    }}>
+      <div style={{ fontSize: 10.5, color: T.textFaint, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.03em", marginBottom: 6 }}>{label}</div>
+      <div style={{ fontSize: 19, fontWeight: 850, color: "white", marginBottom: 4 }}>{prefix}{value.toLocaleString()}</div>
+      <div style={{ fontSize: 10.5, color: T.green, fontWeight: 700 }}>{delta} vs last 7 days</div>
+    </div>
+  )
+}
+
+function DashLineChart({ active }) {
+  const pathRef = useRef(null)
+  const [length, setLength] = useState(0)
+  useEffect(() => {
+    if (pathRef.current) setLength(pathRef.current.getTotalLength())
+  }, [])
+  return (
+    <svg viewBox="0 0 300 90" width="100%" height="80" preserveAspectRatio="none">
+      <defs>
+        <linearGradient id="lpLineGrad" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor={T.cyan} />
+          <stop offset="55%" stopColor={T.purple} />
+          <stop offset="100%" stopColor={T.pink} />
+        </linearGradient>
+      </defs>
+      <path
+        ref={pathRef}
+        d="M0,60 C20,50 35,70 50,55 C65,40 80,65 100,45 C120,25 140,55 160,35 C180,15 200,50 220,30 C240,10 260,40 280,20 C290,10 295,15 300,10"
+        fill="none" stroke="url(#lpLineGrad)" strokeWidth="2.5"
+        style={{
+          strokeDasharray: length || 1,
+          strokeDashoffset: active ? 0 : length,
+          transition: "stroke-dashoffset 1.6s cubic-bezier(0.4,0,0.2,1)",
+        }}
+      />
+      {length > 0 && (
+        <circle cx="300" cy="10" r="4" fill={T.pink} style={{
+          opacity: active ? 1 : 0,
+          transition: "opacity 0.4s ease 1.5s",
+          animation: active ? "lp-pulse 2s infinite" : "none",
+        }} />
+      )}
+    </svg>
+  )
+}
+
+function DashPlatformBar({ name, value, pct, color, active, delay }) {
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11.5, marginBottom: 5, color: T.textSoft }}>
+        <span>{name}</span><span style={{ color: T.textMuted }}>{value}</span>
+      </div>
+      <div style={{ height: 5, borderRadius: 999, background: "rgba(255,255,255,0.06)", overflow: "hidden" }}>
+        <div style={{
+          height: "100%", width: active ? `${pct}%` : "0%", borderRadius: 999, background: color,
+          transition: `width 1s cubic-bezier(0.4,0,0.2,1) ${delay}ms`,
+        }} />
+      </div>
+    </div>
+  )
+}
+
+function DashboardShowcasePanel() {
+  const [ref, inView] = useInViewOnce(0.25)
+  return (
+    <div ref={ref} className="camcash-panel-shell" style={{ borderRadius: 24, padding: 1, background: T.panelBorderGradient, boxShadow: "-18px 0 60px rgba(22,244,255,0.14), 18px 0 60px rgba(255,43,174,0.16), 0 24px 70px rgba(0,0,0,0.5)" }}>
+      <div style={{ borderRadius: 23, background: T.bgPanel, padding: 22 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18, paddingBottom: 14, borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ width: 24, height: 24, borderRadius: 7, background: T.gradientPrimary, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 900, color: "#06101A" }}>$</div>
+            <span style={{ fontSize: 14, fontWeight: 800, color: "white" }}>Cam<span style={{ background: T.gradientPrimary, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Cash</span></span>
+          </div>
+          <div style={{ display: "flex", gap: 4 }}>
+            <div style={{ fontSize: 11, padding: "6px 10px", borderRadius: 8, background: "rgba(22,244,255,0.1)", color: T.cyanSoft, fontWeight: 700 }}>Overview</div>
+            <div style={{ fontSize: 11, padding: "6px 10px", borderRadius: 8, color: T.textFaint, fontWeight: 700 }}>Best hours</div>
+            <div style={{ fontSize: 11, padding: "6px 10px", borderRadius: 8, color: T.textFaint, fontWeight: 700 }}>Top spenders</div>
+          </div>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 16 }}>
+          {LP_DASH_STATS.map((s, i) => (
+            <DashStatCard key={s.label} {...s} active={inView} delay={i * 90} />
+          ))}
+        </div>
+
+        <div className="lp-dash-charts" style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 12 }}>
+          <div style={{ background: "rgba(13,17,38,0.7)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 14, padding: 14, height: 150 }}>
+            <div style={{ fontSize: 10.5, color: T.textFaint, fontWeight: 700, textTransform: "uppercase", marginBottom: 8 }}>Earnings over time</div>
+            <DashLineChart active={inView} />
+          </div>
+          <div style={{ background: "rgba(13,17,38,0.7)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 14, padding: 14 }}>
+            <div style={{ fontSize: 10.5, color: T.textFaint, fontWeight: 700, textTransform: "uppercase", marginBottom: 10 }}>Earnings by platform</div>
+            {LP_DASH_PLATFORMS.map((p, i) => (
+              <DashPlatformBar key={p.name} {...p} active={inView} delay={400 + i * 150} />
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── DEMO PREVIEW GRID — mini interactive cards for features not covered
 //    by the Live Demo widget or the Message Generator Preview section ───────
 const LP_PLATFORMS = [
@@ -860,13 +1015,14 @@ export default function LandingPage() {
             <a key={title} href={href} style={{
               display: "block", textDecoration: "none",
               background: "linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01)), rgba(12,16,34,0.68)",
-              border: "1px solid rgba(255,255,255,0.08)", borderRadius: 18, padding: "22px 20px",
-              transition: "border-color 180ms ease, transform 180ms ease",
+              border: `1px solid ${accent}30`, borderRadius: 18, padding: "22px 20px",
+              boxShadow: `0 0 22px -10px ${accent}70, 0 10px 26px -14px rgba(0,0,0,0.6)`,
+              transition: "border-color 180ms ease, transform 180ms ease, box-shadow 180ms ease",
             }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = `${accent}50`; e.currentTarget.style.transform = "translateY(-2px)" }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"; e.currentTarget.style.transform = "translateY(0)" }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = `${accent}80`; e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = `0 0 34px -6px ${accent}90, 0 16px 34px -12px rgba(0,0,0,0.65)` }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = `${accent}30`; e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = `0 0 22px -10px ${accent}70, 0 10px 26px -14px rgba(0,0,0,0.6)` }}
             >
-              <div style={{ width: 42, height: 42, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 14, fontSize: 19, background: `${accent}18`, border: `1px solid ${accent}40`, color: accent }}>{icon}</div>
+              <div style={{ width: 42, height: 42, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 14, fontSize: 19, background: `${accent}18`, border: `1px solid ${accent}40`, color: accent, boxShadow: `0 0 16px -4px ${accent}90` }}>{icon}</div>
               <div style={{ fontSize: 16, fontWeight: 800, color: "white", marginBottom: 6, letterSpacing: -0.01 }}>{title}</div>
               <div style={{ fontSize: 13.5, color: T.textMuted, lineHeight: 1.5, marginBottom: 12 }}>{body}</div>
               <span style={{ fontSize: 13, fontWeight: 700, color: T.cyanSoft }}>{cta}</span>
@@ -907,69 +1063,7 @@ export default function LandingPage() {
             }}>View full demo →</a>
           </div>
 
-          <div className="camcash-panel-shell" style={{ borderRadius: 24, padding: 1, background: T.panelBorderGradient, boxShadow: "-18px 0 60px rgba(22,244,255,0.14), 18px 0 60px rgba(255,43,174,0.16), 0 24px 70px rgba(0,0,0,0.5)" }}>
-            <div style={{ borderRadius: 23, background: T.bgPanel, padding: 22 }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18, paddingBottom: 14, borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <div style={{ width: 24, height: 24, borderRadius: 7, background: T.gradientPrimary, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 900, color: "#06101A" }}>$</div>
-                  <span style={{ fontSize: 14, fontWeight: 800, color: "white" }}>Cam<span style={{ background: T.gradientPrimary, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Cash</span></span>
-                </div>
-                <div style={{ display: "flex", gap: 4 }}>
-                  <div style={{ fontSize: 11, padding: "6px 10px", borderRadius: 8, background: "rgba(22,244,255,0.1)", color: T.cyanSoft, fontWeight: 700 }}>Overview</div>
-                  <div style={{ fontSize: 11, padding: "6px 10px", borderRadius: 8, color: T.textFaint, fontWeight: 700 }}>Best hours</div>
-                  <div style={{ fontSize: 11, padding: "6px 10px", borderRadius: 8, color: T.textFaint, fontWeight: 700 }}>Top spenders</div>
-                </div>
-              </div>
-
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 16 }}>
-                {[
-                  ["Total earnings", "$12,842", "+18.6%"],
-                  ["Tips received", "6,231", "+22.4%"],
-                  ["Transactions", "3,421", "+14.3%"],
-                  ["Avg. per hour", "$146", "+16.7%"],
-                ].map(([label, val, delta]) => (
-                  <div key={label} style={{ background: "rgba(13,17,38,0.7)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 14, padding: 14 }}>
-                    <div style={{ fontSize: 10.5, color: T.textFaint, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.03em", marginBottom: 6 }}>{label}</div>
-                    <div style={{ fontSize: 19, fontWeight: 850, color: "white", marginBottom: 4 }}>{val}</div>
-                    <div style={{ fontSize: 10.5, color: T.green, fontWeight: 700 }}>{delta} vs last 7 days</div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="lp-dash-charts" style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 12 }}>
-                <div style={{ background: "rgba(13,17,38,0.7)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 14, padding: 14, height: 150 }}>
-                  <div style={{ fontSize: 10.5, color: T.textFaint, fontWeight: 700, textTransform: "uppercase", marginBottom: 8 }}>Earnings over time</div>
-                  <svg viewBox="0 0 300 90" width="100%" height="80" preserveAspectRatio="none">
-                    <defs>
-                      <linearGradient id="lpLineGrad" x1="0" y1="0" x2="1" y2="0">
-                        <stop offset="0%" stopColor={T.cyan} />
-                        <stop offset="55%" stopColor={T.purple} />
-                        <stop offset="100%" stopColor={T.pink} />
-                      </linearGradient>
-                    </defs>
-                    <path d="M0,60 C20,50 35,70 50,55 C65,40 80,65 100,45 C120,25 140,55 160,35 C180,15 200,50 220,30 C240,10 260,40 280,20 C290,10 295,15 300,10" fill="none" stroke="url(#lpLineGrad)" strokeWidth="2.5" />
-                  </svg>
-                </div>
-                <div style={{ background: "rgba(13,17,38,0.7)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 14, padding: 14 }}>
-                  <div style={{ fontSize: 10.5, color: T.textFaint, fontWeight: 700, textTransform: "uppercase", marginBottom: 10 }}>Earnings by platform</div>
-                  {[
-                    ["BongaCams", "$6,124", 47.6, T.pink],
-                    ["Chaturbate", "$4,231", 32.9, T.cyan],
-                    ["MFC", "$2,487", 19.5, T.purple],
-                  ].map(([p, v, pct, color]) => (
-                    <div key={p} style={{ marginBottom: 12 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11.5, marginBottom: 5, color: T.textSoft }}>
-                        <span>{p}</span><span style={{ color: T.textMuted }}>{v}</span>
-                      </div>
-                      <div style={{ height: 5, borderRadius: 999, background: "rgba(255,255,255,0.06)", overflow: "hidden" }}>
-                        <div style={{ height: "100%", width: `${pct}%`, borderRadius: 999, background: color }} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
+          <DashboardShowcasePanel />
         </div>
       </div>
 
@@ -1116,7 +1210,10 @@ export default function LandingPage() {
         <div className="lp-msg-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
 
           {/* Message generator */}
-          <div style={{ padding: "22px 20px", borderRadius: 18, background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.07)" }}>
+          <div style={{ padding: "22px 20px", borderRadius: 18, background: "rgba(255,255,255,0.025)", border: `1px solid ${T.magenta}30`, boxShadow: `0 0 22px -10px ${T.magenta}70, 0 10px 26px -14px rgba(0,0,0,0.6)`, transition: "border-color 180ms ease, transform 180ms ease, box-shadow 180ms ease" }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = `${T.magenta}80`; e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = `0 0 34px -6px ${T.magenta}90, 0 16px 34px -12px rgba(0,0,0,0.65)` }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = `${T.magenta}30`; e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = `0 0 22px -10px ${T.magenta}70, 0 10px 26px -14px rgba(0,0,0,0.6)` }}
+          >
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
               <span style={{ fontSize: 18 }}>💌</span>
               <div>
@@ -1140,7 +1237,10 @@ export default function LandingPage() {
           </div>
 
           {/* Whale card / Fan Profile */}
-          <div style={{ padding: "22px 20px", borderRadius: 18, background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.07)" }}>
+          <div style={{ padding: "22px 20px", borderRadius: 18, background: "rgba(255,255,255,0.025)", border: `1px solid ${T.pink}30`, boxShadow: `0 0 22px -10px ${T.pink}70, 0 10px 26px -14px rgba(0,0,0,0.6)`, transition: "border-color 180ms ease, transform 180ms ease, box-shadow 180ms ease" }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = `${T.pink}80`; e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = `0 0 34px -6px ${T.pink}90, 0 16px 34px -12px rgba(0,0,0,0.65)` }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = `${T.pink}30`; e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = `0 0 22px -10px ${T.pink}70, 0 10px 26px -14px rgba(0,0,0,0.6)` }}
+          >
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
               <span style={{ fontSize: 18 }}>🐳</span>
               <div>
