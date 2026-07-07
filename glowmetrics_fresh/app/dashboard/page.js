@@ -32,6 +32,22 @@ const MoneyMap = dynamic(() => import('./MoneyMap'), { ssr: false, loading: () =
 let track = (event, props) => {}
 try { track = require("@vercel/analytics").track } catch (e) {}
 
+// Manual memoization for expensive derived values computed after the
+// `if (loading) return` early-exit below — that early return means a real
+// useMemo() there would violate the Rules of Hooks (hook count would differ
+// between loading/loaded renders), so we cache by reference-equality of
+// deps in a plain ref object instead. Recomputes only when deps change,
+// not on every render (e.g. unrelated clicks, the 30s/60s timers).
+function memoOn(cache, key, deps, compute) {
+  const prev = cache[key]
+  if (prev && prev.deps.length === deps.length && prev.deps.every((d, i) => d === deps[i])) {
+    return prev.value
+  }
+  const value = compute()
+  cache[key] = { deps, value }
+  return value
+}
+
 const C = {
   bg: "#05070f", card: "#121826", card2: "#161e2e", border: "#1e2d45", border2: "#2a3f5f",
   indigo: "#7C5CFF", cyan: "#22D3EE", pink: "#EC4899", gold: "#F59E0B", blue: "#60A5FA",
@@ -1324,6 +1340,7 @@ export default function Dashboard() {
   const liveTipsChannelRef = useRef(null)
   const refreshTimerRef = useRef(null)
   const liveTickerRef = useRef(null)
+  const derivedCacheRef = useRef({}) // see memoOn() — caches expensive per-render recomputation below
   // ── LIVE MODE INTELLIGENCE ────────────────────────────────────────────
   const [liveStrategy, setLiveStrategy]       = useState('balanced')
   const [coachingHistory, setCoachingHistory] = useState([])
@@ -1687,7 +1704,7 @@ export default function Dashboard() {
       } else if (hiddenAt && Date.now() - hiddenAt > 15 * 60 * 1000) {
         // Tab was hidden for 15+ min — reload fresh data
         try { sessionStorage.removeItem(`camcash_tips_${user.id}`) } catch(e) {}
-        loadData(user.id, true).then(() => setLastRefreshed(new Date()))
+        loadData(user.id, true, { silent: true }).then(() => setLastRefreshed(new Date()))
         hiddenAt = null
       } else {
         hiddenAt = null
@@ -1755,11 +1772,12 @@ export default function Dashboard() {
     router.replace('/login')
   }
 
-  const loadData = async (uid, force = false) => {
-    
-    
-
-    setLoading(true)
+  const loadData = async (uid, force = false, { silent = false } = {}) => {
+    // `silent` keeps the current screen mounted (e.g. after a CSV upload) instead of
+    // replacing the whole dashboard with the full-page spinner, so the just-shown
+    // success/error confirmation stays visible while data refreshes in the background.
+    if (silent) setIsRefreshing(true)
+    else setLoading(true)
     try {
       let allData = []
       let from = 0
@@ -1789,7 +1807,10 @@ export default function Dashboard() {
       const { data: engineData } = await supabase.rpc('get_user_insights', { p_user_id: uid })
       setEngineInsights(engineData)
       setLastRefreshed(new Date())
-    } finally { setLoading(false) }
+    } finally {
+      if (silent) setIsRefreshing(false)
+      else setLoading(false)
+    }
   }
 const handleCSV = async (file, forcePlatform = null) => {
     if (!file || !user) return
@@ -1848,7 +1869,7 @@ const handleCSV = async (file, forcePlatform = null) => {
       if (typeof window !== 'undefined') localStorage.setItem('camcash_onboarded', '1')
       // Force reload after upload — bypass cache so new tips appear immediately
       try { sessionStorage.removeItem(`camcash_tips_${user.id}`) } catch(e) {}
-      await loadData(user.id, true)
+      await loadData(user.id, true, { silent: true })
 
     } catch (err) {
       showToast("❌ " + err.message)
@@ -1860,13 +1881,13 @@ const handleCSV = async (file, forcePlatform = null) => {
 
   const deleteTip = async (tipId) => {
     if (!confirm("Delete this tip?")) return
-    try { const { error } = await supabase.from("tips").delete().eq("id", tipId); if (error) throw error; showToast("✅ Tip deleted"); await loadData(user.id) }
+    try { const { error } = await supabase.from("tips").delete().eq("id", tipId); if (error) throw error; showToast("✅ Tip deleted"); await loadData(user.id, false, { silent: true }) }
     catch (err) { showToast("❌ " + err.message) }
   }
 
   const deleteAllTips = async () => {
     if (!user) return
-    try { const { error } = await supabase.from("tips").delete().eq("user_id", user.id); if (error) throw error; showToast("✅ All tips deleted"); setShowDeleteConfirm(false); try { sessionStorage.removeItem(`camcash_tips_${user.id}`) } catch(e) {}; await loadData(user.id, true) }
+    try { const { error } = await supabase.from("tips").delete().eq("user_id", user.id); if (error) throw error; showToast("✅ All tips deleted"); setShowDeleteConfirm(false); try { sessionStorage.removeItem(`camcash_tips_${user.id}`) } catch(e) {}; await loadData(user.id, true, { silent: true }) }
     catch (err) { showToast("❌ " + err.message) }
   }
 
@@ -1894,7 +1915,8 @@ const handleCSV = async (file, forcePlatform = null) => {
   const nextMoves = liveAnalytics?.nextMoves || analytics?.nextMoves || []
   const totalRevenue = analytics?.totalUSD || 0
   // timedSessions kept for sparkline/MoM trend calculations only (not for avg $/hr)
-  const timedSessions = sessions.filter(s => !s.durationUnknown && (s.durationMinutes || 0) >= 20)
+  const timedSessions = memoOn(derivedCacheRef.current, 'timedSessions', [sessions], () =>
+    sessions.filter(s => !s.durationUnknown && (s.durationMinutes || 0) >= 20))
   const timedTotalUSD = timedSessions.reduce((sum, s) => sum + (s.totalUSD || 0), 0)
   const timedTotalHours = timedSessions.reduce((sum, s) => sum + (s.durationHours || 0), 0)
   // Single canonical $/hr — uses analytics.earningsVelocity (totalUSD / totalHours across all
@@ -1915,17 +1937,20 @@ const handleCSV = async (file, forcePlatform = null) => {
   // so hour/day reflects when money actually came in, not when the session started
   // Use UTC to match the database timestamps
   const UTC_DAYS_LONG = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
-  const platformTimes = {}
-  tips.forEach(t => {
-    if (!platformTimes[t.platform]) platformTimes[t.platform] = { hours: {}, days: {} }
-    const dt = new Date(t.date_time || t.dateRaw)
-    const hour = dt.getUTCHours()
-    const day = UTC_DAYS_LONG[dt.getUTCDay()]
-    platformTimes[t.platform].hours[hour] = (platformTimes[t.platform].hours[hour] || 0) + (t.usd || 0)
-    platformTimes[t.platform].days[day]   = (platformTimes[t.platform].days[day]   || 0) + (t.usd || 0)
+  const platformTimes = memoOn(derivedCacheRef.current, 'platformTimes', [tips], () => {
+    const pt = {}
+    tips.forEach(t => {
+      if (!pt[t.platform]) pt[t.platform] = { hours: {}, days: {} }
+      const dt = new Date(t.date_time || t.dateRaw)
+      const hour = dt.getUTCHours()
+      const day = UTC_DAYS_LONG[dt.getUTCDay()]
+      pt[t.platform].hours[hour] = (pt[t.platform].hours[hour] || 0) + (t.usd || 0)
+      pt[t.platform].days[day]   = (pt[t.platform].days[day]   || 0) + (t.usd || 0)
+    })
+    return pt
   })
 
-  const filteredWhales = whales.filter(w => {
+  const filteredWhales = memoOn(derivedCacheRef.current, 'filteredWhales', [whales, whaleFilter, platformFilter, chartDrillDay, tips], () => whales.filter(w => {
     if (whaleFilter !== "ALL" && w.tier !== whaleFilter) return false
     if (platformFilter !== "ALL" && w.platform !== platformFilter) return false
     if (chartDrillDay) {
@@ -1937,9 +1962,9 @@ const handleCSV = async (file, forcePlatform = null) => {
       if (!tippedOnDay) return false
     }
     return true
-  })
+  }))
 
-  const allPlatforms = [...new Set(tips.map(t => t.platform))]
+  const allPlatforms = memoOn(derivedCacheRef.current, 'allPlatforms', [tips], () => [...new Set(tips.map(t => t.platform))])
   const freePlatformLimitReached = !isPro && allPlatforms.length > 0
 
   // ── Build "What's Next" alerts — smarter, personalized, prioritized
@@ -2416,10 +2441,10 @@ const handleCSV = async (file, forcePlatform = null) => {
     return alerts.sort((a, b) => a.priority - b.priority).slice(0, 6)
   }
 
-  const whatsNextAlerts = buildWhatsNextAlerts()
-  const reengageList = buildReengageList()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const dailyBrief = buildDailyBrief() // re-runs every minuteTick
+  const whatsNextAlerts = memoOn(derivedCacheRef.current, 'whatsNextAlerts', [whales, tips], buildWhatsNextAlerts)
+  const reengageList = memoOn(derivedCacheRef.current, 'reengageList', [whales], buildReengageList)
+  // re-runs every minuteTick (as well as when the underlying data changes)
+  const dailyBrief = memoOn(derivedCacheRef.current, 'dailyBrief', [tips, analytics, whales, minuteTick], buildDailyBrief)
 
   // ── CANONICAL PEAK HOUR ──────────────────────────────────────────────────────
   // Single source of truth used by the header, Daily Brief, and Losing Money.
@@ -2434,35 +2459,45 @@ const handleCSV = async (file, forcePlatform = null) => {
     ? (() => { const _off = new Date().getTimezoneOffset()/-60; const _lh = Math.round(((canonicalPeakHourUTC+_off)%24+24)%24); return _lh===0?'12 AM':_lh<12?`${_lh} AM`:_lh===12?'12 PM':`${_lh-12} PM` })()
     : null
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const realTimeAlerts = buildRealTimeAlerts() // re-runs every minuteTick
+  // re-runs every minuteTick (as well as when the underlying data changes)
+  const realTimeAlerts = memoOn(derivedCacheRef.current, 'realTimeAlerts', [tips, whales, minuteTick], buildRealTimeAlerts)
   void minuteTick // ensures re-render when minute changes
 
   // ── MONTH-OVER-MONTH GROWTH ── used by Momentum indicator and KPI cards
   const _momNow = new Date()
-  const _momThisStart = new Date(Date.UTC(_momNow.getUTCFullYear(), _momNow.getUTCMonth(), 1))
-  const _momPrevStart = new Date(Date.UTC(_momNow.getUTCFullYear(), _momNow.getUTCMonth() - 1, 1))
-  const _momThisRev = tips.reduce((s, t) => new Date(t.date_time || t.dateRaw) >= _momThisStart ? s + (t.usd || 0) : s, 0)
-  const _momPrevRev = tips.reduce((s, t) => { const d = new Date(t.date_time || t.dateRaw); return d >= _momPrevStart && d < _momThisStart ? s + (t.usd || 0) : s }, 0)
-  const growthPct = (_momPrevRev > 0 && _momThisRev > 0) ? Math.round(((_momThisRev - _momPrevRev) / _momPrevRev) * 100) : null
+  const _momMonthKey = `${_momNow.getUTCFullYear()}-${_momNow.getUTCMonth()}`
+  const { momThisRev: _momThisRev, momPrevRev: _momPrevRev, growthPct } = memoOn(
+    derivedCacheRef.current, 'momentum', [tips, _momMonthKey], () => {
+      const momThisStart = new Date(Date.UTC(_momNow.getUTCFullYear(), _momNow.getUTCMonth(), 1))
+      const momPrevStart = new Date(Date.UTC(_momNow.getUTCFullYear(), _momNow.getUTCMonth() - 1, 1))
+      const momThisRev = tips.reduce((s, t) => new Date(t.date_time || t.dateRaw) >= momThisStart ? s + (t.usd || 0) : s, 0)
+      const momPrevRev = tips.reduce((s, t) => { const d = new Date(t.date_time || t.dateRaw); return d >= momPrevStart && d < momThisStart ? s + (t.usd || 0) : s }, 0)
+      const growthPct = (momPrevRev > 0 && momThisRev > 0) ? Math.round(((momThisRev - momPrevRev) / momPrevRev) * 100) : null
+      return { momThisRev, momPrevRev, growthPct }
+    })
 
   // ── DASHBOARD READINESS — always renders real dashboard, module-level locking ─
-  const _drDates      = tips.map(t => new Date(t.date_time || t.dateRaw)).filter(d => !isNaN(d)).sort((a, b) => a - b)
-  const _drRangeDays  = _drDates.length >= 2 ? Math.round((_drDates[_drDates.length - 1] - _drDates[0]) / 86400000) : 0
-  const _drStreamDays = new Set(_drDates.map(d => d.toDateString())).size
-  const _drPlatCount  = [...new Set(tips.map(t => t.platform).filter(p => p && p !== 'Unknown'))].length
-  const dashboardReadiness = getDashboardReadiness({
-    totalTips:     tips.length,
-    totalSessions: analytics?.meaningfulSessionCount || 0,
-    totalFans:     analytics?.uniqueFanCount || [...new Set(tips.map(t => (t.username || '').toLowerCase()).filter(Boolean))].length,
-    totalEarnings: analytics?.totalUSD || 0,
-    dateRangeDays: _drRangeDays,
-    streamDays:    _drStreamDays,
+  const {
+    dashboardReadiness, _isLowData, _plannerLock, _moneyMapLock,
+  } = memoOn(derivedCacheRef.current, 'readiness', [tips, analytics, isPro], () => {
+    const drDates      = tips.map(t => new Date(t.date_time || t.dateRaw)).filter(d => !isNaN(d)).sort((a, b) => a - b)
+    const drRangeDays  = drDates.length >= 2 ? Math.round((drDates[drDates.length - 1] - drDates[0]) / 86400000) : 0
+    const drStreamDays = new Set(drDates.map(d => d.toDateString())).size
+    const drPlatCount  = [...new Set(tips.map(t => t.platform).filter(p => p && p !== 'Unknown'))].length
+    const readiness = getDashboardReadiness({
+      totalTips:     tips.length,
+      totalSessions: analytics?.meaningfulSessionCount || 0,
+      totalFans:     analytics?.uniqueFanCount || [...new Set(tips.map(t => (t.username || '').toLowerCase()).filter(Boolean))].length,
+      totalEarnings: analytics?.totalUSD || 0,
+      dateRangeDays: drRangeDays,
+      streamDays:    drStreamDays,
+    })
+    const isLowData  = readiness !== 'ready'
+    const modLockArgs = { totalTips: tips.length, totalSessions: analytics?.meaningfulSessionCount || 0, totalFans: analytics?.uniqueFanCount || 0, totalEarnings: analytics?.totalUSD || 0, totalStreamMinutes: analytics?.totalStreamMinutes || 0, importedPlatformCount: drPlatCount, isPro, liveModeSessions: 0 }
+    const plannerLock  = getModuleLockState({ module: 'streamPlanner',  ...modLockArgs })
+    const moneyMapLock = getModuleLockState({ module: 'moneyMap',       ...modLockArgs })
+    return { dashboardReadiness: readiness, _isLowData: isLowData, _plannerLock: plannerLock, _moneyMapLock: moneyMapLock }
   })
-  const _isLowData   = dashboardReadiness !== 'ready'
-  const _modLockArgs = { totalTips: tips.length, totalSessions: analytics?.meaningfulSessionCount || 0, totalFans: analytics?.uniqueFanCount || 0, totalEarnings: analytics?.totalUSD || 0, totalStreamMinutes: analytics?.totalStreamMinutes || 0, importedPlatformCount: _drPlatCount, isPro, liveModeSessions: 0 }
-  const _plannerLock  = getModuleLockState({ module: 'streamPlanner',  ..._modLockArgs })
-  const _moneyMapLock = getModuleLockState({ module: 'moneyMap',       ..._modLockArgs })
 
   return (
     <div style={{
