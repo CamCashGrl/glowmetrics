@@ -1,10 +1,6 @@
 export function track(eventName, properties = {}) {
   if (typeof window === 'undefined') return
 
-  // GTM / GA4
-  window.dataLayer = window.dataLayer || []
-  window.dataLayer.push({ event: eventName, ...properties })
-
   // Supabase server-side log (fire and forget)
   fetch('/api/track', {
     method: 'POST',

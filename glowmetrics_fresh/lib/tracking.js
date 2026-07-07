@@ -8,11 +8,6 @@ export function track(event, params = {}) {
     if (process.env.NODE_ENV === 'development') {
       console.log('[Track]', event, params)
     }
-    window.dataLayer = window.dataLayer || []
-    window.dataLayer.push({ event, ...params })
-    if (typeof window.gtag === 'function') {
-      window.gtag('event', event, params)
-    }
   } catch (e) {}
 }
 
@@ -20,15 +15,6 @@ export function trackOnce(event, params = {}) {
   if (fired.has(event)) return
   fired.add(event)
   track(event, params)
-}
-
-export function setUserProps(props = {}) {
-  try {
-    if (typeof window === 'undefined') return
-    if (typeof window.gtag === 'function') {
-      window.gtag('set', 'user_properties', props)
-    }
-  } catch (e) {}
 }
 
 export function getSource() {

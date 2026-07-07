@@ -133,7 +133,7 @@ const DISPOSABLE_DOMAINS = new Set([
 
 export async function POST(req) {
   try {
-    const { token, email } = await req.json()
+    const { email } = await req.json()
 
     if (email) {
       const domain = email.split('@')[1]?.toLowerCase().trim()
@@ -143,36 +143,6 @@ export async function POST(req) {
           { status: 400 }
         )
       }
-    }
-
-    // CAPTCHA widget disabled for now — skip Turnstile verification entirely,
-    // but keep the disposable-email check above.
-    if (!token) {
-      return NextResponse.json({ ok: true })
-    }
-
-    const secret = process.env.TURNSTILE_SECRET_KEY
-    if (!secret) {
-      // If key not configured yet, allow through (avoids breaking signup during env setup)
-      console.warn('[Turnstile] TURNSTILE_SECRET_KEY not set — skipping verification')
-      return NextResponse.json({ ok: true })
-    }
-
-    const formData = new FormData()
-    formData.append('secret', secret)
-    formData.append('response', token)
-
-    const res = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
-      method: 'POST',
-      body: formData,
-    })
-    const data = await res.json()
-
-    if (!data.success) {
-      return NextResponse.json(
-        { ok: false, error: 'Security check failed. Please try again.' },
-        { status: 400 }
-      )
     }
 
     return NextResponse.json({ ok: true })
