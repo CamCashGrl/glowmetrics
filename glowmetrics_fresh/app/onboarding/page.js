@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '../../lib/supabase'
 // Token rates — single source of truth, never hardcode below this line
 import { PLATFORM_TOKEN_RATES, tokenRate } from '../../lib/constants'
+import { track } from '../../lib/track'
 
 
 const PLATFORMS = {
@@ -552,6 +553,13 @@ export default function OnboardingPage(){
     })()
   },[router])
 
+  // Fires on every step transition so we can see exactly where a user
+  // last was before abandoning onboarding (drop-off = last step_viewed row).
+  useEffect(()=>{
+    if(!user)return
+    track('onboarding_step_viewed',{step,platform:platformId})
+  },[step,user])
+
   async function markDone(){
     if(!user)return
     await supabase.from('beta_users').upsert({user_id:user.id,email:user.email,onboarding_complete:true,signed_up_at:user.created_at},{onConflict:'user_id'})
@@ -582,7 +590,11 @@ export default function OnboardingPage(){
     setParseError('')
     if(!pasteText.trim()){setParseError('Paste your tip history above first.');return}
     const p=buildPreview(pasteText,platformId,platform.label)
-    if(!p||( p.tipsDetected===0&&p.paidSessionsDetected===0)){setParseError("We couldn't find any tip rows. Make sure you copied the full table including dates and token amounts.");return}
+    if(!p||( p.tipsDetected===0&&p.paidSessionsDetected===0)){
+      setParseError("We couldn't find any tip rows. Make sure you copied the full table including dates and token amounts.")
+      track('onboarding_paste_parse_failed',{platform:platformId})
+      return
+    }
     setPreview(p);setStep('preview')
   }
 
@@ -639,13 +651,16 @@ export default function OnboardingPage(){
         throw err
       }
       await markDone()
-      setImportResult({inserted:json.inserted??preview?.tipsDetected??0,skipped:json.skipped??0,paidInserted:preview?.paidSessionsDetected??0})
+      const inserted=json.inserted??preview?.tipsDetected??0
+      setImportResult({inserted,skipped:json.skipped??0,paidInserted:preview?.paidSessionsDetected??0})
       setImportedPlatforms(prev=>prev.includes(platformId)?prev:[...prev,platformId])
-      if(isFirstImport){setIsFirstImport(false);setShowSparkle(true);setTimeout(()=>setShowSparkle(false),4000);setStep('live')}
+      track('onboarding_import_completed',{platform:platformId,inserted,skipped:json.skipped??0})
+      if(isFirstImport){track('onboarding_completed',{platform:platformId});setIsFirstImport(false);setShowSparkle(true);setTimeout(()=>setShowSparkle(false),4000);setStep('live')}
       else setStep('step4')
     }catch(e){
       if(e.code==='platform_limit_reached')setUpgradeBlocked({message:e.message,upgradeUrl:e.upgradeUrl||'/pricing'})
       else setImportError(e.message||'Import failed')
+      track('onboarding_import_failed',{platform:platformId,code:e.code||null,message:e.message||null})
       setStep('preview')
     }
   }
@@ -665,11 +680,17 @@ export default function OnboardingPage(){
       const json=await res.json()
       if(!res.ok||json.error)throw new Error(json.error||'Upload failed')
       await markDone()
-      setImportResult({inserted:json.inserted??preview?.tipsDetected??0,skipped:json.skipped??0})
+      const inserted=json.inserted??preview?.tipsDetected??0
+      setImportResult({inserted,skipped:json.skipped??0})
       setImportedPlatforms(prev=>prev.includes(platformId)?prev:[...prev,platformId])
-      if(isFirstImport){setIsFirstImport(false);setShowSparkle(true);setTimeout(()=>setShowSparkle(false),4000);setStep('live')}
+      track('onboarding_import_completed',{platform:platformId,inserted,skipped:json.skipped??0,source:'csv'})
+      if(isFirstImport){track('onboarding_completed',{platform:platformId,source:'csv'});setIsFirstImport(false);setShowSparkle(true);setTimeout(()=>setShowSparkle(false),4000);setStep('live')}
       else setStep('step4')
-    }catch(e){setCsvError(e.message||'Upload failed');setStep('csv')}
+    }catch(e){
+      setCsvError(e.message||'Upload failed')
+      track('onboarding_import_failed',{platform:platformId,message:e.message||null,source:'csv'})
+      setStep('csv')
+    }
     finally{setCsvUploading(false)}
   }
 
