@@ -30,6 +30,20 @@ const schema = {
   mainEntityOfPage: { '@type': 'WebPage', '@id': 'https://www.camcashgrl.com/blog/why-cam-income-is-inconsistent' },
 }
 
+const faqs = [
+  { q: 'What is the most common cause of inconsistent cam income?', a: "Streaming at inconsistent times. Your audience builds habits around when you go live — if your schedule shifts daily, even high-value fans can't form a reliable routine around you, and they drift to someone who is predictably live when they're online." },
+  { q: 'Why did my cam income suddenly drop with no obvious reason?', a: "Usually a top fan churning silently. Sudden income drops are rarely about losing many small tippers at once — they're typically caused by losing one or two high-value fans who were quietly responsible for a large share of revenue. Whales don't announce when they're about to stop, so most models don't notice until the impact already shows in their numbers." },
+  { q: 'How do I know if a slow session is actually a problem or just normal variance?', a: "You need a baseline. Without knowing your average session earnings, $/hr, and tips per minute across your last 20+ sessions, every number feels arbitrary. Once you have a baseline, a session 40% below your average becomes a clear signal to investigate instead of just a bad feeling." },
+  { q: 'Do peak streaming hours stay the same forever?', a: "No. Your audience changes over time as fans come and go and timezone distributions shift, so a peak hour that was accurate six months ago may no longer reflect your current audience. Reanalyzing your peak hours from fresh data every 2-3 months keeps your schedule aligned with who is actually watching now." },
+  { q: 'If I stream on multiple platforms, why does my total income feel unpredictable?', a: 'Because a bad week on one platform can tank your total income even if another platform is performing fine, and most models never separate $/hr by platform to see which one is actually driving the swings. Tracking each platform independently shows you where to reduce time and where to invest more.' },
+]
+
+const faqSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: faqs.map(({ q, a }) => ({ '@type': 'Question', name: q, acceptedAnswer: { '@type': 'Answer', text: a } })),
+}
+
 const s = {
   h1:      { fontSize: '29px', fontWeight: 800, color: '#f1f5f9', lineHeight: 1.2, marginBottom: '14px', letterSpacing: '-0.02em' },
   intro:   { fontSize: '16px', lineHeight: 1.75, color: '#cbd5e1', marginBottom: '32px', paddingLeft: '14px', borderLeft: '3px solid #6366f1' },
@@ -60,6 +74,7 @@ const s = {
   relLinks:{ display: 'flex', flexDirection: 'column', gap: '6px' },
   relLink: { fontSize: '14px', color: '#6366f1', textDecoration: 'none' },
   iLink:   { color: '#a5b4fc', textDecoration: 'none' },
+  faqItem: { borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '14px', marginBottom: '14px' },
 }
 
 const causes = [
@@ -98,7 +113,7 @@ const causes = [
 export default function WhyCamIncomeIsInconsistent() {
   return (
     <ArticleLayout
-      schema={schema}
+      schema={[schema, faqSchema]}
       breadcrumb={[{ label: 'Blog', href: '/blog' }, { label: 'Why Income Is Inconsistent' }]}
     >
       <div style={s.meta}>
@@ -137,6 +152,22 @@ export default function WhyCamIncomeIsInconsistent() {
       <p style={s.p}>For a deeper look at growing your overall income, see <a href="/blog/cam-model-earnings" style={s.iLink}>Cam Model Earnings: How Much Do Cam Models Actually Make?</a></p>
       <p style={s.p}>Flat nights often come from quiet rooms you couldn't restart — <a href="/blog/live-ai-coaching-cam-models" style={s.iLink}>in-stream coaching</a> fixes that in the moment.</p>
       <p style={s.p}>Income also dips when whales drift off unnoticed, which is why <a href="/blog/cam-model-fan-crm" style={s.iLink}>tracking your whales</a> (Pro feature — upgrade after signup) matters.</p>
+
+      <div style={{ margin: '20px 0', borderRadius: '12px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.07)' }}>
+        <img
+          src="/blog-images/camcash-best-hours-heatmap.webp"
+          alt="CamCash revenue timing and platform ROI table showing dollars per active day by platform and day of week"
+          style={{ width: '100%', display: 'block' }}
+        />
+      </div>
+
+      <h2 style={s.h2}>Frequently Asked Questions</h2>
+      {faqs.map(({ q, a }, i) => (
+        <div key={i} style={s.faqItem}>
+          <div style={{ fontSize: '15px', fontWeight: 700, color: '#e2e8f0', marginBottom: '6px' }}>{q}</div>
+          <p style={{ ...s.p, marginBottom: 0 }}>{a}</p>
+        </div>
+      ))}
 
       <div style={s.cta}>
         <div style={s.ctaT}>Find the pattern behind your inconsistency</div>

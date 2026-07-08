@@ -357,7 +357,7 @@ export default function CamCashVsCamDashPost() {
           url: 'https://www.camcashgrl.com/blog/camcash-vs-camdash-vs-cb-cam-insights',
           datePublished: '2026-06-10',
           dateModified: '2026-06-10',
-          author: { '@type': 'Person', name: 'Daphne', url: 'https://www.camcashgrl.com' },
+          author: { '@type': 'Person', name: 'Daphne Dawson', jobTitle: 'Cam Model' },
           publisher: { '@type': 'Organization', name: 'CamCash', url: 'https://www.camcashgrl.com' },
         })}} />
 

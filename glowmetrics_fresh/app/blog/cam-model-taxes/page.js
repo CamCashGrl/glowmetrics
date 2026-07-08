@@ -30,6 +30,17 @@ const schema = {
   mainEntityOfPage: { '@type': 'WebPage', '@id': 'https://www.camcashgrl.com/blog/cam-model-taxes' },
 }
 
+const faqSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: [
+    { '@type': 'Question', name: 'Do I have to pay taxes if I made under $600?', acceptedAnswer: { '@type': 'Answer', text: "In the US, Chaturbate won't issue a 1099 below $600, but you're still legally required to report all self-employment income regardless of amount." } },
+    { '@type': 'Question', name: "What's the self-employment tax rate?", acceptedAnswer: { '@type': 'Answer', text: '15.3% on net earnings in the US (covering Social Security and Medicare), on top of your regular income tax rate. This surprises many new self-employed earners.' } },
+    { '@type': 'Question', name: 'Can I write off my home streaming setup?', acceptedAnswer: { '@type': 'Answer', text: 'Yes, if the space is used regularly and exclusively for streaming. Document the square footage and calculate the proportion of your home dedicated to business use.' } },
+    { '@type': 'Question', name: 'Should I form an LLC?', acceptedAnswer: { '@type': 'Answer', text: 'An LLC offers liability protection and may provide tax advantages depending on your income level. Discuss with an accountant once your cam income is consistent.' } },
+  ],
+}
+
 const s = {
   h1:      { fontSize: '29px', fontWeight: 800, color: '#f1f5f9', lineHeight: 1.2, marginBottom: '14px', letterSpacing: '-0.02em' },
   intro:   { fontSize: '16px', lineHeight: 1.75, color: '#cbd5e1', marginBottom: '32px', paddingLeft: '14px', borderLeft: '3px solid #6366f1' },
@@ -68,7 +79,7 @@ const deductions = [
 export default function CamModelTaxes() {
   return (
     <ArticleLayout
-      schema={schema}
+      schema={[schema, faqSchema]}
       breadcrumb={[{ label: 'Blog', href: '/blog' }, { label: 'Cam Model Taxes' }]}
     >
       <div style={s.meta}>

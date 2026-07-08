@@ -30,6 +30,16 @@ const schema = {
   mainEntityOfPage: { '@type': 'WebPage', '@id': 'https://www.camcashgrl.com/blog/how-to-build-loyal-fans' },
 }
 
+const faqSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: [
+    { '@type': 'Question', name: 'How many loyal fans do you need to make full-time income?', acceptedAnswer: { '@type': 'Answer', text: "Less than you'd think. Models in the $2,000–$5,000/month range often have 10–25 consistent whales generating the majority of income. The goal isn't hundreds of loyal fans — it's a core group of high-value regulars." } },
+    { '@type': 'Question', name: "How do I re-engage a fan who's been gone for months?", acceptedAnswer: { '@type': 'Answer', text: 'A natural, personal message with no pressure works best. Reference something specific about your history with them. Keep it light — the goal is to remind them you exist and make the path back feel easy.' } },
+    { '@type': 'Question', name: 'Is it worth spending time on fans who tip small amounts?', acceptedAnswer: { '@type': 'Answer', text: 'Everyone starts as a small tipper. Some grow into significant spenders over months or years. Treating all tippers with recognition is a low-cost investment with asymmetric upside.' } },
+  ],
+}
+
 const s = {
   h1:      { fontSize: '29px', fontWeight: 800, color: '#f1f5f9', lineHeight: 1.2, marginBottom: '14px', letterSpacing: '-0.02em' },
   intro:   { fontSize: '16px', lineHeight: 1.75, color: '#cbd5e1', marginBottom: '32px', paddingLeft: '14px', borderLeft: '3px solid #6366f1' },
@@ -59,7 +69,7 @@ const s = {
 export default function BuildLoyalFans() {
   return (
     <ArticleLayout
-      schema={schema}
+      schema={[schema, faqSchema]}
       breadcrumb={[{ label: 'Blog', href: '/blog' }, { label: 'Build Loyal Fans' }]}
     >
       <div style={s.meta}>

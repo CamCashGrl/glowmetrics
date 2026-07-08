@@ -30,6 +30,20 @@ const schema = {
   mainEntityOfPage: { '@type': 'WebPage', '@id': 'https://www.camcashgrl.com/blog/why-cam-streams-arent-making-money' },
 }
 
+const faqs = [
+  { q: "What's the root cause behind most underperforming cam streams?", a: "A lack of data. When you don't track your performance systematically, you're relying on memory and feeling instead of measurement — and you can't optimize what you can't measure. Nearly every specific mistake behind low-earning streams traces back to this same gap." },
+  { q: 'Why does streaming at generic "peak hours" not help my earnings?', a: 'Because platform-wide peak hours reflect overall traffic, not your specific audience — your top tippers may be most active at times that have nothing to do with when Chaturbate traffic overall is highest. Analyzing your own tip history by hour of day usually reveals 2-3 personal peak windows that earn 40-80% more than off-peak hours.' },
+  { q: 'How do I know if my stream sessions are front-loaded or back-loaded?', a: 'Look at how your revenue splits between the first and second half of each stream. A front-loaded session has a strong opening that declines; a back-loaded one starts slow and builds momentum. Once you know your typical pattern, you can either end sessions at the natural momentum peak or diagnose what is causing a decline.' },
+  { q: 'Should I split my streaming time equally across platforms?', a: "No. If you stream on more than one platform, you almost certainly earn more per hour on one than the other, and splitting time evenly regardless of performance drains income. Calculate USD earned per hour separately for each platform and give more time to whichever one has the higher $/hr — the gap is often larger than expected." },
+  { q: 'How can I tell if a quiet room mid-stream is a real problem?', a: "It's easier to answer with data than without it. Real-time tracking during a session — a live pace indicator, silence detection, and goal tracking — tells you whether a quiet stretch is normal variance or an actual warning sign, and what to do about it in the moment rather than guessing." },
+]
+
+const faqSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: faqs.map(({ q, a }) => ({ '@type': 'Question', name: q, acceptedAnswer: { '@type': 'Answer', text: a } })),
+}
+
 const s = {
   h1:      { fontSize: '29px', fontWeight: 800, color: '#f1f5f9', lineHeight: 1.2, marginBottom: '14px', letterSpacing: '-0.02em' },
   intro:   { fontSize: '16px', lineHeight: 1.75, color: '#cbd5e1', marginBottom: '32px', paddingLeft: '14px', borderLeft: '3px solid #6366f1' },
@@ -61,6 +75,7 @@ const s = {
   relLinks:{ display: 'flex', flexDirection: 'column', gap: '6px' },
   relLink: { fontSize: '14px', color: '#6366f1', textDecoration: 'none' },
   iLink:   { color: '#a5b4fc', textDecoration: 'none' },
+  faqItem: { borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '14px', marginBottom: '14px' },
 }
 
 const mistakes = [
@@ -94,7 +109,7 @@ const mistakes = [
 export default function WhyStreamsArentMakingMoney() {
   return (
     <ArticleLayout
-      schema={schema}
+      schema={[schema, faqSchema]}
       breadcrumb={[{ label: 'Blog', href: '/blog' }, { label: "Why Streams Aren't Making Money" }]}
     >
       <div style={s.meta}>
@@ -134,6 +149,22 @@ export default function WhyStreamsArentMakingMoney() {
 
       <h2 style={s.h2}>The Pattern Across All 5 Mistakes</h2>
       <p style={s.p}>Every one of these mistakes shares the same root: making decisions without data. The fix isn't working harder — it's working with better information. Your earnings data already exists in your Chaturbate and BongaCams accounts right now. The question is whether you're using it.</p>
+
+      <div style={{ margin: '20px 0', borderRadius: '12px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.07)' }}>
+        <img
+          src="/blog-images/camcash-ai-command-center.webp"
+          alt="CamCash AI Command Center showing a real-time recommendation to go live on Chaturbate with expected earnings"
+          style={{ width: '100%', display: 'block' }}
+        />
+      </div>
+
+      <h2 style={s.h2}>Frequently Asked Questions</h2>
+      {faqs.map(({ q, a }, i) => (
+        <div key={i} style={s.faqItem}>
+          <div style={{ fontSize: '15px', fontWeight: 700, color: '#e2e8f0', marginBottom: '6px' }}>{q}</div>
+          <p style={{ ...s.p, marginBottom: 0 }}>{a}</p>
+        </div>
+      ))}
 
       <div style={s.cta}>
         <div style={s.ctaT}>Find out what your data actually says</div>

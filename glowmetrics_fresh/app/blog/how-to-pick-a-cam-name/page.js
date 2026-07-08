@@ -30,6 +30,20 @@ const schema = {
   mainEntityOfPage: { '@type': 'WebPage', '@id': 'https://www.camcashgrl.com/blog/how-to-pick-a-cam-name' },
 }
 
+const faqSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: [
+    { '@type': 'Question', name: 'Can I change my cam name later?', acceptedAnswer: { '@type': 'Answer', text: "Yes, but it comes at a cost. You'll lose search ranking, some fans will lose track of you, and you'll need to update every platform. It's much better to get it right the first time." } },
+    { '@type': 'Question', name: 'Should my cam name be my real name?', acceptedAnswer: { '@type': 'Answer', text: "Never. Always use a stage name that's completely separate from your personal identity — even if you think you'll never need the separation." } },
+    { '@type': 'Question', name: 'How do I know if my cam name is already taken?', acceptedAnswer: { '@type': 'Answer', text: "Search it on Google, on every cam platform you plan to use, and on major social media sites before committing. Also check that it doesn't return any unrelated results you don't want associated with your brand." } },
+    { '@type': 'Question', name: 'Does a cam name affect SEO?', acceptedAnswer: { '@type': 'Answer', text: 'Yes. A unique, searchable name that you use consistently across platforms will rank in Google search results over time, making you easier to discover organically without paid advertising.' } },
+    { '@type': 'Question', name: 'What if my ideal name is taken on one platform but not others?', acceptedAnswer: { '@type': 'Answer', text: 'Try adding a simple word like "official," "real," or "xo" to the front or back. Avoid numbers — they make names look unprofessional and harder to remember.' } },
+    { '@type': 'Question', name: 'What are some good cam model name ideas?', acceptedAnswer: { '@type': 'Answer', text: "Focus on names that are 2–3 syllables, easy to spell, and hint at your vibe. Examples like VelvetRayne, LunaVex, CrimsonDoll, or NightJade all work because they're distinctive, memorable, and searchable. Avoid anything generic or that sounds like a hundred other profiles." } },
+    { '@type': 'Question', name: 'Is there a free camgirl name generator?', acceptedAnswer: { '@type': 'Answer', text: "Yes — the cam girl name generator on this site is free and gives every suggestion a brand-strength score based on the same rules covered in this guide: length, spellability, and searchability. It's a fast starting point, but still check availability across platforms before you commit." } },
+  ],
+}
+
 const s = {
   h1:      { fontSize: '29px', fontWeight: 800, color: '#f1f5f9', lineHeight: 1.2, marginBottom: '14px', letterSpacing: '-0.02em' },
   intro:   { fontSize: '16px', lineHeight: 1.75, color: '#cbd5e1', marginBottom: '32px', paddingLeft: '14px', borderLeft: '3px solid #6366f1' },

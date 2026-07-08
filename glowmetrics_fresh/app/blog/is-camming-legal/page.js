@@ -30,6 +30,19 @@ const schema = {
   mainEntityOfPage: { '@type': 'WebPage', '@id': 'https://www.camcashgrl.com/blog/is-camming-legal' },
 }
 
+const faqSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: [
+    { '@type': 'Question', name: 'Is camming legal in the United States?', acceptedAnswer: { '@type': 'Answer', text: 'Adult live streaming is not categorically illegal in the United States, but it operates under overlapping federal law, state law, and platform rules simultaneously. Legal compliance means satisfying all layers — not just completing platform signup.' } },
+    { '@type': 'Question', name: 'Is platform verification enough to make camming legal?', acceptedAnswer: { '@type': 'Answer', text: 'No. Platform verification is a contractual requirement between you and the platform — not individualized legal clearance for your specific jurisdiction. Federal obscenity law, state-level rules, and tax obligations exist independently of platform approval.' } },
+    { '@type': 'Question', name: 'Do age verification laws affect models or only viewers?', acceptedAnswer: { '@type': 'Answer', text: 'They are primarily framed as viewer access requirements on platforms, but they directly affect the operating environment for models — including which audiences can access their content and how platforms operate in specific states.' } },
+    { '@type': 'Question', name: 'What federal law is most relevant to cam models?', acceptedAnswer: { '@type': 'Answer', text: 'Federal obscenity law, 18 U.S.C. § 2257 (age verification and recordkeeping for sexually explicit content), and standard federal tax law (self-employment income reporting) are the most commonly relevant frameworks.' } },
+    { '@type': 'Question', name: 'Should you panic because laws vary by state?', acceptedAnswer: { '@type': 'Answer', text: 'No — but you should be informed. Document your assumptions, read your platform terms carefully, and get local legal advice if you have real uncertainty. Panic is not useful; actual research and professional advice are.' } },
+    { '@type': 'Question', name: 'What happens if a cam platform exits your state?', acceptedAnswer: { '@type': 'Answer', text: 'If a platform blocks access from your state due to age-verification compliance decisions, you lose access to viewers in that state. This has already happened with multiple major platforms in several U.S. states. It is a real business risk worth monitoring.' } },
+  ],
+}
+
 const s = {
   h1:      { fontSize: '29px', fontWeight: 800, color: '#f1f5f9', lineHeight: 1.2, marginBottom: '14px', letterSpacing: '-0.02em' },
   intro:   { fontSize: '16px', lineHeight: 1.75, color: '#cbd5e1', marginBottom: '32px', paddingLeft: '14px', borderLeft: '3px solid #6366f1' },
@@ -59,7 +72,7 @@ const s = {
 export default function IsCammingLegal() {
   return (
     <ArticleLayout
-      schema={schema}
+      schema={[schema, faqSchema]}
       breadcrumb={[{ label: 'Blog', href: '/blog' }, { label: 'Is Camming Legal' }]}
     >
       <div style={s.meta}>

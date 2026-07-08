@@ -98,18 +98,31 @@ export default function Page() {
 
   return (
     <div style={{ background: '#05070f', minHeight: '100vh', color: '#94A3B8', fontFamily: 'Inter, sans-serif' }}>
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify({
-        "@context": "https://schema.org",
-        "@type": "Article",
-        "headline": "Why You're Not Making Money on Chaturbate (And How to Fix It)",
-        "description": "The real reasons Chaturbate models underperform — wrong hours, no tip menu, ignoring top fans, no goals, and zero data tracking.",
-        "url": "https://www.camcashgrl.com/blog/why-youre-not-making-money-on-chaturbate",
-        "datePublished": "2026-06-23",
-        "dateModified": "2026-06-23",
-        "author": { "@type": "Organization", "name": "CamCash", "url": "https://www.camcashgrl.com" },
-        "publisher": { "@type": "Organization", "name": "CamCash", "url": "https://www.camcashgrl.com", "logo": { "@type": "ImageObject", "url": "https://www.camcashgrl.com/og-image.png" } },
-        "mainEntityOfPage": { "@type": "WebPage", "@id": "https://www.camcashgrl.com/blog/why-youre-not-making-money-on-chaturbate" }
-      })}} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify([
+        {
+          "@context": "https://schema.org",
+          "@type": "Article",
+          "headline": "Why You're Not Making Money on Chaturbate (And How to Fix It)",
+          "description": "The real reasons Chaturbate models underperform — wrong hours, no tip menu, ignoring top fans, no goals, and zero data tracking.",
+          "url": "https://www.camcashgrl.com/blog/why-youre-not-making-money-on-chaturbate",
+          "datePublished": "2026-06-23",
+          "dateModified": "2026-06-23",
+          "author": { "@type": "Person", "name": "Daphne Dawson", "jobTitle": "Cam Model" },
+          "publisher": { "@type": "Organization", "name": "CamCash", "url": "https://www.camcashgrl.com", "logo": { "@type": "ImageObject", "url": "https://www.camcashgrl.com/og-image.png" } },
+          "mainEntityOfPage": { "@type": "WebPage", "@id": "https://www.camcashgrl.com/blog/why-youre-not-making-money-on-chaturbate" }
+        },
+        {
+          "@context": "https://schema.org",
+          "@type": "FAQPage",
+          "mainEntity": [
+            { "@type": "Question", "name": "Why am I not making money on Chaturbate even though I stream regularly?", "acceptedAnswer": { "@type": "Answer", "text": "It's usually a small number of fixable mistakes compounding over time, not a talent or looks problem: streaming at the wrong hours for your specific audience, no tip menu or a broken one, ignoring your top fans, poorly-sized token goals, and never looking at your own tip data to know what's actually working." } },
+            { "@type": "Question", "name": "How do I find my personal best hours to stream on Chaturbate?", "acceptedAnswer": { "@type": "Answer", "text": "Look at your historical tip data broken down by hour of day rather than following generic advice — your peak window depends on your specific audience's demographics and timezone, not platform-wide traffic. An extra 30 minutes during your real best hour is worth more than 3 hours during a dead one." } },
+            { "@type": "Question", "name": "What makes a good Chaturbate tip menu?", "acceptedAnswer": { "@type": "Answer", "text": "A clear range starting around 25-50 tokens with an obvious low-cost entry point, going up to 500 or higher for whales. Pin it in chat every 20-30 minutes and mention it out loud during quiet stretches — viewers tip when they understand exactly what they're getting and the price feels within reach." } },
+            { "@type": "Question", "name": "How big should my token goals be?", "acceptedAnswer": { "@type": "Answer", "text": "Small enough to realistically complete within 20-40 minutes. A goal that sits unmoved for 45 minutes actively discourages tipping because it looks unreachable. Smaller, faster goals that actually complete — followed immediately by the next one — generate more total income than one large goal that drags on." } },
+            { "@type": "Question", "name": "Does streaming longer hours mean earning more money on Chaturbate?", "acceptedAnswer": { "@type": "Answer", "text": "No — revenue per hour is what matters, not total hours streamed. A model who streams 3 focused hours during her peak window and earns $180 is doing better than one who grinds 7 hours for $140. Long sessions during low-traffic windows drain energy and can even hurt discoverability." } },
+          ]
+        }
+      ])}} />
 
       <nav style={{ padding: '20px 40px', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Link href="/" style={{ fontWeight: 700, fontSize: 15, color: 'white', textDecoration: 'none', letterSpacing: '-0.2px' }}>💜 CamCash</Link>
@@ -129,6 +142,12 @@ export default function Page() {
         <h1 style={{ fontSize: 38, fontWeight: 900, color: 'white', lineHeight: 1.15, marginBottom: 20, letterSpacing: '-0.02em' }}>
           Why You're Not Making Money on Chaturbate (And How to Fix It)
         </h1>
+
+        <div style={{ fontSize: 12, color: '#475569', marginBottom: 20, display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+          <span>Daphne Dawson</span>
+          <span>Updated June 2026</span>
+          <span>8 min read</span>
+        </div>
 
         <p style={{ fontSize: 18, lineHeight: 1.7, color: '#CBD5E1', marginBottom: 28, paddingLeft: 20, borderLeft: '3px solid #EC4899' }}>
           Most Chaturbate models who aren't earning what they expected aren't failing because of their looks, their niche, or how long they've been streaming. They're failing because of a small number of fixable mistakes that compound over time. This guide covers every single one.
@@ -159,6 +178,28 @@ export default function Page() {
         <h2 style={{ fontSize: 26, fontWeight: 800, color: 'white', marginBottom: 14, marginTop: 48, letterSpacing: '-0.01em' }}>The pattern behind all of these problems</h2>
         <p style={{ fontSize: 15, lineHeight: 1.85, color: '#94A3B8', marginBottom: 16 }}>Every problem on this list has the same root cause: streaming without feedback. When you have no data, you can't know what's actually working. You repeat the same patterns because nothing is telling you to stop.</p>
         <p style={{ fontSize: 15, lineHeight: 1.85, color: '#94A3B8', marginBottom: 32 }}>The models who grow fastest are not necessarily the most talented or experienced. They're the ones who look at their own numbers and adjust. They know their peak hours. They know their top fans. They know their average revenue per session and use it as a benchmark for every stream.</p>
+
+        <div style={{ margin: '32px 0', borderRadius: 14, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.08)' }}>
+          <img
+            src="/blog-images/camcash-earnings-stats.webp"
+            alt="CamCash dashboard showing this month's total earnings, average dollars per hour, return rate, and tonight's earnings forecast"
+            style={{ width: '100%', display: 'block' }}
+          />
+        </div>
+
+        <h2 style={{ fontSize: 26, fontWeight: 800, color: 'white', marginBottom: 14, marginTop: 48, letterSpacing: '-0.01em' }}>Frequently Asked Questions</h2>
+        {[
+          { q: 'Why am I not making money on Chaturbate even though I stream regularly?', a: "It's usually a small number of fixable mistakes compounding over time, not a talent or looks problem: streaming at the wrong hours for your specific audience, no tip menu or a broken one, ignoring your top fans, poorly-sized token goals, and never looking at your own tip data to know what's actually working." },
+          { q: 'How do I find my personal best hours to stream on Chaturbate?', a: "Look at your historical tip data broken down by hour of day rather than following generic advice — your peak window depends on your specific audience's demographics and timezone, not platform-wide traffic. An extra 30 minutes during your real best hour is worth more than 3 hours during a dead one." },
+          { q: 'What makes a good Chaturbate tip menu?', a: 'A clear range starting around 25-50 tokens with an obvious low-cost entry point, going up to 500 or higher for whales. Pin it in chat every 20-30 minutes and mention it out loud during quiet stretches — viewers tip when they understand exactly what they\'re getting and the price feels within reach.' },
+          { q: 'How big should my token goals be?', a: 'Small enough to realistically complete within 20-40 minutes. A goal that sits unmoved for 45 minutes actively discourages tipping because it looks unreachable. Smaller, faster goals that actually complete — followed immediately by the next one — generate more total income than one large goal that drags on.' },
+          { q: 'Does streaming longer hours mean earning more money on Chaturbate?', a: 'No — revenue per hour is what matters, not total hours streamed. A model who streams 3 focused hours during her peak window and earns $180 is doing better than one who grinds 7 hours for $140. Long sessions during low-traffic windows drain energy and can even hurt discoverability.' },
+        ].map(({ q, a }, i) => (
+          <div key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: 14, marginBottom: 14 }}>
+            <div style={{ fontSize: 15, fontWeight: 700, color: 'white', marginBottom: 6 }}>{q}</div>
+            <p style={{ fontSize: 15, lineHeight: 1.85, color: '#94A3B8', margin: 0 }}>{a}</p>
+          </div>
+        ))}
 
         <div style={{ padding: '32px', borderRadius: 20, background: 'linear-gradient(135deg, rgba(236,72,153,0.10), rgba(34,211,238,0.08))', border: '1px solid rgba(236,72,153,0.3)', margin: '48px 0', textAlign: 'center' }}>
           <div style={{ fontSize: 22, fontWeight: 900, color: 'white', marginBottom: 10 }}>See exactly why your earnings are where they are</div>

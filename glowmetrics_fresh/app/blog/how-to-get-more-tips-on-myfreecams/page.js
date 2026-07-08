@@ -30,6 +30,20 @@ const schema = {
   mainEntityOfPage: { '@type': 'WebPage', '@id': 'https://www.camcashgrl.com/blog/how-to-get-more-tips-on-myfreecams' },
 }
 
+const faqs = [
+  { q: 'Why am I not getting tips on MyFreeCams even with viewers?', a: "Traffic and tipping are different problems. Most models focus on getting more viewers, but the real gap is converting the viewers already in the room. If you're reacting to slow rooms only after you notice them, the opportunity to fix it has usually already passed — top earners create the conditions for tipping proactively instead of waiting for it to happen." },
+  { q: "What's the fastest way to increase tips on MyFreeCams?", a: 'Give viewers a specific, visible goal instead of tipping passively — something like "next 50 tokens decides what I do next." Clear goals convert far better than an open-ended room with no direction.' },
+  { q: 'Does calling out viewers by name actually increase tips?', a: "Yes. Scanning your viewer list and calling out usernames makes people feel individually seen instead of anonymous, which measurably increases tip probability. It costs nothing and takes seconds between tips." },
+  { q: 'How do I fix a slow, quiet room on MyFreeCams?', a: "Don't wait it out silently. Restart momentum immediately with a small, achievable goal and direct engagement — for example, offering the first tipper of a small amount a say in what happens next. Fixing momentum fast matters more than fixing it perfectly." },
+  { q: 'Should I focus on new viewers or my top tippers on MyFreeCams?', a: 'Your top tippers, without question. A small number of viewers usually drive the majority of your income on any platform. Identify them, give them extra attention, and keep them engaged — they are your most valuable asset, not just your newest viewers.' },
+]
+
+const faqSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: faqs.map(({ q, a }) => ({ '@type': 'Question', name: q, acceptedAnswer: { '@type': 'Answer', text: a } })),
+}
+
 const s = {
   h1:      { fontSize: '29px', fontWeight: 800, color: '#f1f5f9', lineHeight: 1.2, marginBottom: '14px', letterSpacing: '-0.02em' },
   intro:   { fontSize: '16px', lineHeight: 1.75, color: '#cbd5e1', marginBottom: '32px', paddingLeft: '14px', borderLeft: '3px solid #6366f1' },
@@ -43,6 +57,7 @@ const s = {
   stratB:  { padding: '12px 16px' },
   quote:   { padding: '10px 14px', borderRadius: '6px', background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(99,102,241,0.15)', marginTop: '8px', fontSize: '14px', color: '#cbd5e1', fontStyle: 'italic', lineHeight: 1.6 },
   note:    { padding: '12px 16px', borderRadius: '8px', background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.15)', marginBottom: '16px' },
+  faqItem: { borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '14px', marginBottom: '14px' },
   cta:     { background: 'rgba(99,102,241,0.07)', border: '1px solid rgba(99,102,241,0.18)', borderRadius: '10px', padding: '22px 24px', margin: '36px 0', textAlign: 'center' },
   ctaT:    { fontSize: '17px', fontWeight: 700, color: '#f1f5f9', marginBottom: '6px' },
   ctaS:    { fontSize: '13px', color: '#64748b', marginBottom: '16px' },
@@ -91,7 +106,7 @@ const strategies = [
 export default function MoreTipsOnMFC() {
   return (
     <ArticleLayout
-      schema={schema}
+      schema={[schema, faqSchema]}
       breadcrumb={[{ label: 'Blog', href: '/blog' }, { label: 'More Tips on MyFreeCams' }]}
     >
       <div style={s.meta}>
@@ -136,6 +151,14 @@ export default function MoreTipsOnMFC() {
 
       <h2 style={s.h2}>Final Take</h2>
       <p style={s.p}>If you want more tips on MyFreeCams, the formula is simple: set clear goals, engage viewers directly, react fast, and track what works. Your next tip isn't coming from more traffic — it's coming from the viewers already watching.</p>
+
+      <h2 style={s.h2}>Frequently Asked Questions</h2>
+      {faqs.map(({ q, a }, i) => (
+        <div key={i} style={s.faqItem}>
+          <div style={{ fontSize: '15px', fontWeight: 700, color: '#e2e8f0', marginBottom: '6px' }}>{q}</div>
+          <p style={{ ...s.p, marginBottom: 0 }}>{a}</p>
+        </div>
+      ))}
 
       <div style={s.cta}>
         <div style={s.ctaT}>See exactly who your top tippers are</div>

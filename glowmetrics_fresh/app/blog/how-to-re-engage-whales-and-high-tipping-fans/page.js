@@ -30,6 +30,20 @@ const schema = {
   mainEntityOfPage: { '@type': 'WebPage', '@id': 'https://www.camcashgrl.com/blog/how-to-re-engage-whales-and-high-tipping-fans' },
 }
 
+const faqs = [
+  { q: 'What counts as a "whale" in cam modeling?', a: 'A whale is a viewer who contributes a large percentage of your income — in many cases just 1-3 people represent 50%+ of total earnings. That concentration is exactly why keeping a whale engaged matters so much: replacing one is far harder than retaining one.' },
+  { q: 'Why do high-tipping fans stop tipping?', a: "Usually one of four reasons: they no longer feel special the way they did early on, the room has gotten repetitive and they're bored, they feel replaced by newer tippers getting more attention, or there's no new goal or progression left to chase. All four are fixable once you recognize which one applies." },
+  { q: 'What is the biggest mistake models make with high-value fans?', a: 'Focusing too much on acquiring new viewers and not enough on keeping the best ones. Your highest income almost always comes from a small group of repeat spenders — if you are not actively managing and re-engaging them, you are leaving money on the table every stream.' },
+  { q: 'Is it worth messaging a whale directly if they go quiet?', a: "Yes, if done well. A short, personal message — 2-3 sentences, referencing something specific about them, low pressure — can have a large return. Give them a specific reason to come back rather than a generic 'miss you' note, and it will feel like an invitation instead of a guilt trip." },
+  { q: 'How do you know when a whale is at risk of leaving for good?', a: 'Watch their tipping interval. If a fan has not been around in a while, do not ignore it — track when they typically tip and notice when that pattern breaks. The models who catch this early and reach out have a much better recovery rate than those who wait until the fan has been silent for weeks.' },
+]
+
+const faqSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: faqs.map(({ q, a }) => ({ '@type': 'Question', name: q, acceptedAnswer: { '@type': 'Answer', text: a } })),
+}
+
 const s = {
   h1:      { fontSize: '29px', fontWeight: 800, color: '#f1f5f9', lineHeight: 1.2, marginBottom: '14px', letterSpacing: '-0.02em' },
   intro:   { fontSize: '16px', lineHeight: 1.75, color: '#cbd5e1', marginBottom: '32px', paddingLeft: '14px', borderLeft: '3px solid #6366f1' },
@@ -62,6 +76,7 @@ const s = {
   relLinks:{ display: 'flex', flexDirection: 'column', gap: '6px' },
   relLink: { fontSize: '14px', color: '#6366f1', textDecoration: 'none' },
   iLink:   { color: '#a5b4fc', textDecoration: 'none' },
+  faqItem: { borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '14px', marginBottom: '14px' },
 }
 
 const reasons = [
@@ -127,7 +142,7 @@ const steps = [
 export default function ReEngageWhalesHighTippers() {
   return (
     <ArticleLayout
-      schema={schema}
+      schema={[schema, faqSchema]}
       breadcrumb={[{ label: 'Blog', href: '/blog' }, { label: 'Re-Engage Whales & High-Tipping Fans' }]}
     >
       <div style={s.meta}>
@@ -178,6 +193,22 @@ export default function ReEngageWhalesHighTippers() {
 
       <h2 style={s.h2}>The Biggest Mistake Models Make</h2>
       <p style={s.p}>They focus too much on getting new viewers and not enough on keeping their best ones. Your highest income will almost always come from a small group of repeat spenders. So if you're not actively managing and re-engaging them, you're leaving money on the table every single stream.</p>
+
+      <div style={{ margin: '20px 0', borderRadius: '12px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.07)' }}>
+        <img
+          src="/blog-images/camcash-fan-intelligence.webp"
+          alt="CamCash Fan Intelligence panel ranking VIP fans by lifetime spend, with concentration risk and returning-fan alerts"
+          style={{ width: '100%', display: 'block' }}
+        />
+      </div>
+
+      <h2 style={s.h2}>Frequently Asked Questions</h2>
+      {faqs.map(({ q, a }, i) => (
+        <div key={i} style={s.faqItem}>
+          <div style={{ fontSize: '15px', fontWeight: 700, color: '#e2e8f0', marginBottom: '6px' }}>{q}</div>
+          <p style={{ ...s.p, marginBottom: 0 }}>{a}</p>
+        </div>
+      ))}
 
       <div style={s.cta}>
         <div style={s.ctaT}>Know exactly who your whales are</div>
