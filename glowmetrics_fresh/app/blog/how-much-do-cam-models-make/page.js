@@ -103,6 +103,14 @@ export default function HowMuchDoCamModelsMake() {
         </p>
       </div>
 
+      <div style={{ margin: '0 0 32px', borderRadius: '12px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.07)' }}>
+        <img
+          src="/blog-images/camcash-earnings-stats.webp"
+          alt="CamCash dashboard showing this month's total earnings, average dollars per hour, return rate, and tonight's earnings forecast"
+          style={{ width: '100%', display: 'block' }}
+        />
+      </div>
+
       <div style={{background:'rgba(255,255,255,0.03)', border:'1px solid rgba(255,255,255,0.07)', borderRadius:12, padding:'20px 24px', marginBottom:32}}>
         <div style={{fontSize:13, fontWeight:700, color:'#e2e8f0', marginBottom:12}}>In this guide</div>
         {[

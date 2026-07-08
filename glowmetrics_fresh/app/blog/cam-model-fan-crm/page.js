@@ -159,6 +159,12 @@ export default function Page() {
           alongside the rest of your earnings data.
         </p>
 
+        <img
+          src="/blog-images/camcash-fan-intelligence.webp"
+          alt="CamCash Fan Intelligence panel ranking VIP fans by lifetime spend, with concentration risk and returning-fan alerts"
+          className="w-full rounded-lg border border-slate-200 dark:border-slate-800 my-6"
+        />
+
         <h2>From data to DM: personalized re-engagement</h2>
         <p>
           The profile is not just for looking at. When a fan goes quiet, the data behind their profile drives a{' '}

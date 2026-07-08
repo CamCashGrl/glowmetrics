@@ -310,6 +310,14 @@ export default function RevenuePerHourPage() {
       <h2 style={s.h2}>Best Streaming Hours vs Best Streaming Days</h2>
       <p style={s.p}>Revenue per hour also separates strong days from strong hours. Saturday may bring the most total earnings because you stream longer on Saturdays. But Thursday night might earn more per hour.</p>
 
+      <div style={{ margin: '20px 0', borderRadius: '12px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.07)' }}>
+        <img
+          src="/blog-images/camcash-best-hours-heatmap.webp"
+          alt="CamCash revenue timing and platform ROI table showing dollars per active day by platform and day of week, with top revenue-per-hour rate by platform"
+          style={{ width: '100%', display: 'block' }}
+        />
+      </div>
+
       <div style={{ overflowX: 'auto', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.08)', marginBottom: '20px' }}>
         <table style={s.table}>
           <thead>

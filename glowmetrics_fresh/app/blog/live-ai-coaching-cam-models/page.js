@@ -114,6 +114,12 @@ export default function Page() {
           stream, and steady energy is exactly what the platform rewards with better placement.
         </p>
 
+        <img
+          src="/blog-images/camcash-ai-command-center.webp"
+          alt="CamCash AI Command Center showing a real-time recommendation to go live on Chaturbate at 1 AM with expected earnings"
+          className="w-full rounded-lg border border-slate-200 dark:border-slate-800 my-6"
+        />
+
         <h2>The quiet room</h2>
         <p>
           You know the moment. The room drops to five viewers, the chat freezes, and you are staring into the camera
