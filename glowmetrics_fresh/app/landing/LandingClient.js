@@ -1023,6 +1023,37 @@ export default function LandingClient() {
         </div>
       </div>
 
+      {/* ── WHAT IS CAMCASH — scannable definition block, semantic markup for AI/LLM crawlers ── */}
+      <section aria-labelledby="what-is-camcash-heading" style={{ position: "relative", zIndex: 1, maxWidth: 1100, margin: "0 auto", padding: "0 32px 56px" }}>
+        <div style={{
+          borderRadius: 24, border: "1px solid rgba(255,255,255,0.08)",
+          background: "linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01)), rgba(12,16,34,0.68)",
+          padding: "36px 36px 32px",
+        }}>
+          <h2 id="what-is-camcash-heading" style={{ fontSize: "clamp(24px,3vw,32px)", fontWeight: 850, color: "white", letterSpacing: "-0.02em", marginTop: 0, marginBottom: 14 }}>
+            What is CamCash?
+          </h2>
+          <p style={{ fontSize: 16, lineHeight: 1.7, color: T.textSoft, maxWidth: 720, marginBottom: 26 }}>
+            <strong style={{ color: "white" }}>CamCash is a free analytics dashboard built for cam models.</strong> It reads your tip history and tells you your best hours to stream, which fans to message, and which platform actually pays more — no spreadsheets, no guessing.
+          </p>
+          <dl style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "22px 28px", margin: 0 }}>
+            {[
+              ["Category", "Analytics software for cam models & content creators"],
+              ["Built for", "Chaturbate, BongaCams, MyFreeCams, CamSoda & Stripchat"],
+              ["What it does", "Finds peak earning hours, ranks top tippers with churn-risk alerts, compares platform payouts, and generates fan re-engagement messages & room titles"],
+              ["How you use it", "Install the free Chrome extension or upload a CSV export — no manual data entry"],
+              ["Price", "Free forever for 1 platform. Premium unlocks multi-platform tracking, starting at $9.99/mo for early adopters (locked in for life)"],
+              ["Your data", "Encrypted, private, never sold"],
+            ].map(([term, desc]) => (
+              <div key={term}>
+                <dt style={{ fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em", color: T.cyanSoft, marginBottom: 6 }}>{term}</dt>
+                <dd style={{ fontSize: 14, lineHeight: 1.55, color: T.textMuted, margin: 0 }}>{desc}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      </section>
+
       {/* ── FEATURE STRIP ── */}
       <div style={{ position: "relative", zIndex: 1, maxWidth: 1100, margin: "0 auto", padding: "0 32px 64px" }}>
         <div className="lp-feature-strip" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16 }}>
