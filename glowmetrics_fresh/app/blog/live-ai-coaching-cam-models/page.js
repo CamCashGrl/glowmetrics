@@ -72,7 +72,7 @@ export default function Page() {
     description: DESC,
     datePublished: '2026-06-07',
     dateModified: '2026-06-07',
-    author: { '@type': 'Organization', name: 'CamCashGrl' },
+    author: { '@type': 'Person', name: 'Daphne Dawson', jobTitle: 'Cam Model' },
     publisher: {
       '@type': 'Organization',
       name: 'CamCashGrl',
@@ -99,7 +99,7 @@ export default function Page() {
       <BlogLayout
         title="Live AI Coaching: How to Fill a Quiet Room and Boost In-Stream Earnings"
         summary="We have all stared at a room that dropped to five viewers with a frozen chat. Real-time AI coaching is the cure: cues and prompts the moment the energy dips, so the night never gets away from you."
-        author="CamCashGrl Team"
+        author="Daphne Dawson"
         publishedDate="June 2026"
         lastUpdated="June 7, 2026"
         faqs={faqs}

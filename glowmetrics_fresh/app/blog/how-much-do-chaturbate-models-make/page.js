@@ -26,7 +26,7 @@ const schema = {
   url: 'https://www.camcashgrl.com/blog/how-much-do-chaturbate-models-make',
   datePublished: '2026-01-01',
   dateModified: '2026-06-16',
-  author: { '@type': 'Organization', name: 'CamCash', url: 'https://www.camcashgrl.com' },
+  author: { '@type': 'Person', name: 'Daphne Dawson', jobTitle: 'Cam Model' },
   publisher: { '@type': 'Organization', name: 'CamCash', url: 'https://www.camcashgrl.com' },
   mainEntityOfPage: { '@type': 'WebPage', '@id': 'https://www.camcashgrl.com/blog/how-much-do-chaturbate-models-make' },
 }
@@ -161,7 +161,7 @@ export default function ChaturbateEarningsPost() {
       breadcrumb={[{ label: 'Blog', href: '/blog' }, { label: 'Chaturbate Model Earnings' }]}
     >
       <div style={s.meta}>
-        <span>CamCashGrl team</span>
+        <span>Daphne Dawson</span>
         <span>Updated June 2026</span>
         <span>9 min read</span>
       </div>

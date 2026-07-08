@@ -39,7 +39,7 @@ const articleSchema = {
   url: 'https://www.camcashgrl.com/blog/revenue-per-hour-cam-model',
   datePublished: '2026-06-07',
   dateModified: '2026-06-07',
-  author: { '@type': 'Organization', name: 'CamCash', url: 'https://www.camcashgrl.com' },
+  author: { '@type': 'Person', name: 'Daphne Dawson', jobTitle: 'Cam Model' },
   publisher: { '@type': 'Organization', name: 'CamCash', url: 'https://www.camcashgrl.com' },
   mainEntityOfPage: { '@type': 'WebPage', '@id': 'https://www.camcashgrl.com/blog/revenue-per-hour-cam-model' },
 }

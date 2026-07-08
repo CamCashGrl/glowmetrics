@@ -20,7 +20,7 @@ const schema = {
   url: 'https://www.camcashgrl.com/blog/how-to-make-money-on-chaturbate',
   datePublished: '2026-06-23',
   dateModified: '2026-06-23',
-  author: { '@type': 'Organization', name: 'CamCash', url: 'https://www.camcashgrl.com' },
+  author: { '@type': 'Person', name: 'Daphne Dawson', jobTitle: 'Cam Model' },
   publisher: { '@type': 'Organization', name: 'CamCash', url: 'https://www.camcashgrl.com' },
   mainEntityOfPage: {
     '@type': 'WebPage',
@@ -125,7 +125,7 @@ export default function HowToMakeMoneyOnChaturbate() {
       breadcrumb={[{ label: 'Blog', href: '/blog' }, { label: 'Make Money on Chaturbate' }]}
     >
       <div style={s.meta}>
-        <span>CamCashGrl team</span>
+        <span>Daphne Dawson</span>
         <span>Updated June 2026</span>
         <span>8 min read</span>
       </div>

@@ -25,7 +25,7 @@ const schema = {
   url: 'https://www.camcashgrl.com/blog/cam-model-taxes',
   datePublished: '2026-01-01',
   dateModified: '2026-04-27',
-  author: { '@type': 'Organization', name: 'CamCash', url: 'https://www.camcashgrl.com' },
+  author: { '@type': 'Person', name: 'Daphne Dawson', jobTitle: 'Cam Model' },
   publisher: { '@type': 'Organization', name: 'CamCash', url: 'https://www.camcashgrl.com' },
   mainEntityOfPage: { '@type': 'WebPage', '@id': 'https://www.camcashgrl.com/blog/cam-model-taxes' },
 }
@@ -72,7 +72,7 @@ export default function CamModelTaxes() {
       breadcrumb={[{ label: 'Blog', href: '/blog' }, { label: 'Cam Model Taxes' }]}
     >
       <div style={s.meta}>
-        <span>CamCashGrl team</span>
+        <span>Daphne Dawson</span>
         <span>Updated April 2026</span>
         <span>7 min read</span>
       </div>

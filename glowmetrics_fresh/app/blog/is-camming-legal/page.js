@@ -25,7 +25,7 @@ const schema = {
   url: 'https://www.camcashgrl.com/blog/is-camming-legal',
   datePublished: '2026-07-14',
   dateModified: '2026-07-14',
-  author: { '@type': 'Organization', name: 'CamCashGrl', url: 'https://www.camcashgrl.com' },
+  author: { '@type': 'Person', name: 'Daphne Dawson', jobTitle: 'Cam Model' },
   publisher: { '@type': 'Organization', name: 'CamCashGrl', url: 'https://www.camcashgrl.com' },
   mainEntityOfPage: { '@type': 'WebPage', '@id': 'https://www.camcashgrl.com/blog/is-camming-legal' },
 }
@@ -63,7 +63,7 @@ export default function IsCammingLegal() {
       breadcrumb={[{ label: 'Blog', href: '/blog' }, { label: 'Is Camming Legal' }]}
     >
       <div style={s.meta}>
-        <span>CamCashGrl team</span>
+        <span>Daphne Dawson</span>
         <span>July 2026</span>
         <span>7 min read</span>
       </div>

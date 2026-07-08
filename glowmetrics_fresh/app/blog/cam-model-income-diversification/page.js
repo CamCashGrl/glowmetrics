@@ -19,7 +19,7 @@ const schema = {
   url: 'https://www.camcashgrl.com/blog/cam-model-income-diversification',
   datePublished: '2026-06-23',
   dateModified: '2026-06-23',
-  author: { '@type': 'Organization', name: 'CamCash', url: 'https://www.camcashgrl.com' },
+  author: { '@type': 'Person', name: 'Daphne Dawson', jobTitle: 'Cam Model' },
   publisher: { '@type': 'Organization', name: 'CamCash', url: 'https://www.camcashgrl.com' },
   mainEntityOfPage: {
     '@type': 'WebPage',
@@ -104,7 +104,7 @@ export default function CamModelIncomeDiversification() {
       breadcrumb={[{ label: 'Blog', href: '/blog' }, { label: 'Income Diversification' }]}
     >
       <div style={s.meta}>
-        <span>CamCashGrl team</span>
+        <span>Daphne Dawson</span>
         <span>Updated June 2026</span>
         <span>6 min read</span>
       </div>

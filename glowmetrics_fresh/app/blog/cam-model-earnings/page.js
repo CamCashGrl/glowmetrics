@@ -30,7 +30,7 @@ const schema = {
   url: 'https://www.camcashgrl.com/blog/cam-model-earnings',
   datePublished: '2026-01-01',
   dateModified: '2026-07-07',
-  author: { '@type': 'Organization', name: 'CamCash', url: 'https://www.camcashgrl.com' },
+  author: { '@type': 'Person', name: 'Daphne Dawson', jobTitle: 'Cam Model' },
   publisher: { '@type': 'Organization', name: 'CamCash', url: 'https://www.camcashgrl.com' },
   mainEntityOfPage: {
     '@type': 'WebPage',
@@ -138,7 +138,7 @@ export default function CamModelEarnings() {
       breadcrumb={[{ label: 'Blog', href: '/blog' }, { label: 'Cam Model Earnings' }]}
     >
       <div style={s.meta}>
-        <span>CamCashGrl team</span>
+        <span>Daphne Dawson</span>
         <span>Updated July 2026</span>
         <span>7 min read</span>
       </div>

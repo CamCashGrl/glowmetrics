@@ -97,7 +97,7 @@ export default function GFEStrategy() {
 
         <article>
           <div style={s.meta}>
-            <span>CamCashGrl team</span>
+            <span>Daphne Dawson</span>
             <span>June 2026</span>
             <span>8 min read</span>
           </div>

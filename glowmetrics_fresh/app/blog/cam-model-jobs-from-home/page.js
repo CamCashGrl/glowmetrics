@@ -25,7 +25,7 @@ const schema = {
   url: 'https://www.camcashgrl.com/blog/cam-model-jobs-from-home',
   datePublished: '2026-06-26',
   dateModified: '2026-06-26',
-  author: { '@type': 'Organization', name: 'CamCashGrl', url: 'https://www.camcashgrl.com' },
+  author: { '@type': 'Person', name: 'Daphne Dawson', jobTitle: 'Cam Model' },
   publisher: { '@type': 'Organization', name: 'CamCashGrl', url: 'https://www.camcashgrl.com' },
   mainEntityOfPage: { '@type': 'WebPage', '@id': 'https://www.camcashgrl.com/blog/cam-model-jobs-from-home' },
 }
@@ -61,7 +61,7 @@ export default function CamModelJobsFromHome() {
       breadcrumb={[{ label: 'Blog', href: '/blog' }, { label: 'Cam Model Jobs From Home' }]}
     >
       <div style={s.meta}>
-        <span>CamCashGrl team</span>
+        <span>Daphne Dawson</span>
         <span>June 2026</span>
         <span>7 min read</span>
       </div>

@@ -25,7 +25,7 @@ const schema = {
   url: 'https://www.camcashgrl.com/blog/why-cam-streams-arent-making-money',
   datePublished: '2026-01-01',
   dateModified: '2026-04-27',
-  author: { '@type': 'Organization', name: 'CamCash', url: 'https://www.camcashgrl.com' },
+  author: { '@type': 'Person', name: 'Daphne Dawson', jobTitle: 'Cam Model' },
   publisher: { '@type': 'Organization', name: 'CamCash', url: 'https://www.camcashgrl.com' },
   mainEntityOfPage: { '@type': 'WebPage', '@id': 'https://www.camcashgrl.com/blog/why-cam-streams-arent-making-money' },
 }
@@ -98,7 +98,7 @@ export default function WhyStreamsArentMakingMoney() {
       breadcrumb={[{ label: 'Blog', href: '/blog' }, { label: "Why Streams Aren't Making Money" }]}
     >
       <div style={s.meta}>
-        <span>CamCashGrl team</span>
+        <span>Daphne Dawson</span>
         <span>Updated April 2026</span>
         <span>5 min read</span>
       </div>

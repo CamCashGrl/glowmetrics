@@ -174,7 +174,7 @@ export default function BestMonthPost() {
       breadcrumb={[{ label: 'Blog', href: '/blog' }, { label: 'Best Month on Chaturbate' }]}
     >
       <div style={s.meta}>
-        <span>CamCashGrl</span>
+        <span>Daphne Dawson</span>
         <span>July 2026</span>
         <span>9 min read</span>
       </div>

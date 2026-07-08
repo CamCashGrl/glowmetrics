@@ -20,7 +20,7 @@ const schema = {
   url: 'https://www.camcashgrl.com/blog/how-to-get-views-on-chaturbate',
   datePublished: '2026-01-01',
   dateModified: '2026-04-27',
-  author: { '@type': 'Organization', name: 'CamCash', url: 'https://www.camcashgrl.com' },
+  author: { '@type': 'Person', name: 'Daphne Dawson', jobTitle: 'Cam Model' },
   publisher: { '@type': 'Organization', name: 'CamCash', url: 'https://www.camcashgrl.com' },
   mainEntityOfPage: { '@type': 'WebPage', '@id': 'https://www.camcashgrl.com/blog/how-to-get-views-on-chaturbate' },
 }
@@ -69,7 +69,7 @@ export default function BlogPostChaturbateViewers() {
       breadcrumb={[{ label: 'Blog', href: '/blog' }, { label: 'Get More Viewers on Chaturbate' }]}
     >
       <div style={s.meta}>
-        <span>CamCashGrl team</span>
+        <span>Daphne Dawson</span>
         <span>Updated April 2026</span>
         <span>6 min read</span>
       </div>

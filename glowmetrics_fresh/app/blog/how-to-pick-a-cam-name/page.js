@@ -25,7 +25,7 @@ const schema = {
   url: 'https://www.camcashgrl.com/blog/how-to-pick-a-cam-name',
   datePublished: '2026-05-26',
   dateModified: '2026-05-26',
-  author: { '@type': 'Organization', name: 'CamCashGrl', url: 'https://www.camcashgrl.com' },
+  author: { '@type': 'Person', name: 'Daphne Dawson', jobTitle: 'Cam Model' },
   publisher: { '@type': 'Organization', name: 'CamCashGrl', url: 'https://www.camcashgrl.com' },
   mainEntityOfPage: { '@type': 'WebPage', '@id': 'https://www.camcashgrl.com/blog/how-to-pick-a-cam-name' },
 }
@@ -60,7 +60,7 @@ export default function HowToPickACamName() {
       breadcrumb={[{ label: 'Blog', href: '/blog' }, { label: 'How to Pick a Cam Name' }]}
     >
       <div style={s.meta}>
-        <span>CamCashGrl team</span>
+        <span>Daphne Dawson</span>
         <span>May 2026</span>
         <span>8 min read</span>
       </div>

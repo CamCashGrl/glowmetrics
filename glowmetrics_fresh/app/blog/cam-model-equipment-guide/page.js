@@ -25,7 +25,7 @@ const schema = {
   url: 'https://www.camcashgrl.com/blog/cam-model-equipment-guide',
   datePublished: '2026-07-03',
   dateModified: '2026-07-03',
-  author: { '@type': 'Organization', name: 'CamCashGrl', url: 'https://www.camcashgrl.com' },
+  author: { '@type': 'Person', name: 'Daphne Dawson', jobTitle: 'Cam Model' },
   publisher: { '@type': 'Organization', name: 'CamCashGrl', url: 'https://www.camcashgrl.com' },
   mainEntityOfPage: { '@type': 'WebPage', '@id': 'https://www.camcashgrl.com/blog/cam-model-equipment-guide' },
 }
@@ -59,7 +59,7 @@ export default function CamModelEquipmentGuide() {
       breadcrumb={[{ label: 'Blog', href: '/blog' }, { label: 'Cam Model Equipment Guide' }]}
     >
       <div style={s.meta}>
-        <span>CamCashGrl team</span>
+        <span>Daphne Dawson</span>
         <span>July 2026</span>
         <span>6 min read</span>
       </div>

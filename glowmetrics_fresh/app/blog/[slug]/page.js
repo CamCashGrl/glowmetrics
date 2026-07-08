@@ -54,7 +54,7 @@ export default async function DynamicBlogPost({ params }) {
       url: `https://www.camcashgrl.com/blog/${post.slug}`,
       datePublished: post.created_at,
       dateModified: post.updated_at,
-      author: { '@type': 'Organization', name: 'CamCashGrl', url: 'https://www.camcashgrl.com' },
+      author: { '@type': 'Person', name: 'Daphne Dawson', jobTitle: 'Cam Model' },
       publisher: { '@type': 'Organization', name: 'CamCashGrl', url: 'https://www.camcashgrl.com' },
     }
 
@@ -64,7 +64,7 @@ export default async function DynamicBlogPost({ params }) {
         breadcrumb={[{ label: 'Blog', href: '/blog' }, { label: post.title }]}
       >
         <div style={{ fontSize: '12px', color: '#475569', marginBottom: '28px', display: 'flex', gap: '16px' }}>
-          <span>CamCashGrl</span>
+          <span>Daphne Dawson</span>
           <span>{new Date(post.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</span>
         </div>
         <h1 style={{ fontSize: '29px', fontWeight: 800, color: '#f1f5f9', lineHeight: 1.2, marginBottom: '24px', letterSpacing: '-0.02em' }}>

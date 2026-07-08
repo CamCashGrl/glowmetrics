@@ -25,7 +25,7 @@ const schema = {
   url: 'https://www.camcashgrl.com/blog/how-cam-models-stay-anonymous',
   datePublished: '2026-07-07',
   dateModified: '2026-07-07',
-  author: { '@type': 'Organization', name: 'CamCashGrl', url: 'https://www.camcashgrl.com' },
+  author: { '@type': 'Person', name: 'Daphne Dawson', jobTitle: 'Cam Model' },
   publisher: { '@type': 'Organization', name: 'CamCashGrl', url: 'https://www.camcashgrl.com' },
   mainEntityOfPage: { '@type': 'WebPage', '@id': 'https://www.camcashgrl.com/blog/how-cam-models-stay-anonymous' },
 }
@@ -63,7 +63,7 @@ export default function HowCamModelsStayAnonymous() {
       breadcrumb={[{ label: 'Blog', href: '/blog' }, { label: 'How Cam Models Stay Anonymous' }]}
     >
       <div style={s.meta}>
-        <span>CamCashGrl team</span>
+        <span>Daphne Dawson</span>
         <span>July 2026</span>
         <span>8 min read</span>
       </div>

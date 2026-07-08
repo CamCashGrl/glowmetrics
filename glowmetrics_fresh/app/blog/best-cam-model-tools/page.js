@@ -24,7 +24,7 @@ const schema = {
   url: 'https://www.camcashgrl.com/blog/best-cam-model-tools',
   datePublished: '2026-01-01',
   dateModified: '2026-04-27',
-  author: { '@type': 'Organization', name: 'CamCashGrl', url: 'https://www.camcashgrl.com' },
+  author: { '@type': 'Person', name: 'Daphne Dawson', jobTitle: 'Cam Model' },
   publisher: { '@type': 'Organization', name: 'CamCashGrl', url: 'https://www.camcashgrl.com' },
   mainEntityOfPage: { '@type': 'WebPage', '@id': 'https://www.camcashgrl.com/blog/best-cam-model-tools' },
 }
@@ -67,7 +67,7 @@ export default function BestCamModelTools() {
       breadcrumb={[{ label: 'Blog', href: '/blog' }, { label: 'Best Cam Model Tools' }]}
     >
       <div style={s.meta}>
-        <span>CamCashGrl team</span>
+        <span>Daphne Dawson</span>
         <span>Updated April 2026</span>
         <span>7 min read</span>
       </div>
