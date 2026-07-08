@@ -56,7 +56,7 @@ export default function Page() {
   ];
 
   const relatedBlogs = [
-    { title: 'How to Re-Engage Whales and Top Tippers', description: 'The full playbook for winning back quiet fans', href: '/blog/how-to-re-engage-whales-and-top-tippers' },
+    { title: 'How to Re-Engage Whales and Top Tippers', description: 'The full playbook for winning back quiet fans', href: '/blog/how-to-re-engage-whales-and-high-tipping-fans' },
     { title: 'How to Track Cam Tips Automatically', description: 'Let your fan profiles build themselves', href: '/blog/how-to-track-cam-tips-automatically' },
     { title: 'How to Build Loyal Fans', description: 'Turn one-time tippers into recurring supporters', href: '/blog/how-to-build-loyal-fans' },
   ];
@@ -159,6 +159,12 @@ export default function Page() {
           alongside the rest of your earnings data.
         </p>
 
+        <img
+          src="/blog-images/camcash-fan-intelligence.webp"
+          alt="CamCash Fan Intelligence panel ranking VIP fans by lifetime spend, with concentration risk and returning-fan alerts"
+          className="w-full rounded-lg border border-slate-200 dark:border-slate-800 my-6"
+        />
+
         <h2>From data to DM: personalized re-engagement</h2>
         <p>
           The profile is not just for looking at. When a fan goes quiet, the data behind their profile drives a{' '}
@@ -169,7 +175,7 @@ export default function Page() {
         <p>
           That saves hours of manual DMing and makes every message feel personal. For the full strategy on what to say and
           when, including timing and tone, see our deep dive on{' '}
-          <a href="/blog/how-to-re-engage-whales-and-top-tippers">re-engaging whales and top tippers</a>.
+          <a href="/blog/how-to-re-engage-whales-and-high-tipping-fans">re-engaging whales and top tippers</a>.
         </p>
 
         <h2>The psychology: perceived relationship value</h2>

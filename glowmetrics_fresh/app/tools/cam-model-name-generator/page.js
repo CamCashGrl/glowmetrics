@@ -79,6 +79,24 @@ const toolSchema = {
   featureList: ['Name generation (25/50/100)', 'Brand strength scoring', 'Domain availability checking', 'Platform availability links', 'AI branding analysis'],
 }
 
+const S = {
+  card: '#21262F',
+  gold: '#F59E0B',
+  pink: '#EC4899',
+  white: '#F1F5F9',
+  muted: '#6B7280',
+  text: '#9CA3AF',
+  textStrong: '#F0F2F6',
+  border: 'rgba(255,255,255,0.07)',
+}
+
+const PLATFORM_NOTES = [
+  { platform: 'Chaturbate', color: S.gold, notes: ['Case-insensitive — AvaQuinn = avaquinn', 'Underscores allowed', 'Shown prominently in room listings', 'Can\'t be changed after registration'] },
+  { platform: 'OnlyFans', color: '#00AFF0', notes: ['Your @handle appears in your link', 'Short handles build cleaner URLs', 'Can be changed once per 30 days', 'Drives significant Google search traffic'] },
+  { platform: 'Instagram', color: S.pink, notes: ['No explicit terms in username', 'Max 30 characters', 'Periods and underscores allowed', 'Case insensitive — @AvaQuinn = @avaquinn'] },
+  { platform: 'Twitter / X', color: '#1DA1F2', notes: ['Max 15 characters', 'No spaces', 'Underscores and letters only', 'Shorter handles perform better'] },
+]
+
 export default function CamModelNameGeneratorPage() {
   return (
     <>
@@ -86,8 +104,34 @@ export default function CamModelNameGeneratorPage() {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(toolSchema) }} />
       <NameGeneratorClient />
-      <div style={{ maxWidth: 860, margin: '0 auto', padding: '0 24px 48px', textAlign: 'center' }}>
-        <p style={{ fontSize: 15, color: '#94a3b8', lineHeight: 1.7 }}>
+
+      <div style={{ maxWidth: 860, margin: '0 auto', padding: '0 24px 48px' }}>
+        <section style={{ marginBottom: 40 }}>
+          <h2 style={{ fontSize: 'clamp(20px,3vw,28px)', fontWeight: 800, color: S.textStrong, marginBottom: 16, letterSpacing: '-0.02em' }}>
+            Platform Differences to Know Before You Choose
+          </h2>
+          <p style={{ fontSize: 15, lineHeight: 1.85, color: S.text, marginBottom: 20 }}>
+            Not every platform handles usernames the same way. Understanding the constraints before you commit saves you from a painful rebrand later:
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
+            {PLATFORM_NOTES.map(({ platform, color, notes }) => (
+              <div key={platform} style={{ background: S.card, border: `1px solid ${S.border}`, borderRadius: 12, overflow: 'hidden' }}>
+                <div style={{ padding: '12px 16px', borderBottom: `1px solid ${S.border}`, fontSize: 13, fontWeight: 700, color }}>
+                  {platform}
+                </div>
+                <div style={{ padding: '12px 16px' }}>
+                  {notes.map((note, i) => (
+                    <div key={i} style={{ fontSize: 12, color: S.text, padding: '5px 0', borderBottom: i < notes.length - 1 ? `1px solid ${S.border}` : 'none', lineHeight: 1.5 }}>
+                      → {note}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <p style={{ fontSize: 15, color: S.muted, lineHeight: 1.7, textAlign: 'center' }}>
           Once you pick your cam name,{' '}
           <a href="/landing" style={{ color: '#6366f1', textDecoration: 'none' }}>use CamCash to track your tips, best hours, and top fans</a>.
         </p>

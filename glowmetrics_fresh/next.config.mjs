@@ -75,6 +75,20 @@ const nextConfig = {
         destination: '/blog/how-to-increase-cam-earnings',
         permanent: true,
       },
+      {
+        // Merged duplicate — same topic/keyword as how-to-re-engage-whales-and-high-tipping-fans,
+        // which now contains the combined content of both posts.
+        source: '/blog/how-to-re-engage-whales-and-top-tippers',
+        destination: '/blog/how-to-re-engage-whales-and-high-tipping-fans',
+        permanent: true,
+      },
+      {
+        // Merged duplicate — same tool component as /tools/cam-model-name-generator
+        // (which had the stronger GSC performance), now with the combined article content.
+        source: '/guides/cam-model-name-generator',
+        destination: '/tools/cam-model-name-generator',
+        permanent: true,
+      },
     ]
   },
 }

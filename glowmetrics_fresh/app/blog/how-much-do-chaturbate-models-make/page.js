@@ -1,28 +1,28 @@
 import ArticleLayout from '../../components/ArticleLayout'
 
 export const metadata = {
-  title: 'How Much Do Chaturbate Models Make? Realistic Earnings Guide',
-  description: 'Learn how much Chaturbate models can make, how tokens convert to USD, what affects hourly earnings, and why tracking tips matters.',
+  title: 'How Much Do Chaturbate Models Make? $3–$150+/hr by Level',
+  description: 'Real Chaturbate hourly rates by experience: $3–$10/hr new, $10–$25/hr established, $60–$150+/hr top earners. Token-to-USD conversion and what actually drives pay.',
   alternates: { canonical: 'https://www.camcashgrl.com/blog/how-much-do-chaturbate-models-make' },
   openGraph: {
-    title: 'How Much Do Chaturbate Models Make? Realistic Earnings Guide',
-    description: 'Learn how much Chaturbate models can make, how tokens convert to USD, what affects hourly earnings, and why tracking tips matters.',
+    title: 'How Much Do Chaturbate Models Make? $3–$150+/hr by Level',
+    description: 'Real Chaturbate hourly rates by experience level, token-to-USD conversion, and what actually drives pay — not vague averages.',
     url: 'https://www.camcashgrl.com/blog/how-much-do-chaturbate-models-make',
     type: 'article',
     images: [{ url: 'https://www.camcashgrl.com/og-image.png', width: 1200, height: 630 }],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'How Much Do Chaturbate Models Make? Realistic Earnings Guide',
-    description: 'Learn how much Chaturbate models can make, how tokens convert to USD, what affects hourly earnings, and why tracking tips matters.',
+    title: 'How Much Do Chaturbate Models Make? $3–$150+/hr by Level',
+    description: 'Real hourly rates by experience level, token-to-USD conversion, and what actually drives pay.',
   },
 }
 
 const schema = {
   '@context': 'https://schema.org',
   '@type': 'Article',
-  headline: 'How Much Do Chaturbate Models Make? Realistic Earnings Guide',
-  description: 'Learn how much Chaturbate models can make, how tokens convert to USD, what affects hourly earnings, and why tracking tips matters.',
+  headline: 'How Much Do Chaturbate Models Make? $3–$150+/hr by Level',
+  description: 'Real Chaturbate hourly rates by experience: $3–$10/hr new, $10–$25/hr established, $60–$150+/hr top earners. Token-to-USD conversion and what actually drives pay.',
   url: 'https://www.camcashgrl.com/blog/how-much-do-chaturbate-models-make',
   datePublished: '2026-01-01',
   dateModified: '2026-06-16',

@@ -105,7 +105,7 @@ export default function HowToPickACamName() {
 
       <div style={s.tip}>
         <p style={{ ...s.p, marginBottom: 0 }}>
-          <strong style={{ color: '#e2e8f0' }}>Stuck on ideas?</strong> Try our free <a href="/guides/cam-model-name-generator" style={{ color: '#a5b4fc', textDecoration: 'none' }}>camgirl name generator</a> — it scores every name for brand strength and checks how searchable it is before you commit.
+          <strong style={{ color: '#e2e8f0' }}>Stuck on ideas?</strong> Try our free <a href="/tools/cam-model-name-generator" style={{ color: '#a5b4fc', textDecoration: 'none' }}>camgirl name generator</a> — it scores every name for brand strength and checks how searchable it is before you commit.
         </p>
       </div>
 
@@ -224,7 +224,7 @@ export default function HowToPickACamName() {
 
       <div style={s.faq}>
         <div style={s.faqQ}>Is there a free camgirl name generator?</div>
-        <p style={s.faqA}>Yes — the <a href="/guides/cam-model-name-generator" style={{ color: '#a5b4fc', textDecoration: 'none' }}>cam girl name generator</a> is free and gives every suggestion a brand-strength score based on the same rules covered in this guide: length, spellability, and searchability. It's a fast starting point, but still check availability across platforms before you commit.</p>
+        <p style={s.faqA}>Yes — the <a href="/tools/cam-model-name-generator" style={{ color: '#a5b4fc', textDecoration: 'none' }}>cam girl name generator</a> is free and gives every suggestion a brand-strength score based on the same rules covered in this guide: length, spellability, and searchability. It's a fast starting point, but still check availability across platforms before you commit.</p>
       </div>
 
       <div style={s.related}>
@@ -234,7 +234,7 @@ export default function HowToPickACamName() {
           <a href="/blog/how-to-increase-cam-earnings" style={s.relLink}>→ How to increase cam earnings with data</a>
           <a href="/blog/how-to-make-more-money-on-chaturbate" style={s.relLink}>→ How to make more money on Chaturbate</a>
           <a href="/blog/why-cam-income-is-inconsistent" style={s.relLink}>→ Why cam income is inconsistent</a>
-          <a href="/guides/cam-model-name-generator" style={s.relLink}>→ Free camgirl name generator</a>
+          <a href="/tools/cam-model-name-generator" style={s.relLink}>→ Free camgirl name generator</a>
           <a href="/guides/chaturbate-room-title-generator" style={s.relLink}>→ Free room title generator</a>
         </div>
       </div>

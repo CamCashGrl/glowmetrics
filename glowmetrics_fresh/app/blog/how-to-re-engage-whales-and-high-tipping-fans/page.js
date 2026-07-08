@@ -73,42 +73,52 @@ const reasons = [
 
 const steps = [
   {
-    num: '1', title: 'Acknowledge Them Properly',
+    num: '1', title: "Identify Who's Gone Quiet",
+    body: "You can't re-engage someone you're not tracking. Look for fans who tipped heavily 30–90 days ago but haven't since, regulars who used to show up every stream but stopped, and high-ticket one-time tippers you never followed up with.",
+    quotes: null,
+  },
+  {
+    num: '2', title: 'Acknowledge Them Properly',
     body: 'When a whale returns, your reaction matters. Make them feel recognized, valued, and important.',
     quotes: ['"hey"  ← bad', '"OMG where have you been 😭 I missed you!!"  ← good'],
   },
   {
-    num: '2', title: 'Give Them Priority Attention',
+    num: '3', title: 'Give Them Priority Attention',
     body: "You don't need to ignore your whole room — but whales should feel like VIPs. Say their name often, respond quickly to their messages, and give slightly more energy to their tips. It's about balance, but they should still feel like they matter more.",
     quotes: null,
   },
   {
-    num: '3', title: 'Create Exclusive Rewards',
+    num: '4', title: 'Create Exclusive Rewards',
     body: 'Whales spend more when they feel like they\'re getting something others aren\'t. Try private goals just for them, custom shows, special actions only they can trigger, or "whale-only" menu items. Even small exclusivity can dramatically increase spending.',
     quotes: null,
   },
   {
-    num: '4', title: 'Bring Back the Excitement',
+    num: '5', title: 'Bring Back the Excitement',
     body: 'If they\'ve tipped big before, they want that same energy again. When they tip — react BIG, show genuine excitement, make it feel like a moment. Energy = reinforcement. And reinforcement = more tipping.',
     quotes: null,
   },
   {
-    num: '5', title: 'Introduce New Goals and Progression',
+    num: '6', title: 'Introduce New Goals and Progression',
     body: 'Whales love leveling up. Instead of repeating the same goals, try tiered goals, unlockable content, and "big reward" milestones.',
     quotes: ['500 tokens = Tease', '1000 tokens = Oil show', '2000 tokens = Exclusive content'],
   },
   {
-    num: '6', title: 'Use Absence to Your Advantage',
+    num: '7', title: 'Use Direct Outreach (If the Platform Allows)',
+    body: "A short, personal message to a lapsed whale can have a huge return. Keep it short (2–3 sentences max), personal (reference something specific about them), and low pressure (invite, don't push). Give them a specific reason to come back — make it feel like an event, not a guilt trip.",
+    quotes: ['"I\'m 200 tokens away from my biggest goal ever — I need my OGs for this one"', '"Top 3 tippers this week get a personal message from me"'],
+  },
+  {
+    num: '8', title: 'Use Absence to Your Advantage',
     body: "If a whale hasn't been around in a while, don't ignore it. When they return, mention that you noticed they were gone and make it feel meaningful.",
     quotes: ['"I haven\'t seen you in forever… you better make up for it 😏"'],
   },
   {
-    num: '7', title: 'Stay Consistent',
+    num: '9', title: 'Stay Consistent',
     body: "One of the biggest reasons whales disappear permanently is inconsistency. If you stream randomly, change schedules constantly, or disappear for days or weeks — they move on. Consistency builds trust, and trust keeps whales coming back.",
     quotes: null,
   },
   {
-    num: '8', title: 'Track Your High Tippers',
+    num: '10', title: 'Track Your High Tippers',
     body: "If you don't know who your whales are, when they tip, or how they behave — you can't optimize for them. Track your top spenders, their session behavior, and tip patterns. Once you understand your whales, you can predict their behavior, recreate what worked, and increase their lifetime value.",
     quotes: null,
   },
@@ -123,7 +133,7 @@ export default function ReEngageWhalesHighTippers() {
       <div style={s.meta}>
         <span>CamCashGrl team</span>
         <span>Updated June 2026</span>
-        <span>7 min read</span>
+        <span>9 min read</span>
       </div>
 
       <h1 style={s.h1}>How to Re-Engage Whales and High-Tipping Fans (And Get Them Spending Again)</h1>
@@ -192,8 +202,8 @@ export default function ReEngageWhalesHighTippers() {
       <div style={s.related}>
         <div style={s.relT}>Related reading</div>
         <div style={s.relLinks}>
-          <a href="/blog/how-to-re-engage-whales-and-top-tippers" style={s.relLink}>→ Re-Engage Your Top Tippers — timing tactics and reactivation methods</a>
           <a href="/blog/how-to-build-loyal-fans" style={s.relLink}>→ How to build a loyal fanbase that tips consistently</a>
+          <a href="/blog/why-cam-income-is-inconsistent" style={s.relLink}>→ Why cam income is inconsistent</a>
           <a href="/blog/cam-model-fan-crm" style={s.relLink}>→ Cam Model Fan CRM — track and manage your top spenders</a>
           <a href="/blog/cam-model-tipping-pattern-data-examples" style={s.relLink}>→ 7 tipping pattern examples: what your data is telling you</a>
         </div>
