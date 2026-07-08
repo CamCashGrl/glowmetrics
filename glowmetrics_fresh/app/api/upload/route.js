@@ -100,6 +100,46 @@ export async function POST(req) {
     r.tip_seq = next
   })
 
+  // ── LOG TO csv_uploads ─────────────────────────────────────────────────
+  // Shared by the success path below and the platform-limit block path, so a
+  // blocked attempt still leaves an audit row instead of vanishing entirely.
+  const logCsvUpload = async (status) => {
+    try {
+      const dates = rows.map(r => new Date(r.date_time)).filter(d => !isNaN(d))
+      const dateFrom = dates.length ? new Date(Math.min(...dates)) : null
+      const dateTo   = dates.length ? new Date(Math.max(...dates)) : null
+
+      // Build sorted array of unique "YYYY-MM" strings covered
+      const monthsSet = new Set(
+        dates.map(d => `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`)
+      )
+      const monthsCovered = [...monthsSet].sort()
+
+      const totalUsd = rows.reduce((sum, r) => sum + (r.usd || 0), 0)
+      const totalTokens = rows.reduce((sum, r) => sum + (r.tokens || 0), 0)
+
+      await supabase.from('csv_uploads').insert({
+        user_id:        user.id,
+        upload_ref:     crypto.randomUUID(),
+        platform:       detectedPlatform,
+        file_name:      file.name || 'upload.csv',
+        date_from:      dateFrom,
+        date_to:        dateTo,
+        months_covered: monthsCovered,
+        total_rows:     rows.length,
+        inserted_rows:  inserted,
+        skipped_rows:   skipped,
+        total_usd:      parseFloat(totalUsd.toFixed(2)),
+        total_tokens:   totalTokens,
+        status,
+      })
+      console.log(`[UPLOAD] Logged csv_upload record (${status}) for ${detectedPlatform} — ${monthsCovered.length} months covered`)
+    } catch (logErr) {
+      // Non-fatal — don't fail the whole upload if logging fails
+      console.warn('[UPLOAD] Failed to log csv_upload record:', logErr.message)
+    }
+  }
+
   // ── BATCH INSERT via dedup RPC ─────────────────────────────────────────
   let inserted = 0
   let skipped  = 0
@@ -122,8 +162,13 @@ export async function POST(req) {
       console.error(`[UPLOAD] Batch ${batchNum}/${totalBatches} error:`, message)
 
       if (message?.includes('PLATFORM_LIMIT_REACHED')) {
+        // Log the attempt — including any rows earlier batches in this same
+        // request already inserted — before returning. Without this, a
+        // correctly-rejected upload leaves zero trace in csv_uploads,
+        // indistinguishable from a request that never ran at all.
+        await logCsvUpload('blocked')
         return NextResponse.json({
-          error: 'Free tier tracks 1 platform. Upgrade to Standard ($19.99/mo) to track multiple platforms.',
+          error: `You're on the free plan, which tracks one platform. Upgrade to add ${detectedPlatform} alongside your existing platform data.`,
           code: 'platform_limit_reached',
           upgradeUrl: '/pricing',
         }, { status: 402 })
@@ -139,41 +184,7 @@ export async function POST(req) {
     console.log(`[UPLOAD] Batch ${batchNum}/${totalBatches} — inserted: ${data?.inserted}, skipped: ${data?.skipped}`)
   }
 
-  // ── LOG TO csv_uploads ─────────────────────────────────────────────────
-  try {
-    const dates = rows.map(r => new Date(r.date_time)).filter(d => !isNaN(d))
-    const dateFrom = dates.length ? new Date(Math.min(...dates)) : null
-    const dateTo   = dates.length ? new Date(Math.max(...dates)) : null
-
-    // Build sorted array of unique "YYYY-MM" strings covered
-    const monthsSet = new Set(
-      dates.map(d => `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`)
-    )
-    const monthsCovered = [...monthsSet].sort()
-
-    const totalUsd = rows.reduce((sum, r) => sum + (r.usd || 0), 0)
-    const totalTokens = rows.reduce((sum, r) => sum + (r.tokens || 0), 0)
-
-    await supabase.from('csv_uploads').insert({
-      user_id:        user.id,
-      upload_ref:     crypto.randomUUID(),
-      platform:       detectedPlatform,
-      file_name:      file.name || 'upload.csv',
-      date_from:      dateFrom,
-      date_to:        dateTo,
-      months_covered: monthsCovered,
-      total_rows:     rows.length,
-      inserted_rows:  inserted,
-      skipped_rows:   skipped,
-      total_usd:      parseFloat(totalUsd.toFixed(2)),
-      total_tokens:   totalTokens,
-      status:         errors.length > 0 ? 'partial' : 'complete',
-    })
-    console.log(`[UPLOAD] Logged csv_upload record for ${detectedPlatform} — ${monthsCovered.length} months covered`)
-  } catch (logErr) {
-    // Non-fatal — don't fail the whole upload if logging fails
-    console.warn('[UPLOAD] Failed to log csv_upload record:', logErr.message)
-  }
+  await logCsvUpload(errors.length > 0 ? 'partial' : 'complete')
 
   // ── RESPONSE ───────────────────────────────────────────────────────────
   const response = {

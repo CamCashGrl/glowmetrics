@@ -524,6 +524,7 @@ export default function OnboardingPage(){
   const[parseError,setParseError]=useState('')
   const[importResult,setImportResult]=useState(null)
   const[importError,setImportError]=useState('')
+  const[upgradeBlocked,setUpgradeBlocked]=useState(null)
   const[isFirstImport,setIsFirstImport]=useState(true)
   const[showSparkle,setShowSparkle]=useState(false)
   const[importedPlatforms,setImportedPlatforms]=useState([])
@@ -587,7 +588,7 @@ export default function OnboardingPage(){
 
   async function handleImport(){
     if(!user)return
-    setImportError('');setStep('loading');setLoadingMsgIdx(0);setLoadingProgress(0)
+    setImportError('');setUpgradeBlocked(null);setStep('loading');setLoadingMsgIdx(0);setLoadingProgress(0)
     try{
       const{data:{session}}=await supabase.auth.getSession()
       if(!session)throw new Error('Not logged in')
@@ -632,13 +633,21 @@ export default function OnboardingPage(){
       ])
       clearInterval(pi);clearInterval(mi);setLoadingProgress(100)
       const json=await res.json()
-      if(!res.ok||json.error)throw new Error(json.error||'Import failed')
+      if(!res.ok||json.error){
+        const err=new Error(json.error||'Import failed')
+        err.code=json.code;err.upgradeUrl=json.upgradeUrl
+        throw err
+      }
       await markDone()
       setImportResult({inserted:json.inserted??preview?.tipsDetected??0,skipped:json.skipped??0,paidInserted:preview?.paidSessionsDetected??0})
       setImportedPlatforms(prev=>prev.includes(platformId)?prev:[...prev,platformId])
       if(isFirstImport){setIsFirstImport(false);setShowSparkle(true);setTimeout(()=>setShowSparkle(false),4000);setStep('live')}
       else setStep('step4')
-    }catch(e){setImportError(e.message||'Import failed');setStep('preview')}
+    }catch(e){
+      if(e.code==='platform_limit_reached')setUpgradeBlocked({message:e.message,upgradeUrl:e.upgradeUrl||'/pricing'})
+      else setImportError(e.message||'Import failed')
+      setStep('preview')
+    }
   }
 
   async function handleCsvUpload(file){
@@ -890,6 +899,13 @@ export default function OnboardingPage(){
                 </div>
               </div>
 
+              {upgradeBlocked&&(
+                <div style={{marginBottom:10,padding:'12px 14px',borderRadius:12,background:'rgba(167,139,250,0.08)',border:'1px solid rgba(167,139,250,0.35)'}}>
+                  <div style={{fontSize:12,fontWeight:800,color:'#a78bfa',marginBottom:4}}>🔒 Upgrade to add {platform.label}</div>
+                  <div style={{fontSize:12,color:'rgba(203,213,225,0.85)',lineHeight:1.5,marginBottom:9}}>{upgradeBlocked.message}</div>
+                  <button onClick={()=>window.open('https://www.camcashgrl.com/pricing','_blank')} style={{padding:'8px 16px',borderRadius:9,border:'none',cursor:'pointer',background:'linear-gradient(135deg,#a78bfa,#7c3aed)',color:'#fff',fontSize:12,fontWeight:700}}>See upgrade options →</button>
+                </div>
+              )}
               {importError&&<div style={{marginBottom:10,padding:'9px 12px',borderRadius:11,background:'rgba(248,113,113,0.07)',border:'1px solid rgba(248,113,113,0.22)',fontSize:12,color:'#f87171'}}>⚠️ {importError}</div>}
 
               <div style={{display:'grid',gridTemplateColumns:'auto 1fr',gap:10,marginBottom:6}}>

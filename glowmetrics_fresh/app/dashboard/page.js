@@ -1898,8 +1898,13 @@ const handleCSV = async (file, forcePlatform = null) => {
       const result = await res.json()
 
       if (!res.ok || result.error) {
-        showToast("❌ " + (result.error || 'Upload failed'))
-        setLastUploadResult({ success: false, error: result.error || 'Upload failed' })
+        if (result.code === 'platform_limit_reached') {
+          showToast("🔒 " + (result.error || "Free plan tracks 1 platform — upgrade to add more."))
+          setLastUploadResult({ success: false, blocked: true, error: result.error || 'Free plan tracks 1 platform.', upgradeUrl: result.upgradeUrl || '/pricing' })
+        } else {
+          showToast("❌ " + (result.error || 'Upload failed'))
+          setLastUploadResult({ success: false, error: result.error || 'Upload failed' })
+        }
         setUploading(false)
         return
       }
@@ -5688,14 +5693,14 @@ const handleCSV = async (file, forcePlatform = null) => {
               {lastUploadResult && (
                 <div style={{
                   marginTop: 20, padding: "14px 16px", borderRadius: 10,
-                  background: lastUploadResult.success ? "rgba(16,185,129,0.1)" : "rgba(248,113,113,0.1)",
-                  border: `1px solid ${lastUploadResult.success ? "rgba(16,185,129,0.3)" : "rgba(248,113,113,0.3)"}`,
+                  background: lastUploadResult.success ? "rgba(16,185,129,0.1)" : lastUploadResult.blocked ? "rgba(167,139,250,0.1)" : "rgba(248,113,113,0.1)",
+                  border: `1px solid ${lastUploadResult.success ? "rgba(16,185,129,0.3)" : lastUploadResult.blocked ? "rgba(167,139,250,0.35)" : "rgba(248,113,113,0.3)"}`,
                   fontSize: 13,
-                  color: lastUploadResult.success ? C.green : C.red,
+                  color: lastUploadResult.success ? C.green : lastUploadResult.blocked ? "#a78bfa" : C.red,
                   display: "flex", alignItems: "center", gap: 10
                 }}>
-                  <span style={{ fontSize: 18 }}>{lastUploadResult.success ? "✅" : "❌"}</span>
-                  <div>
+                  <span style={{ fontSize: 18 }}>{lastUploadResult.success ? "✅" : lastUploadResult.blocked ? "🔒" : "❌"}</span>
+                  <div style={{ flex: 1 }}>
                     {lastUploadResult.success ? (
                       <>
                         <div style={{ fontWeight: 700 }}>
@@ -5711,6 +5716,9 @@ const handleCSV = async (file, forcePlatform = null) => {
                       <div style={{ fontWeight: 700 }}>{lastUploadResult.error}</div>
                     )}
                   </div>
+                  {lastUploadResult.blocked && (
+                    <Button as="a" href={lastUploadResult.upgradeUrl || '/pricing'} style={{ flexShrink: 0, padding: "8px 14px", fontSize: 12, whiteSpace: "nowrap" }}>Upgrade →</Button>
+                  )}
                 </div>
               )}
             </div>
