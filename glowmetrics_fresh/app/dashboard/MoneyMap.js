@@ -61,15 +61,15 @@ function normPlatform(raw) {
 // ─── Pure data functions ──────────────────────────────────────────────────────
 function groupIntoSessions(tips) {
   if (!tips?.length) return []
-  const sorted = [...tips].sort((a,b)=>new Date(a.created_at)-new Date(b.created_at))
+  const sorted = [...tips].sort((a,b)=>new Date(a.date_time)-new Date(b.date_time))
   const GAP = 4*60*60*1000
   const sessions = []
   let cur = null
   for (const t of sorted) {
-    const ts = new Date(t.created_at).getTime()
+    const ts = new Date(t.date_time).getTime()
     if (!cur || ts - cur.lastTs > GAP) {
       if (cur) sessions.push(cur)
-      const d = new Date(t.created_at)
+      const d = new Date(t.date_time)
       cur = {
         start: d,
         end: d,
@@ -78,16 +78,16 @@ function groupIntoSessions(tips) {
         usd: 0,
         tipsCount: 0,
         tippers: new Set(),
-        platform: normPlatform(t.chat_platform),
+        platform: normPlatform(t.platform),
         utcDay: utcDay(d),
         utcHourStart: utcHour(d),
       }
     }
     cur.tokens   += Number(t.tokens||0)
-    cur.usd      += Number(t.usd_value||0)
+    cur.usd      += Number(t.usd||0)
     cur.tipsCount++
-    if (t.from_username) cur.tippers.add(t.from_username)
-    cur.end    = new Date(t.created_at)
+    if (t.username) cur.tippers.add(t.username)
+    cur.end    = new Date(t.date_time)
     cur.lastTs = ts
   }
   if (cur) sessions.push(cur)
@@ -102,12 +102,12 @@ function groupIntoSessions(tips) {
 function platformEfficiency(tips) {
   const map = {}
   for (const t of tips) {
-    const p = normPlatform(t.chat_platform)
+    const p = normPlatform(t.platform)
     if (!map[p]) map[p] = { platform:p, tokens:0, usd:0, count:0, sessions:new Set(), days:new Set() }
     map[p].tokens += Number(t.tokens||0)
-    map[p].usd    += Number(t.usd_value||0)
+    map[p].usd    += Number(t.usd||0)
     map[p].count++
-    map[p].days.add(utcYMD(t.created_at))
+    map[p].days.add(utcYMD(t.date_time))
   }
   return Object.values(map).map(p => ({
     ...p,
@@ -124,13 +124,13 @@ function windowStats(tips) {
     grid[`${d}_${slot}`] = { day:d, slot, tokens:0, usd:0, count:0, sessions:0 }
   }
   for (const t of tips) {
-    const d = utcDay(t.created_at)
-    const h = utcHour(t.created_at)
+    const d = utcDay(t.date_time)
+    const h = utcHour(t.date_time)
     const slot = Math.floor(h/2)*2
     const key = `${d}_${slot}`
     if (grid[key]) {
       grid[key].tokens += Number(t.tokens||0)
-      grid[key].usd    += Number(t.usd_value||0)
+      grid[key].usd    += Number(t.usd||0)
       grid[key].count++
     }
   }
@@ -140,14 +140,14 @@ function windowStats(tips) {
 function detectWhales(tips) {
   const map = {}
   for (const t of tips) {
-    const u = t.from_username||"anon"
+    const u = t.username||"anon"
     if (!map[u]) map[u] = { username:u, tokens:0, usd:0, count:0, lastSeen:null, platforms:new Set() }
     map[u].tokens += Number(t.tokens||0)
-    map[u].usd    += Number(t.usd_value||0)
+    map[u].usd    += Number(t.usd||0)
     map[u].count++
-    const ts = t.created_at
+    const ts = t.date_time
     if (!map[u].lastSeen || ts > map[u].lastSeen) map[u].lastSeen = ts
-    if (t.chat_platform) map[u].platforms.add(normPlatform(t.chat_platform))
+    if (t.platform) map[u].platforms.add(normPlatform(t.platform))
   }
   return Object.values(map)
     .map(w=>({...w, platforms:w.platforms.size, isWhale:w.tokens>=500}))
@@ -157,12 +157,12 @@ function detectWhales(tips) {
 function monthlyTotals(tips) {
   const map = {}
   for (const t of tips) {
-    const mk = utcMonthKey(t.created_at)
+    const mk = utcMonthKey(t.date_time)
     if (!map[mk]) map[mk] = { month:mk, usd:0, tokens:0, count:0, activeDays:new Set() }
-    map[mk].usd    += Number(t.usd_value||0)
+    map[mk].usd    += Number(t.usd||0)
     map[mk].tokens += Number(t.tokens||0)
     map[mk].count++
-    map[mk].activeDays.add(utcYMD(t.created_at))
+    map[mk].activeDays.add(utcYMD(t.date_time))
   }
   return Object.values(map)
     .map(m=>({...m, activeDays:m.activeDays.size}))
@@ -188,9 +188,9 @@ function weeklyEfficiency(sessions) {
 function earningsBySource(tips) {
   const map = {}
   for (const t of tips) {
-    const src = normPlatform(t.chat_platform)
+    const src = normPlatform(t.platform)
     if (!map[src]) map[src] = { name:src, value:0 }
-    map[src].value += Number(t.usd_value||0)
+    map[src].value += Number(t.usd||0)
   }
   return Object.values(map).sort((a,b)=>b.value-a.value)
 }
@@ -257,17 +257,17 @@ function MoneyMapTab({ tips }) {
   const [selected, setSelected] = useState(null)
 
   const platforms = useMemo(()=>{
-    const s = new Set(tips.map(t=>normPlatform(t.chat_platform)))
+    const s = new Set(tips.map(t=>normPlatform(t.platform)))
     return ["all",...s]
   },[tips])
 
   const filtered = useMemo(()=>{
     let arr = tips
-    if (platform!=="all") arr = arr.filter(t=>normPlatform(t.chat_platform)===platform)
+    if (platform!=="all") arr = arr.filter(t=>normPlatform(t.platform)===platform)
     if (range!=="all") {
       const now = Date.now()
       const cutoff = range==="30d" ? now-30*86400000 : range==="90d" ? now-90*86400000 : now-7*86400000
-      arr = arr.filter(t=>new Date(t.created_at).getTime()>=cutoff)
+      arr = arr.filter(t=>new Date(t.date_time).getTime()>=cutoff)
     }
     return arr
   },[tips,platform,range])
@@ -535,15 +535,15 @@ function PlatformsTab({ tips, sessions }) {
   const platformDayData = useMemo(()=>{
     const map = {}
     for (const t of tips) {
-      const dk = utcYMD(t.created_at).slice(5)
-      const p  = normPlatform(t.chat_platform)
+      const dk = utcYMD(t.date_time).slice(5)
+      const p  = normPlatform(t.platform)
       if (!map[dk]) map[dk] = { date:dk }
-      map[dk][p] = (map[dk][p]||0) + Number(t.usd_value||0)
+      map[dk][p] = (map[dk][p]||0) + Number(t.usd||0)
     }
     return Object.values(map).sort((a,b)=>a.date.localeCompare(b.date)).slice(-30)
   },[tips])
 
-  const allPlats = useMemo(()=>[...new Set(tips.map(t=>normPlatform(t.chat_platform)))],[tips])
+  const allPlats = useMemo(()=>[...new Set(tips.map(t=>normPlatform(t.platform)))],[tips])
 
   const roleLabel = (p, platforms) => {
     if (!platforms.length) return ""
@@ -620,7 +620,7 @@ function TrendsTab({ tips, sessions }) {
   const monthly   = useMemo(()=>monthlyTotals(tips),[tips])
   const weekly    = useMemo(()=>weeklyEfficiency(sessions),[sessions])
   const bySource  = useMemo(()=>earningsBySource(tips),[tips])
-  const totalUsd  = useMemo(()=>tips.reduce((s,t)=>s+Number(t.usd_value||0),0),[tips])
+  const totalUsd  = useMemo(()=>tips.reduce((s,t)=>s+Number(t.usd||0),0),[tips])
 
   const monthlyChart = monthly.map(m=>({
     ...m,
@@ -716,7 +716,7 @@ function MoneyMapContent({ tips }) {
 
   const sessions = useMemo(()=>groupIntoSessions(tips),[tips])
 
-  const totalUsd    = useMemo(()=>tips.reduce((s,t)=>s+Number(t.usd_value||0),0),[tips])
+  const totalUsd    = useMemo(()=>tips.reduce((s,t)=>s+Number(t.usd||0),0),[tips])
   const totalTokens = useMemo(()=>tips.reduce((s,t)=>s+Number(t.tokens||0),0),[tips])
   const whales      = useMemo(()=>detectWhales(tips).filter(w=>w.isWhale),[tips])
   const avgSession  = useMemo(()=>{

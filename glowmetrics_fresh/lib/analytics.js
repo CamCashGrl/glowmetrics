@@ -498,6 +498,8 @@ export function identifyWhales(tips) {
   const allFans = Object.values(fanMap)
   const sorted = [...allFans].sort((a, b) => b.totalUSD - a.totalUSD)
   const totalFans = sorted.length
+  // O(1) rank lookup instead of sorted.findIndex(...) per fan (was O(fans^2))
+  const rankByUsername = new Map(sorted.map((s, i) => [s.username.toLowerCase(), i]))
 
   return allFans.map(f => {
     const fanSorted = [...f.tips].sort((a, b) => new Date(b.dateRaw || b.date_time) - new Date(a.dateRaw || a.date_time))
@@ -507,7 +509,7 @@ export function identifyWhales(tips) {
     const lifetimeDays = Math.max(Math.floor((lastTipDate - firstTipDate) / 86400000), 1)
     const avgDaysBetweenTips = f.tipCount > 1 ? Math.max(1, lifetimeDays / (f.tipCount - 1)) : 30
     const biggestTip = Math.max(...f.tips.map(t => t.usd))
-    const fanRankIndex = sorted.findIndex(s => s.username.toLowerCase() === f.username.toLowerCase())
+    const fanRankIndex = rankByUsername.get(f.username.toLowerCase())
     const percentileRank = totalFans > 1 ? fanRankIndex / (totalFans - 1) : 0
     let tier = 'Regular'
     if (percentileRank <= 0.05) tier = 'Whale'
@@ -658,7 +660,7 @@ export function generateLossAlerts(tips, sessions, whales, bestHour) {
   return alerts
 }
 
-export function generateInsights(tips, sessions, bestDay, worstDay, bestHour) {
+export function generateInsights(tips, sessions, bestDay, worstDay, bestHour, precomputedWhales = null) {
   const insights = []
   if (!tips.length || !sessions.length) return insights
   const now = Date.now()
@@ -688,7 +690,7 @@ export function generateInsights(tips, sessions, bestDay, worstDay, bestHour) {
     insights.push({ icon: '⏰', text: `Go live at ${label} — your avg session earnings are ${multiplier ? `${multiplier}x higher` : 'at their peak'} at this hour ($${bestHour.avg.toFixed(0)} avg). Missing this window costs you real money every session`, type: 'time', priority: 1 })
   }
 
-  const whales = identifyWhales(tips)
+  const whales = precomputedWhales || identifyWhales(tips)
   const trueWhales = whales.filter(w => w.tier === 'Whale')
   const topWhales = (trueWhales.length > 0 ? trueWhales : whales.filter(w => w.tier === 'Shark')).slice(0, 5)
   const wE = topWhales.reduce((s, w) => s + w.totalUSD, 0)
@@ -845,7 +847,7 @@ export function aggregateRows(tips, tz = null) {
   const bestHour = [...hourAvgs].sort((a, b) => b.avg - a.avg)[0] || null
 
   const whales      = identifyWhales(tips)
-  const insights    = generateInsights(tips, meaningfulSessions, bestDay, worstDay, bestHour)
+  const insights    = generateInsights(tips, meaningfulSessions, bestDay, worstDay, bestHour, whales)
   const predictions = predictRevenue(tips, meaningfulSessions)
   const whaleAlerts = generateWhaleAlerts(whales)
   const lossAlerts  = generateLossAlerts(tips, meaningfulSessions, whales, bestHour)
