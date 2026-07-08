@@ -75,6 +75,13 @@ const nextConfig = {
         destination: '/blog/how-to-increase-cam-earnings',
         permanent: true,
       },
+      {
+        // Merged duplicate — same topic/keyword as how-to-re-engage-whales-and-high-tipping-fans,
+        // which now contains the combined content of both posts.
+        source: '/blog/how-to-re-engage-whales-and-top-tippers',
+        destination: '/blog/how-to-re-engage-whales-and-high-tipping-fans',
+        permanent: true,
+      },
     ]
   },
 }

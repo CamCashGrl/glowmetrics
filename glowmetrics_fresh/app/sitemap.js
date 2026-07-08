@@ -53,7 +53,6 @@ export default function sitemap() {
     'how-to-make-more-money-on-chaturbate',
     'how-to-pick-a-cam-name',
     'how-to-re-engage-whales-and-high-tipping-fans',
-    'how-to-re-engage-whales-and-top-tippers',
     'how-to-stay-safe-as-a-cam-model',
     'how-to-track-cam-tips-automatically',
     'is-camming-legal',

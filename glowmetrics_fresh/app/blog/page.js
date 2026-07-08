@@ -93,11 +93,6 @@ const posts = [
     description: 'How the token-to-dollar conversion works on Chaturbate, BongaCams, and MyFreeCams — and why it matters for your income.',
   },
   {
-    slug: 'how-to-re-engage-whales-and-top-tippers',
-    title: 'Re-Engage Your Top Tippers',
-    description: 'Win back your biggest spenders before they go cold.',
-  },
-  {
     slug: 'cam-model-tipping-pattern-data-examples',
     title: '7 Cam Model Tipping Pattern Data Examples: What Your Tips Are Telling You',
     description: 'Real tipping patterns — from whale behavior to dead hour dips — and how to use that data to earn more.',

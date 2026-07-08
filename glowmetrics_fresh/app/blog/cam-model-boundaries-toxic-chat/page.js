@@ -222,7 +222,7 @@ export default function BoundariesToxicChat() {
               <a href="/blog/cam-model-mental-health-burnout-prevention" style={s.relatedLink}>→ Cam model burnout prevention</a>
               <a href="/blog/how-to-find-your-cam-model-niche" style={s.relatedLink}>→ Cam model niche guide: know what you're getting into before you commit</a>
               <a href="/blog/girlfriend-experience-gfe-cam-modeling-strategy" style={s.relatedLink}>→ GFE strategy: managing fan attachment</a>
-              <a href="/blog/how-to-re-engage-whales-and-top-tippers" style={s.relatedLink}>→ How to re-engage top tippers before they go cold</a>
+              <a href="/blog/how-to-re-engage-whales-and-high-tipping-fans" style={s.relatedLink}>→ How to re-engage top tippers before they go cold</a>
             </div>
           </div>
         </article>

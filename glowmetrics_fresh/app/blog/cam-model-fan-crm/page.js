@@ -56,7 +56,7 @@ export default function Page() {
   ];
 
   const relatedBlogs = [
-    { title: 'How to Re-Engage Whales and Top Tippers', description: 'The full playbook for winning back quiet fans', href: '/blog/how-to-re-engage-whales-and-top-tippers' },
+    { title: 'How to Re-Engage Whales and Top Tippers', description: 'The full playbook for winning back quiet fans', href: '/blog/how-to-re-engage-whales-and-high-tipping-fans' },
     { title: 'How to Track Cam Tips Automatically', description: 'Let your fan profiles build themselves', href: '/blog/how-to-track-cam-tips-automatically' },
     { title: 'How to Build Loyal Fans', description: 'Turn one-time tippers into recurring supporters', href: '/blog/how-to-build-loyal-fans' },
   ];
@@ -169,7 +169,7 @@ export default function Page() {
         <p>
           That saves hours of manual DMing and makes every message feel personal. For the full strategy on what to say and
           when, including timing and tone, see our deep dive on{' '}
-          <a href="/blog/how-to-re-engage-whales-and-top-tippers">re-engaging whales and top tippers</a>.
+          <a href="/blog/how-to-re-engage-whales-and-high-tipping-fans">re-engaging whales and top tippers</a>.
         </p>
 
         <h2>The psychology: perceived relationship value</h2>

@@ -145,7 +145,7 @@ export default function SiteFooter({ sidebarOffset = 0, variant = 'full' }) {
           <FooterLink href="/blog/how-to-get-views-on-chaturbate">Get More Viewers on Chaturbate</FooterLink>
           <FooterLink href="/blog/how-to-increase-cam-earnings">Increase Cam Earnings With Data</FooterLink>
           <FooterLink href="/blog/how-to-make-more-money-on-chaturbate">Make More Money on Chaturbate</FooterLink>
-          <FooterLink href="/blog/how-to-re-engage-whales-and-top-tippers">Re-Engage Your Top Tippers</FooterLink>
+          <FooterLink href="/blog/how-to-re-engage-whales-and-high-tipping-fans">Re-Engage Your Top Tippers</FooterLink>
           <FooterLink href="/blog/why-cam-income-is-inconsistent">Why Cam Income Is Inconsistent</FooterLink>
           <FooterLink href="/blog/why-cam-streams-arent-making-money">Why Streams Aren&apos;t Making Money</FooterLink>
           <FooterLink href="/blog/chaturbate-payout-explained">Chaturbate Payout Explained</FooterLink>

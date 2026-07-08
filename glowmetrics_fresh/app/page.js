@@ -82,7 +82,7 @@ export default function HomePage() {
           <a href="/blog/how-to-make-more-money-on-chaturbate">How to Make More Money on Chaturbate</a>
           <a href="/blog/how-much-do-chaturbate-models-make">How Much Do Chaturbate Models Make</a>
           <a href="/blog/how-to-build-loyal-fans">How to Build a Loyal Fanbase</a>
-          <a href="/blog/how-to-re-engage-whales-and-top-tippers">How to Re-Engage Whales and Top Tippers</a>
+          <a href="/blog/how-to-re-engage-whales-and-high-tipping-fans">How to Re-Engage Whales and Top Tippers</a>
           <a href="/blog/why-cam-income-is-inconsistent">Why Cam Income Is Inconsistent</a>
           <a href="/blog/best-cam-model-tools">Best Cam Model Tools</a>
           <a href="/guides/chaturbate-earnings-tracker">Chaturbate Earnings Tracker</a>
