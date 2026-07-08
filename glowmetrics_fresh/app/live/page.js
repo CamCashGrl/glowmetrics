@@ -6,9 +6,16 @@ import { computeRoomHealth } from '../../lib/analytics/roomHealth';
 import { computeRevenueVelocity, computeLiveComparison } from '../../lib/analytics/velocity';
 import { detectSessionPhase, PHASES, getRecoveryActions, getGoalStrategy } from '../../lib/analytics/sessionPhase';
 import { computeOpportunityScore, computeStreamHealth } from '../../lib/analytics/opportunity';
+import {
+  normalizeHistoricalTip, normalizeLiveTip, buildFanIndex, buildLeaderboard, attachFanStatus,
+  computeActiveTipperCount, getPrimaryVipAction, markActionDone, getActiveDoneKeys,
+  getEffectiveBoardSettings, isOverlayModeActive, maskUsername,
+} from '../../lib/analytics/vipBoard';
 import FeedbackWidget from '../components/FeedbackWidget';
 import EventsSync from './EventsSync';
 import Button from '../../components/ui/Button';
+import LiveVIPBoard from '../components/LiveVIPBoard';
+import PostStreamFollowUp from '../components/PostStreamFollowUp';
 
 const C = {
   bg: '#040812', card: 'rgba(15,20,32,0.75)', border: 'rgba(168,85,247,0.2)',
@@ -39,7 +46,10 @@ export default function LivePage() {
   const [flashTipId, setFlashTipId]   = useState(null);
   const [liveTick, setLiveTick]       = useState(0);
   const [sessions, setSessions]       = useState([]);
+  const [vipChatLineIndex, setVipChatLineIndex] = useState(0); // "Generate Another Line" cursor for the Do This Now card
+  const [vipDoneTick, setVipDoneTick] = useState(0); // bump to force a re-read of localStorage "mark done" dismissals
   const [currentSessionId, setCurrentSessionId] = useState(null);
+  const [historicalTips, setHistoricalTips] = useState([]); // permanent `tips` table rows, for the Live VIP Board's Today/Week/Month/All-Time tabs
 
   // ── DEMO / AUTH / EXT MODAL STATE ────────────────────────────────────
   const [demoTips, setDemoTips]           = useState([]);
@@ -141,6 +151,29 @@ export default function LivePage() {
 
     return () => { if (liveTipsChannelRef.current) supabase.removeChannel(liveTipsChannelRef.current); };
   }, [normalizeTip]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Permanent tip history (Pro/Unlimited plans only — free plans have no rows here)
+  // for the Live VIP Board's Today/Week/Month/All-Time tabs. Read-only, does not
+  // affect the free live-coaching feed above, which stays on `live_tips`.
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    (async () => {
+      let allRows = [];
+      let from = 0;
+      const PAGE = 1000;
+      while (true) {
+        const { data, error } = await supabase.from('tips').select('*').eq('user_id', user.id)
+          .order('date_time', { ascending: true }).range(from, from + PAGE - 1);
+        if (error || cancelled) break;
+        if (data?.length) allRows = [...allRows, ...data];
+        if (!data || data.length < PAGE) break;
+        from += PAGE;
+      }
+      if (!cancelled) setHistoricalTips(allRows);
+    })();
+    return () => { cancelled = true; };
+  }, [user]);
 
   // ── SESSION DB HANDLERS ───────────────────────────────────────────────
 
@@ -354,9 +387,11 @@ export default function LivePage() {
           if (canFireAlert(`whale_prox_${uname}`, 6 * 60 * 1000)) {
             const avgMins = Math.round(avgGapMs / 60000);
             const sinceMins = Math.round(sinceLastMs / 60000);
-            const context = `${uname} usually tips every ~${avgMins} minutes`;
+            const overlaySafe = isOverlayModeActive();
+            const displayName = overlaySafe ? 'One of your regulars' : uname;
+            const context = `${displayName} usually tips every ~${avgMins} minutes`;
             const action = `${sinceMins} min since their last tip — call them out right now!`;
-            const text = `${uname} tips every ~${avgMins} min — ${sinceMins} min since their last. Call them out!`;
+            const text = `${displayName} tips every ~${avgMins} min — ${sinceMins} min since their last. Call them out!`;
             alerts.push({ priority: 3, level: 'info', icon: '🐋', text, context, action }); logFired('🐋', text);
             surfaced = true;
           }
@@ -366,9 +401,10 @@ export default function LivePage() {
     if (topTipper && totalRevenue > 0 && topTipper.revenue / totalRevenue >= 0.45) {
       if (canFireAlert(`whale_dep_${topTipper.username}`, 10 * 60 * 1000)) {
         const pctStr = Math.round(topTipper.revenue / totalRevenue * 100);
-        const context = `${topTipper.username} is ${pctStr}% of your session revenue`;
+        const overlaySafe = isOverlayModeActive();
+        const context = overlaySafe ? `One fan is carrying most of your session revenue` : `${topTipper.username} is ${pctStr}% of your session revenue`;
         const action = `Give them personal attention and an exclusive offer for their next tip`;
-        const text = `${topTipper.username} is ${pctStr}% of revenue — give them attention`;
+        const text = overlaySafe ? `One fan is carrying most of the room — give them attention` : `${topTipper.username} is ${pctStr}% of revenue — give them attention`;
         alerts.push({ priority: 4, level: 'info', icon: '🐳', text, context, action }); logFired('🐳', text);
       }
     }
@@ -527,6 +563,35 @@ export default function LivePage() {
 
   const alerts     = getAlerts(state);
   const nextAction = getNextAction(state);
+
+  // ── LIVE VIP PRIMARY ACTION ("Do This Now" upgrade) — who needs
+  // attention right now, not just the top-line coaching text above.
+  const vipHistoricalRecords = historicalTips.map(normalizeHistoricalTip);
+  const vipLiveRecords = liveEvents.map(normalizeLiveTip);
+  const vipFanIndex = buildFanIndex([...vipHistoricalRecords, ...vipLiveRecords], new Date());
+  const vipSessionRecords = (liveActive && liveStartTime) ? vipLiveRecords.filter(r => r.timestamp >= liveStartTime) : [];
+  const vipSessionEntriesRaw = buildLeaderboard({
+    records: vipSessionRecords, fanIndex: vipFanIndex, platformFilter: 'all', sortBy: 'total',
+    excludedFans: [], minTipUsd: 0, sessionStart: liveStartTime, now: new Date(),
+  });
+  const vipSessionEntries = attachFanStatus(vipSessionEntriesRaw, vipFanIndex, { now: new Date(), liveActive, sessionStart: liveStartTime });
+  const vipActiveTipperCount = computeActiveTipperCount(vipLiveRecords, liveStartTime, new Date(), 10);
+  const vipBoardSettings = getEffectiveBoardSettings();
+  const vipOverlayActive = isOverlayModeActive();
+  void vipDoneTick; // re-read "mark done" dismissals from storage after Mark Done is clicked
+  const vipDoneKeys = getActiveDoneKeys();
+  const vipAction = liveActive ? getPrimaryVipAction({
+    sessionEntries: vipSessionEntries,
+    activeTipperCount: vipActiveTipperCount,
+    doneKeys: vipDoneKeys,
+    hideFullUsernames: vipBoardSettings.hideFullUsernames,
+    hideDollarAmounts: vipBoardSettings.hideDollarAmounts,
+  }) : null;
+  const vipChatLines = vipAction?.chatLines || [];
+  const vipCurrentLine = vipChatLines.length ? vipChatLines[vipChatLineIndex % vipChatLines.length] : '';
+  const handleVipCopyLine = () => { if (vipCurrentLine && typeof navigator !== 'undefined') navigator.clipboard?.writeText(vipCurrentLine).catch(() => {}) };
+  const handleVipMarkDone = () => { if (vipAction?.key && vipAction.key !== '__rotate__') { markActionDone(vipAction.key); setVipDoneTick(t => t + 1); setVipChatLineIndex(0) } };
+  const handleVipAnotherLine = () => setVipChatLineIndex(i => (i + 1) % Math.max(vipChatLines.length, 1));
 
   // ── NEW INTELLIGENCE FEATURES ────────────────────────────────────────
 
@@ -818,7 +883,7 @@ export default function LivePage() {
                 <div style={{ fontSize: 22, fontWeight: 900, color: oppScore.color }}>{oppScore.score}<span style={{ fontSize: 11, fontWeight: 400 }}>/100</span></div>
               </div>
               <div style={{ flex: '1 1 130px', borderRadius: 10, padding: '10px 14px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-                <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 4 }}>Stream Health</div>
+                <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 4 }}>Room Vibe</div>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
                   <span style={{ fontSize: 22, fontWeight: 900, color: streamHealth.grade === 'A' ? C.green : streamHealth.grade === 'B' ? C.cyan : streamHealth.grade === 'C' ? C.gold : C.red }}>{streamHealth.grade}</span>
                   <span style={{ fontSize: 13, color: C.muted }}>{streamHealth.score}/100</span>
@@ -927,35 +992,72 @@ export default function LivePage() {
               };
               const uc = topAlert ? (urgencyMap[topAlert.level] || urgencyMap.info) : null;
               const def = { bg: 'linear-gradient(135deg, rgba(236,72,153,0.1), rgba(124,92,255,0.1))', border: 'rgba(168,85,247,0.3)', badge: 'rgba(236,72,153,0.2)', badgeText: C.pink, tag: '⚡ DO THIS NOW' };
-              const sty = uc || def;
+              // A structural alert (dead air, milestone, critical) still wins the spotlight when it fires —
+              // but when nothing more urgent is happening, the VIP action (who needs attention right now)
+              // becomes the main character instead of a generic strategy line.
+              const showVipAsPrimary = !!vipAction && (!topAlert || topAlert.level === 'info' || topAlert.level === 'success');
+              const sty = showVipAsPrimary ? def : (uc || def);
+              const secondaryText = showVipAsPrimary
+                ? (topAlert ? (topAlert.action || topAlert.text) : (nextAction.text !== vipAction.headline ? nextAction.text : null))
+                : (topAlert && nextAction.text !== topAlert.text ? nextAction.text : null);
               return (
-                <div style={{ borderRadius: 16, padding: '26px 28px', marginBottom: 20, background: topAlert ? sty.bg : def.bg, border: `1px solid ${topAlert ? sty.border : def.border}`, boxShadow: topAlert?.level === 'critical' ? '0 0 32px rgba(248,113,113,0.12)' : 'none', animation: topAlert?.level === 'critical' ? 'cc-glow 2.5s ease-in-out infinite' : 'none', position: 'relative', overflow: 'hidden' }}>
+                <div style={{ borderRadius: 16, padding: '26px 28px', marginBottom: 20, background: (topAlert && !showVipAsPrimary) ? sty.bg : def.bg, border: `1px solid ${(topAlert && !showVipAsPrimary) ? sty.border : def.border}`, boxShadow: topAlert?.level === 'critical' ? '0 0 32px rgba(248,113,113,0.12)' : 'none', animation: topAlert?.level === 'critical' ? 'cc-glow 2.5s ease-in-out infinite' : 'none', position: 'relative', overflow: 'hidden' }}>
                   <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: 'linear-gradient(90deg, #ec4899, #a855f7, #22d3ee)', backgroundSize: '200% 100%', animation: 'cc-bar 2s ease infinite alternate' }} />
                   <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'flex-start' }}>
                     <div style={{ flex: 1, minWidth: 260 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                        <div style={{ padding: '3px 10px', borderRadius: 6, background: topAlert ? sty.badge : def.badge, fontSize: 10, fontWeight: 800, color: topAlert ? sty.badgeText : def.badgeText, letterSpacing: 0.8, textTransform: 'uppercase' }}>
-                          {topAlert ? sty.tag : def.tag}
+                        <div style={{ padding: '3px 10px', borderRadius: 6, background: sty.badge, fontSize: 10, fontWeight: 800, color: sty.badgeText, letterSpacing: 0.8, textTransform: 'uppercase' }}>
+                          {sty.tag}
                         </div>
                         <div style={{ fontSize: 10, color: C.muted }}>AI Coach · {liveStrategy} mode</div>
                       </div>
-                      {topAlert?.context && (
-                        <div style={{ fontSize: 13, color: topAlert ? sty.badgeText : C.pink, opacity: 0.85, marginBottom: 6, fontWeight: 600, lineHeight: 1.4 }}>
+                      {!showVipAsPrimary && topAlert?.context && (
+                        <div style={{ fontSize: 13, color: sty.badgeText, opacity: 0.85, marginBottom: 6, fontWeight: 600, lineHeight: 1.4 }}>
                           {topAlert.context}
                         </div>
                       )}
-                      <div style={{ fontSize: 19, fontWeight: 700, color: C.white, lineHeight: 1.65, marginBottom: topAlert && nextAction.text !== topAlert.text ? 12 : 0 }}>
-                        {topAlert ? (topAlert.action || topAlert.text) : nextAction.text}
-                      </div>
-                      {topAlert && nextAction.text !== topAlert.text && (
-                        <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.6, borderTop: '1px solid rgba(255,255,255,0.07)', paddingTop: 10 }}>
-                          <span style={{ color: topAlert ? sty.badgeText : C.pink, fontWeight: 700 }}>Next: </span>{nextAction.text}
-                        </div>
+                      {showVipAsPrimary ? (
+                        <>
+                          <div style={{ fontSize: 19, fontWeight: 800, color: C.white, lineHeight: 1.5, marginBottom: 6 }}>
+                            {vipAction.headline}
+                          </div>
+                          <div style={{ fontSize: 13.5, color: C.muted, lineHeight: 1.6, marginBottom: 12 }}>{vipAction.body}</div>
+                          {vipCurrentLine && (
+                            <div style={{ fontSize: 13, color: C.white, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: '10px 12px', marginBottom: 12, fontStyle: 'italic' }}>
+                              “{vipCurrentLine}”
+                            </div>
+                          )}
+                          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                            <button onClick={handleVipCopyLine} style={{ padding: '7px 14px', borderRadius: 8, background: `linear-gradient(90deg, ${C.cyan}, ${C.pink})`, border: 'none', color: '#040812', fontWeight: 800, fontSize: 12, cursor: 'pointer' }}>📋 Copy Line</button>
+                            {vipAction.key !== '__rotate__' && (
+                              <button onClick={handleVipMarkDone} style={{ padding: '7px 14px', borderRadius: 8, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.14)', color: C.white, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>✓ Mark Done</button>
+                            )}
+                            {vipChatLines.length > 1 && (
+                              <button onClick={handleVipAnotherLine} style={{ padding: '7px 14px', borderRadius: 8, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.14)', color: C.white, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>🔁 Another Line</button>
+                            )}
+                          </div>
+                          {secondaryText && (
+                            <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.6, borderTop: '1px solid rgba(255,255,255,0.07)', paddingTop: 10, marginTop: 12 }}>
+                              <span style={{ color: C.pink, fontWeight: 700 }}>Also: </span>{secondaryText}
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <div style={{ fontSize: 19, fontWeight: 700, color: C.white, lineHeight: 1.65, marginBottom: secondaryText ? 12 : 0 }}>
+                            {topAlert ? (topAlert.action || topAlert.text) : nextAction.text}
+                          </div>
+                          {secondaryText && (
+                            <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.6, borderTop: '1px solid rgba(255,255,255,0.07)', paddingTop: 10 }}>
+                              <span style={{ color: topAlert ? sty.badgeText : C.pink, fontWeight: 700 }}>Next: </span>{secondaryText}
+                            </div>
+                          )}
+                        </>
                       )}
                     </div>
                     {liveActive && state && goalStrategy && (
                       <div style={{ minWidth: 170, padding: '14px 18px', borderRadius: 12, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-                        <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8 }}>Goal Push Probability</div>
+                        <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8 }}>Goal Push Chance</div>
                         <div style={{ fontSize: 30, fontWeight: 900, color: goalStrategy.probability >= 70 ? C.green : goalStrategy.probability >= 40 ? C.gold : C.red, marginBottom: 6 }}>{goalStrategy.probability}%</div>
                         <div style={{ height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.08)', overflow: 'hidden', marginBottom: 8 }}>
                           <div style={{ height: '100%', width: `${goalStrategy.probability}%`, borderRadius: 2, background: goalStrategy.probability >= 70 ? `linear-gradient(90deg, ${C.green}, ${C.cyan})` : `linear-gradient(90deg, ${C.gold}, ${C.orange})`, transition: 'width 0.5s ease' }} />
@@ -1159,11 +1261,11 @@ export default function LivePage() {
               {/* RIGHT */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
-                {/* Stream Health */}
+                {/* Room Vibe (formerly "Stream Health") */}
                 {liveActive && state && (
                   <div style={{ ...glassCard, borderRadius: 14, padding: '16px 18px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                      <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700 }}>Stream Health</div>
+                      <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700 }}>Room Vibe</div>
                       <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
                         <span style={{ fontSize: 26, fontWeight: 900, color: streamHealth.grade === 'A' ? C.green : streamHealth.grade === 'B' ? C.cyan : streamHealth.grade === 'C' ? C.gold : C.red }}>{streamHealth.grade}</span>
                         <span style={{ fontSize: 11, color: C.muted }}>{streamHealth.score}/100</span>
@@ -1267,14 +1369,16 @@ export default function LivePage() {
                 {whaleAlert && (
                   <div style={{ borderRadius: 14, padding: '16px 18px', background: 'rgba(34,211,238,0.07)', border: '1px solid rgba(34,211,238,0.3)' }}>
                     <div style={{ fontSize: 9, color: C.cyan, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700, marginBottom: 10 }}>💎 Top Tipper This Session</div>
-                    <div style={{ fontSize: 19, fontWeight: 900, color: C.white, marginBottom: 8 }}>{whaleAlert.username}</div>
+                    <div style={{ fontSize: 19, fontWeight: 900, color: C.white, marginBottom: 8 }}>{maskUsername(whaleAlert.username, vipBoardSettings.hideFullUsernames)}</div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
                       <span style={{ fontSize: 11, color: C.muted }}>Tipped this session</span>
-                      <span style={{ fontSize: 14, fontWeight: 800, color: C.cyan }}>${whaleAlert.revenue.toFixed(2)}</span>
+                      <span style={{ fontSize: 14, fontWeight: 800, color: C.cyan }}>{vipBoardSettings.hideDollarAmounts ? '•••' : `$${whaleAlert.revenue.toFixed(2)}`}</span>
                     </div>
-                    <div style={{ padding: '6px 10px', borderRadius: 8, background: 'rgba(34,211,238,0.1)', marginBottom: 10 }}>
-                      <span style={{ fontSize: 12, color: C.cyan, fontWeight: 700 }}>{whaleAlert.pct}% of your session revenue</span>
-                    </div>
+                    {!vipOverlayActive && (
+                      <div style={{ padding: '6px 10px', borderRadius: 8, background: 'rgba(34,211,238,0.1)', marginBottom: 10 }}>
+                        <span style={{ fontSize: 12, color: C.cyan, fontWeight: 700 }}>{whaleAlert.pct}% of your session revenue</span>
+                      </div>
+                    )}
                     <div style={{ fontSize: 11, color: C.gold, fontWeight: 700, lineHeight: 1.5 }}>
                       → Thank them publicly and offer something exclusive for their next tip
                     </div>
@@ -1286,7 +1390,7 @@ export default function LivePage() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                     <div style={{ width: 7, height: 7, borderRadius: '50%', background: liveEvents.some(e => e.sourceUsed === 'extension') ? C.green : C.muted, boxShadow: liveEvents.some(e => e.sourceUsed === 'extension') ? `0 0 6px ${C.green}` : 'none' }} />
                     <div style={{ fontSize: 13, fontWeight: 700, color: C.white }}>
-                      {liveEvents.some(e => e.sourceUsed === 'extension') ? 'Extension Auto-Capturing' : 'Auto-capture tips'}
+                      {liveEvents.some(e => e.sourceUsed === 'extension') ? 'Tip Capture — Active' : 'Tip Capture'}
                     </div>
                   </div>
                   <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.5, marginBottom: 8 }}>
@@ -1299,6 +1403,25 @@ export default function LivePage() {
                   )}
                 </div>
               </div>
+            </div>
+
+            {/* ── AFTER-STREAM FOLLOW-UP ──────────────────────────── */}
+            <PostStreamFollowUp
+              liveEvents={liveEvents}
+              liveActive={liveActive}
+              liveStartTime={liveStartTime}
+              colors={C}
+            />
+
+            {/* ── LIVE VIP BOARD ────────────────────────────────── */}
+            <div style={{ marginBottom: 20 }}>
+              <LiveVIPBoard
+                liveEvents={liveEvents}
+                historicalTips={historicalTips}
+                liveActive={liveActive}
+                liveStartTime={liveStartTime}
+                colors={C}
+              />
             </div>
 
             {/* ── BOTTOM PANELS ─────────────────────────────────── */}
@@ -1331,7 +1454,7 @@ export default function LivePage() {
               {/* Alert History */}
               {liveActive && firedAlertsLog.current.length > 0 && (
                 <div style={{ ...glassCard, borderRadius: 14, padding: 18 }}>
-                  <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700, marginBottom: 10 }}>📋 Alert History</div>
+                  <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700, marginBottom: 10 }}>📋 Money Moves</div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 5, maxHeight: 240, overflowY: 'auto' }}>
                     {firedAlertsLog.current.slice(0, 15).map((entry, i) => (
                       <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '5px 8px', borderRadius: 7, background: 'rgba(255,255,255,0.02)' }}>
