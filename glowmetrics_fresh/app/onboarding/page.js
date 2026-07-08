@@ -638,7 +638,10 @@ export default function OnboardingPage(){
         err.code=json.code;err.upgradeUrl=json.upgradeUrl
         throw err
       }
-      await markDone()
+      // Onboarding is only "complete" once real data has landed — a request
+      // that came back ok but inserted nothing (e.g. every row was already a
+      // duplicate) shouldn't flip the user past onboarding.
+      if((json.inserted??0)>0)await markDone()
       setImportResult({inserted:json.inserted??preview?.tipsDetected??0,skipped:json.skipped??0,paidInserted:preview?.paidSessionsDetected??0})
       setImportedPlatforms(prev=>prev.includes(platformId)?prev:[...prev,platformId])
       if(isFirstImport){setIsFirstImport(false);setShowSparkle(true);setTimeout(()=>setShowSparkle(false),4000);setStep('live')}
@@ -664,7 +667,7 @@ export default function OnboardingPage(){
       clearInterval(pi);setLoadingProgress(100)
       const json=await res.json()
       if(!res.ok||json.error)throw new Error(json.error||'Upload failed')
-      await markDone()
+      if((json.inserted??0)>0)await markDone()
       setImportResult({inserted:json.inserted??preview?.tipsDetected??0,skipped:json.skipped??0})
       setImportedPlatforms(prev=>prev.includes(platformId)?prev:[...prev,platformId])
       if(isFirstImport){setIsFirstImport(false);setShowSparkle(true);setTimeout(()=>setShowSparkle(false),4000);setStep('live')}
