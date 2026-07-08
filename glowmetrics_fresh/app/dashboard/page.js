@@ -2257,10 +2257,12 @@ const handleCSV = async (file, forcePlatform = null) => {
     const hoursUntilPeak = bh !== null ? (bh - utcHour + 24) % 24 : null
     const atPeak = hoursUntilPeak === 0 || hoursUntilPeak === 1
 
-    // Best platform per hour
+    // Best platform per hour — tips with no real platform are skipped
+    // entirely rather than bucketed under a placeholder label.
     const platHourUSD = {}; const platHourSessions = {}
     tips.forEach(t => {
-      const p = t.platform || 'Unknown'
+      if (!t.platform) return
+      const p = t.platform
       const d = new Date(t.date_time || t.dateRaw)
       const h = d.getHours() // local hour to match analytics.js toLocalHour
       const bucket = Math.floor(d.getTime() / 3600000)
@@ -2290,7 +2292,7 @@ const handleCSV = async (file, forcePlatform = null) => {
     // Real fallback: the platform with the highest total earnings across all
     // tips — needs only 1 tip to resolve, so it's never a fake/wrong platform.
     const platTotalUSD = {}
-    tips.forEach(t => { const p = t.platform || 'Unknown'; platTotalUSD[p] = (platTotalUSD[p] || 0) + (t.usd || 0) })
+    tips.forEach(t => { if (!t.platform) return; platTotalUSD[t.platform] = (platTotalUSD[t.platform] || 0) + (t.usd || 0) })
     const topEarningPlat = Object.entries(platTotalUSD).sort((a, b) => b[1] - a[1])[0]?.[0] || null
     const displayPlat = todayBestPlat || bestPlatPeak || bestPlatNow || topEarningPlat
     const displayAvg = todayBestAvg || bestPlatPeakAvg || bestPlatNowAvg || bestHour?.avg || 0
