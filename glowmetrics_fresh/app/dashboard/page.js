@@ -1350,6 +1350,16 @@ export default function Dashboard() {
   const pendingTipInsertsRef = useRef([])
   const tipFlushTimerRef = useRef(null)
   const tipBatchStartRef = useRef(0)
+  // Always-current tips array, kept in sync via the effect below — lets timer/
+  // realtime callbacks read latest tips without depending on (and re-running
+  // on every change of) the `tips` state itself.
+  const tipsRef = useRef([])
+  // ── ANALYTICS ENGINE WEB WORKER ──────────────────────────────────────
+  // aggregateRows() (imported as runEngine) is expensive at large tip counts —
+  // runs it off the main thread so it can't block clicks. See runEngineAsync.
+  const engineWorkerRef = useRef(null)
+  const engineRequestIdRef = useRef(0)
+  const enginePendingRef = useRef(new Map())
   // ── LIVE MODE INTELLIGENCE ────────────────────────────────────────────
   const [liveStrategy, setLiveStrategy]       = useState('balanced')
   const [coachingHistory, setCoachingHistory] = useState([])
@@ -1423,6 +1433,56 @@ export default function Dashboard() {
       document.documentElement.scrollTop = 0
       document.body.scrollTop = 0
     }
+  }
+
+  // Keep tipsRef current so timer/realtime callbacks (set up once, in the
+  // mount effect below) can read the latest tips without depending on it.
+  useEffect(() => { tipsRef.current = tips }, [tips])
+
+  // Lazily creates (and reuses) the analytics engine worker. Returns null if
+  // Workers aren't available so callers can fall back to running inline.
+  const getEngineWorker = () => {
+    if (typeof window === 'undefined' || typeof Worker === 'undefined') return null
+    if (engineWorkerRef.current) return engineWorkerRef.current
+    try {
+      const worker = new Worker(new URL('./analyticsEngine.worker.js', import.meta.url))
+      worker.onmessage = (event) => {
+        const { requestId, result, error } = event.data || {}
+        const pending = enginePendingRef.current.get(requestId)
+        if (!pending) return
+        enginePendingRef.current.delete(requestId)
+        if (error) pending.reject(new Error(error))
+        else pending.resolve(result)
+      }
+      worker.onerror = (event) => {
+        // Worker crashed outright (not a per-request error) — reject everything
+        // in flight so callers fall back instead of hanging, and drop the worker
+        // so the next call re-creates a fresh one.
+        enginePendingRef.current.forEach(p => p.reject(event?.error || new Error('analytics worker crashed')))
+        enginePendingRef.current.clear()
+        engineWorkerRef.current = null
+      }
+      engineWorkerRef.current = worker
+      return worker
+    } catch (e) {
+      return null
+    }
+  }
+
+  // Runs runEngine (aggregateRows) off the main thread via a Web Worker so a
+  // large tip history can't block clicks. Falls back to running inline if
+  // Workers aren't available or the worker fails — same result either way.
+  const runEngineAsync = (tipsData, tz) => {
+    const worker = getEngineWorker()
+    if (!worker) return Promise.resolve(runEngine(tipsData, tz))
+    const requestId = ++engineRequestIdRef.current
+    return new Promise((resolve, reject) => {
+      enginePendingRef.current.set(requestId, { resolve, reject })
+      worker.postMessage({ requestId, tips: tipsData, tz })
+    }).catch((err) => {
+      console.error('[runEngineAsync] worker failed, falling back to inline:', err)
+      return runEngine(tipsData, tz)
+    })
   }
 
   // Counter bump when new tips arrive
@@ -1628,7 +1688,7 @@ export default function Dashboard() {
       const TIP_BATCH_DEBOUNCE_MS = 2500
       const TIP_BATCH_MAX_WAIT_MS = 5000
 
-      const flushPendingTipInserts = () => {
+      const flushPendingTipInserts = async () => {
         clearTimeout(tipFlushTimerRef.current)
         tipFlushTimerRef.current = null
         tipBatchStartRef.current = 0
@@ -1636,29 +1696,29 @@ export default function Dashboard() {
         if (!batch.length) return
         pendingTipInsertsRef.current = []
 
-        setTips(prev => {
-          const existingKeys = new Set(prev.map(t => `${t.date_time}|${t.username}|${t.tokens}`))
-          const newRows = batch.filter(row => {
-            const key = `${row.date_time}|${row.username}|${row.tokens}`
-            if (existingKeys.has(key)) return false
-            existingKeys.add(key)
-            return true
-          })
-          if (!newRows.length) return prev
-          const updated = [...prev, ...newRows].sort((a,b) => new Date(a.date_time)-new Date(b.date_time))
-          try {
-            const userTz = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC'
-            const r = runEngine(updated, userTz)
-            if (r) setAnalytics(r)
-            lastEngineTipsFingerprintRef.current = { length: updated.length, lastId: updated[updated.length - 1]?.id ?? null }
-          } catch(e) { console.error('realtime runEngine failed:', e) }
-          setNewTipCount(n => n + newRows.length)
-          setNewAlertKey(k => k + 1)
-          setLastRefreshed(new Date())
-          // Invalidate the sessionStorage cache so next hard reload gets fresh data
-          try { sessionStorage.removeItem(`camcash_tips_${user.id}`) } catch(e) {}
-          return updated
+        const prev = tipsRef.current
+        const existingKeys = new Set(prev.map(t => `${t.date_time}|${t.username}|${t.tokens}`))
+        const newRows = batch.filter(row => {
+          const key = `${row.date_time}|${row.username}|${row.tokens}`
+          if (existingKeys.has(key)) return false
+          existingKeys.add(key)
+          return true
         })
+        if (!newRows.length) return
+        const updated = [...prev, ...newRows].sort((a,b) => new Date(a.date_time)-new Date(b.date_time))
+        setTips(updated)
+        tipsRef.current = updated
+        setNewTipCount(n => n + newRows.length)
+        setNewAlertKey(k => k + 1)
+        setLastRefreshed(new Date())
+        // Invalidate the sessionStorage cache so next hard reload gets fresh data
+        try { sessionStorage.removeItem(`camcash_tips_${user.id}`) } catch(e) {}
+        try {
+          const userTz = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC'
+          const r = await runEngineAsync(updated, userTz)
+          if (r) setAnalytics(r)
+          lastEngineTipsFingerprintRef.current = { length: updated.length, lastId: updated[updated.length - 1]?.id ?? null }
+        } catch(e) { console.error('realtime runEngine failed:', e) }
       }
 
       const channel = supabase
@@ -1718,22 +1778,20 @@ export default function Dashboard() {
       // re-runs the (expensive, at large tip counts) engine when the tips array has
       // changed since the last runEngine() call — otherwise this ticked forever and
       // recomputed the full analytics pipeline every 30s even with no new data.
-      refreshTimerRef.current = setInterval(() => {
-        setTips(prev => {
-          if (!prev.length) return prev
-          const fingerprint = { length: prev.length, lastId: prev[prev.length - 1]?.id ?? null }
-          const last = lastEngineTipsFingerprintRef.current
-          if (last && last.length === fingerprint.length && last.lastId === fingerprint.lastId) {
-            return prev // unchanged since the last engine run — skip the recompute
-          }
-          try {
-            const userTz = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC'
-            const r = runEngine(prev, userTz)
-            if (r) setAnalytics(r)
-            lastEngineTipsFingerprintRef.current = fingerprint
-          } catch(e) { console.error('refresh runEngine failed:', e) }
-          return prev
-        })
+      refreshTimerRef.current = setInterval(async () => {
+        const prev = tipsRef.current
+        if (!prev.length) return
+        const fingerprint = { length: prev.length, lastId: prev[prev.length - 1]?.id ?? null }
+        const last = lastEngineTipsFingerprintRef.current
+        if (last && last.length === fingerprint.length && last.lastId === fingerprint.lastId) {
+          return // unchanged since the last engine run — skip the recompute
+        }
+        try {
+          const userTz = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC'
+          const r = await runEngineAsync(prev, userTz)
+          if (r) setAnalytics(r)
+          lastEngineTipsFingerprintRef.current = fingerprint
+        } catch(e) { console.error('refresh runEngine failed:', e) }
       }, 30000)
 
       // ── MINUTE TICK — re-evaluates time-based alerts every 60s ──
@@ -1747,6 +1805,8 @@ export default function Dashboard() {
       if (liveTipsChannelRef.current) supabase.removeChannel(liveTipsChannelRef.current)
       if (refreshTimerRef.current) clearInterval(refreshTimerRef.current)
       if (tipFlushTimerRef.current) clearTimeout(tipFlushTimerRef.current)
+      if (engineWorkerRef.current) { engineWorkerRef.current.terminate(); engineWorkerRef.current = null }
+      enginePendingRef.current.clear()
       // minuteTimer cleared inline
     }
   }, [])
@@ -1849,9 +1909,10 @@ export default function Dashboard() {
       }
       if (allData.length) {
         setTips(allData)
+        tipsRef.current = allData
         try {
           const userTz = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC'
-          const result = runEngine(allData, userTz)
+          const result = await runEngineAsync(allData, userTz)
           setAnalytics(result)
           lastEngineTipsFingerprintRef.current = { length: allData.length, lastId: allData[allData.length - 1]?.id ?? null }
         } catch (engineErr) {
