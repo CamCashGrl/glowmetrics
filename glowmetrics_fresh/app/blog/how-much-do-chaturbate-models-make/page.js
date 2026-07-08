@@ -306,18 +306,18 @@ export default function ChaturbateEarningsPost() {
         <div style={s.roiHeader}>
           <div style={s.roiH}>Your Platform ROI — At a Glance</div>
           <p style={{ ...s.roiSub, marginBottom: 0 }}>
-            CamCash shows your real hourly rate by platform. Some models discover Chaturbate earns $29/hr while another platform earns $8/hr — a difference impossible to spot without tracking.
+            CamCash shows your real hourly rate by platform. Some models discover one platform earns 2-4x more per hour than another — a difference impossible to spot without tracking.
           </p>
         </div>
         <a href="/landing/demo" style={{ display: 'block', textDecoration: 'none' }}>
           <img
-            src="/blog/topearners.png"
-            alt="CamCash platform ROI showing Chaturbate at $29.60/hr, MFC at $15.11/hr, and BongaCams at $8.15/hr"
+            src="/blog-images/camcash-best-hours-heatmap.webp"
+            alt="CamCash revenue timing and platform ROI showing Chaturbate at $1211.40/hr, BongaCams at $777.80/hr, and MyFreeCams at $473.30/hr"
             style={{ width: '100%', display: 'block' }}
           />
         </a>
         <div style={s.roiFooter}>
-          <span style={{ fontSize: '13px', color: '#475569' }}>Real data from a CamCash user · CB $29.60/hr · MFC $15.11/hr · Bonga $8.15/hr</span>
+          <span style={{ fontSize: '13px', color: '#475569' }}>Real data from a CamCash demo account · CB $1211.40/hr · Bonga $777.80/hr · MFC $473.30/hr</span>
           {'  '}
           <a href="/landing/demo" style={{ ...s.iLink, fontSize: '13px' }}>View live demo →</a>
         </div>
@@ -365,18 +365,18 @@ export default function ChaturbateEarningsPost() {
         <div style={s.hidingImg}>
           <a href="/landing/demo" style={{ display: 'block', textDecoration: 'none' }}>
             <img
-              src="/blog/topearners.png"
-              alt="CamCash daily brief showing best time to stream is 6 PM on Chaturbate with $134 avg per session"
+              src="/blog-images/camcash-ai-command-center.webp"
+              alt="CamCash AI Command Center showing a real-time recommendation to go live on Chaturbate at 1 AM with expected earnings of $1,100–$2,200"
               style={{ width: '100%', display: 'block' }}
             />
           </a>
         </div>
         <div style={s.hidingBody}>
           <p style={s.hidingInsight}>
-            The CamCash Daily Brief tells you the single best time to stream today — based on your own session history, not platform-wide averages. It also surfaces which whale fans are likely to return this week, and flags if one platform is significantly outperforming another.
+            The CamCash Command Center tells you the single best move right now — based on your own session history, not platform-wide averages. It also surfaces which whale fans are likely to be online, and flags if one platform is significantly outperforming another.
           </p>
           <p style={{ ...s.hidingInsight, marginBottom: '16px' }}>
-            Most analytics tools show you charts. CamCash shows you decisions. There's a difference between knowing you earned $6,980 and knowing your best time to stream is 6 PM tonight on Chaturbate with $134 expected per session.
+            Most analytics tools show you charts. CamCash shows you decisions. There's a difference between knowing your total earnings and knowing your best move right now is going live on Chaturbate with $1,100–$2,200 expected tonight.
           </p>
           <a href="/landing" style={s.insightBtn}>See What My Data Says</a>
         </div>

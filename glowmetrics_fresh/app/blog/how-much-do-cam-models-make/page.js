@@ -215,6 +215,8 @@ export default function HowMuchDoCamModelsMake() {
         <div style={s.relT}>Related reading</div>
         <div style={s.relLinks}>
           <a href="/blog/cam-model-taxes" style={s.relLink}>→ Cam Model Taxes Explained</a>
+          <a href="/blog/how-much-do-bongacams-models-make" style={s.relLink}>→ How Much Do BongaCams Models Make?</a>
+          <a href="/blog/how-much-do-myfreecams-models-make" style={s.relLink}>→ How Much Do MyFreeCams Models Make?</a>
           <a href="/blog/how-to-get-more-viewers-as-a-cam-model" style={s.relLink}>→ How to Get More Viewers as a Cam Model</a>
           <a href="/blog/cam-model-jobs-from-home" style={s.relLink}>→ Cam Model Jobs From Home</a>
           <a href="/blog/best-cam-sites-for-models" style={s.relLink}>→ Best Cam Sites for Models in 2026</a>

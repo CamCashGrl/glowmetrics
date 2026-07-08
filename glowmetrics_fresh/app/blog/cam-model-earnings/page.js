@@ -472,6 +472,8 @@ export default function CamModelEarnings() {
         <div style={s.relT}>Related reading</div>
         <div style={s.relLinks}>
           <a href="/blog/how-much-do-chaturbate-models-make" style={s.relLink}>→ How much Chaturbate models make</a>
+          <a href="/blog/how-much-do-bongacams-models-make" style={s.relLink}>→ How much BongaCams models make</a>
+          <a href="/blog/how-much-do-myfreecams-models-make" style={s.relLink}>→ How much MyFreeCams models make</a>
           <a href="/guides/cam-model-token-calculator" style={s.relLink}>→ Cam model token calculator</a>
           <a href="/guides/cam-model-income-tracker" style={s.relLink}>→ Cam model income tracker</a>
           <a href="/guides/chaturbate-earnings-tracker" style={s.relLink}>→ Chaturbate earnings tracker</a>

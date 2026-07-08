@@ -452,6 +452,8 @@ export default function BestCamModelTools() {
           <a href="/blog/how-to-increase-cam-earnings" style={s.relLink}>→ How to increase cam earnings with data</a>
           <a href="/blog/why-cam-streams-arent-making-money" style={s.relLink}>→ Why your streams aren't making money</a>
           <a href="/blog/cam-model-earnings" style={s.relLink}>→ How much cam models actually make</a>
+          <a href="/blog/how-much-do-bongacams-models-make" style={s.relLink}>→ How much BongaCams models make</a>
+          <a href="/blog/how-much-do-myfreecams-models-make" style={s.relLink}>→ How much MyFreeCams models make</a>
           <a href="/blog/how-to-re-engage-whales-and-high-tipping-fans" style={s.relLink}>→ How to re-engage whales and top tippers</a>
           <a href="/blog/how-to-build-loyal-fans" style={s.relLink}>→ How to build loyal fans on cam</a>
           <a href="/blog/how-to-pick-a-cam-name" style={s.relLink}>→ How to pick the perfect cam name</a>
