@@ -2260,7 +2260,7 @@ const handleCSV = async (file, forcePlatform = null) => {
     // Best platform per hour
     const platHourUSD = {}; const platHourSessions = {}
     tips.forEach(t => {
-      const p = t.platform || 'Chaturbate'
+      const p = t.platform || 'Unknown'
       const d = new Date(t.date_time || t.dateRaw)
       const h = d.getHours() // local hour to match analytics.js toLocalHour
       const bucket = Math.floor(d.getTime() / 3600000)

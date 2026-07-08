@@ -140,6 +140,25 @@ export async function POST(req) {
     }
   }
 
+  // ── BUMP beta_users.csv_upload_count ────────────────────────────────────
+  // Only counts uploads that actually landed rows — a request that inserted
+  // nothing (all duplicates, or blocked before any batch succeeded) isn't a
+  // real upload event.
+  const bumpCsvUploadCount = async () => {
+    if (inserted <= 0) return
+    try {
+      const { data: betaRow } = await supabase.from('beta_users').select('csv_upload_count').eq('user_id', user.id).maybeSingle()
+      await supabase.from('beta_users').upsert({
+        user_id: user.id,
+        email: user.email,
+        csv_upload_count: (betaRow?.csv_upload_count || 0) + 1,
+      }, { onConflict: 'user_id' })
+    } catch (bumpErr) {
+      // Non-fatal — don't fail the whole upload if this counter update fails
+      console.warn('[UPLOAD] Failed to bump csv_upload_count:', bumpErr.message)
+    }
+  }
+
   // ── BATCH INSERT via dedup RPC ─────────────────────────────────────────
   let inserted = 0
   let skipped  = 0
@@ -167,6 +186,7 @@ export async function POST(req) {
         // correctly-rejected upload leaves zero trace in csv_uploads,
         // indistinguishable from a request that never ran at all.
         await logCsvUpload('blocked')
+        await bumpCsvUploadCount()
         return NextResponse.json({
           error: `You're on the free plan, which tracks one platform. Upgrade to add ${detectedPlatform} alongside your existing platform data.`,
           code: 'platform_limit_reached',
@@ -185,6 +205,7 @@ export async function POST(req) {
   }
 
   await logCsvUpload(errors.length > 0 ? 'partial' : 'complete')
+  await bumpCsvUploadCount()
 
   // ── RESPONSE ───────────────────────────────────────────────────────────
   const response = {
