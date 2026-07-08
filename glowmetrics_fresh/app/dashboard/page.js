@@ -2280,7 +2280,14 @@ const handleCSV = async (file, forcePlatform = null) => {
         if (avg > bestPlatPeakAvg) { bestPlatPeakAvg = avg; bestPlatPeak = plat }
       })
     }
-    const displayPlat = todayBestPlat || bestPlatPeak || bestPlatNow || 'Chaturbate'
+    // todayBestPlat/bestPlatPeak/bestPlatNow are time-bucketed (need 3+ session
+    // buckets at a specific hour/day) and are often null for sparse accounts.
+    // Real fallback: the platform with the highest total earnings across all
+    // tips — needs only 1 tip to resolve, so it's never a fake/wrong platform.
+    const platTotalUSD = {}
+    tips.forEach(t => { const p = t.platform || 'Unknown'; platTotalUSD[p] = (platTotalUSD[p] || 0) + (t.usd || 0) })
+    const topEarningPlat = Object.entries(platTotalUSD).sort((a, b) => b[1] - a[1])[0]?.[0] || null
+    const displayPlat = todayBestPlat || bestPlatPeak || bestPlatNow || topEarningPlat
     const displayAvg = todayBestAvg || bestPlatPeakAvg || bestPlatNowAvg || bestHour?.avg || 0
 
     // Best day
@@ -2679,6 +2686,10 @@ const handleCSV = async (file, forcePlatform = null) => {
           const brief = dailyBrief
           const atPeak = brief?.atPeak
           const momentumData = analytics?.momentum
+          // "No data" here means zero tips in the last 60 days (not zero tips
+          // ever) — a genuine insufficient-data case, not a value to hide
+          // behind vague copy. Rendered as a locked chip below instead.
+          const momentumLocked = !atPeak && tips.length > 0 && momentumData?.label === 'No data'
           const momentum = atPeak ? '🔥 AT PEAK'
             : momentumData ? `${momentumData.emoji} ${momentumData.label}`
             : tips.length === 0 ? '— No data' : '→ Steady'
@@ -2706,7 +2717,11 @@ const handleCSV = async (file, forcePlatform = null) => {
                 </div>
                 <div style={{ display:'flex', flexDirection:'column', justifyContent:'center', padding:'0 24px', borderRight:'1px solid rgba(255,255,255,0.07)', flexShrink:0 }}>
                   <div style={{ fontSize:10, color:'#475569', textTransform:'uppercase', letterSpacing:1.2, fontWeight:600, marginBottom:2 }}>Momentum</div>
-                  <div style={{ fontSize:13, fontWeight:800, color:momentumColor, whiteSpace:'nowrap', animation: atPeak ? 'cmd-pulse 1.5s infinite' : 'none' }}>{momentum}</div>
+                  {momentumLocked ? (
+                    <div onClick={() => handleTabChange('upload')} title="No tips in the last 60 days yet — upload more data to see momentum" style={{ fontSize:13, fontWeight:700, color:'#64748b', whiteSpace:'nowrap', cursor:'pointer' }}>🔒 Locked</div>
+                  ) : (
+                    <div style={{ fontSize:13, fontWeight:800, color:momentumColor, whiteSpace:'nowrap', animation: atPeak ? 'cmd-pulse 1.5s infinite' : 'none' }}>{momentum}</div>
+                  )}
                 </div>
                 <div style={{ display:'flex', flexDirection:'column', justifyContent:'center', padding:'0 24px', borderRight:'1px solid rgba(255,255,255,0.07)', flexShrink:0 }}>
                   <div style={{ fontSize:10, color:'#475569', textTransform:'uppercase', letterSpacing:1.2, fontWeight:600, marginBottom:2 }}>Best Platform</div>
@@ -2758,7 +2773,7 @@ const handleCSV = async (file, forcePlatform = null) => {
             totalFans={analytics?.uniqueFanCount || 0}
             totalEarnings={analytics?.totalUSD || 0}
             readiness={dashboardReadiness}
-            onImport={() => handleTabChange('import')}
+            onImport={() => handleTabChange('upload')}
           />
         )}
 
@@ -2905,6 +2920,10 @@ const handleCSV = async (file, forcePlatform = null) => {
             reengageFans, likelyOnline, sessionsAtPeakCount } = dailyBrief
           const bhLabel = canonicalPeakLabel || _bhLabel
           const displayPlat = engineInsights?.summary?.best_platform || _displayPlat
+          // Real threshold from getModuleLockState('bestStreamingTimes'): 25+ tips
+          // and 3+ meaningful sessions — matches the >=3 session-bucket requirement
+          // bestHour/platformBestTimes use internally (lib/analytics.js).
+          const bestTimeLock = !bhLabel ? getModuleLockState({ module: 'bestStreamingTimes', totalTips: tips.length, totalSessions: analytics?.meaningfulSessionCount || 0 }) : { locked: false }
           return (
             <div style={{ marginBottom: 20, borderRadius: 18, overflow: 'hidden', border: `1px solid ${atPeak ? 'rgba(16,185,129,0.45)' : 'rgba(124,92,255,0.3)'}`, background: 'rgba(10,12,24,0.7)', backdropFilter: 'blur(16px)', animation: 'fadeUp 0.3s ease both' }}>
 
@@ -2984,12 +3003,22 @@ const handleCSV = async (file, forcePlatform = null) => {
                     </div>
                   </div>
 
-                  <div style={{ flex: 1, minWidth: 130, padding: '11px 14px', borderRadius: 11, background: atPeak ? 'rgba(16,185,129,0.12)' : 'rgba(34,211,238,0.07)', border: `1px solid ${atPeak ? 'rgba(16,185,129,0.4)' : 'rgba(34,211,238,0.18)'}` }}>
+                  <div style={{ flex: 1, minWidth: 130, padding: '11px 14px', borderRadius: 11, background: bestTimeLock.locked ? 'rgba(255,255,255,0.03)' : atPeak ? 'rgba(16,185,129,0.12)' : 'rgba(34,211,238,0.07)', border: `1px solid ${bestTimeLock.locked ? 'rgba(255,255,255,0.08)' : atPeak ? 'rgba(16,185,129,0.4)' : 'rgba(34,211,238,0.18)'}` }}>
                     <div style={{ fontSize: 10, color: C.muted, marginBottom: 3, textTransform: 'uppercase', letterSpacing: 1 }}>Best Time</div>
-                    <div style={{ fontSize: 14, fontWeight: 800, color: atPeak ? C.green : C.white }}>{bhLabel || 'Calculating...'}</div>
-                    <div style={{ fontSize: 11, color: atPeak ? C.green : C.cyan, marginTop: 2 }}>
-                      {atPeak ? 'ON RIGHT NOW — stream!' : hoursUntilPeak !== null ? `in ${hoursUntilPeak}h${(!isNaN(displayAvg) && displayAvg > 0) ? ` · $${displayAvg.toFixed(0)} avg` : ''}` : ''}
-                    </div>
+                    {bestTimeLock.locked ? (
+                      <>
+                        <div style={{ fontSize: 14, fontWeight: 800, color: '#64748b' }}>🔒 Locked</div>
+                        <div style={{ fontSize: 11, color: C.muted, marginTop: 2, lineHeight: 1.4 }}>{bestTimeLock.message}</div>
+                        <button onClick={() => handleTabChange('upload')} style={{ marginTop: 6, padding: '4px 10px', borderRadius: 100, border: '1px solid rgba(34,211,238,0.3)', background: 'rgba(34,211,238,0.08)', color: C.cyan, fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>Upload More Data</button>
+                      </>
+                    ) : (
+                      <>
+                        <div style={{ fontSize: 14, fontWeight: 800, color: atPeak ? C.green : C.white }}>{bhLabel}</div>
+                        <div style={{ fontSize: 11, color: atPeak ? C.green : C.cyan, marginTop: 2 }}>
+                          {atPeak ? 'ON RIGHT NOW — stream!' : hoursUntilPeak !== null ? `in ${hoursUntilPeak}h${(!isNaN(displayAvg) && displayAvg > 0) ? ` · $${displayAvg.toFixed(0)} avg` : ''}` : ''}
+                        </div>
+                      </>
+                    )}
                   </div>
 
                   <div style={{ flex: 1, minWidth: 130, padding: '11px 14px', borderRadius: 11, background: 'rgba(245,158,11,0.07)', border: '1px solid rgba(245,158,11,0.18)' }}>
@@ -6141,12 +6170,12 @@ const handleCSV = async (file, forcePlatform = null) => {
         {activeTab === 'analytics' && <AnalyticsCharts tips={tips} />}
         {activeTab === 'planner' && (
           _plannerLock.locked
-            ? <div style={{ padding: '32px 0' }}><LockedInsightCard title="Stream Planner" description="Plan your schedule around your best earning windows." lockType="needs_data" requirement={_plannerLock.message} ctaLabel="Upload More Data" ctaAction={() => handleTabChange('import')} /></div>
+            ? <div style={{ padding: '32px 0' }}><LockedInsightCard title="Stream Planner" description="Plan your schedule around your best earning windows." lockType="needs_data" requirement={_plannerLock.message} ctaLabel="Upload More Data" ctaAction={() => handleTabChange('upload')} /></div>
             : <StreamPlanner tips={tips} isPro={true} />
         )}
         {activeTab === 'moneymap' && (
           _moneyMapLock.locked
-            ? <div style={{ padding: '32px 0' }}><LockedInsightCard title="Money Map" description="See where and when your money comes from across sessions and platforms." lockType="needs_data" requirement={_moneyMapLock.message} ctaLabel="Upload More Data" ctaAction={() => handleTabChange('import')} /></div>
+            ? <div style={{ padding: '32px 0' }}><LockedInsightCard title="Money Map" description="See where and when your money comes from across sessions and platforms." lockType="needs_data" requirement={_moneyMapLock.message} ctaLabel="Upload More Data" ctaAction={() => handleTabChange('upload')} /></div>
             : <MoneyMap tips={tips} isPro={true} />
         )}
       </div>
