@@ -1,44 +1,19 @@
 "use client"
 import React, { useState, useEffect, useMemo, useRef } from "react"
 import {
-  VIP_PLATFORMS, RANGE_TABS, SORT_OPTIONS, FAN_TIERS, CONTEST_TYPES,
+  VIP_PLATFORMS, RANGE_TABS, SORT_OPTIONS, CONTEST_TYPES, PRIVACY_MODES,
   getRangeStart, buildFanIndex, buildLeaderboard, applyClimberSort, withRankChange,
-  snapshotRanks, getSuggestedAction, maskUsername, detectLeaderboardAlerts,
+  snapshotRanks, maskUsername, detectLeaderboardAlerts,
   normalizeHistoricalTip, normalizeLiveTip,
+  attachFanStatus, getNextBestAction, FAN_STATUS_META,
+  getFanNote, saveFanNote, markFanThanked, applyPrivacyModeDefaults,
+  DEFAULT_BOARD_SETTINGS, loadBoardSettings, saveBoardSettings,
 } from "../../lib/analytics/vipBoard"
 
 const DEFAULT_C = {
   bg: "#05070f", card: "#121826", card2: "#161e2e", border: "#1e2d45", border2: "#2a3f5f",
   cyan: "#22D3EE", pink: "#EC4899", gold: "#F59E0B", blue: "#60A5FA",
   green: "#10B981", red: "#F87171", orange: "#FB923C", white: "#F1F5F9", text: "#94A3B8", muted: "#475569",
-}
-
-const STORAGE_KEY = "camcash_vip_board_settings_v1"
-
-function loadSettings() {
-  if (typeof window === "undefined") return null
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY)
-    return raw ? JSON.parse(raw) : null
-  } catch { return null }
-}
-
-function saveSettings(settings) {
-  if (typeof window === "undefined") return
-  try { window.localStorage.setItem(STORAGE_KEY, JSON.stringify(settings)) } catch {}
-}
-
-const DEFAULT_SETTINGS = {
-  privateDashboardOnly: true,
-  showOnOverlay: false,
-  hideFullUsernames: true,
-  showTokensInsteadOfUsd: false,
-  hideDollarAmounts: false,
-  minimumTipUsd: 1,
-  excludedFans: [],
-  autoResetAfterInactivity: false,
-  contestMode: false,
-  contestType: "top_tipper",
 }
 
 const AUTO_RESET_INACTIVITY_MINUTES = 30
@@ -64,10 +39,17 @@ function timeAgo(date) {
   return `${Math.floor(s / 86400)}d ago`
 }
 
+function copyToClipboard(text) {
+  if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(text).catch(() => {})
+  }
+}
+
 /**
- * Live VIP Board — top-tippers leaderboard for Live Mode.
+ * Live VIP Board — a "who needs attention right now" leaderboard for Live Mode.
  * Purely additive: renders as its own card, does not touch any existing
- * Live Mode state, cards, or coaching logic.
+ * Live Mode state, cards, or coaching logic. Collapsed by default so it
+ * doesn't compete with the Do This Now card for attention.
  *
  * @param {Array} liveEvents - the host page's in-memory live tip list (already normalized)
  * @param {Array} historicalTips - raw rows from the `tips` table (may be empty/null if not loaded)
@@ -77,15 +59,17 @@ function timeAgo(date) {
  */
 export default function LiveVIPBoard({ liveEvents = [], historicalTips = [], liveActive = false, liveStartTime = null, colors }) {
   const C = { ...DEFAULT_C, ...(colors || {}) }
+  const [collapsed, setCollapsed] = useState(true)
   const [range, setRange] = useState("session")
   const [platformFilter, setPlatformFilter] = useState("all")
   const [sortBy, setSortBy] = useState("total")
   const [expandedKey, setExpandedKey] = useState(null)
-  const [settings, setSettings] = useState(DEFAULT_SETTINGS)
+  const [settings, setSettings] = useState(DEFAULT_BOARD_SETTINGS)
   const [showSettings, setShowSettings] = useState(false)
   const [sessionDisplayResetAt, setSessionDisplayResetAt] = useState(null)
   const [vipAlerts, setVipAlerts] = useState([])
   const [now, setNow] = useState(new Date())
+  const [notesVersion, setNotesVersion] = useState(0)
 
   const prevRanksRef = useRef({}) // per range+platform+ -> {key: rank}, canonical "total" ordering
   const prevSessionTopRef = useRef(null)
@@ -93,11 +77,10 @@ export default function LiveVIPBoard({ liveEvents = [], historicalTips = [], liv
   const lastLiveTsRef = useRef(null)
 
   useEffect(() => {
-    const saved = loadSettings()
-    if (saved) setSettings(s => ({ ...s, ...saved }))
+    setSettings(loadBoardSettings())
   }, [])
 
-  useEffect(() => { saveSettings(settings) }, [settings])
+  useEffect(() => { saveBoardSettings(settings) }, [settings])
 
   // A new stream start clears the display's session boundary automatically.
   useEffect(() => { setSessionDisplayResetAt(null) }, [liveStartTime])
@@ -107,6 +90,9 @@ export default function LiveVIPBoard({ liveEvents = [], historicalTips = [], liv
     const id = setInterval(() => setNow(new Date()), 1000)
     return () => clearInterval(id)
   }, [])
+
+  const isOverlay = settings.privacyMode === "overlay"
+  const effectiveSettings = useMemo(() => applyPrivacyModeDefaults(settings.privacyMode, settings), [settings])
 
   const availablePlatforms = useMemo(() => {
     const set = new Set()
@@ -163,14 +149,24 @@ export default function LiveVIPBoard({ liveEvents = [], historicalTips = [], liv
     [baseEntries, rankSnapKey]
   )
 
+  // Attach a situational relationship status ("who needs attention right now")
+  // to each entry, on top of the plain rank/money fields.
+  const statusedEntries = useMemo(
+    () => attachFanStatus(entriesWithRank, fanIndex, {
+      now, liveActive: liveActive && range === "session", sessionStart: range === "session" ? sessionStart : null,
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [entriesWithRank, fanIndex, range, sessionStart, now, liveActive, notesVersion]
+  )
+
   const displayEntries = useMemo(() => {
-    if (sortBy === "climber") return applyClimberSort(entriesWithRank, prevRanksRef.current[rankSnapKey])
-    const copy = [...entriesWithRank]
+    if (sortBy === "climber") return applyClimberSort(statusedEntries, prevRanksRef.current[rankSnapKey])
+    const copy = [...statusedEntries]
     if (sortBy === "count") copy.sort((a, b) => b.tipCount - a.tipCount)
     else if (sortBy === "biggest") copy.sort((a, b) => b.biggestTipUsd - a.biggestTipUsd)
     else if (sortBy === "recent") copy.sort((a, b) => b.lastTipAt - a.lastTipAt)
     return copy
-  }, [entriesWithRank, sortBy, rankSnapKey])
+  }, [statusedEntries, sortBy, rankSnapKey])
 
   // Snapshot canonical ("total") rank order per range+platform after each recompute, for next comparison.
   useEffect(() => {
@@ -184,7 +180,7 @@ export default function LiveVIPBoard({ liveEvents = [], historicalTips = [], liv
     const { alerts, platformLeader } = detectLeaderboardAlerts({
       previousTop: prevSessionTopRef.current,
       currentTop: top5,
-      hideFullUsernames: settings.hideFullUsernames,
+      hideFullUsernames: effectiveSettings.hideFullUsernames,
       previousPlatformLeader: prevPlatformLeaderRef.current,
     })
     if (alerts.length) {
@@ -192,7 +188,7 @@ export default function LiveVIPBoard({ liveEvents = [], historicalTips = [], liv
     }
     prevSessionTopRef.current = top5
     prevPlatformLeaderRef.current = platformLeader
-  }, [baseEntries, range, liveActive, settings.hideFullUsernames])
+  }, [baseEntries, range, liveActive, effectiveSettings.hideFullUsernames])
 
   useEffect(() => {
     if (!vipAlerts.length) return
@@ -216,6 +212,8 @@ export default function LiveVIPBoard({ liveEvents = [], historicalTips = [], liv
 
   const setSetting = (key, value) => setSettings(s => ({ ...s, [key]: value }))
 
+  const setPrivacyMode = (mode) => setSettings(s => applyPrivacyModeDefaults(mode, s))
+
   const toggleExclude = (username) => {
     setSettings(s => {
       const lower = username.trim().toLowerCase()
@@ -225,6 +223,9 @@ export default function LiveVIPBoard({ liveEvents = [], historicalTips = [], liv
   }
 
   const resetDisplay = () => { setSessionDisplayResetAt(new Date()); setVipAlerts([]) }
+  const bumpNotesVersion = () => setNotesVersion(v => v + 1)
+
+  const topEntry = displayEntries[0]
 
   return (
     <div style={{ ...glassCardStyle(C), borderRadius: 16, padding: "18px 20px" }}>
@@ -235,8 +236,8 @@ export default function LiveVIPBoard({ liveEvents = [], historicalTips = [], liv
         .vip-tab-btn:hover, .vip-chip:hover { filter: brightness(1.15); }
       `}</style>
 
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, flexWrap: "wrap", gap: 8 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: collapsed ? 0 : 14, flexWrap: "wrap", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }} onClick={() => setCollapsed(v => !v)}>
           <span style={{ fontSize: 17 }}>👑</span>
           <span style={{
             fontSize: 15, fontWeight: 900, letterSpacing: 0.2,
@@ -244,73 +245,96 @@ export default function LiveVIPBoard({ liveEvents = [], historicalTips = [], liv
             WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text",
           }}>Live VIP Board</span>
           <span style={{ fontSize: 10, color: C.muted }}>Top Fans</span>
+          {collapsed && topEntry && (
+            <span style={{ fontSize: 11, color: C.text, marginLeft: 4 }}>
+              · {displayEntries.length} VIP{displayEntries.length === 1 ? "" : "s"} · Top: {maskUsername(topEntry.username, effectiveSettings.hideFullUsernames)} {fmtMoney(topEntry.totalUsd, topEntry.totalTokens, effectiveSettings)}
+            </span>
+          )}
+          <span style={{ fontSize: 11, color: C.muted }}>{collapsed ? "▸ Show board" : "▾ Collapse"}</span>
         </div>
-        <button onClick={() => setShowSettings(v => !v)} style={ghostBtnStyle(C)}>
-          {showSettings ? "Close Settings" : "⚙ Display & Privacy"}
-        </button>
-      </div>
-
-      {/* Live alerts */}
-      {vipAlerts.length > 0 && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
-          {vipAlerts.map(a => (
-            <div key={a.id} style={{
-              animation: "vip-slide-in 0.25s ease-out", fontSize: 12, fontWeight: 700, color: C.white,
-              background: "rgba(236,72,153,0.10)", border: `1px solid ${C.pink}55`, borderRadius: 10, padding: "8px 12px",
-            }}>🔔 {a.text}</div>
-          ))}
-        </div>
-      )}
-
-      {showSettings && (
-        <SettingsPanel C={C} settings={settings} setSetting={setSetting} onResetDisplay={resetDisplay} liveActive={liveActive} entries={displayEntries} onToggleExclude={toggleExclude} />
-      )}
-
-      {/* Range tabs */}
-      <div style={{ display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap" }}>
-        {RANGE_TABS.map(t => (
-          <button key={t.key} className="vip-tab-btn" onClick={() => setRange(t.key)} style={tabBtnStyle(C, range === t.key)}>
-            {t.label}
+        {!collapsed && (
+          <button onClick={() => setShowSettings(v => !v)} style={ghostBtnStyle(C)}>
+            {showSettings ? "Close Settings" : "⚙ Display & Privacy"}
           </button>
-        ))}
+        )}
       </div>
 
-      {/* Filters row */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
-        <select value={platformFilter} onChange={e => setPlatformFilter(e.target.value)} style={selectStyle(C)}>
-          <option value="all">All Platforms</option>
-          {VIP_PLATFORMS.map(p => (
-            <option key={p} value={p} disabled={!availablePlatforms.has(p)}>
-              {p}{!availablePlatforms.has(p) ? " (no data)" : ""}
-            </option>
-          ))}
-        </select>
-        <select value={sortBy} onChange={e => setSortBy(e.target.value)} style={selectStyle(C)}>
-          {SORT_OPTIONS.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
-        </select>
-      </div>
+      {!collapsed && (
+        <>
+          {/* Live alerts */}
+          {vipAlerts.length > 0 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12, marginTop: 14 }}>
+              {vipAlerts.map(a => (
+                <div key={a.id} style={{
+                  animation: "vip-slide-in 0.25s ease-out", fontSize: 12, fontWeight: 700, color: C.white,
+                  background: "rgba(236,72,153,0.10)", border: `1px solid ${C.pink}55`, borderRadius: 10, padding: "8px 12px",
+                }}>🔔 {a.text}</div>
+              ))}
+            </div>
+          )}
 
-      {/* Leaderboard body */}
-      {displayEntries.length === 0 ? (
-        <EmptyState C={C} range={range} hasAnyHistory={hasAnyHistory} fallbackSuggestion={fallbackSuggestion} />
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          {displayEntries.map((entry, i) => (
-            <LeaderRow
-              key={entry.key}
-              entry={entry}
-              index={i}
-              C={C}
-              settings={settings}
-              expanded={expandedKey === entry.key}
-              onToggle={() => setExpandedKey(k => k === entry.key ? null : entry.key)}
+          {showSettings && (
+            <SettingsPanel
+              C={C} settings={settings} setSetting={setSetting} setPrivacyMode={setPrivacyMode}
+              onResetDisplay={resetDisplay} liveActive={liveActive} entries={displayEntries} onToggleExclude={toggleExclude}
             />
-          ))}
-        </div>
-      )}
+          )}
 
-      {/* Contest mode (UI-only for now) */}
-      <ContestModePanel C={C} settings={settings} setSetting={setSetting} />
+          {/* Range tabs */}
+          <div style={{ display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap", marginTop: showSettings || vipAlerts.length ? 0 : 14 }}>
+            {RANGE_TABS.map(t => (
+              <button key={t.key} className="vip-tab-btn" onClick={() => setRange(t.key)} style={tabBtnStyle(C, range === t.key)}>
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          {range === "session" && liveActive && displayEntries.length > 0 && (
+            <div style={{ fontSize: 10.5, color: C.muted, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 700 }}>
+              👀 Who to Work Right Now
+            </div>
+          )}
+
+          {/* Filters row */}
+          <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+            <select value={platformFilter} onChange={e => setPlatformFilter(e.target.value)} style={selectStyle(C)}>
+              <option value="all">All Platforms</option>
+              {VIP_PLATFORMS.map(p => (
+                <option key={p} value={p} disabled={!availablePlatforms.has(p)}>
+                  {p}{!availablePlatforms.has(p) ? " (no data)" : ""}
+                </option>
+              ))}
+            </select>
+            <select value={sortBy} onChange={e => setSortBy(e.target.value)} style={selectStyle(C)}>
+              {SORT_OPTIONS.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
+            </select>
+          </div>
+
+          {/* Leaderboard body */}
+          {displayEntries.length === 0 ? (
+            <EmptyState C={C} range={range} hasAnyHistory={hasAnyHistory} fallbackSuggestion={fallbackSuggestion} />
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {displayEntries.map((entry, i) => (
+                <LeaderRow
+                  key={entry.key}
+                  entry={entry}
+                  index={i}
+                  C={C}
+                  settings={effectiveSettings}
+                  isOverlay={isOverlay}
+                  expanded={expandedKey === entry.key}
+                  onToggle={() => setExpandedKey(k => k === entry.key ? null : entry.key)}
+                  onNotesChanged={bumpNotesVersion}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* Contest mode (UI-only for now) */}
+          <ContestModePanel C={C} settings={settings} setSetting={setSetting} />
+        </>
+      )}
     </div>
   )
 }
@@ -347,8 +371,8 @@ function selectStyle(C) {
   }
 }
 
-function TierBadge({ tier, C }) {
-  const t = FAN_TIERS[tier] || FAN_TIERS.Regular
+function StatusBadge({ status, C }) {
+  const t = FAN_STATUS_META[status] || FAN_STATUS_META.Regular
   return (
     <span style={{
       fontSize: 10, fontWeight: 800, color: t.color, background: `${t.color}1a`,
@@ -366,9 +390,23 @@ function PlatformBadge({ platform, C }) {
   )
 }
 
-function LeaderRow({ entry, index, C, settings, expanded, onToggle }) {
+function CopyLineButton({ C, text, label = "📋 Copy Chat Line" }) {
+  const [copied, setCopied] = useState(false)
+  return (
+    <button
+      onClick={(e) => { e.stopPropagation(); copyToClipboard(text); setCopied(true); setTimeout(() => setCopied(false), 1800) }}
+      style={{ ...ghostBtnStyle(C), fontSize: 10.5, padding: "5px 9px" }}
+    >
+      {copied ? "✓ Copied" : label}
+    </button>
+  )
+}
+
+function LeaderRow({ entry, index, C, settings, isOverlay, expanded, onToggle, onNotesChanged }) {
   const displayName = maskUsername(entry.username, settings.hideFullUsernames)
   const rankColor = entry.rank === 1 ? C.gold : entry.rank === 2 ? "#C0C0C0" : entry.rank === 3 ? "#CD7F32" : C.text
+  const nextBest = getNextBestAction(entry, entry.status, { hideFullUsernames: settings.hideFullUsernames })
+
   return (
     <div style={{ borderRadius: 12, border: `1px solid ${C.border}`, background: C.card2, overflow: "hidden", animation: `vip-row-in 0.2s ease-out ${index * 0.02}s both` }}>
       <div className="vip-row" onClick={onToggle} style={{
@@ -380,11 +418,14 @@ function LeaderRow({ entry, index, C, settings, expanded, onToggle }) {
           <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
             <span style={{ fontSize: 13, fontWeight: 800, color: C.white, overflow: "hidden", textOverflow: "ellipsis" }}>{displayName}</span>
             <PlatformBadge platform={entry.platform} C={C} />
-            <TierBadge tier={entry.tier} C={C} />
+            <StatusBadge status={entry.status} C={C} />
           </div>
           <div style={{ fontSize: 10.5, color: C.muted, marginTop: 2 }}>
             {entry.tipCount} tip{entry.tipCount === 1 ? "" : "s"} · biggest {fmtMoney(entry.biggestTipUsd, entry.biggestTipTokens, settings)} · {timeAgo(entry.lastTipAt)}
           </div>
+          {!isOverlay && (
+            <div style={{ fontSize: 10.5, color: C.cyan, marginTop: 3, fontWeight: 600 }}>→ {nextBest.action}</div>
+          )}
         </div>
         <div style={{ fontSize: 13.5, fontWeight: 900, color: C.cyan, textAlign: "right" }}>{fmtMoney(entry.totalUsd, entry.totalTokens, settings)}</div>
         <div style={{ fontSize: 11, fontWeight: 700, color: entry.rankChange > 0 ? C.green : entry.rankChange < 0 ? C.red : C.muted, textAlign: "right", minWidth: 34 }}>
@@ -405,12 +446,85 @@ function LeaderRow({ entry, index, C, settings, expanded, onToggle }) {
             <Detail label="Last tip" value={new Date(entry.lastTipAt).toLocaleDateString()} C={C} />
             <Detail label="Sessions tipped" value={entry.sessionsTipped} C={C} />
           </div>
-          <div style={{
-            fontSize: 12, color: C.white, background: `${C.cyan}12`, border: `1px solid ${C.cyan}33`,
-            borderRadius: 8, padding: "8px 10px", fontWeight: 600,
-          }}>💡 {getSuggestedAction(entry)}</div>
+
+          {!isOverlay && (
+            <>
+              <div style={{
+                fontSize: 12, color: C.white, background: `${C.cyan}12`, border: `1px solid ${C.cyan}33`,
+                borderRadius: 8, padding: "8px 10px", fontWeight: 600, marginBottom: 10,
+              }}>
+                <div style={{ fontSize: 9, color: C.cyan, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Next Best Action</div>
+                💡 {nextBest.action}
+                <div style={{ marginTop: 8, display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  <CopyLineButton C={C} text={nextBest.chatLines[0]} />
+                  <button
+                    onClick={(e) => { e.stopPropagation(); markFanThanked(entry.key); onNotesChanged() }}
+                    style={{ ...ghostBtnStyle(C), fontSize: 10.5, padding: "5px 9px" }}
+                  >
+                    🙏 Mark Thanked
+                  </button>
+                </div>
+              </div>
+
+              <FanNotesEditor C={C} entry={entry} onNotesChanged={onNotesChanged} />
+            </>
+          )}
         </div>
       )}
+    </div>
+  )
+}
+
+function FanNotesEditor({ C, entry, onNotesChanged }) {
+  const stored = getFanNote(entry.key)
+  const [likes, setLikes] = useState(stored.likes)
+  const [respondsTo, setRespondsTo] = useState(stored.respondsTo)
+  const [avoid, setAvoid] = useState(stored.avoid)
+  const [customNote, setCustomNote] = useState(stored.customNote)
+
+  useEffect(() => {
+    const s = getFanNote(entry.key)
+    setLikes(s.likes); setRespondsTo(s.respondsTo); setAvoid(s.avoid); setCustomNote(s.customNote)
+  }, [entry.key])
+
+  const commit = (patch) => { saveFanNote(entry.key, patch); onNotesChanged() }
+
+  const fieldStyle = {
+    width: "100%", background: C.card, border: `1px solid ${C.border2}`, color: C.white,
+    fontSize: 11.5, borderRadius: 6, padding: "5px 8px", marginTop: 3,
+  }
+
+  return (
+    <div onClick={e => e.stopPropagation()} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: 10 }}>
+      <div style={{ fontSize: 9, color: C.muted, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8, fontWeight: 700 }}>
+        📝 Relationship Notes <span style={{ color: C.orange, textTransform: "none", fontWeight: 400 }}>(private — never shown on overlay)</span>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 8, marginBottom: 8 }}>
+        <label style={{ fontSize: 10, color: C.text }}>
+          Likes
+          <input style={fieldStyle} value={likes} placeholder="bratty attention, shoutouts…"
+            onChange={e => setLikes(e.target.value)} onBlur={() => commit({ likes })} />
+        </label>
+        <label style={{ fontSize: 10, color: C.text }}>
+          Responds to
+          <input style={fieldStyle} value={respondsTo} placeholder="leaderboard competition…"
+            onChange={e => setRespondsTo(e.target.value)} onBlur={() => commit({ respondsTo })} />
+        </label>
+        <label style={{ fontSize: 10, color: C.text }}>
+          Avoid
+          <input style={fieldStyle} value={avoid} placeholder="long free DMs…"
+            onChange={e => setAvoid(e.target.value)} onBlur={() => commit({ avoid })} />
+        </label>
+      </div>
+      <label style={{ fontSize: 10, color: C.text, display: "block", marginBottom: 8 }}>
+        Custom note
+        <textarea style={{ ...fieldStyle, minHeight: 44, resize: "vertical" }} value={customNote}
+          placeholder="Next message: invite before next stream…"
+          onChange={e => setCustomNote(e.target.value)} onBlur={() => commit({ customNote })} />
+      </label>
+      <div style={{ fontSize: 10, color: C.muted }}>
+        Last thanked: {stored.lastThankedAt ? new Date(stored.lastThankedAt).toLocaleString() : "never"}
+      </div>
     </div>
   )
 }
@@ -454,11 +568,38 @@ function EmptyState({ C, range, hasAnyHistory, fallbackSuggestion }) {
   )
 }
 
-function SettingsPanel({ C, settings, setSetting, onResetDisplay, liveActive, entries, onToggleExclude }) {
+function PrivacyModeSelector({ C, mode, onSetMode }) {
+  return (
+    <div>
+      <div style={{ fontSize: 11, fontWeight: 800, color: C.white, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.4 }}>Privacy Mode</div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        {Object.entries(PRIVACY_MODES).map(([key, cfg]) => (
+          <button
+            key={key}
+            onClick={() => onSetMode(key)}
+            style={{
+              flex: "1 1 200px", textAlign: "left", padding: "10px 12px", borderRadius: 10, cursor: "pointer",
+              background: mode === key ? `linear-gradient(135deg, ${C.cyan}22, ${C.pink}22)` : C.card,
+              border: `1px solid ${mode === key ? C.cyan : C.border2}`,
+            }}
+          >
+            <div style={{ fontSize: 12, fontWeight: 800, color: mode === key ? C.white : C.text }}>
+              {key === "private" ? "🔒" : "📺"} {cfg.label}
+            </div>
+            <div style={{ fontSize: 10, color: C.muted, marginTop: 3, lineHeight: 1.4 }}>{cfg.description}</div>
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function SettingsPanel({ C, settings, setSetting, setPrivacyMode, onResetDisplay, liveActive, entries, onToggleExclude }) {
+  const isOverlay = settings.privacyMode === "overlay"
   return (
     <div style={{ background: C.card2, border: `1px solid ${C.border2}`, borderRadius: 12, padding: 14, marginBottom: 14, display: "flex", flexDirection: "column", gap: 14 }}>
       <div>
-        <div style={{ fontSize: 11, fontWeight: 800, color: C.white, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.4 }}>Reset Display</div>
+        <div style={{ fontSize: 11, fontWeight: 800, color: C.white, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.4 }}>Stream Controls</div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
           <button onClick={onResetDisplay} style={ghostBtnStyle(C)}>Reset Live Board</button>
           <button onClick={onResetDisplay} style={ghostBtnStyle(C)}>Start New Session</button>
@@ -473,15 +614,20 @@ function SettingsPanel({ C, settings, setSetting, onResetDisplay, liveActive, en
         </div>
       </div>
 
+      <PrivacyModeSelector C={C} mode={settings.privacyMode} onSetMode={setPrivacyMode} />
+
       <div>
-        <div style={{ fontSize: 11, fontWeight: 800, color: C.white, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.4 }}>Privacy & Display</div>
+        <div style={{ fontSize: 11, fontWeight: 800, color: C.white, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.4 }}>Fine-Tune Display</div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 8 }}>
-          <ToggleRow C={C} label="Private dashboard only" checked={settings.privateDashboardOnly} onChange={v => setSetting("privateDashboardOnly", v)} />
-          <ToggleRow C={C} label="Show on overlay" checked={settings.showOnOverlay} onChange={v => setSetting("showOnOverlay", v)} />
-          <ToggleRow C={C} label="Hide full usernames" checked={settings.hideFullUsernames} onChange={v => setSetting("hideFullUsernames", v)} />
+          <ToggleRow C={C} label="Hide full usernames" checked={settings.hideFullUsernames} disabled={isOverlay} onChange={v => setSetting("hideFullUsernames", v)} />
           <ToggleRow C={C} label="Show tokens instead of USD" checked={settings.showTokensInsteadOfUsd} onChange={v => setSetting("showTokensInsteadOfUsd", v)} />
-          <ToggleRow C={C} label="Hide dollar amounts" checked={settings.hideDollarAmounts} onChange={v => setSetting("hideDollarAmounts", v)} />
+          <ToggleRow C={C} label="Hide dollar amounts" checked={settings.hideDollarAmounts} disabled={isOverlay} onChange={v => setSetting("hideDollarAmounts", v)} />
         </div>
+        {isOverlay && (
+          <div style={{ marginTop: 8, fontSize: 10.5, color: C.muted }}>
+            🔒 Safe Overlay Mode forces masked usernames and hidden dollar amounts — this can't be turned off while overlay mode is active.
+          </div>
+        )}
         <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 8 }}>
           <span style={{ fontSize: 11, color: C.text }}>Minimum tip to appear</span>
           <input
@@ -490,11 +636,6 @@ function SettingsPanel({ C, settings, setSetting, onResetDisplay, liveActive, en
             style={{ ...selectStyle(C), width: 70 }}
           />
         </div>
-        {!settings.showOnOverlay ? null : settings.hideFullUsernames ? null : (
-          <div style={{ marginTop: 8, fontSize: 10.5, color: C.orange }}>
-            ⚠ Overlay is on and usernames are not masked — viewers will see full names.
-          </div>
-        )}
       </div>
 
       {entries.length > 0 && (
@@ -520,10 +661,10 @@ function SettingsPanel({ C, settings, setSetting, onResetDisplay, liveActive, en
   )
 }
 
-function ToggleRow({ C, label, checked, onChange }) {
+function ToggleRow({ C, label, checked, onChange, disabled = false }) {
   return (
-    <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11.5, color: C.text, cursor: "pointer" }}>
-      <input type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)} />
+    <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11.5, color: disabled ? C.muted : C.text, cursor: disabled ? "not-allowed" : "pointer" }}>
+      <input type="checkbox" checked={checked} disabled={disabled} onChange={e => onChange(e.target.checked)} />
       {label}
     </label>
   )

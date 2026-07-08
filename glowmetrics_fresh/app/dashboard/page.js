@@ -7,6 +7,11 @@ import { computeRoomHealth, ROOM_STATES, MOMENTUM_DIRECTIONS } from "../../lib/a
 import { computeRevenueVelocity, computeLiveComparison } from "../../lib/analytics/velocity"
 import { detectSessionPhase, PHASES, getRecoveryActions, getGoalStrategy } from "../../lib/analytics/sessionPhase"
 import { computeOpportunityScore, computeStreamHealth } from "../../lib/analytics/opportunity"
+import {
+  normalizeHistoricalTip, normalizeLiveTip, buildFanIndex, buildLeaderboard, attachFanStatus,
+  computeActiveTipperCount, getPrimaryVipAction, markActionDone, getActiveDoneKeys,
+  getEffectiveBoardSettings, isOverlayModeActive,
+} from "../../lib/analytics/vipBoard"
 import dynamic from "next/dynamic"
 import Sidebar from "./Sidebar"
 import SiteFooter from "../components/SiteFooter"
@@ -28,6 +33,7 @@ const AnalyticsCharts = dynamic(() => import('./AnalyticsCharts'), { ssr: false,
 const StreamPlanner = dynamic(() => import('./StreamPlanner'), { ssr: false, loading: () => TAB_LOADING })
 const MoneyMap = dynamic(() => import('./MoneyMap'), { ssr: false, loading: () => TAB_LOADING })
 const LiveVIPBoard = dynamic(() => import('../components/LiveVIPBoard'), { ssr: false })
+const PostStreamFollowUp = dynamic(() => import('../components/PostStreamFollowUp'), { ssr: false })
 
 // Analytics tracking — works whether or not @vercel/analytics is installed
 let track = (event, props) => {}
@@ -1354,6 +1360,8 @@ export default function Dashboard() {
   // ── LIVE MODE INTELLIGENCE ────────────────────────────────────────────
   const [liveStrategy, setLiveStrategy]       = useState('balanced')
   const [coachingHistory, setCoachingHistory] = useState([])
+  const [vipChatLineIndex, setVipChatLineIndex] = useState(0) // "Generate Another Line" cursor for the Do This Now card
+  const [vipDoneTick, setVipDoneTick] = useState(0) // bump to force a re-read of localStorage "mark done" dismissals
   const prevPhaseRef       = useRef(null)
   const isHydratingHistory = useRef(false)
   const processedTipIds    = useRef(new Set())
@@ -4430,7 +4438,7 @@ const handleCSV = async (file, forcePlatform = null) => {
             if (timeSinceLastTip !== null && timeSinceLastTip >= deadAirCrit) {
               if (canFireAlert('dead_air_critical', 3 * 60 * 1000)) {
                 const text = liveStrategy === 'whale' && topTipper
-                  ? `${Math.round(timeSinceLastTip)} min silence — address ${topTipper.username} directly NOW`
+                  ? `${Math.round(timeSinceLastTip)} min silence — address ${isOverlayModeActive() ? 'your top tipper' : topTipper.username} directly NOW`
                   : `No tips in ${Math.round(timeSinceLastTip)} min — call out names NOW`
                 alerts.push({ priority: 1, level: 'critical', icon: '🚨', text })
                 logFired('🚨', text)
@@ -4530,7 +4538,9 @@ const handleCSV = async (file, forcePlatform = null) => {
             if (topTipper && totalRevenue > 0 && topTipper.revenue / totalRevenue >= 0.45) {
               const key = `whale_dep_${topTipper.username}`
               if (canFireAlert(key, 10 * 60 * 1000)) {
-                const text = `${topTipper.username} is ${Math.round(topTipper.revenue / totalRevenue * 100)}% of revenue — give them attention`
+                const text = isOverlayModeActive()
+                  ? `One fan is carrying most of the room right now — give them attention`
+                  : `${topTipper.username} is ${Math.round(topTipper.revenue / totalRevenue * 100)}% of revenue — give them attention`
                 alerts.push({ priority: 4, level: 'info', icon: '🐳', text })
                 logFired('🐳', text)
               }
@@ -4665,6 +4675,35 @@ const handleCSV = async (file, forcePlatform = null) => {
           const alerts     = getAlerts(state)
           const nextAction = getNextAction(state)
 
+          // ── LIVE VIP PRIMARY ACTION ("Do This Now" upgrade) — who needs
+          // attention right now, not just the top-line coaching text above.
+          const vipHistoricalRecords = memoOn(derivedCacheRef.current, 'vipHistoricalRecords', [tips], () => tips.map(normalizeHistoricalTip))
+          const vipLiveRecords = memoOn(derivedCacheRef.current, 'vipLiveRecords', [liveEvents], () => liveEvents.map(normalizeLiveTip))
+          const vipFanIndex = memoOn(derivedCacheRef.current, 'vipFanIndex', [tips, liveEvents], () => buildFanIndex([...vipHistoricalRecords, ...vipLiveRecords], new Date()))
+          const vipSessionRecords = (liveActive && liveStartTime) ? vipLiveRecords.filter(r => r.timestamp >= liveStartTime) : []
+          const vipSessionEntriesRaw = buildLeaderboard({
+            records: vipSessionRecords, fanIndex: vipFanIndex, platformFilter: 'all', sortBy: 'total',
+            excludedFans: [], minTipUsd: 0, sessionStart: liveStartTime, now: new Date(),
+          })
+          const vipSessionEntries = attachFanStatus(vipSessionEntriesRaw, vipFanIndex, { now: new Date(), liveActive, sessionStart: liveStartTime })
+          const vipActiveTipperCount = computeActiveTipperCount(vipLiveRecords, liveStartTime, new Date(), 10)
+          const vipBoardSettings = getEffectiveBoardSettings()
+          const vipOverlayActive = isOverlayModeActive()
+          void vipDoneTick // re-read "mark done" dismissals from storage after Mark Done is clicked
+          const vipDoneKeys = getActiveDoneKeys()
+          const vipAction = liveActive ? getPrimaryVipAction({
+            sessionEntries: vipSessionEntries,
+            activeTipperCount: vipActiveTipperCount,
+            doneKeys: vipDoneKeys,
+            hideFullUsernames: vipBoardSettings.hideFullUsernames,
+            hideDollarAmounts: vipBoardSettings.hideDollarAmounts,
+          }) : null
+          const vipChatLines = vipAction?.chatLines || []
+          const vipCurrentLine = vipChatLines.length ? vipChatLines[vipChatLineIndex % vipChatLines.length] : ''
+          const handleVipCopyLine = () => { if (vipCurrentLine && typeof navigator !== 'undefined') navigator.clipboard?.writeText(vipCurrentLine).catch(() => {}) }
+          const handleVipMarkDone = () => { if (vipAction?.key && vipAction.key !== '__rotate__') { markActionDone(vipAction.key); setVipDoneTick(t => t + 1); setVipChatLineIndex(0) } }
+          const handleVipAnotherLine = () => setVipChatLineIndex(i => (i + 1) % Math.max(vipChatLines.length, 1))
+
           const PACE_CONFIG = {
             above:    { label: '🔥 Hot', color: C.green,  bg: 'rgba(16,185,129,0.12)',  border: 'rgba(16,185,129,0.3)' },
             on_track: { label: '✅ On Track', color: C.cyan, bg: 'rgba(34,211,238,0.1)', border: 'rgba(34,211,238,0.25)' },
@@ -4754,9 +4793,9 @@ const handleCSV = async (file, forcePlatform = null) => {
                       <div style={{ fontSize: 10, color: opportunityScore.color, marginTop: 2 }}>{opportunityScore.label}</div>
                     </div>
 
-                    {/* Stream Health */}
+                    {/* Room Vibe (formerly "Stream Health") */}
                     <div style={{ flex: '1 1 130px', borderRadius: 10, padding: '10px 14px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-                      <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 4 }}>Stream Health</div>
+                      <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 4 }}>Room Vibe</div>
                       <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
                         <span style={{ fontSize: 22, fontWeight: 900, color: streamHealth.grade === 'A' ? C.green : streamHealth.grade === 'B' ? C.cyan : streamHealth.grade === 'C' ? C.gold : C.red }}>{streamHealth.grade}</span>
                         <span style={{ fontSize: 13, color: C.muted }}>{streamHealth.score}/100</span>
@@ -4872,31 +4911,68 @@ const handleCSV = async (file, forcePlatform = null) => {
                     }
                     const uc = topAlert ? (urgencyMap[topAlert.level] || urgencyMap.info) : null
                     const defaultStyle = { bg: 'linear-gradient(135deg, rgba(236,72,153,0.1), rgba(124,92,255,0.1))', border: 'rgba(168,85,247,0.3)', badge: 'rgba(236,72,153,0.2)', badgeText: C.pink, tag: '⚡ DO THIS NOW' }
-                    const style = uc || defaultStyle
+                    // A structural alert (dead air, milestone, critical) still wins the spotlight when it fires —
+                    // but when nothing more urgent is happening, the VIP action (who needs attention right now)
+                    // becomes the main character instead of a generic strategy line.
+                    const showVipAsPrimary = !!vipAction && (!topAlert || topAlert.level === 'info' || topAlert.level === 'success')
+                    const style = showVipAsPrimary ? defaultStyle : (uc || defaultStyle)
+                    const secondaryText = showVipAsPrimary
+                      ? (topAlert ? topAlert.text : (nextAction.text !== vipAction.headline ? nextAction.text : null))
+                      : (topAlert && nextAction.text !== topAlert.text ? nextAction.text : null)
                     return (
-                      <div style={{ borderRadius: 16, padding: '26px 28px', marginBottom: 20, background: topAlert ? style.bg : defaultStyle.bg, border: `1px solid ${topAlert ? style.border : defaultStyle.border}`, boxShadow: topAlert?.level === 'critical' ? '0 0 32px rgba(248,113,113,0.12)' : 'none', animation: topAlert?.level === 'critical' ? 'cc-glow 2.5s ease-in-out infinite' : 'none', position: 'relative', overflow: 'hidden' }}>
+                      <div style={{ borderRadius: 16, padding: '26px 28px', marginBottom: 20, background: (topAlert && !showVipAsPrimary) ? style.bg : defaultStyle.bg, border: `1px solid ${(topAlert && !showVipAsPrimary) ? style.border : defaultStyle.border}`, boxShadow: topAlert?.level === 'critical' ? '0 0 32px rgba(248,113,113,0.12)' : 'none', animation: topAlert?.level === 'critical' ? 'cc-glow 2.5s ease-in-out infinite' : 'none', position: 'relative', overflow: 'hidden' }}>
                         {/* Animated gradient line at top */}
                         <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: 'linear-gradient(90deg, #ec4899, #a855f7, #22d3ee)', backgroundSize: '200% 100%', animation: 'cc-bar 2s ease infinite alternate' }} />
                         <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'flex-start' }}>
                           <div style={{ flex: 1, minWidth: 260 }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                              <div style={{ padding: '3px 10px', borderRadius: 6, background: topAlert ? style.badge : defaultStyle.badge, fontSize: 10, fontWeight: 800, color: topAlert ? style.badgeText : defaultStyle.badgeText, letterSpacing: 0.8, textTransform: 'uppercase' }}>
-                                {topAlert ? style.tag : defaultStyle.tag}
+                              <div style={{ padding: '3px 10px', borderRadius: 6, background: style.badge, fontSize: 10, fontWeight: 800, color: style.badgeText, letterSpacing: 0.8, textTransform: 'uppercase' }}>
+                                {style.tag}
                               </div>
                               <div style={{ fontSize: 10, color: C.muted }}>AI Coach · {liveStrategy} mode</div>
                             </div>
-                            <div style={{ fontSize: 19, fontWeight: 700, color: C.white, lineHeight: 1.65, marginBottom: topAlert && nextAction.text !== topAlert.text ? 12 : 0 }}>
-                              {topAlert ? topAlert.text : nextAction.text}
-                            </div>
-                            {topAlert && nextAction.text !== topAlert.text && (
-                              <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.6, borderTop: '1px solid rgba(255,255,255,0.07)', paddingTop: 10 }}>
-                                <span style={{ color: topAlert ? style.badgeText : C.pink, fontWeight: 700 }}>Next: </span>{nextAction.text}
-                              </div>
+                            {showVipAsPrimary ? (
+                              <>
+                                <div style={{ fontSize: 19, fontWeight: 800, color: C.white, lineHeight: 1.5, marginBottom: 6 }}>
+                                  {vipAction.headline}
+                                </div>
+                                <div style={{ fontSize: 13.5, color: C.text, lineHeight: 1.6, marginBottom: 12 }}>{vipAction.body}</div>
+                                {vipCurrentLine && (
+                                  <div style={{ fontSize: 13, color: C.white, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: '10px 12px', marginBottom: 12, fontStyle: 'italic' }}>
+                                    “{vipCurrentLine}”
+                                  </div>
+                                )}
+                                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                                  <button onClick={handleVipCopyLine} style={{ padding: '7px 14px', borderRadius: 8, background: `linear-gradient(90deg, ${C.cyan}, ${C.pink})`, border: 'none', color: '#05070f', fontWeight: 800, fontSize: 12, cursor: 'pointer' }}>📋 Copy Line</button>
+                                  {vipAction.key !== '__rotate__' && (
+                                    <button onClick={handleVipMarkDone} style={{ padding: '7px 14px', borderRadius: 8, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.14)', color: C.white, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>✓ Mark Done</button>
+                                  )}
+                                  {vipChatLines.length > 1 && (
+                                    <button onClick={handleVipAnotherLine} style={{ padding: '7px 14px', borderRadius: 8, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.14)', color: C.white, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>🔁 Another Line</button>
+                                  )}
+                                </div>
+                                {secondaryText && (
+                                  <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.6, borderTop: '1px solid rgba(255,255,255,0.07)', paddingTop: 10, marginTop: 12 }}>
+                                    <span style={{ color: C.pink, fontWeight: 700 }}>Also: </span>{secondaryText}
+                                  </div>
+                                )}
+                              </>
+                            ) : (
+                              <>
+                                <div style={{ fontSize: 19, fontWeight: 700, color: C.white, lineHeight: 1.65, marginBottom: secondaryText ? 12 : 0 }}>
+                                  {topAlert ? topAlert.text : nextAction.text}
+                                </div>
+                                {secondaryText && (
+                                  <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.6, borderTop: '1px solid rgba(255,255,255,0.07)', paddingTop: 10 }}>
+                                    <span style={{ color: topAlert ? style.badgeText : C.pink, fontWeight: 700 }}>Next: </span>{secondaryText}
+                                  </div>
+                                )}
+                              </>
                             )}
                           </div>
                           {liveActive && state && goalStrategy && (
                             <div style={{ minWidth: 170, padding: '14px 18px', borderRadius: 12, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-                              <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8 }}>Goal Push Probability</div>
+                              <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8 }}>Goal Push Chance</div>
                               <div style={{ fontSize: 30, fontWeight: 900, color: goalStrategy.probability >= 70 ? C.green : goalStrategy.probability >= 40 ? C.gold : C.red, marginBottom: 6 }}>{goalStrategy.probability}%</div>
                               <div style={{ height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.08)', overflow: 'hidden', marginBottom: 8 }}>
                                 <div style={{ height: '100%', width: `${goalStrategy.probability}%`, borderRadius: 2, background: goalStrategy.probability >= 70 ? `linear-gradient(90deg, ${C.green}, ${C.cyan})` : `linear-gradient(90deg, ${C.gold}, ${C.orange})`, transition: 'width 0.5s ease' }} />
@@ -4930,7 +5006,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                         {[
                           { label: 'Revenue', value: `$${state?.totalRevenue?.toFixed(2) || '0.00'}`, color: C.green, sub: velocity.label || null, showSparkline: true },
                           { label: 'Tips/min', value: state?.tipsPerMinute?.toFixed(2) || '0.00', color: C.cyan, sub: `${state?.liveOnlyCount || 0} tips live`, showSparkline: false },
-                          { label: 'Avg Tip', value: `$${state?.avgTipValue?.toFixed(2) || '0.00'}`, color: C.gold, sub: state?.topTipper ? `Top: ${state.topTipper.username}` : null, showSparkline: false },
+                          { label: 'Avg Tip', value: `$${state?.avgTipValue?.toFixed(2) || '0.00'}`, color: C.gold, sub: state?.topTipper ? `Top: ${vipOverlayActive ? 'your top tipper' : state.topTipper.username}` : null, showSparkline: false },
                           { label: 'Rev/hr', value: `$${velocity.currentUPH.toFixed(0)}`, color: velocity.color, sub: comparison.vsAvgPct !== null ? `${(comparison.vsAvgPct ?? 0) >= 0 ? '+' : ''}${comparison.vsAvgPct}% vs avg` : null, showSparkline: false },
                         ].map(({ label, value, color, sub, showSparkline }) => (
                           <div key={label} style={{ ...glassCard, borderRadius: 12, padding: '18px', transition: 'box-shadow 0.2s ease', cursor: 'default' }}
@@ -5025,11 +5101,11 @@ const handleCSV = async (file, forcePlatform = null) => {
                     {/* RIGHT */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
-                      {/* STREAM HEALTH */}
+                      {/* ROOM VIBE (formerly "Stream Health") */}
                       {liveActive && state && (
                         <div style={{ ...glassCard, borderRadius: 14, padding: '16px 18px' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                            <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700 }}>Stream Health</div>
+                            <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700 }}>Room Vibe</div>
                             <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
                               <span style={{ fontSize: 26, fontWeight: 900, color: streamHealth.grade === 'A' ? C.green : streamHealth.grade === 'B' ? C.cyan : streamHealth.grade === 'C' ? C.gold : C.red }}>{streamHealth.grade}</span>
                               <span style={{ fontSize: 11, color: C.muted }}>{streamHealth.score}/100</span>
@@ -5094,7 +5170,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                           <div style={{ width: 7, height: 7, borderRadius: '50%', background: liveEvents.some(e => e.sourceUsed === 'extension') ? C.green : C.muted, boxShadow: liveEvents.some(e => e.sourceUsed === 'extension') ? `0 0 6px ${C.green}` : 'none' }} />
                           <div style={{ fontSize: 13, fontWeight: 700, color: C.white }}>
-                            {liveEvents.some(e => e.sourceUsed === 'extension') ? 'Extension Auto-Capturing' : 'Auto-capture tips'}
+                            {liveEvents.some(e => e.sourceUsed === 'extension') ? 'Tip Capture — Active' : 'Tip Capture'}
                           </div>
                         </div>
                         <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.5, marginBottom: 8 }}>
@@ -5108,6 +5184,14 @@ const handleCSV = async (file, forcePlatform = null) => {
                       </div>
                     </div>
                   </div>
+
+                  {/* ── AFTER-STREAM FOLLOW-UP ──────────────────────────── */}
+                  <PostStreamFollowUp
+                    liveEvents={liveEvents}
+                    liveActive={liveActive}
+                    liveStartTime={liveStartTime}
+                    colors={C}
+                  />
 
                   {/* ── LIVE VIP BOARD ────────────────────────────────── */}
                   <div style={{ marginBottom: 20 }}>
@@ -5150,7 +5234,7 @@ const handleCSV = async (file, forcePlatform = null) => {
                     {/* ALERT HISTORY */}
                     {liveActive && firedAlertsLog.current.length > 0 && (
                       <div style={{ ...glassCard, borderRadius: 14, padding: 18 }}>
-                        <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700, marginBottom: 10 }}>📋 Alert History</div>
+                        <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700, marginBottom: 10 }}>📋 Money Moves</div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 5, maxHeight: 240, overflowY: 'auto' }}>
                           {firedAlertsLog.current.slice(0, 15).map((entry, i) => (
                             <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '5px 8px', borderRadius: 7, background: 'rgba(255,255,255,0.02)' }}>
