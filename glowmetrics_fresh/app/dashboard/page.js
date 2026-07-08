@@ -1341,6 +1341,15 @@ export default function Dashboard() {
   const refreshTimerRef = useRef(null)
   const liveTickerRef = useRef(null)
   const derivedCacheRef = useRef({}) // see memoOn() — caches expensive per-render recomputation below
+  // Fingerprint (row count + last row id) of the tips array as of the last runEngine()
+  // call, from ANY trigger (initial load, realtime batch, or the 30s timer itself).
+  // Lets the 30s timer skip the expensive recompute when nothing has changed.
+  const lastEngineTipsFingerprintRef = useRef(null)
+  // Batches Realtime `tips` INSERT events so a burst of inserts triggers one
+  // runEngine() pass instead of one per row. See flushPendingTipInserts below.
+  const pendingTipInsertsRef = useRef([])
+  const tipFlushTimerRef = useRef(null)
+  const tipBatchStartRef = useRef(0)
   // ── LIVE MODE INTELLIGENCE ────────────────────────────────────────────
   const [liveStrategy, setLiveStrategy]       = useState('balanced')
   const [coachingHistory, setCoachingHistory] = useState([])
@@ -1612,28 +1621,62 @@ export default function Dashboard() {
       } catch(e) {}
 
       // ── SUPABASE REALTIME ──────────────────────────────────
+      // Inserted rows are queued and merged in one batch (see flushPendingTipInserts)
+      // instead of re-running the full analytics engine per row — at large tip counts,
+      // a burst of inserts (e.g. re-sync, bulk import) would otherwise run the full
+      // engine once per row and freeze the tab.
+      const TIP_BATCH_DEBOUNCE_MS = 2500
+      const TIP_BATCH_MAX_WAIT_MS = 5000
+
+      const flushPendingTipInserts = () => {
+        clearTimeout(tipFlushTimerRef.current)
+        tipFlushTimerRef.current = null
+        tipBatchStartRef.current = 0
+        const batch = pendingTipInsertsRef.current
+        if (!batch.length) return
+        pendingTipInsertsRef.current = []
+
+        setTips(prev => {
+          const existingKeys = new Set(prev.map(t => `${t.date_time}|${t.username}|${t.tokens}`))
+          const newRows = batch.filter(row => {
+            const key = `${row.date_time}|${row.username}|${row.tokens}`
+            if (existingKeys.has(key)) return false
+            existingKeys.add(key)
+            return true
+          })
+          if (!newRows.length) return prev
+          const updated = [...prev, ...newRows].sort((a,b) => new Date(a.date_time)-new Date(b.date_time))
+          try {
+            const userTz = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC'
+            const r = runEngine(updated, userTz)
+            if (r) setAnalytics(r)
+            lastEngineTipsFingerprintRef.current = { length: updated.length, lastId: updated[updated.length - 1]?.id ?? null }
+          } catch(e) { console.error('realtime runEngine failed:', e) }
+          setNewTipCount(n => n + newRows.length)
+          setNewAlertKey(k => k + 1)
+          setLastRefreshed(new Date())
+          // Invalidate the sessionStorage cache so next hard reload gets fresh data
+          try { sessionStorage.removeItem(`camcash_tips_${user.id}`) } catch(e) {}
+          return updated
+        })
+      }
+
       const channel = supabase
         .channel(`tips_live_${user.id}`)
         .on('postgres_changes', {
           event: 'INSERT', schema: 'public', table: 'tips',
           filter: `user_id=eq.${user.id}`
         }, (payload) => {
-          setTips(prev => {
-            const exists = prev.some(t =>
-              t.date_time === payload.new.date_time &&
-              t.username === payload.new.username &&
-              t.tokens === payload.new.tokens
-            )
-            if (exists) return prev
-            const updated = [...prev, payload.new].sort((a,b) => new Date(a.date_time)-new Date(b.date_time))
-            try { const userTz = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC'; const r = runEngine(updated, userTz); if(r) setAnalytics(r) } catch(e) { console.error('realtime runEngine failed:', e) }
-            return updated
-          })
-          setNewTipCount(n => n + 1)
-          setNewAlertKey(k => k + 1)
-          setLastRefreshed(new Date())
-          // Invalidate the sessionStorage cache so next hard reload gets fresh data
-          try { sessionStorage.removeItem(`camcash_tips_${user.id}`) } catch(e) {}
+          pendingTipInsertsRef.current.push(payload.new)
+          if (!tipBatchStartRef.current) tipBatchStartRef.current = Date.now()
+          // Debounce so a burst of inserts collapses into one flush, but never
+          // wait longer than TIP_BATCH_MAX_WAIT_MS from the first queued insert —
+          // a continuous stream of inserts still flushes periodically instead of
+          // appearing to stop updating.
+          const elapsed = Date.now() - tipBatchStartRef.current
+          const wait = Math.max(Math.min(TIP_BATCH_DEBOUNCE_MS, TIP_BATCH_MAX_WAIT_MS - elapsed), 0)
+          clearTimeout(tipFlushTimerRef.current)
+          tipFlushTimerRef.current = setTimeout(flushPendingTipInserts, wait)
         })
         .subscribe()
       realtimeChannelRef.current = channel
@@ -1671,10 +1714,24 @@ export default function Dashboard() {
 
       // ── LIGHTWEIGHT 30s analytics re-run (NO DB calls — just re-runs engine on cached data)
       // Full reloads only happen on: initial load, CSV upload, focus after 5+ min away
+      // Gated on a cheap fingerprint (row count + last row id) so it only actually
+      // re-runs the (expensive, at large tip counts) engine when the tips array has
+      // changed since the last runEngine() call — otherwise this ticked forever and
+      // recomputed the full analytics pipeline every 30s even with no new data.
       refreshTimerRef.current = setInterval(() => {
         setTips(prev => {
           if (!prev.length) return prev
-          try { const userTz = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC'; const r = runEngine(prev, userTz); if(r) setAnalytics(r) } catch(e) { console.error('refresh runEngine failed:', e) }
+          const fingerprint = { length: prev.length, lastId: prev[prev.length - 1]?.id ?? null }
+          const last = lastEngineTipsFingerprintRef.current
+          if (last && last.length === fingerprint.length && last.lastId === fingerprint.lastId) {
+            return prev // unchanged since the last engine run — skip the recompute
+          }
+          try {
+            const userTz = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC'
+            const r = runEngine(prev, userTz)
+            if (r) setAnalytics(r)
+            lastEngineTipsFingerprintRef.current = fingerprint
+          } catch(e) { console.error('refresh runEngine failed:', e) }
           return prev
         })
       }, 30000)
@@ -1689,6 +1746,7 @@ export default function Dashboard() {
       if (realtimeChannelRef.current) supabase.removeChannel(realtimeChannelRef.current)
       if (liveTipsChannelRef.current) supabase.removeChannel(liveTipsChannelRef.current)
       if (refreshTimerRef.current) clearInterval(refreshTimerRef.current)
+      if (tipFlushTimerRef.current) clearTimeout(tipFlushTimerRef.current)
       // minuteTimer cleared inline
     }
   }, [])
@@ -1795,6 +1853,7 @@ export default function Dashboard() {
           const userTz = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC'
           const result = runEngine(allData, userTz)
           setAnalytics(result)
+          lastEngineTipsFingerprintRef.current = { length: allData.length, lastId: allData[allData.length - 1]?.id ?? null }
         } catch (engineErr) {
           console.error('[loadData] runEngine failed:', engineErr)
         }
