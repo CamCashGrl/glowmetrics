@@ -167,7 +167,7 @@ export default function First30DaysPost() {
       breadcrumb={[{ label: 'Blog', href: '/blog' }, { label: 'First 30 Days on Chaturbate' }]}
     >
       <div style={s.meta}>
-        <span>CamCashGrl</span>
+        <span>Daphne Dawson</span>
         <span>July 2026</span>
         <span>8 min read</span>
       </div>

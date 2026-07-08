@@ -25,9 +25,22 @@ const schema = {
   url: 'https://www.camcashgrl.com/blog/cam-model-jobs-from-home',
   datePublished: '2026-06-26',
   dateModified: '2026-06-26',
-  author: { '@type': 'Organization', name: 'CamCashGrl', url: 'https://www.camcashgrl.com' },
+  author: { '@type': 'Person', name: 'Daphne Dawson', jobTitle: 'Cam Model' },
   publisher: { '@type': 'Organization', name: 'CamCashGrl', url: 'https://www.camcashgrl.com' },
   mainEntityOfPage: { '@type': 'WebPage', '@id': 'https://www.camcashgrl.com/blog/cam-model-jobs-from-home' },
+}
+
+const faqSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: [
+    { '@type': 'Question', name: 'Do legitimate agencies charge upfront fees?', acceptedAnswer: { '@type': 'Answer', text: 'No. Legitimate agency guidance emphasizes revenue-share models with no upfront equipment or onboarding fees as a basic trust marker. Any large upfront payment request deserves serious scrutiny before you proceed.' } },
+    { '@type': 'Question', name: 'Can you do cam modeling part time?', acceptedAnswer: { '@type': 'Answer', text: 'Yes. Both public salary discussions and creator guidance make clear that part-time schedules are common, especially at the start. 15–20 hours per week is a typical beginner commitment. Many models keep their cam career part-time indefinitely while building other income streams alongside it.' } },
+    { '@type': 'Question', name: 'What is the biggest red flag in a cam model job ad?', acceptedAnswer: { '@type': 'Answer', text: 'Losing control of your account, your contract exit, or your payout path is a more serious risk than an inflated income claim. Terms that affect your long-term leverage — account ownership, exclusivity, exit conditions — matter more than any earnings promise.' } },
+    { '@type': 'Question', name: 'Is cam modeling considered self-employment?', acceptedAnswer: { '@type': 'Answer', text: 'In most cases, yes. If you are working directly on a platform, you are treated as an independent contractor for tax purposes. Even through an agency, the tax treatment varies — ask specifically before assuming you have employee status.' } },
+    { '@type': 'Question', name: 'What questions should I ask before signing with an agency?', acceptedAnswer: { '@type': 'Answer', text: 'Who owns the platform account? Who controls the payout destination? What percentage do you take and for what specific services? Are there exclusivity restrictions? What are the exit terms? What happens to my account and audience if I leave?' } },
+    { '@type': 'Question', name: 'Can I work on multiple platforms at once?', acceptedAnswer: { '@type': 'Answer', text: 'If you are working independently, usually yes — but always check your platform agreements for multi-streaming restrictions. If you are working through an agency, exclusivity clauses may prohibit it. Always confirm in writing before assuming.' } },
+  ],
 }
 
 const s = {
@@ -57,11 +70,11 @@ const s = {
 export default function CamModelJobsFromHome() {
   return (
     <ArticleLayout
-      schema={schema}
+      schema={[schema, faqSchema]}
       breadcrumb={[{ label: 'Blog', href: '/blog' }, { label: 'Cam Model Jobs From Home' }]}
     >
       <div style={s.meta}>
-        <span>CamCashGrl team</span>
+        <span>Daphne Dawson</span>
         <span>June 2026</span>
         <span>7 min read</span>
       </div>

@@ -25,9 +25,20 @@ const schema = {
   url: 'https://www.camcashgrl.com/blog/cam-model-taxes',
   datePublished: '2026-01-01',
   dateModified: '2026-04-27',
-  author: { '@type': 'Organization', name: 'CamCash', url: 'https://www.camcashgrl.com' },
+  author: { '@type': 'Person', name: 'Daphne Dawson', jobTitle: 'Cam Model' },
   publisher: { '@type': 'Organization', name: 'CamCash', url: 'https://www.camcashgrl.com' },
   mainEntityOfPage: { '@type': 'WebPage', '@id': 'https://www.camcashgrl.com/blog/cam-model-taxes' },
+}
+
+const faqSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: [
+    { '@type': 'Question', name: 'Do I have to pay taxes if I made under $600?', acceptedAnswer: { '@type': 'Answer', text: "In the US, Chaturbate won't issue a 1099 below $600, but you're still legally required to report all self-employment income regardless of amount." } },
+    { '@type': 'Question', name: "What's the self-employment tax rate?", acceptedAnswer: { '@type': 'Answer', text: '15.3% on net earnings in the US (covering Social Security and Medicare), on top of your regular income tax rate. This surprises many new self-employed earners.' } },
+    { '@type': 'Question', name: 'Can I write off my home streaming setup?', acceptedAnswer: { '@type': 'Answer', text: 'Yes, if the space is used regularly and exclusively for streaming. Document the square footage and calculate the proportion of your home dedicated to business use.' } },
+    { '@type': 'Question', name: 'Should I form an LLC?', acceptedAnswer: { '@type': 'Answer', text: 'An LLC offers liability protection and may provide tax advantages depending on your income level. Discuss with an accountant once your cam income is consistent.' } },
+  ],
 }
 
 const s = {
@@ -68,11 +79,11 @@ const deductions = [
 export default function CamModelTaxes() {
   return (
     <ArticleLayout
-      schema={schema}
+      schema={[schema, faqSchema]}
       breadcrumb={[{ label: 'Blog', href: '/blog' }, { label: 'Cam Model Taxes' }]}
     >
       <div style={s.meta}>
-        <span>CamCashGrl team</span>
+        <span>Daphne Dawson</span>
         <span>Updated April 2026</span>
         <span>7 min read</span>
       </div>

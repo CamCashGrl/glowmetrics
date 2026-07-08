@@ -19,7 +19,7 @@ const articleSchema = {
   description: 'Real cam model income data: beginner-to-veteran ranges, income drivers, and gross vs net breakdowns.',
   url: 'https://www.camcashgrl.com/blog/how-much-do-cam-models-make',
   datePublished: '2026-06-23', dateModified: '2026-06-23',
-  author: { '@type': 'Organization', name: 'CamCashGrl', url: 'https://www.camcashgrl.com' },
+  author: { '@type': 'Person', name: 'Daphne Dawson', jobTitle: 'Cam Model' },
   publisher: { '@type': 'Organization', name: 'CamCashGrl', url: 'https://www.camcashgrl.com' },
   mainEntityOfPage: { '@type': 'WebPage', '@id': 'https://www.camcashgrl.com/blog/how-much-do-cam-models-make' },
 }
@@ -81,7 +81,7 @@ export default function HowMuchDoCamModelsMake() {
       breadcrumb={[{ label: 'Blog', href: '/blog' }, { label: 'How Much Do Cam Models Make' }]}
     >
       <div style={s.meta}>
-        <span>CamCashGrl team</span>
+        <span>Daphne Dawson</span>
         <span>June 2026</span>
         <span>7 min read</span>
       </div>
@@ -215,6 +215,8 @@ export default function HowMuchDoCamModelsMake() {
         <div style={s.relT}>Related reading</div>
         <div style={s.relLinks}>
           <a href="/blog/cam-model-taxes" style={s.relLink}>→ Cam Model Taxes Explained</a>
+          <a href="/blog/how-much-do-bongacams-models-make" style={s.relLink}>→ How Much Do BongaCams Models Make?</a>
+          <a href="/blog/how-much-do-myfreecams-models-make" style={s.relLink}>→ How Much Do MyFreeCams Models Make?</a>
           <a href="/blog/how-to-get-more-viewers-as-a-cam-model" style={s.relLink}>→ How to Get More Viewers as a Cam Model</a>
           <a href="/blog/cam-model-jobs-from-home" style={s.relLink}>→ Cam Model Jobs From Home</a>
           <a href="/blog/best-cam-sites-for-models" style={s.relLink}>→ Best Cam Sites for Models in 2026</a>

@@ -60,7 +60,7 @@ export default function BoundariesToxicChat() {
           "url": "https://www.camcashgrl.com/blog/cam-model-boundaries-toxic-chat",
           "datePublished": "2026-06-23",
           "dateModified": "2026-06-23",
-          "author": { "@type": "Organization", "name": "CamCash", "url": "https://www.camcashgrl.com" },
+          "author": { "@type": "Person", "name": "Daphne Dawson", "jobTitle": "Cam Model" },
           "publisher": { "@type": "Organization", "name": "CamCash", "url": "https://www.camcashgrl.com" },
           "mainEntityOfPage": { "@type": "WebPage", "@id": "https://www.camcashgrl.com/blog/cam-model-boundaries-toxic-chat" }
         },
@@ -97,7 +97,7 @@ export default function BoundariesToxicChat() {
 
         <article>
           <div style={s.meta}>
-            <span>CamCashGrl team</span>
+            <span>Daphne Dawson</span>
             <span>June 2026</span>
             <span>7 min read</span>
           </div>

@@ -20,7 +20,7 @@ const schema = {
   url: 'https://www.camcashgrl.com/blog/benefits-of-cam-model-bookkeeping',
   datePublished: '2026-06-23',
   dateModified: '2026-06-23',
-  author: { '@type': 'Organization', name: 'CamCash', url: 'https://www.camcashgrl.com' },
+  author: { '@type': 'Person', name: 'Daphne Dawson', jobTitle: 'Cam Model' },
   publisher: { '@type': 'Organization', name: 'CamCash', url: 'https://www.camcashgrl.com' },
   mainEntityOfPage: { '@type': 'WebPage', '@id': 'https://www.camcashgrl.com/blog/benefits-of-cam-model-bookkeeping' },
 }
@@ -88,7 +88,7 @@ export default function BenefitsOfCamModelBookkeeping() {
       breadcrumb={[{ label: 'Blog', href: '/blog' }, { label: 'Benefits of Cam Model Bookkeeping' }]}
     >
       <div style={s.meta}>
-        <span>CamCashGrl team</span>
+        <span>Daphne Dawson</span>
         <span>Updated June 2026</span>
         <span>7 min read</span>
       </div>

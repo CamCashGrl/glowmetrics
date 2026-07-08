@@ -1,6 +1,6 @@
 export default function sitemap() {
   const base = 'https://www.camcashgrl.com'
-  const today = '2026-06-26'
+  const today = '2026-07-08'
 
   const staticPages = [
     { url: base,                                          priority: 1.0, changeFrequency: 'weekly'  },
@@ -40,8 +40,10 @@ export default function sitemap() {
     'freemium-vs-premium-cam-model',
     'girlfriend-experience-gfe-cam-modeling-strategy',
     'how-cam-models-stay-anonymous',
+    'how-much-do-bongacams-models-make',
     'how-much-do-cam-models-make',
     'how-much-do-chaturbate-models-make',
+    'how-much-do-myfreecams-models-make',
     'how-to-build-loyal-fans',
     'how-to-find-your-cam-model-niche',
     'how-to-get-more-tips-on-myfreecams',

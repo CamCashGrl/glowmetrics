@@ -25,9 +25,23 @@ const schema = {
   url: 'https://www.camcashgrl.com/blog/how-to-stay-safe-as-a-cam-model',
   datePublished: '2026-06-13',
   dateModified: '2026-06-13',
-  author: { '@type': 'Person', name: 'Dest', url: 'https://www.camcashgrl.com' },
+  author: { '@type': 'Person', name: 'Daphne Dawson', jobTitle: 'Cam Model' },
   publisher: { '@type': 'Organization', name: 'CamCash', url: 'https://www.camcashgrl.com' },
   mainEntityOfPage: { '@type': 'WebPage', '@id': 'https://www.camcashgrl.com/blog/how-to-stay-safe-as-a-cam-model' },
+}
+
+const faqs = [
+  { q: 'How do cam models most commonly get doxxed?', a: 'The most common vectors are unstripped photo/video metadata (EXIF data reveals GPS location), identifiable background details visible during streams, payment descriptors that show a legal name, reusing an email or password across a cam account and a personal account, and reverse image search matching a profile photo used elsewhere online.' },
+  { q: 'Should I use my nickname or a variation of my real name as a cam name?', a: "No. Your cam name needs to be completely unconnected to anything in your real life — not your nickname, not your middle name, not a variation of your actual name. The bar is that someone searching your stage name for hours should find nothing that connects to your real identity." },
+  { q: 'What should someone do if they get threatened with exposure (sextortion)?', a: 'Do not pay — payment never ends the threats, it confirms you will pay and escalates them. Document everything with timestamped screenshots before blocking, block immediately on every platform they contacted you on, report to the platform with your documentation, contact the Cyber Civil Rights Initiative (cybercivilrights.org) for crisis help and legal resources, and file a police report if they have real information, since it creates a paper trail.' },
+  { q: 'Do cam platforms let you block viewers from specific locations?', a: "Yes. Chaturbate, BongaCams, and MyFreeCams all have geo-blocking or country/IP blocking features in their model settings. Blocking your home state or country is a common step for models worried about being recognized by someone they know." },
+  { q: 'Is SMS two-factor authentication safe enough for cam model accounts?', a: 'No — use an authenticator app instead. SIM swapping, where someone hijacks your phone number to intercept SMS codes, is a real attack vector against creators specifically because their accounts are known to be valuable targets.' },
+]
+
+const faqSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: faqs.map(({ q, a }) => ({ '@type': 'Question', name: q, acceptedAnswer: { '@type': 'Answer', text: a } })),
 }
 
 const s = {
@@ -50,20 +64,19 @@ const s = {
   relLinks:{ display: 'flex', flexDirection: 'column', gap: '6px' },
   relLink: { fontSize: '14px', color: '#6366f1', textDecoration: 'none' },
   iLink:   { color: '#a5b4fc', textDecoration: 'none' },
-  imgPlaceholder: { background: 'rgba(99,102,241,0.04)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '10px', padding: '28px 24px', textAlign: 'center', marginBottom: '24px' },
-  imgCaption: { fontSize: '12px', color: '#475569', fontStyle: 'italic' },
   numberedList: { paddingLeft: '20px', marginBottom: '16px', counterReset: 'item' },
   numberedItem: { fontSize: '15px', lineHeight: 1.7, color: '#94a3b8', marginBottom: '6px' },
+  faqItem: { borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '14px', marginBottom: '14px' },
 }
 
 export default function HowToStaySafeAsCamModel() {
   return (
     <ArticleLayout
-      schema={schema}
+      schema={[schema, faqSchema]}
       breadcrumb={[{ label: 'Blog', href: '/blog' }, { label: 'Cam Model Safety Guide' }]}
     >
       <div style={s.meta}>
-        <span>Written by Dest</span>
+        <span>Daphne Dawson</span>
         <span>Updated June 2026</span>
         <span>10 min read</span>
       </div>
@@ -94,10 +107,6 @@ export default function HowToStaySafeAsCamModel() {
       <p style={s.p}>
         The goal is that if someone searches your stage name for 10 hours, they find nothing that connects to your real identity. That's the bar.
       </p>
-
-      <div style={s.imgPlaceholder}>
-        <p style={{ ...s.imgCaption, marginBottom: 0 }}>cam model privacy setup checklist showing separate accounts for stage name vs real identity</p>
-      </div>
 
       <h2 style={s.h2}>What Doxxing Actually Looks Like (And How It Happens)</h2>
       <p style={s.p}>
@@ -189,8 +198,12 @@ export default function HowToStaySafeAsCamModel() {
         CamCash stores your earnings analytics in your account only — encrypted, behind authentication, never shared. If you're currently tracking earnings in notes apps, Google Sheets, or photos of your screen, that's a privacy risk worth closing.
       </p>
 
-      <div style={s.imgPlaceholder}>
-        <p style={{ ...s.imgCaption, marginBottom: 0 }}>CamCash dashboard showing earnings analytics protected behind login — cam model income tracking privacy</p>
+      <div style={{ borderRadius: '12px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.07)', marginBottom: '24px' }}>
+        <img
+          src="/blog-images/camcash-earnings-stats.webp"
+          alt="CamCash dashboard showing earnings analytics protected behind login — total earnings, average dollars per hour, and return rate"
+          style={{ width: '100%', display: 'block' }}
+        />
       </div>
 
       <div style={s.cta}>
@@ -206,6 +219,14 @@ export default function HowToStaySafeAsCamModel() {
       <p style={s.p}>
         The models who have long careers in this industry are the ones who built these walls before they needed them — not after.
       </p>
+
+      <h2 style={s.h2}>Frequently Asked Questions</h2>
+      {faqs.map(({ q, a }, i) => (
+        <div key={i} style={s.faqItem}>
+          <div style={{ fontSize: '15px', fontWeight: 700, color: '#e2e8f0', marginBottom: '6px' }}>{q}</div>
+          <p style={{ ...s.p, marginBottom: 0 }}>{a}</p>
+        </div>
+      ))}
 
       <div style={s.related}>
         <div style={s.relT}>Related reading</div>

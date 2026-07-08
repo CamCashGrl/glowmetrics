@@ -72,7 +72,7 @@ export default function FreemiumVsPremium() {
           "url": "https://www.camcashgrl.com/blog/freemium-vs-premium-cam-model",
           "datePublished": "2026-06-23",
           "dateModified": "2026-06-23",
-          "author": { "@type": "Person", "name": "Daphne", "url": "https://www.camcashgrl.com" },
+          "author": { "@type": "Person", "name": "Daphne Dawson", "jobTitle": "Cam Model" },
           "publisher": { "@type": "Organization", "name": "CamCash", "url": "https://www.camcashgrl.com" },
           "mainEntityOfPage": { "@type": "WebPage", "@id": "https://www.camcashgrl.com/blog/freemium-vs-premium-cam-model" }
         },
@@ -109,7 +109,7 @@ export default function FreemiumVsPremium() {
 
         <article>
           <div style={s.meta}>
-            <span>Daphne · CamCashGrl</span>
+            <span>Daphne Dawson</span>
             <span>June 2026</span>
             <span>7 min read</span>
           </div>

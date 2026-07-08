@@ -72,7 +72,7 @@ export default function Page() {
     description: DESC,
     datePublished: '2026-06-07',
     dateModified: '2026-06-07',
-    author: { '@type': 'Organization', name: 'CamCashGrl' },
+    author: { '@type': 'Person', name: 'Daphne Dawson', jobTitle: 'Cam Model' },
     publisher: {
       '@type': 'Organization',
       name: 'CamCashGrl',
@@ -99,7 +99,7 @@ export default function Page() {
       <BlogLayout
         title="The Psychology of a Click: How to Generate Viral Cam Room Titles"
         summary="A boring title gets buried. A title built on the viral formula stops the scroll. Here is the anatomy of a high-converting room title and how to generate one for every stream without burning out."
-        author="CamCashGrl Team"
+        author="Daphne Dawson"
         publishedDate="June 2026"
         lastUpdated="June 7, 2026"
         faqs={faqs}

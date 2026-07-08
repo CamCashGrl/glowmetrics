@@ -30,7 +30,7 @@ const schema = {
   url: 'https://www.camcashgrl.com/blog/cam-model-earnings',
   datePublished: '2026-01-01',
   dateModified: '2026-07-07',
-  author: { '@type': 'Organization', name: 'CamCash', url: 'https://www.camcashgrl.com' },
+  author: { '@type': 'Person', name: 'Daphne Dawson', jobTitle: 'Cam Model' },
   publisher: { '@type': 'Organization', name: 'CamCash', url: 'https://www.camcashgrl.com' },
   mainEntityOfPage: {
     '@type': 'WebPage',
@@ -138,7 +138,7 @@ export default function CamModelEarnings() {
       breadcrumb={[{ label: 'Blog', href: '/blog' }, { label: 'Cam Model Earnings' }]}
     >
       <div style={s.meta}>
-        <span>CamCashGrl team</span>
+        <span>Daphne Dawson</span>
         <span>Updated July 2026</span>
         <span>7 min read</span>
       </div>
@@ -472,6 +472,8 @@ export default function CamModelEarnings() {
         <div style={s.relT}>Related reading</div>
         <div style={s.relLinks}>
           <a href="/blog/how-much-do-chaturbate-models-make" style={s.relLink}>→ How much Chaturbate models make</a>
+          <a href="/blog/how-much-do-bongacams-models-make" style={s.relLink}>→ How much BongaCams models make</a>
+          <a href="/blog/how-much-do-myfreecams-models-make" style={s.relLink}>→ How much MyFreeCams models make</a>
           <a href="/guides/cam-model-token-calculator" style={s.relLink}>→ Cam model token calculator</a>
           <a href="/guides/cam-model-income-tracker" style={s.relLink}>→ Cam model income tracker</a>
           <a href="/guides/chaturbate-earnings-tracker" style={s.relLink}>→ Chaturbate earnings tracker</a>

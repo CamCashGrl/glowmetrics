@@ -38,6 +38,16 @@ const posts = [
     description: 'Per-hour earnings data for Chaturbate broadcasters.',
   },
   {
+    slug: 'how-much-do-bongacams-models-make',
+    title: 'How Much Do BongaCams Models Make?',
+    description: 'Earnings by model level and how the tiered token payout system works.',
+  },
+  {
+    slug: 'how-much-do-myfreecams-models-make',
+    title: 'How Much Do MyFreeCams Models Make?',
+    description: 'Earnings by experience level and how the Premium-member tipping system works.',
+  },
+  {
     slug: 'how-to-build-loyal-fans',
     title: 'How to Build Loyal Fans',
     description: 'Build a fanbase that comes back and tips consistently.',

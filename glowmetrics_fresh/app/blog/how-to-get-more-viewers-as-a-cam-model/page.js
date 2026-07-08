@@ -19,7 +19,7 @@ const articleSchema = {
   description: 'Cross-platform viewer growth guide for cam models: Chaturbate, BongaCams, MFC, Stripchat, and CamSoda — discovery, retention, off-platform promotion, and platform comparison.',
   url: 'https://www.camcashgrl.com/blog/how-to-get-more-viewers-as-a-cam-model',
   datePublished: '2026-07-17', dateModified: '2026-07-17',
-  author: { '@type': 'Organization', name: 'CamCashGrl', url: 'https://www.camcashgrl.com' },
+  author: { '@type': 'Person', name: 'Daphne Dawson', jobTitle: 'Cam Model' },
   publisher: { '@type': 'Organization', name: 'CamCashGrl', url: 'https://www.camcashgrl.com' },
   mainEntityOfPage: { '@type': 'WebPage', '@id': 'https://www.camcashgrl.com/blog/how-to-get-more-viewers-as-a-cam-model' },
 }
@@ -64,7 +64,7 @@ export default function HowToGetMoreViewers() {
       breadcrumb={[{ label: 'Blog', href: '/blog' }, { label: 'How to Get More Viewers as a Cam Model' }]}
     >
       <div style={s.meta}>
-        <span>CamCashGrl team</span>
+        <span>Daphne Dawson</span>
         <span>July 2026</span>
         <span>7 min read</span>
       </div>

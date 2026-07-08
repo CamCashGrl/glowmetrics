@@ -25,9 +25,23 @@ const schema = {
   url: 'https://www.camcashgrl.com/blog/how-to-increase-cam-earnings',
   datePublished: '2026-01-01',
   dateModified: '2026-04-27',
-  author: { '@type': 'Organization', name: 'CamCash', url: 'https://www.camcashgrl.com' },
+  author: { '@type': 'Person', name: 'Daphne Dawson', jobTitle: 'Cam Model' },
   publisher: { '@type': 'Organization', name: 'CamCash', url: 'https://www.camcashgrl.com' },
   mainEntityOfPage: { '@type': 'WebPage', '@id': 'https://www.camcashgrl.com/blog/how-to-increase-cam-earnings' },
+}
+
+const faqs = [
+  { q: 'What data should cam models track to increase earnings?', a: 'Complete tip history across every session and platform: username, amount (tokens and/or USD), timestamp, which platform the tip came from, and session start/end time. Complete data reveals patterns most models never see — which fans tip on which days, which sessions consistently outperform others, and which platform actually pays more per hour.' },
+  { q: 'How do I find my real peak streaming hours?', a: "Generic 'peak traffic time' advice is based on platform-wide traffic, not your specific audience — a model whose top tippers are in Europe has different peak hours than one with a mostly US-based audience. Export at least 3 months of tip history, group tips by hour of day, and calculate average earnings per active streaming day at each hour. Most models find 2-3 hours where they earn 40-80% more than their overall average." },
+  { q: 'How much of my cam income comes from my top fans?', a: 'In almost every cam model\'s earning history, the top 10-15% of fans account for 60-70% of total income. These are your whales, and losing even one can cost $50-$300+ in a month — which is why tracking each fan\'s lifetime spend, tip frequency, and days since their last tip matters more than chasing new viewers.' },
+  { q: 'What should I check after every stream to improve my earnings?', a: "Three things: whether you earned above or below your personal average (in relative terms, not absolute dollars), when the money came in during the session (front-loaded, back-loaded, or steady), and who drove the revenue — if one fan contributed 50%+ of a session's income, that's a concentration risk worth addressing." },
+  { q: 'How do I know if one cam platform pays better than another?', a: 'Compare USD earned per hour streamed, calculated separately per platform — not total earnings, which gets distorted by how many hours you spent on each. Most models who run this comparison honestly find a significant gap, commonly 2-4x more per hour on one platform than the other.' },
+]
+
+const faqSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: faqs.map(({ q, a }) => ({ '@type': 'Question', name: q, acceptedAnswer: { '@type': 'Answer', text: a } })),
 }
 
 const s = {
@@ -55,16 +69,17 @@ const s = {
   relLinks:{ display: 'flex', flexDirection: 'column', gap: '6px' },
   relLink: { fontSize: '14px', color: '#6366f1', textDecoration: 'none' },
   iLink:   { color: '#a5b4fc', textDecoration: 'none' },
+  faqItem: { borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '14px', marginBottom: '14px' },
 }
 
 export default function HowToIncreaseCamEarnings() {
   return (
     <ArticleLayout
-      schema={schema}
+      schema={[schema, faqSchema]}
       breadcrumb={[{ label: 'Blog', href: '/blog' }, { label: 'Increase Cam Earnings' }]}
     >
       <div style={s.meta}>
-        <span>CamCashGrl team</span>
+        <span>Daphne Dawson</span>
         <span>Updated April 2026</span>
         <span>6 min read</span>
       </div>
@@ -148,6 +163,22 @@ export default function HowToIncreaseCamEarnings() {
 
       <h2 style={s.h2}>Step 5: Compare Your Platforms Honestly</h2>
       <p style={s.p}>If you stream on more than one platform, you almost certainly earn more per hour on one than the other. The right metric is USD earned per hour streamed, calculated per platform. Most models who do this analysis find a significant difference — commonly 2–4x more on one platform than the other.</p>
+
+      <div style={{ margin: '20px 0', borderRadius: '12px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.07)' }}>
+        <img
+          src="/blog-images/camcash-best-hours-heatmap.webp"
+          alt="CamCash revenue timing and platform ROI table showing dollars per active day by platform and day of week"
+          style={{ width: '100%', display: 'block' }}
+        />
+      </div>
+
+      <h2 style={s.h2}>Frequently Asked Questions</h2>
+      {faqs.map(({ q, a }, i) => (
+        <div key={i} style={s.faqItem}>
+          <div style={{ fontSize: '15px', fontWeight: 700, color: '#e2e8f0', marginBottom: '6px' }}>{q}</div>
+          <p style={{ ...s.p, marginBottom: 0 }}>{a}</p>
+        </div>
+      ))}
 
       <div style={s.cta}>
         <div style={s.ctaT}>See exactly where your money comes from</div>

@@ -20,7 +20,7 @@ const schema = {
   url: 'https://www.camcashgrl.com/blog/cam-model-token-to-dollar-ratio-explained',
   datePublished: '2026-06-23',
   dateModified: '2026-06-23',
-  author: { '@type': 'Organization', name: 'CamCash', url: 'https://www.camcashgrl.com' },
+  author: { '@type': 'Person', name: 'Daphne Dawson', jobTitle: 'Cam Model' },
   publisher: { '@type': 'Organization', name: 'CamCash', url: 'https://www.camcashgrl.com' },
   mainEntityOfPage: { '@type': 'WebPage', '@id': 'https://www.camcashgrl.com/blog/cam-model-token-to-dollar-ratio-explained' },
 }
@@ -93,7 +93,7 @@ export default function CamModelTokenToDollarRatioExplained() {
       breadcrumb={[{ label: 'Blog', href: '/blog' }, { label: 'Token to Dollar Ratio Explained' }]}
     >
       <div style={s.meta}>
-        <span>CamCashGrl team</span>
+        <span>Daphne Dawson</span>
         <span>Updated June 2026</span>
         <span>6 min read</span>
       </div>

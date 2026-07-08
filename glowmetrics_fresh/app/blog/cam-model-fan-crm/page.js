@@ -72,7 +72,7 @@ export default function Page() {
     description: DESC,
     datePublished: '2026-06-07',
     dateModified: '2026-06-07',
-    author: { '@type': 'Organization', name: 'CamCashGrl' },
+    author: { '@type': 'Person', name: 'Daphne Dawson', jobTitle: 'Cam Model' },
     publisher: {
       '@type': 'Organization',
       name: 'CamCashGrl',
@@ -99,7 +99,7 @@ export default function Page() {
       <BlogLayout
         title="Whale Management 101: How to Track, Profile, and Prioritize Your Top Tippers"
         summary="A handful of fans drive most of your income. A fan CRM keeps a profile on every one of them so you always know who your VIPs are, what they respond to, and when it is time to reach out."
-        author="CamCashGrl Team"
+        author="Daphne Dawson"
         publishedDate="June 2026"
         lastUpdated="June 7, 2026"
         faqs={faqs}

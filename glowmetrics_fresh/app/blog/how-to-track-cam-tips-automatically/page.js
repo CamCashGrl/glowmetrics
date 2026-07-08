@@ -72,7 +72,7 @@ export default function Page() {
     description: DESC,
     datePublished: '2026-06-07',
     dateModified: '2026-06-07',
-    author: { '@type': 'Organization', name: 'CamCashGrl' },
+    author: { '@type': 'Person', name: 'Daphne Dawson', jobTitle: 'Cam Model' },
     publisher: {
       '@type': 'Organization',
       name: 'CamCashGrl',
@@ -99,7 +99,7 @@ export default function Page() {
       <BlogLayout
         title="How to Track Your Cam Tips and Earnings Automatically"
         summary="After a long stream, the last thing you want is to download a messy spreadsheet and do math at 3 AM. Here is how to track every tip automatically and let your dashboard build itself."
-        author="CamCashGrl Team"
+        author="Daphne Dawson"
         publishedDate="June 2026"
         lastUpdated="June 7, 2026"
         faqs={faqs}

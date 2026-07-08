@@ -25,9 +25,19 @@ const schema = {
   url: 'https://www.camcashgrl.com/blog/how-to-build-loyal-fans',
   datePublished: '2026-01-01',
   dateModified: '2026-04-27',
-  author: { '@type': 'Organization', name: 'CamCash', url: 'https://www.camcashgrl.com' },
+  author: { '@type': 'Person', name: 'Daphne Dawson', jobTitle: 'Cam Model' },
   publisher: { '@type': 'Organization', name: 'CamCash', url: 'https://www.camcashgrl.com' },
   mainEntityOfPage: { '@type': 'WebPage', '@id': 'https://www.camcashgrl.com/blog/how-to-build-loyal-fans' },
+}
+
+const faqSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: [
+    { '@type': 'Question', name: 'How many loyal fans do you need to make full-time income?', acceptedAnswer: { '@type': 'Answer', text: "Less than you'd think. Models in the $2,000–$5,000/month range often have 10–25 consistent whales generating the majority of income. The goal isn't hundreds of loyal fans — it's a core group of high-value regulars." } },
+    { '@type': 'Question', name: "How do I re-engage a fan who's been gone for months?", acceptedAnswer: { '@type': 'Answer', text: 'A natural, personal message with no pressure works best. Reference something specific about your history with them. Keep it light — the goal is to remind them you exist and make the path back feel easy.' } },
+    { '@type': 'Question', name: 'Is it worth spending time on fans who tip small amounts?', acceptedAnswer: { '@type': 'Answer', text: 'Everyone starts as a small tipper. Some grow into significant spenders over months or years. Treating all tippers with recognition is a low-cost investment with asymmetric upside.' } },
+  ],
 }
 
 const s = {
@@ -59,11 +69,11 @@ const s = {
 export default function BuildLoyalFans() {
   return (
     <ArticleLayout
-      schema={schema}
+      schema={[schema, faqSchema]}
       breadcrumb={[{ label: 'Blog', href: '/blog' }, { label: 'Build Loyal Fans' }]}
     >
       <div style={s.meta}>
-        <span>CamCashGrl team</span>
+        <span>Daphne Dawson</span>
         <span>Updated April 2026</span>
         <span>7 min read</span>
       </div>

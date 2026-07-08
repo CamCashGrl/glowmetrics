@@ -25,9 +25,22 @@ const schema = {
   url: 'https://www.camcashgrl.com/blog/cam-model-equipment-guide',
   datePublished: '2026-07-03',
   dateModified: '2026-07-03',
-  author: { '@type': 'Organization', name: 'CamCashGrl', url: 'https://www.camcashgrl.com' },
+  author: { '@type': 'Person', name: 'Daphne Dawson', jobTitle: 'Cam Model' },
   publisher: { '@type': 'Organization', name: 'CamCashGrl', url: 'https://www.camcashgrl.com' },
   mainEntityOfPage: { '@type': 'WebPage', '@id': 'https://www.camcashgrl.com/blog/cam-model-equipment-guide' },
+}
+
+const faqSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: [
+    { '@type': 'Question', name: 'Is your laptop camera enough at the start?', acceptedAnswer: { '@type': 'Answer', text: 'Sometimes, but good lighting will matter more than replacing it on day one. If your laptop camera is 1080p and your lighting is solid, your image quality may already be acceptable for a beginner setup. Test record first before buying anything.' } },
+    { '@type': 'Question', name: 'Do you need OBS immediately?', acceptedAnswer: { '@type': 'Answer', text: 'Not always. Many platforms have built-in broadcast tools you can use to start. OBS adds control, testing capability, and scene management — it is worth learning once you are past your first few sessions and ready to optimize.' } },
+    { '@type': 'Question', name: 'Should you record test sessions?', acceptedAnswer: { '@type': 'Answer', text: 'Absolutely. OBS recommends testing before your first real stream, and that habit is the cheapest quality improvement you can make. Most setup problems are visible in a 3-minute test recording and invisible until you review one.' } },
+    { '@type': 'Question', name: 'What lighting is best for camming?', acceptedAnswer: { '@type': 'Answer', text: 'Soft, even, flattering light placed in front of you (not behind or to the side). A ring light works well because it creates even illumination and a flattering eye catchlight. Two softboxes placed at 45-degree angles give slightly more control over shadows.' } },
+    { '@type': 'Question', name: 'Does audio quality matter?', acceptedAnswer: { '@type': 'Answer', text: 'More than most beginners expect. Viewers tolerate average video longer than they tolerate poor audio. If you are conversational in your room style, clear audio directly affects whether people stay. A $40–60 USB microphone is one of the best value upgrades available.' } },
+    { '@type': 'Question', name: 'What internet speed do you need for camming?', acceptedAnswer: { '@type': 'Answer', text: 'A stable 5 Mbps upload is the minimum for reliable 1080p streaming. 10+ Mbps upload gives you headroom. Stability matters more than raw speed — a wired ethernet connection is more reliable than strong WiFi for multi-hour sessions.' } },
+  ],
 }
 
 const s = {
@@ -55,11 +68,11 @@ const s = {
 export default function CamModelEquipmentGuide() {
   return (
     <ArticleLayout
-      schema={schema}
+      schema={[schema, faqSchema]}
       breadcrumb={[{ label: 'Blog', href: '/blog' }, { label: 'Cam Model Equipment Guide' }]}
     >
       <div style={s.meta}>
-        <span>CamCashGrl team</span>
+        <span>Daphne Dawson</span>
         <span>July 2026</span>
         <span>6 min read</span>
       </div>
