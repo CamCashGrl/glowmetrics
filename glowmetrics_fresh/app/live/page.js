@@ -9,6 +9,7 @@ import { computeOpportunityScore, computeStreamHealth } from '../../lib/analytic
 import FeedbackWidget from '../components/FeedbackWidget';
 import EventsSync from './EventsSync';
 import Button from '../../components/ui/Button';
+import LiveVIPBoard from '../components/LiveVIPBoard';
 
 const C = {
   bg: '#040812', card: 'rgba(15,20,32,0.75)', border: 'rgba(168,85,247,0.2)',
@@ -40,6 +41,7 @@ export default function LivePage() {
   const [liveTick, setLiveTick]       = useState(0);
   const [sessions, setSessions]       = useState([]);
   const [currentSessionId, setCurrentSessionId] = useState(null);
+  const [historicalTips, setHistoricalTips] = useState([]); // permanent `tips` table rows, for the Live VIP Board's Today/Week/Month/All-Time tabs
 
   // ── DEMO / AUTH / EXT MODAL STATE ────────────────────────────────────
   const [demoTips, setDemoTips]           = useState([]);
@@ -141,6 +143,29 @@ export default function LivePage() {
 
     return () => { if (liveTipsChannelRef.current) supabase.removeChannel(liveTipsChannelRef.current); };
   }, [normalizeTip]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Permanent tip history (Pro/Unlimited plans only — free plans have no rows here)
+  // for the Live VIP Board's Today/Week/Month/All-Time tabs. Read-only, does not
+  // affect the free live-coaching feed above, which stays on `live_tips`.
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    (async () => {
+      let allRows = [];
+      let from = 0;
+      const PAGE = 1000;
+      while (true) {
+        const { data, error } = await supabase.from('tips').select('*').eq('user_id', user.id)
+          .order('date_time', { ascending: true }).range(from, from + PAGE - 1);
+        if (error || cancelled) break;
+        if (data?.length) allRows = [...allRows, ...data];
+        if (!data || data.length < PAGE) break;
+        from += PAGE;
+      }
+      if (!cancelled) setHistoricalTips(allRows);
+    })();
+    return () => { cancelled = true; };
+  }, [user]);
 
   // ── SESSION DB HANDLERS ───────────────────────────────────────────────
 
@@ -1299,6 +1324,17 @@ export default function LivePage() {
                   )}
                 </div>
               </div>
+            </div>
+
+            {/* ── LIVE VIP BOARD ────────────────────────────────── */}
+            <div style={{ marginBottom: 20 }}>
+              <LiveVIPBoard
+                liveEvents={liveEvents}
+                historicalTips={historicalTips}
+                liveActive={liveActive}
+                liveStartTime={liveStartTime}
+                colors={C}
+              />
             </div>
 
             {/* ── BOTTOM PANELS ─────────────────────────────────── */}

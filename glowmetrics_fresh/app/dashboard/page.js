@@ -27,6 +27,7 @@ const TAB_LOADING = (
 const AnalyticsCharts = dynamic(() => import('./AnalyticsCharts'), { ssr: false, loading: () => TAB_LOADING })
 const StreamPlanner = dynamic(() => import('./StreamPlanner'), { ssr: false, loading: () => TAB_LOADING })
 const MoneyMap = dynamic(() => import('./MoneyMap'), { ssr: false, loading: () => TAB_LOADING })
+const LiveVIPBoard = dynamic(() => import('../components/LiveVIPBoard'), { ssr: false })
 
 // Analytics tracking — works whether or not @vercel/analytics is installed
 let track = (event, props) => {}
@@ -5106,6 +5107,17 @@ const handleCSV = async (file, forcePlatform = null) => {
                         )}
                       </div>
                     </div>
+                  </div>
+
+                  {/* ── LIVE VIP BOARD ────────────────────────────────── */}
+                  <div style={{ marginBottom: 20 }}>
+                    <LiveVIPBoard
+                      liveEvents={liveEvents}
+                      historicalTips={tips}
+                      liveActive={liveActive}
+                      liveStartTime={liveStartTime}
+                      colors={C}
+                    />
                   </div>
 
                   {/* ── BOTTOM PANELS ─────────────────────────────────── */}
