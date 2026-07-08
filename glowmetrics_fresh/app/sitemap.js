@@ -70,7 +70,6 @@ export default function sitemap() {
     'bongacams-analytics',
     'cam-model-analytics',
     'cam-model-income-tracker',
-    'cam-model-name-generator',
     'cam-model-revenue-dashboard',
     'cam-model-room-title-generator',
     'cam-model-session-breakdown',

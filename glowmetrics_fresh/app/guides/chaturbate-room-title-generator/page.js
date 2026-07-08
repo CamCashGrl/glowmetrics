@@ -262,7 +262,7 @@ export default function ChaturbateRoomTitleGeneratorPage() {
                 {[
                   { href: '/dashboard', label: 'Income Tracker', desc: 'Upload your CSV and see session-by-session earnings in USD' },
                   { href: '/guides/chaturbate-token-calculator', label: 'Token Calculator', desc: 'Convert any token amount to USD at the real broadcaster rate' },
-                  { href: '/guides/cam-model-name-generator', label: 'Name Generator', desc: 'Find a cam model name that builds a long-term brand' },
+                  { href: '/tools/cam-model-name-generator', label: 'Name Generator', desc: 'Find a cam model name that builds a long-term brand' },
                   { href: '/demo', label: 'CamCash Demo', desc: 'See what the full analytics dashboard looks like' },
                 ].map(({ href, label, desc }) => (
                   <a key={href} href={href} style={{ background: S.card, border: `1px solid ${S.border}`, borderRadius: 12, padding: '18px 20px', textDecoration: 'none', display: 'block' }}>

@@ -82,6 +82,13 @@ const nextConfig = {
         destination: '/blog/how-to-re-engage-whales-and-high-tipping-fans',
         permanent: true,
       },
+      {
+        // Merged duplicate — same tool component as /tools/cam-model-name-generator
+        // (which had the stronger GSC performance), now with the combined article content.
+        source: '/guides/cam-model-name-generator',
+        destination: '/tools/cam-model-name-generator',
+        permanent: true,
+      },
     ]
   },
 }

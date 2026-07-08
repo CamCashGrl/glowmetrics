@@ -283,7 +283,7 @@ export default function ChaturbateTokenCalculatorPage() {
                 {[
                   { href: '/dashboard', label: 'Income Tracker Dashboard', desc: 'Upload your CSV and see every session broken down in USD' },
                   { href: '/guides/chaturbate-room-title-generator', label: 'Room Title Generator', desc: 'Generate high-converting Chaturbate room titles instantly' },
-                  { href: '/guides/cam-model-name-generator', label: 'Cam Model Name Generator', desc: 'Find a name that builds a searchable, memorable brand' },
+                  { href: '/tools/cam-model-name-generator', label: 'Cam Model Name Generator', desc: 'Find a name that builds a searchable, memorable brand' },
                   { href: '/demo', label: 'Try the Demo', desc: 'See what your full analytics dashboard looks like with real data' },
                 ].map(({ href, label, desc }) => (
                   <a key={href} href={href} style={{ background: S.card, border: `1px solid ${S.border}`, borderRadius: 14, padding: '18px 20px', textDecoration: 'none', display: 'block' }}>
