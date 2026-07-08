@@ -152,82 +152,6 @@ function HeroSection() {
   )
 }
 
-// ── Section 3: Launch Phase Banner ───────────────────────────────────────────
-function LaunchBanner() {
-  return (
-    <section style={{ padding: '0 20px 64px', position: 'relative' }}>
-      <div style={{
-        maxWidth:     800,
-        margin:       '0 auto',
-        border:       '2px solid rgba(16,185,129,0.4)',
-        background:   'rgba(16,185,129,0.08)',
-        borderRadius: 16,
-        padding:      '32px 40px',
-      }}>
-        {/* Top row */}
-        <div style={{
-          display:       'flex',
-          flexWrap:      'wrap',
-          gap:           24,
-          alignItems:    'center',
-          justifyContent:'space-between',
-          marginBottom:  24,
-        }}>
-          {/* Left */}
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
-            <span style={{ fontSize: 36, lineHeight: 1 }}>🎉</span>
-            <div>
-              <h2 style={{ color: C.white, fontWeight: 800, fontSize: 22, margin: '0 0 6px' }}>
-                Right Now — Launch Phase
-              </h2>
-              <p style={{ color: C.text, fontSize: 15, margin: 0, lineHeight: 1.5 }}>
-                Everything is completely free. No limits. No paywall.
-              </p>
-            </div>
-          </div>
-          {/* Right */}
-          <div style={{ textAlign: 'center' }}>
-            <p style={{
-              fontSize:    56,
-              fontWeight:  900,
-              color:       C.green,
-              margin:      0,
-              lineHeight:  1,
-              letterSpacing: '-2px',
-            }}>FREE</p>
-            <p style={{ color: C.muted, fontSize: 13, margin: '4px 0 0', fontWeight: 600 }}>
-              Until 100 users
-            </p>
-          </div>
-        </div>
-
-        {/* Counter */}
-        <div style={{ marginBottom: 28 }}>
-          <UserCounter variant="full" />
-        </div>
-
-        {/* CTA */}
-        <a href="/landing" style={{
-          display:        'inline-flex',
-          alignItems:     'center',
-          gap:            6,
-          padding:        '13px 28px',
-          borderRadius:   10,
-          background:     C.green,
-          color:          '#fff',
-          fontWeight:     800,
-          fontSize:       15,
-          textDecoration: 'none',
-          letterSpacing:  '0.2px',
-          boxShadow:      '0 0 20px rgba(16,185,129,0.35)',
-        }}>
-          Start Free Today →
-        </a>
-      </div>
-    </section>
-  )
-}
-
 // ── Section 4: After Launch Comparison ───────────────────────────────────────
 function AfterLaunchSection({ checkoutLoading, setCheckoutLoading }) {
   return (
@@ -838,7 +762,6 @@ export default function PricingClient() {
 
       <main>
         <HeroSection />
-        <LaunchBanner />
         <AfterLaunchSection checkoutLoading={checkoutLoading} setCheckoutLoading={setCheckoutLoading} />
         <EarlyAdopterSection checkoutLoading={checkoutLoading} setCheckoutLoading={setCheckoutLoading} />
         <PromiseSection />
