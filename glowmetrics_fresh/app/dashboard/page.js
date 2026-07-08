@@ -27,6 +27,7 @@ const TAB_LOADING = (
 const AnalyticsCharts = dynamic(() => import('./AnalyticsCharts'), { ssr: false, loading: () => TAB_LOADING })
 const StreamPlanner = dynamic(() => import('./StreamPlanner'), { ssr: false, loading: () => TAB_LOADING })
 const MoneyMap = dynamic(() => import('./MoneyMap'), { ssr: false, loading: () => TAB_LOADING })
+const DashboardGrowthCharts = dynamic(() => import('./DashboardGrowthCharts'), { ssr: false })
 
 // Analytics tracking — works whether or not @vercel/analytics is installed
 let track = (event, props) => {}
@@ -2911,6 +2912,11 @@ const handleCSV = async (file, forcePlatform = null) => {
                 </>
               )
             })()}
+
+            {/* ═══════════════════════════════════════
+                TOKENS VS HOURS ONLINE + MONTHLY GROWTH
+            ═══════════════════════════════════════ */}
+            {tips.length > 0 && <DashboardGrowthCharts tips={tips} sessions={sessions} />}
 
             {/* ═══════════════════════════════════════
                 DAILY BRIEF — overview only, below earnings
