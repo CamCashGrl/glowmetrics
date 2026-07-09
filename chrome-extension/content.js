@@ -133,6 +133,144 @@
     if (msg.type === 'PING') { reply({ pong: true }); return true; }
   });
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // TOKEN ACTIVITY TABLE SCAN — reads the "Your Account's Activity" table on
+  // Chaturbate's own token history page (?tab=tokens). This is DOM reading of
+  // content already rendered on a page the user is logged into and viewing —
+  // same category as the live chat-tip parser above, not automated fetching
+  // of anything, no requests to chaturbate.com beyond what the browser
+  // already made to load the page the user navigated to.
+  //
+  // Platform-specific: only Chaturbate's activity table is known to render
+  // this way. BongaCams/MyFreeCams need their own investigation before
+  // extending this — do not assume the same selectors apply.
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  function isChaturbateTokensPage() {
+    return platform === 'chaturbate' && /[?&]tab=tokens/.test(location.search);
+  }
+
+  // Parses one <tr> from the activity table into a structured row.
+  // Returns null for rows that don't match the expected shape (defensive —
+  // a partial/garbled row should be skipped, never guessed at).
+  function parseActivityRow(tr) {
+    const cells = tr.querySelectorAll('td');
+    if (cells.length < 4) return null;
+
+    const [dateCell, actionCell, tokensCell] = cells;
+    const dateText   = dateCell.textContent.trim();
+    const actionText = actionCell.textContent.trim();
+    const tokensText = tokensCell.textContent.trim();
+
+    // Direction + username. The action cell's first line is either
+    // "Outbound Tip: <username>" or "Tip From: <username>" — everything
+    // after is the tip message, which we deliberately do not parse further
+    // (message text is not needed and could contain misleading patterns).
+    const link = actionCell.querySelector('a');
+    const username = link ? link.textContent.trim() : null;
+
+    let direction = null;
+    if (/^Outbound Tip:/i.test(actionText)) direction = 'outbound';
+    else if (/^Tip From:/i.test(actionText)) direction = 'inbound';
+    else return null; // not a tip row (could be a token purchase, refund, etc. — skip)
+
+    if (!username) return null;
+
+    const tokens = parseInt(tokensText.replace(/[^\d-]/g, ''), 10);
+    if (isNaN(tokens)) return null;
+
+    // Parse "Jul 7, 2026, 11:43 PM" — Chaturbate's own rendered format.
+    // If this ever fails to parse, surface the row as needs-review rather
+    // than guessing a timestamp (never fabricate data going into `tips`).
+    const parsedDate = new Date(dateText);
+    const validDate  = !isNaN(parsedDate.getTime());
+
+    return {
+      username,
+      tokens: Math.abs(tokens),
+      direction, // 'inbound' | 'outbound' — outbound rows are NOT earnings
+      timestamp: validDate ? parsedDate.toISOString() : null,
+      raw_date_text: dateText, // kept for manual review if timestamp parse failed
+      platform: 'chaturbate',
+    };
+  }
+
+  function findActivityTable() {
+    // The activity table is preceded by a heading; walk all tables and
+    // match on header cells rather than relying on a specific class name,
+    // since Chaturbate's markup for this isn't documented and could change.
+    const tables = document.querySelectorAll('table');
+    for (const table of tables) {
+      const headers = [...table.querySelectorAll('th')].map(th => th.textContent.trim().toLowerCase());
+      if (headers.includes('date') && headers.includes('action') && headers.includes('tokens')) {
+        return table;
+      }
+    }
+    return null;
+  }
+
+  // Scrolls the activity table's internal scroll container (it's a fixed-height
+  // scrollable panel per the observed UI, not the page itself) to trigger any
+  // lazy-loaded rows, waiting between scrolls for new rows to render.
+  async function scrollAndCollectRows(table) {
+    const seen = new Map(); // key: date+username+tokens+direction → row (de-dupes across scroll passes)
+    const scrollContainer = table.closest('[style*="overflow"]') || table.parentElement;
+
+    const collectVisible = () => {
+      const rows = table.querySelectorAll('tbody tr');
+      for (const tr of rows) {
+        const parsed = parseActivityRow(tr);
+        if (!parsed) continue;
+        const key = `${parsed.raw_date_text}|${parsed.username}|${parsed.tokens}|${parsed.direction}`;
+        if (!seen.has(key)) seen.set(key, parsed);
+      }
+    };
+
+    collectVisible();
+
+    let lastCount = -1;
+    let stableRounds = 0;
+    const maxRounds = 200; // hard ceiling — prevents an infinite scroll loop on an unexpectedly long history
+
+    for (let round = 0; round < maxRounds; round++) {
+      if (scrollContainer) {
+        scrollContainer.scrollTop = scrollContainer.scrollHeight;
+      }
+      await new Promise(r => setTimeout(r, 400)); // let lazy content render
+      collectVisible();
+
+      if (seen.size === lastCount) {
+        stableRounds++;
+        if (stableRounds >= 3) break; // no new rows for 3 consecutive checks — assume fully loaded
+      } else {
+        stableRounds = 0;
+      }
+      lastCount = seen.size;
+    }
+
+    return [...seen.values()];
+  }
+
+  // Entry point — called when the user clicks "Scan Token History" in the overlay.
+  async function runTokenScan() {
+    if (!isChaturbateTokensPage()) {
+      return { ok: false, error: 'Navigate to your Chaturbate token history page (Tokens tab) first.' };
+    }
+    const table = findActivityTable();
+    if (!table) {
+      return { ok: false, error: 'Could not find the activity table on this page. Chaturbate may have changed their layout.' };
+    }
+    const rows = await scrollAndCollectRows(table);
+    return { ok: true, rows };
+  }
+
+  chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
+    if (msg.action === 'run_token_scan') {
+      runTokenScan().then(reply);
+      return true; // async response
+    }
+  });
+
   // SPA navigation re-init
   let lastUrl = location.href;
   new MutationObserver(() => {
@@ -427,6 +565,10 @@
       </div>
     `;
 
+    const scanBtn = isChaturbateTokensPage()
+      ? `<button class="dashbtn" id="scanBtn" style="width:100%;margin-top:6px;border:1px solid rgba(16,185,129,0.4);background:linear-gradient(135deg, rgba(16,185,129,0.25), rgba(16,185,129,0.12));">🔍 Scan Token History</button>`
+      : '';
+
     return hdr + `
       <div id="body">
         <div id="coach">${_esc(coachText)}</div>
@@ -441,6 +583,7 @@
       </div>
       <div id="foot">
         <a class="dashbtn" href="https://www.camcashgrl.com/dashboard" target="_blank">📊 Open Dashboard →</a>
+        ${scanBtn}
       </div>
     `;
   }
@@ -456,6 +599,11 @@
         if (panel) panel.classList.toggle('collapsed', _collapsed);
         tbtn.textContent = _collapsed ? '▲' : '▼';
       };
+    }
+
+    const scanBtn = _shadow.getElementById('scanBtn');
+    if (scanBtn) {
+      scanBtn.onclick = () => _startScan(scanBtn);
     }
 
     // Drag — bound to full panel so anywhere is draggable
@@ -485,6 +633,119 @@
       panel.onpointerup     = () => { _dragging = false; };
       panel.onpointercancel = () => { _dragging = false; };
     }
+  }
+
+  // ─── Scan trigger + preview/confirm modal ──────────────────────────────────
+  let _scanModal = null;
+
+  function _startScan(btn) {
+    const originalText = btn.textContent;
+    btn.textContent = '⏳ Scanning... this can take a minute for long histories';
+    btn.disabled = true;
+
+    chrome.runtime.sendMessage({ action: 'scan_token_history' }, (result) => {
+      btn.textContent = originalText;
+      btn.disabled = false;
+
+      if (chrome.runtime.lastError) {
+        _showScanError('Lost connection to the extension. Try reloading the page.');
+        return;
+      }
+      if (!result?.ok) {
+        _showScanError(result?.error || 'Scan failed for an unknown reason.');
+        return;
+      }
+      _showScanPreview(result.preview);
+    });
+  }
+
+  function _closeScanModal() {
+    if (_scanModal) { _scanModal.remove(); _scanModal = null; }
+  }
+
+  function _showScanError(message) {
+    _closeScanModal();
+    _scanModal = document.createElement('div');
+    _scanModal.style.cssText = 'position:fixed;inset:0;z-index:2147483647;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);';
+    const shadow = _scanModal.attachShadow({ mode: 'open' });
+    shadow.innerHTML = `
+      <style>${_css()}</style>
+      <div id="panel" style="width:340px;">
+        <div id="hdr"><div id="title">⚠️ Scan couldn't complete</div></div>
+        <div id="body">
+          <div style="font-size:13px;color:#f1f5f9;line-height:1.5;">${_esc(message)}</div>
+        </div>
+        <div id="foot"><button class="dashbtn" id="closeBtn">Close</button></div>
+      </div>
+    `;
+    document.body.appendChild(_scanModal);
+    shadow.getElementById('closeBtn').onclick = _closeScanModal;
+  }
+
+  // Shows the parsed, categorized results for explicit review. Nothing is
+  // written to Supabase until the user clicks "Import" here — this is the
+  // hard boundary between "read what's on the page" and "change the database."
+  function _showScanPreview(preview) {
+    _closeScanModal();
+    const { inbound, outboundExcluded, needsReview, summary } = preview;
+
+    _scanModal = document.createElement('div');
+    _scanModal.style.cssText = 'position:fixed;inset:0;z-index:2147483647;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);';
+    const shadow = _scanModal.attachShadow({ mode: 'open' });
+
+    const rowsPreviewHTML = inbound.slice(0, 8).map(r => `
+      <div class="tr">
+        <span class="tu">${_esc(r.username)}</span>
+        <span class="tt">${r.tokens}t</span>
+        <span class="td">$${r.usd.toFixed(2)}</span>
+      </div>
+    `).join('') || '<div id="empty">No inbound tips found</div>';
+
+    const moreCount = inbound.length > 8 ? inbound.length - 8 : 0;
+
+    shadow.innerHTML = `
+      <style>${_css()}</style>
+      <div id="panel" style="width:320px;cursor:default;">
+        <div id="hdr"><div id="title">🔍 Scan Results</div></div>
+        <div id="body">
+          <div style="font-size:12px;color:#94a3b8;line-height:1.6;">
+            Found <strong style="color:#10b981;">${summary.inboundCount}</strong> tips worth
+            <strong style="color:#10b981;">$${summary.totalUsd.toFixed(2)}</strong>.
+            ${summary.outboundExcludedCount > 0 ? `<br/>Excluded ${summary.outboundExcludedCount} outbound tip(s) you sent to others — those aren't your earnings.` : ''}
+            ${summary.needsReviewCount > 0 ? `<br/>⚠️ ${summary.needsReviewCount} row(s) couldn't be read reliably and were skipped.` : ''}
+          </div>
+          <div id="tips">${rowsPreviewHTML}</div>
+          ${moreCount > 0 ? `<div style="font-size:11px;color:#475569;text-align:center;">+ ${moreCount} more</div>` : ''}
+        </div>
+        <div id="foot" style="display:flex;gap:8px;">
+          <button class="dashbtn" id="cancelBtn" style="background:transparent;border:1px solid rgba(255,255,255,0.15);">Cancel</button>
+          <button class="dashbtn" id="importBtn" ${inbound.length === 0 ? 'disabled' : ''}>Import ${summary.inboundCount} Tips</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(_scanModal);
+
+    shadow.getElementById('cancelBtn').onclick = _closeScanModal;
+    shadow.getElementById('importBtn').onclick = () => {
+      const importBtn = shadow.getElementById('importBtn');
+      importBtn.textContent = 'Importing...';
+      importBtn.disabled = true;
+
+      // Send exactly the rows the user was shown — nothing re-fetched or
+      // re-derived at this step.
+      chrome.runtime.sendMessage(
+        { action: 'confirm_token_import', rows: inbound },
+        (result) => {
+          if (chrome.runtime.lastError || !result?.ok) {
+            _showScanError(result?.error || 'Import failed. Nothing was lost — your scan results are gone, but no data was changed. Try scanning again.');
+            return;
+          }
+          _closeScanModal();
+          const { inserted, skipped } = result.result;
+          _showScanError(`✅ Imported ${inserted} tip(s). ${skipped > 0 ? `${skipped} were already in your history and skipped.` : ''}`);
+        }
+      );
+    };
   }
 
   // ─── Create overlay (first call only) ─────────────────────────────────────
