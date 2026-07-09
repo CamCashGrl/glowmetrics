@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
+import { createSupabaseRouteClient } from '../../../lib/supabase-server';
 import { z } from 'zod';
 
 const REASON_OPTIONS = [
@@ -20,7 +19,7 @@ const FeedbackSchema = z.object({
 });
 
 export async function POST(request) {
-  const supabase = createRouteHandlerClient({ cookies });
+  const supabase = createSupabaseRouteClient();
 
   // Derive user from server-side session — never trust a client-supplied user_id
   const {
