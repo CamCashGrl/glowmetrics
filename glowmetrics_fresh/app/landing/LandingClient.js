@@ -5,6 +5,11 @@ import dynamic from "next/dynamic"
 import { DM_Sans } from "next/font/google"
 import { T as TrackEvents, captureAttribution } from "../../lib/tracking"
 import { track } from "../../lib/track"
+// NEW (marketing visual only) — see components/landing/*.js. Safe to remove:
+// deleting this import + the <FloatingDashboardPreview>/<PlatformsTypewriter>
+// block below fully reverts this addition.
+import FloatingDashboardPreview from "../../components/landing/FloatingDashboardPreview"
+import PlatformsTypewriter from "../../components/landing/PlatformsTypewriter"
 
 // Supabase (and its ~85KB of JS) is only needed once a visitor checks their
 // auth state or touches the signup/login form — not for the initial paint.
@@ -1022,6 +1027,28 @@ export default function LandingClient() {
           <AuthPanel id="lp-auth-mobile-inner" {...authPanelProps} />
         </div>
       </div>
+
+      {/* ══════════════════════════════════════════════════════════════════
+          NEW — FLOATING DASHBOARD PREVIEW (marketing visual, MOCK/DEMO DATA)
+          Added alongside existing hero/sections, nothing above or below this
+          block was changed. To revert: delete this <section> plus the two
+          imports at the top of the file.
+          ══════════════════════════════════════════════════════════════════ */}
+      <section style={{ position: "relative", zIndex: 1, maxWidth: 1100, margin: "0 auto", padding: "0 32px 72px" }}>
+        <div style={{ textAlign: "center", marginBottom: 8 }}>
+          <div style={{ fontSize: "clamp(22px,2.6vw,30px)", fontWeight: 850, color: "white", letterSpacing: -0.6 }}>
+            See CamCash in action
+          </div>
+          <div style={{ fontSize: 14, color: T.textFaint, marginTop: 8, marginBottom: 30 }}>
+            A live look at what your dashboard tracks — updating in real time while you stream
+          </div>
+        </div>
+        <FloatingDashboardPreview />
+        <div style={{ marginTop: 20 }}>
+          <PlatformsTypewriter />
+        </div>
+      </section>
+      {/* ══════════════════════════════ END NEW BLOCK ══════════════════════════════ */}
 
       {/* ── WHAT IS CAMCASH — scannable definition block, semantic markup for AI/LLM crawlers ── */}
       <section aria-labelledby="what-is-camcash-heading" style={{ position: "relative", zIndex: 1, maxWidth: 1100, margin: "0 auto", padding: "0 32px 56px" }}>
