@@ -116,7 +116,6 @@ async function syncTip({ username, tokens, platform, timestamp }) {
     if (!res.ok) {
       const err = await res.text();
       console.error('[CamCash] tip sync failed:', res.status, err);
-      if (err.includes('PLATFORM_LIMIT_REACHED')) notifyPlatformLimit(platform);
       return { savedToHistory: false };
     }
     const data = await res.json();
@@ -125,21 +124,6 @@ async function syncTip({ username, tokens, platform, timestamp }) {
     console.error('[CamCash] sync failed:', e.message);
     return { savedToHistory: false };
   }
-}
-
-// Free plan tracks 1 platform — this fires when the server rejects a tip for
-// a platform the user hasn't already tracked. Throttled so a blocked stream
-// doesn't spam a notification per tip.
-function notifyPlatformLimit(platform) {
-  if (!canCoach('platform_limit', 30 * 60 * 1000)) return;
-  chrome.notifications.create(`platform_limit_${Date.now()}`, {
-    type: 'basic',
-    iconUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
-    title: '🔒 Free plan tracks 1 platform',
-    message: `Tips on ${platform} aren't being saved — upgrade to Standard ($19.99/mo) to track multiple platforms.`,
-    priority: 2,
-  });
-  broadcast({ action: 'platform_limit_reached', platform });
 }
 
 // ─── Plan loading — determines whether tips save to permanent history ────────
@@ -294,10 +278,90 @@ async function broadcastOverlay() {
 function isWhale(u) { return whales.some(w => w.username.toLowerCase() === u.toLowerCase()); }
 function getWhale(u) { return whales.find(w => w.username.toLowerCase() === u.toLowerCase()); }
 
+// ─── Token history scan ─────────────────────────────────────────────────────
+// Triggered by the "Scan Token History" button in the overlay/popup.
+// Flow: ask the content script to read the on-page table → send the parsed
+// rows to /api/scan/preview for server-side validation/normalization →
+// return the preview payload to whoever asked (popup or overlay) for the
+// user to review. Nothing gets written to `tips` from this function —
+// import only happens after explicit user confirmation via a separate
+// 'confirm_token_scan' action, which calls /api/scan/import.
+async function scanTokenHistory() {
+  await restorePromise;
+  if (!session) return { ok: false, error: 'Not signed in.' };
+
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab?.id) return { ok: false, error: 'No active tab found.' };
+
+  let scanResult;
+  try {
+    scanResult = await chrome.tabs.sendMessage(tab.id, { action: 'run_token_scan' });
+  } catch (e) {
+    return { ok: false, error: 'Could not reach the page. Make sure you\'re on your Chaturbate token history page.' };
+  }
+  if (!scanResult?.ok) return scanResult || { ok: false, error: 'Scan failed.' };
+
+  try {
+    const res = await fetch(`${API_BASE}/api/scan/preview`, {
+      method: 'POST',
+      headers: {
+        'Content-Type':  'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ platform: 'chaturbate', rows: scanResult.rows }),
+    });
+    if (!res.ok) {
+      const err = await res.text();
+      return { ok: false, error: `Server rejected the scan: ${err}` };
+    }
+    const preview = await res.json();
+    return { ok: true, preview };
+  } catch (e) {
+    return { ok: false, error: 'Could not reach CamCash to validate the scan.' };
+  }
+}
+
+// Takes the exact "inbound" rows the user already saw and approved in the
+// preview modal — nothing is re-fetched from the page at confirm time, so
+// what the user reviewed is exactly what gets sent for import.
+async function confirmTokenImport(rows) {
+  await restorePromise;
+  if (!session) return { ok: false, error: 'Not signed in.' };
+  if (!Array.isArray(rows) || rows.length === 0) return { ok: false, error: 'Nothing to import.' };
+  try {
+    const res = await fetch(`${API_BASE}/api/scan/import`, {
+      method: 'POST',
+      headers: {
+        'Content-Type':  'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ rows }),
+    });
+    if (!res.ok) {
+      const err = await res.text();
+      return { ok: false, error: `Import failed: ${err}` };
+    }
+    const result = await res.json();
+    return { ok: true, result };
+  } catch (e) {
+    return { ok: false, error: 'Could not reach CamCash to complete the import.' };
+  }
+}
+
 // ─── Message router ───────────────────────────────────────────────────────────
 chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
 
   if (msg.action === 'get_state') { reply(getState()); return false; }
+
+  if (msg.action === 'scan_token_history') {
+    scanTokenHistory().then(reply);
+    return true;
+  }
+
+  if (msg.action === 'confirm_token_import') {
+    confirmTokenImport(msg.rows).then(reply);
+    return true;
+  }
 
   if (msg.action === 'logout') {
     logout().then(() => reply({ ok: true }));
