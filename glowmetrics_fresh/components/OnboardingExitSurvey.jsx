@@ -25,12 +25,16 @@ const REASONS = [
  *     i.e. once they've reached the paste/CSV step)
  * - active: boolean — pass false to fully disable (e.g. after onboarding
  *     completes) so the beforeunload listener is removed
+ * - onResolved: () => void — called once the user has dismissed or
+ *     submitted the survey, so the caller can complete whatever exit
+ *     action (e.g. router.push) it deferred to show this modal
  */
 export default function OnboardingExitSurvey({
   currentStep,
   currentStepName,
   minStepToTrigger = 1,
   active = true,
+  onResolved,
 }) {
   const [visible, setVisible] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -91,12 +95,14 @@ export default function OnboardingExitSurvey({
       setSubmitting(false);
       setSubmitted(true);
       setVisible(false);
+      onResolved?.();
     }
   };
 
   const dismiss = () => {
     setSubmitted(true); // treat dismissal as "don't ask again this session"
     setVisible(false);
+    onResolved?.();
   };
 
   if (!visible) return null;
