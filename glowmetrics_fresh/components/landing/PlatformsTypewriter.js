@@ -5,16 +5,13 @@ import { useEffect, useState } from "react"
 // PlatformsTypewriter — PURE MARKETING VISUAL for the landing page.
 //
 // Types out "Platforms we support" followed by each supported platform
-// name, one letter at a time, building up a row of chips. Platform names
-// mirror the list already used in the "What is CamCash?" section of
-// app/landing/LandingClient.js ("Built for" row) — MOCK/DEMO presentation
-// only, no live integration status or real per-platform data implied.
+// name, one letter at a time, building up a row of chips — MOCK/DEMO
+// presentation only, no live integration status or real per-platform
+// data implied.
 // ─────────────────────────────────────────────────────────────────────────
 
 const T = {
   cyan: "#16F4FF",
-  cyanSoft: "#48E9FF",
-  purple: "#7C5CFF",
   pink: "#FF2BAE",
   gold: "#FFC857",
   textFaint: "#5E647C",
@@ -25,8 +22,6 @@ const PLATFORMS = [
   { name: "Chaturbate", color: T.cyan },
   { name: "BongaCams", color: T.pink },
   { name: "MyFreeCams", color: T.gold },
-  { name: "CamSoda", color: T.purple },
-  { name: "Stripchat", color: T.cyanSoft },
 ]
 
 const TYPE_MS = 55
