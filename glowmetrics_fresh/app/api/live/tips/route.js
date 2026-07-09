@@ -20,16 +20,21 @@ export async function OPTIONS(req) {
 
 export async function POST(req) {
   const cors = corsHeaders(req);
-  const supabaseAdmin = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
-  );
-  const supabaseClient = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  );
 
   try {
+    // Constructing these inside the try means a misconfigured/missing key
+    // (e.g. SUPABASE_SERVICE_ROLE_KEY unset in this environment) is caught
+    // and returned as a normal JSON error with CORS headers attached,
+    // instead of an uncaught exception that skips both.
+    const supabaseAdmin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    );
+    const supabaseClient = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    );
+
     const authHeader = req.headers.get('authorization');
     if (!authHeader?.startsWith('Bearer ')) {
       return Response.json({ error: 'Missing authorization' }, { status: 401, headers: cors });
@@ -118,16 +123,19 @@ export async function POST(req) {
 
 export async function GET(req) {
   const cors = corsHeaders(req);
-  const supabaseAdmin = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
-  );
-  const supabaseClient = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  );
 
   try {
+    // See POST above — constructing these inside the try catches a
+    // misconfigured/missing key instead of throwing uncaught.
+    const supabaseAdmin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    );
+    const supabaseClient = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    );
+
     const authHeader = req.headers.get('authorization');
     if (!authHeader?.startsWith('Bearer ')) {
       return Response.json({ error: 'Missing authorization' }, { status: 401, headers: cors });
