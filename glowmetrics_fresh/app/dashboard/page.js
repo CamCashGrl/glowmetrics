@@ -28,6 +28,7 @@ const AnalyticsCharts = dynamic(() => import('./AnalyticsCharts'), { ssr: false,
 const StreamPlanner = dynamic(() => import('./StreamPlanner'), { ssr: false, loading: () => TAB_LOADING })
 const MoneyMap = dynamic(() => import('./MoneyMap'), { ssr: false, loading: () => TAB_LOADING })
 const DashboardGrowthCharts = dynamic(() => import('./DashboardGrowthCharts'), { ssr: false })
+const TokenCalculator = dynamic(() => import('../guides/cam-model-token-calculator/TokenCalculatorClient'), { ssr: false, loading: () => TAB_LOADING })
 
 // Analytics tracking — works whether or not @vercel/analytics is installed
 let track = (event, props) => {}
@@ -6209,6 +6210,14 @@ const stopImportMessageRotation = () => {
         {activeTab === "titles" && (
           <div style={{ maxWidth: 760, margin: "0 auto" }}>
             <TitleGenerator C={C} glassCard={glassCard} analytics={analytics} tips={tips} sessions={sessions} whales={whales} />
+          </div>
+        )}
+
+        {activeTab === "calc" && (
+          <div style={{ maxWidth: 900, margin: "0 auto" }}>
+            <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 8 }}>🪙 Token Calculator</h1>
+            <p style={{ fontSize: 14, color: C.muted, marginBottom: 32 }}>Convert tokens to USD earnings across Chaturbate, BongaCams, MyFreeCams, Stripchat & CamSoda</p>
+            <TokenCalculator />
           </div>
         )}
 
