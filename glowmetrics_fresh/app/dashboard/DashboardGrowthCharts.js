@@ -23,14 +23,25 @@ function isoWeekStart(date) {
   d.setUTCDate(d.getUTCDate() - day + 1)
   return d
 }
+const dayKey   = (date) => date.toISOString().slice(0, 10)
 const weekKey  = (date) => isoWeekStart(date).toISOString().slice(0, 10)
 const monthKey = (date) => `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`
 
+const DAY_FMT   = new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" })
 const WEEK_FMT  = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" })
 const MONTH_FMT = new Intl.DateTimeFormat("en-US", { month: "short", year: "2-digit", timeZone: "UTC" })
+const TIME_FMT  = new Intl.DateTimeFormat("en-US", { hour: "numeric", hour12: true, timeZone: "UTC" })
+
+const MODE_CONFIG = {
+  daily:   { keyFn: dayKey,   fmt: DAY_FMT,   label: "Daily",   unit: "days",   take: 14 },
+  weekly:  { keyFn: weekKey,  fmt: WEEK_FMT,  label: "Weekly",  unit: "weeks",  take: 12 },
+  monthly: { keyFn: monthKey, fmt: MONTH_FMT, label: "Monthly", unit: "months", take: 12 },
+  time:    { keyFn: (d) => String(d.getUTCHours()), fmt: TIME_FMT, label: "Time of Day", unit: "hours", take: 24 },
+}
 
 function tokensVsHoursSeries(tips, sessions, mode) {
-  const keyFn = mode === "weekly" ? weekKey : monthKey
+  const { keyFn, take } = MODE_CONFIG[mode]
+  const isTime = mode === "time"
   const map = {}
   for (const t of tips) {
     const d = new Date(t.date_time || t.dateRaw)
@@ -46,14 +57,16 @@ function tokensVsHoursSeries(tips, sessions, mode) {
     if (!map[k]) map[k] = { key: k, sortDate: d, tokens: 0, hours: 0 }
     map[k].hours += Number(s.durationHours || 0)
   }
-  return Object.values(map)
-    .sort((a, b) => a.key.localeCompare(b.key))
-    .slice(-12)
-    .map((row) => ({
-      ...row,
-      label: mode === "weekly" ? WEEK_FMT.format(row.sortDate) : MONTH_FMT.format(row.sortDate),
-      hours: parseFloat(row.hours.toFixed(1)),
-    }))
+  const rows = Object.values(map).sort((a, b) =>
+    isTime ? Number(a.key) - Number(b.key) : a.key.localeCompare(b.key)
+  )
+  return (isTime ? rows : rows.slice(-take)).map((row) => ({
+    ...row,
+    label: isTime
+      ? TIME_FMT.format(new Date(Date.UTC(2000, 0, 1, Number(row.key))))
+      : MODE_CONFIG[mode].fmt.format(row.sortDate),
+    hours: parseFloat(row.hours.toFixed(1)),
+  }))
 }
 
 function monthlyUsdSeries(tips) {
@@ -111,11 +124,11 @@ export default function DashboardGrowthCharts({ tips, sessions }) {
           <div>
             <div style={{ fontSize: 15, fontWeight: 700, color: WHITE }}>Tokens vs Hours Online</div>
             <div style={{ fontSize: 11, color: MUTED }}>
-              {mode === "weekly" ? "Weekly" : "Monthly"} earnings rhythm — tokens (left) and stream hours (right)
+              {MODE_CONFIG[mode].label} earnings rhythm — tokens (left) and stream hours (right)
             </div>
           </div>
-          <div style={{ display: "flex", gap: 4, background: "rgba(255,255,255,0.04)", borderRadius: 8, padding: 3 }}>
-            {[["weekly", "Weekly"], ["monthly", "Monthly"]].map(([id, label]) => (
+          <div style={{ display: "flex", gap: 4, background: "rgba(255,255,255,0.04)", borderRadius: 8, padding: 3, flexWrap: "wrap" }}>
+            {[["daily", "Day"], ["weekly", "Week"], ["monthly", "Month"], ["time", "Time"]].map(([id, label]) => (
               <button
                 key={id}
                 onClick={() => setMode(id)}
@@ -133,13 +146,13 @@ export default function DashboardGrowthCharts({ tips, sessions }) {
         </div>
         {series.length < 2 ? (
           <div style={{ padding: "40px 0", textAlign: "center", color: MUTED, fontSize: 13 }}>
-            Not enough {mode === "weekly" ? "weeks" : "months"} of data yet — keep streaming and tracking.
+            Not enough {MODE_CONFIG[mode].unit} of data yet — keep streaming and tracking.
           </div>
         ) : (
           <ResponsiveContainer width="100%" height={230}>
             <ComposedChart data={series} margin={{ top: 12, right: 8, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={BORDER} vertical={false} />
-              <XAxis dataKey="label" tick={{ fill: MUTED, fontSize: 10 }} axisLine={false} tickLine={false} />
+              <XAxis dataKey="label" tick={{ fill: MUTED, fontSize: 10 }} axisLine={false} tickLine={false} interval={mode === "daily" ? "preserveStartEnd" : 0} />
               <YAxis yAxisId="left" tick={{ fill: MUTED, fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(v) => `${Math.round(v / 1000)}k`} />
               <YAxis yAxisId="right" orientation="right" tick={{ fill: MUTED, fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(v) => `${v}h`} />
               <Tooltip content={<GrowthTooltip />} />
