@@ -209,46 +209,50 @@
     return null;
   }
 
-  // Scrolls the activity table's internal scroll container (it's a fixed-height
-  // scrollable panel per the observed UI, not the page itself) to trigger any
-  // lazy-loaded rows, waiting between scrolls for new rows to render.
-  async function scrollAndCollectRows(table) {
-    const seen = new Map(); // key: date+username+tokens+direction → row (de-dupes across scroll passes)
-    const scrollContainer = table.closest('[style*="overflow"]') || table.parentElement;
+  // Clicks the "Load more" button repeatedly until it's gone or stops adding
+  // rows. This table paginates via an explicit button, NOT scroll position —
+  // confirmed against real page markup. Scrolling alone does nothing here.
+  async function expandFullHistory(table) {
+    const container = table.closest('[style*="overflow"]') || table.parentElement;
+    const maxRounds = 300; // hard ceiling — a very long history is still finite
 
-    const collectVisible = () => {
-      const rows = table.querySelectorAll('tbody tr');
-      for (const tr of rows) {
-        const parsed = parseActivityRow(tr);
-        if (!parsed) continue;
-        const key = `${parsed.raw_date_text}|${parsed.username}|${parsed.tokens}|${parsed.direction}`;
-        if (!seen.has(key)) seen.set(key, parsed);
-      }
-    };
-
-    collectVisible();
-
-    let lastCount = -1;
+    let lastRowCount = table.querySelectorAll('tbody tr').length;
     let stableRounds = 0;
-    const maxRounds = 200; // hard ceiling — prevents an infinite scroll loop on an unexpectedly long history
 
     for (let round = 0; round < maxRounds; round++) {
-      if (scrollContainer) {
-        scrollContainer.scrollTop = scrollContainer.scrollHeight;
-      }
-      await new Promise(r => setTimeout(r, 400)); // let lazy content render
-      collectVisible();
+      const loadMoreBtn = container?.querySelector('.loadMoreButton, [data-testid="load-more-stats"]');
+      if (!loadMoreBtn) break; // button is gone — fully loaded
 
-      if (seen.size === lastCount) {
+      loadMoreBtn.click();
+      await new Promise(r => setTimeout(r, 500)); // let the new rows render
+
+      const currentRowCount = table.querySelectorAll('tbody tr').length;
+      if (currentRowCount === lastRowCount) {
         stableRounds++;
-        if (stableRounds >= 3) break; // no new rows for 3 consecutive checks — assume fully loaded
+        if (stableRounds >= 3) break; // clicking isn't adding rows anymore — stop
       } else {
         stableRounds = 0;
       }
-      lastCount = seen.size;
+      lastRowCount = currentRowCount;
     }
+  }
 
-    return [...seen.values()];
+  // Reads the table exactly once, after it's fully expanded — NOT incrementally
+  // across multiple passes. A single complete read means no cross-pass
+  // duplication is possible, so no content-based dedup key is needed here.
+  // This matters: some real tips are genuinely identical (same user, same
+  // amount, same minute, sent back-to-back) — deduping by content would
+  // silently collapse those into one and undercount real earnings. The
+  // existing insert_tips_dedup RPC already handles same-batch repeats
+  // correctly via its own ordinality-based tip_seq — we just need to hand
+  // it every real row, in order, exactly once.
+  function readAllRows(table) {
+    const rows = [];
+    for (const tr of table.querySelectorAll('tbody tr')) {
+      const parsed = parseActivityRow(tr);
+      if (parsed) rows.push(parsed);
+    }
+    return rows;
   }
 
   // Entry point — called when the user clicks "Scan Token History" in the overlay.
@@ -260,7 +264,8 @@
     if (!table) {
       return { ok: false, error: 'Could not find the activity table on this page. Chaturbate may have changed their layout.' };
     }
-    const rows = await scrollAndCollectRows(table);
+    await expandFullHistory(table);
+    const rows = readAllRows(table);
     return { ok: true, rows };
   }
 
