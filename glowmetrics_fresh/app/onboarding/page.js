@@ -6,6 +6,7 @@ import { supabase } from '../../lib/supabase'
 // Token rates — single source of truth, never hardcode below this line
 import { PLATFORM_TOKEN_RATES, tokenRate } from '../../lib/constants'
 import { track } from '../../lib/track'
+import OnboardingExitSurvey from '@/components/OnboardingExitSurvey'
 
 
 const PLATFORMS = {
@@ -719,6 +720,7 @@ export default function OnboardingPage(){
       </div>
 
       <AmbientParticles/>
+      <OnboardingExitSurvey currentStep={stepNum} currentStepName={step} minStepToTrigger={1}/>
       {showSparkle&&<Sparkle/>}
       {showUpsell&&pendingPlatform&&<ProUpsellModal platform={PLATFORMS[pendingPlatform]} onSkip={handleUpsellSkip}/>}
       <FeedbackBubble/>
