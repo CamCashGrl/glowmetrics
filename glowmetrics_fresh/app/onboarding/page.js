@@ -587,6 +587,14 @@ export default function OnboardingPage(){
     if(importedPlatforms.length)setPlatformId(importedPlatforms[0])
   }
 
+  function handleCloseClick(){
+    // window.__onboardingExitCheck returns false and shows the exit survey
+    // when eligible; onResolved (passed to OnboardingExitSurvey) completes
+    // this navigation once the user dismisses/submits it.
+    const canExitNow=window.__onboardingExitCheck?window.__onboardingExitCheck():true
+    if(canExitNow)router.push('/dashboard')
+  }
+
   function handlePreview(){
     setParseError('')
     if(!pasteText.trim()){setParseError('Paste your tip history above first.');return}
@@ -720,7 +728,7 @@ export default function OnboardingPage(){
       </div>
 
       <AmbientParticles/>
-      <OnboardingExitSurvey currentStep={stepNum} currentStepName={step} minStepToTrigger={1}/>
+      <OnboardingExitSurvey currentStep={stepNum} currentStepName={step} minStepToTrigger={1} onResolved={()=>router.push('/dashboard')}/>
       {showSparkle&&<Sparkle/>}
       {showUpsell&&pendingPlatform&&<ProUpsellModal platform={PLATFORMS[pendingPlatform]} onSkip={handleUpsellSkip}/>}
       <FeedbackBubble/>
@@ -733,6 +741,16 @@ export default function OnboardingPage(){
           <div style={{position:'absolute',top:0,left:'8%',right:'8%',height:'1px',background:'linear-gradient(90deg,transparent,rgba(255,255,255,0.22),transparent)',pointerEvents:'none'}}/>
           <div style={{position:'absolute',top:-50,left:-50,width:220,height:220,borderRadius:'50%',background:'rgba(33,230,243,0.055)',filter:'blur(40px)',pointerEvents:'none'}}/>
           <div style={{position:'absolute',bottom:-50,right:-50,width:220,height:220,borderRadius:'50%',background:'rgba(255,47,174,0.045)',filter:'blur(40px)',pointerEvents:'none'}}/>
+
+          {!['loading','done'].includes(step)&&(
+            <button
+              onClick={handleCloseClick}
+              aria-label="Close onboarding"
+              style={{position:'absolute',top:16,right:16,width:28,height:28,borderRadius:'50%',border:'1px solid rgba(255,255,255,0.12)',background:'rgba(255,255,255,0.04)',color:'rgba(148,163,184,0.7)',fontSize:13,lineHeight:1,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',zIndex:5,transition:'all 0.18s'}}
+              onMouseEnter={e=>{e.currentTarget.style.color='#fff';e.currentTarget.style.borderColor='rgba(255,255,255,0.25)'}}
+              onMouseLeave={e=>{e.currentTarget.style.color='rgba(148,163,184,0.7)';e.currentTarget.style.borderColor='rgba(255,255,255,0.12)'}}
+            >✕</button>
+          )}
 
           {!['loading'].includes(step)&&(
             <header>
