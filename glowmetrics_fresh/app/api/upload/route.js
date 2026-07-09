@@ -100,37 +100,40 @@ export async function POST(req) {
     r.tip_seq = next
   })
 
+  // ── SUMMARY STATS ────────────────────────────────────────────────────────
+  // Computed once, shared by the csv_uploads audit log and the JSON response
+  // (the response uses these so the importer UI can show a real summary —
+  // rows/earnings/platform/date range — instead of just a row count).
+  const summaryDates = rows.map(r => new Date(r.date_time)).filter(d => !isNaN(d))
+  const summaryDateFrom = summaryDates.length ? new Date(Math.min(...summaryDates)) : null
+  const summaryDateTo   = summaryDates.length ? new Date(Math.max(...summaryDates)) : null
+  const summaryTotalUsd = parseFloat(rows.reduce((sum, r) => sum + (r.usd || 0), 0).toFixed(2))
+  const summaryTotalTokens = rows.reduce((sum, r) => sum + (r.tokens || 0), 0)
+
   // ── LOG TO csv_uploads ─────────────────────────────────────────────────
   // Shared by the success path below and the platform-limit block path, so a
   // blocked attempt still leaves an audit row instead of vanishing entirely.
   const logCsvUpload = async (status) => {
     try {
-      const dates = rows.map(r => new Date(r.date_time)).filter(d => !isNaN(d))
-      const dateFrom = dates.length ? new Date(Math.min(...dates)) : null
-      const dateTo   = dates.length ? new Date(Math.max(...dates)) : null
-
       // Build sorted array of unique "YYYY-MM" strings covered
       const monthsSet = new Set(
-        dates.map(d => `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`)
+        summaryDates.map(d => `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`)
       )
       const monthsCovered = [...monthsSet].sort()
-
-      const totalUsd = rows.reduce((sum, r) => sum + (r.usd || 0), 0)
-      const totalTokens = rows.reduce((sum, r) => sum + (r.tokens || 0), 0)
 
       await supabase.from('csv_uploads').insert({
         user_id:        user.id,
         upload_ref:     crypto.randomUUID(),
         platform:       detectedPlatform,
         file_name:      file.name || 'upload.csv',
-        date_from:      dateFrom,
-        date_to:        dateTo,
+        date_from:      summaryDateFrom,
+        date_to:        summaryDateTo,
         months_covered: monthsCovered,
         total_rows:     rows.length,
         inserted_rows:  inserted,
         skipped_rows:   skipped,
-        total_usd:      parseFloat(totalUsd.toFixed(2)),
-        total_tokens:   totalTokens,
+        total_usd:      summaryTotalUsd,
+        total_tokens:   summaryTotalTokens,
         status,
       })
       console.log(`[UPLOAD] Logged csv_upload record (${status}) for ${detectedPlatform} — ${monthsCovered.length} months covered`)
@@ -195,6 +198,9 @@ export async function POST(req) {
     batches:   totalBatches,
     batchSize: BATCH_SIZE,
     platform:  detectedPlatform, // ← used by dashboard toast
+    totalUsd:  summaryTotalUsd,
+    dateFrom:  summaryDateFrom ? summaryDateFrom.toISOString() : null,
+    dateTo:    summaryDateTo ? summaryDateTo.toISOString() : null,
   }
 
   if (errors.length > 0) {

@@ -59,11 +59,30 @@ const TIER_COLORS = {
   "Whale": C.gold, "Shark": C.blue, "Regular": C.cyan, "Dormant": C.orange
 }
 
+// Rotating microcopy shown on the CSV importer button/progress bar while a
+// real upload request is in flight — purely cosmetic (doesn't imply we know
+// the server's actual step), but keeps the card feeling alive during the wait.
+const IMPORT_MESSAGES = [
+  "Reading your CSV…",
+  "Detecting platform…",
+  "Importing tips…",
+  "Calculating earnings…",
+  "Finding top fans…",
+  "Building your dashboard…",
+]
+
 const glassCard = {
   background: "rgba(15,20,32,0.75)",
   border: "1px solid rgba(255,255,255,0.08)",
   backdropFilter: "blur(20px)",
   boxShadow: "0 0 40px rgba(59,130,246,0.15), 0 0 80px rgba(236,72,153,0.08)",
+}
+
+const formatImportDate = (iso) => {
+  if (!iso) return null
+  const d = new Date(iso)
+  if (isNaN(d)) return null
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
 const formatHour = (hour) => {
@@ -1274,7 +1293,11 @@ export default function Dashboard() {
   const [analytics, setAnalytics] = useState(null)
   const [liveAnalytics, setLiveAnalytics] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [uploading, setUploading] = useState(false)
+  // Import flow: idle -> processing -> success | error
+  const [importStage, setImportStage] = useState('idle')
+  const [importMessageIdx, setImportMessageIdx] = useState(0)
+  const importMessageTimerRef = useRef(null)
+  const uploading = importStage === 'processing'
   const [uploadPlatform, setUploadPlatform] = useState("")
   const [lastUploadResult, setLastUploadResult] = useState(null)
   const [activeTab, setActiveTab] = useState(initialTab)
@@ -1826,6 +1849,11 @@ export default function Dashboard() {
     if (analytics) setLiveAnalytics(analytics)
   }, [analytics])
 
+  // Stop the rotating-microcopy interval if the dashboard unmounts mid-import
+  useEffect(() => () => {
+    if (importMessageTimerRef.current) clearInterval(importMessageTimerRef.current)
+  }, [])
+
   const handleSignOut = async () => {
     await supabase.auth.signOut()
     router.replace('/login')
@@ -1872,19 +1900,39 @@ export default function Dashboard() {
       else setLoading(false)
     }
   }
-const handleCSV = async (file, forcePlatform = null) => {
+const stopImportMessageRotation = () => {
+    if (importMessageTimerRef.current) {
+      clearInterval(importMessageTimerRef.current)
+      importMessageTimerRef.current = null
+    }
+  }
+
+  const resetImport = () => {
+    stopImportMessageRotation()
+    setImportStage('idle')
+    setLastUploadResult(null)
+  }
+
+  const handleCSV = async (file, forcePlatform = null) => {
     if (!file || !user) return
     // Free plan tracks a single platform — block explicit uploads for a different platform
     if (freePlatformLimitReached && forcePlatform && !allPlatforms.includes(forcePlatform)) {
       showToast("🔒 Free plan tracks 1 platform. Upgrade to Pro to add another (see sidebar).")
       return
     }
-    setUploading(true)
+    setImportStage('processing')
+    setImportMessageIdx(0)
     setLastUploadResult(null)
     gtmTrack('csv_upload_started', { platform: forcePlatform || uploadPlatform || 'unknown' })
+
+    stopImportMessageRotation()
+    importMessageTimerRef.current = setInterval(() => {
+      setImportMessageIdx(i => (i + 1) % IMPORT_MESSAGES.length)
+    }, 1400)
+
     try {
       const { data: { session } } = await supabase.auth.getSession()
-      if (!session) { showToast("❌ Not logged in"); setUploading(false); return }
+      if (!session) { showToast("❌ Not logged in"); setImportStage('error'); setLastUploadResult({ success: false, error: 'Not logged in.' }); return }
 
       const fd = new FormData()
       fd.append('file', file)
@@ -1904,9 +1952,9 @@ const handleCSV = async (file, forcePlatform = null) => {
           setLastUploadResult({ success: false, blocked: true, error: result.error || 'Free plan tracks 1 platform.', upgradeUrl: result.upgradeUrl || '/pricing' })
         } else {
           showToast("❌ " + (result.error || 'Upload failed'))
-          setLastUploadResult({ success: false, error: result.error || 'Upload failed' })
+          setLastUploadResult({ success: false, error: result.error || "We couldn't read this CSV. Please check the format or try another file." })
         }
-        setUploading(false)
+        setImportStage('error')
         return
       }
 
@@ -1917,7 +1965,16 @@ const handleCSV = async (file, forcePlatform = null) => {
         ? `✅ Imported ${result.inserted} tips (${result.skipped} duplicates skipped)`
         : `✅ Imported ${result.inserted} tips from ${result.platform}!`
       showToast(msg)
-      setLastUploadResult({ success: true, inserted: result.inserted, skipped: result.skipped, platform: result.platform })
+      setLastUploadResult({
+        success: true,
+        inserted: result.inserted,
+        skipped: result.skipped,
+        platform: result.platform,
+        totalUsd: result.totalUsd,
+        dateFrom: result.dateFrom,
+        dateTo: result.dateTo,
+      })
+      setImportStage('success')
 
       // Google Ads — CSV Upload conversion
       try {
@@ -1938,9 +1995,10 @@ const handleCSV = async (file, forcePlatform = null) => {
 
     } catch (err) {
       showToast("❌ " + err.message)
-      setLastUploadResult({ success: false, error: err.message })
+      setLastUploadResult({ success: false, error: err.message || "We couldn't read this CSV. Please check the format or try another file." })
+      setImportStage('error')
     } finally {
-      setUploading(false)
+      stopImportMessageRotation()
     }
   }
 
@@ -2675,6 +2733,39 @@ const handleCSV = async (file, forcePlatform = null) => {
         .card-glow-gold:hover  { box-shadow: 0 0 38px rgba(251,191,36,0.26), 0 8px 32px rgba(0,0,0,0.5) !important; transform: translateY(-4px) !important; }
         .stat-card { transition: transform 0.2s ease, box-shadow 0.2s ease; }
         @keyframes cmd-pulse { 0%,100% { opacity:1; } 50% { opacity:0.55; } }
+
+        /* ── CSV IMPORTER STATES ── */
+        .import-spinner {
+          width: 15px; height: 15px; flex-shrink: 0; border-radius: 50%;
+          border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff;
+          animation: spin 0.7s linear infinite;
+        }
+        .import-progress-track {
+          position: relative; height: 4px; border-radius: 4px; overflow: hidden;
+          background: rgba(255,255,255,0.06);
+        }
+        .import-progress-fill {
+          position: absolute; top: 0; left: 0; height: 100%; width: 40%; border-radius: 4px;
+          background: linear-gradient(90deg,#21E6F3,#6C5CFF,#FF2FAE);
+          box-shadow: 0 0 12px rgba(108,92,255,0.65);
+          animation: import-progress-sweep 1.15s ease-in-out infinite;
+        }
+        @keyframes import-progress-sweep {
+          0%   { transform: translateX(-100%); }
+          100% { transform: translateX(350%); }
+        }
+        @keyframes import-flash {
+          0%   { opacity: 0;   transform: scale(0.55); }
+          35%  { opacity: 0.9; transform: scale(1.2); }
+          100% { opacity: 0;   transform: scale(1.5); }
+        }
+        @keyframes import-check-pop {
+          0%   { opacity: 0; transform: scale(0.4); }
+          60%  { opacity: 1; transform: scale(1.15); }
+          100% { opacity: 1; transform: scale(1); }
+        }
+        .import-flash-ring { animation: import-flash 900ms ease-out; }
+        .import-check-badge { animation: import-check-pop 420ms cubic-bezier(0.34,1.3,0.64,1); }
       `}</style>
 
       <div style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 0 }}>
@@ -5704,56 +5795,90 @@ const handleCSV = async (file, forcePlatform = null) => {
                 <Button as="a" href="/pricing" style={{ flexShrink: 0, padding: "8px 14px", fontSize: 12, whiteSpace: "nowrap" }}>Upgrade →</Button>
               </div>
             )}
-            <div style={{ ...glassCard, borderRadius: 14, padding: 32, marginBottom: 16 }}>
-              <div style={{ marginBottom: 20 }}>
-                <label style={{ fontSize: 12, color: C.muted, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8, display: "block" }}>Platform (optional — helps if auto-detect fails)</label>
-                <select value={uploadPlatform} onChange={e => setUploadPlatform(e.target.value)}
-                  style={{ width: "100%", padding: "10px 14px", borderRadius: 9, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: C.white, fontSize: 14, outline: "none" }}>
-                  <option value="">Auto-detect (recommended)</option>
-                  {["Chaturbate", "BongaCams", "MyFreeCams", "Stripchat", "CamSoda"].map(p => {
-                    const locked = freePlatformLimitReached && !allPlatforms.includes(p)
-                    return <option key={p} value={p} disabled={locked}>{locked ? `🔒 ${p} — requires Pro` : p}</option>
-                  })}
-                </select>
-              </div>
-              <div style={{ textAlign: "center" }}>
-                <div style={{ fontSize: 40, marginBottom: 12 }}>📁</div>
-                <Button as="label" disabled={uploading} style={{ padding: "14px 32px", fontSize: 15 }}>
-                  {uploading ? "Processing..." : "Choose CSV File"}
-                  <input type="file" accept=".csv,.txt" style={{ display: "none" }} onChange={e => handleCSV(e.target.files[0], uploadPlatform || null)} disabled={uploading} />
-                </Button>
-                <p style={{ fontSize: 12, color: C.muted, marginTop: 12 }}>Supports Chaturbate, BongaCams, MyFreeCams, Stripchat, CamSoda</p>
-              </div>
+            <div style={{ ...glassCard, borderRadius: 14, padding: 32, marginBottom: 16, position: "relative", overflow: "hidden" }}>
+              {importStage !== 'success' && (
+                <div style={{ marginBottom: 20 }}>
+                  <label style={{ fontSize: 12, color: C.muted, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8, display: "block" }}>Platform (optional — helps if auto-detect fails)</label>
+                  <select value={uploadPlatform} onChange={e => setUploadPlatform(e.target.value)} disabled={uploading}
+                    style={{ width: "100%", padding: "10px 14px", borderRadius: 9, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: C.white, fontSize: 14, outline: "none", opacity: uploading ? 0.6 : 1 }}>
+                    <option value="">Auto-detect (recommended)</option>
+                    {["Chaturbate", "BongaCams", "MyFreeCams", "Stripchat", "CamSoda"].map(p => {
+                      const locked = freePlatformLimitReached && !allPlatforms.includes(p)
+                      return <option key={p} value={p} disabled={locked}>{locked ? `🔒 ${p} — requires Pro` : p}</option>
+                    })}
+                  </select>
+                </div>
+              )}
 
-              {lastUploadResult && (
-                <div style={{
-                  marginTop: 20, padding: "14px 16px", borderRadius: 10,
-                  background: lastUploadResult.success ? "rgba(16,185,129,0.1)" : lastUploadResult.blocked ? "rgba(167,139,250,0.1)" : "rgba(248,113,113,0.1)",
-                  border: `1px solid ${lastUploadResult.success ? "rgba(16,185,129,0.3)" : lastUploadResult.blocked ? "rgba(167,139,250,0.35)" : "rgba(248,113,113,0.3)"}`,
-                  fontSize: 13,
-                  color: lastUploadResult.success ? C.green : lastUploadResult.blocked ? "#a78bfa" : C.red,
-                  display: "flex", alignItems: "center", gap: 10
-                }}>
-                  <span style={{ fontSize: 18 }}>{lastUploadResult.success ? "✅" : lastUploadResult.blocked ? "🔒" : "❌"}</span>
-                  <div style={{ flex: 1 }}>
-                    {lastUploadResult.success ? (
-                      <>
-                        <div style={{ fontWeight: 700 }}>
-                          {lastUploadResult.inserted} tips imported from {lastUploadResult.platform}
-                        </div>
-                        {lastUploadResult.skipped > 0 && (
-                          <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>
-                            {lastUploadResult.skipped} duplicates skipped
-                          </div>
-                        )}
-                      </>
-                    ) : (
-                      <div style={{ fontWeight: 700 }}>{lastUploadResult.error}</div>
+              {(importStage === 'idle') && (
+                <div style={{ textAlign: "center" }}>
+                  <div style={{ fontSize: 40, marginBottom: 12 }}>📁</div>
+                  <Button as="label" style={{ padding: "14px 32px", fontSize: 15 }}>
+                    Upload CSV
+                    <input type="file" accept=".csv,.txt" style={{ display: "none" }}
+                      onChange={e => { const f = e.target.files[0]; e.target.value = ''; handleCSV(f, uploadPlatform || null) }} />
+                  </Button>
+                  <p style={{ fontSize: 12, color: C.muted, marginTop: 12 }}>Supports Chaturbate, BongaCams, MyFreeCams, Stripchat, CamSoda</p>
+                </div>
+              )}
+
+              {importStage === 'processing' && (
+                <div style={{ textAlign: "center" }}>
+                  <div style={{ fontSize: 40, marginBottom: 12, animation: "pulse-msg 1.6s ease-in-out infinite" }}>📁</div>
+                  <Button disabled style={{ padding: "14px 32px", fontSize: 15, minWidth: 236 }}>
+                    <span className="import-spinner" />
+                    {IMPORT_MESSAGES[importMessageIdx]}
+                  </Button>
+                  <div className="import-progress-track" style={{ marginTop: 20 }}>
+                    <div className="import-progress-fill" />
+                  </div>
+                  <p style={{ fontSize: 12, color: C.muted, marginTop: 12 }}>Hang tight — this only takes a moment.</p>
+                </div>
+              )}
+
+              {importStage === 'success' && lastUploadResult?.success && (
+                <div style={{ textAlign: "center" }}>
+                  <div style={{ position: "relative", width: 56, height: 56, margin: "0 auto 14px" }}>
+                    <div className="import-flash-ring" style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "radial-gradient(circle,rgba(34,211,238,0.55),rgba(236,72,153,0.35) 60%,transparent 70%)" }} />
+                    <div className="import-check-badge" style={{ position: "relative", width: 56, height: 56, borderRadius: "50%", background: "linear-gradient(135deg,#10B981,#22D3EE)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, color: "#fff", boxShadow: "0 0 24px rgba(16,185,129,0.45)" }}>✓</div>
+                  </div>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: C.white, marginBottom: 8 }}>Success — your tips were imported.</div>
+                  <div style={{ fontSize: 13.5, color: C.text, lineHeight: 1.6 }}>
+                    Imported <strong style={{ color: C.white }}>{(lastUploadResult.inserted || 0).toLocaleString()}</strong> tips from <strong style={{ color: C.cyan }}>{lastUploadResult.platform}</strong>
+                    {typeof lastUploadResult.totalUsd === 'number' && (
+                      <> — <strong style={{ color: C.green }}>${lastUploadResult.totalUsd.toFixed(2)}</strong> tracked</>
                     )}
                   </div>
-                  {lastUploadResult.blocked && (
-                    <Button as="a" href={lastUploadResult.upgradeUrl || '/pricing'} style={{ flexShrink: 0, padding: "8px 14px", fontSize: 12, whiteSpace: "nowrap" }}>Upgrade →</Button>
+                  {(formatImportDate(lastUploadResult.dateFrom) && formatImportDate(lastUploadResult.dateTo)) && (
+                    <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>
+                      {formatImportDate(lastUploadResult.dateFrom)} – {formatImportDate(lastUploadResult.dateTo)}
+                    </div>
                   )}
+                  {lastUploadResult.skipped > 0 && (
+                    <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>{lastUploadResult.skipped} duplicates skipped</div>
+                  )}
+                  <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 20, flexWrap: "wrap" }}>
+                    <Button onClick={() => handleTabChange('overview')} style={{ padding: "12px 26px", fontSize: 14 }}>View Dashboard</Button>
+                    <Button variant="secondary" onClick={resetImport} style={{ padding: "12px 22px", fontSize: 13 }}>Import another CSV</Button>
+                  </div>
+                </div>
+              )}
+
+              {importStage === 'error' && lastUploadResult && (
+                <div style={{ textAlign: "center" }}>
+                  <div style={{ fontSize: 34, marginBottom: 10 }}>{lastUploadResult.blocked ? "🔒" : "⚠️"}</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: lastUploadResult.blocked ? "#a78bfa" : C.red, marginBottom: 4 }}>
+                    {lastUploadResult.error}
+                  </div>
+                  {!lastUploadResult.blocked && (
+                    <div style={{ fontSize: 12, color: C.muted, marginBottom: 16 }}>Check the file format, or try a different export from your platform.</div>
+                  )}
+                  <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: lastUploadResult.blocked ? 12 : 0, flexWrap: "wrap" }}>
+                    {lastUploadResult.blocked && (
+                      <Button as="a" href={lastUploadResult.upgradeUrl || '/pricing'} style={{ padding: "12px 24px", fontSize: 13 }}>Upgrade →</Button>
+                    )}
+                    <Button variant="secondary" onClick={resetImport} style={{ padding: "12px 24px", fontSize: 13 }}>Try Again</Button>
+                  </div>
                 </div>
               )}
             </div>
