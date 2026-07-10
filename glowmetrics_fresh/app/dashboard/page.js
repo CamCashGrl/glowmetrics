@@ -1321,6 +1321,10 @@ export default function Dashboard() {
   const [chartDrillDay, setChartDrillDay] = useState(null)
   // ── LIVE MODE STATE ───────────────────────────────────────
   const [liveActive, setLiveActive] = useState(false)
+  // Set true only by the explicit "End"/Stop control; cleared only by an
+  // explicit "Start Stream" click. Guards realtime tip events and tab-open
+  // history hydration from silently reactivating a session the user stopped.
+  const liveStoppedRef = useRef(false)
   const [liveStartTime, setLiveStartTime] = useState(null)
   const [liveEvents, setLiveEvents] = useState([])
   const [liveGoalTokens, setLiveGoalTokens] = useState(0)
@@ -1713,6 +1717,9 @@ export default function Dashboard() {
           event: 'INSERT', schema: 'public', table: 'live_tips',
           filter: `user_id=eq.${user.id}`
         }, (payload) => {
+          // Respect an explicit Stop — a tip landing server-side doesn't mean
+          // the dashboard should silently resurrect a session the user ended.
+          if (liveStoppedRef.current) return
           const tip = payload.new
           const tokens = parseInt(tip.tokens) || 0
           const usd = parseFloat(tip.usd) || parseFloat((tokens * 0.05).toFixed(2))
@@ -1797,13 +1804,18 @@ export default function Dashboard() {
     return () => document.removeEventListener('visibilitychange', onVisibility)
   }, [user])
 
-  // ── LIVE MODE: load existing tips when tab is activated ───────────────────
+  // ── LIVE MODE: load recent tip history for context when tab is activated ──
+  // This is read-only context for the feed — it must never start or backdate
+  // a live session on its own. Only an explicit "Start Stream" click (or a
+  // brand-new realtime tip while not stopped) sets liveActive/liveStartTime.
+  // Tagged _isHistory so pace/dead-air coaching (which only look at live-only
+  // events) ignore it. Skipped entirely while a session is already running so
+  // switching tabs and back doesn't clobber the live event list.
   useEffect(() => {
-    if (activeTab !== 'live' || !user) return
+    if (activeTab !== 'live' || !user || liveActive) return
     let cancelled = false
 
     const loadRecentLiveTips = async () => {
-      // Load tips from the last 12 hours so the session has real context
       const since = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString()
       const { data, error } = await supabase
         .from('live_tips')
@@ -1822,17 +1834,15 @@ export default function Dashboard() {
         sourceUsed:        tip.source || 'extension',
         timestamp:         new Date(tip.received_at),
         platform:          tip.platform || 'chaturbate',
+        _isHistory:        true,
       }))
 
       setLiveEvents(normalized)
-      setLiveActive(true)
-      // Use earliest tip as session start so pace/coaching calculations are accurate
-      setLiveStartTime(prev => prev || new Date(data[0].received_at))
     }
 
     loadRecentLiveTips()
     return () => { cancelled = true }
-  }, [activeTab, user])
+  }, [activeTab, user, liveActive])
 
   // ── LIVE TICKER: 1-second interval drives time-based re-renders ─────────────
   // Without this, computeState() / getAlerts() / coaching never update because
@@ -2844,9 +2854,9 @@ const stopImportMessageRotation = () => {
 
         {/* ── LIVE STATUS BAR ── */}
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 12px", borderRadius: 20, background: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.25)" }}>
-            <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#10B981", boxShadow: "0 0 6px #10B981", animation: "pulse-msg 2s infinite" }} />
-            <span style={{ fontSize: 11, fontWeight: 700, color: "#10B981" }}>LIVE</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 12px", borderRadius: 20, background: liveActive ? "rgba(16,185,129,0.1)" : "rgba(100,116,139,0.1)", border: `1px solid ${liveActive ? "rgba(16,185,129,0.25)" : "rgba(100,116,139,0.25)"}` }}>
+            <div style={{ width: 6, height: 6, borderRadius: "50%", background: liveActive ? "#10B981" : "#64748b", boxShadow: liveActive ? "0 0 6px #10B981" : "none", animation: liveActive ? "pulse-msg 2s infinite" : "none" }} />
+            <span style={{ fontSize: 11, fontWeight: 700, color: liveActive ? "#10B981" : "#64748b" }}>{liveActive ? "LIVE" : "OFFLINE"}</span>
           </div>
           {isRefreshing && (
             <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "#94A3B8" }}>
@@ -4824,12 +4834,12 @@ const stopImportMessageRotation = () => {
                     <option value="goal">🎯 Goal Focus</option>
                   </select>
                   {!liveActive ? (
-                    <button onClick={() => { setLiveActive(true); setLiveStartTime(new Date()); setLiveEvents([]); processedTipIds.current = new Set(); coachingCooldowns.current = {} }}
+                    <button onClick={() => { liveStoppedRef.current = false; setLiveActive(true); setLiveStartTime(new Date()); setLiveEvents([]); processedTipIds.current = new Set(); coachingCooldowns.current = {} }}
                       style={{ padding: '7px 18px', borderRadius: 8, background: 'linear-gradient(135deg, #10B981, #22D3EE)', border: 'none', color: C.white, fontWeight: 800, fontSize: 12, cursor: 'pointer', boxShadow: '0 0 16px rgba(16,185,129,0.35)' }}>
                       ▶ Start Stream
                     </button>
                   ) : (
-                    <button onClick={() => setLiveActive(false)}
+                    <button onClick={() => { liveStoppedRef.current = true; setLiveActive(false) }}
                       style={{ padding: '7px 18px', borderRadius: 8, background: 'rgba(248,113,113,0.15)', border: '1px solid rgba(248,113,113,0.4)', color: C.red, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
                       ⏹ End
                     </button>
@@ -4894,7 +4904,7 @@ const stopImportMessageRotation = () => {
                   <div style={{ fontSize: 14, color: C.muted, maxWidth: 440, margin: '0 auto 28px', lineHeight: 1.75 }}>
                     Your AI coach watches the room in real time — tracking momentum, spotting opportunities, and telling you exactly what to do next to make more money.
                   </div>
-                  <button onClick={() => { setLiveActive(true); setLiveStartTime(new Date()); setLiveEvents([]); processedTipIds.current = new Set(); coachingCooldowns.current = {} }}
+                  <button onClick={() => { liveStoppedRef.current = false; setLiveActive(true); setLiveStartTime(new Date()); setLiveEvents([]); processedTipIds.current = new Set(); coachingCooldowns.current = {} }}
                     style={{ padding: '13px 36px', borderRadius: 12, background: 'linear-gradient(135deg, #10B981, #22D3EE)', border: 'none', color: C.white, fontWeight: 800, fontSize: 16, cursor: 'pointer', boxShadow: '0 0 32px rgba(16,185,129,0.4)' }}>
                     ▶ Start Streaming
                   </button>
@@ -4932,7 +4942,7 @@ const stopImportMessageRotation = () => {
                           </div>
                           <div style={{ display: 'flex', gap: 28, alignItems: 'center', flexWrap: 'wrap' }}>
                             {[
-                              { label: 'Revenue', value: `$${state?.totalRevenue?.toFixed(2) || '0.00'}`, color: C.green, size: 28 },
+                              { label: 'Session Revenue', value: `$${state?.totalRevenue?.toFixed(2) || '0.00'}`, color: C.green, size: 28 },
                               { label: 'Tokens', value: (state?.totalTokens || 0).toLocaleString(), color: C.cyan, size: 22 },
                               { label: 'Pace', value: pace.label, color: pace.color, size: 18 },
                               { label: 'Opportunity', value: `${opportunityScore.score}/100`, color: opportunityScore.color, size: 22 },
@@ -5028,7 +5038,7 @@ const stopImportMessageRotation = () => {
                       {/* MONEY MOMENTUM — 4 stats */}
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
                         {[
-                          { label: 'Revenue', value: `$${state?.totalRevenue?.toFixed(2) || '0.00'}`, color: C.green, sub: velocity.label || null, showSparkline: true },
+                          { label: 'Session Revenue', value: `$${state?.totalRevenue?.toFixed(2) || '0.00'}`, color: C.green, sub: velocity.label || null, showSparkline: true },
                           { label: 'Tips/min', value: state?.tipsPerMinute?.toFixed(2) || '0.00', color: C.cyan, sub: `${state?.liveOnlyCount || 0} tips live`, showSparkline: false },
                           { label: 'Avg Tip', value: `$${state?.avgTipValue?.toFixed(2) || '0.00'}`, color: C.gold, sub: state?.topTipper ? `Top: ${state.topTipper.username}` : null, showSparkline: false },
                           { label: 'Rev/hr', value: `$${velocity.currentUPH.toFixed(0)}`, color: velocity.color, sub: comparison.vsAvgPct !== null ? `${(comparison.vsAvgPct ?? 0) >= 0 ? '+' : ''}${comparison.vsAvgPct}% vs avg` : null, showSparkline: false },
