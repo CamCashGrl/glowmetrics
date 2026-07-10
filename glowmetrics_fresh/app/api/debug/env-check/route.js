@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
+// redeploy trigger: re-checking after SUPABASE_SERVICE_ROLE_KEY was deleted and re-added in Vercel
 // TEMPORARY diagnostic route — added to settle whether SUPABASE_SERVICE_ROLE_KEY
 // (and its neighbors) are actually present in process.env at runtime in
 // Production, after repeated "Error: supabaseKey is required." crashes in
