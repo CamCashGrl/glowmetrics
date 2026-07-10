@@ -591,8 +591,11 @@ export default function OnboardingPage(){
     // window.__onboardingExitCheck returns false and shows the exit survey
     // when eligible; onResolved (passed to OnboardingExitSurvey) completes
     // this navigation once the user dismisses/submits it.
+    // Goes to '/' rather than '/dashboard': a user with onboarding_complete
+    // false and zero tips gets bounced right back to /onboarding by the
+    // dashboard's abandoned-onboarding redirect, trapping them in a loop.
     const canExitNow=window.__onboardingExitCheck?window.__onboardingExitCheck():true
-    if(canExitNow)router.push('/dashboard')
+    if(canExitNow)router.push('/')
   }
 
   function handlePreview(){
@@ -728,7 +731,7 @@ export default function OnboardingPage(){
       </div>
 
       <AmbientParticles/>
-      <OnboardingExitSurvey currentStep={stepNum} currentStepName={step} minStepToTrigger={1} onResolved={()=>router.push('/dashboard')}/>
+      <OnboardingExitSurvey currentStep={stepNum} currentStepName={step} minStepToTrigger={1} onResolved={()=>router.push('/')}/>
       {showSparkle&&<Sparkle/>}
       {showUpsell&&pendingPlatform&&<ProUpsellModal platform={PLATFORMS[pendingPlatform]} onSkip={handleUpsellSkip}/>}
       <FeedbackBubble/>
