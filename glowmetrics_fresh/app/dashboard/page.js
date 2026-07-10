@@ -1893,7 +1893,7 @@ export default function Dashboard() {
           sessionStorage.setItem(`camcash_tips_time_${uid}`, Date.now().toString())
         } catch(e) {} // quota exceeded — fine, skip cache
       }
-      const { data: engineData } = await supabase.rpc('get_user_insights', { p_user_id: uid })
+      const { data: engineData } = await supabase.rpc('get_user_insights', { p_user_id: uid, p_timezone: userTz })
       setEngineInsights(engineData)
       setLastRefreshed(new Date())
     } finally {
@@ -2581,13 +2581,16 @@ const stopImportMessageRotation = () => {
   // Single source of truth used by the header, Daily Brief, and Losing Money.
   // Prefer engineInsights daily_plan (most specific), then today's analytics best
   // hour from dailyBrief, then the all-time analytics best hour as final fallback.
-  const canonicalPeakHourUTC = (
+  // All three sources are already user-local hours: get_user_insights is called
+  // with p_timezone above, so daily_plan.best_hour comes back local (not UTC);
+  // dailyBrief.bh and analytics.bestHour.hour were already local via toLocalHour().
+  const canonicalPeakHourLocal = (
     engineInsights?.daily_plan?.best_hour ??
     dailyBrief?.bh ??
     (analytics?.bestHour ? parseInt(analytics.bestHour.hour) : null)
   )
-  const canonicalPeakLabel = canonicalPeakHourUTC != null
-    ? (() => { const _off = new Date().getTimezoneOffset()/-60; const _lh = Math.round(((canonicalPeakHourUTC+_off)%24+24)%24); return _lh===0?'12 AM':_lh<12?`${_lh} AM`:_lh===12?'12 PM':`${_lh-12} PM` })()
+  const canonicalPeakLabel = canonicalPeakHourLocal != null
+    ? (() => { const _lh = ((canonicalPeakHourLocal % 24) + 24) % 24; return _lh===0?'12 AM':_lh<12?`${_lh} AM`:_lh===12?'12 PM':`${_lh-12} PM` })()
     : null
 
   // re-runs every minuteTick (as well as when the underlying data changes)
@@ -2797,7 +2800,7 @@ const stopImportMessageRotation = () => {
             : momentumData?.pct > -10 ? '#22D3EE'
             : tips.length === 0 ? '#475569' : '#f87171'
           const localNow = new Date().getHours()
-          const hoursUntilLocal = canonicalPeakHourUTC != null ? (canonicalPeakHourUTC - localNow + 24) % 24 : brief?.hoursUntilPeak
+          const hoursUntilLocal = canonicalPeakHourLocal != null ? (canonicalPeakHourLocal - localNow + 24) % 24 : brief?.hoursUntilPeak
           const peakLabel = hoursUntilLocal === 0 ? 'NOW' : hoursUntilLocal === 1 ? 'in 1 hr' : (hoursUntilLocal > 0 && !isNaN(hoursUntilLocal)) ? `in ${hoursUntilLocal}h` : null
           const _eiPeakLabel = canonicalPeakLabel || brief?.bhLabel
           const bestPlat = brief?.displayPlat || (tips.length > 0 ? tips[0]?.platform : null)
