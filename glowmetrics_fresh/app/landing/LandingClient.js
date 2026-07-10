@@ -785,7 +785,13 @@ export default function LandingClient() {
         .select('onboarding_complete')
         .eq('user_id', user.id)
         .single()
-      router.replace(profile?.onboarding_complete ? '/dashboard' : '/onboarding')
+      // Only force fully-onboarded users off the marketing page. Incomplete
+      // onboarding is NOT redirected here — the explicit sign-in handler
+      // below already sends users to /onboarding right after login; doing
+      // it again on every landing-page mount trapped anyone who'd
+      // intentionally left onboarding (e.g. via the exit survey) back into
+      // it the moment they landed on '/'.
+      if (profile?.onboarding_complete) router.replace('/dashboard')
     })
   }, [])
 
