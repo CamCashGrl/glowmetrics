@@ -143,6 +143,15 @@
       letter-spacing: 0.8px;
       color: #475569;
     }
+    #clear-tips-btn {
+      font-size: 10px;
+      color: #475569;
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0;
+    }
+    #clear-tips-btn:hover { color: #94a3b8; }
     #tips-list { padding: 0 14px 10px; }
 
     .tip-item {
@@ -261,6 +270,7 @@
     <!-- Tips -->
     <div class="tips-header">
       <span class="tips-label">Recent Tips</span>
+      <button id="clear-tips-btn" title="Clears this local list only — does not delete saved tips or dashboard history">Clear tips</button>
     </div>
     <div id="tips-list">
       <div class="empty-state">No tips detected yet this session</div>

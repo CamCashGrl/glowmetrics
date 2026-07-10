@@ -93,22 +93,15 @@ export async function POST(req) {
     // Permanent history (dashboard analytics) is a Pro feature — live coaching
     // and the live tip feed above are free on every supported platform, but
     // only paid plans get tips written into the historical `tips` table.
+    // The `sync_live_tip_to_tips` DB trigger on live_tips already handles that
+    // mirror (and is itself plan-gated) — inserting into `tips` here too would
+    // double-write every tip, so this just reads the plan for the response.
     const { data: profile } = await supabaseAdmin
       .from('profiles')
       .select('plan')
       .eq('id', user.id)
       .maybeSingle();
     const savedToHistory = profile?.plan === 'pro' || profile?.plan === 'unlimited';
-
-    if (savedToHistory) {
-      await supabaseAdmin.from('tips').insert({
-        user_id:   user.id,
-        username:  username.trim(),
-        tokens:    parseInt(amount, 10),
-        platform:  platform.toLowerCase(),
-        date_time: receivedAt,
-      });
-    }
 
     return Response.json(
       { success: true, tip: data[0], savedToHistory, message: `Tip from ${username} synced` },
