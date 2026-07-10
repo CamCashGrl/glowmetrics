@@ -177,6 +177,26 @@ async function loadWhales() {
   } catch (_) {}
 }
 
+// ─── Clear tip log ────────────────────────────────────────────────────────────
+// Wipes only the local/in-memory tip feed shown in the popup and overlay —
+// synced tips already POSTed to /api/live/tips (and thus the dashboard) are
+// untouched. Lets a model start a fresh-looking log at the top of a session
+// without a prior model's history still showing.
+async function clearTips() {
+  sessionTips = [];
+  sessionTokens = 0;
+  sessionUsd = 0;
+  topTipper = null;
+  lastTipTs = null;
+
+  const items = await chrome.storage.local.get(null);
+  const tipKeys = Object.keys(items).filter(k => k.startsWith('tip_'));
+  if (tipKeys.length) await chrome.storage.local.remove(tipKeys);
+
+  broadcast({ action: 'state', state: getState() });
+  broadcastOverlay();
+}
+
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 async function logout() {
   session = null;
@@ -365,6 +385,11 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
 
   if (msg.action === 'logout') {
     logout().then(() => reply({ ok: true }));
+    return true;
+  }
+
+  if (msg.action === 'clear_tips') {
+    clearTips().then(() => reply({ ok: true }));
     return true;
   }
 

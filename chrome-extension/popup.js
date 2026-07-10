@@ -237,6 +237,19 @@ chrome.runtime.sendMessage({ action: 'get_state' }, (state) => {
   updatePlanNotice(state.isPro);
 });
 
+// Clear tips button — clears only the local list shown in this popup/overlay.
+// Does not touch synced tips, the tips table, or dashboard history.
+document.getElementById('clear-tips-btn').addEventListener('click', () => {
+  const ok = confirm('Clear the tip log shown here? This only clears this local view — saved tips and your dashboard are not affected.');
+  if (!ok) return;
+
+  chrome.runtime.sendMessage({ action: 'clear_tips' }, () => {
+    const whaleAlert = document.getElementById('whale-alert');
+    if (whaleAlert) whaleAlert.style.display = 'none';
+    loadTips();
+  });
+});
+
 // Test tip button
 document.getElementById('test-tip-btn').addEventListener('click', () => {
   chrome.runtime.sendMessage({
