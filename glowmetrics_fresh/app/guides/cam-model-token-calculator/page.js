@@ -416,7 +416,7 @@ export default function TokenCalculatorPage() {
               ))}
             </div>
             <p style={{ fontSize: 16, lineHeight: 1.8, color: S.text }}>
-              Review your tip menu analytics quarterly. If you're getting lots of entry tips but no whale tips, raise your mid-tier prices. If tips have stalled entirely, introduce new affordable entry-level options to restart momentum.
+              Review your tip menu analytics quarterly. If you're getting lots of entry tips but no whale tips, raise your mid-tier prices. If tips have stalled entirely, introduce new affordable entry-level options to restart momentum. If you run a dominant or tribute-based room, the whale-goal tier above is really its own pricing model — see the <a href="/blog/findom-kink-niche" style={{ color: S.accent, textDecoration: 'none' }}>findom and kink niche guide</a> for how to structure tiered tributes specifically.
             </p>
           </section>
 
@@ -447,6 +447,7 @@ export default function TokenCalculatorPage() {
                 { href: '/guides/cam-model-income-tracker', label: 'Income Tracker', desc: 'Track $/hr, top fans, and session breakdowns' },
                 { href: '/guides/chaturbate-best-hours', label: 'Best Hours to Stream', desc: 'Find your personal peak streaming times' },
                 { href: '/blog/cam-model-earnings', label: 'Cam Model Earnings Guide', desc: 'How much models make and why it changes' },
+                { href: '/blog/findom-kink-niche', label: 'Findom & Kink Niche Guide', desc: 'Tribute pricing tiers, boundaries, and platform differences' },
               ].map(({ href, label, desc }) => (
                 <a key={href} href={href} style={{ background: S.card, border: `1px solid ${S.border}`, borderRadius: 14, padding: '18px 20px', textDecoration: 'none', display: 'block', transition: 'border-color 0.15s' }}>
                   <div style={{ fontSize: 14, fontWeight: 700, color: S.accent, marginBottom: 6 }}>{label}</div>
