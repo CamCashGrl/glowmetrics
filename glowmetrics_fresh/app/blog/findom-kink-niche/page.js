@@ -342,6 +342,7 @@ export default function FindomKinkNiche() {
           <a href="/blog/why-cam-income-is-inconsistent" style={s.relLink}>→ Why cam income is inconsistent</a>
           <a href="/guides/cam-model-top-tippers" style={s.relLink}>→ Cam model top tippers guide</a>
           <a href="/guides/cam-model-analytics" style={s.relLink}>→ Cam model analytics guide</a>
+          <a href="/guides/cam-model-token-calculator" style={s.relLink}>→ Cam model token calculator</a>
         </div>
       </div>
 
