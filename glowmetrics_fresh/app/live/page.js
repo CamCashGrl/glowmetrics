@@ -6,6 +6,7 @@ import { computeRoomHealth } from '../../lib/analytics/roomHealth';
 import { computeRevenueVelocity, computeLiveComparison } from '../../lib/analytics/velocity';
 import { detectSessionPhase, PHASES, getRecoveryActions, getGoalStrategy } from '../../lib/analytics/sessionPhase';
 import { computeOpportunityScore, computeStreamHealth } from '../../lib/analytics/opportunity';
+import { detectSessions } from '../../lib/analytics/sessions';
 import { tokenRate } from '../../lib/constants';
 import FeedbackWidget from '../components/FeedbackWidget';
 import EventsSync from './EventsSync';
@@ -132,10 +133,18 @@ export default function LivePage() {
         }).subscribe();
       liveTipsChannelRef.current = ch;
 
-      // Load sessions for velocity comparison
-      supabase.from('sessions').select('*').eq('user_id', u.id)
-        .order('start_time', { ascending: false }).limit(30)
-        .then(({ data }) => { if (data) setSessions(data); });
+      // Load recent tip history and infer session baselines for Personal Best /
+      // Peak Hour / Revenue Velocity comparison. Scoped to the last 90 days
+      // (not the full lifetime `tips` history like the dashboard's analytics
+      // engine) — this page is meant to stay lightweight for real-time
+      // coaching, and a "personal best" from recent memory is more actionable
+      // here than an all-time figure. This is why the number can differ
+      // slightly from the dashboard's all-time stats.
+      const sessionsSince = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
+      supabase.from('tips').select('username, platform, tokens, usd, date_time')
+        .eq('user_id', u.id).gte('date_time', sessionsSince)
+        .order('date_time', { ascending: true })
+        .then(({ data }) => { if (data) setSessions(detectSessions(data)); });
     });
 
     return () => { if (liveTipsChannelRef.current) supabase.removeChannel(liveTipsChannelRef.current); };
@@ -565,8 +574,8 @@ export default function LivePage() {
     const hourRevenue = {};
     const hourCount = {};
     sessions.forEach(s => {
-      if (!s.start_time || !(s.totalUSD > 0)) return;
-      const h = new Date(s.start_time).getHours();
+      if (!s.startTime || !(s.totalUSD > 0)) return;
+      const h = new Date(s.startTime).getHours();
       hourRevenue[h] = (hourRevenue[h] || 0) + (s.totalUSD || 0);
       hourCount[h] = (hourCount[h] || 0) + 1;
     });
