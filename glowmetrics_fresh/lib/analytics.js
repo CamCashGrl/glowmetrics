@@ -950,6 +950,10 @@ export function aggregateRows(tips, tz = null) {
   const totalTimedHours = timedSessions.reduce((s, x) => s + x.durationHours, 0)
   const totalTimedUSD = timedSessions.reduce((s, x) => s + x.totalUSD, 0)
   const earningsVelocity = totalTimedHours > 0 ? parseFloat((totalTimedUSD / totalTimedHours).toFixed(2)) : null
+  // Denominator behind earningsVelocity, exposed so callers can gate display of
+  // the $/hr figure on a minimum sample size (see canShowHourlyRate in DashboardPreview.js)
+  // instead of showing a precise-looking number off of a single short session.
+  const totalStreamMinutes = Math.round(totalTimedHours * 60)
 
   const platformVelocity = {}
   Object.keys(platformMap).forEach(p => {
@@ -1100,7 +1104,7 @@ export function aggregateRows(tips, tz = null) {
     bestDay, bestHour, platformBestTimes,
     monthlyData, bestMonth,
     tipTypeBreakdown, privateShowFans, spyShowFans,
-    earningsVelocity, platformVelocity,
+    earningsVelocity, totalStreamMinutes, platformVelocity,
     missedRevenueByPlatform, returningVsNew, topFanDependency,
     dependencyRisk: null, preTipBehavior: null, trueHourlyAvg: [],
     meaningfulSessions, allValidSessions,

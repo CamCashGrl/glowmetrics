@@ -12,7 +12,7 @@ import Sidebar from "./Sidebar"
 import SiteFooter from "../components/SiteFooter"
 import { PLATFORM_TOKEN_RATES, tokenRate } from "../../lib/constants"
 import { track as gtmTrack } from '../../lib/track'
-import { getDashboardReadiness, getModuleLockState, LockedInsightCard, DashboardProgressCard } from './DashboardPreview'
+import { getDashboardReadiness, getModuleLockState, canShowHourlyRate, LockedInsightCard, DashboardProgressCard } from './DashboardPreview'
 import Button from '../../components/ui/Button'
 import EarlyAdopterOffer from './EarlyAdopterOffer'
 
@@ -2045,6 +2045,13 @@ const stopImportMessageRotation = () => {
   // Single canonical $/hr — uses analytics.earningsVelocity (totalUSD / totalHours across all
   // meaningful sessions) so the header, KPI card, and "Overall" chip all show the same number.
   const avgPerHour = analytics?.earningsVelocity ?? (timedTotalHours > 0 ? timedTotalUSD / timedTotalHours : 0)
+  // Gate display on the same minimum sample size used everywhere else in the app
+  // (canShowHourlyRate) — a single short session can otherwise produce a
+  // precise-looking $/hr that isn't representative of anything sustained.
+  const hourlyRateUnlocked = canShowHourlyRate({
+    sessionCount: analytics?.meaningfulSessionCount || 0,
+    totalStreamMinutes: analytics?.totalStreamMinutes || 0,
+  })
   // Single source of truth — pre-computed in aggregateRows, same values used everywhere
   const analyticsbestDay  = analytics?.bestDay  || null
   const analyticsBestHour = analytics?.bestHour || null
@@ -2813,7 +2820,11 @@ const stopImportMessageRotation = () => {
                 </div>
                 <div style={{ display:'flex', flexDirection:'column', justifyContent:'center', padding:'0 24px', borderRight:'1px solid rgba(255,255,255,0.07)', flexShrink:0 }}>
                   <div style={{ fontSize:10, color:'#475569', textTransform:'uppercase', letterSpacing:1.2, fontWeight:600, marginBottom:2 }}>Avg $/Hour</div>
-                  <div style={{ fontSize:19, fontWeight:900, color:'#22D3EE', whiteSpace:'nowrap' }}>{safeAvg > 0 ? `$${safeAvg.toFixed(2)}` : '—'}</div>
+                  {hourlyRateUnlocked ? (
+                    <div style={{ fontSize:19, fontWeight:900, color:'#22D3EE', whiteSpace:'nowrap' }}>{safeAvg > 0 ? `$${safeAvg.toFixed(2)}` : '—'}</div>
+                  ) : (
+                    <div onClick={() => handleTabChange('upload')} title="Unlocks after 3+ sessions and 60+ tracked minutes" style={{ fontSize:13, fontWeight:700, color:'#64748b', whiteSpace:'nowrap', cursor:'pointer' }}>🔒 Locked</div>
+                  )}
                 </div>
                 <div style={{ display:'flex', flexDirection:'column', justifyContent:'center', padding:'0 24px', borderRight:'1px solid rgba(255,255,255,0.07)', flexShrink:0 }}>
                   <div style={{ fontSize:10, color:'#475569', textTransform:'uppercase', letterSpacing:1.2, fontWeight:600, marginBottom:2 }}>Momentum</div>
@@ -2959,9 +2970,11 @@ const stopImportMessageRotation = () => {
                   sub: topPct ? `Top ${topPct}% of models on this platform` : 'Upload more data to rank',
                   icon:'💰', badge: growthPct !== null ? (isPositive ? `↑ ${growthPct}% vs last month` : `↓ ${Math.abs(growthPct)}% vs last month`) : null,
                   badgeColor: isPositive ? C.green : C.red, isHero: true },
-                { label:"Avg $/Hour", accent:'#22d3ee', glowClass:'card-glow-cyan', sparkData:last6AvgHr, trend:avgHrGrowth,
-                  value: safeAvgHr > 0 ? `$${safeAvgHr.toFixed(2)}` : '—',
-                  sub: safeAvgHr > 20 ? 'Above average — keep it up!' : safeAvgHr > 0 ? 'Tip: stream at peak hours' : 'Start timed sessions to track',
+                { label:"Avg $/Hour", accent:'#22d3ee', glowClass:'card-glow-cyan', sparkData:last6AvgHr, trend: hourlyRateUnlocked ? avgHrGrowth : null,
+                  value: hourlyRateUnlocked ? (safeAvgHr > 0 ? `$${safeAvgHr.toFixed(2)}` : '—') : '🔒 Locked',
+                  sub: hourlyRateUnlocked
+                    ? (safeAvgHr > 20 ? 'Above average — keep it up!' : safeAvgHr > 0 ? 'Tip: stream at peak hours' : 'Start timed sessions to track')
+                    : 'Unlocks after 3+ sessions and 60+ tracked minutes',
                   icon:'⏱️', badge:null },
                 { label:"Total Fans", accent:'#a78bfa', glowClass:'card-glow-violet', sparkData:last6Fans, trend:fansGrowth,
                   value: whales.length > 0 ? whales.length.toLocaleString() : '—',
