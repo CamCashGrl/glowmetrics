@@ -10,7 +10,7 @@ import { computeOpportunityScore, computeStreamHealth } from "../../lib/analytic
 import dynamic from "next/dynamic"
 import Sidebar from "./Sidebar"
 import SiteFooter from "../components/SiteFooter"
-import { PLATFORM_TOKEN_RATES } from "../../lib/constants"
+import { PLATFORM_TOKEN_RATES, tokenRate } from "../../lib/constants"
 import { track as gtmTrack } from '../../lib/track'
 import { getDashboardReadiness, getModuleLockState, LockedInsightCard, DashboardProgressCard } from './DashboardPreview'
 import Button from '../../components/ui/Button'
@@ -1474,7 +1474,6 @@ export default function Dashboard() {
       if (processedTipIds.current.has(dedupKey)) return
       processedTipIds.current.add(dedupKey)
 
-      const rate    = 0.05
       const tokens  = parseInt(tipEvent.tokens) || 0
       const usd     = parseFloat(tipEvent.usd)  || 0
       const normalized = {
@@ -1483,7 +1482,7 @@ export default function Dashboard() {
         username:         tipEvent.username,
         tokens,
         usd,
-        normalizedRevenue: usd > 0 ? usd : parseFloat((tokens * rate).toFixed(2)),
+        normalizedRevenue: usd > 0 ? usd : parseFloat((tokens * tokenRate(tipEvent.platform)).toFixed(2)),
         sourceUsed:       usd > 0 ? 'usd' : 'tokens',
         timestamp:        new Date(tipEvent.timestamp || Date.now()),
         platform:         tipEvent.platform || 'Unknown',
@@ -1533,7 +1532,7 @@ export default function Dashboard() {
               username:         tip.username || 'Unknown',
               tokens:           parseInt(tip.tokens) || 0,
               usd:              parseFloat(tip.usd) || 0,
-              normalizedRevenue: parseFloat(tip.usd) || parseFloat(((tip.tokens || 0) * 0.05).toFixed(2)),
+              normalizedRevenue: parseFloat(tip.usd) || parseFloat(((tip.tokens || 0) * tokenRate(tip.platform)).toFixed(2)),
               sourceUsed:       tip.source || 'extension',
               timestamp:        new Date(tip.received_at),
               platform:         tip.platform || 'extension',
@@ -1566,7 +1565,7 @@ export default function Dashboard() {
           username:         tip.username || 'Unknown',
           tokens:           parseInt(tip.tokens) || 0,
           usd:              parseFloat(tip.usd) || 0,
-          normalizedRevenue: parseFloat(tip.usd) || parseFloat(((tip.tokens || 0) * 0.05).toFixed(2)),
+          normalizedRevenue: parseFloat(tip.usd) || parseFloat(((tip.tokens || 0) * tokenRate(tip.platform)).toFixed(2)),
           sourceUsed:       tip.source || 'extension',
           timestamp:        new Date(tip.received_at),
           platform:         tip.platform || 'extension',
@@ -1715,7 +1714,7 @@ export default function Dashboard() {
         }, (payload) => {
           const tip = payload.new
           const tokens = parseInt(tip.tokens) || 0
-          const usd = parseFloat(tip.usd) || parseFloat((tokens * 0.05).toFixed(2))
+          const usd = parseFloat(tip.usd) || parseFloat((tokens * tokenRate(tip.platform)).toFixed(2))
           const normalized = {
             username: tip.username || 'Unknown',
             tokens, usd,
@@ -1817,8 +1816,8 @@ export default function Dashboard() {
       const normalized = data.map(tip => ({
         username:          tip.username || 'Unknown',
         tokens:            parseInt(tip.tokens) || 0,
-        usd:               parseFloat(tip.usd) || parseFloat(((tip.tokens || 0) * 0.05).toFixed(2)),
-        normalizedRevenue: parseFloat(tip.usd) || parseFloat(((tip.tokens || 0) * 0.05).toFixed(2)),
+        usd:               parseFloat(tip.usd) || parseFloat(((tip.tokens || 0) * tokenRate(tip.platform)).toFixed(2)),
+        normalizedRevenue: parseFloat(tip.usd) || parseFloat(((tip.tokens || 0) * tokenRate(tip.platform)).toFixed(2)),
         sourceUsed:        tip.source || 'extension',
         timestamp:         new Date(tip.received_at),
         platform:          tip.platform || 'chaturbate',

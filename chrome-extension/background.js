@@ -4,6 +4,13 @@ const SUPABASE_URL  = 'https://hlsdlaibnayzbfflxclj.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhsc2RsYWlibmF5emJmZmx4Y2xqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM2MjQwODUsImV4cCI6MjA4OTIwMDA4NX0.5FwPe35UL-o46FvBJX526La5o7jcbFaP1KVoLtI4U_M';
 const API_BASE       = 'https://www.camcashgrl.com';
 
+// Token→USD rates for the popup's local display only — the server (see
+// app/api/live/tips/route.js) is the source of truth for what actually gets
+// stored. Mirrors glowmetrics_fresh/lib/constants.js PLATFORM_TOKEN_RATES;
+// this extension has no build step to import that file directly, so keep
+// these two tables in sync by hand if a rate ever changes.
+const TOKEN_RATES = { chaturbate: 0.05, bongacams: 0.025, myfreecams: 0.05, stripchat: 0.05, camsoda: 0.05 };
+
 // ─── State ────────────────────────────────────────────────────────────────────
 let session = null;
 let whales = [];
@@ -371,7 +378,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
   if (msg.action === 'tip') {
     const { username, tokens, platform } = msg;
     lastTipTs = Date.now();
-    const usd = parseFloat((tokens * 0.05).toFixed(2));
+    const usd = parseFloat((tokens * (TOKEN_RATES[platform] || 0.05)).toFixed(2));
     const tip = { username, tokens, usd, platform, ts: lastTipTs };
 
     sessionTips.unshift(tip);

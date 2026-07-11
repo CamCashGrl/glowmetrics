@@ -14,8 +14,16 @@ export const PLATFORM_TOKEN_RATES = {
 
 export const DEFAULT_TOKEN_RATE = 0.05
 
+// Lowercased lookup so callers passing DB/API casing (e.g. 'bongacams' from
+// live_tips.platform) still resolve to the correct rate instead of silently
+// falling through to DEFAULT_TOKEN_RATE.
+const PLATFORM_TOKEN_RATES_LOWER = Object.fromEntries(
+  Object.entries(PLATFORM_TOKEN_RATES).map(([k, v]) => [k.toLowerCase(), v])
+)
+
 export function tokenRate(platform) {
-  return PLATFORM_TOKEN_RATES[platform] ?? DEFAULT_TOKEN_RATE
+  if (!platform) return DEFAULT_TOKEN_RATE
+  return PLATFORM_TOKEN_RATES_LOWER[platform.toLowerCase()] ?? DEFAULT_TOKEN_RATE
 }
 
 // What viewers pay per token to buy it (not what the model receives).
