@@ -207,6 +207,7 @@ export default function AdminPage() {
             <span style={{ fontSize:11, color:C.muted }}>Updated {fmtTime(generatedAt)}</span>
             <button onClick={load} style={{ padding:"5px 14px", borderRadius:8, background:`${C.cyan}18`, border:`1px solid ${C.cyan}33`, color:C.cyan, cursor:"pointer", fontSize:11, fontWeight:700 }}>↻ Refresh</button>
             <button onClick={() => router.push("/admin/preview")} style={{ padding:"5px 14px", borderRadius:8, background:`${C.purple}18`, border:`1px solid ${C.purple}44`, color:C.purple, cursor:"pointer", fontSize:11, fontWeight:700 }}>👁 Stage Preview</button>
+            <button onClick={() => router.push("/admin/messages")} style={{ padding:"5px 14px", borderRadius:8, background:`${C.pink}18`, border:`1px solid ${C.pink}44`, color:C.pink, cursor:"pointer", fontSize:11, fontWeight:700 }}>✉️ Messages</button>
             <button onClick={logout} style={{ padding:"5px 14px", borderRadius:8, background:"rgba(255,255,255,0.05)", border:`1px solid ${C.border}`, color:C.muted, cursor:"pointer", fontSize:11 }}>Sign out</button>
           </div>
         </div>

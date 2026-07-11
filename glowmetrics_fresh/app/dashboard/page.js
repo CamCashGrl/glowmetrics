@@ -15,6 +15,7 @@ import { track as gtmTrack } from '../../lib/track'
 import { getDashboardReadiness, getModuleLockState, LockedInsightCard, DashboardProgressCard } from './DashboardPreview'
 import Button from '../../components/ui/Button'
 import EarlyAdopterOffer from './EarlyAdopterOffer'
+import MessagesPanel from './MessagesPanel'
 
 // Tab-only components loaded on demand instead of in the initial dashboard
 // bundle — each is only ever rendered behind an `activeTab === '...'` check,
@@ -1303,6 +1304,7 @@ export default function Dashboard() {
   const [lastUploadResult, setLastUploadResult] = useState(null)
   const [activeTab, setActiveTab] = useState(initialTab)
   const [toast, setToast] = useState("")
+  const [unreadMessages, setUnreadMessages] = useState(0)
   const [uploadCount, setUploadCount] = useState(0)
   const [whaleFilter, setWhaleFilter] = useState("ALL")
   const [platformFilter, setPlatformFilter] = useState("ALL")
@@ -1398,6 +1400,17 @@ export default function Dashboard() {
   }
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(""), 3500) }
+
+  // Unread badge needs a count even when the Messages tab has never been
+  // opened this session — MessagesPanel only mounts (and fetches) once
+  // activeTab === "messages", so fetch just the count here too.
+  useEffect(() => {
+    if (!user?.id) return
+    fetch("/api/messages")
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setUnreadMessages(d.notifications.filter(n => !n.read_at).length) })
+      .catch(() => {})
+  }, [user?.id])
 
   // ── SAVE TIPPER NOTE ─────────────────────────────────────────────
   const saveTipperNote = async (username, note, followUp = false) => {
@@ -2777,7 +2790,7 @@ const stopImportMessageRotation = () => {
       </div>
 
       {/* SIDEBAR — desktop only, hidden on mobile via CSS */}
-      <Sidebar activeTab={activeTab} onTabChange={(tab) => { setActiveTab(tab); if (typeof window !== "undefined") { localStorage.setItem("camcash_tab", tab); window.scrollTo({ top: 0, behavior: "instant" }); } }} user={user} onSignOut={async () => { await supabase.auth.signOut(); router.replace("/login"); }} isPro={isPro} />{/* MAIN CONTENT */}
+      <Sidebar activeTab={activeTab} onTabChange={(tab) => { setActiveTab(tab); if (typeof window !== "undefined") { localStorage.setItem("camcash_tab", tab); window.scrollTo({ top: 0, behavior: "instant" }); } }} user={user} onSignOut={async () => { await supabase.auth.signOut(); router.replace("/login"); }} isPro={isPro} unreadMessages={unreadMessages} />{/* MAIN CONTENT */}
       <div className="dash-main" style={{ marginLeft: 240, width: "calc(100% - 240px)", minWidth: 0, padding: 32, boxSizing: "border-box", overflowX: "hidden" }}>
 
         {/* ── STICKY COMMAND BAR ── */}
@@ -6220,6 +6233,14 @@ const stopImportMessageRotation = () => {
             <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 8 }}>🪙 Token Calculator</h1>
             <p style={{ fontSize: 14, color: C.muted, marginBottom: 32 }}>Convert tokens to USD earnings across Chaturbate, BongaCams, MyFreeCams, Stripchat & CamSoda</p>
             <TokenCalculator />
+          </div>
+        )}
+
+        {activeTab === "messages" && (
+          <div style={{ maxWidth: 1000 }}>
+            <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 8 }}>✉️ Messages</h1>
+            <p style={{ fontSize: 14, color: C.muted, marginBottom: 24 }}>Messages from CamCash and the team, and your replies</p>
+            <MessagesPanel user={user} showToast={showToast} onUnreadChange={setUnreadMessages} />
           </div>
         )}
 

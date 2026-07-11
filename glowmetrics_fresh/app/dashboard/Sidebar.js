@@ -110,13 +110,14 @@ const NAV = [
   {
     group: "SUPPORT",
     items: [
+      { id: "messages", icon: "✉️", label: "Messages" },
       { id: "upload", icon: "📥", label: "Import CSV" },
       { id: "help",   icon: "❓", label: "CSV Help" },
     ]
   },
 ]
 
-export default function Sidebar({ activeTab, onTabChange, user, onSignOut, isPro = false }) {
+export default function Sidebar({ activeTab, onTabChange, user, onSignOut, isPro = false, unreadMessages = 0 }) {
   const [hoveredId, setHoveredId] = useState(null)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [showUpgrade, setShowUpgrade] = useState(false)
@@ -143,7 +144,12 @@ export default function Sidebar({ activeTab, onTabChange, user, onSignOut, isPro
         <span style={{ fontSize: 13, fontWeight: isActive ? 700 : 500, color: isActive ? C.white : C.text, letterSpacing: -0.2 }}>
           {label}
         </span>
-        {isActive && (
+        {id === "messages" && unreadMessages > 0 && (
+          <span style={{ marginLeft: "auto", minWidth: 16, height: 16, borderRadius: 8, background: C.pink, color: "white", fontSize: 10, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px" }}>
+            {unreadMessages > 9 ? "9+" : unreadMessages}
+          </span>
+        )}
+        {isActive && !(id === "messages" && unreadMessages > 0) && (
           <div style={{ marginLeft: "auto", width: 5, height: 5, borderRadius: "50%", background: C.cyan, boxShadow: "0 0 5px #22D3EE" }} />
         )}
       </button>
