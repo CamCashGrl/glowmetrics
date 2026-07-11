@@ -187,6 +187,26 @@ export default function Page() {
         </p>
         <img src="/blog-images/viral-room-title-generator.png" alt="CamCashGrl viral room title generator showing toy, goal, reward, and mood selectors with generated titles" className="w-full rounded-lg border border-slate-200 dark:border-slate-800 my-6" />
 
+        <div className="rounded-2xl border border-pink-500/25 bg-pink-500/5 p-6 my-8">
+          <img
+            src="/blog-images/500-room-titles.webp"
+            alt="500 Cam Room Titles PDF cover by Pretty Profitz"
+            className="w-full max-w-xs mx-auto rounded-lg mb-4"
+          />
+          <h3 className="text-lg font-bold mb-2">Want 500 titles instead of writing your own?</h3>
+          <p className="text-sm mb-4 leading-relaxed">
+            Pretty Profitz sells a ready-made &quot;500 Cam Room Titles&quot; PDF — pre-written titles across niches, moods, and goals, so you&apos;re never stuck staring at a blank title field before a stream.
+          </p>
+          <a
+            href="https://www.etsy.com/shop/prettyprofitz"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-block rounded-lg bg-gradient-to-r from-pink-500 to-amber-500 px-5 py-2.5 text-sm font-bold text-slate-900 no-underline"
+          >
+            Shop 500 Room Titles on Etsy →
+          </a>
+        </div>
+
         <h2>Beating creative burnout</h2>
         <p>
           Anyone who has streamed consistently knows the title is one more decision in a day already full of them. Outfit,

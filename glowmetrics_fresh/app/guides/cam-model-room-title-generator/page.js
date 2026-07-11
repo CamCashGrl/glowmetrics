@@ -251,6 +251,7 @@ export default function TitleGeneratorPage() {
               {[
                 ['#viral-formula', 'The Viral Title Formula'],
                 ['#title-examples', 'Room Title Examples by Category'],
+                ['#500-titles', '500 Titles PDF (Done For You)'],
                 ['#title-frequency', 'How Often to Change Your Title'],
                 ['#hashtag-guide', 'Best Hashtags for Cam Models'],
                 ['#hashtag-formula', 'The Viral Hashtag Formula'],
@@ -327,6 +328,35 @@ export default function TitleGeneratorPage() {
                   </div>
                 </div>
               ))}
+            </div>
+          </Section>
+
+          {/* Section 5b — Etsy Promo */}
+          <Section id="500-titles">
+            <Tag color={S.pink}>Done For You</Tag>
+            <H2>Want 500 Titles Instead of Writing Your Own?</H2>
+            <Lead>If generating titles on the fly isn't your thing, Pretty Profitz sells a ready-made PDF of pre-written room titles across niches, moods, and goals.</Lead>
+
+            <div style={{ background: S.card, border: `1px solid ${S.pink}40`, borderRadius: '14px', padding: '24px', display: 'flex', flexWrap: 'wrap', gap: '24px', alignItems: 'center' }}>
+              <img
+                src="/blog-images/500-room-titles.webp"
+                alt="500 Cam Room Titles PDF cover by Pretty Profitz"
+                style={{ width: '160px', borderRadius: '10px', flexShrink: 0 }}
+              />
+              <div style={{ flex: '1', minWidth: '220px' }}>
+                <div style={{ fontSize: '16px', fontWeight: 700, color: S.textStrong, marginBottom: '8px' }}>500 Cam Room Titles PDF</div>
+                <p style={{ fontSize: '13px', color: S.text, lineHeight: 1.65, marginBottom: '16px' }}>
+                  500 pre-written titles you can copy straight into your room — no formula-building required. Built to pair with the free generator above when you just want inspiration fast.
+                </p>
+                <a
+                  href="https://www.etsy.com/shop/prettyprofitz"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ display: 'inline-block', padding: '10px 22px', borderRadius: '9px', background: `linear-gradient(90deg, ${S.pink}, ${S.gold})`, color: '#0f172a', fontWeight: 700, fontSize: '14px', textDecoration: 'none' }}
+                >
+                  Shop 500 Room Titles on Etsy →
+                </a>
+              </div>
             </div>
           </Section>
 

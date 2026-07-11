@@ -215,6 +215,34 @@ export default function ChaturbateRoomTitleGeneratorPage() {
 
             <section style={{ marginBottom: 52 }}>
               <h2 style={{ fontSize: 'clamp(22px,3.5vw,30px)', fontWeight: 800, color: S.textStrong, marginBottom: 8, letterSpacing: '-0.02em' }}>
+                Want 500 Titles Instead of Writing Your Own?
+              </h2>
+              <div style={{ width: 48, height: 3, background: S.pink, borderRadius: 2, marginBottom: 24 }} />
+              <div style={{ background: S.card, border: `1px solid ${S.pink}40`, borderRadius: 14, padding: 24, display: 'flex', flexWrap: 'wrap', gap: 24, alignItems: 'center' }}>
+                <img
+                  src="/blog-images/500-room-titles.webp"
+                  alt="500 Cam Room Titles PDF cover by Pretty Profitz"
+                  style={{ width: 160, borderRadius: 10, flexShrink: 0 }}
+                />
+                <div style={{ flex: 1, minWidth: 220 }}>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: S.textStrong, marginBottom: 8 }}>500 Cam Room Titles PDF</div>
+                  <p style={{ fontSize: 13, color: S.text, lineHeight: 1.65, marginBottom: 16 }}>
+                    Pretty Profitz sells a ready-made PDF of 500 pre-written room titles across niches, moods, and goals — copy straight into your room, no formula-building required.
+                  </p>
+                  <a
+                    href="https://www.etsy.com/shop/prettyprofitz"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ display: 'inline-block', padding: '10px 22px', borderRadius: 9, background: `linear-gradient(90deg, ${S.pink}, ${S.gold})`, color: '#0f172a', fontWeight: 700, fontSize: 14, textDecoration: 'none' }}
+                  >
+                    Shop 500 Room Titles on Etsy →
+                  </a>
+                </div>
+              </div>
+            </section>
+
+            <section style={{ marginBottom: 52 }}>
+              <h2 style={{ fontSize: 'clamp(22px,3.5vw,30px)', fontWeight: 800, color: S.textStrong, marginBottom: 8, letterSpacing: '-0.02em' }}>
                 Track Whether Your Titles Are Working
               </h2>
               <div style={{ width: 48, height: 3, background: S.accent, borderRadius: 2, marginBottom: 24 }} />
