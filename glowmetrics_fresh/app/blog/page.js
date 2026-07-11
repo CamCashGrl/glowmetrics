@@ -232,6 +232,11 @@ const posts = [
     title: 'How to Re-Engage Whales and High-Tipping Fans (And Get Them Spending Again)',
     description: "Whales don't just randomly leave. They disengage for specific reasons — and if you understand those reasons, you can bring them back.",
   },
+  {
+    slug: 'findom-kink-niche',
+    title: 'Findom & Kink for Cam Models: Building a Niche That Actually Pays',
+    description: 'A practical guide to the findom and kink niche for cam models — pricing tiers, boundaries, platform differences, and how to track what actually converts instead of guessing.',
+  },
 ]
 
 export default function BlogPage() {

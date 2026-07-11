@@ -188,6 +188,7 @@ export default function HowToFindYourCamModelNiche() {
       <p style={s.p}>In findom, the model asserts dominance through financial control — the viewer&apos;s act of sending money is itself the submission. Findom models often require &ldquo;tributes&rdquo; as admission to the room, set specific financial tasks, and may have ongoing relationships where the financial dynamic is ongoing.</p>
       <p style={s.p}>This is one of the highest-earning niches for dominant models who do it authentically. It&apos;s also one of the most saturated — there are a lot of models claiming findom who don&apos;t actually understand or embody the dynamic.</p>
       <p style={s.platformOk}>Platform status: ✅ Allowed. Voluntary tipping and tributes are fine. Coercion or threats are not.</p>
+      <p style={s.p}>For tribute pricing tiers, boundary-setting, and how findom differs by platform, see our full guide: <a href="/blog/findom-kink-niche" style={{ color: '#6366f1', textDecoration: 'none' }}>Findom & Kink for Cam Models</a>.</p>
 
       <h3 style={s.h3}>Raceplay</h3>
       <div style={s.warnBox}>
@@ -301,6 +302,7 @@ export default function HowToFindYourCamModelNiche() {
         <div style={s.relT}>Related reading</div>
         <div style={s.relLinks}>
           <a href="/blog/girlfriend-experience-gfe-cam-modeling-strategy" style={s.relLink}>→ GFE Strategy for Cam Models</a>
+          <a href="/blog/findom-kink-niche" style={s.relLink}>→ Findom & Kink for Cam Models</a>
           <a href="/blog/cam-model-boundaries-toxic-chat" style={s.relLink}>→ How to Set Boundaries as a Cam Model</a>
           <a href="/blog/cam-model-mental-health-burnout-prevention" style={s.relLink}>→ Cam Model Burnout Prevention</a>
           <a href="/blog/cam-model-earnings" style={s.relLink}>→ How Much Do Cam Models Make?</a>

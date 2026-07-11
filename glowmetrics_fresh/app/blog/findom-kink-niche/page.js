@@ -267,8 +267,14 @@ export default function FindomKinkNiche() {
         That&apos;s the kind of pattern <a href="/landing" style={s.iLink}>CamCash</a> is built to surface —
         session-level and fan-level data across platforms, so pricing and scheduling decisions come from real numbers
         instead of guesswork. See our guide on{' '}
-        <a href="/blog/how-to-re-engage-whales-and-top-tippers" style={s.iLink}>re-engaging whales and top tippers</a>{' '}
-        for how this applies to high-value regulars specifically.
+        <a href="/blog/how-to-re-engage-whales-and-high-tipping-fans" style={s.iLink}>re-engaging whales and high-tipping fans</a>{' '}
+        for how this applies to high-value regulars specifically. If you&apos;re still weighing findom against other
+        cam specialties, our{' '}
+        <a href="/blog/how-to-find-your-cam-model-niche" style={s.iLink}>guide to finding your cam model niche</a>{' '}
+        breaks down how it compares to GFE, humiliation, and other dominant/submissive dynamics. And once you know
+        roughly what a tribute is worth in real dollars, the{' '}
+        <a href="/blog/cam-model-token-to-dollar-ratio-explained" style={s.iLink}>token-to-dollar ratio explainer</a>{' '}
+        shows you exactly how tokens convert to payout across platforms.
       </p>
 
       <div style={s.faqSection}>
@@ -329,7 +335,9 @@ export default function FindomKinkNiche() {
         <div style={s.relT}>Related reading</div>
         <div style={s.relLinks}>
           <a href="/blog/cam-model-earnings" style={s.relLink}>→ How much do cam models make? Real hourly rates by experience level</a>
-          <a href="/blog/how-to-re-engage-whales-and-top-tippers" style={s.relLink}>→ How to re-engage whales and top tippers</a>
+          <a href="/blog/how-to-re-engage-whales-and-high-tipping-fans" style={s.relLink}>→ How to re-engage whales and high-tipping fans</a>
+          <a href="/blog/how-to-find-your-cam-model-niche" style={s.relLink}>→ How to find your cam model niche</a>
+          <a href="/blog/cam-model-token-to-dollar-ratio-explained" style={s.relLink}>→ Cam model token to dollar ratio explained</a>
           <a href="/blog/how-to-increase-cam-earnings" style={s.relLink}>→ How to increase cam earnings</a>
           <a href="/blog/why-cam-income-is-inconsistent" style={s.relLink}>→ Why cam income is inconsistent</a>
           <a href="/guides/cam-model-top-tippers" style={s.relLink}>→ Cam model top tippers guide</a>

@@ -205,7 +205,9 @@ export default function CamModelTokenToDollarRatioExplained() {
 
       <h3 style={s.h3}>Goal Math</h3>
       <p style={s.p}>
-        For countdowns and goals, work backwards from your income target. Want to earn $100 from a goal show on Chaturbate? Your goal needs to be 2,000 tokens. Fans collectively spend about $220 to send you those tokens. Price your goals to match your content quality — not just token minimums.
+        For countdowns and goals, work backwards from your income target. Want to earn $100 from a goal show on Chaturbate? Your goal needs to be 2,000 tokens. Fans collectively spend about $220 to send you those tokens. Price your goals to match your content quality — not just token minimums. If you run tribute-style tip menus, our{' '}
+        <a href="/blog/findom-kink-niche" style={s.iLink}>findom and kink pricing guide</a>{' '}
+        covers how to structure tiered tributes on top of this same token math.
       </p>
 
       <div style={s.midCta}>
@@ -252,6 +254,7 @@ export default function CamModelTokenToDollarRatioExplained() {
           <a href="/blog/cam-model-tipping-pattern-data-examples" style={s.relLink}>→ Cam Model Tipping Pattern Data Examples</a>
           <a href="/blog/how-to-track-cam-tips-automatically" style={s.relLink}>→ How to Track Your Cam Model Daily Revenue</a>
           <a href="/blog/benefits-of-cam-model-bookkeeping" style={s.relLink}>→ Benefits of Cam Model Bookkeeping</a>
+          <a href="/blog/findom-kink-niche" style={s.relLink}>→ Findom & Kink for Cam Models: Building a Niche That Actually Pays</a>
         </div>
       </div>
     </ArticleLayout>
