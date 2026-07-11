@@ -11,6 +11,15 @@ import { tokenRate } from '../../lib/constants';
 import FeedbackWidget from '../components/FeedbackWidget';
 import EventsSync from './EventsSync';
 import Button from '../../components/ui/Button';
+import { buildCoachingEventFields } from '../../lib/sessionHub/coachingCategory';
+import { computeCoachingOutcomeWindows, dedupeOutcomesByEventId } from '../../lib/sessionHub/coachingOutcome';
+import { computeCoachingSummary } from '../../lib/sessionHub/coachingSummary';
+import { computeSessionDuration, computeActualHourlyRate } from '../../lib/sessionHub/sessionMath';
+import { buildLiveSessionAnalysisContext } from '../../lib/sessionHub/analysisContext';
+import { computeSessionDataQuality } from '../../lib/sessionHub/dataQuality';
+import { resolveDurationConfidence } from '../../lib/sessionHub/sessionCorrection';
+import { logFeatureUsageEvent, createOnceGuard } from '../../lib/sessionHub/featureUsage';
+import CoachingActionButtons from '../dashboard/sessions/CoachingActionButtons';
 
 const C = {
   bg: '#040812', card: 'rgba(15,20,32,0.75)', border: 'rgba(168,85,247,0.2)',
@@ -40,6 +49,10 @@ export default function LivePage() {
   const [liveTick, setLiveTick]       = useState(0);
   const [sessions, setSessions]       = useState([]);
   const [currentSessionId, setCurrentSessionId] = useState(null);
+  const [isPaused, setIsPaused]       = useState(false);
+  const [pauseIntervals, setPauseIntervals] = useState([]);
+  const [coachingActionsVisible, setCoachingActionsVisible] = useState(true);
+  const [coachingEventTick, setCoachingEventTick] = useState(0);
 
   // ── DEMO / AUTH / EXT MODAL STATE ────────────────────────────────────
   const [demoTips, setDemoTips]           = useState([]);
@@ -64,6 +77,8 @@ export default function LivePage() {
   const prevPhaseRef      = useRef(null);
   const liveTipsChannelRef = useRef(null);
   const liveTickerRef     = useRef(null);
+  const coachingEventMapRef = useRef({}); // dedupeKey -> { id, status } for the most recent firing
+  const featureUsageGuardRef = useRef(createOnceGuard());
 
   // 1-second ticker drives coaching + elapsed time
   useEffect(() => {
@@ -93,6 +108,9 @@ export default function LivePage() {
       if (!u) { setAuthStatus('live'); return; }
       setUser(u);
       setAuthStatus('live');
+
+      supabase.from('profiles').select('coaching_actions_visible').eq('id', u.id).maybeSingle()
+        .then(({ data }) => { if (data) setCoachingActionsVisible(data.coaching_actions_visible !== false); });
 
       // Load last 12h of tips as history
       const since = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString();
@@ -157,8 +175,13 @@ export default function LivePage() {
     setLiveActive(true);
     setLiveStartTime(startTime);
     setLiveEvents([]);
+    setIsPaused(false);
+    setPauseIntervals([]);
     processedTipIds.current = new Set();
     coachingCooldowns.current = {};
+    coachingEventMapRef.current = {};
+    firedAlertsLog.current = [];
+    featureUsageGuardRef.current.reset();
     if (user) {
       const { data: session } = await supabase
         .from('stream_sessions')
@@ -171,7 +194,148 @@ export default function LivePage() {
         })
         .select()
         .single();
-      if (session) setCurrentSessionId(session.id);
+      if (session) {
+        setCurrentSessionId(session.id);
+        if (featureUsageGuardRef.current.shouldLog(`live_mode.session_started:${session.id}`)) {
+          logFeatureUsageEvent(supabase, {
+            userId: user.id, sessionId: session.id, feature: 'live_mode',
+            action: 'live_mode.session_started', metadata: { platform: livePlatform },
+          });
+        }
+      }
+    }
+  };
+
+  const handlePauseStream = async () => {
+    if (isPaused) return;
+    const now = new Date().toISOString();
+    setIsPaused(true);
+    setPauseIntervals(prev => [...prev, { start: now, end: null }]);
+    if (user && currentSessionId) {
+      logFeatureUsageEvent(supabase, {
+        userId: user.id, sessionId: currentSessionId, feature: 'pause_resume', action: 'session.paused', metadata: {},
+      });
+    }
+  };
+
+  const handleResumeStream = async () => {
+    if (!isPaused) return;
+    const now = new Date().toISOString();
+    setIsPaused(false);
+    setPauseIntervals(prev => prev.map((p, i) => (i === prev.length - 1 ? { ...p, end: now } : p)));
+    if (user && currentSessionId) {
+      logFeatureUsageEvent(supabase, {
+        userId: user.id, sessionId: currentSessionId, feature: 'pause_resume', action: 'session.resumed', metadata: {},
+      });
+    }
+  };
+
+  // Persists coaching outcome windows, session analysis context, and data
+  // quality flags for a just-ended session. Data collection only — never
+  // derives or displays an effectiveness/lift conclusion here.
+  const finalizeLiveSession = async ({ sessionId, startedAt, endedAt, closedPauseIntervals, sessionTips, totalUsd, totalTokens, platform }) => {
+    const { data: eventRows } = await supabase.from('coaching_events').select('*').eq('session_id', sessionId);
+    const events = eventRows || [];
+    const tipsForOutcomes = sessionTips.map(t => ({ username: t.username, usd: t.normalizedRevenue || t.usd || 0, timestamp: t.timestamp }));
+
+    const outcomes = events.map(ev => {
+      const windows = computeCoachingOutcomeWindows({
+        promptShownAt: ev.shown_at,
+        tips: tipsForOutcomes,
+        relatedTipperName: ev.related_tipper_name,
+      });
+      return {
+        coachingEventId: ev.id,
+        userId: user.id,
+        sessionId,
+        actionStatus: ev.action_status,
+        ...windows,
+        paceBeforePrompt: parseFloat((windows.earningsBefore5m / 5).toFixed(3)),
+      };
+    });
+
+    for (const outcome of dedupeOutcomesByEventId(outcomes)) {
+      await supabase.from('coaching_prompt_outcomes').upsert({
+        user_id: outcome.userId,
+        coaching_event_id: outcome.coachingEventId,
+        session_id: outcome.sessionId,
+        action_status: outcome.actionStatus,
+        prompt_shown_at: outcome.promptShownAt,
+        earnings_before_5m: outcome.earningsBefore5m,
+        earnings_after_5m: outcome.earningsAfter5m,
+        earnings_after_10m: outcome.earningsAfter10m,
+        earnings_after_20m: outcome.earningsAfter20m,
+        tips_before_5m: outcome.tipsBefore5m,
+        tips_after_5m: outcome.tipsAfter5m,
+        tips_after_10m: outcome.tipsAfter10m,
+        tips_after_20m: outcome.tipsAfter20m,
+        unique_tippers_before_5m: outcome.uniqueTippersBefore5m,
+        unique_tippers_after_5m: outcome.uniqueTippersAfter5m,
+        unique_tippers_after_10m: outcome.uniqueTippersAfter10m,
+        unique_tippers_after_20m: outcome.uniqueTippersAfter20m,
+        related_supporter_tipped_again_5m: outcome.relatedSupporterTippedAgain5m,
+        related_supporter_tipped_again_10m: outcome.relatedSupporterTippedAgain10m,
+        pace_before_prompt: outcome.paceBeforePrompt,
+        pace_after_10m: outcome.paceAfter10m,
+      }, { onConflict: 'coaching_event_id' });
+    }
+
+    const summary = computeCoachingSummary(events.map(e => ({ category: e.category, actionStatus: e.action_status })));
+    const duration = computeSessionDuration(startedAt, endedAt, closedPauseIntervals);
+    const durationConfidence = resolveDurationConfidence({ hasUserCorrection: false, completed: true });
+
+    const context = buildLiveSessionAnalysisContext({
+      sessionId, platform, startedAt: startedAt.toISOString(), endedAt: endedAt.toISOString(),
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      activeDurationMinutes: duration.activeDurationMinutes,
+      pausedDurationMinutes: duration.pausedDurationMinutes,
+      totalEarningsUsd: totalUsd, totalTokens, tipCount: sessionTips.length,
+      uniqueTipperCount: new Set(sessionTips.map(t => (t.username || '').toLowerCase())).size,
+      coachingEnabled: true,
+      promptCounts: { performed: summary.performedPromptCount, skipped: summary.skippedPromptCount, unmarked: summary.unmarkedPromptCount },
+      durationConfidence,
+    });
+    await supabase.from('live_session_analysis_context').upsert({
+      session_id: context.sessionId, user_id: user.id, platform: context.platform,
+      started_at: context.startedAt, ended_at: context.endedAt,
+      day_of_week: context.dayOfWeek, start_hour_local: context.startHourLocal, timezone: context.timezone,
+      active_duration_minutes: context.activeDurationMinutes, paused_duration_minutes: context.pausedDurationMinutes,
+      total_earnings_usd: context.totalEarningsUsd, total_tokens: context.totalTokens,
+      tip_count: context.tipCount, unique_tipper_count: context.uniqueTipperCount,
+      actual_hourly_rate: context.actualHourlyRate, coaching_enabled: context.coachingEnabled,
+      coaching_prompt_count: context.coachingPromptCount, performed_prompt_count: context.performedPromptCount,
+      skipped_prompt_count: context.skippedPromptCount, unmarked_prompt_count: context.unmarkedPromptCount,
+      goal_used: context.goalUsed, streaming_plan_window_id: context.streamingPlanWindowId,
+      started_from_streaming_plan: context.startedFromStreamingPlan, started_inside_recommended_window: context.startedInsideRecommendedWindow,
+      duration_confidence: context.durationConfidence,
+    }, { onConflict: 'session_id' });
+
+    const outcomeWindowsComplete = events.every(ev => endedAt.getTime() - new Date(ev.shown_at).getTime() >= 20 * 60_000);
+    const quality = computeSessionDataQuality({
+      duration: { activeDurationMinutes: duration.activeDurationMinutes, completed: true, hasEstimatedEnd: false },
+      hasUserCorrection: false,
+      containsPauseIntervals: closedPauseIntervals.length > 0,
+      duplicateTipCount: 0,
+      invalidTipCount: 0,
+      coachingDataComplete: true,
+      outcomeWindowsComplete,
+    });
+    await supabase.from('session_data_quality').upsert({
+      session_id: sessionId, user_id: user.id,
+      has_verified_start: quality.hasVerifiedStart, has_verified_end: quality.hasVerifiedEnd,
+      has_estimated_end: quality.hasEstimatedEnd, has_user_correction: quality.hasUserCorrection,
+      contains_pause_intervals: quality.containsPauseIntervals, extension_connected_percent: quality.extensionConnectedPercent,
+      duplicate_tip_count: quality.duplicateTipCount, invalid_tip_count: quality.invalidTipCount,
+      coaching_data_complete: quality.coachingDataComplete, outcome_windows_complete: quality.outcomeWindowsComplete,
+      eligible_for_future_impact_analysis: quality.eligibleForFutureImpactAnalysis,
+      ineligibility_reasons: quality.ineligibilityReasons,
+    }, { onConflict: 'session_id' });
+
+    if (featureUsageGuardRef.current.shouldLog(`live_mode.session_ended:${sessionId}`)) {
+      logFeatureUsageEvent(supabase, {
+        userId: user.id, sessionId, feature: 'live_mode', action: 'live_mode.session_ended',
+        metadata: { durationConfidence, coachingPromptCount: context.coachingPromptCount },
+      });
     }
   };
 
@@ -179,6 +343,11 @@ export default function LivePage() {
     setLiveActive(false);
     if (user && currentSessionId && liveStartTime) {
       const endTime = new Date();
+      const closedPauseIntervals = isPaused
+        ? pauseIntervals.map((p, i) => (i === pauseIntervals.length - 1 && !p.end ? { ...p, end: endTime.toISOString() } : p))
+        : pauseIntervals;
+      setIsPaused(false);
+      setPauseIntervals(closedPauseIntervals);
       const hoursStreamed = (endTime - new Date(liveStartTime)) / 1000 / 60 / 60;
       const sessionTips = liveEvents.filter(e => !e._isHistory);
       const totalUsd    = sessionTips.reduce((sum, t) => sum + (t.normalizedRevenue || t.usd || 0), 0);
@@ -191,8 +360,15 @@ export default function LivePage() {
           usd:           parseFloat(totalUsd.toFixed(2)),
           tokens:        totalTokens,
           tip_count:     sessionTips.length,
+          completed:     true,
+          pause_intervals: closedPauseIntervals,
+          duration_confidence: 'verified',
         })
         .eq('id', currentSessionId);
+      await finalizeLiveSession({
+        sessionId: currentSessionId, startedAt: new Date(liveStartTime), endedAt: endTime,
+        closedPauseIntervals, sessionTips, totalUsd, totalTokens, platform: livePlatform,
+      });
       setCurrentSessionId(null);
     }
   };
@@ -261,6 +437,50 @@ export default function LivePage() {
     return false;
   };
 
+  // Persists a just-shown coaching prompt as a StoredCoachingEvent so it
+  // survives the session and can carry an optional Performed/Skip mark.
+  // Fire-and-forget — must never interrupt or delay the live coaching UI.
+  const persistCoachingEvent = (key, meta) => {
+    if (!user || !currentSessionId) return;
+    const fields = buildCoachingEventFields({ key, ...meta });
+    supabase.from('coaching_events').insert({
+      user_id: user.id,
+      session_id: currentSessionId,
+      type: 'live_alert',
+      category: fields.category,
+      priority: fields.priority,
+      dedupe_key: fields.dedupeKey,
+      title: fields.title,
+      message: fields.message,
+      compact_message: fields.compactMessage,
+      related_tipper_name: fields.relatedTipperName,
+      related_amount_usd: fields.relatedAmountUsd,
+    }).select().single().then(({ data }) => {
+      if (data) {
+        coachingEventMapRef.current[key] = { id: data.id, status: 'unmarked' };
+        setCoachingEventTick(v => v + 1);
+      }
+    });
+    logFeatureUsageEvent(supabase, {
+      userId: user.id, sessionId: currentSessionId, feature: 'coaching',
+      action: 'coaching.prompt_shown', metadata: { category: fields.category },
+    });
+  };
+
+  const updateLiveCoachingStatus = (key, nextStatus) => {
+    const entry = coachingEventMapRef.current[key];
+    if (!entry || !user) return;
+    coachingEventMapRef.current[key] = { ...entry, status: nextStatus };
+    setCoachingEventTick(v => v + 1);
+    const respondedAt = nextStatus === 'unmarked' ? null : new Date().toISOString();
+    supabase.from('coaching_events').update({ action_status: nextStatus, action_responded_at: respondedAt, updated_at: new Date().toISOString() }).eq('id', entry.id);
+    logFeatureUsageEvent(supabase, {
+      userId: user.id, sessionId: currentSessionId, feature: 'coaching_action',
+      action: nextStatus === 'unmarked' ? 'coaching.prompt_unmarked' : nextStatus === 'performed' ? 'coaching.prompt_performed' : 'coaching.prompt_skipped',
+      metadata: { coachingEventId: entry.id },
+    });
+  };
+
   const getAlerts = (state) => {
     if (!state || isHydratingHistory.current || !liveActive) return [];
     const { timeSinceLastTip, paceStatus, goalProgress, topTipper, totalRevenue, elapsedMins, liveOnlyCount } = state;
@@ -268,9 +488,10 @@ export default function LivePage() {
     const deadAirHigh = liveStrategy === 'aggressive' ? 4 : 5;
     const goalPushPct = liveStrategy === 'aggressive' || liveStrategy === 'goal' ? 80 : 90;
     const alerts = [];
-    const logFired = (icon, text) => {
-      firedAlertsLog.current.unshift({ icon, text, ts: Date.now() });
+    const logFired = (icon, text, key, meta = {}) => {
+      firedAlertsLog.current.unshift({ icon, text, ts: Date.now(), key });
       if (firedAlertsLog.current.length > 20) firedAlertsLog.current.length = 20;
+      persistCoachingEvent(key, { priority: meta.priority, text, context: meta.context, action: meta.action, relatedTipperName: meta.relatedTipperName ?? null, relatedAmountUsd: meta.relatedAmountUsd ?? null });
     };
     if (timeSinceLastTip !== null && timeSinceLastTip >= deadAirCrit) {
       if (canFireAlert('dead_air_critical', 3 * 60 * 1000)) {
@@ -279,7 +500,8 @@ export default function LivePage() {
           ? `Address ${topTipper.username} directly — call them out by name right now`
           : `Start a 2,000 token room goal and ask viewers to vote on the reward`;
         const text = `${context} — ${action}`;
-        alerts.push({ priority: 1, level: 'critical', icon: '🚨', text, context, action }); logFired('🚨', text);
+        alerts.push({ priority: 1, level: 'critical', icon: '🚨', text, context, action, key: 'dead_air_critical' });
+        logFired('🚨', text, 'dead_air_critical', { priority: 1, context, action });
       }
     }
     if (goalProgress >= goalPushPct && goalProgress < 100) {
@@ -287,7 +509,8 @@ export default function LivePage() {
         const context = `Goal is at ${goalProgress}% — the room is primed`;
         const action = `Announce your reward out loud right now and keep the energy high`;
         const text = `${goalProgress}% to goal — push NOW, announce the reward`;
-        alerts.push({ priority: 1, level: 'critical', icon: '🎯', text, context, action }); logFired('🎯', text);
+        alerts.push({ priority: 1, level: 'critical', icon: '🎯', text, context, action, key: 'goal_push' });
+        logFired('🎯', text, 'goal_push', { priority: 1, context, action });
       }
     }
     if (timeSinceLastTip !== null && timeSinceLastTip >= deadAirHigh && timeSinceLastTip < deadAirCrit) {
@@ -299,7 +522,8 @@ export default function LivePage() {
           ? `Thank a viewer by name — recognition re-engages the room`
           : `Start a quick 200-token goal right now`;
         const text = `${Math.round(timeSinceLastTip)} min since last tip — ${action}`;
-        alerts.push({ priority: 2, level: 'warning', icon: '⚠️', text, context, action }); logFired('⚠️', text);
+        alerts.push({ priority: 2, level: 'warning', icon: '⚠️', text, context, action, key: 'dead_air_high' });
+        logFired('⚠️', text, 'dead_air_high', { priority: 2, context, action });
       }
     }
     if (paceStatus === 'below' && elapsedMins >= 8 && liveOnlyCount >= 3) {
@@ -309,7 +533,8 @@ export default function LivePage() {
           ? `Announce a limited-time exclusive offer right now`
           : `Activate toy or set a micro-goal to restart momentum`;
         const text = `Pace dropping — ${action}`;
-        alerts.push({ priority: 2, level: 'warning', icon: '📉', text, context, action }); logFired('📉', text);
+        alerts.push({ priority: 2, level: 'warning', icon: '📉', text, context, action, key: 'pace_below' });
+        logFired('📉', text, 'pace_below', { priority: 2, context, action });
       }
     }
     if (elapsedMins > 75 && paceStatus === 'below' && liveOnlyCount >= 5) {
@@ -317,7 +542,8 @@ export default function LivePage() {
         const context = `${Math.round(elapsedMins)} minutes in and tip rate is dropping`;
         const action = `Try a new goal or content angle to reset room energy`;
         const text = `Stream fatigue — ${action}`;
-        alerts.push({ priority: 2, level: 'warning', icon: '😴', text, context, action }); logFired('😴', text);
+        alerts.push({ priority: 2, level: 'warning', icon: '😴', text, context, action, key: 'stream_fatigue' });
+        logFired('😴', text, 'stream_fatigue', { priority: 2, context, action });
       }
     }
     if (paceStatus === 'above' && elapsedMins >= 8 && liveOnlyCount >= 3) {
@@ -329,7 +555,8 @@ export default function LivePage() {
         const text = liveStrategy === 'aggressive'
           ? `Momentum is hot — ${action}`
           : `Momentum building — ${action}`;
-        alerts.push({ priority: 3, level: 'success', icon: '🔥', text, context, action }); logFired('🔥', text);
+        alerts.push({ priority: 3, level: 'success', icon: '🔥', text, context, action, key: 'pace_above' });
+        logFired('🔥', text, 'pace_above', { priority: 3, context, action });
       }
     }
     if (goalProgress >= 100) {
@@ -337,7 +564,8 @@ export default function LivePage() {
         const context = `You just hit your room goal!`;
         const action = `Set the next goal immediately — momentum drops if there's nothing to tip toward`;
         const text = `Goal hit! ${action}`;
-        alerts.push({ priority: 3, level: 'success', icon: '🎉', text, context, action }); logFired('🎉', text);
+        alerts.push({ priority: 3, level: 'success', icon: '🎉', text, context, action, key: 'goal_hit' });
+        logFired('🎉', text, 'goal_hit', { priority: 3, context, action });
       }
     }
     if (liveOnlyCount >= 4 && liveStrategy !== 'engagement') {
@@ -365,7 +593,9 @@ export default function LivePage() {
             const context = `${uname} usually tips every ~${avgMins} minutes`;
             const action = `${sinceMins} min since their last tip — call them out right now!`;
             const text = `${uname} tips every ~${avgMins} min — ${sinceMins} min since their last. Call them out!`;
-            alerts.push({ priority: 3, level: 'info', icon: '🐋', text, context, action }); logFired('🐋', text);
+            const key = `whale_prox_${uname}`;
+            alerts.push({ priority: 3, level: 'info', icon: '🐋', text, context, action, key });
+            logFired('🐋', text, key, { priority: 3, context, action, relatedTipperName: uname });
             surfaced = true;
           }
         }
@@ -377,7 +607,9 @@ export default function LivePage() {
         const context = `${topTipper.username} is ${pctStr}% of your session revenue`;
         const action = `Give them personal attention and an exclusive offer for their next tip`;
         const text = `${topTipper.username} is ${pctStr}% of revenue — give them attention`;
-        alerts.push({ priority: 4, level: 'info', icon: '🐳', text, context, action }); logFired('🐳', text);
+        const key = `whale_dep_${topTipper.username}`;
+        alerts.push({ priority: 4, level: 'info', icon: '🐳', text, context, action, key });
+        logFired('🐳', text, key, { priority: 4, context, action, relatedTipperName: topTipper.username, relatedAmountUsd: topTipper.revenue });
       }
     }
     return alerts.sort((a, b) => a.priority - b.priority).slice(0, 4);
@@ -806,12 +1038,28 @@ export default function LivePage() {
                 ▶ Start Stream
               </button>
             ) : (
-              <button onClick={handleStopStream}
-                style={{ padding: '7px 18px', borderRadius: 8, background: 'rgba(248,113,113,0.15)', border: '1px solid rgba(248,113,113,0.4)', color: C.red, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
-                ⏹ End
-              </button>
+              <>
+                {!isPaused ? (
+                  <button onClick={handlePauseStream}
+                    style={{ padding: '7px 18px', borderRadius: 8, background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.4)', color: C.gold, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
+                    ⏸ Pause
+                  </button>
+                ) : (
+                  <button onClick={handleResumeStream}
+                    style={{ padding: '7px 18px', borderRadius: 8, background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.4)', color: C.green, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
+                    ▶ Resume
+                  </button>
+                )}
+                <button onClick={handleStopStream}
+                  style={{ padding: '7px 18px', borderRadius: 8, background: 'rgba(248,113,113,0.15)', border: '1px solid rgba(248,113,113,0.4)', color: C.red, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
+                  ⏹ End
+                </button>
+              </>
             )}
           </div>
+          {isPaused && (
+            <div style={{ width: '100%', marginTop: 6, fontSize: 11, color: C.gold, fontWeight: 700 }}>⏸ Session paused — coaching and timers are on hold</div>
+          )}
 
           {/* Intelligence strip */}
           {liveActive && state && (
@@ -1341,13 +1589,24 @@ export default function LivePage() {
                 <div style={{ ...glassCard, borderRadius: 14, padding: 18 }}>
                   <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700, marginBottom: 10 }}>📋 Alert History</div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 5, maxHeight: 240, overflowY: 'auto' }}>
-                    {firedAlertsLog.current.slice(0, 15).map((entry, i) => (
-                      <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '5px 8px', borderRadius: 7, background: 'rgba(255,255,255,0.02)' }}>
-                        <span style={{ fontSize: 13, flexShrink: 0, lineHeight: 1.4 }}>{entry.icon}</span>
-                        <span style={{ fontSize: 11, color: C.text, flex: 1, lineHeight: 1.4 }}>{entry.text}</span>
-                        <span style={{ fontSize: 9, color: C.muted, whiteSpace: 'nowrap', marginTop: 1 }}>{new Date(entry.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                      </div>
-                    ))}
+                    {firedAlertsLog.current.slice(0, 15).map((entry, i) => {
+                      const stored = entry.key ? coachingEventMapRef.current[entry.key] : null;
+                      return (
+                        <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '5px 8px', borderRadius: 7, background: 'rgba(255,255,255,0.02)', flexWrap: 'wrap' }}>
+                          <span style={{ fontSize: 13, flexShrink: 0, lineHeight: 1.4 }}>{entry.icon}</span>
+                          <span style={{ fontSize: 11, color: C.text, flex: 1, lineHeight: 1.4, minWidth: 160 }}>{entry.text}</span>
+                          <span style={{ fontSize: 9, color: C.muted, whiteSpace: 'nowrap', marginTop: 1 }}>{new Date(entry.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                          {stored && (
+                            <CoachingActionButtons
+                              status={stored.status}
+                              visible={coachingActionsVisible}
+                              size="compact"
+                              onSetStatus={(next) => updateLiveCoachingStatus(entry.key, next)}
+                            />
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}

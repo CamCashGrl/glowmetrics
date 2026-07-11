@@ -15,6 +15,8 @@ import { track as gtmTrack } from '../../lib/track'
 import { getDashboardReadiness, getModuleLockState, canShowHourlyRate, LockedInsightCard, DashboardProgressCard } from './DashboardPreview'
 import Button from '../../components/ui/Button'
 import EarlyAdopterOffer from './EarlyAdopterOffer'
+import SessionsHubTabs from './sessions/SessionsHubTabs'
+import LiveModeSessionsTab from './sessions/LiveModeSessionsTab'
 
 // Tab-only components loaded on demand instead of in the initial dashboard
 // bundle — each is only ever rendered behind an `activeTab === '...'` check,
@@ -1368,6 +1370,7 @@ export default function Dashboard() {
   const [whaleFilter, setWhaleFilter] = useState("ALL")
   const [platformFilter, setPlatformFilter] = useState("ALL")
   const [meaningfulOnly, setMeaningfulOnly] = useState(true)
+  const [sessionsSubTab, setSessionsSubTab] = useState('uploaded')
   const [platformTimeFilter, setPlatformTimeFilter] = useState("ALL")
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [selectedWhale, setSelectedWhale] = useState(null)
@@ -5516,10 +5519,16 @@ const stopImportMessageRotation = () => {
 
           return (
             <div>
+              <SessionsHubTabs active={sessionsSubTab} onChange={setSessionsSubTab} />
+              {sessionsSubTab === 'live' && <LiveModeSessionsTab user={user} />}
+              {sessionsSubTab !== 'live' && <div>
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 24 }}>
                 <div>
                   <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 4 }}>🎥 Session Breakdown</h1>
                   <p style={{ fontSize: 13, color: C.muted }}>What happened in each stream and how to earn more next time</p>
+                  <span style={{ display: 'inline-block', marginTop: 8, padding: '3px 10px', borderRadius: 999, fontSize: 11, fontWeight: 700, background: 'rgba(245,158,11,0.14)', color: C.gold }}>
+                    Estimated sessions
+                  </span>
                 </div>
                 <div style={{ display:'flex', alignItems:'center', gap:8, padding:'6px 12px', borderRadius:20, background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.08)', flexShrink:0 }}>
                   <label style={{ display:'flex', alignItems:'center', gap:6, cursor:'pointer', fontSize:12, color:C.muted }}>
@@ -5756,6 +5765,10 @@ const stopImportMessageRotation = () => {
                   </div>
                 )
               })}
+              <div style={{ marginTop: 18, padding: '12px 16px', borderRadius: 12, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', fontSize: 12, color: C.muted, lineHeight: 1.6 }}>
+                Imported files do not include exact stream start and end times. Session duration and $/hour are estimated from recorded tip activity.
+              </div>
+            </div>}
             </div>
           )
         })()}
