@@ -12,7 +12,7 @@ import Sidebar from "./Sidebar"
 import SiteFooter from "../components/SiteFooter"
 import { PLATFORM_TOKEN_RATES, tokenRate } from "../../lib/constants"
 import { track as gtmTrack } from '../../lib/track'
-import { getDashboardReadiness, getModuleLockState, LockedInsightCard, DashboardProgressCard } from './DashboardPreview'
+import { getDashboardReadiness, getModuleLockState, canShowHourlyRate, LockedInsightCard, DashboardProgressCard } from './DashboardPreview'
 import Button from '../../components/ui/Button'
 import EarlyAdopterOffer from './EarlyAdopterOffer'
 
@@ -2042,9 +2042,33 @@ const stopImportMessageRotation = () => {
     sessions.filter(s => !s.durationUnknown && (s.durationMinutes || 0) >= 20))
   const timedTotalUSD = timedSessions.reduce((sum, s) => sum + (s.totalUSD || 0), 0)
   const timedTotalHours = timedSessions.reduce((sum, s) => sum + (s.durationHours || 0), 0)
-  // Single canonical $/hr — uses analytics.earningsVelocity (totalUSD / totalHours across all
-  // meaningful sessions) so the header, KPI card, and "Overall" chip all show the same number.
-  const avgPerHour = analytics?.earningsVelocity ?? (timedTotalHours > 0 ? timedTotalUSD / timedTotalHours : 0)
+  // Estimated $/Hour — imported CSVs only carry tip timestamps, never real stream
+  // start/end times, so this is inferred from the gap between a session's first
+  // and last recorded tip. analytics.estimatedHourlyRate is the single source of
+  // truth (lib/analytics.js) — a weighted total across hourly-rate-eligible
+  // sessions only (>=2 tips, known duration, >=15 observed minutes). Both the
+  // sticky command bar and the Money Snapshot KPI card read this same value;
+  // neither computes it independently.
+  const avgPerHour = analytics?.estimatedHourlyRate ?? 0
+  const hourlyRateSessionCount = analytics?.hourlyRateSessionCount || 0
+  const hourlyRateTotalMinutes = analytics?.hourlyRateTotalMinutes || 0
+  // Gate display on the same eligible sessions/minutes the number itself is
+  // built from — never on the broader meaningfulSessionCount/totalStreamMinutes,
+  // which include sessions this rate calc deliberately excludes.
+  const hourlyRateUnlocked = canShowHourlyRate({
+    sessionCount: hourlyRateSessionCount,
+    totalStreamMinutes: hourlyRateTotalMinutes,
+  })
+  const formatDuration = (mins) => {
+    const m = Math.round(mins || 0)
+    const h = Math.floor(m / 60)
+    const rem = m % 60
+    return h > 0 ? `${h}h ${rem}m` : `${rem}m`
+  }
+  const hourlyRateSubtext = hourlyRateUnlocked
+    ? `Based on ${hourlyRateSessionCount} inferred session${hourlyRateSessionCount === 1 ? '' : 's'} and ${formatDuration(hourlyRateTotalMinutes)} of observed tip activity.`
+    : 'Unlocks after 3 eligible sessions and 60 minutes of observed tip activity.'
+  const HOURLY_RATE_TOOLTIP = 'Estimated from the time between your first and last recorded tips in each session. Imported tip files do not include exact stream start and end times.'
   // Single source of truth — pre-computed in aggregateRows, same values used everywhere
   const analyticsbestDay  = analytics?.bestDay  || null
   const analyticsBestHour = analytics?.bestHour || null
@@ -2812,8 +2836,12 @@ const stopImportMessageRotation = () => {
                   <div style={{ fontSize:19, fontWeight:900, background:'linear-gradient(135deg,#60a5fa,#f472b6)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', whiteSpace:'nowrap' }}>${safeRevenue.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
                 </div>
                 <div style={{ display:'flex', flexDirection:'column', justifyContent:'center', padding:'0 24px', borderRight:'1px solid rgba(255,255,255,0.07)', flexShrink:0 }}>
-                  <div style={{ fontSize:10, color:'#475569', textTransform:'uppercase', letterSpacing:1.2, fontWeight:600, marginBottom:2 }}>Avg $/Hour</div>
-                  <div style={{ fontSize:19, fontWeight:900, color:'#22D3EE', whiteSpace:'nowrap' }}>{safeAvg > 0 ? `$${safeAvg.toFixed(2)}` : '—'}</div>
+                  <div title={HOURLY_RATE_TOOLTIP} style={{ fontSize:10, color:'#475569', textTransform:'uppercase', letterSpacing:1.2, fontWeight:600, marginBottom:2, cursor:'help' }}>Estimated $/Hour</div>
+                  {hourlyRateUnlocked ? (
+                    <div title={hourlyRateSubtext} style={{ fontSize:19, fontWeight:900, color:'#22D3EE', whiteSpace:'nowrap', cursor:'help' }}>${safeAvg.toFixed(2)}</div>
+                  ) : (
+                    <div onClick={() => handleTabChange('upload')} title={hourlyRateSubtext} style={{ fontSize:13, fontWeight:700, color:'#64748b', whiteSpace:'nowrap', cursor:'pointer' }}>🔒 Locked</div>
+                  )}
                 </div>
                 <div style={{ display:'flex', flexDirection:'column', justifyContent:'center', padding:'0 24px', borderRight:'1px solid rgba(255,255,255,0.07)', flexShrink:0 }}>
                   <div style={{ fontSize:10, color:'#475569', textTransform:'uppercase', letterSpacing:1.2, fontWeight:600, marginBottom:2 }}>Momentum</div>
@@ -2959,9 +2987,9 @@ const stopImportMessageRotation = () => {
                   sub: topPct ? `Top ${topPct}% of models on this platform` : 'Upload more data to rank',
                   icon:'💰', badge: growthPct !== null ? (isPositive ? `↑ ${growthPct}% vs last month` : `↓ ${Math.abs(growthPct)}% vs last month`) : null,
                   badgeColor: isPositive ? C.green : C.red, isHero: true },
-                { label:"Avg $/Hour", accent:'#22d3ee', glowClass:'card-glow-cyan', sparkData:last6AvgHr, trend:avgHrGrowth,
-                  value: safeAvgHr > 0 ? `$${safeAvgHr.toFixed(2)}` : '—',
-                  sub: safeAvgHr > 20 ? 'Above average — keep it up!' : safeAvgHr > 0 ? 'Tip: stream at peak hours' : 'Start timed sessions to track',
+                { label:"Estimated $/Hour", tooltip: HOURLY_RATE_TOOLTIP, accent:'#22d3ee', glowClass:'card-glow-cyan', sparkData:last6AvgHr, trend: hourlyRateUnlocked ? avgHrGrowth : null,
+                  value: hourlyRateUnlocked ? `$${safeAvgHr.toFixed(2)}` : 'Locked',
+                  sub: hourlyRateSubtext,
                   icon:'⏱️', badge:null },
                 { label:"Total Fans", accent:'#a78bfa', glowClass:'card-glow-violet', sparkData:last6Fans, trend:fansGrowth,
                   value: whales.length > 0 ? whales.length.toLocaleString() : '—',
@@ -2987,7 +3015,7 @@ const stopImportMessageRotation = () => {
                         {/* accent top bar */}
                         <div style={{ position:'absolute', top:0, left:0, right:0, height:3, background:`linear-gradient(90deg,${s.accent}80,${s.accent}20)`, borderRadius:'18px 18px 0 0' }} />
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
-                          <span style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600 }}>{s.label}</span>
+                          <span title={s.tooltip} style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600, cursor: s.tooltip ? 'help' : 'default' }}>{s.label}</span>
                           <span style={{ fontSize: 22 }}>{s.icon}</span>
                         </div>
                         {s.isHero

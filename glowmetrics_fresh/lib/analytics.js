@@ -785,7 +785,9 @@ export function aggregateRows(tips, tz = null) {
       predictions: null, whaleAlerts: [], lossAlerts: [], nextMoves: [],
       bestDay: null, bestHour: null, platformBestTimes: {},
       monthlyData: [], bestMonth: null, tipTypeBreakdown: [],
-      privateShowFans: [], spyShowFans: [], earningsVelocity: null,
+      privateShowFans: [], spyShowFans: [], earningsVelocity: null, totalStreamMinutes: 0,
+      estimatedHourlyRate: 0, hourlyRateSessionCount: 0, hourlyRateTotalMinutes: 0,
+      hourlyRateTotalUsd: 0, excludedUntimedSessionCount: 0,
       platformVelocity: {}, missedRevenueByPlatform: {},
       returningVsNew: null, topFanDependency: null,
       dependencyRisk: null, preTipBehavior: null, trueHourlyAvg: []
@@ -945,11 +947,39 @@ export function aggregateRows(tips, tz = null) {
     platformBestTimes[p] = { hour: hourEntries[0] || null, bestDay: dayEntries[0] || null, bestHourByDay, allHours: hourEntries, allDays: dayEntries }
   })
 
-  // ── EARNINGS VELOCITY ─────────────────────────────────────────────────
+  // ── EARNINGS VELOCITY (legacy field, kept for existing callers) ───────
   const timedSessions = meaningfulSessions.filter(s => !s.durationUnknown)
   const totalTimedHours = timedSessions.reduce((s, x) => s + x.durationHours, 0)
   const totalTimedUSD = timedSessions.reduce((s, x) => s + x.totalUSD, 0)
   const earningsVelocity = totalTimedHours > 0 ? parseFloat((totalTimedUSD / totalTimedHours).toFixed(2)) : null
+  const totalStreamMinutes = Math.round(totalTimedHours * 60)
+
+  // ── ESTIMATED $/HOUR ───────────────────────────────────────────────────
+  // Imported CSV files carry tip timestamps only — never a creator's actual
+  // stream start/end time — so this can only ever be an estimate inferred
+  // from the gap between a session's first and last recorded tip. A session
+  // can be a meaningful *earning* event (e.g. one $75 tip, durationUnknown)
+  // without being usable for a rate calculation, since a zero/unknown
+  // duration has no denominator. This eligibility rule is intentionally
+  // stricter than — and separate from — sessionQuality/meaningfulSessions.
+  const isHourlyRateEligible = (s) =>
+    s.tipCount >= 2 &&
+    !s.durationUnknown &&
+    Number.isFinite(s.durationMinutes) &&
+    s.durationMinutes >= 15 &&
+    s.totalUSD > 0
+
+  const hourlyRateSessions = meaningfulSessions.filter(isHourlyRateEligible)
+  const hourlyRateTotalUsd = parseFloat(hourlyRateSessions.reduce((s, x) => s + x.totalUSD, 0).toFixed(2))
+  const hourlyRateTotalMinutes = hourlyRateSessions.reduce((s, x) => s + x.durationMinutes, 0)
+  // Weighted overall average — numerator and denominator always come from the
+  // exact same eligible sessions. Never average each session's own hourly rate;
+  // that would give a short session the same weight as a long one.
+  const estimatedHourlyRate = hourlyRateTotalMinutes > 0
+    ? parseFloat((hourlyRateTotalUsd / (hourlyRateTotalMinutes / 60)).toFixed(2))
+    : 0
+  const hourlyRateSessionCount = hourlyRateSessions.length
+  const excludedUntimedSessionCount = meaningfulSessions.filter(s => !isHourlyRateEligible(s)).length
 
   const platformVelocity = {}
   Object.keys(platformMap).forEach(p => {
@@ -1100,7 +1130,9 @@ export function aggregateRows(tips, tz = null) {
     bestDay, bestHour, platformBestTimes,
     monthlyData, bestMonth,
     tipTypeBreakdown, privateShowFans, spyShowFans,
-    earningsVelocity, platformVelocity,
+    earningsVelocity, totalStreamMinutes, platformVelocity,
+    estimatedHourlyRate, hourlyRateSessionCount, hourlyRateTotalMinutes,
+    hourlyRateTotalUsd, excludedUntimedSessionCount,
     missedRevenueByPlatform, returningVsNew, topFanDependency,
     dependencyRisk: null, preTipBehavior: null, trueHourlyAvg: [],
     meaningfulSessions, allValidSessions,
