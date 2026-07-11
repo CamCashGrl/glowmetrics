@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
-import { parseCSV, aggregateRows as runEngine } from "../../lib/analytics"
+import { parseCSV, detectPlatform, aggregateRows as runEngine } from "../../lib/analytics"
 import { computeRoomHealth, ROOM_STATES, MOMENTUM_DIRECTIONS } from "../../lib/analytics/roomHealth"
 import { computeRevenueVelocity, computeLiveComparison } from "../../lib/analytics/velocity"
 import { detectSessionPhase, PHASES, getRecoveryActions, getGoalStrategy } from "../../lib/analytics/sessionPhase"
@@ -84,6 +84,63 @@ const formatImportDate = (iso) => {
   const d = new Date(iso)
   if (isNaN(d)) return null
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
+// Builds the "quick preview" stats (tips / fans / earnings / top spender)
+// shown when a free-tier user's import is blocked by the platform limit —
+// same shape as onboarding's buildPreview(), minus paid-session handling,
+// since this only needs to answer "what's in the file" for a soft paywall.
+function buildImportPreview(rawText, platform) {
+  if (!rawText) return null
+  const rows = parseCSV(rawText, platform)
+  if (!rows.length) return null
+  const totalUsd = rows.reduce((sum, r) => sum + (r.usd || 0), 0)
+  const fanTotals = rows.reduce((acc, r) => { acc[r.username] = (acc[r.username] || 0) + r.tokens; return acc }, {})
+  const topSpender = Object.entries(fanTotals).sort((a, b) => b[1] - a[1])[0]
+  return {
+    tipsDetected: rows.length,
+    fansDetected: Object.keys(fanTotals).length,
+    estimatedEarnings: parseFloat(totalUsd.toFixed(2)),
+    topSpender: topSpender ? topSpender[0] : null,
+  }
+}
+
+// Sparkle burst — ports the same completion animation used in onboarding's
+// "First Insights" step so the platform-limit preview feels visually
+// consistent with a real completed import.
+function ImportSparkle() {
+  const ref = useRef()
+  useEffect(() => {
+    const c = ref.current; if (!c) return
+    const ctx = c.getContext('2d'); c.width = window.innerWidth; c.height = window.innerHeight
+    const COLS = ['#22D3EE', '#ffffff', '#EC4899', '#A78BFA', '#7C5CFF']
+    const dots = Array.from({ length: 38 }, () => ({
+      x: Math.random() * c.width, y: Math.random() * c.height,
+      r: Math.random() * 2.2 + 0.4, color: COLS[Math.floor(Math.random() * COLS.length)],
+      alpha: Math.random() * 0.9 + 0.1, aDir: Math.random() > 0.5 ? 1 : -1, aSpd: Math.random() * 0.025 + 0.008,
+      vx: (Math.random() - 0.5) * 0.3, vy: (Math.random() - 0.5) * 0.3,
+    }))
+    let frame = 0, raf
+    const draw = () => {
+      ctx.clearRect(0, 0, c.width, c.height)
+      dots.forEach(d => {
+        d.x += d.vx; d.y += d.vy; d.alpha += d.aDir * d.aSpd
+        if (d.alpha >= 1) { d.alpha = 1; d.aDir = -1 }
+        if (d.alpha <= 0) { d.alpha = 0; d.aDir = 1 }
+        if (d.x < -4) d.x = c.width + 4; if (d.x > c.width + 4) d.x = -4
+        if (d.y < -4) d.y = c.height + 4; if (d.y > c.height + 4) d.y = -4
+        ctx.save(); ctx.globalAlpha = d.alpha; ctx.translate(d.x, d.y); ctx.fillStyle = d.color
+        const s = d.r
+        ctx.beginPath(); ctx.moveTo(0, -s * 2.5); ctx.lineTo(s * 0.5, -s * 0.5); ctx.lineTo(s * 2.5, 0); ctx.lineTo(s * 0.5, s * 0.5); ctx.lineTo(0, s * 2.5); ctx.lineTo(-s * 0.5, s * 0.5); ctx.lineTo(-s * 2.5, 0); ctx.lineTo(-s * 0.5, -s * 0.5); ctx.closePath(); ctx.fill(); ctx.restore()
+      })
+      frame++
+      if (frame < 140) raf = requestAnimationFrame(draw)
+      else { let op = 1; const fade = () => { op -= 0.06; ctx.globalAlpha = op; if (op > 0) requestAnimationFrame(fade); else ctx.clearRect(0, 0, c.width, c.height) }; fade() }
+    }
+    raf = requestAnimationFrame(draw)
+    return () => cancelAnimationFrame(raf)
+  }, [])
+  return <canvas ref={ref} style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 9999 }} />
 }
 
 const formatHour = (hour) => {
@@ -1301,6 +1358,10 @@ export default function Dashboard() {
   const uploading = importStage === 'processing'
   const [uploadPlatform, setUploadPlatform] = useState("")
   const [lastUploadResult, setLastUploadResult] = useState(null)
+  // Platform-limit soft paywall: preview of what's in a blocked import, shown
+  // instead of a hard block (see denyWithPlatformPreview / handleCSV below)
+  const [lockedPreview, setLockedPreview] = useState(null)
+  const [showImportSparkle, setShowImportSparkle] = useState(false)
   const [activeTab, setActiveTab] = useState(initialTab)
   const [toast, setToast] = useState("")
   const [uploadCount, setUploadCount] = useState(0)
@@ -1911,13 +1972,35 @@ const stopImportMessageRotation = () => {
     stopImportMessageRotation()
     setImportStage('idle')
     setLastUploadResult(null)
+    setLockedPreview(null)
+  }
+
+  // Shows a quick preview of what's in a blocked import (tips/fans/earnings/
+  // top spender) plus a soft paywall, instead of just refusing the upload —
+  // so a free-tier user sees real value before being asked to subscribe.
+  const denyWithPlatformPreview = async (file, platformLabel) => {
+    let rawText = ''
+    try { rawText = await file.text() } catch (e) {}
+    const detectedLabel = platformLabel || (rawText ? detectPlatform(rawText) : null) || 'this platform'
+    const preview = buildImportPreview(rawText, platformLabel)
+    setLastUploadResult(null)
+    setLockedPreview({ platform: detectedLabel, preview })
+    setImportStage('locked_preview')
+    // Only play the celebratory checkmark/sparkle when we actually found
+    // something to preview — an unparseable file isn't a "confirmation".
+    if (preview) {
+      setShowImportSparkle(true)
+      setTimeout(() => setShowImportSparkle(false), 2400)
+    }
+    gtmTrack('platform_limit_preview_shown', { platform: detectedLabel, hasPreview: !!preview })
   }
 
   const handleCSV = async (file, forcePlatform = null) => {
     if (!file || !user) return
-    // Free plan tracks a single platform — block explicit uploads for a different platform
+    // Free plan tracks a single platform — instead of a hard block, show a
+    // quick preview of the file's contents plus a soft paywall below it.
     if (freePlatformLimitReached && forcePlatform && !allPlatforms.includes(forcePlatform)) {
-      showToast("🔒 Free plan tracks 1 platform. Upgrade to Pro to add another (see sidebar).")
+      await denyWithPlatformPreview(file, forcePlatform)
       return
     }
     setImportStage('processing')
@@ -1948,13 +2031,12 @@ const stopImportMessageRotation = () => {
 
       if (!res.ok || result.error) {
         if (result.code === 'platform_limit_reached') {
-          showToast("🔒 " + (result.error || "Free plan tracks 1 platform — upgrade to add more."))
-          setLastUploadResult({ success: false, blocked: true, error: result.error || 'Free plan tracks 1 platform.', upgradeUrl: result.upgradeUrl || '/pricing' })
+          await denyWithPlatformPreview(file, forcePlatform || uploadPlatform || result.platform || null)
         } else {
           showToast("❌ " + (result.error || 'Upload failed'))
           setLastUploadResult({ success: false, error: result.error || "We couldn't read this CSV. Please check the format or try another file." })
+          setImportStage('error')
         }
-        setImportStage('error')
         return
       }
 
@@ -5799,7 +5881,7 @@ const stopImportMessageRotation = () => {
               </div>
             )}
             <div style={{ ...glassCard, borderRadius: 14, padding: 32, marginBottom: 16, position: "relative", overflow: "hidden" }}>
-              {importStage !== 'success' && (
+              {!['success', 'locked_preview'].includes(importStage) && (
                 <div style={{ marginBottom: 20 }}>
                   <label style={{ fontSize: 12, color: C.muted, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8, display: "block" }}>Platform (optional — helps if auto-detect fails)</label>
                   <select value={uploadPlatform} onChange={e => setUploadPlatform(e.target.value)} disabled={uploading}
@@ -5869,18 +5951,61 @@ const stopImportMessageRotation = () => {
 
               {importStage === 'error' && lastUploadResult && (
                 <div style={{ textAlign: "center" }}>
-                  <div style={{ fontSize: 34, marginBottom: 10 }}>{lastUploadResult.blocked ? "🔒" : "⚠️"}</div>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: lastUploadResult.blocked ? "#a78bfa" : C.red, marginBottom: 4 }}>
+                  <div style={{ fontSize: 34, marginBottom: 10 }}>⚠️</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: C.red, marginBottom: 4 }}>
                     {lastUploadResult.error}
                   </div>
-                  {!lastUploadResult.blocked && (
-                    <div style={{ fontSize: 12, color: C.muted, marginBottom: 16 }}>Check the file format, or try a different export from your platform.</div>
-                  )}
-                  <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: lastUploadResult.blocked ? 12 : 0, flexWrap: "wrap" }}>
-                    {lastUploadResult.blocked && (
-                      <Button as="a" href={lastUploadResult.upgradeUrl || '/pricing'} style={{ padding: "12px 24px", fontSize: 13 }}>Upgrade →</Button>
-                    )}
+                  <div style={{ fontSize: 12, color: C.muted, marginBottom: 16 }}>Check the file format, or try a different export from your platform.</div>
+                  <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
                     <Button variant="secondary" onClick={resetImport} style={{ padding: "12px 24px", fontSize: 13 }}>Try Again</Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Platform-limit soft paywall — a quick preview of what's in the
+                  attempted import, so a free-tier user sees real value before
+                  being asked to subscribe, rather than a hard block. */}
+              {importStage === 'locked_preview' && lockedPreview && (
+                <div style={{ textAlign: "center" }}>
+                  <div style={{ position: "relative", width: 56, height: 56, margin: "0 auto 14px" }}>
+                    {lockedPreview.preview && <div className="import-flash-ring" style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "radial-gradient(circle,rgba(34,211,238,0.55),rgba(236,72,153,0.35) 60%,transparent 70%)" }} />}
+                    <div className={lockedPreview.preview ? "import-check-badge" : ""} style={{ position: "relative", width: 56, height: 56, borderRadius: "50%", background: lockedPreview.preview ? "linear-gradient(135deg,#10B981,#22D3EE)" : "rgba(255,255,255,0.06)", border: lockedPreview.preview ? "none" : "1px solid rgba(255,255,255,0.12)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, color: "#fff", boxShadow: lockedPreview.preview ? "0 0 24px rgba(16,185,129,0.45)" : "none" }}>{lockedPreview.preview ? "✓" : "📁"}</div>
+                  </div>
+                  <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.18em", textTransform: "uppercase", color: C.cyan, marginBottom: 8 }}>Quick Preview</div>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: C.white, marginBottom: 16 }}>
+                    Here's what's in your {lockedPreview.platform} import
+                  </div>
+
+                  {lockedPreview.preview ? (
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 10, marginBottom: 16, textAlign: "left" }}>
+                      {[
+                        { label: "Tips Imported", value: lockedPreview.preview.tipsDetected.toLocaleString(), color: C.cyan },
+                        { label: "Unique Fans", value: lockedPreview.preview.fansDetected.toLocaleString(), color: C.gold },
+                        { label: "Est. Earnings", value: `$${lockedPreview.preview.estimatedEarnings.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, color: C.green },
+                        { label: "Top Spender", value: lockedPreview.preview.topSpender || "—", color: C.pink },
+                      ].map(s => (
+                        <div key={s.label} className="stat-card" style={{ ...glassCard, borderRadius: 14, padding: "12px 14px", position: "relative", overflow: "hidden" }}>
+                          <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg,${s.color}00,${s.color}88,${s.color}00)` }} />
+                          <div style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em", color: C.muted, marginBottom: 5 }}>{s.label}</div>
+                          <div style={{ fontSize: 17, fontWeight: 900, color: s.color, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.value}</div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: 13, color: C.muted, marginBottom: 16 }}>
+                      We couldn't read enough of this file for a preview, but here's what unlocking {lockedPreview.platform} gets you.
+                    </div>
+                  )}
+
+                  {/* Soft paywall — smaller and less prominent than the preview above */}
+                  <div style={{ borderRadius: 12, border: "1px solid rgba(168,85,247,0.25)", background: "rgba(168,85,247,0.06)", padding: "12px 14px" }}>
+                    <div style={{ fontSize: 12.5, color: C.text, marginBottom: 8 }}>
+                      🔒 Subscribe to view your insights for <strong style={{ color: C.white }}>{lockedPreview.platform}</strong>
+                    </div>
+                    <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
+                      <Button as="a" href="/pricing" style={{ padding: "8px 16px", fontSize: 12.5 }}>Subscribe →</Button>
+                      <Button variant="secondary" onClick={resetImport} style={{ padding: "8px 16px", fontSize: 12.5 }}>Not now</Button>
+                    </div>
                   </div>
                 </div>
               )}
@@ -6901,6 +7026,8 @@ const stopImportMessageRotation = () => {
           </div>
         )
       })()}
+
+      {showImportSparkle && <ImportSparkle />}
 
       {toast && (
         <div style={{ position: "fixed", bottom: 24, left: 272, background: "rgba(15,20,32,0.95)", backdropFilter: "blur(20px)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 12, padding: "14px 20px", color: C.white, fontSize: 14, zIndex: 9999, boxShadow: "0 8px 32px rgba(0,0,0,0.8)" }}>
