@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { tokenRate } from '../../../../lib/constants';
 
 export const dynamic = 'force-dynamic';
 
@@ -66,7 +67,7 @@ export async function POST(req) {
       user_id:  user.id,
       username: username.trim(),
       tokens:   parseInt(amount, 10),
-      usd:      parseFloat((parseInt(amount, 10) * 0.05).toFixed(2)),
+      usd:      parseFloat((parseInt(amount, 10) * tokenRate(platform)).toFixed(2)),
       platform: platform.toLowerCase(),
       source:   'extension',
       received_at: receivedAt,
