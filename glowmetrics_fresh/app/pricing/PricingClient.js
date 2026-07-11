@@ -30,21 +30,23 @@ async function startCheckout(planType, setLoading) {
   }
 }
 
-// ── Color palette ─────────────────────────────────────────────────────────────
+// ── Color palette — CamCash brand tokens (matches app/landing/LandingClient.js) ─
 const C = {
-  bg:         '#040812',
-  card:       '#0d1424',
-  card2:      '#111827',
-  border:     'rgba(168,85,247,0.15)',
-  borderPink: 'rgba(236,72,153,0.2)',
-  purple:     '#a855f7',
-  pink:       '#ec4899',
-  cyan:       '#22d3ee',
-  green:      '#10b981',
-  gold:       '#f59e0b',
-  white:      '#f1f5f9',
-  text:       '#94a3b8',
-  muted:      '#475569',
+  bg:         '#050713',
+  card:       'rgba(10, 14, 32, 0.82)',
+  card2:      'rgba(16, 20, 42, 0.72)',
+  border:     'rgba(124,92,255,0.15)',
+  borderPink: 'rgba(255,43,174,0.2)',
+  purple:     '#7C5CFF',
+  pink:       '#FF2BAE',
+  cyan:       '#16F4FF',
+  cyanSoft:   '#48E9FF',
+  green:      '#10B981',
+  gold:       '#FFC857',
+  white:      '#FFFFFF',
+  text:       '#8D93AA',
+  muted:      '#5E647C',
+  gradientPrimary: 'linear-gradient(90deg, #16F4FF 0%, #55B8FF 28%, #7C5CFF 52%, #FF2BAE 100%)',
 }
 
 // ── Reusable check mark line ──────────────────────────────────────────────────
@@ -71,22 +73,28 @@ function TopBar() {
       alignItems:      'center',
       justifyContent:  'space-between',
       padding:         '0 20px',
-      background:      'rgba(4,8,18,0.92)',
+      background:      'rgba(5,7,19,0.92)',
       backdropFilter:  'blur(20px)',
       WebkitBackdropFilter: 'blur(20px)',
-      borderBottom:    '1px solid rgba(168,85,247,0.2)',
+      borderBottom:    '1px solid rgba(124,92,255,0.2)',
     }}>
-      <a href="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 6 }}>
-        <span style={{ fontSize: 20 }}>💜</span>
+      <a href="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 9 }}>
         <span style={{
-          fontWeight:           700,
-          fontSize:             17,
-          background:           `linear-gradient(90deg, ${C.purple}, ${C.pink})`,
-          WebkitBackgroundClip: 'text',
-          WebkitTextFillColor:  'transparent',
-          backgroundClip:       'text',
-          letterSpacing:        '-0.3px',
-        }}>CamCash</span>
+          width: 28, height: 28, borderRadius: 9,
+          background: C.gradientPrimary,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 14, fontWeight: 900, color: '#06101A',
+          boxShadow: '0 0 14px rgba(22,244,255,0.3)',
+        }}>$</span>
+        <span style={{ fontSize: 17, fontWeight: 800, color: C.white, letterSpacing: '-0.4px' }}>
+          Cam
+          <span style={{
+            background:           C.gradientPrimary,
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor:  'transparent',
+            backgroundClip:       'text',
+          }}>Cash</span>™
+        </span>
       </a>
       <Button as="a" href="/landing" style={{ padding: '8px 18px', fontSize: 13 }}>
         Create Free Account →
@@ -109,34 +117,34 @@ function HeroSection() {
       <div style={{
         position:   'absolute',
         inset:      0,
-        background: 'radial-gradient(ellipse 70% 55% at 50% 0%, rgba(168,85,247,0.13) 0%, rgba(4,8,18,0) 70%)',
+        background: 'radial-gradient(ellipse 70% 55% at 50% 0%, rgba(124,92,255,0.13) 0%, rgba(5,7,19,0) 70%)',
         pointerEvents: 'none',
       }} />
       <div style={{ position: 'relative', maxWidth: 760, margin: '0 auto' }}>
-        <p style={{
-          fontSize:      11,
-          fontWeight:    800,
-          letterSpacing: '2.5px',
-          color:         C.purple,
-          textTransform: 'uppercase',
-          fontVariant:   'small-caps',
-          marginBottom:  18,
-          margin:        '0 0 18px',
+        <div style={{
+          display: 'inline-flex', alignItems: 'center', gap: 8,
+          padding: '7px 14px', borderRadius: 999,
+          background: 'rgba(22,244,255,0.08)', border: '1px solid rgba(22,244,255,0.28)',
+          fontSize: 12, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase',
+          color: C.cyanSoft, marginBottom: 22,
         }}>
+          <span style={{ width: 6, height: 6, borderRadius: '50%', background: C.cyan, boxShadow: '0 0 8px rgba(22,244,255,0.8)' }} />
           Transparent Pricing
-        </p>
+        </div>
         <h1 style={{
           fontSize:             'clamp(30px, 6vw, 54px)',
           fontWeight:           800,
           lineHeight:           1.1,
           margin:               '0 0 22px',
-          background:           `linear-gradient(135deg, ${C.purple} 0%, ${C.pink} 100%)`,
-          WebkitBackgroundClip: 'text',
-          WebkitTextFillColor:  'transparent',
-          backgroundClip:       'text',
+          color:                C.white,
           letterSpacing:        '-1px',
         }}>
-          Transparent Pricing.<br />Powerful Platform.
+          Transparent Pricing.<br /><span style={{
+            background:           C.gradientPrimary,
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor:  'transparent',
+            backgroundClip:       'text',
+          }}>Powerful Platform.</span>
         </h1>
         <p style={{
           fontSize:   'clamp(15px, 2vw, 18px)',
@@ -182,7 +190,7 @@ function AfterLaunchSection({ checkoutLoading, setCheckoutLoading }) {
           {/* Free Tier Card */}
           <div style={{
             background:   C.card,
-            border:       '1px solid rgba(34,211,238,0.2)',
+            border:       '1px solid rgba(22,244,255,0.2)',
             borderRadius: 16,
             padding:      '32px 28px',
             display:      'flex',
@@ -224,12 +232,12 @@ function AfterLaunchSection({ checkoutLoading, setCheckoutLoading }) {
           {/* Premium Tier Card */}
           <div style={{
             background:   C.card,
-            border:       '1px solid rgba(168,85,247,0.3)',
+            border:       '1px solid rgba(124,92,255,0.3)',
             borderRadius: 16,
             padding:      '32px 28px',
             display:      'flex',
             flexDirection:'column',
-            boxShadow:    '0 0 32px rgba(168,85,247,0.12)',
+            boxShadow:    '0 0 32px rgba(124,92,255,0.12)',
           }}>
             <div style={{ marginBottom: 8 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
@@ -237,13 +245,13 @@ function AfterLaunchSection({ checkoutLoading, setCheckoutLoading }) {
                 <span style={{ color: C.white, fontWeight: 800, fontSize: 20 }}>Standard Plan</span>
                 <span style={{
                   marginLeft:   'auto',
-                  background:   'rgba(168,85,247,0.15)',
+                  background:   'rgba(124,92,255,0.15)',
                   color:        C.purple,
                   borderRadius: 999,
                   padding:      '3px 12px',
                   fontSize:     12,
                   fontWeight:   700,
-                  border:       '1px solid rgba(168,85,247,0.3)',
+                  border:       '1px solid rgba(124,92,255,0.3)',
                 }}>$19.99 / month</span>
               </div>
               <p style={{ color: C.muted, fontSize: 13, margin: 0 }}>or $199.99/year (2 months free)</p>
@@ -282,9 +290,9 @@ function AfterLaunchSection({ checkoutLoading, setCheckoutLoading }) {
 function EarlyAdopterSection({ checkoutLoading, setCheckoutLoading }) {
   return (
     <section id="early-adopter" style={{
-      background:   'rgba(236,72,153,0.06)',
-      borderTop:    '1px solid rgba(236,72,153,0.2)',
-      borderBottom: '1px solid rgba(236,72,153,0.2)',
+      background:   'rgba(255,43,174,0.06)',
+      borderTop:    '1px solid rgba(255,43,174,0.2)',
+      borderBottom: '1px solid rgba(255,43,174,0.2)',
       padding:      '80px 20px',
     }}>
       {/* Header */}
@@ -325,8 +333,8 @@ function EarlyAdopterSection({ checkoutLoading, setCheckoutLoading }) {
       }}>
         {/* Monthly Card */}
         <div style={{
-          border:       '2px solid rgba(236,72,153,0.4)',
-          background:   'rgba(236,72,153,0.07)',
+          border:       '2px solid rgba(255,43,174,0.4)',
+          background:   'rgba(255,43,174,0.07)',
           borderRadius: 16,
           padding:      '36px 28px',
           display:      'flex',
@@ -372,8 +380,8 @@ function EarlyAdopterSection({ checkoutLoading, setCheckoutLoading }) {
 
         {/* Annual Card */}
         <div style={{
-          border:       '2px solid rgba(168,85,247,0.4)',
-          background:   'rgba(168,85,247,0.08)',
+          border:       '2px solid rgba(124,92,255,0.4)',
+          background:   'rgba(124,92,255,0.08)',
           borderRadius: 16,
           padding:      '36px 28px',
           display:      'flex',
@@ -704,7 +712,7 @@ function FAQSection() {
 function FinalCTA() {
   return (
     <section style={{
-      background: 'radial-gradient(ellipse 80% 60% at 50% 0%, rgba(168,85,247,0.2) 0%, rgba(4,8,18,0) 70%), #040812',
+      background: 'radial-gradient(ellipse 80% 60% at 50% 0%, rgba(124,92,255,0.2) 0%, rgba(5,7,19,0) 70%), #050713',
       padding:    '80px 20px',
       textAlign:  'center',
     }}>
@@ -747,6 +755,18 @@ function FinalCTA() {
   )
 }
 
+// ── Ambient background (mirrors app/landing/LandingClient.js) ────────────────
+function AmbientBackground() {
+  return (
+    <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0 }}>
+      <div style={{ position: 'absolute', inset: 0, backgroundImage: 'radial-gradient(1px 1px at 20% 30%, rgba(255,255,255,0.3), transparent), radial-gradient(1px 1px at 60% 10%, rgba(255,255,255,0.22), transparent), radial-gradient(1px 1px at 80% 60%, rgba(255,255,255,0.26), transparent), radial-gradient(1px 1px at 35% 80%, rgba(255,255,255,0.18), transparent), radial-gradient(1px 1px at 90% 85%, rgba(255,255,255,0.22), transparent)' }} />
+      <div style={{ position: 'absolute', width: 700, height: 700, top: '-15%', right: '-5%', background: 'radial-gradient(circle,rgba(22,244,255,0.08),transparent 65%)', filter: 'blur(60px)' }} />
+      <div style={{ position: 'absolute', width: 600, height: 600, bottom: '10%', left: '-10%', background: 'radial-gradient(circle,rgba(255,43,174,0.08),transparent 65%)', filter: 'blur(60px)' }} />
+      <div style={{ position: 'absolute', width: 600, height: 600, top: '40%', left: '40%', background: 'radial-gradient(circle,rgba(124,92,255,0.06),transparent 65%)', filter: 'blur(60px)' }} />
+    </div>
+  )
+}
+
 // ── Root Component ────────────────────────────────────────────────────────────
 export default function PricingClient() {
   const [checkoutLoading, setCheckoutLoading] = useState(null)
@@ -758,9 +778,10 @@ export default function PricingClient() {
       fontFamily:      "'DM Sans', system-ui, -apple-system, sans-serif",
       WebkitFontSmoothing: 'antialiased',
     }}>
+      <AmbientBackground />
       <TopBar />
 
-      <main>
+      <main style={{ position: 'relative', zIndex: 1 }}>
         <HeroSection />
         <AfterLaunchSection checkoutLoading={checkoutLoading} setCheckoutLoading={setCheckoutLoading} />
         <EarlyAdopterSection checkoutLoading={checkoutLoading} setCheckoutLoading={setCheckoutLoading} />
@@ -770,7 +791,9 @@ export default function PricingClient() {
         <FinalCTA />
       </main>
 
-      <SiteFooter />
+      <div style={{ position: 'relative', zIndex: 1 }}>
+        <SiteFooter />
+      </div>
     </div>
   )
 }
