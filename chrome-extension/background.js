@@ -21,6 +21,7 @@ let sessionTokens = 0;
 let sessionUsd = 0;
 let topTipper = null;
 let plan = 'free'; // 'free' | 'pro' | 'unlimited' — controls whether tips save to permanent history
+let paused = false; // manual pause from the popup — while true, new tips/entries are ignored
 
 // restorePromise resolves once the initial restore() call completes.
 // Tip sync always awaits this before trying to use session.
@@ -259,7 +260,21 @@ function getState() {
     usd: sessionUsd, topTipper, coaches: coachMsgs,
     whales: whales.slice(0, 10), connected: true,
     plan, isPro: plan === 'pro' || plan === 'unlimited',
+    paused,
   };
+}
+
+// Clears this session's local tip data — the live feed, running totals, and
+// the persisted tip_* records the popup reads. This is a local reset only;
+// it never touches the permanent dashboard history stored server-side.
+async function clearTips() {
+  sessionTips = [];
+  sessionTokens = 0;
+  sessionUsd = 0;
+  topTipper = null;
+  const items = await chrome.storage.local.get(null);
+  const keys = Object.keys(items).filter(k => k.startsWith('tip_'));
+  if (keys.length) await chrome.storage.local.remove(keys);
 }
 
 function broadcast(msg) { chrome.runtime.sendMessage(msg).catch(() => {}); }
@@ -376,6 +391,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
   }
 
   if (msg.action === 'tip') {
+    if (paused) return false;
     const { username, tokens, platform } = msg;
     lastTipTs = Date.now();
     const usd = parseFloat((tokens * (TOKEN_RATES[platform] || 0.05)).toFixed(2));
@@ -411,6 +427,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
   }
 
   if (msg.action === 'entered') {
+    if (paused) return false;
     const { username } = msg;
     if (isWhale(username)) {
       const w = getWhale(username);
@@ -432,6 +449,22 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
     broadcast({ action: 'state', state: getState() });
     broadcastOverlay();
     return false;
+  }
+
+  if (msg.action === 'set_paused') {
+    paused = !!msg.paused;
+    broadcast({ action: 'state', state: getState() });
+    broadcastOverlay();
+    return false;
+  }
+
+  if (msg.action === 'clear_tips') {
+    clearTips().then(() => {
+      broadcast({ action: 'state', state: getState() });
+      broadcastOverlay();
+      reply({ ok: true });
+    });
+    return true;
   }
 
   if (msg.type === 'AUTH_CHANGED') {
