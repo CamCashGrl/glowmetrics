@@ -964,15 +964,6 @@ function TitleGenerator({ C, glassCard, analytics, tips, sessions, whales }) {
         @keyframes heartPop { 0% { transform: scale(1); } 30% { transform: scale(1.35); } 60% { transform: scale(0.9); } 100% { transform: scale(1); } }
       `}</style>
 
-      {/* GO LIVE BANNER — compact */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 14px", marginBottom: 10, borderRadius: 10, background: "linear-gradient(135deg, rgba(239,68,68,0.12), rgba(236,72,153,0.08))", border: "1px solid rgba(239,68,68,0.25)" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontSize: 14 }}>🔴</span>
-          <div style={{ fontSize: 12, fontWeight: 700, color: C.white }}>Ready to go live? Generate your title below.</div>
-        </div>
-        <a href="https://chaturbate.com" target="_blank" rel="noopener noreferrer" style={{ padding: "6px 12px", borderRadius: 8, textDecoration: "none", background: "linear-gradient(135deg, #ef4444, #EC4899)", color: C.white, fontSize: 11, fontWeight: 800, whiteSpace: "nowrap" }}>🔴 Go Live</a>
-      </div>
-
       {/* HEADER + SETTINGS */}
       <div style={{ display: "flex", gap: 12, marginBottom: 8, alignItems: "flex-start" }}>
         <div style={{ flex: 1, minWidth: 0 }}>
