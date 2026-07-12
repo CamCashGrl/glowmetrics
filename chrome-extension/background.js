@@ -22,6 +22,13 @@ let sessionUsd = 0;
 let topTipper = null;
 let plan = 'free'; // 'free' | 'pro' | 'unlimited' — controls whether tips save to permanent history
 
+// liveSession mirrors the server's stream_sessions row (see
+// app/api/live/session/route.js) — not to be confused with `session` above,
+// which is the Supabase auth session. Tracked here so the popup's
+// Start/Pause/Resume button reflects real state even if it was changed from
+// the web /live page instead of the extension.
+let liveSession = null;
+
 // restorePromise resolves once the initial restore() call completes.
 // Tip sync always awaits this before trying to use session.
 let restorePromise = null;
@@ -39,13 +46,14 @@ function canCoach(key, cooldownMs) {
 
 // ─── Persistence ─────────────────────────────────────────────────────────────
 async function save() {
-  await chrome.storage.local.set({ _bg_whales: whales, _bg_coachMsgs: coachMsgs });
+  await chrome.storage.local.set({ _bg_whales: whales, _bg_coachMsgs: coachMsgs, _bg_liveSession: liveSession });
 }
 
 async function restore() {
-  const data = await chrome.storage.local.get(['session', 'user', '_bg_whales', '_bg_coachMsgs']);
-  whales    = data._bg_whales    || [];
-  coachMsgs = data._bg_coachMsgs || [];
+  const data = await chrome.storage.local.get(['session', 'user', '_bg_whales', '_bg_coachMsgs', '_bg_liveSession']);
+  whales      = data._bg_whales     || [];
+  coachMsgs   = data._bg_coachMsgs  || [];
+  liveSession = data._bg_liveSession || null;
   if (data.session && data.user) {
     const token = typeof data.session === 'string' ? data.session : data.session?.access_token;
     if (token) session = { access_token: token, user: data.user };
@@ -133,6 +141,99 @@ async function syncTip({ username, tokens, platform, timestamp }) {
   }
 }
 
+// ─── Live session (Start/Pause/Resume/Stop) ───────────────────────────────────
+// One authoritative session-lifecycle implementation on the server (see
+// app/api/live/session/route.js) — the web /live page calls the same route,
+// so starting/pausing here shows up there and vice versa.
+async function callSessionApi(action, payload = {}) {
+  await restorePromise;
+  if (!session) return { ok: false, error: 'Not signed in.' };
+
+  const doPost = () => fetch(`${API_BASE}/api/live/session`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+    body: JSON.stringify({ action, ...payload }),
+  });
+
+  try {
+    let res = await doPost();
+    if (res.status === 401) {
+      const refreshed = await refreshSession();
+      if (refreshed) res = await doPost();
+    }
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      return { ok: false, error: err.error || 'Request failed.' };
+    }
+    const data = await res.json();
+    if (data.session) { liveSession = data.session; await save(); }
+    return { ok: true, session: data.session };
+  } catch (e) {
+    return { ok: false, error: 'Could not reach CamCash.' };
+  }
+}
+
+function isLiveSessionPaused() {
+  const intervals = liveSession?.pause_intervals || [];
+  return intervals.length > 0 && !intervals[intervals.length - 1].end;
+}
+
+async function startLiveSession(platform) {
+  const result = await callSessionApi('start', { platform: platform || 'chaturbate' });
+  broadcast({ action: 'state', state: getState() });
+  return result;
+}
+
+async function pauseLiveSession() {
+  if (!liveSession) return { ok: false, error: 'No active session.' };
+  const result = await callSessionApi('pause', { sessionId: liveSession.id, reason: 'user' });
+  broadcast({ action: 'state', state: getState() });
+  return result;
+}
+
+async function resumeLiveSession() {
+  if (!liveSession) return { ok: false, error: 'No active session.' };
+  const result = await callSessionApi('resume', { sessionId: liveSession.id });
+  broadcast({ action: 'state', state: getState() });
+  return result;
+}
+
+async function stopLiveSession() {
+  if (!liveSession) return { ok: false, error: 'No active session.' };
+  const result = await callSessionApi('stop', { sessionId: liveSession.id });
+  liveSession = null;
+  await save();
+  broadcast({ action: 'state', state: getState() });
+  return result;
+}
+
+// ─── Heartbeat — proves the extension is actually open/active on a
+// supported cam site, not just that Start was clicked on the web page. The
+// web /live page only shows a session as "lit up"/tracked while a recent
+// heartbeat exists, and auto-pauses the session for any gap. ─────────────
+const PLATFORM_HOST_MAP = [
+  { match: 'chaturbate.com', platform: 'chaturbate' },
+  { match: 'bongacams.com',  platform: 'bongacams' },
+  { match: 'myfreecams.com', platform: 'myfreecams' },
+];
+
+async function sendHeartbeatIfConnected() {
+  await restorePromise;
+  if (!session) return;
+  try {
+    const tabs = await chrome.tabs.query({ url: [
+      'https://chaturbate.com/*', 'https://*.chaturbate.com/*',
+      'https://bongacams.com/*',  'https://*.bongacams.com/*',
+      'https://myfreecams.com/*', 'https://*.myfreecams.com/*',
+    ]});
+    if (tabs.length === 0) return; // not on a supported site — let the heartbeat go stale
+    const host = tabs[0].url || '';
+    const platform = (PLATFORM_HOST_MAP.find(p => host.includes(p.match)) || {}).platform || 'chaturbate';
+    const result = await callSessionApi('heartbeat', { platform });
+    if (result.ok) broadcast({ action: 'state', state: getState() });
+  } catch (_) {}
+}
+
 // ─── Plan loading — determines whether tips save to permanent history ────────
 async function loadPlan() {
   await restorePromise;
@@ -194,6 +295,7 @@ async function logout() {
   sessionUsd = 0;
   topTipper = null;
   lastTipTs = null;
+  liveSession = null;
   await chrome.storage.local.clear();
   chrome.alarms.clearAll();
 }
@@ -238,6 +340,11 @@ function addCoach(type) {
 function scheduleAlarms() {
   chrome.alarms.create('dead_air',      { periodInMinutes: 5 });
   chrome.alarms.create('whale_refresh', { periodInMinutes: 10 });
+  // Chrome MV3 clamps repeating alarms to a 1-minute minimum — the server
+  // treats a heartbeat as stale after ~2.5x this period (see
+  // HEARTBEAT_STALE_MS in app/api/live/session/route.js) to tolerate one
+  // missed tick without falsely showing the session as untracked.
+  chrome.alarms.create('heartbeat',     { periodInMinutes: 1 });
 }
 
 chrome.alarms.onAlarm.addListener(async (alarm) => {
@@ -249,6 +356,7 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
     }
   }
   if (alarm.name === 'whale_refresh') { await loadWhales(); await loadPlan(); }
+  if (alarm.name === 'heartbeat') { await sendHeartbeatIfConnected(); }
 });
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -259,6 +367,7 @@ function getState() {
     usd: sessionUsd, topTipper, coaches: coachMsgs,
     whales: whales.slice(0, 10), connected: true,
     plan, isPro: plan === 'pro' || plan === 'unlimited',
+    liveSession, isLiveSessionPaused: isLiveSessionPaused(),
   };
 }
 
@@ -434,9 +543,14 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
     return false;
   }
 
+  if (msg.action === 'start_session')  { startLiveSession(msg.platform).then(reply); return true; }
+  if (msg.action === 'pause_session')  { pauseLiveSession().then(reply); return true; }
+  if (msg.action === 'resume_session') { resumeLiveSession().then(reply); return true; }
+  if (msg.action === 'stop_session')   { stopLiveSession().then(reply); return true; }
+
   if (msg.type === 'AUTH_CHANGED') {
     restorePromise = restore().then(() => {
-      if (session) { loadWhales(); loadPlan(); scheduleAlarms(); }
+      if (session) { loadWhales(); loadPlan(); scheduleAlarms(); sendHeartbeatIfConnected(); }
       else { plan = 'free'; chrome.alarms.clearAll(); }
     });
     return false;
@@ -445,5 +559,5 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 restorePromise = restore().then(() => {
-  if (session) { loadWhales(); loadPlan(); scheduleAlarms(); }
+  if (session) { loadWhales(); loadPlan(); scheduleAlarms(); sendHeartbeatIfConnected(); }
 });

@@ -12,13 +12,7 @@ import FeedbackWidget from '../components/FeedbackWidget';
 import EventsSync from './EventsSync';
 import Button from '../../components/ui/Button';
 import { buildCoachingEventFields } from '../../lib/sessionHub/coachingCategory';
-import { computeCoachingOutcomeWindows, dedupeOutcomesByEventId } from '../../lib/sessionHub/coachingOutcome';
-import { computeCoachingSummary } from '../../lib/sessionHub/coachingSummary';
-import { computeSessionDuration, computeActualHourlyRate } from '../../lib/sessionHub/sessionMath';
-import { buildLiveSessionAnalysisContext } from '../../lib/sessionHub/analysisContext';
-import { computeSessionDataQuality } from '../../lib/sessionHub/dataQuality';
-import { resolveDurationConfidence } from '../../lib/sessionHub/sessionCorrection';
-import { logFeatureUsageEvent, createOnceGuard } from '../../lib/sessionHub/featureUsage';
+import { logFeatureUsageEvent } from '../../lib/sessionHub/featureUsage';
 import CoachingActionButtons from '../dashboard/sessions/CoachingActionButtons';
 
 const C = {
@@ -53,6 +47,8 @@ export default function LivePage() {
   const [pauseIntervals, setPauseIntervals] = useState([]);
   const [coachingActionsVisible, setCoachingActionsVisible] = useState(true);
   const [coachingEventTick, setCoachingEventTick] = useState(0);
+  const [extensionActive, setExtensionActive] = useState(false);
+  const [sessionCoachingEvents, setSessionCoachingEvents] = useState([]);
 
   // ── DEMO / AUTH / EXT MODAL STATE ────────────────────────────────────
   const [demoTips, setDemoTips]           = useState([]);
@@ -78,7 +74,7 @@ export default function LivePage() {
   const liveTipsChannelRef = useRef(null);
   const liveTickerRef     = useRef(null);
   const coachingEventMapRef = useRef({}); // dedupeKey -> { id, status } for the most recent firing
-  const featureUsageGuardRef = useRef(createOnceGuard());
+  const extensionActiveRef = useRef(false); // last known extension-active state, for edge-transition detection
 
   // 1-second ticker drives coaching + elapsed time
   useEffect(() => {
@@ -168,209 +164,154 @@ export default function LivePage() {
     return () => { if (liveTipsChannelRef.current) supabase.removeChannel(liveTipsChannelRef.current); };
   }, [normalizeTip]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Polls whether the CamCash extension is actually open on a supported cam
+  // site (not just that Start was clicked here), and picks up session state
+  // the extension itself may have changed. A session is only "lit up" /
+  // actively tracked when both are true — see the liveActive && extensionActive
+  // checks below. Connectivity gaps are recorded as real pause intervals
+  // (reason: 'extension_disconnected') so active-duration and Actual $/Hour
+  // never count time the extension wasn't really there to capture tips.
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+
+    const poll = async () => {
+      const { data: { session: authSession } } = await supabase.auth.getSession();
+      const token = authSession?.access_token;
+      if (!token) return;
+      let data;
+      try {
+        const res = await fetch('/api/live/session', { headers: { Authorization: `Bearer ${token}` } });
+        if (!res.ok || cancelled) return;
+        data = await res.json();
+      } catch {
+        return;
+      }
+      if (cancelled) return;
+      setExtensionActive(data.extensionActive);
+
+      if (data.session && data.session.id !== currentSessionId) {
+        applyServerSession(data.session);
+        setLiveActive(true);
+      } else if (!data.session && currentSessionId) {
+        setLiveActive(false);
+        setCurrentSessionId(null);
+        setIsPaused(false);
+        setPauseIntervals([]);
+      } else if (data.session) {
+        const intervals = data.session.pause_intervals || [];
+        setPauseIntervals(intervals);
+        setIsPaused(intervals.some(p => !p.end));
+      }
+
+      const wasActive = extensionActiveRef.current;
+      extensionActiveRef.current = data.extensionActive;
+      if (data.session && !data.session.completed) {
+        if (wasActive && !data.extensionActive) {
+          callSessionApi('pause', { sessionId: data.session.id, reason: 'extension_disconnected' })
+            .then(r => { if (r?.session) applyServerSession(r.session); });
+        } else if (!wasActive && data.extensionActive) {
+          const intervals = data.session.pause_intervals || [];
+          const last = intervals[intervals.length - 1];
+          if (last && !last.end && last.reason === 'extension_disconnected') {
+            callSessionApi('resume', { sessionId: data.session.id })
+              .then(r => { if (r?.session) applyServerSession(r.session); });
+          }
+        }
+      }
+    };
+
+    poll();
+    const interval = setInterval(poll, 15000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [user, currentSessionId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Hydrates the full coaching prompt log for the current session (covers a
+  // page reload mid-session, or a session picked up from the extension) —
+  // Coaching History must never be limited to what happened to still be in
+  // this page's in-memory buffer.
+  useEffect(() => {
+    if (!currentSessionId) { setSessionCoachingEvents([]); return; }
+    let cancelled = false;
+    supabase.from('coaching_events').select('*').eq('session_id', currentSessionId).order('shown_at', { ascending: false })
+      .then(({ data }) => {
+        if (cancelled || !data) return;
+        setSessionCoachingEvents(data.map(row => ({
+          id: row.id, dedupeKey: row.dedupe_key, category: row.category, title: row.title,
+          message: row.message, shownAt: row.shown_at, actionStatus: row.action_status,
+        })));
+      });
+    return () => { cancelled = true; };
+  }, [currentSessionId]);
+
   // ── SESSION DB HANDLERS ───────────────────────────────────────────────
 
+  // One authoritative session-lifecycle implementation lives server-side
+  // (app/api/live/session/route.js), shared with the Chrome extension, so
+  // starting/pausing/stopping from either surface stays in sync. This is a
+  // thin authenticated wrapper around it.
+  const callSessionApi = async (action, payload = {}) => {
+    const { data: { session: authSession } } = await supabase.auth.getSession();
+    const token = authSession?.access_token;
+    if (!token) return null;
+    try {
+      const res = await fetch('/api/live/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ action, ...payload }),
+      });
+      if (!res.ok) return null;
+      return await res.json();
+    } catch {
+      return null;
+    }
+  };
+
+  // Applies a server session row (from any action, or from presence
+  // polling) to local component state so the UI reflects whichever surface
+  // (this page or the extension) last changed it.
+  const applyServerSession = (session) => {
+    if (!session) return;
+    setCurrentSessionId(session.id);
+    setLiveStartTime(new Date(session.start_time));
+    const intervals = session.pause_intervals || [];
+    setPauseIntervals(intervals);
+    setIsPaused(intervals.some(p => !p.end));
+  };
+
   const handleStartStream = async () => {
-    const startTime = new Date();
-    setLiveActive(true);
-    setLiveStartTime(startTime);
     setLiveEvents([]);
-    setIsPaused(false);
-    setPauseIntervals([]);
     processedTipIds.current = new Set();
     coachingCooldowns.current = {};
     coachingEventMapRef.current = {};
     firedAlertsLog.current = [];
-    featureUsageGuardRef.current.reset();
-    if (user) {
-      const { data: session } = await supabase
-        .from('stream_sessions')
-        .insert({
-          user_id: user.id,
-          platform: livePlatform,
-          start_time: startTime.toISOString(),
-          end_time: startTime.toISOString(), // placeholder; updated on stop
-          hours_streamed: 0,
-        })
-        .select()
-        .single();
-      if (session) {
-        setCurrentSessionId(session.id);
-        if (featureUsageGuardRef.current.shouldLog(`live_mode.session_started:${session.id}`)) {
-          logFeatureUsageEvent(supabase, {
-            userId: user.id, sessionId: session.id, feature: 'live_mode',
-            action: 'live_mode.session_started', metadata: { platform: livePlatform },
-          });
-        }
-      }
+    if (!user) return;
+    const result = await callSessionApi('start', { platform: livePlatform });
+    if (result?.session) {
+      applyServerSession(result.session);
+      setLiveActive(true);
     }
   };
 
   const handlePauseStream = async () => {
-    if (isPaused) return;
-    const now = new Date().toISOString();
-    setIsPaused(true);
-    setPauseIntervals(prev => [...prev, { start: now, end: null }]);
-    if (user && currentSessionId) {
-      logFeatureUsageEvent(supabase, {
-        userId: user.id, sessionId: currentSessionId, feature: 'pause_resume', action: 'session.paused', metadata: {},
-      });
-    }
+    if (isPaused || !currentSessionId) return;
+    const result = await callSessionApi('pause', { sessionId: currentSessionId, reason: 'user' });
+    if (result?.session) applyServerSession(result.session);
   };
 
   const handleResumeStream = async () => {
-    if (!isPaused) return;
-    const now = new Date().toISOString();
-    setIsPaused(false);
-    setPauseIntervals(prev => prev.map((p, i) => (i === prev.length - 1 ? { ...p, end: now } : p)));
-    if (user && currentSessionId) {
-      logFeatureUsageEvent(supabase, {
-        userId: user.id, sessionId: currentSessionId, feature: 'pause_resume', action: 'session.resumed', metadata: {},
-      });
-    }
-  };
-
-  // Persists coaching outcome windows, session analysis context, and data
-  // quality flags for a just-ended session. Data collection only — never
-  // derives or displays an effectiveness/lift conclusion here.
-  const finalizeLiveSession = async ({ sessionId, startedAt, endedAt, closedPauseIntervals, sessionTips, totalUsd, totalTokens, platform }) => {
-    const { data: eventRows } = await supabase.from('coaching_events').select('*').eq('session_id', sessionId);
-    const events = eventRows || [];
-    const tipsForOutcomes = sessionTips.map(t => ({ username: t.username, usd: t.normalizedRevenue || t.usd || 0, timestamp: t.timestamp }));
-
-    const outcomes = events.map(ev => {
-      const windows = computeCoachingOutcomeWindows({
-        promptShownAt: ev.shown_at,
-        tips: tipsForOutcomes,
-        relatedTipperName: ev.related_tipper_name,
-      });
-      return {
-        coachingEventId: ev.id,
-        userId: user.id,
-        sessionId,
-        actionStatus: ev.action_status,
-        ...windows,
-        paceBeforePrompt: parseFloat((windows.earningsBefore5m / 5).toFixed(3)),
-      };
-    });
-
-    for (const outcome of dedupeOutcomesByEventId(outcomes)) {
-      await supabase.from('coaching_prompt_outcomes').upsert({
-        user_id: outcome.userId,
-        coaching_event_id: outcome.coachingEventId,
-        session_id: outcome.sessionId,
-        action_status: outcome.actionStatus,
-        prompt_shown_at: outcome.promptShownAt,
-        earnings_before_5m: outcome.earningsBefore5m,
-        earnings_after_5m: outcome.earningsAfter5m,
-        earnings_after_10m: outcome.earningsAfter10m,
-        earnings_after_20m: outcome.earningsAfter20m,
-        tips_before_5m: outcome.tipsBefore5m,
-        tips_after_5m: outcome.tipsAfter5m,
-        tips_after_10m: outcome.tipsAfter10m,
-        tips_after_20m: outcome.tipsAfter20m,
-        unique_tippers_before_5m: outcome.uniqueTippersBefore5m,
-        unique_tippers_after_5m: outcome.uniqueTippersAfter5m,
-        unique_tippers_after_10m: outcome.uniqueTippersAfter10m,
-        unique_tippers_after_20m: outcome.uniqueTippersAfter20m,
-        related_supporter_tipped_again_5m: outcome.relatedSupporterTippedAgain5m,
-        related_supporter_tipped_again_10m: outcome.relatedSupporterTippedAgain10m,
-        pace_before_prompt: outcome.paceBeforePrompt,
-        pace_after_10m: outcome.paceAfter10m,
-      }, { onConflict: 'coaching_event_id' });
-    }
-
-    const summary = computeCoachingSummary(events.map(e => ({ category: e.category, actionStatus: e.action_status })));
-    const duration = computeSessionDuration(startedAt, endedAt, closedPauseIntervals);
-    const durationConfidence = resolveDurationConfidence({ hasUserCorrection: false, completed: true });
-
-    const context = buildLiveSessionAnalysisContext({
-      sessionId, platform, startedAt: startedAt.toISOString(), endedAt: endedAt.toISOString(),
-      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      activeDurationMinutes: duration.activeDurationMinutes,
-      pausedDurationMinutes: duration.pausedDurationMinutes,
-      totalEarningsUsd: totalUsd, totalTokens, tipCount: sessionTips.length,
-      uniqueTipperCount: new Set(sessionTips.map(t => (t.username || '').toLowerCase())).size,
-      coachingEnabled: true,
-      promptCounts: { performed: summary.performedPromptCount, skipped: summary.skippedPromptCount, unmarked: summary.unmarkedPromptCount },
-      durationConfidence,
-    });
-    await supabase.from('live_session_analysis_context').upsert({
-      session_id: context.sessionId, user_id: user.id, platform: context.platform,
-      started_at: context.startedAt, ended_at: context.endedAt,
-      day_of_week: context.dayOfWeek, start_hour_local: context.startHourLocal, timezone: context.timezone,
-      active_duration_minutes: context.activeDurationMinutes, paused_duration_minutes: context.pausedDurationMinutes,
-      total_earnings_usd: context.totalEarningsUsd, total_tokens: context.totalTokens,
-      tip_count: context.tipCount, unique_tipper_count: context.uniqueTipperCount,
-      actual_hourly_rate: context.actualHourlyRate, coaching_enabled: context.coachingEnabled,
-      coaching_prompt_count: context.coachingPromptCount, performed_prompt_count: context.performedPromptCount,
-      skipped_prompt_count: context.skippedPromptCount, unmarked_prompt_count: context.unmarkedPromptCount,
-      goal_used: context.goalUsed, streaming_plan_window_id: context.streamingPlanWindowId,
-      started_from_streaming_plan: context.startedFromStreamingPlan, started_inside_recommended_window: context.startedInsideRecommendedWindow,
-      duration_confidence: context.durationConfidence,
-    }, { onConflict: 'session_id' });
-
-    const outcomeWindowsComplete = events.every(ev => endedAt.getTime() - new Date(ev.shown_at).getTime() >= 20 * 60_000);
-    const quality = computeSessionDataQuality({
-      duration: { activeDurationMinutes: duration.activeDurationMinutes, completed: true, hasEstimatedEnd: false },
-      hasUserCorrection: false,
-      containsPauseIntervals: closedPauseIntervals.length > 0,
-      duplicateTipCount: 0,
-      invalidTipCount: 0,
-      coachingDataComplete: true,
-      outcomeWindowsComplete,
-    });
-    await supabase.from('session_data_quality').upsert({
-      session_id: sessionId, user_id: user.id,
-      has_verified_start: quality.hasVerifiedStart, has_verified_end: quality.hasVerifiedEnd,
-      has_estimated_end: quality.hasEstimatedEnd, has_user_correction: quality.hasUserCorrection,
-      contains_pause_intervals: quality.containsPauseIntervals, extension_connected_percent: quality.extensionConnectedPercent,
-      duplicate_tip_count: quality.duplicateTipCount, invalid_tip_count: quality.invalidTipCount,
-      coaching_data_complete: quality.coachingDataComplete, outcome_windows_complete: quality.outcomeWindowsComplete,
-      eligible_for_future_impact_analysis: quality.eligibleForFutureImpactAnalysis,
-      ineligibility_reasons: quality.ineligibilityReasons,
-    }, { onConflict: 'session_id' });
-
-    if (featureUsageGuardRef.current.shouldLog(`live_mode.session_ended:${sessionId}`)) {
-      logFeatureUsageEvent(supabase, {
-        userId: user.id, sessionId, feature: 'live_mode', action: 'live_mode.session_ended',
-        metadata: { durationConfidence, coachingPromptCount: context.coachingPromptCount },
-      });
-    }
+    if (!isPaused || !currentSessionId) return;
+    const result = await callSessionApi('resume', { sessionId: currentSessionId });
+    if (result?.session) applyServerSession(result.session);
   };
 
   const handleStopStream = async () => {
     setLiveActive(false);
-    if (user && currentSessionId && liveStartTime) {
-      const endTime = new Date();
-      const closedPauseIntervals = isPaused
-        ? pauseIntervals.map((p, i) => (i === pauseIntervals.length - 1 && !p.end ? { ...p, end: endTime.toISOString() } : p))
-        : pauseIntervals;
-      setIsPaused(false);
-      setPauseIntervals(closedPauseIntervals);
-      const hoursStreamed = (endTime - new Date(liveStartTime)) / 1000 / 60 / 60;
-      const sessionTips = liveEvents.filter(e => !e._isHistory);
-      const totalUsd    = sessionTips.reduce((sum, t) => sum + (t.normalizedRevenue || t.usd || 0), 0);
-      const totalTokens = sessionTips.reduce((sum, t) => sum + (t.tokens || 0), 0);
-      await supabase
-        .from('stream_sessions')
-        .update({
-          end_time:      endTime.toISOString(),
-          hours_streamed: parseFloat(hoursStreamed.toFixed(4)),
-          usd:           parseFloat(totalUsd.toFixed(2)),
-          tokens:        totalTokens,
-          tip_count:     sessionTips.length,
-          completed:     true,
-          pause_intervals: closedPauseIntervals,
-          duration_confidence: 'verified',
-        })
-        .eq('id', currentSessionId);
-      await finalizeLiveSession({
-        sessionId: currentSessionId, startedAt: new Date(liveStartTime), endedAt: endTime,
-        closedPauseIntervals, sessionTips, totalUsd, totalTokens, platform: livePlatform,
-      });
-      setCurrentSessionId(null);
-    }
+    if (!currentSessionId) return;
+    await callSessionApi('stop', { sessionId: currentSessionId });
+    setCurrentSessionId(null);
+    setIsPaused(false);
+    setPauseIntervals([]);
   };
 
   // ── INLINE LIVE ENGINE (same logic as dashboard live tab) ────────────
@@ -443,6 +384,7 @@ export default function LivePage() {
   const persistCoachingEvent = (key, meta) => {
     if (!user || !currentSessionId) return;
     const fields = buildCoachingEventFields({ key, ...meta });
+    const shownAt = new Date().toISOString();
     supabase.from('coaching_events').insert({
       user_id: user.id,
       session_id: currentSessionId,
@@ -455,10 +397,15 @@ export default function LivePage() {
       compact_message: fields.compactMessage,
       related_tipper_name: fields.relatedTipperName,
       related_amount_usd: fields.relatedAmountUsd,
+      shown_at: shownAt,
     }).select().single().then(({ data }) => {
       if (data) {
         coachingEventMapRef.current[key] = { id: data.id, status: 'unmarked' };
         setCoachingEventTick(v => v + 1);
+        setSessionCoachingEvents(prev => [{
+          id: data.id, dedupeKey: key, category: fields.category, title: fields.title,
+          message: fields.message, shownAt: data.shown_at, actionStatus: 'unmarked',
+        }, ...prev]);
       }
     });
     logFeatureUsageEvent(supabase, {
@@ -467,22 +414,34 @@ export default function LivePage() {
     });
   };
 
-  const updateLiveCoachingStatus = (key, nextStatus) => {
-    const entry = coachingEventMapRef.current[key];
-    if (!entry || !user) return;
-    coachingEventMapRef.current[key] = { ...entry, status: nextStatus };
-    setCoachingEventTick(v => v + 1);
+  // Shared by both the fleeting "AI Coach" centerpiece (looked up by
+  // dedupeKey) and the persistent Alert History log (looked up by id) —
+  // one DB write, one feature-usage log, no duplicated logic.
+  const applyCoachingStatusUpdate = (id, nextStatus) => {
+    if (!id || !user) return;
     const respondedAt = nextStatus === 'unmarked' ? null : new Date().toISOString();
-    supabase.from('coaching_events').update({ action_status: nextStatus, action_responded_at: respondedAt, updated_at: new Date().toISOString() }).eq('id', entry.id);
+    supabase.from('coaching_events').update({ action_status: nextStatus, action_responded_at: respondedAt, updated_at: new Date().toISOString() }).eq('id', id);
     logFeatureUsageEvent(supabase, {
       userId: user.id, sessionId: currentSessionId, feature: 'coaching_action',
       action: nextStatus === 'unmarked' ? 'coaching.prompt_unmarked' : nextStatus === 'performed' ? 'coaching.prompt_performed' : 'coaching.prompt_skipped',
-      metadata: { coachingEventId: entry.id },
+      metadata: { coachingEventId: id },
     });
+    setSessionCoachingEvents(prev => prev.map(e => (e.id === id ? { ...e, actionStatus: nextStatus } : e)));
+  };
+
+  const updateLiveCoachingStatus = (key, nextStatus) => {
+    const entry = coachingEventMapRef.current[key];
+    if (!entry) return;
+    coachingEventMapRef.current[key] = { ...entry, status: nextStatus };
+    setCoachingEventTick(v => v + 1);
+    applyCoachingStatusUpdate(entry.id, nextStatus);
   };
 
   const getAlerts = (state) => {
-    if (!state || isHydratingHistory.current || !liveActive) return [];
+    // Coaching only fires when the session is actually being tracked — the
+    // user clicked Start AND the extension is confirmed open/active on a
+    // supported cam site. Otherwise there's no real tip data behind it.
+    if (!state || isHydratingHistory.current || !liveActive || !extensionActive) return [];
     const { timeSinceLastTip, paceStatus, goalProgress, topTipper, totalRevenue, elapsedMins, liveOnlyCount } = state;
     const deadAirCrit = liveStrategy === 'aggressive' ? 6 : 8;
     const deadAirHigh = liveStrategy === 'aggressive' ? 4 : 5;
@@ -616,7 +575,9 @@ export default function LivePage() {
   };
 
   const getNextAction = (state) => {
-    if (!state || !liveActive) return { text: 'Start your stream to get live coaching' };
+    if (!liveActive) return { text: 'Start your stream to get live coaching' };
+    if (!extensionActive) return { text: 'Waiting for the CamCash extension to connect on your cam site tab…' };
+    if (!state) return { text: 'Waiting for your first tip — set a goal to get things started.' };
     if (isHydratingHistory.current) return { text: 'Loading session data…' };
     const { timeSinceLastTip, paceStatus, goalProgress, topTipper, totalRevenue, elapsedMins, liveOnlyCount } = state;
     if (liveOnlyCount === 0) return { text: 'Waiting for your first tip — set a goal to get things started.' };
@@ -1060,6 +1021,11 @@ export default function LivePage() {
           {isPaused && (
             <div style={{ width: '100%', marginTop: 6, fontSize: 11, color: C.gold, fontWeight: 700 }}>⏸ Session paused — coaching and timers are on hold</div>
           )}
+          {liveActive && !isPaused && !extensionActive && (
+            <div style={{ width: '100%', marginTop: 6, fontSize: 11, color: C.gold, fontWeight: 700 }}>
+              ⚠️ CamCash extension not detected — open the extension on your cam site tab to resume tracking. This session is auto-paused until it reconnects.
+            </div>
+          )}
 
           {/* Intelligence strip */}
           {liveActive && state && (
@@ -1130,11 +1096,16 @@ export default function LivePage() {
                 <div style={{ borderRadius: 16, padding: '22px 28px', marginBottom: 20, background: `linear-gradient(135deg, ${rg.from}, ${rg.to})`, border: `1px solid ${roomHealth.border}`, boxShadow: `0 0 48px ${rg.glow}`, position: 'relative', overflow: 'hidden', transition: 'all 1.2s ease' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 20 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
-                      <div style={{ width: 14, height: 14, borderRadius: '50%', background: liveActive ? C.green : C.muted, boxShadow: liveActive ? `0 0 12px ${C.green}` : 'none', animation: liveActive ? 'cc-pulse 1.2s ease-in-out infinite' : 'none', flexShrink: 0 }} />
+                      <div style={{ width: 14, height: 14, borderRadius: '50%', background: (liveActive && extensionActive) ? C.green : liveActive ? C.gold : C.muted, boxShadow: (liveActive && extensionActive) ? `0 0 12px ${C.green}` : 'none', animation: (liveActive && extensionActive) ? 'cc-pulse 1.2s ease-in-out infinite' : 'none', flexShrink: 0 }} />
                       <div>
                         <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.45)', textTransform: 'uppercase', letterSpacing: 1.2, fontWeight: 700, marginBottom: 3 }}>Room State</div>
                         <div style={{ fontSize: 30, fontWeight: 900, color: roomHealth.color, letterSpacing: -0.5 }}>{roomHealth.emoji} {roomHealth.label}</div>
                       </div>
+                      {liveActive && (
+                        <div style={{ padding: '6px 14px', borderRadius: 20, background: extensionActive ? 'rgba(16,185,129,0.14)' : 'rgba(245,158,11,0.14)', border: `1px solid ${extensionActive ? 'rgba(16,185,129,0.4)' : 'rgba(245,158,11,0.4)'}`, fontSize: 11, fontWeight: 700, color: extensionActive ? C.green : C.gold }}>
+                          {extensionActive ? '🟢 Tracked' : '⏸ Extension not connected — not tracked'}
+                        </div>
+                      )}
                       {liveActive && state && (
                         <div style={{ padding: '6px 14px', borderRadius: 20, background: phaseConfig.bg, border: `1px solid ${phaseConfig.border}`, fontSize: 12, fontWeight: 700, color: phaseConfig.color }}>
                           {phaseConfig.icon} {phaseConfig.label}
@@ -1584,29 +1555,27 @@ export default function LivePage() {
                 );
               })()}
 
-              {/* Alert History */}
-              {liveActive && firedAlertsLog.current.length > 0 && (
+              {/* Alert History — the full session's coaching prompt log, not
+                  just what's still in this page's recent in-memory buffer. */}
+              {liveActive && sessionCoachingEvents.length > 0 && (
                 <div style={{ ...glassCard, borderRadius: 14, padding: 18 }}>
-                  <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700, marginBottom: 10 }}>📋 Alert History</div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 5, maxHeight: 240, overflowY: 'auto' }}>
-                    {firedAlertsLog.current.slice(0, 15).map((entry, i) => {
-                      const stored = entry.key ? coachingEventMapRef.current[entry.key] : null;
-                      return (
-                        <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '5px 8px', borderRadius: 7, background: 'rgba(255,255,255,0.02)', flexWrap: 'wrap' }}>
-                          <span style={{ fontSize: 13, flexShrink: 0, lineHeight: 1.4 }}>{entry.icon}</span>
-                          <span style={{ fontSize: 11, color: C.text, flex: 1, lineHeight: 1.4, minWidth: 160 }}>{entry.text}</span>
-                          <span style={{ fontSize: 9, color: C.muted, whiteSpace: 'nowrap', marginTop: 1 }}>{new Date(entry.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                          {stored && (
-                            <CoachingActionButtons
-                              status={stored.status}
-                              visible={coachingActionsVisible}
-                              size="compact"
-                              onSetStatus={(next) => updateLiveCoachingStatus(entry.key, next)}
-                            />
-                          )}
-                        </div>
-                      );
-                    })}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                    <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700 }}>📋 Alert History</div>
+                    <div style={{ fontSize: 9, color: C.muted }}>{sessionCoachingEvents.length} shown this session</div>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 5, maxHeight: 320, overflowY: 'auto' }}>
+                    {sessionCoachingEvents.map((entry) => (
+                      <div key={entry.id} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '5px 8px', borderRadius: 7, background: 'rgba(255,255,255,0.02)', flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: 11, color: C.text, flex: 1, lineHeight: 1.4, minWidth: 160 }}>{entry.message}</span>
+                        <span style={{ fontSize: 9, color: C.muted, whiteSpace: 'nowrap', marginTop: 1 }}>{new Date(entry.shownAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                        <CoachingActionButtons
+                          status={entry.actionStatus}
+                          visible={coachingActionsVisible}
+                          size="compact"
+                          onSetStatus={(next) => applyCoachingStatusUpdate(entry.id, next)}
+                        />
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
