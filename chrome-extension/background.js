@@ -198,6 +198,18 @@ async function logout() {
   chrome.alarms.clearAll();
 }
 
+// Clears session tip totals + persisted tip history without touching auth.
+async function clearTips() {
+  sessionTips = [];
+  sessionTokens = 0;
+  sessionUsd = 0;
+  topTipper = null;
+  lastTipTs = null;
+  const items = await chrome.storage.local.get(null);
+  const tipKeys = Object.keys(items).filter(k => k.startsWith('tip_'));
+  if (tipKeys.length) await chrome.storage.local.remove(tipKeys);
+}
+
 // ─── Coaching ─────────────────────────────────────────────────────────────────
 const COACH = {
   dead_air: [
@@ -372,6 +384,11 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
 
   if (msg.action === 'logout') {
     logout().then(() => reply({ ok: true }));
+    return true;
+  }
+
+  if (msg.action === 'clear_tips') {
+    clearTips().then(() => reply({ ok: true }));
     return true;
   }
 

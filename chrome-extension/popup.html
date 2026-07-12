@@ -159,6 +159,17 @@
     .tip-time     { color: #334155; font-size: 10px; }
     .empty-state  { color: #334155; font-size: 12px; padding: 8px 0; text-align: center; }
 
+    #clear-tips-btn {
+      font-size: 10px;
+      font-weight: 600;
+      color: #475569;
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0;
+    }
+    #clear-tips-btn:hover { color: #f87171; }
+
     #whale-alert {
       display: none;
       margin: 0 14px 8px;
@@ -261,6 +272,7 @@
     <!-- Tips -->
     <div class="tips-header">
       <span class="tips-label">Recent Tips</span>
+      <button id="clear-tips-btn">Clear</button>
     </div>
     <div id="tips-list">
       <div class="empty-state">No tips detected yet this session</div>

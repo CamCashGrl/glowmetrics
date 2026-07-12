@@ -237,6 +237,14 @@ chrome.runtime.sendMessage({ action: 'get_state' }, (state) => {
   updatePlanNotice(state.isPro);
 });
 
+// Clear tips button
+document.getElementById('clear-tips-btn').addEventListener('click', () => {
+  if (!confirm('Clear all tips from this session?')) return;
+  chrome.runtime.sendMessage({ action: 'clear_tips' }, () => {
+    loadTips();
+  });
+});
+
 // Test tip button
 document.getElementById('test-tip-btn').addEventListener('click', () => {
   chrome.runtime.sendMessage({
