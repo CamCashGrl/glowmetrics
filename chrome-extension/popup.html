@@ -1,223 +1,801 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>CamCash</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+<meta charset="UTF-8" />
+<title>CamCash</title>
+<style>
+  :root {
+    --bg: #0b0d12;
+    --surface: #111520;
+    --surface-2: #161b29;
+    --border: rgba(148, 163, 184, 0.14);
+    --border-strong: rgba(168, 85, 247, 0.35);
+    --text: #f1f5f9;
+    --text-muted: #94a3b8;
+    --text-dim: #64748b;
+    --cyan: #22d3ee;
+    --purple: #a855f7;
+    --pink: #ec4899;
+    --green: #34d399;
+    --amber: #f59e0b;
+    --gradient: linear-gradient(135deg, #22d3ee 0%, #a855f7 48%, #ec4899 100%);
+    --radius-card: 15px;
+    --radius-btn: 11px;
+    --radius-pill: 999px;
+  }
 
-    body {
-      width: 320px;
-      max-height: 600px;
-      overflow-y: auto;
-      background: #0d0f14;
-      color: #f1f5f9;
-      font-family: system-ui, -apple-system, sans-serif;
-      font-size: 13px;
-      -webkit-font-smoothing: antialiased;
-    }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
 
-    .header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 12px 14px;
-      border-bottom: 1px solid #1e2232;
-    }
-    .logo {
-      font-size: 16px;
-      font-weight: 800;
-      background: linear-gradient(135deg, #a855f7, #ec4899);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-    }
-    #status {
-      font-size: 10px;
-      font-weight: 600;
-      padding: 3px 8px;
-      border-radius: 20px;
-      background: rgba(107,114,128,0.2);
-      color: #9ca3af;
-    }
+  html, body { background: var(--bg); }
 
-    #auth-section { padding: 16px 14px; }
-    .section-title {
-      font-size: 13px;
-      font-weight: 700;
-      color: #e2e8f0;
-      margin-bottom: 12px;
-    }
-    .field { margin-bottom: 9px; }
-    .field label {
-      display: block;
-      font-size: 10px;
-      color: #64748b;
-      margin-bottom: 3px;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-    .field input {
-      width: 100%;
-      padding: 8px 10px;
-      background: #161b2e;
-      border: 1px solid #1e2232;
-      border-radius: 7px;
-      color: #f1f5f9;
-      font-size: 13px;
-      outline: none;
-    }
-    .field input:focus { border-color: #7c5cff; }
+  body {
+    width: 440px;
+    max-height: 640px;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    font-size: 13px;
+    -webkit-font-smoothing: antialiased;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
 
-    #auth-error {
-      display: none;
-      font-size: 11px;
-      color: #f87171;
-      margin: 6px 0;
-    }
+  a { color: inherit; text-decoration: none; }
+  button { font-family: inherit; }
 
-    .btn {
-      width: 100%;
-      padding: 9px;
-      border: none;
-      border-radius: 8px;
-      font-size: 13px;
-      font-weight: 700;
-      cursor: pointer;
-      margin-top: 6px;
-    }
-    .btn-primary {
-      background: linear-gradient(135deg, #7c5cff, #ec4899);
-      color: white;
-    }
-    .btn-primary:hover { opacity: 0.9; }
-    .btn-primary:disabled { opacity: 0.5; cursor: wait; }
-    .btn-ghost {
-      background: #161b2e;
-      color: #64748b;
-      border: 1px solid #1e2232;
-      margin-top: 4px;
-    }
-    .btn-ghost:hover { color: #94a3b8; }
+  svg.icon { width: 15px; height: 15px; flex-shrink: 0; }
 
-    #dashboard-section { display: none; }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, 0.25);
+    border-radius: 999px;
+  }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(148, 163, 184, 0.4); }
 
-    #user-info {
-      padding: 8px 14px;
-      font-size: 11px;
-      color: #4ade80;
-      border-bottom: 1px solid #1e2232;
-    }
+  :focus-visible {
+    outline: 2px solid var(--purple);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
 
-    #coach-box {
-      padding: 10px 14px;
-      border-bottom: 1px solid #1e2232;
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+      scroll-behavior: auto !important;
     }
-    .coach-label {
-      font-size: 9px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.8px;
-      color: #475569;
-      margin-bottom: 6px;
-    }
-    #coach-msg {
-      font-size: 12px;
-      color: #cbd5e1;
-      background: #161b2e;
-      padding: 7px 10px;
-      border-radius: 7px;
-      line-height: 1.4;
-      min-height: 32px;
-    }
+  }
 
-    .tips-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 8px 14px 4px;
-    }
-    .tips-label {
-      font-size: 9px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.8px;
-      color: #475569;
-    }
-    #tips-list { padding: 0 14px 10px; }
+  /* ── Header ─────────────────────────────────────────────── */
+  .app-header {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 16px 18px;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, rgba(168, 85, 247, 0.06), transparent 70%);
+  }
+  .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .brand img {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    flex-shrink: 0;
+  }
+  .brand-text { min-width: 0; }
+  .brand-name {
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: 0.2px;
+    background: var(--gradient);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    line-height: 1.15;
+  }
+  .brand-sub {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1.1px;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-top: 2px;
+  }
 
-    .tip-item {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 5px 0;
-      border-bottom: 1px solid #1a2035;
-      font-size: 12px;
-    }
-    .tip-item:last-child { border-bottom: none; }
-    .tip-username { color: #a78bfa; font-weight: 600; }
-    .tip-amount   { color: #10b981; font-weight: 600; }
-    .tip-time     { color: #334155; font-size: 10px; }
-    .empty-state  { color: #334155; font-size: 12px; padding: 8px 0; text-align: center; }
+  .status-pill {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 14px;
+    border-radius: var(--radius-pill);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+  .status-pill .dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--text-dim);
+    flex-shrink: 0;
+  }
+  .status-pill .status-copy { display: flex; flex-direction: column; line-height: 1.2; }
+  .status-pill .status-label {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    color: var(--text-dim);
+  }
+  .status-pill .status-state {
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.3px;
+    color: var(--text-muted);
+  }
+  .status-pill.active {
+    background: rgba(52, 211, 153, 0.08);
+    border-color: rgba(52, 211, 153, 0.35);
+    box-shadow: 0 0 18px rgba(52, 211, 153, 0.12);
+  }
+  .status-pill.active .dot {
+    background: var(--green);
+    box-shadow: 0 0 8px rgba(52, 211, 153, 0.75);
+    animation: statusPulse 2.2s ease-in-out infinite;
+  }
+  .status-pill.active .status-state { color: var(--green); }
+  .status-pill.paused {
+    background: rgba(245, 158, 11, 0.08);
+    border-color: rgba(245, 158, 11, 0.35);
+  }
+  .status-pill.paused .dot { background: var(--amber); box-shadow: 0 0 8px rgba(245, 158, 11, 0.6); animation: none; }
+  .status-pill.paused .status-state { color: var(--amber); }
+  @keyframes statusPulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.55; transform: scale(0.85); }
+  }
 
-    #whale-alert {
-      display: none;
-      margin: 0 14px 8px;
-      padding: 7px 10px;
-      background: rgba(234,179,8,0.1);
-      border: 1px solid rgba(234,179,8,0.3);
-      border-radius: 7px;
-      font-size: 12px;
-      color: #fbbf24;
-    }
+  /* ── Scrollable middle ──────────────────────────────────── */
+  .app-main {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    padding: 14px 18px 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
 
-    #platform-limit-alert {
-      display: none;
-      margin: 0 14px 8px;
-      padding: 7px 10px;
-      background: rgba(168,85,247,0.1);
-      border: 1px solid rgba(168,85,247,0.3);
-      border-radius: 7px;
-      font-size: 12px;
-      color: #c4b5fd;
-      line-height: 1.4;
-    }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-card);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35), 0 0 24px rgba(168, 85, 247, 0.06);
+    flex-shrink: 0;
+  }
 
-    .footer {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 8px 14px;
-      border-top: 1px solid #1e2232;
-    }
-    .footer a {
-      font-size: 11px;
-      color: #7c5cff;
-      text-decoration: none;
-      opacity: 0.8;
-    }
-    .footer a:hover { opacity: 1; }
-    #logout-btn {
-      font-size: 10px;
-      color: #475569;
-      background: none;
-      border: none;
-      cursor: pointer;
-      padding: 0;
-    }
-    #logout-btn:hover { color: #94a3b8; }
-  </style>
+  .section-label {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.9px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  /* ── Auth ───────────────────────────────────────────────── */
+  #auth-section { padding: 22px 20px; }
+  .auth-head { text-align: center; margin-bottom: 16px; }
+  .auth-head img { width: 46px; height: 46px; border-radius: 12px; margin-bottom: 10px; }
+  .auth-title { font-size: 18px; font-weight: 800; color: var(--text); }
+  .auth-sub { font-size: 12.5px; color: var(--text-muted); margin-top: 5px; line-height: 1.5; }
+
+  .field { margin-bottom: 10px; }
+  .field label {
+    display: block;
+    font-size: 10.5px;
+    font-weight: 700;
+    color: var(--text-dim);
+    margin-bottom: 5px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+  }
+  .field input {
+    width: 100%;
+    padding: 10px 12px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--text);
+    font-size: 13px;
+    outline: none;
+    transition: border-color 0.15s ease;
+  }
+  .field input:focus { border-color: var(--purple); }
+
+  #auth-error {
+    display: none;
+    font-size: 11.5px;
+    color: #f87171;
+    background: rgba(248, 113, 113, 0.08);
+    border: 1px solid rgba(248, 113, 113, 0.25);
+    border-radius: 8px;
+    padding: 7px 10px;
+    margin: 8px 0;
+  }
+
+  .btn {
+    width: 100%;
+    padding: 11px;
+    border: none;
+    border-radius: var(--radius-btn);
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    margin-top: 8px;
+    transition: opacity 0.15s ease, transform 0.1s ease;
+  }
+  .btn:active { transform: scale(0.98); }
+  .btn-primary {
+    background: var(--gradient);
+    color: #0b0d12;
+  }
+  .btn-primary:hover { opacity: 0.92; }
+  .btn-primary:disabled { opacity: 0.55; cursor: wait; }
+  .btn-ghost {
+    background: var(--surface-2);
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+  }
+  .btn-ghost:hover { color: var(--text); border-color: rgba(148, 163, 184, 0.3); }
+
+  #dashboard-section { display: none; flex-direction: column; min-height: 0; flex: 1 1 auto; }
+
+  /* ── Account row ────────────────────────────────────────── */
+  .account-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+  }
+  .account-avatar {
+    position: relative;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    flex-shrink: 0;
+  }
+  .account-avatar .conn-dot {
+    position: absolute;
+    right: -1px;
+    bottom: -1px;
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    background: var(--green);
+    border: 2px solid var(--surface);
+    box-shadow: 0 0 6px rgba(52, 211, 153, 0.7);
+  }
+  .account-info { min-width: 0; flex: 1 1 auto; }
+  .account-label { font-size: 11px; color: var(--text-dim); }
+  .account-email {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-top: 1px;
+  }
+  .account-badge {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.3px;
+    color: var(--green);
+    background: rgba(52, 211, 153, 0.1);
+    border: 1px solid rgba(52, 211, 153, 0.3);
+    border-radius: var(--radius-pill);
+    padding: 6px 12px;
+  }
+
+  /* ── Plan card ──────────────────────────────────────────── */
+  .plan-card {
+    display: none;
+    padding: 14px;
+    align-items: center;
+    gap: 12px;
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.07), rgba(168, 85, 247, 0.05));
+    border: 1px solid rgba(245, 158, 11, 0.35);
+  }
+  .plan-icon {
+    flex-shrink: 0;
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    background: rgba(245, 158, 11, 0.14);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--amber);
+  }
+  .plan-body { flex: 1 1 auto; min-width: 0; }
+  .plan-badge {
+    font-size: 10.5px;
+    font-weight: 800;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    color: var(--amber);
+  }
+  .plan-copy {
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--text-muted);
+    margin-top: 3px;
+  }
+  .plan-action {
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+  }
+  .plan-cta {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    background: var(--gradient);
+    color: #0b0d12;
+    font-size: 11.5px;
+    font-weight: 800;
+    letter-spacing: 0.3px;
+    padding: 9px 14px;
+    border-radius: var(--radius-pill);
+    white-space: nowrap;
+    transition: opacity 0.15s ease;
+  }
+  .plan-cta:hover { opacity: 0.9; }
+  .plan-cta svg { width: 13px; height: 13px; }
+  .plan-sub { font-size: 10px; color: var(--text-dim); }
+
+  /* ── Toasts (whale / platform limit) ───────────────────── */
+  #whale-alert, #platform-limit-alert {
+    display: none;
+    padding: 10px 13px;
+    font-size: 12px;
+    line-height: 1.5;
+    align-items: center;
+    gap: 9px;
+  }
+  #whale-alert {
+    background: rgba(245, 158, 11, 0.09);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    color: #fbbf24;
+  }
+  #platform-limit-alert {
+    background: rgba(168, 85, 247, 0.09);
+    border: 1px solid rgba(168, 85, 247, 0.3);
+    color: #d8b4fe;
+  }
+  #platform-limit-alert a { color: #e9d5ff; font-weight: 700; text-decoration: underline; }
+
+  /* ── Live coach ─────────────────────────────────────────── */
+  #coach-card { padding: 14px; position: relative; overflow: hidden; }
+  .coach-head {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    margin-bottom: 11px;
+  }
+  .coach-icon {
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+    background: var(--gradient);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #0b0d12;
+    flex-shrink: 0;
+  }
+  .coach-sparkle {
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    color: var(--pink);
+    opacity: 0.55;
+    pointer-events: none;
+  }
+  .coach-body {
+    background: var(--surface-2);
+    border-radius: 11px;
+    border-left: 3px solid var(--purple);
+    padding: 12px 13px;
+    min-height: 44px;
+  }
+  .coach-body.type-momentum { border-left-color: var(--cyan); }
+  .coach-body.type-whale { border-left-color: var(--pink); }
+  .coach-body.type-slow { border-left-color: var(--amber); }
+  .coach-body.type-pace { border-left-color: var(--purple); }
+
+  .coach-msg-text {
+    font-size: 13px;
+    line-height: 1.55;
+    color: var(--text);
+  }
+  .coach-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 9px;
+  }
+  .coach-category {
+    font-size: 9.5px;
+    font-weight: 800;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    padding: 3px 9px;
+    border-radius: var(--radius-pill);
+    background: rgba(168, 85, 247, 0.16);
+    color: #d8b4fe;
+  }
+  .coach-category.type-momentum { background: rgba(34, 211, 238, 0.14); color: #67e8f9; }
+  .coach-category.type-whale { background: rgba(236, 72, 153, 0.16); color: #f9a8d4; }
+  .coach-category.type-slow { background: rgba(245, 158, 11, 0.14); color: #fcd34d; }
+  .coach-category.type-pace { background: rgba(168, 85, 247, 0.16); color: #d8b4fe; }
+  .coach-time { font-size: 11px; color: var(--text-dim); }
+
+  .coach-empty { font-size: 12.5px; color: var(--text-muted); line-height: 1.55; }
+  .coach-empty strong { display: block; font-size: 13px; color: var(--text); margin-bottom: 3px; }
+
+  .coach-enter { animation: coachIn 0.45s ease both; }
+  @keyframes coachIn {
+    0% { opacity: 0; transform: translateY(6px); box-shadow: 0 0 0 rgba(168, 85, 247, 0); }
+    60% { box-shadow: 0 0 22px rgba(168, 85, 247, 0.25); }
+    100% { opacity: 1; transform: translateY(0); box-shadow: 0 0 0 rgba(168, 85, 247, 0); }
+  }
+
+  /* ── Session snapshot ───────────────────────────────────── */
+  #snapshot-card { padding: 14px; }
+  .snapshot-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .session-toggle-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 10.5px;
+    font-weight: 800;
+    letter-spacing: 0.3px;
+    color: var(--text-muted);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-pill);
+    padding: 5px 11px;
+    cursor: pointer;
+    transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+  }
+  .session-toggle-btn:hover { color: var(--text); border-color: rgba(148, 163, 184, 0.3); }
+  .session-toggle-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+  .session-toggle-btn.is-paused {
+    color: var(--amber);
+    background: rgba(245, 158, 11, 0.1);
+    border-color: rgba(245, 158, 11, 0.35);
+  }
+  .session-toggle-btn svg { width: 12px; height: 12px; }
+  .snapshot-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    margin-top: 11px;
+  }
+  .snap-tile {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 11px;
+    padding: 9px 7px;
+    text-align: center;
+    min-width: 0;
+  }
+  .snap-icon {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 6px;
+  }
+  .snap-icon.earned { background: rgba(52, 211, 153, 0.14); color: var(--green); }
+  .snap-icon.tokens { background: rgba(34, 211, 238, 0.14); color: var(--cyan); }
+  .snap-icon.tips { background: rgba(168, 85, 247, 0.14); color: var(--purple); }
+  .snap-icon.top { background: rgba(236, 72, 153, 0.14); color: var(--pink); }
+  .snap-label {
+    font-size: 8.5px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: var(--text-dim);
+  }
+  .snap-value {
+    font-size: 15px;
+    font-weight: 800;
+    margin-top: 3px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .snap-value.earned { color: var(--green); }
+  .snap-value.tokens { color: var(--cyan); }
+  .snap-value.tips { color: var(--text); }
+  .snap-value.top { color: var(--pink); font-size: 13px; }
+
+  .snapshot-platform {
+    display: none;
+    align-items: center;
+    gap: 6px;
+    margin-top: 10px;
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+  .snapshot-platform .dot {
+    width: 6px; height: 6px; border-radius: 50%; background: var(--green);
+  }
+  .platform-chip {
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.4px;
+    color: var(--text-dim);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 1px 6px;
+  }
+
+  /* ── Recent tips ────────────────────────────────────────── */
+  #tips-card { padding: 14px 0 0; display: flex; flex-direction: column; }
+  .tips-head { display: flex; align-items: center; justify-content: space-between; padding: 0 14px 11px; }
+  .tips-meta { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--text-dim); }
+  .tips-meta .live-dot {
+    width: 6px; height: 6px; border-radius: 50%; background: var(--green);
+    box-shadow: 0 0 5px rgba(52, 211, 153, 0.8);
+    animation: statusPulse 2.2s ease-in-out infinite;
+  }
+  .tips-meta .live-text { color: var(--green); font-weight: 700; }
+  .tips-meta.is-paused .live-dot { background: var(--amber); box-shadow: 0 0 5px rgba(245, 158, 11, 0.7); animation: none; }
+  .tips-meta.is-paused .live-text { color: var(--amber); }
+
+  .clear-tips-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    margin-left: 2px;
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--text-dim);
+    cursor: pointer;
+    transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+  }
+  .clear-tips-btn:hover { color: #f87171; border-color: rgba(248, 113, 113, 0.3); background: rgba(248, 113, 113, 0.08); }
+  .clear-tips-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+  .clear-tips-btn svg { width: 13px; height: 13px; }
+
+  #tips-list {
+    max-height: 258px;
+    overflow-y: auto;
+    padding: 0 14px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .tip-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: 11px;
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    transition: border-color 0.3s ease, box-shadow 0.3s ease, background 0.3s ease;
+  }
+  .tip-row--medium { border-color: rgba(34, 211, 238, 0.3); }
+  .tip-row--whale {
+    border-color: rgba(236, 72, 153, 0.4);
+    box-shadow: 0 0 16px rgba(236, 72, 153, 0.1);
+    background: linear-gradient(135deg, rgba(236, 72, 153, 0.06), rgba(168, 85, 247, 0.04));
+  }
+  .tip-row--new {
+    border-color: rgba(236, 72, 153, 0.55);
+    box-shadow: 0 0 0 1px rgba(236, 72, 153, 0.3), 0 0 20px rgba(236, 72, 153, 0.18);
+    animation: tipIn 0.4s ease both;
+  }
+  @keyframes tipIn {
+    0% { opacity: 0; transform: translateY(-8px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+
+  .tip-avatar {
+    flex-shrink: 0;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12.5px;
+    font-weight: 800;
+    color: #0b0d12;
+  }
+
+  .tip-main { flex: 1 1 auto; min-width: 0; }
+  .tip-top { display: flex; align-items: baseline; gap: 6px; }
+  .tip-username {
+    font-size: 13.5px;
+    font-weight: 700;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 130px;
+  }
+  .tip-verb { font-size: 11.5px; color: var(--text-dim); }
+  .tip-amount {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--cyan);
+    white-space: nowrap;
+  }
+  .tip-row--whale .tip-amount, .tip-row--medium .tip-amount { color: var(--pink); }
+
+  .tip-side { flex-shrink: 0; display: flex; align-items: center; gap: 8px; }
+  .tip-time { font-size: 11px; color: var(--text-dim); white-space: nowrap; }
+  .tip-status { display: flex; align-items: center; color: var(--green); }
+  .tip-status.pending { color: var(--text-dim); }
+  .tip-new-pill {
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.4px;
+    color: #fff;
+    background: var(--gradient);
+    border-radius: var(--radius-pill);
+    padding: 3px 8px;
+  }
+
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 8px;
+    padding: 22px 16px;
+    color: var(--text-muted);
+  }
+  .empty-state .empty-icon {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-dim);
+  }
+  .empty-state strong { font-size: 13px; color: var(--text); }
+  .empty-state span { font-size: 11.5px; line-height: 1.5; max-width: 280px; }
+
+  /* ── Bottom action bar ──────────────────────────────────── */
+  .action-bar {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: stretch;
+    gap: 8px;
+    padding: 12px 18px;
+    border-top: 1px solid var(--border);
+    background: linear-gradient(0deg, rgba(11, 13, 18, 0.98), rgba(11, 13, 18, 0.9));
+  }
+  .action-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border-radius: var(--radius-btn);
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.2px;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    color: var(--text-muted);
+    padding: 10px 12px;
+    transition: border-color 0.15s ease, color 0.15s ease, transform 0.1s ease, background 0.15s ease;
+  }
+  .action-btn:hover { color: var(--text); border-color: rgba(148, 163, 184, 0.3); }
+  .action-btn:active { transform: scale(0.97); }
+
+  .action-btn--dashboard { flex: 0 0 auto; color: var(--cyan); }
+  .action-btn--dashboard:hover { color: #67e8f9; border-color: rgba(34, 211, 238, 0.35); }
+  .action-btn--dashboard svg { color: var(--cyan); }
+
+  .action-btn--test {
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 1px;
+    background: var(--gradient);
+    color: #0b0d12;
+    border: none;
+    line-height: 1.3;
+  }
+  .action-btn--test .test-title { display: flex; align-items: center; gap: 6px; font-size: 12.5px; }
+  .action-btn--test .test-sub { font-size: 9.5px; font-weight: 600; opacity: 0.75; letter-spacing: 0.2px; }
+  .action-btn--test:hover { opacity: 0.92; }
+  .action-btn--test:disabled { opacity: 0.6; cursor: wait; }
+
+  .action-btn--icon { flex: 0 0 auto; padding: 10px 14px; }
+
+  .app-footer {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    padding: 0 0 12px;
+    font-size: 10.5px;
+    color: var(--text-dim);
+  }
+  .app-footer svg { width: 11px; height: 11px; color: var(--pink); }
+</style>
 </head>
 <body>
 
   <!-- Header -->
-  <div class="header">
-    <div class="logo">CamCash</div>
-    <div id="status">Inactive</div>
+  <div class="app-header">
+    <div class="brand">
+      <img src="icons/icon48.png" alt="" />
+      <div class="brand-text">
+        <div class="brand-name">CamCash</div>
+        <div class="brand-sub">Live Stream Companion</div>
+      </div>
+    </div>
+    <div id="status-pill" class="status-pill">
+      <span class="dot"></span>
+      <span class="status-copy">
+        <span class="status-label">Live Mode</span>
+        <span class="status-state" id="status-state">Off</span>
+      </span>
+    </div>
   </div>
 
   <!-- Auth -->
   <div id="auth-section">
-    <div class="section-title">Sign in to CamCash</div>
+    <div class="auth-head">
+      <img src="icons/icon48.png" alt="" />
+      <div class="auth-title">Connect CamCash</div>
+      <div class="auth-sub">Sign in to activate live coaching and your real-time tip feed.</div>
+    </div>
     <div class="field">
       <label>Email</label>
       <input type="email" id="email" placeholder="you@example.com" autocomplete="email" />
@@ -233,44 +811,129 @@
 
   <!-- Dashboard -->
   <div id="dashboard-section">
-    <div id="user-info"></div>
+    <div class="app-main">
 
-    <!-- Whale alert -->
-    <div id="whale-alert"></div>
-
-    <!-- Platform limit alert: shown when a tip is blocked because free plan
-         already tracks a different platform (distinct from the general
-         plan-notice below, which is about permanent history, not platform count). -->
-    <div id="platform-limit-alert"></div>
-
-    <!-- Free plan notice: live coaching + tip feed always work; permanent
-         dashboard history is a Pro feature. Hidden automatically for Pro users. -->
-    <div id="plan-notice" style="display:none;padding:9px 14px;border-bottom:1px solid #1e2232;background:rgba(245,158,11,0.06);">
-      <div style="font-size:11px;color:#fbbf24;line-height:1.5;">
-        🔓 Free plan — live coaching &amp; tip feed always on. Tips aren't saved permanently.
-        <a href="https://www.camcashgrl.com/pricing" target="_blank" style="color:#fbbf24;font-weight:700;">Upgrade to keep history →</a>
+      <!-- Account status -->
+      <div class="card account-row">
+        <div class="account-avatar" id="account-avatar">
+          <span id="account-avatar-fallback"></span>
+          <span class="conn-dot"></span>
+        </div>
+        <div class="account-info">
+          <div class="account-label">Connected as</div>
+          <div class="account-email" id="account-email" title=""></div>
+        </div>
+        <div class="account-badge" id="account-badge">
+          <span id="icon-connected"></span>
+          <span>Connected</span>
+        </div>
       </div>
+
+      <!-- Whale alert -->
+      <div id="whale-alert" class="card"></div>
+
+      <!-- Platform limit alert -->
+      <div id="platform-limit-alert" class="card"></div>
+
+      <!-- Free plan card -->
+      <div id="plan-card" class="card plan-card">
+        <div class="plan-icon" id="plan-icon-slot"></div>
+        <div class="plan-body">
+          <div class="plan-badge">Free Plan</div>
+          <p class="plan-copy">Live coaching and your tip feed are active. Upgrade to save your full history and insights.</p>
+        </div>
+        <div class="plan-action">
+          <a class="plan-cta" href="https://www.camcashgrl.com/pricing" target="_blank" rel="noopener">
+            Keep My History
+          </a>
+          <span class="plan-sub">Upgrade to Pro</span>
+        </div>
+      </div>
+
+      <!-- Live Coach -->
+      <div id="coach-card" class="card">
+        <div class="coach-head">
+          <div class="coach-icon" id="coach-icon-slot"></div>
+          <div class="section-label">Live Coach</div>
+        </div>
+        <div id="coach-sparkle-slot" class="coach-sparkle"></div>
+        <div id="coach-content"></div>
+      </div>
+
+      <!-- Session snapshot -->
+      <div id="snapshot-card" class="card">
+        <div class="snapshot-head">
+          <div class="section-label" id="snapshot-label-slot">Current Session</div>
+          <button class="session-toggle-btn" id="session-toggle-btn" type="button">
+            <span id="icon-session-toggle"></span>
+            <span id="session-toggle-label">Pause Session</span>
+          </button>
+        </div>
+        <div class="snapshot-grid">
+          <div class="snap-tile">
+            <div class="snap-icon earned" id="icon-earned"></div>
+            <div class="snap-label">Earned</div>
+            <div class="snap-value earned" id="snap-earned">—</div>
+          </div>
+          <div class="snap-tile">
+            <div class="snap-icon tokens" id="icon-tokens"></div>
+            <div class="snap-label">Tokens</div>
+            <div class="snap-value tokens" id="snap-tokens">—</div>
+          </div>
+          <div class="snap-tile">
+            <div class="snap-icon tips" id="icon-tips"></div>
+            <div class="snap-label">Tips</div>
+            <div class="snap-value tips" id="snap-tips">0</div>
+          </div>
+          <div class="snap-tile">
+            <div class="snap-icon top" id="icon-top"></div>
+            <div class="snap-label">Top Tipper</div>
+            <div class="snap-value top" id="snap-top">—</div>
+          </div>
+        </div>
+        <div class="snapshot-platform" id="snapshot-platform">
+          <span class="dot"></span>
+          <span id="snapshot-platform-name"></span>
+          <span class="platform-chip" id="snapshot-platform-chip"></span>
+        </div>
+      </div>
+
+      <!-- Recent Tips -->
+      <div id="tips-card" class="card">
+        <div class="tips-head">
+          <div class="section-label" id="tips-label-slot">Recent Tips</div>
+          <div class="tips-meta" id="tips-meta">
+            <span class="live-dot" id="tips-live-dot"></span>
+            <span class="live-text" id="tips-live-text">Live</span>
+            <span id="tips-count-text">0 detected</span>
+            <button class="clear-tips-btn" id="clear-tips-btn" type="button" aria-label="Clear tip feed" title="Clear this session's tip feed — does not affect your saved dashboard history">
+              <span id="icon-clear"></span>
+            </button>
+          </div>
+        </div>
+        <div id="tips-list"></div>
+      </div>
+
     </div>
 
-    <!-- Coach -->
-    <div id="coach-box">
-      <div class="coach-label">Live Coach</div>
-      <div id="coach-msg">Coaching tips will appear during your stream</div>
+    <!-- Action bar -->
+    <div class="action-bar">
+      <a class="action-btn action-btn--dashboard" href="https://www.camcashgrl.com/dashboard?tab=live" target="_blank" rel="noopener">
+        <span id="icon-dashboard"></span>
+        <span>Dashboard</span>
+      </a>
+      <button class="action-btn action-btn--test" id="test-tip-btn" title="Preview how a detected tip appears." aria-label="Send a test tip to preview how a detected tip appears">
+        <span class="test-title"><span id="icon-test"></span><span>Test Tip</span></span>
+        <span class="test-sub">Send a test tip</span>
+      </button>
+      <button class="action-btn action-btn--icon" id="logout-btn" aria-label="Sign out" title="Sign out">
+        <span id="icon-logout"></span>
+      </button>
     </div>
 
-    <!-- Tips -->
-    <div class="tips-header">
-      <span class="tips-label">Recent Tips</span>
-    </div>
-    <div id="tips-list">
-      <div class="empty-state">No tips detected yet this session</div>
-    </div>
-
-    <!-- Footer -->
-    <div class="footer">
-      <a href="https://www.camcashgrl.com/dashboard?tab=live" target="_blank">Dashboard →</a>
-      <button id="test-tip-btn" style="font-size:10px;color:#7c5cff;background:none;border:1px solid #1e2232;border-radius:5px;padding:3px 8px;cursor:pointer;">Test Tip</button>
-      <button id="logout-btn">Sign out</button>
+    <div class="app-footer">
+      <span>CamCash v3.0.0</span>
+      <span id="icon-heart"></span>
     </div>
   </div>
 
