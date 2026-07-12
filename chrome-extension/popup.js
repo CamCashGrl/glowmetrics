@@ -15,7 +15,6 @@ const ICONS = {
   wallet: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg>',
   star: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 2 3.1 6.9L22 10l-5 5 1.3 7.1L12 18.3 5.7 22.1 7 15 2 10l6.9-1.1Z"/></svg>',
   heart: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.5-1.5 3-3.4 3-5.5A5.5 5.5 0 0 0 12 5a5.5 5.5 0 0 0-10 3.5C2 15 12 21 12 21s5-3.1 7-6"/></svg>',
-  heartSmall: '<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 21s-7-4.35-9.5-8.5C.8 9.2 2.7 5.8 6 5.3c2-.3 3.6.7 6 3.2 2.4-2.5 4-3.5 6-3.2 3.3.5 5.2 3.9 3.5 7.2C19 16.65 12 21 12 21Z"/></svg>',
   wifi: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13a10 10 0 0 1 14 0"/><path d="M8.5 16.5a5 5 0 0 1 7 0"/><path d="M2 8.8a15 15 0 0 1 20 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>',
   dashboard: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M7 15v3M12 10v8M17 6v12"/></svg>',
   send: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4Z"/></svg>',
@@ -110,7 +109,6 @@ function setStaticIcons() {
   document.getElementById('icon-test').innerHTML = ICONS.send;
   document.getElementById('icon-logout').innerHTML = ICONS.logOut;
   document.getElementById('icon-clear').innerHTML = ICONS.trash;
-  document.getElementById('icon-heart').innerHTML = ICONS.heartSmall;
 }
 
 // ─── Auth ────────────────────────────────────────────────────────────────

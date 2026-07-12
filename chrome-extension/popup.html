@@ -29,8 +29,8 @@
   html, body { background: var(--bg); }
 
   body {
-    width: 440px;
-    max-height: 640px;
+    width: 420px;
+    max-height: 660px;
     background: var(--bg);
     color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
@@ -76,51 +76,51 @@
     align-items: center;
     justify-content: space-between;
     gap: 10px;
-    padding: 16px 18px;
+    padding: 8px 12px;
     border-bottom: 1px solid var(--border);
     background: linear-gradient(180deg, rgba(168, 85, 247, 0.06), transparent 70%);
   }
-  .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .brand { display: flex; align-items: center; gap: 8px; min-width: 0; }
   .brand img {
-    width: 38px;
-    height: 38px;
-    border-radius: 10px;
+    width: 24px;
+    height: 24px;
+    border-radius: 7px;
     flex-shrink: 0;
   }
   .brand-text { min-width: 0; }
   .brand-name {
-    font-size: 20px;
+    font-size: 16px;
     font-weight: 800;
     letter-spacing: 0.2px;
     background: var(--gradient);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
-    line-height: 1.15;
+    line-height: 1.1;
   }
   .brand-sub {
-    font-size: 10px;
+    font-size: 9px;
     font-weight: 700;
-    letter-spacing: 1.1px;
+    letter-spacing: 1px;
     text-transform: uppercase;
     color: var(--text-dim);
-    margin-top: 2px;
+    margin-top: 1px;
   }
 
   .status-pill {
     flex-shrink: 0;
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 7px 14px;
+    gap: 7px;
+    padding: 5px 11px;
     border-radius: var(--radius-pill);
     background: var(--surface);
     border: 1px solid var(--border);
     transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
   }
   .status-pill .dot {
-    width: 9px;
-    height: 9px;
+    width: 8px;
+    height: 8px;
     border-radius: 50%;
     background: var(--text-dim);
     flex-shrink: 0;
@@ -165,10 +165,10 @@
   .app-main {
     flex: 1 1 auto;
     overflow-y: auto;
-    padding: 14px 18px 4px;
+    padding: 8px 14px 2px;
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 6px;
   }
 
   .card {
@@ -191,13 +191,13 @@
   }
 
   /* ── Auth ───────────────────────────────────────────────── */
-  #auth-section { padding: 22px 20px; }
-  .auth-head { text-align: center; margin-bottom: 16px; }
-  .auth-head img { width: 46px; height: 46px; border-radius: 12px; margin-bottom: 10px; }
-  .auth-title { font-size: 18px; font-weight: 800; color: var(--text); }
-  .auth-sub { font-size: 12.5px; color: var(--text-muted); margin-top: 5px; line-height: 1.5; }
+  #auth-section { padding: 18px 18px; }
+  .auth-head { text-align: center; margin-bottom: 13px; }
+  .auth-head img { width: 40px; height: 40px; border-radius: 11px; margin-bottom: 8px; }
+  .auth-title { font-size: 16px; font-weight: 800; color: var(--text); }
+  .auth-sub { font-size: 12px; color: var(--text-muted); margin-top: 4px; line-height: 1.45; }
 
-  .field { margin-bottom: 10px; }
+  .field { margin-bottom: 8px; }
   .field label {
     display: block;
     font-size: 10.5px;
@@ -209,7 +209,7 @@
   }
   .field input {
     width: 100%;
-    padding: 10px 12px;
+    padding: 9px 11px;
     background: var(--surface-2);
     border: 1px solid var(--border);
     border-radius: 10px;
@@ -233,13 +233,13 @@
 
   .btn {
     width: 100%;
-    padding: 11px;
+    padding: 10px;
     border: none;
     border-radius: var(--radius-btn);
     font-size: 13px;
     font-weight: 700;
     cursor: pointer;
-    margin-top: 8px;
+    margin-top: 7px;
     transition: opacity 0.15s ease, transform 0.1s ease;
   }
   .btn:active { transform: scale(0.98); }
@@ -262,13 +262,13 @@
   .account-row {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 12px 14px;
+    gap: 8px;
+    padding: 6px 9px;
   }
   .account-avatar {
     position: relative;
-    width: 38px;
-    height: 38px;
+    width: 26px;
+    height: 26px;
     border-radius: 50%;
     background: var(--surface-2);
     border: 1px solid var(--border);
@@ -282,8 +282,8 @@
     position: absolute;
     right: -1px;
     bottom: -1px;
-    width: 11px;
-    height: 11px;
+    width: 10px;
+    height: 10px;
     border-radius: 50%;
     background: var(--green);
     border: 2px solid var(--surface);
@@ -292,7 +292,7 @@
   .account-info { min-width: 0; flex: 1 1 auto; }
   .account-label { font-size: 11px; color: var(--text-dim); }
   .account-email {
-    font-size: 14px;
+    font-size: 13.5px;
     font-weight: 700;
     color: var(--text);
     white-space: nowrap;
@@ -304,7 +304,7 @@
     flex-shrink: 0;
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 5px;
     font-size: 11px;
     font-weight: 800;
     letter-spacing: 0.3px;
@@ -312,23 +312,23 @@
     background: rgba(52, 211, 153, 0.1);
     border: 1px solid rgba(52, 211, 153, 0.3);
     border-radius: var(--radius-pill);
-    padding: 6px 12px;
+    padding: 5px 10px;
   }
 
   /* ── Plan card ──────────────────────────────────────────── */
   .plan-card {
     display: none;
-    padding: 14px;
+    padding: 7px 9px;
     align-items: center;
-    gap: 12px;
+    gap: 8px;
     background: linear-gradient(135deg, rgba(245, 158, 11, 0.07), rgba(168, 85, 247, 0.05));
     border: 1px solid rgba(245, 158, 11, 0.35);
   }
   .plan-icon {
     flex-shrink: 0;
-    width: 34px;
-    height: 34px;
-    border-radius: 10px;
+    width: 24px;
+    height: 24px;
+    border-radius: 8px;
     background: rgba(245, 158, 11, 0.14);
     display: flex;
     align-items: center;
@@ -344,17 +344,17 @@
     color: var(--amber);
   }
   .plan-copy {
-    font-size: 12px;
-    line-height: 1.5;
+    font-size: 11.5px;
+    line-height: 1.42;
     color: var(--text-muted);
-    margin-top: 3px;
+    margin-top: 2px;
   }
   .plan-action {
     flex-shrink: 0;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 5px;
+    gap: 4px;
   }
   .plan-cta {
     display: flex;
@@ -365,7 +365,7 @@
     font-size: 11.5px;
     font-weight: 800;
     letter-spacing: 0.3px;
-    padding: 9px 14px;
+    padding: 7px 12px;
     border-radius: var(--radius-pill);
     white-space: nowrap;
     transition: opacity 0.15s ease;
@@ -377,11 +377,11 @@
   /* ── Toasts (whale / platform limit) ───────────────────── */
   #whale-alert, #platform-limit-alert {
     display: none;
-    padding: 10px 13px;
-    font-size: 12px;
-    line-height: 1.5;
+    padding: 8px 11px;
+    font-size: 11.5px;
+    line-height: 1.45;
     align-items: center;
-    gap: 9px;
+    gap: 8px;
   }
   #whale-alert {
     background: rgba(245, 158, 11, 0.09);
@@ -396,17 +396,17 @@
   #platform-limit-alert a { color: #e9d5ff; font-weight: 700; text-decoration: underline; }
 
   /* ── Live coach ─────────────────────────────────────────── */
-  #coach-card { padding: 14px; position: relative; overflow: hidden; }
+  #coach-card { padding: 7px 9px; position: relative; overflow: hidden; }
   .coach-head {
     display: flex;
     align-items: center;
-    gap: 9px;
-    margin-bottom: 11px;
+    gap: 7px;
+    margin-bottom: 6px;
   }
   .coach-icon {
-    width: 26px;
-    height: 26px;
-    border-radius: 8px;
+    width: 22px;
+    height: 22px;
+    border-radius: 7px;
     background: var(--gradient);
     display: flex;
     align-items: center;
@@ -416,18 +416,18 @@
   }
   .coach-sparkle {
     position: absolute;
-    top: 10px;
-    right: 12px;
+    top: 8px;
+    right: 10px;
     color: var(--pink);
     opacity: 0.55;
     pointer-events: none;
   }
   .coach-body {
     background: var(--surface-2);
-    border-radius: 11px;
+    border-radius: 9px;
     border-left: 3px solid var(--purple);
-    padding: 12px 13px;
-    min-height: 44px;
+    padding: 6px 9px;
+    min-height: 28px;
   }
   .coach-body.type-momentum { border-left-color: var(--cyan); }
   .coach-body.type-whale { border-left-color: var(--pink); }
@@ -435,22 +435,22 @@
   .coach-body.type-pace { border-left-color: var(--purple); }
 
   .coach-msg-text {
-    font-size: 13px;
-    line-height: 1.55;
+    font-size: 12px;
+    line-height: 1.4;
     color: var(--text);
   }
   .coach-meta {
     display: flex;
     align-items: center;
-    gap: 8px;
-    margin-top: 9px;
+    gap: 7px;
+    margin-top: 4px;
   }
   .coach-category {
     font-size: 9.5px;
     font-weight: 800;
     letter-spacing: 0.6px;
     text-transform: uppercase;
-    padding: 3px 9px;
+    padding: 2px 8px;
     border-radius: var(--radius-pill);
     background: rgba(168, 85, 247, 0.16);
     color: #d8b4fe;
@@ -461,7 +461,7 @@
   .coach-category.type-pace { background: rgba(168, 85, 247, 0.16); color: #d8b4fe; }
   .coach-time { font-size: 11px; color: var(--text-dim); }
 
-  .coach-empty { font-size: 12.5px; color: var(--text-muted); line-height: 1.55; }
+  .coach-empty { font-size: 12px; color: var(--text-muted); line-height: 1.45; }
   .coach-empty strong { display: block; font-size: 13px; color: var(--text); margin-bottom: 3px; }
 
   .coach-enter { animation: coachIn 0.45s ease both; }
@@ -472,7 +472,7 @@
   }
 
   /* ── Session snapshot ───────────────────────────────────── */
-  #snapshot-card { padding: 14px; }
+  #snapshot-card { padding: 7px 9px; }
   .snapshot-head {
     display: flex;
     align-items: center;
@@ -482,7 +482,7 @@
   .session-toggle-btn {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 5px;
     font-size: 10.5px;
     font-weight: 800;
     letter-spacing: 0.3px;
@@ -490,7 +490,7 @@
     background: var(--surface-2);
     border: 1px solid var(--border);
     border-radius: var(--radius-pill);
-    padding: 5px 11px;
+    padding: 4px 9px;
     cursor: pointer;
     transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
   }
@@ -505,25 +505,25 @@
   .snapshot-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    gap: 8px;
-    margin-top: 11px;
+    gap: 5px;
+    margin-top: 5px;
   }
   .snap-tile {
     background: var(--surface-2);
     border: 1px solid var(--border);
-    border-radius: 11px;
-    padding: 9px 7px;
+    border-radius: 9px;
+    padding: 5px 4px;
     text-align: center;
     min-width: 0;
   }
   .snap-icon {
-    width: 24px;
-    height: 24px;
+    width: 16px;
+    height: 16px;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    margin: 0 auto 6px;
+    margin: 0 auto 3px;
   }
   .snap-icon.earned { background: rgba(52, 211, 153, 0.14); color: var(--green); }
   .snap-icon.tokens { background: rgba(34, 211, 238, 0.14); color: var(--cyan); }
@@ -537,9 +537,9 @@
     color: var(--text-dim);
   }
   .snap-value {
-    font-size: 15px;
+    font-size: 13.5px;
     font-weight: 800;
-    margin-top: 3px;
+    margin-top: 2px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -547,13 +547,13 @@
   .snap-value.earned { color: var(--green); }
   .snap-value.tokens { color: var(--cyan); }
   .snap-value.tips { color: var(--text); }
-  .snap-value.top { color: var(--pink); font-size: 13px; }
+  .snap-value.top { color: var(--pink); font-size: 12px; }
 
   .snapshot-platform {
     display: none;
     align-items: center;
     gap: 6px;
-    margin-top: 10px;
+    margin-top: 7px;
     font-size: 11px;
     color: var(--text-muted);
   }
@@ -572,8 +572,8 @@
   }
 
   /* ── Recent tips ────────────────────────────────────────── */
-  #tips-card { padding: 14px 0 0; display: flex; flex-direction: column; }
-  .tips-head { display: flex; align-items: center; justify-content: space-between; padding: 0 14px 11px; }
+  #tips-card { padding: 8px 0 0; display: flex; flex-direction: column; }
+  .tips-head { display: flex; align-items: center; justify-content: space-between; padding: 0 12px 6px; }
   .tips-meta { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--text-dim); }
   .tips-meta .live-dot {
     width: 6px; height: 6px; border-radius: 50%; background: var(--green);
@@ -588,8 +588,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 22px;
-    height: 22px;
+    width: 20px;
+    height: 20px;
     border-radius: 6px;
     margin-left: 2px;
     background: transparent;
@@ -603,20 +603,20 @@
   .clear-tips-btn svg { width: 13px; height: 13px; }
 
   #tips-list {
-    max-height: 258px;
+    max-height: 128px;
     overflow-y: auto;
-    padding: 0 14px 8px;
+    padding: 0 12px 6px;
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 5px;
   }
 
   .tip-row {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 8px 10px;
-    border-radius: 11px;
+    gap: 8px;
+    padding: 6px 9px;
+    border-radius: 10px;
     border: 1px solid var(--border);
     background: var(--surface-2);
     transition: border-color 0.3s ease, box-shadow 0.3s ease, background 0.3s ease;
@@ -639,13 +639,13 @@
 
   .tip-avatar {
     flex-shrink: 0;
-    width: 30px;
-    height: 30px;
+    width: 26px;
+    height: 26px;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 12.5px;
+    font-size: 11.5px;
     font-weight: 800;
     color: #0b0d12;
   }
@@ -653,17 +653,17 @@
   .tip-main { flex: 1 1 auto; min-width: 0; }
   .tip-top { display: flex; align-items: baseline; gap: 6px; }
   .tip-username {
-    font-size: 13.5px;
+    font-size: 13px;
     font-weight: 700;
     color: var(--text);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 130px;
+    max-width: 120px;
   }
-  .tip-verb { font-size: 11.5px; color: var(--text-dim); }
+  .tip-verb { font-size: 11px; color: var(--text-dim); }
   .tip-amount {
-    font-size: 13px;
+    font-size: 12.5px;
     font-weight: 700;
     color: var(--cyan);
     white-space: nowrap;
@@ -689,13 +689,13 @@
     flex-direction: column;
     align-items: center;
     text-align: center;
-    gap: 8px;
-    padding: 22px 16px;
+    gap: 6px;
+    padding: 16px 14px;
     color: var(--text-muted);
   }
   .empty-state .empty-icon {
-    width: 38px;
-    height: 38px;
+    width: 32px;
+    height: 32px;
     border-radius: 50%;
     background: var(--surface-2);
     border: 1px solid var(--border);
@@ -704,16 +704,16 @@
     justify-content: center;
     color: var(--text-dim);
   }
-  .empty-state strong { font-size: 13px; color: var(--text); }
-  .empty-state span { font-size: 11.5px; line-height: 1.5; max-width: 280px; }
+  .empty-state strong { font-size: 12.5px; color: var(--text); }
+  .empty-state span { font-size: 11.5px; line-height: 1.45; max-width: 280px; }
 
   /* ── Bottom action bar ──────────────────────────────────── */
   .action-bar {
     flex: 0 0 auto;
     display: flex;
     align-items: stretch;
-    gap: 8px;
-    padding: 12px 18px;
+    gap: 7px;
+    padding: 6px 12px;
     border-top: 1px solid var(--border);
     background: linear-gradient(0deg, rgba(11, 13, 18, 0.98), rgba(11, 13, 18, 0.9));
   }
@@ -721,7 +721,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 8px;
+    gap: 7px;
     border-radius: var(--radius-btn);
     font-size: 12px;
     font-weight: 800;
@@ -730,7 +730,7 @@
     border: 1px solid var(--border);
     background: var(--surface-2);
     color: var(--text-muted);
-    padding: 10px 12px;
+    padding: 8px 11px;
     transition: border-color 0.15s ease, color 0.15s ease, transform 0.1s ease, background 0.15s ease;
   }
   .action-btn:hover { color: var(--text); border-color: rgba(148, 163, 184, 0.3); }
@@ -754,19 +754,7 @@
   .action-btn--test:hover { opacity: 0.92; }
   .action-btn--test:disabled { opacity: 0.6; cursor: wait; }
 
-  .action-btn--icon { flex: 0 0 auto; padding: 10px 14px; }
-
-  .app-footer {
-    flex: 0 0 auto;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 5px;
-    padding: 0 0 12px;
-    font-size: 10.5px;
-    color: var(--text-dim);
-  }
-  .app-footer svg { width: 11px; height: 11px; color: var(--pink); }
+  .action-btn--icon { flex: 0 0 auto; padding: 8px 12px; }
 </style>
 </head>
 <body>
@@ -840,7 +828,7 @@
         <div class="plan-icon" id="plan-icon-slot"></div>
         <div class="plan-body">
           <div class="plan-badge">Free Plan</div>
-          <p class="plan-copy">Live coaching and your tip feed are active. Upgrade to save your full history and insights.</p>
+          <p class="plan-copy">Live coaching & tip feed stay on. Upgrade to save your full history.</p>
         </div>
         <div class="plan-action">
           <a class="plan-cta" href="https://www.camcashgrl.com/pricing" target="_blank" rel="noopener">
@@ -929,11 +917,6 @@
       <button class="action-btn action-btn--icon" id="logout-btn" aria-label="Sign out" title="Sign out">
         <span id="icon-logout"></span>
       </button>
-    </div>
-
-    <div class="app-footer">
-      <span>CamCash v3.0.0</span>
-      <span id="icon-heart"></span>
     </div>
   </div>
 
