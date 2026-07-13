@@ -1918,6 +1918,7 @@ export default function Dashboard() {
     if (silent) setIsRefreshing(true)
     else setLoading(true)
     try {
+      const userTz = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC'
       let allData = []
       let from = 0
       const PAGE = 1000
@@ -1931,7 +1932,6 @@ export default function Dashboard() {
       if (allData.length) {
         setTips(allData)
         try {
-          const userTz = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC'
           const result = runEngine(allData, userTz)
           setAnalytics(result)
           lastEngineTipsFingerprintRef.current = { length: allData.length, lastId: allData[allData.length - 1]?.id ?? null }
