@@ -1,81 +1,12 @@
 "use client"
 import { useState } from "react"
-import Button from "../../components/ui/Button"
+import PricingOverlay from "./PricingOverlay"
 
 const C = {
   bg: "#05070f", card: "#0d1322", border: "#1e2d45",
   cyan: "#22D3EE", pink: "#EC4899", gold: "#F59E0B",
   green: "#10B981", white: "#F1F5F9", muted: "#475569", text: "#94A3B8",
   purple: "#a855f7"
-}
-
-const PRO_BENEFITS = [
-  "Track multiple platforms (Chaturbate, BongaCams, MyFreeCams & more)",
-  "Save analytics history forever",
-  "AI learns your patterns",
-  "Performance trends & insights",
-  "Multi-month tracking",
-  "Fan behavior analysis",
-  "Creator benchmarking",
-  "Predictive coaching",
-]
-
-async function startCheckout(planType, setLoading) {
-  setLoading(planType)
-  try {
-    const res = await fetch('/api/stripe/checkout', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ plan_type: planType }),
-    })
-    if (res.status === 401) { window.location.href = `/login?plan=${planType}`; return }
-    const data = await res.json()
-    if (data.url) window.location.href = data.url
-    else alert('Something went wrong. Please try again.')
-  } catch {
-    alert('Something went wrong. Please try again.')
-  } finally {
-    setLoading(null)
-  }
-}
-
-function UpgradeModal({ onClose }) {
-  const [loading, setLoading] = useState(null)
-  return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 1100, background: "rgba(0,0,0,0.88)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }} onClick={onClose}>
-      <div style={{ width: "100%", maxWidth: 440, background: "rgba(15,20,32,0.98)", backdropFilter: "blur(24px)", borderRadius: 22, border: "1px solid rgba(255,255,255,0.1)", boxShadow: "0 0 70px rgba(34,211,238,0.18), 0 0 130px rgba(236,72,153,0.12)", overflow: "hidden" }} onClick={e => e.stopPropagation()}>
-        <div style={{ height: 4, background: `linear-gradient(90deg, ${C.cyan}, ${C.purple}, ${C.pink})` }} />
-        <div style={{ padding: 30 }}>
-          <div style={{ textAlign: "center", marginBottom: 20 }}>
-            <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.18em", textTransform: "uppercase", color: C.pink, marginBottom: 8 }}>Upgrade to Pro</div>
-            <h2 style={{ fontSize: 21, fontWeight: 800, color: C.white, marginBottom: 6 }}>Unlock everything CamCash can do</h2>
-            <p style={{ fontSize: 13, color: C.muted, lineHeight: 1.6 }}>Multi-platform tracking, unlimited history, and AI-driven insights.</p>
-          </div>
-
-          <div style={{ display: "flex", flexDirection: "column", gap: 7, marginBottom: 20 }}>
-            {PRO_BENEFITS.map(b => (
-              <div key={b} style={{ display: "flex", alignItems: "flex-start", gap: 9, fontSize: 12.5, color: "rgba(226,232,240,0.9)", lineHeight: 1.5 }}>
-                <span style={{ color: C.cyan, fontWeight: 700, flexShrink: 0 }}>✓</span>{b}
-              </div>
-            ))}
-          </div>
-
-          <button
-            onClick={() => startCheckout('standard_monthly', setLoading)}
-            disabled={loading !== null}
-            style={{ width: "100%", padding: "11px", borderRadius: 12, border: "1px solid rgba(255,255,255,0.12)", cursor: loading ? "wait" : "pointer", background: "rgba(255,255,255,0.04)", color: "rgba(226,232,240,0.85)", fontSize: 13, fontWeight: 700, marginBottom: 14 }}>
-            {loading === 'standard_monthly' ? 'Redirecting…' : 'Standard — $19.99/mo →'}
-          </button>
-
-          <div style={{ textAlign: "center" }}>
-            <a href="/pricing" style={{ fontSize: 12, color: C.cyan, textDecoration: "underline" }}>See full plan comparison</a>
-            <span style={{ color: C.muted, margin: "0 8px" }}>·</span>
-            <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 12, color: C.muted, cursor: "pointer" }}>Maybe later</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
 }
 
 const NAV = [
@@ -100,7 +31,7 @@ const NAV = [
     items: [
       { id: "live",      icon: "🔴", label: "Live Mode" },
       { id: "titles",    icon: "🎬", label: "Room Titles" },
-      { id: "calc",      icon: "🪙", label: "Token Calc"  },
+      { id: "calc",      icon: "🪙", label: "Token Calculator"  },
       { id: "data",      icon: "📝", label: "Edit Data" },
       { id: "analytics", icon: "📊", label: "Analytics" },
       { id: "planner",   icon: "🗓️", label: "Stream Planner" },
@@ -119,7 +50,7 @@ const NAV = [
 export default function Sidebar({ activeTab, onTabChange, user, onSignOut, isPro = false }) {
   const [hoveredId, setHoveredId] = useState(null)
   const [mobileOpen, setMobileOpen] = useState(false)
-  const [showUpgrade, setShowUpgrade] = useState(false)
+  const [showPricing, setShowPricing] = useState(false)
 
   const renderItem = (id, icon, label) => {
     const isActive  = activeTab === id
@@ -177,18 +108,25 @@ export default function Sidebar({ activeTab, onTabChange, user, onSignOut, isPro
         ))}
       </div>
 
-      {/* Upgrade CTA — always visible, prominent */}
+      {/* Plan indicator — always visible, prominent. Pro users see a static
+          badge; free users see the same badge styling as a clickable CTA. */}
       {isPro ? (
         <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 12px", borderRadius: 10, background: "rgba(168,85,247,0.1)", border: "1px solid rgba(168,85,247,0.3)", marginBottom: 10 }}>
           <span style={{ fontSize: 13 }}>✦</span>
           <span style={{ fontSize: 12, fontWeight: 700, color: C.purple }}>Pro plan active</span>
         </div>
       ) : (
-        <Button onClick={() => setShowUpgrade(true)} style={{ width: "100%", marginBottom: 10, fontSize: 13, padding: "11px 12px" }}>
-          ✦ Upgrade to Pro
-        </Button>
+        <button
+          onClick={() => setShowPricing(true)}
+          style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "9px 12px", borderRadius: 10, background: "rgba(168,85,247,0.1)", border: "1px solid rgba(168,85,247,0.3)", marginBottom: 10, cursor: "pointer", transition: "background 0.15s" }}
+          onMouseEnter={e => e.currentTarget.style.background = "rgba(168,85,247,0.18)"}
+          onMouseLeave={e => e.currentTarget.style.background = "rgba(168,85,247,0.1)"}
+        >
+          <span style={{ fontSize: 13 }}>✦</span>
+          <span style={{ fontSize: 12, fontWeight: 700, color: C.purple }}>Get Pro</span>
+        </button>
       )}
-      {showUpgrade && <UpgradeModal onClose={() => setShowUpgrade(false)} />}
+      {showPricing && <PricingOverlay onClose={() => setShowPricing(false)} isPro={isPro} />}
 
       {/* User footer */}
       {user && (

@@ -11,6 +11,7 @@ import dynamic from "next/dynamic"
 import Sidebar from "./Sidebar"
 import SiteFooter from "../components/SiteFooter"
 import { PLATFORM_TOKEN_RATES, tokenRate } from "../../lib/constants"
+import { exportTipsAsCSV } from "../../lib/csv-export"
 import { track as gtmTrack } from '../../lib/track'
 import { getDashboardReadiness, getModuleLockState, canShowHourlyRate, LockedInsightCard, DashboardProgressCard } from './DashboardPreview'
 import Button from '../../components/ui/Button'
@@ -28,7 +29,7 @@ const AnalyticsCharts = dynamic(() => import('./AnalyticsCharts'), { ssr: false,
 const StreamPlanner = dynamic(() => import('./StreamPlanner'), { ssr: false, loading: () => TAB_LOADING })
 const MoneyMap = dynamic(() => import('./MoneyMap'), { ssr: false, loading: () => TAB_LOADING })
 const DashboardGrowthCharts = dynamic(() => import('./DashboardGrowthCharts'), { ssr: false })
-const TokenCalculator = dynamic(() => import('../guides/cam-model-token-calculator/TokenCalculatorClient'), { ssr: false, loading: () => TAB_LOADING })
+const TokenCalculatorPanel = dynamic(() => import('./TokenCalculatorPanel'), { ssr: false, loading: () => TAB_LOADING })
 
 // Analytics tracking — works whether or not @vercel/analytics is installed
 let track = (event, props) => {}
@@ -5830,9 +5831,15 @@ const stopImportMessageRotation = () => {
 
               return (
                 <>
-                  <div style={{ ...glassCard, borderRadius: 14, padding: 16, marginBottom: 16, display: "flex", gap: 24 }}>
+                  <div style={{ ...glassCard, borderRadius: 14, padding: 16, marginBottom: 16, display: "flex", alignItems: "center", gap: 24, flexWrap: "wrap" }}>
                     <div style={{ fontSize: 14, color: C.muted }}>Showing <span style={{ color: C.white, fontWeight: 600 }}>{filtered.length}</span> tips{(dateFrom || dateTo) ? ' (filtered)' : ''}</div>
                     <div style={{ fontSize: 14, color: C.muted }}>Total: <span style={{ color: C.green, fontWeight: 700 }}>${filtered.reduce((s, t) => s + t.usd, 0).toFixed(2)}</span></div>
+                    <button
+                      onClick={() => exportTipsAsCSV(filtered, `camcash-tips${(dateFrom || dateTo) ? `-${dateFrom || 'start'}_to_${dateTo || 'now'}` : ''}.csv`)}
+                      disabled={filtered.length === 0}
+                      style={{ marginLeft: "auto", padding: "8px 16px", borderRadius: 8, background: "rgba(34,211,238,0.12)", border: "1px solid rgba(34,211,238,0.3)", color: filtered.length === 0 ? C.muted : C.cyan, fontSize: 13, fontWeight: 600, cursor: filtered.length === 0 ? "not-allowed" : "pointer" }}>
+                      ⬇ Export CSV
+                    </button>
                   </div>
 
                   <div style={{ ...glassCard, borderRadius: 14, overflow: "hidden" }}>
@@ -6360,10 +6367,10 @@ const stopImportMessageRotation = () => {
         )}
 
         {activeTab === "calc" && (
-          <div style={{ maxWidth: 900, margin: "0 auto" }}>
-            <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 8 }}>🪙 Token Calculator</h1>
-            <p style={{ fontSize: 14, color: C.muted, marginBottom: 32 }}>Convert tokens to USD earnings across Chaturbate, BongaCams, MyFreeCams, Stripchat & CamSoda</p>
-            <TokenCalculator />
+          <div style={{ maxWidth: 880, margin: "0 auto" }}>
+            <h1 style={{ fontSize: 24, fontWeight: 800, color: C.white, marginBottom: 6 }}>🪙 Token Calculator</h1>
+            <p style={{ fontSize: 13.5, color: C.muted, marginBottom: 20, lineHeight: 1.5 }}>See how much you earn from platform tokens, or calculate how many tokens you need to reach an earnings goal.</p>
+            <TokenCalculatorPanel C={C} glassCard={glassCard} />
           </div>
         )}
 
