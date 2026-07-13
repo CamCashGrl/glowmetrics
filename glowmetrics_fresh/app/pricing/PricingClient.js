@@ -5,6 +5,23 @@ import UserCounter from '../components/UserCounter'
 import SiteFooter from '../components/SiteFooter'
 import Button from '../../components/ui/Button'
 
+async function openBillingPortal(setLoading) {
+  setLoading(true)
+  try {
+    const res = await fetch('/api/stripe/portal', { method: 'POST' })
+    const data = await res.json()
+    if (data.url) {
+      window.location.href = data.url
+    } else {
+      alert('Could not open billing portal. Please try again.')
+    }
+  } catch {
+    alert('Could not open billing portal. Please try again.')
+  } finally {
+    setLoading(false)
+  }
+}
+
 async function startCheckout(planType, setLoading) {
   setLoading(planType)
   try {
@@ -60,7 +77,28 @@ function CheckLine({ children, color = C.cyan }) {
 }
 
 // ── Section 1: Sticky Top Bar ─────────────────────────────────────────────────
-function TopBar() {
+function TopBar({ embedded = false, onBack }) {
+  const logo = (
+    <span style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+      <span style={{
+        width: 28, height: 28, borderRadius: 9,
+        background: C.gradientPrimary,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: 14, fontWeight: 900, color: '#06101A',
+        boxShadow: '0 0 14px rgba(22,244,255,0.3)',
+      }}>$</span>
+      <span style={{ fontSize: 17, fontWeight: 800, color: C.white, letterSpacing: '-0.4px' }}>
+        Cam
+        <span style={{
+          background:           C.gradientPrimary,
+          WebkitBackgroundClip: 'text',
+          WebkitTextFillColor:  'transparent',
+          backgroundClip:       'text',
+        }}>Cash</span>™
+      </span>
+    </span>
+  )
+
   return (
     <div style={{
       position:        'fixed',
@@ -78,27 +116,58 @@ function TopBar() {
       WebkitBackdropFilter: 'blur(20px)',
       borderBottom:    '1px solid rgba(124,92,255,0.2)',
     }}>
-      <a href="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 9 }}>
-        <span style={{
-          width: 28, height: 28, borderRadius: 9,
-          background: C.gradientPrimary,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 14, fontWeight: 900, color: '#06101A',
-          boxShadow: '0 0 14px rgba(22,244,255,0.3)',
-        }}>$</span>
-        <span style={{ fontSize: 17, fontWeight: 800, color: C.white, letterSpacing: '-0.4px' }}>
-          Cam
-          <span style={{
-            background:           C.gradientPrimary,
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor:  'transparent',
-            backgroundClip:       'text',
-          }}>Cash</span>™
+      {embedded ? logo : (
+        <a href="/" style={{ textDecoration: 'none' }}>{logo}</a>
+      )}
+      {embedded ? (
+        <button
+          onClick={onBack}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            padding: '8px 16px', fontSize: 13, fontWeight: 700,
+            color: C.white, background: 'rgba(255,255,255,0.06)',
+            border: '1px solid rgba(255,255,255,0.16)', borderRadius: 10,
+            cursor: 'pointer',
+          }}
+        >
+          ← Back to Dashboard
+        </button>
+      ) : (
+        <Button as="a" href="/landing" style={{ padding: '8px 18px', fontSize: 13 }}>
+          Create Free Account →
+        </Button>
+      )}
+    </div>
+  )
+}
+
+// ── Current subscription banner (embedded/in-dashboard view only) ────────────
+function CurrentPlanBanner({ currentPlan }) {
+  const [portalLoading, setPortalLoading] = useState(false)
+  const isProPlan = currentPlan === 'pro'
+
+  return (
+    <div style={{
+      maxWidth: 900, margin: '0 auto 36px', padding: '14px 20px', borderRadius: 14,
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap',
+      background: isProPlan ? 'rgba(124,92,255,0.1)' : 'rgba(22,244,255,0.06)',
+      border: `1px solid ${isProPlan ? 'rgba(124,92,255,0.3)' : 'rgba(22,244,255,0.25)'}`,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <span style={{ fontSize: 16 }}>{isProPlan ? '✦' : '🌿'}</span>
+        <span style={{ color: C.white, fontSize: 14, fontWeight: 700 }}>
+          You're currently on the {isProPlan ? 'Standard' : 'Free'} plan
         </span>
-      </a>
-      <Button as="a" href="/landing" style={{ padding: '8px 18px', fontSize: 13 }}>
-        Create Free Account →
-      </Button>
+      </div>
+      {isProPlan && (
+        <button
+          onClick={() => openBillingPortal(setPortalLoading)}
+          disabled={portalLoading}
+          style={{ padding: '8px 16px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.16)', background: 'rgba(255,255,255,0.05)', color: C.white, fontSize: 13, fontWeight: 700, cursor: portalLoading ? 'wait' : 'pointer' }}
+        >
+          {portalLoading ? 'Opening…' : 'Manage Subscription →'}
+        </button>
+      )}
     </div>
   )
 }
@@ -160,8 +229,21 @@ function HeroSection() {
   )
 }
 
+// ── Current-plan pill shown on a tier card instead of its signup/checkout CTA
+function CurrentPlanPill({ color }) {
+  return (
+    <div style={{
+      textAlign: 'center', padding: '12px 0', borderRadius: 12,
+      background: `${color}22`, border: `1px solid ${color}66`,
+      color, fontWeight: 700, fontSize: 14,
+    }}>
+      ✓ Your Current Plan
+    </div>
+  )
+}
+
 // ── Section 4: After Launch Comparison ───────────────────────────────────────
-function AfterLaunchSection({ checkoutLoading, setCheckoutLoading }) {
+function AfterLaunchSection({ checkoutLoading, setCheckoutLoading, currentPlan }) {
   return (
     <section style={{ padding: '0 20px 72px' }}>
       <div style={{ maxWidth: 900, margin: '0 auto' }}>
@@ -224,9 +306,13 @@ function AfterLaunchSection({ checkoutLoading, setCheckoutLoading }) {
               Free tier will ALWAYS exist and be useful
             </p>
 
-            <Button as="a" href="/landing" variant="secondary" style={{ display: 'block', width: '100%' }}>
-              Start with Free Tier →
-            </Button>
+            {currentPlan === 'free' ? (
+              <CurrentPlanPill color={C.green} />
+            ) : (
+              <Button as="a" href="/landing" variant="secondary" style={{ display: 'block', width: '100%' }}>
+                Start with Free Tier →
+              </Button>
+            )}
           </div>
 
           {/* Premium Tier Card */}
@@ -271,13 +357,17 @@ function AfterLaunchSection({ checkoutLoading, setCheckoutLoading }) {
             </div>
 
             <div style={{ marginTop: 20 }}>
-              <Button
-                onClick={() => startCheckout('standard_monthly', setCheckoutLoading)}
-                disabled={checkoutLoading !== null}
-                style={{ display: 'block', width: '100%', padding: '12px 0', fontSize: 14 }}
-              >
-                {checkoutLoading === 'standard_monthly' ? 'Redirecting…' : 'Get Standard Plan — $19.99/mo →'}
-              </Button>
+              {currentPlan === 'pro' ? (
+                <CurrentPlanPill color={C.purple} />
+              ) : (
+                <Button
+                  onClick={() => startCheckout('standard_monthly', setCheckoutLoading)}
+                  disabled={checkoutLoading !== null}
+                  style={{ display: 'block', width: '100%', padding: '12px 0', fontSize: 14 }}
+                >
+                  {checkoutLoading === 'standard_monthly' ? 'Redirecting…' : 'Get Standard Plan — $19.99/mo →'}
+                </Button>
+              )}
             </div>
           </div>
         </div>
@@ -768,7 +858,11 @@ function AmbientBackground() {
 }
 
 // ── Root Component ────────────────────────────────────────────────────────────
-export default function PricingClient() {
+// `embedded` renders this same pricing content inline inside the dashboard
+// (via PricingOverlay) instead of as the standalone /pricing route — used so
+// clicking "Get Pro" in the sidebar shows identical plan info without
+// navigating away from (or losing) the dashboard session/state.
+export default function PricingClient({ embedded = false, onBack, currentPlan = null }) {
   const [checkoutLoading, setCheckoutLoading] = useState(null)
   return (
     <div style={{
@@ -779,21 +873,24 @@ export default function PricingClient() {
       WebkitFontSmoothing: 'antialiased',
     }}>
       <AmbientBackground />
-      <TopBar />
+      <TopBar embedded={embedded} onBack={onBack} />
 
       <main style={{ position: 'relative', zIndex: 1 }}>
         <HeroSection />
-        <AfterLaunchSection checkoutLoading={checkoutLoading} setCheckoutLoading={setCheckoutLoading} />
+        {embedded && currentPlan && <CurrentPlanBanner currentPlan={currentPlan} />}
+        <AfterLaunchSection checkoutLoading={checkoutLoading} setCheckoutLoading={setCheckoutLoading} currentPlan={currentPlan} />
         <EarlyAdopterSection checkoutLoading={checkoutLoading} setCheckoutLoading={setCheckoutLoading} />
         <PromiseSection />
         <ComparisonTable />
         <FAQSection />
-        <FinalCTA />
+        {!embedded && <FinalCTA />}
       </main>
 
-      <div style={{ position: 'relative', zIndex: 1 }}>
-        <SiteFooter />
-      </div>
+      {!embedded && (
+        <div style={{ position: 'relative', zIndex: 1 }}>
+          <SiteFooter />
+        </div>
+      )}
     </div>
   )
 }
