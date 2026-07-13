@@ -11,10 +11,17 @@ const COLUMNS = [
   { key: "tip_note",  header: "Note" },
 ]
 
+// The importer (lib/analytics.js parseCSV/parseCSVLine) splits the file on
+// raw newlines before any quote-aware parsing, and its quote handling just
+// toggles on each `"` rather than recognizing RFC4180 `""` escapes — so an
+// embedded newline truncates a row and an embedded quote gets silently
+// dropped instead of round-tripping. Sanitize both away on export so every
+// field the importer sees is exactly what was exported.
 function escapeCSVField(value) {
-  const str = value == null ? "" : String(value)
-  if (/[",\n]/.test(str)) return `"${str.replace(/"/g, '""')}"`
-  return str
+  const str = (value == null ? "" : String(value))
+    .replace(/\r\n|\r|\n/g, " ")
+    .replace(/"/g, "'")
+  return str.includes(",") ? `"${str}"` : str
 }
 
 export function tipsToCSV(tips) {
