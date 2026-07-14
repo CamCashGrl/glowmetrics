@@ -5,6 +5,7 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch: {}
 
 jobs:
   build:
@@ -27,7 +28,19 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run Next.js build
+      - name: Run ESLint (if configured)
+        run: |
+          if node -e "process.exit(require('./package.json').scripts?.lint ? 0 : 1)"; then
+            echo "Found a 'lint' script in package.json — running it."
+            npm run lint
+          else
+            echo "No 'lint' script in package.json — skipping ESLint step."
+          fi
+
+      - name: Run estimated-hourly-rate verification
+        run: node scripts/verify-estimated-hourly-rate.mjs
+
+      - name: Run production build
         run: npm run build
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
