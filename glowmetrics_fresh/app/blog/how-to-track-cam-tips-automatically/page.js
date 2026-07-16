@@ -53,6 +53,7 @@ export default function Page() {
   const relatedTools = [
     { icon: '\uD83D\uDCCA', name: 'Analytics Dashboard', description: 'See your tips, top fans, and peak hours in one place', href: '/guides/cam-model-analytics' },
     { icon: '\uD83D\uDD52', name: 'Best Time to Stream', description: 'Find the hours that actually earn for you', href: '/guides/best-time-to-stream-chaturbate' },
+    { icon: '\uD83E\uDDEE', name: 'Token Calculator', description: 'Convert tokens to USD across platforms', href: '/guides/cam-model-token-calculator' },
   ];
 
   const relatedBlogs = [

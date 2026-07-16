@@ -214,6 +214,7 @@ export default function HowMuchDoCamModelsMake() {
       <div style={s.related}>
         <div style={s.relT}>Related reading</div>
         <div style={s.relLinks}>
+          <a href="/guides/cam-model-token-calculator" style={s.relLink}>→ Cam Model Token Calculator</a>
           <a href="/blog/cam-model-taxes" style={s.relLink}>→ Cam Model Taxes Explained</a>
           <a href="/blog/how-much-do-bongacams-models-make" style={s.relLink}>→ How Much Do BongaCams Models Make?</a>
           <a href="/blog/how-much-do-myfreecams-models-make" style={s.relLink}>→ How Much Do MyFreeCams Models Make?</a>

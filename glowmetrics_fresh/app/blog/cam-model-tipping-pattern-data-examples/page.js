@@ -220,6 +220,7 @@ export default function CamModelTippingPatternDataExamples() {
       <div style={s.related}>
         <div style={s.relT}>Related reading</div>
         <div style={s.relLinks}>
+          <a href="/guides/cam-model-token-calculator" style={s.relLink}>→ Cam Model Token Calculator</a>
           <a href="/blog/cam-model-self-employment-tax-prep" style={s.relLink}>→ Cam Model Self-Employment Tax Prep</a>
           <a href="/blog/why-cam-model-data-prevents-overspending" style={s.relLink}>→ Why Data Helps Cam Model Pricing</a>
           <a href="/blog/how-to-track-cam-tips-automatically" style={s.relLink}>→ How to Track Your Cam Model Daily Revenue</a>

@@ -203,6 +203,7 @@ export default function HowToIncreaseCamEarnings() {
       <div style={s.related}>
         <div style={s.relT}>Related reading</div>
         <div style={s.relLinks}>
+          <a href="/guides/cam-model-token-calculator" style={s.relLink}>→ Cam Model Token Calculator</a>
           <a href="/blog/why-cam-streams-arent-making-money" style={s.relLink}>→ Why your cam streams aren't making money</a>
           <a href="/blog/how-to-build-loyal-fans" style={s.relLink}>→ How to build loyal fans that actually tip</a>
           <a href="/blog/how-to-track-cam-tips-automatically" style={s.relLink}>→ How to Track Cam Tips Automatically — Measure earnings without the spreadsheet</a>

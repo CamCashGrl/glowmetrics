@@ -86,6 +86,10 @@ const s = {
   faqItem: { marginBottom: '24px', paddingBottom: '24px', borderBottom: '1px solid rgba(255,255,255,0.04)' },
   faqQ:    { fontSize: '15px', fontWeight: 600, color: '#c7d2fe', marginBottom: '8px' },
   faqA:    { fontSize: '14px', color: '#94a3b8', lineHeight: 1.75 },
+  etsyBox: { borderRadius: '16px', border: '1px solid rgba(236,72,153,0.25)', background: 'rgba(236,72,153,0.06)', padding: '24px', margin: '32px 0' },
+  etsyH: { fontSize: '18px', fontWeight: 700, color: '#f1f5f9', margin: '0 0 8px' },
+  etsyP: { fontSize: '14px', color: '#94a3b8', margin: '0 0 16px', lineHeight: 1.6 },
+  etsyBtn: { display: 'inline-block', background: 'linear-gradient(90deg, #ec4899, #f59e0b)', color: '#0f172a', padding: '10px 20px', borderRadius: '10px', fontWeight: 700, fontSize: '14px', textDecoration: 'none' },
   finalCta: { background: 'linear-gradient(135deg, rgba(99,102,241,0.10) 0%, rgba(139,92,246,0.08) 100%)', border: '1px solid rgba(99,102,241,0.25)', borderRadius: '14px', padding: '36px 28px', margin: '44px 0 36px', textAlign: 'center' },
   finalCtaH: { fontSize: '22px', fontWeight: 800, color: '#f1f5f9', marginBottom: '12px', letterSpacing: '-0.02em' },
   finalCtaSub: { fontSize: '14px', color: '#64748b', lineHeight: 1.7, marginBottom: '20px' },
@@ -131,6 +135,24 @@ export default function HowToIncreaseChaturbateTips() {
         <li style={s.li}><strong style={{ color: '#e2e8f0' }}>Write clear descriptions</strong> — specific rewards convert faster than vague ones. “Private photo set” beats “special reward.”</li>
         <li style={s.li}><strong style={{ color: '#e2e8f0' }}>Limit to 8–10 items</strong> — more creates decision paralysis.</li>
       </ul>
+
+      <div style={s.etsyBox}>
+        <img
+          src="/blog-images/spin_the_wheel_cover.png"
+          alt="Spin-the-Wheel Template Pack for cam models cover art by Pretty Profitz"
+          style={{ width: '100%', maxWidth: '300px', display: 'block', margin: '0 auto 16px', borderRadius: '10px' }}
+        />
+        <div style={s.etsyH}>Don&apos;t want to build a tip menu from scratch?</div>
+        <p style={s.etsyP}>
+          Pretty Profitz sells a &quot;320 Realistic Menu Ideas&quot; pack (20 categorized tip menu pages —
+          everyday, toy &amp; game, show-type, and premium/niche menus) plus a Spin-the-Wheel Template Pack with
+          8 editable wheels and Canva templates, so your menu and games are ready before your next stream.
+        </p>
+        <p style={s.etsyP}>
+          Use code <strong style={{ color: '#f1f5f9' }}>PRETTY21</strong> at checkout for 25% off.
+        </p>
+        <a href="https://www.etsy.com/shop/prettyprofitz" style={s.etsyBtn} target="_blank" rel="noopener noreferrer">Shop tip menus &amp; wheel templates on Etsy →</a>
+      </div>
 
       <h2 style={s.h2}>3. Run Goal Shows Correctly</h2>
       <p style={s.p}>
@@ -271,6 +293,7 @@ export default function HowToIncreaseChaturbateTips() {
       <div style={s.related}>
         <div style={s.relT}>Related reading</div>
         <div style={s.relLinks}>
+          <a href="/guides/cam-model-token-calculator" style={s.relLink}>→ Cam Model Token Calculator</a>
           <a href="/guides/chaturbate-best-hours" style={s.relLink}>→ Best Hours to Stream on Chaturbate</a>
           <a href="/blog/how-much-do-chaturbate-models-make" style={s.relLink}>→ How Much Do Chaturbate Models Make Per Hour?</a>
           <a href="/blog/cam-model-tipping-pattern-data-examples" style={s.relLink}>→ Cam Model Tipping Pattern Data Examples</a>

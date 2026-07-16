@@ -471,6 +471,9 @@ export default function MakeMoreOnChaturbate() {
         <div style={s.related}>
           <div style={s.relatedTitle}>Related articles</div>
           <div style={s.relatedLinks}>
+            <a href="/guides/cam-model-token-calculator" style={s.relatedLink}>
+              Cam Model Token Calculator
+            </a>
             <a href="/blog/cam-model-earnings" style={s.relatedLink}>
               Cam Model Earnings Guide
             </a>
