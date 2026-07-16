@@ -186,7 +186,7 @@ export default function FindomKinkNiche() {
 
       <div style={s.etsyBox}>
         <img
-          src="/blog-images/how-to-train-your-pay-pig.png"
+          src="/blog-images/how-to-train-your-paypig.png"
           alt="How to Train Your PayPig findom script cover art by Pretty Profitz"
           style={{ width: '100%', maxWidth: '360px', display: 'block', margin: '0 auto 16px', borderRadius: '10px' }}
         />
