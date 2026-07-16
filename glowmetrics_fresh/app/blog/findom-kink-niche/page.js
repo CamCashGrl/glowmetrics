@@ -128,6 +128,8 @@ const s = {
   etsyH: { fontSize: '18px', fontWeight: 700, color: '#f1f5f9', margin: '0 0 8px' },
   etsyP: { fontSize: '14px', color: '#94a3b8', margin: '0 0 16px', lineHeight: 1.6 },
   etsyBtn: { display: 'inline-block', background: 'linear-gradient(90deg, #ec4899, #f59e0b)', color: '#0f172a', padding: '10px 20px', borderRadius: '10px', fontWeight: 700, fontSize: '14px', textDecoration: 'none' },
+  etsyGallery: { display: 'flex', gap: '12px', flexWrap: 'wrap', justifyContent: 'center', marginBottom: '18px' },
+  etsyThumb: { width: '140px', borderRadius: '10px', display: 'block' },
 }
 
 export default function FindomKinkNiche() {
@@ -185,11 +187,12 @@ export default function FindomKinkNiche() {
       </ul>
 
       <div style={s.etsyBox}>
-        <img
-          src="/blog-images/how-to-train-your-paypig.png"
-          alt="How to Train Your PayPig findom script cover art by Pretty Profitz"
-          style={{ width: '100%', maxWidth: '360px', display: 'block', margin: '0 auto 16px', borderRadius: '10px' }}
-        />
+        <div style={s.etsyGallery}>
+          <img src="/blog-images/paypig_script.png" alt="How to Train Your PayPig findom script cover art by Pretty Profitz" style={s.etsyThumb} />
+          <img src="/blog-images/mistress_contract.png" alt="Mistress Contract and 128 Slave Rules training bundle cover art by Pretty Profitz" style={s.etsyThumb} />
+          <img src="/blog-images/bondage_for_beginners.png" alt="Bondage for Beginners starter guide cover art by Pretty Profitz" style={s.etsyThumb} />
+          <img src="/blog-images/101_ways_to_punish_your_sissy.png" alt="101 Ways to Train Your Sissy findom guide cover art by Pretty Profitz" style={s.etsyThumb} />
+        </div>
         <div style={s.etsyH}>Need a starting script instead of building from scratch?</div>
         <p style={s.etsyP}>
           Pretty Profitz sells ready-to-use findom scripts, including the &quot;How to Train Your PayPig&quot; tribute

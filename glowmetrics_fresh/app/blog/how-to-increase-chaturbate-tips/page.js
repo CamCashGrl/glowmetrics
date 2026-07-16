@@ -137,6 +137,11 @@ export default function HowToIncreaseChaturbateTips() {
       </ul>
 
       <div style={s.etsyBox}>
+        <img
+          src="/blog-images/spin_the_wheel_cover.png"
+          alt="Spin-the-Wheel Template Pack for cam models cover art by Pretty Profitz"
+          style={{ width: '100%', maxWidth: '300px', display: 'block', margin: '0 auto 16px', borderRadius: '10px' }}
+        />
         <div style={s.etsyH}>Don&apos;t want to build a tip menu from scratch?</div>
         <p style={s.etsyP}>
           Pretty Profitz sells a &quot;320 Realistic Menu Ideas&quot; pack (20 categorized tip menu pages —

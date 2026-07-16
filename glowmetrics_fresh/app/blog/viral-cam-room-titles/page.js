@@ -188,6 +188,11 @@ export default function Page() {
         <img src="/blog-images/viral-room-title-generator.png" alt="CamCashGrl viral room title generator showing toy, goal, reward, and mood selectors with generated titles" className="w-full rounded-lg border border-slate-200 dark:border-slate-800 my-6" />
 
         <div style={{ borderRadius: '16px', border: '1px solid rgba(236,72,153,0.25)', background: 'rgba(236,72,153,0.06)', padding: '24px', margin: '32px 0' }}>
+          <img
+            src="/blog-images/500_room_titles.png"
+            alt="500 High-Converting Cam Room Titles digital guide cover art by Pretty Profitz"
+            style={{ width: '100%', maxWidth: '360px', display: 'block', margin: '0 auto 16px', borderRadius: '10px' }}
+          />
           <div style={{ fontSize: '18px', fontWeight: 700, color: '#f1f5f9', margin: '0 0 8px' }}>Need 500 more title ideas on tap?</div>
           <p style={{ fontSize: '14px', color: '#94a3b8', margin: '0 0 16px', lineHeight: 1.6 }}>
             Pretty Profitz sells a &quot;500 High-Converting Cam Room Titles&quot; digital guide — copy-and-paste
