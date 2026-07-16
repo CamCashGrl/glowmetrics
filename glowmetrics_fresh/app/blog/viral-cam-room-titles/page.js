@@ -187,6 +187,19 @@ export default function Page() {
         </p>
         <img src="/blog-images/viral-room-title-generator.png" alt="CamCashGrl viral room title generator showing toy, goal, reward, and mood selectors with generated titles" className="w-full rounded-lg border border-slate-200 dark:border-slate-800 my-6" />
 
+        <div style={{ borderRadius: '16px', border: '1px solid rgba(236,72,153,0.25)', background: 'rgba(236,72,153,0.06)', padding: '24px', margin: '32px 0' }}>
+          <div style={{ fontSize: '18px', fontWeight: 700, color: '#f1f5f9', margin: '0 0 8px' }}>Need 500 more title ideas on tap?</div>
+          <p style={{ fontSize: '14px', color: '#94a3b8', margin: '0 0 16px', lineHeight: 1.6 }}>
+            Pretty Profitz sells a &quot;500 High-Converting Cam Room Titles&quot; digital guide — copy-and-paste
+            titles across 10 categories for cam models, livestream creators, and online performers, plus tip
+            menus, spin-the-wheel game templates, and more in the same shop.
+          </p>
+          <p style={{ fontSize: '14px', color: '#94a3b8', margin: '0 0 16px', lineHeight: 1.6 }}>
+            Use code <strong style={{ color: '#f1f5f9' }}>PRETTY21</strong> at checkout for 25% off.
+          </p>
+          <a href="https://www.etsy.com/shop/prettyprofitz" style={{ display: 'inline-block', background: 'linear-gradient(90deg, #ec4899, #f59e0b)', color: '#0f172a', padding: '10px 20px', borderRadius: '10px', fontWeight: 700, fontSize: '14px', textDecoration: 'none' }} target="_blank" rel="noopener noreferrer">Shop cam room title bundles on Etsy →</a>
+        </div>
+
         <h2>Beating creative burnout</h2>
         <p>
           Anyone who has streamed consistently knows the title is one more decision in a day already full of them. Outfit,
