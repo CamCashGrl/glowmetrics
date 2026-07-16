@@ -1,6 +1,7 @@
 "use client"
 import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
+import CollabReportsPanel from "./CollabReportsPanel"
 
 const C = {
   bg:     "#050713",
@@ -542,6 +543,8 @@ export default function AdminPage() {
             </table>
           </div>
         </Card>
+
+        <CollabReportsPanel />
 
         {/* Recent Feedback */}
         {feedback?.length > 0 && (
