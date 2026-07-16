@@ -194,6 +194,12 @@ export default function FindomKinkNiche() {
         <p style={s.etsyP}>
           Pretty Profitz sells ready-to-use findom scripts, including the &quot;How to Train Your PayPig&quot; tribute
           script — built to guide the tiered-tribute and task-based approach above without starting from a blank page.
+          The shop also carries the Mistress Contract &amp; 128 Slave Rules training bundle, a Bondage for Beginners
+          starter guide, findom-for-beginners guides, tip menus, tribute and task trackers, sexting scripts, and cam
+          room title bundles.
+        </p>
+        <p style={{ ...s.etsyP, marginBottom: '16px' }}>
+          Use code <strong style={{ color: '#f1f5f9' }}>PRETTY21</strong> at checkout for 25% off.
         </p>
         <a href="https://www.etsy.com/shop/prettyprofitz" style={s.etsyBtn} target="_blank" rel="noopener noreferrer">Shop findom scripts on Etsy →</a>
       </div>
