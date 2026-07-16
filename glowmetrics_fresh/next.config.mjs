@@ -21,6 +21,52 @@ const nextConfig = {
         destination: 'https://www.camcashgrl.com/landing',
         permanent: true,
       },
+      // Non-www variants of every other internal redirect below, so a non-www
+      // hit resolves in a single hop instead of chaining through the catch-all
+      // (apex -> www -> final). Google Search Console was flagging the 2-hop
+      // chain on these specific URLs as a redirect error.
+      {
+        source: '/guides/chaturbate-room-title-generator',
+        has: [{ type: 'host', value: 'camcashgrl.com' }],
+        destination: 'https://www.camcashgrl.com/guides/cam-model-room-title-generator',
+        permanent: true,
+      },
+      {
+        source: '/guides/chaturbate-token-calculator',
+        has: [{ type: 'host', value: 'camcashgrl.com' }],
+        destination: 'https://www.camcashgrl.com/guides/cam-model-token-calculator',
+        permanent: true,
+      },
+      {
+        source: '/guides/best-time-to-stream-on-chaturbate',
+        has: [{ type: 'host', value: 'camcashgrl.com' }],
+        destination: 'https://www.camcashgrl.com/guides/chaturbate-best-hours',
+        permanent: true,
+      },
+      {
+        source: '/blog/how-to-get-veiws-on-chaturbate',
+        has: [{ type: 'host', value: 'camcashgrl.com' }],
+        destination: 'https://www.camcashgrl.com/blog/how-to-get-views-on-chaturbate',
+        permanent: true,
+      },
+      {
+        source: '/guides/how-to-increase-cam-earnings',
+        has: [{ type: 'host', value: 'camcashgrl.com' }],
+        destination: 'https://www.camcashgrl.com/blog/how-to-increase-cam-earnings',
+        permanent: true,
+      },
+      {
+        source: '/blog/how-to-re-engage-whales-and-top-tippers',
+        has: [{ type: 'host', value: 'camcashgrl.com' }],
+        destination: 'https://www.camcashgrl.com/blog/how-to-re-engage-whales-and-high-tipping-fans',
+        permanent: true,
+      },
+      {
+        source: '/guides/cam-model-name-generator',
+        has: [{ type: 'host', value: 'camcashgrl.com' }],
+        destination: 'https://www.camcashgrl.com/tools/cam-model-name-generator',
+        permanent: true,
+      },
       // Catch-all www redirect (must come after the specific non-www rules above)
       {
         source: '/:path((?!api/).*)',
