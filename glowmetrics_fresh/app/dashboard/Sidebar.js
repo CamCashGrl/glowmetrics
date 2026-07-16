@@ -1,5 +1,6 @@
 "use client"
 import { useState } from "react"
+import { usePathname } from "next/navigation"
 import Button from "../../components/ui/Button"
 
 const C = {
@@ -108,6 +109,12 @@ const NAV = [
     ]
   },
   {
+    group: "COMMUNITY",
+    items: [
+      { id: "collabs", icon: "🤝", label: "Collab Board", href: "/collabs" },
+    ]
+  },
+  {
     group: "SUPPORT",
     items: [
       { id: "upload", icon: "📥", label: "Import CSV" },
@@ -120,25 +127,25 @@ export default function Sidebar({ activeTab, onTabChange, user, onSignOut, isPro
   const [hoveredId, setHoveredId] = useState(null)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [showUpgrade, setShowUpgrade] = useState(false)
+  const pathname = usePathname()
 
-  const renderItem = (id, icon, label) => {
-    const isActive  = activeTab === id
+  // Items with an `href` are real routes outside the dashboard's internal tab
+  // system (e.g. /collabs) — they navigate normally instead of calling
+  // onTabChange, and their "active" state is derived from the current path.
+  const renderItem = (id, icon, label, href) => {
+    const isActive  = href ? pathname?.startsWith(href) : activeTab === id
     const isHovered = hoveredId === id
-    return (
-      <button key={id}
-        onClick={() => { onTabChange(id); setMobileOpen(false) }}
-        onMouseEnter={() => setHoveredId(id)}
-        onMouseLeave={() => setHoveredId(null)}
-        style={{
-          width: "100%", display: "flex", alignItems: "center", gap: 10,
-          padding: "8px 12px", borderRadius: 10, border: "none", cursor: "pointer",
-          background: isActive
-            ? "linear-gradient(135deg,rgba(34,211,238,0.14),rgba(124,92,255,0.08))"
-            : isHovered ? "rgba(255,255,255,0.05)" : "transparent",
-          borderLeft: isActive ? "2px solid #22D3EE" : "2px solid transparent",
-          transition: "all 0.15s", marginBottom: 2,
-        }}
-      >
+    const sharedStyle = {
+      width: "100%", display: "flex", alignItems: "center", gap: 10,
+      padding: "8px 12px", borderRadius: 10, border: "none", cursor: "pointer",
+      background: isActive
+        ? "linear-gradient(135deg,rgba(34,211,238,0.14),rgba(124,92,255,0.08))"
+        : isHovered ? "rgba(255,255,255,0.05)" : "transparent",
+      borderLeft: isActive ? "2px solid #22D3EE" : "2px solid transparent",
+      transition: "all 0.15s", marginBottom: 2, textDecoration: "none",
+    }
+    const inner = (
+      <>
         <span style={{ fontSize: 16, flexShrink: 0, opacity: isActive ? 1 : 0.7 }}>{icon}</span>
         <span style={{ fontSize: 13, fontWeight: isActive ? 700 : 500, color: isActive ? C.white : C.text, letterSpacing: -0.2 }}>
           {label}
@@ -146,6 +153,29 @@ export default function Sidebar({ activeTab, onTabChange, user, onSignOut, isPro
         {isActive && (
           <div style={{ marginLeft: "auto", width: 5, height: 5, borderRadius: "50%", background: C.cyan, boxShadow: "0 0 5px #22D3EE" }} />
         )}
+      </>
+    )
+
+    if (href) {
+      return (
+        <a key={id} href={href}
+          onMouseEnter={() => setHoveredId(id)}
+          onMouseLeave={() => setHoveredId(null)}
+          style={sharedStyle}
+        >
+          {inner}
+        </a>
+      )
+    }
+
+    return (
+      <button key={id}
+        onClick={() => { onTabChange(id); setMobileOpen(false) }}
+        onMouseEnter={() => setHoveredId(id)}
+        onMouseLeave={() => setHoveredId(null)}
+        style={sharedStyle}
+      >
+        {inner}
       </button>
     )
   }
@@ -172,7 +202,7 @@ export default function Sidebar({ activeTab, onTabChange, user, onSignOut, isPro
                 {group.group}
               </div>
             )}
-            {group.items.map(({ id, icon, label }) => renderItem(id, icon, label))}
+            {group.items.map(({ id, icon, label, href }) => renderItem(id, icon, label, href))}
           </div>
         ))}
       </div>
