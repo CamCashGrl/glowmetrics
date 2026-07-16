@@ -488,6 +488,7 @@ export default function RevenuePerHourPage() {
         <div style={s.relT}>Related guides</div>
         <div style={s.relGrid}>
           {[
+            { href: '/guides/cam-model-token-calculator', label: 'Cam Model Token Calculator', desc: 'Convert tokens to USD across platforms' },
             { href: '/guides/best-time-to-stream-chaturbate', label: 'Best Time to Stream on Chaturbate', desc: 'Find your personal peak earning hours' },
             { href: '/guides/chaturbate-earnings-tracker',    label: 'Chaturbate Earnings Tracker',       desc: 'Full history analysis from your CSV' },
             { href: '/guides/cam-model-top-tippers',          label: 'Top Tipper Tracker',                desc: 'Whale detection and fan analytics' },

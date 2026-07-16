@@ -183,6 +183,7 @@ export default function MoreTipsOnMFC() {
       <div style={s.related}>
         <div style={s.relT}>Related reading</div>
         <div style={s.relLinks}>
+          <a href="/guides/cam-model-token-calculator" style={s.relLink}>→ Cam Model Token Calculator</a>
           <a href="/blog/how-much-do-myfreecams-models-make" style={s.relLink}>→ How much do MyFreeCams models make?</a>
           <a href="/blog/how-to-build-loyal-fans" style={s.relLink}>→ How to build a loyal fanbase that actually tips</a>
           <a href="/blog/how-to-re-engage-whales-and-high-tipping-fans" style={s.relLink}>→ How to re-engage whales and top tippers</a>

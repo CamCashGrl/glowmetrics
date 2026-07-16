@@ -293,6 +293,7 @@ export default function HowToIncreaseChaturbateTips() {
       <div style={s.related}>
         <div style={s.relT}>Related reading</div>
         <div style={s.relLinks}>
+          <a href="/guides/cam-model-token-calculator" style={s.relLink}>→ Cam Model Token Calculator</a>
           <a href="/guides/chaturbate-best-hours" style={s.relLink}>→ Best Hours to Stream on Chaturbate</a>
           <a href="/blog/how-much-do-chaturbate-models-make" style={s.relLink}>→ How Much Do Chaturbate Models Make Per Hour?</a>
           <a href="/blog/cam-model-tipping-pattern-data-examples" style={s.relLink}>→ Cam Model Tipping Pattern Data Examples</a>

@@ -396,6 +396,7 @@ export default function HowToMakeMoneyOnChaturbate() {
       <div style={s.related}>
         <div style={s.relT}>Related reading</div>
         <div style={s.relLinks}>
+          <a href="/guides/cam-model-token-calculator" style={s.relLink}>→ Cam Model Token Calculator</a>
           <a href="/blog/chaturbate-payout-explained" style={s.relLink}>→ Chaturbate Payout Explained: How Models Get Paid</a>
           <a href="/blog/how-much-do-chaturbate-models-make" style={s.relLink}>→ How Much Do Chaturbate Models Make Per Hour?</a>
           <a href="/blog/how-to-increase-chaturbate-tips" style={s.relLink}>→ How to Increase Chaturbate Tips</a>

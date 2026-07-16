@@ -193,7 +193,7 @@ export default function CamModelTokenToDollarRatioExplained() {
 
       <h3 style={s.h3}>The Comparison That Actually Matters</h3>
       <p style={s.p}>
-        When comparing earnings across platforms, don’t compare token counts — compare dollar payouts. 10,000 Chaturbate tokens = $500. 10,000 BongaCams tokens = potentially different, depending on your tier and viewer geography. Track your actual dollar payouts, not just token totals.
+        When comparing earnings across platforms, don’t compare token counts — compare dollar payouts. 10,000 Chaturbate tokens = $500. 10,000 BongaCams tokens = potentially different, depending on your tier and viewer geography. Track your actual dollar payouts, not just token totals — the <a href="/guides/cam-model-token-calculator" style={s.iLink}>token calculator</a> converts any platform's tokens to USD instantly.
       </p>
 
       <h2 style={s.h2}>How Token Math Should Shape Your Tip Menu</h2>
@@ -249,6 +249,7 @@ export default function CamModelTokenToDollarRatioExplained() {
       <div style={s.related}>
         <div style={s.relT}>Related reading</div>
         <div style={s.relLinks}>
+          <a href="/guides/cam-model-token-calculator" style={s.relLink}>→ Cam Model Token Calculator</a>
           <a href="/blog/cam-model-tipping-pattern-data-examples" style={s.relLink}>→ Cam Model Tipping Pattern Data Examples</a>
           <a href="/blog/how-to-track-cam-tips-automatically" style={s.relLink}>→ How to Track Your Cam Model Daily Revenue</a>
           <a href="/blog/benefits-of-cam-model-bookkeeping" style={s.relLink}>→ Benefits of Cam Model Bookkeeping</a>

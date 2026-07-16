@@ -215,6 +215,7 @@ export default function MyFreeCamsEarningsPost() {
       <div style={s.related}>
         <div style={s.relT}>Related reading</div>
         <div style={s.relLinks}>
+          <a href="/guides/cam-model-token-calculator" style={s.relLink}>→ Cam Model Token Calculator</a>
           <a href="/blog/how-to-get-more-tips-on-myfreecams" style={s.relLink}>→ How to get more tips on MyFreeCams</a>
           <a href="/blog/how-much-do-bongacams-models-make" style={s.relLink}>→ How much do BongaCams models make?</a>
           <a href="/blog/how-much-do-chaturbate-models-make" style={s.relLink}>→ How much do Chaturbate models make?</a>
