@@ -420,6 +420,22 @@ export default function TokenCalculatorPage() {
             <p style={{ fontSize: 16, lineHeight: 1.8, color: S.text }}>
               Review your tip menu analytics quarterly. If you're getting lots of entry tips but no whale tips, raise your mid-tier prices. If tips have stalled entirely, introduce new affordable entry-level options to restart momentum.
             </p>
+
+            <div style={{ borderRadius: '16px', border: '1px solid rgba(236,72,153,0.25)', background: 'rgba(236,72,153,0.06)', padding: '24px', marginTop: '28px' }}>
+              <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', justifyContent: 'center', marginBottom: '16px' }}>
+                <img src="/blog-images/spin_the_wheel_cover.png" alt="Spin-the-Wheel Template Pack for cam models cover art by Pretty Profitz" style={{ width: '140px', borderRadius: '10px', display: 'block' }} />
+                <img src="/blog-images/500_room_titles.png" alt="500 High-Converting Cam Room Titles digital guide cover art by Pretty Profitz" style={{ width: '140px', borderRadius: '10px', display: 'block' }} />
+              </div>
+              <div style={{ fontSize: '18px', fontWeight: 700, color: S.white, margin: '0 0 8px' }}>Want your tip menu and titles ready to go?</div>
+              <p style={{ fontSize: '14px', color: S.text, margin: '0 0 16px', lineHeight: 1.6 }}>
+                Pretty Profitz sells a Spin-the-Wheel Template Pack (8 editable wheels for tip menu games) and a
+                500 High-Converting Cam Room Titles guide, plus tip menus, trackers, and more in the same shop.
+              </p>
+              <p style={{ fontSize: '14px', color: S.text, margin: '0 0 16px', lineHeight: 1.6 }}>
+                Use code <strong style={{ color: S.white }}>PRETTY21</strong> at checkout for 25% off.
+              </p>
+              <a href="https://www.etsy.com/shop/prettyprofitz" style={{ display: 'inline-block', background: 'linear-gradient(90deg, #ec4899, #f59e0b)', color: '#0f172a', padding: '10px 20px', borderRadius: '10px', fontWeight: 700, fontSize: '14px', textDecoration: 'none' }} target="_blank" rel="noopener noreferrer">Shop tip menus &amp; wheel templates on Etsy →</a>
+            </div>
           </section>
 
           {/* FAQ SECTION */}
