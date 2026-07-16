@@ -2,21 +2,21 @@ import TokenCalculatorClient from './TokenCalculatorClient'
 import Button from '../../../components/ui/Button'
 
 export const metadata = {
-  title: 'Cam Model Token Calculator: Convert Tokens to USD Fast',
-  description: 'Free cam model token calculator for converting Chaturbate, BongaCams, MyFreeCams, and Stripchat tokens into estimated USD.',
-  keywords: 'token calculator, chaturbate token calculator, cam model token calculator, tokens to usd, how much are tokens worth, cam model earnings, broadcaster payout rate',
+  title: 'Chaturbate, MFC & Stripchat Token Calculator: Convert Tokens to USD',
+  description: 'Free token calculator for Chaturbate, MFC, Stripchat, BongaCams, and CamSoda — convert cam tokens to USD instantly and see your real broadcaster payout rate.',
+  keywords: 'token calculator, chaturbate token calculator, cb token calculator, mfc token calculator, stripchat token conversion rate, cam model token calculator, tokens to usd, how much are tokens worth, cam model earnings, broadcaster payout rate',
   alternates: { canonical: 'https://www.camcashgrl.com/guides/cam-model-token-calculator' },
   openGraph: {
-    title: 'Cam Model Token Calculator: Convert Tokens to USD Fast',
-    description: 'Free cam model token calculator for converting Chaturbate, BongaCams, MyFreeCams, and Stripchat tokens into estimated USD.',
+    title: 'Chaturbate, MFC & Stripchat Token Calculator: Convert Tokens to USD',
+    description: 'Free token calculator for Chaturbate, MFC, Stripchat, BongaCams, and CamSoda — convert cam tokens to USD instantly and see your real broadcaster payout rate.',
     url: 'https://www.camcashgrl.com/guides/cam-model-token-calculator',
     type: 'article',
     images: [{ url: 'https://www.camcashgrl.com/og-image.png', width: 1200, height: 630 }],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Cam Model Token Calculator: Convert Tokens to USD Fast',
-    description: 'Free cam model token calculator for converting Chaturbate, BongaCams, MyFreeCams, and Stripchat tokens into estimated USD.',
+    title: 'Chaturbate, MFC & Stripchat Token Calculator: Convert Tokens to USD',
+    description: 'Free token calculator for Chaturbate, MFC, Stripchat, BongaCams, and CamSoda — convert cam tokens to USD instantly and see your real broadcaster payout rate.',
   },
   robots: {
     index: true,
@@ -32,9 +32,11 @@ const faqSchema = {
   '@type': 'FAQPage',
   mainEntity: [
     { '@type': 'Question', name: 'How much is one Chaturbate token worth?', acceptedAnswer: { '@type': 'Answer', text: 'One Chaturbate token is worth $0.05 to the broadcaster. Viewers purchase tokens at $0.10 each, meaning Chaturbate keeps 50% and the model receives 50%.' } },
+    { '@type': 'Question', name: 'How much does 1,000 tokens make on Chaturbate?', acceptedAnswer: { '@type': 'Answer', text: '1,000 Chaturbate tokens equals $50 to the broadcaster. Viewers pay $100 to purchase 1,000 tokens; Chaturbate keeps the other $50. At 5,000 tokens that\'s $250, and at 10,000 tokens that\'s $500.' } },
     { '@type': 'Question', name: 'How much does BongaCams pay per token?', acceptedAnswer: { '@type': 'Answer', text: 'BongaCams pays approximately $0.025 per token to broadcasters — half of Chaturbate\'s rate. Viewers buy BongaCams tokens at roughly $0.068 each, so the model receives about 37% of what the viewer pays.' } },
-    { '@type': 'Question', name: 'What is the MyFreeCams token rate?', acceptedAnswer: { '@type': 'Answer', text: 'MyFreeCams pays approximately $0.05 per token (about $5.00 per 100 tokens). The exact rate can vary slightly based on model level and promotional periods.' } },
+    { '@type': 'Question', name: 'What is the MyFreeCams (MFC) token rate?', acceptedAnswer: { '@type': 'Answer', text: 'MyFreeCams (MFC) pays approximately $0.05 per token (about $5.00 per 100 tokens). The exact rate can vary slightly based on model level and promotional periods.' } },
     { '@type': 'Question', name: 'How much does Stripchat pay per token?', acceptedAnswer: { '@type': 'Answer', text: 'Stripchat pays approximately $0.05 per token. Rates can vary based on model tier and payment method, so always check your current rate in your Stripchat dashboard.' } },
+    { '@type': 'Question', name: 'What is the Stripchat token conversion rate for models?', acceptedAnswer: { '@type': 'Answer', text: 'The Stripchat token conversion rate — the model payout rate for converting tokens to USD — is approximately $0.05 per token. That means 1,000 Stripchat tokens converts to about $50 for the model, though the exact payout rate can vary by tier and payment method.' } },
     { '@type': 'Question', name: 'What is CamSoda\'s token payout rate?', acceptedAnswer: { '@type': 'Answer', text: 'CamSoda pays approximately $0.055 per token — slightly higher than most competitors at the standard tier. This makes 1,000 CamSoda tokens worth about $55 versus $50 on Chaturbate.' } },
     { '@type': 'Question', name: 'Do cam models pay taxes on token earnings?', acceptedAnswer: { '@type': 'Answer', text: 'Yes. In the United States, cam model earnings are self-employment income. You will typically receive a 1099-NEC from platforms paying over $600/year. You are responsible for self-employment tax (15.3%) plus income tax. Keep detailed records of all earnings, and consider quarterly estimated tax payments.' } },
     { '@type': 'Question', name: 'What is the difference between viewer rate and broadcaster rate?', acceptedAnswer: { '@type': 'Answer', text: 'The viewer rate is what fans pay to purchase tokens. The broadcaster rate is the lower amount models actually receive. For example, on Chaturbate viewers pay $0.10/token but models receive $0.05/token. This split funds platform operations.' } },
