@@ -738,15 +738,23 @@ export default function LivePage() {
           <button onClick={() => setShowDemoPreview(true)} style={{ padding: '7px 14px', background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.2)', borderRadius: 8, color: C.cyan, fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>
             🎬 Preview Demo
           </button>
-          <a href="/dashboard" style={{ padding: '7px 14px', background: 'rgba(168,85,247,0.12)', border: '1px solid rgba(168,85,247,0.2)', borderRadius: 8, color: C.purple, fontWeight: 600, fontSize: 12, textDecoration: 'none' }}>
-            Full Dashboard →
-          </a>
+          {user && (
+            <a href="/dashboard" style={{ padding: '7px 14px', background: 'rgba(168,85,247,0.12)', border: '1px solid rgba(168,85,247,0.2)', borderRadius: 8, color: C.purple, fontWeight: 600, fontSize: 12, textDecoration: 'none' }}>
+              Full Dashboard →
+            </a>
+          )}
           <Button as="a" href="/camcash-extension.zip" download="camcash-extension.zip" onClick={() => { setShowExtModal(true); setExtStep(0); }} style={{ padding: '7px 14px', fontSize: 12 }}>
             📥 Get Extension
           </Button>
-          <button onClick={async () => { await supabase.auth.signOut(); window.location.reload(); }} style={{ padding: '7px 14px', background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.25)', borderRadius: 8, color: C.red, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
-            Sign Out
-          </button>
+          {user ? (
+            <button onClick={async () => { await supabase.auth.signOut(); window.location.reload(); }} style={{ padding: '7px 14px', background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.25)', borderRadius: 8, color: C.red, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
+              Sign Out
+            </button>
+          ) : (
+            <button onClick={() => { setAuthMode('signin'); setShowAuthModal(true); }} style={{ padding: '7px 14px', background: 'linear-gradient(135deg, #10B981, #22D3EE)', border: 'none', borderRadius: 8, color: '#fff', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
+              Sign In
+            </button>
+          )}
         </div>
       </div>
 
