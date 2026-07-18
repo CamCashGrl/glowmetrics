@@ -4,13 +4,19 @@ import { NextResponse } from 'next/server'
 import { getLiveSessionCaller } from '../../../../../lib/liveSession/auth'
 import { shapeLiveSession, sanitizedErrorResponse } from '../../../../../lib/liveSession/shape'
 import { isEngineV2AllowedForUser } from '../../../../../lib/liveSession/flag'
+import { corsHeaders } from '../../../../../lib/liveSession/cors'
 
 const UNRESOLVED_STATUSES = ['starting', 'active', 'paused', 'stopping', 'needs_resolution']
 
+export async function OPTIONS(req) {
+  return new Response(null, { status: 204, headers: corsHeaders(req) })
+}
+
 export async function POST(req) {
+  const cors = corsHeaders(req)
   // 1. Authenticate.
   const { supabase, user } = await getLiveSessionCaller(req)
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: cors })
 
   // 2. Look for an existing unresolved live_sessions row owned by this user.
   const { data: existing, error: lookupError } = await supabase
@@ -24,7 +30,7 @@ export async function POST(req) {
 
   if (lookupError) {
     const { status, body } = sanitizedErrorResponse(lookupError)
-    return NextResponse.json(body, { status })
+    return NextResponse.json(body, { status, headers: cors })
   }
 
   // 3. An unresolved session already exists — return it regardless of the
@@ -32,7 +38,7 @@ export async function POST(req) {
   // for this branch: an already-running session is never stranded by a
   // later flag change.
   if (existing) {
-    return NextResponse.json({ session: shapeLiveSession(existing) })
+    return NextResponse.json({ session: shapeLiveSession(existing) }, { headers: cors })
   }
 
   // 4. No existing session — only now does the flag matter.
@@ -43,7 +49,7 @@ export async function POST(req) {
   if (!allowed) {
     return NextResponse.json(
       { error: 'Live Mode V2 is not enabled for this account.', engineDisabled: true },
-      { status: 403 }
+      { status: 403, headers: cors }
     )
   }
 
@@ -59,8 +65,8 @@ export async function POST(req) {
   const { data, error } = await supabase.rpc('start_live_session', { p_platform: platform })
   if (error) {
     const { status, body } = sanitizedErrorResponse(error)
-    return NextResponse.json(body, { status })
+    return NextResponse.json(body, { status, headers: cors })
   }
 
-  return NextResponse.json({ session: shapeLiveSession(data) })
+  return NextResponse.json({ session: shapeLiveSession(data) }, { headers: cors })
 }

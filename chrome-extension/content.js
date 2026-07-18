@@ -99,7 +99,7 @@
       }
     });
     observer.observe(node, { childList: true, subtree: true });
-    chrome.runtime.sendMessage({ action: 'connected' });
+    chrome.runtime.sendMessage({ action: 'connected', platform });
   }
 
   function findAndObserve() {
@@ -535,59 +535,26 @@
 
     const coachText = s.coaches?.[0]?.text || '👁 Watching for tips...';
 
-    const heatState = s.roomHeat || null;
-    let heatHTML = '';
-    if (heatState) {
-      heatHTML = `<div id="heat" style="background:${heatState.bg};border:1px solid ${heatState.border};">
-        <span style="color:${heatState.color};">${heatState.emoji}</span>
-        <span class="heat-label" style="color:${heatState.color};">${heatState.label}</span>
-        <span class="heat-dir" style="color:${heatState.directionColor};">${heatState.directionLabel}</span>
-      </div>`;
-    }
+    // Deliberately compact — this is a status HUD, not a second control
+    // center. The extension popup owns Start/Pause/Resume/Stop and the full
+    // stat/tip breakdown; this overlay only ever shows live status, the
+    // latest coaching prompt, earned, and tip count, per the redesign spec.
+    const usd      = '$' + (s.usd || 0).toFixed(2);
+    const tipCount = (s.tips || []).length;
 
-    const usd      = '$' + (s.usd    || 0).toFixed(2);
-    const tokens   = (s.tokens || 0).toLocaleString();
-    const tipCount = (s.tips   || []).length;
-
-    const whaleSet = new Set((s.whales || []).map(w => w.username.toLowerCase()));
-    const tips     = (s.tips   || []).slice(0, 4);
-    const tipRows  = tips.length === 0
-      ? '<div id="empty">No tips yet this session</div>'
-      : tips.map(t => {
-          const isW = whaleSet.has((t.username || '').toLowerCase());
-          const usdVal = (t.usd || t.tokens * 0.05).toFixed(2);
-          return `<div class="tr${isW ? ' whale' : ''}">
-            <span class="tu">${_esc(t.username)}</span>
-            <span class="tt">${t.tokens}t</span>
-            <span class="td">$${usdVal}</span>
-          </div>`;
-        }).join('');
-
-    const planNotice = s.isPro ? '' : `
-      <div id="planNotice">
-        🔓 Free plan: live coaching + this tip feed, always. Tips aren't saved to
-        your permanent history — <a href="https://www.camcashgrl.com/pricing" target="_blank">upgrade to keep them forever →</a>
-      </div>
-    `;
-
+    // Scan Token History has no other entry point on this page, so it stays
+    // — it's a distinct feature (bulk import), not a duplicate control.
     const scanBtn = isChaturbateTokensPage()
-      ? `<button class="dashbtn" id="scanBtn" style="width:100%;margin-top:6px;border:1px solid rgba(16,185,129,0.4);background:linear-gradient(135deg, rgba(16,185,129,0.25), rgba(16,185,129,0.12));">🔍 Scan Token History</button>`
+      ? `<button class="dashbtn" id="scanBtn" style="width:100%;margin-top:2px;border:1px solid rgba(16,185,129,0.4);background:linear-gradient(135deg, rgba(16,185,129,0.25), rgba(16,185,129,0.12));">🔍 Scan Token History</button>`
       : '';
 
     return hdr + `
       <div id="body">
         <div id="coach">${_esc(coachText)}</div>
-        ${heatHTML}
         <div id="stats">
-          <div class="st"><div class="stl">Revenue</div><div class="stv g">${usd}</div></div>
-          <div class="st"><div class="stl">Tokens</div><div class="stv c">${tokens}</div></div>
+          <div class="st"><div class="stl">Earned</div><div class="stv g">${usd}</div></div>
           <div class="st"><div class="stl">Tips</div><div class="stv o">${tipCount}</div></div>
         </div>
-        <div id="tips">${tipRows}</div>
-        ${planNotice}
-      </div>
-      <div id="foot">
-        <a class="dashbtn" href="https://www.camcashgrl.com/dashboard" target="_blank">📊 Open Dashboard →</a>
         ${scanBtn}
       </div>
     `;
@@ -754,10 +721,24 @@
   }
 
   // ─── Create overlay (first call only) ─────────────────────────────────────
+  // Chrome reloading this extension while a tab is already open can leave a
+  // *previous* content-script instance's overlay element orphaned in the
+  // page (the old script's execution context is invalidated, but the DOM
+  // node it already inserted is not automatically removed). Checking only
+  // the in-memory `_host` variable misses that case, since it's fresh per
+  // script instance — so remove any existing element with this stable id
+  // first, guaranteeing exactly one overlay survives regardless of how many
+  // times the extension has been reloaded under this tab.
+  const OVERLAY_HOST_ID = 'camcash-cc-overlay-host';
+
   function _create() {
     if (_host) return;
 
+    const stale = document.getElementById(OVERLAY_HOST_ID);
+    if (stale) stale.remove();
+
     _host = document.createElement('div');
+    _host.id = OVERLAY_HOST_ID;
     _host.style.cssText = 'position:fixed;z-index:2147483647;';
 
     const pos = _loadPos() || _defaultPos();

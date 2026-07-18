@@ -57,6 +57,18 @@ export default function LivePage() {
   const [authError, setAuthError]         = useState('');
   const [authLoading, setAuthLoading]     = useState(false);
 
+  // Timezone used to display the V2 engine's session start/end clock times
+  // (the duration itself is timezone-independent and unaffected by this).
+  // Falls back to the browser's own timezone; persisted per-browser so it
+  // doesn't need re-selecting every visit.
+  const [liveTimezone, setLiveTimezone] = useState(() => {
+    if (typeof window === 'undefined') return 'UTC';
+    return localStorage.getItem('cc_live_timezone') || Intl.DateTimeFormat().resolvedOptions().timeZone;
+  });
+  useEffect(() => {
+    if (typeof window !== 'undefined') localStorage.setItem('cc_live_timezone', liveTimezone);
+  }, [liveTimezone]);
+
   const processedTipIds   = useRef(new Set());
   const coachingCooldowns = useRef({});
   const isHydratingHistory = useRef(false);
@@ -70,6 +82,21 @@ export default function LivePage() {
   // lifecycle, entirely independent of the legacy state above. engineMode
   // is locked once inside the hook and never re-evaluated for this mount.
   const engine = useLiveSessionEngine();
+
+  // Phase 1D: for V2 users only, mirror the real engine state into the
+  // legacy liveActive/liveStartTime state that the rest of this component
+  // (computeState, the room-state hero, AI coach, stats grid, tip feed —
+  // dozens of `liveActive &&` conditions throughout this file) already
+  // reads. This makes the existing rich dashboard react to the *real*
+  // session instead of requiring every one of those conditions to be
+  // rewritten individually. No-ops entirely for legacy users, since
+  // engineMode is locked once per mount and never toggles mid-session.
+  useEffect(() => {
+    if (engine.engineMode !== 'v2') return;
+    const status = engine.serverSession?.status;
+    setLiveActive(status === 'active' || status === 'paused');
+    setLiveStartTime(engine.serverSession?.started_at ? new Date(engine.serverSession.started_at) : null);
+  }, [engine.engineMode, engine.serverSession?.status, engine.serverSession?.started_at]);
 
   // 1-second ticker drives coaching + elapsed time
   useEffect(() => {
@@ -206,18 +233,26 @@ export default function LivePage() {
   // ── INLINE LIVE ENGINE (same logic as dashboard live tab) ────────────
 
   const computeState = () => {
-    if (!liveEvents.length || !liveStartTime) return null;
+    // For V2-engine users, only count tips tagged to the CURRENT session
+    // (live_session_id) — otherwise older tips from a previous, already-ended
+    // session sitting in the same 12h hydration window would inflate this
+    // session's numbers. Legacy users are completely unaffected (events
+    // stays the raw liveEvents array, exactly as before).
+    const events = engine.engineMode === 'v2'
+      ? liveEvents.filter(e => e.live_session_id === engine.serverSession?.id)
+      : liveEvents;
+    if (!events.length || !liveStartTime) return null;
     const nowMs   = Date.now();
     const startMs = new Date(liveStartTime).getTime();
     const elapsedMins = Math.max((nowMs - startMs) / 60000, 0.1);
     let totalRevenue = 0, totalTokens = 0;
     const tipperMap = {};
-    liveEvents.forEach(ev => {
+    events.forEach(ev => {
       totalRevenue += ev.normalizedRevenue || 0;
       totalTokens  += ev.tokens || 0;
       tipperMap[ev.username] = (tipperMap[ev.username] || 0) + (ev.normalizedRevenue || 0);
     });
-    const liveOnly = liveEvents.filter(e => !e._isHistory);
+    const liveOnly = events.filter(e => !e._isHistory);
     const sortedLive = [...liveOnly].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
     const lastLiveTip = sortedLive[0];
     const timeSinceLast = lastLiveTip
@@ -499,138 +534,33 @@ export default function LivePage() {
       if (result.error) {
         setAuthError(result.error.message);
       } else {
-        setShowAuthModal(false);
-        setAuthEmail('');
-        setAuthPassword('');
+        // A successful sign-in/sign-up only updates Supabase's own session
+        // storage — this component's `user` state (read once on mount) never
+        // finds out on its own. Reload so the mount effect re-runs and picks
+        // up the new session, same as the existing Sign Out button already
+        // does in reverse.
+        window.location.reload();
+        return;
       }
     } finally {
       setAuthLoading(false);
     }
   };
 
-  // ── V2 LIVE SESSION ENGINE — PHASE 1C ─────────────────────────────────
-  // Rendered instead of everything below when engine.engineMode === 'v2'.
-  // The legacy screens and handlers below this block are completely
-  // untouched and only ever reachable when engineMode is 'legacy'.
+  // ── V2 LIVE SESSION ENGINE — PHASE 1D ─────────────────────────────────
+  // No longer replaces the page. When engine.engineMode === 'v2', its
+  // controls and timer are integrated directly into the operational status
+  // bar below (see fmtDuration/timezone helpers + the bar's V2 branch) —
+  // the full original dashboard (room state, AI coach, stats grid, tip
+  // feed, sidebar) always renders underneath, active/paused/restored or not.
 
-  if (engine.phase === 'loading') return (
-    <div style={{ minHeight: '100vh', background: C.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.muted, fontFamily: 'system-ui', gap: 10 }}>
-      <style>{`@keyframes cc-pulse { 0%,100%{opacity:1;} 50%{opacity:0.35;} }`}</style>
-      <div style={{ width: 8, height: 8, borderRadius: '50%', background: C.purple, animation: 'cc-pulse 1s ease-in-out infinite' }} />
-      Connecting…
-    </div>
-  );
-
-  if (engine.engineMode === 'v2') {
-    const fmtDuration = (secs) => {
-      const s = Math.max(0, Math.floor(secs || 0));
-      const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), r = s % 60;
-      return h > 0
-        ? `${h}:${String(m).padStart(2, '0')}:${String(r).padStart(2, '0')}`
-        : `${m}:${String(r).padStart(2, '0')}`;
-    };
-    const session = engine.serverSession;
-    const errorBanner = engine.actionError && (
-      <div style={{ padding: '10px 14px', borderRadius: 10, background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.3)', color: C.red, fontSize: 13, marginBottom: 14 }}>
-        {engine.actionError}
-      </div>
-    );
-
-    return (
-      <div style={{ minHeight: '100vh', background: C.bg, fontFamily: 'system-ui', color: C.white, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-        <div style={{ width: '100%', maxWidth: 480 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-            <span style={{ fontWeight: 800, fontSize: 18, background: `linear-gradient(90deg, ${C.purple}, ${C.pink})`, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-              CamCash
-            </span>
-            <button
-              onClick={async () => { engine.logout(); await supabase.auth.signOut(); window.location.reload(); }}
-              style={{ padding: '6px 12px', background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.25)', borderRadius: 8, color: C.red, fontWeight: 700, fontSize: 11, cursor: 'pointer' }}
-            >
-              Sign Out
-            </button>
-          </div>
-
-          {errorBanner}
-
-          {engine.phase === 'idle' && (
-            <div style={{ ...glassCard, borderRadius: 20, padding: '48px 32px', textAlign: 'center' }}>
-              <div style={{ fontSize: 48, marginBottom: 16 }}>🔴</div>
-              <div style={{ fontSize: 20, fontWeight: 800, marginBottom: 20 }}>Ready to go live?</div>
-              <button
-                disabled={engine.actionPending}
-                onClick={() => engine.goLive(livePlatform)}
-                style={{ padding: '13px 36px', borderRadius: 12, background: 'linear-gradient(135deg, #10B981, #22D3EE)', border: 'none', color: '#fff', fontWeight: 800, fontSize: 16, cursor: engine.actionPending ? 'default' : 'pointer', opacity: engine.actionPending ? 0.6 : 1 }}
-              >
-                {engine.actionPending ? 'Starting…' : '▶ Go Live'}
-              </button>
-            </div>
-          )}
-
-          {engine.phase === 'active' && session && (
-            <div style={{ ...glassCard, borderRadius: 20, padding: '32px 28px', textAlign: 'center' }}>
-              <div style={{ fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>
-                {session.status === 'paused' ? '⏸ Paused' : '🔴 Live'}
-              </div>
-              <div style={{ fontSize: 42, fontWeight: 900, marginBottom: 24, fontVariantNumeric: 'tabular-nums' }}>
-                {fmtDuration(engine.duration?.active_duration_seconds)}
-              </div>
-              <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
-                {session.status === 'active' && (
-                  <button disabled={engine.actionPending} onClick={engine.pause}
-                    style={{ padding: '10px 22px', borderRadius: 10, background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.4)', color: C.gold, fontWeight: 700, cursor: 'pointer' }}>
-                    ⏸ Pause
-                  </button>
-                )}
-                {session.status === 'paused' && (
-                  <button disabled={engine.actionPending} onClick={engine.resume}
-                    style={{ padding: '10px 22px', borderRadius: 10, background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.4)', color: C.green, fontWeight: 700, cursor: 'pointer' }}>
-                    ▶ Resume
-                  </button>
-                )}
-                <button disabled={engine.actionPending} onClick={engine.stop}
-                  style={{ padding: '10px 22px', borderRadius: 10, background: 'rgba(248,113,113,0.15)', border: '1px solid rgba(248,113,113,0.4)', color: C.red, fontWeight: 700, cursor: 'pointer' }}>
-                  ⏹ Stop
-                </button>
-              </div>
-            </div>
-          )}
-
-          {engine.phase === 'needs_resolution' && (
-            <div style={{ ...glassCard, borderRadius: 20, padding: '32px 28px', textAlign: 'center' }}>
-              <div style={{ fontSize: 32, marginBottom: 12 }}>⚠️</div>
-              <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 8 }}>
-                We couldn&apos;t confirm your stream was still active.
-              </div>
-              <div style={{ fontSize: 13, color: C.muted, marginBottom: 24 }}>
-                Are you still live, or did the stream end?
-              </div>
-              <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
-                <button disabled={engine.actionPending} onClick={() => engine.resolve('still_live')}
-                  style={{ padding: '10px 22px', borderRadius: 10, background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.4)', color: C.green, fontWeight: 700, cursor: 'pointer' }}>
-                  Still Live
-                </button>
-                <button disabled={engine.actionPending} onClick={() => engine.resolve('ended')}
-                  style={{ padding: '10px 22px', borderRadius: 10, background: 'rgba(248,113,113,0.15)', border: '1px solid rgba(248,113,113,0.4)', color: C.red, fontWeight: 700, cursor: 'pointer' }}>
-                  Stream Ended
-                </button>
-              </div>
-            </div>
-          )}
-
-          {engine.phase === 'justEnded' && (
-            <div style={{ ...glassCard, borderRadius: 20, padding: '32px 28px', textAlign: 'center' }}>
-              <div style={{ fontSize: 32, marginBottom: 12 }}>✅</div>
-              <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 6 }}>Session ended</div>
-              <div style={{ fontSize: 13, color: C.muted }}>
-                Active time: {fmtDuration(engine.duration?.active_duration_seconds)}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }
+  const fmtDuration = (secs) => {
+    const s = Math.max(0, Math.floor(secs || 0));
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), r = s % 60;
+    return h > 0
+      ? `${h}:${String(m).padStart(2, '0')}:${String(r).padStart(2, '0')}`
+      : `${m}:${String(r).padStart(2, '0')}`;
+  };
 
   // ── CONNECTING / UNAUTHENTICATED SCREENS ─────────────────────────────
 
@@ -868,15 +798,23 @@ export default function LivePage() {
           <button onClick={() => setShowDemoPreview(true)} style={{ padding: '7px 14px', background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.2)', borderRadius: 8, color: C.cyan, fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>
             🎬 Preview Demo
           </button>
-          <a href="/dashboard" style={{ padding: '7px 14px', background: 'rgba(168,85,247,0.12)', border: '1px solid rgba(168,85,247,0.2)', borderRadius: 8, color: C.purple, fontWeight: 600, fontSize: 12, textDecoration: 'none' }}>
-            Full Dashboard →
-          </a>
+          {user && (
+            <a href="/dashboard" style={{ padding: '7px 14px', background: 'rgba(168,85,247,0.12)', border: '1px solid rgba(168,85,247,0.2)', borderRadius: 8, color: C.purple, fontWeight: 600, fontSize: 12, textDecoration: 'none' }}>
+              Full Dashboard →
+            </a>
+          )}
           <Button as="a" href="/camcash-extension.zip" download="camcash-extension.zip" onClick={() => { setShowExtModal(true); setExtStep(0); }} style={{ padding: '7px 14px', fontSize: 12 }}>
             📥 Get Extension
           </Button>
-          <button onClick={async () => { await supabase.auth.signOut(); window.location.reload(); }} style={{ padding: '7px 14px', background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.25)', borderRadius: 8, color: C.red, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
-            Sign Out
-          </button>
+          {user ? (
+            <button onClick={async () => { await supabase.auth.signOut(); window.location.reload(); }} style={{ padding: '7px 14px', background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.25)', borderRadius: 8, color: C.red, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
+              Sign Out
+            </button>
+          ) : (
+            <button onClick={() => { setAuthMode('signin'); setShowAuthModal(true); }} style={{ padding: '7px 14px', background: 'linear-gradient(135deg, #10B981, #22D3EE)', border: 'none', borderRadius: 8, color: '#fff', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
+              Sign In
+            </button>
+          )}
         </div>
       </div>
 
@@ -899,7 +837,12 @@ export default function LivePage() {
             {[
               { label: 'Extension', ok: liveEvents.some(e => e.sourceUsed === 'extension'), okText: 'Connected', offText: 'Not detected' },
               { label: 'Realtime',  ok: !!liveTipsChannelRef?.current,                      okText: 'Live',      offText: 'Offline' },
-              { label: 'Sync',      ok: liveActive,                                          okText: 'Active',    offText: 'Standby' },
+              {
+                label: 'Sync',
+                ok: engine.engineMode === 'v2' ? (engine.phase === 'active' || engine.phase === 'needs_resolution') : liveActive,
+                okText: engine.engineMode === 'v2' && engine.serverSession?.status === 'paused' ? 'Paused' : 'Active',
+                offText: 'Standby',
+              },
             ].map(({ label, ok, okText, offText }) => (
               <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                 <div style={{ width: 6, height: 6, borderRadius: '50%', background: ok ? C.green : '#374151', boxShadow: ok ? `0 0 5px ${C.green}` : 'none' }} />
@@ -907,10 +850,21 @@ export default function LivePage() {
                 <span style={{ fontSize: 11, color: ok ? C.green : '#475569', fontWeight: 600 }}>{ok ? okText : offText}</span>
               </div>
             ))}
-            {liveActive && state && (
-              <span style={{ fontSize: 11, color: C.muted }}>
-                Session: {Math.floor(state.elapsedMins)}m {Math.round((state.elapsedMins % 1) * 60)}s
-              </span>
+            {engine.engineMode === 'v2' && engine.serverSession && (engine.phase === 'active' || engine.serverSession.status === 'paused') ? (
+              <>
+                <span style={{ fontSize: 11, color: C.muted, fontVariantNumeric: 'tabular-nums' }}>
+                  Session: {fmtDuration(engine.duration?.active_duration_seconds)}
+                </span>
+                <span style={{ fontSize: 11, color: C.dim }}>
+                  Started {new Date(engine.serverSession.started_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: liveTimezone })} ({liveTimezone})
+                </span>
+              </>
+            ) : (
+              liveActive && state && (
+                <span style={{ fontSize: 11, color: C.muted }}>
+                  Session: {Math.floor(state.elapsedMins)}m {Math.round((state.elapsedMins % 1) * 60)}s
+                </span>
+              )
             )}
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -926,11 +880,70 @@ export default function LivePage() {
               <option value="whale">🐋 Whale Focus</option>
               <option value="goal">🎯 Goal Focus</option>
             </select>
+            <select value={liveTimezone} onChange={e => setLiveTimezone(e.target.value)} title="Timezone for session start/end times" style={{ ...inp2, width: 'auto', padding: '5px 10px', fontSize: 12 }}>
+              {Array.from(new Set([liveTimezone, Intl.DateTimeFormat().resolvedOptions().timeZone,
+                'America/Los_Angeles', 'America/Denver', 'America/Chicago', 'America/New_York', 'UTC', 'Europe/London', 'Europe/Berlin'
+              ])).map(tz => <option key={tz} value={tz}>{tz}</option>)}
+            </select>
             <Button as="a" href="/camcash-extension.zip" download="camcash-extension.zip" onClick={() => { setShowExtModal(true); setExtStep(0); }}
               style={{ padding: '7px 14px', fontSize: 12, whiteSpace: 'nowrap' }}>
               📥 Download Extension
             </Button>
-            {!liveActive ? (
+            {engine.engineMode === 'v2' ? (
+              <>
+                {engine.phase === 'idle' && (
+                  <button disabled={engine.actionPending} onClick={() => engine.goLive(livePlatform)}
+                    style={{ padding: '7px 18px', borderRadius: 8, background: 'linear-gradient(135deg, #10B981, #22D3EE)', border: 'none', color: C.white, fontWeight: 800, fontSize: 12, cursor: engine.actionPending ? 'default' : 'pointer', opacity: engine.actionPending ? 0.6 : 1, boxShadow: '0 0 16px rgba(16,185,129,0.35)' }}>
+                    {engine.actionPending ? 'Starting…' : '▶ Start Stream'}
+                  </button>
+                )}
+                {engine.phase === 'active' && engine.serverSession?.status === 'active' && (
+                  <>
+                    <button disabled={engine.actionPending} onClick={engine.pause}
+                      style={{ padding: '7px 18px', borderRadius: 8, background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.4)', color: C.gold, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
+                      ⏸ Pause
+                    </button>
+                    <button disabled={engine.actionPending} onClick={engine.stop}
+                      style={{ padding: '7px 18px', borderRadius: 8, background: 'rgba(248,113,113,0.15)', border: '1px solid rgba(248,113,113,0.4)', color: C.red, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
+                      ⏹ End
+                    </button>
+                  </>
+                )}
+                {engine.serverSession?.status === 'paused' && (
+                  <>
+                    <button disabled={engine.actionPending} onClick={engine.resume}
+                      style={{ padding: '7px 18px', borderRadius: 8, background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.4)', color: C.green, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
+                      ▶ Resume
+                    </button>
+                    <button disabled={engine.actionPending} onClick={engine.stop}
+                      style={{ padding: '7px 18px', borderRadius: 8, background: 'rgba(248,113,113,0.15)', border: '1px solid rgba(248,113,113,0.4)', color: C.red, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
+                      ⏹ End
+                    </button>
+                  </>
+                )}
+                {engine.phase === 'needs_resolution' && (
+                  <>
+                    <span style={{ fontSize: 12, color: C.gold, fontWeight: 700 }}>⚠️ Still live?</span>
+                    <button disabled={engine.actionPending} onClick={() => engine.resolve('still_live')}
+                      style={{ padding: '7px 14px', borderRadius: 8, background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.4)', color: C.green, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
+                      Still Live
+                    </button>
+                    <button disabled={engine.actionPending} onClick={() => engine.resolve('ended')}
+                      style={{ padding: '7px 14px', borderRadius: 8, background: 'rgba(248,113,113,0.15)', border: '1px solid rgba(248,113,113,0.4)', color: C.red, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
+                      Stream Ended
+                    </button>
+                  </>
+                )}
+                {engine.phase === 'justEnded' && (
+                  <span style={{ fontSize: 12, color: C.green, fontWeight: 700 }}>
+                    ✅ Session ended — active time {fmtDuration(engine.duration?.active_duration_seconds)}
+                  </span>
+                )}
+                {engine.actionError && (
+                  <span style={{ fontSize: 11, color: C.red }}>{engine.actionError}</span>
+                )}
+              </>
+            ) : !liveActive ? (
               <button onClick={handleStartStream}
                 style={{ padding: '7px 18px', borderRadius: 8, background: 'linear-gradient(135deg, #10B981, #22D3EE)', border: 'none', color: C.white, fontWeight: 800, fontSize: 12, cursor: 'pointer', boxShadow: '0 0 16px rgba(16,185,129,0.35)' }}>
                 ▶ Start Stream

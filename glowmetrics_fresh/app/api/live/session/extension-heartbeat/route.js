@@ -3,14 +3,20 @@ export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { getLiveSessionCaller } from '../../../../../lib/liveSession/auth'
 import { shapeLiveSession, sanitizedErrorResponse } from '../../../../../lib/liveSession/shape'
+import { corsHeaders } from '../../../../../lib/liveSession/cors'
+
+export async function OPTIONS(req) {
+  return new Response(null, { status: 204, headers: corsHeaders(req) })
+}
 
 // Extension heartbeat — proves the extension is active on a supported
 // broadcaster page. Merely having Chrome open or the background worker
 // alive is not proof; broadcasterPageDetected must reflect an actual,
 // periodically re-checked page detection performed by the content script.
 export async function POST(req) {
+  const cors = corsHeaders(req)
   const { supabase, user } = await getLiveSessionCaller(req)
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: cors })
 
   let platform = null
   let broadcasterPageDetected = false
@@ -28,8 +34,8 @@ export async function POST(req) {
   })
   if (error) {
     const { status, body } = sanitizedErrorResponse(error)
-    return NextResponse.json(body, { status })
+    return NextResponse.json(body, { status, headers: cors })
   }
 
-  return NextResponse.json({ session: shapeLiveSession(data) })
+  return NextResponse.json({ session: shapeLiveSession(data) }, { headers: cors })
 }

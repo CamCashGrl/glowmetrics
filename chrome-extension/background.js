@@ -1,8 +1,17 @@
 // CamCash background service worker
 
-const SUPABASE_URL  = 'https://hlsdlaibnayzbfflxclj.supabase.co';
-const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhsc2RsYWlibmF5emJmZmx4Y2xqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM2MjQwODUsImV4cCI6MjA4OTIwMDA4NX0.5FwPe35UL-o46FvBJX526La5o7jcbFaP1KVoLtI4U_M';
-const API_BASE       = 'https://www.camcashgrl.com';
+// ─── TEST ONLY ──────────────────────────────────────────────────────────────
+// These three constants are temporarily pointed at the "live mode testing"
+// Supabase project and the feat/live-mode-session-engine Preview deployment,
+// for testing the new live_sessions engine end-to-end before it ships. Revert
+// to the production values (commented below) before this extension is ever
+// distributed again.
+//   Production SUPABASE_URL:  https://hlsdlaibnayzbfflxclj.supabase.co
+//   Production SUPABASE_ANON: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhsc2RsYWlibmF5emJmZmx4Y2xqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM2MjQwODUsImV4cCI6MjA4OTIwMDA4NX0.5FwPe35UL-o46FvBJX526La5o7jcbFaP1KVoLtI4U_M
+//   Production API_BASE:      https://www.camcashgrl.com
+const SUPABASE_URL  = 'https://qqvflqcxglkmeuahubwv.supabase.co';
+const SUPABASE_ANON = 'sb_publishable_p2RXONVpakjC4x1kV-Jjbg_Pnm3v2bo';
+const API_BASE       = 'https://glowmetrics-ggsb-git-feat-live-mod-a46129-daphneoncams-projects.vercel.app';
 
 // Token→USD rates for the popup's local display only — the server (see
 // app/api/live/tips/route.js) is the source of truth for what actually gets
@@ -25,6 +34,20 @@ let plan = 'free'; // 'free' | 'pro' | 'unlimited' — controls whether tips sav
 // restorePromise resolves once the initial restore() call completes.
 // Tip sync always awaits this before trying to use session.
 let restorePromise = null;
+
+// ─── Live session state (official live_sessions row) ──────────────────────
+// Distinct from `session` above (the auth session). `liveSession` mirrors
+// whatever GET /api/live/session last returned — the extension never keeps
+// its own independent timer/session record, per design.
+let liveSession = null;
+// Set true only while a content script has confirmed it's actively observing
+// a supported broadcaster page (the same signal already used for the
+// 'connected' message); cleared when that tab closes or navigates away.
+// This is the best available "is this really the broadcast page" signal
+// without inventing new detection rules on top of what content.js already does.
+let broadcasterPageActive = false;
+let broadcasterTabId = null;
+let broadcasterPlatform = null;
 
 // Coaching cooldowns — prevents the same signal repeating within its window.
 const coachCooldowns = {};
@@ -86,6 +109,90 @@ async function refreshSession() {
     console.error('[CamCash] token refresh failed:', e.message);
     return false;
   }
+}
+
+// ─── Live session engine (official live_sessions row) ──────────────────────
+// All calls go through /api/live/session/*, the same routes and RPCs the
+// website uses — no separate/duplicate session logic here. A 401 triggers
+// one refresh-and-retry, same pattern as syncTip below.
+async function liveSessionCall(path, method, body) {
+  await restorePromise;
+  if (!session) return null;
+
+  const doFetch = () => fetch(`${API_BASE}${path}`, {
+    method,
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+  });
+
+  try {
+    let res = await doFetch();
+    if (res.status === 401) {
+      const refreshed = await refreshSession();
+      if (refreshed) res = await doFetch();
+    }
+    if (!res.ok) {
+      console.error('[CamCash] live session call failed:', path, res.status);
+      return null;
+    }
+    return await res.json();
+  } catch (e) {
+    console.error('[CamCash] live session call error:', path, e.message);
+    return null;
+  }
+}
+
+async function restoreLiveSession() {
+  const data = await liveSessionCall('/api/live/session', 'GET');
+  liveSession = data?.session || null;
+  broadcast({ action: 'state', state: getState() });
+}
+
+async function startLiveSession(platform) {
+  const data = await liveSessionCall('/api/live/session/start', 'POST');
+  if (data?.session) liveSession = data.session;
+  broadcast({ action: 'state', state: getState() });
+  return data;
+}
+
+async function pauseLiveSession() {
+  const data = await liveSessionCall('/api/live/session/pause', 'POST');
+  if (data?.session) liveSession = data.session;
+  broadcast({ action: 'state', state: getState() });
+  return data;
+}
+
+async function resumeLiveSession() {
+  const data = await liveSessionCall('/api/live/session/resume', 'POST');
+  if (data?.session) liveSession = data.session;
+  broadcast({ action: 'state', state: getState() });
+  return data;
+}
+
+async function stopLiveSession() {
+  const data = await liveSessionCall('/api/live/session/stop', 'POST');
+  liveSession = data?.session || null;
+  broadcast({ action: 'state', state: getState() });
+  return data;
+}
+
+async function resolveLiveSession(choice) {
+  const data = await liveSessionCall('/api/live/session/resolve', 'POST', { choice });
+  liveSession = data?.session || null;
+  broadcast({ action: 'state', state: getState() });
+  return data;
+}
+
+// Sent periodically (see the 'live_heartbeat' alarm below) while a session
+// is unresolved. Proves the extension is on a confirmed broadcaster page —
+// never sent as "detected" unless broadcasterPageActive is genuinely true.
+async function sendExtensionHeartbeat() {
+  if (!liveSession) return;
+  const data = await liveSessionCall(
+    '/api/live/session/extension-heartbeat', 'POST',
+    { platform: broadcasterPlatform, broadcasterPageDetected: broadcasterPageActive }
+  );
+  if (data?.session) liveSession = data.session;
 }
 
 // ─── Tip sync ──────────────────────────────────────────────────────────────────
@@ -194,6 +301,9 @@ async function logout() {
   sessionUsd = 0;
   topTipper = null;
   lastTipTs = null;
+  liveSession = null;
+  broadcasterPageActive = false;
+  broadcasterTabId = null;
   await chrome.storage.local.clear();
   chrome.alarms.clearAll();
 }
@@ -238,7 +348,21 @@ function addCoach(type) {
 function scheduleAlarms() {
   chrome.alarms.create('dead_air',      { periodInMinutes: 5 });
   chrome.alarms.create('whale_refresh', { periodInMinutes: 10 });
+  // chrome.alarms has a 1-minute minimum period — coarser than the website's
+  // 20s heartbeat, but that's fine: the grace period for missed-heartbeat
+  // detection is designed around minutes, not seconds.
+  chrome.alarms.create('live_heartbeat', { periodInMinutes: 1 });
 }
+
+// If the tab we were treating as the active broadcaster page closes, the
+// extension must stop claiming the page is detected — never keep reporting
+// a stale "true" once the tab is gone.
+chrome.tabs.onRemoved.addListener((tabId) => {
+  if (tabId === broadcasterTabId) {
+    broadcasterTabId = null;
+    broadcasterPageActive = false;
+  }
+});
 
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === 'dead_air' && session) {
@@ -249,6 +373,7 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
     }
   }
   if (alarm.name === 'whale_refresh') { await loadWhales(); await loadPlan(); }
+  if (alarm.name === 'live_heartbeat' && session && liveSession) await sendExtensionHeartbeat();
 });
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -259,6 +384,7 @@ function getState() {
     usd: sessionUsd, topTipper, coaches: coachMsgs,
     whales: whales.slice(0, 10), connected: true,
     plan, isPro: plan === 'pro' || plan === 'unlimited',
+    liveSession, broadcasterPageActive,
   };
 }
 
@@ -429,15 +555,48 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
   }
 
   if (msg.action === 'connected') {
+    // A content script confirmed it successfully attached to a supported
+    // broadcaster page's chat — the same real signal already used for the
+    // overlay, now also feeding the extension heartbeat's page-detected flag.
+    if (_sender.tab?.id) {
+      broadcasterTabId = _sender.tab.id;
+      broadcasterPageActive = true;
+      broadcasterPlatform = msg.platform || broadcasterPlatform;
+    }
     broadcast({ action: 'state', state: getState() });
     broadcastOverlay();
     return false;
   }
 
+  if (msg.action === 'live_start') {
+    startLiveSession(msg.platform).then(reply);
+    return true;
+  }
+  if (msg.action === 'live_pause') {
+    pauseLiveSession().then(reply);
+    return true;
+  }
+  if (msg.action === 'live_resume') {
+    resumeLiveSession().then(reply);
+    return true;
+  }
+  if (msg.action === 'live_stop') {
+    stopLiveSession().then(reply);
+    return true;
+  }
+  if (msg.action === 'live_resolve') {
+    resolveLiveSession(msg.choice).then(reply);
+    return true;
+  }
+  if (msg.action === 'live_get_state') {
+    reply({ liveSession, broadcasterPageActive });
+    return false;
+  }
+
   if (msg.type === 'AUTH_CHANGED') {
     restorePromise = restore().then(() => {
-      if (session) { loadWhales(); loadPlan(); scheduleAlarms(); }
-      else { plan = 'free'; chrome.alarms.clearAll(); }
+      if (session) { loadWhales(); loadPlan(); restoreLiveSession(); scheduleAlarms(); }
+      else { plan = 'free'; liveSession = null; chrome.alarms.clearAll(); }
     });
     return false;
   }
@@ -445,5 +604,5 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 restorePromise = restore().then(() => {
-  if (session) { loadWhales(); loadPlan(); scheduleAlarms(); }
+  if (session) { loadWhales(); loadPlan(); restoreLiveSession(); scheduleAlarms(); }
 });
