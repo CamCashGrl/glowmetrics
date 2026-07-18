@@ -493,9 +493,13 @@ export default function LivePage() {
       if (result.error) {
         setAuthError(result.error.message);
       } else {
-        setShowAuthModal(false);
-        setAuthEmail('');
-        setAuthPassword('');
+        // A successful sign-in/sign-up only updates Supabase's own session
+        // storage — this component's `user` state (read once on mount) never
+        // finds out on its own. Reload so the mount effect re-runs and picks
+        // up the new session, same as the existing Sign Out button already
+        // does in reverse.
+        window.location.reload();
+        return;
       }
     } finally {
       setAuthLoading(false);
