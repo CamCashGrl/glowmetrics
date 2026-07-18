@@ -15,6 +15,7 @@ import { track as gtmTrack } from '../../lib/track'
 import { getDashboardReadiness, getModuleLockState, canShowHourlyRate, LockedInsightCard, DashboardProgressCard } from './DashboardPreview'
 import Button from '../../components/ui/Button'
 import EarlyAdopterOffer from './EarlyAdopterOffer'
+import { useLiveSessionEngine } from '../live/useLiveSessionEngine'
 
 // Tab-only components loaded on demand instead of in the initial dashboard
 // bundle — each is only ever rendered behind an `activeTab === '...'` check,
@@ -1374,6 +1375,18 @@ export default function Dashboard() {
   // ── LIVE MODE STATE ───────────────────────────────────────
   const [liveActive, setLiveActive] = useState(false)
   const [liveStartTime, setLiveStartTime] = useState(null)
+  // Real session engine (live_sessions table) — same hook /app/live/page.js
+  // uses. Mirrors its status into the legacy liveActive/liveStartTime state
+  // below so a session started from the extension (or any other surface)
+  // shows up here too, instead of only after a tip arrives. No-ops entirely
+  // for legacy (non-V2) accounts, since engineMode is locked once per mount.
+  const liveEngine = useLiveSessionEngine()
+  useEffect(() => {
+    if (liveEngine.engineMode !== 'v2') return
+    const status = liveEngine.serverSession?.status
+    setLiveActive(status === 'active' || status === 'paused')
+    setLiveStartTime(liveEngine.serverSession?.started_at ? new Date(liveEngine.serverSession.started_at) : null)
+  }, [liveEngine.engineMode, liveEngine.serverSession?.status, liveEngine.serverSession?.started_at])
   const [liveEvents, setLiveEvents] = useState([])
   const [liveGoalTokens, setLiveGoalTokens] = useState(0)
   const [livePlatform, setLivePlatform] = useState('Chaturbate')

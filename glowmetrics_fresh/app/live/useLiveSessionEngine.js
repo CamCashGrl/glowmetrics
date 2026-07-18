@@ -5,6 +5,11 @@ import { shapeLiveSession } from '../../lib/liveSession/shape'
 
 const HEARTBEAT_INTERVAL_MS = 20000
 const STOP_SUMMARY_DISPLAY_MS = 5000
+// A session can be started/paused/resumed/stopped from a different surface
+// entirely (the extension popup, or another open tab) — this page has no
+// other way to find out. Polling is the simplest fix; 15s keeps any given
+// page's view close enough to real without hammering the route.
+const POLL_INTERVAL_MS = 15000
 
 // Encapsulates the entire V2 Live Mode session lifecycle: Restore, Go Live,
 // Pause, Resume, Stop, Resolve, and the website heartbeat. The engine
@@ -28,6 +33,14 @@ export function useLiveSessionEngine() {
   const heartbeatInFlightRef = useRef(false)
   const stopSummaryTimeoutRef = useRef(null)
   const tickerRef = useRef(null)
+
+  // Mirrored into refs so the poll interval (set up once, see below) always
+  // reads the latest value without needing to be torn down and recreated
+  // every time phase/actionPending change.
+  const phaseRef = useRef(phase)
+  useEffect(() => { phaseRef.current = phase }, [phase])
+  const actionPendingRef = useRef(actionPending)
+  useEffect(() => { actionPendingRef.current = actionPending }, [actionPending])
 
   useEffect(() => {
     tickerRef.current = setInterval(() => setTick((t) => t + 1), 1000)
@@ -102,6 +115,42 @@ export function useLiveSessionEngine() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Notices a session started/paused/resumed/stopped from a different
+  // surface (the extension, or another open tab) — restore() only ever runs
+  // once, on mount, so without this a page open before that action happened
+  // would show nothing until manually reloaded. Skipped while an action
+  // initiated from *this* instance is in flight (its own response already
+  // drives state) and while a stop's justEnded summary is being displayed
+  // (a poll landing mid-summary would otherwise cut it short by clearing
+  // serverSession/phase early).
+  const poll = useCallback(async () => {
+    if (engineModeRef.current !== 'v2') return
+    if (actionPendingRef.current) return
+    if (phaseRef.current === 'loading' || phaseRef.current === 'justEnded') return
+    try {
+      const res = await fetch('/api/live/session', { cache: 'no-store' })
+      if (!res.ok) return
+      const data = await res.json()
+      setEngineEnabledForNewSession(!!data.engineEnabledForNewSession)
+      if (data.session) {
+        setServerSession(data.session)
+        setPhase(data.session.status === 'needs_resolution' ? 'needs_resolution' : 'active')
+        startHeartbeat()
+      } else {
+        setServerSession(null)
+        setPhase('idle')
+        stopHeartbeat()
+      }
+    } catch (_) {
+      // a failed poll is never surfaced — the next tick retries
+    }
+  }, [startHeartbeat, stopHeartbeat])
+
+  useEffect(() => {
+    const id = setInterval(poll, POLL_INTERVAL_MS)
+    return () => clearInterval(id)
+  }, [poll])
 
   const goLive = useCallback(async (platform) => {
     if (actionPending || engineModeRef.current !== 'v2') return
