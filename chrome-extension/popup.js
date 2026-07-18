@@ -8,7 +8,7 @@
 //   Production SUPABASE_URL:      https://hlsdlaibnayzbfflxclj.supabase.co
 //   Production SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhsc2RsYWlibmF5emJmZmx4Y2xqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM2MjQwODUsImV4cCI6MjA4OTIwMDA4NX0.5FwPe35UL-o46FvBJX526La5o7jcbFaP1KVoLtI4U_M
 const SUPABASE_URL = 'https://qqvflqcxglkmeuahubwv.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_p2RXONVpakjC4x1kV-Jjbg_Pnm3v2bo';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFxdmZscWN4Z2xrbWV1YWh1Ynd2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQxMzgyOTQsImV4cCI6MjA5OTcxNDI5NH0.XpfBTAIUwIVrKRdLkuiATm8lu234NPu0t7iQFLSFk2s';
 
 // DOM elements
 const authSection = document.getElementById('auth-section');
