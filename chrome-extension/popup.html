@@ -108,6 +108,31 @@
       border-bottom: 1px solid #1e2232;
     }
 
+    #session-box {
+      padding: 10px 14px;
+      border-bottom: 1px solid #1e2232;
+    }
+    #session-status {
+      font-size: 11px;
+      color: #64748b;
+      margin-bottom: 8px;
+      line-height: 1.4;
+    }
+    .session-controls {
+      display: flex;
+      gap: 6px;
+    }
+    .session-controls .btn {
+      margin-top: 0;
+      flex: 1;
+      padding: 8px;
+      font-size: 12px;
+    }
+    .btn-start  { background: linear-gradient(135deg, #10b981, #22d3ee); color: #04101a; }
+    .btn-pause  { background: rgba(245,158,11,0.18); color: #fbbf24; border: 1px solid rgba(245,158,11,0.4); }
+    .btn-resume { background: rgba(16,185,129,0.18); color: #4ade80; border: 1px solid rgba(16,185,129,0.4); }
+    .btn-stop   { background: rgba(248,113,113,0.15); color: #f87171; border: 1px solid rgba(248,113,113,0.4); }
+
     #coach-box {
       padding: 10px 14px;
       border-bottom: 1px solid #1e2232;
@@ -120,15 +145,27 @@
       color: #475569;
       margin-bottom: 6px;
     }
-    #coach-msg {
+    #coach-list {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      max-height: 150px;
+      overflow-y: auto;
+    }
+    .coach-item {
       font-size: 12px;
       color: #cbd5e1;
       background: #161b2e;
       padding: 7px 10px;
       border-radius: 7px;
       line-height: 1.4;
-      min-height: 32px;
     }
+    .coach-item-time {
+      font-size: 9px;
+      color: #475569;
+      margin-top: 3px;
+    }
+    .empty-coach { color: #334155; font-size: 12px; padding: 8px 0; text-align: center; }
 
     .tips-header {
       display: flex;
@@ -252,10 +289,24 @@
       </div>
     </div>
 
+    <!-- Live session: Start/Pause/Resume/Stop — mirrors the web /live page,
+         and is the same session either surface shows/tracks. -->
+    <div id="session-box">
+      <div id="session-status">Not tracking a session</div>
+      <div class="session-controls">
+        <button class="btn btn-start" id="start-session-btn">▶ Start Stream</button>
+        <button class="btn btn-pause" id="pause-session-btn" style="display:none;">⏸ Pause</button>
+        <button class="btn btn-resume" id="resume-session-btn" style="display:none;">▶ Resume</button>
+        <button class="btn btn-stop" id="stop-session-btn" style="display:none;">⏹ End</button>
+      </div>
+    </div>
+
     <!-- Coach -->
     <div id="coach-box">
       <div class="coach-label">Live Coach</div>
-      <div id="coach-msg">Coaching tips will appear during your stream</div>
+      <div id="coach-list">
+        <div class="empty-coach">Coaching tips will appear here during your stream</div>
+      </div>
     </div>
 
     <!-- Tips -->

@@ -11,6 +11,9 @@ import { tokenRate } from '../../lib/constants';
 import FeedbackWidget from '../components/FeedbackWidget';
 import EventsSync from './EventsSync';
 import Button from '../../components/ui/Button';
+import { buildCoachingEventFields } from '../../lib/sessionHub/coachingCategory';
+import { logFeatureUsageEvent } from '../../lib/sessionHub/featureUsage';
+import CoachingActionButtons from '../dashboard/sessions/CoachingActionButtons';
 
 const C = {
   bg: '#040812', card: 'rgba(15,20,32,0.75)', border: 'rgba(168,85,247,0.2)',
@@ -40,6 +43,12 @@ export default function LivePage() {
   const [liveTick, setLiveTick]       = useState(0);
   const [sessions, setSessions]       = useState([]);
   const [currentSessionId, setCurrentSessionId] = useState(null);
+  const [isPaused, setIsPaused]       = useState(false);
+  const [pauseIntervals, setPauseIntervals] = useState([]);
+  const [coachingActionsVisible, setCoachingActionsVisible] = useState(true);
+  const [coachingEventTick, setCoachingEventTick] = useState(0);
+  const [extensionActive, setExtensionActive] = useState(false);
+  const [sessionCoachingEvents, setSessionCoachingEvents] = useState([]);
 
   // ── DEMO / AUTH / EXT MODAL STATE ────────────────────────────────────
   const [demoTips, setDemoTips]           = useState([]);
@@ -64,6 +73,8 @@ export default function LivePage() {
   const prevPhaseRef      = useRef(null);
   const liveTipsChannelRef = useRef(null);
   const liveTickerRef     = useRef(null);
+  const coachingEventMapRef = useRef({}); // dedupeKey -> { id, status } for the most recent firing
+  const extensionActiveRef = useRef(false); // last known extension-active state, for edge-transition detection
 
   // 1-second ticker drives coaching + elapsed time
   useEffect(() => {
@@ -93,6 +104,9 @@ export default function LivePage() {
       if (!u) { setAuthStatus('live'); return; }
       setUser(u);
       setAuthStatus('live');
+
+      supabase.from('profiles').select('coaching_actions_visible').eq('id', u.id).maybeSingle()
+        .then(({ data }) => { if (data) setCoachingActionsVisible(data.coaching_actions_visible !== false); });
 
       // Load last 12h of tips as history
       const since = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString();
@@ -150,51 +164,154 @@ export default function LivePage() {
     return () => { if (liveTipsChannelRef.current) supabase.removeChannel(liveTipsChannelRef.current); };
   }, [normalizeTip]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Polls whether the CamCash extension is actually open on a supported cam
+  // site (not just that Start was clicked here), and picks up session state
+  // the extension itself may have changed. A session is only "lit up" /
+  // actively tracked when both are true — see the liveActive && extensionActive
+  // checks below. Connectivity gaps are recorded as real pause intervals
+  // (reason: 'extension_disconnected') so active-duration and Actual $/Hour
+  // never count time the extension wasn't really there to capture tips.
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+
+    const poll = async () => {
+      const { data: { session: authSession } } = await supabase.auth.getSession();
+      const token = authSession?.access_token;
+      if (!token) return;
+      let data;
+      try {
+        const res = await fetch('/api/live/session', { headers: { Authorization: `Bearer ${token}` } });
+        if (!res.ok || cancelled) return;
+        data = await res.json();
+      } catch {
+        return;
+      }
+      if (cancelled) return;
+      setExtensionActive(data.extensionActive);
+
+      if (data.session && data.session.id !== currentSessionId) {
+        applyServerSession(data.session);
+        setLiveActive(true);
+      } else if (!data.session && currentSessionId) {
+        setLiveActive(false);
+        setCurrentSessionId(null);
+        setIsPaused(false);
+        setPauseIntervals([]);
+      } else if (data.session) {
+        const intervals = data.session.pause_intervals || [];
+        setPauseIntervals(intervals);
+        setIsPaused(intervals.some(p => !p.end));
+      }
+
+      const wasActive = extensionActiveRef.current;
+      extensionActiveRef.current = data.extensionActive;
+      if (data.session && !data.session.completed) {
+        if (wasActive && !data.extensionActive) {
+          callSessionApi('pause', { sessionId: data.session.id, reason: 'extension_disconnected' })
+            .then(r => { if (r?.session) applyServerSession(r.session); });
+        } else if (!wasActive && data.extensionActive) {
+          const intervals = data.session.pause_intervals || [];
+          const last = intervals[intervals.length - 1];
+          if (last && !last.end && last.reason === 'extension_disconnected') {
+            callSessionApi('resume', { sessionId: data.session.id })
+              .then(r => { if (r?.session) applyServerSession(r.session); });
+          }
+        }
+      }
+    };
+
+    poll();
+    const interval = setInterval(poll, 15000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [user, currentSessionId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Hydrates the full coaching prompt log for the current session (covers a
+  // page reload mid-session, or a session picked up from the extension) —
+  // Coaching History must never be limited to what happened to still be in
+  // this page's in-memory buffer.
+  useEffect(() => {
+    if (!currentSessionId) { setSessionCoachingEvents([]); return; }
+    let cancelled = false;
+    supabase.from('coaching_events').select('*').eq('session_id', currentSessionId).order('shown_at', { ascending: false })
+      .then(({ data }) => {
+        if (cancelled || !data) return;
+        setSessionCoachingEvents(data.map(row => ({
+          id: row.id, dedupeKey: row.dedupe_key, category: row.category, title: row.title,
+          message: row.message, shownAt: row.shown_at, actionStatus: row.action_status,
+        })));
+      });
+    return () => { cancelled = true; };
+  }, [currentSessionId]);
+
   // ── SESSION DB HANDLERS ───────────────────────────────────────────────
 
+  // One authoritative session-lifecycle implementation lives server-side
+  // (app/api/live/session/route.js), shared with the Chrome extension, so
+  // starting/pausing/stopping from either surface stays in sync. This is a
+  // thin authenticated wrapper around it.
+  const callSessionApi = async (action, payload = {}) => {
+    const { data: { session: authSession } } = await supabase.auth.getSession();
+    const token = authSession?.access_token;
+    if (!token) return null;
+    try {
+      const res = await fetch('/api/live/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ action, ...payload }),
+      });
+      if (!res.ok) return null;
+      return await res.json();
+    } catch {
+      return null;
+    }
+  };
+
+  // Applies a server session row (from any action, or from presence
+  // polling) to local component state so the UI reflects whichever surface
+  // (this page or the extension) last changed it.
+  const applyServerSession = (session) => {
+    if (!session) return;
+    setCurrentSessionId(session.id);
+    setLiveStartTime(new Date(session.start_time));
+    const intervals = session.pause_intervals || [];
+    setPauseIntervals(intervals);
+    setIsPaused(intervals.some(p => !p.end));
+  };
+
   const handleStartStream = async () => {
-    const startTime = new Date();
-    setLiveActive(true);
-    setLiveStartTime(startTime);
     setLiveEvents([]);
     processedTipIds.current = new Set();
     coachingCooldowns.current = {};
-    if (user) {
-      const { data: session } = await supabase
-        .from('stream_sessions')
-        .insert({
-          user_id: user.id,
-          platform: livePlatform,
-          start_time: startTime.toISOString(),
-          end_time: startTime.toISOString(), // placeholder; updated on stop
-          hours_streamed: 0,
-        })
-        .select()
-        .single();
-      if (session) setCurrentSessionId(session.id);
+    coachingEventMapRef.current = {};
+    firedAlertsLog.current = [];
+    if (!user) return;
+    const result = await callSessionApi('start', { platform: livePlatform });
+    if (result?.session) {
+      applyServerSession(result.session);
+      setLiveActive(true);
     }
+  };
+
+  const handlePauseStream = async () => {
+    if (isPaused || !currentSessionId) return;
+    const result = await callSessionApi('pause', { sessionId: currentSessionId, reason: 'user' });
+    if (result?.session) applyServerSession(result.session);
+  };
+
+  const handleResumeStream = async () => {
+    if (!isPaused || !currentSessionId) return;
+    const result = await callSessionApi('resume', { sessionId: currentSessionId });
+    if (result?.session) applyServerSession(result.session);
   };
 
   const handleStopStream = async () => {
     setLiveActive(false);
-    if (user && currentSessionId && liveStartTime) {
-      const endTime = new Date();
-      const hoursStreamed = (endTime - new Date(liveStartTime)) / 1000 / 60 / 60;
-      const sessionTips = liveEvents.filter(e => !e._isHistory);
-      const totalUsd    = sessionTips.reduce((sum, t) => sum + (t.normalizedRevenue || t.usd || 0), 0);
-      const totalTokens = sessionTips.reduce((sum, t) => sum + (t.tokens || 0), 0);
-      await supabase
-        .from('stream_sessions')
-        .update({
-          end_time:      endTime.toISOString(),
-          hours_streamed: parseFloat(hoursStreamed.toFixed(4)),
-          usd:           parseFloat(totalUsd.toFixed(2)),
-          tokens:        totalTokens,
-          tip_count:     sessionTips.length,
-        })
-        .eq('id', currentSessionId);
-      setCurrentSessionId(null);
-    }
+    if (!currentSessionId) return;
+    await callSessionApi('stop', { sessionId: currentSessionId });
+    setCurrentSessionId(null);
+    setIsPaused(false);
+    setPauseIntervals([]);
   };
 
   // ── INLINE LIVE ENGINE (same logic as dashboard live tab) ────────────
@@ -261,16 +378,79 @@ export default function LivePage() {
     return false;
   };
 
+  // Persists a just-shown coaching prompt as a StoredCoachingEvent so it
+  // survives the session and can carry an optional Performed/Skip mark.
+  // Fire-and-forget — must never interrupt or delay the live coaching UI.
+  const persistCoachingEvent = (key, meta) => {
+    if (!user || !currentSessionId) return;
+    const fields = buildCoachingEventFields({ key, ...meta });
+    const shownAt = new Date().toISOString();
+    supabase.from('coaching_events').insert({
+      user_id: user.id,
+      session_id: currentSessionId,
+      type: 'live_alert',
+      category: fields.category,
+      priority: fields.priority,
+      dedupe_key: fields.dedupeKey,
+      title: fields.title,
+      message: fields.message,
+      compact_message: fields.compactMessage,
+      related_tipper_name: fields.relatedTipperName,
+      related_amount_usd: fields.relatedAmountUsd,
+      shown_at: shownAt,
+    }).select().single().then(({ data }) => {
+      if (data) {
+        coachingEventMapRef.current[key] = { id: data.id, status: 'unmarked' };
+        setCoachingEventTick(v => v + 1);
+        setSessionCoachingEvents(prev => [{
+          id: data.id, dedupeKey: key, category: fields.category, title: fields.title,
+          message: fields.message, shownAt: data.shown_at, actionStatus: 'unmarked',
+        }, ...prev]);
+      }
+    });
+    logFeatureUsageEvent(supabase, {
+      userId: user.id, sessionId: currentSessionId, feature: 'coaching',
+      action: 'coaching.prompt_shown', metadata: { category: fields.category },
+    });
+  };
+
+  // Shared by both the fleeting "AI Coach" centerpiece (looked up by
+  // dedupeKey) and the persistent Alert History log (looked up by id) —
+  // one DB write, one feature-usage log, no duplicated logic.
+  const applyCoachingStatusUpdate = (id, nextStatus) => {
+    if (!id || !user) return;
+    const respondedAt = nextStatus === 'unmarked' ? null : new Date().toISOString();
+    supabase.from('coaching_events').update({ action_status: nextStatus, action_responded_at: respondedAt, updated_at: new Date().toISOString() }).eq('id', id);
+    logFeatureUsageEvent(supabase, {
+      userId: user.id, sessionId: currentSessionId, feature: 'coaching_action',
+      action: nextStatus === 'unmarked' ? 'coaching.prompt_unmarked' : nextStatus === 'performed' ? 'coaching.prompt_performed' : 'coaching.prompt_skipped',
+      metadata: { coachingEventId: id },
+    });
+    setSessionCoachingEvents(prev => prev.map(e => (e.id === id ? { ...e, actionStatus: nextStatus } : e)));
+  };
+
+  const updateLiveCoachingStatus = (key, nextStatus) => {
+    const entry = coachingEventMapRef.current[key];
+    if (!entry) return;
+    coachingEventMapRef.current[key] = { ...entry, status: nextStatus };
+    setCoachingEventTick(v => v + 1);
+    applyCoachingStatusUpdate(entry.id, nextStatus);
+  };
+
   const getAlerts = (state) => {
-    if (!state || isHydratingHistory.current || !liveActive) return [];
+    // Coaching only fires when the session is actually being tracked — the
+    // user clicked Start AND the extension is confirmed open/active on a
+    // supported cam site. Otherwise there's no real tip data behind it.
+    if (!state || isHydratingHistory.current || !liveActive || !extensionActive) return [];
     const { timeSinceLastTip, paceStatus, goalProgress, topTipper, totalRevenue, elapsedMins, liveOnlyCount } = state;
     const deadAirCrit = liveStrategy === 'aggressive' ? 6 : 8;
     const deadAirHigh = liveStrategy === 'aggressive' ? 4 : 5;
     const goalPushPct = liveStrategy === 'aggressive' || liveStrategy === 'goal' ? 80 : 90;
     const alerts = [];
-    const logFired = (icon, text) => {
-      firedAlertsLog.current.unshift({ icon, text, ts: Date.now() });
+    const logFired = (icon, text, key, meta = {}) => {
+      firedAlertsLog.current.unshift({ icon, text, ts: Date.now(), key });
       if (firedAlertsLog.current.length > 20) firedAlertsLog.current.length = 20;
+      persistCoachingEvent(key, { priority: meta.priority, text, context: meta.context, action: meta.action, relatedTipperName: meta.relatedTipperName ?? null, relatedAmountUsd: meta.relatedAmountUsd ?? null });
     };
     if (timeSinceLastTip !== null && timeSinceLastTip >= deadAirCrit) {
       if (canFireAlert('dead_air_critical', 3 * 60 * 1000)) {
@@ -279,7 +459,8 @@ export default function LivePage() {
           ? `Address ${topTipper.username} directly — call them out by name right now`
           : `Start a 2,000 token room goal and ask viewers to vote on the reward`;
         const text = `${context} — ${action}`;
-        alerts.push({ priority: 1, level: 'critical', icon: '🚨', text, context, action }); logFired('🚨', text);
+        alerts.push({ priority: 1, level: 'critical', icon: '🚨', text, context, action, key: 'dead_air_critical' });
+        logFired('🚨', text, 'dead_air_critical', { priority: 1, context, action });
       }
     }
     if (goalProgress >= goalPushPct && goalProgress < 100) {
@@ -287,7 +468,8 @@ export default function LivePage() {
         const context = `Goal is at ${goalProgress}% — the room is primed`;
         const action = `Announce your reward out loud right now and keep the energy high`;
         const text = `${goalProgress}% to goal — push NOW, announce the reward`;
-        alerts.push({ priority: 1, level: 'critical', icon: '🎯', text, context, action }); logFired('🎯', text);
+        alerts.push({ priority: 1, level: 'critical', icon: '🎯', text, context, action, key: 'goal_push' });
+        logFired('🎯', text, 'goal_push', { priority: 1, context, action });
       }
     }
     if (timeSinceLastTip !== null && timeSinceLastTip >= deadAirHigh && timeSinceLastTip < deadAirCrit) {
@@ -299,7 +481,8 @@ export default function LivePage() {
           ? `Thank a viewer by name — recognition re-engages the room`
           : `Start a quick 200-token goal right now`;
         const text = `${Math.round(timeSinceLastTip)} min since last tip — ${action}`;
-        alerts.push({ priority: 2, level: 'warning', icon: '⚠️', text, context, action }); logFired('⚠️', text);
+        alerts.push({ priority: 2, level: 'warning', icon: '⚠️', text, context, action, key: 'dead_air_high' });
+        logFired('⚠️', text, 'dead_air_high', { priority: 2, context, action });
       }
     }
     if (paceStatus === 'below' && elapsedMins >= 8 && liveOnlyCount >= 3) {
@@ -309,7 +492,8 @@ export default function LivePage() {
           ? `Announce a limited-time exclusive offer right now`
           : `Activate toy or set a micro-goal to restart momentum`;
         const text = `Pace dropping — ${action}`;
-        alerts.push({ priority: 2, level: 'warning', icon: '📉', text, context, action }); logFired('📉', text);
+        alerts.push({ priority: 2, level: 'warning', icon: '📉', text, context, action, key: 'pace_below' });
+        logFired('📉', text, 'pace_below', { priority: 2, context, action });
       }
     }
     if (elapsedMins > 75 && paceStatus === 'below' && liveOnlyCount >= 5) {
@@ -317,7 +501,8 @@ export default function LivePage() {
         const context = `${Math.round(elapsedMins)} minutes in and tip rate is dropping`;
         const action = `Try a new goal or content angle to reset room energy`;
         const text = `Stream fatigue — ${action}`;
-        alerts.push({ priority: 2, level: 'warning', icon: '😴', text, context, action }); logFired('😴', text);
+        alerts.push({ priority: 2, level: 'warning', icon: '😴', text, context, action, key: 'stream_fatigue' });
+        logFired('😴', text, 'stream_fatigue', { priority: 2, context, action });
       }
     }
     if (paceStatus === 'above' && elapsedMins >= 8 && liveOnlyCount >= 3) {
@@ -329,7 +514,8 @@ export default function LivePage() {
         const text = liveStrategy === 'aggressive'
           ? `Momentum is hot — ${action}`
           : `Momentum building — ${action}`;
-        alerts.push({ priority: 3, level: 'success', icon: '🔥', text, context, action }); logFired('🔥', text);
+        alerts.push({ priority: 3, level: 'success', icon: '🔥', text, context, action, key: 'pace_above' });
+        logFired('🔥', text, 'pace_above', { priority: 3, context, action });
       }
     }
     if (goalProgress >= 100) {
@@ -337,7 +523,8 @@ export default function LivePage() {
         const context = `You just hit your room goal!`;
         const action = `Set the next goal immediately — momentum drops if there's nothing to tip toward`;
         const text = `Goal hit! ${action}`;
-        alerts.push({ priority: 3, level: 'success', icon: '🎉', text, context, action }); logFired('🎉', text);
+        alerts.push({ priority: 3, level: 'success', icon: '🎉', text, context, action, key: 'goal_hit' });
+        logFired('🎉', text, 'goal_hit', { priority: 3, context, action });
       }
     }
     if (liveOnlyCount >= 4 && liveStrategy !== 'engagement') {
@@ -365,7 +552,9 @@ export default function LivePage() {
             const context = `${uname} usually tips every ~${avgMins} minutes`;
             const action = `${sinceMins} min since their last tip — call them out right now!`;
             const text = `${uname} tips every ~${avgMins} min — ${sinceMins} min since their last. Call them out!`;
-            alerts.push({ priority: 3, level: 'info', icon: '🐋', text, context, action }); logFired('🐋', text);
+            const key = `whale_prox_${uname}`;
+            alerts.push({ priority: 3, level: 'info', icon: '🐋', text, context, action, key });
+            logFired('🐋', text, key, { priority: 3, context, action, relatedTipperName: uname });
             surfaced = true;
           }
         }
@@ -377,14 +566,18 @@ export default function LivePage() {
         const context = `${topTipper.username} is ${pctStr}% of your session revenue`;
         const action = `Give them personal attention and an exclusive offer for their next tip`;
         const text = `${topTipper.username} is ${pctStr}% of revenue — give them attention`;
-        alerts.push({ priority: 4, level: 'info', icon: '🐳', text, context, action }); logFired('🐳', text);
+        const key = `whale_dep_${topTipper.username}`;
+        alerts.push({ priority: 4, level: 'info', icon: '🐳', text, context, action, key });
+        logFired('🐳', text, key, { priority: 4, context, action, relatedTipperName: topTipper.username, relatedAmountUsd: topTipper.revenue });
       }
     }
     return alerts.sort((a, b) => a.priority - b.priority).slice(0, 4);
   };
 
   const getNextAction = (state) => {
-    if (!state || !liveActive) return { text: 'Start your stream to get live coaching' };
+    if (!liveActive) return { text: 'Start your stream to get live coaching' };
+    if (!extensionActive) return { text: 'Waiting for the CamCash extension to connect on your cam site tab…' };
+    if (!state) return { text: 'Waiting for your first tip — set a goal to get things started.' };
     if (isHydratingHistory.current) return { text: 'Loading session data…' };
     const { timeSinceLastTip, paceStatus, goalProgress, topTipper, totalRevenue, elapsedMins, liveOnlyCount } = state;
     if (liveOnlyCount === 0) return { text: 'Waiting for your first tip — set a goal to get things started.' };
@@ -814,12 +1007,33 @@ export default function LivePage() {
                 ▶ Start Stream
               </button>
             ) : (
-              <button onClick={handleStopStream}
-                style={{ padding: '7px 18px', borderRadius: 8, background: 'rgba(248,113,113,0.15)', border: '1px solid rgba(248,113,113,0.4)', color: C.red, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
-                ⏹ End
-              </button>
+              <>
+                {!isPaused ? (
+                  <button onClick={handlePauseStream}
+                    style={{ padding: '7px 18px', borderRadius: 8, background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.4)', color: C.gold, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
+                    ⏸ Pause
+                  </button>
+                ) : (
+                  <button onClick={handleResumeStream}
+                    style={{ padding: '7px 18px', borderRadius: 8, background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.4)', color: C.green, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
+                    ▶ Resume
+                  </button>
+                )}
+                <button onClick={handleStopStream}
+                  style={{ padding: '7px 18px', borderRadius: 8, background: 'rgba(248,113,113,0.15)', border: '1px solid rgba(248,113,113,0.4)', color: C.red, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
+                  ⏹ End
+                </button>
+              </>
             )}
           </div>
+          {isPaused && (
+            <div style={{ width: '100%', marginTop: 6, fontSize: 11, color: C.gold, fontWeight: 700 }}>⏸ Session paused — coaching and timers are on hold</div>
+          )}
+          {liveActive && !isPaused && !extensionActive && (
+            <div style={{ width: '100%', marginTop: 6, fontSize: 11, color: C.gold, fontWeight: 700 }}>
+              ⚠️ CamCash extension not detected — open the extension on your cam site tab to resume tracking. This session is auto-paused until it reconnects.
+            </div>
+          )}
 
           {/* Intelligence strip */}
           {liveActive && state && (
@@ -890,11 +1104,16 @@ export default function LivePage() {
                 <div style={{ borderRadius: 16, padding: '22px 28px', marginBottom: 20, background: `linear-gradient(135deg, ${rg.from}, ${rg.to})`, border: `1px solid ${roomHealth.border}`, boxShadow: `0 0 48px ${rg.glow}`, position: 'relative', overflow: 'hidden', transition: 'all 1.2s ease' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 20 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
-                      <div style={{ width: 14, height: 14, borderRadius: '50%', background: liveActive ? C.green : C.muted, boxShadow: liveActive ? `0 0 12px ${C.green}` : 'none', animation: liveActive ? 'cc-pulse 1.2s ease-in-out infinite' : 'none', flexShrink: 0 }} />
+                      <div style={{ width: 14, height: 14, borderRadius: '50%', background: (liveActive && extensionActive) ? C.green : liveActive ? C.gold : C.muted, boxShadow: (liveActive && extensionActive) ? `0 0 12px ${C.green}` : 'none', animation: (liveActive && extensionActive) ? 'cc-pulse 1.2s ease-in-out infinite' : 'none', flexShrink: 0 }} />
                       <div>
                         <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.45)', textTransform: 'uppercase', letterSpacing: 1.2, fontWeight: 700, marginBottom: 3 }}>Room State</div>
                         <div style={{ fontSize: 30, fontWeight: 900, color: roomHealth.color, letterSpacing: -0.5 }}>{roomHealth.emoji} {roomHealth.label}</div>
                       </div>
+                      {liveActive && (
+                        <div style={{ padding: '6px 14px', borderRadius: 20, background: extensionActive ? 'rgba(16,185,129,0.14)' : 'rgba(245,158,11,0.14)', border: `1px solid ${extensionActive ? 'rgba(16,185,129,0.4)' : 'rgba(245,158,11,0.4)'}`, fontSize: 11, fontWeight: 700, color: extensionActive ? C.green : C.gold }}>
+                          {extensionActive ? '🟢 Tracked' : '⏸ Extension not connected — not tracked'}
+                        </div>
+                      )}
                       {liveActive && state && (
                         <div style={{ padding: '6px 14px', borderRadius: 20, background: phaseConfig.bg, border: `1px solid ${phaseConfig.border}`, fontSize: 12, fontWeight: 700, color: phaseConfig.color }}>
                           {phaseConfig.icon} {phaseConfig.label}
@@ -1344,16 +1563,25 @@ export default function LivePage() {
                 );
               })()}
 
-              {/* Alert History */}
-              {liveActive && firedAlertsLog.current.length > 0 && (
+              {/* Alert History — the full session's coaching prompt log, not
+                  just what's still in this page's recent in-memory buffer. */}
+              {liveActive && sessionCoachingEvents.length > 0 && (
                 <div style={{ ...glassCard, borderRadius: 14, padding: 18 }}>
-                  <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700, marginBottom: 10 }}>📋 Alert History</div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 5, maxHeight: 240, overflowY: 'auto' }}>
-                    {firedAlertsLog.current.slice(0, 15).map((entry, i) => (
-                      <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '5px 8px', borderRadius: 7, background: 'rgba(255,255,255,0.02)' }}>
-                        <span style={{ fontSize: 13, flexShrink: 0, lineHeight: 1.4 }}>{entry.icon}</span>
-                        <span style={{ fontSize: 11, color: C.text, flex: 1, lineHeight: 1.4 }}>{entry.text}</span>
-                        <span style={{ fontSize: 9, color: C.muted, whiteSpace: 'nowrap', marginTop: 1 }}>{new Date(entry.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                    <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700 }}>📋 Alert History</div>
+                    <div style={{ fontSize: 9, color: C.muted }}>{sessionCoachingEvents.length} shown this session</div>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 5, maxHeight: 320, overflowY: 'auto' }}>
+                    {sessionCoachingEvents.map((entry) => (
+                      <div key={entry.id} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '5px 8px', borderRadius: 7, background: 'rgba(255,255,255,0.02)', flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: 11, color: C.text, flex: 1, lineHeight: 1.4, minWidth: 160 }}>{entry.message}</span>
+                        <span style={{ fontSize: 9, color: C.muted, whiteSpace: 'nowrap', marginTop: 1 }}>{new Date(entry.shownAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                        <CoachingActionButtons
+                          status={entry.actionStatus}
+                          visible={coachingActionsVisible}
+                          size="compact"
+                          onSetStatus={(next) => applyCoachingStatusUpdate(entry.id, next)}
+                        />
                       </div>
                     ))}
                   </div>

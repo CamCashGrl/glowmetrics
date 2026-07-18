@@ -15,6 +15,12 @@ const userInfo = document.getElementById('user-info');
 const tipsList = document.getElementById('tips-list');
 const authError = document.getElementById('auth-error');
 const statusBadge = document.getElementById('status');
+const sessionStatusEl = document.getElementById('session-status');
+const startSessionBtn = document.getElementById('start-session-btn');
+const pauseSessionBtn = document.getElementById('pause-session-btn');
+const resumeSessionBtn = document.getElementById('resume-session-btn');
+const stopSessionBtn = document.getElementById('stop-session-btn');
+const coachListEl = document.getElementById('coach-list');
 
 // On load
 function init() {
@@ -196,14 +202,71 @@ function escapeHtml(text) {
 
 setInterval(loadTips, 5000);
 
+// Renders the full log of coaching prompts shown this session (not just
+// the latest one) — background.js already caps this at 8 in memory.
+function renderCoachList(coaches) {
+  if (!coachListEl) return;
+  if (!coaches || coaches.length === 0) {
+    coachListEl.innerHTML = '<div class="empty-coach">Coaching tips will appear here during your stream</div>';
+    return;
+  }
+  coachListEl.innerHTML = coaches.map(c => `
+    <div class="coach-item">
+      ${escapeHtml(c.text)}
+      <div class="coach-item-time">${formatTime(new Date(c.ts).toISOString())}</div>
+    </div>
+  `).join('');
+}
+
+// Reflects whichever surface (this popup or the web /live page) last
+// changed the session — liveSession/isLiveSessionPaused always come from
+// the server via background.js's callSessionApi.
+function renderSessionUI(state) {
+  if (!sessionStatusEl) return;
+  const liveSession = state?.liveSession;
+  const paused = !!state?.isLiveSessionPaused;
+
+  if (!liveSession || liveSession.completed) {
+    sessionStatusEl.textContent = 'Not tracking a session';
+    startSessionBtn.style.display = 'inline-block';
+    pauseSessionBtn.style.display = 'none';
+    resumeSessionBtn.style.display = 'none';
+    stopSessionBtn.style.display = 'none';
+    return;
+  }
+
+  sessionStatusEl.textContent = paused
+    ? '⏸ Session paused'
+    : `🟢 Tracking since ${formatTime(liveSession.start_time)}`;
+  startSessionBtn.style.display = 'none';
+  pauseSessionBtn.style.display = paused ? 'none' : 'inline-block';
+  resumeSessionBtn.style.display = paused ? 'inline-block' : 'none';
+  stopSessionBtn.style.display = 'inline-block';
+}
+
+function setSessionButtonsDisabled(disabled) {
+  [startSessionBtn, pauseSessionBtn, resumeSessionBtn, stopSessionBtn].forEach(b => { if (b) b.disabled = disabled; });
+}
+
+function sendSessionAction(action, payload = {}) {
+  setSessionButtonsDisabled(true);
+  chrome.runtime.sendMessage({ action, ...payload }, (result) => {
+    setSessionButtonsDisabled(false);
+    if (chrome.runtime.lastError) return;
+    if (!result?.ok) { alert(result?.error || 'Something went wrong.'); return; }
+  });
+}
+
+startSessionBtn?.addEventListener('click', () => sendSessionAction('start_session', { platform: 'chaturbate' }));
+pauseSessionBtn?.addEventListener('click', () => sendSessionAction('pause_session'));
+resumeSessionBtn?.addEventListener('click', () => sendSessionAction('resume_session'));
+stopSessionBtn?.addEventListener('click', () => sendSessionAction('stop_session'));
+
 // Listen for coaching + state broadcasts from background
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg.action === 'state' && msg.state) {
-    const coaches = msg.state.coaches;
-    if (coaches && coaches.length > 0) {
-      const coachMsg = document.getElementById('coach-msg');
-      if (coachMsg) coachMsg.textContent = coaches[0].text;
-    }
+    renderCoachList(msg.state.coaches);
+    renderSessionUI(msg.state);
     updatePlanNotice(msg.state.isPro);
     loadTips();
   }
@@ -235,6 +298,8 @@ function updatePlanNotice(isPro) {
 chrome.runtime.sendMessage({ action: 'get_state' }, (state) => {
   if (chrome.runtime.lastError || !state) return;
   updatePlanNotice(state.isPro);
+  renderCoachList(state.coaches);
+  renderSessionUI(state);
 });
 
 // Test tip button
