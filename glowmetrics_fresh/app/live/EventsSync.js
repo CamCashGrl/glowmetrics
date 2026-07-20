@@ -57,22 +57,10 @@ export default function EventsSync({ onNewTip }) {
     poll()
   }
 
-  if (status === 'no_token') return (
-    <div style={{
-      padding: '10px 14px',
-      borderRadius: '10px',
-      background: 'rgba(245,158,11,0.1)',
-      border: '1px solid rgba(245,158,11,0.3)',
-      fontSize: '13px',
-      color: '#f59e0b',
-      display: 'flex',
-      alignItems: 'center',
-      gap: '8px',
-      marginBottom: '16px',
-    }}>
-      ⚡ <span>Connect your <a href="/dashboard?tab=upload" style={{ color: '#22d3ee', textDecoration: 'underline' }}>Chaturbate Events API token</a> for live tip capture</span>
-    </div>
-  )
+  // Direct Chaturbate Events API capture isn't finished yet — no banner
+  // prompting for it until that feature actually works. Extension-based
+  // tip capture (the working path) is surfaced elsewhere on this page.
+  if (status === 'no_token') return null
 
   return (
     <div style={{
