@@ -1,5 +1,9 @@
 // popup.js - CamCash Live popup UI
 
+// Must match background.js's SUPABASE_URL/SUPABASE_ANON exactly — this is
+// where the login token itself is issued, and if it doesn't match the
+// project background.js/the API talk to, every authenticated action fails
+// with "unauthorized" even though login itself appears to succeed.
 const SUPABASE_URL = 'https://hlsdlaibnayzbfflxclj.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhsc2RsYWlibmF5emJmZmx4Y2xqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM2MjQwODUsImV4cCI6MjA4OTIwMDA4NX0.5FwPe35UL-o46FvBJX526La5o7jcbFaP1KVoLtI4U_M';
 
@@ -14,7 +18,21 @@ const logoutBtn = document.getElementById('logout-btn');
 const userInfo = document.getElementById('user-info');
 const tipsList = document.getElementById('tips-list');
 const authError = document.getElementById('auth-error');
-const statusBadge = document.getElementById('status');
+const statusPill = document.getElementById('status-pill');
+const statusPillText = document.getElementById('status-pill-text');
+
+const sessionLabel = document.getElementById('session-label');
+const sessionTimerEl = document.getElementById('session-timer');
+const sessionBtnRow = document.getElementById('session-btn-row');
+const sessionResolutionPrompt = document.getElementById('session-resolution-prompt');
+
+const statEarned = document.getElementById('stat-earned');
+const statTokens = document.getElementById('stat-tokens');
+const statTips = document.getElementById('stat-tips');
+const statTop = document.getElementById('stat-top');
+
+const coachMsgEl = document.getElementById('coach-msg');
+const coachMetaEl = document.getElementById('coach-meta');
 
 // On load
 function init() {
@@ -32,6 +50,16 @@ async function checkAuthState() {
   const stored = await getStoredAuth();
   if (stored.session && stored.user) {
     showDashboard(stored.user);
+    chrome.runtime.sendMessage({ action: 'live_get_state' }, (res) => {
+      if (chrome.runtime.lastError) return;
+      updateLiveSession(res?.liveSession);
+    });
+    chrome.runtime.sendMessage({ action: 'get_state' }, (state) => {
+      if (chrome.runtime.lastError || !state) return;
+      updatePlanNotice(state.isPro);
+      updateStats(state);
+      updateCoach(state.coaches);
+    });
   } else {
     showAuth();
   }
@@ -47,7 +75,7 @@ function showAuth() {
 function showDashboard(user) {
   authSection.style.display = 'none';
   dashboardSection.style.display = 'block';
-  userInfo.textContent = `✅ Logged in as ${user.email}`;
+  userInfo.textContent = `✅ ${user.email}`;
 }
 
 // Login directly via Supabase
@@ -122,46 +150,35 @@ logoutBtn.addEventListener('click', async () => {
   passwordInput.value = '';
 });
 
-// Load and display tips
+// Load and display tips — capped to the latest 3, matching the compact layout.
+// (The underlying storage can hold more; #tips-list itself scrolls internally
+// if ever more than 3 rows are shown, but the default view stays short.)
 async function loadTips() {
   chrome.storage.local.get(null, (items) => {
     const tips = Object.values(items).filter(item => item && item.amount);
 
     if (tips.length === 0) {
-      tipsList.innerHTML = '<div class="empty-state">No tips detected yet this session</div>';
+      tipsList.innerHTML = '<div class="empty-state">No tips yet</div>';
       return;
     }
 
     tips.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 
-    tipsList.innerHTML = tips.slice(0, 10).map(tip => `
+    tipsList.innerHTML = tips.slice(0, 3).map(tip => `
       <div class="tip-item">
-        <div>
-          <span class="tip-username">${escapeHtml(tip.username)}</span>
-          <span style="color:#64748b"> tipped </span>
-          <span class="tip-amount">${tip.amount} tokens</span>
-        </div>
-        <div class="tip-time">${formatTime(tip.timestamp)}${tip.synced ? ' ✅' : ' ⏳'}</div>
+        <span class="tip-username">${escapeHtml(tip.username)}</span>
+        <span class="tip-amount">${tip.amount}t</span>
+        <span class="tip-time">${formatTime(tip.timestamp)}</span>
       </div>
     `).join('');
   });
 }
 
-// Update status badge
+// Update status badge (content-script reachability, unrelated to live session state)
 function updateStatus() {
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
     if (tabs[0]) {
-      chrome.tabs.sendMessage(tabs[0].id, { type: 'PING' }, (response) => {
-        if (chrome.runtime.lastError) {
-          statusBadge.textContent = 'Inactive';
-          statusBadge.style.background = 'rgba(107,114,128,0.2)';
-          statusBadge.style.color = '#9ca3af';
-        } else {
-          statusBadge.textContent = 'Active';
-          statusBadge.style.background = 'rgba(34,197,94,0.1)';
-          statusBadge.style.color = '#4ade80';
-        }
-      });
+      chrome.tabs.sendMessage(tabs[0].id, { type: 'PING' }, () => { void chrome.runtime.lastError; });
     }
   });
 }
@@ -196,15 +213,32 @@ function escapeHtml(text) {
 
 setInterval(loadTips, 5000);
 
+// ─── Stats + coach (single card each — no duplication) ─────────────────────
+function updateStats(state) {
+  statEarned.textContent = '$' + (state.usd || 0).toFixed(2);
+  statTokens.textContent = (state.tokens || 0).toLocaleString();
+  statTips.textContent = (state.tips || []).length;
+  statTop.textContent = state.topTipper ? state.topTipper.username : '—';
+}
+
+function updateCoach(coaches) {
+  if (coaches && coaches.length > 0) {
+    coachMsgEl.textContent = coaches[0].text;
+    const mins = Math.max(0, Math.round((Date.now() - coaches[0].ts) / 60000));
+    coachMetaEl.textContent = mins === 0 ? 'just now' : `${mins}m ago`;
+  } else {
+    coachMsgEl.textContent = 'Coaching tips will appear during your stream';
+    coachMetaEl.textContent = '';
+  }
+}
+
 // Listen for coaching + state broadcasts from background
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg.action === 'state' && msg.state) {
-    const coaches = msg.state.coaches;
-    if (coaches && coaches.length > 0) {
-      const coachMsg = document.getElementById('coach-msg');
-      if (coachMsg) coachMsg.textContent = coaches[0].text;
-    }
+    updateCoach(msg.state.coaches);
     updatePlanNotice(msg.state.isPro);
+    updateStats(msg.state);
+    updateLiveSession(msg.state.liveSession);
     loadTips();
   }
   if (msg.action === 'whale_alert') {
@@ -232,11 +266,6 @@ function updatePlanNotice(isPro) {
   el.style.display = isPro ? 'none' : 'block';
 }
 
-chrome.runtime.sendMessage({ action: 'get_state' }, (state) => {
-  if (chrome.runtime.lastError || !state) return;
-  updatePlanNotice(state.isPro);
-});
-
 // Test tip button
 document.getElementById('test-tip-btn').addEventListener('click', () => {
   chrome.runtime.sendMessage({
@@ -248,3 +277,102 @@ document.getElementById('test-tip-btn').addEventListener('click', () => {
     loadTips();
   });
 });
+
+// ─── Live session controls ──────────────────────────────────────────────────
+// Mirrors the same live_sessions row the website uses — no separate timer or
+// session record kept here. `_liveSession` is the last server response;
+// `_liveSessionFetchedAtMs` anchors the 1s ticker so the displayed timer
+// advances smoothly between actual server responses without ever being the
+// source of truth itself (shapeLiveSession()'s active_duration_seconds is).
+let _liveSession = null;
+let _liveSessionFetchedAtMs = 0;
+let _liveActionPending = false;
+
+function updateLiveSession(session) {
+  _liveSession = session || null;
+  _liveSessionFetchedAtMs = Date.now();
+  renderLiveSession();
+  renderStatusPill();
+}
+
+function setStatusPill(cls, text) {
+  statusPill.className = `status-pill ${cls}`;
+  statusPillText.textContent = text;
+}
+
+function renderStatusPill() {
+  if (!_liveSession) { setStatusPill('status-offline', 'OFFLINE'); return; }
+  if (_liveSession.status === 'needs_resolution') { setStatusPill('status-attention', 'NEEDS ATTENTION'); return; }
+  if (_liveSession.status === 'paused') { setStatusPill('status-paused', 'PAUSED'); return; }
+  setStatusPill('status-live', 'LIVE');
+}
+
+function fmtDuration(secs) {
+  const s = Math.max(0, Math.floor(secs || 0));
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), r = s % 60;
+  return h > 0
+    ? `${h}:${String(m).padStart(2, '0')}:${String(r).padStart(2, '0')}`
+    : `${m}:${String(r).padStart(2, '0')}`;
+}
+
+function liveButton(label, cls, onClick) {
+  const btn = document.createElement('button');
+  btn.className = `session-btn ${cls}`;
+  btn.textContent = label;
+  btn.disabled = _liveActionPending;
+  btn.onclick = onClick;
+  return btn;
+}
+
+function callLiveAction(action, extra, btn) {
+  if (_liveActionPending) return;
+  _liveActionPending = true;
+  if (btn) btn.disabled = true;
+  chrome.runtime.sendMessage({ action, ...extra }, (res) => {
+    _liveActionPending = false;
+    updateLiveSession(res?.session ?? null);
+  });
+}
+
+function renderLiveSession() {
+  sessionBtnRow.innerHTML = '';
+  sessionResolutionPrompt.style.display = 'none';
+
+  if (!_liveSession) {
+    sessionLabel.textContent = '';
+    sessionTimerEl.textContent = '';
+    sessionBtnRow.appendChild(liveButton('▶ Start Stream', 'session-btn-start', () => {
+      callLiveAction('live_start', { platform: 'chaturbate' }, sessionBtnRow.firstChild);
+    }));
+    return;
+  }
+
+  if (_liveSession.status === 'needs_resolution') {
+    sessionLabel.textContent = '';
+    sessionTimerEl.textContent = '';
+    sessionResolutionPrompt.style.display = 'block';
+    sessionResolutionPrompt.textContent = "We couldn't confirm you were still broadcasting. Still live?";
+    sessionBtnRow.appendChild(liveButton('Still Live', 'session-btn-resume', (e) => callLiveAction('live_resolve', { choice: 'still_live' }, e.target)));
+    sessionBtnRow.appendChild(liveButton('Stream Ended', 'session-btn-stop', (e) => callLiveAction('live_resolve', { choice: 'ended' }, e.target)));
+    return;
+  }
+
+  const elapsedSinceFetch = (Date.now() - _liveSessionFetchedAtMs) / 1000;
+  const liveSecs = _liveSession.status === 'active'
+    ? (_liveSession.active_duration_seconds || 0) + elapsedSinceFetch
+    : (_liveSession.active_duration_seconds || 0);
+
+  if (_liveSession.status === 'paused') {
+    sessionLabel.textContent = 'PAUSED';
+    sessionTimerEl.textContent = fmtDuration(liveSecs);
+    sessionBtnRow.appendChild(liveButton('▶ Resume', 'session-btn-resume', (e) => callLiveAction('live_resume', {}, e.target)));
+    sessionBtnRow.appendChild(liveButton('⏹ Stop', 'session-btn-stop', (e) => callLiveAction('live_stop', {}, e.target)));
+  } else {
+    sessionLabel.textContent = 'LIVE';
+    sessionTimerEl.textContent = fmtDuration(liveSecs);
+    sessionBtnRow.appendChild(liveButton('⏸ Pause', 'session-btn-pause', (e) => callLiveAction('live_pause', {}, e.target)));
+    sessionBtnRow.appendChild(liveButton('⏹ Stop', 'session-btn-stop', (e) => callLiveAction('live_stop', {}, e.target)));
+  }
+}
+
+setInterval(() => { if (_liveSession && _liveSession.status === 'active') renderLiveSession(); }, 1000);

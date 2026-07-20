@@ -63,6 +63,28 @@ export async function POST(req) {
     const tsMs = new Date(receivedAt).getTime();
     const deduplication_key = `${user.id}-${username.trim().toLowerCase()}-${amount}-${platform.toLowerCase()}-${tsMs}`;
 
+    // Attribute this tip to the caller's current live_sessions row only when
+    // that session is genuinely 'active' — never while 'paused' or absent.
+    // This is what lets the dashboard show only this session's real-time
+    // activity; a tip that arrives while paused still gets saved above (no
+    // income data is lost), it just isn't counted toward this session's
+    // analytics. Best-effort: a lookup failure must never block saving the
+    // tip itself, so it's wrapped separately from the main insert.
+    let live_session_id = null;
+    try {
+      const { data: activeSession } = await supabaseAdmin
+        .from('live_sessions')
+        .select('id, status')
+        .eq('user_id', user.id)
+        .eq('status', 'active')
+        .order('started_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (activeSession) live_session_id = activeSession.id;
+    } catch (_) {
+      // live_sessions lookup failed — tip is still saved, just unattributed.
+    }
+
     const tipData = {
       user_id:  user.id,
       username: username.trim(),
@@ -72,6 +94,7 @@ export async function POST(req) {
       source:   'extension',
       received_at: receivedAt,
       deduplication_key,
+      live_session_id,
     };
 
     const { data, error } = await supabaseAdmin
@@ -164,7 +187,28 @@ export async function GET(req) {
     const { data, error } = await query;
     if (error) throw error;
 
-    return Response.json({ tips: data, count: data?.length || 0 }, { headers: cors });
+    // "Clear Session Tips" never deletes rows — it hides them by setting
+    // tips_cleared_at on the current session. Apply that filter here too so
+    // this route stays consistent with the client-side feeds, scoped only
+    // to that exact session's own tips (never a blanket user-wide cutoff).
+    let tips = data;
+    const { data: currentSession } = await supabaseAdmin
+      .from('live_sessions')
+      .select('id, tips_cleared_at')
+      .eq('user_id', user.id)
+      .in('status', ['starting', 'active', 'paused', 'stopping', 'needs_resolution'])
+      .order('started_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (currentSession?.tips_cleared_at) {
+      const clearedAtMs = new Date(currentSession.tips_cleared_at).getTime();
+      tips = tips.filter((t) => {
+        if (t.live_session_id !== currentSession.id) return true;
+        return new Date(t.received_at).getTime() > clearedAtMs;
+      });
+    }
+
+    return Response.json({ tips, count: tips?.length || 0 }, { headers: cors });
 
   } catch (err) {
     console.error('Tip GET error:', err);

@@ -11,6 +11,7 @@ import { tokenRate } from '../../lib/constants';
 import FeedbackWidget from '../components/FeedbackWidget';
 import EventsSync from './EventsSync';
 import Button from '../../components/ui/Button';
+import { useLiveSessionEngine } from './useLiveSessionEngine';
 
 const C = {
   bg: '#040812', card: 'rgba(15,20,32,0.75)', border: 'rgba(168,85,247,0.2)',
@@ -56,6 +57,18 @@ export default function LivePage() {
   const [authError, setAuthError]         = useState('');
   const [authLoading, setAuthLoading]     = useState(false);
 
+  // Timezone used to display the V2 engine's session start/end clock times
+  // (the duration itself is timezone-independent and unaffected by this).
+  // Falls back to the browser's own timezone; persisted per-browser so it
+  // doesn't need re-selecting every visit.
+  const [liveTimezone, setLiveTimezone] = useState(() => {
+    if (typeof window === 'undefined') return 'UTC';
+    return localStorage.getItem('cc_live_timezone') || Intl.DateTimeFormat().resolvedOptions().timeZone;
+  });
+  useEffect(() => {
+    if (typeof window !== 'undefined') localStorage.setItem('cc_live_timezone', liveTimezone);
+  }, [liveTimezone]);
+
   const processedTipIds   = useRef(new Set());
   const coachingCooldowns = useRef({});
   const isHydratingHistory = useRef(false);
@@ -64,6 +77,44 @@ export default function LivePage() {
   const prevPhaseRef      = useRef(null);
   const liveTipsChannelRef = useRef(null);
   const liveTickerRef     = useRef(null);
+
+  // V2 Live Mode session engine — Phase 1C. Its own restore/heartbeat/
+  // lifecycle, entirely independent of the legacy state above. engineMode
+  // is locked once inside the hook and never re-evaluated for this mount.
+  const engine = useLiveSessionEngine();
+
+  // Phase 1D: for V2 users only, mirror the real engine state into the
+  // legacy liveActive/liveStartTime state that the rest of this component
+  // (computeState, the room-state hero, AI coach, stats grid, tip feed —
+  // dozens of `liveActive &&` conditions throughout this file) already
+  // reads. This makes the existing rich dashboard react to the *real*
+  // session instead of requiring every one of those conditions to be
+  // rewritten individually. No-ops entirely for legacy users, since
+  // engineMode is locked once per mount and never toggles mid-session.
+  useEffect(() => {
+    if (engine.engineMode !== 'v2') return;
+    const status = engine.serverSession?.status;
+    setLiveActive(status === 'active' || status === 'paused');
+    setLiveStartTime(engine.serverSession?.started_at ? new Date(engine.serverSession.started_at) : null);
+  }, [engine.engineMode, engine.serverSession?.status, engine.serverSession?.started_at]);
+
+  // "Clear Session Tips" never deletes rows — it sets tips_cleared_at on the
+  // session (see the clear-tips route). This engine poll picks that up
+  // within ~15s of the extension or another tab clearing it, and this prunes
+  // the already-loaded liveEvents array once, so every existing computation
+  // downstream (revenue, pace, tip feed) reflects it without individually
+  // touching each usage site. Only removes entries for *this* session that
+  // are older than the clear — never touches other sessions' history.
+  useEffect(() => {
+    const clearedAt = engine.serverSession?.tips_cleared_at;
+    if (engine.engineMode !== 'v2' || !clearedAt) return;
+    const clearedAtMs = new Date(clearedAt).getTime();
+    const sessionId = engine.serverSession?.id;
+    setLiveEvents(prev => prev.filter(e => {
+      if (e.live_session_id !== sessionId) return true;
+      return new Date(e.timestamp).getTime() > clearedAtMs;
+    }));
+  }, [engine.engineMode, engine.serverSession?.tips_cleared_at, engine.serverSession?.id]);
 
   // 1-second ticker drives coaching + elapsed time
   useEffect(() => {
@@ -200,18 +251,26 @@ export default function LivePage() {
   // ── INLINE LIVE ENGINE (same logic as dashboard live tab) ────────────
 
   const computeState = () => {
-    if (!liveEvents.length || !liveStartTime) return null;
+    // For V2-engine users, only count tips tagged to the CURRENT session
+    // (live_session_id) — otherwise older tips from a previous, already-ended
+    // session sitting in the same 12h hydration window would inflate this
+    // session's numbers. Legacy users are completely unaffected (events
+    // stays the raw liveEvents array, exactly as before).
+    const events = engine.engineMode === 'v2'
+      ? liveEvents.filter(e => e.live_session_id === engine.serverSession?.id)
+      : liveEvents;
+    if (!events.length || !liveStartTime) return null;
     const nowMs   = Date.now();
     const startMs = new Date(liveStartTime).getTime();
     const elapsedMins = Math.max((nowMs - startMs) / 60000, 0.1);
     let totalRevenue = 0, totalTokens = 0;
     const tipperMap = {};
-    liveEvents.forEach(ev => {
+    events.forEach(ev => {
       totalRevenue += ev.normalizedRevenue || 0;
       totalTokens  += ev.tokens || 0;
       tipperMap[ev.username] = (tipperMap[ev.username] || 0) + (ev.normalizedRevenue || 0);
     });
-    const liveOnly = liveEvents.filter(e => !e._isHistory);
+    const liveOnly = events.filter(e => !e._isHistory);
     const sortedLive = [...liveOnly].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
     const lastLiveTip = sortedLive[0];
     const timeSinceLast = lastLiveTip
@@ -506,6 +565,21 @@ export default function LivePage() {
     }
   };
 
+  // ── V2 LIVE SESSION ENGINE — PHASE 1D ─────────────────────────────────
+  // No longer replaces the page. When engine.engineMode === 'v2', its
+  // controls and timer are integrated directly into the operational status
+  // bar below (see fmtDuration/timezone helpers + the bar's V2 branch) —
+  // the full original dashboard (room state, AI coach, stats grid, tip
+  // feed, sidebar) always renders underneath, active/paused/restored or not.
+
+  const fmtDuration = (secs) => {
+    const s = Math.max(0, Math.floor(secs || 0));
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), r = s % 60;
+    return h > 0
+      ? `${h}:${String(m).padStart(2, '0')}:${String(r).padStart(2, '0')}`
+      : `${m}:${String(r).padStart(2, '0')}`;
+  };
+
   // ── CONNECTING / UNAUTHENTICATED SCREENS ─────────────────────────────
 
   if (authStatus === 'connecting') return (
@@ -781,7 +855,12 @@ export default function LivePage() {
             {[
               { label: 'Extension', ok: liveEvents.some(e => e.sourceUsed === 'extension'), okText: 'Connected', offText: 'Not detected' },
               { label: 'Realtime',  ok: !!liveTipsChannelRef?.current,                      okText: 'Live',      offText: 'Offline' },
-              { label: 'Sync',      ok: liveActive,                                          okText: 'Active',    offText: 'Standby' },
+              {
+                label: 'Sync',
+                ok: engine.engineMode === 'v2' ? (engine.phase === 'active' || engine.phase === 'needs_resolution') : liveActive,
+                okText: engine.engineMode === 'v2' && engine.serverSession?.status === 'paused' ? 'Paused' : 'Active',
+                offText: 'Standby',
+              },
             ].map(({ label, ok, okText, offText }) => (
               <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                 <div style={{ width: 6, height: 6, borderRadius: '50%', background: ok ? C.green : '#374151', boxShadow: ok ? `0 0 5px ${C.green}` : 'none' }} />
@@ -789,10 +868,21 @@ export default function LivePage() {
                 <span style={{ fontSize: 11, color: ok ? C.green : '#475569', fontWeight: 600 }}>{ok ? okText : offText}</span>
               </div>
             ))}
-            {liveActive && state && (
-              <span style={{ fontSize: 11, color: C.muted }}>
-                Session: {Math.floor(state.elapsedMins)}m {Math.round((state.elapsedMins % 1) * 60)}s
-              </span>
+            {engine.engineMode === 'v2' && engine.serverSession && (engine.phase === 'active' || engine.serverSession.status === 'paused') ? (
+              <>
+                <span style={{ fontSize: 11, color: C.muted, fontVariantNumeric: 'tabular-nums' }}>
+                  Session: {fmtDuration(engine.duration?.active_duration_seconds)}
+                </span>
+                <span style={{ fontSize: 11, color: C.dim }}>
+                  Started {new Date(engine.serverSession.started_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: liveTimezone })} ({liveTimezone})
+                </span>
+              </>
+            ) : (
+              liveActive && state && (
+                <span style={{ fontSize: 11, color: C.muted }}>
+                  Session: {Math.floor(state.elapsedMins)}m {Math.round((state.elapsedMins % 1) * 60)}s
+                </span>
+              )
             )}
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -808,11 +898,78 @@ export default function LivePage() {
               <option value="whale">🐋 Whale Focus</option>
               <option value="goal">🎯 Goal Focus</option>
             </select>
+            <select value={liveTimezone} onChange={e => setLiveTimezone(e.target.value)} title="Timezone for session start/end times" style={{ ...inp2, width: 'auto', padding: '5px 10px', fontSize: 12 }}>
+              {Array.from(new Set([liveTimezone, Intl.DateTimeFormat().resolvedOptions().timeZone,
+                'America/Los_Angeles', 'America/Denver', 'America/Chicago', 'America/New_York', 'UTC', 'Europe/London', 'Europe/Berlin'
+              ])).map(tz => <option key={tz} value={tz}>{tz}</option>)}
+            </select>
             <Button as="a" href="/camcash-extension.zip" download="camcash-extension.zip" onClick={() => { setShowExtModal(true); setExtStep(0); }}
               style={{ padding: '7px 14px', fontSize: 12, whiteSpace: 'nowrap' }}>
               📥 Download Extension
             </Button>
-            {!liveActive ? (
+            {engine.engineMode === 'v2' ? (
+              <>
+                {engine.phase === 'idle' && (
+                  <button disabled={engine.actionPending} onClick={() => engine.goLive(livePlatform)}
+                    style={{ padding: '7px 18px', borderRadius: 8, background: 'linear-gradient(135deg, #10B981, #22D3EE)', border: 'none', color: C.white, fontWeight: 800, fontSize: 12, cursor: engine.actionPending ? 'default' : 'pointer', opacity: engine.actionPending ? 0.6 : 1, boxShadow: '0 0 16px rgba(16,185,129,0.35)' }}>
+                    {engine.actionPending ? 'Starting…' : '▶ Start Stream'}
+                  </button>
+                )}
+                {engine.phase === 'active' && engine.serverSession?.status === 'active' && (
+                  <>
+                    <button disabled={engine.actionPending} onClick={engine.pause}
+                      style={{ padding: '7px 18px', borderRadius: 8, background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.4)', color: C.gold, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
+                      ⏸ Pause
+                    </button>
+                    <button disabled={engine.actionPending} onClick={engine.stop}
+                      style={{ padding: '7px 18px', borderRadius: 8, background: 'rgba(248,113,113,0.15)', border: '1px solid rgba(248,113,113,0.4)', color: C.red, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
+                      ⏹ End
+                    </button>
+                  </>
+                )}
+                {engine.serverSession?.status === 'paused' && (
+                  <>
+                    <button disabled={engine.actionPending} onClick={engine.resume}
+                      style={{ padding: '7px 18px', borderRadius: 8, background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.4)', color: C.green, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
+                      ▶ Resume
+                    </button>
+                    <button disabled={engine.actionPending} onClick={engine.stop}
+                      style={{ padding: '7px 18px', borderRadius: 8, background: 'rgba(248,113,113,0.15)', border: '1px solid rgba(248,113,113,0.4)', color: C.red, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
+                      ⏹ End
+                    </button>
+                  </>
+                )}
+                {(engine.serverSession?.status === 'active' || engine.serverSession?.status === 'paused') && (
+                  <button disabled={engine.actionPending} onClick={() => {
+                    if (window.confirm('Clear this session\'s tip feed? Earnings, tip count, and top tipper for this session will reset. Historical/past sessions are never affected.')) engine.clearTips();
+                  }} title="Clear this session's tip feed — does not delete historical data"
+                    style={{ padding: '7px 14px', borderRadius: 8, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.15)', color: C.muted, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
+                    🧹 Clear Feed
+                  </button>
+                )}
+                {engine.phase === 'needs_resolution' && (
+                  <>
+                    <span style={{ fontSize: 12, color: C.gold, fontWeight: 700 }}>⚠️ Still live?</span>
+                    <button disabled={engine.actionPending} onClick={() => engine.resolve('still_live')}
+                      style={{ padding: '7px 14px', borderRadius: 8, background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.4)', color: C.green, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
+                      Still Live
+                    </button>
+                    <button disabled={engine.actionPending} onClick={() => engine.resolve('ended')}
+                      style={{ padding: '7px 14px', borderRadius: 8, background: 'rgba(248,113,113,0.15)', border: '1px solid rgba(248,113,113,0.4)', color: C.red, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
+                      Stream Ended
+                    </button>
+                  </>
+                )}
+                {engine.phase === 'justEnded' && (
+                  <span style={{ fontSize: 12, color: C.green, fontWeight: 700 }}>
+                    ✅ Session ended — active time {fmtDuration(engine.duration?.active_duration_seconds)}
+                  </span>
+                )}
+                {engine.actionError && (
+                  <span style={{ fontSize: 11, color: C.red }}>{engine.actionError}</span>
+                )}
+              </>
+            ) : !liveActive ? (
               <button onClick={handleStartStream}
                 style={{ padding: '7px 18px', borderRadius: 8, background: 'linear-gradient(135deg, #10B981, #22D3EE)', border: 'none', color: C.white, fontWeight: 800, fontSize: 12, cursor: 'pointer', boxShadow: '0 0 16px rgba(16,185,129,0.35)' }}>
                 ▶ Start Stream
