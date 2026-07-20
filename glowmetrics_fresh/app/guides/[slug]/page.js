@@ -1,6 +1,14 @@
 // app/guides/[slug]/page.js
-// 12 keyword-targeted pages. Each one ranks for a specific search term
+// 4 keyword-targeted pages. Each one ranks for a specific search term
 // and converts visitors directly to signups.
+//
+// Note: several slugs that used to live here (chaturbate-earnings-tracker,
+// cam-model-analytics, best-time-to-stream-chaturbate, cam-model-top-tippers,
+// cam-model-income-tracker, chaturbate-token-tracker, cam-model-session-breakdown,
+// chaturbate-best-hours) now have their own dedicated app/guides/<slug>/page.js
+// route, which Next.js resolves ahead of this dynamic [slug] route. Their
+// entries here were unreachable dead code and have been removed — the
+// dedicated pages are the live, edited content for those URLs.
 import Button from '../../../components/ui/Button'
 
 import { notFound } from 'next/navigation'
@@ -8,62 +16,6 @@ import { notFound } from 'next/navigation'
 const BASE = 'https://www.camcashgrl.com'
 
 const GUIDES = {
-  'chaturbate-earnings-tracker': {
-    title: 'Chaturbate Earnings Tracker — Free Tool for Broadcasters',
-    description: 'Track your Chaturbate tips, tokens, and hourly earnings automatically. See your best days, top fans, and peak hours in one dashboard.',
-    ogTitle: 'Chaturbate Earnings Tracker (Free)',
-    twitterTitle: 'Free Chaturbate Earnings Tracker',
-    h1: 'Chaturbate Earnings Tracker',
-    intro: 'CamCash is the easiest way to track your Chaturbate earnings. Upload your token history CSV and instantly see your total revenue, top fans, best streaming hours, and personalized tips to earn more — all free.',
-    sections: [
-      {
-        h2: 'What You Can Track',
-        body: 'Upload your Chaturbate token CSV to instantly see: total tokens earned and their USD value, your top tippers ranked by lifetime spend, peak earning hours across all your streams, best days of the week, session-by-session breakdowns with timeline analysis, and which fans are at risk of going cold.',
-      },
-      {
-        h2: 'How to Export Your Chaturbate Data',
-        body: 'Log in to Chaturbate → go to your model account → Stats & Data → Token Stats → select your date range → click Download CSV. Upload that file to CamCash and your entire earning history is analyzed instantly. No API key, no account access — just your CSV file.',
-      },
-      {
-        h2: 'Insights You Get Immediately',
-        body: 'CamCash shows you which fans contribute most to your income (whale detection), what time of day you earn the most on Chaturbate specifically, which day of the week performs best, and specific recommendations like "go live on Saturdays at 2 AM — that\'s your peak window based on your data."',
-      },
-      {
-        h2: 'Why Token-to-USD Accuracy Matters',
-        body: 'CamCash uses the correct Chaturbate payout rate ($0.05/token for broadcasters) and lets you adjust this in settings if your rate differs. Every dollar figure you see is your actual take-home — not Chaturbate\'s gross revenue figure.',
-      },
-    ],
-    cta: 'Track Your Chaturbate Earnings Free',
-  },
-
-  'cam-model-analytics': {
-    title: 'Cam Model Analytics Dashboard — Free for CB, BC & MFC',
-    description: 'Analytics built for cam models on Chaturbate, BongaCams and MyFreeCams. See what\'s working, who your whales are, and when to go live.',
-    ogTitle: 'Cam Model Analytics — Free Dashboard',
-    twitterTitle: 'Cam Model Analytics Dashboard',
-    h1: 'Cam Model Analytics Dashboard',
-    intro: 'CamCash turns your raw earnings data into clear, actionable insights. Know exactly when to go live, which fans to focus on, and what\'s actually driving your income — without guesswork.',
-    sections: [
-      {
-        h2: 'Works With Every Major Platform',
-        body: 'CamCash supports Chaturbate, BongaCams, MyFreeCams, CamSoda, and Stripchat. Upload your CSV from any platform and see your full earnings picture in one place. Multi-platform comparison shows you where your time is most valuable — most models find one platform earns 3–6x more per hour than the other.',
-      },
-      {
-        h2: 'Fan Intelligence — Whale Detection',
-        body: 'Know exactly who your highest-value fans are, when they\'re most likely to be online, and how to keep them engaged. CamCash identifies your top spenders, tracks their tipping patterns, shows their churn risk, and generates personalized re-engagement messages when a high-value fan goes quiet.',
-      },
-      {
-        h2: 'Session Breakdown',
-        body: 'After every stream, CamCash shows a full breakdown: a timeline of when tips came in (5-minute buckets), which fans drove the most revenue, your peak earning moment, velocity trends (was your pace growing or dying?), and specific recommendations for what to do differently next time.',
-      },
-      {
-        h2: 'Dependency Risk Alerts',
-        body: 'If one fan is driving 50%+ of your income, CamCash flags it. Knowing your revenue concentration helps you diversify your audience before a key tipper disappears — the most common cause of sudden income drops for cam models.',
-      },
-    ],
-    cta: 'Get Free Cam Model Analytics',
-  },
-
   'how-to-increase-cam-tips': {
     title: 'How to Increase Cam Tips — What the Data Actually Shows',
     description: 'Data-backed strategies to get more tips per stream. Best goal sizes, timing, room title formulas, and fan engagement tactics that work.',
@@ -124,90 +76,6 @@ const GUIDES = {
     cta: 'Analyze Your BongaCams Earnings Free',
   },
 
-  'best-time-to-stream-chaturbate': {
-    title: 'Best Time to Stream on Chaturbate in 2026 — Peak Hours',
-    description: 'When are the most viewers and tippers online on Chaturbate? Data on peak streaming windows by day, hour, and audience type.',
-    ogTitle: 'Best Time to Stream on Chaturbate 2026',
-    twitterTitle: 'Best Chaturbate Streaming Times',
-    h1: 'Best Time to Stream on Chaturbate',
-    intro: 'There\'s no universal "best time" to stream on Chaturbate — it depends entirely on your specific audience. CamCash analyzes your actual tip history to find the hours and days when your viewers are most active and spending.',
-    sections: [
-      {
-        h2: 'Why Peak Hours Are Personal',
-        body: 'Your top fans have their own schedules. A model whose biggest tippers are in Europe will have completely different peak hours than one with a US-based audience. CamCash finds your personal peak windows from your data — not generic advice based on average Chaturbate traffic.',
-      },
-      {
-        h2: 'How CamCash Finds Your Peak Time',
-        body: 'Upload your Chaturbate CSV and CamCash groups all your tips by UTC hour of day across every session. It then shows you exactly which hours average the highest revenue per active streaming day — accounting for session length so you get accurate earnings per hour, not inflated totals from long sessions.',
-      },
-      {
-        h2: 'Real-Time Peak Alerts',
-        body: 'Once CamCash knows your peak hours from your data, it shows live alerts in the dashboard when you\'re approaching your highest-earning window. If your best hour is 2 AM and it\'s 1:30 AM, you\'ll see: "Your peak earning hour starts in 30 minutes — go live now."',
-      },
-      {
-        h2: 'Best Day of the Week',
-        body: 'CamCash also identifies your best day of the week per platform. For many models it\'s Saturday on Chaturbate — but your specific data might show Monday is your highest-earning day. CamCash shows you the actual avg per active streaming day so high-session days don\'t skew the numbers.',
-      },
-    ],
-    cta: 'Find Your Personal Peak Hours Free',
-  },
-
-  'cam-model-top-tippers': {
-    title: 'Cam Model Top Tipper Tracker — Free Tool (Free)',
-    description: 'See who your biggest tippers are across all platforms, when they last showed up, and which ones are overdue. Free fan tracker for cam models.',
-    ogTitle: 'Top Tipper Tracker for Cam Models',
-    twitterTitle: 'Cam Model Top Tipper Tracker',
-    h1: 'Cam Model Top Tipper Tracker',
-    intro: 'Knowing who your most valuable fans are and understanding their behavior is the highest-leverage thing a cam model can do to increase income. CamCash tracks every tipper across your history and gives you a complete picture.',
-    sections: [
-      {
-        h2: 'Whale Detection',
-        body: 'CamCash automatically identifies your "whales" — fans whose lifetime spend puts them in the top 5% of your audience. These fans often generate 40–60% of total revenue. Keeping them engaged is more valuable than finding new fans. CamCash shows their tier (Whale, Shark, Regular), last tip date, churn risk level, and predicted next tip timing.',
-      },
-      {
-        h2: 'Fan Behavior Patterns',
-        body: 'For each top fan, CamCash shows: total lifetime spend, number of tips, average tip size, days since last tip, their typical active hours (so you know when to go live to catch them), their churn risk level, and their spending velocity compared to your average fan.',
-      },
-      {
-        h2: 'Re-engagement Messages',
-        body: 'When a top tipper hasn\'t appeared in longer than their typical interval, CamCash generates a personalized re-engagement message tailored to their behavior. Big single-tippers get different messages than frequent micro-tippers. Fans who\'ve done private shows get different messages than tip-note fans.',
-      },
-      {
-        h2: 'Dependency Risk',
-        body: 'CamCash shows what percentage of your total revenue comes from your top 1, 3, and 5 fans. If one fan accounts for 50%+ of your income, you\'ll see a high-risk alert: "If this fan leaves, you lose half your revenue." This motivates audience diversification before it\'s a crisis.',
-      },
-    ],
-    cta: 'See Your Top Fans Free',
-  },
-
-  'cam-model-income-tracker': {
-    title: 'Cam Model Income Tracker — Free Tool for 2026',
-    description: 'Track your cam model income across platforms automatically. See monthly trends, platform comparison, and hourly rate over time.',
-    ogTitle: 'Cam Model Income Tracker (Free)',
-    twitterTitle: 'Free Cam Model Income Tracker',
-    h1: 'Cam Model Income Tracker',
-    intro: 'CamCash is a free income tracker built specifically for cam models. Upload CSVs from any platform and get a complete picture of your earnings — by day, by session, by platform, and by fan.',
-    sections: [
-      {
-        h2: 'Multi-Platform Income Tracking',
-        body: 'Combine earnings from Chaturbate, BongaCams, MyFreeCams, CamSoda, and Stripchat into one dashboard. CamCash deduplicates imports automatically, so you can upload frequently without double-counting. The platform comparison shows you $/hour on each platform so you can see where your time is most valuable.',
-      },
-      {
-        h2: 'Session-Level Breakdown',
-        body: 'Every stream gets a full breakdown: total earned, revenue per minute, which fans contributed most, your peak earning moment in the session, velocity trend (momentum building or dying?), and a recommendation for what to do differently next time. This is what "what happened in my stream" actually looks like as data.',
-      },
-      {
-        h2: 'Revenue Predictions',
-        body: 'Based on your earning history, CamCash predicts what you\'re likely to earn in the next 7 and 30 days, and estimates tonight\'s stream earnings based on what you\'ve earned on the same day of the week historically. Predictions include confidence levels based on how much data you have.',
-      },
-      {
-        h2: 'Configurable Token Rates',
-        body: 'CamCash lets you set the token-to-USD rate per platform in Settings. This matters because Chaturbate\'s broadcaster rate ($0.05/token) differs from Stripchat and others. Every dollar figure you see reflects your actual payout, not the platform\'s gross.',
-      },
-    ],
-    cta: 'Track Your Income Free',
-  },
-
   'myfreecams-analytics': {
     title: 'MyFreeCams Analytics — Free Earnings Tracker for MFC',
     description: 'Track your MyFreeCams tips, top fans, and best streaming times. Free analytics dashboard built for MFC broadcasters.',
@@ -230,34 +98,6 @@ const GUIDES = {
       },
     ],
     cta: 'Analyze Your MFC Earnings Free',
-  },
-
-  'chaturbate-token-tracker': {
-    title: 'Chaturbate Token Tracker — See Every Tip in One Place',
-    description: 'Track every Chaturbate token tip automatically. See your top tippers, tip frequency, and token totals without any manual logging.',
-    ogTitle: 'Chaturbate Token Tracker (Free)',
-    twitterTitle: 'Free Chaturbate Token Tracker',
-    h1: 'Chaturbate Token Tracker',
-    intro: 'CamCash automatically converts Chaturbate tokens to USD at the correct broadcaster rate and gives you a complete picture of your earnings by fan, session, hour, and day — no spreadsheets required.',
-    sections: [
-      {
-        h2: 'Token to USD Conversion',
-        body: 'Every token in your upload is automatically converted to USD at the standard Chaturbate broadcaster rate ($0.05/token). You see both your token totals and USD earnings side by side. The rate is configurable in Settings if your account has a different rate negotiated with Chaturbate.',
-      },
-      {
-        h2: 'Who Sent the Most Tokens',
-        body: 'CamCash ranks all your tippers by total tokens sent across your entire history. See your all-time top 10, how much each one has spent in USD, their average tip size, the last time they tipped, and their churn risk level.',
-      },
-      {
-        h2: 'Token Flow by Session',
-        body: 'Every session gets a timeline showing exactly when tokens came in — broken into 5-minute buckets. See your peak earning moment in each stream, what percentage of tokens came in the first vs second half, and which fan drove the most tokens in that session.',
-      },
-      {
-        h2: 'Token Goal Analytics',
-        body: 'CamCash tracks how often you hit your token goals and what your average session earns. The Room Title Generator uses this to create goal-based titles like "hit 500 → I react instantly" that are calibrated to your realistic earning pace.',
-      },
-    ],
-    cta: 'Track Your Chaturbate Tokens Free',
   },
 
   'cam-model-revenue-dashboard': {
@@ -286,58 +126,6 @@ const GUIDES = {
       },
     ],
     cta: 'Open Your Free Dashboard',
-  },
-
-  'cam-model-session-breakdown': {
-    title: 'Cam Model Session Breakdown — What Happened Each Stream',
-    description: 'See exactly what happened during every stream — tips timeline, whale activity, earnings per hour, and what to do differently next time.',
-    ogTitle: 'Cam Model Session Breakdown Tool',
-    twitterTitle: 'Cam Model Session Breakdown',
-    h1: 'Cam Model Session Breakdown',
-    intro: 'CamCash\'s session breakdown answers the question every cam model has after going offline: what actually happened in that stream and how do I earn more next time?',
-    sections: [
-      {
-        h2: 'Timeline Analysis',
-        body: 'Every session is broken into 5-minute buckets showing exactly when money came in. The timeline bar chart shows your peak earning moment highlighted in gold, slow periods, and tip spikes. You can see at a glance whether your stream front-loaded, back-loaded, or stayed consistent.',
-      },
-      {
-        h2: 'Revenue Velocity',
-        body: 'CamCash computes your earnings per minute for the first half and second half of every session. If your pace dropped 25%+ in the second half, it flags "earnings slowing" with a percentage change. If your second half outperformed the first, it shows "momentum building +40% vs first half."',
-      },
-      {
-        h2: 'Top Contributors',
-        body: 'For every session, CamCash ranks the top 3 fans by USD contribution with their percentage of total session revenue. If one fan drove 60%+ of a session, you\'ll see an orange concentration warning so you know to diversify in future streams.',
-      },
-      {
-        h2: 'Revenue Gap vs Your Average',
-        body: 'Every session card shows whether you outperformed or underperformed your historical average. "⚠️ $38 below your avg session ($90) — 42% shortfall" gives you a concrete number for how much a poor session cost you, making it real instead of abstract.',
-      },
-    ],
-    cta: 'See Your Session Breakdown Free',
-  },
-
-  'chaturbate-best-hours': {
-    title: 'Chaturbate Best Hours to Stream — Data by Day & Time',
-    description: 'Which hours actually perform best on Chaturbate? Real data on peak tipping windows, best days of the week, and when whales show up.',
-    ogTitle: 'Chaturbate Best Hours to Stream',
-    twitterTitle: 'Chaturbate Best Streaming Hours',
-    h1: 'Chaturbate Best Hours to Stream',
-    intro: 'The best hours to stream on Chaturbate are different for every model. CamCash finds yours by analyzing every tip in your earning history and showing you exactly which hours generate the most revenue per active streaming day.',
-    sections: [
-      {
-        h2: 'Your Data vs Generic Advice',
-        body: 'Generic advice says "stream at 9 PM EST." Your data might say 2 AM UTC is your highest-earning hour — because that\'s when your actual top tippers are active. CamCash shows you the real numbers: avg USD per active streaming day at each hour, computed from your entire tip history in UTC.',
-      },
-      {
-        h2: 'How the Heatmap Works',
-        body: 'CamCash builds a 24-hour heatmap for each platform showing total earnings by hour. Darker cells = more money. The heatmap uses individual tip timestamps, not session start times, so the numbers accurately reflect when money came in rather than when you clicked Go Live.',
-      },
-      {
-        h2: 'Live Peak Alerts',
-        body: 'Once your peak hours are known, CamCash shows live alerts in the dashboard. "Your peak earning hour is 2 AM — go live now" or "Peak hour in 45 minutes — prep your stream." These fire in the Live Intelligence panel on the Overview tab whenever you\'re approaching your best window.',
-      },
-    ],
-    cta: 'Find Your Best Hours Free',
   },
 }
 
