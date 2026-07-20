@@ -187,7 +187,28 @@ export async function GET(req) {
     const { data, error } = await query;
     if (error) throw error;
 
-    return Response.json({ tips: data, count: data?.length || 0 }, { headers: cors });
+    // "Clear Session Tips" never deletes rows — it hides them by setting
+    // tips_cleared_at on the current session. Apply that filter here too so
+    // this route stays consistent with the client-side feeds, scoped only
+    // to that exact session's own tips (never a blanket user-wide cutoff).
+    let tips = data;
+    const { data: currentSession } = await supabaseAdmin
+      .from('live_sessions')
+      .select('id, tips_cleared_at')
+      .eq('user_id', user.id)
+      .in('status', ['starting', 'active', 'paused', 'stopping', 'needs_resolution'])
+      .order('started_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (currentSession?.tips_cleared_at) {
+      const clearedAtMs = new Date(currentSession.tips_cleared_at).getTime();
+      tips = tips.filter((t) => {
+        if (t.live_session_id !== currentSession.id) return true;
+        return new Date(t.received_at).getTime() > clearedAtMs;
+      });
+    }
+
+    return Response.json({ tips, count: tips?.length || 0 }, { headers: cors });
 
   } catch (err) {
     console.error('Tip GET error:', err);

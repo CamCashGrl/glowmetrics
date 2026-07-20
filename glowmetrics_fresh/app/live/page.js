@@ -98,6 +98,24 @@ export default function LivePage() {
     setLiveStartTime(engine.serverSession?.started_at ? new Date(engine.serverSession.started_at) : null);
   }, [engine.engineMode, engine.serverSession?.status, engine.serverSession?.started_at]);
 
+  // "Clear Session Tips" never deletes rows — it sets tips_cleared_at on the
+  // session (see the clear-tips route). This engine poll picks that up
+  // within ~15s of the extension or another tab clearing it, and this prunes
+  // the already-loaded liveEvents array once, so every existing computation
+  // downstream (revenue, pace, tip feed) reflects it without individually
+  // touching each usage site. Only removes entries for *this* session that
+  // are older than the clear — never touches other sessions' history.
+  useEffect(() => {
+    const clearedAt = engine.serverSession?.tips_cleared_at;
+    if (engine.engineMode !== 'v2' || !clearedAt) return;
+    const clearedAtMs = new Date(clearedAt).getTime();
+    const sessionId = engine.serverSession?.id;
+    setLiveEvents(prev => prev.filter(e => {
+      if (e.live_session_id !== sessionId) return true;
+      return new Date(e.timestamp).getTime() > clearedAtMs;
+    }));
+  }, [engine.engineMode, engine.serverSession?.tips_cleared_at, engine.serverSession?.id]);
+
   // 1-second ticker drives coaching + elapsed time
   useEffect(() => {
     liveTickerRef.current = setInterval(() => setLiveTick(t => t + 1), 1000);
@@ -920,6 +938,14 @@ export default function LivePage() {
                       ⏹ End
                     </button>
                   </>
+                )}
+                {(engine.serverSession?.status === 'active' || engine.serverSession?.status === 'paused') && (
+                  <button disabled={engine.actionPending} onClick={() => {
+                    if (window.confirm('Clear this session\'s tip feed? Earnings, tip count, and top tipper for this session will reset. Historical/past sessions are never affected.')) engine.clearTips();
+                  }} title="Clear this session's tip feed — does not delete historical data"
+                    style={{ padding: '7px 14px', borderRadius: 8, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.15)', color: C.muted, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
+                    🧹 Clear Feed
+                  </button>
                 )}
                 {engine.phase === 'needs_resolution' && (
                   <>

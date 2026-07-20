@@ -267,6 +267,24 @@ export function useLiveSessionEngine() {
     }
   }, [actionPending, startHeartbeat])
 
+  // Never deletes a live_tips row — sets tips_cleared_at on the current
+  // session (see app/api/live/session/clear-tips/route.js). Allowed in any
+  // unresolved phase, not just 'active', since a paused or needs_resolution
+  // session can still have a tip feed worth resetting.
+  const clearTips = useCallback(async () => {
+    if (actionPending || engineModeRef.current !== 'v2' || !serverSession) return
+    setActionPending(true)
+    setActionError(null)
+    try {
+      const res = await fetch('/api/live/session/clear-tips', { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) { setActionError(data.error); return }
+      if (data.session) setServerSession(data.session)
+    } finally {
+      setActionPending(false)
+    }
+  }, [actionPending, serverSession])
+
   const logout = useCallback(() => {
     stopHeartbeat()
     clearTimeout(stopSummaryTimeoutRef.current)
@@ -287,6 +305,7 @@ export function useLiveSessionEngine() {
     resume,
     stop,
     resolve,
+    clearTips,
     logout,
   }
 }
