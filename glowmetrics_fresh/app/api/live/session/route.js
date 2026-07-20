@@ -12,7 +12,11 @@ export async function OPTIONS(req) {
   return new Response(null, { status: 204, headers: corsHeaders(req) })
 }
 
-// Restore. Read-only — never creates a session, never mutates anything.
+// Restore. Never creates a session. The one exception to "never mutates
+// anything": it runs the stale-session sweep first (missed-heartbeat ->
+// needs_resolution -> auto-ended, see sweep_stale_live_session()), since this
+// is the most frequently polled path and the simplest place to guarantee
+// staleness is caught promptly regardless of which surface is active.
 // Does not use the "last 12 hours of live_tips" heuristic this replaces.
 export async function GET(req) {
   const cors = corsHeaders(req)
@@ -20,6 +24,8 @@ export async function GET(req) {
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: { 'Cache-Control': 'no-store', ...cors } })
   }
+
+  await supabase.rpc('sweep_stale_live_session')
 
   // Always looked up, independent of the flag — an existing session must be
   // found and returned even when the flag is currently disabled or Edge

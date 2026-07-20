@@ -63,20 +63,24 @@ export async function POST(req) {
     const tsMs = new Date(receivedAt).getTime();
     const deduplication_key = `${user.id}-${username.trim().toLowerCase()}-${amount}-${platform.toLowerCase()}-${tsMs}`;
 
-    // Attribute this tip to the caller's current live_sessions row only when
-    // that session is genuinely 'active' — never while 'paused' or absent.
-    // This is what lets the dashboard show only this session's real-time
-    // activity; a tip that arrives while paused still gets saved above (no
-    // income data is lost), it just isn't counted toward this session's
-    // analytics. Best-effort: a lookup failure must never block saving the
-    // tip itself, so it's wrapped separately from the main insert.
+    // Attribute this tip to the caller's current live_sessions row when it's
+    // 'active', or 'needs_resolution' — never while 'paused' or absent.
+    // needs_resolution is included because a tip landing during that window
+    // is the strongest possible proof the stream never actually stopped: it
+    // both cancels the pending "Are you still there?" auto-end (see
+    // sweep_stale_live_session()) and correctly counts toward the session if
+    // it later resolves back to active. A tip that arrives while paused
+    // still gets saved above (no income data is lost), it just isn't
+    // counted toward this session's analytics. Best-effort: a lookup
+    // failure must never block saving the tip itself, so it's wrapped
+    // separately from the main insert.
     let live_session_id = null;
     try {
       const { data: activeSession } = await supabaseAdmin
         .from('live_sessions')
         .select('id, status')
         .eq('user_id', user.id)
-        .eq('status', 'active')
+        .in('status', ['active', 'needs_resolution'])
         .order('started_at', { ascending: false })
         .limit(1)
         .maybeSingle();
