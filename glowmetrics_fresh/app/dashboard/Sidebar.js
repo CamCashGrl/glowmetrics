@@ -9,75 +9,6 @@ const C = {
   purple: "#a855f7"
 }
 
-const PRO_BENEFITS = [
-  "Track multiple platforms (Chaturbate, BongaCams, MyFreeCams & more)",
-  "Save analytics history forever",
-  "AI learns your patterns",
-  "Performance trends & insights",
-  "Multi-month tracking",
-  "Fan behavior analysis",
-  "Creator benchmarking",
-  "Predictive coaching",
-]
-
-async function startCheckout(planType, setLoading) {
-  setLoading(planType)
-  try {
-    const res = await fetch('/api/stripe/checkout', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ plan_type: planType }),
-    })
-    if (res.status === 401) { window.location.href = `/login?plan=${planType}`; return }
-    const data = await res.json()
-    if (data.url) window.location.href = data.url
-    else alert('Something went wrong. Please try again.')
-  } catch {
-    alert('Something went wrong. Please try again.')
-  } finally {
-    setLoading(null)
-  }
-}
-
-function UpgradeModal({ onClose }) {
-  const [loading, setLoading] = useState(null)
-  return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 1100, background: "rgba(0,0,0,0.88)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }} onClick={onClose}>
-      <div style={{ width: "100%", maxWidth: 440, background: "rgba(15,20,32,0.98)", backdropFilter: "blur(24px)", borderRadius: 22, border: "1px solid rgba(255,255,255,0.1)", boxShadow: "0 0 70px rgba(34,211,238,0.18), 0 0 130px rgba(236,72,153,0.12)", overflow: "hidden" }} onClick={e => e.stopPropagation()}>
-        <div style={{ height: 4, background: `linear-gradient(90deg, ${C.cyan}, ${C.purple}, ${C.pink})` }} />
-        <div style={{ padding: 30 }}>
-          <div style={{ textAlign: "center", marginBottom: 20 }}>
-            <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.18em", textTransform: "uppercase", color: C.pink, marginBottom: 8 }}>Upgrade to Pro</div>
-            <h2 style={{ fontSize: 21, fontWeight: 800, color: C.white, marginBottom: 6 }}>Unlock everything CamCash can do</h2>
-            <p style={{ fontSize: 13, color: C.muted, lineHeight: 1.6 }}>Multi-platform tracking, unlimited history, and AI-driven insights.</p>
-          </div>
-
-          <div style={{ display: "flex", flexDirection: "column", gap: 7, marginBottom: 20 }}>
-            {PRO_BENEFITS.map(b => (
-              <div key={b} style={{ display: "flex", alignItems: "flex-start", gap: 9, fontSize: 12.5, color: "rgba(226,232,240,0.9)", lineHeight: 1.5 }}>
-                <span style={{ color: C.cyan, fontWeight: 700, flexShrink: 0 }}>✓</span>{b}
-              </div>
-            ))}
-          </div>
-
-          <button
-            onClick={() => startCheckout('standard_monthly', setLoading)}
-            disabled={loading !== null}
-            style={{ width: "100%", padding: "11px", borderRadius: 12, border: "1px solid rgba(255,255,255,0.12)", cursor: loading ? "wait" : "pointer", background: "rgba(255,255,255,0.04)", color: "rgba(226,232,240,0.85)", fontSize: 13, fontWeight: 700, marginBottom: 14 }}>
-            {loading === 'standard_monthly' ? 'Redirecting…' : 'Standard — $19.99/mo →'}
-          </button>
-
-          <div style={{ textAlign: "center" }}>
-            <a href="/pricing" style={{ fontSize: 12, color: C.cyan, textDecoration: "underline" }}>See full plan comparison</a>
-            <span style={{ color: C.muted, margin: "0 8px" }}>·</span>
-            <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 12, color: C.muted, cursor: "pointer" }}>Maybe later</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 const NAV = [
   {
     group: null,
@@ -119,7 +50,6 @@ const NAV = [
 export default function Sidebar({ activeTab, onTabChange, user, onSignOut, isPro = false }) {
   const [hoveredId, setHoveredId] = useState(null)
   const [mobileOpen, setMobileOpen] = useState(false)
-  const [showUpgrade, setShowUpgrade] = useState(false)
 
   const renderItem = (id, icon, label) => {
     const isActive  = activeTab === id
@@ -184,11 +114,10 @@ export default function Sidebar({ activeTab, onTabChange, user, onSignOut, isPro
           <span style={{ fontSize: 12, fontWeight: 700, color: C.purple }}>Pro plan active</span>
         </div>
       ) : (
-        <Button onClick={() => setShowUpgrade(true)} style={{ width: "100%", marginBottom: 10, fontSize: 13, padding: "11px 12px" }}>
+        <Button as="a" href="/pricing" style={{ width: "100%", marginBottom: 10, fontSize: 13, padding: "11px 12px", textAlign: "center" }}>
           ✦ Upgrade to Pro
         </Button>
       )}
-      {showUpgrade && <UpgradeModal onClose={() => setShowUpgrade(false)} />}
 
       {/* User footer */}
       {user && (
