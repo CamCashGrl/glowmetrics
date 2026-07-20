@@ -37,6 +37,14 @@ const faqSchema = {
   mainEntity: [
     {
       '@type': 'Question',
+      name: 'How much do Chaturbate models make?',
+      acceptedAnswer: {
+        '@type': 'Answer',
+        text: 'Earnings on Chaturbate vary enormously by experience, hours streamed, and audience size — anywhere from a few dollars an hour for brand-new models to hundreds or thousands per hour for established top performers. There\'s no single average that means much without context. For a real, unfiltered example: one model\'s actual first 30 days totaled $88.90 across 16.7 hours streamed, about $5.33/hr — see the full breakdown below.',
+      },
+    },
+    {
+      '@type': 'Question',
       name: 'How much do Chaturbate models make in their first month?',
       acceptedAnswer: {
         '@type': 'Answer',
@@ -142,6 +150,10 @@ const dailyData = [
 ]
 
 const faqs = [
+  {
+    q: 'How much do Chaturbate models make?',
+    a: 'Earnings on Chaturbate vary enormously by experience, hours streamed, and audience size — anywhere from a few dollars an hour for brand-new models to hundreds or thousands per hour for established top performers. There\'s no single average that means much without context. For a real, unfiltered example: one model\'s actual first 30 days totaled $88.90 across 16.7 hours streamed, about $5.33/hr — see the full breakdown below.',
+  },
   {
     q: 'How much do Chaturbate models make in their first month?',
     a: 'First-month earnings on Chaturbate vary widely, but a realistic range is $50–$200 depending on how often you stream. Based on real data from one model\'s first 30 days: $88.90 total across 20 sessions and roughly 16.7 hours streamed — an effective hourly rate of about $5.33/hr. Most new models see one or two standout sessions that skew the average, with many slower days in between.',
