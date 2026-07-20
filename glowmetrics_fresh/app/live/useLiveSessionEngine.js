@@ -5,6 +5,12 @@ import { shapeLiveSession } from '../../lib/liveSession/shape'
 
 const HEARTBEAT_INTERVAL_MS = 20000
 const STOP_SUMMARY_DISPLAY_MS = 5000
+// Resolution choices that end the session. 'still_live' is the only
+// non-terminal choice — it returns the session to whatever it actually was
+// before the outage (decided server-side, see resolve() below).
+const TERMINAL_RESOLUTION_CHOICES = new Set([
+  'ended', 'end_at_last_heartbeat', 'choose_end_time', 'mark_invalid',
+])
 // A session can be started/paused/resumed/stopped from a different surface
 // entirely (the extension popup, or another open tab) — this page has no
 // other way to find out. Polling is the simplest fix; 15s keeps any given
@@ -19,11 +25,15 @@ const POLL_INTERVAL_MS = 15000
 // decide which UI tree and which click handlers to use; this hook never
 // touches stream_sessions and never calls the legacy handlers itself.
 export function useLiveSessionEngine() {
-  const [phase, setPhase] = useState('loading') // 'loading' | 'idle' | 'active' | 'needs_resolution' | 'justEnded' | 'legacy'
+  const [phase, setPhase] = useState('loading') // 'loading' | 'idle' | 'active' | 'needs_resolution' | 'resolved' | 'justEnded' | 'legacy'
   const [serverSession, setServerSession] = useState(null)
   const [engineEnabledForNewSession, setEngineEnabledForNewSession] = useState(false)
   const [actionPending, setActionPending] = useState(false)
   const [actionError, setActionError] = useState(null)
+  // Set only for a terminal resolve() outcome, so the UI can show which of
+  // the 4 terminal choices just happened; cleared once the transient
+  // 'resolved' display window ends. Never touched by 'still_live'.
+  const [lastResolution, setLastResolution] = useState(null)
   const [, setTick] = useState(0) // drives re-render only; the live timer is recomputed from serverSession each tick, never written to the DB
 
   // Locked once by restore(); never reassigned afterward.
@@ -121,13 +131,13 @@ export function useLiveSessionEngine() {
   // once, on mount, so without this a page open before that action happened
   // would show nothing until manually reloaded. Skipped while an action
   // initiated from *this* instance is in flight (its own response already
-  // drives state) and while a stop's justEnded summary is being displayed
-  // (a poll landing mid-summary would otherwise cut it short by clearing
-  // serverSession/phase early).
+  // drives state) and while a stop's justEnded summary, or a resolve()'s
+  // terminal-outcome summary, is being displayed (a poll landing mid-summary
+  // would otherwise cut it short by clearing serverSession/phase early).
   const poll = useCallback(async () => {
     if (engineModeRef.current !== 'v2') return
     if (actionPendingRef.current) return
-    if (phaseRef.current === 'loading' || phaseRef.current === 'justEnded') return
+    if (phaseRef.current === 'loading' || phaseRef.current === 'justEnded' || phaseRef.current === 'resolved') return
     try {
       const res = await fetch('/api/live/session', { cache: 'no-store' })
       if (!res.ok) return
@@ -242,6 +252,12 @@ export function useLiveSessionEngine() {
   }, [actionPending, stopHeartbeat])
 
   const resolve = useCallback(async (choice, endTime) => {
+    // actionPending is also the duplicate-submission guard: a second click
+    // (or a second tab) while the first request is still in flight is a
+    // no-op here, and the RPC itself is safe against a genuine race — once
+    // one caller resolves the session out of 'needs_resolution', any other
+    // caller's resolve_live_session() finds nothing to act on and returns
+    // null, handled below as the "nothing left to resolve" branch.
     if (actionPending || engineModeRef.current !== 'v2') return
     setActionPending(true)
     setActionError(null)
@@ -253,19 +269,44 @@ export function useLiveSessionEngine() {
       const data = await res.json()
       if (!res.ok) { setActionError(data.error); return }
 
-      if (choice === 'ended') {
+      if (!data.resolved || !data.session) {
+        // Nothing was actually resolved — e.g. a duplicate submission that
+        // lost the race to another tab/device. Resync to idle rather than
+        // guess at a phase.
+        stopHeartbeat()
         setServerSession(null)
+        setLastResolution(null)
         setPhase('idle')
         return
       }
 
+      if (TERMINAL_RESOLUTION_CHOICES.has(choice)) {
+        stopHeartbeat()
+        setServerSession(data.session)
+        setLastResolution({ choice, session: data.session })
+        setPhase('resolved')
+        stopSummaryTimeoutRef.current = setTimeout(() => {
+          setPhase('idle')
+          setServerSession(null)
+          setLastResolution(null)
+        }, STOP_SUMMARY_DISPLAY_MS)
+        return
+      }
+
+      // 'still_live' — the RPC returns the session in whatever status it
+      // actually had before the outage (active or paused; see
+      // resolve_live_session()'s status_before_resolution branch), never
+      // assumed to be active. phase='active' here is the same generic
+      // "live, unresolved" bucket used by restore()/poll() — the UI always
+      // branches on serverSession.status, not on phase, to tell active and
+      // paused apart.
       setServerSession(data.session)
       setPhase('active')
       startHeartbeat()
     } finally {
       setActionPending(false)
     }
-  }, [actionPending, startHeartbeat])
+  }, [actionPending, startHeartbeat, stopHeartbeat])
 
   // Never deletes a live_tips row — sets tips_cleared_at on the current
   // session (see app/api/live/session/clear-tips/route.js). Allowed in any
@@ -298,6 +339,7 @@ export function useLiveSessionEngine() {
     engineEnabledForNewSession,
     actionPending,
     actionError,
+    lastResolution,
     engineMode: engineModeRef.current,
     duration,
     goLive,
