@@ -120,6 +120,9 @@ export default function BestCamModelTools() {
           ['What Is a Cam Model Analytics Tool?', '#what-is'],
           ['Why Most Cam Models Track the Wrong Metrics', '#wrong-metrics'],
           ['Best Cam Model Analytics Tools (Reviews)', '#tools'],
+          ['Cam Model Forums & Communities', '#forums'],
+          ['Toy & Tip-Activation Tools', '#toy-tools'],
+          ['Best Cam Streaming Software', '#streaming-software'],
           ['How to Track Chaturbate Earnings', '#chaturbate-tracking'],
           ['How to Identify Your Highest-Value Fans', '#top-fans'],
           ['Metrics Every Cam Model Should Track', '#metrics-table'],
@@ -327,6 +330,29 @@ export default function BestCamModelTools() {
           </div>
         </div>
       </div>
+
+      {/* FORUMS & COMMUNITIES */}
+      <h2 id="forums" style={s.h2}>Cam Model Forums & Communities</h2>
+      <p style={s.p}>Analytics tools show you what your data says. Forums and communities show you what other models are actually dealing with right now — site payout changes, safety issues, scam warnings, and honest reviews you won't find anywhere official. These are the spaces worth bookmarking:</p>
+      <ul style={s.ul}>
+        <li style={s.li}><strong style={{color:'#e2e8f0'}}><a href="https://cbcaminsights.com/" style={s.iLink}>CB Cam Insights</a></strong> — a Chaturbate-focused stats and analytics tool with its own docs and user community. Worth a look if you're Chaturbate-only and want a second data source alongside CamCash.</li>
+        <li style={s.li}><strong style={{color:'#e2e8f0'}}><a href="https://ambercutie.com/" style={s.iLink}>AmberCutie</a></strong> — one of the largest, longest-running cam model forums. Has a public section plus a verified-models-only area, an "Ask a Model" Q&A board, and a support section for models to vent and swap advice.</li>
+        <li style={s.li}><strong style={{color:'#e2e8f0'}}><a href="https://camgirlwiki.com/" style={s.iLink}>CamGirlWiki</a></strong> — a wiki written by cam models, for cam models, covering the basics of getting started and the practical realities of the job.</li>
+        <li style={s.li}><strong style={{color:'#e2e8f0'}}>Cam101</strong> — Lovense's educational platform for cam models, with courses, contests, and a forum for camming and toy-tech questions.</li>
+        <li style={s.li}><strong style={{color:'#e2e8f0'}}><a href="https://wecamgirls.co/" style={s.iLink}>WeCamGirls</a></strong> — a free, models-only community (no clients allowed) running since 2012, with a forum, cam site reviews, and a resources section covering payment providers and affiliate programs.</li>
+        <li style={s.li}><strong style={{color:'#e2e8f0'}}><a href="https://www.reddit.com/r/camgirlproblems/" style={s.iLink}>r/camgirlproblems</a></strong> — the go-to subreddit for venting, quick advice, and hearing how other models are handling the same platform headaches.</li>
+      </ul>
+
+      {/* TOY & TIP-ACTIVATION TOOLS */}
+      <h2 id="toy-tools" style={s.h2}>Toy & Tip-Activation Tools</h2>
+      <p style={s.p}>Tip-activated toys turn tipping into an interactive loop — a viewer tips, your toy reacts, and that immediate feedback drives repeat tips during a session. This is separate from analytics, but it directly affects the tip-level data CamCash tracks.</p>
+      <p style={s.p}><strong style={{color:'#e2e8f0'}}><a href="https://www.lovense.com/" style={s.iLink}>Lovense</a></strong> is the standard here. Their browser extension connects a toy directly to Chaturbate, Stripchat, and most major platforms — you set which tip amounts trigger which vibration pattern, and it fires automatically with no manual input during your stream. Most models pair the extension with one of Lovense's own toys (Lush, Nora, Ferri, etc.), though the extension also supports third-party Bluetooth toys. Many platforms also support "Lovense Control," where a viewer can pay to take direct control of your toy's intensity for a set duration through the tip menu.</p>
+      <p style={s.p}>Because tip-activation tools generate a spike of small, closely-timed tips, they show up clearly in CamCash's session breakdown — it's an easy way to see whether a toy goal or control window actually moved your revenue for that session.</p>
+
+      {/* STREAMING SOFTWARE */}
+      <h2 id="streaming-software" style={s.h2}>Best Cam Streaming Software</h2>
+      <p style={s.p}><strong style={{color:'#e2e8f0'}}><a href="https://streamster.io/" style={s.iLink}>Streamster</a></strong> is the most widely used multistreaming tool for cam models. It lets you broadcast to multiple platforms at once (Chaturbate, Stripchat, MyFreeCams, BongaCams, and any site that accepts an RTMP feed) from a single desktop, mobile, or web app, with the video processing handled on Streamster's servers instead of your own computer. It also includes a multichat feature that combines chat from every connected platform into one window, and a remote-control mode so you can manage your stream from your phone while on cam. Streaming to two platforms is free; more platforms require a paid plan.</p>
+      <p style={s.p}>If you multistream, upload each platform's CSV export separately to CamCash — this keeps the Platform Comparison tab accurate about which site actually pays best for your time, rather than blending your multistreamed sessions into one number.</p>
 
       {/* HOW TO TRACK CHATURBATE EARNINGS */}
       <h2 id="chaturbate-tracking" style={s.h2}>How to Track Chaturbate Earnings</h2>
