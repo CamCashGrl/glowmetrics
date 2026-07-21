@@ -105,7 +105,7 @@ export async function GET(req) {
 
   const { data, error } = await supabase
     .from('tip_menus')
-    .select('id, name, platform, currency_type, token_value, style, title, updated_at, created_at')
+    .select('id, name, platform, currency_type, token_value, style, title, intro, updated_at, created_at')
     .eq('user_id', user.id)
     .order('updated_at', { ascending: false })
     .limit(200)

@@ -5,11 +5,15 @@ import BioGenerator from './components/BioGenerator'
 import TipMenuGenerator from './components/TipMenuGenerator'
 import DraftsPanel from './components/DraftsPanel'
 import Button from '../../../components/ui/Button'
+import {
+  Hero, WhatYouGet, ExampleResults, HowItWorks, PlatformFormats,
+  ComparisonSection, PrivacySection, FAQSection, FinalCTA, FAQ_SCHEMA,
+} from './components/MarketingSections'
 
 const TABS = [
-  { id: 'bio', label: 'Bio Generator', icon: '✍️' },
-  { id: 'tipmenu', label: 'Tip Menu Generator', icon: '💸' },
-  { id: 'drafts', label: 'My Drafts', icon: '📁' },
+  { id: 'bio', label: 'Bio Generator', icon: '✍️', desc: 'Create short and full bios for cam platforms, subscription pages, social media, and promotional use.' },
+  { id: 'tipmenu', label: 'Tip Menu Generator', icon: '💸', desc: 'Build an editable menu with platform-aware pricing, creator-earnings estimates, categories, limits, and boundaries.' },
+  { id: 'drafts', label: 'My Drafts', icon: '📁', desc: 'Open, rename, duplicate, continue editing, or delete saved bios and tip menus.' },
 ]
 
 export default function ProfileStudioClient() {
@@ -48,8 +52,16 @@ export default function ProfileStudioClient() {
 
   const isLoggedIn = authState === 'in'
 
+  const goToTool = (which) => {
+    setTab(which)
+    requestAnimationFrame(() => {
+      document.getElementById('generator')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
+  }
+
   return (
     <PageShell>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(FAQ_SCHEMA) }} />
       <nav aria-label="site" style={{
         padding: '16px 32px', borderBottom: `1px solid ${T.border}`, display: 'flex',
         justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0,
@@ -68,7 +80,7 @@ export default function ProfileStudioClient() {
         </div>
       </nav>
 
-      <div style={{ maxWidth: 1180, margin: '0 auto', padding: '48px 20px 100px' }}>
+      <div style={{ maxWidth: 1180, margin: '0 auto', padding: '48px 20px 0' }}>
         <nav aria-label="breadcrumb" style={{ marginBottom: 24, fontSize: 12 }}>
           <a href="/landing" style={{ color: T.cyan, textDecoration: 'none' }}>Home</a>
           <span style={{ margin: '0 8px', color: T.faint }}>›</span>
@@ -77,21 +89,26 @@ export default function ProfileStudioClient() {
           <span style={{ color: T.faint }}>Creator Profile Studio</span>
         </nav>
 
+        <Hero onGoTo={goToTool} />
+        <WhatYouGet />
+        <ExampleResults />
+        <HowItWorks />
+        <PlatformFormats />
+        <ComparisonSection />
+        <PrivacySection />
+      </div>
+
+      <div id="generator" style={{ maxWidth: 1180, margin: '0 auto', padding: '20px 20px 0', scrollMarginTop: 76 }}>
         <div style={{ textAlign: 'center', marginBottom: 36 }}>
-          <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-            <Badge color={T.cyan}>Cam Bio Generator</Badge>
-            <Badge color={T.pink}>Tip Menu Generator</Badge>
-            <Badge color={T.green}>100% Free</Badge>
-          </div>
-          <h1 style={{ fontSize: 'clamp(28px,4.5vw,44px)', fontWeight: 900, color: T.white, lineHeight: 1.08, marginBottom: 14, letterSpacing: '-0.03em' }}>
+          <h2 style={{ fontSize: 'clamp(24px,3.6vw,36px)', fontWeight: 900, color: T.white, lineHeight: 1.1, marginBottom: 12, letterSpacing: '-0.02em' }}>
             Creator Profile <span style={{ background: GRADIENT, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Studio</span>
-          </h1>
-          <p style={{ fontSize: 16, color: T.muted, maxWidth: 620, margin: '0 auto', lineHeight: 1.7 }}>
-            Build a bio and a tip menu that actually sound like your business — personalized to your persona, platforms, boundaries, and pricing. Free, no account required. What you enter in one tool carries into the other.
+          </h2>
+          <p style={{ fontSize: 15, color: T.muted, maxWidth: 560, margin: '0 auto', lineHeight: 1.7 }}>
+            What you enter in one tool carries into the other — pick a tab below to get started.
           </p>
         </div>
 
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginBottom: 30, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginBottom: 14, flexWrap: 'wrap' }}>
           {TABS.map(t => (
             <button
               key={t.id}
@@ -110,6 +127,10 @@ export default function ProfileStudioClient() {
           ))}
         </div>
 
+        <p style={{ textAlign: 'center', fontSize: 12.5, color: T.faint, maxWidth: 480, margin: '0 auto 30px', lineHeight: 1.6 }}>
+          {TABS.find(t => t.id === tab)?.desc}
+        </p>
+
         {isLoggedIn && (
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 14 }}>
             <SecondaryButton onClick={handleSaveProfile} title="Save your persona, platforms, boundaries, and pricing so both tools stay prefilled next time">💾 Save profile for next time</SecondaryButton>
@@ -123,6 +144,11 @@ export default function ProfileStudioClient() {
           <TipMenuGenerator isLoggedIn={isLoggedIn} sharedProfile={sharedProfile} onSharedProfileChange={handleSharedProfileChange} />
         )}
         {tab === 'drafts' && <DraftsPanel isLoggedIn={isLoggedIn} />}
+      </div>
+
+      <div style={{ maxWidth: 1180, margin: '0 auto', padding: '56px 20px 100px' }}>
+        <FAQSection />
+        <FinalCTA onGoTo={goToTool} />
       </div>
     </PageShell>
   )

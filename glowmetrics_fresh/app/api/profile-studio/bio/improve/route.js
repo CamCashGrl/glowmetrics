@@ -38,15 +38,21 @@ export async function POST(req) {
     return NextResponse.json({ error: err.message }, { status: 502 })
   }
 
-  const { text, warnings, blocked } = sanitizeGeneratedBio(aiResult.revisedBio, { services: [], maxChars })
+  const { text, warnings, blocked } = sanitizeGeneratedBio(aiResult.rewrittenBio, { services: [], maxChars })
   if (blocked) {
     return NextResponse.json({ error: 'Could not safely improve this bio. Please review it manually.' }, { status: 422 })
   }
 
+  const score = Number.isInteger(aiResult.score) ? Math.max(0, Math.min(100, aiResult.score)) : 0
+
   return NextResponse.json({
-    improvements: Array.isArray(aiResult.improvements) ? aiResult.improvements.slice(0, 12) : [],
-    explanation: aiResult.explanation || '',
-    revisedBio: text,
+    score,
+    summary: aiResult.summary || '',
+    strengths: Array.isArray(aiResult.strengths) ? aiResult.strengths.slice(0, 12) : [],
+    issues: Array.isArray(aiResult.issues) ? aiResult.issues.slice(0, 12) : [],
+    recommendations: Array.isArray(aiResult.recommendations) ? aiResult.recommendations.slice(0, 12) : [],
+    rewrittenBio: text,
+    originalCharacterCount: parsed.data.existingBio.length,
     characterCount: text.length,
     warnings,
   })

@@ -6,16 +6,34 @@
 // slot this engine has already decided; it cannot invent or move a price.
 // ============================================================
 
-// Share of items at each price level, by strategy. Every strategy still
-// guarantees at least one low-cost and one premium/high-value slot below,
-// so "custom" (user hasn't picked a lean yet) defaults to the same curve
-// as "balanced".
+// Share of items at each price level, by pricing strategy (Step 5) AND by
+// tip-menu type (Step 2, 14 options) — every strategy/type still guarantees
+// at least one low-cost and one premium/high-value slot below. Only the
+// "balanced" menu type defers to the creator's chosen pricing strategy;
+// every other type has its own fixed curve so it stays true to its purpose
+// regardless of the strategy pill (matches the original balanced/
+// high_engagement/premium behavior, extended to all 14 types).
 const STRATEGY_WEIGHTS = {
+  // Step 5 pricing strategies (used only when menu type === 'balanced')
   budget:   { low: 0.50, mid: 0.35, premium: 0.12, high_value: 0.03 },
-  balanced: { low: 0.35, mid: 0.35, premium: 0.20, high_value: 0.10 },
+  balanced: { low: 0.30, mid: 0.40, premium: 0.20, high_value: 0.10 },
   premium:  { low: 0.15, mid: 0.30, premium: 0.35, high_value: 0.20 },
   luxury:   { low: 0.10, mid: 0.20, premium: 0.30, high_value: 0.40 },
-  custom:   { low: 0.35, mid: 0.35, premium: 0.20, high_value: 0.10 },
+  custom:   { low: 0.30, mid: 0.40, premium: 0.20, high_value: 0.10 },
+
+  // Tip-menu types with their own fixed distribution, independent of strategy
+  high_engagement:          { low: 0.45, mid: 0.35, premium: 0.15, high_value: 0.05 },
+  beginner_friendly:        { low: 0.40, mid: 0.45, premium: 0.15, high_value: 0.00 },
+  non_nude:                 { low: 0.30, mid: 0.40, premium: 0.20, high_value: 0.10 },
+  toy_focused:              { low: 0.25, mid: 0.35, premium: 0.25, high_value: 0.15 },
+  game_focused:             { low: 0.40, mid: 0.35, premium: 0.20, high_value: 0.05 },
+  dominant_persona:         { low: 0.20, mid: 0.30, premium: 0.30, high_value: 0.20 },
+  submissive_persona:       { low: 0.30, mid: 0.35, premium: 0.25, high_value: 0.10 },
+  girlfriend_experience:    { low: 0.35, mid: 0.40, premium: 0.20, high_value: 0.05 },
+  private_show_conversion:  { low: 0.20, mid: 0.25, premium: 0.35, high_value: 0.20 },
+  goal_focused:             { low: 0.30, mid: 0.30, premium: 0.25, high_value: 0.15 },
+  short_menu:               { low: 0.30, mid: 0.40, premium: 0.20, high_value: 0.10 },
+  full_menu:                { low: 0.30, mid: 0.40, premium: 0.20, high_value: 0.10 },
 }
 
 const LEVEL_BAND = {

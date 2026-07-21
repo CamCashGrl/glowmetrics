@@ -3,6 +3,7 @@ import { useState, useMemo } from 'react'
 import {
   T, Card, SectionLabel, FieldLabel, TextInput, Select, PillGroup, SingleSelectPills,
   PrimaryButton, SecondaryButton, StepDots, LoadingStaged, ErrorBanner, EmptyState, Badge, TextArea, Toggle,
+  GuidancePanel, CompletionTracker,
 } from './theme'
 import TipMenuEditor from './TipMenuEditor'
 import {
@@ -12,6 +13,14 @@ import {
 } from '../../../../lib/profileStudio/constants'
 
 const STEPS = ['Platform', 'Style', 'Categories', 'Boundaries', 'Pricing']
+
+const WHY_TEXT = [
+  'Your platform and token value determine the correct payout math so estimated earnings are accurate, not guessed.',
+  'Your persona and show energy control the wording and category emphasis of every generated item.',
+  'Only the categories you enable are used — nothing outside your selection is suggested.',
+  'Boundaries and intensity limits are enforced before any item is ever generated.',
+  'Your strategy, price range, and item count determine the deterministic pricing curve — the AI never invents a price.',
+]
 
 function TagInput({ value, onChange, placeholder, ariaLabel }) {
   const [text, setText] = useState('')
@@ -77,6 +86,7 @@ export default function TipMenuGenerator({ isLoggedIn, sharedProfile, onSharedPr
   const [maxPrice, setMaxPrice] = useState(500)
   const [itemCount, setItemCount] = useState(20)
   const [hideEarningsFromCustomer, setHideEarningsFromCustomer] = useState(false)
+  const [selectedStyles, setSelectedStyles] = useState(['balanced', 'high_engagement', 'premium'])
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -90,6 +100,11 @@ export default function TipMenuGenerator({ isLoggedIn, sharedProfile, onSharedPr
   }, [tokenValue, currencyType])
 
   const toggleCategory = id => setCategories(c => (c.includes(id) ? c.filter(x => x !== id) : [...c, id]))
+  const toggleStyle = id => setSelectedStyles(s => {
+    if (s.includes(id)) return s.filter(x => x !== id)
+    if (s.length >= 3) return s
+    return [...s, id]
+  })
 
   const goNext = () => setStep(s => Math.min(s + 1, STEPS.length - 1))
   const goBack = () => setStep(s => Math.max(s - 1, 0))
@@ -117,7 +132,7 @@ export default function TipMenuGenerator({ isLoggedIn, sharedProfile, onSharedPr
           categories, customCategories,
           boundaries: { neverInclude, privateOnly, amountGated, requireApproval, maxIntensity, countdownsAllowed, tipsStack, oneUserControl, refundable, disclaimer },
           strategy, minPrice: Number(minPrice), maxPrice: Number(maxPrice), itemCount,
-          style: 'balanced', hideEarningsFromCustomer,
+          styles: selectedStyles, hideEarningsFromCustomer,
         }),
       })
       const data = await res.json()
@@ -136,12 +151,26 @@ export default function TipMenuGenerator({ isLoggedIn, sharedProfile, onSharedPr
 
   const activeMenu = menus?.find(m => m.style === activeStyle) || menus?.[0]
 
+  const checklist = [
+    { label: 'Platform format', done: !!platform },
+    { label: 'Brand voice', done: persona.length > 0 },
+    { label: 'Categories', done: categories.length > 0 },
+    { label: 'Boundaries', done: neverInclude.length > 0 || !!disclaimer.trim() },
+    { label: 'Pricing range', done: Number(minPrice) > 0 && Number(maxPrice) > Number(minPrice) },
+    { label: 'Room goal', done: !!roomGoal },
+    { label: 'Comfort level', done: !!comfortLevel },
+    { label: 'Item count', done: !!itemCount },
+  ]
+  const completionPercent = Math.round((checklist.filter(c => c.done).length / checklist.length) * 100)
+
   return (
     <div>
       <StepDots steps={STEPS} current={step} />
+      <CompletionTracker percent={completionPercent} checklist={checklist} />
       <ErrorBanner message={error} onDismiss={() => setError('')} />
 
       {step === 0 && (
+      <div className="ps-wizard-layout" style={{ display: 'grid', gridTemplateColumns: '1fr 260px', gap: 20, alignItems: 'start' }}>
         <Card className="ps-fade">
           <SectionLabel>Step 1 · Platform and token value</SectionLabel>
           <div className="ps-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
@@ -181,9 +210,12 @@ export default function TipMenuGenerator({ isLoggedIn, sharedProfile, onSharedPr
             </div>
           </div>
         </Card>
+        <GuidancePanel>{WHY_TEXT[0]}</GuidancePanel>
+      </div>
       )}
 
       {step === 1 && (
+      <div className="ps-wizard-layout" style={{ display: 'grid', gridTemplateColumns: '1fr 260px', gap: 20, alignItems: 'start' }}>
         <Card className="ps-fade">
           <SectionLabel>Step 2 · Creator style</SectionLabel>
           <FieldLabel>Main persona</FieldLabel>
@@ -204,9 +236,12 @@ export default function TipMenuGenerator({ isLoggedIn, sharedProfile, onSharedPr
             <SingleSelectPills options={COMFORT_LEVELS} value={comfortLevel} onChange={setComfortLevel} />
           </div>
         </Card>
+        <GuidancePanel>{WHY_TEXT[1]}</GuidancePanel>
+      </div>
       )}
 
       {step === 2 && (
+      <div className="ps-wizard-layout" style={{ display: 'grid', gridTemplateColumns: '1fr 260px', gap: 20, alignItems: 'start' }}>
         <Card className="ps-fade">
           <SectionLabel>Step 3 · Menu categories</SectionLabel>
           <p style={{ fontSize: 13, color: T.muted, marginBottom: 12 }}>Enable the categories that fit your show — nude or non-nude, it's your call.</p>
@@ -237,9 +272,12 @@ export default function TipMenuGenerator({ isLoggedIn, sharedProfile, onSharedPr
             </div>
           </div>
         </Card>
+        <GuidancePanel>{WHY_TEXT[2]}</GuidancePanel>
+      </div>
       )}
 
       {step === 3 && (
+      <div className="ps-wizard-layout" style={{ display: 'grid', gridTemplateColumns: '1fr 260px', gap: 20, alignItems: 'start' }}>
         <Card className="ps-fade">
           <SectionLabel>Step 4 · Boundaries and exclusions</SectionLabel>
           <FieldLabel hint="never suggested in your menu">Activities never to include</FieldLabel>
@@ -273,9 +311,12 @@ export default function TipMenuGenerator({ isLoggedIn, sharedProfile, onSharedPr
             <TextArea id="tm-disclaimer" value={disclaimer} maxLength={300} onChange={e => setDisclaimer(e.target.value)} placeholder="e.g. All custom requests are reviewed before approval." />
           </div>
         </Card>
+        <GuidancePanel>{WHY_TEXT[3]}</GuidancePanel>
+      </div>
       )}
 
       {step === 4 && (
+      <div className="ps-wizard-layout" style={{ display: 'grid', gridTemplateColumns: '1fr 260px', gap: 20, alignItems: 'start' }}>
         <Card className="ps-fade">
           <SectionLabel>Step 5 · Pricing strategy</SectionLabel>
           <FieldLabel>Strategy</FieldLabel>
@@ -305,15 +346,44 @@ export default function TipMenuGenerator({ isLoggedIn, sharedProfile, onSharedPr
             <Toggle checked={hideEarningsFromCustomer} onChange={setHideEarningsFromCustomer} label="Hide estimated earnings from the customer-facing version" />
           </div>
 
-          <div style={{ marginTop: 10, fontSize: 12.5, color: T.cyan }}>Generates all three menu styles: {MENU_STYLES.map(s => s.label).join(', ')}.</div>
+          <div style={{ marginTop: 20 }}>
+            <FieldLabel hint="pick up to 3 — each generates its own editable menu">Menu type</FieldLabel>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 8 }}>
+              {MENU_STYLES.map(s => {
+                const active = selectedStyles.includes(s.id)
+                const disabled = !active && selectedStyles.length >= 3
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => toggleStyle(s.id)}
+                    disabled={disabled}
+                    className="ps-btn"
+                    style={{
+                      textAlign: 'left', padding: '10px 12px', borderRadius: 12, cursor: disabled ? 'not-allowed' : 'pointer',
+                      border: `1px solid ${active ? 'rgba(22,244,255,0.7)' : T.border}`,
+                      background: active ? 'rgba(22,244,255,0.12)' : 'rgba(255,255,255,0.03)',
+                      opacity: disabled ? 0.4 : 1,
+                    }}
+                  >
+                    <div style={{ fontSize: 12.5, fontWeight: 700, color: active ? T.white : T.soft }}>{active ? '✓ ' : ''}{s.label}</div>
+                    <div style={{ fontSize: 11, color: T.faint, marginTop: 2, lineHeight: 1.4 }}>{s.desc}</div>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
 
           <div style={{ marginTop: 22 }}>
-            <PrimaryButton onClick={handleGenerate} disabled={loading || !categories.length}>
+            <PrimaryButton onClick={handleGenerate} disabled={loading || !categories.length || !selectedStyles.length}>
               {loading ? 'Generating…' : '✨ Generate my tip menu'}
             </PrimaryButton>
             {!categories.length && <div style={{ fontSize: 12, color: T.faint, marginTop: 8 }}>Enable at least one category in Step 3.</div>}
+            {!selectedStyles.length && <div style={{ fontSize: 12, color: T.faint, marginTop: 8 }}>Pick at least one menu type above.</div>}
           </div>
         </Card>
+        <GuidancePanel>{WHY_TEXT[4]}</GuidancePanel>
+      </div>
       )}
 
       {step < 4 && (

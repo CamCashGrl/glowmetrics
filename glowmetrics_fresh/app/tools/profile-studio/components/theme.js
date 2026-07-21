@@ -50,6 +50,7 @@ export function PageShell({ children }) {
         .ps-btn:hover { transform: translateY(-1px); }
         .ps-pill:hover { border-color: rgba(22,244,255,0.5) !important; }
         @media (max-width: 860px) { .ps-grid-2 { grid-template-columns: 1fr !important; } .ps-editor-grid { grid-template-columns: 1fr !important; } }
+        @media (max-width: 900px) { .ps-wizard-layout { grid-template-columns: 1fr !important; } }
         @media (max-width: 640px) { .ps-step-label { display: none !important; } }
       `}</style>
     </div>
@@ -307,6 +308,44 @@ export function EmptyState({ title, description, icon = '✨' }) {
       <div style={{ fontSize: 32, marginBottom: 12 }}>{icon}</div>
       <div style={{ fontSize: 17, fontWeight: 800, color: T.white, marginBottom: 8 }}>{title}</div>
       <div style={{ fontSize: 14, color: T.muted, maxWidth: 420, margin: '0 auto', lineHeight: 1.6 }}>{description}</div>
+    </div>
+  )
+}
+
+export function GuidancePanel({ title = 'Why we ask this', children }) {
+  return (
+    <div style={{
+      background: 'rgba(124,92,255,0.06)', border: '1px solid rgba(124,92,255,0.25)', borderRadius: 16,
+      padding: 18, fontSize: 12.5, color: T.muted, lineHeight: 1.6, alignSelf: 'start',
+    }}>
+      <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: T.purple, marginBottom: 8 }}>{title}</div>
+      {children}
+    </div>
+  )
+}
+
+export function CompletionTracker({ percent, checklist }) {
+  return (
+    <div style={{ marginBottom: 18 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: T.soft }}>Profile completeness</span>
+        <span style={{ fontSize: 12, fontWeight: 700, color: T.cyan }}>{percent}%</span>
+      </div>
+      <div style={{ height: 6, borderRadius: 999, background: 'rgba(255,255,255,0.08)', overflow: 'hidden', marginBottom: 12 }}>
+        <div style={{ height: '100%', width: `${percent}%`, background: GRADIENT, transition: 'width 0.3s ease' }} />
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+        {checklist.map(c => (
+          <span key={c.label} style={{
+            fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 999,
+            background: c.done ? 'rgba(34,197,94,0.12)' : 'rgba(255,255,255,0.04)',
+            border: `1px solid ${c.done ? 'rgba(34,197,94,0.4)' : T.border}`,
+            color: c.done ? T.green : T.faint,
+          }}>
+            {c.done ? '✓' : '○'} {c.label}
+          </span>
+        ))}
+      </div>
     </div>
   )
 }

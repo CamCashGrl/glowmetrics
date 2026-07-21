@@ -49,7 +49,7 @@ export const TipMenuGenerateRequestSchema = z.object({
   minPrice: z.number().positive().max(1000000),
   maxPrice: z.number().positive().max(10000000),
   itemCount: z.number().int().refine(n => MENU_ITEM_COUNTS.includes(n), 'itemCount must be 10, 15, 20, or 30'),
-  style: z.enum(STYLE_IDS).default('balanced'),
+  styles: z.array(z.enum(STYLE_IDS)).min(1).max(3).default(['balanced']),
 
   hideEarningsFromCustomer: z.boolean().default(false),
 }).refine(d => d.maxPrice > d.minPrice, { message: 'maxPrice must be greater than minPrice', path: ['maxPrice'] })

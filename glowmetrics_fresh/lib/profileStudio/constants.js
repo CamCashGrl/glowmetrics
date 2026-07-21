@@ -80,14 +80,18 @@ export const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
 // ── Step 5: Bio format / length / emoji ─────────────────────────────────
 export const BIO_FORMATS = [
+  { id: 'very_short_cam_bio', label: 'Very short cam bio' },
   { id: 'short_cam_bio', label: 'Short cam bio' },
   { id: 'full_cam_profile', label: 'Full cam profile bio' },
   { id: 'chaturbate', label: 'Chaturbate-style bio' },
   { id: 'myfreecams', label: 'MyFreeCams-style bio' },
   { id: 'bongacams', label: 'BongaCams-style bio' },
+  { id: 'stripchat', label: 'Stripchat-style bio' },
+  { id: 'camsoda', label: 'CamSoda-style bio' },
+  { id: 'onlyfans', label: 'OnlyFans bio' },
+  { id: 'fansly', label: 'Fansly bio' },
   { id: 'x_twitter', label: 'X/Twitter bio' },
   { id: 'instagram', label: 'Instagram bio' },
-  { id: 'onlyfans_fansly', label: 'OnlyFans or Fansly bio' },
   { id: 'promotional', label: 'Promotional bio' },
   { id: 'seo_description', label: 'SEO-friendly creator description' },
   { id: 'about_me', label: 'About Me section' },
@@ -116,16 +120,20 @@ export const BIO_STYLES = [
 // Hard platform character caps — the generator must fit inside these
 // regardless of the requested length option.
 export const PLATFORM_CHAR_CAPS = {
-  chaturbate: 999,
-  myfreecams: 999,
-  bongacams: 500,
+  very_short_cam_bio: 160,
+  short_cam_bio: 350,
+  full_cam_profile: 900,
+  chaturbate: 750,
+  myfreecams: 850,
+  bongacams: 600,
+  stripchat: 650,
+  camsoda: 600,
+  onlyfans: 300,
+  fansly: 350,
   x_twitter: 160,
   instagram: 150,
-  onlyfans_fansly: 1000,
-  short_cam_bio: 160,
-  full_cam_profile: 1200,
-  promotional: 400,
-  seo_description: 400,
+  promotional: 700,
+  seo_description: 1000,
   about_me: 1200,
 }
 
@@ -165,10 +173,25 @@ export const PRICING_STRATEGIES = [
 
 export const MENU_ITEM_COUNTS = [10, 15, 20, 30]
 
+// 14 selectable tip-menu types. Each maps to its own price-distribution
+// weighting in pricingEngine.js (STYLE_WEIGHTS) — the AI never invents
+// prices for any of them, only the item copy for slots this engine has
+// already priced. Creators pick 1-3 types per generation.
 export const MENU_STYLES = [
-  { id: 'balanced', label: 'Balanced menu' },
-  { id: 'high_engagement', label: 'High-engagement menu (more affordable tips)' },
-  { id: 'premium', label: 'Premium menu (fewer, higher-value actions)' },
+  { id: 'balanced', label: 'Balanced menu', desc: 'A broadly useful menu with a healthy price ladder.', defaultItemCount: 20 },
+  { id: 'high_engagement', label: 'High-engagement menu', desc: 'More affordable tips to increase participation and tip frequency.', defaultItemCount: 20 },
+  { id: 'premium', label: 'Premium menu', desc: 'Fewer, higher-value actions for established creators or high-spender rooms.', defaultItemCount: 20 },
+  { id: 'beginner_friendly', label: 'Beginner-friendly menu', desc: 'A simple, manageable first menu with easy rules.', defaultItemCount: 10 },
+  { id: 'non_nude', label: 'Non-nude menu', desc: 'A profitable menu built entirely without nudity.', defaultItemCount: 20 },
+  { id: 'toy_focused', label: 'Toy-focused menu', desc: 'Centered on interactive toys, priced by intensity and duration.', defaultItemCount: 15 },
+  { id: 'game_focused', label: 'Game-focused menu', desc: 'Centered on room participation games like spin-the-wheel or roll-the-dice.', defaultItemCount: 15 },
+  { id: 'dominant_persona', label: 'Dominant persona menu', desc: 'Aligned with a dominant, strict, bratty, luxury, or findom-style persona.', defaultItemCount: 20 },
+  { id: 'submissive_persona', label: 'Submissive persona menu', desc: 'Aligned with a submissive or service-oriented persona.', defaultItemCount: 20 },
+  { id: 'girlfriend_experience', label: 'Girlfriend experience menu', desc: 'A warm, connection-focused menu.', defaultItemCount: 15 },
+  { id: 'private_show_conversion', label: 'Private-show conversion menu', desc: 'Encourages viewers to move from public chat into private shows.', defaultItemCount: 15 },
+  { id: 'goal_focused', label: 'Goal-focused menu', desc: 'Supports room goals and milestone progression.', defaultItemCount: 15 },
+  { id: 'short_menu', label: 'Short menu (10 items)', desc: 'Fast, simple, mobile-friendly menu.', defaultItemCount: 10 },
+  { id: 'full_menu', label: 'Full menu (20-30 items)', desc: 'A comprehensive room menu with organized categories.', defaultItemCount: 30 },
 ]
 
 export const MENU_THEMES = [
