@@ -341,7 +341,12 @@ function parseWithHeaders(lines, platform) {
     }
     if (!username) continue
 
-    let tokens = parseInt(row.tokens || 0) || 0
+    // Strip $, comma, AND whitespace (incl. NBSP/narrow-NBSP thousands
+    // separators like BongaCams' "1 507") before parsing — parseInt
+    // otherwise stops at the first non-numeric character and silently
+    // truncates e.g. "1 507" tokens down to 1. Mirrors the cleanup already
+    // applied to usd just below.
+    let tokens = parseInt((row.tokens || '0').toString().replace(/[$,\s]/g, '')) || 0
     if (tokens < 0) continue
 
     const rawUsd = (row.usd || row.usd_amount || '0').toString().replace(/[$,\s]/g, '')

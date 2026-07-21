@@ -84,7 +84,11 @@ function parseBCPaidSessions(rawText){
       const d=tryParseDate(col)
       if(d&&!ts){ts=d;continue}
       if(col===sessionType)continue
-      const n=parseFloat(col.replace(/[$,]/g,''))
+      // Strip $, comma, AND whitespace (incl. NBSP/narrow-NBSP thousands
+      // separators like BongaCams' "1 507") before parsing — parseFloat
+      // otherwise stops at the first non-numeric character and silently
+      // truncates e.g. "1 507" tokens down to 1.
+      const n=parseFloat(col.replace(/[$,\s]/g,''))
       if(!isNaN(n)&&n>0){
         if(Number.isInteger(n)&&n<100000&&tokens===0)tokens=Math.round(n)
         else if(n<50000&&usd===0)usd=n
