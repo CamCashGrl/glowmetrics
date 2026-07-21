@@ -1352,6 +1352,9 @@ export default function LivePage() {
                       <span style={{ fontSize: 14 }}>＋</span> Log a tip manually
                     </summary>
                     <div style={{ padding: '0 16px 14px' }}>
+                      <div style={{ fontSize: 10, color: C.muted, marginBottom: 8, padding: '5px 8px', borderRadius: 6, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                        Demo only — shown on this screen but not saved, not counted toward earnings, and never used for coaching prompts.
+                      </div>
                       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: 8 }}>
                         <input placeholder="Username" value={liveTipInput.username} onChange={e => setLiveTipInput(p => ({ ...p, username: e.target.value }))} onKeyDown={e => e.key === 'Enter' && addTip()} style={inp2} />
                         <input type="number" placeholder="Tokens" value={liveTipInput.tokens} onChange={e => setLiveTipInput(p => ({ ...p, tokens: e.target.value }))} onKeyDown={e => e.key === 'Enter' && addTip()} style={inp2} />
