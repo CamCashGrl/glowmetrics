@@ -1,5 +1,6 @@
 "use client"
 import { useState } from "react"
+import { usePathname, useRouter } from "next/navigation"
 import Button from "../../components/ui/Button"
 
 const C = {
@@ -43,6 +44,7 @@ const NAV = [
     items: [
       { id: "upload", icon: "📥", label: "Import CSV" },
       { id: "help",   icon: "❓", label: "CSV Help" },
+      { id: "tax-organizer", icon: "🧾", label: "Tax Organizer", href: "/tax-organizer" },
     ]
   },
 ]
@@ -50,13 +52,28 @@ const NAV = [
 export default function Sidebar({ activeTab, onTabChange, user, onSignOut, isPro = false }) {
   const [hoveredId, setHoveredId] = useState(null)
   const [mobileOpen, setMobileOpen] = useState(false)
+  const pathname = usePathname()
+  const router = useRouter()
 
-  const renderItem = (id, icon, label) => {
-    const isActive  = activeTab === id
+  const renderItem = (id, icon, label, href) => {
+    // Route-based items (Tax Organizer) are active when the URL matches.
+    // Tab-based items are only meaningfully "active" while actually on the
+    // /dashboard SPA — everywhere else (e.g. this same Sidebar rendered on
+    // /tax-organizer) they're inert until clicked.
+    const isActive  = href ? pathname === href : (pathname === '/dashboard' && activeTab === id)
     const isHovered = hoveredId === id
+    const handleClick = () => {
+      if (href) { router.push(href); setMobileOpen(false); return }
+      if (pathname === '/dashboard') { onTabChange(id); setMobileOpen(false); return }
+      // Sidebar is mounted on a different route (e.g. /tax-organizer) — send
+      // the user back to the dashboard with that tab pre-selected instead of
+      // silently doing nothing (dashboard/page.js reads ?tab= on load).
+      router.push(`/dashboard?tab=${id}`)
+      setMobileOpen(false)
+    }
     return (
       <button key={id}
-        onClick={() => { onTabChange(id); setMobileOpen(false) }}
+        onClick={handleClick}
         onMouseEnter={() => setHoveredId(id)}
         onMouseLeave={() => setHoveredId(null)}
         style={{
@@ -102,7 +119,7 @@ export default function Sidebar({ activeTab, onTabChange, user, onSignOut, isPro
                 {group.group}
               </div>
             )}
-            {group.items.map(({ id, icon, label }) => renderItem(id, icon, label))}
+            {group.items.map(({ id, icon, label, href }) => renderItem(id, icon, label, href))}
           </div>
         ))}
       </div>
