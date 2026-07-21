@@ -465,6 +465,7 @@ export default function TokenCalculatorPage() {
                 { href: '/guides/cam-model-income-tracker', label: 'Income Tracker', desc: 'Track $/hr, top fans, and session breakdowns' },
                 { href: '/guides/chaturbate-best-hours', label: 'Best Hours to Stream', desc: 'Find your personal peak streaming times' },
                 { href: '/blog/cam-model-earnings', label: 'Cam Model Earnings Guide', desc: 'How much models make and why it changes' },
+                { href: '/tools/profile-studio', label: 'Creator Profile Studio', desc: 'Free AI bio and tip menu generator, no sign-up required' },
               ].map(({ href, label, desc }) => (
                 <a key={href} href={href} style={{ background: S.card, border: `1px solid ${S.border}`, borderRadius: 14, padding: '18px 20px', textDecoration: 'none', display: 'block', transition: 'border-color 0.15s' }}>
                   <div style={{ fontSize: 14, fontWeight: 700, color: S.accent, marginBottom: 6 }}>{label}</div>
@@ -483,6 +484,7 @@ export default function TokenCalculatorPage() {
               <a href="/guides/chaturbate-token-tracker" style={{ fontSize: 14, color: S.accent, textDecoration: 'none' }}>→ Chaturbate token tracker</a>
               <a href="/guides/chaturbate-best-hours" style={{ fontSize: 14, color: S.accent, textDecoration: 'none' }}>→ Best hours to stream on Chaturbate</a>
               <a href="/guides/cam-model-income-tracker" style={{ fontSize: 14, color: S.accent, textDecoration: 'none' }}>→ Cam model income tracker</a>
+              <a href="/tools/profile-studio" style={{ fontSize: 14, color: S.accent, textDecoration: 'none' }}>→ Free cam bio & tip menu generator</a>
             </div>
           </div>
 
