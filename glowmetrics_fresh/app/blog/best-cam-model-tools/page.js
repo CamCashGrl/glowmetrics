@@ -490,6 +490,7 @@ export default function BestCamModelTools() {
           <a href="/guides/cam-model-room-title-generator" style={s.relLink}>→ Free room title generator</a>
           <a href="/blog/how-to-track-cam-tips-automatically" style={s.relLink}>→ How to Track Cam Tips Automatically — Automate your earnings tracking</a>
           <a href="/blog/cam-model-fan-crm" style={s.relLink}>→ Cam Model Fan CRM — Track and profile your top tippers</a>
+          <a href="/tools/profile-studio" style={s.relLink}>→ Free cam bio & tip menu generator</a>
         </div>
       </div>
     </ArticleLayout>

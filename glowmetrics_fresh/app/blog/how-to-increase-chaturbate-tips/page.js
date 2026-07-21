@@ -299,6 +299,7 @@ export default function HowToIncreaseChaturbateTips() {
           <a href="/blog/cam-model-tipping-pattern-data-examples" style={s.relLink}>→ Cam Model Tipping Pattern Data Examples</a>
           <a href="/blog/how-to-make-money-on-chaturbate" style={s.relLink}>→ How to Make Money on Chaturbate</a>
           <a href="/blog/chaturbate-payout-explained" style={s.relLink}>→ Chaturbate Payout Explained</a>
+          <a href="/tools/profile-studio" style={s.relLink}>→ Free cam bio & tip menu generator</a>
         </div>
       </div>
     </ArticleLayout>

@@ -245,6 +245,7 @@ export default function GFEStrategy() {
               <a href="/blog/cam-model-mental-health-burnout-prevention" style={s.relatedLink}>→ Cam model burnout prevention</a>
               <a href="/blog/how-to-build-loyal-fans" style={s.relatedLink}>→ How to build loyal fans who tip consistently</a>
               <a href="/blog/cam-model-income-diversification" style={s.relatedLink}>→ How to diversify your cam income</a>
+              <a href="/tools/profile-studio" style={s.relatedLink}>→ Free cam bio & tip menu generator</a>
             </div>
           </div>
         </article>
