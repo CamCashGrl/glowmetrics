@@ -111,7 +111,13 @@ export const TRIGGER_LEVEL = {
 // Returns every currently-qualifying trigger (not just the winner) in fixed
 // rule order — the caller picks the single active one via
 // selectPrimaryTrigger() below. tips must already be session-scoped.
-export function evaluateCoachingTriggers({ state, tips, strategy }) {
+//
+// now defaults to Date.now() so real callers (route.js) behave exactly as
+// before — but whale_prox's "time since this tipper's last tip" check reads
+// from this same value instead of calling Date.now() itself, so it can
+// never drift from the clock computeCoachingState was evaluated against,
+// and both are deterministically testable together.
+export function evaluateCoachingTriggers({ state, tips, strategy, now = Date.now() }) {
   if (!state) return [];
   const { timeSinceLastTip, paceStatus, goalProgress, topTipper, totalRevenue, elapsedMins, liveOnlyCount } = state;
 
@@ -215,7 +221,7 @@ export function evaluateCoachingTriggers({ state, tips, strategy }) {
       const gaps = [];
       for (let i = 1; i < sortedTimes.length; i++) gaps.push(sortedTimes[i] - sortedTimes[i - 1]);
       const avgGapMs = gaps.reduce((s, g) => s + g, 0) / gaps.length;
-      const sinceLastMs = Date.now() - sortedTimes[sortedTimes.length - 1];
+      const sinceLastMs = now - sortedTimes[sortedTimes.length - 1];
       if (avgGapMs > 15 * 60 * 1000) continue;
       const ratio = sinceLastMs / avgGapMs;
       if (ratio >= 1.3 && sinceLastMs > 2 * 60 * 1000) {
