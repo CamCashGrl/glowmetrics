@@ -1,5 +1,7 @@
 'use client'
 
+import { track } from '../../lib/track'
+
 export default function ExtensionDownloadButton({ style, label }) {
   return (
     <a
@@ -16,6 +18,7 @@ export default function ExtensionDownloadButton({ style, label }) {
             })
           }
         } catch(e) {}
+        track('extension_download_clicked', { source_page: window.location.pathname })
       }}
     >
       {label ?? '📥 Install Chrome Extension — Free'}

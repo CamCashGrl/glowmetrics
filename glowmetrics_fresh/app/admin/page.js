@@ -155,7 +155,7 @@ export default function AdminPage() {
     </div>
   )
 
-  const { kpis, funnel, stageBreakdown, platformBreakdown, users=[], importHealth, liveMode, subscriptions, feedback, signupsByDay=[], utmBreakdown={}, generatedAt } = data || {}
+  const { kpis, funnel, stageBreakdown, platformBreakdown, users=[], importHealth, liveMode, extension, subscriptions, feedback, signupsByDay=[], utmBreakdown={}, generatedAt } = data || {}
 
   // Filter + sort users
   const filtered = users
@@ -277,7 +277,7 @@ export default function AdminPage() {
           </Card>
         </div>
 
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:20, marginBottom:20 }}>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))", gap:20, marginBottom:20 }}>
 
           {/* Import Health */}
           <Card>
@@ -323,6 +323,29 @@ export default function AdminPage() {
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0" }}>
                 <span style={{ fontSize:12, color:C.text }}>Last Live Tip</span>
                 <span style={{ fontSize:12, color:C.muted }}>{fmtTime(liveMode?.lastTip)}</span>
+              </div>
+            </div>
+          </Card>
+
+          {/* Extension Health */}
+          <Card>
+            <SectionTitle>Extension Health</SectionTitle>
+            <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+              {[
+                ["Installs",             extension?.installs,       C.cyan],
+                ["Updates",              extension?.updates,        C.muted],
+                ["Download Clicks",      extension?.downloadClicks, C.gold],
+                ["Ever Active",          extension?.activeUsers,    C.purple],
+                ["Active (24h)",         extension?.active24h,      extension?.active24h > 0 ? C.pink : C.muted],
+              ].map(([l,v,color]) => (
+                <div key={l} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderBottom:`1px solid rgba(255,255,255,0.04)` }}>
+                  <span style={{ fontSize:12, color:C.text }}>{l}</span>
+                  <span style={{ fontSize:16, fontWeight:800, color, fontFamily:"'DM Mono',monospace" }}>{v ?? 0}</span>
+                </div>
+              ))}
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0" }}>
+                <span style={{ fontSize:12, color:C.text }}>Last Install</span>
+                <span style={{ fontSize:12, color:C.muted }}>{fmtTime(extension?.lastInstall)}</span>
               </div>
             </div>
           </Card>
