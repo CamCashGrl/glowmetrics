@@ -3,6 +3,7 @@ import { useState } from 'react'
 import {
   T, Card, SectionLabel, FieldLabel, TextInput, TextArea, Select, PillGroup, SingleSelectPills,
   PrimaryButton, SecondaryButton, StepDots, LoadingStaged, ErrorBanner, EmptyState, Badge,
+  GuidancePanel, CompletionTracker,
 } from './theme'
 import BioResultCard from './BioResultCard'
 import {
@@ -12,6 +13,14 @@ import {
 } from '../../../../lib/profileStudio/constants'
 
 const STEPS = ['Identity', 'Persona', 'Content', 'Schedule', 'Generate']
+
+const WHY_TEXT = [
+  'Your name, platform, and experience level help determine the correct tone, length, and style. Private personal information is not required.',
+  'Your persona choices control how playful, dominant, soft, luxury, teasing, conversational, or sales-focused the final result sounds.',
+  'The generator uses only the services you approve and avoids activities you exclude.',
+  'Schedule and call-to-action details help turn visitors into repeat viewers and followers.',
+  'The selected platform and output type determine the structure, wording, length, and purpose of the result.',
+]
 
 function buildInitialForm(shared) {
   return {
@@ -170,12 +179,26 @@ export default function BioGenerator({ isLoggedIn, sharedProfile, onSharedProfil
     }
   }
 
+  const checklist = [
+    { label: 'Creator identity', done: !!form.identity.displayName.trim() },
+    { label: 'Brand voice', done: form.persona.personaTags.length > 0 || form.persona.tone.length > 0 },
+    { label: 'Services', done: form.content.services.length > 0 },
+    { label: 'Boundaries', done: form.content.boundaries.hardNo.length > 0 || !!form.content.boundaries.topics.trim() },
+    { label: 'Audience', done: !!form.persona.desiredAudience.trim() },
+    { label: 'Schedule', done: form.schedule.days.length > 0 || !!form.schedule.hours.trim() },
+    { label: 'Call to action', done: !!form.schedule.ctaPrimary },
+    { label: 'Platform format', done: form.identity.platforms.length > 0 },
+  ]
+  const completionPercent = Math.round((checklist.filter(c => c.done).length / checklist.length) * 100)
+
   return (
     <div>
       <StepDots steps={STEPS} current={step} />
+      <CompletionTracker percent={completionPercent} checklist={checklist} />
       <ErrorBanner message={error} onDismiss={() => setError('')} />
 
       {step === 0 && (
+      <div className="ps-wizard-layout" style={{ display: 'grid', gridTemplateColumns: '1fr 260px', gap: 20, alignItems: 'start' }}>
         <Card className="ps-fade">
           <SectionLabel>Step 1 · Creator identity</SectionLabel>
           <div className="ps-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
@@ -225,9 +248,12 @@ export default function BioGenerator({ isLoggedIn, sharedProfile, onSharedProfil
             <PillGroup options={ALL_PLATFORMS} value={form.identity.platforms} onToggle={id => toggleIn('identity', 'platforms', id)} />
           </div>
         </Card>
+        <GuidancePanel>{WHY_TEXT[0]}</GuidancePanel>
+      </div>
       )}
 
       {step === 1 && (
+      <div className="ps-wizard-layout" style={{ display: 'grid', gridTemplateColumns: '1fr 260px', gap: 20, alignItems: 'start' }}>
         <Card className="ps-fade">
           <SectionLabel>Step 2 · Persona and brand</SectionLabel>
           <FieldLabel>Persona (select all that apply)</FieldLabel>
@@ -269,9 +295,12 @@ export default function BioGenerator({ isLoggedIn, sharedProfile, onSharedProfil
             <PillGroup options={TONE_OPTIONS} value={form.persona.tone} onToggle={id => toggleIn('persona', 'tone', id)} />
           </div>
         </Card>
+        <GuidancePanel>{WHY_TEXT[1]}</GuidancePanel>
+      </div>
       )}
 
       {step === 2 && (
+      <div className="ps-wizard-layout" style={{ display: 'grid', gridTemplateColumns: '1fr 260px', gap: 20, alignItems: 'start' }}>
         <Card className="ps-fade">
           <SectionLabel>Step 3 · Content and boundaries</SectionLabel>
           <FieldLabel>What do you offer?</FieldLabel>
@@ -324,9 +353,12 @@ export default function BioGenerator({ isLoggedIn, sharedProfile, onSharedProfil
             </label>
           </div>
         </Card>
+        <GuidancePanel>{WHY_TEXT[2]}</GuidancePanel>
+      </div>
       )}
 
       {step === 3 && (
+      <div className="ps-wizard-layout" style={{ display: 'grid', gridTemplateColumns: '1fr 260px', gap: 20, alignItems: 'start' }}>
         <Card className="ps-fade">
           <SectionLabel>Step 4 · Schedule and calls to action</SectionLabel>
           <FieldLabel>Typical streaming days</FieldLabel>
@@ -362,9 +394,12 @@ export default function BioGenerator({ isLoggedIn, sharedProfile, onSharedProfil
             <SingleSelectPills options={PRIMARY_CTA_OPTIONS} value={form.schedule.ctaSecondary} onChange={v => patch('schedule', 'ctaSecondary', v)} />
           </div>
         </Card>
+        <GuidancePanel>{WHY_TEXT[3]}</GuidancePanel>
+      </div>
       )}
 
       {step === 4 && (
+      <div className="ps-wizard-layout" style={{ display: 'grid', gridTemplateColumns: '1fr 260px', gap: 20, alignItems: 'start' }}>
         <Card className="ps-fade">
           <SectionLabel>Step 5 · Platform format</SectionLabel>
           <FieldLabel htmlFor="bio-format">Generate as</FieldLabel>
@@ -387,6 +422,8 @@ export default function BioGenerator({ isLoggedIn, sharedProfile, onSharedProfil
             {!form.identity.displayName && <div style={{ fontSize: 12, color: T.faint, marginTop: 8 }}>Add a display name in Step 1 to generate.</div>}
           </div>
         </Card>
+        <GuidancePanel>{WHY_TEXT[4]}</GuidancePanel>
+      </div>
       )}
 
       {step < 4 && (
@@ -429,25 +466,59 @@ export default function BioGenerator({ isLoggedIn, sharedProfile, onSharedProfil
       )}
 
       <div style={{ marginTop: 40, paddingTop: 28, borderTop: `1px solid ${T.borderSoft}` }}>
-        <SectionLabel htmlFor="bio-improve-text">Improve my existing bio</SectionLabel>
-        <p style={{ fontSize: 13, color: T.muted, marginBottom: 12 }}>Paste your current bio and get a short explanation of what's weak, followed by a revised version.</p>
+        <SectionLabel htmlFor="bio-improve-text">Already Have a Bio? Let CamCash Audit It</SectionLabel>
+        <p style={{ fontSize: 13, color: T.muted, marginBottom: 12 }}>
+          Checks: opening hook, brand personality, platform fit, readability, clear services, clear schedule, viewer CTA, boundary language, repetition, length, emoji use, unsupported claims, and privacy risks.
+        </p>
         <TextArea id="bio-improve-text" aria-label="Existing bio to improve" value={improveText} maxLength={4000} onChange={e => setImproveText(e.target.value)} placeholder="Paste your current bio here…" />
         <div style={{ marginTop: 10 }}>
           <SecondaryButton onClick={handleImprove} disabled={improveLoading || !improveText.trim()}>
-            {improveLoading ? 'Analyzing…' : 'Improve my bio'}
+            {improveLoading ? 'Auditing…' : 'Audit and Rewrite My Bio'}
           </SecondaryButton>
         </div>
         <ErrorBanner message={improveError} onDismiss={() => setImproveError('')} />
         {improveResult && (
           <Card style={{ marginTop: 16 }} className="ps-fade">
-            <div style={{ fontSize: 13, fontWeight: 700, color: T.cyan, marginBottom: 8 }}>What was improved</div>
-            <ul style={{ margin: '0 0 12px', paddingLeft: 18, color: T.muted, fontSize: 13, lineHeight: 1.7 }}>
-              {improveResult.improvements.map((imp, i) => <li key={i}>{imp}</li>)}
-            </ul>
-            <p style={{ fontSize: 13, color: T.soft, marginBottom: 14 }}>{improveResult.explanation}</p>
-            <div style={{ fontSize: 13, fontWeight: 700, color: T.pink, marginBottom: 8 }}>Revised bio</div>
-            <p style={{ fontSize: 14.5, lineHeight: 1.65, color: T.white, whiteSpace: 'pre-wrap' }}>{improveResult.revisedBio}</p>
-            <div style={{ fontSize: 11.5, color: T.faint }}>{improveResult.characterCount} characters</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
+              <div style={{
+                width: 56, height: 56, borderRadius: '50%', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                background: `conic-gradient(${T.cyan} ${improveResult.score * 3.6}deg, rgba(255,255,255,0.08) 0deg)`,
+              }}>
+                <div style={{ width: 46, height: 46, borderRadius: '50%', background: '#0B0E1F', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, fontWeight: 800, color: T.white }}>
+                  {improveResult.score}
+                </div>
+              </div>
+              <p style={{ fontSize: 13.5, color: T.soft, margin: 0 }}>{improveResult.summary}</p>
+            </div>
+
+            {improveResult.strengths.length > 0 && (
+              <>
+                <div style={{ fontSize: 12, fontWeight: 800, color: T.green, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Strengths</div>
+                <ul style={{ margin: '0 0 14px', paddingLeft: 18, color: T.muted, fontSize: 13, lineHeight: 1.7 }}>
+                  {improveResult.strengths.map((s, i) => <li key={i}>{s}</li>)}
+                </ul>
+              </>
+            )}
+            {improveResult.issues.length > 0 && (
+              <>
+                <div style={{ fontSize: 12, fontWeight: 800, color: T.gold, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Problems found</div>
+                <ul style={{ margin: '0 0 14px', paddingLeft: 18, color: T.muted, fontSize: 13, lineHeight: 1.7 }}>
+                  {improveResult.issues.map((s, i) => <li key={i}>{s}</li>)}
+                </ul>
+              </>
+            )}
+            {improveResult.recommendations.length > 0 && (
+              <>
+                <div style={{ fontSize: 12, fontWeight: 800, color: T.cyan, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Suggested fixes</div>
+                <ul style={{ margin: '0 0 16px', paddingLeft: 18, color: T.muted, fontSize: 13, lineHeight: 1.7 }}>
+                  {improveResult.recommendations.map((s, i) => <li key={i}>{s}</li>)}
+                </ul>
+              </>
+            )}
+
+            <div style={{ fontSize: 13, fontWeight: 700, color: T.pink, marginBottom: 8 }}>Rewritten bio</div>
+            <p style={{ fontSize: 14.5, lineHeight: 1.65, color: T.white, whiteSpace: 'pre-wrap' }}>{improveResult.rewrittenBio}</p>
+            <div style={{ fontSize: 11.5, color: T.faint }}>{improveResult.originalCharacterCount} → {improveResult.characterCount} characters</div>
           </Card>
         )}
       </div>

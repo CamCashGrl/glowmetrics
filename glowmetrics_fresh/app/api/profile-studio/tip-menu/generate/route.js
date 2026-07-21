@@ -8,10 +8,11 @@ import { buildPricingSlots, estimateEarnings, suggestVisibility, suggestDuration
 import { buildTipMenuContentPrompt, TIP_MENU_CONTENT_OUTPUT_SCHEMA } from '../../../../../lib/profileStudio/prompts'
 import { generateStructuredContent } from '../../../../../lib/profileStudio/anthropic'
 
-const STYLE_STRATEGY = {
-  balanced: null, // uses the creator's chosen strategy
-  high_engagement: 'budget',
-  premium: 'premium',
+// Every tip-menu type has its own fixed price-distribution weighting
+// (see STRATEGY_WEIGHTS in pricingEngine.js) except "balanced", which
+// defers to the creator's chosen Step 5 pricing strategy.
+function strategyForStyle(style, creatorStrategy) {
+  return style === 'balanced' ? creatorStrategy : style
 }
 
 // Free, unlimited, and usable signed-out. Signed-in users get their menu
@@ -19,7 +20,7 @@ const STYLE_STRATEGY = {
 // users get the identical generation and full export options, just with
 // nothing persisted server-side — there's no account to attach it to.
 async function generateOneMenu({ style, data, user, supabase }) {
-  const strategy = STYLE_STRATEGY[style] || data.strategy
+  const strategy = strategyForStyle(style, data.strategy)
 
   const neverInclude = (data.boundaries.neverInclude || []).map(t => t.toLowerCase().trim()).filter(Boolean)
   const allCategories = [...data.categories, ...data.customCategories]
@@ -54,6 +55,7 @@ async function generateOneMenu({ style, data, user, supabase }) {
     ctaPrimary: data.roomGoal,
     disclaimer: data.boundaries.disclaimer,
     slots,
+    style,
   })
 
   const warnings = []
@@ -234,8 +236,7 @@ export async function POST(req) {
     return NextResponse.json({ error: 'Invalid or missing fields.', details: parsed.error.issues.slice(0, 10) }, { status: 400 })
   }
   const data = parsed.data
-
-  const styles = ['balanced', 'high_engagement', 'premium']
+  const styles = data.styles
 
   try {
     const menus = []

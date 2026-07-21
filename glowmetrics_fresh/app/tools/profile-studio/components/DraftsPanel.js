@@ -8,9 +8,17 @@ function fmtDate(iso) {
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
+function preview(draft, kind) {
+  const raw = kind === 'bio' ? draft.text : draft.intro
+  if (!raw) return ''
+  return raw.length > 100 ? `${raw.slice(0, 100).trim()}…` : raw
+}
+
 function DraftRow({ draft, kind, onDelete, onDuplicate, onRename }) {
   const [renaming, setRenaming] = useState(false)
   const [name, setName] = useState(draft.name || draft.title)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const previewText = preview(draft, kind)
 
   return (
     <div className="ps-fade" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '12px 4px', borderBottom: `1px solid ${T.borderSoft}`, flexWrap: 'wrap' }}>
@@ -28,14 +36,24 @@ function DraftRow({ draft, kind, onDelete, onDuplicate, onRename }) {
               {kind === 'bio' ? <Badge color={T.cyan}>{draft.platform}</Badge> : <Badge color={T.pink}>{draft.style}</Badge>}
               {' '}Last edited {fmtDate(draft.updatedAt)}
             </div>
+            {previewText && (
+              <div style={{ fontSize: 12, color: T.muted, marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 480 }}>{previewText}</div>
+            )}
           </>
         )}
       </div>
-      {!renaming && (
+      {!renaming && !confirmingDelete && (
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           <SecondaryButton onClick={() => setRenaming(true)}>Rename</SecondaryButton>
           <SecondaryButton onClick={() => onDuplicate(draft.id)}>Duplicate</SecondaryButton>
-          <SecondaryButton onClick={() => onDelete(draft.id)} style={{ color: T.red, borderColor: 'rgba(239,68,68,0.35)' }}>Delete</SecondaryButton>
+          <SecondaryButton onClick={() => setConfirmingDelete(true)} style={{ color: T.red, borderColor: 'rgba(239,68,68,0.35)' }}>Delete</SecondaryButton>
+        </div>
+      )}
+      {confirmingDelete && (
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 12, color: T.red, fontWeight: 700 }}>Delete this {kind === 'bio' ? 'bio' : 'tip menu'}?</span>
+          <SecondaryButton onClick={() => onDelete(draft.id)} style={{ color: T.red, borderColor: 'rgba(239,68,68,0.35)' }}>Confirm delete</SecondaryButton>
+          <SecondaryButton onClick={() => setConfirmingDelete(false)}>Cancel</SecondaryButton>
         </div>
       )}
     </div>
