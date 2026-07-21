@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { T, Card, Badge, GRADIENT, PrimaryButton, SecondaryButton } from './theme'
+import { FAQS } from './faqData'
 
 function SectionHeading({ eyebrow, title, sub }) {
   return (
@@ -22,11 +23,14 @@ export function Hero({ onGoTo }) {
           <Badge color={T.pink}>Tip Menu Generator</Badge>
           <Badge color={T.green}>100% Free</Badge>
         </div>
-        <h1 style={{ fontSize: 'clamp(28px,4.2vw,42px)', fontWeight: 900, color: T.white, lineHeight: 1.1, marginBottom: 16, letterSpacing: '-0.03em' }}>
-          Build a Bio That Sounds Like You<span style={{ color: T.faint }}>—</span>and a Tip Menu <span style={{ background: GRADIENT, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Designed for Your Show</span>
+        <h1 style={{ fontSize: 'clamp(26px,3.8vw,38px)', fontWeight: 900, color: T.white, lineHeight: 1.15, marginBottom: 14, letterSpacing: '-0.03em' }}>
+          Free <span style={{ background: GRADIENT, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Cam Bio Generator</span> &amp; <span style={{ background: GRADIENT, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Tip Menu Generator</span>
         </h1>
+        <p style={{ fontSize: 17, color: T.soft, fontWeight: 600, lineHeight: 1.5, marginBottom: 14 }}>
+          Build a bio that sounds like you—and a tip menu designed for your show.
+        </p>
         <p style={{ fontSize: 16, color: T.muted, lineHeight: 1.7, marginBottom: 24, maxWidth: 480 }}>
-          Create personalized, platform-ready bios and balanced tip menus based on your persona, services, boundaries, audience, pricing preferences, and goals.
+          Generate a personalized, platform-ready cam bio for Chaturbate, MyFreeCams, Stripchat, CamSoda, OnlyFans, Fansly, X, or Instagram, plus a balanced tip menu, based on your persona, services, boundaries, audience, and pricing goals.
         </p>
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 18 }}>
           <PrimaryButton onClick={() => onGoTo('bio')}>Create My Bio</PrimaryButton>
@@ -276,19 +280,6 @@ export function PrivacySection() {
 }
 
 // ── FAQ ────────────────────────────────────────────────────────────────────
-const FAQS = [
-  { q: 'Is the Bio Generator free?', a: 'Yes — generating bios and tip menus is free, with no account required. Creating an account only adds the ability to save and revisit your drafts.' },
-  { q: 'Do I need to use my real name?', a: 'No. Use your display name or username — CamCash never asks for your legal name, address, or private contact details.' },
-  { q: 'Will the generator include activities I did not select?', a: 'No. Output is checked server-side against your selected services and boundaries before it is shown to you.' },
-  { q: 'How are tip-menu prices calculated?', a: 'Prices come from a deterministic pricing engine based on your chosen strategy, minimum/maximum price, and item count — the AI only writes the item names and descriptions, never the prices.' },
-  { q: 'Can I make a non-nude tip menu?', a: 'Yes — choose non-nude-friendly categories in Step 3 and the menu will be built entirely around them.' },
-  { q: 'Can I edit generated results?', a: 'Yes, every bio and tip menu item is editable after generation.' },
-  { q: 'Can I create bios for multiple platforms?', a: 'Yes — pick a different platform format and generate again; your identity and persona details carry over.' },
-  { q: 'Are my drafts saved?', a: 'Only when you are signed in. Signed-out generation works fully, but nothing is saved without an account.' },
-  { q: 'What is included in Free?', a: 'Everything — bio generation, tip menu generation, editing, and export are all free right now.' },
-  { q: 'What is included in Pro?', a: 'There is currently no paid tier for Creator Profile Studio — the full tool is free.' },
-]
-
 export function FAQSection() {
   const [open, setOpen] = useState(null)
   return (
@@ -311,16 +302,6 @@ export function FAQSection() {
       </div>
     </div>
   )
-}
-
-export const FAQ_SCHEMA = {
-  '@context': 'https://schema.org',
-  '@type': 'FAQPage',
-  mainEntity: FAQS.map(f => ({
-    '@type': 'Question',
-    name: f.q,
-    acceptedAnswer: { '@type': 'Answer', text: f.a },
-  })),
 }
 
 // ── Final CTA ──────────────────────────────────────────────────────────────

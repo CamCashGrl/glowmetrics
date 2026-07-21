@@ -7,7 +7,7 @@ import DraftsPanel from './components/DraftsPanel'
 import Button from '../../../components/ui/Button'
 import {
   Hero, WhatYouGet, ExampleResults, HowItWorks, PlatformFormats,
-  ComparisonSection, PrivacySection, FAQSection, FinalCTA, FAQ_SCHEMA,
+  ComparisonSection, PrivacySection, FAQSection, FinalCTA,
 } from './components/MarketingSections'
 
 const TABS = [
@@ -61,7 +61,6 @@ export default function ProfileStudioClient() {
 
   return (
     <PageShell>
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(FAQ_SCHEMA) }} />
       <nav aria-label="site" style={{
         padding: '16px 32px', borderBottom: `1px solid ${T.border}`, display: 'flex',
         justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0,
