@@ -15,6 +15,16 @@ function strategyForStyle(style, creatorStrategy) {
   return style === 'balanced' ? creatorStrategy : style
 }
 
+// "Short menu" and "full menu" are defined by their item count (10, and
+// 20-30, respectively) — that's the whole point of picking them, so it
+// isn't left as a suggestion the creator's Step 5 item-count pill can
+// silently override.
+function itemCountForStyle(style, creatorItemCount) {
+  if (style === 'short_menu') return 10
+  if (style === 'full_menu') return creatorItemCount >= 20 ? creatorItemCount : 30
+  return creatorItemCount
+}
+
 // Free, unlimited, and usable signed-out. Signed-in users get their menu
 // saved automatically (so the visual editor/drafts panel work); signed-out
 // users get the identical generation and full export options, just with
@@ -27,7 +37,7 @@ async function generateOneMenu({ style, data, user, supabase }) {
   const safeCategories = allCategories.filter(cat => !neverInclude.some(term => cat.toLowerCase().includes(term)))
   const categories = safeCategories.length ? safeCategories : allCategories
 
-  const itemCount = data.itemCount
+  const itemCount = itemCountForStyle(style, data.itemCount)
 
   const slots = buildPricingSlots({
     categories,
