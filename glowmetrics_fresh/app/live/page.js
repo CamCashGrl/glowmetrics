@@ -82,9 +82,12 @@ export default function LivePage() {
 
   const processedTipIds   = useRef(new Set());
   const isHydratingHistory = useRef(false);
-  // Guards against re-pushing the current liveStrategy/liveGoalTokens to a
-  // session we've already synced them to (see the sync effect below).
-  const coachingSyncedSessionId = useRef(null);
+  // The session id we ourselves just created and pushed liveStrategy/
+  // liveGoalTokens to (see handleGoLive below) — tells the pull-from-server
+  // effect further down not to immediately read that same session back,
+  // since at that point engine.serverSession still reflects the DB's
+  // pre-push defaults ('balanced'/0), not what we just pushed.
+  const justStartedSessionId = useRef(null);
   // Dedupes firedAlertsLog entries across the 15s coaching poll — the same
   // active prompt is refetched repeatedly until it resolves, but it should
   // only appear once in the history panels.
@@ -414,16 +417,36 @@ export default function LivePage() {
     return () => { cancelled = true; clearInterval(id); };
   }, [engine.engineMode, engine.serverSession?.id]);
 
-  // Pushes the current liveStrategy/liveGoalTokens to the server the
-  // moment a new V2 session appears, so a brand-new session (which starts
-  // with coaching_strategy='balanced'/coaching_goal_tokens=0 by DB default)
-  // doesn't silently diverge from what the dropdown/input are still
-  // visibly showing from the previous session. Runs once per session id.
+  // Reads coaching_strategy/coaching_goal_tokens back FROM the server
+  // whenever a session is discovered — covers both a page refresh of an
+  // already-active session (this is the only place those values ever get
+  // read; without it liveStrategy/liveGoalTokens always sat at their
+  // useState defaults and every refresh looked like it silently reset the
+  // dropdown/input) and a fresh browser tab picking up a session started
+  // elsewhere. Skips the one session id we ourselves just created via
+  // handleGoLive below, since at that exact moment engine.serverSession
+  // still reflects the DB's pre-push defaults, not what we just pushed —
+  // pulling here would immediately stomp on our own push.
   useEffect(() => {
     const sessionId = engine.serverSession?.id;
     if (engine.engineMode !== 'v2' || !sessionId) return;
-    if (coachingSyncedSessionId.current === sessionId) return;
-    coachingSyncedSessionId.current = sessionId;
+    if (justStartedSessionId.current === sessionId) return;
+    if (engine.serverSession.coaching_strategy) setLiveStrategy(engine.serverSession.coaching_strategy);
+    if (typeof engine.serverSession.coaching_goal_tokens === 'number') setLiveGoalTokens(engine.serverSession.coaching_goal_tokens);
+  }, [engine.engineMode, engine.serverSession?.id]);
+
+  // Pushes the current liveStrategy/liveGoalTokens to a session the instant
+  // it's created — a brand-new session starts with coaching_strategy=
+  // 'balanced'/coaching_goal_tokens=0 by DB default, and this is what makes
+  // it carry over whatever the dropdown/input were already visibly showing
+  // instead of silently diverging from it. Wraps engine.goLive so it only
+  // ever runs for a session this component instance genuinely just created
+  // — never for one discovered via a page refresh (that's the pull effect
+  // above's job).
+  const handleGoLive = async () => {
+    const session = await engine.goLive(livePlatform);
+    if (!session) return;
+    justStartedSessionId.current = session.id;
     fetch('/api/live/session/coaching-strategy', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ strategy: liveStrategy }),
@@ -432,8 +455,7 @@ export default function LivePage() {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ goalTokens: liveGoalTokens || 0 }),
     }).catch(() => {});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [engine.engineMode, engine.serverSession?.id]);
+  };
 
   const respondToCoachingPrompt = async (status) => {
     if (!coachingPrompt) return;
@@ -917,7 +939,7 @@ export default function LivePage() {
             {engine.engineMode === 'v2' ? (
               <>
                 {engine.phase === 'idle' && (
-                  <button disabled={engine.actionPending} onClick={() => engine.goLive(livePlatform)}
+                  <button disabled={engine.actionPending} onClick={handleGoLive}
                     style={{ padding: '7px 18px', borderRadius: 8, background: 'linear-gradient(135deg, #10B981, #22D3EE)', border: 'none', color: C.white, fontWeight: 800, fontSize: 12, cursor: engine.actionPending ? 'default' : 'pointer', opacity: engine.actionPending ? 0.6 : 1, boxShadow: '0 0 16px rgba(16,185,129,0.35)' }}>
                     {engine.actionPending ? 'Starting…' : '▶ Start Stream'}
                   </button>

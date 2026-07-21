@@ -190,6 +190,7 @@ export function useLiveSessionEngine() {
         setPhase('active')
         startHeartbeat()
       }
+      return data.session
     } finally {
       setActionPending(false)
     }
