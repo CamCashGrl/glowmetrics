@@ -3,7 +3,7 @@ import { useState, useMemo } from 'react'
 import {
   T, Card, SectionLabel, FieldLabel, TextInput, Select, PillGroup, SingleSelectPills,
   PrimaryButton, SecondaryButton, StepDots, LoadingStaged, ErrorBanner, EmptyState, Badge, TextArea, Toggle,
-  GuidancePanel, CompletionTracker,
+  GuidancePanel, CompletionTracker, TagInput,
 } from './theme'
 import TipMenuEditor from './TipMenuEditor'
 import {
@@ -21,35 +21,6 @@ const WHY_TEXT = [
   'Boundaries and intensity limits are enforced before any item is ever generated.',
   'Your strategy, price range, and item count determine the deterministic pricing curve — the AI never invents a price.',
 ]
-
-function TagInput({ value, onChange, placeholder, ariaLabel }) {
-  const [text, setText] = useState('')
-  return (
-    <div>
-      <TextInput
-        aria-label={ariaLabel || placeholder}
-        value={text}
-        onChange={e => setText(e.target.value)}
-        onKeyDown={e => {
-          if (e.key === 'Enter' && text.trim()) {
-            e.preventDefault()
-            onChange([...value, text.trim()])
-            setText('')
-          }
-        }}
-        placeholder={placeholder}
-      />
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
-        {value.map((item, i) => (
-          <Badge key={i} color={T.pink}>
-            {item}{' '}
-            <button onClick={() => onChange(value.filter((_, j) => j !== i))} style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', marginLeft: 4 }}>✕</button>
-          </Badge>
-        ))}
-      </div>
-    </div>
-  )
-}
 
 export default function TipMenuGenerator({ isLoggedIn, sharedProfile, onSharedProfileChange }) {
   const [step, setStep] = useState(0)

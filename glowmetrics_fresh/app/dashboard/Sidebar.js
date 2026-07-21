@@ -39,6 +39,12 @@ const NAV = [
     ]
   },
   {
+    group: "BRAND STUDIO",
+    items: [
+      { id: "brandstudio", icon: "🎨", label: "Brand Studio" },
+    ]
+  },
+  {
     group: "SUPPORT",
     items: [
       { id: "upload", icon: "📥", label: "Import CSV" },

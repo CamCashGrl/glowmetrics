@@ -60,6 +60,17 @@ export const PERSONA_TAGS = [
 export const TONE_OPTIONS = [
   'Sweet', 'Flirty', 'Playful', 'Confident', 'Dominant', 'Bratty',
   'Mysterious', 'Luxury', 'Friendly', 'Direct',
+  // Added for Brand Studio's Brand Profile tone picker — additive only,
+  // existing values above are untouched so nothing already saved changes.
+  'Cute', 'Dark', 'Professional', 'Wholesome', 'Teasing', 'Funny', 'Elegant',
+]
+
+// Curated audience tags for the Brand Profile — compiled into the existing
+// free-text `desiredAudience` field rather than a new column; kept as its
+// own list so future generators (e.g. Content Calendar) can reason about
+// audience structurally instead of parsing free text.
+export const AUDIENCE_TAGS = [
+  'Whales', 'Regulars', 'New Viewers', 'Couples', 'Femdom Audience', 'Roleplay Fans',
 ]
 
 // ── Step 3: Content and boundaries ──────────────────────────────────────

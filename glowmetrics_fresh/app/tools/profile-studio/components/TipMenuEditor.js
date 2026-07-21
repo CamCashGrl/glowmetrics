@@ -41,14 +41,17 @@ function ReviewPanel({ review, dismissed, onDismiss }) {
   )
 }
 
-function ItemRow({ item, index, total, categories, onChange, onMove, onDuplicate, onDelete }) {
+function ItemRow({ item, index, total, categories, onChange, onMove, onDuplicate, onDelete, onToggleLock }) {
   const [expanded, setExpanded] = useState(false)
   return (
-    <div className="ps-fade" style={{ border: `1px solid ${T.border}`, borderRadius: 14, padding: 14, marginBottom: 10, background: 'rgba(255,255,255,0.02)' }}>
+    <div className="ps-fade" style={{ border: `1px solid ${item.locked ? 'rgba(22,244,255,0.4)' : T.border}`, borderRadius: 14, padding: 14, marginBottom: 10, background: item.locked ? 'rgba(22,244,255,0.04)' : 'rgba(255,255,255,0.02)' }}>
       <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4, paddingTop: 2 }}>
           <IconButton title="Move up" onClick={() => onMove(index, -1)}>▲</IconButton>
           <IconButton title="Move down" onClick={() => onMove(index, 1)}>▼</IconButton>
+          <IconButton title={item.locked ? 'Unlock — this item will be rewritten on regenerate' : 'Lock — keep this item as-is when you regenerate'} active={item.locked} onClick={() => onToggleLock(index)}>
+            {item.locked ? '🔒' : '🔓'}
+          </IconButton>
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 8 }}>
@@ -166,10 +169,49 @@ export default function TipMenuEditor({ menu, isLoggedIn, onMenuUpdated }) {
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
   const [copiedKey, setCopiedKey] = useState('')
+  const [regenerating, setRegenerating] = useState(false)
+  const [regenError, setRegenError] = useState('')
 
   const categories = useMemo(() => [...new Set([...TIP_MENU_CATEGORIES, ...items.map(i => i.category)])], [items])
 
   const updateItem = (index, patch) => setItems(prev => prev.map((it, i) => (i === index ? { ...it, ...patch } : it)))
+  const toggleLock = index => setItems(prev => prev.map((it, i) => (i === index ? { ...it, locked: !it.locked } : it)))
+
+  const handleRegenerateUnlocked = async () => {
+    if (items.every(it => it.locked)) return
+    setRegenerating(true)
+    setRegenError('')
+    try {
+      const res = await fetch('/api/profile-studio/tip-menu/regenerate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          platform: menu.platform,
+          style: menu.style,
+          persona: menu.settings?.persona || [],
+          showEnergy: menu.settings?.showEnergy,
+          roomGoal: menu.settings?.roomGoal,
+          disclaimer: menu.settings?.boundaries?.disclaimer,
+          neverInclude: menu.settings?.boundaries?.neverInclude,
+          items: items.map(it => ({
+            name: it.name, description: it.description, price: it.price, estimatedEarnings: it.estimatedEarnings,
+            category: it.category, visibility: it.visibility, durationSeconds: it.durationSeconds,
+            cooldownMinutes: it.cooldownMinutes, locked: !!it.locked,
+          })),
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setRegenError(data.error || 'Something went wrong regenerating your menu.')
+        return
+      }
+      setItems(prev => reindex(data.items.map((it, i) => ({ ...prev[i], ...it }))))
+    } catch {
+      setRegenError('Network error. Please try again.')
+    } finally {
+      setRegenerating(false)
+    }
+  }
   const moveItem = (index, dir) => setItems(prev => {
     const next = [...prev]
     const target = index + dir
@@ -268,10 +310,16 @@ export default function TipMenuEditor({ menu, isLoggedIn, onMenuUpdated }) {
             </div>
           </Card>
 
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, flexWrap: 'wrap', gap: 8 }}>
             <SectionLabel style={{ marginBottom: 0 }}>Items ({items.length})</SectionLabel>
-            <SecondaryButton onClick={addItem}>+ Add item</SecondaryButton>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <SecondaryButton onClick={handleRegenerateUnlocked} disabled={regenerating || items.every(it => it.locked)} title="Locked items (🔒) are kept exactly as-is">
+                {regenerating ? 'Regenerating…' : '🔄 Regenerate unlocked items'}
+              </SecondaryButton>
+              <SecondaryButton onClick={addItem}>+ Add item</SecondaryButton>
+            </div>
           </div>
+          <ErrorBanner message={regenError} onDismiss={() => setRegenError('')} />
           {items.map((item, i) => (
             <ItemRow
               key={item.id || i}
@@ -280,6 +328,7 @@ export default function TipMenuEditor({ menu, isLoggedIn, onMenuUpdated }) {
               total={items.length}
               categories={categories}
               onChange={updateItem}
+              onToggleLock={toggleLock}
               onMove={moveItem}
               onDuplicate={duplicateItem}
               onDelete={deleteItem}
