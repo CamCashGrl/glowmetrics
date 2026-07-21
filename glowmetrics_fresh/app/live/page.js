@@ -57,6 +57,12 @@ export default function LivePage() {
   const [authError, setAuthError]         = useState('');
   const [authLoading, setAuthLoading]     = useState(false);
 
+  // Resolution card ("still live?"): local-only UI state for the "Choose
+  // End Time" option, which needs a picker before it can submit — the other
+  // 4 resolution choices submit immediately via engine.resolve().
+  const [resolveShowEndTimePicker, setResolveShowEndTimePicker] = useState(false);
+  const [resolveEndTimeInput, setResolveEndTimeInput]           = useState('');
+
   // Timezone used to display the V2 engine's session start/end clock times
   // (the duration itself is timezone-independent and unaffected by this).
   // Falls back to the browser's own timezone; persisted per-browser so it
@@ -580,6 +586,22 @@ export default function LivePage() {
       : `${m}:${String(r).padStart(2, '0')}`;
   };
 
+  // Local-time value a <input type="datetime-local"> needs (YYYY-MM-DDTHH:mm).
+  // Display/input convenience only — the server independently re-validates
+  // whatever timestamp actually comes back from this input.
+  const toDatetimeLocalValue = (date) => {
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  };
+
+  const resolutionOutcomeLabel = (lastResolution) => {
+    if (!lastResolution) return '';
+    if (lastResolution.choice === 'mark_invalid') {
+      return '🚫 Session marked invalid — excluded from earnings, duration, and streaming-window stats';
+    }
+    return `✅ Session ended — active time ${fmtDuration(lastResolution.session?.active_duration_seconds)}`;
+  };
+
   // ── CONNECTING / UNAUTHENTICATED SCREENS ─────────────────────────────
 
   if (authStatus === 'connecting') return (
@@ -951,14 +973,60 @@ export default function LivePage() {
                   <>
                     <span style={{ fontSize: 12, color: C.gold, fontWeight: 700 }}>⚠️ Still live?</span>
                     <button disabled={engine.actionPending} onClick={() => engine.resolve('still_live')}
-                      style={{ padding: '7px 14px', borderRadius: 8, background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.4)', color: C.green, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
+                      style={{ padding: '7px 14px', borderRadius: 8, background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.4)', color: C.green, fontWeight: 700, fontSize: 12, cursor: engine.actionPending ? 'default' : 'pointer', opacity: engine.actionPending ? 0.6 : 1 }}>
                       Still Live
                     </button>
-                    <button disabled={engine.actionPending} onClick={() => engine.resolve('ended')}
-                      style={{ padding: '7px 14px', borderRadius: 8, background: 'rgba(248,113,113,0.15)', border: '1px solid rgba(248,113,113,0.4)', color: C.red, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
+                    <button disabled={engine.actionPending} onClick={() => engine.resolve('end_at_last_heartbeat')}
+                      title="Ends the session using the last time we actually heard from your extension or browser tab"
+                      style={{ padding: '7px 14px', borderRadius: 8, background: 'rgba(248,113,113,0.15)', border: '1px solid rgba(248,113,113,0.4)', color: C.red, fontWeight: 700, fontSize: 12, cursor: engine.actionPending ? 'default' : 'pointer', opacity: engine.actionPending ? 0.6 : 1 }}>
                       Stream Ended
                     </button>
+                    {resolveShowEndTimePicker ? (
+                      <>
+                        <input
+                          type="datetime-local"
+                          value={resolveEndTimeInput}
+                          max={toDatetimeLocalValue(new Date())}
+                          min={engine.serverSession?.started_at ? toDatetimeLocalValue(new Date(engine.serverSession.started_at)) : undefined}
+                          onChange={(e) => setResolveEndTimeInput(e.target.value)}
+                          style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, padding: '6px 10px', color: C.white, fontSize: 12, outline: 'none' }}
+                        />
+                        <button
+                          disabled={engine.actionPending || !resolveEndTimeInput}
+                          onClick={() => {
+                            const iso = new Date(resolveEndTimeInput).toISOString();
+                            engine.resolve('choose_end_time', iso);
+                            setResolveShowEndTimePicker(false);
+                            setResolveEndTimeInput('');
+                          }}
+                          style={{ padding: '7px 14px', borderRadius: 8, background: 'rgba(56,213,232,0.15)', border: '1px solid rgba(56,213,232,0.4)', color: C.cyan, fontWeight: 700, fontSize: 12, cursor: (engine.actionPending || !resolveEndTimeInput) ? 'default' : 'pointer', opacity: (engine.actionPending || !resolveEndTimeInput) ? 0.5 : 1 }}>
+                          Confirm
+                        </button>
+                        <button
+                          disabled={engine.actionPending}
+                          onClick={() => { setResolveShowEndTimePicker(false); setResolveEndTimeInput(''); }}
+                          style={{ padding: '7px 14px', borderRadius: 8, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.15)', color: C.muted, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
+                          Cancel
+                        </button>
+                      </>
+                    ) : (
+                      <button disabled={engine.actionPending} onClick={() => setResolveShowEndTimePicker(true)}
+                        style={{ padding: '7px 14px', borderRadius: 8, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.15)', color: C.muted, fontWeight: 700, fontSize: 12, cursor: engine.actionPending ? 'default' : 'pointer', opacity: engine.actionPending ? 0.6 : 1 }}>
+                        Choose End Time
+                      </button>
+                    )}
+                    <button disabled={engine.actionPending} onClick={() => {
+                        if (window.confirm('Mark this session invalid? It will be excluded from earnings, duration, and streaming-window stats. The record itself is never deleted.')) engine.resolve('mark_invalid');
+                      }}
+                      style={{ padding: '7px 14px', borderRadius: 8, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(148,163,184,0.3)', color: C.muted, fontWeight: 700, fontSize: 12, cursor: engine.actionPending ? 'default' : 'pointer', opacity: engine.actionPending ? 0.6 : 1 }}>
+                      Mark Invalid
+                    </button>
                   </>
+                )}
+                {engine.phase === 'resolved' && (
+                  <span style={{ fontSize: 12, color: engine.lastResolution?.choice === 'mark_invalid' ? C.muted : C.green, fontWeight: 700 }}>
+                    {resolutionOutcomeLabel(engine.lastResolution)}
+                  </span>
                 )}
                 {engine.phase === 'justEnded' && (
                   <span style={{ fontSize: 12, color: C.green, fontWeight: 700 }}>
