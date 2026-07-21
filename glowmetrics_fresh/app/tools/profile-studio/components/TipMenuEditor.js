@@ -153,7 +153,7 @@ function LivePreview({ menu, items, theme, hideEarnings }) {
   )
 }
 
-export default function TipMenuEditor({ menu, isPro, onMenuUpdated }) {
+export default function TipMenuEditor({ menu, isLoggedIn, onMenuUpdated }) {
   const [items, setItems] = useState(() => reindex(menu.items || []))
   const [title, setTitle] = useState(menu.title || '')
   const [intro, setIntro] = useState(menu.intro || '')
@@ -189,7 +189,13 @@ export default function TipMenuEditor({ menu, isPro, onMenuUpdated }) {
     visibility: 'public', durationSeconds: null, cooldownMinutes: null,
   }]))
 
+  const isSavedToAccount = isLoggedIn && !String(menu.id).startsWith('local_')
+
   const handleSave = async () => {
+    if (!isSavedToAccount) {
+      window.location.assign('/landing')
+      return
+    }
     setSaving(true)
     setError('')
     try {
@@ -281,7 +287,10 @@ export default function TipMenuEditor({ menu, isPro, onMenuUpdated }) {
           ))}
 
           <div style={{ marginTop: 16 }}>
-            <PrimaryButton onClick={handleSave} disabled={saving}>{saving ? 'Saving…' : saved ? '✓ Saved' : '💾 Save changes'}</PrimaryButton>
+            <PrimaryButton onClick={handleSave} disabled={saving}>
+              {saving ? 'Saving…' : saved ? '✓ Saved' : isSavedToAccount ? '💾 Save changes' : '🔓 Sign up to save'}
+            </PrimaryButton>
+            {!isSavedToAccount && <div style={{ fontSize: 12, color: T.faint, marginTop: 8 }}>Exports below are free right now — sign up to keep this menu editable and reopen it later.</div>}
           </div>
         </div>
 
@@ -307,11 +316,10 @@ export default function TipMenuEditor({ menu, isPro, onMenuUpdated }) {
               <SecondaryButton onClick={() => doExport('social')}>{copiedKey === 'social' ? '✓ Copied' : '📋 Social media post'}</SecondaryButton>
             </div>
             <div style={{ marginTop: 12, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              <SecondaryButton disabled title="Coming soon">🖼 PNG image <Badge color={T.gold} style={{ marginLeft: 6 }}>Pro · Soon</Badge></SecondaryButton>
-              <SecondaryButton disabled title="Coming soon">📄 Printable PDF <Badge color={T.gold} style={{ marginLeft: 6 }}>Pro · Soon</Badge></SecondaryButton>
-              <SecondaryButton disabled title="Coming soon">🎨 Canva layout <Badge color={T.gold} style={{ marginLeft: 6 }}>Pro · Soon</Badge></SecondaryButton>
+              <SecondaryButton disabled title="Coming soon">🖼 PNG image <Badge color={T.gold} style={{ marginLeft: 6 }}>Soon</Badge></SecondaryButton>
+              <SecondaryButton disabled title="Coming soon">📄 Printable PDF <Badge color={T.gold} style={{ marginLeft: 6 }}>Soon</Badge></SecondaryButton>
+              <SecondaryButton disabled title="Coming soon">🎨 Canva layout <Badge color={T.gold} style={{ marginLeft: 6 }}>Soon</Badge></SecondaryButton>
             </div>
-            {!isPro && <div style={{ marginTop: 12, fontSize: 12, color: T.faint }}>Free plan includes plain text copy. Upgrade to Pro for every export format and brand colors.</div>}
           </Card>
         </div>
       </div>

@@ -3,7 +3,6 @@ export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getProfileStudioCaller } from '../../../../lib/profileStudio/auth'
-import { getIsProUser } from '../../../../lib/profileStudio/entitlements'
 import { ALL_PLATFORMS, PERSONA_TAGS, TONE_OPTIONS, SERVICE_OPTIONS } from '../../../../lib/profileStudio/constants'
 
 // A saved creator profile is intentionally permissive/partial — the wizard
@@ -109,17 +108,14 @@ export async function GET() {
   const { supabase, user } = await getProfileStudioCaller()
   if (!user) return NextResponse.json({ error: 'Unauthorized', loggedIn: false }, { status: 401 })
 
-  const [{ data, error }, isPro] = await Promise.all([
-    supabase.from('creator_profiles').select('*').eq('user_id', user.id).maybeSingle(),
-    getIsProUser(supabase, user.id),
-  ])
+  const { data, error } = await supabase.from('creator_profiles').select('*').eq('user_id', user.id).maybeSingle()
 
   if (error) {
     console.error('Failed to load creator profile', error.message)
     return NextResponse.json({ error: 'Something went wrong loading your profile.' }, { status: 500 })
   }
 
-  return NextResponse.json({ profile: toClient(data), loggedIn: true, isPro })
+  return NextResponse.json({ profile: toClient(data), loggedIn: true })
 }
 
 export async function POST(req) {

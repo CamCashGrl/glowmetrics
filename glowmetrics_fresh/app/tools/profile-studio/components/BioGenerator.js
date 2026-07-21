@@ -58,7 +58,7 @@ function buildInitialForm(shared) {
   }
 }
 
-export default function BioGenerator({ isLoggedIn, isPro, sharedProfile, onSharedProfileChange }) {
+export default function BioGenerator({ isLoggedIn, sharedProfile, onSharedProfileChange }) {
   const [step, setStep] = useState(0)
   const [form, setForm] = useState(() => buildInitialForm(sharedProfile))
   const [format, setFormat] = useState('short_cam_bio')
@@ -138,6 +138,7 @@ export default function BioGenerator({ isLoggedIn, isPro, sharedProfile, onShare
   }
 
   const handleSaveBio = async (id, text) => {
+    if (id.startsWith('local_')) return // no account to save to — BioResultCard shows a sign-up prompt instead
     await fetch('/api/profile-studio/bios', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -167,16 +168,6 @@ export default function BioGenerator({ isLoggedIn, isPro, sharedProfile, onShare
     } finally {
       setImproveLoading(false)
     }
-  }
-
-  if (!isLoggedIn) {
-    return (
-      <EmptyState
-        icon="🔒"
-        title="Sign in to build your bio"
-        description="Build a bio that sounds like you—not a generic template. Sign in to generate, save, and edit your Cam Bio."
-      />
-    )
   }
 
   return (
@@ -415,6 +406,11 @@ export default function BioGenerator({ isLoggedIn, isPro, sharedProfile, onShare
       {!loading && bios && (
         <div className="ps-fade" style={{ marginTop: 28 }}>
           <SectionLabel>Your generated bios</SectionLabel>
+          {!isLoggedIn && (
+            <div style={{ marginBottom: 14, fontSize: 12.5, color: T.cyan, background: 'rgba(22,244,255,0.08)', border: '1px solid rgba(22,244,255,0.25)', borderRadius: 10, padding: '10px 14px' }}>
+              💡 Copy and export are free right now. <a href="/landing" style={{ color: T.cyan, fontWeight: 700 }}>Sign up free</a> to save these, edit them later, and unlock the drafts panel.
+            </div>
+          )}
           {warnings.length > 0 && (
             <div style={{ marginBottom: 14, fontSize: 12.5, color: T.gold, background: 'rgba(255,200,87,0.08)', border: '1px solid rgba(255,200,87,0.25)', borderRadius: 10, padding: '10px 14px' }}>
               {warnings.map((w, i) => <div key={i}>⚠ {w}</div>)}
@@ -422,7 +418,7 @@ export default function BioGenerator({ isLoggedIn, isPro, sharedProfile, onShare
           )}
           <div className="ps-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
             {bios.map(bio => (
-              <BioResultCard key={bio.id} bio={bio} onSave={handleSaveBio} onRegenerate={handleGenerate} regenerating={loading} />
+              <BioResultCard key={bio.id} bio={bio} isLoggedIn={isLoggedIn} onSave={handleSaveBio} onRegenerate={handleGenerate} regenerating={loading} />
             ))}
           </div>
         </div>
@@ -433,12 +429,12 @@ export default function BioGenerator({ isLoggedIn, isPro, sharedProfile, onShare
       )}
 
       <div style={{ marginTop: 40, paddingTop: 28, borderTop: `1px solid ${T.borderSoft}` }}>
-        <SectionLabel htmlFor="bio-improve-text">Improve my existing bio {!isPro && <Badge color={T.gold} style={{ marginLeft: 8 }}>Pro</Badge>}</SectionLabel>
+        <SectionLabel htmlFor="bio-improve-text">Improve my existing bio</SectionLabel>
         <p style={{ fontSize: 13, color: T.muted, marginBottom: 12 }}>Paste your current bio and get a short explanation of what's weak, followed by a revised version.</p>
-        <TextArea id="bio-improve-text" aria-label="Existing bio to improve" value={improveText} maxLength={4000} onChange={e => setImproveText(e.target.value)} placeholder="Paste your current bio here…" disabled={!isPro} />
+        <TextArea id="bio-improve-text" aria-label="Existing bio to improve" value={improveText} maxLength={4000} onChange={e => setImproveText(e.target.value)} placeholder="Paste your current bio here…" />
         <div style={{ marginTop: 10 }}>
-          <SecondaryButton onClick={handleImprove} disabled={!isPro || improveLoading || !improveText.trim()}>
-            {improveLoading ? 'Analyzing…' : isPro ? 'Improve my bio' : 'Upgrade to unlock'}
+          <SecondaryButton onClick={handleImprove} disabled={improveLoading || !improveText.trim()}>
+            {improveLoading ? 'Analyzing…' : 'Improve my bio'}
           </SecondaryButton>
         </div>
         <ErrorBanner message={improveError} onDismiss={() => setImproveError('')} />

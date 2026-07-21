@@ -14,8 +14,10 @@ const TABS = [
 export default function ProfileStudioClient() {
   const [tab, setTab] = useState('bio')
   const [authState, setAuthState] = useState('loading') // loading | out | in
-  const [isPro, setIsPro] = useState(false)
-  const [sharedProfile, setSharedProfile] = useState(null)
+  // Free and usable signed-out — starts populated so both tools work
+  // immediately; only overwritten with saved data once we know the visitor
+  // is signed in.
+  const [sharedProfile, setSharedProfile] = useState({})
 
   useEffect(() => {
     let cancelled = false
@@ -25,7 +27,6 @@ export default function ProfileStudioClient() {
         if (res.status === 401) { setAuthState('out'); return }
         const data = await res.json()
         setAuthState('in')
-        setIsPro(!!data.isPro)
         setSharedProfile(data.profile || {})
       })
       .catch(() => { if (!cancelled) setAuthState('out') })
@@ -37,7 +38,6 @@ export default function ProfileStudioClient() {
   }
 
   const handleSaveProfile = async () => {
-    if (!sharedProfile) return
     await fetch('/api/profile-studio/profile', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -62,13 +62,13 @@ export default function ProfileStudioClient() {
           <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
             <Badge color={T.cyan}>Cam Bio Generator</Badge>
             <Badge color={T.pink}>Tip Menu Generator</Badge>
-            {isLoggedIn && <Badge color={isPro ? T.gold : T.muted}>{isPro ? 'Pro plan' : 'Free plan'}</Badge>}
+            <Badge color={T.green}>100% Free</Badge>
           </div>
           <h1 style={{ fontSize: 'clamp(28px,4.5vw,44px)', fontWeight: 900, color: T.white, lineHeight: 1.08, marginBottom: 14, letterSpacing: '-0.03em' }}>
             Creator Profile <span style={{ background: GRADIENT, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Studio</span>
           </h1>
           <p style={{ fontSize: 16, color: T.muted, maxWidth: 620, margin: '0 auto', lineHeight: 1.7 }}>
-            Build a bio and a tip menu that actually sound like your business — personalized to your persona, platforms, boundaries, and pricing. What you enter in one tool carries into the other.
+            Build a bio and a tip menu that actually sound like your business — personalized to your persona, platforms, boundaries, and pricing. Free, no account required. What you enter in one tool carries into the other.
           </p>
         </div>
 
@@ -91,17 +91,17 @@ export default function ProfileStudioClient() {
           ))}
         </div>
 
-        {isLoggedIn && sharedProfile && (
+        {isLoggedIn && (
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 14 }}>
             <SecondaryButton onClick={handleSaveProfile} title="Save your persona, platforms, boundaries, and pricing so both tools stay prefilled next time">💾 Save profile for next time</SecondaryButton>
           </div>
         )}
 
         {tab === 'bio' && (
-          <BioGenerator isLoggedIn={isLoggedIn} isPro={isPro} sharedProfile={sharedProfile} onSharedProfileChange={handleSharedProfileChange} />
+          <BioGenerator isLoggedIn={isLoggedIn} sharedProfile={sharedProfile} onSharedProfileChange={handleSharedProfileChange} />
         )}
         {tab === 'tipmenu' && (
-          <TipMenuGenerator isLoggedIn={isLoggedIn} isPro={isPro} sharedProfile={sharedProfile} onSharedProfileChange={handleSharedProfileChange} />
+          <TipMenuGenerator isLoggedIn={isLoggedIn} sharedProfile={sharedProfile} onSharedProfileChange={handleSharedProfileChange} />
         )}
         {tab === 'drafts' && <DraftsPanel isLoggedIn={isLoggedIn} />}
       </div>

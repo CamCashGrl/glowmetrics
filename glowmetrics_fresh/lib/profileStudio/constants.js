@@ -186,17 +186,6 @@ export const PRICE_LEVELS = [
   { id: 'high_value', label: 'High-value / goal tips' },
 ]
 
-// ── Free / Pro entitlement caps ──────────────────────────────────────────
-export const FREE_TIER_LIMITS = {
-  maxSavedBios: 1,
-  maxSavedTipMenus: 1,
-  maxTipMenuItemsFree: 10,
-}
-
-export function isProPlan(plan) {
-  return plan === 'pro' || plan === 'unlimited'
-}
-
 // ── Loading messages (staged, not a frozen spinner) ──────────────────────
 export const BIO_LOADING_MESSAGES = [
   'Learning your creator style…',

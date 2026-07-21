@@ -55,8 +55,11 @@ export const BioScheduleSchema = z.object({
   hours: shortText(60),
   timezone: shortText(60),
   consistent: z.boolean().default(true),
-  ctaPrimary: z.enum(PRIMARY_CTA_OPTIONS).optional(),
-  ctaSecondary: z.enum(PRIMARY_CTA_OPTIONS).optional(),
+  // The form sends '' (not a missing key) when no CTA is picked yet —
+  // normalize that to undefined before the enum check so an untouched
+  // "optional" field doesn't fail validation.
+  ctaPrimary: z.preprocess(v => (v === '' ? undefined : v), z.enum(PRIMARY_CTA_OPTIONS).optional()),
+  ctaSecondary: z.preprocess(v => (v === '' ? undefined : v), z.enum(PRIMARY_CTA_OPTIONS).optional()),
   socialUsernames: z.record(z.string(), z.string().max(60)).optional().default({}),
 })
 

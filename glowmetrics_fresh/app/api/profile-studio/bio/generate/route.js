@@ -1,21 +1,21 @@
 export const dynamic = 'force-dynamic'
 
 import { NextResponse } from 'next/server'
-import { getProfileStudioCaller } from '../../../../../lib/profileStudio/auth'
-import { getIsProUser } from '../../../../../lib/profileStudio/entitlements'
+import { getProfileStudioCaller, getClientIp } from '../../../../../lib/profileStudio/auth'
 import { checkRateLimit } from '../../../../../lib/rateLimit'
 import { BioGenerateRequestSchema, sanitizeGeneratedBio, charCap } from '../../../../../lib/profileStudio/bioRules'
 import { buildBioPrompt, BIO_OUTPUT_SCHEMA } from '../../../../../lib/profileStudio/prompts'
 import { generateStructuredContent } from '../../../../../lib/profileStudio/anthropic'
-import { FREE_TIER_LIMITS } from '../../../../../lib/profileStudio/constants'
 
+// Free, unlimited, and usable signed-out — this tool exists to pull
+// visitors into signing up, not to gate them out first. Signed-in users get
+// their results saved automatically; signed-out users get the same
+// generation but nothing is persisted (nothing to attach it to).
 export async function POST(req) {
   const { supabase, user } = await getProfileStudioCaller()
-  if (!user) {
-    return NextResponse.json({ error: 'Please sign in to generate a bio.' }, { status: 401 })
-  }
 
-  const rate = checkRateLimit(`${user.id}:bio-generate`, { windowMs: 60_000, max: 5 })
+  const rateKey = user ? `user:${user.id}` : `ip:${getClientIp(req)}`
+  const rate = checkRateLimit(`${rateKey}:bio-generate`, { windowMs: 60_000, max: 5 })
   if (!rate.allowed) {
     return NextResponse.json({ error: 'Please wait a moment before generating again.' }, { status: 429 })
   }
@@ -32,25 +32,6 @@ export async function POST(req) {
     return NextResponse.json({ error: 'Invalid or missing fields.', details: parsed.error.issues.slice(0, 10) }, { status: 400 })
   }
   const { identity, persona, content, schedule, format, length, emoji } = parsed.data
-
-  const isPro = await getIsProUser(supabase, user.id)
-
-  if (!isPro) {
-    const { count, error: countError } = await supabase
-      .from('generated_bios')
-      .select('id', { count: 'exact', head: true })
-      .eq('user_id', user.id)
-    if (countError) {
-      console.error('Failed to check bio generation count', countError.message)
-      return NextResponse.json({ error: 'Something went wrong. Please try again.' }, { status: 500 })
-    }
-    if ((count ?? 0) >= FREE_TIER_LIMITS.maxSavedBios) {
-      return NextResponse.json({
-        error: 'Free plan includes one bio generation. Upgrade to Pro for unlimited bios and every platform format.',
-        code: 'free_limit_reached',
-      }, { status: 403 })
-    }
-  }
 
   const maxChars = charCap(format, length)
   const prompt = buildBioPrompt({ identity, persona, content, schedule, format, length, emoji, maxChars })
@@ -85,6 +66,15 @@ export async function POST(req) {
 
   if (!bios.length) {
     return NextResponse.json({ error: 'Could not generate a safe bio from these inputs. Please adjust your selections and try again.' }, { status: 422 })
+  }
+
+  if (!user) {
+    return NextResponse.json({
+      bios: bios.map((b, i) => ({ id: `local_${Date.now()}_${i}`, ...b })),
+      warnings: [...new Set(warnings)],
+      suggestions: [],
+      saved: false,
+    })
   }
 
   const rowsToInsert = bios.map(b => ({
@@ -123,6 +113,6 @@ export async function POST(req) {
     bios: responseBios,
     warnings: [...new Set(warnings)],
     suggestions: [],
-    meta: { isPro },
+    saved: true,
   })
 }

@@ -1,14 +1,12 @@
 export const dynamic = 'force-dynamic'
 
 import { NextResponse } from 'next/server'
-import { getProfileStudioCaller } from '../../../../../lib/profileStudio/auth'
-import { getIsProUser } from '../../../../../lib/profileStudio/entitlements'
+import { getProfileStudioCaller, getClientIp } from '../../../../../lib/profileStudio/auth'
 import { checkRateLimit } from '../../../../../lib/rateLimit'
 import { TipMenuGenerateRequestSchema, violatesBoundaries, reviewTipMenu, cannedItemText } from '../../../../../lib/profileStudio/tipMenuRules'
 import { buildPricingSlots, estimateEarnings, suggestVisibility, suggestDuration, suggestCooldown } from '../../../../../lib/profileStudio/pricingEngine'
 import { buildTipMenuContentPrompt, TIP_MENU_CONTENT_OUTPUT_SCHEMA } from '../../../../../lib/profileStudio/prompts'
 import { generateStructuredContent } from '../../../../../lib/profileStudio/anthropic'
-import { FREE_TIER_LIMITS } from '../../../../../lib/profileStudio/constants'
 
 const STYLE_STRATEGY = {
   balanced: null, // uses the creator's chosen strategy
@@ -16,7 +14,11 @@ const STYLE_STRATEGY = {
   premium: 'premium',
 }
 
-async function generateOneMenu({ style, data, user, supabase, isPro }) {
+// Free, unlimited, and usable signed-out. Signed-in users get their menu
+// saved automatically (so the visual editor/drafts panel work); signed-out
+// users get the identical generation and full export options, just with
+// nothing persisted server-side — there's no account to attach it to.
+async function generateOneMenu({ style, data, user, supabase }) {
   const strategy = STYLE_STRATEGY[style] || data.strategy
 
   const neverInclude = (data.boundaries.neverInclude || []).map(t => t.toLowerCase().trim()).filter(Boolean)
@@ -24,7 +26,7 @@ async function generateOneMenu({ style, data, user, supabase, isPro }) {
   const safeCategories = allCategories.filter(cat => !neverInclude.some(term => cat.toLowerCase().includes(term)))
   const categories = safeCategories.length ? safeCategories : allCategories
 
-  const itemCount = isPro ? data.itemCount : Math.min(data.itemCount, FREE_TIER_LIMITS.maxTipMenuItemsFree)
+  const itemCount = data.itemCount
 
   const slots = buildPricingSlots({
     categories,
@@ -117,6 +119,25 @@ async function generateOneMenu({ style, data, user, supabase, isPro }) {
     theme: 'dark_neon',
   }
 
+  if (!user) {
+    return {
+      id: `local_${Date.now()}_${style}`,
+      style,
+      platform: data.platform,
+      currencyType: data.currencyType,
+      tokenValue: data.tokenValue,
+      title,
+      intro,
+      closingCta,
+      rules,
+      settings,
+      review,
+      items,
+      warnings,
+      saved: false,
+    }
+  }
+
   const { data: menuRow, error: menuError } = await supabase
     .from('tip_menus')
     .insert({
@@ -188,16 +209,15 @@ async function generateOneMenu({ style, data, user, supabase, isPro }) {
       sortOrder: row.sort_order,
     })),
     warnings,
+    saved: true,
   }
 }
 
 export async function POST(req) {
   const { supabase, user } = await getProfileStudioCaller()
-  if (!user) {
-    return NextResponse.json({ error: 'Please sign in to generate a tip menu.' }, { status: 401 })
-  }
 
-  const rate = checkRateLimit(`${user.id}:tip-menu-generate`, { windowMs: 60_000, max: 5 })
+  const rateKey = user ? `user:${user.id}` : `ip:${getClientIp(req)}`
+  const rate = checkRateLimit(`${rateKey}:tip-menu-generate`, { windowMs: 60_000, max: 5 })
   if (!rate.allowed) {
     return NextResponse.json({ error: 'Please wait a moment before generating again.' }, { status: 429 })
   }
@@ -215,40 +235,21 @@ export async function POST(req) {
   }
   const data = parsed.data
 
-  const isPro = await getIsProUser(supabase, user.id)
-
-  if (!isPro) {
-    const { count, error: countError } = await supabase
-      .from('tip_menus')
-      .select('id', { count: 'exact', head: true })
-      .eq('user_id', user.id)
-    if (countError) {
-      console.error('Failed to check tip menu generation count', countError.message)
-      return NextResponse.json({ error: 'Something went wrong. Please try again.' }, { status: 500 })
-    }
-    if ((count ?? 0) >= FREE_TIER_LIMITS.maxSavedTipMenus) {
-      return NextResponse.json({
-        error: 'Free plan includes one 10-item tip menu. Upgrade to Pro for unlimited menus, smart review, and every export format.',
-        code: 'free_limit_reached',
-      }, { status: 403 })
-    }
-  }
-
-  const styles = isPro ? ['balanced', 'high_engagement', 'premium'] : [data.style || 'balanced']
+  const styles = ['balanced', 'high_engagement', 'premium']
 
   try {
     const menus = []
     for (const style of styles) {
       // Sequential, not parallel — keeps generation load predictable and lets
       // the client's staged loading messages track real progress.
-      const menu = await generateOneMenu({ style, data, user, supabase, isPro })
+      const menu = await generateOneMenu({ style, data, user, supabase })
       menus.push(menu)
     }
 
     return NextResponse.json({
       menus,
       warnings: menus.flatMap(m => m.warnings),
-      meta: { isPro },
+      saved: !!user,
     })
   } catch (err) {
     console.error('Tip menu generation failed', err.message)

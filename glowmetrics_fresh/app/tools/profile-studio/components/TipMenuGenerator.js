@@ -8,7 +8,7 @@ import TipMenuEditor from './TipMenuEditor'
 import {
   TIP_MENU_PLATFORMS, CURRENCY_TYPES, defaultTokenValue, PERSONA_TAGS, SHOW_ENERGY_OPTIONS,
   ROOM_GOAL_OPTIONS, COMFORT_LEVELS, TIP_MENU_CATEGORIES, PRICING_STRATEGIES, MENU_ITEM_COUNTS,
-  MENU_STYLES, TIP_MENU_LOADING_MESSAGES, FREE_TIER_LIMITS,
+  MENU_STYLES, TIP_MENU_LOADING_MESSAGES,
 } from '../../../../lib/profileStudio/constants'
 
 const STEPS = ['Platform', 'Style', 'Categories', 'Boundaries', 'Pricing']
@@ -42,7 +42,7 @@ function TagInput({ value, onChange, placeholder, ariaLabel }) {
   )
 }
 
-export default function TipMenuGenerator({ isLoggedIn, isPro, sharedProfile, onSharedProfileChange }) {
+export default function TipMenuGenerator({ isLoggedIn, sharedProfile, onSharedProfileChange }) {
   const [step, setStep] = useState(0)
 
   const [platform, setPlatform] = useState(sharedProfile?.platforms?.[0] || 'Chaturbate')
@@ -91,8 +91,6 @@ export default function TipMenuGenerator({ isLoggedIn, isPro, sharedProfile, onS
 
   const toggleCategory = id => setCategories(c => (c.includes(id) ? c.filter(x => x !== id) : [...c, id]))
 
-  const effectiveItemCount = isPro ? itemCount : Math.min(itemCount, FREE_TIER_LIMITS.maxTipMenuItemsFree)
-
   const goNext = () => setStep(s => Math.min(s + 1, STEPS.length - 1))
   const goBack = () => setStep(s => Math.max(s - 1, 0))
 
@@ -118,7 +116,7 @@ export default function TipMenuGenerator({ isLoggedIn, isPro, sharedProfile, onS
           persona, showEnergy, roomGoal, comfortLevel,
           categories, customCategories,
           boundaries: { neverInclude, privateOnly, amountGated, requireApproval, maxIntensity, countdownsAllowed, tipsStack, oneUserControl, refundable, disclaimer },
-          strategy, minPrice: Number(minPrice), maxPrice: Number(maxPrice), itemCount: effectiveItemCount,
+          strategy, minPrice: Number(minPrice), maxPrice: Number(maxPrice), itemCount,
           style: 'balanced', hideEarningsFromCustomer,
         }),
       })
@@ -134,16 +132,6 @@ export default function TipMenuGenerator({ isLoggedIn, isPro, sharedProfile, onS
     } finally {
       setLoading(false)
     }
-  }
-
-  if (!isLoggedIn) {
-    return (
-      <EmptyState
-        icon="🔒"
-        title="Sign in to build your tip menu"
-        description="Create a menu designed around your show style, boundaries, and income goals. Sign in to generate, edit, and export it."
-      />
-    )
   }
 
   const activeMenu = menus?.find(m => m.style === activeStyle) || menus?.[0]
@@ -305,10 +293,10 @@ export default function TipMenuGenerator({ isLoggedIn, isPro, sharedProfile, onS
           </div>
 
           <div style={{ marginTop: 16 }}>
-            <FieldLabel>Number of items{!isPro ? ' (free plan caps at 10)' : ''}</FieldLabel>
+            <FieldLabel>Number of items</FieldLabel>
             <SingleSelectPills
               options={MENU_ITEM_COUNTS.map(n => ({ id: n, label: String(n) }))}
-              value={effectiveItemCount}
+              value={itemCount}
               onChange={v => setItemCount(Number(v))}
             />
           </div>
@@ -317,11 +305,7 @@ export default function TipMenuGenerator({ isLoggedIn, isPro, sharedProfile, onS
             <Toggle checked={hideEarningsFromCustomer} onChange={setHideEarningsFromCustomer} label="Hide estimated earnings from the customer-facing version" />
           </div>
 
-          {isPro ? (
-            <div style={{ marginTop: 10, fontSize: 12.5, color: T.cyan }}>Pro generates all three menu styles: {MENU_STYLES.map(s => s.label).join(', ')}.</div>
-          ) : (
-            <div style={{ marginTop: 10, fontSize: 12.5, color: T.faint }}>Free plan generates one balanced, 10-item menu. Upgrade to Pro for all three styles and up to 30 items.</div>
-          )}
+          <div style={{ marginTop: 10, fontSize: 12.5, color: T.cyan }}>Generates all three menu styles: {MENU_STYLES.map(s => s.label).join(', ')}.</div>
 
           <div style={{ marginTop: 22 }}>
             <PrimaryButton onClick={handleGenerate} disabled={loading || !categories.length}>
@@ -348,6 +332,11 @@ export default function TipMenuGenerator({ isLoggedIn, isPro, sharedProfile, onS
 
       {!loading && menus && activeMenu && (
         <div className="ps-fade" style={{ marginTop: 28 }}>
+          {!isLoggedIn && (
+            <div style={{ marginBottom: 18, fontSize: 12.5, color: T.cyan, background: 'rgba(22,244,255,0.08)', border: '1px solid rgba(22,244,255,0.25)', borderRadius: 10, padding: '10px 14px' }}>
+              💡 Editing and every export are free right now. <a href="/landing" style={{ color: T.cyan, fontWeight: 700 }}>Sign up free</a> to save this menu and reopen it later from your drafts.
+            </div>
+          )}
           {menus.length > 1 && (
             <div style={{ display: 'flex', gap: 8, marginBottom: 18, flexWrap: 'wrap' }}>
               {menus.map(m => (
@@ -367,7 +356,7 @@ export default function TipMenuGenerator({ isLoggedIn, isPro, sharedProfile, onS
               ))}
             </div>
           )}
-          <TipMenuEditor menu={activeMenu} isPro={isPro} onMenuUpdated={updated => setMenus(prev => prev.map(m => (m.id === updated.id ? { ...m, ...updated } : m)))} />
+          <TipMenuEditor menu={activeMenu} isLoggedIn={isLoggedIn} onMenuUpdated={updated => setMenus(prev => prev.map(m => (m.id === updated.id ? { ...m, ...updated } : m)))} />
         </div>
       )}
 

@@ -1,28 +1,17 @@
 export const dynamic = 'force-dynamic'
 
 import { NextResponse } from 'next/server'
-import { getProfileStudioCaller } from '../../../../../lib/profileStudio/auth'
-import { getIsProUser } from '../../../../../lib/profileStudio/entitlements'
+import { getProfileStudioCaller, getClientIp } from '../../../../../lib/profileStudio/auth'
 import { checkRateLimit } from '../../../../../lib/rateLimit'
 import { BioImproveRequestSchema, sanitizeGeneratedBio, charCap } from '../../../../../lib/profileStudio/bioRules'
 import { buildBioImprovePrompt, BIO_IMPROVE_OUTPUT_SCHEMA } from '../../../../../lib/profileStudio/prompts'
 import { generateStructuredContent } from '../../../../../lib/profileStudio/anthropic'
 
 export async function POST(req) {
-  const { supabase, user } = await getProfileStudioCaller()
-  if (!user) {
-    return NextResponse.json({ error: 'Please sign in to improve a bio.' }, { status: 401 })
-  }
+  const { user } = await getProfileStudioCaller()
 
-  const isPro = await getIsProUser(supabase, user.id)
-  if (!isPro) {
-    return NextResponse.json({
-      error: 'Improving an existing bio is a Pro feature. Upgrade to unlock it.',
-      code: 'pro_required',
-    }, { status: 403 })
-  }
-
-  const rate = checkRateLimit(`${user.id}:bio-improve`, { windowMs: 60_000, max: 5 })
+  const rateKey = user ? `user:${user.id}` : `ip:${getClientIp(req)}`
+  const rate = checkRateLimit(`${rateKey}:bio-improve`, { windowMs: 60_000, max: 5 })
   if (!rate.allowed) {
     return NextResponse.json({ error: 'Please wait a moment before trying again.' }, { status: 429 })
   }

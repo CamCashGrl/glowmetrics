@@ -5,7 +5,7 @@ import { T, Card, Badge, SecondaryButton, TextArea } from './theme'
 const STYLE_LABEL = { best_overall: 'Best Overall', playful: 'More Playful', direct: 'More Direct' }
 const STYLE_COLOR = { best_overall: T.cyan, playful: T.pink, direct: T.gold }
 
-export default function BioResultCard({ bio, onSave, onRegenerate, regenerating }) {
+export default function BioResultCard({ bio, isLoggedIn, onSave, onRegenerate, regenerating }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(bio.text)
   const [copied, setCopied] = useState(false)
@@ -50,11 +50,21 @@ export default function BioResultCard({ bio, onSave, onRegenerate, regenerating 
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         <SecondaryButton onClick={handleCopy}>{copied ? '✓ Copied' : '📋 Copy'}</SecondaryButton>
         {editing ? (
-          <SecondaryButton onClick={handleSave} disabled={saving}>{saving ? 'Saving…' : savedFlash ? '✓ Saved' : '💾 Save edits'}</SecondaryButton>
+          isLoggedIn ? (
+            <SecondaryButton onClick={handleSave} disabled={saving}>{saving ? 'Saving…' : savedFlash ? '✓ Saved' : '💾 Save edits'}</SecondaryButton>
+          ) : (
+            <SecondaryButton as="a" onClick={() => window.location.assign('/landing')}>🔓 Sign up to save</SecondaryButton>
+          )
         ) : (
           <SecondaryButton onClick={() => { setDraft(bio.text); setEditing(true) }}>✏️ Edit</SecondaryButton>
         )}
-        {!editing && <SecondaryButton onClick={() => onSave(bio.id, bio.text)}>{savedFlash ? '✓ Saved' : '💾 Save'}</SecondaryButton>}
+        {!editing && (
+          isLoggedIn ? (
+            <SecondaryButton onClick={() => onSave(bio.id, bio.text)}>{savedFlash ? '✓ Saved' : '💾 Save'}</SecondaryButton>
+          ) : (
+            <SecondaryButton onClick={() => window.location.assign('/landing')}>🔓 Sign up to save</SecondaryButton>
+          )
+        )}
         <SecondaryButton onClick={onRegenerate} disabled={regenerating}>{regenerating ? 'Regenerating…' : '🔄 Regenerate'}</SecondaryButton>
       </div>
     </Card>
