@@ -308,7 +308,12 @@ function renderStatusPill() {
 }
 
 function fmtDuration(secs) {
-  const s = Math.max(0, Math.floor(secs || 0));
+  // Clamped to 24h: a real session timer is never anywhere close to this,
+  // so a value beyond it means something upstream computed against a bad
+  // timestamp (e.g. a missing field defaulting to epoch) — display a safe
+  // placeholder instead of an absurd number of hours.
+  const raw = Math.max(0, Math.floor(secs || 0));
+  const s = raw > 86400 ? 0 : raw;
   const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), r = s % 60;
   return h > 0
     ? `${h}:${String(m).padStart(2, '0')}:${String(r).padStart(2, '0')}`
@@ -354,6 +359,21 @@ function renderLiveSession() {
     sessionResolutionPrompt.textContent = "We couldn't confirm you were still broadcasting. Still live?";
     sessionBtnRow.appendChild(liveButton('Still Live', 'session-btn-resume', (e) => callLiveAction('live_resolve', { choice: 'still_live' }, e.target)));
     sessionBtnRow.appendChild(liveButton('Stream Ended', 'session-btn-stop', (e) => callLiveAction('live_resolve', { choice: 'ended' }, e.target)));
+    return;
+  }
+
+  // Only 'active' and 'paused' are live states with further actions.
+  // Anything else ('ended', 'stopping', or anything unrecognized) means
+  // there's nothing left to act on — fall back to idle (Start Stream)
+  // instead of defaulting to the live button set, which previously showed
+  // Pause/Stop even after a session had actually ended.
+  if (_liveSession.status !== 'active' && _liveSession.status !== 'paused') {
+    _liveSession = null;
+    sessionLabel.textContent = '';
+    sessionTimerEl.textContent = '';
+    sessionBtnRow.appendChild(liveButton('▶ Start Stream', 'session-btn-start', () => {
+      callLiveAction('live_start', { platform: 'chaturbate' }, sessionBtnRow.firstChild);
+    }));
     return;
   }
 

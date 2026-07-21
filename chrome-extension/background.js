@@ -162,7 +162,11 @@ async function resumeLiveSession() {
 
 async function stopLiveSession() {
   const data = await liveSessionCall('/api/live/session/stop', 'POST');
-  liveSession = data?.session || null;
+  // A stopped session is 'ended', not null — but there is nothing further
+  // to act on, so this extension should stop tracking it as "the current
+  // session" the same as if there were none at all (matches the popup no
+  // longer treating a non-active/paused status as still-live).
+  liveSession = null;
   broadcast({ action: 'state', state: getState() });
   return data;
 }
@@ -183,7 +187,11 @@ async function sendExtensionHeartbeat() {
     '/api/live/session/extension-heartbeat', 'POST',
     { platform: broadcasterPlatform, broadcasterPageDetected: broadcasterPageActive }
   );
-  if (data?.session) liveSession = data.session;
+  // A null session here means the server no longer considers there to be
+  // an unresolved session for this account (ended, or auto-resolved) —
+  // stop tracking it so this heartbeat correctly stops firing on its own,
+  // instead of retrying forever against a session that's already done.
+  liveSession = data?.session || null;
 }
 
 // ─── Tip sync ──────────────────────────────────────────────────────────────────
