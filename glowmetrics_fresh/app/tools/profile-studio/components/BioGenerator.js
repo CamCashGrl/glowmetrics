@@ -3,7 +3,7 @@ import { useState } from 'react'
 import {
   T, Card, SectionLabel, FieldLabel, TextInput, TextArea, Select, PillGroup, SingleSelectPills,
   PrimaryButton, SecondaryButton, StepDots, LoadingStaged, ErrorBanner, EmptyState, Badge,
-  GuidancePanel, CompletionTracker,
+  GuidancePanel, CompletionTracker, LiveSummaryPanel,
 } from './theme'
 import BioResultCard from './BioResultCard'
 import {
@@ -191,6 +191,18 @@ export default function BioGenerator({ isLoggedIn, sharedProfile, onSharedProfil
   ]
   const completionPercent = Math.round((checklist.filter(c => c.done).length / checklist.length) * 100)
 
+  const summaryRows = [
+    { label: 'Display name', value: form.identity.displayName },
+    { label: 'Persona', value: form.persona.personaTags.join(', ') },
+    { label: 'Tone', value: form.persona.tone.join(', ') },
+    { label: 'Platforms', value: form.identity.platforms.join(', ') },
+    { label: 'Services', value: form.content.services.join(', ') },
+    { label: 'Exclusions', value: form.content.boundaries.hardNo.length ? `${form.content.boundaries.hardNo.length} listed` : '' },
+    { label: 'Schedule', value: [form.schedule.days.join('/'), form.schedule.hours].filter(Boolean).join(' · ') },
+    { label: 'Primary CTA', value: form.schedule.ctaPrimary },
+    { label: 'Output format', value: BIO_FORMATS.find(f => f.id === format)?.label },
+  ]
+
   return (
     <div>
       <StepDots steps={STEPS} current={step} />
@@ -249,6 +261,7 @@ export default function BioGenerator({ isLoggedIn, sharedProfile, onSharedProfil
           </div>
         </Card>
         <GuidancePanel>{WHY_TEXT[0]}</GuidancePanel>
+        <LiveSummaryPanel title="Your Profile So Far" rows={summaryRows} />
       </div>
       )}
 
@@ -296,6 +309,7 @@ export default function BioGenerator({ isLoggedIn, sharedProfile, onSharedProfil
           </div>
         </Card>
         <GuidancePanel>{WHY_TEXT[1]}</GuidancePanel>
+        <LiveSummaryPanel title="Your Profile So Far" rows={summaryRows} />
       </div>
       )}
 
@@ -354,6 +368,7 @@ export default function BioGenerator({ isLoggedIn, sharedProfile, onSharedProfil
           </div>
         </Card>
         <GuidancePanel>{WHY_TEXT[2]}</GuidancePanel>
+        <LiveSummaryPanel title="Your Profile So Far" rows={summaryRows} />
       </div>
       )}
 
@@ -395,6 +410,7 @@ export default function BioGenerator({ isLoggedIn, sharedProfile, onSharedProfil
           </div>
         </Card>
         <GuidancePanel>{WHY_TEXT[3]}</GuidancePanel>
+        <LiveSummaryPanel title="Your Profile So Far" rows={summaryRows} />
       </div>
       )}
 
@@ -423,6 +439,7 @@ export default function BioGenerator({ isLoggedIn, sharedProfile, onSharedProfil
           </div>
         </Card>
         <GuidancePanel>{WHY_TEXT[4]}</GuidancePanel>
+        <LiveSummaryPanel title="Your Profile So Far" rows={summaryRows} />
       </div>
       )}
 

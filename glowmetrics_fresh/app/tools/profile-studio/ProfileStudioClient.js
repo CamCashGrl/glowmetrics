@@ -6,8 +6,8 @@ import TipMenuGenerator from './components/TipMenuGenerator'
 import DraftsPanel from './components/DraftsPanel'
 import Button from '../../../components/ui/Button'
 import {
-  Hero, WhatYouGet, ExampleResults, HowItWorks, PlatformFormats,
-  ComparisonSection, PrivacySection, FAQSection, FinalCTA,
+  Hero, WhatYouGet, SupportedFormats, ExampleResults, HowItWorks, PlatformFormats,
+  ComparisonSection, PrivacySection, CreatorStylePresets, WrittenGuides, FAQSection, FinalCTA,
 } from './components/MarketingSections'
 
 const TABS = [
@@ -23,6 +23,10 @@ export default function ProfileStudioClient() {
   // immediately; only overwritten with saved data once we know the visitor
   // is signed in.
   const [sharedProfile, setSharedProfile] = useState({})
+  // Bumped whenever a creator-style preset is applied, forcing both wizards
+  // to remount and re-read their initial state from sharedProfile — neither
+  // wizard re-reads sharedProfile after its own first render otherwise.
+  const [presetVersion, setPresetVersion] = useState(0)
 
   useEffect(() => {
     let cancelled = false
@@ -59,6 +63,21 @@ export default function ProfileStudioClient() {
     })
   }
 
+  // Presets only suggest persona/tone/audience/compatible categories — they
+  // never touch services or boundaries, which the creator still confirms
+  // themselves in the wizard.
+  const applyPreset = (preset) => {
+    setSharedProfile(prev => ({
+      ...(prev || {}),
+      personaTags: preset.personaTags,
+      tone: preset.tone,
+      desiredAudience: preset.desiredAudience,
+      tipMenuCategories: preset.categories,
+    }))
+    setPresetVersion(v => v + 1)
+    goToTool('bio')
+  }
+
   return (
     <PageShell>
       <nav aria-label="site" style={{
@@ -90,11 +109,13 @@ export default function ProfileStudioClient() {
 
         <Hero onGoTo={goToTool} />
         <WhatYouGet />
+        <SupportedFormats />
         <ExampleResults />
         <HowItWorks />
         <PlatformFormats />
         <ComparisonSection />
         <PrivacySection />
+        <CreatorStylePresets onSelectPreset={applyPreset} />
       </div>
 
       <div id="generator" style={{ maxWidth: 1180, margin: '0 auto', padding: '20px 20px 0', scrollMarginTop: 76 }}>
@@ -137,15 +158,16 @@ export default function ProfileStudioClient() {
         )}
 
         {tab === 'bio' && (
-          <BioGenerator isLoggedIn={isLoggedIn} sharedProfile={sharedProfile} onSharedProfileChange={handleSharedProfileChange} />
+          <BioGenerator key={presetVersion} isLoggedIn={isLoggedIn} sharedProfile={sharedProfile} onSharedProfileChange={handleSharedProfileChange} />
         )}
         {tab === 'tipmenu' && (
-          <TipMenuGenerator isLoggedIn={isLoggedIn} sharedProfile={sharedProfile} onSharedProfileChange={handleSharedProfileChange} />
+          <TipMenuGenerator key={presetVersion} isLoggedIn={isLoggedIn} sharedProfile={sharedProfile} onSharedProfileChange={handleSharedProfileChange} />
         )}
         {tab === 'drafts' && <DraftsPanel isLoggedIn={isLoggedIn} />}
       </div>
 
       <div style={{ maxWidth: 1180, margin: '0 auto', padding: '56px 20px 100px' }}>
+        <WrittenGuides />
         <FAQSection />
         <FinalCTA onGoTo={goToTool} />
       </div>

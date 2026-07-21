@@ -3,7 +3,7 @@ import { useState, useMemo } from 'react'
 import {
   T, Card, SectionLabel, FieldLabel, TextInput, Select, PillGroup, SingleSelectPills,
   PrimaryButton, SecondaryButton, StepDots, LoadingStaged, ErrorBanner, EmptyState, Badge, TextArea, Toggle,
-  GuidancePanel, CompletionTracker,
+  GuidancePanel, CompletionTracker, LiveSummaryPanel,
 } from './theme'
 import TipMenuEditor from './TipMenuEditor'
 import {
@@ -66,7 +66,9 @@ export default function TipMenuGenerator({ isLoggedIn, sharedProfile, onSharedPr
   const [roomGoal, setRoomGoal] = useState('More small tips')
   const [comfortLevel, setComfortLevel] = useState('moderate')
 
-  const [categories, setCategories] = useState(TIP_MENU_CATEGORIES.slice(0, 8))
+  const [categories, setCategories] = useState(
+    sharedProfile?.tipMenuCategories?.length ? sharedProfile.tipMenuCategories : TIP_MENU_CATEGORIES.slice(0, 8)
+  )
   const [customCategories, setCustomCategories] = useState([])
   const [customCategoryText, setCustomCategoryText] = useState('')
 
@@ -163,6 +165,18 @@ export default function TipMenuGenerator({ isLoggedIn, sharedProfile, onSharedPr
   ]
   const completionPercent = Math.round((checklist.filter(c => c.done).length / checklist.length) * 100)
 
+  const summaryRows = [
+    { label: 'Platform', value: platform },
+    { label: 'Creator payout value', value: `${tokenValue} ${currencyType === 'dollars' ? '' : `(${currencyType})`}`.trim() },
+    { label: 'Menu type(s)', value: selectedStyles.map(id => MENU_STYLES.find(s => s.id === id)?.label).filter(Boolean).join(', ') },
+    { label: 'Item count', value: itemCount ? String(itemCount) : '' },
+    { label: 'Pricing strategy', value: PRICING_STRATEGIES.find(s => s.id === strategy)?.label },
+    { label: 'Min / max price', value: `${minPrice} – ${maxPrice}` },
+    { label: 'Main goal', value: roomGoal },
+    { label: 'Custom request policy', value: requireApproval ? 'Requires approval' : 'No approval needed' },
+    { label: 'Public/private', value: privateOnly.length ? `${privateOnly.length} private-only` : 'All public by default' },
+  ]
+
   return (
     <div>
       <StepDots steps={STEPS} current={step} />
@@ -211,6 +225,7 @@ export default function TipMenuGenerator({ isLoggedIn, sharedProfile, onSharedPr
           </div>
         </Card>
         <GuidancePanel>{WHY_TEXT[0]}</GuidancePanel>
+        <LiveSummaryPanel title="Your Menu Strategy" rows={summaryRows} />
       </div>
       )}
 
@@ -237,6 +252,7 @@ export default function TipMenuGenerator({ isLoggedIn, sharedProfile, onSharedPr
           </div>
         </Card>
         <GuidancePanel>{WHY_TEXT[1]}</GuidancePanel>
+        <LiveSummaryPanel title="Your Menu Strategy" rows={summaryRows} />
       </div>
       )}
 
@@ -273,6 +289,7 @@ export default function TipMenuGenerator({ isLoggedIn, sharedProfile, onSharedPr
           </div>
         </Card>
         <GuidancePanel>{WHY_TEXT[2]}</GuidancePanel>
+        <LiveSummaryPanel title="Your Menu Strategy" rows={summaryRows} />
       </div>
       )}
 
@@ -312,6 +329,7 @@ export default function TipMenuGenerator({ isLoggedIn, sharedProfile, onSharedPr
           </div>
         </Card>
         <GuidancePanel>{WHY_TEXT[3]}</GuidancePanel>
+        <LiveSummaryPanel title="Your Menu Strategy" rows={summaryRows} />
       </div>
       )}
 
@@ -383,6 +401,7 @@ export default function TipMenuGenerator({ isLoggedIn, sharedProfile, onSharedPr
           </div>
         </Card>
         <GuidancePanel>{WHY_TEXT[4]}</GuidancePanel>
+        <LiveSummaryPanel title="Your Menu Strategy" rows={summaryRows} />
       </div>
       )}
 
