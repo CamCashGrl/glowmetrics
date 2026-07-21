@@ -37,6 +37,21 @@ const CreatorProfileSchema = z.object({
 
   pricingPreferences: z.record(z.string(), z.any()).optional(),
   tipMenuCategories: z.array(z.string().max(40)).optional(),
+
+  // Brand Studio additions — kept in one JSON bucket instead of new columns
+  // since none of these need to be queried/filtered/indexed independently.
+  brandSettings: z.object({
+    primaryPlatform: z.string().max(40).optional(),
+    emojiStyle: z.enum(['none', 'minimal', 'playful', 'heavy']).optional(),
+    alwaysUseWords: z.array(z.string().max(40)).max(30).optional(),
+    neverUseWords: z.array(z.string().max(40)).max(30).optional(),
+    website: z.string().trim().max(200).optional(),
+    notes: z.string().trim().max(2000).optional(),
+    comfortLevel: z.enum(['beginner', 'moderate', 'experienced']).optional(),
+    audienceTags: z.array(z.string().max(40)).max(20).optional(),
+    defaultBioFormat: z.string().max(40).optional(),
+    defaultTipMenuStrategy: z.string().max(40).optional(),
+  }).partial().optional(),
 })
 
 function toRow(userId, data) {
@@ -67,6 +82,7 @@ function toRow(userId, data) {
     social_usernames: data.socialUsernames ?? {},
     pricing_preferences: data.pricingPreferences ?? {},
     tip_menu_categories: data.tipMenuCategories ?? [],
+    brand_settings: data.brandSettings ?? {},
     updated_at: new Date().toISOString(),
   }
 }
@@ -100,6 +116,7 @@ function toClient(row) {
     socialUsernames: row.social_usernames,
     pricingPreferences: row.pricing_preferences,
     tipMenuCategories: row.tip_menu_categories,
+    brandSettings: row.brand_settings || {},
     updatedAt: row.updated_at,
   }
 }

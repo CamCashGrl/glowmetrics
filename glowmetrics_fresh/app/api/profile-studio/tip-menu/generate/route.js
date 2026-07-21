@@ -129,6 +129,9 @@ async function generateOneMenu({ style, data, user, supabase }) {
     hideEarningsFromCustomer: data.hideEarningsFromCustomer,
     boundaries: data.boundaries,
     theme: 'dark_neon',
+    // Persisted so the "regenerate unlocked items" action (tip-menu/regenerate)
+    // can rebuild the same prompt context without the creator re-entering it.
+    persona: data.persona,
   }
 
   if (!user) {

@@ -247,6 +247,38 @@ export function Badge({ children, color = T.cyan, style }) {
   )
 }
 
+// Shared "type and press Enter to add a tag" input — used by the tip menu
+// wizard's boundary lists and Brand Studio's always-use/never-use word lists
+// so there's exactly one implementation instead of one per screen.
+export function TagInput({ value, onChange, placeholder, ariaLabel, badgeColor = T.pink }) {
+  const [text, setText] = React.useState('')
+  return (
+    <div>
+      <TextInput
+        aria-label={ariaLabel || placeholder}
+        value={text}
+        onChange={e => setText(e.target.value)}
+        onKeyDown={e => {
+          if (e.key === 'Enter' && text.trim()) {
+            e.preventDefault()
+            onChange([...value, text.trim()])
+            setText('')
+          }
+        }}
+        placeholder={placeholder}
+      />
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
+        {value.map((item, i) => (
+          <Badge key={i} color={badgeColor}>
+            {item}{' '}
+            <button onClick={() => onChange(value.filter((_, j) => j !== i))} style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', marginLeft: 4 }}>✕</button>
+          </Badge>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export function StepDots({ steps, current }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 22, flexWrap: 'wrap' }}>
