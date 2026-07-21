@@ -4,6 +4,7 @@ import { PageShell, T, GRADIENT, Badge, SecondaryButton } from './components/the
 import BioGenerator from './components/BioGenerator'
 import TipMenuGenerator from './components/TipMenuGenerator'
 import DraftsPanel from './components/DraftsPanel'
+import Button from '../../../components/ui/Button'
 
 const TABS = [
   { id: 'bio', label: 'Bio Generator', icon: '✍️' },
@@ -49,6 +50,24 @@ export default function ProfileStudioClient() {
 
   return (
     <PageShell>
+      <nav aria-label="site" style={{
+        padding: '16px 32px', borderBottom: `1px solid ${T.border}`, display: 'flex',
+        justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0,
+        background: 'rgba(5,7,19,0.92)', backdropFilter: 'blur(16px)', zIndex: 40,
+      }}>
+        <a href="/landing" style={{ fontWeight: 800, fontSize: 15, color: T.white, textDecoration: 'none', letterSpacing: '-0.2px', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ background: GRADIENT, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>CamCash</span>
+        </a>
+        <div style={{ display: 'flex', gap: 18, alignItems: 'center' }}>
+          <a href="/tools" style={{ fontSize: 13, color: T.muted, textDecoration: 'none' }}>All Tools</a>
+          <a href="/tools/cam-model-name-generator" style={{ fontSize: 13, color: T.muted, textDecoration: 'none' }}>Name Generator</a>
+          <a href="/blog" style={{ fontSize: 13, color: T.muted, textDecoration: 'none' }}>Blog</a>
+          <Button as="a" href={isLoggedIn ? '/dashboard' : '/login'} style={{ padding: '7px 18px', fontSize: 13 }}>
+            {isLoggedIn ? 'Dashboard' : 'Sign in'}
+          </Button>
+        </div>
+      </nav>
+
       <div style={{ maxWidth: 1180, margin: '0 auto', padding: '48px 20px 100px' }}>
         <nav aria-label="breadcrumb" style={{ marginBottom: 24, fontSize: 12 }}>
           <a href="/landing" style={{ color: T.cyan, textDecoration: 'none' }}>Home</a>
