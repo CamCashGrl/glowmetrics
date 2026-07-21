@@ -357,6 +357,28 @@ export default function TipMenuGenerator({ isLoggedIn, sharedProfile, onSharedPr
             </div>
           )}
           <TipMenuEditor menu={activeMenu} isLoggedIn={isLoggedIn} onMenuUpdated={updated => setMenus(prev => prev.map(m => (m.id === updated.id ? { ...m, ...updated } : m)))} />
+
+          <div style={{ borderRadius: 16, border: '1px solid rgba(255,43,174,0.25)', background: 'rgba(255,43,174,0.06)', padding: 24, marginTop: 24 }}>
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center', marginBottom: 16 }}>
+              <img src="/blog-images/spin_the_wheel_cover.png" alt="Spin-the-Wheel Template Pack for cam models cover art by Pretty Profitz" style={{ width: 140, borderRadius: 10, display: 'block' }} />
+            </div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: T.white, margin: '0 0 8px', textAlign: 'center' }}>Want a designed, printable version of this menu?</div>
+            <p style={{ fontSize: 14, color: T.muted, margin: '0 0 16px', lineHeight: 1.6, textAlign: 'center' }}>
+              Pretty Profitz sells ready-made tip menu templates (320+ styles to choose from), a Roll-the-Dice game template, and the Spin-the-Wheel Template Pack — all editable and Etsy-instant-download.
+            </p>
+            <p style={{ fontSize: 14, color: T.muted, margin: '0 0 18px', lineHeight: 1.6, textAlign: 'center' }}>
+              Use code <strong style={{ color: T.white }}>PRETTY70</strong> at checkout for 70% off.
+            </p>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+              <a href="https://prettyprofitz.etsy.com" target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', background: 'linear-gradient(90deg,#16F4FF,#7C5CFF,#FF2BAE)', color: '#050713', padding: '11px 22px', borderRadius: 10, fontWeight: 800, fontSize: 14, textDecoration: 'none' }}>Shop tip menus & templates on Etsy →</a>
+            </div>
+            <div style={{ display: 'flex', gap: 16, justifyContent: 'center', flexWrap: 'wrap', marginTop: 18, fontSize: 12.5 }}>
+              <a href="/guides/cam-model-room-title-generator" style={{ color: T.cyan, textDecoration: 'none' }}>→ Free cam room title generator</a>
+              <a href="/blog/viral-cam-room-titles" style={{ color: T.cyan, textDecoration: 'none' }}>→ Viral cam room titles</a>
+              <a href="/blog/best-cam-model-tools" style={{ color: T.cyan, textDecoration: 'none' }}>→ Best cam model tools</a>
+              <a href="/landing" style={{ color: T.cyan, textDecoration: 'none' }}>→ Track your real tip earnings on CamCash</a>
+            </div>
+          </div>
         </div>
       )}
 

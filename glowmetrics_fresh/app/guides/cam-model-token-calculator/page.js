@@ -428,13 +428,19 @@ export default function TokenCalculatorPage() {
               </div>
               <div style={{ fontSize: '18px', fontWeight: 700, color: S.white, margin: '0 0 8px' }}>Want your tip menu and titles ready to go?</div>
               <p style={{ fontSize: '14px', color: S.text, margin: '0 0 16px', lineHeight: 1.6 }}>
-                Pretty Profitz sells a Spin-the-Wheel Template Pack (8 editable wheels for tip menu games) and a
-                500 High-Converting Cam Room Titles guide, plus tip menus, trackers, and more in the same shop.
+                Pretty Profitz sells a Spin-the-Wheel Template Pack (8 editable wheels for tip menu games), a Roll-the-Dice
+                game template, 320+ tip menu designs, and a 500 High-Converting Cam Room Titles guide, all in the same shop.
               </p>
               <p style={{ fontSize: '14px', color: S.text, margin: '0 0 16px', lineHeight: 1.6 }}>
-                Use code <strong style={{ color: S.white }}>PRETTY21</strong> at checkout for 25% off.
+                Use code <strong style={{ color: S.white }}>PRETTY70</strong> at checkout for 70% off.
               </p>
-              <a href="https://www.etsy.com/shop/prettyprofitz" style={{ display: 'inline-block', background: 'linear-gradient(90deg, #ec4899, #f59e0b)', color: '#0f172a', padding: '10px 20px', borderRadius: '10px', fontWeight: 700, fontSize: '14px', textDecoration: 'none' }} target="_blank" rel="noopener noreferrer">Shop tip menus &amp; wheel templates on Etsy →</a>
+              <a href="https://prettyprofitz.etsy.com" style={{ display: 'inline-block', background: 'linear-gradient(90deg, #ec4899, #f59e0b)', color: '#0f172a', padding: '10px 20px', borderRadius: '10px', fontWeight: 700, fontSize: '14px', textDecoration: 'none' }} target="_blank" rel="noopener noreferrer">Shop tip menus &amp; wheel templates on Etsy →</a>
+              <div style={{ display: 'flex', gap: 16, justifyContent: 'center', flexWrap: 'wrap', marginTop: 16, fontSize: 13 }}>
+                <a href="/guides/cam-model-room-title-generator" style={{ color: S.accent, textDecoration: 'none' }}>→ Free cam room title generator</a>
+                <a href="/blog/viral-cam-room-titles" style={{ color: S.accent, textDecoration: 'none' }}>→ Viral cam room titles</a>
+                <a href="/blog/best-cam-model-tools" style={{ color: S.accent, textDecoration: 'none' }}>→ Best cam model tools</a>
+                <a href="/landing" style={{ color: S.accent, textDecoration: 'none' }}>→ Track your real tip earnings on CamCash</a>
+              </div>
             </div>
           </section>
 
