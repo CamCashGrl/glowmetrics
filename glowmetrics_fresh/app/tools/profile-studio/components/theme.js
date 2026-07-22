@@ -77,6 +77,38 @@ export function Card({ children, style, highlight, ...rest }) {
   )
 }
 
+// Collapsible section for supporting/marketing content — keeps the page
+// short with everything closed, while each section's content (built by the
+// existing marketing components) is unchanged, just wrapped.
+export function Accordion({ title, icon, subtitle, defaultOpen = false, children, onToggle }) {
+  const [open, setOpen] = React.useState(defaultOpen)
+  const toggle = () => {
+    const next = !open
+    setOpen(next)
+    onToggle?.(next)
+  }
+  return (
+    <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 16, marginBottom: 12, overflow: 'hidden' }}>
+      <button
+        onClick={toggle}
+        className="ps-btn"
+        aria-expanded={open}
+        style={{ width: '100%', textAlign: 'left', padding: '18px 22px', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}
+      >
+        <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {icon && <span style={{ fontSize: 18 }}>{icon}</span>}
+          <span>
+            <span style={{ fontSize: 15.5, fontWeight: 800, color: T.white, display: 'block' }}>{title}</span>
+            {subtitle && <span style={{ fontSize: 12, color: T.faint, fontWeight: 500 }}>{subtitle}</span>}
+          </span>
+        </span>
+        <span style={{ color: T.cyan, fontSize: 20, flexShrink: 0, transform: open ? 'rotate(45deg)' : 'none', transition: 'transform 0.15s' }}>+</span>
+      </button>
+      {open && <div style={{ padding: '0 22px 26px' }}>{children}</div>}
+    </div>
+  )
+}
+
 export function SectionLabel({ children, style }) {
   return (
     <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: T.cyan, marginBottom: 10, ...style }}>

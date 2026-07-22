@@ -11,6 +11,7 @@ import {
   SERVICE_OPTIONS, PRIMARY_CTA_OPTIONS, WEEKDAYS, BIO_FORMATS, BIO_LENGTHS, EMOJI_LEVELS,
   BIO_LOADING_MESSAGES,
 } from '../../../../lib/profileStudio/constants'
+import { track } from '../../../../lib/track'
 
 const STEPS = ['Identity', 'Persona', 'Content', 'Schedule', 'Generate']
 
@@ -121,11 +122,12 @@ export default function BioGenerator({ isLoggedIn, sharedProfile, onSharedProfil
   const goNext = () => { pushSharedProfile(); setStep(s => Math.min(s + 1, STEPS.length - 1)) }
   const goBack = () => setStep(s => Math.max(s - 1, 0))
 
-  const handleGenerate = async () => {
+  const handleGenerate = async (isRegenerate = false) => {
     setError('')
     setLoading(true)
     setBios(null)
     pushSharedProfile()
+    track(isRegenerate ? 'generate_again_clicked' : 'generate_clicked', { type: 'bio', format })
     try {
       const res = await fetch('/api/profile-studio/bio/generate', {
         method: 'POST',
@@ -135,19 +137,26 @@ export default function BioGenerator({ isLoggedIn, sharedProfile, onSharedProfil
       const data = await res.json()
       if (!res.ok) {
         setError(data.error || 'Something went wrong. Please try again.')
+        track('generation_failed', { type: 'bio' })
         return
       }
       setBios(data.bios)
       setWarnings(data.warnings || [])
+      track('generation_succeeded', { type: 'bio', format })
     } catch {
       setError('Network error. Please check your connection and try again.')
+      track('generation_failed', { type: 'bio' })
     } finally {
       setLoading(false)
     }
   }
 
   const handleSaveBio = async (id, text) => {
-    if (id.startsWith('local_')) return // no account to save to — BioResultCard shows a sign-up prompt instead
+    if (id.startsWith('local_')) {
+      track('account_creation_started', { source: 'bio_save_prompt' })
+      return // no account to save to — BioResultCard shows a sign-up prompt instead
+    }
+    track('save_clicked', { type: 'bio' })
     await fetch('/api/profile-studio/bios', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -432,7 +441,7 @@ export default function BioGenerator({ isLoggedIn, sharedProfile, onSharedProfil
           </div>
 
           <div style={{ marginTop: 22 }}>
-            <PrimaryButton onClick={handleGenerate} disabled={loading || !form.identity.displayName}>
+            <PrimaryButton onClick={() => handleGenerate(false)} disabled={loading || !form.identity.displayName}>
               {loading ? 'Generating…' : '✨ Generate my bio'}
             </PrimaryButton>
             {!form.identity.displayName && <div style={{ fontSize: 12, color: T.faint, marginTop: 8 }}>Add a display name in Step 1 to generate.</div>}
@@ -472,7 +481,7 @@ export default function BioGenerator({ isLoggedIn, sharedProfile, onSharedProfil
           )}
           <div className="ps-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
             {bios.map(bio => (
-              <BioResultCard key={bio.id} bio={bio} isLoggedIn={isLoggedIn} onSave={handleSaveBio} onRegenerate={handleGenerate} regenerating={loading} />
+              <BioResultCard key={bio.id} bio={bio} isLoggedIn={isLoggedIn} onSave={handleSaveBio} onRegenerate={() => handleGenerate(true)} regenerating={loading} />
             ))}
           </div>
         </div>

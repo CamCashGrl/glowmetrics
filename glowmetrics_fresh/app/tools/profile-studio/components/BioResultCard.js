@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { T, Card, Badge, SecondaryButton, TextArea } from './theme'
+import { track } from '../../../../lib/track'
 
 const STYLE_LABEL = { best_overall: 'Best Overall', playful: 'More Playful', direct: 'More Direct' }
 const STYLE_COLOR = { best_overall: T.cyan, playful: T.pink, direct: T.gold }
@@ -14,6 +15,7 @@ export default function BioResultCard({ bio, isLoggedIn, onSave, onRegenerate, r
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(editing ? draft : bio.text)
+    track('result_copied', { type: 'bio', style: bio.style })
     setCopied(true)
     setTimeout(() => setCopied(false), 1800)
   }

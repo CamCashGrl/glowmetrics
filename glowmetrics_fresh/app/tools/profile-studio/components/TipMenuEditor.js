@@ -6,6 +6,7 @@ import {
 } from './theme'
 import { TIP_MENU_CATEGORIES, MENU_THEMES } from '../../../../lib/profileStudio/constants'
 import { toPlainText, toFormattedText, toHTML, toRoomText, toSocialPost, copyToClipboard, downloadFile } from '../lib/export'
+import { track } from '../../../../lib/track'
 
 function reindex(items) {
   return items.map((it, i) => ({ ...it, sortOrder: i }))
@@ -193,9 +194,11 @@ export default function TipMenuEditor({ menu, isLoggedIn, onMenuUpdated }) {
 
   const handleSave = async () => {
     if (!isSavedToAccount) {
+      track('account_creation_started', { source: 'tipmenu_save_prompt' })
       window.location.assign('/landing')
       return
     }
+    track('save_clicked', { type: 'tipmenu' })
     setSaving(true)
     setError('')
     try {
@@ -237,6 +240,7 @@ export default function TipMenuEditor({ menu, isLoggedIn, onMenuUpdated }) {
   const doExport = async (kind) => {
     setCopiedKey(kind)
     setTimeout(() => setCopiedKey(''), 1800)
+    track('result_copied', { type: 'tipmenu', format: kind })
     if (kind === 'plain') return copyToClipboard(toPlainText(menuForExport))
     if (kind === 'formatted') return copyToClipboard(toFormattedText(menuForExport))
     if (kind === 'html') return downloadFile(`${title || 'tip-menu'}.html`, toHTML(menuForExport, { themeId: theme, brandName: title }), 'text/html')
