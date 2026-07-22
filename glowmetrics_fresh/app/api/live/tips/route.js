@@ -131,11 +131,7 @@ export async function POST(req) {
           upgradeUrl: '/pricing',
         }, { status: 402, headers: cors });
       }
-      // TEMPORARY DEBUG — remove once the local test-project save failure is
-      // root-caused. Surfaces the real Supabase error in the response body
-      // itself so it's visible in the Network tab, instead of only in the
-      // dev server's own terminal.
-      return Response.json({ error: 'Failed to save tip', debug: error }, { status: 500, headers: cors });
+      return Response.json({ error: 'Failed to save tip' }, { status: 500, headers: cors });
     }
 
     // Permanent history (dashboard analytics) is a Pro feature — live coaching
