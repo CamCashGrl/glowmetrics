@@ -195,7 +195,7 @@ export default function WhyCamIncomeIsInconsistent() {
           <a href="/blog/cam-model-earnings" style={s.relLink}>→ Cam model earnings: the complete guide</a>
           <a href="/blog/why-cam-streams-arent-making-money" style={s.relLink}>→ Why cam streams underperform</a>
           <a href="/blog/live-ai-coaching-cam-models" style={s.relLink}>→ Live AI Coaching for Cam Models — Stop quiet rooms from killing a night</a>
-          <a href="/blog/cam-model-fan-crm" style={s.relLink}>→ Cam Model Fan CRM — Catch whales before they go quiet</a>
+          <a href="/blog/cam-model-fan-crm" style={s.relLink}>→ Whale Watch — Catch whales before they go quiet</a>
         </div>
       </div>
     </ArticleLayout>

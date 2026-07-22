@@ -109,8 +109,8 @@ const posts = [
   },
   {
     slug: 'cam-model-fan-crm',
-    title: 'Cam Model Fan CRM — Track Top Tippers',
-    description: 'How to use a fan CRM to remember your top spenders, personalize interactions, and keep them coming back.',
+    title: 'Whale Watch: Profiles on All Your High Rollers',
+    description: 'How to build profiles on your high rollers so you remember their spending, personalize interactions, and keep them coming back.',
   },
   {
     slug: 'revenue-per-hour-cam-model',

@@ -59,7 +59,7 @@ export default function Page() {
   const relatedBlogs = [
     { title: 'Cam Model Income Tracking', description: 'The full picture: manual and automatic earnings tracking', href: '/blog/how-to-track-cam-tips-automatically' },
     { title: 'Live AI Coaching for Cam Models', description: 'Turn live data into more tips while you stream', href: '/blog/live-ai-coaching-cam-models' },
-    { title: 'Cam Model Fan CRM', description: 'Track and profile your top tippers automatically', href: '/blog/cam-model-fan-crm' },
+    { title: 'Whale Watch', description: 'Track and profile your high rollers automatically', href: '/blog/cam-model-fan-crm' },
   ];
 
   const relatedGuides = [

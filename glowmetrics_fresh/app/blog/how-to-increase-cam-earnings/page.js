@@ -208,7 +208,7 @@ export default function HowToIncreaseCamEarnings() {
           <a href="/blog/how-to-build-loyal-fans" style={s.relLink}>→ How to build loyal fans that actually tip</a>
           <a href="/blog/how-to-track-cam-tips-automatically" style={s.relLink}>→ How to Track Cam Tips Automatically — Measure earnings without the spreadsheet</a>
           <a href="/blog/live-ai-coaching-cam-models" style={s.relLink}>→ Live AI Coaching for Cam Models — Real-time cues that boost in-stream tips</a>
-          <a href="/blog/cam-model-fan-crm" style={s.relLink}>→ Cam Model Fan CRM — Profile and prioritize your top tippers</a>
+          <a href="/blog/cam-model-fan-crm" style={s.relLink}>→ Whale Watch — Profile and prioritize your high rollers</a>
           <a href="/tools/profile-studio" style={s.relLink}>→ Free cam bio & tip menu generator</a>
         </div>
       </div>

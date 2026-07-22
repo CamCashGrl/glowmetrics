@@ -180,7 +180,7 @@ export default function ReEngageWhalesHighTippers() {
       <h2 style={s.h2}>How to Re-Engage Whales (Step-by-Step)</h2>
       <p style={s.p}>
         <a href="/landing" style={s.iLink}>CamCash</a> shows your top tippers by lifetime spend and flags who's gone quiet — so you always know who to focus on.
-        Use the <a href="/blog/cam-model-fan-crm" style={s.iLink}>Fan CRM</a> to track high-tipper behavior across sessions.
+        Use <a href="/blog/cam-model-fan-crm" style={s.iLink}>Whale Watch</a> to track high-tipper behavior across sessions.
       </p>
 
       {steps.map(({ num, title, body, quotes }) => (
@@ -240,7 +240,7 @@ export default function ReEngageWhalesHighTippers() {
         <div style={s.relLinks}>
           <a href="/blog/how-to-build-loyal-fans" style={s.relLink}>→ How to build a loyal fanbase that tips consistently</a>
           <a href="/blog/why-cam-income-is-inconsistent" style={s.relLink}>→ Why cam income is inconsistent</a>
-          <a href="/blog/cam-model-fan-crm" style={s.relLink}>→ Cam Model Fan CRM — track and manage your top spenders</a>
+          <a href="/blog/cam-model-fan-crm" style={s.relLink}>→ Whale Watch — track and manage your top spenders</a>
           <a href="/blog/cam-model-tipping-pattern-data-examples" style={s.relLink}>→ 7 tipping pattern examples: what your data is telling you</a>
         </div>
       </div>
