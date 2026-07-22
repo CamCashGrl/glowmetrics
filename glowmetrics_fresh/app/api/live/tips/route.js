@@ -107,6 +107,22 @@ export async function POST(req) {
       .select();
 
     if (error) {
+      // A repeat submission of the exact same tip (same tipper, amount,
+      // platform, and millisecond) hits the deduplication_key unique
+      // constraint — that's the constraint doing its job, not a failure.
+      // Treat it as an idempotent no-op and return the row already saved
+      // by the original submission, instead of surfacing a 500.
+      if (error.code === '23505' && error.message?.includes('deduplication_key')) {
+        const { data: existing } = await supabaseAdmin
+          .from('live_tips')
+          .select()
+          .eq('deduplication_key', deduplication_key)
+          .maybeSingle();
+        return Response.json(
+          { success: true, tip: existing, savedToHistory: false, message: `Tip from ${username} already recorded` },
+          { headers: cors }
+        );
+      }
       console.error('Supabase insert error:', error);
       if (error.message?.includes('PLATFORM_LIMIT_REACHED')) {
         return Response.json({
