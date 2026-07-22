@@ -1130,6 +1130,29 @@ export function computePaidSessionAnalytics(sessions) {
     }))
     .sort((a, b) => b.usd - a.usd)
 
+  // ── PLATFORM BREAKDOWN ─────────────────────────────────────
+  // Same shape/derivation as sessionTypeBreakdown above, just keyed by
+  // platform instead of session_type -- only BongaCams populates
+  // paid_sessions today, but this doesn't assume that.
+  const platformMap = {}
+  sessions.forEach(s => {
+    const p = s.platform || 'Unknown'
+    if (!platformMap[p]) platformMap[p] = { usd: 0, count: 0, clients: new Set() }
+    platformMap[p].usd     += parseFloat(s.usd) || 0
+    platformMap[p].count   += 1
+    platformMap[p].clients.add((s.username || '').toLowerCase())
+  })
+  const platformBreakdown = Object.entries(platformMap)
+    .map(([platform, d]) => ({
+      platform,
+      usd:      parseFloat(d.usd.toFixed(2)),
+      count:    d.count,
+      clients:  d.clients.size,
+      pct:      totalUSD > 0 ? Math.round((d.usd / totalUSD) * 100) : 0,
+      avgUsd:   d.count > 0 ? parseFloat((d.usd / d.count).toFixed(2)) : 0,
+    }))
+    .sort((a, b) => b.usd - a.usd)
+
   // ── TOP PRIVATE CLIENTS ────────────────────────────────────
   const clientMap = {}
   sessions.forEach(s => {
@@ -1247,15 +1270,22 @@ export function computePaidSessionAnalytics(sessions) {
     to:   new Date(Math.max(...allDates)).toISOString(),
   } : null
 
+  // ── AVERAGES ────────────────────────────────────────────────
+  const avgTokensPerSession = totalCount > 0 ? Math.round(totalTokens / totalCount) : 0
+  const avgPayoutPerToken   = totalTokens > 0 ? parseFloat((totalUSD / totalTokens).toFixed(4)) : 0
+
   return {
     totalUSD:            parseFloat(totalUSD.toFixed(2)),
     totalTokens,
     totalCount,
     avgSessionUSD:       totalCount > 0 ? parseFloat((totalUSD / totalCount).toFixed(2)) : 0,
+    avgTokensPerSession,
+    avgPayoutPerToken,
     uniqueClients:       totalClients,
     repeatClients,
     repeatClientPct,
     sessionTypeBreakdown,
+    platformBreakdown,
     topClients,
     peakHours,
     bestHour,
