@@ -120,6 +120,7 @@ export default function BestCamModelTools() {
           ['What Is a Cam Model Analytics Tool?', '#what-is'],
           ['Why Most Cam Models Track the Wrong Metrics', '#wrong-metrics'],
           ['Best Cam Model Analytics Tools (Reviews)', '#tools'],
+          ['Cam Bio & Tip Menu Generator', '#profile-studio'],
           ['Cam Model Forums & Communities', '#forums'],
           ['Toy & Tip-Activation Tools', '#toy-tools'],
           ['Best Cam Streaming Software', '#streaming-software'],
@@ -331,6 +332,32 @@ export default function BestCamModelTools() {
         </div>
       </div>
 
+      {/* CREATOR PROFILE STUDIO — FEATURED SECTION */}
+      <h2 id="profile-studio" style={s.h2}>Also Free From CamCash: Cam Bio & Tip Menu Generator</h2>
+      <p style={s.p}>Analytics tell you what already happened. Creator Profile Studio helps with the two things that shape whether a viewer tips in the first place — your bio and your tip menu.</p>
+      <div style={s.card}>
+        <div style={s.cardH}>
+          <div>
+            <span style={s.cardN}>Creator Profile Studio</span>
+            <div style={{ fontSize: '12px', color: '#475569', marginTop: '3px' }}>Best for: writing a platform-ready bio and pricing a tip menu without starting from a blank page</div>
+          </div>
+          <span style={s.badge}>Free</span>
+        </div>
+        <div style={s.cardB}>
+          <p style={s.p}>Two connected tools: a bio generator and a tip menu generator, sharing the same persona, platform, and boundary selections so what you enter in one carries into the other.</p>
+          <ul style={s.ul}>
+            <li style={s.li}><strong style={{ color: '#e2e8f0' }}>Platform-specific bio generator.</strong> Distinct formats for Chaturbate, MyFreeCams, BongaCams, Stripchat, CamSoda, OnlyFans, Fansly, X, and Instagram — each with its own structure and length, not one generic template stretched across every platform.</li>
+            <li style={s.li}><strong style={{ color: '#e2e8f0' }}>Tip menu generator with real pricing logic.</strong> Prices come from a deterministic pricing engine based on your strategy, price range, and item count — the AI only writes item names and descriptions, never the prices themselves.</li>
+            <li style={s.li}><strong style={{ color: '#e2e8f0' }}>Boundary-aware generation.</strong> Only the services and categories you approve can appear in the output; excluded activities are filtered out before anything is shown to you.</li>
+            <li style={s.li}><strong style={{ color: '#e2e8f0' }}>14 tip menu types.</strong> Including non-nude, beginner-friendly, premium, and toy-focused menus, each with its own price distribution and category emphasis.</li>
+            <li style={s.li}><strong style={{ color: '#e2e8f0' }}>Editable results with earnings estimates.</strong> Every bio and every tip menu item is editable after generation, with estimated creator earnings shown per item based on your platform's payout rate.</li>
+          </ul>
+          <div style={{ marginTop: '14px' }}>
+            <a href="/tools/profile-studio" style={s.ctaBtn}>Try the Free Cam Bio and Tip Menu Generator →</a>
+          </div>
+        </div>
+      </div>
+
       {/* FORUMS & COMMUNITIES */}
       <h2 id="forums" style={s.h2}>Cam Model Forums & Communities</h2>
       <p style={s.p}>Analytics tools show you what your data says. Forums and communities show you what other models are actually dealing with right now — site payout changes, safety issues, scam warnings, and honest reviews you won't find anywhere official. These are the spaces worth bookmarking:</p>
@@ -490,6 +517,7 @@ export default function BestCamModelTools() {
           <a href="/guides/cam-model-room-title-generator" style={s.relLink}>→ Free room title generator</a>
           <a href="/blog/how-to-track-cam-tips-automatically" style={s.relLink}>→ How to Track Cam Tips Automatically — Automate your earnings tracking</a>
           <a href="/blog/cam-model-fan-crm" style={s.relLink}>→ Cam Model Fan CRM — Track and profile your top tippers</a>
+          <a href="/tools/profile-studio" style={s.relLink}>→ Free cam bio & tip menu generator</a>
         </div>
       </div>
     </ArticleLayout>

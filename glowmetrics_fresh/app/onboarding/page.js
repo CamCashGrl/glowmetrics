@@ -84,7 +84,11 @@ function parseBCPaidSessions(rawText){
       const d=tryParseDate(col)
       if(d&&!ts){ts=d;continue}
       if(col===sessionType)continue
-      const n=parseFloat(col.replace(/[$,]/g,''))
+      // Strip $, comma, AND whitespace (incl. NBSP/narrow-NBSP thousands
+      // separators like BongaCams' "1 507") before parsing — parseFloat
+      // otherwise stops at the first non-numeric character and silently
+      // truncates e.g. "1 507" tokens down to 1.
+      const n=parseFloat(col.replace(/[$,\s]/g,''))
       if(!isNaN(n)&&n>0){
         if(Number.isInteger(n)&&n<100000&&tokens===0)tokens=Math.round(n)
         else if(n<50000&&usd===0)usd=n
@@ -143,6 +147,12 @@ function parseRows(rawText,platformId){
         if(Number.isInteger(n)&&n>=1&&n<100000&&tokens===null)tokens=n
         else if(!Number.isInteger(n)&&n<5000&&usd===null)usd=n
         else if(Number.isInteger(n)&&n>=1&&n<100000&&tokens===null)tokens=n
+        // A whole-dollar payout (e.g. "9.00") parses to an integer and
+        // matched neither branch above once tokens was already found —
+        // silently dropping a real trusted payout in favor of a token-rate
+        // estimate. Once tokens is known and usd isn't, treat the next
+        // positive number as the real payout regardless of its integer-ness.
+        else if(tokens!==null&&usd===null)usd=n
       }else if(col.length>0&&isNaN(parseFloat(col))){
         if(username===null&&col.length<=50&&col.length>1)username=col
         else if(note===''&&col.length>0)note=col
