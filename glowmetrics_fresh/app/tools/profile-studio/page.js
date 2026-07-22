@@ -2,7 +2,7 @@ import ProfileStudioClient from './ProfileStudioClient'
 import { FAQ_SCHEMA } from './components/faqData'
 
 export const metadata = {
-  title: 'Free Cam Bio Generator & Tip Menu Generator | Creator Profile Studio',
+  title: 'Free Cam Bio Generator & Tip Menu Generator | CamCash',
   description: 'Free AI cam bio generator for Chaturbate, MyFreeCams, Stripchat, OnlyFans & more, plus a tip menu generator with smart pricing. No account required.',
   keywords: 'cam bio generator, chaturbate bio generator, onlyfans bio generator, myfreecams bio generator, stripchat bio generator, camsoda bio generator, fansly bio generator, tip menu generator, cam model tip menu ideas, cam model tip menu templates, ai cam bio generator, free cam model tools, cam model profile generator, webcam model bio generator, cam girl bio generator',
   alternates: { canonical: 'https://www.camcashgrl.com/tools/profile-studio' },

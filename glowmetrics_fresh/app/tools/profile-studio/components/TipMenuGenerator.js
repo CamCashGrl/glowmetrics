@@ -11,6 +11,7 @@ import {
   ROOM_GOAL_OPTIONS, COMFORT_LEVELS, TIP_MENU_CATEGORIES, PRICING_STRATEGIES, MENU_ITEM_COUNTS,
   MENU_STYLES, TIP_MENU_LOADING_MESSAGES,
 } from '../../../../lib/profileStudio/constants'
+import { track } from '../../../../lib/track'
 
 const STEPS = ['Platform', 'Style', 'Categories', 'Boundaries', 'Pricing']
 
@@ -115,6 +116,7 @@ export default function TipMenuGenerator({ isLoggedIn, sharedProfile, onSharedPr
     setError('')
     setLoading(true)
     setMenus(null)
+    track('generate_clicked', { type: 'tipmenu', styles: selectedStyles })
     onSharedProfileChange?.({
       platforms: sharedProfile?.platforms?.length ? sharedProfile.platforms : [platform],
       personaTags: persona,
@@ -140,12 +142,15 @@ export default function TipMenuGenerator({ isLoggedIn, sharedProfile, onSharedPr
       const data = await res.json()
       if (!res.ok) {
         setError(data.error || 'Something went wrong. Please try again.')
+        track('generation_failed', { type: 'tipmenu' })
         return
       }
       setMenus(data.menus)
       setActiveStyle(data.menus[0]?.style || 'balanced')
+      track('generation_succeeded', { type: 'tipmenu', styles: selectedStyles })
     } catch {
       setError('Network error. Please check your connection and try again.')
+      track('generation_failed', { type: 'tipmenu' })
     } finally {
       setLoading(false)
     }

@@ -1,13 +1,15 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { PageShell, T, GRADIENT, Badge, SecondaryButton } from './components/theme'
+import { PageShell, T, GRADIENT, Accordion } from './components/theme'
 import BioGenerator from './components/BioGenerator'
 import TipMenuGenerator from './components/TipMenuGenerator'
 import DraftsPanel from './components/DraftsPanel'
 import Button from '../../../components/ui/Button'
+import { track } from '../../../lib/track'
 import {
   Hero, WhatYouGet, SupportedFormats, ExampleResults, HowItWorks, PlatformFormats,
-  ComparisonSection, PrivacySection, CreatorStylePresets, WrittenGuides, FAQSection, FinalCTA,
+  ComparisonSection, PrivacySection, CreatorStylePresets, WrittenGuides, FAQSection,
+  MoreFreeTools, FinalCTA,
 } from './components/MarketingSections'
 
 const TABS = [
@@ -16,6 +18,11 @@ const TABS = [
   { id: 'drafts', label: 'My Drafts', icon: '📁', desc: 'Open, rename, duplicate, continue editing, or delete saved bios and tip menus.' },
 ]
 
+// Page order per the redesign brief: compact hero -> generator -> results
+// (results live inside the generator components) -> supporting content as
+// collapsed accordions -> compact FAQ -> small final CTA. Every accordion's
+// content is the same, unmodified MarketingSections component as before —
+// only where it sits on the page and whether it starts open/closed changed.
 export default function ProfileStudioClient() {
   const [tab, setTab] = useState('bio')
   const [authState, setAuthState] = useState('loading') // loading | out | in
@@ -27,8 +34,10 @@ export default function ProfileStudioClient() {
   // to remount and re-read their initial state from sharedProfile — neither
   // wizard re-reads sharedProfile after its own first render otherwise.
   const [presetVersion, setPresetVersion] = useState(0)
+  const [generatorStarted, setGeneratorStarted] = useState(false)
 
   useEffect(() => {
+    track('page_viewed', { page: 'profile_studio' })
     let cancelled = false
     fetch('/api/profile-studio/profile')
       .then(async res => {
@@ -56,11 +65,24 @@ export default function ProfileStudioClient() {
 
   const isLoggedIn = authState === 'in'
 
+  const markGeneratorStarted = () => {
+    if (!generatorStarted) {
+      track('generator_started')
+      setGeneratorStarted(true)
+    }
+  }
+
   const goToTool = (which) => {
     setTab(which)
+    markGeneratorStarted()
     requestAnimationFrame(() => {
       document.getElementById('generator')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     })
+  }
+
+  const handleTabClick = (id) => {
+    setTab(id)
+    markGeneratorStarted()
   }
 
   // Presets only suggest persona/tone/audience/compatible categories — they
@@ -75,6 +97,7 @@ export default function ProfileStudioClient() {
       tipMenuCategories: preset.categories,
     }))
     setPresetVersion(v => v + 1)
+    track('preset_selected', { preset: preset.id })
     goToTool('bio')
   }
 
@@ -89,8 +112,7 @@ export default function ProfileStudioClient() {
           <span style={{ background: GRADIENT, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>CamCash</span>
         </a>
         <div style={{ display: 'flex', gap: 18, alignItems: 'center' }}>
-          <a href="/tools" style={{ fontSize: 13, color: T.muted, textDecoration: 'none' }}>All Tools</a>
-          <a href="/tools/cam-model-name-generator" style={{ fontSize: 13, color: T.muted, textDecoration: 'none' }}>Name Generator</a>
+          <a href="/tools" style={{ fontSize: 13, color: T.muted, textDecoration: 'none' }}>Free tools</a>
           <a href="/blog" style={{ fontSize: 13, color: T.muted, textDecoration: 'none' }}>Blog</a>
           <Button as="a" href={isLoggedIn ? '/dashboard' : '/login'} style={{ padding: '7px 18px', fontSize: 13 }}>
             {isLoggedIn ? 'Dashboard' : 'Sign in'}
@@ -98,41 +120,23 @@ export default function ProfileStudioClient() {
         </div>
       </nav>
 
-      <div style={{ maxWidth: 1180, margin: '0 auto', padding: '48px 20px 0' }}>
-        <nav aria-label="breadcrumb" style={{ marginBottom: 24, fontSize: 12 }}>
+      <div style={{ maxWidth: 1180, margin: '0 auto', padding: '18px 20px 0' }}>
+        <nav aria-label="breadcrumb" style={{ marginBottom: 14, fontSize: 11.5 }}>
           <a href="/landing" style={{ color: T.cyan, textDecoration: 'none' }}>Home</a>
-          <span style={{ margin: '0 8px', color: T.faint }}>›</span>
+          <span style={{ margin: '0 6px', color: T.faint }}>›</span>
           <a href="/tools" style={{ color: T.cyan, textDecoration: 'none' }}>Tools</a>
-          <span style={{ margin: '0 8px', color: T.faint }}>›</span>
+          <span style={{ margin: '0 6px', color: T.faint }}>›</span>
           <span style={{ color: T.faint }}>Creator Profile Studio</span>
         </nav>
-
         <Hero onGoTo={goToTool} />
-        <WhatYouGet />
-        <SupportedFormats />
-        <ExampleResults />
-        <HowItWorks />
-        <PlatformFormats />
-        <ComparisonSection />
-        <PrivacySection />
-        <CreatorStylePresets onSelectPreset={applyPreset} />
       </div>
 
-      <div id="generator" style={{ maxWidth: 1180, margin: '0 auto', padding: '20px 20px 0', scrollMarginTop: 76 }}>
-        <div style={{ textAlign: 'center', marginBottom: 36 }}>
-          <h2 style={{ fontSize: 'clamp(24px,3.6vw,36px)', fontWeight: 900, color: T.white, lineHeight: 1.1, marginBottom: 12, letterSpacing: '-0.02em' }}>
-            Creator Profile <span style={{ background: GRADIENT, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Studio</span>
-          </h2>
-          <p style={{ fontSize: 15, color: T.muted, maxWidth: 560, margin: '0 auto', lineHeight: 1.7 }}>
-            What you enter in one tool carries into the other — pick a tab below to get started.
-          </p>
-        </div>
-
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginBottom: 14, flexWrap: 'wrap' }}>
+      <div id="generator" style={{ maxWidth: 1180, margin: '0 auto', padding: '4px 20px 0', scrollMarginTop: 76 }}>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginBottom: 10, flexWrap: 'wrap' }}>
           {TABS.map(t => (
             <button
               key={t.id}
-              onClick={() => setTab(t.id)}
+              onClick={() => handleTabClick(t.id)}
               className="ps-btn"
               style={{
                 padding: '11px 22px', borderRadius: 14, cursor: 'pointer', fontWeight: 800, fontSize: 14,
@@ -147,13 +151,13 @@ export default function ProfileStudioClient() {
           ))}
         </div>
 
-        <p style={{ textAlign: 'center', fontSize: 12.5, color: T.faint, maxWidth: 480, margin: '0 auto 30px', lineHeight: 1.6 }}>
+        <p style={{ textAlign: 'center', fontSize: 12.5, color: T.faint, maxWidth: 480, margin: '0 auto 22px', lineHeight: 1.6 }}>
           {TABS.find(t => t.id === tab)?.desc}
         </p>
 
         {isLoggedIn && (
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 14 }}>
-            <SecondaryButton onClick={handleSaveProfile} title="Save your persona, platforms, boundaries, and pricing so both tools stay prefilled next time">💾 Save profile for next time</SecondaryButton>
+            <a href="#" onClick={e => { e.preventDefault(); handleSaveProfile() }} style={{ fontSize: 12.5, color: T.cyan, textDecoration: 'none' }} title="Save your persona, platforms, boundaries, and pricing so both tools stay prefilled next time">💾 Save profile for next time</a>
           </div>
         )}
 
@@ -166,9 +170,41 @@ export default function ProfileStudioClient() {
         {tab === 'drafts' && <DraftsPanel isLoggedIn={isLoggedIn} />}
       </div>
 
-      <div style={{ maxWidth: 1180, margin: '0 auto', padding: '56px 20px 100px' }}>
-        <WrittenGuides />
-        <FAQSection />
+      <div style={{ maxWidth: 760, margin: '48px auto 0', padding: '0 20px' }}>
+        <Accordion title="See example results" icon="✨" defaultOpen>
+          <ExampleResults />
+        </Accordion>
+        <Accordion title="Start with a creator style" icon="🎨" subtitle="Quick-start presets — you still confirm services and boundaries yourself">
+          <CreatorStylePresets onSelectPreset={applyPreset} />
+        </Accordion>
+        <Accordion title="What you'll get" icon="🎯">
+          <WhatYouGet />
+        </Accordion>
+        <Accordion title="How it works" icon="ℹ️">
+          <HowItWorks />
+        </Accordion>
+        <Accordion title="Supported platforms" icon="💻">
+          <PlatformFormats />
+        </Accordion>
+        <Accordion title="Supported formats & menu types" icon="📋">
+          <SupportedFormats />
+        </Accordion>
+        <Accordion title="Privacy & boundaries" icon="🛡️">
+          <PrivacySection />
+        </Accordion>
+        <Accordion title="Why this is different from generic AI" icon="⭐">
+          <ComparisonSection />
+        </Accordion>
+        <Accordion title="Guides: bios, pricing, and tip menus" icon="📖">
+          <WrittenGuides />
+        </Accordion>
+        <Accordion title="Common questions" icon="❓">
+          <FAQSection />
+        </Accordion>
+      </div>
+
+      <div style={{ maxWidth: 1180, margin: '32px auto 0', padding: '0 20px 100px' }}>
+        <MoreFreeTools />
         <FinalCTA onGoTo={goToTool} />
       </div>
     </PageShell>

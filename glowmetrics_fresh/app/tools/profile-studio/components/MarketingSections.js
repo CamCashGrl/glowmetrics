@@ -15,61 +15,34 @@ function SectionHeading({ eyebrow, title, sub }) {
 }
 
 // ── Hero ─────────────────────────────────────────────────────────────────
+// Compact by design: the full generator sits directly below this, so the
+// hero's only job is "explain in one breath, then get out of the way."
 export function Hero({ onGoTo }) {
   return (
-    <div className="ps-fade" style={{ display: 'grid', gridTemplateColumns: '1.05fr 0.95fr', gap: 40, alignItems: 'center', marginBottom: 56 }} data-hero-grid>
+    <div className="ps-fade" style={{ display: 'grid', gridTemplateColumns: '1.1fr 0.9fr', gap: 32, alignItems: 'center', marginBottom: 28 }} data-hero-grid>
       <div>
-        <div style={{ display: 'flex', gap: 8, marginBottom: 18, flexWrap: 'wrap' }}>
-          <Badge color={T.cyan}>Cam Bio Generator</Badge>
-          <Badge color={T.pink}>Tip Menu Generator</Badge>
-          <Badge color={T.green}>100% Free</Badge>
-        </div>
-        <h1 style={{ fontSize: 'clamp(26px,3.8vw,38px)', fontWeight: 900, color: T.white, lineHeight: 1.15, marginBottom: 14, letterSpacing: '-0.03em' }}>
-          Free <span style={{ background: GRADIENT, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Cam Bio Generator</span> &amp; <span style={{ background: GRADIENT, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Tip Menu Generator</span>
+        <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: T.cyan, marginBottom: 10 }}>Creator Profile Studio</div>
+        <h1 style={{ fontSize: 'clamp(24px,3.4vw,34px)', fontWeight: 900, color: T.white, lineHeight: 1.15, marginBottom: 10, letterSpacing: '-0.03em' }}>
+          <span style={{ background: GRADIENT, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Cam Bio Generator</span> and Tip Menu Builder
         </h1>
-        <p style={{ fontSize: 17, color: T.soft, fontWeight: 600, lineHeight: 1.5, marginBottom: 14 }}>
-          Build a bio that sounds like you—and a tip menu designed for your show.
+        <p style={{ fontSize: 15.5, color: T.muted, lineHeight: 1.6, marginBottom: 16, maxWidth: 480 }}>
+          Create a magnetic, platform-ready bio and a balanced tip menu — free, in seconds, no account required.
         </p>
-        <p style={{ fontSize: 16, color: T.muted, lineHeight: 1.7, marginBottom: 24, maxWidth: 480 }}>
-          Generate a personalized, platform-ready cam bio for Chaturbate, MyFreeCams, Stripchat, CamSoda, OnlyFans, Fansly, X, or Instagram, plus a balanced tip menu, based on your persona, services, boundaries, audience, and pricing goals.
-        </p>
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 18 }}>
-          <PrimaryButton onClick={() => onGoTo('bio')}>Create My Bio</PrimaryButton>
-          <SecondaryButton onClick={() => onGoTo('tipmenu')}>Build My Tip Menu</SecondaryButton>
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
+          <PrimaryButton onClick={() => onGoTo('bio')}>Start Building ↓</PrimaryButton>
         </div>
-        <p style={{ fontSize: 13, color: T.faint, marginBottom: 14 }}>Free to generate. Create an account only when you want to save your work.</p>
-        <div style={{ fontSize: 12.5, color: T.muted, display: 'flex', flexWrap: 'wrap', gap: '6px 14px' }}>
-          {['Personalized results', 'Boundaries respected', 'Editable output', 'Platform-ready formats'].map((t, i) => (
-            <span key={t} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              {i > 0 && <span style={{ color: T.faint }}>•</span>} <span style={{ color: T.cyan }}>✓</span> {t}
-            </span>
-          ))}
-        </div>
+        <p style={{ fontSize: 12.5, color: T.faint }}>100% free · No credit card · No account required to try it</p>
       </div>
 
-      <Card highlight style={{ padding: 22 }}>
-        <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
-          <Badge color={T.cyan}>Chaturbate format</Badge>
-          <Badge color={T.green}>Boundaries checked</Badge>
-        </div>
-        <p style={{ fontSize: 13.5, lineHeight: 1.6, color: T.soft, marginBottom: 12, borderLeft: `2px solid ${T.cyan}`, paddingLeft: 12 }}>
-          "Bratty, playful, and always up for a game. I stream weeknights and love a good tip-goal challenge — favorite my room so you don't miss it. Tip, tease, and let's make it a good one."
+      <Card highlight style={{ padding: 18 }}>
+        <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: T.faint, marginBottom: 10 }}>Example result</div>
+        <p style={{ fontSize: 13, lineHeight: 1.55, color: T.soft, marginBottom: 10, borderLeft: `2px solid ${T.cyan}`, paddingLeft: 10 }}>
+          "Bratty, playful, and always up for a game. Favorite my room so you don't miss it — tip, tease, and let's make it a good one."
         </p>
-        <div style={{ fontSize: 11, color: T.faint, marginBottom: 18 }}>312 characters · Persona: Bratty princess, Playful</div>
-
-        <div style={{ borderTop: `1px solid ${T.borderSoft}`, paddingTop: 14 }}>
-          <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
-            <Badge color={T.pink}>Balanced menu</Badge>
-            <Badge color={T.gold}>Pricing balanced</Badge>
-          </div>
-          {[
-            ['Say Hello', 25, '$1.25'],
-            ['Outfit Change', 100, '$5.00'],
-            ['Private Show Interest', 500, '$25.00'],
-          ].map(([name, price, usd]) => (
-            <div key={name} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: T.soft, padding: '6px 0', borderBottom: `1px solid ${T.borderSoft}` }}>
-              <span>{name}</span>
-              <span style={{ color: T.cyan, fontWeight: 700 }}>{price} tok <span style={{ color: T.faint, fontWeight: 500 }}>· {usd}</span></span>
+        <div style={{ borderTop: `1px solid ${T.borderSoft}`, paddingTop: 10, display: 'flex', flexDirection: 'column', gap: 4 }}>
+          {[['Say Hello', '25 tok'], ['Outfit Change', '100 tok'], ['Private Show Interest', '500 tok']].map(([name, price]) => (
+            <div key={name} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: T.muted }}>
+              <span>{name}</span><span style={{ color: T.cyan, fontWeight: 700 }}>{price}</span>
             </div>
           ))}
         </div>
@@ -508,6 +481,42 @@ export function FAQSection() {
           </div>
         ))}
       </div>
+    </div>
+  )
+}
+
+// ── More free tools + Etsy promo ──────────────────────────────────────────
+// Same links/copy/code as the existing post-generation Etsy block inside
+// TipMenuGenerator.js (untouched) — this page-level version is visible
+// regardless of which tab a visitor used, per the redesign brief.
+export function MoreFreeTools() {
+  return (
+    <div style={{ marginBottom: 40 }}>
+      <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', justifyContent: 'center', marginBottom: 24, fontSize: 13 }}>
+        <a href="/tools" style={{ color: T.cyan, textDecoration: 'none' }}>→ All free CamCash tools</a>
+        <a href="/tools/cam-model-name-generator" style={{ color: T.cyan, textDecoration: 'none' }}>→ Cam model name generator</a>
+        <a href="/guides/cam-model-token-calculator" style={{ color: T.cyan, textDecoration: 'none' }}>→ Token calculator</a>
+        <a href="/guides/cam-model-room-title-generator" style={{ color: T.cyan, textDecoration: 'none' }}>→ Room title generator</a>
+        <a href="/guides/cam-model-income-tracker" style={{ color: T.cyan, textDecoration: 'none' }}>→ Cam model income tracker</a>
+        <a href="/blog/how-to-increase-cam-earnings" style={{ color: T.cyan, textDecoration: 'none' }}>→ How to increase cam earnings</a>
+        <a href="/blog/best-cam-model-tools" style={{ color: T.cyan, textDecoration: 'none' }}>→ Best cam model tools</a>
+      </div>
+
+      <Card highlight style={{ padding: 24, borderColor: 'rgba(255,43,174,0.25)' }}>
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center', marginBottom: 16 }}>
+          <img src="/blog-images/spin_the_wheel_cover.png" alt="Spin-the-Wheel Template Pack for cam models cover art by Pretty Profitz" style={{ width: 120, borderRadius: 10, display: 'block' }} />
+        </div>
+        <div style={{ fontSize: 16, fontWeight: 700, color: T.white, margin: '0 0 8px', textAlign: 'center' }}>Want a designed, printable tip menu?</div>
+        <p style={{ fontSize: 13.5, color: T.muted, margin: '0 0 14px', lineHeight: 1.6, textAlign: 'center' }}>
+          Pretty Profitz sells ready-made tip menu templates (320+ styles), a Roll-the-Dice game template, and the Spin-the-Wheel Template Pack — all editable, Etsy-instant-download.
+        </p>
+        <p style={{ fontSize: 13.5, color: T.muted, margin: '0 0 16px', lineHeight: 1.6, textAlign: 'center' }}>
+          Use code <strong style={{ color: T.white }}>PRETTY70</strong> at checkout for 70% off.
+        </p>
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+          <a href="https://prettyprofitz.etsy.com" target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', background: GRADIENT, color: '#050713', padding: '11px 22px', borderRadius: 10, fontWeight: 800, fontSize: 14, textDecoration: 'none' }}>Shop on Etsy →</a>
+        </div>
+      </Card>
     </div>
   )
 }
