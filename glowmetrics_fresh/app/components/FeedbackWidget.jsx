@@ -73,26 +73,34 @@ export default function FeedbackWidget() {
 
   return (
     <>
-      {/* Floating pill button */}
+      {/* Floating icon button — kept small and low z-index so it never sits on
+          top of card content or chart tooltips; the slide-out panel below is
+          the only part that intentionally goes to a high z-index. */}
       <button
         onClick={openPanel}
+        title="Send feedback"
+        aria-label="Send feedback"
         style={{
           position: 'fixed',
-          bottom: 24,
-          right: 24,
-          zIndex: 9999,
-          padding: '10px 18px',
-          borderRadius: 100,
-          background: 'rgba(15,20,32,0.95)',
+          bottom: 'max(18px, env(safe-area-inset-bottom))',
+          right: 'max(18px, env(safe-area-inset-right))',
+          zIndex: 30,
+          width: 42,
+          height: 42,
+          borderRadius: '50%',
+          background: 'rgba(15,20,32,0.92)',
           backdropFilter: 'blur(20px)',
           WebkitBackdropFilter: 'blur(20px)',
           border: '1px solid rgba(255,255,255,0.12)',
           color: '#94a3b8',
-          fontSize: 13,
-          fontWeight: 600,
+          fontSize: 16,
           cursor: 'pointer',
           transition: 'all 0.2s ease',
           fontFamily: 'inherit',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          boxShadow: '0 4px 16px rgba(0,0,0,0.35)',
         }}
         onMouseEnter={e => {
           e.currentTarget.style.borderColor = 'rgba(124,92,255,0.4)'
@@ -103,7 +111,7 @@ export default function FeedbackWidget() {
           e.currentTarget.style.color = '#94a3b8'
         }}
       >
-        💬 Feedback
+        💬
       </button>
 
       {/* Overlay + panel */}

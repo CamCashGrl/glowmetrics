@@ -2164,11 +2164,6 @@ const stopImportMessageRotation = () => {
   const lossAlerts = liveAnalytics?.lossAlerts || analytics?.lossAlerts || []
   const nextMoves = liveAnalytics?.nextMoves || analytics?.nextMoves || []
   const totalRevenue = analytics?.totalUSD || 0
-  // timedSessions kept for sparkline/MoM trend calculations only (not for avg $/hr)
-  const timedSessions = memoOn(derivedCacheRef.current, 'timedSessions', [sessions], () =>
-    sessions.filter(s => !s.durationUnknown && (s.durationMinutes || 0) >= 20))
-  const timedTotalUSD = timedSessions.reduce((sum, s) => sum + (s.totalUSD || 0), 0)
-  const timedTotalHours = timedSessions.reduce((sum, s) => sum + (s.durationHours || 0), 0)
   // Estimated $/Hour — imported CSVs only carry tip timestamps, never real stream
   // start/end times, so this is inferred from the gap between a session's first
   // and last recorded tip. analytics.estimatedHourlyRate is the single source of
@@ -2193,8 +2188,8 @@ const stopImportMessageRotation = () => {
     return h > 0 ? `${h}h ${rem}m` : `${rem}m`
   }
   const hourlyRateSubtext = hourlyRateUnlocked
-    ? `Based on ${hourlyRateSessionCount} inferred session${hourlyRateSessionCount === 1 ? '' : 's'} and ${formatDuration(hourlyRateTotalMinutes)} of observed tip activity.`
-    : 'Unlocks after 3 eligible sessions and 60 minutes of observed tip activity.'
+    ? `Based on ${hourlyRateSessionCount} session${hourlyRateSessionCount === 1 ? '' : 's'} and ${formatDuration(hourlyRateTotalMinutes)} tracked.`
+    : 'Unlocks after 3 eligible sessions and 60 minutes tracked.'
   const HOURLY_RATE_TOOLTIP = 'Estimated from the time between your first and last recorded tips in each session. Imported tip files do not include exact stream start and end times.'
   // Single source of truth — pre-computed in aggregateRows, same values used everywhere
   const analyticsbestDay  = analytics?.bestDay  || null
@@ -2869,6 +2864,14 @@ const stopImportMessageRotation = () => {
         button:active { transform: scale(0.96) !important; transition: transform 0.1s ease !important; }
         .dash-main { margin-left: 240px; width: calc(100% - 240px); overflow-x: hidden; box-sizing: border-box; }
         @media (max-width: 768px) { .dash-main { margin-left: 0 !important; width: 100% !important; } }
+        @media (max-width: 1024px) { .stat-grid-4 { grid-template-columns: repeat(2, 1fr) !important; } }
+        @media (max-width: 640px)  { .stat-grid-4 { grid-template-columns: 1fr !important; } }
+        /* position:sticky's "top" shifts the bar's painted position but — like
+           position:relative — doesn't reserve extra flow space, so the next
+           sibling (LIVE status row) needs a matching margin-bottom or it sits
+           underneath the visually-shifted bar. This clears the fixed mobile
+           hamburger button (36px + 14px) both at rest and once scrolled. */
+        @media (max-width: 768px) { .sticky-command-bar { top: 56px !important; margin-bottom: 68px !important; } }
 
         @keyframes shimmer-sweep {
           0%   { background-position: -200% center; }
@@ -2956,38 +2959,41 @@ const stopImportMessageRotation = () => {
           const bestPlat = brief?.displayPlat || (tips.length > 0 ? tips[0]?.platform : null)
           const safeRevenue = (!isNaN(totalRevenue) && isFinite(totalRevenue)) ? totalRevenue : 0
           return (
-            <div style={{ position: 'sticky', top: 0, zIndex: 20, marginBottom: 20, marginLeft: -32, marginRight: -32, width: 'calc(100% + 64px)', maxWidth: 'none', padding: '0 32px', background: 'rgba(5,7,15,0.86)', backdropFilter: 'blur(22px)', WebkitBackdropFilter: 'blur(22px)', borderBottom: '1px solid rgba(255,255,255,0.06)', boxShadow: '0 2px 20px rgba(0,0,0,0.4)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', height: 58, gap: 0, overflowX: 'auto' }}>
-                <div style={{ display:'flex', flexDirection:'column', justifyContent:'center', paddingRight:24, borderRight:'1px solid rgba(255,255,255,0.07)', flexShrink:0 }}>
-                  <div style={{ fontSize:10, color:'#475569', textTransform:'uppercase', letterSpacing:1.2, fontWeight:600, marginBottom:2 }}>Total Earned</div>
-                  <div style={{ fontSize:19, fontWeight:900, background:'linear-gradient(135deg,#60a5fa,#f472b6)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', whiteSpace:'nowrap' }}>${safeRevenue.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+            <div className="sticky-command-bar" style={{ position: 'sticky', top: 0, zIndex: 20, marginBottom: 12, marginLeft: -32, marginRight: -32, width: 'calc(100% + 64px)', maxWidth: 'none', padding: '0 32px', background: 'rgba(5,7,15,0.86)', backdropFilter: 'blur(22px)', WebkitBackdropFilter: 'blur(22px)', borderBottom: '1px solid rgba(255,255,255,0.05)', boxShadow: '0 2px 20px rgba(0,0,0,0.4)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', height: 48, gap: 8 }}>
+                {/* Metrics scroll independently so Go Live — outside this container — never gets clipped or scrolled out of view on narrower desktop widths */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 0, overflowX: 'auto', flex: '1 1 auto', minWidth: 0 }}>
+                <div style={{ display:'flex', flexDirection:'column', justifyContent:'center', paddingRight:20, borderRight:'1px solid rgba(255,255,255,0.06)', flexShrink:0 }}>
+                  <div style={{ fontSize:10, color:'#8a93ab', textTransform:'uppercase', letterSpacing:0.6, fontWeight:600, marginBottom:2 }}>Total Earned</div>
+                  <div style={{ fontSize:18, fontWeight:900, background:'linear-gradient(135deg,#60a5fa,#f472b6)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', whiteSpace:'nowrap' }}>${safeRevenue.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
                 </div>
-                <div style={{ display:'flex', flexDirection:'column', justifyContent:'center', padding:'0 24px', borderRight:'1px solid rgba(255,255,255,0.07)', flexShrink:0 }}>
-                  <div title={HOURLY_RATE_TOOLTIP} style={{ fontSize:10, color:'#475569', textTransform:'uppercase', letterSpacing:1.2, fontWeight:600, marginBottom:2, cursor:'help' }}>Estimated $/Hour</div>
+                <div style={{ display:'flex', flexDirection:'column', justifyContent:'center', padding:'0 20px', borderRight:'1px solid rgba(255,255,255,0.06)', flexShrink:0 }}>
+                  <div title={HOURLY_RATE_TOOLTIP} style={{ fontSize:10, color:'#8a93ab', textTransform:'uppercase', letterSpacing:0.6, fontWeight:600, marginBottom:2, cursor:'help' }}>Estimated $/Hour</div>
                   {hourlyRateUnlocked ? (
-                    <div title={hourlyRateSubtext} style={{ fontSize:19, fontWeight:900, color:'#22D3EE', whiteSpace:'nowrap', cursor:'help' }}>${safeAvg.toFixed(2)}</div>
+                    <div title={hourlyRateSubtext} style={{ fontSize:18, fontWeight:900, color:'#22D3EE', whiteSpace:'nowrap', cursor:'help' }}>${safeAvg.toFixed(2)}</div>
                   ) : (
-                    <div onClick={() => handleTabChange('upload')} title={hourlyRateSubtext} style={{ fontSize:13, fontWeight:700, color:'#64748b', whiteSpace:'nowrap', cursor:'pointer' }}>🔒 Locked</div>
+                    <div onClick={() => handleTabChange('upload')} title={hourlyRateSubtext} style={{ fontSize:13, fontWeight:700, color:'#7d8aa3', whiteSpace:'nowrap', cursor:'pointer' }}>🔒 Locked</div>
                   )}
                 </div>
-                <div style={{ display:'flex', flexDirection:'column', justifyContent:'center', padding:'0 24px', borderRight:'1px solid rgba(255,255,255,0.07)', flexShrink:0 }}>
-                  <div style={{ fontSize:10, color:'#475569', textTransform:'uppercase', letterSpacing:1.2, fontWeight:600, marginBottom:2 }}>Momentum</div>
+                <div style={{ display:'flex', flexDirection:'column', justifyContent:'center', padding:'0 20px', borderRight:'1px solid rgba(255,255,255,0.06)', flexShrink:0 }}>
+                  <div style={{ fontSize:10, color:'#8a93ab', textTransform:'uppercase', letterSpacing:0.6, fontWeight:600, marginBottom:2 }}>Momentum</div>
                   {momentumLocked ? (
-                    <div onClick={() => handleTabChange('upload')} title="No tips in the last 60 days yet — upload more data to see momentum" style={{ fontSize:13, fontWeight:700, color:'#64748b', whiteSpace:'nowrap', cursor:'pointer' }}>🔒 Locked</div>
+                    <div onClick={() => handleTabChange('upload')} title="No tips in the last 60 days yet — upload more data to see momentum" style={{ fontSize:13, fontWeight:700, color:'#7d8aa3', whiteSpace:'nowrap', cursor:'pointer' }}>🔒 Locked</div>
                   ) : (
                     <div style={{ fontSize:13, fontWeight:800, color:momentumColor, whiteSpace:'nowrap', animation: atPeak ? 'cmd-pulse 1.5s infinite' : 'none' }}>{momentum}</div>
                   )}
                 </div>
-                <div style={{ display:'flex', flexDirection:'column', justifyContent:'center', padding:'0 24px', borderRight:'1px solid rgba(255,255,255,0.07)', flexShrink:0 }}>
-                  <div style={{ fontSize:10, color:'#475569', textTransform:'uppercase', letterSpacing:1.2, fontWeight:600, marginBottom:2 }}>Best Platform</div>
+                <div style={{ display:'flex', flexDirection:'column', justifyContent:'center', padding:'0 20px', borderRight:'1px solid rgba(255,255,255,0.06)', flexShrink:0 }}>
+                  <div style={{ fontSize:10, color:'#8a93ab', textTransform:'uppercase', letterSpacing:0.6, fontWeight:600, marginBottom:2 }}>Best Platform</div>
                   <div style={{ fontSize:13, fontWeight:800, color:'#a78bfa', whiteSpace:'nowrap' }}>{bestPlat || '—'}</div>
                 </div>
-                <div style={{ display:'flex', flexDirection:'column', justifyContent:'center', padding:'0 24px', borderRight:'1px solid rgba(255,255,255,0.07)', flexShrink:0 }}>
-                  <div style={{ fontSize:10, color:'#475569', textTransform:'uppercase', letterSpacing:1.2, fontWeight:600, marginBottom:2 }}>Peak Window</div>
+                <div style={{ display:'flex', flexDirection:'column', justifyContent:'center', padding:'0 20px', flexShrink:0 }}>
+                  <div style={{ fontSize:10, color:'#8a93ab', textTransform:'uppercase', letterSpacing:0.6, fontWeight:600, marginBottom:2 }}>Peak Window</div>
                   <div style={{ fontSize:13, fontWeight:800, color: atPeak ? '#10B981' : '#fbbf24', whiteSpace:'nowrap' }}>{_eiPeakLabel ? `${_eiPeakLabel}${peakLabel ? ` · ${peakLabel}` : ''}` : '—'}</div>
                 </div>
-                <div style={{ marginLeft:'auto', paddingLeft:24, flexShrink:0 }}>
-                  <button onClick={() => { setActiveTab('live'); if (typeof window !== 'undefined') { localStorage.setItem('camcash_tab','live'); window.scrollTo({top:0,behavior:'instant'}); } }} style={{ padding:'9px 22px', borderRadius:12, background:'linear-gradient(135deg,#10B981,#22D3EE)', border:'none', color:'#fff', fontWeight:800, fontSize:13, cursor:'pointer', whiteSpace:'nowrap', boxShadow:'0 0 22px rgba(16,185,129,0.4)', letterSpacing:0.3 }}>
+                </div>
+                <div style={{ paddingLeft:12, borderLeft:'1px solid rgba(255,255,255,0.06)', flexShrink:0 }}>
+                  <button onClick={() => { setActiveTab('live'); if (typeof window !== 'undefined') { localStorage.setItem('camcash_tab','live'); window.scrollTo({top:0,behavior:'instant'}); } }} style={{ padding:'8px 20px', borderRadius:11, background:'linear-gradient(135deg,#10B981,#22D3EE)', border:'none', color:'#fff', fontWeight:800, fontSize:13, cursor:'pointer', whiteSpace:'nowrap', boxShadow:'0 0 14px rgba(16,185,129,0.3)', letterSpacing:0.3 }}>
                     ⚡ Go Live
                   </button>
                 </div>
@@ -2997,8 +3003,8 @@ const stopImportMessageRotation = () => {
         })()}
 
         {/* ── LIVE STATUS BAR ── */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 12px", borderRadius: 20, background: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.25)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "3px 10px", borderRadius: 20, background: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.25)" }}>
             <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#10B981", boxShadow: "0 0 6px #10B981", animation: "pulse-msg 2s infinite" }} />
             <span style={{ fontSize: 11, fontWeight: 700, color: "#10B981" }}>LIVE</span>
           </div>
@@ -3009,7 +3015,7 @@ const stopImportMessageRotation = () => {
             </div>
           )}
           {lastRefreshed && !isRefreshing && (
-            <span key={lastRefreshed.getTime()} className="recently-updated" style={{ fontSize: 11, color: "#475569", padding: "2px 6px", borderRadius: 4 }}>
+            <span key={lastRefreshed.getTime()} className="recently-updated" style={{ fontSize: 11, color: "#7d8aa3", padding: "2px 6px", borderRadius: 4 }}>
               Updated {lastRefreshed.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
             </span>
           )}
@@ -3048,116 +3054,84 @@ const stopImportMessageRotation = () => {
               const thisMonthRev = tips.filter(t => new Date(t.date_time || t.dateRaw) >= thisMonthStart).reduce((s, t) => s + (t.usd || 0), 0)
               const prevMonthRev = tips.filter(t => { const d = new Date(t.date_time || t.dateRaw); return d >= prevMonthStart && d < thisMonthStart }).reduce((s, t) => s + (t.usd || 0), 0)
               const growthPct = (prevMonthRev > 0 && thisMonthRev > 0) ? Math.round(((thisMonthRev - prevMonthRev) / prevMonthRev) * 100) : null
-              const isPositive = growthPct !== null && growthPct >= 0
               const safeRevenue = (!isNaN(totalRevenue) && isFinite(totalRevenue)) ? totalRevenue : 0
-              const safeAvgHr = (!isNaN(avgPerHour) && isFinite(avgPerHour)) ? avgPerHour : 0
+              const safeThisMonthRev = (!isNaN(thisMonthRev) && isFinite(thisMonthRev)) ? thisMonthRev : 0
               const topPct = safeRevenue > 0 ? Math.max(1, Math.min(25, Math.round(100 - (safeRevenue / 50)))) : null
               const sessionsLast30 = sessions.filter(s => (Date.now() - new Date(s.startTime)) / 86400000 <= 30).length
               const fansActiveLast30 = new Set(tips.filter(t => (Date.now() - new Date(t.date_time || t.dateRaw)) / 86400000 <= 30).map(t => t.username)).size
 
               // ── Per-card month-over-month trend ──
-              const thisMonthTimed = timedSessions.filter(s => new Date(s.startTime) >= thisMonthStart)
-              const prevMonthTimed = timedSessions.filter(s => { const d = new Date(s.startTime); return d >= prevMonthStart && d < thisMonthStart })
-              const tmAvgHr = thisMonthTimed.reduce((s,x) => s+(x.durationHours||0),0) > 0 ? thisMonthTimed.reduce((s,x) => s+(x.totalUSD||0),0) / thisMonthTimed.reduce((s,x) => s+(x.durationHours||0),0) : null
-              const pmAvgHr = prevMonthTimed.reduce((s,x) => s+(x.durationHours||0),0) > 0 ? prevMonthTimed.reduce((s,x) => s+(x.totalUSD||0),0) / prevMonthTimed.reduce((s,x) => s+(x.durationHours||0),0) : null
-              const avgHrGrowth = (tmAvgHr !== null && pmAvgHr !== null && pmAvgHr > 0) ? Math.round(((tmAvgHr - pmAvgHr) / pmAvgHr) * 100) : null
+              // Meaningful sessions only (analytics.meaningfulSessions), matching the
+              // valid-session rule used everywhere else — never the raw session list.
+              const meaningfulSessions = analytics?.meaningfulSessions || []
+              const thisMonthMeaningful = meaningfulSessions.filter(s => new Date(s.startTime) >= thisMonthStart)
+              const prevMonthMeaningful = meaningfulSessions.filter(s => { const d = new Date(s.startTime); return d >= prevMonthStart && d < thisMonthStart })
+              const sessGrowth = (prevMonthMeaningful.length > 0 && thisMonthMeaningful.length > 0)
+                ? Math.round(((thisMonthMeaningful.length - prevMonthMeaningful.length) / prevMonthMeaningful.length) * 100) : null
+
+              const avgSessionUSD = meaningfulSessions.length ? meaningfulSessions.reduce((s,x) => s+(x.totalUSD||0),0) / meaningfulSessions.length : 0
+              const tmAvgSession = thisMonthMeaningful.length ? thisMonthMeaningful.reduce((s,x) => s+(x.totalUSD||0),0) / thisMonthMeaningful.length : null
+              const pmAvgSession = prevMonthMeaningful.length ? prevMonthMeaningful.reduce((s,x) => s+(x.totalUSD||0),0) / prevMonthMeaningful.length : null
+              const avgSessionGrowth = (tmAvgSession !== null && pmAvgSession !== null && pmAvgSession > 0)
+                ? Math.round(((tmAvgSession - pmAvgSession) / pmAvgSession) * 100) : null
+
               const thisMonthFans = new Set(tips.filter(t => new Date(t.date_time || t.dateRaw) >= thisMonthStart).map(t => t.username)).size
               const prevMonthFans = new Set(tips.filter(t => { const d = new Date(t.date_time || t.dateRaw); return d >= prevMonthStart && d < thisMonthStart }).map(t => t.username)).size
               const fansGrowth = (prevMonthFans > 0 && thisMonthFans > 0) ? Math.round(((thisMonthFans - prevMonthFans) / prevMonthFans) * 100) : null
-              const thisMonthSess = sessions.filter(s => new Date(s.startTime) >= thisMonthStart).length
-              const prevMonthSess = sessions.filter(s => { const d = new Date(s.startTime); return d >= prevMonthStart && d < thisMonthStart }).length
-              const sessGrowth = (prevMonthSess > 0 && thisMonthSess > 0) ? Math.round(((thisMonthSess - prevMonthSess) / prevMonthSess) * 100) : null
-
-              // ── 6-month sparkline data ──
-              const last6Rev = [], last6Fans = [], last6Sess = []
-              for (let i = 5; i >= 0; i--) {
-                const ms = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1))
-                const me = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i + 1, 1))
-                const monthTips = tips.filter(t => { const d = new Date(t.date_time || t.dateRaw); return d >= ms && d < me })
-                last6Rev.push(monthTips.reduce((acc,t) => acc+(t.usd||0),0))
-                last6Fans.push(new Set(monthTips.map(t => t.username)).size)
-                last6Sess.push(sessions.filter(x => { const d = new Date(x.startTime); return d >= ms && d < me }).length)
-              }
-              const last6AvgHr = []
-              for (let i = 5; i >= 0; i--) {
-                const ms = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1))
-                const me = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i + 1, 1))
-                const mts = timedSessions.filter(s => { const d = new Date(s.startTime); return d >= ms && d < me })
-                const mh = mts.reduce((s,x) => s+(x.durationHours||0),0)
-                last6AvgHr.push(mh > 0 ? mts.reduce((s,x) => s+(x.totalUSD||0),0) / mh : 0)
-              }
-
-              // mini sparkline renderer (6 bars)
-              const MiniSpark = ({ data, accent }) => {
-                const max = Math.max(...data, 0.01)
-                const W = 7, H = 24, G = 3
-                return (
-                  <svg width={(W+G)*6-G} height={H} style={{ display:'block', marginTop:10 }}>
-                    {data.map((v, j) => {
-                      const bh = Math.max(2, Math.round((v / max) * H))
-                      return <rect key={j} x={j*(W+G)} y={H-bh} width={W} height={bh} rx={2} fill={j === 5 ? accent : 'rgba(255,255,255,0.10)'} />
-                    })}
-                  </svg>
-                )
-              }
 
               // trend badge renderer
-              const TrendBadge = ({ pct, color }) => {
+              const TrendBadge = ({ pct }) => {
                 if (pct === null || isNaN(pct)) return null
                 const up = pct >= 0
                 return <span style={{ fontSize:10, fontWeight:700, color: up ? '#10B981' : '#f87171', marginLeft:6 }}>{up ? '↑' : '↓'}{Math.abs(pct)}%</span>
               }
 
+              // Card row intentionally shows different metrics than the sticky command
+              // bar above (which already covers Total Earned / Estimated $/Hour) —
+              // these four add depth instead of repeating the same headline numbers.
               const cardDefs = [
-                { label:"Total Earned", accent:'#f472b6', glowClass:'card-glow-pink', sparkData:last6Rev, trend:growthPct,
-                  value: `$${safeRevenue.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}`,
+                { label:"Earnings This Month", accent:'#f472b6', glowClass:'card-glow-pink', trend:growthPct,
+                  value: `$${safeThisMonthRev.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}`,
                   sub: topPct ? `Top ${topPct}% of models on this platform` : 'Upload more data to rank',
-                  icon:'💰', badge: growthPct !== null ? (isPositive ? `↑ ${growthPct}% vs last month` : `↓ ${Math.abs(growthPct)}% vs last month`) : null,
-                  badgeColor: isPositive ? C.green : C.red, isHero: true },
-                { label:"Estimated $/Hour", tooltip: HOURLY_RATE_TOOLTIP, accent:'#22d3ee', glowClass:'card-glow-cyan', sparkData:last6AvgHr, trend: hourlyRateUnlocked ? avgHrGrowth : null,
-                  value: hourlyRateUnlocked ? `$${safeAvgHr.toFixed(2)}` : 'Locked',
-                  sub: hourlyRateSubtext,
-                  icon:'⏱️', badge:null },
-                { label:"Total Fans", accent:'#a78bfa', glowClass:'card-glow-violet', sparkData:last6Fans, trend:fansGrowth,
+                  icon:'💰', isHero:true },
+                { label:"Avg Per Session", accent:'#22d3ee', glowClass:'card-glow-cyan', trend:avgSessionGrowth,
+                  value: meaningfulSessions.length > 0 ? `$${avgSessionUSD.toFixed(2)}` : '—',
+                  sub: meaningfulSessions.length > 0 ? `Across ${meaningfulSessions.length.toLocaleString()} meaningful sessions` : 'Not enough data yet',
+                  icon:'🎯' },
+                { label:"Total Fans", accent:'#a78bfa', glowClass:'card-glow-violet', trend:fansGrowth,
                   value: whales.length > 0 ? whales.length.toLocaleString() : '—',
-                  sub: fansActiveLast30 > 0 ? `${fansActiveLast30} active in last 30 days` : 'No fan activity tracked yet',
-                  icon:'👥', badge:null },
-                { label:"Sessions", accent:'#fbbf24', glowClass:'card-glow-gold', sparkData:last6Sess, trend:sessGrowth,
-                  value: sessions.length > 0 ? sessions.length.toLocaleString() : '—',
-                  sub: (analytics?.meaningfulSessionCount > 0)
-                    ? `${analytics.meaningfulSessionCount} meaningful · ${analytics.lowSignalSessionCount} low-signal`
-                    : (sessionsLast30 > 0 ? `${sessionsLast30} in last 30 days${sessionsLast30 >= 3 ? ' 🔥' : ''}` : 'No sessions in last 30 days'),
-                  icon:'🎥',
-                  badge: sessionsLast30 >= 5 ? '🔥 On a streak!' : null, badgeColor: C.gold,
-                  info: 'Analytics use meaningful sessions only by default' }
+                  sub: fansActiveLast30 > 0 ? `${fansActiveLast30} active in last 30 days` : 'None active in the last 30 days',
+                  icon:'👥' },
+                { label:"Meaningful Sessions", accent:'#fbbf24', glowClass:'card-glow-gold', trend:sessGrowth,
+                  value: meaningfulSessions.length > 0 ? meaningfulSessions.length.toLocaleString() : (sessions.length > 0 ? '0' : '—'),
+                  sub: meaningfulSessions.length > 0
+                    ? `${sessions.length.toLocaleString()} tracked · ${(analytics?.lowSignalSessionCount || 0).toLocaleString()} low-signal`
+                    : (sessions.length > 0 ? `${sessions.length} detected, none meaningful yet` : (sessionsLast30 > 0 ? `${sessionsLast30} in last 30 days` : 'No sessions yet')),
+                  icon:'🎥' }
               ]
 
               // Earnings velocity per platform for velocity strip
               const velPlatforms = Object.entries(platformVelocity).filter(([,v]) => v !== null).sort((a,b) => (b[1]||0)-(a[1]||0))
               return (
                 <>
-                  <div className="stat-grid-4" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 20 }}>
+                  <div className="stat-grid-4" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 14 }}>
                     {cardDefs.map((s, i) => (
-                      <div key={i} className={`stat-card ${s.glowClass}`} style={{ ...glassCard, borderRadius: 18, padding: "16px 20px", position: "relative", overflow: "hidden", animation: `fadeUp 0.3s ease ${i * 0.06}s both`, cursor:'default' }}>
+                      <div key={i} className={`stat-card ${s.glowClass}`} style={{ ...glassCard, borderRadius: 16, padding: "13px 16px", position: "relative", overflow: "hidden", animation: `fadeUp 0.3s ease ${i * 0.06}s both`, cursor:'default', display:'flex', flexDirection:'column' }}>
                         {/* accent top bar */}
-                        <div style={{ position:'absolute', top:0, left:0, right:0, height:3, background:`linear-gradient(90deg,${s.accent}80,${s.accent}20)`, borderRadius:'18px 18px 0 0' }} />
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
-                          <span title={s.tooltip} style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600, cursor: s.tooltip ? 'help' : 'default' }}>{s.label}</span>
-                          <span style={{ fontSize: 22 }}>{s.icon}</span>
+                        <div style={{ position:'absolute', top:0, left:0, right:0, height:3, background:`linear-gradient(90deg,${s.accent}80,${s.accent}20)`, borderRadius:'16px 16px 0 0' }} />
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                          <span style={{ fontSize: 11, color: C.text, textTransform: "uppercase", letterSpacing: 0.6, fontWeight: 700 }}>{s.label}</span>
+                          <span style={{ fontSize: 18, opacity: 0.75 }}>{s.icon}</span>
                         </div>
-                        {s.isHero
-                          ? <div className="hero-revenue-shimmer" style={{ fontSize: 'clamp(20px, 3vw, 34px)', fontWeight: 900, marginBottom: 4, lineHeight: 1.05 }}>{s.value}</div>
-                          : <div style={{ fontSize: 'clamp(18px, 2.5vw, 26px)', fontWeight: 900, color: s.accent, marginBottom: 4, lineHeight: 1.1 }}>{s.value}<TrendBadge pct={s.trend} /></div>
-                        }
-                        {s.isHero && <div style={{ marginBottom:4 }}><TrendBadge pct={s.trend} /></div>}
-                        <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.4 }}>{s.sub}</div>
-                        {s.badge && <div style={{ marginTop: 8, display: "inline-block", padding: "2px 8px", borderRadius: 6, background: `${s.badgeColor}20`, border: `1px solid ${s.badgeColor}40`, fontSize: 10, fontWeight: 700, color: s.badgeColor }}>{s.badge}</div>}
-                        {s.info && <div style={{ marginTop: 6, fontSize: 9, color: C.muted, opacity: 0.7, lineHeight: 1.3 }}>ℹ️ {s.info}</div>}
+                        <div className={s.isHero ? 'hero-revenue-shimmer' : ''} style={{ fontSize: 'clamp(20px, 2.4vw, 26px)', fontWeight: 900, lineHeight: 1.1, marginBottom: 4, ...(s.isHero ? {} : { color: s.accent }) }}>
+                          {s.value}<TrendBadge pct={s.trend} />
+                        </div>
+                        <div style={{ fontSize: 11.5, color: C.text, lineHeight: 1.35 }}>{s.sub}</div>
                       </div>
                     ))}
                   </div>
                   {/* section divider */}
-                  <div style={{ height:1, background:'linear-gradient(90deg,transparent,rgba(255,255,255,0.06),transparent)', marginBottom:20 }} />
+                  <div style={{ height:1, background:'linear-gradient(90deg,transparent,rgba(255,255,255,0.06),transparent)', marginBottom:14 }} />
                 </>
               )
             })()}
