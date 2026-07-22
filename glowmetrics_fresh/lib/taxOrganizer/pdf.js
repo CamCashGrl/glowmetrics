@@ -57,6 +57,7 @@ function drawTable(doc, headers, rows) {
     y += 14
   })
   doc.y = y + 4
+  doc.x = doc.page.margins.left
 }
 
 // summary: the object returned by buildEarningsSummary().

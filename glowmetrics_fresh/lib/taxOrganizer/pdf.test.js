@@ -112,3 +112,48 @@ describe('buildEarningsSummaryPdf', () => {
     expect(text).toContain('No earnings recorded for this period')
   })
 })
+
+// Finds the BT/ET text object whose fully-reconstructed text exactly matches
+// `headingText`, and returns the x-coordinate pdfkit positioned it at (the
+// `e` term of the `1 0 0 1 e f Tm` text-matrix operator that precedes it).
+// This checks the PDF's own internal cursor state directly — not pixels —
+// so it stays reliable across unrelated visual tweaks (colors, font sizes)
+// while still catching a regression of the exact bug that was found here:
+// drawTable() leaving doc.x stuck at the last table column's x-position.
+function extractHeadingXPosition(buf, headingText) {
+  const raw = buf.toString('latin1')
+  const blocks = raw.match(/BT[\s\S]*?ET/g) || []
+  for (const block of blocks) {
+    const hexRuns = block.match(/<([0-9a-fA-F]+)>/g) || []
+    const text = hexRuns.map(h => Buffer.from(h.slice(1, -1), 'hex').toString('latin1')).join('')
+    if (text === headingText) {
+      const tm = block.match(/1 0 0 1 ([\d.]+) [\d.]+ Tm/)
+      return tm ? parseFloat(tm[1]) : null
+    }
+  }
+  return null
+}
+
+describe('buildEarningsSummaryPdf — drawTable() cursor reset regression', () => {
+  it('positions the "Earnings by Month" heading (which follows the platform table) at the left margin, not a stale table-column x-position', async () => {
+    const summary = buildEarningsSummary({
+      tipsRows: [tip({ platform: 'Chaturbate' }), tip({ id: 2, platform: 'BongaCams', username: 'other' })],
+      paidSessionRows: [],
+      requestedTimezone: 'UTC',
+    })
+    const buf = await buildEarningsSummaryPdf(summary, { rangeLabel: '2026', generatedAtISO: '2026-07-21T00:00:00Z', compress: false })
+    const x = extractHeadingXPosition(buf, 'Earnings by Month')
+    expect(x).toBe(50) // PDFDocument({ margin: 50 }) — the page's left margin
+  })
+
+  it('positions the "Token Conversion Methods Used" heading (which follows the monthly table) at the left margin too', async () => {
+    const summary = buildEarningsSummary({
+      tipsRows: [tip({ platform: 'Chaturbate' }), tip({ id: 2, platform: 'BongaCams', username: 'other' })],
+      paidSessionRows: [],
+      requestedTimezone: 'UTC',
+    })
+    const buf = await buildEarningsSummaryPdf(summary, { rangeLabel: '2026', generatedAtISO: '2026-07-21T00:00:00Z', compress: false })
+    const x = extractHeadingXPosition(buf, 'Token Conversion Methods Used')
+    expect(x).toBe(50)
+  })
+})
