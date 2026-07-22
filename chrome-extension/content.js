@@ -533,7 +533,13 @@
       `;
     }
 
-    const coachText = s.coaches?.[0]?.text || '👁 Watching for tips...';
+    // Read-only display of the same shared coachingPrompt broadcast from
+    // background.js — never generates its own trigger or its own response.
+    // Performed/Skip live only in the popup (this overlay is deliberately a
+    // status HUD, not a second control center, per the comment below), so
+    // there is exactly one place a response to a given prompt can come
+    // from, never two independently-generated ones for the same event.
+    const coachText = s.coachingPrompt?.message || s.coachingPrompt?.compact_message || '👁 Watching for tips...';
 
     // Deliberately compact — this is a status HUD, not a second control
     // center. The extension popup owns Start/Pause/Resume/Stop and the full

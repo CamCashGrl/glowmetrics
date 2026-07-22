@@ -14,13 +14,18 @@ const TOKEN_RATES = { chaturbate: 0.05, bongacams: 0.025, myfreecams: 0.05, stri
 // ─── State ────────────────────────────────────────────────────────────────────
 let session = null;
 let whales = [];
-let coachMsgs = [];
 let lastTipTs = null;
 let sessionTips = [];
 let sessionTokens = 0;
 let sessionUsd = 0;
 let topTipper = null;
 let plan = 'free'; // 'free' | 'pro' | 'unlimited' — controls whether tips save to permanent history
+
+// The single canonical coaching prompt, fetched from the shared
+// server-persisted engine (GET /api/live/coaching) — this extension never
+// computes its own coaching triggers anymore. null when nothing is
+// currently active. Mirrors app/live/page.js's coachingPrompt state.
+let coachingPrompt = null;
 
 // restorePromise resolves once the initial restore() call completes.
 // Tip sync always awaits this before trying to use session.
@@ -40,26 +45,14 @@ let broadcasterPageActive = false;
 let broadcasterTabId = null;
 let broadcasterPlatform = null;
 
-// Coaching cooldowns — prevents the same signal repeating within its window.
-const coachCooldowns = {};
-function canCoach(key, cooldownMs) {
-  const last = coachCooldowns[key];
-  if (!last || Date.now() - last > cooldownMs) {
-    coachCooldowns[key] = Date.now();
-    return true;
-  }
-  return false;
-}
-
 // ─── Persistence ─────────────────────────────────────────────────────────────
 async function save() {
-  await chrome.storage.local.set({ _bg_whales: whales, _bg_coachMsgs: coachMsgs });
+  await chrome.storage.local.set({ _bg_whales: whales });
 }
 
 async function restore() {
-  const data = await chrome.storage.local.get(['session', 'user', '_bg_whales', '_bg_coachMsgs']);
-  whales    = data._bg_whales    || [];
-  coachMsgs = data._bg_coachMsgs || [];
+  const data = await chrome.storage.local.get(['session', 'user', '_bg_whales']);
+  whales = data._bg_whales || [];
   if (data.session && data.user) {
     const token = typeof data.session === 'string' ? data.session : data.session?.access_token;
     if (token) session = { access_token: token, user: data.user };
@@ -179,6 +172,7 @@ async function restoreLiveSession() {
   const data = await liveSessionCall('/api/live/session', 'GET');
   liveSession = data?.session || null;
   broadcast({ action: 'state', state: getState() });
+  if (liveSession) await fetchCoachingPrompt();
 }
 
 async function startLiveSession(platform) {
@@ -336,7 +330,7 @@ async function loadWhales() {
 async function logout() {
   session = null;
   whales = [];
-  coachMsgs = [];
+  coachingPrompt = null;
   sessionTips = [];
   sessionTokens = 0;
   sessionUsd = 0;
@@ -350,48 +344,47 @@ async function logout() {
 }
 
 // ─── Coaching ─────────────────────────────────────────────────────────────────
-const COACH = {
-  dead_air: [
-    "💡 It's quiet — try a countdown goal to spark tips",
-    "💡 Ask viewers: 'Who wants to see __?' Drive interaction!",
-    "💡 Shoutout your last 3 tippers to re-engage the room",
-    "💡 Set a 5-min goal — urgency drives tips",
-    "💡 Try a quick poll: '50 tokens or 100?' — gets people talking",
-  ],
-  streak: [
-    "🔥 Room is hot! Set a bigger goal while momentum is high",
-    "🔥 Tip streak! Tease your next milestone to keep it going",
-    "🔥 Great energy — call out your top tipper by name!",
-  ],
-  whale: [
-    "🐋 Whale just entered — acknowledge them personally right now",
-    "🐋 Big tipper in the room! Make them feel like a VIP",
-    "🐋 Give your whale a personal shoutout — it keeps them coming back",
-  ],
-  quiet: [
-    "💬 Engage the lurkers — ask a fun question",
-    "💬 Try: 'Next tip gets a personal shoutout on screen!'",
-    "💬 Drop a limited-time offer in chat to wake the room up",
-  ],
-};
-
-function addCoach(type) {
-  const pool = COACH[type] || COACH.dead_air;
-  const text = pool[Math.floor(Math.random() * pool.length)];
-  coachMsgs.unshift({ text, type, ts: Date.now() });
-  if (coachMsgs.length > 8) coachMsgs.length = 8;
-  save();
+// No local trigger logic here anymore — every coaching prompt is evaluated
+// server-side (lib/coaching/triggers.js in the website repo) and fetched
+// through the same GET /api/live/coaching endpoint the website polls, so
+// this extension always shows the exact same canonical prompt, never one
+// it computed independently. reuses liveSessionCall(), the same
+// auth+refresh+error handling every other /api/live/* call here already
+// goes through.
+async function fetchCoachingPrompt() {
+  if (!liveSession) { coachingPrompt = null; return; }
+  const data = await liveSessionCall('/api/live/coaching', 'GET');
+  coachingPrompt = data?.prompt || null;
   broadcast({ action: 'state', state: getState() });
   broadcastOverlay();
 }
 
+// Shared by popup and the on-page overlay against the same coaching_events
+// row — whichever surface the user responds on updates the one canonical
+// record; the other surface converges on its next fetchCoachingPrompt().
+async function respondToCoachingPrompt(eventId, status) {
+  const data = await liveSessionCall('/api/live/coaching/respond', 'POST', { eventId, status });
+  if (data?.event?.action_status && data.event.action_status !== 'unmarked' && coachingPrompt?.id === eventId) {
+    coachingPrompt = null;
+  }
+  broadcast({ action: 'state', state: getState() });
+  broadcastOverlay();
+  return data;
+}
+
 // ─── Alarms ───────────────────────────────────────────────────────────────────
 function scheduleAlarms() {
-  chrome.alarms.create('dead_air',      { periodInMinutes: 5 });
+  // whale_refresh keeps loading the historical top-tippers list even though
+  // nothing currently triggers off it — kept for the deferred room-entry
+  // whale-notification restoration (see the 'entered' handler below), so
+  // that data is already warm whenever that phase gets built.
   chrome.alarms.create('whale_refresh', { periodInMinutes: 10 });
   // chrome.alarms has a 1-minute minimum period — coarser than the website's
-  // 20s heartbeat, but that's fine: the grace period for missed-heartbeat
-  // detection is designed around minutes, not seconds.
+  // 15s coaching poll, but that's fine for time-based triggers (dead air,
+  // stream fatigue), which are themselves measured in minutes. The
+  // coaching prompt fetch below piggybacks on this same alarm rather than
+  // its own — one fewer moving part, and it's already the natural "is
+  // there anything new" pulse for an unresolved session.
   chrome.alarms.create('live_heartbeat', { periodInMinutes: 1 });
 }
 
@@ -406,15 +399,19 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 });
 
 chrome.alarms.onAlarm.addListener(async (alarm) => {
-  if (alarm.name === 'dead_air' && session) {
-    const sinceLastTip = lastTipTs ? Date.now() - lastTipTs : Infinity;
-    if (sinceLastTip > 5 * 60 * 1000) {
-      const type = sessionTips.length > 0 ? 'quiet' : 'dead_air';
-      if (canCoach(`alarm_${type}`, 2 * 60 * 1000)) addCoach(type);
+  if (alarm.name === 'whale_refresh') { await loadWhales(); await loadPlan(); }
+  if (alarm.name === 'live_heartbeat' && session) {
+    if (liveSession) {
+      await sendExtensionHeartbeat();
+      await fetchCoachingPrompt();
+    } else {
+      // No session currently tracked here — check whether one was started
+      // on another surface (the website) since we last knew. Without this,
+      // an extension that booted up before a website-started session began
+      // would never learn about it until its own restart or next login.
+      await restoreLiveSession();
     }
   }
-  if (alarm.name === 'whale_refresh') { await loadWhales(); await loadPlan(); }
-  if (alarm.name === 'live_heartbeat' && session && liveSession) await sendExtensionHeartbeat();
 });
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -422,7 +419,7 @@ function getState() {
   return {
     authed: !!session, user: session?.user || null,
     tips: sessionTips.slice(0, 20), tokens: sessionTokens,
-    usd: sessionUsd, topTipper, coaches: coachMsgs,
+    usd: sessionUsd, topTipper, coachingPrompt,
     whales: whales.slice(0, 10), connected: true,
     plan, isPro: plan === 'pro' || plan === 'unlimited',
     liveSession, broadcasterPageActive,
@@ -567,31 +564,22 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
       chrome.storage.local.set({ [storageKey]: { ...tipRecord, synced: true, savedToHistory: !!result?.savedToHistory } });
     });
 
-    // Coaching with cooldowns — prevents spam
-    const recentCount = sessionTips.filter(t => lastTipTs - t.ts < 60000).length;
-    if (recentCount >= 3 && canCoach('streak', 3 * 60 * 1000)) addCoach('streak');
-    if (isWhale(username) && canCoach(`whale_tip_${username}`, 5 * 60 * 1000)) addCoach('whale');
-
     broadcast({ action: 'state', state: getState() });
     broadcastOverlay();
     return false;
   }
 
   if (msg.action === 'entered') {
-    const { username } = msg;
-    if (isWhale(username)) {
-      const w = getWhale(username);
-      if (canCoach(`whale_enter_${username}`, 5 * 60 * 1000)) addCoach('whale');
-      chrome.notifications.create(`whale_${username}_${Date.now()}`, {
-        type: 'basic',
-        iconUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
-        title: '🐋 Whale Alert!',
-        message: `${username} just entered (${w.tokens.toLocaleString()} tokens historically)`,
-        priority: 2,
-      });
-      broadcast({ action: 'whale_alert', username, tokens: w.tokens });
-      broadcastOverlay();
-    }
+    // FOLLOW-UP (deferred, not this phase): this used to independently fire
+    // a native "🐋 Whale Alert!" OS notification + a popup banner whenever
+    // a historically-known big spender entered the room — a genuinely
+    // different signal from whale_prox/whale_dep (which are both
+    // tip-based, current-session triggers from the shared coaching
+    // engine). Restoring a native notification for room-entry requires
+    // persisting 'entered' events server-side first (they're currently
+    // extension-local only) and adding that as a real 10th trigger —
+    // deliberately out of scope this phase. isWhale()/loadWhales() are
+    // left in place so that data is ready whenever this gets built.
     return false;
   }
 
@@ -632,6 +620,10 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
   if (msg.action === 'live_get_state') {
     reply({ liveSession, broadcasterPageActive });
     return false;
+  }
+  if (msg.action === 'coaching_respond') {
+    respondToCoachingPrompt(msg.eventId, msg.status).then(reply);
+    return true;
   }
 
   if (msg.type === 'AUTH_CHANGED') {

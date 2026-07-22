@@ -33,6 +33,9 @@ const statTop = document.getElementById('stat-top');
 
 const coachMsgEl = document.getElementById('coach-msg');
 const coachMetaEl = document.getElementById('coach-meta');
+const coachActionsEl = document.getElementById('coach-actions');
+const coachPerformedBtn = document.getElementById('coach-performed-btn');
+const coachSkipBtn = document.getElementById('coach-skip-btn');
 
 // On load
 function init() {
@@ -58,7 +61,7 @@ async function checkAuthState() {
       if (chrome.runtime.lastError || !state) return;
       updatePlanNotice(state.isPro);
       updateStats(state);
-      updateCoach(state.coaches);
+      updateCoach(state.coachingPrompt);
     });
   } else {
     showAuth();
@@ -221,33 +224,43 @@ function updateStats(state) {
   statTop.textContent = state.topTipper ? state.topTipper.username : '—';
 }
 
-function updateCoach(coaches) {
-  if (coaches && coaches.length > 0) {
-    coachMsgEl.textContent = coaches[0].text;
-    const mins = Math.max(0, Math.round((Date.now() - coaches[0].ts) / 60000));
+// prompt is the single canonical coaching_events row shared with the
+// website and the on-page overlay (see background.js's coachingPrompt) —
+// never a locally-generated message. null when nothing is currently active.
+let currentCoachingPromptId = null;
+function updateCoach(prompt) {
+  currentCoachingPromptId = prompt?.id || null;
+  if (prompt) {
+    coachMsgEl.textContent = prompt.message || prompt.compact_message || prompt.title;
+    const mins = Math.max(0, Math.round((Date.now() - new Date(prompt.shown_at).getTime()) / 60000));
     coachMetaEl.textContent = mins === 0 ? 'just now' : `${mins}m ago`;
+    coachActionsEl.style.display = 'flex';
   } else {
     coachMsgEl.textContent = 'Coaching tips will appear during your stream';
     coachMetaEl.textContent = '';
+    coachActionsEl.style.display = 'none';
   }
 }
+
+function respondToCoach(status) {
+  if (!currentCoachingPromptId) return;
+  const eventId = currentCoachingPromptId;
+  coachActionsEl.style.display = 'none'; // optimistic — background's next state broadcast is canonical
+  chrome.runtime.sendMessage({ action: 'coaching_respond', eventId, status }, () => {
+    if (chrome.runtime.lastError) return;
+  });
+}
+coachPerformedBtn.addEventListener('click', () => respondToCoach('performed'));
+coachSkipBtn.addEventListener('click', () => respondToCoach('skipped'));
 
 // Listen for coaching + state broadcasts from background
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg.action === 'state' && msg.state) {
-    updateCoach(msg.state.coaches);
+    updateCoach(msg.state.coachingPrompt);
     updatePlanNotice(msg.state.isPro);
     updateStats(msg.state);
     updateLiveSession(msg.state.liveSession);
     loadTips();
-  }
-  if (msg.action === 'whale_alert') {
-    const whaleAlert = document.getElementById('whale-alert');
-    if (whaleAlert) {
-      whaleAlert.textContent = `🐋 ${msg.username} just entered! (${msg.tokens.toLocaleString()} tokens historically)`;
-      whaleAlert.style.display = 'block';
-      setTimeout(() => { whaleAlert.style.display = 'none'; }, 12000);
-    }
   }
   if (msg.action === 'platform_limit_reached') {
     const limitAlert = document.getElementById('platform-limit-alert');
@@ -333,7 +346,24 @@ function callLiveAction(action, extra, btn) {
   if (_liveActionPending) return;
   _liveActionPending = true;
   if (btn) btn.disabled = true;
+  // If the background script's reply never arrives — the message port can
+  // close early on a dropped connection, a stale/reloading service worker,
+  // or a network failure — sendMessage's callback silently never fires.
+  // Without this timeout, _liveActionPending would stay true forever, and
+  // since liveButton() reads it at render time, every button created from
+  // then on would be silently disabled with no visible error at all. This
+  // guarantees the UI recovers on its own a few seconds later regardless.
+  let settled = false;
+  const failSafe = setTimeout(() => {
+    if (settled) return;
+    settled = true;
+    _liveActionPending = false;
+    renderLiveSession();
+  }, 5000);
   chrome.runtime.sendMessage({ action, ...extra }, (res) => {
+    if (settled) return;
+    settled = true;
+    clearTimeout(failSafe);
     _liveActionPending = false;
     updateLiveSession(res?.session ?? null);
   });

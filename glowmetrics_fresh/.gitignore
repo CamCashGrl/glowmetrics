@@ -14,6 +14,8 @@ node_modules/
 .env.development.local
 .env.test.local
 .env.production.local
+.env.local.backup
+.env.*.backup
 
 # Google service account key for scripts/request-indexing.mjs — never commit
 scripts/service-account.json
