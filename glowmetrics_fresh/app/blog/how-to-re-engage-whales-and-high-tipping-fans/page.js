@@ -77,6 +77,11 @@ const s = {
   relLink: { fontSize: '14px', color: '#6366f1', textDecoration: 'none' },
   iLink:   { color: '#a5b4fc', textDecoration: 'none' },
   faqItem: { borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '14px', marginBottom: '14px' },
+  etsyBox: { borderRadius: '16px', border: '1px solid rgba(236,72,153,0.25)', background: 'rgba(236,72,153,0.06)', padding: '24px', margin: '32px 0' },
+  etsyH: { fontSize: '18px', fontWeight: 700, color: '#f1f5f9', margin: '0 0 8px' },
+  etsyP: { fontSize: '14px', color: '#94a3b8', margin: '0 0 16px', lineHeight: 1.6 },
+  etsyBtn: { display: 'inline-block', background: 'linear-gradient(90deg, #ec4899, #f59e0b)', color: '#0f172a', padding: '10px 20px', borderRadius: '10px', fontWeight: 700, fontSize: '14px', textDecoration: 'none' },
+  etsyThumb: { width: '100%', maxWidth: '280px', display: 'block', margin: '0 auto 16px', borderRadius: '10px' },
 }
 
 const reasons = [
@@ -238,6 +243,23 @@ export default function ReEngageWhalesHighTippers() {
           <a href="/blog/cam-model-fan-crm" style={s.relLink}>→ Cam Model Fan CRM — track and manage your top spenders</a>
           <a href="/blog/cam-model-tipping-pattern-data-examples" style={s.relLink}>→ 7 tipping pattern examples: what your data is telling you</a>
         </div>
+      </div>
+
+      <div style={s.etsyBox}>
+        <img
+          src="/blog-images/vipclienttracker.png"
+          alt="VIP Client Tracker cam model workbook cover art by Pretty Profitz"
+          style={s.etsyThumb}
+        />
+        <div style={s.etsyH}>Prefer to track your VIPs by hand?</div>
+        <p style={s.etsyP}>
+          Pretty Profitz&apos;s VIP Client Tracker is a fillable PDF workbook for logging your top clients — spending
+          history, preferences, follow-up reminders, and re-engagement notes — no software required.
+        </p>
+        <p style={{ ...s.etsyP, marginBottom: '16px' }}>
+          Use code <strong style={{ color: '#f1f5f9' }}>PRETTY70</strong> at checkout for 70% off.
+        </p>
+        <a href="https://www.etsy.com/shop/prettyprofitz" style={s.etsyBtn} target="_blank" rel="noopener noreferrer">Shop the VIP Client Tracker on Etsy →</a>
       </div>
     </ArticleLayout>
   )

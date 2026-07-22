@@ -201,6 +201,23 @@ export default function Page() {
         <p>
           <strong>You do not have to remember every whale. You just need a system that does.</strong>
         </p>
+
+        <div style={{ borderRadius: '16px', border: '1px solid rgba(236,72,153,0.25)', background: 'rgba(236,72,153,0.06)', padding: '24px', margin: '32px 0' }}>
+          <img
+            src="/blog-images/vipclienttracker.png"
+            alt="VIP Client Tracker cam model workbook cover art by Pretty Profitz"
+            style={{ width: '100%', maxWidth: '280px', display: 'block', margin: '0 auto 16px', borderRadius: '10px' }}
+          />
+          <div style={{ fontSize: '18px', fontWeight: 700, color: '#f1f5f9', margin: '0 0 8px' }}>Prefer a paper trail instead of a dashboard?</div>
+          <p style={{ fontSize: '14px', color: '#94a3b8', margin: '0 0 16px', lineHeight: 1.6 }}>
+            Pretty Profitz&apos;s VIP Client Tracker is a fillable PDF workbook for logging your top clients — spending
+            history, preferences, follow-up reminders, and re-engagement notes — no software required.
+          </p>
+          <p style={{ fontSize: '14px', color: '#94a3b8', margin: '0 0 16px', lineHeight: 1.6 }}>
+            Use code <strong style={{ color: '#f1f5f9' }}>PRETTY70</strong> at checkout for 70% off.
+          </p>
+          <a href="https://www.etsy.com/shop/prettyprofitz" style={{ display: 'inline-block', background: 'linear-gradient(90deg, #ec4899, #f59e0b)', color: '#0f172a', padding: '10px 20px', borderRadius: '10px', fontWeight: 700, fontSize: '14px', textDecoration: 'none' }} target="_blank" rel="noopener noreferrer">Shop the VIP Client Tracker on Etsy →</a>
+        </div>
       </BlogLayout>
     </>
   );
