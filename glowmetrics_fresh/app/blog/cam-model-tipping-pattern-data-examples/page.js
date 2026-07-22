@@ -82,6 +82,11 @@ const s = {
   relT:    { fontSize: '11px', color: '#475569', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '10px' },
   relLinks: { display: 'flex', flexDirection: 'column', gap: '6px' },
   relLink: { fontSize: '14px', color: '#6366f1', textDecoration: 'none' },
+  etsyBox: { borderRadius: '16px', border: '1px solid rgba(236,72,153,0.25)', background: 'rgba(236,72,153,0.06)', padding: '24px', margin: '32px 0' },
+  etsyH: { fontSize: '18px', fontWeight: 700, color: '#f1f5f9', margin: '0 0 8px' },
+  etsyP: { fontSize: '14px', color: '#94a3b8', margin: '0 0 16px', lineHeight: 1.6 },
+  etsyBtn: { display: 'inline-block', background: 'linear-gradient(90deg, #ec4899, #f59e0b)', color: '#0f172a', padding: '10px 20px', borderRadius: '10px', fontWeight: 700, fontSize: '14px', textDecoration: 'none' },
+  etsyThumb: { width: '100%', maxWidth: '280px', display: 'block', margin: '0 auto 16px', borderRadius: '10px' },
 }
 
 export default function CamModelTippingPatternDataExamples() {
@@ -224,7 +229,25 @@ export default function CamModelTippingPatternDataExamples() {
           <a href="/blog/cam-model-self-employment-tax-prep" style={s.relLink}>→ Cam Model Self-Employment Tax Prep</a>
           <a href="/blog/why-cam-model-data-prevents-overspending" style={s.relLink}>→ Why Data Helps Cam Model Pricing</a>
           <a href="/blog/how-to-track-cam-tips-automatically" style={s.relLink}>→ How to Track Your Cam Model Daily Revenue</a>
+          <a href="/tools/profile-studio" style={s.relLink}>→ Free cam bio & tip menu generator</a>
         </div>
+      </div>
+
+      <div style={s.etsyBox}>
+        <img
+          src="/blog-images/vipclienttracker.png"
+          alt="VIP Client Tracker cam model workbook cover art by Pretty Profitz"
+          style={s.etsyThumb}
+        />
+        <div style={s.etsyH}>Want to log your whale cluster by hand?</div>
+        <p style={s.etsyP}>
+          Pretty Profitz&apos;s VIP Client Tracker is a fillable PDF workbook for logging your top clients — spending
+          history, preferences, follow-up reminders, and re-engagement notes — no software required.
+        </p>
+        <p style={{ ...s.etsyP, marginBottom: '16px' }}>
+          Use code <strong style={{ color: '#f1f5f9' }}>PRETTY70</strong> at checkout for 70% off.
+        </p>
+        <a href="https://www.etsy.com/shop/prettyprofitz" style={s.etsyBtn} target="_blank" rel="noopener noreferrer">Shop the VIP Client Tracker on Etsy →</a>
       </div>
     </ArticleLayout>
   )

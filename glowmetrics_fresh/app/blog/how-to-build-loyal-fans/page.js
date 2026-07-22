@@ -206,7 +206,8 @@ export default function BuildLoyalFans() {
           <a href="/blog/cam-model-earnings" style={s.relLink}>→ Cam model earnings guide</a>
           <a href="/guides/cam-model-top-tippers" style={s.relLink}>→ Top tipper tracking guide</a>
           <a href="/tools/cam-model-name-generator" style={s.relLink}>→ Free cam model name generator</a>
-          <a href="/blog/cam-model-fan-crm" style={s.relLink}>→ Cam Model Fan CRM — Make every fan feel remembered</a>
+          <a href="/blog/cam-model-fan-crm" style={s.relLink}>→ Whale Watch — Make every fan feel remembered</a>
+          <a href="/tools/profile-studio" style={s.relLink}>→ Free cam bio & tip menu generator</a>
         </div>
       </div>
     </ArticleLayout>

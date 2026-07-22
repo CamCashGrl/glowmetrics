@@ -452,7 +452,7 @@ export default function BestCamSitesForModels() {
           <a href="/guides/chaturbate-earnings-tracker" style={s.relLink}>→ Chaturbate earnings tracker</a>
           <a href="/guides/chaturbate-best-hours" style={s.relLink}>→ Best time to stream on Chaturbate</a>
           <a href="/guides/cam-model-top-tippers" style={s.relLink}>→ Cam model top tippers guide</a>
-          <a href="/blog/cam-model-fan-crm" style={s.relLink}>→ Cam Model Fan CRM — Protect your highest-value fans</a>
+          <a href="/blog/cam-model-fan-crm" style={s.relLink}>→ Whale Watch — Protect your highest-value fans</a>
         </div>
       </div>
     </ArticleLayout>

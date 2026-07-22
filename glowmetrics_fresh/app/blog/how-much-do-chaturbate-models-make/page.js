@@ -428,6 +428,7 @@ export default function ChaturbateEarningsPost() {
           <a href="/guides/chaturbate-token-tracker" style={{ fontSize: '14px', color: '#6366f1', textDecoration: 'none' }}>→ Chaturbate token tracker</a>
           <a href="/guides/chaturbate-best-hours" style={{ fontSize: '14px', color: '#6366f1', textDecoration: 'none' }}>→ Best hours to stream on Chaturbate</a>
           <a href="/guides/cam-model-income-tracker" style={{ fontSize: '14px', color: '#6366f1', textDecoration: 'none' }}>→ Cam model income tracker</a>
+          <a href="/tools/profile-studio" style={{ fontSize: '14px', color: '#6366f1', textDecoration: 'none' }}>→ Free cam bio & tip menu generator</a>
         </div>
       </div>
 
@@ -469,6 +470,10 @@ export default function ChaturbateEarningsPost() {
           <a href="/guides/chaturbate-earnings-tracker" style={s.toolCard}>
             <div style={s.toolN}>Earnings Tracker</div>
             <div style={s.toolD}>Real $/hr, top fans, session breakdowns</div>
+          </a>
+          <a href="/tools/profile-studio" style={s.toolCard}>
+            <div style={s.toolN}>Creator Profile Studio</div>
+            <div style={s.toolD}>Free AI bio and tip menu generator</div>
           </a>
         </div>
       </div>

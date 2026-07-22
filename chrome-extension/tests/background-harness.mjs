@@ -70,7 +70,8 @@ function makeContext({ initialStorage = {} } = {}) {
       lastError: null,
       onMessage: { addListener: (fn) => { state.onMessage = fn; } },
       sendMessage: (msg) => { state.broadcasts.push(msg); return Promise.resolve(); },
-      onInstalled: { addListener: () => {} },
+      onInstalled: { addListener: (fn) => { state.onInstalled = fn; } },
+      getManifest: () => ({ version: '3.0.0-test' }),
     },
     alarms: {
       create: (name, opts) => { state.alarms[name] = opts; },

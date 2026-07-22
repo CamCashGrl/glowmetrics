@@ -59,6 +59,7 @@ export async function GET(req) {
     liveTipsResult,
     subsResult,
     feedbackResult,
+    extensionEventsResult,
   ] = await Promise.all([
     client.auth.admin.listUsers({ perPage: 1000 }),
     client.from('profiles').select('id, created_at, plan'),
@@ -68,6 +69,9 @@ export async function GET(req) {
     client.from('live_tips').select('user_id, received_at, usd').order('received_at', { ascending: false }),
     client.from('subscriptions').select('user_id, status, plan_type, current_period_end'),
     client.from('feedback').select('message, page_url, created_at, user_id').order('created_at', { ascending: false }).limit(10),
+    client.from('analytics_events')
+      .select('user_id, event_name, created_at')
+      .in('event_name', ['extension_installed', 'extension_updated', 'extension_download_clicked', 'extension_active']),
   ])
 
   const allUsers  = authResult.data?.users || []
@@ -78,6 +82,7 @@ export async function GET(req) {
   const liveTips  = liveTipsResult.data || []
   const subs      = subsResult.data || []
   const feedback  = feedbackResult.data || []
+  const extEvents = extensionEventsResult.data || []
 
   const realUsers = allUsers.filter(u => !isTestAccount(u.email))
   const testUsers = allUsers.filter(u => isTestAccount(u.email))
@@ -198,6 +203,17 @@ export async function GET(req) {
     currentlyLive: liveActive12h.size,
   }
 
+  // Extension health (installs/downloads/usage — see chrome-extension/background.js
+  // and app/components/ExtensionDownloadButton.js for where these events fire)
+  const extension = {
+    installs:         extEvents.filter(e => e.event_name === 'extension_installed').length,
+    updates:          extEvents.filter(e => e.event_name === 'extension_updated').length,
+    downloadClicks:   extEvents.filter(e => e.event_name === 'extension_download_clicked').length,
+    activeUsers:      new Set(extEvents.filter(e => e.event_name === 'extension_active' && e.user_id).map(e => e.user_id)).size,
+    active24h:        new Set(extEvents.filter(e => e.event_name === 'extension_active' && e.user_id && e.created_at > h24).map(e => e.user_id)).size,
+    lastInstall:      extEvents.filter(e => e.event_name === 'extension_installed').sort((a, b) => b.created_at > a.created_at ? 1 : -1)[0]?.created_at || null,
+  }
+
   // Subscription breakdown
   const subBreakdown = { active: 0, trialing: 0, cancelled: 0, free: 0 }
   for (const s of subs) {
@@ -251,6 +267,7 @@ export async function GET(req) {
     users:        userRows,
     importHealth,
     liveMode,
+    extension,
     subscriptions: subBreakdown,
     feedback,
     signupsByDay,

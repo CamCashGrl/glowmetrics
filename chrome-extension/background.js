@@ -69,6 +69,48 @@ function sbHeaders(token) {
   };
 }
 
+// ─── Usage/install tracking ─────────────────────────────────────────────────
+// Writes straight to analytics_events, the same table app/api/track/route.js
+// (the website's tracker) writes to — one place for signup/import/extension
+// events. Before login this inserts with user_id: null (allowed by the
+// table's "user_id IS NULL" RLS policy); once signed in it's sent with the
+// caller's own access_token so auth.uid() = user_id and RLS accepts it.
+function logExtensionEvent(eventName, properties) {
+  const token = session ? session.access_token : null;
+  fetch(`${SUPABASE_URL}/rest/v1/analytics_events`, {
+    method: 'POST',
+    headers: sbHeaders(token),
+    body: JSON.stringify({
+      user_id: session ? session.user.id : null,
+      event_name: eventName,
+      properties: { ...properties, extension_version: chrome.runtime.getManifest().version },
+    }),
+  }).catch(() => {});
+}
+
+// Fires at most once per calendar day per install — proof the extension is
+// actually being opened/used by a signed-in account, not just sitting
+// installed. Boot and AUTH_CHANGED are the only two places a valid `session`
+// can newly become available, so those are the only call sites.
+async function pingExtensionActive() {
+  if (!session) return;
+  const today = new Date().toISOString().slice(0, 10);
+  const stored = await chrome.storage.local.get(['_last_active_ping']);
+  if (stored._last_active_ping === today) return;
+  await chrome.storage.local.set({ _last_active_ping: today });
+  logExtensionEvent('extension_active', {});
+}
+
+// Fires once per real install/update — chrome.runtime.onInstalled guarantees
+// this, unlike a page-load-based signal. Happens before any login, so this
+// is always the anonymous (user_id: null) path.
+chrome.runtime.onInstalled.addListener((details) => {
+  logExtensionEvent(details.reason === 'update' ? 'extension_updated' : 'extension_installed', {
+    reason: details.reason,
+    previousVersion: details.previousVersion || null,
+  });
+});
+
 // ─── Token refresh — called automatically when a 401 is returned ──────────────
 async function refreshSession() {
   try {
@@ -578,7 +620,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
 
   if (msg.type === 'AUTH_CHANGED') {
     restorePromise = restore().then(() => {
-      if (session) { loadWhales(); loadPlan(); restoreLiveSession(); scheduleAlarms(); }
+      if (session) { loadWhales(); loadPlan(); restoreLiveSession(); scheduleAlarms(); pingExtensionActive(); }
       else { plan = 'free'; liveSession = null; chrome.alarms.clearAll(); }
     });
     return false;
@@ -587,5 +629,5 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 restorePromise = restore().then(() => {
-  if (session) { loadWhales(); loadPlan(); restoreLiveSession(); scheduleAlarms(); }
+  if (session) { loadWhales(); loadPlan(); restoreLiveSession(); scheduleAlarms(); pingExtensionActive(); }
 });

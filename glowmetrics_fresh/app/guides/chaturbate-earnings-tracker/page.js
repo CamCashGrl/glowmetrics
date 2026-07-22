@@ -683,6 +683,7 @@ export default function ChaturbateEarningsTrackerPage() {
                 { href: "/guides/cam-model-income-tracker",          label: "Cam Model Income Tracker" },
                 { href: "/blog/how-much-do-chaturbate-models-make",  label: "How Much Do Chaturbate Models Make?" },
                 { href: "/blog/how-much-do-cam-models-make",         label: "How Much Do Cam Models Make?" },
+                { href: "/tools/profile-studio",                     label: "Free Cam Bio & Tip Menu Generator" },
               ].map(({ href, label }) => (
                 <a key={href} href={href} style={s.pill}>{label}</a>
               ))}

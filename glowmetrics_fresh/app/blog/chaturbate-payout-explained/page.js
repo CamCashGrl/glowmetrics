@@ -331,6 +331,7 @@ export default function ChaturbatePayoutExplained() {
           <a href="/guides/chaturbate-token-tracker" style={s.relLink}>→ Chaturbate token tracker</a>
           <a href="/guides/chaturbate-best-hours" style={s.relLink}>→ Best hours to stream on Chaturbate</a>
           <a href="/guides/cam-model-income-tracker" style={s.relLink}>→ Cam model income tracker</a>
+          <a href="/tools/profile-studio" style={s.relLink}>→ Free cam bio & tip menu generator</a>
         </div>
       </div>
 

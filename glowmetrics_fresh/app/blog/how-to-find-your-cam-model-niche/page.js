@@ -304,6 +304,7 @@ export default function HowToFindYourCamModelNiche() {
           <a href="/blog/cam-model-boundaries-toxic-chat" style={s.relLink}>→ How to Set Boundaries as a Cam Model</a>
           <a href="/blog/cam-model-mental-health-burnout-prevention" style={s.relLink}>→ Cam Model Burnout Prevention</a>
           <a href="/blog/cam-model-earnings" style={s.relLink}>→ How Much Do Cam Models Make?</a>
+          <a href="/tools/profile-studio" style={s.relLink}>→ Free cam bio & tip menu generator</a>
         </div>
       </div>
     </ArticleLayout>

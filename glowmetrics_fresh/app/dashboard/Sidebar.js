@@ -19,17 +19,23 @@ const NAV = [
     items: [{ id: "whales", icon: "👑", label: "Top Fans" }]
   },
   {
+    group: "SESSIONS",
+    items: [
+      { id: "sessions", icon: "🎥", label: "Free Chat Sessions" },
+      { id: "live",     icon: "🔴", label: "Live Mode Sessions" },
+      { id: "private",  icon: "💎", label: "Private Sessions" },
+    ]
+  },
+  {
     group: "ANALYTICS",
     items: [
       { id: "platforms", icon: "🎯", label: "Platforms" },
-      { id: "sessions",  icon: "🎥", label: "Sessions" },
       { id: "monthly",   icon: "📈", label: "Monthly" },
     ]
   },
   {
     group: "TOOLS",
     items: [
-      { id: "live",      icon: "🔴", label: "Live Mode" },
       { id: "titles",    icon: "🎬", label: "Room Titles" },
       { id: "calc",      icon: "🪙", label: "Token Calc"  },
       { id: "data",      icon: "📝", label: "Edit Data" },

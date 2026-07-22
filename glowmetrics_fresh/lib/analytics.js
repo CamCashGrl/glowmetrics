@@ -286,6 +286,13 @@ function parseCSVLine(line) {
   return result
 }
 
+// BongaCams paid-chat/spy-mode session types, matched against a row's
+// "Chat Type" column (normalized to tip_type by normalizeHeaderName above).
+// Duplicated from the identical BC_PAID_TYPES list in app/onboarding/page.js
+// on purpose — that list drives the paste-flow's own client-side detection
+// and is out of scope here; consolidating the two is a separate follow-up.
+const BC_PAID_CHAT_TYPES = ['Private Chat', 'Full-Private Chat', 'Group Chat', 'Spy Mode']
+
 function parseWithHeaders(lines, platform) {
   const rawHeaders = parseCSVLine(lines[0])
   const headers = rawHeaders.map(normalizeHeaderName)
@@ -300,6 +307,11 @@ function parseWithHeaders(lines, platform) {
 
     const action = (row.action || '').toLowerCase()
     const tipType = (row.tip_type || '').toLowerCase()
+    // Exact (case-insensitive) match against the four BongaCams paid-chat
+    // types — same match semantics as onboarding's detectBCPaidRow(), just
+    // applied to the already header-mapped tip_type field instead of
+    // scanning raw columns.
+    const bcPaidChatType = BC_PAID_CHAT_TYPES.find(t => t.toLowerCase() === tipType) || null
 
     if (action.includes('transfer') || action.includes('cash') ||
         action.includes('outbound tip') || action.includes('promoted room') ||
@@ -329,7 +341,12 @@ function parseWithHeaders(lines, platform) {
     }
     if (!username) continue
 
-    let tokens = parseInt(row.tokens || 0) || 0
+    // Strip $, comma, AND whitespace (incl. NBSP/narrow-NBSP thousands
+    // separators like BongaCams' "1 507") before parsing — parseInt
+    // otherwise stops at the first non-numeric character and silently
+    // truncates e.g. "1 507" tokens down to 1. Mirrors the cleanup already
+    // applied to usd just below.
+    let tokens = parseInt((row.tokens || '0').toString().replace(/[$,\s]/g, '')) || 0
     if (tokens < 0) continue
 
     const rawUsd = (row.usd || row.usd_amount || '0').toString().replace(/[$,\s]/g, '')
@@ -355,7 +372,11 @@ function parseWithHeaders(lines, platform) {
       tokens: tokens > 0 ? tokens : Math.round(usd / tokenRate(rowPlatform)),
       usd: usd > 0 ? parseFloat(usd.toFixed(2)) : parseFloat((tokens * tokenRate(rowPlatform)).toFixed(2)),
       tip_type: row.tip_type || 'Tip',
-      tip_note: row.note || row.tip_note || ''
+      tip_note: row.note || row.tip_note || '',
+      // Paid-chat/spy-mode rows must be routed to paid_sessions, not tips —
+      // stamped here so callers (e.g. /api/upload) can split the flat
+      // parseCSV() result without re-deriving the classification themselves.
+      ...(bcPaidChatType ? { is_paid_session: true, session_type: bcPaidChatType } : {}),
     })
   }
   return results
@@ -1109,6 +1130,29 @@ export function computePaidSessionAnalytics(sessions) {
     }))
     .sort((a, b) => b.usd - a.usd)
 
+  // ── PLATFORM BREAKDOWN ─────────────────────────────────────
+  // Same shape/derivation as sessionTypeBreakdown above, just keyed by
+  // platform instead of session_type -- only BongaCams populates
+  // paid_sessions today, but this doesn't assume that.
+  const platformMap = {}
+  sessions.forEach(s => {
+    const p = s.platform || 'Unknown'
+    if (!platformMap[p]) platformMap[p] = { usd: 0, count: 0, clients: new Set() }
+    platformMap[p].usd     += parseFloat(s.usd) || 0
+    platformMap[p].count   += 1
+    platformMap[p].clients.add((s.username || '').toLowerCase())
+  })
+  const platformBreakdown = Object.entries(platformMap)
+    .map(([platform, d]) => ({
+      platform,
+      usd:      parseFloat(d.usd.toFixed(2)),
+      count:    d.count,
+      clients:  d.clients.size,
+      pct:      totalUSD > 0 ? Math.round((d.usd / totalUSD) * 100) : 0,
+      avgUsd:   d.count > 0 ? parseFloat((d.usd / d.count).toFixed(2)) : 0,
+    }))
+    .sort((a, b) => b.usd - a.usd)
+
   // ── TOP PRIVATE CLIENTS ────────────────────────────────────
   const clientMap = {}
   sessions.forEach(s => {
@@ -1226,15 +1270,22 @@ export function computePaidSessionAnalytics(sessions) {
     to:   new Date(Math.max(...allDates)).toISOString(),
   } : null
 
+  // ── AVERAGES ────────────────────────────────────────────────
+  const avgTokensPerSession = totalCount > 0 ? Math.round(totalTokens / totalCount) : 0
+  const avgPayoutPerToken   = totalTokens > 0 ? parseFloat((totalUSD / totalTokens).toFixed(4)) : 0
+
   return {
     totalUSD:            parseFloat(totalUSD.toFixed(2)),
     totalTokens,
     totalCount,
     avgSessionUSD:       totalCount > 0 ? parseFloat((totalUSD / totalCount).toFixed(2)) : 0,
+    avgTokensPerSession,
+    avgPayoutPerToken,
     uniqueClients:       totalClients,
     repeatClients,
     repeatClientPct,
     sessionTypeBreakdown,
+    platformBreakdown,
     topClients,
     peakHours,
     bestHour,

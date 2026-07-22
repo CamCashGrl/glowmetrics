@@ -3,24 +3,24 @@ import BlogLayout from '@/components/BlogLayout';
 
 const SLUG = 'cam-model-fan-crm';
 const URL = `https://www.camcashgrl.com/blog/${SLUG}`;
-const TITLE = 'Cam Model Fan CRM — Track Your Top Tippers and Whales';
+const TITLE = 'Whale Watch: Profiles on All Your High Rollers';
 const DESC =
-  'Know who your biggest fans are, when they last tipped, and when they\'re overdue. A fan CRM built for cam models on multiple platforms.';
+  'CamCash builds a profile on every high roller in your room, all in one spot — with multiple freemium cam platforms integrated.';
 
 export const metadata = {
   title: TITLE,
   description: DESC,
   alternates: { canonical: URL },
   openGraph: {
-    title: 'Cam Model Fan CRM — Track Top Tippers',
+    title: 'Whale Watch — Profiles on Your High Rollers',
     description: DESC,
     url: URL,
     type: 'article',
-    images: [{ url: 'https://www.camcashgrl.com/og-image.png', width: 1200, height: 630, alt: 'CamCashGrl fan CRM and top tipper profiles' }],
+    images: [{ url: 'https://www.camcashgrl.com/og-image.png', width: 1200, height: 630, alt: 'CamCashGrl Whale Watch — high roller profiles across cam platforms' }],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Fan CRM for Cam Models',
+    title: 'Whale Watch for Cam Models',
     description: DESC,
     images: ['https://www.camcashgrl.com/og-image.png'],
   },
@@ -29,8 +29,8 @@ export const metadata = {
 export default function Page() {
   const faqs = [
     {
-      q: 'What is a fan CRM for cam models?',
-      a: 'It is a system that keeps a record of every tipper and builds a profile on the ones who matter, total spent, average tip, how long they have followed you, which platform they came from, and when they last tipped. Instead of relying on memory, you have a ranked, organized view of who your real supporters are.',
+      q: 'What is Whale Watch for cam models?',
+      a: 'It is a system that keeps a record of every tipper and builds a profile on the ones who matter, total spent, average tip, how long they have followed you, which platform they came from, and when they last tipped. Instead of relying on memory, you have a ranked, organized view of who your real high rollers are.',
     },
     {
       q: 'How are fans ranked or prioritized?',
@@ -42,7 +42,7 @@ export default function Page() {
     },
     {
       q: 'Do I have to log all of this manually?',
-      a: 'No. When you track tips automatically with the CamCashGrl extension, every tipper is captured and profiled for you as you stream. The CRM fills itself in. A manual CSV import can backfill fans from before you started tracking.',
+      a: 'No. When you track tips automatically with the CamCashGrl extension, every tipper is captured and profiled for you as you stream. Whale Watch fills itself in. A manual CSV import can backfill fans from before you started tracking.',
     },
     {
       q: 'What about re-engaging fans who went quiet?',
@@ -97,8 +97,8 @@ export default function Page() {
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }} />
       <BlogLayout
-        title="Whale Management 101: How to Track, Profile, and Prioritize Your Top Tippers"
-        summary="A handful of fans drive most of your income. A fan CRM keeps a profile on every one of them so you always know who your VIPs are, what they respond to, and when it is time to reach out."
+        title="Whale Watch: Profiles on All Your High Rollers"
+        summary="A handful of fans drive most of your income. Whale Watch keeps a profile on every one of them so you always know who your high rollers are, what they respond to, and when it is time to reach out."
         author="Daphne Dawson"
         publishedDate="June 2026"
         lastUpdated="June 7, 2026"
@@ -108,10 +108,10 @@ export default function Page() {
         relatedGuides={relatedGuides}
       >
         <p>
-          <strong>Quick answer:</strong> a fan CRM tracks every tipper and builds a profile on the ones who matter, total
+          <strong>Quick answer:</strong> Whale Watch tracks every tipper and builds a profile on the ones who matter, total
           spent, average tip, follow length, platform, and last-tipped date, then ranks them by value. That ranked view is
-          how you stop relying on memory and start treating your top supporters like the VIPs they are. Here is how to build
-          one and what each number is telling you.
+          how you stop relying on memory and start treating your top supporters like the high rollers they are. Here is how
+          to build one and what each number is telling you.
         </p>
 
         <h2>The 80/20 rule of cam income</h2>
@@ -185,7 +185,7 @@ export default function Page() {
           value, and it is the real engine behind a loyal, high-spending fanbase.
         </p>
         <p>
-          A fan CRM is how you scale that feeling. When you can greet a returning whale by name, reference the goal they
+          Whale Watch is how you scale that feeling. When you can greet a returning whale by name, reference the goal they
           helped you hit last month, and reach out at exactly the right moment, you are manufacturing the sense of being
           seen, the same thing that keeps people coming back. The mechanics of turning that into lasting loyalty are covered
           in <a href="/blog/how-to-build-loyal-fans">how to build loyal fans</a>.
@@ -201,6 +201,23 @@ export default function Page() {
         <p>
           <strong>You do not have to remember every whale. You just need a system that does.</strong>
         </p>
+
+        <div style={{ borderRadius: '16px', border: '1px solid rgba(236,72,153,0.25)', background: 'rgba(236,72,153,0.06)', padding: '24px', margin: '32px 0' }}>
+          <img
+            src="/blog-images/vipclienttracker.png"
+            alt="VIP Client Tracker cam model workbook cover art by Pretty Profitz"
+            style={{ width: '100%', maxWidth: '280px', display: 'block', margin: '0 auto 16px', borderRadius: '10px' }}
+          />
+          <div style={{ fontSize: '18px', fontWeight: 700, color: '#f1f5f9', margin: '0 0 8px' }}>Prefer a paper trail instead of a dashboard?</div>
+          <p style={{ fontSize: '14px', color: '#94a3b8', margin: '0 0 16px', lineHeight: 1.6 }}>
+            Pretty Profitz&apos;s VIP Client Tracker is a fillable PDF workbook for logging your top clients — spending
+            history, preferences, follow-up reminders, and re-engagement notes — no software required.
+          </p>
+          <p style={{ fontSize: '14px', color: '#94a3b8', margin: '0 0 16px', lineHeight: 1.6 }}>
+            Use code <strong style={{ color: '#f1f5f9' }}>PRETTY70</strong> at checkout for 70% off.
+          </p>
+          <a href="https://www.etsy.com/shop/prettyprofitz" style={{ display: 'inline-block', background: 'linear-gradient(90deg, #ec4899, #f59e0b)', color: '#0f172a', padding: '10px 20px', borderRadius: '10px', fontWeight: 700, fontSize: '14px', textDecoration: 'none' }} target="_blank" rel="noopener noreferrer">Shop the VIP Client Tracker on Etsy →</a>
+        </div>
       </BlogLayout>
     </>
   );
