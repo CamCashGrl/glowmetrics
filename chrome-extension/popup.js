@@ -346,7 +346,24 @@ function callLiveAction(action, extra, btn) {
   if (_liveActionPending) return;
   _liveActionPending = true;
   if (btn) btn.disabled = true;
+  // If the background script's reply never arrives — the message port can
+  // close early on a dropped connection, a stale/reloading service worker,
+  // or a network failure — sendMessage's callback silently never fires.
+  // Without this timeout, _liveActionPending would stay true forever, and
+  // since liveButton() reads it at render time, every button created from
+  // then on would be silently disabled with no visible error at all. This
+  // guarantees the UI recovers on its own a few seconds later regardless.
+  let settled = false;
+  const failSafe = setTimeout(() => {
+    if (settled) return;
+    settled = true;
+    _liveActionPending = false;
+    renderLiveSession();
+  }, 5000);
   chrome.runtime.sendMessage({ action, ...extra }, (res) => {
+    if (settled) return;
+    settled = true;
+    clearTimeout(failSafe);
     _liveActionPending = false;
     updateLiveSession(res?.session ?? null);
   });
