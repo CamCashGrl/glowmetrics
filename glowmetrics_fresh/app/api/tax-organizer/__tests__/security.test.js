@@ -148,6 +148,58 @@ describe('export-csv — fails safely when the dataset is too large', () => {
   })
 })
 
+describe('routes — malformed input fails safely (no 500, no crash)', () => {
+  it('a non-date startDate/endDate does not crash the summary route', async () => {
+    authenticateRequest.mockResolvedValue({ supabase: {}, user: USER_A })
+    fetchEarningsRows.mockResolvedValue({ tipsRows: USER_A_TIPS, paidSessionRows: [], tooLarge: false })
+    getAvailableYearRange.mockResolvedValue({ hasData: true, years: [2026] })
+    const res = await summaryGET(mockRequest('http://x/api/tax-organizer/summary?startDate=not-a-date&endDate=also-not-a-date'))
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.totals.recordCount).toBe(0) // malformed range matches nothing — degrades safely, never throws
+  })
+
+  it('an unsupported/garbage platform filter returns zero matches instead of erroring', async () => {
+    authenticateRequest.mockResolvedValue({ supabase: {}, user: USER_A })
+    fetchEarningsRows.mockResolvedValue({ tipsRows: USER_A_TIPS, paidSessionRows: [], tooLarge: false })
+    getAvailableYearRange.mockResolvedValue({ hasData: true, years: [2026] })
+    const res = await summaryGET(mockRequest('http://x/api/tax-organizer/summary?year=2026&platforms=' + encodeURIComponent('💥NotARealPlatform<script>')))
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.totals.recordCount).toBe(0)
+  })
+
+  it('an extremely large page number clamps to the last page instead of erroring or returning nothing', async () => {
+    authenticateRequest.mockResolvedValue({ supabase: {}, user: USER_A })
+    fetchEarningsRows.mockResolvedValue({ tipsRows: USER_A_TIPS, paidSessionRows: [], tooLarge: false })
+    const res = await recordsGET(mockRequest('http://x/api/tax-organizer/records?year=2026&page=999999999'))
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.pagination.page).toBe(body.pagination.totalPages)
+    expect(body.records.length).toBeGreaterThan(0)
+  })
+
+  it('an invalid timezone string never throws — falls back to UTC', async () => {
+    authenticateRequest.mockResolvedValue({ supabase: {}, user: USER_A })
+    fetchEarningsRows.mockResolvedValue({ tipsRows: USER_A_TIPS, paidSessionRows: [], tooLarge: false })
+    getAvailableYearRange.mockResolvedValue({ hasData: true, years: [2026] })
+    const res = await summaryGET(mockRequest('http://x/api/tax-organizer/summary?year=2026&tz=' + encodeURIComponent('Definitely/Not_A_Zone')))
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.timezone).toBe('UTC')
+    expect(body.requestedTimezoneWasInvalid).toBe(true)
+  })
+
+  it('a non-numeric page value falls back to page 1 rather than erroring', async () => {
+    authenticateRequest.mockResolvedValue({ supabase: {}, user: USER_A })
+    fetchEarningsRows.mockResolvedValue({ tipsRows: USER_A_TIPS, paidSessionRows: [], tooLarge: false })
+    const res = await recordsGET(mockRequest('http://x/api/tax-organizer/records?year=2026&page=not-a-number'))
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.pagination.page).toBe(1)
+  })
+})
+
 describe('records route — pagination', () => {
   it('never returns more than pageSize records regardless of total', async () => {
     authenticateRequest.mockResolvedValue({ supabase: {}, user: USER_A })
