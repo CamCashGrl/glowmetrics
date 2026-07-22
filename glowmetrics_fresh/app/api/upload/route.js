@@ -53,6 +53,11 @@ export async function POST(req) {
       tip_note:  row.tip_note  || row.note || row.message || '',
       tokens,
       usd,
+      // BongaCams paid-chat/spy-mode rows are flagged by parseCSV() (see
+      // lib/analytics.js's BC_PAID_CHAT_TYPES) so they can be routed to
+      // paid_sessions below instead of tips.
+      is_paid_session: row.is_paid_session === true,
+      session_type:    row.session_type || null,
     }
   }).filter(r =>
     r.date_time &&
@@ -82,6 +87,16 @@ export async function POST(req) {
   const detectedPlatform = textDetectedPlatform
   rows.forEach(r => { if (!r.platform || r.platform === 'Unknown') r.platform = detectedPlatform })
 
+  // ── SPLIT TIPS FROM PAID CHAT / SPY-MODE SESSIONS ───────────────────────
+  // Paid-chat/spy-mode rows (flagged above) never go into tips — they go to
+  // paid_sessions via insert_paid_sessions_dedup, same as the onboarding
+  // paste flow's separate /api/upload-paid-sessions call. Keeping the split
+  // here (rather than filtering in lib/analytics.js) lets parseCSV() keep
+  // returning one flat array, which app/dashboard/page.js's own parseCSV
+  // caller still relies on.
+  const tipRows = rows.filter(r => !r.is_paid_session)
+  const paidSessionRows = rows.filter(r => r.is_paid_session)
+
   // ── ASSIGN DEDUP SEQUENCE ACROSS THE WHOLE FILE ─────────────────────────
   // Two rows can legitimately share the same (user, username, tokens, usd,
   // date_time) — e.g. the same fan tipping the same amount at the same
@@ -92,8 +107,10 @@ export async function POST(req) {
   // group split across a batch boundary would otherwise get renumbered from 1
   // in the second batch and collide with the first batch's already-inserted
   // rows, silently dropping real tips.
+  // Only tipRows get a tip_seq — insert_paid_sessions_dedup has no client_seq
+  // concept (it dedups per-row against paid_sessions_dedup_unique instead).
   const dedupSeq = new Map()
-  rows.forEach(r => {
+  tipRows.forEach(r => {
     const key = `${r.user_id}|${r.username.toLowerCase()}|${r.tokens}|${r.usd.toFixed(2)}|${r.date_time}`
     const next = (dedupSeq.get(key) || 0) + 1
     dedupSeq.set(key, next)
@@ -104,11 +121,13 @@ export async function POST(req) {
   // Computed once, shared by the csv_uploads audit log and the JSON response
   // (the response uses these so the importer UI can show a real summary —
   // rows/earnings/platform/date range — instead of just a row count).
-  const summaryDates = rows.map(r => new Date(r.date_time)).filter(d => !isNaN(d))
+  // Tip-only, same as csv_uploads' columns (which log the tip import, not
+  // paid sessions) and the response fields the importer UI already reads.
+  const summaryDates = tipRows.map(r => new Date(r.date_time)).filter(d => !isNaN(d))
   const summaryDateFrom = summaryDates.length ? new Date(Math.min(...summaryDates)) : null
   const summaryDateTo   = summaryDates.length ? new Date(Math.max(...summaryDates)) : null
-  const summaryTotalUsd = parseFloat(rows.reduce((sum, r) => sum + (r.usd || 0), 0).toFixed(2))
-  const summaryTotalTokens = rows.reduce((sum, r) => sum + (r.tokens || 0), 0)
+  const summaryTotalUsd = parseFloat(tipRows.reduce((sum, r) => sum + (r.usd || 0), 0).toFixed(2))
+  const summaryTotalTokens = tipRows.reduce((sum, r) => sum + (r.tokens || 0), 0)
 
   // ── LOG TO csv_uploads ─────────────────────────────────────────────────
   // Shared by the success path below and the platform-limit block path, so a
@@ -129,7 +148,7 @@ export async function POST(req) {
         date_from:      summaryDateFrom,
         date_to:        summaryDateTo,
         months_covered: monthsCovered,
-        total_rows:     rows.length,
+        total_rows:     tipRows.length,
         inserted_rows:  inserted,
         skipped_rows:   skipped,
         total_usd:      summaryTotalUsd,
@@ -147,10 +166,10 @@ export async function POST(req) {
   let inserted = 0
   let skipped  = 0
   const errors = []
-  const totalBatches = Math.ceil(rows.length / BATCH_SIZE)
+  const totalBatches = Math.ceil(tipRows.length / BATCH_SIZE)
 
-  for (let i = 0; i < rows.length; i += BATCH_SIZE) {
-    const batch    = rows.slice(i, i + BATCH_SIZE)
+  for (let i = 0; i < tipRows.length; i += BATCH_SIZE) {
+    const batch    = tipRows.slice(i, i + BATCH_SIZE)
     const batchNum = Math.floor(i / BATCH_SIZE) + 1
 
     const { data, error } = await supabase.rpc('insert_tips_dedup', {
@@ -189,27 +208,83 @@ export async function POST(req) {
 
   await logCsvUpload(errors.length > 0 ? 'partial' : 'complete')
 
+  // ── BATCH INSERT PAID CHAT / SPY-MODE SESSIONS ──────────────────────────
+  // Same RPC the onboarding paste flow's /api/upload-paid-sessions uses, so
+  // rows flagged by parseCSV() (BC_PAID_CHAT_TYPES, lib/analytics.js) land in
+  // paid_sessions instead of tips regardless of which import path sent them.
+  let paidInserted = 0
+  let paidSkipped  = 0
+  const paidErrors = []
+  const paidTotalBatches = Math.ceil(paidSessionRows.length / BATCH_SIZE)
+
+  for (let i = 0; i < paidSessionRows.length; i += BATCH_SIZE) {
+    const batch = paidSessionRows.slice(i, i + BATCH_SIZE).map(r => ({
+      user_id:      r.user_id,
+      date_time:    r.date_time,
+      platform:     r.platform,
+      username:     r.username,
+      session_type: r.session_type,
+      tokens:       r.tokens,
+      usd:          r.usd,
+    }))
+    const batchNum = Math.floor(i / BATCH_SIZE) + 1
+
+    const { data, error } = await supabase.rpc('insert_paid_sessions_dedup', {
+      sessions: batch
+    })
+
+    if (error) {
+      console.error(`[UPLOAD] Paid-session batch ${batchNum}/${paidTotalBatches} error:`, error.message)
+
+      if (error.message?.includes('PLATFORM_LIMIT_REACHED')) {
+        // Tips (if any) already inserted and logged above — this only blocks
+        // the paid-session half, same as onboarding's two independent
+        // requests would behave if the paid-sessions call failed on its own.
+        return NextResponse.json({
+          error: `You're on the free plan, which tracks one platform. Upgrade to add ${detectedPlatform} alongside your existing platform data.`,
+          code: 'platform_limit_reached',
+          upgradeUrl: '/pricing',
+        }, { status: 402 })
+      }
+
+      paidErrors.push({ batch: batchNum, error: error.message })
+      continue
+    }
+
+    paidInserted += data?.inserted || 0
+    paidSkipped  += data?.skipped  || 0
+
+    console.log(`[UPLOAD] Paid-session batch ${batchNum}/${paidTotalBatches} — inserted: ${data?.inserted}, skipped: ${data?.skipped}`)
+  }
+
   // ── RESPONSE ───────────────────────────────────────────────────────────
   const response = {
     ok:        errors.length === 0,
     inserted,
     skipped,
-    total:     rows.length,
+    total:     tipRows.length,
     batches:   totalBatches,
     batchSize: BATCH_SIZE,
     platform:  detectedPlatform, // ← used by dashboard toast
     totalUsd:  summaryTotalUsd,
     dateFrom:  summaryDateFrom ? summaryDateFrom.toISOString() : null,
     dateTo:    summaryDateTo ? summaryDateTo.toISOString() : null,
+    paidSessionsInserted: paidInserted,
+    paidSessionsSkipped:  paidSkipped,
   }
 
   if (errors.length > 0) {
     response.warnings = errors
-    response.message  = `${errors.length} batch(es) had errors but upload continued. ${inserted} of ${rows.length} rows inserted.`
+    response.message  = `${errors.length} batch(es) had errors but upload continued. ${inserted} of ${tipRows.length} rows inserted.`
     console.warn('[UPLOAD] Completed with errors:', errors)
   } else {
     response.message = `All ${inserted} tips inserted successfully (${skipped} duplicates skipped).`
     console.log('[UPLOAD] Complete:', response.message)
+  }
+
+  if (paidErrors.length > 0) {
+    response.paidSessionsWarnings = paidErrors
+    console.warn('[UPLOAD] Paid-session batches completed with errors:', paidErrors)
   }
 
   // ── FOUNDER NOTIFICATION (non-blocking) ───────────────────────────────
