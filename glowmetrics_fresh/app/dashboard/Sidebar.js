@@ -87,24 +87,24 @@ export default function Sidebar({ activeTab, onTabChange, user, onSignOut, isPro
   }
 
   const sidebarContent = (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", padding: "20px 12px" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", padding: "18px 12px" }}>
       {/* Logo */}
-      <div style={{ display: "flex", alignItems: "center", gap: 9, padding: "0 4px", marginBottom: 28 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 9, padding: "0 4px", marginBottom: 22 }}>
         <div style={{ width: 30, height: 30, borderRadius: 8, background: "linear-gradient(135deg,#22D3EE,#EC4899)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 900, color: "white", boxShadow: "0 0 14px rgba(34,211,238,0.3)", flexShrink: 0 }}>$</div>
         <div>
           <div style={{ fontSize: 15, fontWeight: 800, color: C.white, letterSpacing: -0.4 }}>
             Cam<span style={{ background: "linear-gradient(90deg,#22D3EE,#EC4899)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Cash</span>
           </div>
-          <div style={{ fontSize: 9, color: C.muted, letterSpacing: 1, textTransform: "uppercase", marginTop: 1 }}>Creator Intelligence</div>
+          <div style={{ fontSize: 9, color: "#7d8aa3", letterSpacing: 0.8, textTransform: "uppercase", marginTop: 1 }}>Creator Intelligence</div>
         </div>
       </div>
 
       {/* Nav groups */}
       <div style={{ flex: 1, overflowY: "auto" }}>
         {NAV.map((group, gi) => (
-          <div key={gi} style={{ marginBottom: group.group ? 16 : 8 }}>
+          <div key={gi} style={{ marginBottom: group.group ? 12 : 5 }}>
             {group.group && (
-              <div style={{ fontSize: 9, fontWeight: 700, color: C.muted, letterSpacing: 1.2, textTransform: "uppercase", padding: "0 12px", marginBottom: 4 }}>
+              <div style={{ fontSize: 9, fontWeight: 700, color: "#6b7488", letterSpacing: 1, textTransform: "uppercase", padding: "0 12px", marginBottom: 4 }}>
                 {group.group}
               </div>
             )}
@@ -113,28 +113,28 @@ export default function Sidebar({ activeTab, onTabChange, user, onSignOut, isPro
         ))}
       </div>
 
-      {/* Upgrade CTA — always visible, prominent */}
+      {/* Upgrade CTA — always visible, but the Pro state stays low-key since it's a status, not a call to action */}
       {isPro ? (
-        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 12px", borderRadius: 10, background: "rgba(168,85,247,0.1)", border: "1px solid rgba(168,85,247,0.3)", marginBottom: 10 }}>
-          <span style={{ fontSize: 13 }}>✦</span>
-          <span style={{ fontSize: 12, fontWeight: 700, color: C.purple }}>Pro plan active</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "6px 10px", borderRadius: 9, background: "rgba(168,85,247,0.07)", border: "1px solid rgba(168,85,247,0.2)", marginBottom: 8 }}>
+          <span style={{ fontSize: 11 }}>✦</span>
+          <span style={{ fontSize: 11.5, fontWeight: 700, color: C.purple }}>Pro plan active</span>
         </div>
       ) : (
-        <Button as="a" href="/pricing" style={{ width: "100%", marginBottom: 10, fontSize: 13, padding: "11px 12px", textAlign: "center" }}>
+        <Button as="a" href="/pricing" style={{ width: "100%", marginBottom: 8, fontSize: 13, padding: "11px 12px", textAlign: "center" }}>
           ✦ Upgrade to Pro
         </Button>
       )}
 
-      {/* User footer */}
+      {/* User footer — email + sign out share one compact row */}
       {user && (
-        <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: 14, marginTop: 8 }}>
-          <div style={{ fontSize: 11, color: C.muted, padding: "0 4px", marginBottom: 8, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: 10, marginTop: 4, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+          <div title={user.email} style={{ fontSize: 11, color: "#7d8aa3", padding: "0 4px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
             {user.email}
           </div>
           <button onClick={onSignOut}
-            style={{ width: "100%", padding: "8px 12px", borderRadius: 10, background: "rgba(248,113,113,0.08)", border: "1px solid rgba(248,113,113,0.18)", color: "#F87171", fontSize: 12, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 8, transition: "all 0.15s" }}
-            onMouseEnter={e => e.currentTarget.style.background = "rgba(248,113,113,0.15)"}
-            onMouseLeave={e => e.currentTarget.style.background = "rgba(248,113,113,0.08)"}>
+            style={{ flexShrink: 0, padding: "5px 8px", borderRadius: 8, background: "transparent", border: "none", color: "#F87171", fontSize: 11.5, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 5, transition: "background 0.15s" }}
+            onMouseEnter={e => e.currentTarget.style.background = "rgba(248,113,113,0.1)"}
+            onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
             <span>→</span> Sign Out
           </button>
         </div>

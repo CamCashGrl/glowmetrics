@@ -13,7 +13,8 @@ const RED    = "#F87171"
 const GREEN  = "#10B981"
 const WHITE  = "#F1F5F9"
 const TEXT   = "#94A3B8"
-const MUTED  = "#475569"
+const MUTED  = "#8a93ab"
+const FAINT  = "#5E647C"
 
 const fmtUsd = (v) => `$${Number(v || 0).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
 
@@ -113,30 +114,35 @@ export default function DashboardGrowthCharts({ tips, sessions }) {
     ? Math.round(((thisMonth.usd - prevMonth.usd) / prevMonth.usd) * 100)
     : null
   const isPositive = growthPct !== null && growthPct >= 0
+  // monthly[] only has an entry for months that actually have tip data, so the
+  // last entry is "the current calendar month" only when its key matches today —
+  // otherwise it's a past, already-complete month.
+  const isThisMonthPartial = thisMonth?.key === monthKey(new Date())
 
   if (!tips || tips.length === 0) return null
 
   return (
-    <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 24 }}>
+    <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 16 }}>
       {/* Tokens vs Hours Online */}
-      <div style={{ flex: "2 1 420px", minWidth: 320, background: CARD, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "18px 20px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4, flexWrap: "wrap", gap: 8 }}>
+      <div style={{ flex: "2 1 420px", minWidth: 320, background: CARD, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "16px 18px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8, flexWrap: "wrap", gap: 8 }}>
           <div>
             <div style={{ fontSize: 15, fontWeight: 700, color: WHITE }}>Tokens vs Hours Online</div>
-            <div style={{ fontSize: 11, color: MUTED }}>
+            <div style={{ fontSize: 11.5, color: MUTED }}>
               {MODE_CONFIG[mode].label} earnings rhythm — tokens (left) and stream hours (right)
             </div>
           </div>
-          <div style={{ display: "flex", gap: 4, background: "rgba(255,255,255,0.04)", borderRadius: 8, padding: 3, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: 2, background: "rgba(255,255,255,0.04)", border: `1px solid ${BORDER}`, borderRadius: 9, padding: 3, flexWrap: "wrap" }}>
             {[["daily", "Day"], ["weekly", "Week"], ["monthly", "Month"], ["time", "Time"]].map(([id, label]) => (
               <button
                 key={id}
                 onClick={() => setMode(id)}
                 style={{
-                  padding: "5px 12px", borderRadius: 6, border: "none", cursor: "pointer",
+                  padding: "5px 13px", borderRadius: 6, border: "none", cursor: "pointer",
                   fontSize: 12, fontWeight: 600,
-                  background: mode === id ? "rgba(34,211,238,0.15)" : "transparent",
+                  background: mode === id ? "rgba(34,211,238,0.16)" : "transparent",
                   color: mode === id ? CYAN : MUTED,
+                  transition: "background 0.15s ease, color 0.15s ease",
                 }}
               >
                 {label}
@@ -155,7 +161,7 @@ export default function DashboardGrowthCharts({ tips, sessions }) {
               <XAxis dataKey="label" tick={{ fill: MUTED, fontSize: 10 }} axisLine={false} tickLine={false} interval={mode === "daily" ? "preserveStartEnd" : 0} />
               <YAxis yAxisId="left" tick={{ fill: MUTED, fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(v) => `${Math.round(v / 1000)}k`} />
               <YAxis yAxisId="right" orientation="right" tick={{ fill: MUTED, fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(v) => `${v}h`} />
-              <Tooltip content={<GrowthTooltip />} />
+              <Tooltip content={<GrowthTooltip />} wrapperStyle={{ zIndex: 50 }} />
               <Legend wrapperStyle={{ fontSize: 11, color: MUTED }} />
               <Line yAxisId="left" type="monotone" dataKey="tokens" name="Tokens" stroke={CYAN} strokeWidth={2} dot={false} />
               <Line yAxisId="right" type="monotone" dataKey="hours" name="Hours Online" stroke={PINK} strokeWidth={2} dot={false} />
@@ -165,16 +171,18 @@ export default function DashboardGrowthCharts({ tips, sessions }) {
       </div>
 
       {/* Monthly Growth */}
-      <div style={{ flex: "1 1 260px", minWidth: 240, background: CARD, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "18px 20px" }}>
+      <div style={{ flex: "1 1 260px", minWidth: 240, background: CARD, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "16px 18px" }}>
         <div style={{ fontSize: 15, fontWeight: 700, color: WHITE, marginBottom: 2 }}>Monthly Growth</div>
-        <div style={{ fontSize: 11, color: MUTED, marginBottom: 14 }}>Last {monthly.length} months — month-over-month USD change</div>
+        <div style={{ fontSize: 11.5, color: MUTED, marginBottom: 10 }}>Last {monthly.length} months — month-over-month USD change</div>
 
         {thisMonth ? (
           <>
-            <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 10, flexWrap: "wrap" }}>
               <div>
-                <div style={{ fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>This month</div>
-                <div style={{ fontSize: 26, fontWeight: 800, color: WHITE }}>{fmtUsd(thisMonth.usd)}</div>
+                <div style={{ fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                  {isThisMonthPartial ? "This month so far" : "This month"}
+                </div>
+                <div style={{ fontSize: 26, fontWeight: 800, color: WHITE, lineHeight: 1.1 }}>{fmtUsd(thisMonth.usd)}</div>
               </div>
               {growthPct !== null && (
                 <div style={{
@@ -187,11 +195,16 @@ export default function DashboardGrowthCharts({ tips, sessions }) {
                 </div>
               )}
             </div>
+            {isThisMonthPartial && (
+              <div style={{ fontSize: 10.5, color: FAINT, marginBottom: 12 }}>
+                Month still in progress — total will keep climbing.
+              </div>
+            )}
 
-            <ResponsiveContainer width="100%" height={110}>
+            <ResponsiveContainer width="100%" height={128}>
               <BarChart data={monthly} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
                 <XAxis dataKey="label" tick={{ fill: MUTED, fontSize: 10 }} axisLine={false} tickLine={false} />
-                <Tooltip content={<GrowthTooltip />} />
+                <Tooltip content={<GrowthTooltip />} wrapperStyle={{ zIndex: 50 }} />
                 <Bar dataKey="usd" name="$ Earned" radius={[4, 4, 0, 0]}>
                   {monthly.map((m, i) => (
                     <Cell key={m.key} fill={i === monthly.length - 1 ? CYAN : "rgba(34,211,238,0.3)"} />
