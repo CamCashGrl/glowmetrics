@@ -3,7 +3,7 @@ import { useState } from 'react'
 import {
   T, Card, SectionLabel, FieldLabel, TextInput, TextArea, Select, PillGroup, SingleSelectPills,
   PrimaryButton, SecondaryButton, StepDots, LoadingStaged, ErrorBanner, EmptyState, Badge,
-  GuidancePanel, CompletionTracker, LiveSummaryPanel,
+  GuidancePanel, CompletionTracker, LiveSummaryPanel, Accordion,
 } from './theme'
 import BioResultCard from './BioResultCard'
 import {
@@ -12,13 +12,11 @@ import {
   BIO_LOADING_MESSAGES,
 } from '../../../../lib/profileStudio/constants'
 
-const STEPS = ['Identity', 'Persona', 'Content', 'Schedule', 'Generate']
+const STEPS = ['Your Brand', 'Personalize', 'Generate']
 
 const WHY_TEXT = [
-  'Your name, platform, and experience level help determine the correct tone, length, and style. Private personal information is not required.',
-  'Your persona choices control how playful, dominant, soft, luxury, teasing, conversational, or sales-focused the final result sounds.',
-  'The generator uses only the services you approve and avoids activities you exclude.',
-  'Schedule and call-to-action details help turn visitors into repeat viewers and followers.',
+  'Your name, platform, persona, and tone determine the voice, structure, and style of the result. Private personal information is not required.',
+  'The generator uses only the services you approve and avoids activities you exclude. Schedule and call-to-action details help turn visitors into repeat viewers and followers.',
   'The selected platform and output type determine the structure, wording, length, and purpose of the result.',
 ]
 
@@ -210,117 +208,114 @@ export default function BioGenerator({ isLoggedIn, sharedProfile, onSharedProfil
       <ErrorBanner message={error} onDismiss={() => setError('')} />
 
       {step === 0 && (
-      <div className="ps-wizard-layout" style={{ display: 'grid', gridTemplateColumns: '1fr 260px', gap: 20, alignItems: 'start' }}>
+      <div className="ps-wizard-layout" style={{ display: 'grid', gridTemplateColumns: '1fr 260px', gap: 14, alignItems: 'start' }}>
         <Card className="ps-fade">
-          <SectionLabel>Step 1 · Creator identity</SectionLabel>
-          <div className="ps-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-            <div>
-              <FieldLabel htmlFor="bio-display-name" required>Display name</FieldLabel>
-              <TextInput id="bio-display-name" value={form.identity.displayName} maxLength={60} onChange={e => patch('identity', 'displayName', e.target.value)} placeholder="e.g. Luna Hart" />
-            </div>
-            <div>
-              <FieldLabel htmlFor="bio-username" hint="optional">Username</FieldLabel>
-              <TextInput id="bio-username" value={form.identity.username} maxLength={60} onChange={e => patch('identity', 'username', e.target.value)} placeholder="e.g. lunahart" />
-            </div>
-            <div>
-              <FieldLabel htmlFor="bio-pronouns" hint="optional">Pronouns</FieldLabel>
-              <TextInput id="bio-pronouns" value={form.identity.pronouns} maxLength={30} onChange={e => patch('identity', 'pronouns', e.target.value)} placeholder="she/her" />
-            </div>
-            <div>
-              <FieldLabel htmlFor="bio-location" hint="optional">General location</FieldLabel>
-              <TextInput id="bio-location" value={form.identity.locationGeneral} maxLength={80} onChange={e => patch('identity', 'locationGeneral', e.target.value)} placeholder="e.g. West Coast, USA" />
-            </div>
-          </div>
+          <SectionLabel>Step 1 · Your brand</SectionLabel>
+          <FieldLabel htmlFor="bio-display-name" required>Display name</FieldLabel>
+          <TextInput id="bio-display-name" value={form.identity.displayName} maxLength={60} onChange={e => patch('identity', 'displayName', e.target.value)} placeholder="e.g. Luna Hart" />
 
-          <div style={{ marginTop: 16 }}>
-            <FieldLabel>Age display preference</FieldLabel>
-            <SingleSelectPills options={AGE_DISPLAY_OPTIONS} value={form.identity.ageDisplay} onChange={v => patch('identity', 'ageDisplay', v)} />
-            {form.identity.ageDisplay === 'custom' && (
-              <TextInput aria-label="Custom age display text" style={{ marginTop: 8, maxWidth: 200 }} value={form.identity.ageDisplayValue} maxLength={20} onChange={e => patch('identity', 'ageDisplayValue', e.target.value)} placeholder='e.g. "18+"' />
-            )}
-          </div>
-
-          <div style={{ marginTop: 16 }}>
-            <FieldLabel htmlFor="bio-languages" hint="comma separated, optional">Languages spoken</FieldLabel>
-            <TextInput
-              id="bio-languages"
-              value={form.identity.languages.join(', ')}
-              onChange={e => patch('identity', 'languages', e.target.value.split(',').map(s => s.trim()).filter(Boolean))}
-              placeholder="English, Spanish"
-            />
-          </div>
-
-          <div style={{ marginTop: 16 }}>
-            <FieldLabel>Experience level</FieldLabel>
-            <SingleSelectPills options={EXPERIENCE_LEVELS} value={form.identity.experienceLevel} onChange={v => patch('identity', 'experienceLevel', v)} />
-          </div>
-
-          <div style={{ marginTop: 16 }}>
+          <div style={{ marginTop: 8 }}>
             <FieldLabel>Main platforms</FieldLabel>
             <PillGroup options={ALL_PLATFORMS} value={form.identity.platforms} onToggle={id => toggleIn('identity', 'platforms', id)} />
           </div>
+
+          <div style={{ marginTop: 8 }}>
+            <FieldLabel>Persona (select all that apply)</FieldLabel>
+            <PillGroup options={PERSONA_TAGS} value={form.persona.personaTags} onToggle={id => toggleIn('persona', 'personaTags', id)} />
+          </div>
+
+          <div style={{ marginTop: 8 }}>
+            <FieldLabel>Desired tone</FieldLabel>
+            <PillGroup options={TONE_OPTIONS} value={form.persona.tone} onToggle={id => toggleIn('persona', 'tone', id)} />
+          </div>
+
+          <div style={{ marginTop: 10 }}>
+            <Accordion title="Customize further">
+              <div className="ps-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div>
+                  <FieldLabel htmlFor="bio-username" hint="optional">Username</FieldLabel>
+                  <TextInput id="bio-username" value={form.identity.username} maxLength={60} onChange={e => patch('identity', 'username', e.target.value)} placeholder="e.g. lunahart" />
+                </div>
+                <div>
+                  <FieldLabel htmlFor="bio-pronouns" hint="optional">Pronouns</FieldLabel>
+                  <TextInput id="bio-pronouns" value={form.identity.pronouns} maxLength={30} onChange={e => patch('identity', 'pronouns', e.target.value)} placeholder="she/her" />
+                </div>
+                <div>
+                  <FieldLabel htmlFor="bio-location" hint="optional">General location</FieldLabel>
+                  <TextInput id="bio-location" value={form.identity.locationGeneral} maxLength={80} onChange={e => patch('identity', 'locationGeneral', e.target.value)} placeholder="e.g. West Coast, USA" />
+                </div>
+                <div>
+                  <FieldLabel htmlFor="bio-languages" hint="comma separated, optional">Languages spoken</FieldLabel>
+                  <TextInput
+                    id="bio-languages"
+                    value={form.identity.languages.join(', ')}
+                    onChange={e => patch('identity', 'languages', e.target.value.split(',').map(s => s.trim()).filter(Boolean))}
+                    placeholder="English, Spanish"
+                  />
+                </div>
+              </div>
+
+              <div style={{ marginTop: 12 }}>
+                <FieldLabel>Age display preference</FieldLabel>
+                <SingleSelectPills options={AGE_DISPLAY_OPTIONS} value={form.identity.ageDisplay} onChange={v => patch('identity', 'ageDisplay', v)} />
+                {form.identity.ageDisplay === 'custom' && (
+                  <TextInput aria-label="Custom age display text" style={{ marginTop: 8, maxWidth: 200 }} value={form.identity.ageDisplayValue} maxLength={20} onChange={e => patch('identity', 'ageDisplayValue', e.target.value)} placeholder='e.g. "18+"' />
+                )}
+              </div>
+
+              <div style={{ marginTop: 12 }}>
+                <FieldLabel>Experience level</FieldLabel>
+                <SingleSelectPills options={EXPERIENCE_LEVELS} value={form.identity.experienceLevel} onChange={v => patch('identity', 'experienceLevel', v)} />
+              </div>
+
+              <div style={{ marginTop: 12 }}>
+                <FieldLabel htmlFor="bio-personality-words" hint="up to 3">Three words describing your personality</FieldLabel>
+                <TextInput
+                  id="bio-personality-words"
+                  value={form.persona.personalityWords.join(', ')}
+                  onChange={e => patch('persona', 'personalityWords', e.target.value.split(',').map(s => s.trim()).filter(Boolean).slice(0, 3))}
+                  placeholder="playful, confident, warm"
+                />
+              </div>
+
+              <div className="ps-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 12 }}>
+                <div>
+                  <FieldLabel htmlFor="bio-audience" hint="optional">Desired audience</FieldLabel>
+                  <TextInput id="bio-audience" value={form.persona.desiredAudience} maxLength={200} onChange={e => patch('persona', 'desiredAudience', e.target.value)} placeholder="e.g. regulars who like conversation" />
+                </div>
+                <div>
+                  <FieldLabel htmlFor="bio-signature" hint="optional">Signature phrase</FieldLabel>
+                  <TextInput id="bio-signature" value={form.persona.signaturePhrase} maxLength={120} onChange={e => patch('persona', 'signaturePhrase', e.target.value)} placeholder="e.g. Let's make it a good one." />
+                </div>
+              </div>
+
+              <div style={{ marginTop: 12 }}>
+                <FieldLabel htmlFor="bio-room-difference" hint="optional">What makes your room different</FieldLabel>
+                <TextArea id="bio-room-difference" value={form.persona.roomDifference} maxLength={300} onChange={e => patch('persona', 'roomDifference', e.target.value)} placeholder="e.g. real conversation, no scripted chat" />
+              </div>
+
+              <div style={{ marginTop: 12 }}>
+                <FieldLabel htmlFor="bio-qualities" hint="optional">Your strongest qualities</FieldLabel>
+                <TextArea id="bio-qualities" value={form.persona.strongestQualities} maxLength={300} onChange={e => patch('persona', 'strongestQualities', e.target.value)} placeholder="e.g. great listener, high energy shows" />
+              </div>
+            </Accordion>
+          </div>
         </Card>
-        <GuidancePanel>{WHY_TEXT[0]}</GuidancePanel>
-        <LiveSummaryPanel title="Your Profile So Far" rows={summaryRows} />
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <GuidancePanel>{WHY_TEXT[0]}</GuidancePanel>
+          <LiveSummaryPanel title="Your Profile So Far" rows={summaryRows} />
+        </div>
       </div>
       )}
 
       {step === 1 && (
-      <div className="ps-wizard-layout" style={{ display: 'grid', gridTemplateColumns: '1fr 260px', gap: 20, alignItems: 'start' }}>
+      <div className="ps-wizard-layout" style={{ display: 'grid', gridTemplateColumns: '1fr 260px', gap: 14, alignItems: 'start' }}>
         <Card className="ps-fade">
-          <SectionLabel>Step 2 · Persona and brand</SectionLabel>
-          <FieldLabel>Persona (select all that apply)</FieldLabel>
-          <PillGroup options={PERSONA_TAGS} value={form.persona.personaTags} onToggle={id => toggleIn('persona', 'personaTags', id)} />
-
-          <div style={{ marginTop: 18 }}>
-            <FieldLabel htmlFor="bio-personality-words" hint="up to 3">Three words describing your personality</FieldLabel>
-            <TextInput
-              id="bio-personality-words"
-              value={form.persona.personalityWords.join(', ')}
-              onChange={e => patch('persona', 'personalityWords', e.target.value.split(',').map(s => s.trim()).filter(Boolean).slice(0, 3))}
-              placeholder="playful, confident, warm"
-            />
-          </div>
-
-          <div className="ps-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 16 }}>
-            <div>
-              <FieldLabel htmlFor="bio-audience" hint="optional">Desired audience</FieldLabel>
-              <TextInput id="bio-audience" value={form.persona.desiredAudience} maxLength={200} onChange={e => patch('persona', 'desiredAudience', e.target.value)} placeholder="e.g. regulars who like conversation" />
-            </div>
-            <div>
-              <FieldLabel htmlFor="bio-signature" hint="optional">Signature phrase</FieldLabel>
-              <TextInput id="bio-signature" value={form.persona.signaturePhrase} maxLength={120} onChange={e => patch('persona', 'signaturePhrase', e.target.value)} placeholder="e.g. Let's make it a good one." />
-            </div>
-          </div>
-
-          <div style={{ marginTop: 16 }}>
-            <FieldLabel htmlFor="bio-room-difference" hint="optional">What makes your room different</FieldLabel>
-            <TextArea id="bio-room-difference" value={form.persona.roomDifference} maxLength={300} onChange={e => patch('persona', 'roomDifference', e.target.value)} placeholder="e.g. real conversation, no scripted chat" />
-          </div>
-
-          <div style={{ marginTop: 16 }}>
-            <FieldLabel htmlFor="bio-qualities" hint="optional">Your strongest qualities</FieldLabel>
-            <TextArea id="bio-qualities" value={form.persona.strongestQualities} maxLength={300} onChange={e => patch('persona', 'strongestQualities', e.target.value)} placeholder="e.g. great listener, high energy shows" />
-          </div>
-
-          <div style={{ marginTop: 16 }}>
-            <FieldLabel>Desired tone</FieldLabel>
-            <PillGroup options={TONE_OPTIONS} value={form.persona.tone} onToggle={id => toggleIn('persona', 'tone', id)} />
-          </div>
-        </Card>
-        <GuidancePanel>{WHY_TEXT[1]}</GuidancePanel>
-        <LiveSummaryPanel title="Your Profile So Far" rows={summaryRows} />
-      </div>
-      )}
-
-      {step === 2 && (
-      <div className="ps-wizard-layout" style={{ display: 'grid', gridTemplateColumns: '1fr 260px', gap: 20, alignItems: 'start' }}>
-        <Card className="ps-fade">
-          <SectionLabel>Step 3 · Content and boundaries</SectionLabel>
+          <SectionLabel>Step 2 · Personalize</SectionLabel>
           <FieldLabel>What do you offer?</FieldLabel>
           <PillGroup options={SERVICE_OPTIONS} value={form.content.services} onToggle={id => toggleIn('content', 'services', id)} />
 
-          <div style={{ marginTop: 20, paddingTop: 20, borderTop: `1px solid ${T.borderSoft}` }}>
+          <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${T.borderSoft}` }}>
             <FieldLabel htmlFor="bio-hard-no" hint="press Enter to add, optional">Hard no items</FieldLabel>
             <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
               <TextInput
@@ -347,12 +342,12 @@ export default function BioGenerator({ isLoggedIn, sharedProfile, onSharedProfil
             </div>
           </div>
 
-          <div style={{ marginTop: 16 }}>
+          <div style={{ marginTop: 14 }}>
             <FieldLabel htmlFor="bio-topics" hint="optional">Topics or requests you don't allow</FieldLabel>
             <TextArea id="bio-topics" value={form.content.boundaries.topics} maxLength={400} onChange={e => patchNested('content', 'boundaries', 'topics', e.target.value)} placeholder="Describe anything else off-limits" />
           </div>
 
-          <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
             <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13.5, color: T.soft }}>
               <input type="checkbox" checked={form.content.boundaries.mentionPublicly} onChange={e => patchNested('content', 'boundaries', 'mentionPublicly', e.target.checked)} />
               Mention my boundaries publicly in the bio
@@ -366,58 +361,55 @@ export default function BioGenerator({ isLoggedIn, sharedProfile, onSharedProfil
               Include an 18+ reminder
             </label>
           </div>
+
+          <div style={{ marginTop: 14 }}>
+            <Accordion title="Customize further">
+              <FieldLabel>Typical streaming days</FieldLabel>
+              <PillGroup options={WEEKDAYS} value={form.schedule.days} onToggle={id => toggleIn('schedule', 'days', id)} />
+
+              <div className="ps-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 12 }}>
+                <div>
+                  <FieldLabel htmlFor="bio-hours" hint="optional">Typical streaming hours</FieldLabel>
+                  <TextInput id="bio-hours" value={form.schedule.hours} maxLength={60} onChange={e => patch('schedule', 'hours', e.target.value)} placeholder="e.g. evenings, 8-11pm" />
+                </div>
+                <div>
+                  <FieldLabel htmlFor="bio-timezone" hint="optional">Time zone</FieldLabel>
+                  <TextInput id="bio-timezone" value={form.schedule.timezone} maxLength={60} onChange={e => patch('schedule', 'timezone', e.target.value)} placeholder="e.g. EST" />
+                </div>
+              </div>
+
+              <div style={{ marginTop: 12 }}>
+                <FieldLabel>Is your schedule consistent?</FieldLabel>
+                <SingleSelectPills
+                  options={[{ id: 'true', label: 'Consistent' }, { id: 'false', label: 'Changes weekly' }]}
+                  value={String(form.schedule.consistent)}
+                  onChange={v => patch('schedule', 'consistent', v === 'true')}
+                />
+              </div>
+
+              <div style={{ marginTop: 12 }}>
+                <FieldLabel>Main call to action</FieldLabel>
+                <SingleSelectPills options={PRIMARY_CTA_OPTIONS} value={form.schedule.ctaPrimary} onChange={v => patch('schedule', 'ctaPrimary', v)} />
+              </div>
+
+              <div style={{ marginTop: 12 }}>
+                <FieldLabel hint="optional">Secondary call to action</FieldLabel>
+                <SingleSelectPills options={PRIMARY_CTA_OPTIONS} value={form.schedule.ctaSecondary} onChange={v => patch('schedule', 'ctaSecondary', v)} />
+              </div>
+            </Accordion>
+          </div>
         </Card>
-        <GuidancePanel>{WHY_TEXT[2]}</GuidancePanel>
-        <LiveSummaryPanel title="Your Profile So Far" rows={summaryRows} />
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <GuidancePanel>{WHY_TEXT[1]}</GuidancePanel>
+          <LiveSummaryPanel title="Your Profile So Far" rows={summaryRows} />
+        </div>
       </div>
       )}
 
-      {step === 3 && (
-      <div className="ps-wizard-layout" style={{ display: 'grid', gridTemplateColumns: '1fr 260px', gap: 20, alignItems: 'start' }}>
+      {step === 2 && (
+      <div className="ps-wizard-layout" style={{ display: 'grid', gridTemplateColumns: '1fr 260px', gap: 14, alignItems: 'start' }}>
         <Card className="ps-fade">
-          <SectionLabel>Step 4 · Schedule and calls to action</SectionLabel>
-          <FieldLabel>Typical streaming days</FieldLabel>
-          <PillGroup options={WEEKDAYS} value={form.schedule.days} onToggle={id => toggleIn('schedule', 'days', id)} />
-
-          <div className="ps-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 16 }}>
-            <div>
-              <FieldLabel htmlFor="bio-hours" hint="optional">Typical streaming hours</FieldLabel>
-              <TextInput id="bio-hours" value={form.schedule.hours} maxLength={60} onChange={e => patch('schedule', 'hours', e.target.value)} placeholder="e.g. evenings, 8-11pm" />
-            </div>
-            <div>
-              <FieldLabel htmlFor="bio-timezone" hint="optional">Time zone</FieldLabel>
-              <TextInput id="bio-timezone" value={form.schedule.timezone} maxLength={60} onChange={e => patch('schedule', 'timezone', e.target.value)} placeholder="e.g. EST" />
-            </div>
-          </div>
-
-          <div style={{ marginTop: 16 }}>
-            <FieldLabel>Is your schedule consistent?</FieldLabel>
-            <SingleSelectPills
-              options={[{ id: 'true', label: 'Consistent' }, { id: 'false', label: 'Changes weekly' }]}
-              value={String(form.schedule.consistent)}
-              onChange={v => patch('schedule', 'consistent', v === 'true')}
-            />
-          </div>
-
-          <div style={{ marginTop: 16 }}>
-            <FieldLabel>Main call to action</FieldLabel>
-            <SingleSelectPills options={PRIMARY_CTA_OPTIONS} value={form.schedule.ctaPrimary} onChange={v => patch('schedule', 'ctaPrimary', v)} />
-          </div>
-
-          <div style={{ marginTop: 16 }}>
-            <FieldLabel hint="optional">Secondary call to action</FieldLabel>
-            <SingleSelectPills options={PRIMARY_CTA_OPTIONS} value={form.schedule.ctaSecondary} onChange={v => patch('schedule', 'ctaSecondary', v)} />
-          </div>
-        </Card>
-        <GuidancePanel>{WHY_TEXT[3]}</GuidancePanel>
-        <LiveSummaryPanel title="Your Profile So Far" rows={summaryRows} />
-      </div>
-      )}
-
-      {step === 4 && (
-      <div className="ps-wizard-layout" style={{ display: 'grid', gridTemplateColumns: '1fr 260px', gap: 20, alignItems: 'start' }}>
-        <Card className="ps-fade">
-          <SectionLabel>Step 5 · Platform format</SectionLabel>
+          <SectionLabel>Step 3 · Generate</SectionLabel>
           <FieldLabel htmlFor="bio-format">Generate as</FieldLabel>
           <Select id="bio-format" value={format} onChange={e => setFormat(e.target.value)} style={{ maxWidth: 340, marginBottom: 16 }}>
             {BIO_FORMATS.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
@@ -438,18 +430,20 @@ export default function BioGenerator({ isLoggedIn, sharedProfile, onSharedProfil
             {!form.identity.displayName && <div style={{ fontSize: 12, color: T.faint, marginTop: 8 }}>Add a display name in Step 1 to generate.</div>}
           </div>
         </Card>
-        <GuidancePanel>{WHY_TEXT[4]}</GuidancePanel>
-        <LiveSummaryPanel title="Your Profile So Far" rows={summaryRows} />
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <GuidancePanel>{WHY_TEXT[2]}</GuidancePanel>
+          <LiveSummaryPanel title="Your Profile So Far" rows={summaryRows} />
+        </div>
       </div>
       )}
 
-      {step < 4 && (
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 18 }}>
+      {step < STEPS.length - 1 && (
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8 }}>
           <SecondaryButton onClick={goBack} disabled={step === 0}>← Back</SecondaryButton>
           <PrimaryButton onClick={goNext}>Continue →</PrimaryButton>
         </div>
       )}
-      {step === 4 && step > 0 && (
+      {step === STEPS.length - 1 && step > 0 && (
         <div style={{ marginTop: 12 }}>
           <SecondaryButton onClick={goBack}>← Back</SecondaryButton>
         </div>
@@ -478,7 +472,7 @@ export default function BioGenerator({ isLoggedIn, sharedProfile, onSharedProfil
         </div>
       )}
 
-      {!bios && !loading && step === 4 && (
+      {!bios && !loading && step === STEPS.length - 1 && (
         <EmptyState title="Build a bio that sounds like you—not a generic template." description="Fill out your identity, persona, content, and schedule, then generate three versions to choose from." />
       )}
 

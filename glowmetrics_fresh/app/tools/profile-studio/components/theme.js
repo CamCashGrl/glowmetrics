@@ -67,7 +67,7 @@ export function Card({ children, style, highlight, ...rest }) {
         border: `1px solid ${highlight ? 'rgba(22,244,255,0.28)' : T.border}`,
         borderRadius: 20,
         boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.05), 0 14px 34px rgba(0,0,0,0.28)',
-        padding: 22,
+        padding: 10,
         ...style,
       }}
       {...rest}
@@ -79,7 +79,7 @@ export function Card({ children, style, highlight, ...rest }) {
 
 export function SectionLabel({ children, style }) {
   return (
-    <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: T.cyan, marginBottom: 10, ...style }}>
+    <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: T.cyan, marginBottom: 6, ...style }}>
       {children}
     </div>
   )
@@ -87,7 +87,7 @@ export function SectionLabel({ children, style }) {
 
 export function FieldLabel({ children, hint, required, htmlFor }) {
   return (
-    <label htmlFor={htmlFor} style={{ display: 'block', fontSize: 13, fontWeight: 700, color: T.soft, marginBottom: 6 }}>
+    <label htmlFor={htmlFor} style={{ display: 'block', fontSize: 13, fontWeight: 700, color: T.soft, marginBottom: 4 }}>
       {children}{required ? <span style={{ color: T.pink }}> *</span> : null}
       {hint ? <span style={{ fontWeight: 400, color: T.faint, marginLeft: 6 }}>({hint})</span> : null}
     </label>
@@ -96,7 +96,7 @@ export function FieldLabel({ children, hint, required, htmlFor }) {
 
 const baseInputStyle = {
   width: '100%',
-  padding: '11px 14px',
+  padding: '9px 14px',
   borderRadius: 12,
   background: T.input,
   border: `1px solid ${T.border}`,
@@ -129,7 +129,7 @@ export function Pill({ active, onClick, children, disabled }) {
       disabled={disabled}
       className="ps-pill ps-btn"
       style={{
-        padding: '8px 14px',
+        padding: '6px 12px',
         borderRadius: 999,
         fontSize: 13,
         fontWeight: 600,
@@ -148,7 +148,7 @@ export function Pill({ active, onClick, children, disabled }) {
 
 export function PillGroup({ options, value = [], onToggle, max }) {
   return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
       {options.map(opt => {
         const id = typeof opt === 'string' ? opt : opt.id
         const label = typeof opt === 'string' ? opt : opt.label
@@ -249,7 +249,7 @@ export function Badge({ children, color = T.cyan, style }) {
 
 export function StepDots({ steps, current }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 22, flexWrap: 'wrap' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
       {steps.map((label, i) => (
         <React.Fragment key={label}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -326,12 +326,12 @@ export function GuidancePanel({ title = 'Why we ask this', children }) {
 
 export function CompletionTracker({ percent, checklist }) {
   return (
-    <div style={{ marginBottom: 18 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+    <div style={{ marginBottom: 10 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
         <span style={{ fontSize: 12, fontWeight: 700, color: T.soft }}>Profile completeness</span>
         <span style={{ fontSize: 12, fontWeight: 700, color: T.cyan }}>{percent}%</span>
       </div>
-      <div style={{ height: 6, borderRadius: 999, background: 'rgba(255,255,255,0.08)', overflow: 'hidden', marginBottom: 12 }}>
+      <div style={{ height: 6, borderRadius: 999, background: 'rgba(255,255,255,0.08)', overflow: 'hidden', marginBottom: 6 }}>
         <div style={{ height: '100%', width: `${percent}%`, background: GRADIENT, transition: 'width 0.3s ease' }} />
       </div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
@@ -346,6 +346,29 @@ export function CompletionTracker({ percent, checklist }) {
           </span>
         ))}
       </div>
+    </div>
+  )
+}
+
+// Collapsed-by-default expandable panel — used to keep secondary/educational
+// content on the page (examples, how-it-works, platform list, privacy,
+// comparison, guides) out of the way of the generator by default, without
+// deleting any of it.
+export function Accordion({ title, children, defaultOpen = false }) {
+  const [open, setOpen] = useState(defaultOpen)
+  return (
+    <div style={{ border: `1px solid ${T.border}`, borderRadius: 14, background: T.card, marginBottom: 8, overflow: 'hidden' }}>
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        aria-expanded={open}
+        className="ps-btn"
+        style={{ width: '100%', textAlign: 'left', padding: '12px 16px', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}
+      >
+        <span style={{ fontSize: 14.5, fontWeight: 800, color: T.white }}>{title}</span>
+        <span style={{ color: T.cyan, fontSize: 19, fontWeight: 300, transform: open ? 'rotate(45deg)' : 'none', transition: 'transform 0.15s', flexShrink: 0 }}>+</span>
+      </button>
+      {open && <div style={{ padding: '0 18px 18px' }}>{children}</div>}
     </div>
   )
 }
