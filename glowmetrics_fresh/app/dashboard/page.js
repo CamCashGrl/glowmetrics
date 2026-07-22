@@ -88,6 +88,17 @@ const formatImportDate = (iso) => {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
+// Turns a raw day count into a friendly "Last active …" phrase without
+// altering the underlying days-since-last-tip value used elsewhere.
+const formatLastActive = (days) => {
+  if (days === null || days === undefined || isNaN(days)) return "Not enough data yet"
+  if (days <= 0) return "Last active today"
+  if (days === 1) return "Last active yesterday"
+  if (days < 30) return `Last active ${days} days ago`
+  if (days < 365) return `Last active ${Math.round(days / 30)} months ago`
+  return `Last active ${(days / 365).toFixed(1)} years ago`
+}
+
 // Builds the "quick preview" stats (tips / fans / earnings / top spender)
 // shown when a free-tier user's import is blocked by the platform limit —
 // same shape as onboarding's buildPreview(), minus paid-session handling,
@@ -2920,6 +2931,22 @@ const stopImportMessageRotation = () => {
         }
         .import-flash-ring { animation: import-flash 900ms ease-out; }
         .import-check-badge { animation: import-check-pop 420ms cubic-bezier(0.34,1.3,0.64,1); }
+
+        /* ── FAN CARD / MESSAGE (HEART-ENVELOPE) ── */
+        @keyframes heart-envelope-breathe {
+          0%, 100% { transform: scale(1); filter: drop-shadow(0 0 0 rgba(255,43,174,0)); }
+          50% { transform: scale(1.08); filter: drop-shadow(0 0 6px rgba(255,43,174,0.45)); }
+        }
+        .heart-envelope-btn { animation: heart-envelope-breathe 2.8s ease-in-out infinite; }
+        .heart-envelope-btn:hover, .heart-envelope-btn:focus-visible {
+          transform: scale(1.12);
+          box-shadow: 0 0 0 3px rgba(255,43,174,0.18), 0 0 16px rgba(255,43,174,0.35);
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .heart-envelope-btn { animation: none; }
+          .heart-envelope-btn:hover, .heart-envelope-btn:focus-visible { transform: none; }
+        }
+        .tier-filter-btn { transition: background 0.15s ease, color 0.15s ease; }
       `}</style>
 
       <div style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 0 }}>
@@ -4263,33 +4290,45 @@ const stopImportMessageRotation = () => {
 
         {activeTab === "whales" && (
           <div>
-            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 12, marginBottom: 8 }}>
-              <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, margin: 0 }}>🐳 Top Fans</h1>
-              <div style={{ display: "flex", gap: 8 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 2 }}>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+                <h1 style={{ fontSize: 22, fontWeight: 800, color: C.white, margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 20 }}>🐳</span> Top Fans
+                </h1>
+                <span style={{ fontSize: 13, color: C.text }}>Your highest-value supporters ranked by total spend</span>
+              </div>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 {chartDrillDay && (
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", borderRadius: 10, background: "rgba(34,211,238,0.1)", border: "1px solid rgba(34,211,238,0.35)", fontSize: 13, color: C.cyan, fontWeight: 600 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 12px", borderRadius: 10, background: "rgba(34,211,238,0.1)", border: "1px solid rgba(34,211,238,0.35)", fontSize: 12, color: C.cyan, fontWeight: 600 }}>
                     📅 {chartDrillDay}s only
-                    <button onClick={() => setChartDrillDay(null)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 14, padding: 0, lineHeight: 1 }}>✕</button>
+                    <button onClick={() => setChartDrillDay(null)} style={{ background: "none", border: "none", color: C.text, cursor: "pointer", fontSize: 14, padding: 0, lineHeight: 1 }}>✕</button>
                   </div>
                 )}
-                <button onClick={() => setFanSearchOpen(true)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 10, background: "linear-gradient(135deg, rgba(59,130,246,0.15), rgba(236,72,153,0.15))", border: "1px solid rgba(59,130,246,0.35)", color: C.white, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                <button onClick={() => setFanSearchOpen(true)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 13px", borderRadius: 9, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.12)", color: C.text, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
                   🔍 Search Fan
                 </button>
               </div>
             </div>
-            <p style={{ fontSize: 13, color: C.muted, marginBottom: 24 }}>Your highest-value supporters ranked by total spend</p>
 
             {/* FILTERS */}
-            <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
-              <div style={{ display: "flex", gap: 6, background: "rgba(255,255,255,0.04)", padding: 4, borderRadius: 10, border: "1px solid rgba(255,255,255,0.08)" }}>
-                {["ALL","Whale","Shark","Regular","Dormant"].map(t => (
-                  <button key={t} onClick={() => setWhaleFilter(t)} style={{ padding: "5px 12px", borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: "pointer", border: "none", transition: "all 0.15s", background: whaleFilter === t ? "linear-gradient(135deg, #3b82f6, #ec4899)" : "transparent", color: whaleFilter === t ? C.white : C.muted }}>{t}</button>
-                ))}
+            <div style={{ display: "flex", gap: 10, marginTop: 14, marginBottom: 16, flexWrap: "wrap" }}>
+              <div style={{ display: "flex", gap: 2, background: "rgba(255,255,255,0.03)", padding: 3, borderRadius: 10, border: "1px solid rgba(255,255,255,0.08)" }}>
+                {["ALL","Whale","Shark","Regular","Dormant"].map(t => {
+                  const count = t === "ALL" ? whales.length : whales.filter(w => w.tier === t).length
+                  const active = whaleFilter === t
+                  return (
+                    <button key={t} className="tier-filter-btn" onClick={() => setWhaleFilter(t)}
+                      style={{ padding: "6px 12px", borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: "pointer", border: "none", background: active ? "linear-gradient(135deg, #22D3EE, #EC4899)" : "transparent", color: active ? "#06101A" : C.text }}>
+                      {t === "ALL" ? "All" : t}
+                      <span style={{ marginLeft: 5, fontSize: 10, fontWeight: 700, opacity: active ? 0.75 : 0.6 }}>{count}</span>
+                    </button>
+                  )
+                })}
               </div>
               {allPlatforms.length > 1 && (
-                <div style={{ display: "flex", gap: 6, background: "rgba(255,255,255,0.04)", padding: 4, borderRadius: 10, border: "1px solid rgba(255,255,255,0.08)" }}>
+                <div style={{ display: "flex", gap: 2, background: "rgba(255,255,255,0.03)", padding: 3, borderRadius: 10, border: "1px solid rgba(255,255,255,0.08)" }}>
                   {["ALL", ...allPlatforms].map(p => (
-                    <button key={p} onClick={() => setPlatformFilter(p)} style={{ padding: "5px 12px", borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: "pointer", border: "none", transition: "all 0.15s", background: platformFilter === p ? "rgba(34,211,238,0.2)" : "transparent", color: platformFilter === p ? C.cyan : C.muted }}>{p}</button>
+                    <button key={p} className="tier-filter-btn" onClick={() => setPlatformFilter(p)} style={{ padding: "6px 12px", borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: "pointer", border: "none", background: platformFilter === p ? "rgba(34,211,238,0.18)" : "transparent", color: platformFilter === p ? C.cyan : C.text }}>{p}</button>
                   ))}
                 </div>
               )}
@@ -4299,86 +4338,103 @@ const stopImportMessageRotation = () => {
             {filteredWhales.length === 0 ? (
               <div style={{ ...glassCard, borderRadius: 14, padding: 32, textAlign: 'center', marginBottom: 20 }}>
                 <div style={{ fontSize: 32, marginBottom: 12 }}>🔍</div>
-                <div style={{ fontSize: 15, color: C.muted }}>No fans match this filter</div>
+                <div style={{ fontSize: 15, color: C.text, fontWeight: 600, marginBottom: 4 }}>No fans match this filter</div>
+                <div style={{ fontSize: 12, color: C.text }}>Try a different tier or clear the platform filter</div>
               </div>
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 14, marginBottom: 20 }}>
                 {filteredWhales.map((w, i) => {
                   const tc = TIER_COLORS[w.tier] || C.cyan
-                  const days = w.daysSinceLastTip ?? Math.floor((Date.now() - new Date(w.lastTipDate)) / 86400000)
+                  const days = w.daysSinceLastTip ?? (w.lastTipDate ? Math.floor((Date.now() - new Date(w.lastTipDate)) / 86400000) : null)
                   const relScore = Math.min(100, Math.round((w.tipCount * 3) + (w.totalUSD / 10) + (days < 7 ? 20 : days < 30 ? 10 : 0)))
                   const scoreColor = relScore >= 70 ? C.green : relScore >= 40 ? C.gold : C.red
-                  const riskLevel = days < 14 ? { label: 'Low', color: C.green, pct: 20 } : days < 45 ? { label: 'Medium', color: C.gold, pct: 55 } : { label: 'High', color: C.red, pct: 90 }
-                  const tierIcon = w.tier === 'Whale' ? '💎' : w.tier === 'Shark' ? '🦈' : w.tier === 'Regular' ? '⭐' : '💤'
+                  // Reuse the shared churn-risk formula from analytics.js (w.churnRisk)
+                  // instead of a second, inconsistent day-threshold calc — that duplicate
+                  // was why nearly every card showed "High" regardless of actual pattern.
+                  const cr = w.churnRisk?.level
+                  const riskLevel = cr === "Low" ? { label: "Low", color: C.green, pct: 20 }
+                    : cr === "Medium" ? { label: "Medium", color: C.gold, pct: 55 }
+                    : cr === "High" ? { label: "High", color: C.red, pct: 80 }
+                    : cr === "Critical" ? { label: "Critical", color: C.red, pct: 95 }
+                    : null
+                  const riskReason = riskLevel && (riskLevel.label === "High" || riskLevel.label === "Critical")
+                    ? `Inactive for ${days} days`
+                    : riskLevel?.label === "Medium" ? "Spend has slowed" : null
                   return (
                     <div key={i}
                       className="hoverable"
-                      style={{ ...glassCard, borderRadius: 16, padding: 18, border: `1px solid ${tc}33`, cursor: 'default', transition: 'transform 0.18s ease, box-shadow 0.18s ease' }}
-                      onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = `0 0 28px ${tc}22, 0 8px 32px rgba(0,0,0,0.45)` }}
+                      style={{ ...glassCard, borderRadius: 16, padding: 16, border: '1px solid rgba(255,255,255,0.08)', cursor: 'default', transition: 'transform 0.18s ease, box-shadow 0.18s ease' }}
+                      onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = `0 8px 28px rgba(0,0,0,0.4)` }}
                       onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = '' }}>
 
                       {/* TOP ROW — avatar, name, badges, score */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
                         {/* Avatar */}
-                        <div style={{ width: 42, height: 42, borderRadius: 12, background: `linear-gradient(135deg, ${tc}, ${tc}80)`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 17, fontWeight: 800, color: '#fff', flexShrink: 0 }}>
+                        <div style={{ width: 36, height: 36, borderRadius: 10, background: `linear-gradient(135deg, ${tc}, ${tc}80)`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 800, color: '#fff', flexShrink: 0 }}>
                           {(w.username || '?').charAt(0).toUpperCase()}
                         </div>
                         {/* Name + badges */}
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 14, fontWeight: 700, color: C.white, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginBottom: 4 }}>{w.username}</div>
+                          <div title={w.username} style={{ fontSize: 14, fontWeight: 700, color: C.white, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginBottom: 3 }}>{w.username}</div>
                           <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-                            <span style={{ padding: '2px 7px', borderRadius: 100, background: `${tc}20`, color: tc, fontSize: 10, fontWeight: 700 }}>{w.tier}</span>
-                            <span style={{ padding: '2px 7px', borderRadius: 100, background: 'rgba(255,255,255,0.06)', color: C.muted, fontSize: 10, fontWeight: 600 }}>{w.platform}</span>
+                            <span style={{ padding: '1px 6px', borderRadius: 100, background: `${tc}18`, color: tc, fontSize: 9, fontWeight: 700 }}>{w.tier}</span>
+                            <span style={{ padding: '1px 6px', borderRadius: 100, background: 'rgba(255,255,255,0.05)', color: C.text, fontSize: 9, fontWeight: 600 }}>{w.platform || 'Unknown'}</span>
                           </div>
                         </div>
                         {/* Relationship score */}
-                        <div style={{ flexShrink: 0, width: 38, height: 38, borderRadius: '50%', background: `${scoreColor}18`, border: `2px solid ${scoreColor}55`, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                          <div style={{ fontSize: 11, fontWeight: 800, color: scoreColor, lineHeight: 1 }}>{relScore}</div>
-                          <div style={{ fontSize: 7, color: scoreColor, opacity: 0.7, lineHeight: 1 }}>REL</div>
+                        <div title="Relationship score" style={{ flexShrink: 0, width: 30, height: 30, borderRadius: '50%', border: `2px solid ${scoreColor}45`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <div style={{ fontSize: 10, fontWeight: 800, color: scoreColor, lineHeight: 1 }}>{relScore}</div>
                         </div>
                       </div>
 
-                      {/* METRIC ROW — 4 pills */}
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 6, marginBottom: 12 }}>
-                        {[
-                          { icon: '💰', val: `$${(w.totalUSD || 0).toFixed(2)}`, label: 'lifetime' },
-                          { icon: '🔁', val: String(w.tipCount || 0), label: 'tips' },
-                          { icon: '⏱', val: `${days}d`, label: 'ago' },
-                          { icon: '📊', val: `$${(w.avgTipSize || 0).toFixed(2)}`, label: 'avg tip' },
-                        ].map(({ icon, val, label }) => (
-                          <div key={label} style={{ padding: '7px 10px', borderRadius: 9, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <span style={{ fontSize: 12 }}>{icon}</span>
-                            <div>
-                              <div style={{ fontSize: 12, fontWeight: 700, color: C.white, lineHeight: 1.1 }}>{val}</div>
-                              <div style={{ fontSize: 9, color: C.muted, lineHeight: 1 }}>{label}</div>
-                            </div>
+                      {/* PRIMARY METRICS — typography-led, no heavy tiles */}
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', rowGap: 8, columnGap: 10, marginBottom: 12, padding: '10px 0', borderTop: '1px solid rgba(255,255,255,0.06)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                        <div>
+                          <div style={{ fontSize: 14, fontWeight: 800, color: C.white }}>${(w.totalUSD || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                          <div style={{ fontSize: 10, color: C.text }}>Lifetime spend</div>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 14, fontWeight: 800, color: C.white }}>{(w.tipCount || 0).toLocaleString()}</div>
+                          <div style={{ fontSize: 10, color: C.text }}>Total tips</div>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: C.white }} title={w.lastTipDate ? new Date(w.lastTipDate).toLocaleString() : undefined}>{formatLastActive(days).replace('Last active ', '')}</div>
+                          <div style={{ fontSize: 10, color: C.text }}>Last active</div>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: C.white }}>${(w.avgTipSize || 0).toFixed(2)}</div>
+                          <div style={{ fontSize: 10, color: C.text }}>Avg. tip</div>
+                        </div>
+                      </div>
+
+                      {/* RETENTION RISK */}
+                      {riskLevel && (
+                        <div style={{ marginBottom: 12 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                            <span style={{ fontSize: 9, color: C.text, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 600 }}>Retention risk</span>
+                            <span style={{ fontSize: 10, fontWeight: 700, color: riskLevel.color }}>{riskLevel.label}</span>
                           </div>
-                        ))}
-                      </div>
-
-                      {/* RETENTION RISK BAR */}
-                      <div style={{ marginBottom: 12 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                          <span style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 600 }}>Retention Risk</span>
-                          <span style={{ fontSize: 9, fontWeight: 700, color: riskLevel.color }}>{riskLevel.label}</span>
+                          <div style={{ height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.06)', overflow: 'hidden' }}>
+                            <div style={{ height: '100%', width: `${riskLevel.pct}%`, borderRadius: 2, background: riskLevel.color, transition: 'width 0.4s ease' }} />
+                          </div>
+                          {riskReason && <div style={{ fontSize: 10, color: C.text, marginTop: 4 }}>{riskReason}</div>}
                         </div>
-                        <div style={{ height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.07)', overflow: 'hidden' }}>
-                          <div style={{ height: '100%', width: `${riskLevel.pct}%`, borderRadius: 2, background: riskLevel.color, transition: 'width 0.4s ease' }} />
-                        </div>
-                      </div>
+                      )}
 
-                      {/* QUICK ACTIONS */}
-                      <div style={{ display: 'flex', gap: 6 }}>
-                        <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }}
-                          style={{ flex: 1, padding: '7px 0', borderRadius: 8, background: 'rgba(236,72,153,0.1)', border: '1px solid rgba(236,72,153,0.25)', color: C.pink, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
-                          title="Message">💌 Message</button>
+                      {/* ACTIONS — one primary, two secondary */}
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                         <button onClick={() => setSelectedWhale(w)}
-                          style={{ flex: 1, padding: '7px 0', borderRadius: 8, background: 'rgba(34,211,238,0.1)', border: '1px solid rgba(34,211,238,0.25)', color: C.cyan, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
-                          title="View profile">🔍 View</button>
+                          style={{ flex: 1, padding: '8px 0', borderRadius: 8, background: 'linear-gradient(135deg, #22D3EE, #EC4899)', border: 'none', color: '#06101A', fontSize: 12, fontWeight: 800, cursor: 'pointer' }}
+                          title="View fan profile">View Fan</button>
+                        <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }}
+                          className="heart-envelope-btn"
+                          aria-label={`Message ${w.username}`}
+                          title="Message fan"
+                          style={{ width: 32, height: 32, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, background: 'rgba(255,43,174,0.1)', border: '1px solid rgba(255,43,174,0.25)', color: C.pink, fontSize: 14, cursor: 'pointer' }}>💌</button>
                         <button onClick={() => setNoteTarget(w.username)}
-                          style={{ flex: 1, padding: '7px 0', borderRadius: 8, background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.25)', color: '#a78bfa', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
-                          title="Add note">📝 Note</button>
-                        <div style={{ width: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, opacity: 0.6 }} title={`${w.tier} tier`}>{tierIcon}</div>
+                          aria-label={`Add note for ${w.username}`}
+                          title="Add note"
+                          style={{ width: 32, height: 32, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.25)', color: '#a78bfa', fontSize: 13, cursor: 'pointer' }}>📝</button>
                       </div>
                     </div>
                   )
@@ -6588,16 +6644,27 @@ const stopImportMessageRotation = () => {
                       <div style={{ fontSize: 20, fontWeight: 800, color: C.white }}>{w.username}</div>
                       <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
                         <span style={{ padding: "2px 10px", borderRadius: 100, background: `${tierColor}20`, border: `1px solid ${tierColor}50`, color: tierColor, fontSize: 11, fontWeight: 700 }}>{w.tier}</span>
-                        <span style={{ fontSize: 12, color: C.muted }}>{w.platform}</span>
+                        <span style={{ fontSize: 12, color: C.text }}>{w.platform}</span>
                       </div>
                     </div>
                   </div>
-                  <button onClick={() => setSelectedWhale(null)} style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.1)", color: C.muted, fontSize: 16, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }}
+                      className="heart-envelope-btn"
+                      aria-label={`Message ${w.username}`}
+                      title="Message fan"
+                      style={{ width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "50%", background: "rgba(255,43,174,0.12)", border: "1px solid rgba(255,43,174,0.3)", color: C.pink, fontSize: 14, cursor: "pointer" }}>💌</button>
+                    <button onClick={() => setNoteTarget(w.username)}
+                      aria-label={`Add note for ${w.username}`}
+                      title="Add note"
+                      style={{ width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "50%", background: "rgba(167,139,250,0.12)", border: "1px solid rgba(167,139,250,0.3)", color: "#a78bfa", fontSize: 13, cursor: "pointer" }}>📝</button>
+                    <button onClick={() => setSelectedWhale(null)} aria-label="Close profile" style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.1)", color: C.text, fontSize: 16, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+                  </div>
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
                   {[{ label: "Total Spent", value: `$${w.totalUSD.toFixed(2)}`, color: C.green }, { label: "Tips Given", value: w.tipCount, color: C.cyan }, { label: "Avg Tip", value: `$${w.avgTipSize.toFixed(2)}`, color: C.gold }, { label: "Biggest Tip", value: `$${biggestTip.toFixed(2)}`, color: C.pink }].map(({ label, value, color }) => (
-                    <div key={label} style={{ background: "rgba(255,255,255,0.05)", borderRadius: 10, padding: 12, textAlign: "center" }}>
-                      <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>{label}</div>
+                    <div key={label} style={{ textAlign: "center" }}>
+                      <div style={{ fontSize: 11, color: C.text, marginBottom: 4 }}>{label}</div>
                       <div style={{ fontSize: 16, fontWeight: 800, color }}>{value}</div>
                     </div>
                   ))}
@@ -6605,12 +6672,18 @@ const stopImportMessageRotation = () => {
               </div>
               <div style={{ padding: 24, display: "flex", flexDirection: "column", gap: 20 }}>
                 <div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>📊 Fan Intelligence</div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: C.text, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>📊 Fan Intelligence</div>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
-                    {[{ label: "First tip", value: firstTip ? new Date(firstTip.date_time).toLocaleDateString() : "Not enough data yet" }, { label: "Last tip", value: w.lastTipDate ? `${new Date(w.lastTipDate).toLocaleDateString()} (${daysSinceLastTip}d ago)` : "Not enough data yet" }, { label: "Avg days between tips", value: whaleTips.length > 1 ? `${avgDaysBetweenTips} days` : "Not enough data yet" }, { label: "Churn risk", value: churnRisk || "Not enough data yet", color: churnColor }].map(({ label, value, color }) => (
-                      <div key={label} style={{ padding: 14, background: "rgba(255,255,255,0.04)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.07)" }}>
-                        <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>{label}</div>
-                        <div style={{ fontSize: 14, fontWeight: 600, color: color || C.white }}>{value}</div>
+                    {[
+                      { label: "First tip", value: firstTip ? new Date(firstTip.date_time).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : "Not enough data yet" },
+                      { label: "Last tip", value: w.lastTipDate ? new Date(w.lastTipDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : "Not enough data yet", sub: daysSinceLastTip !== null ? `${daysSinceLastTip.toLocaleString()} days ago` : null },
+                      { label: "Avg days between tips", value: whaleTips.length > 1 ? `Every ~${avgDaysBetweenTips} days` : "Not enough data yet" },
+                      { label: "Churn risk", value: churnRisk || "Not enough data yet", color: churnColor },
+                    ].map(({ label, value, sub, color }) => (
+                      <div key={label} style={{ padding: "10px 0" }}>
+                        <div style={{ fontSize: 11, color: C.text, marginBottom: 4 }}>{label}</div>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: color || C.white }}>{value}</div>
+                        {sub && <div style={{ fontSize: 11, color: C.text, marginTop: 2 }}>{sub}</div>}
                       </div>
                     ))}
                   </div>
@@ -6630,7 +6703,7 @@ const stopImportMessageRotation = () => {
                     const maxCount = Math.max(...Object.values(dayCounts), 1)
                     return (
                       <div>
-                        <div style={{ fontSize: 11, color: C.muted, marginBottom: 8 }}>📅 Tips by day of week</div>
+                        <div style={{ fontSize: 11, color: C.text, marginBottom: 8 }}>📅 Tips by day of week</div>
                         <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4 }}>
                           {dayKeys.map(d => {
                             const count = dayCounts[d]
@@ -6639,9 +6712,9 @@ const stopImportMessageRotation = () => {
                             return (
                               <div key={d} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
                                 <div style={{ width: "100%", height: 30, borderRadius: 6, background: bg, border: "1px solid rgba(255,255,255,0.06)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                                  <span style={{ fontSize: 10, fontWeight: 700, color: count > 0 ? C.white : C.muted }}>{count || ""}</span>
+                                  <span style={{ fontSize: 10, fontWeight: 700, color: count > 0 ? C.white : C.text }}>{count || ""}</span>
                                 </div>
-                                <span style={{ fontSize: 9, color: C.muted }}>{d}</span>
+                                <span style={{ fontSize: 9, color: C.text }}>{d}</span>
                               </div>
                             )
                           })}
@@ -6651,13 +6724,13 @@ const stopImportMessageRotation = () => {
                   })()}
                 </div>
                 <div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>🏆 Top 3 Tips</div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: C.text, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>🏆 Top 3 Tips</div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                     {[...whaleTips].sort((a,b) => b.usd - a.usd).slice(0,3).map((t, i) => (
                       <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: "rgba(255,255,255,0.04)", borderRadius: 8, border: "1px solid rgba(255,255,255,0.07)" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                           <span style={{ fontSize: 14 }}>{["🥇","🥈","🥉"][i]}</span>
-                          <span style={{ fontSize: 12, color: C.muted }}>{new Date(t.date_time).toLocaleDateString()}</span>
+                          <span style={{ fontSize: 12, color: C.text }}>{new Date(t.date_time).toLocaleDateString()}</span>
                         </div>
                         <div style={{ fontSize: 15, fontWeight: 800, color: C.gold }}>${t.usd.toFixed(2)}</div>
                       </div>
@@ -6665,11 +6738,11 @@ const stopImportMessageRotation = () => {
                   </div>
                 </div>
                 <div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>🕐 Recent Tips</div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: C.text, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>🕐 Recent Tips</div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                     {sortedTips.slice(0, 5).map((t, i) => (
                       <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: "rgba(255,255,255,0.04)", borderRadius: 8, border: "1px solid rgba(255,255,255,0.07)" }}>
-                        <div style={{ fontSize: 12, color: C.muted }}>{new Date(t.date_time).toLocaleDateString()} at {new Date(t.date_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</div>
+                        <div style={{ fontSize: 12, color: C.text }}>{new Date(t.date_time).toLocaleDateString()} at {new Date(t.date_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</div>
                         <div style={{ fontSize: 14, fontWeight: 700, color: C.green }}>${t.usd.toFixed(2)}</div>
                       </div>
                     ))}
@@ -6677,7 +6750,7 @@ const stopImportMessageRotation = () => {
                 </div>
                 {fanPaidSessions.length > 0 && (
                   <div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>💎 Private Sessions</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: C.text, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>💎 Private Sessions</div>
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10, marginBottom: 12 }}>
                       {[
                         { label: "Lifetime private earnings", value: `$${fanPrivateUSD.toFixed(2)}`, color: C.purple || "#a855f7" },
@@ -6690,7 +6763,7 @@ const stopImportMessageRotation = () => {
                         { label: "Most recent private session", value: fanPrivateSorted[fanPrivateSorted.length - 1] ? new Date(fanPrivateSorted[fanPrivateSorted.length - 1].date_time).toLocaleDateString() : "Not enough data yet" },
                       ].map(({ label, value, color }) => (
                         <div key={label} style={{ padding: 14, background: "rgba(168,85,247,0.06)", borderRadius: 10, border: "1px solid rgba(168,85,247,0.15)" }}>
-                          <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>{label}</div>
+                          <div style={{ fontSize: 11, color: C.text, marginBottom: 4 }}>{label}</div>
                           <div style={{ fontSize: 14, fontWeight: 700, color: color || C.white }}>{value}</div>
                         </div>
                       ))}
@@ -6698,19 +6771,19 @@ const stopImportMessageRotation = () => {
                     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                       {[...fanPaidSessions].sort((a, b) => new Date(b.date_time) - new Date(a.date_time)).slice(0, 5).map(s => (
                         <div key={s.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: "rgba(255,255,255,0.04)", borderRadius: 8, border: "1px solid rgba(255,255,255,0.07)" }}>
-                          <div style={{ fontSize: 12, color: C.muted }}>{s.session_type} · {new Date(s.date_time).toLocaleDateString()}</div>
+                          <div style={{ fontSize: 12, color: C.text }}>{s.session_type} · {new Date(s.date_time).toLocaleDateString()}</div>
                           <div style={{ fontSize: 14, fontWeight: 700, color: "#a855f7" }}>${parseFloat(s.usd).toFixed(2)}</div>
                         </div>
                       ))}
                     </div>
                     {/* Combined lifetime value — each source labeled separately, summed once */}
                     <div style={{ marginTop: 12, padding: 14, background: "rgba(255,255,255,0.04)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.07)" }}>
-                      <div style={{ fontSize: 11, color: C.muted, marginBottom: 8 }}>Combined Lifetime Value</div>
+                      <div style={{ fontSize: 11, color: C.text, marginBottom: 8 }}>Combined Lifetime Value</div>
                       <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4 }}>
-                        <span style={{ color: C.muted }}>Free-chat tips</span><span style={{ color: C.cyan, fontWeight: 700 }}>${(w.totalUSD || 0).toFixed(2)}</span>
+                        <span style={{ color: C.text }}>Free-chat tips</span><span style={{ color: C.cyan, fontWeight: 700 }}>${(w.totalUSD || 0).toFixed(2)}</span>
                       </div>
                       <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 8 }}>
-                        <span style={{ color: C.muted }}>Private sessions</span><span style={{ color: "#a855f7", fontWeight: 700 }}>${fanPrivateUSD.toFixed(2)}</span>
+                        <span style={{ color: C.text }}>Private sessions</span><span style={{ color: "#a855f7", fontWeight: 700 }}>${fanPrivateUSD.toFixed(2)}</span>
                       </div>
                       <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, paddingTop: 8, borderTop: "1px solid rgba(255,255,255,0.08)" }}>
                         <span style={{ color: C.white, fontWeight: 700 }}>Combined total</span><span style={{ color: C.white, fontWeight: 800 }}>${((w.totalUSD || 0) + fanPrivateUSD).toFixed(2)}</span>
@@ -6720,7 +6793,7 @@ const stopImportMessageRotation = () => {
                 )}
                 {whaleTips.length > 0 && (
                   <div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>🤖 AI Predictions</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: C.text, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>🤖 AI Predictions</div>
                     <div style={{ padding: 16, background: "rgba(255,255,255,0.04)", borderRadius: 12, border: "1px solid rgba(255,255,255,0.07)", display: "flex", flexDirection: "column", gap: 10 }}>
                       {[{ label: "📅 Likely to tip again in", value: likelyReturnDays === 0 ? "Overdue!" : `~${likelyReturnDays} days`, color: C.cyan }, { label: "💸 Predicted next tip size", value: `$${(w.avgTipSize * 1.1).toFixed(2)}`, color: C.gold }, { label: "🎯 Engagement score", value: `${Math.min(99, Math.round((w.tipCount / 10) * 20 + (w.totalUSD / 100) * 10))} / 100`, color: C.pink }, { label: "📈 30-day revenue forecast", value: `$${((w.totalUSD / Math.max(1, Math.floor((Date.now() - new Date(firstTip?.date_time)) / 2592000000))) * 1.05).toFixed(2)}`, color: C.green }].map(({ label, value, color }) => (
                         <div key={label} style={{ display: "flex", justifyContent: "space-between", padding: "10px 14px", background: "rgba(255,255,255,0.04)", borderRadius: 8 }}>
@@ -6731,7 +6804,7 @@ const stopImportMessageRotation = () => {
                     </div>
                   </div>
                 )}
-                <button onClick={() => setSelectedWhale(null)} style={{ width: "100%", padding: "12px", borderRadius: 10, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: C.muted, fontSize: 14, cursor: "pointer" }}>Close Profile</button>
+                <button onClick={() => setSelectedWhale(null)} style={{ width: "100%", padding: "12px", borderRadius: 10, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: C.text, fontSize: 14, cursor: "pointer" }}>Close Profile</button>
               </div>
             </div>
           </div>
@@ -6951,22 +7024,25 @@ const stopImportMessageRotation = () => {
         </div>
       )}
 
-      {/* FLOATING FEEDBACK BUTTON */}
+      {/* FLOATING FEEDBACK BUTTON — collapsed to a small icon in a safe gutter so it
+          never sits over a fan card's actions or the bottom of the page content */}
       <button
         onClick={() => { setShowFeedback(true); setFeedbackSent(false); setFeedbackText('') }}
+        aria-label="Share feedback"
+        title="Feedback"
         style={{
-          position: "fixed", bottom: 24, right: 24, zIndex: 998,
-          display: "flex", alignItems: "center", gap: 8,
-          padding: "10px 18px", borderRadius: 100,
+          position: "fixed", bottom: 18, right: 18, zIndex: 60,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          width: 42, height: 42, borderRadius: "50%",
           background: "rgba(15,20,32,0.95)", backdropFilter: "blur(20px)",
           border: "1px solid rgba(255,255,255,0.12)",
-          color: C.text, fontSize: 13, fontWeight: 600, cursor: "pointer",
-          boxShadow: "0 4px 24px rgba(0,0,0,0.5)", transition: "all 0.2s"
+          color: C.text, fontSize: 17, cursor: "pointer",
+          boxShadow: "0 4px 18px rgba(0,0,0,0.5)", transition: "all 0.2s"
         }}
         onMouseEnter={e => { e.currentTarget.style.borderColor = "rgba(34,211,238,0.4)"; e.currentTarget.style.color = C.white }}
         onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.12)"; e.currentTarget.style.color = C.text }}
       >
-        <span style={{ fontSize: 16 }}>💬</span> Feedback
+        💬
       </button>
 
       {/* FEEDBACK MODAL */}
