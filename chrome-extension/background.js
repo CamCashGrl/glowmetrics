@@ -400,9 +400,17 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === 'whale_refresh') { await loadWhales(); await loadPlan(); }
-  if (alarm.name === 'live_heartbeat' && session && liveSession) {
-    await sendExtensionHeartbeat();
-    await fetchCoachingPrompt();
+  if (alarm.name === 'live_heartbeat' && session) {
+    if (liveSession) {
+      await sendExtensionHeartbeat();
+      await fetchCoachingPrompt();
+    } else {
+      // No session currently tracked here — check whether one was started
+      // on another surface (the website) since we last knew. Without this,
+      // an extension that booted up before a website-started session began
+      // would never learn about it until its own restart or next login.
+      await restoreLiveSession();
+    }
   }
 });
 

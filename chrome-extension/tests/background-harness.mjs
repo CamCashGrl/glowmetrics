@@ -312,6 +312,40 @@ async function main() {
     check('T8: every one of the 30 tips was POSTed to the server (none silently dropped)', tipPosts.length === 30);
   }
 
+  // ---- Test 9: extension discovers a session the WEBSITE started, on the next heartbeat tick ----
+  // Regression test for a real bug: the heartbeat alarm only re-synced with
+  // the server when liveSession was already truthy, so an extension that
+  // booted with no session never learned about one started elsewhere.
+  {
+    const { sandbox, state } = makeContext({ initialStorage: { session: 'fake-token', user: { id: 'u1', email: 'test@test.com' } } });
+    let websiteHasStartedASession = false;
+    state.fetchHandler = (url) => {
+      if (url.includes('/api/live/session') && !url.includes('start') && !url.includes('heartbeat')) {
+        return websiteHasStartedASession
+          ? { ok: true, json: async () => ({ session: { id: 'web-started-1', status: 'active', started_at: new Date().toISOString(), active_duration_seconds: 12 } }) }
+          : { ok: true, json: async () => ({ session: null }) };
+      }
+      if (url.includes('/api/live/coaching')) return { ok: true, json: async () => ({ prompt: null }) };
+      if (url.includes('/rest/v1/profiles')) return { ok: true, json: async () => [{ plan: 'free' }] };
+      if (url.includes('/rest/v1/tips')) return { ok: true, json: async () => [] };
+      return { ok: true, json: async () => ({}) };
+    };
+    loadBackground(sandbox);
+    await tick(30);
+
+    const beforeState = await new Promise((resolve) => state.onMessage({ action: 'live_get_state' }, {}, resolve));
+    check('T9: boots with no session tracked (none existed yet)', beforeState.liveSession === null);
+
+    // The website starts a session with the extension already idle and running.
+    websiteHasStartedASession = true;
+    await state.onAlarm({ name: 'live_heartbeat' });
+    await tick(30);
+
+    const afterState = await new Promise((resolve) => state.onMessage({ action: 'live_get_state' }, {}, resolve));
+    check('T9: next heartbeat tick discovers the website-started session', afterState.liveSession?.id === 'web-started-1');
+    check('T9: discovered session reflects the real status from the server', afterState.liveSession?.status === 'active');
+  }
+
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail > 0 ? 1 : 0);
 }
