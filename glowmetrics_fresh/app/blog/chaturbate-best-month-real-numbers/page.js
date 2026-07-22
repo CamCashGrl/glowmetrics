@@ -393,7 +393,7 @@ export default function BestMonthPost() {
             <div style={s.toolD}>Convert any token amount to USD instantly</div>
           </a>
           <a href="/blog/cam-model-fan-crm" style={s.toolCard}>
-            <div style={s.toolN}>Fan CRM Guide</div>
+            <div style={s.toolN}>Whale Watch Guide</div>
             <div style={s.toolD}>Track and re-engage your top tippers</div>
           </a>
           <a href="/guides/chaturbate-token-tracker" style={s.toolCard}>

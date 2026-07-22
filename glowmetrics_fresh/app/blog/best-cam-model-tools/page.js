@@ -228,7 +228,7 @@ export default function BestCamModelTools() {
         <li style={s.li}><strong style={{ color: '#e2e8f0' }}>Work with your existing data.</strong> Most platforms let you export earnings as a CSV. Tools that require unofficial integrations are unreliable long-term.</li>
         <li style={s.li}><strong style={{ color: '#e2e8f0' }}>Respect your privacy.</strong> Your earnings data is sensitive. It should be stored securely and never shared with third parties.</li>
       </ul>
-      <p style={s.p}>For earnings, <a href="/blog/how-to-track-cam-tips-automatically" style={s.iLink}>automatic tip tracking</a> beats any spreadsheet — it logs everything while you stream. For your top tippers, <a href="/blog/cam-model-fan-crm" style={s.iLink}>a fan CRM</a> (Pro feature — upgrade after signup) keeps a ranked profile on every whale so none slip away.</p>
+      <p style={s.p}>For earnings, <a href="/blog/how-to-track-cam-tips-automatically" style={s.iLink}>automatic tip tracking</a> beats any spreadsheet — it logs everything while you stream. For your top tippers, <a href="/blog/cam-model-fan-crm" style={s.iLink}>Whale Watch</a> (Pro feature — upgrade after signup) keeps a ranked profile on every whale so none slip away.</p>
 
       <h2 id="tools" style={s.h2}>The Tools</h2>
 
@@ -516,7 +516,7 @@ export default function BestCamModelTools() {
           <a href="/guides/cam-model-token-calculator" style={s.relLink}>→ Chaturbate token calculator</a>
           <a href="/guides/cam-model-room-title-generator" style={s.relLink}>→ Free room title generator</a>
           <a href="/blog/how-to-track-cam-tips-automatically" style={s.relLink}>→ How to Track Cam Tips Automatically — Automate your earnings tracking</a>
-          <a href="/blog/cam-model-fan-crm" style={s.relLink}>→ Cam Model Fan CRM — Track and profile your top tippers</a>
+          <a href="/blog/cam-model-fan-crm" style={s.relLink}>→ Whale Watch — Track and profile your high rollers</a>
           <a href="/tools/profile-studio" style={s.relLink}>→ Free cam bio & tip menu generator</a>
         </div>
       </div>

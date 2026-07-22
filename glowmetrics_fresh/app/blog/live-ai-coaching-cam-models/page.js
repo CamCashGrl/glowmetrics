@@ -58,7 +58,7 @@ export default function Page() {
   const relatedBlogs = [
     { title: 'How to Track Cam Tips Automatically', description: 'The extension that powers your live coaching', href: '/blog/how-to-track-cam-tips-automatically' },
     { title: 'How to Make More Money on Chaturbate', description: 'Broader strategies that pair with in-stream coaching', href: '/blog/how-to-make-more-money-on-chaturbate' },
-    { title: 'Cam Model Fan CRM', description: 'Know your VIPs before they even type', href: '/blog/cam-model-fan-crm' },
+    { title: 'Whale Watch', description: 'Know your high rollers before they even type', href: '/blog/cam-model-fan-crm' },
   ];
 
   const relatedGuides = [
@@ -195,7 +195,7 @@ export default function Page() {
         <p>
           And because the same system is logging your tips, the coaching gets smarter about <em>your</em> room over time. If
           you want to recognize your biggest supporters the second they appear, pair this with a{' '}
-          <a href="/blog/cam-model-fan-crm">fan CRM</a>.
+          <a href="/blog/cam-model-fan-crm">Whale Watch</a>.
         </p>
 
         <h2>Getting started</h2>
