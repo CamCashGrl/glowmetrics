@@ -28,6 +28,7 @@ const TAB_LOADING = (
 const AnalyticsCharts = dynamic(() => import('./AnalyticsCharts'), { ssr: false, loading: () => TAB_LOADING })
 const StreamPlanner = dynamic(() => import('./StreamPlanner'), { ssr: false, loading: () => TAB_LOADING })
 const MoneyMap = dynamic(() => import('./MoneyMap'), { ssr: false, loading: () => TAB_LOADING })
+const PrivateSessions = dynamic(() => import('./PrivateSessions'), { ssr: false, loading: () => TAB_LOADING })
 const DashboardGrowthCharts = dynamic(() => import('./DashboardGrowthCharts'), { ssr: false })
 const TokenCalculator = dynamic(() => import('../guides/cam-model-token-calculator/TokenCalculatorClient'), { ssr: false, loading: () => TAB_LOADING })
 
@@ -1340,6 +1341,8 @@ export default function Dashboard() {
   const [user, setUser] = useState(null)
   const [profile, setProfile] = useState(null)
   const [tips, setTips] = useState([])
+  const [paidSessions, setPaidSessions] = useState([])
+  const [liveTipsTotalUSD, setLiveTipsTotalUSD] = useState(null)
   const [analytics, setAnalytics] = useState(null)
   const [liveAnalytics, setLiveAnalytics] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -1957,6 +1960,28 @@ export default function Dashboard() {
           sessionStorage.setItem(`camcash_tips_time_${uid}`, Date.now().toString())
         } catch(e) {} // quota exceeded — fine, skip cache
       }
+      // paid_sessions (BongaCams Private/Full-Private/Group/Spy) — separate
+      // table, separate state, never merged into `tips`/`analytics`. Same
+      // pagination pattern as the tips fetch above.
+      let allPaidSessions = []
+      let paidFrom = 0
+      while (true) {
+        const { data, error } = await supabase.from("paid_sessions").select("*").eq("user_id", uid).order("date_time", { ascending: true }).range(paidFrom, paidFrom + PAGE - 1)
+        if (error) break
+        if (data?.length) allPaidSessions = [...allPaidSessions, ...data]
+        if (!data || data.length < PAGE) break
+        paidFrom += PAGE
+      }
+      setPaidSessions(allPaidSessions)
+
+      // Live Mode total, for the Private Sessions page's revenue-sources
+      // summary only — kept as its own query against its own table, never
+      // merged into `tips`/`paidSessions` rows or the `analytics` totals.
+      try {
+        const { data: liveRows, error: liveErr } = await supabase.from("live_tips").select("usd").eq("user_id", uid)
+        if (!liveErr) setLiveTipsTotalUSD((liveRows || []).reduce((sum, r) => sum + (parseFloat(r.usd) || 0), 0))
+      } catch (e) { /* non-fatal — Private Sessions page just omits this total */ }
+
       const { data: engineData } = await supabase.rpc('get_user_insights', { p_user_id: uid, p_timezone: userTz })
       setEngineInsights(engineData)
       setLastRefreshed(new Date())
@@ -2114,6 +2139,22 @@ const stopImportMessageRotation = () => {
 
   const sessions = analytics?.sessions || []
   const whales = analytics?.whales || []
+  // Opens the Whale Profile Modal for a fan, matched by fanKey (platform +
+  // normalized username, never merged across platforms) -- reused by the
+  // existing Top Fans list and now also by Private Sessions. If the fan has
+  // no tip history at all (private-only fan), builds a safe minimal
+  // whale-shaped object instead of crashing the tip-centric modal.
+  const viewFanProfile = (username, platform) => {
+    if (!username) return
+    const uname = username.toLowerCase()
+    const existing = whales.find(w => w.username.toLowerCase() === uname && w.platform === platform)
+    if (existing) { setSelectedWhale(existing); return }
+    setSelectedWhale({
+      username, platform, tier: "New / Low Data",
+      totalUSD: 0, tipCount: 0, avgTipSize: 0, lastTipDate: null,
+      typicalOnlineHours: null,
+    })
+  }
   const insights = analytics?.insights || []
   const platforms = analytics?.platforms || []
   const dependencyRisk = analytics?.dependencyRisk || null
@@ -6475,6 +6516,14 @@ const stopImportMessageRotation = () => {
         )}
 
         {activeTab === 'analytics' && <AnalyticsCharts tips={tips} />}
+        {activeTab === 'private' && (
+          <PrivateSessions
+            paidSessions={paidSessions}
+            tipsTotalUSD={analytics?.totalUSD ?? null}
+            liveTotalUSD={liveTipsTotalUSD}
+            onViewFan={viewFanProfile}
+          />
+        )}
         {activeTab === 'planner' && (
           _plannerLock.locked
             ? <div style={{ padding: '32px 0' }}><LockedInsightCard title="Stream Planner" description="Plan your schedule around your best earning windows." lockType="needs_data" requirement={_plannerLock.message} ctaLabel="Upload More Data" ctaAction={() => handleTabChange('upload')} /></div>
@@ -6508,12 +6557,25 @@ const stopImportMessageRotation = () => {
         const whaleTips = tips.filter(t => t.username === w.username && t.platform === w.platform)
         const sortedTips = [...whaleTips].sort((a, b) => new Date(b.date_time) - new Date(a.date_time))
         const firstTip = whaleTips.length ? whaleTips.reduce((a, b) => new Date(a.date_time) < new Date(b.date_time) ? a : b) : null
-        const daysSinceLastTip = Math.floor((Date.now() - new Date(w.lastTipDate)) / 86400000)
+        // A fan reached from Private Sessions may have no free-chat tip
+        // history at all (paid-only) -- w.lastTipDate is null in that case,
+        // guarded below rather than assumed to exist.
+        const daysSinceLastTip = w.lastTipDate ? Math.floor((Date.now() - new Date(w.lastTipDate)) / 86400000) : null
         const tierColor = TIER_COLORS[w.tier] || C.cyan
         const avgDaysBetweenTips = whaleTips.length > 1 ? Math.floor((new Date(w.lastTipDate) - new Date(firstTip?.date_time)) / 86400000 / (whaleTips.length - 1)) : 7
-        const likelyReturnDays = Math.max(0, avgDaysBetweenTips - daysSinceLastTip)
-        const churnRisk = daysSinceLastTip > avgDaysBetweenTips * 2 ? "High" : daysSinceLastTip > avgDaysBetweenTips ? "Medium" : "Low"
+        const likelyReturnDays = daysSinceLastTip !== null ? Math.max(0, avgDaysBetweenTips - daysSinceLastTip) : null
+        const churnRisk = daysSinceLastTip === null ? null : daysSinceLastTip > avgDaysBetweenTips * 2 ? "High" : daysSinceLastTip > avgDaysBetweenTips ? "Medium" : "Low"
         const churnColor = churnRisk === "High" ? C.red : churnRisk === "Medium" ? C.orange : C.green
+        // Fan-key match: platform + normalized username (never merge across
+        // platforms). Mirrors the whaleTips filter above exactly, over
+        // paid_sessions instead of tips.
+        const fanPaidSessions = paidSessions.filter(s => (s.username || '').toLowerCase() === w.username.toLowerCase() && s.platform === w.platform)
+        const fanPrivateUSD = fanPaidSessions.reduce((sum, s) => sum + (parseFloat(s.usd) || 0), 0)
+        const fanPrivateTokens = fanPaidSessions.reduce((sum, s) => sum + (parseInt(s.tokens) || 0), 0)
+        const fanPrivateSorted = [...fanPaidSessions].sort((a, b) => new Date(a.date_time) - new Date(b.date_time))
+        const fanPrivateTypeCounts = {}
+        fanPaidSessions.forEach(s => { fanPrivateTypeCounts[s.session_type] = (fanPrivateTypeCounts[s.session_type] || 0) + 1 })
+        const fanMostCommonType = Object.entries(fanPrivateTypeCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || null
         const biggestTip = whaleTips.length ? Math.max(...whaleTips.map(t => t.usd)) : 0
         return (
           <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 20 }}>
@@ -6545,7 +6607,7 @@ const stopImportMessageRotation = () => {
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>📊 Fan Intelligence</div>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
-                    {[{ label: "First tip", value: firstTip ? new Date(firstTip.date_time).toLocaleDateString() : "—" }, { label: "Last tip", value: `${new Date(w.lastTipDate).toLocaleDateString()} (${daysSinceLastTip}d ago)` }, { label: "Avg days between tips", value: `${avgDaysBetweenTips} days` }, { label: "Churn risk", value: churnRisk, color: churnColor }].map(({ label, value, color }) => (
+                    {[{ label: "First tip", value: firstTip ? new Date(firstTip.date_time).toLocaleDateString() : "Not enough data yet" }, { label: "Last tip", value: w.lastTipDate ? `${new Date(w.lastTipDate).toLocaleDateString()} (${daysSinceLastTip}d ago)` : "Not enough data yet" }, { label: "Avg days between tips", value: whaleTips.length > 1 ? `${avgDaysBetweenTips} days` : "Not enough data yet" }, { label: "Churn risk", value: churnRisk || "Not enough data yet", color: churnColor }].map(({ label, value, color }) => (
                       <div key={label} style={{ padding: 14, background: "rgba(255,255,255,0.04)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.07)" }}>
                         <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>{label}</div>
                         <div style={{ fontSize: 14, fontWeight: 600, color: color || C.white }}>{value}</div>
@@ -6613,17 +6675,62 @@ const stopImportMessageRotation = () => {
                     ))}
                   </div>
                 </div>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>🤖 AI Predictions</div>
-                  <div style={{ padding: 16, background: "rgba(255,255,255,0.04)", borderRadius: 12, border: "1px solid rgba(255,255,255,0.07)", display: "flex", flexDirection: "column", gap: 10 }}>
-                    {[{ label: "📅 Likely to tip again in", value: likelyReturnDays === 0 ? "Overdue!" : `~${likelyReturnDays} days`, color: C.cyan }, { label: "💸 Predicted next tip size", value: `$${(w.avgTipSize * 1.1).toFixed(2)}`, color: C.gold }, { label: "🎯 Engagement score", value: `${Math.min(99, Math.round((w.tipCount / 10) * 20 + (w.totalUSD / 100) * 10))} / 100`, color: C.pink }, { label: "📈 30-day revenue forecast", value: `$${((w.totalUSD / Math.max(1, Math.floor((Date.now() - new Date(firstTip?.date_time)) / 2592000000))) * 1.05).toFixed(2)}`, color: C.green }].map(({ label, value, color }) => (
-                      <div key={label} style={{ display: "flex", justifyContent: "space-between", padding: "10px 14px", background: "rgba(255,255,255,0.04)", borderRadius: 8 }}>
-                        <div style={{ fontSize: 13, color: C.text }}>{label}</div>
-                        <div style={{ fontSize: 13, fontWeight: 700, color }}>{value}</div>
+                {fanPaidSessions.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>💎 Private Sessions</div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10, marginBottom: 12 }}>
+                      {[
+                        { label: "Lifetime private earnings", value: `$${fanPrivateUSD.toFixed(2)}`, color: C.purple || "#a855f7" },
+                        { label: "Total private sessions", value: fanPaidSessions.length },
+                        { label: "Total private tokens", value: fanPrivateTokens.toLocaleString() },
+                        { label: "Avg value per private", value: `$${(fanPrivateUSD / fanPaidSessions.length).toFixed(2)}` },
+                        { label: "Avg private token rate", value: fanPrivateTokens > 0 ? `$${(fanPrivateUSD / fanPrivateTokens).toFixed(4)}/tok` : "Not enough data yet" },
+                        { label: "Most common session type", value: fanMostCommonType || "Not enough data yet" },
+                        { label: "First private session", value: fanPrivateSorted[0] ? new Date(fanPrivateSorted[0].date_time).toLocaleDateString() : "Not enough data yet" },
+                        { label: "Most recent private session", value: fanPrivateSorted[fanPrivateSorted.length - 1] ? new Date(fanPrivateSorted[fanPrivateSorted.length - 1].date_time).toLocaleDateString() : "Not enough data yet" },
+                      ].map(({ label, value, color }) => (
+                        <div key={label} style={{ padding: 14, background: "rgba(168,85,247,0.06)", borderRadius: 10, border: "1px solid rgba(168,85,247,0.15)" }}>
+                          <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>{label}</div>
+                          <div style={{ fontSize: 14, fontWeight: 700, color: color || C.white }}>{value}</div>
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      {[...fanPaidSessions].sort((a, b) => new Date(b.date_time) - new Date(a.date_time)).slice(0, 5).map(s => (
+                        <div key={s.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: "rgba(255,255,255,0.04)", borderRadius: 8, border: "1px solid rgba(255,255,255,0.07)" }}>
+                          <div style={{ fontSize: 12, color: C.muted }}>{s.session_type} · {new Date(s.date_time).toLocaleDateString()}</div>
+                          <div style={{ fontSize: 14, fontWeight: 700, color: "#a855f7" }}>${parseFloat(s.usd).toFixed(2)}</div>
+                        </div>
+                      ))}
+                    </div>
+                    {/* Combined lifetime value — each source labeled separately, summed once */}
+                    <div style={{ marginTop: 12, padding: 14, background: "rgba(255,255,255,0.04)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.07)" }}>
+                      <div style={{ fontSize: 11, color: C.muted, marginBottom: 8 }}>Combined Lifetime Value</div>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4 }}>
+                        <span style={{ color: C.muted }}>Free-chat tips</span><span style={{ color: C.cyan, fontWeight: 700 }}>${(w.totalUSD || 0).toFixed(2)}</span>
                       </div>
-                    ))}
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 8 }}>
+                        <span style={{ color: C.muted }}>Private sessions</span><span style={{ color: "#a855f7", fontWeight: 700 }}>${fanPrivateUSD.toFixed(2)}</span>
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, paddingTop: 8, borderTop: "1px solid rgba(255,255,255,0.08)" }}>
+                        <span style={{ color: C.white, fontWeight: 700 }}>Combined total</span><span style={{ color: C.white, fontWeight: 800 }}>${((w.totalUSD || 0) + fanPrivateUSD).toFixed(2)}</span>
+                      </div>
+                    </div>
                   </div>
-                </div>
+                )}
+                {whaleTips.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>🤖 AI Predictions</div>
+                    <div style={{ padding: 16, background: "rgba(255,255,255,0.04)", borderRadius: 12, border: "1px solid rgba(255,255,255,0.07)", display: "flex", flexDirection: "column", gap: 10 }}>
+                      {[{ label: "📅 Likely to tip again in", value: likelyReturnDays === 0 ? "Overdue!" : `~${likelyReturnDays} days`, color: C.cyan }, { label: "💸 Predicted next tip size", value: `$${(w.avgTipSize * 1.1).toFixed(2)}`, color: C.gold }, { label: "🎯 Engagement score", value: `${Math.min(99, Math.round((w.tipCount / 10) * 20 + (w.totalUSD / 100) * 10))} / 100`, color: C.pink }, { label: "📈 30-day revenue forecast", value: `$${((w.totalUSD / Math.max(1, Math.floor((Date.now() - new Date(firstTip?.date_time)) / 2592000000))) * 1.05).toFixed(2)}`, color: C.green }].map(({ label, value, color }) => (
+                        <div key={label} style={{ display: "flex", justifyContent: "space-between", padding: "10px 14px", background: "rgba(255,255,255,0.04)", borderRadius: 8 }}>
+                          <div style={{ fontSize: 13, color: C.text }}>{label}</div>
+                          <div style={{ fontSize: 13, fontWeight: 700, color }}>{value}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <button onClick={() => setSelectedWhale(null)} style={{ width: "100%", padding: "12px", borderRadius: 10, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: C.muted, fontSize: 14, cursor: "pointer" }}>Close Profile</button>
               </div>
             </div>
