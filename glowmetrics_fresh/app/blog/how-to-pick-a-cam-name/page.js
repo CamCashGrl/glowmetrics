@@ -250,6 +250,7 @@ export default function HowToPickACamName() {
           <a href="/blog/why-cam-income-is-inconsistent" style={s.relLink}>→ Why cam income is inconsistent</a>
           <a href="/tools/cam-model-name-generator" style={s.relLink}>→ Free camgirl name generator</a>
           <a href="/guides/chaturbate-room-title-generator" style={s.relLink}>→ Free room title generator</a>
+          <a href="/tools/profile-studio" style={s.relLink}>→ Free cam bio & tip menu generator</a>
         </div>
       </div>
     </ArticleLayout>

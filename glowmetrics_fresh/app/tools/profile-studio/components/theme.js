@@ -350,6 +350,27 @@ export function CompletionTracker({ percent, checklist }) {
   )
 }
 
+export function LiveSummaryPanel({ title, rows }) {
+  const visible = rows.filter(r => r.value)
+  return (
+    <div style={{ background: T.cardSoft, border: `1px solid ${T.borderSoft}`, borderRadius: 16, padding: 18, marginTop: 14 }}>
+      <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: T.pink, marginBottom: 10 }}>{title}</div>
+      {visible.length ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {visible.map(r => (
+            <div key={r.label} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, fontSize: 12 }}>
+              <span style={{ color: T.faint }}>{r.label}</span>
+              <span style={{ color: T.soft, fontWeight: 600, textAlign: 'right' }}>{r.value}</span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div style={{ fontSize: 12, color: T.faint }}>Fill in the form to see your summary here.</div>
+      )}
+    </div>
+  )
+}
+
 export function Toggle({ checked, onChange, label }) {
   return (
     <label style={{ display: 'inline-flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: 13, color: T.soft, fontWeight: 600 }}>

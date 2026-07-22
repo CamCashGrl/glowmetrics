@@ -253,6 +253,7 @@ export default function CamModelTokenToDollarRatioExplained() {
           <a href="/blog/cam-model-tipping-pattern-data-examples" style={s.relLink}>→ Cam Model Tipping Pattern Data Examples</a>
           <a href="/blog/how-to-track-cam-tips-automatically" style={s.relLink}>→ How to Track Your Cam Model Daily Revenue</a>
           <a href="/blog/benefits-of-cam-model-bookkeeping" style={s.relLink}>→ Benefits of Cam Model Bookkeeping</a>
+          <a href="/tools/profile-studio" style={s.relLink}>→ Free cam bio & tip menu generator</a>
         </div>
       </div>
     </ArticleLayout>
