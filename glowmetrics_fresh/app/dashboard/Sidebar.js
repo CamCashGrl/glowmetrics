@@ -165,14 +165,11 @@ export default function Sidebar({ activeTab, onTabChange, user, onSignOut, isPro
         </Button>
       )}
 
-      {/* User footer — email + sign out share one compact row */}
+      {/* User footer — timezone gets its own row above the compact email/sign-out row */}
       {user && (
-        <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: 10, marginTop: 4, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-          <div title={user.email} style={{ fontSize: 11, color: "#7d8aa3", padding: "0 4px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
-            {user.email}
-          </div>
+        <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: 10, marginTop: 4 }}>
           <div style={{ marginBottom: 8, padding: "0 4px" }}>
-            <label style={{ fontSize: 9, color: C.muted, textTransform: "uppercase", letterSpacing: 0.6, display: "block", marginBottom: 4 }}>
+            <label style={{ fontSize: 9, color: "#7d8aa3", textTransform: "uppercase", letterSpacing: 0.6, display: "block", marginBottom: 4 }}>
               Timezone {savingTz && "· saving…"}
             </label>
             <select
@@ -189,12 +186,17 @@ export default function Sidebar({ activeTab, onTabChange, user, onSignOut, isPro
               ))}
             </select>
           </div>
-          <button onClick={onSignOut}
-            style={{ flexShrink: 0, padding: "5px 8px", borderRadius: 8, background: "transparent", border: "none", color: "#F87171", fontSize: 11.5, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 5, transition: "background 0.15s" }}
-            onMouseEnter={e => e.currentTarget.style.background = "rgba(248,113,113,0.1)"}
-            onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-            <span>→</span> Sign Out
-          </button>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+            <div title={user.email} style={{ fontSize: 11, color: "#7d8aa3", padding: "0 4px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
+              {user.email}
+            </div>
+            <button onClick={onSignOut}
+              style={{ flexShrink: 0, padding: "5px 8px", borderRadius: 8, background: "transparent", border: "none", color: "#F87171", fontSize: 11.5, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 5, transition: "background 0.15s" }}
+              onMouseEnter={e => e.currentTarget.style.background = "rgba(248,113,113,0.1)"}
+              onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+              <span>→</span> Sign Out
+            </button>
+          </div>
         </div>
       )}
     </div>
