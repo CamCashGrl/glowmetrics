@@ -22,14 +22,38 @@ function calcMedian(arr) {
     : sorted[mid]
 }
 
+// Intl.DateTimeFormat construction (not .format()) is the expensive part —
+// building one takes far longer than formatting a date with it. These three
+// helpers are called multiple times per tip across aggregateRows' grouping
+// passes, so at 50k+ rows re-constructing a fresh formatter on every call
+// becomes a large constant-factor cost. Formatters are stateless once built
+// (safe to reuse across dates) for a given (kind, timeZone) pair, so cache
+// them per timezone. Output is byte-identical to before — this only removes
+// redundant formatter construction, not any formatting/formula logic.
+const _hourFormatterCache = new Map()
+const _dowFormatterCache = new Map()
+const _dateFormatterCache = new Map()
+
+function getHourFormatter(tz) {
+  let f = _hourFormatterCache.get(tz)
+  if (!f) { f = new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', hour12: false }); _hourFormatterCache.set(tz, f) }
+  return f
+}
+function getDowFormatter(tz) {
+  let f = _dowFormatterCache.get(tz)
+  if (!f) { f = new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'long' }); _dowFormatterCache.set(tz, f) }
+  return f
+}
+function getDateFormatter(tz) {
+  let f = _dateFormatterCache.get(tz)
+  if (!f) { f = new Intl.DateTimeFormat('en-CA', { timeZone: tz }); _dateFormatterCache.set(tz, f) }
+  return f
+}
+
 export function toLocalHour(dateStr, tz) {
   try {
     const date = new Date(dateStr)
-    const formatted = new Intl.DateTimeFormat('en-US', {
-      timeZone: tz,
-      hour: 'numeric',
-      hour12: false
-    }).format(date)
+    const formatted = getHourFormatter(tz).format(date)
     const h = parseInt(formatted)
     return isNaN(h) ? 0 : h === 24 ? 0 : h
   } catch { return new Date(dateStr).getUTCHours() }
@@ -38,10 +62,7 @@ export function toLocalHour(dateStr, tz) {
 export function toLocalDow(dateStr, tz) {
   try {
     const date = new Date(dateStr)
-    const dayName = new Intl.DateTimeFormat('en-US', {
-      timeZone: tz,
-      weekday: 'long'
-    }).format(date)
+    const dayName = getDowFormatter(tz).format(date)
     return ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
       .indexOf(dayName)
   } catch { return new Date(dateStr).getUTCDay() }
@@ -49,9 +70,7 @@ export function toLocalDow(dateStr, tz) {
 
 function toLocalDateStr(dateStr, tz) {
   try {
-    return new Intl.DateTimeFormat('en-CA', {
-      timeZone: tz
-    }).format(new Date(dateStr)) // returns YYYY-MM-DD
+    return getDateFormatter(tz).format(new Date(dateStr)) // returns YYYY-MM-DD
   } catch { return new Date(dateStr).toISOString().slice(0, 10) }
 }
 
@@ -775,6 +794,16 @@ export function aggregateRows(tips, tz = null) {
   const dayDateAmts = {}, hourBucketAmts = {}
   const UTC_LONG = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
 
+  // ── PER-PLATFORM BEST TIMES accumulators ───────────────────────────────
+  // Declared here (instead of just before their own tips.forEach further
+  // down) so both this day/hour pass and the per-platform pass can be
+  // computed in the SAME loop over tips below — same per-tip dt/dow/dateKey/
+  // h/hBucket/usd values, just written into two sets of maps instead of
+  // scanning the full tips array twice. Output shape/values unchanged.
+  const platHourUSD = {}, platHourBuckets = {}, platDayUSD = {}, platDayDates = {}
+  const platDayHourUSD = {}, platDayHourBuckets = {}
+  const platHourBucketAmts = {}, platDayDateAmts = {}, platDayHourBucketAmts = {}
+
   tips.forEach(t => {
     const dt = new Date(t.dateRaw || t.date_time)
     if (isNaN(dt.getTime())) return
@@ -791,6 +820,26 @@ export function aggregateRows(tips, tz = null) {
     hourTipsUSD[h] += usd
     hourBucketSets[h].add(hBucket)
     hourBucketAmts[h][hBucket] = (hourBucketAmts[h][hBucket] || 0) + usd
+
+    // Per-platform accumulation (was a second, separate tips.forEach further
+    // down — merged in here to avoid re-parsing each tip's date and
+    // re-computing dow/dateKey/h/hBucket a second time).
+    const p = t.platform || 'Chaturbate'
+    if (!platHourUSD[p]) { platHourUSD[p] = {}; platHourBuckets[p] = {}; platHourBucketAmts[p] = {} }
+    if (!platHourUSD[p][h]) { platHourUSD[p][h] = 0; platHourBuckets[p][h] = new Set(); platHourBucketAmts[p][h] = {} }
+    platHourUSD[p][h] += usd; platHourBuckets[p][h].add(hBucket)
+    platHourBucketAmts[p][h][hBucket] = (platHourBucketAmts[p][h][hBucket] || 0) + usd
+
+    if (!platDayUSD[p]) { platDayUSD[p] = {}; platDayDates[p] = {}; platDayDateAmts[p] = {} }
+    if (!platDayUSD[p][dow]) { platDayUSD[p][dow] = 0; platDayDates[p][dow] = new Set(); platDayDateAmts[p][dow] = {} }
+    platDayUSD[p][dow] += usd; platDayDates[p][dow].add(dateKey)
+    platDayDateAmts[p][dow][dateKey] = (platDayDateAmts[p][dow][dateKey] || 0) + usd
+
+    const dayHourKey = `${dow}__${h}`
+    if (!platDayHourUSD[p]) { platDayHourUSD[p] = {}; platDayHourBuckets[p] = {}; platDayHourBucketAmts[p] = {} }
+    if (!platDayHourUSD[p][dayHourKey]) { platDayHourUSD[p][dayHourKey] = 0; platDayHourBuckets[p][dayHourKey] = new Set(); platDayHourBucketAmts[p][dayHourKey] = {} }
+    platDayHourUSD[p][dayHourKey] += usd; platDayHourBuckets[p][dayHourKey].add(hBucket)
+    platDayHourBucketAmts[p][dayHourKey][hBucket] = (platDayHourBucketAmts[p][dayHourKey][hBucket] || 0) + usd
   })
 
   const dayAvgs = Object.keys(dayTipsUSD)
@@ -838,37 +887,10 @@ export function aggregateRows(tips, tz = null) {
   }))
 
   // ── PER-PLATFORM BEST TIMES ───────────────────────────────────────────
+  // Accumulator maps (platHourUSD etc.) are now populated inside the
+  // combined tips.forEach above — see comment there. UTC_DAYS is still
+  // needed below for the bestHourByDay lookup.
   const UTC_DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
-  const platHourUSD = {}, platHourBuckets = {}, platDayUSD = {}, platDayDates = {}
-  const platDayHourUSD = {}, platDayHourBuckets = {}
-  const platHourBucketAmts = {}, platDayDateAmts = {}, platDayHourBucketAmts = {}
-
-  tips.forEach(t => {
-    const p = t.platform || 'Chaturbate'
-    const dt = new Date(t.dateRaw || t.date_time)
-    if (isNaN(dt.getTime())) return
-    const h = toLocalHour(t.dateRaw || t.date_time, userTz)
-    const dow = UTC_DAYS[toLocalDow(t.dateRaw || t.date_time, userTz)]
-    const dateKey = toLocalDateStr(t.dateRaw || t.date_time, userTz)
-    const hBucket = Math.floor(dt.getTime() / 3600000)
-    const usd = t.usd || 0
-
-    if (!platHourUSD[p]) { platHourUSD[p] = {}; platHourBuckets[p] = {}; platHourBucketAmts[p] = {} }
-    if (!platHourUSD[p][h]) { platHourUSD[p][h] = 0; platHourBuckets[p][h] = new Set(); platHourBucketAmts[p][h] = {} }
-    platHourUSD[p][h] += usd; platHourBuckets[p][h].add(hBucket)
-    platHourBucketAmts[p][h][hBucket] = (platHourBucketAmts[p][h][hBucket] || 0) + usd
-
-    if (!platDayUSD[p]) { platDayUSD[p] = {}; platDayDates[p] = {}; platDayDateAmts[p] = {} }
-    if (!platDayUSD[p][dow]) { platDayUSD[p][dow] = 0; platDayDates[p][dow] = new Set(); platDayDateAmts[p][dow] = {} }
-    platDayUSD[p][dow] += usd; platDayDates[p][dow].add(dateKey)
-    platDayDateAmts[p][dow][dateKey] = (platDayDateAmts[p][dow][dateKey] || 0) + usd
-
-    const dayHourKey = `${dow}__${h}`
-    if (!platDayHourUSD[p]) { platDayHourUSD[p] = {}; platDayHourBuckets[p] = {}; platDayHourBucketAmts[p] = {} }
-    if (!platDayHourUSD[p][dayHourKey]) { platDayHourUSD[p][dayHourKey] = 0; platDayHourBuckets[p][dayHourKey] = new Set(); platDayHourBucketAmts[p][dayHourKey] = {} }
-    platDayHourUSD[p][dayHourKey] += usd; platDayHourBuckets[p][dayHourKey].add(hBucket)
-    platDayHourBucketAmts[p][dayHourKey][hBucket] = (platDayHourBucketAmts[p][dayHourKey][hBucket] || 0) + usd
-  })
 
   const platformBestTimes = {}
   Object.keys(platHourUSD).forEach(p => {

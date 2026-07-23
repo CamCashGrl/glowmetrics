@@ -2139,6 +2139,14 @@ const stopImportMessageRotation = () => {
 
   const sessions = analytics?.sessions || []
   const whales = analytics?.whales || []
+  const meaningfulSessions = analytics?.meaningfulSessions || []
+  // Single source of truth for the "meaningful sessions only" toggle
+  // (meaningfulOnly / setMeaningfulOnly state, controlled from both the
+  // sticky command bar and the Sessions tab). When on, every session-based
+  // dashboard view uses only sessions with sessionQuality === 'meaningful'
+  // (computed once in lib/analytics.js); when off, all valid sessions.
+  // Never recompute this filter locally elsewhere — reuse displaySessions.
+  const displaySessions = meaningfulOnly ? meaningfulSessions : sessions
   // Opens the Whale Profile Modal for a fan, matched by fanKey (platform +
   // normalized username, never merged across platforms) -- reused by the
   // existing Top Fans list and now also by Private Sessions. If the fan has
@@ -2992,6 +3000,18 @@ const stopImportMessageRotation = () => {
                   <div style={{ fontSize:13, fontWeight:800, color: atPeak ? '#10B981' : '#fbbf24', whiteSpace:'nowrap' }}>{_eiPeakLabel ? `${_eiPeakLabel}${peakLabel ? ` · ${peakLabel}` : ''}` : '—'}</div>
                 </div>
                 </div>
+                <label
+                  title="When on, sessions under 30 minutes or with fewer than 2 tips are excluded from your session stats dashboard-wide"
+                  style={{ display:'flex', alignItems:'center', gap:6, paddingLeft:12, borderLeft:'1px solid rgba(255,255,255,0.06)', flexShrink:0, cursor:'pointer', userSelect:'none' }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={meaningfulOnly}
+                    onChange={e => setMeaningfulOnly(e.target.checked)}
+                    style={{ accentColor:'#22D3EE', cursor:'pointer' }}
+                  />
+                  <span style={{ fontSize:11, fontWeight:700, color:'#8a93ab', whiteSpace:'nowrap' }}>Meaningful sessions only</span>
+                </label>
                 <div style={{ paddingLeft:12, borderLeft:'1px solid rgba(255,255,255,0.06)', flexShrink:0 }}>
                   <button onClick={() => { setActiveTab('live'); if (typeof window !== 'undefined') { localStorage.setItem('camcash_tab','live'); window.scrollTo({top:0,behavior:'instant'}); } }} style={{ padding:'8px 20px', borderRadius:11, background:'linear-gradient(135deg,#10B981,#22D3EE)', border:'none', color:'#fff', fontWeight:800, fontSize:13, cursor:'pointer', whiteSpace:'nowrap', boxShadow:'0 0 14px rgba(16,185,129,0.3)', letterSpacing:0.3 }}>
                     ⚡ Go Live
@@ -3061,15 +3081,14 @@ const stopImportMessageRotation = () => {
               const fansActiveLast30 = new Set(tips.filter(t => (Date.now() - new Date(t.date_time || t.dateRaw)) / 86400000 <= 30).map(t => t.username)).size
 
               // ── Per-card month-over-month trend ──
-              // Meaningful sessions only (analytics.meaningfulSessions), matching the
-              // valid-session rule used everywhere else — never the raw session list.
-              const meaningfulSessions = analytics?.meaningfulSessions || []
-              const thisMonthMeaningful = meaningfulSessions.filter(s => new Date(s.startTime) >= thisMonthStart)
-              const prevMonthMeaningful = meaningfulSessions.filter(s => { const d = new Date(s.startTime); return d >= prevMonthStart && d < thisMonthStart })
+              // Respects the meaningfulOnly toggle (displaySessions, defined once
+              // near the top of the component) — never recompute this filter locally.
+              const thisMonthMeaningful = displaySessions.filter(s => new Date(s.startTime) >= thisMonthStart)
+              const prevMonthMeaningful = displaySessions.filter(s => { const d = new Date(s.startTime); return d >= prevMonthStart && d < thisMonthStart })
               const sessGrowth = (prevMonthMeaningful.length > 0 && thisMonthMeaningful.length > 0)
                 ? Math.round(((thisMonthMeaningful.length - prevMonthMeaningful.length) / prevMonthMeaningful.length) * 100) : null
 
-              const avgSessionUSD = meaningfulSessions.length ? meaningfulSessions.reduce((s,x) => s+(x.totalUSD||0),0) / meaningfulSessions.length : 0
+              const avgSessionUSD = displaySessions.length ? displaySessions.reduce((s,x) => s+(x.totalUSD||0),0) / displaySessions.length : 0
               const tmAvgSession = thisMonthMeaningful.length ? thisMonthMeaningful.reduce((s,x) => s+(x.totalUSD||0),0) / thisMonthMeaningful.length : null
               const pmAvgSession = prevMonthMeaningful.length ? prevMonthMeaningful.reduce((s,x) => s+(x.totalUSD||0),0) / prevMonthMeaningful.length : null
               const avgSessionGrowth = (tmAvgSession !== null && pmAvgSession !== null && pmAvgSession > 0)
@@ -3095,18 +3114,20 @@ const stopImportMessageRotation = () => {
                   sub: topPct ? `Top ${topPct}% of models on this platform` : 'Upload more data to rank',
                   icon:'💰', isHero:true },
                 { label:"Avg Per Session", accent:'#22d3ee', glowClass:'card-glow-cyan', trend:avgSessionGrowth,
-                  value: meaningfulSessions.length > 0 ? `$${avgSessionUSD.toFixed(2)}` : '—',
-                  sub: meaningfulSessions.length > 0 ? `Across ${meaningfulSessions.length.toLocaleString()} meaningful sessions` : 'Not enough data yet',
+                  value: displaySessions.length > 0 ? `$${avgSessionUSD.toFixed(2)}` : '—',
+                  sub: displaySessions.length > 0 ? `Across ${displaySessions.length.toLocaleString()} ${meaningfulOnly ? 'meaningful ' : ''}sessions` : 'Not enough data yet',
                   icon:'🎯' },
                 { label:"Total Fans", accent:'#a78bfa', glowClass:'card-glow-violet', trend:fansGrowth,
                   value: whales.length > 0 ? whales.length.toLocaleString() : '—',
                   sub: fansActiveLast30 > 0 ? `${fansActiveLast30} active in last 30 days` : 'None active in the last 30 days',
                   icon:'👥' },
-                { label:"Meaningful Sessions", accent:'#fbbf24', glowClass:'card-glow-gold', trend:sessGrowth,
-                  value: meaningfulSessions.length > 0 ? meaningfulSessions.length.toLocaleString() : (sessions.length > 0 ? '0' : '—'),
-                  sub: meaningfulSessions.length > 0
-                    ? `${sessions.length.toLocaleString()} tracked · ${(analytics?.lowSignalSessionCount || 0).toLocaleString()} low-signal`
-                    : (sessions.length > 0 ? `${sessions.length} detected, none meaningful yet` : (sessionsLast30 > 0 ? `${sessionsLast30} in last 30 days` : 'No sessions yet')),
+                { label: meaningfulOnly ? "Meaningful Sessions" : "Total Sessions", accent:'#fbbf24', glowClass:'card-glow-gold', trend:sessGrowth,
+                  value: displaySessions.length > 0 ? displaySessions.length.toLocaleString() : (sessions.length > 0 ? '0' : '—'),
+                  sub: !meaningfulOnly
+                    ? (sessions.length > 0 ? `${sessions.length.toLocaleString()} valid sessions tracked` : 'No sessions yet')
+                    : (displaySessions.length > 0
+                      ? `${sessions.length.toLocaleString()} tracked · ${(analytics?.lowSignalSessionCount || 0).toLocaleString()} low-signal`
+                      : (sessions.length > 0 ? `${sessions.length} detected, none meaningful yet` : (sessionsLast30 > 0 ? `${sessionsLast30} in last 30 days` : 'No sessions yet'))),
                   icon:'🎥' }
               ]
 
@@ -5389,9 +5410,9 @@ const stopImportMessageRotation = () => {
         })()}
 
         {activeTab === "sessions" && (() => {
-          const displaySessions = meaningfulOnly
-            ? (analytics?.meaningfulSessions || sessions)
-            : (analytics?.allValidSessions   || sessions)
+          // displaySessions is the shared meaningfulOnly-aware session list
+          // (defined once near the top of the component) — reused here so the
+          // toggle behaves identically everywhere it's shown.
 
           // ── SESSION BREAKDOWN ENGINE ────────────────────────────────
           // Pure logic — runs on each session's tips array
