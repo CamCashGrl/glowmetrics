@@ -14,6 +14,7 @@ import Button from '../../components/ui/Button';
 import { useLiveSessionEngine } from './useLiveSessionEngine';
 import { TRIGGER_LEVEL, TRIGGER_ICON } from '../../lib/coaching/triggers';
 import CoachingPromptFeed from '../components/CoachingPromptFeed';
+import { playStillLiveChime } from '../../lib/notifySound';
 
 const C = {
   bg: '#040812', card: 'rgba(15,20,32,0.75)', border: 'rgba(168,85,247,0.2)',
@@ -93,6 +94,10 @@ export default function LivePage() {
   // active prompt is refetched repeatedly until it resolves, but it should
   // only appear once in the history panels.
   const lastLoggedCoachingEventId = useRef(null);
+  // Which session id we've already played the "are you still live?" chime
+  // for — prevents replaying it on every re-render while still unresolved,
+  // fires again only for a genuinely new needs_resolution session.
+  const chimedForSessionRef = useRef(null);
   const phaseChangeLog    = useRef([]);
   const firedAlertsLog    = useRef([]);
   const prevPhaseRef      = useRef(null);
@@ -424,6 +429,16 @@ export default function LivePage() {
     const id = setInterval(fetchPrompt, 15000);
     return () => { cancelled = true; clearInterval(id); };
   }, [engine.engineMode, engine.serverSession?.id]);
+
+  // Plays the "are you still live?" chime once per session the moment it
+  // enters needs_resolution — not on every re-render while it stays there.
+  useEffect(() => {
+    if (engine.phase !== 'needs_resolution') return;
+    const sessionId = engine.serverSession?.id;
+    if (!sessionId || chimedForSessionRef.current === sessionId) return;
+    chimedForSessionRef.current = sessionId;
+    playStillLiveChime();
+  }, [engine.phase, engine.serverSession?.id]);
 
   // Reads coaching_strategy/coaching_goal_tokens back FROM the server
   // whenever a session is discovered — covers both a page refresh of an

@@ -36,6 +36,11 @@ let restorePromise = null;
 // whatever GET /api/live/session last returned — the extension never keeps
 // its own independent timer/session record, per design.
 let liveSession = null;
+// Which session id we've already fired the "are you still live?" desktop
+// notification for — the popup isn't always open when this state is first
+// observed, so a notification (not just a UI change) is the reliable signal
+// here. Fires once per session, not on every heartbeat while unresolved.
+let notifiedNeedsResolutionFor = null;
 // Set true only while a content script has confirmed it's actively observing
 // a supported broadcaster page (the same signal already used for the
 // 'connected' message); cleared when that tab closes or navigates away.
@@ -228,6 +233,19 @@ async function sendExtensionHeartbeat() {
   // stop tracking it so this heartbeat correctly stops firing on its own,
   // instead of retrying forever against a session that's already done.
   liveSession = data?.session || null;
+
+  if (liveSession?.status === 'needs_resolution' && notifiedNeedsResolutionFor !== liveSession.id) {
+    notifiedNeedsResolutionFor = liveSession.id;
+    chrome.notifications.create(`still-live-${liveSession.id}`, {
+      type: 'basic',
+      iconUrl: 'icons/icon128.png',
+      title: 'Still streaming?',
+      message: "We haven't seen any activity in a bit — open the popup to confirm you're still live, or it'll end automatically.",
+      priority: 2,
+    });
+  } else if (liveSession?.status !== 'needs_resolution') {
+    notifiedNeedsResolutionFor = null;
+  }
 }
 
 // ─── Tip sync ──────────────────────────────────────────────────────────────────

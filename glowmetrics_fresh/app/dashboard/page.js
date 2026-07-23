@@ -18,6 +18,7 @@ import EarlyAdopterOffer from './EarlyAdopterOffer'
 import { useLiveSessionEngine } from '../live/useLiveSessionEngine'
 import CoachingPromptFeed from '../components/CoachingPromptFeed'
 import { TRIGGER_LEVEL, TRIGGER_ICON } from '../../lib/coaching/triggers'
+import { playStillLiveChime } from '../../lib/notifySound'
 
 // Tab-only components loaded on demand instead of in the initial dashboard
 // bundle — each is only ever rendered behind an `activeTab === '...'` check,
@@ -1389,9 +1390,23 @@ export default function Dashboard() {
   useEffect(() => {
     if (liveEngine.engineMode !== 'v2') return
     const status = liveEngine.serverSession?.status
-    setLiveActive(status === 'active' || status === 'paused')
+    // needs_resolution counts as "the live UI should render" too — otherwise
+    // a session awaiting the "still live?" response silently looks like no
+    // session exists at all on this surface, with no way to resolve it here.
+    setLiveActive(status === 'active' || status === 'paused' || status === 'needs_resolution')
     setLiveStartTime(liveEngine.serverSession?.started_at ? new Date(liveEngine.serverSession.started_at) : null)
   }, [liveEngine.engineMode, liveEngine.serverSession?.status, liveEngine.serverSession?.started_at])
+
+  // Plays the "are you still live?" chime once per session the moment it
+  // enters needs_resolution — mirrors app/live/page.js's equivalent effect.
+  const chimedForSessionRef = useRef(null)
+  useEffect(() => {
+    if (liveEngine.phase !== 'needs_resolution') return
+    const sessionId = liveEngine.serverSession?.id
+    if (!sessionId || chimedForSessionRef.current === sessionId) return
+    chimedForSessionRef.current = sessionId
+    playStillLiveChime()
+  }, [liveEngine.phase, liveEngine.serverSession?.id])
 
   // Reads coaching_strategy/coaching_goal_tokens back FROM the server
   // whenever a session is discovered — same pattern as app/live/page.js.
@@ -4897,6 +4912,19 @@ const stopImportMessageRotation = () => {
                       style={{ padding: '7px 18px', borderRadius: 8, background: 'linear-gradient(135deg, #10B981, #22D3EE)', border: 'none', color: C.white, fontWeight: 800, fontSize: 12, cursor: liveEngine.actionPending ? 'default' : 'pointer', opacity: liveEngine.actionPending ? 0.6 : 1, boxShadow: '0 0 16px rgba(16,185,129,0.35)' }}>
                       ▶ Start Stream
                     </button>
+                  ) : liveEngine.serverSession?.status === 'needs_resolution' ? (
+                    <>
+                      <span style={{ fontSize: 12, color: C.gold, fontWeight: 700 }}>⚠️ Still live?</span>
+                      <button onClick={() => liveEngine.resolve('still_live')} disabled={liveEngine.actionPending}
+                        style={{ padding: '7px 18px', borderRadius: 8, background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.4)', color: C.green, fontWeight: 700, fontSize: 12, cursor: liveEngine.actionPending ? 'default' : 'pointer', opacity: liveEngine.actionPending ? 0.6 : 1 }}>
+                        Still Live
+                      </button>
+                      <button onClick={() => liveEngine.resolve('end_at_last_heartbeat')} disabled={liveEngine.actionPending}
+                        title="Ends the session using the last time we actually heard from your extension or browser tab"
+                        style={{ padding: '7px 18px', borderRadius: 8, background: 'rgba(248,113,113,0.15)', border: '1px solid rgba(248,113,113,0.4)', color: C.red, fontWeight: 700, fontSize: 12, cursor: liveEngine.actionPending ? 'default' : 'pointer', opacity: liveEngine.actionPending ? 0.6 : 1 }}>
+                        Stream Ended
+                      </button>
+                    </>
                   ) : (
                     <>
                       {liveEngine.serverSession?.status === 'paused' ? (
