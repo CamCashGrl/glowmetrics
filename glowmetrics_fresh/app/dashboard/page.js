@@ -2763,24 +2763,36 @@ const stopImportMessageRotation = () => {
   // ── DASHBOARD READINESS — always renders real dashboard, module-level locking ─
   const {
     dashboardReadiness, _isLowData, _plannerLock, _moneyMapLock,
+    _dependencyRiskLock, _fanLoyaltyLock, _preTipBehaviorLock,
   } = memoOn(derivedCacheRef.current, 'readiness', [tips, analytics, isPro], () => {
     const drDates      = tips.map(t => new Date(t.date_time || t.dateRaw)).filter(d => !isNaN(d)).sort((a, b) => a - b)
     const drRangeDays  = drDates.length >= 2 ? Math.round((drDates[drDates.length - 1] - drDates[0]) / 86400000) : 0
     const drStreamDays = new Set(drDates.map(d => d.toDateString())).size
     const drPlatCount  = [...new Set(tips.map(t => t.platform).filter(p => p && p !== 'Unknown'))].length
+    // Real unique-fan count (analytics.uniqueFanCount doesn't exist on
+    // aggregateRows' return — same fallback used for getDashboardReadiness
+    // below, needed here too now that dependencyRisk/fanLoyalty locks key
+    // off totalFans).
+    const drFanCount = analytics?.whales?.length || [...new Set(tips.map(t => (t.username || '').toLowerCase()).filter(Boolean))].length
     const readiness = getDashboardReadiness({
       totalTips:     tips.length,
       totalSessions: analytics?.meaningfulSessionCount || 0,
-      totalFans:     analytics?.uniqueFanCount || [...new Set(tips.map(t => (t.username || '').toLowerCase()).filter(Boolean))].length,
+      totalFans:     drFanCount,
       totalEarnings: analytics?.totalUSD || 0,
       dateRangeDays: drRangeDays,
       streamDays:    drStreamDays,
     })
     const isLowData  = readiness !== 'ready'
-    const modLockArgs = { totalTips: tips.length, totalSessions: analytics?.meaningfulSessionCount || 0, totalFans: analytics?.uniqueFanCount || 0, totalEarnings: analytics?.totalUSD || 0, totalStreamMinutes: analytics?.totalStreamMinutes || 0, importedPlatformCount: drPlatCount, isPro, liveModeSessions: 0 }
+    const modLockArgs = { totalTips: tips.length, totalSessions: analytics?.meaningfulSessionCount || 0, totalFans: drFanCount, totalEarnings: analytics?.totalUSD || 0, totalStreamMinutes: analytics?.totalStreamMinutes || 0, importedPlatformCount: drPlatCount, isPro, liveModeSessions: 0 }
     const plannerLock  = getModuleLockState({ module: 'streamPlanner',  ...modLockArgs })
     const moneyMapLock = getModuleLockState({ module: 'moneyMap',       ...modLockArgs })
-    return { dashboardReadiness: readiness, _isLowData: isLowData, _plannerLock: plannerLock, _moneyMapLock: moneyMapLock }
+    const dependencyRiskLock  = getModuleLockState({ module: 'dependencyRisk',  ...modLockArgs })
+    const fanLoyaltyLock      = getModuleLockState({ module: 'fanLoyalty',      ...modLockArgs })
+    const preTipBehaviorLock  = getModuleLockState({ module: 'preTipBehavior',  ...modLockArgs })
+    return {
+      dashboardReadiness: readiness, _isLowData: isLowData, _plannerLock: plannerLock, _moneyMapLock: moneyMapLock,
+      _dependencyRiskLock: dependencyRiskLock, _fanLoyaltyLock: fanLoyaltyLock, _preTipBehaviorLock: preTipBehaviorLock,
+    }
   })
 
   return (
@@ -3924,6 +3936,12 @@ const stopImportMessageRotation = () => {
               </div>
             )}
 
+            {!dependencyRisk && _dependencyRiskLock.locked && (
+              <div style={{ marginBottom: 20 }}>
+                <LockedInsightCard title="Revenue Dependency Risk" description="See how concentrated your earnings are in your top fan — and what you'd lose if they left." lockType="needs_data" requirement={_dependencyRiskLock.message} ctaLabel="Upload More Data" ctaAction={() => handleTabChange('upload')} />
+              </div>
+            )}
+
             {preTipBehavior && (
               <div style={{ ...glassCard, borderRadius: 14, padding: 20, marginBottom: 20 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
@@ -3953,6 +3971,12 @@ const stopImportMessageRotation = () => {
               </div>
             )}
 
+            {!preTipBehavior && _preTipBehaviorLock.locked && (
+              <div style={{ marginBottom: 20 }}>
+                <LockedInsightCard title="Tip Behavior Patterns" description="See how your tips are paced during a stream — steady, bursty, and your peak tipping hour." lockType="needs_data" requirement={_preTipBehaviorLock.message} ctaLabel="Upload More Data" ctaAction={() => handleTabChange('upload')} />
+              </div>
+            )}
+
             {returningVsNew && (
               <div style={{ ...glassCard, borderRadius: 14, padding: 20, marginBottom: 20 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
@@ -3975,6 +3999,12 @@ const stopImportMessageRotation = () => {
                     <div style={{ fontSize: 20, fontWeight: 800, color: C.white }}>${returningVsNew.avgNewSpend.toFixed(0)}<span style={{ fontSize: 12, color: C.muted, fontWeight: 500 }}> avg</span></div>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {!returningVsNew && _fanLoyaltyLock.locked && (
+              <div style={{ marginBottom: 20 }}>
+                <LockedInsightCard title="Fan Loyalty" description="See what % of your fans come back, and how much more they spend than first-timers." lockType="needs_data" requirement={_fanLoyaltyLock.message} ctaLabel="Upload More Data" ctaAction={() => handleTabChange('upload')} />
               </div>
             )}
 
