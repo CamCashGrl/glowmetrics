@@ -301,7 +301,7 @@ function CountUp({to,prefix='',suffix='',duration=1000,decimals=0}){
 }
 
 // ── Pro Upsell Modal ───────────────────────────────────────────
-function ProUpsellModal({platform,onSkip}){
+function ProUpsellModal({platform,onSkip,onUpgrade}){
   return(
     <div style={{position:'fixed',inset:0,zIndex:9998,background:'rgba(3,5,15,0.92)',backdropFilter:'blur(12px)',display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
       <div style={{width:'100%',maxWidth:430,background:'linear-gradient(180deg,rgba(12,15,35,0.98),rgba(6,8,20,0.99))',borderRadius:24,boxShadow:'0 0 60px rgba(33,230,243,0.15),0 0 120px rgba(255,47,174,0.1)',border:'1px solid rgba(255,255,255,0.08)',padding:28}}>
@@ -317,14 +317,14 @@ function ProUpsellModal({platform,onSkip}){
             <div style={{fontSize:24,fontWeight:900,color:'#fff'}}>$9.99</div>
             <div style={{fontSize:11,color:'rgba(148,163,184,0.7)',marginBottom:12}}>/month · locked forever</div>
             {['All platforms','Save history forever','AI pattern learning','Fan behavior analysis','Lifetime price lock ✦'].map(f=>(<div key={f} style={{display:'flex',gap:6,alignItems:'center',fontSize:12,color:'rgba(203,213,225,0.9)',marginBottom:4}}><span style={{color:'#a78bfa'}}>✓</span>{f}</div>))}
-            <button onClick={()=>window.open('https://www.camcashgrl.com/pricing','_blank')} style={{width:'100%',marginTop:12,padding:'10px',borderRadius:10,border:'none',cursor:'pointer',background:'linear-gradient(135deg,#a78bfa,#7c3aed)',color:'#fff',fontSize:13,fontWeight:700}}>Lock in $9.99/mo →</button>
+            <button onClick={()=>onUpgrade('early_adopter_monthly')} style={{width:'100%',marginTop:12,padding:'10px',borderRadius:10,border:'none',cursor:'pointer',background:'linear-gradient(135deg,#a78bfa,#7c3aed)',color:'#fff',fontSize:13,fontWeight:700}}>Lock in $9.99/mo →</button>
           </div>
           <div style={{background:'rgba(255,255,255,0.03)',border:'1px solid rgba(255,255,255,0.08)',borderRadius:14,padding:16}}>
             <div style={{fontSize:11,color:'rgba(148,163,184,0.7)',fontWeight:700,marginBottom:6,textTransform:'uppercase'}}>Standard</div>
             <div style={{fontSize:24,fontWeight:900,color:'#fff'}}>$19.99</div>
             <div style={{fontSize:11,color:'rgba(148,163,184,0.7)',marginBottom:16}}>/month</div>
             {['All platforms','Save history forever','AI pattern learning','Fan behavior analysis'].map(f=>(<div key={f} style={{display:'flex',gap:6,alignItems:'center',fontSize:12,color:'rgba(148,163,184,0.8)',marginBottom:4}}><span style={{color:'#21E6F3'}}>✓</span>{f}</div>))}
-            <button onClick={()=>window.open('https://www.camcashgrl.com/pricing','_blank')} style={{width:'100%',marginTop:12,padding:'10px',borderRadius:10,border:'1px solid rgba(255,255,255,0.12)',cursor:'pointer',background:'rgba(255,255,255,0.05)',color:'rgba(148,163,184,0.8)',fontSize:13,fontWeight:600}}>Get Standard →</button>
+            <button onClick={()=>onUpgrade('standard_monthly')} style={{width:'100%',marginTop:12,padding:'10px',borderRadius:10,border:'1px solid rgba(255,255,255,0.12)',cursor:'pointer',background:'rgba(255,255,255,0.05)',color:'rgba(148,163,184,0.8)',fontSize:13,fontWeight:600}}>Get Standard →</button>
           </div>
         </div>
         <div style={{background:'rgba(33,230,243,0.06)',border:'1px solid rgba(33,230,243,0.15)',borderRadius:10,padding:'10px 14px',marginBottom:14,fontSize:12,color:'rgba(148,163,184,0.8)',textAlign:'center'}}>
@@ -577,9 +577,14 @@ export default function OnboardingPage(){
   }
 
   function selectPlatform(id){
-    if(userPlan!=='pro'&&importedPlatforms.length>0&&!importedPlatforms.includes(id)){setPendingPlatform(id);setShowUpsell(true);return}
+    if(userPlan!=='pro'&&importedPlatforms.length>0&&!importedPlatforms.includes(id)){setPendingPlatform(id);setShowUpsell(true);track('paywall_viewed',{feature_name:'onboarding_multi_platform'});return}
     setPlatformId(id)
     if(id==='chaturbate')setStep('username');else setStep('paste')
+  }
+
+  function handleUpsellUpgrade(planType){
+    track('upgrade_clicked',{feature_name:'onboarding_multi_platform',plan_type:planType})
+    router.push(`/pricing?plan=${planType}`)
   }
 
   async function handleUsernameSubmit(){
@@ -744,7 +749,7 @@ export default function OnboardingPage(){
       <AmbientParticles/>
       <OnboardingExitSurvey currentStep={stepNum} currentStepName={step} minStepToTrigger={1} onResolved={()=>router.push('/')}/>
       {showSparkle&&<Sparkle/>}
-      {showUpsell&&pendingPlatform&&<ProUpsellModal platform={PLATFORMS[pendingPlatform]} onSkip={handleUpsellSkip}/>}
+      {showUpsell&&pendingPlatform&&<ProUpsellModal platform={PLATFORMS[pendingPlatform]} onSkip={handleUpsellSkip} onUpgrade={handleUpsellUpgrade}/>}
       <FeedbackBubble/>
 
       {/* ── CARD ── */}
