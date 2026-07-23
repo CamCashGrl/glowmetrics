@@ -3,7 +3,7 @@ import { useState, useMemo } from 'react'
 import {
   T, Card, SectionLabel, FieldLabel, TextInput, Select, PillGroup, SingleSelectPills,
   PrimaryButton, SecondaryButton, StepDots, LoadingStaged, ErrorBanner, EmptyState, Badge, TextArea, Toggle,
-  GuidancePanel, CompletionTracker, LiveSummaryPanel,
+  GuidancePanel, CompletionTracker, LiveSummaryPanel, Accordion,
 } from './theme'
 import TipMenuEditor from './TipMenuEditor'
 import {
@@ -13,13 +13,11 @@ import {
 } from '../../../../lib/profileStudio/constants'
 import { track } from '../../../../lib/track'
 
-const STEPS = ['Platform', 'Style', 'Categories', 'Boundaries', 'Pricing']
+const STEPS = ['Your Brand', 'Personalize', 'Generate']
 
 const WHY_TEXT = [
-  'Your platform and token value determine the correct payout math so estimated earnings are accurate, not guessed.',
-  'Your persona and show energy control the wording and category emphasis of every generated item.',
-  'Only the categories you enable are used — nothing outside your selection is suggested.',
-  'Boundaries and intensity limits are enforced before any item is ever generated.',
+  'Your platform, token value, persona, and show energy determine the correct payout math and the wording and category emphasis of every generated item.',
+  'Only the categories you enable are used, and boundaries and intensity limits are enforced before any item is ever generated.',
   'Your strategy, price range, and item count determine the deterministic pricing curve — the AI never invents a price.',
 ]
 
@@ -191,7 +189,7 @@ export default function TipMenuGenerator({ isLoggedIn, sharedProfile, onSharedPr
       {step === 0 && (
       <div className="ps-wizard-layout" style={{ display: 'grid', gridTemplateColumns: '1fr 260px', gap: 20, alignItems: 'start' }}>
         <Card className="ps-fade">
-          <SectionLabel>Step 1 · Platform and token value</SectionLabel>
+          <SectionLabel>Step 1 · Your brand</SectionLabel>
           <div className="ps-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
             <div>
               <FieldLabel htmlFor="tm-platform">Platform</FieldLabel>
@@ -214,57 +212,56 @@ export default function TipMenuGenerator({ isLoggedIn, sharedProfile, onSharedPr
             <div style={{ fontSize: 11.5, color: T.faint, marginTop: 4 }}>Estimates depend on your platform and payout settings — use this as a guide, not a guarantee.</div>
           </div>
 
-          <div className="ps-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginTop: 16 }}>
-            <div>
-              <FieldLabel htmlFor="tm-private-show" hint="optional">Private show price</FieldLabel>
-              <TextInput id="tm-private-show" type="number" min="0" value={privateShowPrice} onChange={e => setPrivateShowPrice(e.target.value)} />
-            </div>
-            <div>
-              <FieldLabel htmlFor="tm-average-tip" hint="optional">Average tip size</FieldLabel>
-              <TextInput id="tm-average-tip" type="number" min="0" value={averageTip} onChange={e => setAverageTip(e.target.value)} />
-            </div>
-            <div>
-              <FieldLabel htmlFor="tm-goal-hour" hint="optional, $/hr">Earnings goal per hour</FieldLabel>
-              <TextInput id="tm-goal-hour" type="number" min="0" value={earningsGoalPerHour} onChange={e => setEarningsGoalPerHour(e.target.value)} />
-            </div>
+          <div style={{ marginTop: 16 }}>
+            <FieldLabel>Main persona</FieldLabel>
+            <PillGroup options={PERSONA_TAGS} value={persona} onToggle={id => setPersona(p => (p.includes(id) ? p.filter(x => x !== id) : [...p, id]))} />
           </div>
-        </Card>
-        <GuidancePanel>{WHY_TEXT[0]}</GuidancePanel>
-        <LiveSummaryPanel title="Your Menu Strategy" rows={summaryRows} />
-      </div>
-      )}
-
-      {step === 1 && (
-      <div className="ps-wizard-layout" style={{ display: 'grid', gridTemplateColumns: '1fr 260px', gap: 20, alignItems: 'start' }}>
-        <Card className="ps-fade">
-          <SectionLabel>Step 2 · Creator style</SectionLabel>
-          <FieldLabel>Main persona</FieldLabel>
-          <PillGroup options={PERSONA_TAGS} value={persona} onToggle={id => setPersona(p => (p.includes(id) ? p.filter(x => x !== id) : [...p, id]))} />
 
           <div style={{ marginTop: 16 }}>
             <FieldLabel>Show energy</FieldLabel>
             <SingleSelectPills options={SHOW_ENERGY_OPTIONS} value={showEnergy} onChange={setShowEnergy} />
           </div>
 
-          <div style={{ marginTop: 16 }}>
-            <FieldLabel>Main room goal</FieldLabel>
-            <SingleSelectPills options={ROOM_GOAL_OPTIONS} value={roomGoal} onChange={setRoomGoal} />
-          </div>
+          <div style={{ marginTop: 18 }}>
+            <Accordion title="Customize further">
+              <div className="ps-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
+                <div>
+                  <FieldLabel htmlFor="tm-private-show" hint="optional">Private show price</FieldLabel>
+                  <TextInput id="tm-private-show" type="number" min="0" value={privateShowPrice} onChange={e => setPrivateShowPrice(e.target.value)} />
+                </div>
+                <div>
+                  <FieldLabel htmlFor="tm-average-tip" hint="optional">Average tip size</FieldLabel>
+                  <TextInput id="tm-average-tip" type="number" min="0" value={averageTip} onChange={e => setAverageTip(e.target.value)} />
+                </div>
+                <div>
+                  <FieldLabel htmlFor="tm-goal-hour" hint="optional, $/hr">Earnings goal per hour</FieldLabel>
+                  <TextInput id="tm-goal-hour" type="number" min="0" value={earningsGoalPerHour} onChange={e => setEarningsGoalPerHour(e.target.value)} />
+                </div>
+              </div>
 
-          <div style={{ marginTop: 16 }}>
-            <FieldLabel>Comfort level</FieldLabel>
-            <SingleSelectPills options={COMFORT_LEVELS} value={comfortLevel} onChange={setComfortLevel} />
+              <div style={{ marginTop: 16 }}>
+                <FieldLabel>Main room goal</FieldLabel>
+                <SingleSelectPills options={ROOM_GOAL_OPTIONS} value={roomGoal} onChange={setRoomGoal} />
+              </div>
+
+              <div style={{ marginTop: 16 }}>
+                <FieldLabel>Comfort level</FieldLabel>
+                <SingleSelectPills options={COMFORT_LEVELS} value={comfortLevel} onChange={setComfortLevel} />
+              </div>
+            </Accordion>
           </div>
         </Card>
-        <GuidancePanel>{WHY_TEXT[1]}</GuidancePanel>
-        <LiveSummaryPanel title="Your Menu Strategy" rows={summaryRows} />
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <GuidancePanel>{WHY_TEXT[0]}</GuidancePanel>
+          <LiveSummaryPanel title="Your Menu Strategy" rows={summaryRows} />
+        </div>
       </div>
       )}
 
-      {step === 2 && (
+      {step === 1 && (
       <div className="ps-wizard-layout" style={{ display: 'grid', gridTemplateColumns: '1fr 260px', gap: 20, alignItems: 'start' }}>
         <Card className="ps-fade">
-          <SectionLabel>Step 3 · Menu categories</SectionLabel>
+          <SectionLabel>Step 2 · Personalize</SectionLabel>
           <p style={{ fontSize: 13, color: T.muted, marginBottom: 12 }}>Enable the categories that fit your show — nude or non-nude, it's your call.</p>
           <PillGroup options={TIP_MENU_CATEGORIES} value={categories} onToggle={toggleCategory} />
 
@@ -292,18 +289,11 @@ export default function TipMenuGenerator({ isLoggedIn, sharedProfile, onSharedPr
               ))}
             </div>
           </div>
-        </Card>
-        <GuidancePanel>{WHY_TEXT[2]}</GuidancePanel>
-        <LiveSummaryPanel title="Your Menu Strategy" rows={summaryRows} />
-      </div>
-      )}
 
-      {step === 3 && (
-      <div className="ps-wizard-layout" style={{ display: 'grid', gridTemplateColumns: '1fr 260px', gap: 20, alignItems: 'start' }}>
-        <Card className="ps-fade">
-          <SectionLabel>Step 4 · Boundaries and exclusions</SectionLabel>
-          <FieldLabel hint="never suggested in your menu">Activities never to include</FieldLabel>
-          <TagInput value={neverInclude} onChange={setNeverInclude} placeholder="Type a boundary and press Enter" ariaLabel="Activities never to include" />
+          <div style={{ marginTop: 20, paddingTop: 20, borderTop: `1px solid ${T.borderSoft}` }}>
+            <FieldLabel hint="never suggested in your menu">Activities never to include</FieldLabel>
+            <TagInput value={neverInclude} onChange={setNeverInclude} placeholder="Type a boundary and press Enter" ariaLabel="Activities never to include" />
+          </div>
 
           <div style={{ marginTop: 16 }}>
             <FieldLabel hint="optional">Activities allowed only in private</FieldLabel>
@@ -315,33 +305,39 @@ export default function TipMenuGenerator({ isLoggedIn, sharedProfile, onSharedPr
             <TagInput value={amountGated} onChange={setAmountGated} placeholder="Type an activity and press Enter" ariaLabel="Activities allowed only at certain tip amounts" />
           </div>
 
-          <div style={{ marginTop: 20, display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <Toggle checked={requireApproval} onChange={setRequireApproval} label="Custom requests require approval" />
-            <Toggle checked={countdownsAllowed} onChange={setCountdownsAllowed} label="Countdowns are allowed" />
-            <Toggle checked={tipsStack} onChange={setTipsStack} label="Repeated tips stack" />
-            <Toggle checked={oneUserControl} onChange={setOneUserControl} label="One user can control an activity" />
-            <Toggle checked={refundable} onChange={setRefundable} label="Tips are refundable" />
-          </div>
-
           <div style={{ marginTop: 16 }}>
             <FieldLabel>Maximum intensity level</FieldLabel>
             <SingleSelectPills options={[{ id: 'mild', label: 'Mild' }, { id: 'moderate', label: 'Moderate' }, { id: 'high', label: 'High' }]} value={maxIntensity} onChange={setMaxIntensity} />
           </div>
 
-          <div style={{ marginTop: 16 }}>
-            <FieldLabel htmlFor="tm-disclaimer" hint="optional">Menu disclaimer</FieldLabel>
-            <TextArea id="tm-disclaimer" value={disclaimer} maxLength={300} onChange={e => setDisclaimer(e.target.value)} placeholder="e.g. All custom requests are reviewed before approval." />
+          <div style={{ marginTop: 18 }}>
+            <Accordion title="Customize further">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <Toggle checked={requireApproval} onChange={setRequireApproval} label="Custom requests require approval" />
+                <Toggle checked={countdownsAllowed} onChange={setCountdownsAllowed} label="Countdowns are allowed" />
+                <Toggle checked={tipsStack} onChange={setTipsStack} label="Repeated tips stack" />
+                <Toggle checked={oneUserControl} onChange={setOneUserControl} label="One user can control an activity" />
+                <Toggle checked={refundable} onChange={setRefundable} label="Tips are refundable" />
+              </div>
+
+              <div style={{ marginTop: 16 }}>
+                <FieldLabel htmlFor="tm-disclaimer" hint="optional">Menu disclaimer</FieldLabel>
+                <TextArea id="tm-disclaimer" value={disclaimer} maxLength={300} onChange={e => setDisclaimer(e.target.value)} placeholder="e.g. All custom requests are reviewed before approval." />
+              </div>
+            </Accordion>
           </div>
         </Card>
-        <GuidancePanel>{WHY_TEXT[3]}</GuidancePanel>
-        <LiveSummaryPanel title="Your Menu Strategy" rows={summaryRows} />
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <GuidancePanel>{WHY_TEXT[1]}</GuidancePanel>
+          <LiveSummaryPanel title="Your Menu Strategy" rows={summaryRows} />
+        </div>
       </div>
       )}
 
-      {step === 4 && (
+      {step === 2 && (
       <div className="ps-wizard-layout" style={{ display: 'grid', gridTemplateColumns: '1fr 260px', gap: 20, alignItems: 'start' }}>
         <Card className="ps-fade">
-          <SectionLabel>Step 5 · Pricing strategy</SectionLabel>
+          <SectionLabel>Step 3 · Generate</SectionLabel>
           <FieldLabel>Strategy</FieldLabel>
           <SingleSelectPills options={PRICING_STRATEGIES} value={strategy} onChange={setStrategy} />
 
@@ -363,10 +359,6 @@ export default function TipMenuGenerator({ isLoggedIn, sharedProfile, onSharedPr
               value={itemCount}
               onChange={v => setItemCount(Number(v))}
             />
-          </div>
-
-          <div style={{ marginTop: 16 }}>
-            <Toggle checked={hideEarningsFromCustomer} onChange={setHideEarningsFromCustomer} label="Hide estimated earnings from the customer-facing version" />
           </div>
 
           <div style={{ marginTop: 20 }}>
@@ -397,26 +389,34 @@ export default function TipMenuGenerator({ isLoggedIn, sharedProfile, onSharedPr
             </div>
           </div>
 
+          <div style={{ marginTop: 18 }}>
+            <Accordion title="Customize further">
+              <Toggle checked={hideEarningsFromCustomer} onChange={setHideEarningsFromCustomer} label="Hide estimated earnings from the customer-facing version" />
+            </Accordion>
+          </div>
+
           <div style={{ marginTop: 22 }}>
             <PrimaryButton onClick={handleGenerate} disabled={loading || !categories.length || !selectedStyles.length}>
               {loading ? 'Generating…' : '✨ Generate my tip menu'}
             </PrimaryButton>
-            {!categories.length && <div style={{ fontSize: 12, color: T.faint, marginTop: 8 }}>Enable at least one category in Step 3.</div>}
+            {!categories.length && <div style={{ fontSize: 12, color: T.faint, marginTop: 8 }}>Enable at least one category in Step 2.</div>}
             {!selectedStyles.length && <div style={{ fontSize: 12, color: T.faint, marginTop: 8 }}>Pick at least one menu type above.</div>}
           </div>
         </Card>
-        <GuidancePanel>{WHY_TEXT[4]}</GuidancePanel>
-        <LiveSummaryPanel title="Your Menu Strategy" rows={summaryRows} />
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <GuidancePanel>{WHY_TEXT[2]}</GuidancePanel>
+          <LiveSummaryPanel title="Your Menu Strategy" rows={summaryRows} />
+        </div>
       </div>
       )}
 
-      {step < 4 && (
+      {step < STEPS.length - 1 && (
         <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 18 }}>
           <SecondaryButton onClick={goBack} disabled={step === 0}>← Back</SecondaryButton>
           <PrimaryButton onClick={goNext}>Continue →</PrimaryButton>
         </div>
       )}
-      {step === 4 && (
+      {step === STEPS.length - 1 && (
         <div style={{ marginTop: 12 }}>
           <SecondaryButton onClick={goBack}>← Back</SecondaryButton>
         </div>
@@ -476,7 +476,7 @@ export default function TipMenuGenerator({ isLoggedIn, sharedProfile, onSharedPr
         </div>
       )}
 
-      {!menus && !loading && step === 4 && (
+      {!menus && !loading && step === STEPS.length - 1 && (
         <EmptyState title="Create a menu designed around your show style, boundaries, and income goals." description="Set your platform, categories, boundaries, and pricing strategy, then generate an editable tip menu." />
       )}
     </div>
