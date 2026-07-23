@@ -3953,6 +3953,31 @@ const stopImportMessageRotation = () => {
               </div>
             )}
 
+            {returningVsNew && (
+              <div style={{ ...glassCard, borderRadius: 14, padding: 20, marginBottom: 20 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+                  <div style={{ fontSize: 20 }}>🔁</div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: C.white }}>Fan Loyalty</div>
+                </div>
+                <div style={{ fontSize: 13, color: C.text, marginBottom: 14 }}>
+                  {returningVsNew.returningPct}% of your fans are returning tippers
+                  {returningVsNew.multiplier
+                    ? ` — they spend ${returningVsNew.multiplier}x more on average than first-timers.`
+                    : '.'}
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                  <div style={{ padding: "12px 14px", background: "rgba(255,255,255,0.04)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.06)" }}>
+                    <div style={{ fontSize: 10, color: C.muted, marginBottom: 4, textTransform: "uppercase" }}>Returning ({returningVsNew.returningCount})</div>
+                    <div style={{ fontSize: 20, fontWeight: 800, color: C.cyan }}>${returningVsNew.avgReturnSpend.toFixed(0)}<span style={{ fontSize: 12, color: C.muted, fontWeight: 500 }}> avg</span></div>
+                  </div>
+                  <div style={{ padding: "12px 14px", background: "rgba(255,255,255,0.04)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.06)" }}>
+                    <div style={{ fontSize: 10, color: C.muted, marginBottom: 4, textTransform: "uppercase" }}>First-time ({returningVsNew.newCount})</div>
+                    <div style={{ fontSize: 20, fontWeight: 800, color: C.white }}>${returningVsNew.avgNewSpend.toFixed(0)}<span style={{ fontSize: 12, color: C.muted, fontWeight: 500 }}> avg</span></div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <EarlyAdopterOffer isPro={isPro} />
 
           </div>
