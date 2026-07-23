@@ -99,6 +99,19 @@ const formatLastActive = (days) => {
   return `Last active ${(days / 365).toFixed(1)} years ago`
 }
 
+// Single custom "message a fan" glyph — one envelope outline with a heart
+// centered inside — used everywhere the Message action appears so it reads
+// as one consistent icon instead of a mix of emoji.
+function EnvelopeHeartIcon({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ display: "block" }}>
+      <rect x="2" y="5" width="20" height="14" rx="3" stroke="currentColor" strokeWidth="1.6" />
+      <path d="M3 6.5L12 13L21 6.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+      <path d="M12 11.3c-.85-1.3-2.75-1.2-3.2.2-.4 1.1.6 2 3.2 3.7 2.6-1.7 3.6-2.6 3.2-3.7-.45-1.4-2.35-1.5-3.2-.2z" fill="currentColor" />
+    </svg>
+  )
+}
+
 // Builds the "quick preview" stats (tips / fans / earnings / top spender)
 // shown when a free-tier user's import is blocked by the platform limit —
 // same shape as onboarding's buildPreview(), minus paid-session handling,
@@ -1386,6 +1399,25 @@ export default function Dashboard() {
   const [fanSearchQuery, setFanSearchQuery] = useState("")
   const [shareModalOpen, setShareModalOpen] = useState(false)
   const [chartDrillDay, setChartDrillDay] = useState(null)
+  // Element that had focus right before the fan profile modal opened, so we
+  // can return focus to it (the "View Fan" button) once the modal closes.
+  // Set synchronously in the "View Fan" onClick (via e.currentTarget) rather
+  // than read back from document.activeElement in an effect — by the time a
+  // passive effect runs, the modal's autoFocus has already moved focus onto
+  // the close button, so reading activeElement here would just capture that.
+  const whaleModalTriggerRef = useRef(null)
+  useEffect(() => {
+    if (selectedWhale) {
+      const onKeyDown = (e) => { if (e.key === "Escape") setSelectedWhale(null) }
+      document.addEventListener("keydown", onKeyDown)
+      return () => {
+        document.removeEventListener("keydown", onKeyDown)
+        if (whaleModalTriggerRef.current && typeof whaleModalTriggerRef.current.focus === "function") {
+          whaleModalTriggerRef.current.focus()
+        }
+      }
+    }
+  }, [selectedWhale])
   // ── LIVE MODE STATE ───────────────────────────────────────
   const [liveActive, setLiveActive] = useState(false)
   const [liveStartTime, setLiveStartTime] = useState(null)
@@ -2935,12 +2967,12 @@ const stopImportMessageRotation = () => {
         /* ── FAN CARD / MESSAGE (HEART-ENVELOPE) ── */
         @keyframes heart-envelope-breathe {
           0%, 100% { transform: scale(1); filter: drop-shadow(0 0 0 rgba(255,43,174,0)); }
-          50% { transform: scale(1.08); filter: drop-shadow(0 0 6px rgba(255,43,174,0.45)); }
+          50% { transform: scale(1.045); filter: drop-shadow(0 0 3px rgba(255,43,174,0.32)); }
         }
-        .heart-envelope-btn { animation: heart-envelope-breathe 2.8s ease-in-out infinite; }
+        .heart-envelope-btn { animation: heart-envelope-breathe 3.4s ease-in-out infinite; }
         .heart-envelope-btn:hover, .heart-envelope-btn:focus-visible {
-          transform: scale(1.12);
-          box-shadow: 0 0 0 3px rgba(255,43,174,0.18), 0 0 16px rgba(255,43,174,0.35);
+          transform: scale(1.08);
+          box-shadow: 0 0 0 3px rgba(255,43,174,0.14), 0 0 10px rgba(255,43,174,0.25);
         }
         @media (prefers-reduced-motion: reduce) {
           .heart-envelope-btn { animation: none; }
@@ -3346,9 +3378,10 @@ const stopImportMessageRotation = () => {
                             </div>
                           </div>
                           <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }}
-                            style={{ padding: '4px', borderRadius: 8, background: 'none', border: 'none', color: C.green, fontSize: 26, cursor: 'pointer', lineHeight: 1, animation: 'pulse-msg 2s infinite', flexShrink: 0 }}>
-                            💌
-                          </button>
+                            className="heart-envelope-btn"
+                            aria-label={`Message ${w.username}`}
+                            title="Message fan"
+                            style={{ padding: 6, borderRadius: 8, background: 'none', border: 'none', color: C.green, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><EnvelopeHeartIcon size={17} /></button>
                         </div>
                       ))}
                     </div>
@@ -3372,9 +3405,10 @@ const stopImportMessageRotation = () => {
                             </div>
                           </div>
                           <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }}
-                            style={{ padding: '4px', borderRadius: 8, background: 'none', border: 'none', color: C.pink, fontSize: 26, cursor: 'pointer', lineHeight: 1, animation: 'pulse-msg 2s infinite', flexShrink: 0 }}>
-                            💌
-                          </button>
+                            className="heart-envelope-btn"
+                            aria-label={`Message ${w.username}`}
+                            title="Message fan"
+                            style={{ padding: 6, borderRadius: 8, background: 'none', border: 'none', color: C.pink, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><EnvelopeHeartIcon size={17} /></button>
                         </div>
                       ))}
                     </div>
@@ -3451,9 +3485,10 @@ const stopImportMessageRotation = () => {
                         </div>
                         {a.cta && (
                           <button onClick={() => { const w = whales.find(wh => wh.username === a.username); if (w) { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) } }}
-                            style={{ flexShrink: 0, padding: "6px", borderRadius: 8, background: "none", border: "none", color: C.pink, fontSize: 28, cursor: "pointer", animation: "pulse-msg 2s infinite", lineHeight: 1 }}>
-                            💌
-                          </button>
+                            className="heart-envelope-btn"
+                            aria-label={`Message ${a.username}`}
+                            title="Message fan"
+                            style={{ flexShrink: 0, padding: 6, borderRadius: 8, background: "none", border: "none", color: C.pink, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><EnvelopeHeartIcon size={18} /></button>
                         )}
                       </div>
                     ))}
@@ -4310,15 +4345,16 @@ const stopImportMessageRotation = () => {
               </div>
             </div>
 
-            {/* FILTERS */}
-            <div style={{ display: "flex", gap: 10, marginTop: 14, marginBottom: 16, flexWrap: "wrap" }}>
-              <div style={{ display: "flex", gap: 2, background: "rgba(255,255,255,0.03)", padding: 3, borderRadius: 10, border: "1px solid rgba(255,255,255,0.08)" }}>
+            {/* FILTERS — each pill group scrolls horizontally within itself on
+                narrow screens instead of clipping options past the viewport edge */}
+            <div style={{ display: "flex", gap: 10, marginTop: 14, marginBottom: 16, flexWrap: "wrap", maxWidth: "100%" }}>
+              <div style={{ display: "flex", gap: 2, background: "rgba(255,255,255,0.03)", padding: 3, borderRadius: 10, border: "1px solid rgba(255,255,255,0.08)", overflowX: "auto", maxWidth: "100%", WebkitOverflowScrolling: "touch" }}>
                 {["ALL","Whale","Shark","Regular","Dormant"].map(t => {
                   const count = t === "ALL" ? whales.length : whales.filter(w => w.tier === t).length
                   const active = whaleFilter === t
                   return (
                     <button key={t} className="tier-filter-btn" onClick={() => setWhaleFilter(t)}
-                      style={{ padding: "6px 12px", borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: "pointer", border: "none", background: active ? "linear-gradient(135deg, #22D3EE, #EC4899)" : "transparent", color: active ? "#06101A" : C.text }}>
+                      style={{ padding: "6px 12px", borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: "pointer", border: "none", flexShrink: 0, whiteSpace: "nowrap", background: active ? "linear-gradient(135deg, #22D3EE, #EC4899)" : "transparent", color: active ? "#06101A" : C.text }}>
                       {t === "ALL" ? "All" : t}
                       <span style={{ marginLeft: 5, fontSize: 10, fontWeight: 700, opacity: active ? 0.75 : 0.6 }}>{count}</span>
                     </button>
@@ -4326,9 +4362,9 @@ const stopImportMessageRotation = () => {
                 })}
               </div>
               {allPlatforms.length > 1 && (
-                <div style={{ display: "flex", gap: 2, background: "rgba(255,255,255,0.03)", padding: 3, borderRadius: 10, border: "1px solid rgba(255,255,255,0.08)" }}>
+                <div style={{ display: "flex", gap: 2, background: "rgba(255,255,255,0.03)", padding: 3, borderRadius: 10, border: "1px solid rgba(255,255,255,0.08)", overflowX: "auto", maxWidth: "100%", WebkitOverflowScrolling: "touch" }}>
                   {["ALL", ...allPlatforms].map(p => (
-                    <button key={p} className="tier-filter-btn" onClick={() => setPlatformFilter(p)} style={{ padding: "6px 12px", borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: "pointer", border: "none", background: platformFilter === p ? "rgba(34,211,238,0.18)" : "transparent", color: platformFilter === p ? C.cyan : C.text }}>{p}</button>
+                    <button key={p} className="tier-filter-btn" onClick={() => setPlatformFilter(p)} style={{ padding: "6px 12px", borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: "pointer", border: "none", flexShrink: 0, whiteSpace: "nowrap", background: platformFilter === p ? "rgba(34,211,238,0.18)" : "transparent", color: platformFilter === p ? C.cyan : C.text }}>{p}</button>
                   ))}
                 </div>
               )}
@@ -4423,14 +4459,14 @@ const stopImportMessageRotation = () => {
 
                       {/* ACTIONS — one primary, two secondary */}
                       <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                        <button onClick={() => setSelectedWhale(w)}
+                        <button onClick={(e) => { whaleModalTriggerRef.current = e.currentTarget; setSelectedWhale(w) }}
                           style={{ flex: 1, padding: '8px 0', borderRadius: 8, background: 'linear-gradient(135deg, #22D3EE, #EC4899)', border: 'none', color: '#06101A', fontSize: 12, fontWeight: 800, cursor: 'pointer' }}
                           title="View fan profile">View Fan</button>
                         <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }}
                           className="heart-envelope-btn"
                           aria-label={`Message ${w.username}`}
                           title="Message fan"
-                          style={{ width: 32, height: 32, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, background: 'rgba(255,43,174,0.1)', border: '1px solid rgba(255,43,174,0.25)', color: C.pink, fontSize: 14, cursor: 'pointer' }}>💌</button>
+                          style={{ width: 32, height: 32, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, background: 'rgba(255,43,174,0.1)', border: '1px solid rgba(255,43,174,0.25)', color: C.pink, cursor: 'pointer' }}><EnvelopeHeartIcon size={15} /></button>
                         <button onClick={() => setNoteTarget(w.username)}
                           aria-label={`Add note for ${w.username}`}
                           title="Add note"
@@ -4532,12 +4568,16 @@ const stopImportMessageRotation = () => {
                             </div>
                           </div>
                           <div style={{ display: "flex", gap: 6, alignItems:"center" }}>
-                            <button onClick={() => setSelectedWhale(w)} style={{ padding: "4px 10px", borderRadius: 6, background: "rgba(34,211,238,0.12)", border: "1px solid rgba(34,211,238,0.25)", color: C.cyan, fontSize: 11, cursor: "pointer" }}>🔍 Profile</button>
+                            <button onClick={(e) => { whaleModalTriggerRef.current = e.currentTarget; setSelectedWhale(w) }} style={{ padding: "4px 10px", borderRadius: 6, background: "rgba(34,211,238,0.12)", border: "1px solid rgba(34,211,238,0.25)", color: C.cyan, fontSize: 11, cursor: "pointer" }}>🔍 Profile</button>
                             <button onClick={() => { setNoteTarget(w.username); setNoteText(tipperNotes[w.username?.toLowerCase()]?.note || '') }}
                               style={{ padding: "4px 8px", borderRadius: 6, background: tipperNotes[w.username?.toLowerCase()]?.note ? "rgba(245,158,11,0.15)" : "rgba(255,255,255,0.05)", border: tipperNotes[w.username?.toLowerCase()]?.note ? "1px solid rgba(245,158,11,0.3)" : "1px solid rgba(255,255,255,0.1)", color: tipperNotes[w.username?.toLowerCase()]?.note ? C.gold : C.muted, fontSize: 11, cursor: "pointer" }}>
                               {tipperNotes[w.username?.toLowerCase()]?.note ? "📝 Note" : "📝"}
                             </button>
-                            <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }} style={{ padding: "4px", borderRadius: 8, background: "none", border: "none", color: C.pink, fontSize: 26, cursor: "pointer", animation: "pulse-msg 2s infinite", lineHeight: 1 }}>💌</button>
+                            <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }}
+                              className="heart-envelope-btn"
+                              aria-label={`Message ${w.username}`}
+                              title="Message fan"
+                              style={{ padding: 6, borderRadius: 8, background: "rgba(255,43,174,0.1)", border: "1px solid rgba(255,43,174,0.25)", color: C.pink, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><EnvelopeHeartIcon size={17} /></button>
                           </div>
                         </div>
 
@@ -6634,8 +6674,8 @@ const stopImportMessageRotation = () => {
         const fanMostCommonType = Object.entries(fanPrivateTypeCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || null
         const biggestTip = whaleTips.length ? Math.max(...whaleTips.map(t => t.usd)) : 0
         return (
-          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 20 }}>
-            <div className="modal-inner" style={{ width: 560, maxHeight: "90vh", overflowY: "auto", ...glassCard, borderRadius: 20 }}>
+          <div onClick={() => setSelectedWhale(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 20 }}>
+            <div className="modal-inner" role="dialog" aria-modal="true" aria-label={`${w.username} fan profile`} onClick={e => e.stopPropagation()} style={{ width: 560, maxHeight: "90vh", overflowY: "auto", ...glassCard, borderRadius: 20 }}>
               <div style={{ padding: "24px 24px 20px", background: `linear-gradient(135deg, ${tierColor}15, transparent)`, borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
@@ -6653,12 +6693,12 @@ const stopImportMessageRotation = () => {
                       className="heart-envelope-btn"
                       aria-label={`Message ${w.username}`}
                       title="Message fan"
-                      style={{ width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "50%", background: "rgba(255,43,174,0.12)", border: "1px solid rgba(255,43,174,0.3)", color: C.pink, fontSize: 14, cursor: "pointer" }}>💌</button>
+                      style={{ width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "50%", background: "rgba(255,43,174,0.12)", border: "1px solid rgba(255,43,174,0.3)", color: C.pink, cursor: "pointer" }}><EnvelopeHeartIcon size={15} /></button>
                     <button onClick={() => setNoteTarget(w.username)}
                       aria-label={`Add note for ${w.username}`}
                       title="Add note"
                       style={{ width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "50%", background: "rgba(167,139,250,0.12)", border: "1px solid rgba(167,139,250,0.3)", color: "#a78bfa", fontSize: 13, cursor: "pointer" }}>📝</button>
-                    <button onClick={() => setSelectedWhale(null)} aria-label="Close profile" style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.1)", color: C.text, fontSize: 16, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+                    <button onClick={() => setSelectedWhale(null)} aria-label="Close profile" autoFocus style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.1)", color: C.text, fontSize: 16, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
                   </div>
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
