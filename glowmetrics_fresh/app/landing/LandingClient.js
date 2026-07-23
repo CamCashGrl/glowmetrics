@@ -947,6 +947,7 @@ export default function LandingClient() {
         <div style={{ display: "flex", alignItems: "center", gap: 20, marginRight: 8 }}>
           <a href="/landing#features" style={{ fontSize: 13, color: T.textMuted, textDecoration: "none" }}>Features</a>
           <a href="/pricing" style={{ fontSize: 13, color: T.textMuted, textDecoration: "none" }}>Pricing</a>
+          <a href="/store" style={{ fontSize: 13, color: T.textMuted, textDecoration: "none" }}>Store</a>
           <a href="/blog" style={{ fontSize: 13, color: T.textMuted, textDecoration: "none" }}>Blog</a>
           <a href="/affiliates" style={{ fontSize: 13, color: T.textMuted, textDecoration: "none" }}>Affiliates</a>
           <a href="/contact" style={{ fontSize: 13, color: T.purple, fontWeight: 700, textDecoration: "none" }}>Contact Us</a>

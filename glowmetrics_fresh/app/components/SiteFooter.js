@@ -37,6 +37,7 @@ const HEADING_STYLE = {
 const DASHBOARD_NAV_LINKS = [
   { href: '/', label: 'Home' },
   { href: '/pricing', label: 'Pricing' },
+  { href: '/store', label: 'Store' },
   { href: '/extension', label: 'Chrome Extension' },
   { href: '/demo', label: 'Live Demo' },
   { href: '/guides', label: 'Free Guides & Tools' },
