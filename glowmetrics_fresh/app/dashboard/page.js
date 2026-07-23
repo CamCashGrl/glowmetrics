@@ -2979,6 +2979,8 @@ const stopImportMessageRotation = () => {
           .heart-envelope-btn:hover, .heart-envelope-btn:focus-visible { transform: none; }
         }
         .tier-filter-btn { transition: background 0.15s ease, color 0.15s ease; }
+        .whale-modal-grid { display: grid; grid-template-columns: 1fr 240px; gap: 22px; }
+        @media (max-width: 640px) { .whale-modal-grid { grid-template-columns: 1fr; } }
       `}</style>
 
       <div style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 0 }}>
@@ -6658,10 +6660,32 @@ const stopImportMessageRotation = () => {
         // guarded below rather than assumed to exist.
         const daysSinceLastTip = w.lastTipDate ? Math.floor((Date.now() - new Date(w.lastTipDate)) / 86400000) : null
         const tierColor = TIER_COLORS[w.tier] || C.cyan
+        const tierIcon = w.tier === 'Whale' ? '💎' : w.tier === 'Shark' ? '🦈' : w.tier === 'Regular' ? '⭐' : '💤'
         const avgDaysBetweenTips = whaleTips.length > 1 ? Math.floor((new Date(w.lastTipDate) - new Date(firstTip?.date_time)) / 86400000 / (whaleTips.length - 1)) : 7
         const likelyReturnDays = daysSinceLastTip !== null ? Math.max(0, avgDaysBetweenTips - daysSinceLastTip) : null
-        const churnRisk = daysSinceLastTip === null ? null : daysSinceLastTip > avgDaysBetweenTips * 2 ? "High" : daysSinceLastTip > avgDaysBetweenTips ? "Medium" : "Low"
-        const churnColor = churnRisk === "High" ? C.red : churnRisk === "Medium" ? C.orange : C.green
+        // Reuse the shared churn-risk formula (w.churnRisk) from analytics.js —
+        // same fix as the card grid — instead of a second local calculation.
+        const churnRisk = w.churnRisk?.level && w.churnRisk.level !== "Unknown" ? w.churnRisk.level : null
+        const churnColor = churnRisk === "Critical" || churnRisk === "High" ? C.red : churnRisk === "Medium" ? C.orange : C.green
+        // Relationship score — identical formula to the Top Fans card grid,
+        // computed here too so the modal's "REL" badge always agrees with it.
+        const relScore = Math.min(100, Math.round((w.tipCount * 3) + (w.totalUSD / 10) + (daysSinceLastTip !== null && daysSinceLastTip < 7 ? 20 : daysSinceLastTip !== null && daysSinceLastTip < 30 ? 10 : 0)))
+        const relColor = relScore >= 70 ? C.green : relScore >= 40 ? C.gold : C.red
+        const valueLabel = w.isTopSpender || w.spendPercentile >= 95 ? "Ultra high value"
+          : relScore >= 70 ? "High value supporter"
+          : relScore >= 40 ? "Growing relationship"
+          : "New supporter"
+        const topSpenderPct = typeof w.spendPercentile === "number" ? Math.max(1, 100 - w.spendPercentile) : null
+        // A short, data-grounded read on the fan — built only from values the
+        // shared analytics engine already computed (churn risk / tip
+        // probability / tip count), never a fabricated observation.
+        const fanInsight = churnRisk === "Critical" || churnRisk === "High"
+          ? "This fan's tipping has slowed — a quick message could bring them back."
+          : w.tipProbability?.level === "High"
+          ? "This fan is highly engaged and likely to tip again soon."
+          : w.tipCount >= 5 && (churnRisk === "Low" || churnRisk === "Medium")
+          ? "This fan is highly engaged and tips consistently. Keep the momentum going!"
+          : null
         // Fan-key match: platform + normalized username (never merge across
         // platforms). Mirrors the whaleTips filter above exactly, over
         // paid_sessions instead of tips.
@@ -6673,96 +6697,132 @@ const stopImportMessageRotation = () => {
         fanPaidSessions.forEach(s => { fanPrivateTypeCounts[s.session_type] = (fanPrivateTypeCounts[s.session_type] || 0) + 1 })
         const fanMostCommonType = Object.entries(fanPrivateTypeCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || null
         const biggestTip = whaleTips.length ? Math.max(...whaleTips.map(t => t.usd)) : 0
+        const dayKeys = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]
+        const dayCounts = { Mon:0,Tue:0,Wed:0,Thu:0,Fri:0,Sat:0,Sun:0 }
+        whaleTips.forEach(t => {
+          const d = new Date(t.date_time).getUTCDay()
+          const key = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][d]
+          if (key in dayCounts) dayCounts[key]++
+        })
+        const maxDayCount = Math.max(...Object.values(dayCounts), 1)
+        const bestDay = whaleTips.length ? Object.entries(dayCounts).sort((a, b) => b[1] - a[1])[0] : null
         return (
           <div onClick={() => setSelectedWhale(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 20 }}>
-            <div className="modal-inner" role="dialog" aria-modal="true" aria-label={`${w.username} fan profile`} onClick={e => e.stopPropagation()} style={{ width: 560, maxHeight: "90vh", overflowY: "auto", ...glassCard, borderRadius: 20 }}>
-              <div style={{ padding: "24px 24px 20px", background: `linear-gradient(135deg, ${tierColor}15, transparent)`, borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                    <div style={{ width: 52, height: 52, borderRadius: 14, background: `linear-gradient(135deg, ${tierColor}, ${tierColor}80)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, fontWeight: 800, color: "#fff" }}>{w.username.charAt(0).toUpperCase()}</div>
-                    <div>
-                      <div style={{ fontSize: 20, fontWeight: 800, color: C.white }}>{w.username}</div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
-                        <span style={{ padding: "2px 10px", borderRadius: 100, background: `${tierColor}20`, border: `1px solid ${tierColor}50`, color: tierColor, fontSize: 11, fontWeight: 700 }}>{w.tier}</span>
-                        <span style={{ fontSize: 12, color: C.text }}>{w.platform}</span>
+            <div className="whale-modal-shell" style={{ width: "min(720px, 94vw)", borderRadius: 21, padding: 1, background: `linear-gradient(135deg, ${tierColor}90, rgba(124,92,255,0.4), rgba(255,43,174,0.85))` }} onClick={e => e.stopPropagation()}>
+              <div className="modal-inner" role="dialog" aria-modal="true" aria-label={`${w.username} fan profile`} style={{ maxHeight: "90vh", overflowY: "auto", ...glassCard, borderRadius: 20 }}>
+                <div style={{ padding: "22px 24px 18px", background: `linear-gradient(135deg, ${tierColor}15, transparent)`, borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                      <div style={{ position: "relative", flexShrink: 0 }}>
+                        <div style={{ width: 56, height: 56, borderRadius: "50%", background: `linear-gradient(135deg, ${tierColor}, ${tierColor}80)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, fontWeight: 800, color: "#fff", border: `2px solid ${tierColor}55`, boxShadow: `0 0 0 3px ${tierColor}25` }}>{w.username.charAt(0).toUpperCase()}</div>
+                        <div title={`${w.tier} tier`} style={{ position: "absolute", right: -3, bottom: -3, width: 22, height: 22, borderRadius: "50%", background: C.bg, border: `1px solid ${tierColor}70`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11 }}>{tierIcon}</div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 19, fontWeight: 800, color: C.white, wordBreak: "break-word" }}>{w.username}</div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4, flexWrap: "wrap" }}>
+                          <span style={{ padding: "2px 10px", borderRadius: 100, background: `${tierColor}20`, border: `1px solid ${tierColor}50`, color: tierColor, fontSize: 11, fontWeight: 700 }}>{w.tier}</span>
+                          <span style={{ padding: "2px 10px", borderRadius: 100, background: "rgba(124,92,255,0.14)", border: "1px solid rgba(124,92,255,0.3)", color: "#a78bfa", fontSize: 11, fontWeight: 600 }}>{w.platform || "Unknown"}</span>
+                        </div>
                       </div>
                     </div>
+                    <button onClick={() => setSelectedWhale(null)} aria-label="Close profile" autoFocus style={{ width: 30, height: 30, borderRadius: "50%", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.1)", color: C.text, fontSize: 15, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>✕</button>
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }}
-                      className="heart-envelope-btn"
-                      aria-label={`Message ${w.username}`}
-                      title="Message fan"
-                      style={{ width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "50%", background: "rgba(255,43,174,0.12)", border: "1px solid rgba(255,43,174,0.3)", color: C.pink, cursor: "pointer" }}><EnvelopeHeartIcon size={15} /></button>
-                    <button onClick={() => setNoteTarget(w.username)}
-                      aria-label={`Add note for ${w.username}`}
-                      title="Add note"
-                      style={{ width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "50%", background: "rgba(167,139,250,0.12)", border: "1px solid rgba(167,139,250,0.3)", color: "#a78bfa", fontSize: 13, cursor: "pointer" }}>📝</button>
-                    <button onClick={() => setSelectedWhale(null)} aria-label="Close profile" autoFocus style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.1)", color: C.text, fontSize: 16, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
-                  </div>
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
-                  {[{ label: "Total Spent", value: `$${w.totalUSD.toFixed(2)}`, color: C.green }, { label: "Tips Given", value: w.tipCount, color: C.cyan }, { label: "Avg Tip", value: `$${w.avgTipSize.toFixed(2)}`, color: C.gold }, { label: "Biggest Tip", value: `$${biggestTip.toFixed(2)}`, color: C.pink }].map(({ label, value, color }) => (
-                    <div key={label} style={{ textAlign: "center" }}>
-                      <div style={{ fontSize: 11, color: C.text, marginBottom: 4 }}>{label}</div>
-                      <div style={{ fontSize: 16, fontWeight: 800, color }}>{value}</div>
+
+                  {topSpenderPct !== null && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+                      <div style={{ width: 34, height: 34, borderRadius: "50%", background: `${relColor}18`, border: `2px solid ${relColor}55`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                        <div style={{ fontSize: 11, fontWeight: 800, color: relColor, lineHeight: 1 }}>{relScore}</div>
+                        <div style={{ fontSize: 6, color: relColor, opacity: 0.75, lineHeight: 1 }}>REL</div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: C.white }}>Top {topSpenderPct}% of supporters</div>
+                        <div style={{ fontSize: 11, color: C.text }}>{valueLabel}</div>
+                      </div>
                     </div>
-                  ))}
-                </div>
-              </div>
-              <div style={{ padding: 24, display: "flex", flexDirection: "column", gap: 20 }}>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: C.text, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>📊 Fan Intelligence</div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
-                    {[
-                      { label: "First tip", value: firstTip ? new Date(firstTip.date_time).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : "Not enough data yet" },
-                      { label: "Last tip", value: w.lastTipDate ? new Date(w.lastTipDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : "Not enough data yet", sub: daysSinceLastTip !== null ? `${daysSinceLastTip.toLocaleString()} days ago` : null },
-                      { label: "Avg days between tips", value: whaleTips.length > 1 ? `Every ~${avgDaysBetweenTips} days` : "Not enough data yet" },
-                      { label: "Churn risk", value: churnRisk || "Not enough data yet", color: churnColor },
-                    ].map(({ label, value, sub, color }) => (
-                      <div key={label} style={{ padding: "10px 0" }}>
+                  )}
+
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
+                    {[{ label: "Total Spent", value: `$${w.totalUSD.toFixed(2)}`, color: C.green }, { label: "Tips Given", value: w.tipCount, color: C.cyan }, { label: "Avg Tip", value: `$${w.avgTipSize.toFixed(2)}`, color: C.gold }, { label: "Biggest Tip", value: `$${biggestTip.toFixed(2)}`, color: C.pink }].map(({ label, value, color }) => (
+                      <div key={label} style={{ textAlign: "center" }}>
                         <div style={{ fontSize: 11, color: C.text, marginBottom: 4 }}>{label}</div>
-                        <div style={{ fontSize: 14, fontWeight: 700, color: color || C.white }}>{value}</div>
-                        {sub && <div style={{ fontSize: 11, color: C.text, marginTop: 2 }}>{sub}</div>}
+                        <div style={{ fontSize: 16, fontWeight: 800, color }}>{value}</div>
                       </div>
                     ))}
                   </div>
-                  {w.typicalOnlineHours && w.typicalOnlineHours !== "Unknown" && (
-                    <div style={{ padding: "9px 14px", background: `${C.cyan}10`, border: `1px solid ${C.cyan}25`, borderRadius: 9, marginBottom: 12 }}>
-                      <span style={{ fontSize: 12, color: C.cyan }}>🕐 Best time to reach: <strong>{w.typicalOnlineHours}</strong></span>
-                    </div>
-                  )}
-                  {(() => {
-                    const dayKeys = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]
-                    const dayCounts = { Mon:0,Tue:0,Wed:0,Thu:0,Fri:0,Sat:0,Sun:0 }
-                    whaleTips.forEach(t => {
-                      const d = new Date(t.date_time).getUTCDay()
-                      const key = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][d]
-                      if (key in dayCounts) dayCounts[key]++
-                    })
-                    const maxCount = Math.max(...Object.values(dayCounts), 1)
-                    return (
-                      <div>
-                        <div style={{ fontSize: 11, color: C.text, marginBottom: 8 }}>📅 Tips by day of week</div>
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4 }}>
-                          {dayKeys.map(d => {
-                            const count = dayCounts[d]
-                            const intensity = count / maxCount
-                            const bg = intensity === 0 ? "rgba(255,255,255,0.04)" : intensity < 0.33 ? "rgba(124,92,255,0.2)" : intensity < 0.66 ? "rgba(124,92,255,0.5)" : "rgba(124,92,255,0.9)"
-                            return (
-                              <div key={d} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-                                <div style={{ width: "100%", height: 30, borderRadius: 6, background: bg, border: "1px solid rgba(255,255,255,0.06)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                                  <span style={{ fontSize: 10, fontWeight: 700, color: count > 0 ? C.white : C.text }}>{count || ""}</span>
-                                </div>
-                                <span style={{ fontSize: 9, color: C.text }}>{d}</span>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      </div>
-                    )
-                  })()}
                 </div>
+
+                <div className="whale-modal-grid" style={{ padding: 24 }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 800, color: C.white, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}><span style={{ color: C.cyan }}>✦</span> Fan Intelligence</div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                        {[
+                          { icon: "📅", label: "First tip", value: firstTip ? new Date(firstTip.date_time).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : "Not enough data yet" },
+                          { icon: "📅", label: "Last tip", value: w.lastTipDate ? new Date(w.lastTipDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : "Not enough data yet", sub: daysSinceLastTip !== null ? `${daysSinceLastTip.toLocaleString()} days ago` : null },
+                          { icon: "🕐", label: "Avg days between tips", value: whaleTips.length > 1 ? `Every ~${avgDaysBetweenTips} days` : "Not enough data yet" },
+                          { icon: "⚠️", label: "Churn risk", value: churnRisk || "Not enough data yet", color: churnColor },
+                          ...(w.typicalOnlineHours && w.typicalOnlineHours !== "Unknown" ? [{ icon: "🕐", label: "Best time to reach", value: w.typicalOnlineHours, color: C.cyan }] : []),
+                        ].map(({ icon, label, value, sub, color }) => (
+                          <div key={label} style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+                            <span style={{ fontSize: 13, marginTop: 1, flexShrink: 0 }}>{icon}</span>
+                            <div style={{ minWidth: 0 }}>
+                              <div style={{ fontSize: 11, color: C.text }}>{label}</div>
+                              <div style={{ fontSize: 14, fontWeight: 700, color: color || C.white }}>{value}</div>
+                              {sub && <div style={{ fontSize: 11, color: C.text, marginTop: 1 }}>{sub}</div>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div style={{ padding: 14, background: "rgba(255,255,255,0.03)", borderRadius: 12, border: "1px solid rgba(255,255,255,0.07)" }}>
+                      <div style={{ fontSize: 11, color: C.text, marginBottom: 10, fontWeight: 700 }}>📊 Tips by day of week</div>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 5 }}>
+                        {dayKeys.map(d => {
+                          const count = dayCounts[d]
+                          const heightPct = 24 + (count / maxDayCount) * 76
+                          return (
+                            <div key={d} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+                              <div style={{ width: "100%", height: 52, display: "flex", alignItems: "flex-end" }}>
+                                <div style={{ width: "100%", height: `${count > 0 ? heightPct : 8}%`, borderRadius: 5, background: count > 0 ? `linear-gradient(180deg, ${C.cyan}, #7C5CFF)` : "rgba(255,255,255,0.06)" }} />
+                              </div>
+                              <span style={{ fontSize: 9, color: C.text }}>{d}</span>
+                            </div>
+                          )
+                        })}
+                      </div>
+                      {bestDay && bestDay[1] > 0 && (
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 12, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+                          <div style={{ fontSize: 12, color: C.text }}>💗 Most active <strong style={{ color: C.pink }}>{{Mon:"Monday",Tue:"Tuesday",Wed:"Wednesday",Thu:"Thursday",Fri:"Friday",Sat:"Saturday",Sun:"Sunday"}[bestDay[0]]}</strong></div>
+                          <div style={{ fontSize: 12, color: C.text }}>{whaleTips.length.toLocaleString()} tips total</div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10, minWidth: 0 }}>
+                    <div style={{ fontSize: 12, fontWeight: 800, color: C.white, textTransform: "uppercase", letterSpacing: 1, marginBottom: 2 }}>Actions</div>
+                    <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }}
+                      className="heart-envelope-btn"
+                      aria-label={`Message ${w.username}`}
+                      style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, padding: "13px 16px", borderRadius: 12, background: "linear-gradient(135deg, rgba(255,43,174,0.22), rgba(124,92,255,0.22))", border: "1px solid rgba(255,43,174,0.45)", color: C.white, fontSize: 14, fontWeight: 800, cursor: "pointer" }}>
+                      <EnvelopeHeartIcon size={18} /> Message Fan
+                    </button>
+                    <div style={{ fontSize: 11, color: C.text, textAlign: "center", marginTop: -4, marginBottom: 4 }}>Start a private conversation</div>
+                    <button onClick={() => setNoteTarget(w.username)}
+                      style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "10px 16px", borderRadius: 10, background: "rgba(167,139,250,0.1)", border: "1px solid rgba(167,139,250,0.25)", color: "#a78bfa", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                      📝 Add Note
+                    </button>
+                  </div>
+                </div>
+
+                <div style={{ padding: "0 24px 24px", display: "flex", flexDirection: "column", gap: 20 }}>
+                {fanInsight && (
+                  <div style={{ padding: "12px 16px", background: "linear-gradient(135deg, rgba(34,211,238,0.08), rgba(255,43,174,0.08))", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 12, display: "flex", alignItems: "flex-start", gap: 10 }}>
+                    <span style={{ fontSize: 15 }}>✨</span>
+                    <span style={{ fontSize: 13, color: C.text, lineHeight: 1.5 }}>{fanInsight}</span>
+                  </div>
+                )}
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 700, color: C.text, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>🏆 Top 3 Tips</div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -6845,6 +6905,8 @@ const stopImportMessageRotation = () => {
                   </div>
                 )}
                 <button onClick={() => setSelectedWhale(null)} style={{ width: "100%", padding: "12px", borderRadius: 10, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: C.text, fontSize: 14, cursor: "pointer" }}>Close Profile</button>
+                <div style={{ textAlign: "center", fontSize: 11, color: C.text, borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: 14 }}>🔒 All fan data is private and secure.</div>
+                </div>
               </div>
             </div>
           </div>
