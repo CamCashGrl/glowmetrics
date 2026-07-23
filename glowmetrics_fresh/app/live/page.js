@@ -13,6 +13,7 @@ import EventsSync from './EventsSync';
 import Button from '../../components/ui/Button';
 import { useLiveSessionEngine } from './useLiveSessionEngine';
 import { TRIGGER_LEVEL, TRIGGER_ICON } from '../../lib/coaching/triggers';
+import CoachingPromptFeed from '../components/CoachingPromptFeed';
 
 const C = {
   bg: '#040812', card: 'rgba(15,20,32,0.75)', border: 'rgba(168,85,247,0.2)',
@@ -164,6 +165,13 @@ export default function LivePage() {
       if (!u) { setAuthStatus('live'); return; }
       setUser(u);
       setAuthStatus('live');
+
+      // Server-persisted timezone override, same profiles.timezone the
+      // dashboard reads/writes — takes priority over the localStorage value
+      // above once loaded, so the setting is consistent across devices
+      // instead of being per-browser only.
+      supabase.from('profiles').select('timezone').eq('id', u.id).maybeSingle()
+        .then(({ data }) => { if (data?.timezone) setLiveTimezone(data.timezone); });
 
       // Load last 12h of tips as history
       const since = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString();
@@ -927,7 +935,14 @@ export default function LivePage() {
               <option value="whale">🐋 Whale Focus</option>
               <option value="goal">🎯 Goal Focus</option>
             </select>
-            <select value={liveTimezone} onChange={e => setLiveTimezone(e.target.value)} title="Timezone for session start/end times" style={{ ...inp2, width: 'auto', padding: '5px 10px', fontSize: 12 }}>
+            <select value={liveTimezone} onChange={e => {
+              const next = e.target.value;
+              setLiveTimezone(next);
+              fetch('/api/profile/timezone', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ timezone: next }),
+              }).catch(() => {});
+            }} title="Timezone for session start/end times" style={{ ...inp2, width: 'auto', padding: '5px 10px', fontSize: 12 }}>
               {Array.from(new Set([liveTimezone, Intl.DateTimeFormat().resolvedOptions().timeZone,
                 'America/Los_Angeles', 'America/Denver', 'America/Chicago', 'America/New_York', 'UTC', 'Europe/London', 'Europe/Berlin'
               ])).map(tz => <option key={tz} value={tz}>{tz}</option>)}
@@ -1609,6 +1624,9 @@ export default function LivePage() {
                   </div>
                 </div>
               )}
+
+              {/* Coaching Prompt Feed — every prompt this session, mark Completed/Skipped */}
+              <CoachingPromptFeed active={liveActive} />
             </div>
           </div>
         )}
