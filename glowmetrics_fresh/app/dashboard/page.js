@@ -102,12 +102,12 @@ const formatLastActive = (days) => {
 // Single custom "message a fan" glyph — one envelope outline with a heart
 // centered inside — used everywhere the Message action appears so it reads
 // as one consistent icon instead of a mix of emoji.
-function EnvelopeHeartIcon({ size = 16 }) {
+function EnvelopeHeartIcon({ size = 16, heartColor = "#FF2BAE" }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ display: "block" }}>
       <rect x="2" y="5" width="20" height="14" rx="3" stroke="currentColor" strokeWidth="1.6" />
       <path d="M3 6.5L12 13L21 6.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-      <path d="M12 11.3c-.85-1.3-2.75-1.2-3.2.2-.4 1.1.6 2 3.2 3.7 2.6-1.7 3.6-2.6 3.2-3.7-.45-1.4-2.35-1.5-3.2-.2z" fill="currentColor" />
+      <path d="M12 11.3c-.85-1.3-2.75-1.2-3.2.2-.4 1.1.6 2 3.2 3.7 2.6-1.7 3.6-2.6 3.2-3.7-.45-1.4-2.35-1.5-3.2-.2z" fill={heartColor} />
     </svg>
   )
 }
@@ -2979,8 +2979,21 @@ const stopImportMessageRotation = () => {
           .heart-envelope-btn:hover, .heart-envelope-btn:focus-visible { transform: none; }
         }
         .tier-filter-btn { transition: background 0.15s ease, color 0.15s ease; }
-        .whale-modal-grid { display: grid; grid-template-columns: 1fr 240px; gap: 22px; }
-        @media (max-width: 640px) { .whale-modal-grid { grid-template-columns: 1fr; } }
+        .whale-modal-shell { box-shadow: 0 0 36px rgba(34,211,238,0.16), 0 0 54px rgba(124,92,255,0.15), 0 0 44px rgba(255,43,174,0.13), 0 22px 54px rgba(0,0,0,0.55); }
+        .whale-modal-grid { display: grid; grid-template-columns: 1fr 220px; gap: 0; align-items: start; }
+        .whale-modal-actions-col { border-left: 1px solid rgba(255,255,255,0.08); padding-left: 22px; margin-left: 22px; }
+        .whale-hero-metrics { display: grid; grid-template-columns: repeat(4, 1fr); }
+        .whale-hero-metric { padding: 0 14px; }
+        .whale-hero-metric:first-child { padding-left: 0; }
+        .whale-hero-metric:not(:first-child) { border-left: 1px solid rgba(255,255,255,0.1); }
+        .whale-intel-split { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        @media (max-width: 640px) {
+          .whale-modal-grid { grid-template-columns: 1fr; }
+          .whale-modal-actions-col { border-left: none; padding-left: 0; margin-left: 0; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 16px; margin-top: 18px; }
+          .whale-hero-metrics { grid-template-columns: repeat(2, 1fr); row-gap: 12px; }
+          .whale-hero-metric:nth-child(odd) { border-left: none; padding-left: 0; }
+          .whale-intel-split { grid-template-columns: 1fr; }
+        }
       `}</style>
 
       <div style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 0 }}>
@@ -6707,101 +6720,121 @@ const stopImportMessageRotation = () => {
         const maxDayCount = Math.max(...Object.values(dayCounts), 1)
         const bestDay = whaleTips.length ? Object.entries(dayCounts).sort((a, b) => b[1] - a[1])[0] : null
         return (
-          <div onClick={() => setSelectedWhale(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 20 }}>
-            <div className="whale-modal-shell" style={{ width: "min(720px, 94vw)", borderRadius: 21, padding: 1, background: `linear-gradient(135deg, ${tierColor}90, rgba(124,92,255,0.4), rgba(255,43,174,0.85))` }} onClick={e => e.stopPropagation()}>
-              <div className="modal-inner" role="dialog" aria-modal="true" aria-label={`${w.username} fan profile`} style={{ maxHeight: "90vh", overflowY: "auto", ...glassCard, borderRadius: 20 }}>
-                <div style={{ padding: "22px 24px 18px", background: `linear-gradient(135deg, ${tierColor}15, transparent)`, borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                      <div style={{ position: "relative", flexShrink: 0 }}>
-                        <div style={{ width: 56, height: 56, borderRadius: "50%", background: `linear-gradient(135deg, ${tierColor}, ${tierColor}80)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, fontWeight: 800, color: "#fff", border: `2px solid ${tierColor}55`, boxShadow: `0 0 0 3px ${tierColor}25` }}>{w.username.charAt(0).toUpperCase()}</div>
-                        <div title={`${w.tier} tier`} style={{ position: "absolute", right: -3, bottom: -3, width: 22, height: 22, borderRadius: "50%", background: C.bg, border: `1px solid ${tierColor}70`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11 }}>{tierIcon}</div>
-                      </div>
-                      <div>
-                        <div style={{ fontSize: 19, fontWeight: 800, color: C.white, wordBreak: "break-word" }}>{w.username}</div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4, flexWrap: "wrap" }}>
-                          <span style={{ padding: "2px 10px", borderRadius: 100, background: `${tierColor}20`, border: `1px solid ${tierColor}50`, color: tierColor, fontSize: 11, fontWeight: 700 }}>{w.tier}</span>
-                          <span style={{ padding: "2px 10px", borderRadius: 100, background: "rgba(124,92,255,0.14)", border: "1px solid rgba(124,92,255,0.3)", color: "#a78bfa", fontSize: 11, fontWeight: 600 }}>{w.platform || "Unknown"}</span>
-                        </div>
-                      </div>
+          <div onClick={() => setSelectedWhale(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", backdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 20 }}>
+            <div className="whale-modal-shell" style={{ width: "min(760px, calc(100vw - 32px))", borderRadius: 19, padding: 1, background: `linear-gradient(135deg, ${tierColor}90, rgba(124,92,255,0.4), rgba(255,43,174,0.85))` }} onClick={e => e.stopPropagation()}>
+              <div className="modal-inner" role="dialog" aria-modal="true" aria-label={`${w.username} fan profile`} style={{ maxHeight: "90vh", overflowY: "auto", ...glassCard, borderRadius: 18 }}>
+                <div style={{ padding: "20px 24px", background: `linear-gradient(90deg, rgba(30,58,110,0.4), rgba(91,58,140,0.32), rgba(122,46,85,0.3))`, borderBottom: "1px solid rgba(255,255,255,0.08)", display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap" }}>
+                  <div style={{ position: "relative", flexShrink: 0 }}>
+                    <div style={{ width: 88, height: 88, borderRadius: "50%", background: `linear-gradient(135deg, ${C.cyan}, ${tierColor}, ${C.pink})`, padding: 3 }}>
+                      <div style={{ width: "100%", height: "100%", borderRadius: "50%", background: `linear-gradient(135deg, ${tierColor}, ${tierColor}80)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32, fontWeight: 800, color: "#fff", boxShadow: `0 0 22px ${tierColor}40` }}>{w.username.charAt(0).toUpperCase()}</div>
                     </div>
-                    <button onClick={() => setSelectedWhale(null)} aria-label="Close profile" autoFocus style={{ width: 30, height: 30, borderRadius: "50%", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.1)", color: C.text, fontSize: 15, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>✕</button>
+                    <div title={`${w.tier} tier`} style={{ position: "absolute", right: -2, bottom: -2, width: 26, height: 26, borderRadius: "50%", background: C.bg, border: `1px solid ${tierColor}70`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13 }}>{tierIcon}</div>
                   </div>
 
-                  {topSpenderPct !== null && (
-                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
-                      <div style={{ width: 34, height: 34, borderRadius: "50%", background: `${relColor}18`, border: `2px solid ${relColor}55`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                        <div style={{ fontSize: 11, fontWeight: 800, color: relColor, lineHeight: 1 }}>{relScore}</div>
-                        <div style={{ fontSize: 6, color: relColor, opacity: 0.75, lineHeight: 1 }}>REL</div>
-                      </div>
-                      <div>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: C.white }}>Top {topSpenderPct}% of supporters</div>
-                        <div style={{ fontSize: 11, color: C.text }}>{valueLabel}</div>
-                      </div>
+                  <div style={{ minWidth: 0, flexShrink: 0 }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: C.white, wordBreak: "break-word" }}>{w.username}</div>
                     </div>
-                  )}
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 5, flexWrap: "wrap" }}>
+                      <span style={{ padding: "2px 10px", borderRadius: 100, background: `${tierColor}20`, border: `1px solid ${tierColor}50`, color: tierColor, fontSize: 11, fontWeight: 700 }}>{w.tier}</span>
+                      <span style={{ padding: "2px 10px", borderRadius: 100, background: "rgba(124,92,255,0.14)", border: "1px solid rgba(124,92,255,0.3)", color: "#a78bfa", fontSize: 11, fontWeight: 600 }}>{w.platform || "Unknown"}</span>
+                    </div>
+                    {topSpenderPct !== null && (
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 7 }}>
+                        <div style={{ width: 26, height: 26, borderRadius: "50%", background: `${relColor}18`, border: `2px solid ${relColor}55`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                          <div style={{ fontSize: 9, fontWeight: 800, color: relColor, lineHeight: 1 }}>{relScore}</div>
+                        </div>
+                        <div style={{ fontSize: 11, color: C.text, lineHeight: 1.3 }}>
+                          <span style={{ color: C.white, fontWeight: 700 }}>Top {topSpenderPct}%</span> of supporters
+                          <div style={{ fontSize: 10 }}>{valueLabel}</div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
 
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
-                    {[{ label: "Total Spent", value: `$${w.totalUSD.toFixed(2)}`, color: C.green }, { label: "Tips Given", value: w.tipCount, color: C.cyan }, { label: "Avg Tip", value: `$${w.avgTipSize.toFixed(2)}`, color: C.gold }, { label: "Biggest Tip", value: `$${biggestTip.toFixed(2)}`, color: C.pink }].map(({ label, value, color }) => (
-                      <div key={label} style={{ textAlign: "center" }}>
-                        <div style={{ fontSize: 11, color: C.text, marginBottom: 4 }}>{label}</div>
-                        <div style={{ fontSize: 16, fontWeight: 800, color }}>{value}</div>
+                  <div className="whale-hero-metrics" style={{ flex: 1, minWidth: 240 }}>
+                    {[{ label: "Total Spent", value: `$${w.totalUSD.toFixed(2)}`, color: C.cyan }, { label: "Tips Given", value: w.tipCount, color: "#a78bfa" }, { label: "Avg Tip", value: `$${w.avgTipSize.toFixed(2)}`, color: "#C4B5FD" }, { label: "Biggest Tip", value: `$${biggestTip.toFixed(2)}`, color: "#FF2BAE" }].map(({ label, value, color }) => (
+                      <div key={label} className="whale-hero-metric">
+                        <div style={{ fontSize: 10, color: C.text, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 4 }}>{label}</div>
+                        <div style={{ fontSize: 17, fontWeight: 800, color }}>{value}</div>
                       </div>
                     ))}
                   </div>
+
+                  <button onClick={() => setSelectedWhale(null)} aria-label="Close profile" autoFocus style={{ width: 28, height: 28, borderRadius: "50%", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.1)", color: C.text, fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, alignSelf: "flex-start" }}>✕</button>
                 </div>
 
-                <div className="whale-modal-grid" style={{ padding: 24 }}>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
-                    <div>
-                      <div style={{ fontSize: 12, fontWeight: 800, color: C.white, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}><span style={{ color: C.cyan }}>✦</span> Fan Intelligence</div>
+                <div className="whale-modal-grid" style={{ padding: "20px 24px" }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
+                    <div style={{ fontSize: 11, fontWeight: 800, color: C.white, textTransform: "uppercase", letterSpacing: 1, display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ color: C.cyan }}>✦</span> Fan Intelligence
+                      <span style={{ width: 26, height: 2, borderRadius: 2, background: "linear-gradient(90deg, #FF2BAE, transparent)", marginLeft: 2 }} />
+                    </div>
+
+                    <div className="whale-intel-split">
                       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                         {[
                           { icon: "📅", label: "First tip", value: firstTip ? new Date(firstTip.date_time).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : "Not enough data yet" },
                           { icon: "📅", label: "Last tip", value: w.lastTipDate ? new Date(w.lastTipDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : "Not enough data yet", sub: daysSinceLastTip !== null ? `${daysSinceLastTip.toLocaleString()} days ago` : null },
                           { icon: "🕐", label: "Avg days between tips", value: whaleTips.length > 1 ? `Every ~${avgDaysBetweenTips} days` : "Not enough data yet" },
                           { icon: "⚠️", label: "Churn risk", value: churnRisk || "Not enough data yet", color: churnColor },
-                          ...(w.typicalOnlineHours && w.typicalOnlineHours !== "Unknown" ? [{ icon: "🕐", label: "Best time to reach", value: w.typicalOnlineHours, color: C.cyan }] : []),
                         ].map(({ icon, label, value, sub, color }) => (
-                          <div key={label} style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
-                            <span style={{ fontSize: 13, marginTop: 1, flexShrink: 0 }}>{icon}</span>
+                          <div key={label} style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+                            <span style={{ fontSize: 12, marginTop: 1, flexShrink: 0 }}>{icon}</span>
                             <div style={{ minWidth: 0 }}>
-                              <div style={{ fontSize: 11, color: C.text }}>{label}</div>
-                              <div style={{ fontSize: 14, fontWeight: 700, color: color || C.white }}>{value}</div>
-                              {sub && <div style={{ fontSize: 11, color: C.text, marginTop: 1 }}>{sub}</div>}
+                              <div style={{ fontSize: 10, color: C.text }}>{label}</div>
+                              <div style={{ fontSize: 13, fontWeight: 700, color: color || C.white }}>{value}</div>
+                              {sub && <div style={{ fontSize: 10, color: C.text, marginTop: 1 }}>{sub}</div>}
                             </div>
                           </div>
                         ))}
+                        {w.typicalOnlineHours && w.typicalOnlineHours !== "Unknown" && (
+                          <div style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 10px", background: `${C.cyan}12`, border: `1px solid ${C.cyan}30`, borderRadius: 100, alignSelf: "flex-start" }}>
+                            <span style={{ fontSize: 11 }}>🕐</span>
+                            <span style={{ fontSize: 11, color: C.cyan, fontWeight: 600 }}>{w.typicalOnlineHours}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div style={{ padding: 12, background: "rgba(255,255,255,0.03)", borderRadius: 12, border: "1px solid rgba(255,255,255,0.07)" }}>
+                        <div style={{ fontSize: 10, color: C.text, marginBottom: 8, fontWeight: 700 }}>📊 Tips by day of week</div>
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 3 }}>
+                          {dayKeys.map(d => {
+                            const count = dayCounts[d]
+                            const isBest = bestDay && bestDay[0] === d && count > 0
+                            const heightPct = 24 + (count / maxDayCount) * 76
+                            return (
+                              <div key={d} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+                                <div style={{ width: "100%", height: 38, display: "flex", alignItems: "flex-end" }}>
+                                  <div style={{ width: "100%", height: `${count > 0 ? heightPct : 8}%`, borderRadius: 4, background: count > 0 ? (isBest ? "#FF2BAE" : `linear-gradient(180deg, ${C.cyan}, #7C5CFF)`) : "rgba(255,255,255,0.06)" }} />
+                                </div>
+                                <span style={{ fontSize: 8, color: C.text }}>{d}</span>
+                              </div>
+                            )
+                          })}
+                        </div>
+                        {bestDay && bestDay[1] > 0 && (
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 9, paddingTop: 8, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+                            <div style={{ fontSize: 11, color: C.text }}>Most active <strong style={{ color: "#FF2BAE" }}>{{Mon:"Monday",Tue:"Tuesday",Wed:"Wednesday",Thu:"Thursday",Fri:"Friday",Sat:"Saturday",Sun:"Sunday"}[bestDay[0]]}</strong></div>
+                            <div style={{ fontSize: 11, color: C.text }}>{whaleTips.length.toLocaleString()} tips total</div>
+                          </div>
+                        )}
                       </div>
                     </div>
 
-                    <div style={{ padding: 14, background: "rgba(255,255,255,0.03)", borderRadius: 12, border: "1px solid rgba(255,255,255,0.07)" }}>
-                      <div style={{ fontSize: 11, color: C.text, marginBottom: 10, fontWeight: 700 }}>📊 Tips by day of week</div>
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 5 }}>
-                        {dayKeys.map(d => {
-                          const count = dayCounts[d]
-                          const heightPct = 24 + (count / maxDayCount) * 76
-                          return (
-                            <div key={d} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
-                              <div style={{ width: "100%", height: 52, display: "flex", alignItems: "flex-end" }}>
-                                <div style={{ width: "100%", height: `${count > 0 ? heightPct : 8}%`, borderRadius: 5, background: count > 0 ? `linear-gradient(180deg, ${C.cyan}, #7C5CFF)` : "rgba(255,255,255,0.06)" }} />
-                              </div>
-                              <span style={{ fontSize: 9, color: C.text }}>{d}</span>
-                            </div>
-                          )
-                        })}
+                    {fanInsight && (
+                      <div style={{ padding: "10px 14px", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 12, display: "flex", alignItems: "flex-start", gap: 9 }}>
+                        <span style={{ fontSize: 13, flexShrink: 0 }}>✨</span>
+                        <span style={{ fontSize: 12, color: C.white, lineHeight: 1.45 }}>{fanInsight}</span>
                       </div>
-                      {bestDay && bestDay[1] > 0 && (
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 12, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
-                          <div style={{ fontSize: 12, color: C.text }}>💗 Most active <strong style={{ color: C.pink }}>{{Mon:"Monday",Tue:"Tuesday",Wed:"Wednesday",Thu:"Thursday",Fri:"Friday",Sat:"Saturday",Sun:"Sunday"}[bestDay[0]]}</strong></div>
-                          <div style={{ fontSize: 12, color: C.text }}>{whaleTips.length.toLocaleString()} tips total</div>
-                        </div>
-                      )}
-                    </div>
+                    )}
                   </div>
 
-                  <div style={{ display: "flex", flexDirection: "column", gap: 10, minWidth: 0 }}>
-                    <div style={{ fontSize: 12, fontWeight: 800, color: C.white, textTransform: "uppercase", letterSpacing: 1, marginBottom: 2 }}>Actions</div>
+                  <div className="whale-modal-actions-col" style={{ display: "flex", flexDirection: "column", gap: 10, minWidth: 0 }}>
+                    <div style={{ fontSize: 11, fontWeight: 800, color: C.white, textTransform: "uppercase", letterSpacing: 1, display: "flex", alignItems: "center", gap: 6 }}>
+                      Actions
+                      <span style={{ width: 26, height: 2, borderRadius: 2, background: "linear-gradient(90deg, #FF2BAE, transparent)" }} />
+                    </div>
                     <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }}
                       className="heart-envelope-btn"
                       aria-label={`Message ${w.username}`}
@@ -6817,12 +6850,6 @@ const stopImportMessageRotation = () => {
                 </div>
 
                 <div style={{ padding: "0 24px 24px", display: "flex", flexDirection: "column", gap: 20 }}>
-                {fanInsight && (
-                  <div style={{ padding: "12px 16px", background: "linear-gradient(135deg, rgba(34,211,238,0.08), rgba(255,43,174,0.08))", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 12, display: "flex", alignItems: "flex-start", gap: 10 }}>
-                    <span style={{ fontSize: 15 }}>✨</span>
-                    <span style={{ fontSize: 13, color: C.text, lineHeight: 1.5 }}>{fanInsight}</span>
-                  </div>
-                )}
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 700, color: C.text, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>🏆 Top 3 Tips</div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
