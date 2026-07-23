@@ -2967,19 +2967,33 @@ const stopImportMessageRotation = () => {
         .import-flash-ring { animation: import-flash 900ms ease-out; }
         .import-check-badge { animation: import-check-pop 420ms cubic-bezier(0.34,1.3,0.64,1); }
 
-        /* ── FAN CARD / MESSAGE (HEART-ENVELOPE) ── */
-        @keyframes heart-envelope-breathe {
-          0%, 100% { transform: scale(1); filter: drop-shadow(0 0 0 rgba(255,43,174,0)); }
-          50% { transform: scale(1.045); filter: drop-shadow(0 0 3px rgba(255,43,174,0.32)); }
-        }
-        .heart-envelope-btn { animation: heart-envelope-breathe 3.4s ease-in-out infinite; }
+        /* ── FAN CARD / MESSAGE (HEART-ENVELOPE) ──
+           .heart-envelope-btn is hover/focus-only (cheap, no continuous
+           repaint) and is safe on every per-row instance across a fan list
+           of any size. The continuous "breathing" keyframe lives on
+           .heart-envelope-btn-idle instead, which must only ever be applied
+           to a single, always-one-at-a-time element (the big "Message Fan"
+           button in the profile modal) — running an infinite filter:
+           drop-shadow animation on every row of a long fan list pegs the
+           GPU/CPU continuously and can make the whole page (and machine)
+           unresponsive once a list gets into the hundreds of fans. */
         .heart-envelope-btn:hover, .heart-envelope-btn:focus-visible {
           transform: scale(1.08);
           box-shadow: 0 0 0 3px rgba(255,43,174,0.14), 0 0 10px rgba(255,43,174,0.25);
         }
+        @keyframes heart-envelope-breathe {
+          0%, 100% { transform: scale(1); filter: drop-shadow(0 0 0 rgba(255,43,174,0)); }
+          50% { transform: scale(1.045); filter: drop-shadow(0 0 3px rgba(255,43,174,0.32)); }
+        }
+        .heart-envelope-btn-idle { animation: heart-envelope-breathe 3.4s ease-in-out infinite; }
+        .heart-envelope-btn-idle:hover, .heart-envelope-btn-idle:focus-visible {
+          transform: scale(1.08);
+          box-shadow: 0 0 0 3px rgba(255,43,174,0.14), 0 0 10px rgba(255,43,174,0.25);
+        }
         @media (prefers-reduced-motion: reduce) {
-          .heart-envelope-btn { animation: none; }
-          .heart-envelope-btn:hover, .heart-envelope-btn:focus-visible { transform: none; }
+          .heart-envelope-btn-idle { animation: none; }
+          .heart-envelope-btn:hover, .heart-envelope-btn:focus-visible,
+          .heart-envelope-btn-idle:hover, .heart-envelope-btn-idle:focus-visible { transform: none; }
         }
         .tier-filter-btn { transition: background 0.15s ease, color 0.15s ease; }
         .whale-modal-shell { box-shadow: 0 0 36px rgba(34,211,238,0.16), 0 0 54px rgba(124,92,255,0.15), 0 0 44px rgba(255,43,174,0.13), 0 22px 54px rgba(0,0,0,0.55); }
@@ -6810,7 +6824,7 @@ const stopImportMessageRotation = () => {
                       <span style={{ width: 26, height: 2, borderRadius: 2, background: "linear-gradient(90deg, #FF2BAE, transparent)" }} />
                     </div>
                     <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }}
-                      className="heart-envelope-btn"
+                      className="heart-envelope-btn-idle"
                       aria-label={`Message ${w.username}`}
                       style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, padding: "13px 16px", borderRadius: 12, background: "linear-gradient(135deg, rgba(255,43,174,0.22), rgba(124,92,255,0.22))", border: "1px solid rgba(255,43,174,0.45)", color: C.white, fontSize: 14, fontWeight: 800, cursor: "pointer" }}>
                       <EnvelopeHeartIcon size={18} /> Message Fan
