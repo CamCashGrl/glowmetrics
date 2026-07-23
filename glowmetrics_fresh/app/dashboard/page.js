@@ -16,6 +16,9 @@ import { getDashboardReadiness, getModuleLockState, canShowHourlyRate, LockedIns
 import Button from '../../components/ui/Button'
 import EarlyAdopterOffer from './EarlyAdopterOffer'
 import { useLiveSessionEngine } from '../live/useLiveSessionEngine'
+import CoachingPromptFeed from '../components/CoachingPromptFeed'
+import { TRIGGER_LEVEL, TRIGGER_ICON } from '../../lib/coaching/triggers'
+import { playStillLiveChime } from '../../lib/notifySound'
 
 // Tab-only components loaded on demand instead of in the initial dashboard
 // bundle — each is only ever rendered behind an `activeTab === '...'` check,
@@ -1387,9 +1390,83 @@ export default function Dashboard() {
   useEffect(() => {
     if (liveEngine.engineMode !== 'v2') return
     const status = liveEngine.serverSession?.status
-    setLiveActive(status === 'active' || status === 'paused')
+    // needs_resolution counts as "the live UI should render" too — otherwise
+    // a session awaiting the "still live?" response silently looks like no
+    // session exists at all on this surface, with no way to resolve it here.
+    setLiveActive(status === 'active' || status === 'paused' || status === 'needs_resolution')
     setLiveStartTime(liveEngine.serverSession?.started_at ? new Date(liveEngine.serverSession.started_at) : null)
   }, [liveEngine.engineMode, liveEngine.serverSession?.status, liveEngine.serverSession?.started_at])
+
+  // Plays the "are you still live?" chime once per session the moment it
+  // enters needs_resolution — mirrors app/live/page.js's equivalent effect.
+  const chimedForSessionRef = useRef(null)
+  useEffect(() => {
+    if (liveEngine.phase !== 'needs_resolution') return
+    const sessionId = liveEngine.serverSession?.id
+    if (!sessionId || chimedForSessionRef.current === sessionId) return
+    chimedForSessionRef.current = sessionId
+    playStillLiveChime()
+  }, [liveEngine.phase, liveEngine.serverSession?.id])
+
+  // Reads coaching_strategy/coaching_goal_tokens back FROM the server
+  // whenever a session is discovered — same pattern as app/live/page.js.
+  // Skips the session id we ourselves just created via handleLiveGoLive
+  // below, since serverSession still reflects the DB's pre-push defaults
+  // at that exact instant, not what we just pushed.
+  useEffect(() => {
+    const sessionId = liveEngine.serverSession?.id
+    if (liveEngine.engineMode !== 'v2' || !sessionId) return
+    if (justStartedSessionId.current === sessionId) return
+    if (liveEngine.serverSession.coaching_strategy) setLiveStrategy(liveEngine.serverSession.coaching_strategy)
+    if (typeof liveEngine.serverSession.coaching_goal_tokens === 'number') setLiveGoalTokens(liveEngine.serverSession.coaching_goal_tokens)
+  }, [liveEngine.engineMode, liveEngine.serverSession?.id])
+
+  // Shared coaching-prompt poll — mirrors app/live/page.js exactly. Only
+  // meaningful for a real V2 session; a fresh prompt can take up to ~15s
+  // to appear, matching the existing heartbeat/poll cadence everywhere else.
+  useEffect(() => {
+    if (liveEngine.engineMode !== 'v2' || !liveEngine.serverSession) { setCoachingPrompt(null); return }
+    let cancelled = false
+    const fetchPrompt = async () => {
+      try {
+        const res = await fetch('/api/live/coaching', { cache: 'no-store' })
+        if (!res.ok || cancelled) return
+        const data = await res.json()
+        if (cancelled) return
+        const prompt = data.prompt || null
+        if (prompt && lastLoggedCoachingEventId.current !== prompt.id) {
+          lastLoggedCoachingEventId.current = prompt.id
+          firedAlertsLog.current.unshift({ icon: TRIGGER_ICON[prompt.type] || 'ℹ️', text: prompt.compact_message || prompt.message, ts: Date.parse(prompt.shown_at) || Date.now() })
+          if (firedAlertsLog.current.length > 20) firedAlertsLog.current.length = 20
+        }
+        setCoachingPrompt(prompt)
+      } catch (_) { /* one failed poll is never surfaced — the next tick retries */ }
+    }
+    fetchPrompt()
+    const id = setInterval(fetchPrompt, 15000)
+    return () => { cancelled = true; clearInterval(id) }
+  }, [liveEngine.engineMode, liveEngine.serverSession?.id])
+
+  // Starts a real V2 session (same engine the website/extension use) and
+  // pushes whatever strategy/goal-tokens the dashboard's own dropdown/input
+  // were already showing, so a session started from here doesn't silently
+  // revert to the DB defaults ('balanced' / 0).
+  const handleLiveGoLive = async () => {
+    const session = await liveEngine.goLive(livePlatform)
+    if (!session) return
+    justStartedSessionId.current = session.id
+    setLiveEvents([])
+    processedTipIds.current = new Set()
+    coachingCooldowns.current = {}
+    fetch('/api/live/session/coaching-strategy', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ strategy: liveStrategy }),
+    }).catch(() => {})
+    fetch('/api/live/session/goal-tokens', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ goalTokens: liveGoalTokens || 0 }),
+    }).catch(() => {})
+  }
   const [liveEvents, setLiveEvents] = useState([])
   const [liveGoalTokens, setLiveGoalTokens] = useState(0)
   const [livePlatform, setLivePlatform] = useState('Chaturbate')
@@ -1446,6 +1523,13 @@ export default function Dashboard() {
   // ── LIVE MODE INTELLIGENCE ────────────────────────────────────────────
   const [liveStrategy, setLiveStrategy]       = useState('balanced')
   const [coachingHistory, setCoachingHistory] = useState([])
+  // Shared coaching-prompt poll — same GET /api/live/coaching endpoint the
+  // public /live page and the extension already use, so the dashboard shows
+  // the exact same canonical prompt instead of its own separately-computed
+  // one. Replaces the old local getAlerts() trigger evaluation entirely.
+  const [coachingPrompt, setCoachingPrompt]   = useState(null)
+  const justStartedSessionId = useRef(null)
+  const lastLoggedCoachingEventId = useRef(null)
   const prevPhaseRef       = useRef(null)
   const isHydratingHistory = useRef(false)
   const processedTipIds    = useRef(new Set())
@@ -1684,7 +1768,7 @@ export default function Dashboard() {
       })
       setUser(user)
       supabase.from('profiles')
-        .select('plan')
+        .select('plan, timezone')
         .eq('id', user.id)
         .maybeSingle()
         .then(({ data }) => { if (data) setProfile(data) })
@@ -1739,7 +1823,7 @@ export default function Dashboard() {
           if (!newRows.length) return prev
           const updated = [...prev, ...newRows].sort((a,b) => new Date(a.date_time)-new Date(b.date_time))
           try {
-            const userTz = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC'
+            const userTz = profile?.timezone || (typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC')
             const r = runEngine(updated, userTz)
             if (r) setAnalytics(r)
             lastEngineTipsFingerprintRef.current = { length: updated.length, lastId: updated[updated.length - 1]?.id ?? null }
@@ -1819,7 +1903,7 @@ export default function Dashboard() {
             return prev // unchanged since the last engine run — skip the recompute
           }
           try {
-            const userTz = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC'
+            const userTz = profile?.timezone || (typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC')
             const r = runEngine(prev, userTz)
             if (r) setAnalytics(r)
             lastEngineTipsFingerprintRef.current = fingerprint
@@ -1934,7 +2018,7 @@ export default function Dashboard() {
     if (silent) setIsRefreshing(true)
     else setLoading(true)
     try {
-      const userTz = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC'
+      const userTz = profile?.timezone || (typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC')
       let allData = []
       let from = 0
       const PAGE = 1000
@@ -2931,7 +3015,7 @@ const stopImportMessageRotation = () => {
       </div>
 
       {/* SIDEBAR — desktop only, hidden on mobile via CSS */}
-      <Sidebar activeTab={activeTab} onTabChange={(tab) => { setActiveTab(tab); if (typeof window !== "undefined") { localStorage.setItem("camcash_tab", tab); window.scrollTo({ top: 0, behavior: "instant" }); } }} user={user} onSignOut={async () => { await supabase.auth.signOut(); router.replace("/login"); }} isPro={isPro} />{/* MAIN CONTENT */}
+      <Sidebar activeTab={activeTab} onTabChange={(tab) => { setActiveTab(tab); if (typeof window !== "undefined") { localStorage.setItem("camcash_tab", tab); window.scrollTo({ top: 0, behavior: "instant" }); } }} user={user} onSignOut={async () => { await supabase.auth.signOut(); router.replace("/login"); }} isPro={isPro} timezone={profile?.timezone || null} onTimezoneChange={(tz) => setProfile((p) => ({ ...p, timezone: tz }))} />{/* MAIN CONTENT */}
       <div className="dash-main" style={{ marginLeft: 240, width: "calc(100% - 240px)", minWidth: 0, padding: 32, boxSizing: "border-box", overflowX: "hidden" }}>
 
         {/* ── STICKY COMMAND BAR ── */}
@@ -4619,167 +4703,12 @@ const stopImportMessageRotation = () => {
             }
           }
 
-          // Coaching cooldown helper — returns true if this alert can fire now.
-          // Each key has its own cooldown window (in milliseconds).
-          const canFireAlert = (key, cooldownMs) => {
-            if (isHydratingHistory.current) return false
-            const last = coachingCooldowns.current[key]
-            if (!last || Date.now() - last > cooldownMs) {
-              coachingCooldowns.current[key] = Date.now()
-              return true
-            }
-            return false
-          }
-
-          // PRIORITY TIERS: CRITICAL → HIGH → MEDIUM → LOW → INFO
-          // Only one alert per priority tier is shown at a time.
-          // Cooldowns prevent the same signal from repeating within the window.
-          const getAlerts = (state) => {
-            if (!state || isHydratingHistory.current) return []
-            if (!liveActive) return []
-
-            const { timeSinceLastTip, paceStatus, goalProgress, topTipper,
-                    totalRevenue, elapsedMins, liveOnlyCount } = state
-
-            // Strategy-adjusted thresholds
-            const deadAirCrit = liveStrategy === 'aggressive' ? 6 : 8
-            const deadAirHigh = liveStrategy === 'aggressive' ? 4 : 5
-            const goalPushPct = liveStrategy === 'aggressive' || liveStrategy === 'goal' ? 80 : 90
-
-            const alerts = []
-
-            // Helper: push to history log when an alert fires
-            const logFired = (icon, text) => {
-              firedAlertsLog.current.unshift({ icon, text, ts: Date.now() })
-              if (firedAlertsLog.current.length > 20) firedAlertsLog.current.length = 20
-            }
-
-            // ── CRITICAL ─────────────────────────────────────────────────────────
-            if (timeSinceLastTip !== null && timeSinceLastTip >= deadAirCrit) {
-              if (canFireAlert('dead_air_critical', 3 * 60 * 1000)) {
-                const text = liveStrategy === 'whale' && topTipper
-                  ? `${Math.round(timeSinceLastTip)} min silence — address ${topTipper.username} directly NOW`
-                  : `No tips in ${Math.round(timeSinceLastTip)} min — call out names NOW`
-                alerts.push({ priority: 1, level: 'critical', icon: '🚨', text })
-                logFired('🚨', text)
-              }
-            }
-            if (goalProgress >= goalPushPct && goalProgress < 100) {
-              if (canFireAlert('goal_push', 4 * 60 * 1000)) {
-                const text = `${goalProgress}% to goal — push NOW, announce the reward`
-                alerts.push({ priority: 1, level: 'critical', icon: '🎯', text })
-                logFired('🎯', text)
-              }
-            }
-
-            // ── HIGH ─────────────────────────────────────────────────────────────
-            if (timeSinceLastTip !== null && timeSinceLastTip >= deadAirHigh && timeSinceLastTip < deadAirCrit) {
-              if (canFireAlert('dead_air_high', 5 * 60 * 1000)) {
-                const text = liveStrategy === 'engagement'
-                  ? `${Math.round(timeSinceLastTip)} min quiet — drop a question or poll in chat now`
-                  : liveStrategy === 'retention'
-                  ? `${Math.round(timeSinceLastTip)} min since last tip — thank a viewer by name to re-engage`
-                  : `${Math.round(timeSinceLastTip)} min silence — restart with a quick goal`
-                alerts.push({ priority: 2, level: 'warning', icon: '⚠️', text })
-                logFired('⚠️', text)
-              }
-            }
-            if (paceStatus === 'below' && elapsedMins >= 8 && liveOnlyCount >= 3) {
-              if (canFireAlert('pace_below', 5 * 60 * 1000)) {
-                const text = liveStrategy === 'aggressive'
-                  ? 'Pace slow — announce a limited-time exclusive offer right now'
-                  : 'Pace dropping — activate toy or set a micro-goal'
-                alerts.push({ priority: 2, level: 'warning', icon: '📉', text })
-                logFired('📉', text)
-              }
-            }
-
-            // ── Stream Fatigue ────────────────────────────────────────────────────
-            if (elapsedMins > 75 && paceStatus === 'below' && liveOnlyCount >= 5) {
-              if (canFireAlert('stream_fatigue', 15 * 60 * 1000)) {
-                const text = 'Stream fatigue — try a new goal or content angle to reset room energy'
-                alerts.push({ priority: 2, level: 'warning', icon: '😴', text })
-                logFired('😴', text)
-              }
-            }
-
-            // ── MEDIUM ────────────────────────────────────────────────────────────
-            if (paceStatus === 'above' && elapsedMins >= 8 && liveOnlyCount >= 3) {
-              if (canFireAlert('pace_above', 8 * 60 * 1000)) {
-                const text = liveStrategy === 'aggressive'
-                  ? 'Momentum is hot — raise your goal amount NOW while they are tipping'
-                  : "Momentum building — don't break the energy"
-                alerts.push({ priority: 3, level: 'success', icon: '🔥', text })
-                logFired('🔥', text)
-              }
-            }
-            if (goalProgress >= 100) {
-              if (canFireAlert('goal_hit', 10 * 60 * 1000)) {
-                const text = 'Goal hit! Set the next one immediately'
-                alerts.push({ priority: 3, level: 'success', icon: '🎉', text })
-                logFired('🎉', text)
-              }
-            }
-
-            // ── Whale Proximity — regular tipper is overdue ───────────────────────
-            if (liveOnlyCount >= 4 && liveStrategy !== 'engagement') {
-              const nowMs = Date.now()
-              const liveOnly = liveEvents.filter(e => !e._isHistory)
-              const tipsByUser = {}
-              for (const e of liveOnly) {
-                if (!e.username) continue
-                if (!tipsByUser[e.username]) tipsByUser[e.username] = []
-                tipsByUser[e.username].push(new Date(e.timestamp).getTime())
-              }
-              let surfaced = false
-              for (const [uname, times] of Object.entries(tipsByUser)) {
-                if (surfaced || times.length < 2) continue
-                const sorted = [...times].sort((a, b) => a - b)
-                const gaps = []
-                for (let i = 1; i < sorted.length; i++) gaps.push(sorted[i] - sorted[i - 1])
-                const avgGapMs = gaps.reduce((s, g) => s + g, 0) / gaps.length
-                const sinceLastMs = nowMs - sorted[sorted.length - 1]
-                if (avgGapMs > 15 * 60 * 1000) continue // skip infrequent tippers
-                const ratio = sinceLastMs / avgGapMs
-                if (ratio >= 1.3 && sinceLastMs > 2 * 60 * 1000) {
-                  if (canFireAlert(`whale_prox_${uname}`, 6 * 60 * 1000)) {
-                    const avgMins = Math.round(avgGapMs / 60000)
-                    const sinceMins = Math.round(sinceLastMs / 60000)
-                    const text = `${uname} tips every ~${avgMins} min — ${sinceMins} min since their last. Call them out!`
-                    alerts.push({ priority: 3, level: 'info', icon: '🐋', text })
-                    logFired('🐋', text)
-                    surfaced = true
-                  }
-                }
-              }
-            }
-
-            // ── INFO ──────────────────────────────────────────────────────────────
-            if (topTipper && totalRevenue > 0 && topTipper.revenue / totalRevenue >= 0.45) {
-              const key = `whale_dep_${topTipper.username}`
-              if (canFireAlert(key, 10 * 60 * 1000)) {
-                const text = `${topTipper.username} is ${Math.round(topTipper.revenue / totalRevenue * 100)}% of revenue — give them attention`
-                alerts.push({ priority: 4, level: 'info', icon: '🐳', text })
-                logFired('🐳', text)
-              }
-            }
-            if (liveStrategy === 'engagement' && elapsedMins >= 5 && liveOnlyCount >= 1) {
-              if (canFireAlert('engagement_tip', 7 * 60 * 1000)) {
-                const text = 'Engagement mode: ask viewers a direct question to boost interaction'
-                alerts.push({ priority: 4, level: 'info', icon: '💬', text })
-                logFired('💬', text)
-              }
-            }
-            if (liveStrategy === 'retention' && elapsedMins >= 10 && liveOnlyCount >= 2) {
-              if (canFireAlert('retention_tip', 8 * 60 * 1000)) {
-                const text = 'Retention mode: welcome regulars back by name — loyalty builds tip habits'
-                alerts.push({ priority: 4, level: 'info', icon: '💜', text })
-                logFired('💜', text)
-              }
-            }
-
-            return alerts.sort((a, b) => a.priority - b.priority).slice(0, 4)
-          }
+          // getAlerts()/canFireAlert() removed — coaching triggers are now
+          // evaluated server-side (lib/coaching/triggers.js, single source of
+          // truth) and fetched via the shared coaching-poll effect above into
+          // coachingPrompt, so the dashboard, website, and extension always
+          // agree on the same canonical prompt instead of each computing
+          // their own (matches app/live/page.js's equivalent removal).
 
           const getNextAction = (state) => {
             if (!state || !liveActive) return { text: 'Start your stream to get live coaching' }
@@ -4890,7 +4819,16 @@ const stopImportMessageRotation = () => {
             prevPhaseRef.current = sessionPhase
           }
 
-          const alerts     = getAlerts(state)
+          // Sourced from the shared coaching engine (same GET /api/live/coaching
+          // the website and extension poll) — never locally computed. Only ever
+          // one canonical prompt at a time by design, so this is always a
+          // single-item array; restAlerts below is always empty now.
+          const alerts = coachingPrompt ? [{
+            priority: coachingPrompt.priority ?? 5,
+            level: TRIGGER_LEVEL[coachingPrompt.type] || 'info',
+            icon: TRIGGER_ICON[coachingPrompt.type] || 'ℹ️',
+            text: coachingPrompt.compact_message || coachingPrompt.message,
+          }] : []
           const nextAction = getNextAction(state)
 
           const PACE_CONFIG = {
@@ -4942,8 +4880,26 @@ const stopImportMessageRotation = () => {
                   <select value={livePlatform} onChange={e => setLivePlatform(e.target.value)} style={{ ...inp2, width: 'auto', padding: '5px 10px', fontSize: 12 }}>
                     {['Chaturbate','BongaCams','MyFreeCams','CamSoda','Stripchat'].map(p => <option key={p} value={p}>{p}</option>)}
                   </select>
-                  <input type="number" value={liveGoalTokens || ''} onChange={e => setLiveGoalTokens(Number(e.target.value)||0)} placeholder="Token goal" style={{ ...inp2, width: 120, padding: '5px 10px', fontSize: 12 }} />
-                  <select value={liveStrategy} onChange={e => setLiveStrategy(e.target.value)} style={{ ...inp2, width: 'auto', padding: '5px 10px', fontSize: 12 }}>
+                  <input type="number" value={liveGoalTokens || ''} onChange={e => {
+                    const next = Math.max(0, Number(e.target.value) || 0)
+                    setLiveGoalTokens(next)
+                    if (liveEngine.engineMode === 'v2' && liveEngine.serverSession) {
+                      fetch('/api/live/session/goal-tokens', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ goalTokens: next }),
+                      }).catch(() => {})
+                    }
+                  }} placeholder="Token goal" style={{ ...inp2, width: 120, padding: '5px 10px', fontSize: 12 }} />
+                  <select value={liveStrategy} onChange={e => {
+                    const next = e.target.value
+                    setLiveStrategy(next)
+                    if (liveEngine.engineMode === 'v2' && liveEngine.serverSession) {
+                      fetch('/api/live/session/coaching-strategy', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ strategy: next }),
+                      }).catch(() => {})
+                    }
+                  }} style={{ ...inp2, width: 'auto', padding: '5px 10px', fontSize: 12 }}>
                     <option value="balanced">⚖️ Balanced</option>
                     <option value="aggressive">💰 Aggressive</option>
                     <option value="retention">🔄 Retention</option>
@@ -4952,15 +4908,41 @@ const stopImportMessageRotation = () => {
                     <option value="goal">🎯 Goal Focus</option>
                   </select>
                   {!liveActive ? (
-                    <button onClick={() => { setLiveActive(true); setLiveStartTime(new Date()); setLiveEvents([]); processedTipIds.current = new Set(); coachingCooldowns.current = {} }}
-                      style={{ padding: '7px 18px', borderRadius: 8, background: 'linear-gradient(135deg, #10B981, #22D3EE)', border: 'none', color: C.white, fontWeight: 800, fontSize: 12, cursor: 'pointer', boxShadow: '0 0 16px rgba(16,185,129,0.35)' }}>
+                    <button onClick={handleLiveGoLive} disabled={liveEngine.actionPending}
+                      style={{ padding: '7px 18px', borderRadius: 8, background: 'linear-gradient(135deg, #10B981, #22D3EE)', border: 'none', color: C.white, fontWeight: 800, fontSize: 12, cursor: liveEngine.actionPending ? 'default' : 'pointer', opacity: liveEngine.actionPending ? 0.6 : 1, boxShadow: '0 0 16px rgba(16,185,129,0.35)' }}>
                       ▶ Start Stream
                     </button>
+                  ) : liveEngine.serverSession?.status === 'needs_resolution' ? (
+                    <>
+                      <span style={{ fontSize: 12, color: C.gold, fontWeight: 700 }}>⚠️ Still live?</span>
+                      <button onClick={() => liveEngine.resolve('still_live')} disabled={liveEngine.actionPending}
+                        style={{ padding: '7px 18px', borderRadius: 8, background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.4)', color: C.green, fontWeight: 700, fontSize: 12, cursor: liveEngine.actionPending ? 'default' : 'pointer', opacity: liveEngine.actionPending ? 0.6 : 1 }}>
+                        Still Live
+                      </button>
+                      <button onClick={() => liveEngine.resolve('end_at_last_heartbeat')} disabled={liveEngine.actionPending}
+                        title="Ends the session using the last time we actually heard from your extension or browser tab"
+                        style={{ padding: '7px 18px', borderRadius: 8, background: 'rgba(248,113,113,0.15)', border: '1px solid rgba(248,113,113,0.4)', color: C.red, fontWeight: 700, fontSize: 12, cursor: liveEngine.actionPending ? 'default' : 'pointer', opacity: liveEngine.actionPending ? 0.6 : 1 }}>
+                        Stream Ended
+                      </button>
+                    </>
                   ) : (
-                    <button onClick={() => setLiveActive(false)}
-                      style={{ padding: '7px 18px', borderRadius: 8, background: 'rgba(248,113,113,0.15)', border: '1px solid rgba(248,113,113,0.4)', color: C.red, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
-                      ⏹ End
-                    </button>
+                    <>
+                      {liveEngine.serverSession?.status === 'paused' ? (
+                        <button onClick={() => liveEngine.resume()} disabled={liveEngine.actionPending}
+                          style={{ padding: '7px 18px', borderRadius: 8, background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.4)', color: C.green, fontWeight: 700, fontSize: 12, cursor: liveEngine.actionPending ? 'default' : 'pointer', opacity: liveEngine.actionPending ? 0.6 : 1 }}>
+                          ▶ Resume
+                        </button>
+                      ) : (
+                        <button onClick={() => liveEngine.pause()} disabled={liveEngine.actionPending}
+                          style={{ padding: '7px 18px', borderRadius: 8, background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.4)', color: C.gold, fontWeight: 700, fontSize: 12, cursor: liveEngine.actionPending ? 'default' : 'pointer', opacity: liveEngine.actionPending ? 0.6 : 1 }}>
+                          ⏸ Pause
+                        </button>
+                      )}
+                      <button onClick={() => liveEngine.stop()} disabled={liveEngine.actionPending}
+                        style={{ padding: '7px 18px', borderRadius: 8, background: 'rgba(248,113,113,0.15)', border: '1px solid rgba(248,113,113,0.4)', color: C.red, fontWeight: 700, fontSize: 12, cursor: liveEngine.actionPending ? 'default' : 'pointer', opacity: liveEngine.actionPending ? 0.6 : 1 }}>
+                        ⏹ End
+                      </button>
+                    </>
                   )}
                 </div>
 
@@ -5022,8 +5004,8 @@ const stopImportMessageRotation = () => {
                   <div style={{ fontSize: 14, color: C.muted, maxWidth: 440, margin: '0 auto 28px', lineHeight: 1.75 }}>
                     Your AI coach watches the room in real time — tracking momentum, spotting opportunities, and telling you exactly what to do next to make more money.
                   </div>
-                  <button onClick={() => { setLiveActive(true); setLiveStartTime(new Date()); setLiveEvents([]); processedTipIds.current = new Set(); coachingCooldowns.current = {} }}
-                    style={{ padding: '13px 36px', borderRadius: 12, background: 'linear-gradient(135deg, #10B981, #22D3EE)', border: 'none', color: C.white, fontWeight: 800, fontSize: 16, cursor: 'pointer', boxShadow: '0 0 32px rgba(16,185,129,0.4)' }}>
+                  <button onClick={handleLiveGoLive} disabled={liveEngine.actionPending}
+                    style={{ padding: '13px 36px', borderRadius: 12, background: 'linear-gradient(135deg, #10B981, #22D3EE)', border: 'none', color: C.white, fontWeight: 800, fontSize: 16, cursor: liveEngine.actionPending ? 'default' : 'pointer', opacity: liveEngine.actionPending ? 0.6 : 1, boxShadow: '0 0 32px rgba(16,185,129,0.4)' }}>
                     ▶ Start Streaming
                   </button>
                 </div>
@@ -5379,6 +5361,9 @@ const stopImportMessageRotation = () => {
                         </div>
                       </div>
                     )}
+
+                    {/* COACHING PROMPT FEED — every prompt this session, mark Completed/Skipped */}
+                    <CoachingPromptFeed active={liveActive} />
 
                   </div>
 

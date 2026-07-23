@@ -53,9 +53,49 @@ const NAV = [
   },
 ]
 
-export default function Sidebar({ activeTab, onTabChange, user, onSignOut, isPro = false }) {
+// Curated common IANA zones — a full Intl.supportedValuesOf('timeZone') list
+// runs to 400+ entries, most of which are aliases nobody would pick; this
+// covers the regions creators actually stream from. "Not set" always means
+// "use my device's timezone", the existing default everywhere.
+const TIMEZONE_OPTIONS = [
+  { value: '', label: 'Auto-detect (device timezone)' },
+  { value: 'America/Los_Angeles', label: 'Pacific Time (US)' },
+  { value: 'America/Denver', label: 'Mountain Time (US)' },
+  { value: 'America/Chicago', label: 'Central Time (US)' },
+  { value: 'America/New_York', label: 'Eastern Time (US)' },
+  { value: 'America/Sao_Paulo', label: 'São Paulo' },
+  { value: 'Europe/London', label: 'London' },
+  { value: 'Europe/Paris', label: 'Paris / Berlin / Madrid' },
+  { value: 'Europe/Moscow', label: 'Moscow' },
+  { value: 'Africa/Lagos', label: 'Lagos' },
+  { value: 'Asia/Dubai', label: 'Dubai' },
+  { value: 'Asia/Kolkata', label: 'Mumbai / Delhi' },
+  { value: 'Asia/Bangkok', label: 'Bangkok / Jakarta' },
+  { value: 'Asia/Manila', label: 'Manila / Singapore' },
+  { value: 'Asia/Tokyo', label: 'Tokyo / Seoul' },
+  { value: 'Australia/Sydney', label: 'Sydney' },
+  { value: 'Pacific/Auckland', label: 'Auckland' },
+]
+
+export default function Sidebar({ activeTab, onTabChange, user, onSignOut, isPro = false, timezone = null, onTimezoneChange }) {
   const [hoveredId, setHoveredId] = useState(null)
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [savingTz, setSavingTz] = useState(false)
+
+  const handleTimezoneChange = async (value) => {
+    setSavingTz(true)
+    try {
+      const res = await fetch('/api/profile/timezone', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ timezone: value || null }),
+      })
+      if (res.ok) onTimezoneChange?.(value || null)
+    } catch (_) {
+      // silent — the select just reverts to its bound value on next render
+    } finally {
+      setSavingTz(false)
+    }
+  }
 
   const renderItem = (id, icon, label) => {
     const isActive  = activeTab === id
@@ -125,18 +165,38 @@ export default function Sidebar({ activeTab, onTabChange, user, onSignOut, isPro
         </Button>
       )}
 
-      {/* User footer — email + sign out share one compact row */}
+      {/* User footer — timezone gets its own row above the compact email/sign-out row */}
       {user && (
-        <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: 10, marginTop: 4, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-          <div title={user.email} style={{ fontSize: 11, color: "#7d8aa3", padding: "0 4px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
-            {user.email}
+        <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: 10, marginTop: 4 }}>
+          <div style={{ marginBottom: 8, padding: "0 4px" }}>
+            <label style={{ fontSize: 9, color: "#7d8aa3", textTransform: "uppercase", letterSpacing: 0.6, display: "block", marginBottom: 4 }}>
+              Timezone {savingTz && "· saving…"}
+            </label>
+            <select
+              value={timezone || ''}
+              onChange={(e) => handleTimezoneChange(e.target.value)}
+              style={{
+                width: "100%", padding: "6px 8px", borderRadius: 7, fontSize: 11,
+                background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)",
+                color: C.white, outline: "none", cursor: "pointer",
+              }}
+            >
+              {TIMEZONE_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
           </div>
-          <button onClick={onSignOut}
-            style={{ flexShrink: 0, padding: "5px 8px", borderRadius: 8, background: "transparent", border: "none", color: "#F87171", fontSize: 11.5, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 5, transition: "background 0.15s" }}
-            onMouseEnter={e => e.currentTarget.style.background = "rgba(248,113,113,0.1)"}
-            onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-            <span>→</span> Sign Out
-          </button>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+            <div title={user.email} style={{ fontSize: 11, color: "#7d8aa3", padding: "0 4px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
+              {user.email}
+            </div>
+            <button onClick={onSignOut}
+              style={{ flexShrink: 0, padding: "5px 8px", borderRadius: 8, background: "transparent", border: "none", color: "#F87171", fontSize: 11.5, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 5, transition: "background 0.15s" }}
+              onMouseEnter={e => e.currentTarget.style.background = "rgba(248,113,113,0.1)"}
+              onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+              <span>→</span> Sign Out
+            </button>
+          </div>
         </div>
       )}
     </div>

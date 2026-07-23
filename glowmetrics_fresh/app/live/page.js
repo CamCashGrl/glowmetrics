@@ -13,6 +13,8 @@ import EventsSync from './EventsSync';
 import Button from '../../components/ui/Button';
 import { useLiveSessionEngine } from './useLiveSessionEngine';
 import { TRIGGER_LEVEL, TRIGGER_ICON } from '../../lib/coaching/triggers';
+import CoachingPromptFeed from '../components/CoachingPromptFeed';
+import { playStillLiveChime } from '../../lib/notifySound';
 
 const C = {
   bg: '#040812', card: 'rgba(15,20,32,0.75)', border: 'rgba(168,85,247,0.2)',
@@ -92,6 +94,10 @@ export default function LivePage() {
   // active prompt is refetched repeatedly until it resolves, but it should
   // only appear once in the history panels.
   const lastLoggedCoachingEventId = useRef(null);
+  // Which session id we've already played the "are you still live?" chime
+  // for — prevents replaying it on every re-render while still unresolved,
+  // fires again only for a genuinely new needs_resolution session.
+  const chimedForSessionRef = useRef(null);
   const phaseChangeLog    = useRef([]);
   const firedAlertsLog    = useRef([]);
   const prevPhaseRef      = useRef(null);
@@ -164,6 +170,13 @@ export default function LivePage() {
       if (!u) { setAuthStatus('live'); return; }
       setUser(u);
       setAuthStatus('live');
+
+      // Server-persisted timezone override, same profiles.timezone the
+      // dashboard reads/writes — takes priority over the localStorage value
+      // above once loaded, so the setting is consistent across devices
+      // instead of being per-browser only.
+      supabase.from('profiles').select('timezone').eq('id', u.id).maybeSingle()
+        .then(({ data }) => { if (data?.timezone) setLiveTimezone(data.timezone); });
 
       // Load last 12h of tips as history
       const since = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString();
@@ -416,6 +429,16 @@ export default function LivePage() {
     const id = setInterval(fetchPrompt, 15000);
     return () => { cancelled = true; clearInterval(id); };
   }, [engine.engineMode, engine.serverSession?.id]);
+
+  // Plays the "are you still live?" chime once per session the moment it
+  // enters needs_resolution — not on every re-render while it stays there.
+  useEffect(() => {
+    if (engine.phase !== 'needs_resolution') return;
+    const sessionId = engine.serverSession?.id;
+    if (!sessionId || chimedForSessionRef.current === sessionId) return;
+    chimedForSessionRef.current = sessionId;
+    playStillLiveChime();
+  }, [engine.phase, engine.serverSession?.id]);
 
   // Reads coaching_strategy/coaching_goal_tokens back FROM the server
   // whenever a session is discovered — covers both a page refresh of an
@@ -927,7 +950,14 @@ export default function LivePage() {
               <option value="whale">🐋 Whale Focus</option>
               <option value="goal">🎯 Goal Focus</option>
             </select>
-            <select value={liveTimezone} onChange={e => setLiveTimezone(e.target.value)} title="Timezone for session start/end times" style={{ ...inp2, width: 'auto', padding: '5px 10px', fontSize: 12 }}>
+            <select value={liveTimezone} onChange={e => {
+              const next = e.target.value;
+              setLiveTimezone(next);
+              fetch('/api/profile/timezone', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ timezone: next }),
+              }).catch(() => {});
+            }} title="Timezone for session start/end times" style={{ ...inp2, width: 'auto', padding: '5px 10px', fontSize: 12 }}>
               {Array.from(new Set([liveTimezone, Intl.DateTimeFormat().resolvedOptions().timeZone,
                 'America/Los_Angeles', 'America/Denver', 'America/Chicago', 'America/New_York', 'UTC', 'Europe/London', 'Europe/Berlin'
               ])).map(tz => <option key={tz} value={tz}>{tz}</option>)}
@@ -1609,6 +1639,9 @@ export default function LivePage() {
                   </div>
                 </div>
               )}
+
+              {/* Coaching Prompt Feed — every prompt this session, mark Completed/Skipped */}
+              <CoachingPromptFeed active={liveActive} />
             </div>
           </div>
         )}

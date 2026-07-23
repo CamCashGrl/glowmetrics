@@ -346,6 +346,34 @@ async function main() {
     check('T9: discovered session reflects the real status from the server', afterState.liveSession?.status === 'active');
   }
 
+  // ---- Test 10: desktop notification fires once when needs_resolution is first observed ----
+  {
+    const { sandbox, state } = makeContext({ initialStorage: { session: 'fake-token', user: { id: 'u1', email: 'test@test.com' } } });
+    let resolutionStatus = 'active';
+    state.fetchHandler = (url) => {
+      if (url.includes('/api/live/session/start')) return { ok: true, json: async () => ({ session: { id: 's1', status: 'active' } }) };
+      if (url.includes('/api/live/session/extension-heartbeat')) return { ok: true, json: async () => ({ session: { id: 's1', status: resolutionStatus } }) };
+      if (url.includes('/api/live/coaching')) return { ok: true, json: async () => ({ prompt: null }) };
+      if (url.includes('/api/live/session') && !url.includes('start')) return { ok: true, json: async () => ({ session: null }) };
+      if (url.includes('/rest/v1/profiles')) return { ok: true, json: async () => [{ plan: 'free' }] };
+      if (url.includes('/rest/v1/tips')) return { ok: true, json: async () => [] };
+      return { ok: true, json: async () => ({}) };
+    };
+    loadBackground(sandbox);
+    await tick(30);
+    await new Promise((resolve) => state.onMessage({ action: 'live_start', platform: 'chaturbate' }, {}, resolve));
+
+    resolutionStatus = 'needs_resolution';
+    await state.onAlarm({ name: 'live_heartbeat' });
+    await tick(30);
+    check('T10: a desktop notification fires once needs_resolution is observed', state.notifications.length === 1);
+
+    // Same status again on the next tick — must not fire a second notification.
+    await state.onAlarm({ name: 'live_heartbeat' });
+    await tick(30);
+    check('T10: no duplicate notification while still unresolved', state.notifications.length === 1);
+  }
+
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail > 0 ? 1 : 0);
 }
