@@ -88,6 +88,30 @@ const formatImportDate = (iso) => {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
+// Turns a raw day count into a friendly "Last active …" phrase without
+// altering the underlying days-since-last-tip value used elsewhere.
+const formatLastActive = (days) => {
+  if (days === null || days === undefined || isNaN(days)) return "Not enough data yet"
+  if (days <= 0) return "Last active today"
+  if (days === 1) return "Last active yesterday"
+  if (days < 30) return `Last active ${days} days ago`
+  if (days < 365) return `Last active ${Math.round(days / 30)} months ago`
+  return `Last active ${(days / 365).toFixed(1)} years ago`
+}
+
+// Single custom "message a fan" glyph — one envelope outline with a heart
+// centered inside — used everywhere the Message action appears so it reads
+// as one consistent icon instead of a mix of emoji.
+function EnvelopeHeartIcon({ size = 16, heartColor = "#FF2BAE" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ display: "block" }}>
+      <rect x="2" y="5" width="20" height="14" rx="3" stroke="currentColor" strokeWidth="1.6" />
+      <path d="M3 6.5L12 13L21 6.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+      <path d="M12 11.3c-.85-1.3-2.75-1.2-3.2.2-.4 1.1.6 2 3.2 3.7 2.6-1.7 3.6-2.6 3.2-3.7-.45-1.4-2.35-1.5-3.2-.2z" fill={heartColor} />
+    </svg>
+  )
+}
+
 // Builds the "quick preview" stats (tips / fans / earnings / top spender)
 // shown when a free-tier user's import is blocked by the platform limit —
 // same shape as onboarding's buildPreview(), minus paid-session handling,
@@ -1375,6 +1399,25 @@ export default function Dashboard() {
   const [fanSearchQuery, setFanSearchQuery] = useState("")
   const [shareModalOpen, setShareModalOpen] = useState(false)
   const [chartDrillDay, setChartDrillDay] = useState(null)
+  // Element that had focus right before the fan profile modal opened, so we
+  // can return focus to it (the "View Fan" button) once the modal closes.
+  // Set synchronously in the "View Fan" onClick (via e.currentTarget) rather
+  // than read back from document.activeElement in an effect — by the time a
+  // passive effect runs, the modal's autoFocus has already moved focus onto
+  // the close button, so reading activeElement here would just capture that.
+  const whaleModalTriggerRef = useRef(null)
+  useEffect(() => {
+    if (selectedWhale) {
+      const onKeyDown = (e) => { if (e.key === "Escape") setSelectedWhale(null) }
+      document.addEventListener("keydown", onKeyDown)
+      return () => {
+        document.removeEventListener("keydown", onKeyDown)
+        if (whaleModalTriggerRef.current && typeof whaleModalTriggerRef.current.focus === "function") {
+          whaleModalTriggerRef.current.focus()
+        }
+      }
+    }
+  }, [selectedWhale])
   // ── LIVE MODE STATE ───────────────────────────────────────
   const [liveActive, setLiveActive] = useState(false)
   const [liveStartTime, setLiveStartTime] = useState(null)
@@ -2923,6 +2966,37 @@ const stopImportMessageRotation = () => {
         }
         .import-flash-ring { animation: import-flash 900ms ease-out; }
         .import-check-badge { animation: import-check-pop 420ms cubic-bezier(0.34,1.3,0.64,1); }
+
+        /* ── FAN CARD / MESSAGE (HEART-ENVELOPE) ── */
+        @keyframes heart-envelope-breathe {
+          0%, 100% { transform: scale(1); filter: drop-shadow(0 0 0 rgba(255,43,174,0)); }
+          50% { transform: scale(1.045); filter: drop-shadow(0 0 3px rgba(255,43,174,0.32)); }
+        }
+        .heart-envelope-btn { animation: heart-envelope-breathe 3.4s ease-in-out infinite; }
+        .heart-envelope-btn:hover, .heart-envelope-btn:focus-visible {
+          transform: scale(1.08);
+          box-shadow: 0 0 0 3px rgba(255,43,174,0.14), 0 0 10px rgba(255,43,174,0.25);
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .heart-envelope-btn { animation: none; }
+          .heart-envelope-btn:hover, .heart-envelope-btn:focus-visible { transform: none; }
+        }
+        .tier-filter-btn { transition: background 0.15s ease, color 0.15s ease; }
+        .whale-modal-shell { box-shadow: 0 0 36px rgba(34,211,238,0.16), 0 0 54px rgba(124,92,255,0.15), 0 0 44px rgba(255,43,174,0.13), 0 22px 54px rgba(0,0,0,0.55); }
+        .whale-modal-grid { display: grid; grid-template-columns: 1fr 220px; gap: 0; align-items: start; }
+        .whale-modal-actions-col { border-left: 1px solid rgba(255,255,255,0.08); padding-left: 22px; margin-left: 22px; }
+        .whale-hero-metrics { display: grid; grid-template-columns: repeat(4, 1fr); }
+        .whale-hero-metric { padding: 0 14px; }
+        .whale-hero-metric:first-child { padding-left: 0; }
+        .whale-hero-metric:not(:first-child) { border-left: 1px solid rgba(255,255,255,0.1); }
+        .whale-intel-split { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        @media (max-width: 640px) {
+          .whale-modal-grid { grid-template-columns: 1fr; }
+          .whale-modal-actions-col { border-left: none; padding-left: 0; margin-left: 0; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 16px; margin-top: 18px; }
+          .whale-hero-metrics { grid-template-columns: repeat(2, 1fr); row-gap: 12px; }
+          .whale-hero-metric:nth-child(odd) { border-left: none; padding-left: 0; }
+          .whale-intel-split { grid-template-columns: 1fr; }
+        }
       `}</style>
 
       <div style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 0 }}>
@@ -3293,9 +3367,10 @@ const stopImportMessageRotation = () => {
                             </div>
                           </div>
                           <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }}
-                            style={{ padding: '4px', borderRadius: 8, background: 'none', border: 'none', color: C.green, fontSize: 26, cursor: 'pointer', lineHeight: 1, animation: 'pulse-msg 2s infinite', flexShrink: 0 }}>
-                            💌
-                          </button>
+                            className="heart-envelope-btn"
+                            aria-label={`Message ${w.username}`}
+                            title="Message fan"
+                            style={{ padding: 6, borderRadius: 8, background: 'none', border: 'none', color: C.green, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><EnvelopeHeartIcon size={17} /></button>
                         </div>
                       ))}
                     </div>
@@ -3319,9 +3394,10 @@ const stopImportMessageRotation = () => {
                             </div>
                           </div>
                           <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }}
-                            style={{ padding: '4px', borderRadius: 8, background: 'none', border: 'none', color: C.pink, fontSize: 26, cursor: 'pointer', lineHeight: 1, animation: 'pulse-msg 2s infinite', flexShrink: 0 }}>
-                            💌
-                          </button>
+                            className="heart-envelope-btn"
+                            aria-label={`Message ${w.username}`}
+                            title="Message fan"
+                            style={{ padding: 6, borderRadius: 8, background: 'none', border: 'none', color: C.pink, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><EnvelopeHeartIcon size={17} /></button>
                         </div>
                       ))}
                     </div>
@@ -3398,9 +3474,10 @@ const stopImportMessageRotation = () => {
                         </div>
                         {a.cta && (
                           <button onClick={() => { const w = whales.find(wh => wh.username === a.username); if (w) { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) } }}
-                            style={{ flexShrink: 0, padding: "6px", borderRadius: 8, background: "none", border: "none", color: C.pink, fontSize: 28, cursor: "pointer", animation: "pulse-msg 2s infinite", lineHeight: 1 }}>
-                            💌
-                          </button>
+                            className="heart-envelope-btn"
+                            aria-label={`Message ${a.username}`}
+                            title="Message fan"
+                            style={{ flexShrink: 0, padding: 6, borderRadius: 8, background: "none", border: "none", color: C.pink, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><EnvelopeHeartIcon size={18} /></button>
                         )}
                       </div>
                     ))}
@@ -4237,33 +4314,46 @@ const stopImportMessageRotation = () => {
 
         {activeTab === "whales" && (
           <div>
-            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 12, marginBottom: 8 }}>
-              <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, margin: 0 }}>🐳 Top Fans</h1>
-              <div style={{ display: "flex", gap: 8 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 2 }}>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+                <h1 style={{ fontSize: 22, fontWeight: 800, color: C.white, margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 20 }}>🐳</span> Top Fans
+                </h1>
+                <span style={{ fontSize: 13, color: C.text }}>Your highest-value supporters ranked by total spend</span>
+              </div>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 {chartDrillDay && (
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", borderRadius: 10, background: "rgba(34,211,238,0.1)", border: "1px solid rgba(34,211,238,0.35)", fontSize: 13, color: C.cyan, fontWeight: 600 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 12px", borderRadius: 10, background: "rgba(34,211,238,0.1)", border: "1px solid rgba(34,211,238,0.35)", fontSize: 12, color: C.cyan, fontWeight: 600 }}>
                     📅 {chartDrillDay}s only
-                    <button onClick={() => setChartDrillDay(null)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 14, padding: 0, lineHeight: 1 }}>✕</button>
+                    <button onClick={() => setChartDrillDay(null)} style={{ background: "none", border: "none", color: C.text, cursor: "pointer", fontSize: 14, padding: 0, lineHeight: 1 }}>✕</button>
                   </div>
                 )}
-                <button onClick={() => setFanSearchOpen(true)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 10, background: "linear-gradient(135deg, rgba(59,130,246,0.15), rgba(236,72,153,0.15))", border: "1px solid rgba(59,130,246,0.35)", color: C.white, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                <button onClick={() => setFanSearchOpen(true)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 13px", borderRadius: 9, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.12)", color: C.text, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
                   🔍 Search Fan
                 </button>
               </div>
             </div>
-            <p style={{ fontSize: 13, color: C.muted, marginBottom: 24 }}>Your highest-value supporters ranked by total spend</p>
 
-            {/* FILTERS */}
-            <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
-              <div style={{ display: "flex", gap: 6, background: "rgba(255,255,255,0.04)", padding: 4, borderRadius: 10, border: "1px solid rgba(255,255,255,0.08)" }}>
-                {["ALL","Whale","Shark","Regular","Dormant"].map(t => (
-                  <button key={t} onClick={() => setWhaleFilter(t)} style={{ padding: "5px 12px", borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: "pointer", border: "none", transition: "all 0.15s", background: whaleFilter === t ? "linear-gradient(135deg, #3b82f6, #ec4899)" : "transparent", color: whaleFilter === t ? C.white : C.muted }}>{t}</button>
-                ))}
+            {/* FILTERS — each pill group scrolls horizontally within itself on
+                narrow screens instead of clipping options past the viewport edge */}
+            <div style={{ display: "flex", gap: 10, marginTop: 14, marginBottom: 16, flexWrap: "wrap", maxWidth: "100%" }}>
+              <div style={{ display: "flex", gap: 2, background: "rgba(255,255,255,0.03)", padding: 3, borderRadius: 10, border: "1px solid rgba(255,255,255,0.08)", overflowX: "auto", maxWidth: "100%", WebkitOverflowScrolling: "touch" }}>
+                {["ALL","Whale","Shark","Regular","Dormant"].map(t => {
+                  const count = t === "ALL" ? whales.length : whales.filter(w => w.tier === t).length
+                  const active = whaleFilter === t
+                  return (
+                    <button key={t} className="tier-filter-btn" onClick={() => setWhaleFilter(t)}
+                      style={{ padding: "6px 12px", borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: "pointer", border: "none", flexShrink: 0, whiteSpace: "nowrap", background: active ? "linear-gradient(135deg, #22D3EE, #EC4899)" : "transparent", color: active ? "#06101A" : C.text }}>
+                      {t === "ALL" ? "All" : t}
+                      <span style={{ marginLeft: 5, fontSize: 10, fontWeight: 700, opacity: active ? 0.75 : 0.6 }}>{count}</span>
+                    </button>
+                  )
+                })}
               </div>
               {allPlatforms.length > 1 && (
-                <div style={{ display: "flex", gap: 6, background: "rgba(255,255,255,0.04)", padding: 4, borderRadius: 10, border: "1px solid rgba(255,255,255,0.08)" }}>
+                <div style={{ display: "flex", gap: 2, background: "rgba(255,255,255,0.03)", padding: 3, borderRadius: 10, border: "1px solid rgba(255,255,255,0.08)", overflowX: "auto", maxWidth: "100%", WebkitOverflowScrolling: "touch" }}>
                   {["ALL", ...allPlatforms].map(p => (
-                    <button key={p} onClick={() => setPlatformFilter(p)} style={{ padding: "5px 12px", borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: "pointer", border: "none", transition: "all 0.15s", background: platformFilter === p ? "rgba(34,211,238,0.2)" : "transparent", color: platformFilter === p ? C.cyan : C.muted }}>{p}</button>
+                    <button key={p} className="tier-filter-btn" onClick={() => setPlatformFilter(p)} style={{ padding: "6px 12px", borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: "pointer", border: "none", flexShrink: 0, whiteSpace: "nowrap", background: platformFilter === p ? "rgba(34,211,238,0.18)" : "transparent", color: platformFilter === p ? C.cyan : C.text }}>{p}</button>
                   ))}
                 </div>
               )}
@@ -4273,86 +4363,103 @@ const stopImportMessageRotation = () => {
             {filteredWhales.length === 0 ? (
               <div style={{ ...glassCard, borderRadius: 14, padding: 32, textAlign: 'center', marginBottom: 20 }}>
                 <div style={{ fontSize: 32, marginBottom: 12 }}>🔍</div>
-                <div style={{ fontSize: 15, color: C.muted }}>No fans match this filter</div>
+                <div style={{ fontSize: 15, color: C.text, fontWeight: 600, marginBottom: 4 }}>No fans match this filter</div>
+                <div style={{ fontSize: 12, color: C.text }}>Try a different tier or clear the platform filter</div>
               </div>
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 14, marginBottom: 20 }}>
                 {filteredWhales.map((w, i) => {
                   const tc = TIER_COLORS[w.tier] || C.cyan
-                  const days = w.daysSinceLastTip ?? Math.floor((Date.now() - new Date(w.lastTipDate)) / 86400000)
+                  const days = w.daysSinceLastTip ?? (w.lastTipDate ? Math.floor((Date.now() - new Date(w.lastTipDate)) / 86400000) : null)
                   const relScore = Math.min(100, Math.round((w.tipCount * 3) + (w.totalUSD / 10) + (days < 7 ? 20 : days < 30 ? 10 : 0)))
                   const scoreColor = relScore >= 70 ? C.green : relScore >= 40 ? C.gold : C.red
-                  const riskLevel = days < 14 ? { label: 'Low', color: C.green, pct: 20 } : days < 45 ? { label: 'Medium', color: C.gold, pct: 55 } : { label: 'High', color: C.red, pct: 90 }
-                  const tierIcon = w.tier === 'Whale' ? '💎' : w.tier === 'Shark' ? '🦈' : w.tier === 'Regular' ? '⭐' : '💤'
+                  // Reuse the shared churn-risk formula from analytics.js (w.churnRisk)
+                  // instead of a second, inconsistent day-threshold calc — that duplicate
+                  // was why nearly every card showed "High" regardless of actual pattern.
+                  const cr = w.churnRisk?.level
+                  const riskLevel = cr === "Low" ? { label: "Low", color: C.green, pct: 20 }
+                    : cr === "Medium" ? { label: "Medium", color: C.gold, pct: 55 }
+                    : cr === "High" ? { label: "High", color: C.red, pct: 80 }
+                    : cr === "Critical" ? { label: "Critical", color: C.red, pct: 95 }
+                    : null
+                  const riskReason = riskLevel && (riskLevel.label === "High" || riskLevel.label === "Critical")
+                    ? `Inactive for ${days} days`
+                    : riskLevel?.label === "Medium" ? "Spend has slowed" : null
                   return (
                     <div key={i}
                       className="hoverable"
-                      style={{ ...glassCard, borderRadius: 16, padding: 18, border: `1px solid ${tc}33`, cursor: 'default', transition: 'transform 0.18s ease, box-shadow 0.18s ease' }}
-                      onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = `0 0 28px ${tc}22, 0 8px 32px rgba(0,0,0,0.45)` }}
+                      style={{ ...glassCard, borderRadius: 16, padding: 16, border: '1px solid rgba(255,255,255,0.08)', cursor: 'default', transition: 'transform 0.18s ease, box-shadow 0.18s ease' }}
+                      onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = `0 8px 28px rgba(0,0,0,0.4)` }}
                       onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = '' }}>
 
                       {/* TOP ROW — avatar, name, badges, score */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
                         {/* Avatar */}
-                        <div style={{ width: 42, height: 42, borderRadius: 12, background: `linear-gradient(135deg, ${tc}, ${tc}80)`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 17, fontWeight: 800, color: '#fff', flexShrink: 0 }}>
+                        <div style={{ width: 36, height: 36, borderRadius: 10, background: `linear-gradient(135deg, ${tc}, ${tc}80)`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 800, color: '#fff', flexShrink: 0 }}>
                           {(w.username || '?').charAt(0).toUpperCase()}
                         </div>
                         {/* Name + badges */}
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 14, fontWeight: 700, color: C.white, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginBottom: 4 }}>{w.username}</div>
+                          <div title={w.username} style={{ fontSize: 14, fontWeight: 700, color: C.white, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginBottom: 3 }}>{w.username}</div>
                           <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-                            <span style={{ padding: '2px 7px', borderRadius: 100, background: `${tc}20`, color: tc, fontSize: 10, fontWeight: 700 }}>{w.tier}</span>
-                            <span style={{ padding: '2px 7px', borderRadius: 100, background: 'rgba(255,255,255,0.06)', color: C.muted, fontSize: 10, fontWeight: 600 }}>{w.platform}</span>
+                            <span style={{ padding: '1px 6px', borderRadius: 100, background: `${tc}18`, color: tc, fontSize: 9, fontWeight: 700 }}>{w.tier}</span>
+                            <span style={{ padding: '1px 6px', borderRadius: 100, background: 'rgba(255,255,255,0.05)', color: C.text, fontSize: 9, fontWeight: 600 }}>{w.platform || 'Unknown'}</span>
                           </div>
                         </div>
                         {/* Relationship score */}
-                        <div style={{ flexShrink: 0, width: 38, height: 38, borderRadius: '50%', background: `${scoreColor}18`, border: `2px solid ${scoreColor}55`, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                          <div style={{ fontSize: 11, fontWeight: 800, color: scoreColor, lineHeight: 1 }}>{relScore}</div>
-                          <div style={{ fontSize: 7, color: scoreColor, opacity: 0.7, lineHeight: 1 }}>REL</div>
+                        <div title="Relationship score" style={{ flexShrink: 0, width: 30, height: 30, borderRadius: '50%', border: `2px solid ${scoreColor}45`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <div style={{ fontSize: 10, fontWeight: 800, color: scoreColor, lineHeight: 1 }}>{relScore}</div>
                         </div>
                       </div>
 
-                      {/* METRIC ROW — 4 pills */}
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 6, marginBottom: 12 }}>
-                        {[
-                          { icon: '💰', val: `$${(w.totalUSD || 0).toFixed(2)}`, label: 'lifetime' },
-                          { icon: '🔁', val: String(w.tipCount || 0), label: 'tips' },
-                          { icon: '⏱', val: `${days}d`, label: 'ago' },
-                          { icon: '📊', val: `$${(w.avgTipSize || 0).toFixed(2)}`, label: 'avg tip' },
-                        ].map(({ icon, val, label }) => (
-                          <div key={label} style={{ padding: '7px 10px', borderRadius: 9, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <span style={{ fontSize: 12 }}>{icon}</span>
-                            <div>
-                              <div style={{ fontSize: 12, fontWeight: 700, color: C.white, lineHeight: 1.1 }}>{val}</div>
-                              <div style={{ fontSize: 9, color: C.muted, lineHeight: 1 }}>{label}</div>
-                            </div>
+                      {/* PRIMARY METRICS — typography-led, no heavy tiles */}
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', rowGap: 8, columnGap: 10, marginBottom: 12, padding: '10px 0', borderTop: '1px solid rgba(255,255,255,0.06)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                        <div>
+                          <div style={{ fontSize: 14, fontWeight: 800, color: C.white }}>${(w.totalUSD || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                          <div style={{ fontSize: 10, color: C.text }}>Lifetime spend</div>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 14, fontWeight: 800, color: C.white }}>{(w.tipCount || 0).toLocaleString()}</div>
+                          <div style={{ fontSize: 10, color: C.text }}>Total tips</div>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: C.white }} title={w.lastTipDate ? new Date(w.lastTipDate).toLocaleString() : undefined}>{formatLastActive(days).replace('Last active ', '')}</div>
+                          <div style={{ fontSize: 10, color: C.text }}>Last active</div>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: C.white }}>${(w.avgTipSize || 0).toFixed(2)}</div>
+                          <div style={{ fontSize: 10, color: C.text }}>Avg. tip</div>
+                        </div>
+                      </div>
+
+                      {/* RETENTION RISK */}
+                      {riskLevel && (
+                        <div style={{ marginBottom: 12 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                            <span style={{ fontSize: 9, color: C.text, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 600 }}>Retention risk</span>
+                            <span style={{ fontSize: 10, fontWeight: 700, color: riskLevel.color }}>{riskLevel.label}</span>
                           </div>
-                        ))}
-                      </div>
-
-                      {/* RETENTION RISK BAR */}
-                      <div style={{ marginBottom: 12 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                          <span style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 600 }}>Retention Risk</span>
-                          <span style={{ fontSize: 9, fontWeight: 700, color: riskLevel.color }}>{riskLevel.label}</span>
+                          <div style={{ height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.06)', overflow: 'hidden' }}>
+                            <div style={{ height: '100%', width: `${riskLevel.pct}%`, borderRadius: 2, background: riskLevel.color, transition: 'width 0.4s ease' }} />
+                          </div>
+                          {riskReason && <div style={{ fontSize: 10, color: C.text, marginTop: 4 }}>{riskReason}</div>}
                         </div>
-                        <div style={{ height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.07)', overflow: 'hidden' }}>
-                          <div style={{ height: '100%', width: `${riskLevel.pct}%`, borderRadius: 2, background: riskLevel.color, transition: 'width 0.4s ease' }} />
-                        </div>
-                      </div>
+                      )}
 
-                      {/* QUICK ACTIONS */}
-                      <div style={{ display: 'flex', gap: 6 }}>
+                      {/* ACTIONS — one primary, two secondary */}
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                        <button onClick={(e) => { whaleModalTriggerRef.current = e.currentTarget; setSelectedWhale(w) }}
+                          style={{ flex: 1, padding: '8px 0', borderRadius: 8, background: 'linear-gradient(135deg, #22D3EE, #EC4899)', border: 'none', color: '#06101A', fontSize: 12, fontWeight: 800, cursor: 'pointer' }}
+                          title="View fan profile">View Fan</button>
                         <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }}
-                          style={{ flex: 1, padding: '7px 0', borderRadius: 8, background: 'rgba(236,72,153,0.1)', border: '1px solid rgba(236,72,153,0.25)', color: C.pink, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
-                          title="Message">💌 Message</button>
-                        <button onClick={() => setSelectedWhale(w)}
-                          style={{ flex: 1, padding: '7px 0', borderRadius: 8, background: 'rgba(34,211,238,0.1)', border: '1px solid rgba(34,211,238,0.25)', color: C.cyan, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
-                          title="View profile">🔍 View</button>
+                          className="heart-envelope-btn"
+                          aria-label={`Message ${w.username}`}
+                          title="Message fan"
+                          style={{ width: 32, height: 32, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, background: 'rgba(255,43,174,0.1)', border: '1px solid rgba(255,43,174,0.25)', color: C.pink, cursor: 'pointer' }}><EnvelopeHeartIcon size={15} /></button>
                         <button onClick={() => setNoteTarget(w.username)}
-                          style={{ flex: 1, padding: '7px 0', borderRadius: 8, background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.25)', color: '#a78bfa', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
-                          title="Add note">📝 Note</button>
-                        <div style={{ width: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, opacity: 0.6 }} title={`${w.tier} tier`}>{tierIcon}</div>
+                          aria-label={`Add note for ${w.username}`}
+                          title="Add note"
+                          style={{ width: 32, height: 32, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.25)', color: '#a78bfa', fontSize: 13, cursor: 'pointer' }}>📝</button>
                       </div>
                     </div>
                   )
@@ -4450,12 +4557,16 @@ const stopImportMessageRotation = () => {
                             </div>
                           </div>
                           <div style={{ display: "flex", gap: 6, alignItems:"center" }}>
-                            <button onClick={() => setSelectedWhale(w)} style={{ padding: "4px 10px", borderRadius: 6, background: "rgba(34,211,238,0.12)", border: "1px solid rgba(34,211,238,0.25)", color: C.cyan, fontSize: 11, cursor: "pointer" }}>🔍 Profile</button>
+                            <button onClick={(e) => { whaleModalTriggerRef.current = e.currentTarget; setSelectedWhale(w) }} style={{ padding: "4px 10px", borderRadius: 6, background: "rgba(34,211,238,0.12)", border: "1px solid rgba(34,211,238,0.25)", color: C.cyan, fontSize: 11, cursor: "pointer" }}>🔍 Profile</button>
                             <button onClick={() => { setNoteTarget(w.username); setNoteText(tipperNotes[w.username?.toLowerCase()]?.note || '') }}
                               style={{ padding: "4px 8px", borderRadius: 6, background: tipperNotes[w.username?.toLowerCase()]?.note ? "rgba(245,158,11,0.15)" : "rgba(255,255,255,0.05)", border: tipperNotes[w.username?.toLowerCase()]?.note ? "1px solid rgba(245,158,11,0.3)" : "1px solid rgba(255,255,255,0.1)", color: tipperNotes[w.username?.toLowerCase()]?.note ? C.gold : C.muted, fontSize: 11, cursor: "pointer" }}>
                               {tipperNotes[w.username?.toLowerCase()]?.note ? "📝 Note" : "📝"}
                             </button>
-                            <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }} style={{ padding: "4px", borderRadius: 8, background: "none", border: "none", color: C.pink, fontSize: 26, cursor: "pointer", animation: "pulse-msg 2s infinite", lineHeight: 1 }}>💌</button>
+                            <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }}
+                              className="heart-envelope-btn"
+                              aria-label={`Message ${w.username}`}
+                              title="Message fan"
+                              style={{ padding: 6, borderRadius: 8, background: "rgba(255,43,174,0.1)", border: "1px solid rgba(255,43,174,0.25)", color: C.pink, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><EnvelopeHeartIcon size={17} /></button>
                           </div>
                         </div>
 
@@ -6536,10 +6647,32 @@ const stopImportMessageRotation = () => {
         // guarded below rather than assumed to exist.
         const daysSinceLastTip = w.lastTipDate ? Math.floor((Date.now() - new Date(w.lastTipDate)) / 86400000) : null
         const tierColor = TIER_COLORS[w.tier] || C.cyan
+        const tierIcon = w.tier === 'Whale' ? '💎' : w.tier === 'Shark' ? '🦈' : w.tier === 'Regular' ? '⭐' : '💤'
         const avgDaysBetweenTips = whaleTips.length > 1 ? Math.floor((new Date(w.lastTipDate) - new Date(firstTip?.date_time)) / 86400000 / (whaleTips.length - 1)) : 7
         const likelyReturnDays = daysSinceLastTip !== null ? Math.max(0, avgDaysBetweenTips - daysSinceLastTip) : null
-        const churnRisk = daysSinceLastTip === null ? null : daysSinceLastTip > avgDaysBetweenTips * 2 ? "High" : daysSinceLastTip > avgDaysBetweenTips ? "Medium" : "Low"
-        const churnColor = churnRisk === "High" ? C.red : churnRisk === "Medium" ? C.orange : C.green
+        // Reuse the shared churn-risk formula (w.churnRisk) from analytics.js —
+        // same fix as the card grid — instead of a second local calculation.
+        const churnRisk = w.churnRisk?.level && w.churnRisk.level !== "Unknown" ? w.churnRisk.level : null
+        const churnColor = churnRisk === "Critical" || churnRisk === "High" ? C.red : churnRisk === "Medium" ? C.orange : C.green
+        // Relationship score — identical formula to the Top Fans card grid,
+        // computed here too so the modal's "REL" badge always agrees with it.
+        const relScore = Math.min(100, Math.round((w.tipCount * 3) + (w.totalUSD / 10) + (daysSinceLastTip !== null && daysSinceLastTip < 7 ? 20 : daysSinceLastTip !== null && daysSinceLastTip < 30 ? 10 : 0)))
+        const relColor = relScore >= 70 ? C.green : relScore >= 40 ? C.gold : C.red
+        const valueLabel = w.isTopSpender || w.spendPercentile >= 95 ? "Ultra high value"
+          : relScore >= 70 ? "High value supporter"
+          : relScore >= 40 ? "Growing relationship"
+          : "New supporter"
+        const topSpenderPct = typeof w.spendPercentile === "number" ? Math.max(1, 100 - w.spendPercentile) : null
+        // A short, data-grounded read on the fan — built only from values the
+        // shared analytics engine already computed (churn risk / tip
+        // probability / tip count), never a fabricated observation.
+        const fanInsight = churnRisk === "Critical" || churnRisk === "High"
+          ? "This fan's tipping has slowed — a quick message could bring them back."
+          : w.tipProbability?.level === "High"
+          ? "This fan is highly engaged and likely to tip again soon."
+          : w.tipCount >= 5 && (churnRisk === "Low" || churnRisk === "Medium")
+          ? "This fan is highly engaged and tips consistently. Keep the momentum going!"
+          : null
         // Fan-key match: platform + normalized username (never merge across
         // platforms). Mirrors the whaleTips filter above exactly, over
         // paid_sessions instead of tips.
@@ -6551,87 +6684,154 @@ const stopImportMessageRotation = () => {
         fanPaidSessions.forEach(s => { fanPrivateTypeCounts[s.session_type] = (fanPrivateTypeCounts[s.session_type] || 0) + 1 })
         const fanMostCommonType = Object.entries(fanPrivateTypeCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || null
         const biggestTip = whaleTips.length ? Math.max(...whaleTips.map(t => t.usd)) : 0
+        const dayKeys = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]
+        const dayCounts = { Mon:0,Tue:0,Wed:0,Thu:0,Fri:0,Sat:0,Sun:0 }
+        whaleTips.forEach(t => {
+          const d = new Date(t.date_time).getUTCDay()
+          const key = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][d]
+          if (key in dayCounts) dayCounts[key]++
+        })
+        const maxDayCount = Math.max(...Object.values(dayCounts), 1)
+        const bestDay = whaleTips.length ? Object.entries(dayCounts).sort((a, b) => b[1] - a[1])[0] : null
         return (
-          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 20 }}>
-            <div className="modal-inner" style={{ width: 560, maxHeight: "90vh", overflowY: "auto", ...glassCard, borderRadius: 20 }}>
-              <div style={{ padding: "24px 24px 20px", background: `linear-gradient(135deg, ${tierColor}15, transparent)`, borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                    <div style={{ width: 52, height: 52, borderRadius: 14, background: `linear-gradient(135deg, ${tierColor}, ${tierColor}80)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, fontWeight: 800, color: "#fff" }}>{w.username.charAt(0).toUpperCase()}</div>
-                    <div>
-                      <div style={{ fontSize: 20, fontWeight: 800, color: C.white }}>{w.username}</div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
-                        <span style={{ padding: "2px 10px", borderRadius: 100, background: `${tierColor}20`, border: `1px solid ${tierColor}50`, color: tierColor, fontSize: 11, fontWeight: 700 }}>{w.tier}</span>
-                        <span style={{ fontSize: 12, color: C.muted }}>{w.platform}</span>
-                      </div>
+          <div onClick={() => setSelectedWhale(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", backdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 20 }}>
+            <div className="whale-modal-shell" style={{ width: "min(760px, calc(100vw - 32px))", borderRadius: 19, padding: 1, background: `linear-gradient(135deg, ${tierColor}90, rgba(124,92,255,0.4), rgba(255,43,174,0.85))` }} onClick={e => e.stopPropagation()}>
+              <div className="modal-inner" role="dialog" aria-modal="true" aria-label={`${w.username} fan profile`} style={{ maxHeight: "90vh", overflowY: "auto", ...glassCard, borderRadius: 18 }}>
+                <div style={{ padding: "20px 24px", background: `linear-gradient(90deg, rgba(30,58,110,0.4), rgba(91,58,140,0.32), rgba(122,46,85,0.3))`, borderBottom: "1px solid rgba(255,255,255,0.08)", display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap" }}>
+                  <div style={{ position: "relative", flexShrink: 0 }}>
+                    <div style={{ width: 88, height: 88, borderRadius: "50%", background: `linear-gradient(135deg, ${C.cyan}, ${tierColor}, ${C.pink})`, padding: 3 }}>
+                      <div style={{ width: "100%", height: "100%", borderRadius: "50%", background: `linear-gradient(135deg, ${tierColor}, ${tierColor}80)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32, fontWeight: 800, color: "#fff", boxShadow: `0 0 22px ${tierColor}40` }}>{w.username.charAt(0).toUpperCase()}</div>
                     </div>
+                    <div title={`${w.tier} tier`} style={{ position: "absolute", right: -2, bottom: -2, width: 26, height: 26, borderRadius: "50%", background: C.bg, border: `1px solid ${tierColor}70`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13 }}>{tierIcon}</div>
                   </div>
-                  <button onClick={() => setSelectedWhale(null)} style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.1)", color: C.muted, fontSize: 16, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
-                  {[{ label: "Total Spent", value: `$${w.totalUSD.toFixed(2)}`, color: C.green }, { label: "Tips Given", value: w.tipCount, color: C.cyan }, { label: "Avg Tip", value: `$${w.avgTipSize.toFixed(2)}`, color: C.gold }, { label: "Biggest Tip", value: `$${biggestTip.toFixed(2)}`, color: C.pink }].map(({ label, value, color }) => (
-                    <div key={label} style={{ background: "rgba(255,255,255,0.05)", borderRadius: 10, padding: 12, textAlign: "center" }}>
-                      <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>{label}</div>
-                      <div style={{ fontSize: 16, fontWeight: 800, color }}>{value}</div>
+
+                  <div style={{ minWidth: 0, flexShrink: 0 }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: C.white, wordBreak: "break-word" }}>{w.username}</div>
                     </div>
-                  ))}
-                </div>
-              </div>
-              <div style={{ padding: 24, display: "flex", flexDirection: "column", gap: 20 }}>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>📊 Fan Intelligence</div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
-                    {[{ label: "First tip", value: firstTip ? new Date(firstTip.date_time).toLocaleDateString() : "Not enough data yet" }, { label: "Last tip", value: w.lastTipDate ? `${new Date(w.lastTipDate).toLocaleDateString()} (${daysSinceLastTip}d ago)` : "Not enough data yet" }, { label: "Avg days between tips", value: whaleTips.length > 1 ? `${avgDaysBetweenTips} days` : "Not enough data yet" }, { label: "Churn risk", value: churnRisk || "Not enough data yet", color: churnColor }].map(({ label, value, color }) => (
-                      <div key={label} style={{ padding: 14, background: "rgba(255,255,255,0.04)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.07)" }}>
-                        <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>{label}</div>
-                        <div style={{ fontSize: 14, fontWeight: 600, color: color || C.white }}>{value}</div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 5, flexWrap: "wrap" }}>
+                      <span style={{ padding: "2px 10px", borderRadius: 100, background: `${tierColor}20`, border: `1px solid ${tierColor}50`, color: tierColor, fontSize: 11, fontWeight: 700 }}>{w.tier}</span>
+                      <span style={{ padding: "2px 10px", borderRadius: 100, background: "rgba(124,92,255,0.14)", border: "1px solid rgba(124,92,255,0.3)", color: "#a78bfa", fontSize: 11, fontWeight: 600 }}>{w.platform || "Unknown"}</span>
+                    </div>
+                    {topSpenderPct !== null && (
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 7 }}>
+                        <div style={{ width: 26, height: 26, borderRadius: "50%", background: `${relColor}18`, border: `2px solid ${relColor}55`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                          <div style={{ fontSize: 9, fontWeight: 800, color: relColor, lineHeight: 1 }}>{relScore}</div>
+                        </div>
+                        <div style={{ fontSize: 11, color: C.text, lineHeight: 1.3 }}>
+                          <span style={{ color: C.white, fontWeight: 700 }}>Top {topSpenderPct}%</span> of supporters
+                          <div style={{ fontSize: 10 }}>{valueLabel}</div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="whale-hero-metrics" style={{ flex: 1, minWidth: 240 }}>
+                    {[{ label: "Total Spent", value: `$${w.totalUSD.toFixed(2)}`, color: C.cyan }, { label: "Tips Given", value: w.tipCount, color: "#a78bfa" }, { label: "Avg Tip", value: `$${w.avgTipSize.toFixed(2)}`, color: "#C4B5FD" }, { label: "Biggest Tip", value: `$${biggestTip.toFixed(2)}`, color: "#FF2BAE" }].map(({ label, value, color }) => (
+                      <div key={label} className="whale-hero-metric">
+                        <div style={{ fontSize: 10, color: C.text, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 4 }}>{label}</div>
+                        <div style={{ fontSize: 17, fontWeight: 800, color }}>{value}</div>
                       </div>
                     ))}
                   </div>
-                  {w.typicalOnlineHours && w.typicalOnlineHours !== "Unknown" && (
-                    <div style={{ padding: "9px 14px", background: `${C.cyan}10`, border: `1px solid ${C.cyan}25`, borderRadius: 9, marginBottom: 12 }}>
-                      <span style={{ fontSize: 12, color: C.cyan }}>🕐 Best time to reach: <strong>{w.typicalOnlineHours}</strong></span>
+
+                  <button onClick={() => setSelectedWhale(null)} aria-label="Close profile" autoFocus style={{ width: 28, height: 28, borderRadius: "50%", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.1)", color: C.text, fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, alignSelf: "flex-start" }}>✕</button>
+                </div>
+
+                <div className="whale-modal-grid" style={{ padding: "20px 24px" }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
+                    <div style={{ fontSize: 11, fontWeight: 800, color: C.white, textTransform: "uppercase", letterSpacing: 1, display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ color: C.cyan }}>✦</span> Fan Intelligence
+                      <span style={{ width: 26, height: 2, borderRadius: 2, background: "linear-gradient(90deg, #FF2BAE, transparent)", marginLeft: 2 }} />
                     </div>
-                  )}
-                  {(() => {
-                    const dayKeys = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]
-                    const dayCounts = { Mon:0,Tue:0,Wed:0,Thu:0,Fri:0,Sat:0,Sun:0 }
-                    whaleTips.forEach(t => {
-                      const d = new Date(t.date_time).getUTCDay()
-                      const key = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][d]
-                      if (key in dayCounts) dayCounts[key]++
-                    })
-                    const maxCount = Math.max(...Object.values(dayCounts), 1)
-                    return (
-                      <div>
-                        <div style={{ fontSize: 11, color: C.muted, marginBottom: 8 }}>📅 Tips by day of week</div>
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4 }}>
+
+                    <div className="whale-intel-split">
+                      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                        {[
+                          { icon: "📅", label: "First tip", value: firstTip ? new Date(firstTip.date_time).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : "Not enough data yet" },
+                          { icon: "📅", label: "Last tip", value: w.lastTipDate ? new Date(w.lastTipDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : "Not enough data yet", sub: daysSinceLastTip !== null ? `${daysSinceLastTip.toLocaleString()} days ago` : null },
+                          { icon: "🕐", label: "Avg days between tips", value: whaleTips.length > 1 ? `Every ~${avgDaysBetweenTips} days` : "Not enough data yet" },
+                          { icon: "⚠️", label: "Churn risk", value: churnRisk || "Not enough data yet", color: churnColor },
+                        ].map(({ icon, label, value, sub, color }) => (
+                          <div key={label} style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+                            <span style={{ fontSize: 12, marginTop: 1, flexShrink: 0 }}>{icon}</span>
+                            <div style={{ minWidth: 0 }}>
+                              <div style={{ fontSize: 10, color: C.text }}>{label}</div>
+                              <div style={{ fontSize: 13, fontWeight: 700, color: color || C.white }}>{value}</div>
+                              {sub && <div style={{ fontSize: 10, color: C.text, marginTop: 1 }}>{sub}</div>}
+                            </div>
+                          </div>
+                        ))}
+                        {w.typicalOnlineHours && w.typicalOnlineHours !== "Unknown" && (
+                          <div style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 10px", background: `${C.cyan}12`, border: `1px solid ${C.cyan}30`, borderRadius: 100, alignSelf: "flex-start" }}>
+                            <span style={{ fontSize: 11 }}>🕐</span>
+                            <span style={{ fontSize: 11, color: C.cyan, fontWeight: 600 }}>{w.typicalOnlineHours}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div style={{ padding: 12, background: "rgba(255,255,255,0.03)", borderRadius: 12, border: "1px solid rgba(255,255,255,0.07)" }}>
+                        <div style={{ fontSize: 10, color: C.text, marginBottom: 8, fontWeight: 700 }}>📊 Tips by day of week</div>
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 3 }}>
                           {dayKeys.map(d => {
                             const count = dayCounts[d]
-                            const intensity = count / maxCount
-                            const bg = intensity === 0 ? "rgba(255,255,255,0.04)" : intensity < 0.33 ? "rgba(124,92,255,0.2)" : intensity < 0.66 ? "rgba(124,92,255,0.5)" : "rgba(124,92,255,0.9)"
+                            const isBest = bestDay && bestDay[0] === d && count > 0
+                            const heightPct = 24 + (count / maxDayCount) * 76
                             return (
                               <div key={d} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-                                <div style={{ width: "100%", height: 30, borderRadius: 6, background: bg, border: "1px solid rgba(255,255,255,0.06)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                                  <span style={{ fontSize: 10, fontWeight: 700, color: count > 0 ? C.white : C.muted }}>{count || ""}</span>
+                                <div style={{ width: "100%", height: 38, display: "flex", alignItems: "flex-end" }}>
+                                  <div style={{ width: "100%", height: `${count > 0 ? heightPct : 8}%`, borderRadius: 4, background: count > 0 ? (isBest ? "#FF2BAE" : `linear-gradient(180deg, ${C.cyan}, #7C5CFF)`) : "rgba(255,255,255,0.06)" }} />
                                 </div>
-                                <span style={{ fontSize: 9, color: C.muted }}>{d}</span>
+                                <span style={{ fontSize: 8, color: C.text }}>{d}</span>
                               </div>
                             )
                           })}
                         </div>
+                        {bestDay && bestDay[1] > 0 && (
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 9, paddingTop: 8, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+                            <div style={{ fontSize: 11, color: C.text }}>Most active <strong style={{ color: "#FF2BAE" }}>{{Mon:"Monday",Tue:"Tuesday",Wed:"Wednesday",Thu:"Thursday",Fri:"Friday",Sat:"Saturday",Sun:"Sunday"}[bestDay[0]]}</strong></div>
+                            <div style={{ fontSize: 11, color: C.text }}>{whaleTips.length.toLocaleString()} tips total</div>
+                          </div>
+                        )}
                       </div>
-                    )
-                  })()}
+                    </div>
+
+                    {fanInsight && (
+                      <div style={{ padding: "10px 14px", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 12, display: "flex", alignItems: "flex-start", gap: 9 }}>
+                        <span style={{ fontSize: 13, flexShrink: 0 }}>✨</span>
+                        <span style={{ fontSize: 12, color: C.white, lineHeight: 1.45 }}>{fanInsight}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="whale-modal-actions-col" style={{ display: "flex", flexDirection: "column", gap: 10, minWidth: 0 }}>
+                    <div style={{ fontSize: 11, fontWeight: 800, color: C.white, textTransform: "uppercase", letterSpacing: 1, display: "flex", alignItems: "center", gap: 6 }}>
+                      Actions
+                      <span style={{ width: 26, height: 2, borderRadius: 2, background: "linear-gradient(90deg, #FF2BAE, transparent)" }} />
+                    </div>
+                    <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }}
+                      className="heart-envelope-btn"
+                      aria-label={`Message ${w.username}`}
+                      style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, padding: "13px 16px", borderRadius: 12, background: "linear-gradient(135deg, rgba(255,43,174,0.22), rgba(124,92,255,0.22))", border: "1px solid rgba(255,43,174,0.45)", color: C.white, fontSize: 14, fontWeight: 800, cursor: "pointer" }}>
+                      <EnvelopeHeartIcon size={18} /> Message Fan
+                    </button>
+                    <div style={{ fontSize: 11, color: C.text, textAlign: "center", marginTop: -4, marginBottom: 4 }}>Start a private conversation</div>
+                    <button onClick={() => setNoteTarget(w.username)}
+                      style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "10px 16px", borderRadius: 10, background: "rgba(167,139,250,0.1)", border: "1px solid rgba(167,139,250,0.25)", color: "#a78bfa", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                      📝 Add Note
+                    </button>
+                  </div>
                 </div>
+
+                <div style={{ padding: "0 24px 24px", display: "flex", flexDirection: "column", gap: 20 }}>
                 <div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>🏆 Top 3 Tips</div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: C.text, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>🏆 Top 3 Tips</div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                     {[...whaleTips].sort((a,b) => b.usd - a.usd).slice(0,3).map((t, i) => (
                       <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: "rgba(255,255,255,0.04)", borderRadius: 8, border: "1px solid rgba(255,255,255,0.07)" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                           <span style={{ fontSize: 14 }}>{["🥇","🥈","🥉"][i]}</span>
-                          <span style={{ fontSize: 12, color: C.muted }}>{new Date(t.date_time).toLocaleDateString()}</span>
+                          <span style={{ fontSize: 12, color: C.text }}>{new Date(t.date_time).toLocaleDateString()}</span>
                         </div>
                         <div style={{ fontSize: 15, fontWeight: 800, color: C.gold }}>${t.usd.toFixed(2)}</div>
                       </div>
@@ -6639,11 +6839,11 @@ const stopImportMessageRotation = () => {
                   </div>
                 </div>
                 <div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>🕐 Recent Tips</div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: C.text, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>🕐 Recent Tips</div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                     {sortedTips.slice(0, 5).map((t, i) => (
                       <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: "rgba(255,255,255,0.04)", borderRadius: 8, border: "1px solid rgba(255,255,255,0.07)" }}>
-                        <div style={{ fontSize: 12, color: C.muted }}>{new Date(t.date_time).toLocaleDateString()} at {new Date(t.date_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</div>
+                        <div style={{ fontSize: 12, color: C.text }}>{new Date(t.date_time).toLocaleDateString()} at {new Date(t.date_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</div>
                         <div style={{ fontSize: 14, fontWeight: 700, color: C.green }}>${t.usd.toFixed(2)}</div>
                       </div>
                     ))}
@@ -6651,7 +6851,7 @@ const stopImportMessageRotation = () => {
                 </div>
                 {fanPaidSessions.length > 0 && (
                   <div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>💎 Private Sessions</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: C.text, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>💎 Private Sessions</div>
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10, marginBottom: 12 }}>
                       {[
                         { label: "Lifetime private earnings", value: `$${fanPrivateUSD.toFixed(2)}`, color: C.purple || "#a855f7" },
@@ -6664,7 +6864,7 @@ const stopImportMessageRotation = () => {
                         { label: "Most recent private session", value: fanPrivateSorted[fanPrivateSorted.length - 1] ? new Date(fanPrivateSorted[fanPrivateSorted.length - 1].date_time).toLocaleDateString() : "Not enough data yet" },
                       ].map(({ label, value, color }) => (
                         <div key={label} style={{ padding: 14, background: "rgba(168,85,247,0.06)", borderRadius: 10, border: "1px solid rgba(168,85,247,0.15)" }}>
-                          <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>{label}</div>
+                          <div style={{ fontSize: 11, color: C.text, marginBottom: 4 }}>{label}</div>
                           <div style={{ fontSize: 14, fontWeight: 700, color: color || C.white }}>{value}</div>
                         </div>
                       ))}
@@ -6672,19 +6872,19 @@ const stopImportMessageRotation = () => {
                     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                       {[...fanPaidSessions].sort((a, b) => new Date(b.date_time) - new Date(a.date_time)).slice(0, 5).map(s => (
                         <div key={s.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: "rgba(255,255,255,0.04)", borderRadius: 8, border: "1px solid rgba(255,255,255,0.07)" }}>
-                          <div style={{ fontSize: 12, color: C.muted }}>{s.session_type} · {new Date(s.date_time).toLocaleDateString()}</div>
+                          <div style={{ fontSize: 12, color: C.text }}>{s.session_type} · {new Date(s.date_time).toLocaleDateString()}</div>
                           <div style={{ fontSize: 14, fontWeight: 700, color: "#a855f7" }}>${parseFloat(s.usd).toFixed(2)}</div>
                         </div>
                       ))}
                     </div>
                     {/* Combined lifetime value — each source labeled separately, summed once */}
                     <div style={{ marginTop: 12, padding: 14, background: "rgba(255,255,255,0.04)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.07)" }}>
-                      <div style={{ fontSize: 11, color: C.muted, marginBottom: 8 }}>Combined Lifetime Value</div>
+                      <div style={{ fontSize: 11, color: C.text, marginBottom: 8 }}>Combined Lifetime Value</div>
                       <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4 }}>
-                        <span style={{ color: C.muted }}>Free-chat tips</span><span style={{ color: C.cyan, fontWeight: 700 }}>${(w.totalUSD || 0).toFixed(2)}</span>
+                        <span style={{ color: C.text }}>Free-chat tips</span><span style={{ color: C.cyan, fontWeight: 700 }}>${(w.totalUSD || 0).toFixed(2)}</span>
                       </div>
                       <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 8 }}>
-                        <span style={{ color: C.muted }}>Private sessions</span><span style={{ color: "#a855f7", fontWeight: 700 }}>${fanPrivateUSD.toFixed(2)}</span>
+                        <span style={{ color: C.text }}>Private sessions</span><span style={{ color: "#a855f7", fontWeight: 700 }}>${fanPrivateUSD.toFixed(2)}</span>
                       </div>
                       <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, paddingTop: 8, borderTop: "1px solid rgba(255,255,255,0.08)" }}>
                         <span style={{ color: C.white, fontWeight: 700 }}>Combined total</span><span style={{ color: C.white, fontWeight: 800 }}>${((w.totalUSD || 0) + fanPrivateUSD).toFixed(2)}</span>
@@ -6694,7 +6894,7 @@ const stopImportMessageRotation = () => {
                 )}
                 {whaleTips.length > 0 && (
                   <div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>🤖 AI Predictions</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: C.text, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>🤖 AI Predictions</div>
                     <div style={{ padding: 16, background: "rgba(255,255,255,0.04)", borderRadius: 12, border: "1px solid rgba(255,255,255,0.07)", display: "flex", flexDirection: "column", gap: 10 }}>
                       {[{ label: "📅 Likely to tip again in", value: likelyReturnDays === 0 ? "Overdue!" : `~${likelyReturnDays} days`, color: C.cyan }, { label: "💸 Predicted next tip size", value: `$${(w.avgTipSize * 1.1).toFixed(2)}`, color: C.gold }, { label: "🎯 Engagement score", value: `${Math.min(99, Math.round((w.tipCount / 10) * 20 + (w.totalUSD / 100) * 10))} / 100`, color: C.pink }, { label: "📈 30-day revenue forecast", value: `$${((w.totalUSD / Math.max(1, Math.floor((Date.now() - new Date(firstTip?.date_time)) / 2592000000))) * 1.05).toFixed(2)}`, color: C.green }].map(({ label, value, color }) => (
                         <div key={label} style={{ display: "flex", justifyContent: "space-between", padding: "10px 14px", background: "rgba(255,255,255,0.04)", borderRadius: 8 }}>
@@ -6705,7 +6905,9 @@ const stopImportMessageRotation = () => {
                     </div>
                   </div>
                 )}
-                <button onClick={() => setSelectedWhale(null)} style={{ width: "100%", padding: "12px", borderRadius: 10, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: C.muted, fontSize: 14, cursor: "pointer" }}>Close Profile</button>
+                <button onClick={() => setSelectedWhale(null)} style={{ width: "100%", padding: "12px", borderRadius: 10, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: C.text, fontSize: 14, cursor: "pointer" }}>Close Profile</button>
+                <div style={{ textAlign: "center", fontSize: 11, color: C.text, borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: 14 }}>🔒 All fan data is private and secure.</div>
+                </div>
               </div>
             </div>
           </div>
@@ -6925,22 +7127,25 @@ const stopImportMessageRotation = () => {
         </div>
       )}
 
-      {/* FLOATING FEEDBACK BUTTON */}
+      {/* FLOATING FEEDBACK BUTTON — collapsed to a small icon in a safe gutter so it
+          never sits over a fan card's actions or the bottom of the page content */}
       <button
         onClick={() => { setShowFeedback(true); setFeedbackSent(false); setFeedbackText('') }}
+        aria-label="Share feedback"
+        title="Feedback"
         style={{
-          position: "fixed", bottom: 24, right: 24, zIndex: 998,
-          display: "flex", alignItems: "center", gap: 8,
-          padding: "10px 18px", borderRadius: 100,
+          position: "fixed", bottom: 18, right: 18, zIndex: 60,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          width: 42, height: 42, borderRadius: "50%",
           background: "rgba(15,20,32,0.95)", backdropFilter: "blur(20px)",
           border: "1px solid rgba(255,255,255,0.12)",
-          color: C.text, fontSize: 13, fontWeight: 600, cursor: "pointer",
-          boxShadow: "0 4px 24px rgba(0,0,0,0.5)", transition: "all 0.2s"
+          color: C.text, fontSize: 17, cursor: "pointer",
+          boxShadow: "0 4px 18px rgba(0,0,0,0.5)", transition: "all 0.2s"
         }}
         onMouseEnter={e => { e.currentTarget.style.borderColor = "rgba(34,211,238,0.4)"; e.currentTarget.style.color = C.white }}
         onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.12)"; e.currentTarget.style.color = C.text }}
       >
-        <span style={{ fontSize: 16 }}>💬</span> Feedback
+        💬
       </button>
 
       {/* FEEDBACK MODAL */}
