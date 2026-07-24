@@ -62,16 +62,29 @@ const TIER_COLORS = {
   "Whale": C.gold, "Shark": C.blue, "Regular": C.cyan, "Dormant": C.orange
 }
 
-// Rotating microcopy shown on the CSV importer button/progress bar while a
-// real upload request is in flight — purely cosmetic (doesn't imply we know
-// the server's actual step), but keeps the card feeling alive during the wait.
+// Rotating microcopy shown while the upload endpoint is reading, validating,
+// deduplicating, and saving the file. These labels deliberately avoid claiming
+// that dashboard analytics have already run — that happens in the separate
+// analysis stage after the upload succeeds.
 const IMPORT_MESSAGES = [
-  "Reading your CSV…",
-  "Detecting platform…",
-  "Importing tips…",
-  "Calculating earnings…",
-  "Finding top fans…",
-  "Building your dashboard…",
+  "Reading your earnings export…",
+  "Detecting the platform format…",
+  "Validating tip rows…",
+  "Checking for duplicates…",
+  "Saving new tip history…",
+  "Finalizing your import…",
+]
+
+// These statuses map to work performed by loadData() + runEngine() after the
+// upload endpoint returns: fetching history, rebuilding sessions, aggregating
+// fans/times/platforms, and generating the existing recommendation objects.
+const ANALYSIS_MESSAGES = [
+  "Reading your earnings history…",
+  "Reconstructing streaming sessions…",
+  "Ranking supporter value…",
+  "Detecting revenue patterns…",
+  "Comparing platforms and time windows…",
+  "Preparing personalized recommendations…",
 ]
 
 const glassCard = {
@@ -179,6 +192,349 @@ const formatHour = (hour) => {
   if (h < 12) return `${h} AM`
   if (h === 12) return "12 PM"
   return `${h - 12} PM`
+}
+
+// aggregateRows() already returns bestHour in the user's local timezone, so
+// post-analysis reveal copy must format it directly (without applying the
+// UTC-to-local offset used by formatHour for raw timestamp buckets).
+const formatMetricHour = (hour) => {
+  const h = Number(hour)
+  if (!Number.isFinite(h)) return "—"
+  const normalized = ((Math.round(h) % 24) + 24) % 24
+  if (normalized === 0) return "12 AM"
+  if (normalized < 12) return `${normalized} AM`
+  if (normalized === 12) return "12 PM"
+  return `${normalized - 12} PM`
+}
+
+const DEFAULT_UPGRADE_CONTEXT = {
+  eyebrow: "CamCash Pro",
+  title: "Unlock the deeper answer behind this insight",
+  summary: "Keep your core dashboard free, then unlock the exact patterns and next actions CamCash found in your data.",
+  unlocks: [
+    "Deeper earnings and timing analysis",
+    "Fan behavior and re-engagement priorities",
+    "Cross-platform comparisons and recommendations",
+  ],
+}
+
+const UPGRADE_CONTEXTS = {
+  dashboard_plan: {
+    eyebrow: "Your free plan",
+    title: "Turn your dashboard into an action plan",
+    summary: "Your totals and core insights stay visible. Pro unlocks the deeper comparisons and specific actions behind them.",
+    unlocks: ["Advanced earnings patterns", "Fan recovery priorities", "Unlimited platform tracking"],
+  },
+  multi_platform: {
+    eyebrow: "Multi-platform tracking",
+    title: "See which platform actually pays you best",
+    summary: "Add another platform, compare performance in one place, and find where your streaming time produces the strongest return.",
+    unlocks: ["Unlimited platform imports", "Platform-by-platform earning windows", "Cross-platform fan and revenue comparisons"],
+  },
+  platform_limit_preview: {
+    eyebrow: "Your import is ready",
+    title: "Unlock this platform’s full analysis",
+    summary: "CamCash successfully read this file. Upgrade to add it to your tracked history and reveal the patterns inside it.",
+    unlocks: ["Import and retain this platform", "Compare it with your current platform", "Reveal its strongest fans and earning windows"],
+  },
+  post_upload_analysis: {
+    eyebrow: "Analysis complete",
+    title: "Unlock the findings behind your new import",
+    summary: "You can already see the trustworthy basics. Pro reveals the deeper risks, opportunities, and recommended actions calculated from this history.",
+    unlocks: ["Exact opportunity and dependency details", "Prioritized fan follow-ups", "A deeper schedule and earnings action plan"],
+  },
+  post_stream_analysis: {
+    eyebrow: "Session report ready",
+    title: "Turn this stream into your next-stream plan",
+    summary: "Your report card is free. Pro unlocks the detailed pace, comparison, and follow-up analysis behind the session.",
+    unlocks: ["Strongest and weakest session segments", "Historical performance comparison", "Personalized fan follow-up priorities"],
+  },
+  whales_empty: {
+    eyebrow: "Fan intelligence",
+    title: "Understand which supporters need attention",
+    summary: "Unlock deeper behavior patterns and re-engagement priorities—not just a longer list of usernames.",
+    unlocks: ["Supporter concentration risk", "Cooling-off and follow-up signals", "Prioritized relationship actions"],
+  },
+}
+
+function buildPostUploadReveal(analytics) {
+  const fans = analytics?.whales || []
+  const scheduleInsight = analytics?.bestHour
+    ? {
+        icon: "⏰",
+        label: "Strongest earning hour",
+        text: `${formatMetricHour(analytics.bestHour.hour)} is your strongest supported hour, with a $${analytics.bestHour.avg.toFixed(2)} median across tracked earning windows.`,
+      }
+    : analytics?.bestDay
+      ? {
+          icon: "📅",
+          label: "Strongest earning day",
+          text: `${analytics.bestDay.day} is your strongest supported day, averaging $${analytics.bestDay.avg.toFixed(2)} across ${analytics.bestDay.count} active dates.`,
+        }
+      : {
+          icon: "📊",
+          label: "Schedule insight warming up",
+          text: "CamCash needs at least 3 supported earning windows before naming a reliable best day or hour.",
+        }
+
+  const retention = analytics?.returningVsNew
+  const topFan = fans[0]
+  const fanInsight = retention && (retention.returningCount + retention.newCount) > 0
+    ? {
+        icon: "🔁",
+        label: "Fan retention",
+        text: `${retention.returningPct}% of tracked supporters are repeat tippers${retention.multiplier ? `, averaging ${retention.multiplier}× the spend of one-time tippers` : ""}.`,
+      }
+    : topFan
+      ? {
+          icon: "💎",
+          label: "Highest-value supporter",
+          text: `${topFan.username} is currently your highest-value tracked supporter at $${topFan.totalUSD.toFixed(2)} across ${topFan.tipCount} tips.`,
+        }
+      : {
+          icon: "👥",
+          label: "Fan insight warming up",
+          text: "Import more fan activity to separate repeat supporters from one-time tippers.",
+        }
+
+  const action = analytics?.nextMoves?.[0]
+    ? { icon: analytics.nextMoves[0].icon || "→", text: analytics.nextMoves[0].text }
+    : {
+        icon: "→",
+        text: "Keep importing or tracking sessions until CamCash has enough history to recommend a reliable next action.",
+      }
+
+  const locked = []
+  const missedOpportunity = Object.entries(analytics?.missedRevenueByPlatform || {})[0]
+  if (missedOpportunity) {
+    const [platform, detail] = missedOpportunity
+    locked.push({
+      title: `${platform} has a stronger earning window`,
+      partial: `Your tracked sessions show a meaningful timing gap on ${platform}.`,
+      why: "Knowing the exact gap helps you move hours instead of simply streaming longer.",
+      unlock: `The $${detail.missedRevenue.toFixed(2)} opportunity estimate, exact comparison, and recommended window.`,
+    })
+  }
+  if (analytics?.topFanDependency?.top1Pct > 0) {
+    locked.push({
+      title: `${analytics.topFanDependency.top1Pct}% of revenue comes from your #1 supporter`,
+      partial: "CamCash detected measurable concentration in your fan revenue.",
+      why: "A concentrated income base can create a sudden earnings drop when one person cools off.",
+      unlock: "Top-3 and top-5 concentration, the fan behind the risk, and a retention action plan.",
+    })
+  }
+  if (analytics?.whaleAlerts?.length > 0) {
+    locked.push({
+      title: `${analytics.whaleAlerts.length} high-value follow-up signal${analytics.whaleAlerts.length === 1 ? "" : "s"} found`,
+      partial: "At least one valuable supporter may need attention based on existing activity history.",
+      why: "Timely, specific outreach is more useful than messaging every inactive fan.",
+      unlock: "The prioritized supporter, the signal behind it, and the recommended follow-up.",
+    })
+  }
+  if (locked.length < 3 && analytics?.momentum?.label && analytics.momentum.label !== "No data") {
+    locked.push({
+      title: `Your 30-day earnings trend is ${analytics.momentum.label.toLowerCase()}`,
+      partial: "CamCash found a measurable direction across your recent and prior 30-day periods.",
+      why: "The direction tells you whether to protect momentum or intervene before a decline grows.",
+      unlock: "The exact period-over-period change and the next action tied to that trend.",
+    })
+  }
+  if (locked.length < 3) {
+    const dayPlans = Object.values(analytics?.platformBestTimes || {})
+      .reduce((count, item) => count + Object.keys(item?.bestHourByDay || {}).length, 0)
+    if (dayPlans >= 2) {
+      locked.push({
+        title: "Your best earning time changes by day",
+        partial: `CamCash found ${dayPlans} supported day-specific earning windows.`,
+        why: "A single generic “best hour” can hide the schedule differences that matter most.",
+        unlock: "The complete day-by-day schedule and platform-specific earning windows.",
+      })
+    }
+  }
+
+  return { scheduleInsight, fanInsight, action, locked: locked.slice(0, 3) }
+}
+
+function PostUploadAnalysisReveal({ result, analytics, isPro, onUpgrade, onDashboard, onReset }) {
+  const reveal = buildPostUploadReveal(analytics)
+  const fans = analytics?.whales?.length || 0
+  const sessions = analytics?.meaningfulSessionCount || 0
+  const totalTracked = analytics?.totalUSD || result?.totalUsd || 0
+
+  return (
+    <div style={{ textAlign: "left" }}>
+      <div style={{ textAlign: "center", marginBottom: 22 }}>
+        <div style={{ position: "relative", width: 56, height: 56, margin: "0 auto 14px" }}>
+          <div className="import-flash-ring" style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "radial-gradient(circle,rgba(34,211,238,0.55),rgba(236,72,153,0.35) 60%,transparent 70%)" }} />
+          <div className="import-check-badge" style={{ position: "relative", width: 56, height: 56, borderRadius: "50%", background: "linear-gradient(135deg,#10B981,#22D3EE)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, color: "#fff", boxShadow: "0 0 24px rgba(16,185,129,0.45)" }}>✓</div>
+        </div>
+        <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.18em", textTransform: "uppercase", color: C.cyan, marginBottom: 7 }}>Analysis complete</div>
+        <div style={{ fontSize: 19, fontWeight: 850, color: C.white, marginBottom: 7 }}>Your import is processed—and your first answers are ready.</div>
+        <div style={{ fontSize: 12.5, color: C.text, lineHeight: 1.6 }}>
+          Imported <strong style={{ color: C.white }}>{(result?.inserted || 0).toLocaleString()}</strong> new tips from <strong style={{ color: C.cyan }}>{result?.platform}</strong>
+          {result?.skipped > 0 ? ` · ${result.skipped} duplicates skipped` : ""}
+        </div>
+        {formatImportDate(result?.dateFrom) && formatImportDate(result?.dateTo) && (
+          <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>{formatImportDate(result.dateFrom)} – {formatImportDate(result.dateTo)}</div>
+        )}
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(130px,1fr))", gap: 9, marginBottom: 16 }}>
+        {[
+          ["Total tracked", `$${totalTracked.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, C.green],
+          ["Supporters", fans.toLocaleString(), C.gold],
+          ["Meaningful sessions", sessions.toLocaleString(), C.cyan],
+          ["New tips", (result?.inserted || 0).toLocaleString(), C.pink],
+        ].map(([label, value, color]) => (
+          <div key={label} style={{ borderRadius: 12, padding: "11px 12px", background: "rgba(255,255,255,0.035)", border: "1px solid rgba(255,255,255,0.08)" }}>
+            <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.09em", color: C.muted, marginBottom: 5 }}>{label}</div>
+            <div style={{ fontSize: 17, fontWeight: 850, color }}>{value}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(230px,1fr))", gap: 10, marginBottom: 12 }}>
+        {[reveal.scheduleInsight, reveal.fanInsight].map(item => (
+          <div key={item.label} style={{ borderRadius: 13, padding: 14, background: "rgba(34,211,238,0.045)", border: "1px solid rgba(34,211,238,0.14)" }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: C.white, marginBottom: 6 }}>{item.icon} {item.label}</div>
+            <div style={{ fontSize: 12, color: C.text, lineHeight: 1.6 }}>{item.text}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ borderRadius: 13, padding: 14, marginBottom: 14, background: "rgba(16,185,129,0.055)", border: "1px solid rgba(16,185,129,0.2)" }}>
+        <div style={{ fontSize: 10, fontWeight: 850, textTransform: "uppercase", letterSpacing: "0.1em", color: C.green, marginBottom: 6 }}>Recommended next action</div>
+        <div style={{ fontSize: 12.5, color: C.white, lineHeight: 1.65 }}>{reveal.action.icon} {reveal.action.text}</div>
+      </div>
+
+      {!isPro && reveal.locked.length > 0 && (
+        <div style={{ borderRadius: 15, padding: 14, marginBottom: 16, background: "rgba(124,92,255,0.055)", border: "1px solid rgba(124,92,255,0.22)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center", marginBottom: 10, flexWrap: "wrap" }}>
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.11em", color: "#a78bfa", marginBottom: 3 }}>Deeper findings preview</div>
+              <div style={{ fontSize: 11, color: C.muted }}>Real signals found in your data—no placeholder blur.</div>
+            </div>
+            <span style={{ fontSize: 10, fontWeight: 800, color: C.pink, padding: "4px 9px", borderRadius: 999, background: "rgba(236,72,153,0.12)", border: "1px solid rgba(236,72,153,0.25)" }}>✦ Pro</span>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {reveal.locked.map(item => (
+              <button key={item.title} type="button" onClick={() => onUpgrade(item)} style={{ width: "100%", textAlign: "left", padding: "12px 13px", borderRadius: 11, cursor: "pointer", background: "rgba(255,255,255,0.035)", border: "1px solid rgba(255,255,255,0.08)", color: "inherit" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
+                  <div>
+                    <div style={{ fontSize: 12.5, fontWeight: 800, color: C.white, marginBottom: 4 }}>🔒 {item.title}</div>
+                    <div style={{ fontSize: 11.5, color: C.text, lineHeight: 1.55, marginBottom: 4 }}>{item.partial}</div>
+                    <div style={{ fontSize: 10.5, color: C.muted, lineHeight: 1.5 }}><strong style={{ color: "#a78bfa" }}>Why it matters:</strong> {item.why}</div>
+                    <div style={{ fontSize: 10.5, color: C.muted, lineHeight: 1.5, marginTop: 2 }}><strong style={{ color: C.pink }}>Pro unlocks:</strong> {item.unlock}</div>
+                  </div>
+                  <span style={{ color: C.pink, fontSize: 16, flexShrink: 0 }}>→</span>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {!isPro && reveal.locked.length === 0 && (
+        <div style={{ borderRadius: 13, padding: 13, marginBottom: 16, background: "rgba(245,158,11,0.05)", border: "1px solid rgba(245,158,11,0.18)", fontSize: 11.5, color: C.text, lineHeight: 1.55 }}>
+          <strong style={{ color: C.gold }}>Deeper analysis is still warming up.</strong> CamCash will only preview a paid finding after your history supports it.
+        </div>
+      )}
+
+      <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
+        <Button onClick={onDashboard} style={{ padding: "12px 24px", fontSize: 13.5 }}>Open My Dashboard →</Button>
+        {!isPro && reveal.locked.length > 0 && <Button variant="secondary" onClick={() => onUpgrade(reveal.locked[0])} style={{ padding: "12px 20px", fontSize: 13 }}>Unlock Full Analysis</Button>}
+        <Button variant="secondary" onClick={onReset} style={{ padding: "12px 20px", fontSize: 13 }}>Import another CSV</Button>
+      </div>
+    </div>
+  )
+}
+
+function PostStreamReportCard({ report, isPro, onUpgrade, onDismiss, onStartAnother }) {
+  if (!report) return null
+  const segmentDirection = report.secondHalfRate > report.firstHalfRate ? "stronger" : report.secondHalfRate < report.firstHalfRate ? "slower" : "steady"
+  const details = [
+    {
+      title: `Your second half was ${segmentDirection}`,
+      partial: "CamCash compared the first and second half of this session.",
+      value: `First half: $${report.firstHalfRate.toFixed(2)}/hr · Second half: $${report.secondHalfRate.toFixed(2)}/hr`,
+      unlock: "Exact segment pace and the point where momentum changed.",
+    },
+    ...(report.vsAveragePct !== null ? [{
+      title: `This stream finished ${report.vsAveragePct >= 0 ? "above" : "below"} your historical pace`,
+      partial: "A supported comparison is available from your prior session history.",
+      value: `${report.vsAveragePct >= 0 ? "+" : ""}${report.vsAveragePct}% versus your historical average`,
+      unlock: "The exact comparison and the historical sessions behind it.",
+    }] : []),
+    ...(report.topTipper ? [{
+      title: "One supporter stood out this session",
+      partial: "CamCash identified the highest-value supporter from the captured tips.",
+      value: `${report.topTipper.username} contributed $${report.topTipper.revenue.toFixed(2)}.`,
+      unlock: "The supporter, contribution, and personalized follow-up priority.",
+    }] : []),
+  ].slice(0, 3)
+
+  return (
+    <div style={{ ...glassCard, borderRadius: 20, padding: 22, marginBottom: 22, border: "1px solid rgba(34,211,238,0.26)", background: "linear-gradient(135deg,rgba(34,211,238,0.07),rgba(124,92,255,0.08),rgba(236,72,153,0.055))" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 14, alignItems: "flex-start", marginBottom: 18 }}>
+        <div>
+          <div style={{ fontSize: 10, color: C.cyan, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.13em", marginBottom: 5 }}>Session complete</div>
+          <div style={{ fontSize: 22, fontWeight: 900, color: C.white, marginBottom: 5 }}>Your performance report card</div>
+          <div style={{ fontSize: 12, color: C.muted }}>Based only on the tips and timing captured during this session.</div>
+        </div>
+        <button type="button" onClick={onDismiss} aria-label="Dismiss session report" style={{ width: 30, height: 30, borderRadius: 9, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: C.muted, cursor: "pointer", flexShrink: 0 }}>✕</button>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(125px,1fr))", gap: 9, marginBottom: 14 }}>
+        {[
+          ["Earnings", `$${report.earnings.toFixed(2)}`, C.green],
+          ["Duration", formatDurationShort(report.durationMinutes), C.cyan],
+          ["Hourly pace", `$${report.hourlyRate.toFixed(2)}`, C.gold],
+          ["Tips", report.tipCount.toLocaleString(), C.pink],
+          ["Supporters", report.uniqueSupporters.toLocaleString(), "#a78bfa"],
+        ].map(([label, value, color]) => (
+          <div key={label} style={{ padding: "11px 12px", borderRadius: 12, background: "rgba(255,255,255,0.035)", border: "1px solid rgba(255,255,255,0.08)" }}>
+            <div style={{ fontSize: 9, color: C.muted, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 5 }}>{label}</div>
+            <div style={{ fontSize: 18, fontWeight: 900, color }}>{value}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))", gap: 10, marginBottom: 14 }}>
+        <div style={{ padding: 14, borderRadius: 13, background: "rgba(16,185,129,0.055)", border: "1px solid rgba(16,185,129,0.18)" }}>
+          <div style={{ fontSize: 10, color: C.green, fontWeight: 850, textTransform: "uppercase", letterSpacing: "0.09em", marginBottom: 6 }}>Standout observation</div>
+          <div style={{ fontSize: 12.5, color: C.white, lineHeight: 1.6 }}>{report.standout}</div>
+        </div>
+        <div style={{ padding: 14, borderRadius: 13, background: "rgba(34,211,238,0.05)", border: "1px solid rgba(34,211,238,0.18)" }}>
+          <div style={{ fontSize: 10, color: C.cyan, fontWeight: 850, textTransform: "uppercase", letterSpacing: "0.09em", marginBottom: 6 }}>Next-stream recommendation</div>
+          <div style={{ fontSize: 12.5, color: C.white, lineHeight: 1.6 }}>{report.recommendation}</div>
+        </div>
+      </div>
+
+      {details.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
+          {details.map(item => (
+            <button key={item.title} type="button" disabled={isPro} onClick={() => !isPro && onUpgrade(item)} style={{ textAlign: "left", width: "100%", padding: "12px 13px", borderRadius: 11, cursor: isPro ? "default" : "pointer", background: isPro ? "rgba(16,185,129,0.045)" : "rgba(124,92,255,0.05)", border: `1px solid ${isPro ? "rgba(16,185,129,0.18)" : "rgba(124,92,255,0.2)"}`, color: "inherit" }}>
+              <div style={{ fontSize: 12.5, fontWeight: 800, color: C.white, marginBottom: 4 }}>{isPro ? "✓" : "🔒"} {item.title}</div>
+              <div style={{ fontSize: 11.5, color: C.text, lineHeight: 1.5 }}>{isPro ? item.value : item.partial}</div>
+              {!isPro && <div style={{ fontSize: 10.5, color: C.muted, marginTop: 4 }}><strong style={{ color: C.pink }}>Pro unlocks:</strong> {item.unlock}</div>}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+        <Button onClick={onStartAnother} style={{ padding: "11px 20px", fontSize: 13 }}>Start Another Stream</Button>
+        {!isPro && details.length > 0 && <Button variant="secondary" onClick={() => onUpgrade(details[0])} style={{ padding: "11px 20px", fontSize: 13 }}>Unlock My Next-Stream Plan</Button>}
+      </div>
+    </div>
+  )
+}
+
+function formatDurationShort(minutes) {
+  const safeMinutes = Math.max(0, Math.round(minutes || 0))
+  const hours = Math.floor(safeMinutes / 60)
+  const mins = safeMinutes % 60
+  return hours ? `${hours}h ${mins}m` : `${mins}m`
 }
 
 // ── FIX: Standalone copy button component so each item can have its own
@@ -1370,11 +1726,11 @@ export default function Dashboard() {
   const [analytics, setAnalytics] = useState(null)
   const [liveAnalytics, setLiveAnalytics] = useState(null)
   const [loading, setLoading] = useState(true)
-  // Import flow: idle -> processing -> success | error
+  // Import flow: idle -> processing -> analyzing -> success | error
   const [importStage, setImportStage] = useState('idle')
   const [importMessageIdx, setImportMessageIdx] = useState(0)
   const importMessageTimerRef = useRef(null)
-  const uploading = importStage === 'processing'
+  const uploading = importStage === 'processing' || importStage === 'analyzing'
   const [uploadPlatform, setUploadPlatform] = useState("")
   const [lastUploadResult, setLastUploadResult] = useState(null)
   // Platform-limit soft paywall: preview of what's in a blocked import, shown
@@ -1394,6 +1750,15 @@ export default function Dashboard() {
   const [messageIndex, setMessageIndex] = useState(0)
   const [messageCopied, setMessageCopied] = useState(false)
   const [showUpgradeModal, setShowUpgradeModal] = useState(false)
+  const [upgradeContext, setUpgradeContext] = useState({ source: 'dashboard_plan', ...UPGRADE_CONTEXTS.dashboard_plan })
+  const [checkoutLoading, setCheckoutLoading] = useState(null)
+  const [checkoutError, setCheckoutError] = useState("")
+  const [billingCycle, setBillingCycle] = useState('monthly')
+  const [checkoutReturn, setCheckoutReturn] = useState(null)
+  const [postStreamReport, setPostStreamReport] = useState(null)
+  const upgradeModalRef = useRef(null)
+  const upgradeCloseRef = useRef(null)
+  const upgradeTriggerRef = useRef(null)
   const [showBetaPrompt, setShowBetaPrompt] = useState(false)
   const [fanSearchOpen, setFanSearchOpen] = useState(false)
   const [fanSearchQuery, setFanSearchQuery] = useState("")
@@ -1502,13 +1867,165 @@ export default function Dashboard() {
 
   const fmtHour = h => { if (h == null || isNaN(h)) return 'N/A'; return h === 0 ? '12 AM' : h < 12 ? h+' AM' : h === 12 ? '12 PM' : (h-12)+' PM' }
 
-  const openUpgradeModal = (source) => {
-    track('upgrade_click', { source })
-    gtmTrack('paywall_hit', { feature: source })
+  const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(""), 3500) }
+
+  const openUpgradeModal = (source = 'dashboard_plan', finding = null) => {
+    if (isPro) {
+      showToast("✓ Your Pro subscription is already active")
+      return
+    }
+    const base = UPGRADE_CONTEXTS[source] || DEFAULT_UPGRADE_CONTEXT
+    const contextual = finding
+      ? {
+          ...base,
+          title: finding.title ? `Unlock: ${finding.title}` : base.title,
+          summary: finding.partial || base.summary,
+          unlocks: finding.unlock
+            ? [finding.unlock, ...(base.unlocks || DEFAULT_UPGRADE_CONTEXT.unlocks).slice(0, 2)]
+            : base.unlocks,
+        }
+      : base
+    upgradeTriggerRef.current = typeof document !== 'undefined' ? document.activeElement : null
+    setUpgradeContext({ source, ...contextual })
+    setCheckoutError("")
+    setBillingCycle('monthly')
     setShowUpgradeModal(true)
+    track('upgrade_modal_viewed', { source })
+    gtmTrack('paywall_hit', { feature: source })
   }
 
-  const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(""), 3500) }
+  const closeUpgradeModal = (reason = 'dismissed') => {
+    if (checkoutLoading) return
+    track('upgrade_modal_dismissed', { source: upgradeContext?.source || 'unknown', reason })
+    gtmTrack('upgrade_modal_dismissed', { feature: upgradeContext?.source || 'unknown', reason })
+    setShowUpgradeModal(false)
+    setCheckoutError("")
+  }
+
+  const startDashboardCheckout = async (planType) => {
+    if (isPro || checkoutLoading) return
+    setCheckoutLoading(planType)
+    setCheckoutError("")
+    const storedContext = {
+      source: upgradeContext?.source || 'dashboard_plan',
+      title: upgradeContext?.title || DEFAULT_UPGRADE_CONTEXT.title,
+      tab: activeTab,
+      createdAt: Date.now(),
+    }
+    try {
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('camcash_upgrade_context', JSON.stringify(storedContext))
+      }
+      track('checkout_started', { source: storedContext.source, plan_type: planType })
+      gtmTrack('upgrade_checkout_started', { feature: storedContext.source, plan_type: planType })
+      const res = await fetch('/api/stripe/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plan_type: planType }),
+      })
+      if (res.status === 401) {
+        window.location.href = `/login?plan=${planType}`
+        return
+      }
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || !data.url) {
+        throw new Error(data.error || 'Checkout could not be started. Please try again.')
+      }
+      window.location.href = data.url
+    } catch (error) {
+      const message = error?.message || 'Checkout could not be started. Please try again.'
+      setCheckoutError(message)
+      track('checkout_failed', { source: storedContext.source, plan_type: planType, message })
+      gtmTrack('upgrade_checkout_failed', { feature: storedContext.source, plan_type: planType })
+      setCheckoutLoading(null)
+    }
+  }
+
+  // Accessible dialog behavior: Escape closes, Tab stays inside the modal,
+  // and focus returns to the exact insight/CTA that opened it.
+  useEffect(() => {
+    if (!showUpgradeModal) return
+    const previouslyFocused = upgradeTriggerRef.current
+    const focusTimer = setTimeout(() => upgradeCloseRef.current?.focus(), 0)
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        closeUpgradeModal('escape')
+        return
+      }
+      if (event.key !== 'Tab' || !upgradeModalRef.current) return
+      const focusable = [...upgradeModalRef.current.querySelectorAll('button:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])')]
+      if (!focusable.length) return
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      clearTimeout(focusTimer)
+      document.removeEventListener('keydown', onKeyDown)
+      if (previouslyFocused && typeof previouslyFocused.focus === 'function') previouslyFocused.focus()
+    }
+  // closeUpgradeModal intentionally reads the current checkout/context state
+  // while the dialog is mounted; remounting this listener on those changes is
+  // unnecessary and would disrupt focus.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showUpgradeModal])
+
+  // Stripe already returns successful checkouts to /dashboard. Session storage
+  // preserves which locked insight and dashboard tab started checkout so the
+  // user returns to the same value moment instead of a generic landing state.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    const status = params.get('success') === 'true' ? 'success' : params.get('canceled') === 'true' ? 'canceled' : null
+    if (!status) return
+    let saved = null
+    try { saved = JSON.parse(sessionStorage.getItem('camcash_upgrade_context') || 'null') } catch (e) {}
+    if (saved?.tab) {
+      setActiveTab(saved.tab)
+      localStorage.setItem('camcash_tab', saved.tab)
+    }
+    setCheckoutReturn({ status, context: saved })
+    if (status === 'success') {
+      track('checkout_returned_success', { source: saved?.source || 'unknown', plan_type: params.get('plan') || 'unknown' })
+      gtmTrack('upgrade_checkout_success', { feature: saved?.source || 'unknown', plan_type: params.get('plan') || 'unknown' })
+    } else {
+      track('checkout_returned_canceled', { source: saved?.source || 'unknown' })
+    }
+    params.delete('success')
+    params.delete('canceled')
+    params.delete('plan')
+    const query = params.toString()
+    window.history.replaceState({}, '', `${window.location.pathname}${query ? `?${query}` : ''}`)
+  }, [])
+
+  // The Stripe webhook may update profiles.plan a moment after the redirect.
+  // Poll only after a confirmed checkout return; never grant access locally.
+  useEffect(() => {
+    if (checkoutReturn?.status !== 'success' || !user || isPro) return
+    let cancelled = false
+    let attempts = 0
+    const checkPlan = async () => {
+      attempts += 1
+      const { data } = await supabase.from('profiles').select('plan').eq('id', user.id).maybeSingle()
+      if (cancelled) return
+      if (data?.plan === 'pro' || data?.plan === 'unlimited') {
+        setProfile(data)
+        sessionStorage.removeItem('camcash_upgrade_context')
+        return
+      }
+      if (attempts < 8) setTimeout(checkPlan, 1500)
+    }
+    checkPlan()
+    return () => { cancelled = true }
+  }, [checkoutReturn?.status, user, isPro])
 
   // ── SAVE TIPPER NOTE ─────────────────────────────────────────────
   const saveTipperNote = async (username, note, followUp = false) => {
@@ -2128,7 +2645,8 @@ const stopImportMessageRotation = () => {
         dateFrom: result.dateFrom,
         dateTo: result.dateTo,
       })
-      setImportStage('success')
+      setImportMessageIdx(0)
+      setImportStage('analyzing')
 
       // Google Ads — CSV Upload conversion
       try {
@@ -2146,6 +2664,11 @@ const stopImportMessageRotation = () => {
       // Force reload after upload — bypass cache so new tips appear immediately
       try { sessionStorage.removeItem(`camcash_tips_${user.id}`) } catch(e) {}
       await loadData(user.id, true, { silent: true })
+      setImportStage('success')
+      setShowImportSparkle(true)
+      setTimeout(() => setShowImportSparkle(false), 2400)
+      track('post_upload_reveal_viewed', { platform: result.platform || 'unknown', inserted: result.inserted || 0 })
+      gtmTrack('post_upload_analysis_revealed', { platform: result.platform || 'unknown', row_count: result.inserted || 0 })
 
     } catch (err) {
       showToast("❌ " + err.message)
@@ -3113,6 +3636,31 @@ const stopImportMessageRotation = () => {
             </div>
           )}
         </div>
+
+        {checkoutReturn && (
+          <div role="status" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14, flexWrap: "wrap", padding: "14px 16px", borderRadius: 14, marginBottom: 16, background: checkoutReturn.status === 'success' ? "rgba(16,185,129,0.08)" : "rgba(245,158,11,0.07)", border: `1px solid ${checkoutReturn.status === 'success' ? "rgba(16,185,129,0.28)" : "rgba(245,158,11,0.25)"}` }}>
+            <div style={{ display: "flex", gap: 11, alignItems: "flex-start" }}>
+              <span style={{ fontSize: 20 }}>{checkoutReturn.status === 'success' ? (isPro ? "✓" : "⏳") : "↩"}</span>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 850, color: C.white, marginBottom: 3 }}>
+                  {checkoutReturn.status === 'success'
+                    ? isPro ? "Pro is active—your insight is unlocked." : "Payment confirmed—activating Pro now."
+                    : "Checkout canceled—nothing was charged."}
+                </div>
+                <div style={{ fontSize: 11.5, color: C.text, lineHeight: 1.5 }}>
+                  {checkoutReturn.status === 'success'
+                    ? isPro
+                      ? `${checkoutReturn.context?.title || "Your deeper dashboard analysis"} is ready where you left off.`
+                      : "Your dashboard will unlock automatically as soon as the subscription update arrives."
+                    : "Your dashboard and the insight you were viewing are still here."}
+                </div>
+              </div>
+            </div>
+            <button type="button" onClick={() => { setCheckoutReturn(null); try { sessionStorage.removeItem('camcash_upgrade_context') } catch (e) {} }} style={{ padding: "7px 12px", borderRadius: 9, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: C.text, fontSize: 11.5, cursor: "pointer" }}>
+              Dismiss
+            </button>
+          </div>
+        )}
 
         {/* ── DASHBOARD PROGRESS CARD — visible on all tabs when data is warming up ── */}
         {_isLowData && (
@@ -5018,6 +5566,46 @@ const stopImportMessageRotation = () => {
           const alerts     = getAlerts(state)
           const nextAction = getNextAction(state)
 
+          const finishLiveSession = async () => {
+            if (!state) {
+              if (liveEngine.engineMode === 'v2') await liveEngine.stop()
+              else setLiveActive(false)
+              return
+            }
+            const sessionEvents = liveEvents.filter(e => !e._isHistory)
+            const uniqueSupporters = new Set(sessionEvents.map(e => e.username).filter(Boolean)).size
+            const firstHalfRate = Math.max(0, (state.firstHalfUPM || 0) * 60)
+            const secondHalfRate = Math.max(0, (state.secondHalfUPM || 0) * 60)
+            const hourlyRate = Math.max(0, Number.isFinite(velocity?.currentUPH) ? velocity.currentUPH : (state.currentUPM || 0) * 60)
+            const standout = comparison?.vsAvgPct !== null
+              ? `This session ran ${Math.abs(comparison.vsAvgPct)}% ${comparison.vsAvgPct >= 0 ? "above" : "below"} your historical hourly pace.`
+              : secondHalfRate > firstHalfRate * 1.15
+                ? "Your earning pace strengthened in the second half of the session."
+                : secondHalfRate < firstHalfRate * 0.75
+                  ? "Your earning pace slowed in the second half of the session."
+                  : state.topTipper
+                    ? `${state.topTipper.username} was the highest-value supporter captured this session.`
+                    : "This session is saved as a baseline; more completed sessions will make comparisons stronger."
+            const report = {
+              earnings: state.totalRevenue || 0,
+              durationMinutes: state.elapsedMins || 0,
+              hourlyRate,
+              tipCount: state.liveOnlyCount || sessionEvents.length,
+              uniqueSupporters,
+              firstHalfRate,
+              secondHalfRate,
+              vsAveragePct: comparison?.vsAvgPct ?? null,
+              topTipper: state.topTipper || null,
+              standout,
+              recommendation: nextAction?.text || "Use this session as a baseline and track the next stream to build a reliable comparison.",
+            }
+            setPostStreamReport(report)
+            track('post_stream_reveal_viewed', { earnings: report.earnings, duration_minutes: report.durationMinutes, tip_count: report.tipCount })
+            gtmTrack('post_stream_analysis_revealed', { earnings: report.earnings, duration_minutes: report.durationMinutes, tip_count: report.tipCount })
+            if (liveEngine.engineMode === 'v2') await liveEngine.stop()
+            else setLiveActive(false)
+          }
+
           const PACE_CONFIG = {
             above:    { label: '🔥 Hot', color: C.green,  bg: 'rgba(16,185,129,0.12)',  border: 'rgba(16,185,129,0.3)' },
             on_track: { label: '✅ On Track', color: C.cyan, bg: 'rgba(34,211,238,0.1)', border: 'rgba(34,211,238,0.25)' },
@@ -5077,14 +5665,14 @@ const stopImportMessageRotation = () => {
                     <option value="goal">🎯 Goal Focus</option>
                   </select>
                   {!liveActive ? (
-                    <button onClick={() => { setLiveActive(true); setLiveStartTime(new Date()); setLiveEvents([]); processedTipIds.current = new Set(); coachingCooldowns.current = {} }}
+                    <button onClick={() => { setPostStreamReport(null); setLiveActive(true); setLiveStartTime(new Date()); setLiveEvents([]); processedTipIds.current = new Set(); coachingCooldowns.current = {} }}
                       style={{ padding: '7px 18px', borderRadius: 8, background: 'linear-gradient(135deg, #10B981, #22D3EE)', border: 'none', color: C.white, fontWeight: 800, fontSize: 12, cursor: 'pointer', boxShadow: '0 0 16px rgba(16,185,129,0.35)' }}>
                       ▶ Start Stream
                     </button>
                   ) : (
-                    <button onClick={() => setLiveActive(false)}
+                    <button onClick={finishLiveSession} disabled={liveEngine.actionPending}
                       style={{ padding: '7px 18px', borderRadius: 8, background: 'rgba(248,113,113,0.15)', border: '1px solid rgba(248,113,113,0.4)', color: C.red, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
-                      ⏹ End
+                      {liveEngine.actionPending ? "Ending…" : "⏹ End"}
                     </button>
                   )}
                 </div>
@@ -5138,6 +5726,16 @@ const stopImportMessageRotation = () => {
                 )}
               </div>
 
+              {!liveActive && postStreamReport && (
+                <PostStreamReportCard
+                  report={postStreamReport}
+                  isPro={isPro}
+                  onUpgrade={(finding) => openUpgradeModal('post_stream_analysis', finding)}
+                  onDismiss={() => setPostStreamReport(null)}
+                  onStartAnother={() => { setPostStreamReport(null); setLiveActive(true); setLiveStartTime(new Date()); setLiveEvents([]); processedTipIds.current = new Set(); coachingCooldowns.current = {} }}
+                />
+              )}
+
               {/* Not started */}
               {!liveActive && !liveEvents.length && (
                 <div style={{ ...glassCard, borderRadius: 20, padding: '64px 48px', textAlign: 'center', marginBottom: 24, background: 'linear-gradient(135deg, rgba(168,85,247,0.08), rgba(236,72,153,0.06), rgba(34,211,238,0.05))', backgroundSize: '300% 300%', animation: 'cc-bar 4s ease infinite alternate', position: 'relative', overflow: 'hidden' }}>
@@ -5147,14 +5745,14 @@ const stopImportMessageRotation = () => {
                   <div style={{ fontSize: 14, color: C.muted, maxWidth: 440, margin: '0 auto 28px', lineHeight: 1.75 }}>
                     Your AI coach watches the room in real time — tracking momentum, spotting opportunities, and telling you exactly what to do next to make more money.
                   </div>
-                  <button onClick={() => { setLiveActive(true); setLiveStartTime(new Date()); setLiveEvents([]); processedTipIds.current = new Set(); coachingCooldowns.current = {} }}
+                  <button onClick={() => { setPostStreamReport(null); setLiveActive(true); setLiveStartTime(new Date()); setLiveEvents([]); processedTipIds.current = new Set(); coachingCooldowns.current = {} }}
                     style={{ padding: '13px 36px', borderRadius: 12, background: 'linear-gradient(135deg, #10B981, #22D3EE)', border: 'none', color: C.white, fontWeight: 800, fontSize: 16, cursor: 'pointer', boxShadow: '0 0 32px rgba(16,185,129,0.4)' }}>
                     ▶ Start Streaming
                   </button>
                 </div>
               )}
 
-              {(liveActive || liveEvents.length > 0) && (
+              {(liveActive || (liveEvents.length > 0 && !postStreamReport)) && (
                 <div>
 
                   {/* ── ROOM STATE HERO ────────────────────────────────── */}
@@ -6038,7 +6636,7 @@ const stopImportMessageRotation = () => {
         )}
 
         {activeTab === "upload" && (
-          <div style={{ maxWidth: 600, margin: "0 auto" }}>
+          <div style={{ maxWidth: 760, margin: "0 auto" }}>
             <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 8 }}>📥 Import CSV</h1>
             <p style={{ fontSize: 14, color: C.muted, marginBottom: freePlatformLimitReached ? 16 : 32 }}>
               {isPro ? "Unlimited platforms • Auto-removes duplicates" : freePlatformLimitReached ? `Free plan — tracking ${allPlatforms[0]}. Auto-removes duplicates.` : "Free plan tracks 1 platform. Auto-removes duplicates."}
@@ -6049,7 +6647,7 @@ const stopImportMessageRotation = () => {
                 <div style={{ flex: 1, fontSize: 12.5, color: C.text, lineHeight: 1.5 }}>
                   You're on the free plan (1 platform). Upgrade to Pro to add BongaCams, MyFreeCams, and more.
                 </div>
-                <Button as="a" href="/pricing" style={{ flexShrink: 0, padding: "8px 14px", fontSize: 12, whiteSpace: "nowrap" }}>Upgrade →</Button>
+                <Button onClick={() => openUpgradeModal('multi_platform')} style={{ flexShrink: 0, padding: "8px 14px", fontSize: 12, whiteSpace: "nowrap" }}>Compare Platforms →</Button>
               </div>
             )}
             <div style={{ ...glassCard, borderRadius: 14, padding: 32, marginBottom: 16, position: "relative", overflow: "hidden" }}>
@@ -6079,46 +6677,35 @@ const stopImportMessageRotation = () => {
                 </div>
               )}
 
-              {importStage === 'processing' && (
+              {(importStage === 'processing' || importStage === 'analyzing') && (
                 <div style={{ textAlign: "center" }}>
-                  <div style={{ fontSize: 40, marginBottom: 12, animation: "pulse-msg 1.6s ease-in-out infinite" }}>📁</div>
-                  <Button disabled style={{ padding: "14px 32px", fontSize: 15, minWidth: 236 }}>
+                  <div style={{ fontSize: 40, marginBottom: 12, animation: "pulse-msg 1.6s ease-in-out infinite" }}>{importStage === 'analyzing' ? "✨" : "📁"}</div>
+                  <Button disabled style={{ padding: "14px 32px", fontSize: 15, minWidth: 300 }}>
                     <span className="import-spinner" />
-                    {IMPORT_MESSAGES[importMessageIdx]}
+                    {importStage === 'analyzing'
+                      ? ANALYSIS_MESSAGES[importMessageIdx % ANALYSIS_MESSAGES.length]
+                      : IMPORT_MESSAGES[importMessageIdx % IMPORT_MESSAGES.length]}
                   </Button>
                   <div className="import-progress-track" style={{ marginTop: 20 }}>
                     <div className="import-progress-fill" />
                   </div>
-                  <p style={{ fontSize: 12, color: C.muted, marginTop: 12 }}>Hang tight — this only takes a moment.</p>
+                  <p style={{ fontSize: 12, color: C.muted, marginTop: 12 }}>
+                    {importStage === 'analyzing'
+                      ? "Your file is saved. CamCash is now rebuilding the dashboard from your real history."
+                      : "Your file is being validated and imported."}
+                  </p>
                 </div>
               )}
 
               {importStage === 'success' && lastUploadResult?.success && (
-                <div style={{ textAlign: "center" }}>
-                  <div style={{ position: "relative", width: 56, height: 56, margin: "0 auto 14px" }}>
-                    <div className="import-flash-ring" style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "radial-gradient(circle,rgba(34,211,238,0.55),rgba(236,72,153,0.35) 60%,transparent 70%)" }} />
-                    <div className="import-check-badge" style={{ position: "relative", width: 56, height: 56, borderRadius: "50%", background: "linear-gradient(135deg,#10B981,#22D3EE)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, color: "#fff", boxShadow: "0 0 24px rgba(16,185,129,0.45)" }}>✓</div>
-                  </div>
-                  <div style={{ fontSize: 16, fontWeight: 800, color: C.white, marginBottom: 8 }}>Success — your tips were imported.</div>
-                  <div style={{ fontSize: 13.5, color: C.text, lineHeight: 1.6 }}>
-                    Imported <strong style={{ color: C.white }}>{(lastUploadResult.inserted || 0).toLocaleString()}</strong> tips from <strong style={{ color: C.cyan }}>{lastUploadResult.platform}</strong>
-                    {typeof lastUploadResult.totalUsd === 'number' && (
-                      <> — <strong style={{ color: C.green }}>${lastUploadResult.totalUsd.toFixed(2)}</strong> tracked</>
-                    )}
-                  </div>
-                  {(formatImportDate(lastUploadResult.dateFrom) && formatImportDate(lastUploadResult.dateTo)) && (
-                    <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>
-                      {formatImportDate(lastUploadResult.dateFrom)} – {formatImportDate(lastUploadResult.dateTo)}
-                    </div>
-                  )}
-                  {lastUploadResult.skipped > 0 && (
-                    <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>{lastUploadResult.skipped} duplicates skipped</div>
-                  )}
-                  <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 20, flexWrap: "wrap" }}>
-                    <Button onClick={() => handleTabChange('overview')} style={{ padding: "12px 26px", fontSize: 14 }}>View Dashboard</Button>
-                    <Button variant="secondary" onClick={resetImport} style={{ padding: "12px 22px", fontSize: 13 }}>Import another CSV</Button>
-                  </div>
-                </div>
+                <PostUploadAnalysisReveal
+                  result={lastUploadResult}
+                  analytics={analytics}
+                  isPro={isPro}
+                  onUpgrade={(finding) => openUpgradeModal('post_upload_analysis', finding)}
+                  onDashboard={() => handleTabChange('overview')}
+                  onReset={resetImport}
+                />
               )}
 
               {importStage === 'error' && lastUploadResult && (
@@ -6172,10 +6759,10 @@ const stopImportMessageRotation = () => {
                   {/* Soft paywall — smaller and less prominent than the preview above */}
                   <div style={{ borderRadius: 12, border: "1px solid rgba(168,85,247,0.25)", background: "rgba(168,85,247,0.06)", padding: "12px 14px" }}>
                     <div style={{ fontSize: 12.5, color: C.text, marginBottom: 8 }}>
-                      🔒 Subscribe to view your insights for <strong style={{ color: C.white }}>{lockedPreview.platform}</strong>
+                      🔒 Your file was read successfully. Unlock its full analysis and compare it with your tracked platform.
                     </div>
                     <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
-                      <Button as="a" href="/pricing" style={{ padding: "8px 16px", fontSize: 12.5 }}>Subscribe →</Button>
+                      <Button onClick={() => openUpgradeModal('platform_limit_preview', { title: `${lockedPreview.platform} analysis`, partial: `Add ${lockedPreview.platform} to your dashboard and reveal the deeper patterns in this file.`, unlock: `The full ${lockedPreview.platform} import, its strongest earning windows, and cross-platform comparison.` })} style={{ padding: "8px 16px", fontSize: 12.5 }}>Unlock This Import →</Button>
                       <Button variant="secondary" onClick={resetImport} style={{ padding: "8px 16px", fontSize: 12.5 }}>Not now</Button>
                     </div>
                   </div>
@@ -6198,8 +6785,8 @@ const stopImportMessageRotation = () => {
                   <p style={{ fontSize: 13, color: C.text, lineHeight: 1.65, marginBottom: 16 }}>
                     The <strong style={{ color: C.white }}>free plan</strong> tracks <strong style={{ color: C.cyan }}>1 platform</strong> — import as much history as you want from it, no limits. A <strong style={{ color: C.white }}>subscription</strong> unlocks tracking <strong style={{ color: C.pink }}>multiple platforms at once</strong> and lets you compare which cam site pays you best by hour, day, and fan type.
                   </p>
-                  <Button onClick={() => router.push('/pricing')} style={{ padding: "12px 26px", fontSize: 13 }}>
-                    View Plans & Subscribe →
+                  <Button onClick={() => openUpgradeModal('dashboard_plan')} style={{ padding: "12px 26px", fontSize: 13 }}>
+                    See What Pro Unlocks →
                   </Button>
                 </>
               )}
@@ -6994,76 +7581,89 @@ const stopImportMessageRotation = () => {
 
       {/* UPGRADE MODAL */}
       {showUpgradeModal && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.88)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1002, padding: 20 }}>
-          <div style={{ width: 480, background: "rgba(15,20,32,0.97)", backdropFilter: "blur(24px)", borderRadius: 24, border: "1px solid rgba(255,255,255,0.1)", boxShadow: "0 0 80px rgba(59,130,246,0.2), 0 0 160px rgba(236,72,153,0.1)", overflow: "hidden" }}>
+        <div onMouseDown={(event) => { if (event.target === event.currentTarget) closeUpgradeModal('backdrop') }} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.88)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1002, padding: 16 }}>
+          <div ref={upgradeModalRef} role="dialog" aria-modal="true" aria-labelledby="upgrade-dialog-title" aria-describedby="upgrade-dialog-description" tabIndex={-1} style={{ width: "min(680px,100%)", maxHeight: "92vh", background: "rgba(15,20,32,0.985)", backdropFilter: "blur(24px)", borderRadius: 24, border: "1px solid rgba(255,255,255,0.11)", boxShadow: "0 0 80px rgba(59,130,246,0.2), 0 0 160px rgba(236,72,153,0.1)", overflowY: "auto" }}>
             <div style={{ height: 4, background: "linear-gradient(90deg, #3b82f6, #a855f7, #ec4899)" }} />
-            <div style={{ padding: 36 }}>
-              <div style={{ textAlign: "center", marginBottom: 28 }}>
-                <div style={{ fontSize: 44, marginBottom: 12 }}>🚀</div>
-                <h2 style={{ fontSize: 24, fontWeight: 800, color: C.white, marginBottom: 8 }}>Unlock Your Full Earning Potential</h2>
-                <p style={{ fontSize: 14, color: C.muted, lineHeight: 1.6 }}>You're only seeing a preview of your data.<br/>Here's what's waiting for you inside:</p>
+            <div style={{ padding: "22px clamp(18px,4vw,34px) 28px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, marginBottom: 18 }}>
+                <div>
+                  <div style={{ fontSize: 10, fontWeight: 900, color: C.cyan, textTransform: "uppercase", letterSpacing: "0.14em", marginBottom: 6 }}>{upgradeContext?.eyebrow || DEFAULT_UPGRADE_CONTEXT.eyebrow}</div>
+                  <h2 id="upgrade-dialog-title" style={{ fontSize: "clamp(21px,4vw,27px)", lineHeight: 1.2, fontWeight: 900, color: C.white, margin: "0 0 8px" }}>{upgradeContext?.title || DEFAULT_UPGRADE_CONTEXT.title}</h2>
+                  <p id="upgrade-dialog-description" style={{ fontSize: 13, color: C.text, lineHeight: 1.65, margin: 0, maxWidth: 560 }}>{upgradeContext?.summary || DEFAULT_UPGRADE_CONTEXT.summary}</p>
+                </div>
+                <button ref={upgradeCloseRef} type="button" onClick={() => closeUpgradeModal('close_button')} aria-label="Close upgrade dialog" disabled={!!checkoutLoading} style={{ width: 34, height: 34, borderRadius: 10, flexShrink: 0, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: C.text, fontSize: 16, cursor: checkoutLoading ? "not-allowed" : "pointer", opacity: checkoutLoading ? 0.5 : 1 }}>✕</button>
               </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 28 }}>
-                {[
-                  { icon: "🐳", text: "See ALL your top spenders — not just the top 3" },
-                  { icon: "⏰", text: "Discover your exact highest-earning hours & days" },
-                  { icon: "💡", text: "Unlock 15+ advanced insights & strategy tips" },
-                  { icon: "📈", text: "Full session history with trend analysis" },
-                  { icon: "🤖", text: "AI fan behavior predictions & return forecasts" },
-                  { icon: "💌", text: "Unlimited re-engagement scripts & fan tracking" },
-                ].map(({ icon, text }) => (
-                  <div key={text} style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 14px", background: "rgba(59,130,246,0.08)", border: "1px solid rgba(59,130,246,0.15)", borderRadius: 10 }}>
-                    <span style={{ fontSize: 18 }}>{icon}</span>
-                    <span style={{ fontSize: 13, color: C.white }}>{text}</span>
+
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
+                <span style={{ padding: "5px 10px", borderRadius: 999, fontSize: 10.5, fontWeight: 800, color: isPro ? C.green : C.text, background: isPro ? "rgba(16,185,129,0.1)" : "rgba(255,255,255,0.05)", border: `1px solid ${isPro ? "rgba(16,185,129,0.25)" : "rgba(255,255,255,0.1)"}` }}>Current plan: {isPro ? "Pro" : "Free"}</span>
+                {!isPro && <span style={{ padding: "5px 10px", borderRadius: 999, fontSize: 10.5, fontWeight: 800, color: C.pink, background: "rgba(236,72,153,0.1)", border: "1px solid rgba(236,72,153,0.25)" }}>Early-adopter price locked for life</span>}
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 8, marginBottom: 18 }}>
+                {(upgradeContext?.unlocks || DEFAULT_UPGRADE_CONTEXT.unlocks).map((text) => (
+                  <div key={text} style={{ display: "flex", alignItems: "flex-start", gap: 9, padding: "10px 11px", background: "rgba(59,130,246,0.055)", border: "1px solid rgba(59,130,246,0.14)", borderRadius: 10 }}>
+                    <span style={{ fontSize: 12, color: C.cyan, fontWeight: 900, marginTop: 1 }}>✓</span>
+                    <span style={{ fontSize: 11.5, color: C.white, lineHeight: 1.5 }}>{text}</span>
                   </div>
                 ))}
               </div>
-              <div style={{ textAlign: "center", padding: "12px 16px", background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.25)", borderRadius: 10, marginBottom: 24 }}>
-                <div style={{ fontSize: 13, color: C.gold, fontWeight: 600 }}>💡 Most creators miss 30–60% of their earning potential without this</div>
-              </div>
-              {earlyAccessSubmitted ? (
-                <div style={{ textAlign: "center", padding: "8px 0 16px" }}>
-                  <div style={{ fontSize: 32, marginBottom: 8 }}>🎉</div>
-                  <div style={{ fontSize: 16, fontWeight: 700, color: C.white, marginBottom: 6 }}>You're on the list!</div>
-                  <div style={{ fontSize: 13, color: C.muted, marginBottom: 16 }}>We'll email you with a founding user discount when we launch.</div>
-                  <button onClick={() => setShowUpgradeModal(false)} style={{ padding: "10px 28px", borderRadius: 10, background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.1)", color: C.muted, fontSize: 13, cursor: "pointer" }}>Close</button>
+
+              {isPro ? (
+                <div style={{ padding: 18, borderRadius: 14, textAlign: "center", background: "rgba(16,185,129,0.07)", border: "1px solid rgba(16,185,129,0.22)" }}>
+                  <div style={{ fontSize: 24, marginBottom: 7 }}>✓</div>
+                  <div style={{ fontSize: 15, fontWeight: 850, color: C.white, marginBottom: 5 }}>Your Pro access is already active.</div>
+                  <div style={{ fontSize: 12, color: C.text, marginBottom: 14 }}>Close this window to continue with the insight that brought you here.</div>
+                  <Button onClick={() => closeUpgradeModal('already_subscribed')} style={{ padding: "10px 22px", fontSize: 13 }}>Continue to Insight</Button>
                 </div>
               ) : (
                 <>
-                  <input
-                    type="email"
-                    value={earlyAccessEmail}
-                    onChange={e => setEarlyAccessEmail(e.target.value)}
-                    placeholder="your@email.com"
-                    style={{ width: "100%", padding: "13px 16px", borderRadius: 12, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.15)", color: C.white, fontSize: 14, outline: "none", marginBottom: 10, boxSizing: "border-box" }}
-                    onFocus={e => e.target.style.borderColor = "rgba(34,211,238,0.5)"}
-                    onBlur={e => e.target.style.borderColor = "rgba(255,255,255,0.15)"}
-                  />
+                  <div role="group" aria-label="Billing period" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, padding: 5, borderRadius: 12, background: "rgba(255,255,255,0.035)", border: "1px solid rgba(255,255,255,0.08)", marginBottom: 12 }}>
+                    {[
+                      { id: 'monthly', label: 'Monthly', sub: '$9.99 / month' },
+                      { id: 'annual', label: 'Annual', sub: '$99.99 / year' },
+                    ].map(option => {
+                      const selected = billingCycle === option.id
+                      return (
+                        <button key={option.id} type="button" aria-pressed={selected} onClick={() => { setBillingCycle(option.id); setCheckoutError(""); track('upgrade_billing_selected', { source: upgradeContext?.source || 'unknown', billing: option.id }) }} style={{ padding: "10px 12px", borderRadius: 9, cursor: "pointer", background: selected ? "linear-gradient(135deg,rgba(34,211,238,0.13),rgba(124,92,255,0.16))" : "transparent", border: `1px solid ${selected ? "rgba(34,211,238,0.35)" : "transparent"}`, color: selected ? C.white : C.text }}>
+                          <div style={{ fontSize: 12.5, fontWeight: 850, marginBottom: 2 }}>{option.label}</div>
+                          <div style={{ fontSize: 10.5, color: selected ? C.cyan : C.muted }}>{option.sub}</div>
+                        </button>
+                      )
+                    })}
+                  </div>
+
+                  <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 14, padding: "14px 16px", borderRadius: 13, marginBottom: 12, background: "rgba(236,72,153,0.065)", border: "1px solid rgba(236,72,153,0.22)", flexWrap: "wrap" }}>
+                    <div>
+                      <div style={{ fontSize: 10, color: C.pink, textTransform: "uppercase", letterSpacing: "0.09em", fontWeight: 850, marginBottom: 3 }}>CamCash Pro · Early adopter</div>
+                      <div style={{ fontSize: 11.5, color: C.text }}>{billingCycle === 'annual' ? "Billed once per year · about $8.33/month" : "Billed monthly · cancel anytime"}</div>
+                    </div>
+                    <div style={{ textAlign: "right" }}>
+                      <span style={{ fontSize: 27, fontWeight: 900, color: C.white }}>{billingCycle === 'annual' ? "$99.99" : "$9.99"}</span>
+                      <span style={{ fontSize: 11, color: C.muted }}>{billingCycle === 'annual' ? "/year" : "/month"}</span>
+                    </div>
+                  </div>
+
+                  {checkoutError && (
+                    <div role="alert" style={{ padding: "10px 12px", borderRadius: 10, marginBottom: 10, background: "rgba(248,113,113,0.08)", border: "1px solid rgba(248,113,113,0.25)", color: C.red, fontSize: 11.5, lineHeight: 1.5 }}>
+                      {checkoutError}
+                    </div>
+                  )}
+
                   <Button
-                    disabled={!earlyAccessEmail.trim() || earlyAccessSubmitting}
-                    onClick={async () => {
-                      if (!earlyAccessEmail.trim()) return
-                      setEarlyAccessSubmitting(true)
-                      track('early_access_signup', { email: earlyAccessEmail })
-                      try {
-                        const { data: { user: currentUser } } = await supabase.auth.getUser()
-                        await supabase.from('early_access').insert({
-                          email: earlyAccessEmail.trim(),
-                          user_id: currentUser?.id || null,
-                          signed_up_at: new Date().toISOString()
-                        }).then(() => {})
-                      } catch(e) {}
-                      setEarlyAccessSubmitted(true)
-                      setEarlyAccessSubmitting(false)
-                      showToast("🎉 You're on the founding user list!")
-                    }}
-                    style={{ width: "100%", padding: "16px", borderRadius: 14, fontSize: 16, marginBottom: 12 }}>
-                    {earlyAccessSubmitting ? "Saving..." : "🔓 Get Early Access"}
+                    disabled={!!checkoutLoading}
+                    onClick={() => startDashboardCheckout(billingCycle === 'annual' ? 'early_adopter_annual' : 'early_adopter_monthly')}
+                    style={{ width: "100%", padding: "14px", borderRadius: 13, fontSize: 14.5, marginBottom: 9 }}>
+                    {checkoutLoading
+                      ? "Opening secure checkout…"
+                      : billingCycle === 'annual' ? "Unlock Pro — $99.99/year →" : "Unlock Pro — $9.99/month →"}
                   </Button>
-                  <div style={{ textAlign: "center", fontSize: 12, color: C.muted, marginBottom: 20 }}>Launching soon • Founding users get lifetime discount</div>
-                  <button onClick={() => setShowUpgradeModal(false)} style={{ width: "100%", padding: "11px", borderRadius: 10, background: "transparent", border: "1px solid rgba(255,255,255,0.1)", color: C.muted, fontSize: 13, cursor: "pointer" }}>
-                    Maybe later
-                  </button>
+
+                  <div style={{ textAlign: "center", fontSize: 10.5, color: C.muted, marginBottom: 14 }}>Secure Stripe checkout · Your dashboard context is saved before redirect</div>
+
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <a href="/pricing" onClick={() => track('full_pricing_comparison_opened', { source: upgradeContext?.source || 'unknown' })} style={{ flex: "1 1 190px", textAlign: "center", padding: "9px 12px", borderRadius: 10, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.09)", color: C.text, fontSize: 11.5, textDecoration: "none" }}>View full plan comparison</a>
+                    <button type="button" onClick={() => closeUpgradeModal('continue_free')} disabled={!!checkoutLoading} style={{ flex: "1 1 150px", padding: "9px 12px", borderRadius: 10, background: "transparent", border: "1px solid rgba(255,255,255,0.09)", color: C.muted, fontSize: 11.5, cursor: checkoutLoading ? "not-allowed" : "pointer" }}>Continue with free</button>
+                  </div>
                 </>
               )}
             </div>
