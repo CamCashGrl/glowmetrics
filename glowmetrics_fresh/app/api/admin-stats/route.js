@@ -43,17 +43,15 @@ export async function GET(req) {
     uploadsResult,
     tipsResult,
     liveTipsResult,
-    subsResult,
     feedbackResult,
     paidSessionsResult,
   ] = await Promise.all([
     client.auth.admin.listUsers({ perPage: 1000 }),
-    client.from('profiles').select('id, created_at, plan, utm_source, utm_medium, utm_campaign'),
+    client.from('profiles').select('id, created_at, plan, plan_type, plan_expires_at, utm_source, utm_medium, utm_campaign'),
     client.from('beta_users').select('user_id, email, onboarding_complete, csv_upload_count, signed_up_at'),
     client.from('csv_uploads').select('user_id, platform, status, total_rows, inserted_rows, total_usd, uploaded_at').order('uploaded_at', { ascending: false }),
     client.from('tips').select('user_id, usd, created_at'),
     client.from('live_tips').select('user_id, received_at, usd').order('received_at', { ascending: false }),
-    client.from('subscriptions').select('user_id, status, plan_type, current_period_end'),
     client.from('feedback').select('message, page_url, created_at, user_id').order('created_at', { ascending: false }).limit(15),
     client.from('paid_sessions').select('user_id'),
   ])
@@ -64,13 +62,11 @@ export async function GET(req) {
   const uploads  = uploadsResult.data     || []
   const tips     = tipsResult.data        || []
   const liveTips = liveTipsResult.data    || []
-  const subs     = subsResult.data        || []
   const feedback = feedbackResult.data    || []
 
   // Index maps
   const profileMap = Object.fromEntries(profiles.map(p => [p.id, p]))
   const betaMap    = Object.fromEntries(betas.map(b => [b.user_id, b]))
-  const subMap     = Object.fromEntries(subs.map(s => [s.user_id, s]))
 
   // Per-user tip aggregates
   const tipsByUser = {}
@@ -96,7 +92,6 @@ export async function GET(req) {
   const userRows = users.map(u => {
     const profile  = profileMap[u.id]
     const beta     = betaMap[u.id]
-    const sub      = subMap[u.id]
     const userUploads = uploadsByUser[u.id] || []
     const tipStat  = tipsByUser[u.id] || { count: 0, usd: 0, last: null }
     const isLive   = liveActive12h.has(u.id)
@@ -106,14 +101,14 @@ export async function GET(req) {
       email:            u.email,
       createdAt:        u.created_at,
       lastSignIn:       u.last_sign_in_at || null,
-      plan:             sub?.plan_type || profile?.plan || 'free',
+      plan:             profile?.plan_type || profile?.plan || 'free',
       onboardingStage:  getOnboardingStage(beta, userUploads.length),
       dashboardStage:   getDashboardStage(tipStat.count, tipStat.usd, isLive),
       uploadCount:      userUploads.length,
       tipCount:         tipStat.count,
       totalUsd:         +tipStat.usd.toFixed(2),
       liveActive:       isLive,
-      subStatus:        sub?.status || 'free',
+      subStatus:        profile?.plan || 'free',
       platforms:        [...new Set(userUploads.map(u => u.platform))],
       lastActivity:     tipStat.last || u.last_sign_in_at || null,
     }
@@ -174,13 +169,11 @@ export async function GET(req) {
 
   // Subscription breakdown
   const subBreakdown = { active: 0, trialing: 0, cancelled: 0, free: 0 }
-  for (const s of subs) {
-    if (s.status === 'active')                              subBreakdown.active++
-    else if (s.status === 'trialing')                       subBreakdown.trialing++
-    else if (s.status === 'canceled' || s.status === 'cancelled') subBreakdown.cancelled++
-    else                                                    subBreakdown.free++
+  for (const p of profiles) {
+    if (p.plan === 'pro' || p.plan === 'unlimited') subBreakdown.active++
+    else                                             subBreakdown.free++
   }
-  subBreakdown.free += Math.max(0, totalUsers - subs.length)
+  subBreakdown.free += Math.max(0, totalUsers - profiles.length)
 
   // Dashboard stage breakdown
   const stageBreakdown = {}

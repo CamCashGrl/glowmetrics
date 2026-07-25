@@ -15,26 +15,24 @@ export async function POST(request) {
     
     // Get or create customer
     let customerId
-    const { data: subscription } = await supabase
-      .from('subscriptions')
+    const { data: profile } = await supabase
+      .from('profiles')
       .select('stripe_customer_id')
-      .eq('user_id', user.id)
+      .eq('id', user.id)
       .single()
-    
-    if (subscription?.stripe_customer_id) {
-      customerId = subscription.stripe_customer_id
+
+    if (profile?.stripe_customer_id) {
+      customerId = profile.stripe_customer_id
     } else {
       const customer = await stripe.customers.create({
         email: user.email,
         metadata: { userId: user.id }
       })
       customerId = customer.id
-      
-      await supabase.from('subscriptions').upsert({
-        user_id: user.id,
-        stripe_customer_id: customerId,
-        status: 'free'
-      })
+
+      await supabase.from('profiles').update({
+        stripe_customer_id: customerId
+      }).eq('id', user.id)
     }
     
     // Resolve the correct Stripe price ID based on plan_type
@@ -63,6 +61,12 @@ export async function POST(request) {
       metadata: {
         userId: user.id,
         plan_type: planType,
+      },
+      subscription_data: {
+        metadata: {
+          userId: user.id,
+          plan_type: planType,
+        }
       }
     })
     

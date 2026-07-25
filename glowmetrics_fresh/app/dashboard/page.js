@@ -7122,11 +7122,30 @@ const stopImportMessageRotation = () => {
                     await supabase.from('beta_users').upsert({ user_id: user?.id, email: earlyAccessEmail.trim(), submitted_early_access: true, saw_beta_prompt: true }, { onConflict: 'user_id' })
                     await supabase.from('analytics_events').insert({ user_id: user?.id, event_name: 'beta_checkout_clicked', properties: { email: earlyAccessEmail.trim() } })
                   } catch(e) {}
-                  setEarlyAccessSubmitting(false)
-                  setEarlyAccessSubmitted(true)
                   setShowBetaPrompt(false)
                   showToast("🎉 Redirecting to checkout...")
-                  setTimeout(() => window.open("https://buy.stripe.com/8x228r3Qu8dj7zQ1F5f7i01", "_blank"), 500)
+                  try {
+                    const res = await fetch('/api/stripe/checkout', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ plan_type: 'early_adopter_monthly' }),
+                    })
+                    if (res.status === 401) {
+                      window.location.href = `/login?plan=early_adopter_monthly`
+                      return
+                    }
+                    const data = await res.json()
+                    if (data.url) {
+                      setEarlyAccessSubmitted(true)
+                      window.location.href = data.url
+                      return
+                    }
+                    showToast("Something went wrong. Please try again.")
+                  } catch (e) {
+                    showToast("Something went wrong. Please try again.")
+                  } finally {
+                    setEarlyAccessSubmitting(false)
+                  }
                 }}
                 style={{ width: "100%", padding: "14px", fontSize: 14, marginBottom: 8 }}>
                 {earlyAccessSubmitting ? "Saving..." : "🔒 Lock In My Early Access"}

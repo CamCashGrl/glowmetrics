@@ -6,14 +6,14 @@ export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
 
 export const getStripeCustomerId = async (userId, email) => {
   const { supabase } = await import('./supabase')
-  const { data: subscription } = await supabase
-    .from('subscriptions')
+  const { data: profile } = await supabase
+    .from('profiles')
     .select('stripe_customer_id')
-    .eq('user_id', userId)
+    .eq('id', userId)
     .single()
 
-  if (subscription?.stripe_customer_id) {
-    return subscription.stripe_customer_id
+  if (profile?.stripe_customer_id) {
+    return profile.stripe_customer_id
   }
 
   const customer = await stripe.customers.create({
@@ -21,11 +21,9 @@ export const getStripeCustomerId = async (userId, email) => {
     metadata: { userId }
   })
 
-  await supabase.from('subscriptions').upsert({
-    user_id: userId,
-    stripe_customer_id: customer.id,
-    status: 'free'
-  })
+  await supabase.from('profiles').update({
+    stripe_customer_id: customer.id
+  }).eq('id', userId)
 
   return customer.id
 }

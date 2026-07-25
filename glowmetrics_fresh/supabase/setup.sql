@@ -30,10 +30,13 @@ create table if not exists tipper_notes (
 
 -- 3. PROFILES
 create table if not exists profiles (
-  id           uuid references auth.users(id) on delete cascade primary key,
-  display_name text,
-  plan         text default 'free',
-  created_at   timestamptz default now()
+  id                 uuid references auth.users(id) on delete cascade primary key,
+  display_name       text,
+  plan               text default 'free',
+  plan_type          text,
+  stripe_customer_id text,
+  plan_expires_at    timestamptz,
+  created_at         timestamptz default now()
 );
 
 -- ── ROW LEVEL SECURITY ───────────────────────────────────────────────────────

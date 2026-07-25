@@ -57,17 +57,15 @@ export async function GET(req) {
     uploadsResult,
     tipsResult,
     liveTipsResult,
-    subsResult,
     feedbackResult,
     extensionEventsResult,
   ] = await Promise.all([
     client.auth.admin.listUsers({ perPage: 1000 }),
-    client.from('profiles').select('id, created_at, plan'),
+    client.from('profiles').select('id, created_at, plan, plan_type, plan_expires_at'),
     client.from('beta_users').select('user_id, email, onboarding_complete, csv_upload_count, signed_up_at'),
     client.from('csv_uploads').select('user_id, platform, status, total_rows, inserted_rows, total_usd, uploaded_at').order('uploaded_at', { ascending: false }),
     client.from('tips').select('user_id, usd, platform, created_at'),
     client.from('live_tips').select('user_id, received_at, usd').order('received_at', { ascending: false }),
-    client.from('subscriptions').select('user_id, status, plan_type, current_period_end'),
     client.from('feedback').select('message, page_url, created_at, user_id').order('created_at', { ascending: false }).limit(10),
     client.from('analytics_events')
       .select('user_id, event_name, created_at')
@@ -80,7 +78,6 @@ export async function GET(req) {
   const uploads   = uploadsResult.data || []
   const tips      = tipsResult.data || []
   const liveTips  = liveTipsResult.data || []
-  const subs      = subsResult.data || []
   const feedback  = feedbackResult.data || []
   const extEvents = extensionEventsResult.data || []
 
@@ -90,7 +87,6 @@ export async function GET(req) {
   // Index maps
   const profileMap = Object.fromEntries(profiles.map(p => [p.id, p]))
   const betaMap    = Object.fromEntries(betas.map(b => [b.user_id, b]))
-  const subMap     = Object.fromEntries(subs.map(s => [s.user_id, s]))
 
   // Per-user tip aggregates (include platform)
   const tipsByUser = {}
@@ -124,7 +120,6 @@ export async function GET(req) {
   const userRows = realUsers.map(u => {
     const profile     = profileMap[u.id]
     const beta        = betaMap[u.id]
-    const sub         = subMap[u.id]
     const userUploads = uploadsByUser[u.id] || []
     const tipStat     = tipsByUser[u.id] || { count: 0, usd: 0, last: null, platforms: new Set() }
     const isLive      = liveActive12h.has(u.id)
@@ -135,14 +130,14 @@ export async function GET(req) {
       email:           u.email,
       createdAt:       u.created_at,
       lastSignIn:      u.last_sign_in_at || null,
-      plan:            sub?.plan_type || profile?.plan || 'free',
+      plan:            profile?.plan_type || profile?.plan || 'free',
       onboardingStage: getOnboardingStage(beta, userUploads.length),
       dashboardStage:  getDashboardStage(tipStat.count, tipStat.usd, isLive),
       uploadCount:     userUploads.length,
       tipCount:        tipStat.count,
       totalUsd:        +tipStat.usd.toFixed(2),
       liveActive:      isLive,
-      subStatus:       sub?.status || 'free',
+      subStatus:       profile?.plan || 'free',
       platforms,
       lastActivity:    tipStat.last || u.last_sign_in_at || null,
     }
@@ -214,15 +209,17 @@ export async function GET(req) {
     lastInstall:      extEvents.filter(e => e.event_name === 'extension_installed').sort((a, b) => b.created_at > a.created_at ? 1 : -1)[0]?.created_at || null,
   }
 
-  // Subscription breakdown
+  // Subscription breakdown (real users only)
   const subBreakdown = { active: 0, trialing: 0, cancelled: 0, free: 0 }
-  for (const s of subs) {
-    if (s.status === 'active')                                   subBreakdown.active++
-    else if (s.status === 'trialing')                            subBreakdown.trialing++
-    else if (s.status === 'canceled' || s.status === 'cancelled') subBreakdown.cancelled++
-    else                                                         subBreakdown.free++
+  let realUsersWithProfile = 0
+  for (const u of realUsers) {
+    const profile = profileMap[u.id]
+    if (!profile) continue
+    realUsersWithProfile++
+    if (profile.plan === 'pro' || profile.plan === 'unlimited') subBreakdown.active++
+    else                                                        subBreakdown.free++
   }
-  subBreakdown.free += Math.max(0, totalRealUsers - subs.length)
+  subBreakdown.free += Math.max(0, totalRealUsers - realUsersWithProfile)
 
   // Dashboard stage breakdown (real users only)
   const stageBreakdown = {}
