@@ -1,28 +1,36 @@
 export default function sitemap() {
   const base = 'https://www.camcashgrl.com'
-  const today = '2026-07-08'
+  const today = '2026-07-25'
 
   const staticPages = [
-    { url: base,                                          priority: 1.0, changeFrequency: 'weekly'  },
-    { url: `${base}/pricing`,                             priority: 0.9, changeFrequency: 'monthly' },
-    { url: `${base}/blog`,                                priority: 0.9, changeFrequency: 'weekly'  },
-    { url: `${base}/landing`,                             priority: 0.8, changeFrequency: 'monthly' },
-    { url: `${base}/extension`,                           priority: 0.8, changeFrequency: 'monthly' },
-    { url: `${base}/affiliates`,                          priority: 0.7, changeFrequency: 'monthly' },
-    { url: `${base}/analytics`,                           priority: 0.7, changeFrequency: 'monthly' },
-    { url: `${base}/tools`,                               priority: 0.7, changeFrequency: 'monthly' },
-    { url: `${base}/tools/cam-model-name-generator`,      priority: 0.7, changeFrequency: 'monthly' },
-    { url: `${base}/tools/profile-studio`,                priority: 0.7, changeFrequency: 'monthly' },
-    { url: `${base}/contact`,                             priority: 0.6, changeFrequency: 'monthly' },
-    { url: `${base}/privacy`,                             priority: 0.5, changeFrequency: 'yearly'  },
-    { url: `${base}/terms`,                               priority: 0.5, changeFrequency: 'yearly'  },
-  ].map(p => ({ ...p, lastModified: today }))
+    { url: base,                                     priority: 1.0, changeFrequency: 'weekly' },
+    { url: `${base}/pricing`,                        priority: 0.9, changeFrequency: 'monthly' },
+    { url: `${base}/blog`,                           priority: 0.9, changeFrequency: 'weekly' },
+    { url: `${base}/landing`,                        priority: 0.8, changeFrequency: 'monthly' },
+    { url: `${base}/extension`,                      priority: 0.8, changeFrequency: 'monthly' },
+    { url: `${base}/affiliates`,                     priority: 0.7, changeFrequency: 'monthly' },
+    { url: `${base}/analytics`,                      priority: 0.7, changeFrequency: 'monthly' },
+    { url: `${base}/tools`,                          priority: 0.7, changeFrequency: 'monthly' },
+    { url: `${base}/tools/cam-model-name-generator`, priority: 0.7, changeFrequency: 'monthly' },
+    { url: `${base}/tools/profile-studio`,           priority: 0.7, changeFrequency: 'monthly' },
+    { url: `${base}/contact`,                        priority: 0.6, changeFrequency: 'monthly' },
+    { url: `${base}/privacy`,                        priority: 0.5, changeFrequency: 'yearly' },
+    { url: `${base}/terms`,                          priority: 0.5, changeFrequency: 'yearly' },
+  ].map(page => ({
+    ...page,
+    lastModified: today,
+  }))
 
   const blogSlugs = [
     'benefits-of-cam-model-bookkeeping',
     'best-cam-model-tools',
     'best-cam-sites-for-beginners',
     'best-cam-sites-for-models',
+
+    // New BongaCams articles
+    'bongacams-payout-guide',
+    'bongacams-camscore-explained',
+
     'cam-model-boundaries-toxic-chat',
     'cam-model-earnings',
     'cam-model-equipment-guide',
@@ -35,6 +43,13 @@ export default function sitemap() {
     'cam-model-tipping-pattern-data-examples',
     'cam-model-token-to-dollar-ratio-explained',
     'camcash-vs-camdash-vs-cb-cam-insights',
+
+    // New creator-product articles
+    'cam-room-dice-game-ideas',
+    'cam-session-scripts-for-models',
+    'femdom-message-scripts-for-creators',
+    'spin-the-wheel-cam-game',
+
     'chaturbate-best-month-real-numbers',
     'chaturbate-first-30-days-real-earnings',
     'chaturbate-payout-explained',
@@ -59,7 +74,15 @@ export default function sitemap() {
     'how-to-stay-safe-as-a-cam-model',
     'how-to-track-cam-tips-automatically',
     'is-camming-legal',
+
+    // Existing and new coaching content
     'live-ai-coaching-cam-models',
+    'live-mode-coaching-for-cam-models',
+
+    // New MyFreeCams articles
+    'myfreecams-camscore-explained',
+    'mfc-share-guide-for-models',
+
     'revenue-per-hour-cam-model',
     'viral-cam-room-titles',
     'why-cam-income-is-inconsistent',
