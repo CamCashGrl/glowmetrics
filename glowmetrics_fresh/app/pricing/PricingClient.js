@@ -4,9 +4,11 @@ import { useState, useEffect } from 'react'
 import UserCounter from '../components/UserCounter'
 import SiteFooter from '../components/SiteFooter'
 import Button from '../../components/ui/Button'
+import { track as gtmTrack } from '../../lib/track'
 
 async function startCheckout(planType, setLoading) {
   setLoading(planType)
+  gtmTrack('upgrade_clicked', { feature_name: 'pricing_page', plan_type: planType })
   try {
     const res = await fetch('/api/stripe/checkout', {
       method: 'POST',
@@ -770,6 +772,19 @@ function AmbientBackground() {
 // ── Root Component ────────────────────────────────────────────────────────────
 export default function PricingClient() {
   const [checkoutLoading, setCheckoutLoading] = useState(null)
+
+  useEffect(() => {
+    gtmTrack('paywall_viewed', { feature_name: 'pricing_page' })
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('canceled') === 'true') {
+      gtmTrack('checkout_canceled', {})
+      params.delete('canceled')
+      const rest = params.toString()
+      window.history.replaceState({}, '', `/pricing${rest ? `?${rest}` : ''}`)
+    }
+  }, [])
+
   return (
     <div style={{
       minHeight:       '100vh',

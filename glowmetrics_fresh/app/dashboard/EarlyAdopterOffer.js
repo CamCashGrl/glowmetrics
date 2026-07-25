@@ -1,5 +1,6 @@
 "use client"
 import { useState } from "react"
+import { track as gtmTrack } from "../../lib/track"
 
 // ============================================================
 // CAMCASH — EARLY ADOPTER OFFER CARD
@@ -16,6 +17,7 @@ const C = {
 
 async function startCheckout(planType, setLoading) {
   setLoading(planType)
+  gtmTrack('upgrade_clicked', { feature_name: 'early_adopter_card', plan_type: planType })
   try {
     const res = await fetch('/api/stripe/checkout', {
       method: 'POST',

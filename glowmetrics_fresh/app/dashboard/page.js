@@ -1503,7 +1503,7 @@ export default function Dashboard() {
   const fmtHour = h => { if (h == null || isNaN(h)) return 'N/A'; return h === 0 ? '12 AM' : h < 12 ? h+' AM' : h === 12 ? '12 PM' : (h-12)+' PM' }
 
   const openUpgradeModal = (source) => {
-    track('upgrade_click', { source })
+    gtmTrack('upgrade_clicked', { feature_name: source })
     gtmTrack('paywall_hit', { feature: source })
     setShowUpgradeModal(true)
   }
@@ -1562,6 +1562,19 @@ export default function Dashboard() {
   }
 
   // Counter bump when new tips arrive
+  // ── CHECKOUT RESULT — fires once when returning from Stripe Checkout ────
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('success') === 'true') {
+      gtmTrack('checkout_completed', { plan_type: params.get('plan') || null })
+      params.delete('success')
+      params.delete('plan')
+      const rest = params.toString()
+      router.replace(`/dashboard${rest ? `?${rest}` : ''}`)
+    }
+  }, [])
+
   useEffect(() => {
     if (newTipCount > prevTipCountRef.current) {
       setCounterBumping(true)
@@ -2058,6 +2071,7 @@ const stopImportMessageRotation = () => {
     setLastUploadResult(null)
     setLockedPreview({ platform: detectedLabel, preview })
     setImportStage('locked_preview')
+    gtmTrack('paywall_viewed', { feature_name: 'platform_import_limit' })
     // Only play the celebratory checkmark/sparkle when we actually found
     // something to preview — an unparseable file isn't a "confirmation".
     if (preview) {
@@ -2112,7 +2126,7 @@ const stopImportMessageRotation = () => {
         return
       }
 
-      track('csv_imported', { rows: result.inserted, platform: result.platform || 'Unknown' })
+      gtmTrack('csv_imported', { rows: result.inserted, platform: result.platform || 'Unknown' })
       gtmTrack('csv_upload_success', { platform: result.platform || 'unknown', row_count: result.inserted })
 
       const msg = result.skipped > 0
@@ -6175,7 +6189,7 @@ const stopImportMessageRotation = () => {
                       🔒 Subscribe to view your insights for <strong style={{ color: C.white }}>{lockedPreview.platform}</strong>
                     </div>
                     <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
-                      <Button as="a" href="/pricing" style={{ padding: "8px 16px", fontSize: 12.5 }}>Subscribe →</Button>
+                      <Button as="a" href="/pricing" onClick={() => gtmTrack('upgrade_clicked', { feature_name: 'platform_import_limit' })} style={{ padding: "8px 16px", fontSize: 12.5 }}>Subscribe →</Button>
                       <Button variant="secondary" onClick={resetImport} style={{ padding: "8px 16px", fontSize: 12.5 }}>Not now</Button>
                     </div>
                   </div>
@@ -6198,7 +6212,7 @@ const stopImportMessageRotation = () => {
                   <p style={{ fontSize: 13, color: C.text, lineHeight: 1.65, marginBottom: 16 }}>
                     The <strong style={{ color: C.white }}>free plan</strong> tracks <strong style={{ color: C.cyan }}>1 platform</strong> — import as much history as you want from it, no limits. A <strong style={{ color: C.white }}>subscription</strong> unlocks tracking <strong style={{ color: C.pink }}>multiple platforms at once</strong> and lets you compare which cam site pays you best by hour, day, and fan type.
                   </p>
-                  <Button onClick={() => router.push('/pricing')} style={{ padding: "12px 26px", fontSize: 13 }}>
+                  <Button onClick={() => { gtmTrack('upgrade_clicked', { feature_name: 'your_plan_panel' }); router.push('/pricing') }} style={{ padding: "12px 26px", fontSize: 13 }}>
                     View Plans & Subscribe →
                   </Button>
                 </>
@@ -7044,7 +7058,7 @@ const stopImportMessageRotation = () => {
                     onClick={async () => {
                       if (!earlyAccessEmail.trim()) return
                       setEarlyAccessSubmitting(true)
-                      track('early_access_signup', { email: earlyAccessEmail })
+                      gtmTrack('early_access_signup', { email: earlyAccessEmail })
                       try {
                         const { data: { user: currentUser } } = await supabase.auth.getUser()
                         await supabase.from('early_access').insert({
@@ -7116,7 +7130,7 @@ const stopImportMessageRotation = () => {
                 onClick={async () => {
                   if (!earlyAccessEmail.trim()) return
                   setEarlyAccessSubmitting(true)
-                  track('beta_checkout_clicked', { email: earlyAccessEmail, uploadCount })
+                  gtmTrack('beta_checkout_clicked', { email: earlyAccessEmail, uploadCount })
                   try {
                     await supabase.from('early_access').insert({ email: earlyAccessEmail.trim(), user_id: user?.id || null, signed_up_at: new Date().toISOString() })
                     await supabase.from('beta_users').upsert({ user_id: user?.id, email: earlyAccessEmail.trim(), submitted_early_access: true, saw_beta_prompt: true }, { onConflict: 'user_id' })
@@ -7132,7 +7146,7 @@ const stopImportMessageRotation = () => {
                 {earlyAccessSubmitting ? "Saving..." : "🔒 Lock In My Early Access"}
               </Button>
               <div style={{ fontSize: 11, color: C.muted, textAlign: "center", marginBottom: 10 }}>Secure Stripe checkout — cancel anytime</div>
-              <button onClick={() => { setShowBetaPrompt(false); track('beta_prompt_dismissed', { uploadCount }) }}
+              <button onClick={() => { setShowBetaPrompt(false); gtmTrack('beta_prompt_dismissed', { uploadCount }) }}
                 style={{ width: "100%", padding: "10px", borderRadius: 10, background: "transparent", border: "1px solid rgba(255,255,255,0.08)", color: C.muted, fontSize: 13, cursor: "pointer" }}>
                 Keep using free beta
               </button>
@@ -7202,7 +7216,7 @@ const stopImportMessageRotation = () => {
                   />
                   <Button
                     disabled={!feedbackText.trim()}
-                    onClick={() => { track('feedback_submitted', { type: feedbackType, length: feedbackText.length }); setFeedbackSent(true) }}
+                    onClick={() => { gtmTrack('feedback_submitted', { type: feedbackType, length: feedbackText.length }); setFeedbackSent(true) }}
                     style={{ width: "100%", padding: "12px", fontSize: 14 }}>
                     {feedbackType === 'feature' ? '✨ Submit Feature Request' : '🐛 Submit Bug Report'}
                   </Button>

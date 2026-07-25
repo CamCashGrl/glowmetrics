@@ -1,6 +1,7 @@
 "use client"
 import { useState } from "react"
 import Button from "../../components/ui/Button"
+import { track as gtmTrack } from "../../lib/track"
 
 const C = {
   bg: "#05070f", card: "#0d1322", border: "#1e2d45",
@@ -120,7 +121,7 @@ export default function Sidebar({ activeTab, onTabChange, user, onSignOut, isPro
           <span style={{ fontSize: 11.5, fontWeight: 700, color: C.purple }}>Pro plan active</span>
         </div>
       ) : (
-        <Button as="a" href="/pricing" style={{ width: "100%", marginBottom: 8, fontSize: 13, padding: "11px 12px", textAlign: "center" }}>
+        <Button as="a" href="/pricing" onClick={() => gtmTrack('upgrade_clicked', { feature_name: 'sidebar' })} style={{ width: "100%", marginBottom: 8, fontSize: 13, padding: "11px 12px", textAlign: "center" }}>
           ✦ Upgrade to Pro
         </Button>
       )}
