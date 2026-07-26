@@ -4,16 +4,23 @@ export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
   apiVersion: '2023-10-16',
 })
 
+// Gets (or creates) a Stripe customer for this user, using `profiles` as the
+// single source of truth for stripe_customer_id — matching what the webhook
+// and the dashboard both read.
 export const getStripeCustomerId = async (userId, email) => {
   const { supabase } = await import('./supabase')
-  const { data: subscription } = await supabase
-    .from('subscriptions')
+  const { data: profile, error: fetchError } = await supabase
+    .from('profiles')
     .select('stripe_customer_id')
-    .eq('user_id', userId)
+    .eq('id', userId)
     .single()
 
-  if (subscription?.stripe_customer_id) {
-    return subscription.stripe_customer_id
+  if (fetchError) {
+    console.error('getStripeCustomerId: failed to read profile', fetchError.message)
+  }
+
+  if (profile?.stripe_customer_id) {
+    return profile.stripe_customer_id
   }
 
   const customer = await stripe.customers.create({
@@ -21,11 +28,14 @@ export const getStripeCustomerId = async (userId, email) => {
     metadata: { userId }
   })
 
-  await supabase.from('subscriptions').upsert({
-    user_id: userId,
-    stripe_customer_id: customer.id,
-    status: 'free'
-  })
+  const { error: updateError } = await supabase
+    .from('profiles')
+    .update({ stripe_customer_id: customer.id })
+    .eq('id', userId)
+
+  if (updateError) {
+    console.error('getStripeCustomerId: failed to save stripe_customer_id', updateError.message)
+  }
 
   return customer.id
 }

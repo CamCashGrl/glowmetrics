@@ -8,35 +8,43 @@ export async function POST(request) {
     const body = await request.json().catch(() => ({}))
     const supabase = createSupabaseRouteClient()
     const { data: { user } } = await supabase.auth.getUser()
-    
+
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
-    
-    // Get or create customer
+
+    // Get or create customer — profiles is the single source of truth
     let customerId
-    const { data: subscription } = await supabase
-      .from('subscriptions')
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
       .select('stripe_customer_id')
-      .eq('user_id', user.id)
+      .eq('id', user.id)
       .single()
-    
-    if (subscription?.stripe_customer_id) {
-      customerId = subscription.stripe_customer_id
+
+    if (profileError) {
+      console.error('Checkout: failed to read profile', profileError.message)
+    }
+
+    if (profile?.stripe_customer_id) {
+      customerId = profile.stripe_customer_id
     } else {
       const customer = await stripe.customers.create({
         email: user.email,
         metadata: { userId: user.id }
       })
       customerId = customer.id
-      
-      await supabase.from('subscriptions').upsert({
-        user_id: user.id,
-        stripe_customer_id: customerId,
-        status: 'free'
-      })
+
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ stripe_customer_id: customerId })
+        .eq('id', user.id)
+
+      if (updateError) {
+        console.error('Checkout: failed to save stripe_customer_id', updateError.message)
+        return NextResponse.json({ error: 'Failed to set up billing profile' }, { status: 500 })
+      }
     }
-    
+
     // Resolve the correct Stripe price ID based on plan_type
     const planType = body.plan_type || 'standard_monthly'
 
@@ -59,13 +67,13 @@ export async function POST(request) {
       payment_method_types: ['card'],
       line_items: [{ price: priceId, quantity: 1 }],
       success_url: `${request.headers.get('origin')}/dashboard?success=true&plan=${planType}`,
-      cancel_url: `${request.headers.get('origin')}/pricing?canceled=true`,
+      cancel_url: `${request.headers.get('origin')}/dashboard?canceled=true`,
       metadata: {
         userId: user.id,
         plan_type: planType,
       }
     })
-    
+
     return NextResponse.json({ url: session.url })
   } catch (error) {
     console.error('Stripe checkout error:', error)
