@@ -42,6 +42,18 @@ async function sendResendNotification(subject, text) {
   }
 }
 
+// Updates profiles and returns whether it actually succeeded — the whole
+// point of this fix is that we never again silently believe an update
+// worked when it didn't.
+async function updateProfile(supabase, userId, update) {
+  const { error } = await supabase.from('profiles').update(update).eq('id', userId)
+  if (error) {
+    console.error(`Webhook: failed to update profile ${userId} with`, update, error.message)
+    return false
+  }
+  return true
+}
+
 export async function POST(request) {
   const supabase = getSupabaseAdmin()
   const body = await request.text()
@@ -69,7 +81,10 @@ export async function POST(request) {
         if (!user) break
         const update = { plan: 'pro' }
         if (session.customer) update.stripe_customer_id = session.customer
-        await supabase.from('profiles').update(update).eq('id', user.id)
+        const ok = await updateProfile(supabase, user.id, update)
+        if (!ok) {
+          return NextResponse.json({ error: 'Failed to update profile' }, { status: 500 })
+        }
         await sendResendNotification(
           `💰 New CamCash Subscriber — ${email} subscribed to Pro`,
           `${email} just subscribed to the Pro plan.`
@@ -85,7 +100,10 @@ export async function POST(request) {
         if (!user) break
         const update = { plan: 'pro' }
         if (sub.customer) update.stripe_customer_id = sub.customer
-        await supabase.from('profiles').update(update).eq('id', user.id)
+        const ok = await updateProfile(supabase, user.id, update)
+        if (!ok) {
+          return NextResponse.json({ error: 'Failed to update profile' }, { status: 500 })
+        }
         await sendResendNotification(
           `💰 New CamCash Subscriber — ${email} subscribed to Pro`,
           `${email} just subscribed to the Pro plan.`
@@ -99,7 +117,10 @@ export async function POST(request) {
         if (!email) break
         const user = await getUserByEmail(supabase, email)
         if (!user) break
-        await supabase.from('profiles').update({ plan: 'free' }).eq('id', user.id)
+        const ok = await updateProfile(supabase, user.id, { plan: 'free' })
+        if (!ok) {
+          return NextResponse.json({ error: 'Failed to update profile' }, { status: 500 })
+        }
         await sendResendNotification(
           `❌ CamCash Cancellation — ${email} cancelled their subscription`,
           `${email} cancelled their Pro subscription.`
@@ -114,7 +135,10 @@ export async function POST(request) {
         const user = await getUserByEmail(supabase, email)
         if (!user) break
         const plan = sub.status === 'active' ? 'pro' : 'free'
-        await supabase.from('profiles').update({ plan }).eq('id', user.id)
+        const ok = await updateProfile(supabase, user.id, { plan })
+        if (!ok) {
+          return NextResponse.json({ error: 'Failed to update profile' }, { status: 500 })
+        }
         if (plan === 'pro') {
           await sendResendNotification(
             `💰 New CamCash Subscriber — ${email} subscribed to Pro`,
