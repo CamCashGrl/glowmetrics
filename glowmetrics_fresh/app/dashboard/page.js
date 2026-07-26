@@ -1394,6 +1394,19 @@ export default function Dashboard() {
   const [messageIndex, setMessageIndex] = useState(0)
   const [messageCopied, setMessageCopied] = useState(false)
   const [showUpgradeModal, setShowUpgradeModal] = useState(false)
+  // Which dashboard feature opened the upgrade modal (e.g. "whales_empty") —
+  // drives the contextual title/description shown inside it.
+  const [upgradeSource, setUpgradeSource] = useState(null)
+  const [upgradeBilling, setUpgradeBilling] = useState('monthly') // 'monthly' | 'annual'
+  const [upgradeLoading, setUpgradeLoading] = useState(false)
+  const [upgradeError, setUpgradeError] = useState('')
+  // Element that opened the upgrade modal, so focus can return to it on close —
+  // same pattern as whaleModalTriggerRef below.
+  const upgradeModalTriggerRef = useRef(null)
+  const upgradeCloseBtnRef = useRef(null)
+  // Checkout redirect banner: Stripe sends users back to /dashboard?success=true
+  // or /dashboard?canceled=true — this surfaces that outcome in the UI.
+  const [checkoutStatus, setCheckoutStatus] = useState(null) // 'success' | 'canceled' | null
   const [showBetaPrompt, setShowBetaPrompt] = useState(false)
   const [fanSearchOpen, setFanSearchOpen] = useState(false)
   const [fanSearchQuery, setFanSearchQuery] = useState("")
@@ -1418,6 +1431,60 @@ export default function Dashboard() {
       }
     }
   }, [selectedWhale])
+
+  // Escape-to-close + focus management for the upgrade modal, and focus
+  // restoration to whatever CTA opened it — same pattern as the whale modal.
+  useEffect(() => {
+    if (showUpgradeModal) {
+      const onKeyDown = (e) => { if (e.key === "Escape") setShowUpgradeModal(false) }
+      document.addEventListener("keydown", onKeyDown)
+      if (upgradeCloseBtnRef.current) upgradeCloseBtnRef.current.focus()
+      return () => {
+        document.removeEventListener("keydown", onKeyDown)
+        if (upgradeModalTriggerRef.current && typeof upgradeModalTriggerRef.current.focus === "function") {
+          upgradeModalTriggerRef.current.focus()
+        }
+      }
+    }
+  }, [showUpgradeModal])
+
+  // Stripe redirects back to /dashboard?success=true&plan=... on completed
+  // checkout, or /dashboard?canceled=true if the user backs out. Surface that
+  // outcome once, refetch the plan (the webhook can take a beat to land), then
+  // strip the params so a refresh doesn't re-trigger the banner.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    const success = params.get('success') === 'true'
+    const canceled = params.get('canceled') === 'true'
+    if (!success && !canceled) return
+
+    let retryTimer
+    if (success) {
+      setCheckoutStatus('success')
+      track('checkout_success', { plan: params.get('plan') || undefined })
+      gtmTrack('checkout_success', { plan: params.get('plan') || undefined })
+      const refetchPlan = () => {
+        supabase.auth.getUser().then(({ data: { user: u } }) => {
+          if (!u) return
+          supabase.from('profiles').select('plan').eq('id', u.id).maybeSingle()
+            .then(({ data }) => { if (data) setProfile(data) })
+        })
+      }
+      refetchPlan()
+      retryTimer = setTimeout(refetchPlan, 3000)
+    } else if (canceled) {
+      setCheckoutStatus('canceled')
+      track('checkout_canceled', {})
+    }
+
+    params.delete('success'); params.delete('canceled'); params.delete('plan')
+    const rest = params.toString()
+    router.replace(`/dashboard${rest ? '?' + rest : ''}`, { scroll: false })
+
+    return () => { if (retryTimer) clearTimeout(retryTimer) }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   // ── LIVE MODE STATE ───────────────────────────────────────
   const [liveActive, setLiveActive] = useState(false)
   const [liveStartTime, setLiveStartTime] = useState(null)
@@ -1505,7 +1572,32 @@ export default function Dashboard() {
   const openUpgradeModal = (source) => {
     track('upgrade_click', { source })
     gtmTrack('paywall_hit', { feature: source })
+    setUpgradeSource(source)
+    setUpgradeError('')
     setShowUpgradeModal(true)
+  }
+
+  // Same checkout call EarlyAdopterOffer.js and the pricing page use — POSTs
+  // to the real Stripe checkout route and redirects to Stripe's hosted page.
+  const startUpgradeCheckout = async (planType) => {
+    setUpgradeLoading(true)
+    setUpgradeError('')
+    track('checkout_started', { plan: planType, source: upgradeSource })
+    try {
+      const res = await fetch('/api/stripe/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plan_type: planType }),
+      })
+      if (res.status === 401) { router.push(`/login?plan=${planType}`); return }
+      const data = await res.json().catch(() => ({}))
+      if (data?.url) { window.location.href = data.url; return }
+      setUpgradeError(data?.error || "Something went wrong starting checkout. Please try again.")
+    } catch (e) {
+      setUpgradeError("Something went wrong starting checkout. Please try again.")
+    } finally {
+      setUpgradeLoading(false)
+    }
   }
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(""), 3500) }
@@ -3021,6 +3113,28 @@ const stopImportMessageRotation = () => {
       {/* SIDEBAR — desktop only, hidden on mobile via CSS */}
       <Sidebar activeTab={activeTab} onTabChange={(tab) => { setActiveTab(tab); if (typeof window !== "undefined") { localStorage.setItem("camcash_tab", tab); window.scrollTo({ top: 0, behavior: "instant" }); } }} user={user} onSignOut={async () => { await supabase.auth.signOut(); router.replace("/login"); }} isPro={isPro} />{/* MAIN CONTENT */}
       <div className="dash-main" style={{ marginLeft: 240, width: "calc(100% - 240px)", minWidth: 0, padding: 32, boxSizing: "border-box", overflowX: "hidden" }}>
+
+        {/* ── CHECKOUT RETURN BANNER — shown once after Stripe redirects back
+             from checkout; see the effect above that reads ?success=true /
+             ?canceled=true, refetches the plan, then strips the params. ── */}
+        {checkoutStatus && (
+          <div role="status" aria-live="polite" style={{
+            display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
+            padding: "14px 18px", marginBottom: 20, borderRadius: 12,
+            background: checkoutStatus === "success" ? "rgba(16,185,129,0.12)" : "rgba(255,255,255,0.05)",
+            border: `1px solid ${checkoutStatus === "success" ? "rgba(16,185,129,0.35)" : "rgba(255,255,255,0.12)"}`,
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span style={{ fontSize: 20 }}>{checkoutStatus === "success" ? "🎉" : "ℹ️"}</span>
+              <span style={{ fontSize: 13.5, color: C.white, fontWeight: 600 }}>
+                {checkoutStatus === "success"
+                  ? "You're subscribed! Your Pro insights are unlocking now — this can take a few seconds."
+                  : "Checkout was canceled — no charge was made. You can upgrade any time."}
+              </span>
+            </div>
+            <button onClick={() => setCheckoutStatus(null)} aria-label="Dismiss" style={{ background: "transparent", border: "none", color: C.muted, fontSize: 18, cursor: "pointer", lineHeight: 1, padding: 4, flexShrink: 0 }}>×</button>
+          </div>
+        )}
 
         {/* ── STICKY COMMAND BAR ── */}
         {(() => {
@@ -4651,7 +4765,7 @@ const stopImportMessageRotation = () => {
             {filteredWhales.length <= 3 && (
               <div style={{ ...glassCard, borderRadius: 14, padding: 20, textAlign: "center", border: "1px solid rgba(59,130,246,0.2)" }}>
                 <div style={{ fontSize: 13, color: C.muted, marginBottom: 12 }}>Upload more data to discover more fans • Pro unlocks full profiles & behavior patterns</div>
-                <button onClick={() => openUpgradeModal("whales_empty")} style={{ padding: "8px 20px", borderRadius: 8, background: "linear-gradient(135deg,rgba(59,130,246,0.3),rgba(236,72,153,0.3))", border: "1px solid rgba(59,130,246,0.4)", color: C.white, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                <button onClick={(e) => { upgradeModalTriggerRef.current = e.currentTarget; openUpgradeModal("whales_empty") }} style={{ padding: "8px 20px", borderRadius: 8, background: "linear-gradient(135deg,rgba(59,130,246,0.3),rgba(236,72,153,0.3))", border: "1px solid rgba(59,130,246,0.4)", color: C.white, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
                   🔓 See What Pro Unlocks
                 </button>
               </div>
@@ -6992,84 +7106,123 @@ const stopImportMessageRotation = () => {
         )
       })()}
 
-      {/* UPGRADE MODAL */}
-      {showUpgradeModal && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.88)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1002, padding: 20 }}>
-          <div style={{ width: 480, background: "rgba(15,20,32,0.97)", backdropFilter: "blur(24px)", borderRadius: 24, border: "1px solid rgba(255,255,255,0.1)", boxShadow: "0 0 80px rgba(59,130,246,0.2), 0 0 160px rgba(236,72,153,0.1)", overflow: "hidden" }}>
-            <div style={{ height: 4, background: "linear-gradient(90deg, #3b82f6, #a855f7, #ec4899)" }} />
-            <div style={{ padding: 36 }}>
-              <div style={{ textAlign: "center", marginBottom: 28 }}>
-                <div style={{ fontSize: 44, marginBottom: 12 }}>🚀</div>
-                <h2 style={{ fontSize: 24, fontWeight: 800, color: C.white, marginBottom: 8 }}>Unlock Your Full Earning Potential</h2>
-                <p style={{ fontSize: 14, color: C.muted, lineHeight: 1.6 }}>You're only seeing a preview of your data.<br/>Here's what's waiting for you inside:</p>
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 28 }}>
-                {[
-                  { icon: "🐳", text: "See ALL your top spenders — not just the top 3" },
-                  { icon: "⏰", text: "Discover your exact highest-earning hours & days" },
-                  { icon: "💡", text: "Unlock 15+ advanced insights & strategy tips" },
-                  { icon: "📈", text: "Full session history with trend analysis" },
-                  { icon: "🤖", text: "AI fan behavior predictions & return forecasts" },
-                  { icon: "💌", text: "Unlimited re-engagement scripts & fan tracking" },
-                ].map(({ icon, text }) => (
-                  <div key={text} style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 14px", background: "rgba(59,130,246,0.08)", border: "1px solid rgba(59,130,246,0.15)", borderRadius: 10 }}>
-                    <span style={{ fontSize: 18 }}>{icon}</span>
-                    <span style={{ fontSize: 13, color: C.white }}>{text}</span>
-                  </div>
-                ))}
-              </div>
-              <div style={{ textAlign: "center", padding: "12px 16px", background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.25)", borderRadius: 10, marginBottom: 24 }}>
-                <div style={{ fontSize: 13, color: C.gold, fontWeight: 600 }}>💡 Most creators miss 30–60% of their earning potential without this</div>
-              </div>
-              {earlyAccessSubmitted ? (
-                <div style={{ textAlign: "center", padding: "8px 0 16px" }}>
-                  <div style={{ fontSize: 32, marginBottom: 8 }}>🎉</div>
-                  <div style={{ fontSize: 16, fontWeight: 700, color: C.white, marginBottom: 6 }}>You're on the list!</div>
-                  <div style={{ fontSize: 13, color: C.muted, marginBottom: 16 }}>We'll email you with a founding user discount when we launch.</div>
-                  <button onClick={() => setShowUpgradeModal(false)} style={{ padding: "10px 28px", borderRadius: 10, background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.1)", color: C.muted, fontSize: 13, cursor: "pointer" }}>Close</button>
+      {/* UPGRADE MODAL — contextual paid-plan upsell, wired to the real Stripe
+          checkout route (same call EarlyAdopterOffer.js and the pricing page
+          use). Replaces the old pre-launch "join the waitlist" email capture. */}
+      {showUpgradeModal && (() => {
+        const UPGRADE_CONTEXT = {
+          whales_empty: {
+            title: "See Every Top Supporter",
+            desc: "You're only seeing your top 3 fans. Upgrade to unlock full profiles, spend history, and behavior patterns for every supporter.",
+          },
+        }
+        const ctx = UPGRADE_CONTEXT[upgradeSource] || {
+          title: "Unlock Your Full Earning Potential",
+          desc: "You're only seeing a preview of your data. Here's what's waiting for you inside:",
+        }
+        return (
+          <div
+            onClick={() => setShowUpgradeModal(false)}
+            style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.88)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1002, padding: 20 }}
+          >
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="upgrade-modal-title"
+              onClick={e => e.stopPropagation()}
+              style={{ width: 480, maxWidth: "100%", maxHeight: "90vh", overflowY: "auto", background: "rgba(15,20,32,0.97)", backdropFilter: "blur(24px)", borderRadius: 24, border: "1px solid rgba(255,255,255,0.1)", boxShadow: "0 0 80px rgba(59,130,246,0.2), 0 0 160px rgba(236,72,153,0.1)" }}
+            >
+              <div style={{ height: 4, background: "linear-gradient(90deg, #3b82f6, #a855f7, #ec4899)" }} />
+              <div style={{ padding: "20px 36px 36px" }}>
+                <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: -8 }}>
+                  <button
+                    ref={upgradeCloseBtnRef}
+                    onClick={() => setShowUpgradeModal(false)}
+                    aria-label="Close upgrade dialog"
+                    style={{ background: "transparent", border: "none", color: C.muted, fontSize: 20, cursor: "pointer", lineHeight: 1, padding: 6 }}
+                  >×</button>
                 </div>
-              ) : (
-                <>
-                  <input
-                    type="email"
-                    value={earlyAccessEmail}
-                    onChange={e => setEarlyAccessEmail(e.target.value)}
-                    placeholder="your@email.com"
-                    style={{ width: "100%", padding: "13px 16px", borderRadius: 12, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.15)", color: C.white, fontSize: 14, outline: "none", marginBottom: 10, boxSizing: "border-box" }}
-                    onFocus={e => e.target.style.borderColor = "rgba(34,211,238,0.5)"}
-                    onBlur={e => e.target.style.borderColor = "rgba(255,255,255,0.15)"}
-                  />
-                  <Button
-                    disabled={!earlyAccessEmail.trim() || earlyAccessSubmitting}
-                    onClick={async () => {
-                      if (!earlyAccessEmail.trim()) return
-                      setEarlyAccessSubmitting(true)
-                      track('early_access_signup', { email: earlyAccessEmail })
-                      try {
-                        const { data: { user: currentUser } } = await supabase.auth.getUser()
-                        await supabase.from('early_access').insert({
-                          email: earlyAccessEmail.trim(),
-                          user_id: currentUser?.id || null,
-                          signed_up_at: new Date().toISOString()
-                        }).then(() => {})
-                      } catch(e) {}
-                      setEarlyAccessSubmitted(true)
-                      setEarlyAccessSubmitting(false)
-                      showToast("🎉 You're on the founding user list!")
-                    }}
-                    style={{ width: "100%", padding: "16px", borderRadius: 14, fontSize: 16, marginBottom: 12 }}>
-                    {earlyAccessSubmitting ? "Saving..." : "🔓 Get Early Access"}
-                  </Button>
-                  <div style={{ textAlign: "center", fontSize: 12, color: C.muted, marginBottom: 20 }}>Launching soon • Founding users get lifetime discount</div>
-                  <button onClick={() => setShowUpgradeModal(false)} style={{ width: "100%", padding: "11px", borderRadius: 10, background: "transparent", border: "1px solid rgba(255,255,255,0.1)", color: C.muted, fontSize: 13, cursor: "pointer" }}>
-                    Maybe later
-                  </button>
-                </>
-              )}
+                <div style={{ textAlign: "center", marginBottom: 24 }}>
+                  <div style={{ fontSize: 44, marginBottom: 12 }}>🚀</div>
+                  <h2 id="upgrade-modal-title" style={{ fontSize: 22, fontWeight: 800, color: C.white, marginBottom: 8 }}>{ctx.title}</h2>
+                  <p style={{ fontSize: 14, color: C.muted, lineHeight: 1.6 }}>{ctx.desc}</p>
+                </div>
+
+                {isPro ? (
+                  <div style={{ textAlign: "center", padding: "8px 0 16px" }}>
+                    <div style={{ fontSize: 32, marginBottom: 8 }}>🎉</div>
+                    <div style={{ fontSize: 15, color: C.white, marginBottom: 16 }}>You're already subscribed — thanks for being Pro!</div>
+                    <button onClick={() => setShowUpgradeModal(false)} style={{ padding: "10px 28px", borderRadius: 10, background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.1)", color: C.muted, fontSize: 13, cursor: "pointer" }}>Close</button>
+                  </div>
+                ) : (
+                  <>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 24 }}>
+                      {[
+                        { icon: "🐳", text: "See ALL your top spenders — not just the top 3" },
+                        { icon: "⏰", text: "Discover your exact highest-earning hours & days" },
+                        { icon: "💡", text: "Unlock 15+ advanced insights & strategy tips" },
+                        { icon: "📈", text: "Full session history with trend analysis" },
+                        { icon: "🤖", text: "AI fan behavior predictions & return forecasts" },
+                        { icon: "💌", text: "Unlimited re-engagement scripts & fan tracking" },
+                      ].map(({ icon, text }) => (
+                        <div key={text} style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 14px", background: "rgba(59,130,246,0.08)", border: "1px solid rgba(59,130,246,0.15)", borderRadius: 10 }}>
+                          <span style={{ fontSize: 18 }}>{icon}</span>
+                          <span style={{ fontSize: 13, color: C.white }}>{text}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Monthly / annual toggle — plan_type values match the
+                        Stripe checkout route's PRICE_MAP exactly. */}
+                    <div role="tablist" aria-label="Billing cycle" style={{ display: "flex", gap: 6, marginBottom: 16, background: "rgba(255,255,255,0.04)", padding: 4, borderRadius: 12, border: "1px solid rgba(255,255,255,0.08)" }}>
+                      {[
+                        { key: "monthly", label: "Monthly" },
+                        { key: "annual", label: "Annual — 2 months free" },
+                      ].map(({ key, label }) => (
+                        <button
+                          key={key}
+                          role="tab"
+                          aria-selected={upgradeBilling === key}
+                          onClick={() => setUpgradeBilling(key)}
+                          style={{
+                            flex: 1, padding: "9px 10px", borderRadius: 9, border: "none", cursor: "pointer",
+                            fontSize: 12.5, fontWeight: 700,
+                            background: upgradeBilling === key ? "linear-gradient(135deg, #EC4899, #a855f7)" : "transparent",
+                            color: upgradeBilling === key ? "#fff" : C.muted,
+                          }}
+                        >{label}</button>
+                      ))}
+                    </div>
+
+                    <div style={{ textAlign: "center", marginBottom: 20 }}>
+                      <span style={{ fontSize: 34, fontWeight: 900, color: C.white }}>
+                        {upgradeBilling === "monthly" ? "$9.99" : "$99.99"}
+                      </span>
+                      <span style={{ fontSize: 13, color: C.muted }}>{upgradeBilling === "monthly" ? "/month" : "/year"}</span>
+                      <div style={{ fontSize: 11, color: C.pink, fontWeight: 700, marginTop: 4, textTransform: "uppercase" }}>Early adopter rate — locked for life</div>
+                    </div>
+
+                    {upgradeError && (
+                      <div role="alert" style={{ fontSize: 12.5, color: "#f87171", background: "rgba(248,113,113,0.1)", border: "1px solid rgba(248,113,113,0.25)", borderRadius: 8, padding: "8px 12px", marginBottom: 12, textAlign: "center" }}>
+                        {upgradeError}
+                      </div>
+                    )}
+
+                    <Button
+                      disabled={upgradeLoading}
+                      onClick={() => startUpgradeCheckout(upgradeBilling === "monthly" ? "early_adopter_monthly" : "early_adopter_annual")}
+                      style={{ width: "100%", padding: "16px", borderRadius: 14, fontSize: 16, marginBottom: 12 }}>
+                      {upgradeLoading ? "Redirecting to checkout…" : "🔓 Upgrade Now"}
+                    </Button>
+                    <div style={{ textAlign: "center", fontSize: 12, color: C.muted, marginBottom: 16 }}>Secure checkout via Stripe • Cancel anytime</div>
+                    <a href="/pricing" style={{ display: "block", textAlign: "center", fontSize: 12.5, color: C.cyan, textDecoration: "none" }}>See full plan comparison →</a>
+                  </>
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      })()}
 
       {/* BETA PROMPT MODAL */}
       {showBetaPrompt && !earlyAccessSubmitted && (
