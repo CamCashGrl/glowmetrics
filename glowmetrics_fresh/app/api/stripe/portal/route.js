@@ -12,18 +12,22 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { data: subscription } = await supabase
-      .from('subscriptions')
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
       .select('stripe_customer_id')
-      .eq('user_id', user.id)
+      .eq('id', user.id)
       .single()
 
-    if (!subscription?.stripe_customer_id) {
+    if (profileError) {
+      console.error('Portal: failed to read profile', profileError.message)
+    }
+
+    if (!profile?.stripe_customer_id) {
       return NextResponse.json({ error: 'No subscription found' }, { status: 404 })
     }
 
     const session = await stripe.billingPortal.sessions.create({
-      customer: subscription.stripe_customer_id,
+      customer: profile.stripe_customer_id,
       return_url: `${request.headers.get('origin')}/dashboard`,
     })
 
