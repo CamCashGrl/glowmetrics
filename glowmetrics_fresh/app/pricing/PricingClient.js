@@ -1,11 +1,23 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import UserCounter from '../components/UserCounter'
 import SiteFooter from '../components/SiteFooter'
 import Button from '../../components/ui/Button'
 import { supabase } from '../../lib/supabase'
 
+/*
+ * IMPORTANT:
+ * This client does not directly read Stripe environment variables.
+ *
+ * It sends:
+ *   standard_monthly
+ *   standard_annual
+ *
+ * The server route at app/api/stripe/checkout/route.js maps those to:
+ *   STRIPE_MONTHLY_PRICE_ID
+ *   NEXT_PUBLIC_STRIPE_PRICE_ANNUAL
+ */
 async function startCheckout(planType, setLoading) {
   setLoading(planType)
 
@@ -21,21 +33,21 @@ async function startCheckout(planType, setLoading) {
       return
     }
 
-    const res = await fetch('/api/stripe/checkout', {
+    const response = await fetch('/api/stripe/checkout', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${session.access_token}`,
       },
-      credentials: 'same-origin',
+      credentials: 'include',
       body: JSON.stringify({
         plan_type: planType,
       }),
     })
 
-    const data = await res.json().catch(() => ({}))
+    const data = await response.json().catch(() => ({}))
 
-    if (!res.ok) {
+    if (!response.ok) {
       throw new Error(
         data.error || 'Unable to start Stripe Checkout.'
       )
@@ -51,7 +63,7 @@ async function startCheckout(planType, setLoading) {
   } catch (error) {
     alert(
       error?.message ||
-        'Something went wrong. Please try again.'
+        'Something went wrong while opening Stripe Checkout. Please try again.'
     )
   } finally {
     setLoading(null)
@@ -63,13 +75,11 @@ const C = {
   card: 'rgba(10, 14, 32, 0.82)',
   card2: 'rgba(16, 20, 42, 0.72)',
   border: 'rgba(124,92,255,0.15)',
-  borderPink: 'rgba(255,43,174,0.2)',
   purple: '#7C5CFF',
   pink: '#FF2BAE',
   cyan: '#16F4FF',
   cyanSoft: '#48E9FF',
   green: '#10B981',
-  gold: '#FFC857',
   white: '#FFFFFF',
   text: '#8D93AA',
   muted: '#5E647C',
@@ -84,13 +94,14 @@ function CheckLine({ children, color = C.cyan }) {
         display: 'flex',
         alignItems: 'flex-start',
         gap: 10,
-        marginBottom: 10,
+        marginBottom: 11,
       }}
     >
       <span
+        aria-hidden="true"
         style={{
           color,
-          fontWeight: 700,
+          fontWeight: 800,
           flexShrink: 0,
           marginTop: 1,
         }}
@@ -120,7 +131,7 @@ function TopBar({ user }) {
         left: 0,
         right: 0,
         zIndex: 1000,
-        height: '56px',
+        height: 56,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
@@ -207,23 +218,28 @@ function PricingSection({
   const freeFeatures = [
     'Track 1 cam platform',
     'Upload tip history by CSV',
-    'Basic earnings and session analytics',
-    'Live tip detection and real-time alerts',
+    'Basic earnings dashboard',
+    'Basic session analytics',
+    'Live tip detection',
+    'Real-time alerts',
     'Basic Live Mode coaching',
     'Top 3 fans',
     'Limited recent tip history',
+    'Basic fan insights',
   ]
 
   const standardFeatures = [
     'Track all supported cam platforms',
     'Full permanent tip history',
-    'Expanded fan insights and full fan profiles',
+    'Expanded fan insights',
+    'Full fan profiles and CRM tools',
     'Cross-platform earnings comparisons',
     'Advanced Live Mode coaching',
     'Private-session analytics',
     'Churn and re-engagement insights',
     'Full best-time analysis',
-    'Stream Planner and Money Map',
+    'Stream Planner',
+    'Money Map',
     'Advanced recommendations and reports',
   ]
 
@@ -238,8 +254,8 @@ function PricingSection({
     >
       <div
         style={{
-          maxWidth: 1000,
           width: '100%',
+          maxWidth: 1000,
           margin: '0 auto',
         }}
       >
@@ -252,10 +268,12 @@ function PricingSection({
             alignItems: 'stretch',
           }}
         >
-          <div
+          {/* FREE PLAN */}
+          <article
             style={{
               background: C.card,
-              border: `1px solid ${C.border}`,
+              border:
+                '1px solid rgba(22,244,255,0.22)',
               borderRadius: 20,
               padding: 28,
               display: 'flex',
@@ -281,6 +299,7 @@ function PricingSection({
                   color: C.white,
                   fontSize: 42,
                   fontWeight: 900,
+                  letterSpacing: '-1px',
                 }}
               >
                 $0
@@ -341,9 +360,10 @@ function PricingSection({
                 ? 'Continue to Dashboard →'
                 : 'Start Free →'}
             </Button>
-          </div>
+          </article>
 
-          <div
+          {/* STANDARD PLAN */}
+          <article
             style={{
               position: 'relative',
               background: C.card2,
@@ -368,7 +388,7 @@ function PricingSection({
                 fontSize: 11,
                 fontWeight: 900,
                 textTransform: 'uppercase',
-                letterSpacing: '.6px',
+                letterSpacing: '0.6px',
               }}
             >
               Most Popular
@@ -393,6 +413,7 @@ function PricingSection({
                   color: C.white,
                   fontSize: 42,
                   fontWeight: 900,
+                  letterSpacing: '-1px',
                 }}
               >
                 $19.99
@@ -443,6 +464,7 @@ function PricingSection({
               }}
             >
               <Button
+                type="button"
                 onClick={() =>
                   startCheckout(
                     'standard_monthly',
@@ -457,12 +479,14 @@ function PricingSection({
                   fontSize: 14,
                 }}
               >
-                {checkoutLoading === 'standard_monthly'
+                {checkoutLoading ===
+                'standard_monthly'
                   ? 'Redirecting…'
                   : 'Choose Monthly — $19.99'}
               </Button>
 
               <Button
+                type="button"
                 variant="secondary"
                 onClick={() =>
                   startCheckout(
@@ -478,12 +502,13 @@ function PricingSection({
                   fontSize: 14,
                 }}
               >
-                {checkoutLoading === 'standard_annual'
+                {checkoutLoading ===
+                'standard_annual'
                   ? 'Redirecting…'
                   : 'Choose Annual — $99'}
               </Button>
             </div>
-          </div>
+          </article>
         </div>
       </div>
     </section>
@@ -492,7 +517,7 @@ function PricingSection({
 
 function PromiseSection() {
   const promises = [
-    'The free tier will always exist and remain genuinely useful',
+    'The free plan will always exist and remain genuinely useful',
     'Core live tracking and basic coaching stay free',
     'Standard unlocks full history, deeper insights, and multi-platform tracking',
     'No surprise feature locks after launch',
@@ -501,11 +526,7 @@ function PromiseSection() {
   ]
 
   return (
-    <section
-      style={{
-        padding: '80px 20px',
-      }}
-    >
+    <section style={{ padding: '72px 20px' }}>
       <div
         style={{
           maxWidth: 760,
@@ -528,7 +549,7 @@ function PromiseSection() {
           Our Promise to You
         </h2>
 
-        <div style={{ marginBottom: 36 }}>
+        <div>
           {promises.map((promise) => (
             <div
               key={promise}
@@ -540,6 +561,7 @@ function PromiseSection() {
               }}
             >
               <span
+                aria-hidden="true"
                 style={{
                   fontSize: 18,
                   flexShrink: 0,
@@ -560,38 +582,6 @@ function PromiseSection() {
             </div>
           ))}
         </div>
-
-        <div
-          style={{
-            borderTop:
-              '1px solid rgba(255,255,255,0.06)',
-            paddingTop: 28,
-          }}
-        >
-          <p
-            style={{
-              color: C.purple,
-              fontWeight: 700,
-              fontSize: 14,
-              margin: '0 0 10px',
-            }}
-          >
-            Why we're doing this:
-          </p>
-
-          <p
-            style={{
-              color: C.text,
-              fontSize: 15,
-              lineHeight: 1.65,
-              margin: 0,
-            }}
-          >
-            CamCash is designed to give creators useful
-            free tools first, with a clear upgrade path
-            for deeper analytics and long-term growth.
-          </p>
-        </div>
       </div>
     </section>
   )
@@ -599,24 +589,24 @@ function PromiseSection() {
 
 const FAQ_ITEMS = [
   {
-    q: 'Will the free tier always be available?',
-    a: 'Yes. The free tier will always exist and remain genuinely useful. It includes one tracked platform, CSV uploads, basic earnings and session analytics, live tip detection, alerts, basic Live Mode coaching, top-three fan insights, and limited recent tip history.',
+    q: 'Will the free plan always be available?',
+    a: 'Yes. The free plan will always exist and remain genuinely useful. It includes one tracked platform, CSV uploads, basic earnings and session analytics, live tip detection, real-time alerts, basic Live Mode coaching, top-three fan insights, and limited recent tip history.',
   },
   {
-    q: 'How many platforms can I track on the free tier?',
-    a: 'The free tier supports one cam platform. Standard unlocks tracking across all supported platforms and adds cross-platform comparisons.',
+    q: 'How many platforms can I track for free?',
+    a: 'The free plan supports one cam platform. Standard unlocks tracking across every supported platform and adds cross-platform comparisons.',
   },
   {
     q: 'What does the Standard plan include?',
-    a: 'Standard includes all supported platforms, full permanent tip history, expanded fan profiles, cross-platform earnings comparisons, advanced Live Mode coaching, private-session analytics, churn and re-engagement insights, full best-time analysis, Stream Planner, Money Map, and advanced reports.',
+    a: 'Standard includes all supported platforms, full permanent tip history, expanded fan profiles, CRM tools, cross-platform earnings comparisons, advanced Live Mode coaching, private-session analytics, churn and re-engagement insights, full best-time analysis, Stream Planner, Money Map, and advanced reports.',
   },
   {
     q: 'How much is Standard?',
-    a: 'Standard is $19.99 per month or $99 per year. The annual plan uses the same Standard features at the lower yearly rate.',
+    a: 'Standard is $19.99 per month or $99 per year. Both billing options unlock the same Standard features.',
   },
   {
     q: 'Can I switch between monthly and annual billing?',
-    a: 'Yes. You can change your billing cycle through your subscription management options.',
+    a: 'Yes. You can change your billing cycle through your subscription-management options.',
   },
   {
     q: 'What platforms does CamCash support?',
@@ -632,11 +622,7 @@ function FAQSection() {
   const [open, setOpen] = useState(null)
 
   return (
-    <section
-      style={{
-        padding: '0 20px 72px',
-      }}
-    >
+    <section style={{ padding: '0 20px 72px' }}>
       <div
         style={{
           maxWidth: 760,
@@ -664,23 +650,24 @@ function FAQSection() {
             overflow: 'hidden',
           }}
         >
-          {FAQ_ITEMS.map((item, i) => {
-            const isOpen = open === i
+          {FAQ_ITEMS.map((item, index) => {
+            const isOpen = open === index
 
             return (
               <div
                 key={item.q}
                 style={{
                   borderBottom:
-                    i < FAQ_ITEMS.length - 1
+                    index < FAQ_ITEMS.length - 1
                       ? '1px solid rgba(255,255,255,0.06)'
                       : 'none',
                 }}
               >
                 <button
                   type="button"
+                  aria-expanded={isOpen}
                   onClick={() =>
-                    setOpen(isOpen ? null : i)
+                    setOpen(isOpen ? null : index)
                   }
                   style={{
                     width: '100%',
@@ -707,6 +694,7 @@ function FAQSection() {
                   </span>
 
                   <span
+                    aria-hidden="true"
                     style={{
                       color: C.purple,
                       fontSize: 18,
@@ -749,7 +737,7 @@ function FAQSection() {
   )
 }
 
-function FinalCTA() {
+function FinalCTA({ user }) {
   return (
     <section
       style={{
@@ -780,8 +768,9 @@ function FinalCTA() {
           lineHeight: 1.6,
         }}
       >
-        Download the extension free or create a free
-        account — no credit card.
+        Create a free account or return to your
+        dashboard. No credit card is required for the
+        Free plan.
       </p>
 
       <div
@@ -795,12 +784,14 @@ function FinalCTA() {
       >
         <Button
           as="a"
-          href="/landing"
+          href={user ? '/dashboard' : '/landing'}
           style={{
             padding: '14px 28px',
           }}
         >
-          Create Free Account →
+          {user
+            ? 'Go to Dashboard →'
+            : 'Create Free Account →'}
         </Button>
 
         <Button
@@ -827,8 +818,8 @@ function FinalCTA() {
           margin: 0,
         }}
       >
-        Free tier always available · No credit card for
-        free account · 4 platforms supported
+        Free plan always available · No credit card
+        required · Four platforms supported
       </p>
     </section>
   )
@@ -861,7 +852,7 @@ function AmbientBackground() {
           top: '-15%',
           right: '-5%',
           background:
-            'radial-gradient(circle,rgba(22,244,255,0.08),transparent 65%)',
+            'radial-gradient(circle, rgba(22,244,255,0.08), transparent 65%)',
           filter: 'blur(60px)',
         }}
       />
@@ -874,7 +865,7 @@ function AmbientBackground() {
           bottom: '10%',
           left: '-10%',
           background:
-            'radial-gradient(circle,rgba(255,43,174,0.08),transparent 65%)',
+            'radial-gradient(circle, rgba(255,43,174,0.08), transparent 65%)',
           filter: 'blur(60px)',
         }}
       />
@@ -887,7 +878,7 @@ function AmbientBackground() {
           top: '40%',
           left: '40%',
           background:
-            'radial-gradient(circle,rgba(124,92,255,0.06),transparent 65%)',
+            'radial-gradient(circle, rgba(124,92,255,0.06), transparent 65%)',
           filter: 'blur(60px)',
         }}
       />
@@ -940,6 +931,7 @@ export default function PricingClient() {
       }}
     >
       <AmbientBackground />
+
       <TopBar user={user} />
 
       <main
@@ -955,8 +947,10 @@ export default function PricingClient() {
         />
 
         <PromiseSection />
+
         <FAQSection />
-        <FinalCTA />
+
+        <FinalCTA user={user} />
       </main>
 
       <div
