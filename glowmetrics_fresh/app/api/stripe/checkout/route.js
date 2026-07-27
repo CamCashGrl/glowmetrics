@@ -2,15 +2,43 @@
 import { NextResponse } from 'next/server'
 import { stripe } from '../../../../lib/stripe'
 import { createSupabaseRouteClient } from '../../../../lib/supabase-server'
+import { createClient } from '@supabase/supabase-js'
 
 export async function POST(request) {
   try {
     const body = await request.json().catch(() => ({}))
-    const supabase = createSupabaseRouteClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    let supabase = createSupabaseRouteClient()
+    let { data: { user } } = await supabase.auth.getUser()
+
+    // Browser sessions normally arrive through Supabase SSR cookies. The bearer
+    // fallback keeps checkout authenticated if the page was reached through a
+    // host transition or the cookie was not refreshed before this request.
+    if (!user) {
+      const authorization = request.headers.get('authorization') || ''
+      const accessToken = authorization.startsWith('Bearer ')
+        ? authorization.slice(7).trim()
+        : null
+
+      if (accessToken) {
+        const tokenClient = createClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL,
+          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+          {
+            global: { headers: { Authorization: `Bearer ${accessToken}` } },
+            auth: { persistSession: false, autoRefreshToken: false },
+          }
+        )
+        const tokenResult = await tokenClient.auth.getUser(accessToken)
+        user = tokenResult.data.user
+        if (user) supabase = tokenClient
+      }
+    }
 
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return NextResponse.json(
+        { error: 'Your login session expired. Please sign in again.' },
+        { status: 401 }
+      )
     }
 
     // Get or create customer — profiles is the single source of truth
@@ -52,12 +80,20 @@ export async function POST(request) {
       early_adopter_monthly: process.env.STRIPE_PRICE_EARLY_ADOPTER_MONTHLY,
       early_adopter_annual:  process.env.STRIPE_PRICE_EARLY_ADOPTER_ANNUAL,
       standard_monthly:      process.env.STRIPE_MONTHLY_PRICE_ID || process.env.STRIPE_PRICE_STANDARD_MONTHLY || process.env.NEXT_PUBLIC_STRIPE_PRICE_ID,
-      standard_annual:       process.env.NEXT_PUBLIC_STRIPE_PRICE_ANNUAL || process.env.STRIPE_PRICE_STANDARD_ANNUAL,
+      standard_annual:       process.env.STRIPE_YEARLY_PRICE_ID || process.env.STRIPE_ANNUAL_PRICE_ID || process.env.STRIPE_PRICE_STANDARD_ANNUAL || process.env.NEXT_PUBLIC_STRIPE_PRICE_ANNUAL,
     }
 
-    const priceId = PRICE_MAP[planType] || process.env.NEXT_PUBLIC_STRIPE_PRICE_ID
-    if (!priceId) {
-      return NextResponse.json({ error: 'Invalid plan or price not configured' }, { status: 400 })
+    if (!Object.prototype.hasOwnProperty.call(PRICE_MAP, planType)) {
+      return NextResponse.json({ error: 'Invalid subscription plan selected.' }, { status: 400 })
+    }
+
+    const priceId = PRICE_MAP[planType]
+    if (!priceId || !priceId.startsWith('price_')) {
+      console.error(`Checkout: missing or invalid price for ${planType}`)
+      return NextResponse.json(
+        { error: `The ${planType.includes('annual') ? 'annual' : 'monthly'} Stripe price is not configured correctly.` },
+        { status: 500 }
+      )
     }
 
     // Create checkout session
@@ -73,6 +109,10 @@ export async function POST(request) {
         plan_type: planType,
       }
     })
+
+    if (!session.url) {
+      return NextResponse.json({ error: 'Stripe Checkout did not return a payment URL.' }, { status: 500 })
+    }
 
     return NextResponse.json({ url: session.url })
   } catch (error) {
