@@ -51,8 +51,8 @@ export async function POST(request) {
     const PRICE_MAP = {
       early_adopter_monthly: process.env.STRIPE_PRICE_EARLY_ADOPTER_MONTHLY,
       early_adopter_annual:  process.env.STRIPE_PRICE_EARLY_ADOPTER_ANNUAL,
-      standard_monthly:      process.env.STRIPE_PRICE_STANDARD_MONTHLY || process.env.NEXT_PUBLIC_STRIPE_PRICE_ID,
-      standard_annual:       process.env.STRIPE_PRICE_STANDARD_ANNUAL,
+      standard_monthly:      process.env.STRIPE_MONTHLY_PRICE_ID || process.env.STRIPE_PRICE_STANDARD_MONTHLY || process.env.NEXT_PUBLIC_STRIPE_PRICE_ID,
+      standard_annual:       process.env.NEXT_PUBLIC_STRIPE_PRICE_ANNUAL || process.env.STRIPE_PRICE_STANDARD_ANNUAL,
     }
 
     const priceId = PRICE_MAP[planType] || process.env.NEXT_PUBLIC_STRIPE_PRICE_ID
