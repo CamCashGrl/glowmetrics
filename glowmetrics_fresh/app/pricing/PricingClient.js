@@ -4,27 +4,39 @@ import { useState, useEffect } from 'react'
 import UserCounter from '../components/UserCounter'
 import SiteFooter from '../components/SiteFooter'
 import Button from '../../components/ui/Button'
+import { supabase } from '../../lib/supabase'
 
 async function startCheckout(planType, setLoading) {
   setLoading(planType)
   try {
-    const res = await fetch('/api/stripe/checkout', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ plan_type: planType }),
-    })
-    if (res.status === 401) {
-      window.location.href = `/landing?plan=${planType}`
+    const { data: { session } } = await supabase.auth.getSession()
+
+    if (!session?.access_token) {
+      alert('Your login session could not be found. Please sign in again, then return to pricing.')
       return
     }
-    const data = await res.json()
-    if (data.url) {
-      window.location.href = data.url
-    } else {
-      alert('Something went wrong. Please try again.')
+
+    const res = await fetch('/api/stripe/checkout', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      credentials: 'same-origin',
+      body: JSON.stringify({ plan_type: planType }),
+    })
+
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      throw new Error(data.error || 'Unable to start Stripe Checkout.')
     }
-  } catch {
-    alert('Something went wrong. Please try again.')
+    if (!data.url) {
+      throw new Error('Stripe Checkout did not return a payment URL.')
+    }
+
+    window.location.assign(data.url)
+  } catch (error) {
+    alert(error?.message || 'Something went wrong. Please try again.')
   } finally {
     setLoading(null)
   }
@@ -60,7 +72,7 @@ function CheckLine({ children, color = C.cyan }) {
 }
 
 // ── Section 1: Sticky Top Bar ─────────────────────────────────────────────────
-function TopBar() {
+function TopBar({ user }) {
   return (
     <div style={{
       position:        'fixed',
@@ -96,8 +108,8 @@ function TopBar() {
           }}>Cash</span>™
         </span>
       </a>
-      <Button as="a" href="/landing" style={{ padding: '8px 18px', fontSize: 13 }}>
-        Create Free Account →
+      <Button as="a" href={user ? "/dashboard" : "/landing"} style={{ padding: '8px 18px', fontSize: 13 }}>
+        {user ? 'Back to Dashboard →' : 'Create Free Account →'}
       </Button>
     </div>
   )
@@ -161,7 +173,7 @@ function HeroSection() {
 }
 
 // ── Section 4: After Launch Comparison ───────────────────────────────────────
-function AfterLaunchSection({ checkoutLoading, setCheckoutLoading }) {
+function AfterLaunchSection({ checkoutLoading, setCheckoutLoading, user }) {
   return (
     <section style={{ padding: '0 20px 72px' }}>
       <div style={{ maxWidth: 900, margin: '0 auto' }}>
@@ -224,8 +236,8 @@ function AfterLaunchSection({ checkoutLoading, setCheckoutLoading }) {
               Free tier will ALWAYS exist and be useful
             </p>
 
-            <Button as="a" href="/landing" variant="secondary" style={{ display: 'block', width: '100%' }}>
-              Start with Free Tier →
+            <Button as="a" href={user ? "/dashboard" : "/landing"} variant="secondary" style={{ display: 'block', width: '100%' }}>
+              {user ? 'Continue with Free Tier →' : 'Start with Free Tier →'}
             </Button>
           </div>
 
@@ -270,13 +282,21 @@ function AfterLaunchSection({ checkoutLoading, setCheckoutLoading }) {
               <CheckLine color={C.purple}>Long-term growth optimization</CheckLine>
             </div>
 
-            <div style={{ marginTop: 20 }}>
+            <div style={{ marginTop: 20, display: 'grid', gap: 10 }}>
               <Button
                 onClick={() => startCheckout('standard_monthly', setCheckoutLoading)}
                 disabled={checkoutLoading !== null}
                 style={{ display: 'block', width: '100%', padding: '12px 0', fontSize: 14 }}
               >
-                {checkoutLoading === 'standard_monthly' ? 'Redirecting…' : 'Get Standard Plan — $19.99/mo →'}
+                {checkoutLoading === 'standard_monthly' ? 'Redirecting…' : 'Choose Monthly — $19.99/mo →'}
+              </Button>
+              <Button
+                onClick={() => startCheckout('standard_annual', setCheckoutLoading)}
+                disabled={checkoutLoading !== null}
+                variant="secondary"
+                style={{ display: 'block', width: '100%', padding: '12px 0', fontSize: 14 }}
+              >
+                {checkoutLoading === 'standard_annual' ? 'Redirecting…' : 'Choose Annual — $199.99/yr →'}
               </Button>
             </div>
           </div>
@@ -770,6 +790,22 @@ function AmbientBackground() {
 // ── Root Component ────────────────────────────────────────────────────────────
 export default function PricingClient() {
   const [checkoutLoading, setCheckoutLoading] = useState(null)
+  const [user, setUser] = useState(null)
+
+  useEffect(() => {
+    let mounted = true
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (mounted) setUser(session?.user || null)
+    })
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (mounted) setUser(session?.user || null)
+    })
+    return () => {
+      mounted = false
+      subscription.unsubscribe()
+    }
+  }, [])
+
   return (
     <div style={{
       minHeight:       '100vh',
@@ -779,14 +815,12 @@ export default function PricingClient() {
       WebkitFontSmoothing: 'antialiased',
     }}>
       <AmbientBackground />
-      <TopBar />
+      <TopBar user={user} />
 
       <main style={{ position: 'relative', zIndex: 1 }}>
         <HeroSection />
-        <AfterLaunchSection checkoutLoading={checkoutLoading} setCheckoutLoading={setCheckoutLoading} />
-        <EarlyAdopterSection checkoutLoading={checkoutLoading} setCheckoutLoading={setCheckoutLoading} />
+        <AfterLaunchSection checkoutLoading={checkoutLoading} setCheckoutLoading={setCheckoutLoading} user={user} />
         <PromiseSection />
-        <ComparisonTable />
         <FAQSection />
         <FinalCTA />
       </main>
