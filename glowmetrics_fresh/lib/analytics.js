@@ -1062,6 +1062,11 @@ export function aggregateRows(tips, tz = null) {
 
   if (prior30USD === 0 && last30USD === 0) {
     momentumLabel = 'No data'; momentumEmoji = '—'
+  } else if (last30USD === 0) {
+    // No revenue at all in the last 30 days — this is an absence of
+    // recent streaming, not a measured downward trend. Don't fabricate
+    // a "Declining" claim from zero data.
+    momentumPct = -100; momentumLabel = 'Inactive'; momentumEmoji = '💤'
   } else if (prior30USD === 0) {
     momentumPct = 100; momentumLabel = 'Surging'; momentumEmoji = '🚀'
   } else {
@@ -1247,8 +1252,16 @@ export function computePaidSessionAnalytics(sessions) {
 
   let momentumPct   = 0
   let momentumLabel = 'Steady'
-  if (prior30USD === 0 && last30USD > 0)    { momentumPct = 100; momentumLabel = 'Surging' }
-  else if (prior30USD > 0) {
+  if (prior30USD === 0 && last30USD === 0) {
+    momentumLabel = 'No data'
+  } else if (last30USD === 0) {
+    // No revenue at all in the last 30 days — this is an absence of
+    // recent streaming, not a measured downward trend. Don't fabricate
+    // a "Declining" claim from zero data.
+    momentumPct = -100; momentumLabel = 'Inactive'
+  } else if (prior30USD === 0) {
+    momentumPct = 100; momentumLabel = 'Surging'
+  } else {
     momentumPct = ((last30USD - prior30USD) / prior30USD) * 100
     if      (momentumPct >  50) momentumLabel = 'Surging'
     else if (momentumPct >  10) momentumLabel = 'Growing'

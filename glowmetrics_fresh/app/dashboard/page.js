@@ -3036,6 +3036,7 @@ const stopImportMessageRotation = () => {
             : momentumData ? `${momentumData.emoji} ${momentumData.label}`
             : tips.length === 0 ? '— No data' : '→ Steady'
           const momentumColor = atPeak ? '#10B981'
+            : momentumData?.label === 'Inactive' ? '#475569'
             : momentumData?.pct > 50 ? '#f472b6'
             : momentumData?.pct > 10 ? '#10B981'
             : momentumData?.pct > -10 ? '#22D3EE'
