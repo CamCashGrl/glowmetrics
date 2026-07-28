@@ -6617,7 +6617,7 @@ const stopImportMessageRotation = () => {
           </div>
         )}
 
-        {activeTab === 'analytics' && <AnalyticsCharts tips={tips} />}
+        {activeTab === 'analytics' && <AnalyticsCharts analytics={analytics} />}
         {activeTab === 'private' && (
           <PrivateSessions
             paidSessions={paidSessions}
