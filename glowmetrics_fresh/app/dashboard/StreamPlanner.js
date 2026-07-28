@@ -838,17 +838,6 @@ function ProgressTab({ tips, windows, prefs }) {
     })
   }, [sessions, isOnPlan])
 
-  const incomeDelta = useMemo(() => {
-    if (sessions.length < 4 || dataSpanWeeks < 4) return null
-    const cutoff = sessions[0].start.getTime() + 28 * 86_400_000
-    const early  = sessions.filter((s) => s.start.getTime() < cutoff)
-    const recent = sessions.filter((s) => s.start.getTime() >= cutoff)
-    if (!early.length || !recent.length) return null
-    const e = early.reduce((n, s) => n + s.usdHr, 0)  / early.length
-    const r = recent.reduce((n, s) => n + s.usdHr, 0) / recent.length
-    return e > 0 ? ((r - e) / e) * 100 : null
-  }, [sessions, dataSpanWeeks])
-
   const missed = useMemo(() => {
     const out = []
     const weekAgo = Date.now() - 7 * 86_400_000
@@ -923,21 +912,6 @@ function ProgressTab({ tips, windows, prefs }) {
           </>
         )}
       </div>
-
-      {incomeDelta !== null && (
-        <div style={cardS()}>
-          <SecHead title="Income Proof" sub="First month vs most recent earnings rate" />
-          <div style={{ display:"flex", alignItems:"center", gap:16 }}>
-            <div style={{ fontSize:36 }}>{incomeDelta >= 0 ? "📈" : "📉"}</div>
-            <div style={{ color:PRIMARY, fontSize:15, fontWeight:700, lineHeight:1.6 }}>
-              Since using CamCash, your avg $/hr has{" "}
-              <span style={{ color:incomeDelta >= 0 ? GREEN : RED }}>
-                {incomeDelta >= 0 ? "increased" : "decreased"} by {Math.abs(incomeDelta).toFixed(0)}%
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
 
       {missed.length > 0 && (
         <div style={cardS()}>
