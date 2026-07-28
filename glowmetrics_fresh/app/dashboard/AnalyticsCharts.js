@@ -263,44 +263,61 @@ function PerformanceDistributionCard({ sessions }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // 3. OUTLIER INVESTIGATION — IQR-based flagging on $/hour
 // ═══════════════════════════════════════════════════════════════════════════════
+// IQR needs a sturdier sample than a plain average — below this, a couple of
+// whale-driven sessions can swing Q1/Q3 enough to flag most of the sample.
+// Lines up with the "High confidence" floor used elsewhere (calculateConfidence).
+const OUTLIER_MIN_SESSIONS = 10
+const WHALE_CONTRIBUTION_PCT = 70
+
+function outlierReason(s, medianDuration) {
+  if (s.topContributorPct >= WHALE_CONTRIBUTION_PCT) return `Driven by one fan (${s.topContributorPct}% of revenue)`
+  if (medianDuration > 0 && s.durationMinutes <= medianDuration * 0.5) return "Unusually short session"
+  if (medianDuration > 0 && s.durationMinutes >= medianDuration * 2) return "Unusually long session"
+  return null
+}
+
 function OutlierCard({ sessions }) {
   const outliers = useMemo(() => {
     const timed = sessions.filter(s => !s.durationUnknown && s.usdPerHour != null)
-    if (timed.length < 8) return { ready: false, high: [], low: [] }
+    if (timed.length < OUTLIER_MIN_SESSIONS) return { ready: false, high: [], low: [] }
     const sortedVals = [...timed].map(s => s.usdPerHour).sort((a, b) => a - b)
     const q1 = quantile(sortedVals, 0.25)
     const q3 = quantile(sortedVals, 0.75)
     const iqr = q3 - q1
     const lowerBound = q1 - 1.5 * iqr
     const upperBound = q3 + 1.5 * iqr
+    const medianDuration = quantile([...timed].map(s => s.durationMinutes).sort((a, b) => a - b), 0.5)
     const high = timed.filter(s => s.usdPerHour > upperBound).sort((a, b) => b.usdPerHour - a.usdPerHour).slice(0, 5)
     const low  = timed.filter(s => s.usdPerHour < lowerBound && s.usdPerHour >= 0).sort((a, b) => a.usdPerHour - b.usdPerHour).slice(0, 5)
-    return { ready: true, high, low, upperBound, lowerBound }
+    return { ready: true, high, low, upperBound, lowerBound, medianDuration }
   }, [sessions])
 
-  const Row = ({ s, kind }) => (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderBottom: `1px solid ${BORDER}` }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-        <div style={{ width: 8, height: 8, borderRadius: "50%", background: platColor(s.platform), flexShrink: 0 }} />
-        <div style={{ minWidth: 0 }}>
-          <div style={{ color: WHITE, fontSize: 13, fontWeight: 600 }}>{s.platform} · {fmtDate(s.startTime)}</div>
-          <div style={{ color: MUTED, fontSize: 11.5 }}>
-            {fmtDur(s.durationMinutes)} · {s.tipCount} tips · {s.uniqueFans} fan{s.uniqueFans === 1 ? "" : "s"}
-            {s.topContributorPct >= 50 ? ` · ${s.topContributorPct}% from one fan` : ""}
+  const Row = ({ s, kind, medianDuration }) => {
+    const reason = outlierReason(s, medianDuration)
+    return (
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderBottom: `1px solid ${BORDER}` }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+          <div style={{ width: 8, height: 8, borderRadius: "50%", background: platColor(s.platform), flexShrink: 0 }} />
+          <div style={{ minWidth: 0 }}>
+            <div style={{ color: WHITE, fontSize: 13, fontWeight: 600 }}>{s.platform} · {fmtDate(s.startTime)}</div>
+            <div style={{ color: MUTED, fontSize: 11.5 }}>
+              {fmtDur(s.durationMinutes)} · {s.tipCount} tips · {s.uniqueFans} fan{s.uniqueFans === 1 ? "" : "s"}
+            </div>
+            {reason && <div style={{ color: kind === "high" ? GREEN : RED, fontSize: 11, marginTop: 2, opacity: 0.85 }}>{reason}</div>}
           </div>
         </div>
+        <div style={{ color: kind === "high" ? GREEN : RED, fontSize: 14, fontWeight: 700, flexShrink: 0, marginLeft: 12 }}>
+          {fmtUSD(s.usdPerHour)}/hr
+        </div>
       </div>
-      <div style={{ color: kind === "high" ? GREEN : RED, fontSize: 14, fontWeight: 700, flexShrink: 0, marginLeft: 12 }}>
-        {fmtUSD(s.usdPerHour)}/hr
-      </div>
-    </div>
-  )
+    )
+  }
 
   return (
     <div style={card()}>
       {sectionTitle("Outlier Investigation", "Sessions whose $/hour falls outside the typical IQR range (1.5× beyond Q1/Q3)")}
       {!outliers.ready ? (
-        <EmptyState sub="Need at least 8 timed sessions before outliers can be identified reliably." />
+        <EmptyState sub={`Need at least ${OUTLIER_MIN_SESSIONS} timed sessions before outliers can be identified reliably.`} />
       ) : outliers.high.length === 0 && outliers.low.length === 0 ? (
         <div style={{ color: TEXT, fontSize: 13, padding: "12px 0" }}>No statistical outliers — your session performance is consistent.</div>
       ) : (
@@ -311,15 +328,19 @@ function OutlierCard({ sessions }) {
             </div>
             {outliers.high.length === 0
               ? <div style={{ color: MUTED, fontSize: 12.5 }}>None found</div>
-              : outliers.high.map(s => <Row key={s.id} s={s} kind="high" />)}
+              : outliers.high.map(s => <Row key={s.id} s={s} kind="high" medianDuration={outliers.medianDuration} />)}
           </div>
           <div>
             <div style={{ color: RED, fontSize: 12, fontWeight: 700, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>
               ↓ Underperformed ({outliers.low.length})
             </div>
             {outliers.low.length === 0
-              ? <div style={{ color: MUTED, fontSize: 12.5 }}>None found</div>
-              : outliers.low.map(s => <Row key={s.id} s={s} kind="low" />)}
+              ? (
+                <div style={{ color: MUTED, fontSize: 12.5, lineHeight: 1.5 }}>
+                  None found — $/hour can't go below $0, so this side only flags sessions far below your typical range. That doesn't mean every session was strong, just that none were statistical extremes.
+                </div>
+              )
+              : outliers.low.map(s => <Row key={s.id} s={s} kind="low" medianDuration={outliers.medianDuration} />)}
           </div>
         </div>
       )}
