@@ -7,6 +7,7 @@ import { computeRoomHealth, ROOM_STATES, MOMENTUM_DIRECTIONS } from "../../lib/a
 import { computeRevenueVelocity, computeLiveComparison } from "../../lib/analytics/velocity"
 import { detectSessionPhase, PHASES, getRecoveryActions, getGoalStrategy } from "../../lib/analytics/sessionPhase"
 import { computeOpportunityScore, computeStreamHealth } from "../../lib/analytics/opportunity"
+import { computeCoachingState } from "../../lib/coaching/triggers"
 import dynamic from "next/dynamic"
 import Sidebar from "./Sidebar"
 import SiteFooter from "../components/SiteFooter"
@@ -3027,20 +3028,26 @@ const stopImportMessageRotation = () => {
           const safeAvg = (!isNaN(avgPerHour) && isFinite(avgPerHour)) ? avgPerHour : 0
           const brief = dailyBrief
           const atPeak = brief?.atPeak
-          const momentumData = analytics?.momentum
-          // "No data" here means zero tips in the last 60 days (not zero tips
-          // ever) — a genuine insufficient-data case, not a value to hide
-          // behind vague copy. Rendered as a locked chip below instead.
-          const momentumLocked = !atPeak && tips.length > 0 && momentumData?.label === 'No data'
-          const momentum = atPeak ? '🔥 AT PEAK'
-            : momentumData ? `${momentumData.emoji} ${momentumData.label}`
-            : tips.length === 0 ? '— No data' : '→ Steady'
-          const momentumColor = atPeak ? '#10B981'
-            : momentumData?.label === 'Inactive' ? '#475569'
-            : momentumData?.pct > 50 ? '#f472b6'
-            : momentumData?.pct > 10 ? '#10B981'
-            : momentumData?.pct > -10 ? '#22D3EE'
-            : tips.length === 0 ? '#475569' : '#f87171'
+          // Momentum in the command bar reflects the CURRENT live room, not
+          // historical revenue trend — it's only meaningful while actually
+          // streaming, so outside live mode it reads as a waiting state
+          // rather than fabricating a Surging/Declining verdict.
+          const liveOnlyTips = liveActive
+            ? liveEvents.filter(e => !e._isHistory).map(e => ({ received_at: e.timestamp, usd: e.normalizedRevenue, tokens: e.tokens, username: e.username }))
+            : []
+          const liveCoachState = liveActive && liveStartTime
+            ? computeCoachingState({ tips: liveOnlyTips, startedAt: liveStartTime, goalTokens: liveGoalTokens })
+            : null
+          const liveMomentumState = liveCoachState
+            ? { ...liveCoachState, tipsPerMinute: liveCoachState.elapsedMins > 0 ? parseFloat((liveCoachState.liveOnlyCount / liveCoachState.elapsedMins).toFixed(2)) : 0 }
+            : null
+          const liveRoomHealth = liveActive ? computeRoomHealth(liveMomentumState) : null
+          const momentum = !liveActive ? 'Waiting for live stream'
+            : atPeak ? '🔥 AT PEAK'
+            : `${liveRoomHealth.directionLabel}`
+          const momentumColor = !liveActive ? '#475569'
+            : atPeak ? '#10B981'
+            : liveRoomHealth.directionColor
           const localNow = new Date().getHours()
           const hoursUntilLocal = canonicalPeakHourLocal != null ? (canonicalPeakHourLocal - localNow + 24) % 24 : brief?.hoursUntilPeak
           const peakLabel = hoursUntilLocal === 0 ? 'NOW' : hoursUntilLocal === 1 ? 'in 1 hr' : (hoursUntilLocal > 0 && !isNaN(hoursUntilLocal)) ? `in ${hoursUntilLocal}h` : null
@@ -3066,11 +3073,7 @@ const stopImportMessageRotation = () => {
                 </div>
                 <div style={{ display:'flex', flexDirection:'column', justifyContent:'center', padding:'0 20px', borderRight:'1px solid rgba(255,255,255,0.06)', flexShrink:0 }}>
                   <div style={{ fontSize:10, color:'#8a93ab', textTransform:'uppercase', letterSpacing:0.6, fontWeight:600, marginBottom:2 }}>Momentum</div>
-                  {momentumLocked ? (
-                    <div onClick={() => handleTabChange('upload')} title="No tips in the last 60 days yet — upload more data to see momentum" style={{ fontSize:13, fontWeight:700, color:'#7d8aa3', whiteSpace:'nowrap', cursor:'pointer' }}>🔒 Locked</div>
-                  ) : (
-                    <div style={{ fontSize:13, fontWeight:800, color:momentumColor, whiteSpace:'nowrap', animation: atPeak ? 'cmd-pulse 1.5s infinite' : 'none' }}>{momentum}</div>
-                  )}
+                  <div style={{ fontSize:13, fontWeight:800, color:momentumColor, whiteSpace:'nowrap', animation: atPeak ? 'cmd-pulse 1.5s infinite' : 'none' }}>{momentum}</div>
                 </div>
                 <div style={{ display:'flex', flexDirection:'column', justifyContent:'center', padding:'0 20px', borderRight:'1px solid rgba(255,255,255,0.06)', flexShrink:0 }}>
                   <div style={{ fontSize:10, color:'#8a93ab', textTransform:'uppercase', letterSpacing:0.6, fontWeight:600, marginBottom:2 }}>Best Platform</div>
