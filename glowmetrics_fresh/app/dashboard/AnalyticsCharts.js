@@ -287,14 +287,9 @@ function OutlierCard({ sessions }) {
     const lowerBound = q1 - 1.5 * iqr
     const upperBound = q3 + 1.5 * iqr
     const medianDuration = quantile([...timed].map(s => s.durationMinutes).sort((a, b) => a - b), 0.5)
-    const highAll = timed.filter(s => s.usdPerHour > upperBound).sort((a, b) => b.usdPerHour - a.usdPerHour)
-    const lowAll  = timed.filter(s => s.usdPerHour < lowerBound && s.usdPerHour >= 0).sort((a, b) => a.usdPerHour - b.usdPerHour)
-    return {
-      ready: true,
-      high: highAll.slice(0, 5), highTotal: highAll.length,
-      low: lowAll.slice(0, 5), lowTotal: lowAll.length,
-      upperBound, lowerBound, medianDuration,
-    }
+    const high = timed.filter(s => s.usdPerHour > upperBound).sort((a, b) => b.usdPerHour - a.usdPerHour).slice(0, 5)
+    const low  = timed.filter(s => s.usdPerHour < lowerBound && s.usdPerHour >= 0).sort((a, b) => a.usdPerHour - b.usdPerHour).slice(0, 5)
+    return { ready: true, high, low, upperBound, lowerBound, medianDuration }
   }, [sessions])
 
   const Row = ({ s, kind, medianDuration }) => {
@@ -323,43 +318,29 @@ function OutlierCard({ sessions }) {
       {sectionTitle("Outlier Investigation", "Sessions whose $/hour falls outside the typical IQR range (1.5× beyond Q1/Q3)")}
       {!outliers.ready ? (
         <EmptyState sub={`Need at least ${OUTLIER_MIN_SESSIONS} timed sessions before outliers can be identified reliably.`} />
-      ) : outliers.highTotal === 0 && outliers.lowTotal === 0 ? (
+      ) : outliers.high.length === 0 && outliers.low.length === 0 ? (
         <div style={{ color: TEXT, fontSize: 13, padding: "12px 0" }}>No statistical outliers — your session performance is consistent.</div>
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
           <div>
             <div style={{ color: GREEN, fontSize: 12, fontWeight: 700, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>
-              ↑ Overperformed ({outliers.highTotal})
+              ↑ Overperformed ({outliers.high.length})
             </div>
-            {outliers.highTotal === 0
+            {outliers.high.length === 0
               ? <div style={{ color: MUTED, fontSize: 12.5 }}>None found</div>
-              : (
-                <>
-                  {outliers.high.map(s => <Row key={s.id} s={s} kind="high" medianDuration={outliers.medianDuration} />)}
-                  {outliers.highTotal > outliers.high.length && (
-                    <div style={{ color: MUTED, fontSize: 11.5, marginTop: 8 }}>Showing top {outliers.high.length} of {outliers.highTotal}</div>
-                  )}
-                </>
-              )}
+              : outliers.high.map(s => <Row key={s.id} s={s} kind="high" medianDuration={outliers.medianDuration} />)}
           </div>
           <div>
             <div style={{ color: RED, fontSize: 12, fontWeight: 700, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>
-              ↓ Underperformed ({outliers.lowTotal})
+              ↓ Underperformed ({outliers.low.length})
             </div>
-            {outliers.lowTotal === 0
+            {outliers.low.length === 0
               ? (
                 <div style={{ color: MUTED, fontSize: 12.5, lineHeight: 1.5 }}>
                   None found — $/hour can't go below $0, so this side only flags sessions far below your typical range. That doesn't mean every session was strong, just that none were statistical extremes.
                 </div>
               )
-              : (
-                <>
-                  {outliers.low.map(s => <Row key={s.id} s={s} kind="low" medianDuration={outliers.medianDuration} />)}
-                  {outliers.lowTotal > outliers.low.length && (
-                    <div style={{ color: MUTED, fontSize: 11.5, marginTop: 8 }}>Showing top {outliers.low.length} of {outliers.lowTotal}</div>
-                  )}
-                </>
-              )}
+              : outliers.low.map(s => <Row key={s.id} s={s} kind="low" medianDuration={outliers.medianDuration} />)}
           </div>
         </div>
       )}
