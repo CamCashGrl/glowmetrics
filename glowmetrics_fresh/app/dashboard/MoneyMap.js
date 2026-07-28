@@ -24,17 +24,17 @@ const DAY_FULL = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","S
 const PLATFORM_COLORS = { chaturbate:"#f97316", myfreecams:"#3b82f6", stripchat:"#ec4899", bongacams:"#8b5cf6", camsoda:"#10b981", other:"#64748b" }
 const SOURCE_COLORS = [CYAN, PURPLE, PINK, AMBER, GREEN, "#ef4444", "#f97316", "#3b82f6"]
 
-// ─── UTC helpers ─────────────────────────────────────────────────────────────
-function utcHour(date)  { return new Date(date).getUTCHours() }
-function utcDay(date)   { return new Date(date).getUTCDay() }
+// ─── Time helpers ────────────────────────────────────────────────────────────
+function localHour(date) { return new Date(date).getHours() }
+function localDay(date)  { return new Date(date).getDay() }
 function utcYMD(date)   { const d = new Date(date); return `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,"0")}-${String(d.getUTCDate()).padStart(2,"0")}` }
 function utcMonthKey(date) { const d = new Date(date); return `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,"0")}` }
 
-function fmtHour(utcH) {
-  return new Date(Date.UTC(2000,0,1,utcH)).toLocaleTimeString([],{hour:"numeric",hour12:true})
+function fmtHour(localH) {
+  return new Date(2000,0,1,localH).toLocaleTimeString([],{hour:"numeric",hour12:true})
 }
-function fmtDayName(utcDayIdx) {
-  return new Date(Date.UTC(2024,0,7+utcDayIdx)).toLocaleDateString("en-US",{weekday:"long"})
+function fmtDayName(localDayIdx) {
+  return new Date(2024,0,7+localDayIdx).toLocaleDateString("en-US",{weekday:"long"})
 }
 function localHourDecFromDate(date) {
   const parts = new Intl.DateTimeFormat("en-US",{hour:"numeric",minute:"2-digit",hour12:false}).formatToParts(date)
@@ -79,8 +79,6 @@ function groupIntoSessions(tips) {
         tipsCount: 0,
         tippers: new Set(),
         platform: normPlatform(t.platform),
-        utcDay: utcDay(d),
-        utcHourStart: utcHour(d),
       }
     }
     cur.tokens   += Number(t.tokens||0)
@@ -124,8 +122,8 @@ function windowStats(tips) {
     grid[`${d}_${slot}`] = { day:d, slot, tokens:0, usd:0, count:0, sessions:0 }
   }
   for (const t of tips) {
-    const d = utcDay(t.date_time)
-    const h = utcHour(t.date_time)
+    const d = localDay(t.date_time)
+    const h = localHour(t.date_time)
     const slot = Math.floor(h/2)*2
     const key = `${d}_${slot}`
     if (grid[key]) {
@@ -327,13 +325,13 @@ function MoneyMapTab({ tips }) {
           <div style={{overflowX:"auto"}}>
             <div style={{display:"grid",gridTemplateColumns:`80px repeat(${TWO_HR_SLOTS.length},1fr)`,gap:"3px",minWidth:"500px"}}>
               {/* Header row */}
-              <div/>
+              <div style={{position:"sticky",left:0,background:BG,zIndex:2}}/>
               {TWO_HR_SLOTS.map(slot=>(
                 <div key={slot} style={{color:SLATE,fontSize:"10px",textAlign:"center",padding:"2px 0",fontWeight:"600"}}>{fmtHour(slot)}</div>
               ))}
               {/* Day rows */}
               {DAYS.map((day,di)=>[
-                <div key={`day-${di}`} style={{color:SLATE,fontSize:"11px",fontWeight:"600",display:"flex",alignItems:"center",paddingRight:"8px"}}>{day}</div>,
+                <div key={`day-${di}`} style={{position:"sticky",left:0,background:BG,zIndex:2,color:SLATE,fontSize:"11px",fontWeight:"600",display:"flex",alignItems:"center",paddingRight:"8px"}}>{day}</div>,
                 ...TWO_HR_SLOTS.map(slot=>{
                   const key=`${di}_${slot}`
                   const cell=grid[key]
