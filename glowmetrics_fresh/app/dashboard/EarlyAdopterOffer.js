@@ -1,5 +1,6 @@
 "use client"
 import { useState } from "react"
+import { supabase } from "../../lib/supabase"
 
 // ============================================================
 // CAMCASH — EARLY ADOPTER OFFER CARD
@@ -17,17 +18,27 @@ const C = {
 async function startCheckout(planType, setLoading) {
   setLoading(planType)
   try {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.access_token) {
+      alert('Your login session could not be found. Please sign in again.')
+      return
+    }
+
     const res = await fetch('/api/stripe/checkout', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      credentials: 'same-origin',
       body: JSON.stringify({ plan_type: planType }),
     })
-    if (res.status === 401) { window.location.href = `/login?plan=${planType}`; return }
-    const data = await res.json()
-    if (data.url) window.location.href = data.url
-    else alert('Something went wrong. Please try again.')
-  } catch {
-    alert('Something went wrong. Please try again.')
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(data.error || 'Unable to start Stripe Checkout.')
+    if (!data.url) throw new Error('Stripe Checkout did not return a payment URL.')
+    window.location.assign(data.url)
+  } catch (error) {
+    alert(error?.message || 'Something went wrong. Please try again.')
   } finally {
     setLoading(null)
   }

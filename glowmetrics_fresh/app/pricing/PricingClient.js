@@ -1,636 +1,620 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import UserCounter from '../components/UserCounter'
 import SiteFooter from '../components/SiteFooter'
 import Button from '../../components/ui/Button'
+import { supabase } from '../../lib/supabase'
 
+/*
+ * IMPORTANT:
+ * This client does not directly read Stripe environment variables.
+ *
+ * It sends:
+ *   standard_monthly
+ *   standard_annual
+ *
+ * The server route at app/api/stripe/checkout/route.js maps those to:
+ *   STRIPE_MONTHLY_PRICE_ID
+ *   NEXT_PUBLIC_STRIPE_PRICE_ANNUAL
+ */
 async function startCheckout(planType, setLoading) {
   setLoading(planType)
+
   try {
-    const res = await fetch('/api/stripe/checkout', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ plan_type: planType }),
-    })
-    if (res.status === 401) {
-      window.location.href = `/landing?plan=${planType}`
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
+
+    if (!session?.access_token) {
+      alert(
+        'Your login session could not be found. Please sign in again, then return to pricing.'
+      )
       return
     }
-    const data = await res.json()
-    if (data.url) {
-      window.location.href = data.url
-    } else {
-      alert('Something went wrong. Please try again.')
+
+    const response = await fetch('/api/stripe/checkout', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      credentials: 'include',
+      body: JSON.stringify({
+        plan_type: planType,
+      }),
+    })
+
+    const data = await response.json().catch(() => ({}))
+
+    if (!response.ok) {
+      throw new Error(
+        data.error || 'Unable to start Stripe Checkout.'
+      )
     }
-  } catch {
-    alert('Something went wrong. Please try again.')
+
+    if (!data.url) {
+      throw new Error(
+        'Stripe Checkout did not return a payment URL.'
+      )
+    }
+
+    window.location.assign(data.url)
+  } catch (error) {
+    alert(
+      error?.message ||
+        'Something went wrong while opening Stripe Checkout. Please try again.'
+    )
   } finally {
     setLoading(null)
   }
 }
 
-// ── Color palette — CamCash brand tokens (matches app/landing/LandingClient.js) ─
 const C = {
-  bg:         '#050713',
-  card:       'rgba(10, 14, 32, 0.82)',
-  card2:      'rgba(16, 20, 42, 0.72)',
-  border:     'rgba(124,92,255,0.15)',
-  borderPink: 'rgba(255,43,174,0.2)',
-  purple:     '#7C5CFF',
-  pink:       '#FF2BAE',
-  cyan:       '#16F4FF',
-  cyanSoft:   '#48E9FF',
-  green:      '#10B981',
-  gold:       '#FFC857',
-  white:      '#FFFFFF',
-  text:       '#8D93AA',
-  muted:      '#5E647C',
-  gradientPrimary: 'linear-gradient(90deg, #16F4FF 0%, #55B8FF 28%, #7C5CFF 52%, #FF2BAE 100%)',
+  bg: '#050713',
+  card: 'rgba(10, 14, 32, 0.82)',
+  card2: 'rgba(16, 20, 42, 0.72)',
+  border: 'rgba(124,92,255,0.15)',
+  purple: '#7C5CFF',
+  pink: '#FF2BAE',
+  cyan: '#16F4FF',
+  cyanSoft: '#48E9FF',
+  green: '#10B981',
+  white: '#FFFFFF',
+  text: '#8D93AA',
+  muted: '#5E647C',
+  gradientPrimary:
+    'linear-gradient(90deg, #16F4FF 0%, #55B8FF 28%, #7C5CFF 52%, #FF2BAE 100%)',
 }
 
-// ── Reusable check mark line ──────────────────────────────────────────────────
 function CheckLine({ children, color = C.cyan }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 10 }}>
-      <span style={{ color, fontWeight: 700, flexShrink: 0, marginTop: 1 }}>✓</span>
-      <span style={{ color: C.text, fontSize: 14, lineHeight: 1.55 }}>{children}</span>
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'flex-start',
+        gap: 10,
+        marginBottom: 11,
+      }}
+    >
+      <span
+        aria-hidden="true"
+        style={{
+          color,
+          fontWeight: 800,
+          flexShrink: 0,
+          marginTop: 1,
+        }}
+      >
+        ✓
+      </span>
+
+      <span
+        style={{
+          color: C.text,
+          fontSize: 14,
+          lineHeight: 1.55,
+        }}
+      >
+        {children}
+      </span>
     </div>
   )
 }
 
-// ── Section 1: Sticky Top Bar ─────────────────────────────────────────────────
-function TopBar() {
+function TopBar({ user }) {
   return (
-    <div style={{
-      position:        'fixed',
-      top:             0,
-      left:            0,
-      right:           0,
-      zIndex:          1000,
-      height:          '56px',
-      display:         'flex',
-      alignItems:      'center',
-      justifyContent:  'space-between',
-      padding:         '0 20px',
-      background:      'rgba(5,7,19,0.92)',
-      backdropFilter:  'blur(20px)',
-      WebkitBackdropFilter: 'blur(20px)',
-      borderBottom:    '1px solid rgba(124,92,255,0.2)',
-    }}>
-      <a href="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 9 }}>
-        <span style={{
-          width: 28, height: 28, borderRadius: 9,
-          background: C.gradientPrimary,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 14, fontWeight: 900, color: '#06101A',
-          boxShadow: '0 0 14px rgba(22,244,255,0.3)',
-        }}>$</span>
-        <span style={{ fontSize: 17, fontWeight: 800, color: C.white, letterSpacing: '-0.4px' }}>
+    <div
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        zIndex: 1000,
+        height: 56,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '0 20px',
+        background: 'rgba(5,7,19,0.92)',
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
+        borderBottom:
+          '1px solid rgba(124,92,255,0.2)',
+      }}
+    >
+      <a
+        href="/"
+        style={{
+          textDecoration: 'none',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 9,
+        }}
+      >
+        <span
+          style={{
+            width: 28,
+            height: 28,
+            borderRadius: 9,
+            background: C.gradientPrimary,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: 14,
+            fontWeight: 900,
+            color: '#06101A',
+            boxShadow:
+              '0 0 14px rgba(22,244,255,0.3)',
+          }}
+        >
+          $
+        </span>
+
+        <span
+          style={{
+            fontSize: 17,
+            fontWeight: 800,
+            color: C.white,
+            letterSpacing: '-0.4px',
+          }}
+        >
           Cam
-          <span style={{
-            background:           C.gradientPrimary,
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor:  'transparent',
-            backgroundClip:       'text',
-          }}>Cash</span>™
+          <span
+            style={{
+              background: C.gradientPrimary,
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              backgroundClip: 'text',
+            }}
+          >
+            Cash
+          </span>
+          ™
         </span>
       </a>
-      <Button as="a" href="/landing" style={{ padding: '8px 18px', fontSize: 13 }}>
-        Create Free Account →
+
+      <Button
+        as="a"
+        href={user ? '/dashboard' : '/landing'}
+        style={{
+          padding: '8px 18px',
+          fontSize: 13,
+        }}
+      >
+        {user
+          ? 'Back to Dashboard →'
+          : 'Create Free Account →'}
       </Button>
     </div>
   )
 }
 
-// ── Section 2: Hero ───────────────────────────────────────────────────────────
-function HeroSection() {
+function PricingSection({
+  checkoutLoading,
+  setCheckoutLoading,
+  user,
+}) {
+  const freeFeatures = [
+    'Track 1 cam platform',
+    'Upload tip history by CSV',
+    'Basic earnings dashboard',
+    'Basic session analytics',
+    'Live tip detection',
+    'Real-time alerts',
+    'Basic Live Mode coaching',
+    'Top 3 fans',
+    'Limited recent tip history',
+    'Basic fan insights',
+  ]
+
+  const standardFeatures = [
+    'Track all supported cam platforms',
+    'Full permanent tip history',
+    'Expanded fan insights',
+    'Full fan profiles and CRM tools',
+    'Cross-platform earnings comparisons',
+    'Advanced Live Mode coaching',
+    'Private-session analytics',
+    'Churn and re-engagement insights',
+    'Full best-time analysis',
+    'Stream Planner',
+    'Money Map',
+    'Advanced recommendations and reports',
+  ]
+
   return (
-    <section style={{
-      paddingTop:  80,
-      paddingBottom: 60,
-      paddingLeft:  20,
-      paddingRight: 20,
-      textAlign:   'center',
-      position:    'relative',
-    }}>
-      <div style={{
-        position:   'absolute',
-        inset:      0,
-        background: 'radial-gradient(ellipse 70% 55% at 50% 0%, rgba(124,92,255,0.13) 0%, rgba(5,7,19,0) 70%)',
-        pointerEvents: 'none',
-      }} />
-      <div style={{ position: 'relative', maxWidth: 760, margin: '0 auto' }}>
-        <div style={{
-          display: 'inline-flex', alignItems: 'center', gap: 8,
-          padding: '7px 14px', borderRadius: 999,
-          background: 'rgba(22,244,255,0.08)', border: '1px solid rgba(22,244,255,0.28)',
-          fontSize: 12, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase',
-          color: C.cyanSoft, marginBottom: 22,
-        }}>
-          <span style={{ width: 6, height: 6, borderRadius: '50%', background: C.cyan, boxShadow: '0 0 8px rgba(22,244,255,0.8)' }} />
-          Transparent Pricing
-        </div>
-        <h1 style={{
-          fontSize:             'clamp(30px, 6vw, 54px)',
-          fontWeight:           800,
-          lineHeight:           1.1,
-          margin:               '0 0 22px',
-          color:                C.white,
-          letterSpacing:        '-1px',
-        }}>
-          Transparent Pricing.<br /><span style={{
-            background:           C.gradientPrimary,
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor:  'transparent',
-            backgroundClip:       'text',
-          }}>Powerful Platform.</span>
-        </h1>
-        <p style={{
-          fontSize:   'clamp(15px, 2vw, 18px)',
-          color:      C.text,
-          lineHeight: 1.65,
-          margin:     '0 auto',
-          maxWidth:   620,
-        }}>
-          See exactly what changes after launch. Free tier always exists. No surprises. We're telling you now.
-        </p>
-      </div>
-    </section>
-  )
-}
-
-// ── Section 4: After Launch Comparison ───────────────────────────────────────
-function AfterLaunchSection({ checkoutLoading, setCheckoutLoading }) {
-  return (
-    <section style={{ padding: '0 20px 72px' }}>
-      <div style={{ maxWidth: 900, margin: '0 auto' }}>
-        {/* Heading */}
-        <div style={{ textAlign: 'center', marginBottom: 40 }}>
-          <h2 style={{
-            color:      C.white,
-            fontSize:   'clamp(24px, 4vw, 36px)',
-            fontWeight: 800,
-            margin:     '0 0 10px',
-            letterSpacing: '-0.5px',
-          }}>
-            When We Launch — Two Tiers
-          </h2>
-          <p style={{ color: C.text, fontSize: 15, margin: 0 }}>
-            Both valuable. Both available forever.
-          </p>
-        </div>
-
-        {/* Cards */}
-        <div style={{
-          display:             'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-          gap:                 24,
-        }}>
-          {/* Free Tier Card */}
-          <div style={{
-            background:   C.card,
-            border:       '1px solid rgba(22,244,255,0.2)',
-            borderRadius: 16,
-            padding:      '32px 28px',
-            display:      'flex',
-            flexDirection:'column',
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-              <span style={{ fontSize: 22 }}>🌿</span>
-              <span style={{ color: C.white, fontWeight: 800, fontSize: 20 }}>Free Tier</span>
-              <span style={{
-                marginLeft:   'auto',
-                background:   'rgba(16,185,129,0.15)',
-                color:        C.green,
-                borderRadius: 999,
-                padding:      '3px 12px',
-                fontSize:     12,
-                fontWeight:   700,
-                border:       '1px solid rgba(16,185,129,0.3)',
-              }}>$0 / month forever</span>
-            </div>
-
-            <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 20, marginTop: 12, flexGrow: 1 }}>
-              <CheckLine color={C.cyan}>Track 1 platform — live via the extension or by uploading your tip data</CheckLine>
-              <CheckLine color={C.cyan}>Live tip detection</CheckLine>
-              <CheckLine color={C.cyan}>Real-time alerts</CheckLine>
-              <CheckLine color={C.cyan}>Basic session coaching</CheckLine>
-              <CheckLine color={C.cyan}>Current-session analytics</CheckLine>
-              <CheckLine color={C.cyan}>Extension download + use forever</CheckLine>
-            </div>
-
-            <p style={{ color: C.green, fontSize: 12, fontWeight: 700, margin: '20px 0 20px', fontStyle: 'italic' }}>
-              Free tier will ALWAYS exist and be useful
+    <section
+      style={{
+        padding: '88px 20px 56px',
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'flex-start',
+      }}
+    >
+      <div
+        style={{
+          width: '100%',
+          maxWidth: 1000,
+          margin: '0 auto',
+        }}
+      >
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns:
+              'repeat(auto-fit, minmax(290px, 1fr))',
+            gap: 24,
+            alignItems: 'stretch',
+          }}
+        >
+          {/* FREE PLAN */}
+          <article
+            style={{
+              background: C.card,
+              border:
+                '1px solid rgba(22,244,255,0.22)',
+              borderRadius: 20,
+              padding: 28,
+              display: 'flex',
+              flexDirection: 'column',
+            }}
+          >
+            <p
+              style={{
+                color: C.cyan,
+                fontSize: 12,
+                fontWeight: 800,
+                textTransform: 'uppercase',
+                letterSpacing: '1.5px',
+                margin: '0 0 12px',
+              }}
+            >
+              Free
             </p>
 
-            <Button as="a" href="/landing" variant="secondary" style={{ display: 'block', width: '100%' }}>
-              Start with Free Tier →
-            </Button>
-          </div>
-
-          {/* Premium Tier Card */}
-          <div style={{
-            background:   C.card,
-            border:       '1px solid rgba(124,92,255,0.3)',
-            borderRadius: 16,
-            padding:      '32px 28px',
-            display:      'flex',
-            flexDirection:'column',
-            boxShadow:    '0 0 32px rgba(124,92,255,0.12)',
-          }}>
             <div style={{ marginBottom: 8 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-                <span style={{ fontSize: 22 }}>💜</span>
-                <span style={{ color: C.white, fontWeight: 800, fontSize: 20 }}>Standard Plan</span>
-                <span style={{
-                  marginLeft:   'auto',
-                  background:   'rgba(124,92,255,0.15)',
-                  color:        C.purple,
-                  borderRadius: 999,
-                  padding:      '3px 12px',
-                  fontSize:     12,
-                  fontWeight:   700,
-                  border:       '1px solid rgba(124,92,255,0.3)',
-                }}>$19.99 / month</span>
-              </div>
-              <p style={{ color: C.muted, fontSize: 13, margin: 0 }}>or $199.99/year (2 months free)</p>
-            </div>
-
-            <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 20, marginTop: 12, flexGrow: 1 }}>
-              <CheckLine color={C.purple}>Everything in Free tier, plus:</CheckLine>
-              <CheckLine color={C.purple}>Track multiple platforms at once (Chaturbate, BongaCams, MyFreeCams &amp; more)</CheckLine>
-              <CheckLine color={C.purple}>Save analytics history forever</CheckLine>
-              <CheckLine color={C.purple}>AI learns your patterns</CheckLine>
-              <CheckLine color={C.purple}>Performance trends &amp; insights</CheckLine>
-              <CheckLine color={C.purple}>Multi-month tracking</CheckLine>
-              <CheckLine color={C.purple}>Fan behavior analysis</CheckLine>
-              <CheckLine color={C.purple}>Creator benchmarking</CheckLine>
-              <CheckLine color={C.purple}>Predictive coaching</CheckLine>
-              <CheckLine color={C.purple}>Long-term growth optimization</CheckLine>
-            </div>
-
-            <div style={{ marginTop: 20 }}>
-              <Button
-                onClick={() => startCheckout('standard_monthly', setCheckoutLoading)}
-                disabled={checkoutLoading !== null}
-                style={{ display: 'block', width: '100%', padding: '12px 0', fontSize: 14 }}
+              <span
+                style={{
+                  color: C.white,
+                  fontSize: 42,
+                  fontWeight: 900,
+                  letterSpacing: '-1px',
+                }}
               >
-                {checkoutLoading === 'standard_monthly' ? 'Redirecting…' : 'Get Standard Plan — $19.99/mo →'}
+                $0
+              </span>
+
+              <span
+                style={{
+                  color: C.text,
+                  fontSize: 15,
+                  marginLeft: 4,
+                }}
+              >
+                /forever
+              </span>
+            </div>
+
+            <p
+              style={{
+                color: C.text,
+                fontSize: 14,
+                lineHeight: 1.6,
+                margin: '0 0 24px',
+              }}
+            >
+              Start tracking your earnings and using
+              CamCash without a credit card.
+            </p>
+
+            <div
+              style={{
+                flexGrow: 1,
+                marginBottom: 26,
+              }}
+            >
+              {freeFeatures.map((feature) => (
+                <CheckLine
+                  key={feature}
+                  color={C.cyan}
+                >
+                  {feature}
+                </CheckLine>
+              ))}
+            </div>
+
+            <Button
+              as="a"
+              href={user ? '/dashboard' : '/landing'}
+              variant="secondary"
+              style={{
+                display: 'block',
+                width: '100%',
+                padding: '13px 0',
+                fontSize: 14,
+                textAlign: 'center',
+              }}
+            >
+              {user
+                ? 'Continue to Dashboard →'
+                : 'Start Free →'}
+            </Button>
+          </article>
+
+          {/* STANDARD PLAN */}
+          <article
+            style={{
+              position: 'relative',
+              background: C.card2,
+              border: `2px solid ${C.pink}`,
+              borderRadius: 20,
+              padding: 28,
+              display: 'flex',
+              flexDirection: 'column',
+              boxShadow:
+                '0 0 36px rgba(255,43,174,0.16)',
+            }}
+          >
+            <div
+              style={{
+                position: 'absolute',
+                top: -13,
+                right: 22,
+                background: C.gradientPrimary,
+                color: '#06101A',
+                padding: '6px 12px',
+                borderRadius: 999,
+                fontSize: 11,
+                fontWeight: 900,
+                textTransform: 'uppercase',
+                letterSpacing: '0.6px',
+              }}
+            >
+              Most Popular
+            </div>
+
+            <p
+              style={{
+                color: C.pink,
+                fontSize: 12,
+                fontWeight: 800,
+                textTransform: 'uppercase',
+                letterSpacing: '1.5px',
+                margin: '0 0 12px',
+              }}
+            >
+              Standard
+            </p>
+
+            <div style={{ marginBottom: 6 }}>
+              <span
+                style={{
+                  color: C.white,
+                  fontSize: 42,
+                  fontWeight: 900,
+                  letterSpacing: '-1px',
+                }}
+              >
+                $19.99
+              </span>
+
+              <span
+                style={{
+                  color: C.text,
+                  fontSize: 15,
+                  marginLeft: 4,
+                }}
+              >
+                /month
+              </span>
+            </div>
+
+            <p
+              style={{
+                color: C.cyan,
+                fontWeight: 800,
+                fontSize: 14,
+                margin: '0 0 22px',
+              }}
+            >
+              Or $99 per year
+            </p>
+
+            <div
+              style={{
+                flexGrow: 1,
+                marginBottom: 26,
+              }}
+            >
+              {standardFeatures.map((feature) => (
+                <CheckLine
+                  key={feature}
+                  color={C.pink}
+                >
+                  {feature}
+                </CheckLine>
+              ))}
+            </div>
+
+            <div
+              style={{
+                display: 'grid',
+                gap: 12,
+              }}
+            >
+              <Button
+                type="button"
+                onClick={() =>
+                  startCheckout(
+                    'standard_monthly',
+                    setCheckoutLoading
+                  )
+                }
+                disabled={checkoutLoading !== null}
+                style={{
+                  display: 'block',
+                  width: '100%',
+                  padding: '13px 0',
+                  fontSize: 14,
+                }}
+              >
+                {checkoutLoading ===
+                'standard_monthly'
+                  ? 'Redirecting…'
+                  : 'Choose Monthly — $19.99'}
+              </Button>
+
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() =>
+                  startCheckout(
+                    'standard_annual',
+                    setCheckoutLoading
+                  )
+                }
+                disabled={checkoutLoading !== null}
+                style={{
+                  display: 'block',
+                  width: '100%',
+                  padding: '13px 0',
+                  fontSize: 14,
+                }}
+              >
+                {checkoutLoading ===
+                'standard_annual'
+                  ? 'Redirecting…'
+                  : 'Choose Annual — $99'}
               </Button>
             </div>
-          </div>
+          </article>
         </div>
       </div>
     </section>
   )
 }
 
-// ── Section 5: Early Adopter ──────────────────────────────────────────────────
-function EarlyAdopterSection({ checkoutLoading, setCheckoutLoading }) {
-  return (
-    <section id="early-adopter" style={{
-      background:   'rgba(255,43,174,0.06)',
-      borderTop:    '1px solid rgba(255,43,174,0.2)',
-      borderBottom: '1px solid rgba(255,43,174,0.2)',
-      padding:      '80px 20px',
-    }}>
-      {/* Header */}
-      <div style={{ textAlign: 'center', marginBottom: 48 }}>
-        <p style={{
-          fontSize:      11,
-          fontWeight:    800,
-          letterSpacing: '2.5px',
-          color:         C.pink,
-          textTransform: 'uppercase',
-          fontVariant:   'small-caps',
-          margin:        '0 0 14px',
-        }}>
-          ⏰ Early Adopter Offer
-        </p>
-        <h2 style={{
-          color:       C.white,
-          fontSize:    'clamp(24px, 4vw, 38px)',
-          fontWeight:  800,
-          margin:      '0 0 14px',
-          letterSpacing: '-0.5px',
-        }}>
-          Lock in lifetime pricing before we launch
-        </h2>
-        <p style={{ color: C.text, fontSize: 15, margin: '0 auto 24px', maxWidth: 540 }}>
-          Limited to the first 100 users. You help us launch — we reward you forever.
-        </p>
-        <UserCounter variant="full" />
-      </div>
-
-      {/* Cards */}
-      <div style={{
-        display:             'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-        gap:                 24,
-        maxWidth:            800,
-        margin:              '0 auto 32px',
-      }}>
-        {/* Monthly Card */}
-        <div style={{
-          border:       '2px solid rgba(255,43,174,0.4)',
-          background:   'rgba(255,43,174,0.07)',
-          borderRadius: 16,
-          padding:      '36px 28px',
-          display:      'flex',
-          flexDirection:'column',
-        }}>
-          <p style={{
-            fontSize:      10,
-            fontWeight:    800,
-            letterSpacing: '2px',
-            color:         C.pink,
-            textTransform: 'uppercase',
-            fontVariant:   'small-caps',
-            margin:        '0 0 16px',
-          }}>Most Flexible</p>
-
-          <div style={{ marginBottom: 8 }}>
-            <span style={{ fontSize: 48, fontWeight: 900, color: C.white, letterSpacing: '-2px', lineHeight: 1 }}>$9.99</span>
-            <span style={{ color: C.text, fontSize: 16, marginLeft: 4 }}>/month</span>
-          </div>
-          <p style={{ color: C.pink, fontWeight: 700, fontSize: 13, margin: '0 0 10px' }}>locked forever</p>
-          <p style={{ color: C.muted, fontSize: 13, margin: '0 0 6px', textDecoration: 'line-through' }}>
-            Regular price: $19.99/month
-          </p>
-          <p style={{ color: C.green, fontWeight: 700, fontSize: 13, margin: '0 0 24px' }}>
-            You save $10/month = $120/year
-          </p>
-
-          <div style={{ flexGrow: 1, marginBottom: 24 }}>
-            <CheckLine color={C.pink}>Lifetime locked rate — never increases</CheckLine>
-            <CheckLine color={C.pink}>Cancel anytime</CheckLine>
-            <CheckLine color={C.pink}>All premium features included</CheckLine>
-            <CheckLine color={C.pink}>Upgrade/downgrade anytime</CheckLine>
-          </div>
-
-          <Button
-            onClick={() => startCheckout('early_adopter_monthly', setCheckoutLoading)}
-            disabled={checkoutLoading !== null}
-            style={{ display: 'block', width: '100%', padding: '14px 0', fontSize: 14 }}
-          >
-            {checkoutLoading === 'early_adopter_monthly' ? 'Redirecting…' : 'Claim Early Adopter Monthly — $9.99/mo'}
-          </Button>
-        </div>
-
-        {/* Annual Card */}
-        <div style={{
-          border:       '2px solid rgba(124,92,255,0.4)',
-          background:   'rgba(124,92,255,0.08)',
-          borderRadius: 16,
-          padding:      '36px 28px',
-          display:      'flex',
-          flexDirection:'column',
-        }}>
-          <p style={{
-            fontSize:      10,
-            fontWeight:    800,
-            letterSpacing: '2px',
-            color:         C.purple,
-            textTransform: 'uppercase',
-            fontVariant:   'small-caps',
-            margin:        '0 0 16px',
-          }}>Best Value</p>
-
-          <div style={{ marginBottom: 8 }}>
-            <span style={{ fontSize: 48, fontWeight: 900, color: C.white, letterSpacing: '-2px', lineHeight: 1 }}>$99.99</span>
-            <span style={{ color: C.text, fontSize: 16, marginLeft: 4 }}>/year</span>
-          </div>
-          <p style={{ color: C.purple, fontWeight: 700, fontSize: 13, margin: '0 0 4px' }}>locked forever</p>
-          <p style={{ color: C.muted, fontSize: 13, margin: '0 0 6px' }}>$8.33/month equivalent</p>
-          <p style={{ color: C.muted, fontSize: 13, margin: '0 0 6px', textDecoration: 'line-through' }}>
-            Regular price: $199.99/year
-          </p>
-          <p style={{ color: C.green, fontWeight: 700, fontSize: 13, margin: '0 0 24px' }}>
-            You save $100/year + 2 months free
-          </p>
-
-          <div style={{ flexGrow: 1, marginBottom: 24 }}>
-            <CheckLine color={C.purple}>Lifetime locked rate — never increases</CheckLine>
-            <CheckLine color={C.purple}>2 months free vs monthly</CheckLine>
-            <CheckLine color={C.purple}>All premium features included</CheckLine>
-            <CheckLine color={C.purple}>Auto-renews at same locked rate</CheckLine>
-          </div>
-
-          <Button
-            onClick={() => startCheckout('early_adopter_annual', setCheckoutLoading)}
-            disabled={checkoutLoading !== null}
-            style={{ display: 'block', width: '100%', padding: '14px 0', fontSize: 14 }}
-          >
-            {checkoutLoading === 'early_adopter_annual' ? 'Redirecting…' : 'Claim Early Adopter Annual — $99.99/yr'}
-          </Button>
-        </div>
-      </div>
-
-      {/* Below cards note */}
-      <div style={{ textAlign: 'center' }}>
-        <p style={{ color: C.muted, fontSize: 13, margin: '0 0 12px' }}>
-          This offer expires when we reach 100 users. Early adopters keep their rate forever after that.
-        </p>
-        <UserCounter variant="compact" />
-      </div>
-    </section>
-  )
-}
-
-// ── Section 6: Our Promise ────────────────────────────────────────────────────
 function PromiseSection() {
+  const promises = [
+    'The free plan will always exist and remain genuinely useful',
+    'Core live tracking and basic coaching stay free',
+    'Standard unlocks full history, deeper insights, and multi-platform tracking',
+    'No surprise feature locks after launch',
+    '30 days notice before material pricing or plan changes',
+    'Built by cam models, for cam models',
+  ]
+
   return (
-    <section style={{ padding: '80px 20px' }}>
-      <div style={{
-        maxWidth:     760,
-        margin:       '0 auto',
-        background:   C.card,
-        border:       `1px solid ${C.border}`,
-        borderRadius: 20,
-        padding:      '48px 40px',
-      }}>
-        <h2 style={{
-          color:       C.white,
-          fontSize:    'clamp(22px, 3.5vw, 32px)',
-          fontWeight:  800,
-          margin:      '0 0 32px',
-          letterSpacing: '-0.4px',
-        }}>
+    <section style={{ padding: '72px 20px' }}>
+      <div
+        style={{
+          maxWidth: 760,
+          margin: '0 auto',
+          background: C.card,
+          border: `1px solid ${C.border}`,
+          borderRadius: 20,
+          padding: '48px 40px',
+        }}
+      >
+        <h2
+          style={{
+            color: C.white,
+            fontSize: 'clamp(22px, 3.5vw, 32px)',
+            fontWeight: 800,
+            margin: '0 0 32px',
+            letterSpacing: '-0.4px',
+          }}
+        >
           Our Promise to You
         </h2>
 
-        <div style={{ marginBottom: 36 }}>
-          {[
-            'Free tier will ALWAYS exist and be genuinely useful',
-            'Premium adds history + AI learning — core features stay free',
-            'No surprise feature locks after launch',
-            '30 days notice before any changes',
-            'Early adopter pricing locked forever — guaranteed',
-            'Built by cam models, for cam models',
-          ].map((promise) => (
-            <div key={promise} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 14 }}>
-              <span style={{ fontSize: 18, flexShrink: 0 }}>✅</span>
-              <span style={{ color: C.text, fontSize: 15, lineHeight: 1.55 }}>{promise}</span>
+        <div>
+          {promises.map((promise) => (
+            <div
+              key={promise}
+              style={{
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: 12,
+                marginBottom: 14,
+              }}
+            >
+              <span
+                aria-hidden="true"
+                style={{
+                  fontSize: 18,
+                  flexShrink: 0,
+                }}
+              >
+                ✅
+              </span>
+
+              <span
+                style={{
+                  color: C.text,
+                  fontSize: 15,
+                  lineHeight: 1.55,
+                }}
+              >
+                {promise}
+              </span>
             </div>
           ))}
         </div>
-
-        <div style={{
-          borderTop:  '1px solid rgba(255,255,255,0.06)',
-          paddingTop: 28,
-        }}>
-          <p style={{ color: C.purple, fontWeight: 700, fontSize: 14, margin: '0 0 10px' }}>
-            Why we're doing this:
-          </p>
-          <p style={{ color: C.text, fontSize: 15, lineHeight: 1.65, margin: 0 }}>
-            You help us launch. We reward you with lifetime savings. We get committed early users. Fair exchange for both.
-          </p>
-        </div>
       </div>
     </section>
   )
 }
 
-// ── Section 7: Feature Comparison Table ──────────────────────────────────────
-function ComparisonTable() {
-  const rows = [
-    { feature: 'Live tip detection',      free: '✅', premium: '✅', early: '✅' },
-    { feature: 'Real-time alerts',        free: '✅', premium: '✅', early: '✅' },
-    { feature: 'Basic coaching',          free: '✅', premium: '✅', early: '✅' },
-    { feature: 'Session analytics',       free: '✅', premium: '✅', early: '✅' },
-    { feature: 'Platforms tracked',       free: '1', premium: 'Unlimited', early: 'Unlimited' },
-    { feature: 'Save analytics history',  free: '❌', premium: '✅', early: '✅' },
-    { feature: 'Performance trends',      free: '❌', premium: '✅', early: '✅' },
-    { feature: 'AI learning',             free: '❌', premium: '✅', early: '✅' },
-    { feature: 'Multi-month tracking',    free: '❌', premium: '✅', early: '✅' },
-    { feature: 'Fan behavior analysis',   free: '❌', premium: '✅', early: '✅' },
-    { feature: 'Creator benchmarking',    free: '❌', premium: '✅', early: '✅' },
-    { feature: 'Predictive coaching',     free: '❌', premium: '✅', early: '✅' },
-    { feature: 'Price',                   free: '$0', premium: '$19.99/mo', early: '$9.99/mo*' },
-    { feature: 'Annual option',           free: '—', premium: '$199.99/yr', early: '$99.99/yr*' },
-    { feature: 'Lifetime price lock',     free: '—', premium: '❌', early: '✅ FOREVER', earlySpecial: true },
-    { feature: 'Availability',            free: 'Always', premium: 'After 100 users', early: 'First 100 only' },
-  ]
-
-  const thStyle = {
-    padding:    '14px 16px',
-    textAlign:  'left',
-    fontSize:   13,
-    fontWeight: 700,
-    color:      C.muted,
-    letterSpacing: '0.5px',
-    textTransform: 'uppercase',
-    whiteSpace: 'nowrap',
-  }
-
-  const tdStyle = (isAlt) => ({
-    padding:    '13px 16px',
-    fontSize:   14,
-    color:      C.text,
-    background: isAlt ? 'rgba(255,255,255,0.02)' : 'transparent',
-    borderTop:  '1px solid rgba(255,255,255,0.04)',
-    whiteSpace: 'nowrap',
-  })
-
-  function CellContent({ value, special }) {
-    if (special) {
-      return <span style={{ color: C.pink, fontWeight: 800 }}>{value}</span>
-    }
-    if (value === '✅') return <span style={{ color: C.green }}>{value}</span>
-    if (value === '❌') return <span style={{ color: C.muted }}>{value}</span>
-    return <span>{value}</span>
-  }
-
-  return (
-    <section style={{ padding: '0 20px 72px' }}>
-      <div style={{ maxWidth: 900, margin: '0 auto' }}>
-        <h2 style={{
-          color:       C.white,
-          fontSize:    'clamp(22px, 3.5vw, 32px)',
-          fontWeight:  800,
-          margin:      '0 0 32px',
-          textAlign:   'center',
-          letterSpacing: '-0.4px',
-        }}>
-          Full Feature Comparison
-        </h2>
-
-        <div style={{
-          background:   C.card,
-          border:       `1px solid ${C.border}`,
-          borderRadius: 16,
-          overflow:     'hidden',
-        }}>
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{
-              width:           '100%',
-              borderCollapse:  'collapse',
-              minWidth:        520,
-            }}>
-              <thead>
-                <tr style={{ background: C.card2 }}>
-                  <th style={{ ...thStyle, color: C.white }}>Feature</th>
-                  <th style={{ ...thStyle, color: C.cyan }}>Free ($0)</th>
-                  <th style={{ ...thStyle, color: C.purple }}>Premium ($19.99/mo)</th>
-                  <th style={{ ...thStyle, color: C.pink }}>Early Adopter ($9.99/mo)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row, i) => (
-                  <tr key={row.feature}>
-                    <td style={{ ...tdStyle(i % 2 === 1), color: C.white, fontWeight: 500 }}>{row.feature}</td>
-                    <td style={tdStyle(i % 2 === 1)}><CellContent value={row.free} /></td>
-                    <td style={tdStyle(i % 2 === 1)}><CellContent value={row.premium} /></td>
-                    <td style={tdStyle(i % 2 === 1)}><CellContent value={row.early} special={row.earlySpecial} /></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <p style={{ color: C.muted, fontSize: 12, margin: '12px 0 0', fontStyle: 'italic' }}>
-          * Early adopter pricing locked forever at sign-up rate
-        </p>
-      </div>
-    </section>
-  )
-}
-
-// ── Section 8: FAQ ────────────────────────────────────────────────────────────
 const FAQ_ITEMS = [
   {
-    q: 'Will the free tier always be available?',
-    a: 'Yes, absolutely. The free tier will always exist and always be genuinely useful. Live tip detection, real-time alerts, basic coaching, and session analytics are free forever. We built this for cam models and we mean it.',
+    q: 'Will the free plan always be available?',
+    a: 'Yes. The free plan will always exist and remain genuinely useful. It includes one tracked platform, CSV uploads, basic earnings and session analytics, live tip detection, real-time alerts, basic Live Mode coaching, top-three fan insights, and limited recent tip history.',
   },
   {
-    q: 'How many platforms can I track on the free tier?',
-    a: 'The free tier tracks 1 platform — either live through the Chrome extension or by uploading your tip data as a CSV. If you stream or want to track more than one platform (say, Chaturbate and BongaCams), upgrade to the Standard plan at $19.99/month to track them all at once.',
+    q: 'How many platforms can I track for free?',
+    a: 'The free plan supports one cam platform. Standard unlocks tracking across every supported platform and adds cross-platform comparisons.',
   },
   {
-    q: 'What happens to my early adopter pricing if I cancel and re-subscribe?',
-    a: 'Your early adopter rate is locked to your account at sign-up. If you cancel and re-subscribe later, you keep the same locked rate. We\'re not trying to trick you — you earned that rate by helping us launch.',
+    q: 'What does the Standard plan include?',
+    a: 'Standard includes all supported platforms, full permanent tip history, expanded fan profiles, CRM tools, cross-platform earnings comparisons, advanced Live Mode coaching, private-session analytics, churn and re-engagement insights, full best-time analysis, Stream Planner, Money Map, and advanced reports.',
   },
   {
-    q: 'When does the early adopter offer close?',
-    a: 'The early adopter offer closes automatically when we reach 100 registered users. After that, new users pay the standard rate. Current early adopters keep their locked rate forever.',
+    q: 'How much is Standard?',
+    a: 'Standard is $19.99 per month or $99 per year. Both billing options unlock the same Standard features.',
   },
   {
-    q: 'Is there a free trial for premium?',
-    a: 'During the launch phase, everything is completely free with no limits. Once we launch with paid tiers, we plan to offer a trial period for premium features. Details coming soon.',
+    q: 'Can I switch between monthly and annual billing?',
+    a: 'Yes. You can change your billing cycle through your subscription-management options.',
   },
   {
     q: 'What platforms does CamCash support?',
-    a: 'CamCash currently supports Chaturbate, BongaCams, MyFreeCams, and Stripchat. More platforms are on our roadmap based on user demand.',
+    a: 'CamCash currently supports Chaturbate, BongaCams, MyFreeCams, and Stripchat. Additional platforms may be added based on creator demand.',
   },
   {
     q: 'Is my data private?',
-    a: 'Yes. Your analytics data is private to your account. We do not sell or share your data. The extension only reads your stream page — it does not access any payment or personal information beyond what you configure.',
-  },
-  {
-    q: 'Can I upgrade or downgrade between monthly and annual?',
-    a: 'Yes. Early adopter monthly users can switch to early adopter annual (and vice versa) at any time, keeping their locked rate. You\'re never locked into a billing cycle you don\'t want.',
+    a: 'Yes. Your analytics data is private to your account. CamCash does not sell your personal analytics data.',
   },
 ]
 
@@ -639,62 +623,107 @@ function FAQSection() {
 
   return (
     <section style={{ padding: '0 20px 72px' }}>
-      <div style={{ maxWidth: 760, margin: '0 auto' }}>
-        <h2 style={{
-          color:       C.white,
-          fontSize:    'clamp(22px, 3.5vw, 32px)',
-          fontWeight:  800,
-          margin:      '0 0 32px',
-          textAlign:   'center',
-          letterSpacing: '-0.4px',
-        }}>
+      <div
+        style={{
+          maxWidth: 760,
+          margin: '0 auto',
+        }}
+      >
+        <h2
+          style={{
+            color: C.white,
+            fontSize: 'clamp(22px, 3.5vw, 32px)',
+            fontWeight: 800,
+            margin: '0 0 32px',
+            textAlign: 'center',
+            letterSpacing: '-0.4px',
+          }}
+        >
           Questions
         </h2>
 
-        <div style={{
-          background:   C.card,
-          border:       `1px solid ${C.border}`,
-          borderRadius: 16,
-          overflow:     'hidden',
-        }}>
-          {FAQ_ITEMS.map((item, i) => {
-            const isOpen = open === i
+        <div
+          style={{
+            background: C.card,
+            border: `1px solid ${C.border}`,
+            borderRadius: 16,
+            overflow: 'hidden',
+          }}
+        >
+          {FAQ_ITEMS.map((item, index) => {
+            const isOpen = open === index
+
             return (
-              <div key={i} style={{
-                borderBottom: i < FAQ_ITEMS.length - 1 ? '1px solid rgba(255,255,255,0.06)' : 'none',
-              }}>
+              <div
+                key={item.q}
+                style={{
+                  borderBottom:
+                    index < FAQ_ITEMS.length - 1
+                      ? '1px solid rgba(255,255,255,0.06)'
+                      : 'none',
+                }}
+              >
                 <button
-                  onClick={() => setOpen(isOpen ? null : i)}
+                  type="button"
+                  aria-expanded={isOpen}
+                  onClick={() =>
+                    setOpen(isOpen ? null : index)
+                  }
                   style={{
-                    width:          '100%',
-                    display:        'flex',
-                    alignItems:     'center',
+                    width: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
                     justifyContent: 'space-between',
-                    gap:            16,
-                    padding:        '20px 24px',
-                    background:     'transparent',
-                    border:         'none',
-                    cursor:         'pointer',
-                    textAlign:      'left',
+                    gap: 16,
+                    padding: '20px 24px',
+                    background: 'transparent',
+                    border: 'none',
+                    cursor: 'pointer',
+                    textAlign: 'left',
                   }}
                 >
-                  <span style={{ color: C.white, fontWeight: 600, fontSize: 15, lineHeight: 1.4 }}>
+                  <span
+                    style={{
+                      color: C.white,
+                      fontWeight: 600,
+                      fontSize: 15,
+                      lineHeight: 1.4,
+                    }}
+                  >
                     {item.q}
                   </span>
-                  <span style={{
-                    color:      C.purple,
-                    fontSize:   18,
-                    flexShrink: 0,
-                    transform:  isOpen ? 'rotate(180deg)' : 'rotate(0deg)',
-                    transition: 'transform 0.2s',
-                    lineHeight: 1,
-                  }}>
+
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      color: C.purple,
+                      fontSize: 18,
+                      flexShrink: 0,
+                      transform: isOpen
+                        ? 'rotate(180deg)'
+                        : 'rotate(0deg)',
+                      transition: 'transform 0.2s',
+                      lineHeight: 1,
+                    }}
+                  >
                     ›
                   </span>
                 </button>
+
                 {isOpen && (
-                  <div style={{ padding: '0 24px 20px' }}>
-                    <p style={{ color: C.text, fontSize: 14, lineHeight: 1.7, margin: 0 }}>
+                  <div
+                    style={{
+                      padding: '0 24px 20px',
+                    }}
+                  >
+                    <p
+                      style={{
+                        color: C.text,
+                        fontSize: 14,
+                        lineHeight: 1.7,
+                        margin: 0,
+                      }}
+                    >
                       {item.a}
                     </p>
                   </div>
@@ -708,38 +737,72 @@ function FAQSection() {
   )
 }
 
-// ── Section 9: Final CTA ──────────────────────────────────────────────────────
-function FinalCTA() {
+function FinalCTA({ user }) {
   return (
-    <section style={{
-      background: 'radial-gradient(ellipse 80% 60% at 50% 0%, rgba(124,92,255,0.2) 0%, rgba(5,7,19,0) 70%), #050713',
-      padding:    '80px 20px',
-      textAlign:  'center',
-    }}>
-      <h2 style={{
-        color:       C.white,
-        fontSize:    'clamp(26px, 5vw, 46px)',
-        fontWeight:  800,
-        margin:      '0 0 16px',
-        letterSpacing: '-1px',
-      }}>
+    <section
+      style={{
+        background:
+          'radial-gradient(ellipse 80% 60% at 50% 0%, rgba(124,92,255,0.2) 0%, rgba(5,7,19,0) 70%), #050713',
+        padding: '80px 20px',
+        textAlign: 'center',
+      }}
+    >
+      <h2
+        style={{
+          color: C.white,
+          fontSize: 'clamp(26px, 5vw, 46px)',
+          fontWeight: 800,
+          margin: '0 0 16px',
+          letterSpacing: '-1px',
+        }}
+      >
         Start free. Grow forever.
       </h2>
-      <p style={{ color: C.text, fontSize: 16, margin: '0 auto 36px', maxWidth: 480, lineHeight: 1.6 }}>
-        Download the extension free or create a free account — no credit card.
+
+      <p
+        style={{
+          color: C.text,
+          fontSize: 16,
+          margin: '0 auto 36px',
+          maxWidth: 480,
+          lineHeight: 1.6,
+        }}
+      >
+        Create a free account or return to your
+        dashboard. No credit card is required for the
+        Free plan.
       </p>
 
-      <div style={{
-        display:        'flex',
-        flexWrap:       'wrap',
-        gap:            14,
-        justifyContent: 'center',
-        marginBottom:   20,
-      }}>
-        <Button as="a" href="/landing" style={{ padding: '14px 28px' }}>
-          Create Free Account →
+      <div
+        style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: 14,
+          justifyContent: 'center',
+          marginBottom: 20,
+        }}
+      >
+        <Button
+          as="a"
+          href={user ? '/dashboard' : '/landing'}
+          style={{
+            padding: '14px 28px',
+          }}
+        >
+          {user
+            ? 'Go to Dashboard →'
+            : 'Create Free Account →'}
         </Button>
-        <Button as="a" href="/extension" variant="secondary" style={{ padding: '14px 28px', fontSize: 15 }}>
+
+        <Button
+          as="a"
+          href="/extension"
+          variant="secondary"
+          style={{
+            padding: '14px 28px',
+            fontSize: 15,
+          }}
+        >
           View Extension →
         </Button>
       </div>
@@ -748,50 +811,154 @@ function FinalCTA() {
         <UserCounter variant="pill" />
       </div>
 
-      <p style={{ color: C.muted, fontSize: 13, margin: 0 }}>
-        Free tier always available · No credit card for free account · 4 platforms supported
+      <p
+        style={{
+          color: C.muted,
+          fontSize: 13,
+          margin: 0,
+        }}
+      >
+        Free plan always available · No credit card
+        required · Four platforms supported
       </p>
     </section>
   )
 }
 
-// ── Ambient background (mirrors app/landing/LandingClient.js) ────────────────
 function AmbientBackground() {
   return (
-    <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0 }}>
-      <div style={{ position: 'absolute', inset: 0, backgroundImage: 'radial-gradient(1px 1px at 20% 30%, rgba(255,255,255,0.3), transparent), radial-gradient(1px 1px at 60% 10%, rgba(255,255,255,0.22), transparent), radial-gradient(1px 1px at 80% 60%, rgba(255,255,255,0.26), transparent), radial-gradient(1px 1px at 35% 80%, rgba(255,255,255,0.18), transparent), radial-gradient(1px 1px at 90% 85%, rgba(255,255,255,0.22), transparent)' }} />
-      <div style={{ position: 'absolute', width: 700, height: 700, top: '-15%', right: '-5%', background: 'radial-gradient(circle,rgba(22,244,255,0.08),transparent 65%)', filter: 'blur(60px)' }} />
-      <div style={{ position: 'absolute', width: 600, height: 600, bottom: '10%', left: '-10%', background: 'radial-gradient(circle,rgba(255,43,174,0.08),transparent 65%)', filter: 'blur(60px)' }} />
-      <div style={{ position: 'absolute', width: 600, height: 600, top: '40%', left: '40%', background: 'radial-gradient(circle,rgba(124,92,255,0.06),transparent 65%)', filter: 'blur(60px)' }} />
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        pointerEvents: 'none',
+        zIndex: 0,
+      }}
+    >
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          backgroundImage:
+            'radial-gradient(1px 1px at 20% 30%, rgba(255,255,255,0.3), transparent), radial-gradient(1px 1px at 60% 10%, rgba(255,255,255,0.22), transparent), radial-gradient(1px 1px at 80% 60%, rgba(255,255,255,0.26), transparent), radial-gradient(1px 1px at 35% 80%, rgba(255,255,255,0.18), transparent), radial-gradient(1px 1px at 90% 85%, rgba(255,255,255,0.22), transparent)',
+        }}
+      />
+
+      <div
+        style={{
+          position: 'absolute',
+          width: 700,
+          height: 700,
+          top: '-15%',
+          right: '-5%',
+          background:
+            'radial-gradient(circle, rgba(22,244,255,0.08), transparent 65%)',
+          filter: 'blur(60px)',
+        }}
+      />
+
+      <div
+        style={{
+          position: 'absolute',
+          width: 600,
+          height: 600,
+          bottom: '10%',
+          left: '-10%',
+          background:
+            'radial-gradient(circle, rgba(255,43,174,0.08), transparent 65%)',
+          filter: 'blur(60px)',
+        }}
+      />
+
+      <div
+        style={{
+          position: 'absolute',
+          width: 600,
+          height: 600,
+          top: '40%',
+          left: '40%',
+          background:
+            'radial-gradient(circle, rgba(124,92,255,0.06), transparent 65%)',
+          filter: 'blur(60px)',
+        }}
+      />
     </div>
   )
 }
 
-// ── Root Component ────────────────────────────────────────────────────────────
 export default function PricingClient() {
-  const [checkoutLoading, setCheckoutLoading] = useState(null)
-  return (
-    <div style={{
-      minHeight:       '100vh',
-      background:      C.bg,
-      color:           C.white,
-      fontFamily:      "'DM Sans', system-ui, -apple-system, sans-serif",
-      WebkitFontSmoothing: 'antialiased',
-    }}>
-      <AmbientBackground />
-      <TopBar />
+  const [checkoutLoading, setCheckoutLoading] =
+    useState(null)
 
-      <main style={{ position: 'relative', zIndex: 1 }}>
-        <HeroSection />
-        <AfterLaunchSection checkoutLoading={checkoutLoading} setCheckoutLoading={setCheckoutLoading} />
-        <EarlyAdopterSection checkoutLoading={checkoutLoading} setCheckoutLoading={setCheckoutLoading} />
+  const [user, setUser] = useState(null)
+
+  useEffect(() => {
+    let mounted = true
+
+    supabase.auth
+      .getSession()
+      .then(({ data: { session } }) => {
+        if (mounted) {
+          setUser(session?.user || null)
+        }
+      })
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        if (mounted) {
+          setUser(session?.user || null)
+        }
+      }
+    )
+
+    return () => {
+      mounted = false
+      subscription.unsubscribe()
+    }
+  }, [])
+
+  return (
+    <div
+      style={{
+        minHeight: '100vh',
+        background: C.bg,
+        color: C.white,
+        fontFamily:
+          "'DM Sans', system-ui, -apple-system, sans-serif",
+        WebkitFontSmoothing: 'antialiased',
+      }}
+    >
+      <AmbientBackground />
+
+      <TopBar user={user} />
+
+      <main
+        style={{
+          position: 'relative',
+          zIndex: 1,
+        }}
+      >
+        <PricingSection
+          checkoutLoading={checkoutLoading}
+          setCheckoutLoading={setCheckoutLoading}
+          user={user}
+        />
+
         <PromiseSection />
-        <ComparisonTable />
+
         <FAQSection />
-        <FinalCTA />
+
+        <FinalCTA user={user} />
       </main>
 
-      <div style={{ position: 'relative', zIndex: 1 }}>
+      <div
+        style={{
+          position: 'relative',
+          zIndex: 1,
+        }}
+      >
         <SiteFooter />
       </div>
     </div>
