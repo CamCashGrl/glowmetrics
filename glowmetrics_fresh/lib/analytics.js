@@ -22,6 +22,20 @@ function calcMedian(arr) {
     : sorted[mid]
 }
 
+// ===============================
+// DATA CONFIDENCE
+// Single source of truth for "how much do we trust this sample" — never
+// reimplement these bands locally in a component or page.
+// ===============================
+export function calculateConfidence(validSessionCount, streamedHours) {
+  const n = validSessionCount || 0
+  const h = streamedHours || 0
+  if (n >= 10 && h >= 20) return { level: 'High',     label: 'Strong pattern' }
+  if (n < 3 || h < 3)     return { level: 'Very Low', label: 'Not enough data yet' }
+  if (n <= 4 || h <= 5)   return { level: 'Low',      label: 'Early signal' }
+  return { level: 'Medium', label: 'Likely pattern' }
+}
+
 export function toLocalHour(dateStr, tz) {
   try {
     const date = new Date(dateStr)
