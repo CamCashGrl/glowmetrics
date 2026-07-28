@@ -325,13 +325,13 @@ function MoneyMapTab({ tips }) {
           <div style={{overflowX:"auto"}}>
             <div style={{display:"grid",gridTemplateColumns:`80px repeat(${TWO_HR_SLOTS.length},1fr)`,gap:"3px",minWidth:"500px"}}>
               {/* Header row */}
-              <div/>
+              <div style={{position:"sticky",left:0,background:BG,zIndex:2}}/>
               {TWO_HR_SLOTS.map(slot=>(
                 <div key={slot} style={{color:SLATE,fontSize:"10px",textAlign:"center",padding:"2px 0",fontWeight:"600"}}>{fmtHour(slot)}</div>
               ))}
               {/* Day rows */}
               {DAYS.map((day,di)=>[
-                <div key={`day-${di}`} style={{color:SLATE,fontSize:"11px",fontWeight:"600",display:"flex",alignItems:"center",paddingRight:"8px"}}>{day}</div>,
+                <div key={`day-${di}`} style={{position:"sticky",left:0,background:BG,zIndex:2,color:SLATE,fontSize:"11px",fontWeight:"600",display:"flex",alignItems:"center",paddingRight:"8px"}}>{day}</div>,
                 ...TWO_HR_SLOTS.map(slot=>{
                   const key=`${di}_${slot}`
                   const cell=grid[key]
