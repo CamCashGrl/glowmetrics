@@ -13,6 +13,7 @@ import EventsSync from './EventsSync';
 import Button from '../../components/ui/Button';
 import { useLiveSessionEngine } from './useLiveSessionEngine';
 import { TRIGGER_LEVEL, TRIGGER_ICON } from '../../lib/coaching/triggers';
+import CoachingHistory from './CoachingHistory';
 
 const C = {
   bg: '#040812', card: 'rgba(15,20,32,0.75)', border: 'rgba(168,85,247,0.2)',
@@ -1257,6 +1258,13 @@ export default function LivePage() {
                 </div>
               );
             })()}
+
+            {/* ── COACHING HISTORY ─────────────────────────────────── */}
+            <CoachingHistory
+              sessionId={engine.engineMode === 'v2' ? engine.serverSession?.id : null}
+              activePromptId={coachingPrompt?.id || null}
+              hasActiveSession={engine.engineMode === 'v2' && ['active', 'paused', 'needs_resolution'].includes(engine.serverSession?.status)}
+            />
 
             {/* ── MAIN GRID ─────────────────────────────────────────── */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 350px', gap: 20, marginBottom: 20 }}>
