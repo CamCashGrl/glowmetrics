@@ -128,6 +128,11 @@ const posts = [
     description: 'Common mistakes that kill cam session earnings.',
   },
   {
+    slug: 'cam-room-slow-what-to-do',
+    title: 'Cam Room Slow? 12 Things to Do Before You Log Off',
+    description: 'Practical moves to try before you end a slow session, plus how to tell if the room is actually dead.',
+  },
+  {
     slug: 'why-cam-model-data-prevents-overspending',
     title: 'Why Cam Model Data Prevents Overspending: The Case for Tracking',
     description: 'How tracking your data stops the leaks and keeps more money in your pocket.',
