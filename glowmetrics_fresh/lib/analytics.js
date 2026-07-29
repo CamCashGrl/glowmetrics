@@ -61,7 +61,9 @@ export function toLocalDow(dateStr, tz) {
   } catch { return new Date(dateStr).getUTCDay() }
 }
 
-function toLocalDateStr(dateStr, tz) {
+// Exported so lib/taxOrganizer/earningsSummary.js can reuse the exact same
+// local-date logic instead of reimplementing it — no behavior change.
+export function toLocalDateStr(dateStr, tz) {
   try {
     return new Intl.DateTimeFormat('en-CA', {
       timeZone: tz
