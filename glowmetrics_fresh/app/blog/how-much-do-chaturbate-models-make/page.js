@@ -1,31 +1,31 @@
 import ArticleLayout from '../../components/ArticleLayout'
 
 export const metadata = {
-  title: 'How Much Do Chaturbate Models Make? $3–$150+/hr by Level',
-  description: 'Real Chaturbate hourly rates by experience: $3–$10/hr new, $10–$25/hr established, $60–$150+/hr top earners. Token-to-USD conversion and what actually drives pay.',
+  title: 'How Much Do Chaturbate Models Make in 2026? Earnings by Level',
+  description: 'See realistic Chaturbate earnings for new, established and top models, including hourly ranges, monthly examples, token values and the factors that affect income.',
   alternates: { canonical: 'https://www.camcashgrl.com/blog/how-much-do-chaturbate-models-make' },
   openGraph: {
-    title: 'How Much Do Chaturbate Models Make? $3–$150+/hr by Level',
-    description: 'Real Chaturbate hourly rates by experience level, token-to-USD conversion, and what actually drives pay — not vague averages.',
+    title: 'How Much Do Chaturbate Models Make in 2026? Earnings by Level',
+    description: 'See realistic Chaturbate earnings for new, established and top models, including hourly ranges, monthly examples, token values and the factors that affect income.',
     url: 'https://www.camcashgrl.com/blog/how-much-do-chaturbate-models-make',
     type: 'article',
     images: [{ url: 'https://www.camcashgrl.com/og-image.png', width: 1200, height: 630 }],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'How Much Do Chaturbate Models Make? $3–$150+/hr by Level',
-    description: 'Real hourly rates by experience level, token-to-USD conversion, and what actually drives pay.',
+    title: 'How Much Do Chaturbate Models Make in 2026? Earnings by Level',
+    description: 'See realistic Chaturbate earnings for new, established and top models, including hourly ranges, monthly examples, token values and the factors that affect income.',
   },
 }
 
 const schema = {
   '@context': 'https://schema.org',
   '@type': 'Article',
-  headline: 'How Much Do Chaturbate Models Make? $3–$150+/hr by Level',
-  description: 'Real Chaturbate hourly rates by experience: $3–$10/hr new, $10–$25/hr established, $60–$150+/hr top earners. Token-to-USD conversion and what actually drives pay.',
+  headline: 'How Much Do Chaturbate Models Make in 2026? Earnings by Level',
+  description: 'See realistic Chaturbate earnings for new, established and top models, including hourly ranges, monthly examples, token values and the factors that affect income.',
   url: 'https://www.camcashgrl.com/blog/how-much-do-chaturbate-models-make',
   datePublished: '2026-01-01',
-  dateModified: '2026-06-16',
+  dateModified: '2026-07-29',
   author: { '@type': 'Person', name: 'Daphne Dawson', jobTitle: 'Cam Model' },
   publisher: { '@type': 'Organization', name: 'CamCash', url: 'https://www.camcashgrl.com' },
   mainEntityOfPage: { '@type': 'WebPage', '@id': 'https://www.camcashgrl.com/blog/how-much-do-chaturbate-models-make' },
@@ -86,10 +86,6 @@ const s = {
   tierRow:  { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '14px 16px', borderRadius: '8px', background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' },
   tierVal:  { fontSize: '18px', fontWeight: 800, color: '#10b981', whiteSpace: 'nowrap' },
   note:     { padding: '12px 16px', borderRadius: '8px', background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.07)', marginBottom: '16px' },
-  cta:      { background: 'rgba(99,102,241,0.07)', border: '1px solid rgba(99,102,241,0.18)', borderRadius: '10px', padding: '22px 24px', margin: '36px 0', textAlign: 'center' },
-  ctaT:     { fontSize: '17px', fontWeight: 700, color: '#f1f5f9', marginBottom: '6px' },
-  ctaS:     { fontSize: '13px', color: '#64748b', marginBottom: '16px' },
-  ctaBtn:   { display: 'inline-block', padding: '9px 22px', borderRadius: '7px', background: '#6366f1', color: 'white', fontWeight: 600, fontSize: '14px', textDecoration: 'none' },
   tools:    { marginTop: '32px', paddingTop: '24px', borderTop: '1px solid rgba(255,255,255,0.06)' },
   toolT:    { fontSize: '11px', color: '#475569', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '10px' },
   toolGrid: { display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', marginBottom: '24px' },
@@ -102,26 +98,11 @@ const s = {
   relLink:  { fontSize: '14px', color: '#6366f1', textDecoration: 'none' },
   iLink:    { color: '#a5b4fc', textDecoration: 'none' },
 
-  hourlyBox:   { background: 'linear-gradient(135deg, rgba(99,102,241,0.10) 0%, rgba(16,185,129,0.07) 100%)', border: '1px solid rgba(99,102,241,0.22)', borderRadius: '12px', padding: '24px', margin: '0 0 32px' },
-  hourlyH:     { fontSize: '18px', fontWeight: 800, color: '#f1f5f9', marginBottom: '10px', letterSpacing: '-0.01em' },
-  hourlyP:     { fontSize: '14px', color: '#94a3b8', lineHeight: 1.65, marginBottom: '16px' },
-  hourlyComp:  { display: 'flex', gap: '10px', marginBottom: '20px', flexWrap: 'wrap' },
-  hourlyCard:  { flex: 1, minWidth: '120px', padding: '14px', borderRadius: '9px', background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.06)', textAlign: 'center' },
-  hourlyRate:  { fontSize: '22px', fontWeight: 800, color: '#10b981', marginBottom: '2px' },
-  hourlyDesc:  { fontSize: '11px', color: '#475569', lineHeight: 1.5 },
-  hourlyBtn:   { display: 'inline-block', padding: '11px 28px', borderRadius: '8px', background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', color: 'white', fontWeight: 700, fontSize: '15px', textDecoration: 'none' },
-
   roiSection:  { margin: '32px 0', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.07)', overflow: 'hidden' },
   roiHeader:   { padding: '18px 22px', background: 'rgba(255,255,255,0.02)' },
   roiH:        { fontSize: '17px', fontWeight: 700, color: '#e2e8f0', marginBottom: '5px' },
   roiSub:      { fontSize: '13px', color: '#64748b', lineHeight: 1.6 },
   roiFooter:   { padding: '14px 22px', background: 'rgba(255,255,255,0.015)', borderTop: '1px solid rgba(255,255,255,0.05)', textAlign: 'center' },
-
-  insightBig:  { padding: '20px 22px', borderRadius: '10px', background: 'rgba(99,102,241,0.07)', border: '1px solid rgba(99,102,241,0.18)', marginBottom: '20px' },
-  insightIcon: { fontSize: '22px', marginBottom: '10px', display: 'block' },
-  insightBody: { fontSize: '15px', color: '#cbd5e1', lineHeight: 1.7, marginBottom: '14px' },
-  insightSub:  { fontSize: '14px', color: '#64748b', lineHeight: 1.6, marginBottom: '16px' },
-  insightBtn:  { display: 'inline-block', padding: '9px 22px', borderRadius: '7px', background: '#6366f1', color: 'white', fontWeight: 600, fontSize: '14px', textDecoration: 'none' },
 
   calcBox:     { borderRadius: '10px', border: '1px solid rgba(16,185,129,0.18)', background: 'rgba(16,185,129,0.05)', padding: '20px 22px', margin: '20px 0' },
   calcH:       { fontSize: '14px', fontWeight: 700, color: '#10b981', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '14px' },
@@ -134,14 +115,6 @@ const s = {
   failList:    { padding: '16px 20px', borderRadius: '9px', background: 'rgba(239,68,68,0.04)', border: '1px solid rgba(239,68,68,0.12)', marginBottom: '20px' },
   failH:       { fontSize: '14px', fontWeight: 700, color: '#fca5a5', marginBottom: '10px' },
   failItem:    { fontSize: '14px', color: '#94a3b8', lineHeight: 1.7, marginBottom: '4px', paddingLeft: '4px' },
-
-  hidingSection: { margin: '40px 0', borderRadius: '12px', border: '1px solid rgba(139,92,246,0.2)', background: 'rgba(139,92,246,0.04)', overflow: 'hidden' },
-  hidingHeader:  { padding: '20px 22px', borderBottom: '1px solid rgba(139,92,246,0.1)' },
-  hidingH:       { fontSize: '17px', fontWeight: 800, color: '#e2e8f0', marginBottom: '6px' },
-  hidingSub:     { fontSize: '13px', color: '#64748b', lineHeight: 1.6 },
-  hidingImg:     { borderBottom: '1px solid rgba(255,255,255,0.05)' },
-  hidingBody:    { padding: '18px 22px' },
-  hidingInsight: { fontSize: '14px', color: '#cbd5e1', lineHeight: 1.7, marginBottom: '12px' },
 
   finalCta:    { background: 'linear-gradient(135deg, rgba(99,102,241,0.10) 0%, rgba(139,92,246,0.08) 100%)', border: '1px solid rgba(99,102,241,0.25)', borderRadius: '14px', padding: '36px 28px', margin: '44px 0 36px', textAlign: 'center' },
   finalCtaH:   { fontSize: '23px', fontWeight: 800, color: '#f1f5f9', marginBottom: '8px', letterSpacing: '-0.02em' },
@@ -162,39 +135,58 @@ export default function ChaturbateEarningsPost() {
     >
       <div style={s.meta}>
         <span>Daphne Dawson</span>
-        <span>Updated June 2026</span>
-        <span>9 min read</span>
+        <span>Updated July 2026</span>
+        <span>10 min read</span>
       </div>
 
       <h1 style={s.h1}>How Much Do Chaturbate Models Make?</h1>
 
       <p style={s.intro}>
-        The honest answer: it varies more than almost any other job. Chaturbate model earnings range from under $5/hr to $100+/hr
-        depending on audience size, streaming schedule, and strategy. Here's what the real numbers look like — and how to calculate yours.
+        Chaturbate earnings vary more than almost any other job because so many factors change the outcome: your experience level,
+        streaming schedule, session length, audience size, how many returning tippers you have, and how consistently you stream.
+        Here's what realistic earnings look like at each stage — and how to calculate your own real hourly rate.
       </p>
 
-      <div style={s.hourlyBox}>
-        <div style={s.hourlyH}>What's Your Real Hourly Rate?</div>
-        <p style={s.hourlyP}>
-          Most models have no idea what they actually earn per hour. Two models can both make $300 in a week, but one streams 8 hours while the other streams 30. That's the difference between:
+      <h2 style={{ ...s.h2, marginTop: 0 }}>Chaturbate Earnings at a Glance: Monthly Examples</h2>
+      <p style={s.p}>These are worked examples, not guarantees — they show what the hourly ranges below translate to at roughly 15 streaming hours per week:</p>
+      <div style={{ overflowX: 'auto', marginBottom: '8px' }}>
+        <table style={{ width: '100%', minWidth: '520px', borderCollapse: 'collapse', fontSize: '14px' }}>
+          <thead>
+            <tr>
+              <th style={{ padding: '10px 12px', textAlign: 'left', fontSize: '11px', fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid rgba(255,255,255,0.07)', background: 'rgba(255,255,255,0.02)' }}>Experience level</th>
+              <th style={{ padding: '10px 12px', textAlign: 'left', fontSize: '11px', fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid rgba(255,255,255,0.07)', background: 'rgba(255,255,255,0.02)' }}>Hourly range</th>
+              <th style={{ padding: '10px 12px', textAlign: 'left', fontSize: '11px', fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid rgba(255,255,255,0.07)', background: 'rgba(255,255,255,0.02)' }}>At 15 hrs/week</th>
+              <th style={{ padding: '10px 12px', textAlign: 'left', fontSize: '11px', fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid rgba(255,255,255,0.07)', background: 'rgba(255,255,255,0.02)' }}>Monthly range</th>
+            </tr>
+          </thead>
+          <tbody>
+            {[
+              ['New model', '$3–$10/hour', '$45–$150/week', '$195–$650/month'],
+              ['Established model', '$10–$25/hour', '$150–$375/week', '$650–$1,625/month'],
+              ['Popular model', '$25–$60/hour', '$375–$900/week', '$1,625–$3,900/month'],
+              ['Top-performing model', '$60–$150+/hour', 'Highly variable', 'Highly variable'],
+            ].map((row) => (
+              <tr key={row[0]}>
+                <td style={{ padding: '11px 12px', color: '#c7d2fe', fontWeight: 600, borderBottom: '1px solid rgba(255,255,255,0.04)' }}>{row[0]}</td>
+                <td style={{ padding: '11px 12px', color: '#10b981', fontWeight: 700, borderBottom: '1px solid rgba(255,255,255,0.04)' }}>{row[1]}</td>
+                <td style={{ padding: '11px 12px', color: '#94a3b8', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>{row[2]}</td>
+                <td style={{ padding: '11px 12px', color: '#94a3b8', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>{row[3]}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p style={{ ...s.p, fontSize: '12px', color: '#475569' }}>
+        These are mathematical examples based on the listed hourly ranges and 15 streaming hours per week. They are not guaranteed earnings.
+      </p>
+
+      <div style={s.note}>
+        <div style={{ fontSize: '14px', fontWeight: 700, color: '#e2e8f0', marginBottom: '8px' }}>How these ranges were estimated</div>
+        <p style={{ ...s.p, marginBottom: 0, fontSize: '14px' }}>
+          These figures combine Chaturbate's token conversion rate, publicly shared creator experiences, general industry observations and CamCash analysis examples.
+          Individual earnings vary significantly based on traffic, hours, consistency, niche, audience loyalty and private-show activity. Treat these figures as
+          directional estimates rather than guarantees.
         </p>
-        <div style={s.hourlyComp}>
-          <div style={s.hourlyCard}>
-            <div style={s.hourlyRate}>$37.50/hr</div>
-            <div style={s.hourlyDesc}>8 hrs · $300 earned</div>
-          </div>
-          <div style={{ ...s.hourlyCard, display: 'flex', alignItems: 'center', justifyContent: 'center', flex: '0 0 auto', minWidth: 'unset', padding: '0 8px' }}>
-            <span style={{ fontSize: '20px', color: '#475569' }}>vs</span>
-          </div>
-          <div style={s.hourlyCard}>
-            <div style={{ ...s.hourlyRate, color: '#f87171' }}>$10.00/hr</div>
-            <div style={s.hourlyDesc}>30 hrs · $300 earned</div>
-          </div>
-        </div>
-        <p style={{ ...s.hourlyP, marginBottom: '20px' }}>
-          CamCash automatically calculates your real Chaturbate hourly rate from your CSV export — per session, per platform, per day of week. Use the <a href="/guides/chaturbate-earnings-tracker" style={s.iLink}>Chaturbate earnings tracker</a> to see yours.
-        </p>
-        <a href="/landing" style={s.hourlyBtn}>Calculate My Hourly Rate Free</a>
       </div>
 
       <div style={s.statGrid}>
@@ -212,7 +204,7 @@ export default function ChaturbateEarningsPost() {
         </div>
       </div>
 
-      <h2 style={s.h2}>Average Chaturbate Earnings for Beginners</h2>
+      <h2 style={s.h2}>Earnings by Experience Level</h2>
       <p style={s.p}>Community-reported earnings suggest these approximate ranges for <em>active</em> Chaturbate models — meaning those streaming at least 15 hours per week:</p>
 
       {[
@@ -231,18 +223,18 @@ export default function ChaturbateEarningsPost() {
       ))}
       <p style={{ ...s.p, fontSize: '12px', color: '#475569', marginTop: '8px' }}>Rough ranges based on community data. Your actual earnings depend on factors covered below.</p>
 
-      <div style={s.insightBig}>
-        <span style={s.insightIcon}>📈</span>
-        <div style={s.insightBody}>
-          Most creators earn 30–50% more during their best 3 hours compared to their off-peak average — even with identical effort and show quality.
-        </div>
-        <div style={s.insightSub}>
-          The problem? Most don't know when those hours are. They're streaming blind — guessing based on general advice instead of their own data.
-        </div>
-        <a href="/landing" style={s.insightBtn}>Find My Peak Hours</a>
+      <p style={s.p}>
+        Many creators discover that a small number of recurring time windows consistently outperform the rest of their schedule, even when the effort and show quality stay the same. The problem is that most models never identify those windows — they stream on a general schedule instead of one based on their own tip history.
+      </p>
+
+      <div style={{ padding: '18px 20px', borderRadius: '10px', background: 'rgba(99,102,241,0.05)', border: '1px solid rgba(99,102,241,0.15)', marginBottom: '20px' }}>
+        <p style={{ ...s.p, marginBottom: '6px', fontWeight: 700, color: '#e2e8f0', fontSize: '15px' }}>From Daphne, CamCash founder and cam model</p>
+        <p style={{ ...s.p, marginBottom: 0 }}>
+          From my own experience, weekly totals alone can be misleading. A profitable four-hour session and a slow twelve-hour week can produce similar totals but require completely different decisions. That's why I began comparing income by hour, session, platform and returning tipper instead of looking only at total tokens.
+        </p>
       </div>
 
-      <h2 style={s.h2}>How Chaturbate Tokens Convert to Real Money</h2>
+      <h2 style={s.h2}>How Chaturbate Tokens Convert to Cash</h2>
       <p style={s.p}>Chaturbate pays models at a rate of <strong style={{ color: '#f1f5f9' }}>$0.05 per token</strong> at the standard broadcaster rate. This means:</p>
       <ul style={s.ul}>
         <li style={s.li}>100 tokens = $5.00 to you</li>
@@ -259,6 +251,10 @@ export default function ChaturbateEarningsPost() {
         </p>
       </div>
 
+      <h2 style={s.h2}>How to Calculate Your Real Hourly Rate</h2>
+      <p style={s.p}>
+        Most models track total tokens, not $/hr — which hides the real picture. Two models can both earn $300 in a week, but one streams 8 hours while the other streams 30. That's the difference between $37.50/hr and $10.00/hr for the identical total.
+      </p>
       <div style={s.calcBox}>
         <div style={s.calcH}>Example Calculation</div>
         <div style={s.calcRow}>
@@ -276,25 +272,22 @@ export default function ChaturbateEarningsPost() {
           <span style={s.calcResult}>= $22.50/hr</span>
         </div>
       </div>
+      <p style={s.p}>
+        Repeat that math per session and per platform and you get your real hourly rate — the number that actually shows whether a schedule change is worth it. The <a href="/guides/chaturbate-earnings-tracker" style={s.iLink}>Chaturbate earnings tracker</a> walks through doing this from your own CSV export.
+      </p>
 
-      <h2 style={s.h2}>What Makes Some Chaturbate Models Earn More?</h2>
+      <h2 style={s.h2}>What Determines How Much a Model Earns?</h2>
 
       <h3 style={s.h3}>1. When they stream</h3>
-      <p style={s.p}>Peak earning hours are determined by when your specific audience is online — not Chaturbate's overall traffic peaks. Models with European fans have completely different peak windows than those with US-based audiences. Streaming during your off-peak hours can cut your $/hr by 40–60% even with identical effort. See <a href="/guides/chaturbate-best-hours" style={s.iLink}>Chaturbate best hours</a> for platform-wide patterns, but your personal CSV data will always be more accurate.</p>
+      <p style={s.p}>Peak earning hours are determined by when your specific audience is online — not Chaturbate's overall traffic peaks. Models with European fans have completely different peak windows than those with US-based audiences. Streaming during your off-peak hours can noticeably lower your $/hr even with identical effort. See <a href="/guides/chaturbate-best-hours" style={s.iLink}>Chaturbate best hours</a> for platform-wide patterns, but your personal CSV data will always be more accurate.</p>
 
-      <h3 style={s.h3}>2. Who their top fans are</h3>
-      <p style={s.p}>In most Chaturbate earning histories, 10–15% of tippers generate 60–70% of revenue. These high-value fans ("whales") tip significantly more than average. One whale who tips 200–500 tokens per session has more impact on your $/hr than 20 small tippers combined.</p>
-
-      <div style={s.insightBig}>
-        <span style={s.insightIcon}>🐳</span>
-        <div style={s.insightBody}>
-          On average, a model's top 3 spenders account for 45–65% of their total lifetime revenue. Losing one whale fan can drop monthly Chaturbate income by 20–30% overnight.
-        </div>
-        <div style={s.insightSub}>
-          CamCash shows you who those fans are, when they last tipped, and flags anyone who's overdue — so you never lose a whale without knowing it.
-        </div>
-        <a href="/landing" style={s.insightBtn}>See My Top Fans</a>
-      </div>
+      <h3 style={s.h3}>2. Why returning tippers matter</h3>
+      <p style={s.p}>
+        In most Chaturbate earning histories, a small share of tippers account for a large share of revenue. These high-value fans ("whales") tend to tip well above the average amount, and a single returning whale can matter more to your $/hr than many small one-time tips. Losing a top spender can meaningfully affect a given month's income, though the exact impact varies a lot by creator.
+      </p>
+      <p style={s.p}>
+        Because of this, knowing who your top fans are and when they typically tip is usually more useful than watching your total token count.
+      </p>
 
       <h3 style={s.h3}>3. How they structure their show</h3>
       <p style={s.p}>Models who use token goals, tip menus, and interactive toys (Lovense Lush, Domi, etc.) consistently report higher $/hr. Token goals give viewers a clear reason to tip now. Interactive toys make every tip feel tangible and immediate.</p>
@@ -304,20 +297,20 @@ export default function ChaturbateEarningsPost() {
 
       <div style={s.roiSection}>
         <div style={s.roiHeader}>
-          <div style={s.roiH}>Your Platform ROI — At a Glance</div>
+          <div style={s.roiH}>Comparing Your Platforms — Example</div>
           <p style={{ ...s.roiSub, marginBottom: 0 }}>
-            CamCash shows your real hourly rate by platform. Some models discover one platform earns 2-4x more per hour than another — a difference impossible to spot without tracking.
+            CamCash shows your real hourly rate by platform, so you can see whether one platform is actually earning you more per hour than another instead of guessing from total tokens.
           </p>
         </div>
         <a href="/landing/demo" style={{ display: 'block', textDecoration: 'none' }}>
           <img
             src="/blog-images/camcash-best-hours-heatmap.webp"
-            alt="CamCash revenue timing and platform ROI showing Chaturbate at $1211.40/hr, BongaCams at $777.80/hr, and MyFreeCams at $473.30/hr"
+            alt="CamCash dashboard example showing illustrative hourly rates by platform: Chaturbate, MyFreeCams, and BongaCams"
             style={{ width: '100%', display: 'block' }}
           />
         </a>
         <div style={s.roiFooter}>
-          <span style={{ fontSize: '13px', color: '#475569' }}>Real data from a CamCash demo account · CB $1211.40/hr · Bonga $777.80/hr · MFC $473.30/hr</span>
+          <span style={{ fontSize: '13px', color: '#475569' }}>Fictional example data for illustration only · CB $29.40/hr · MFC $17.80/hr · Bonga $9.20/hr</span>
           {'  '}
           <a href="/landing/demo" style={{ ...s.iLink, fontSize: '13px' }}>View live demo →</a>
         </div>
@@ -356,37 +349,6 @@ export default function ChaturbateEarningsPost() {
       <p style={s.p}>
         The faster approach: upload your Chaturbate CSV to <a href="/landing" style={s.iLink}>CamCash</a> and it calculates your real $/hr automatically — per session, per platform, and compared against your own historical average. Takes under two minutes.
       </p>
-
-      <div style={s.hidingSection}>
-        <div style={s.hidingHeader}>
-          <div style={s.hidingH}>What Your Data Might Be Hiding</div>
-          <div style={s.hidingSub}>One of the most common surprises when models first upload their CSV to CamCash:</div>
-        </div>
-        <div style={s.hidingImg}>
-          <a href="/landing/demo" style={{ display: 'block', textDecoration: 'none' }}>
-            <img
-              src="/blog-images/camcash-ai-command-center.webp"
-              alt="CamCash AI Command Center showing a real-time recommendation to go live on Chaturbate at 1 AM with expected earnings of $1,100–$2,200"
-              style={{ width: '100%', display: 'block' }}
-            />
-          </a>
-        </div>
-        <div style={s.hidingBody}>
-          <p style={s.hidingInsight}>
-            The CamCash Command Center tells you the single best move right now — based on your own session history, not platform-wide averages. It also surfaces which whale fans are likely to be online, and flags if one platform is significantly outperforming another.
-          </p>
-          <p style={{ ...s.hidingInsight, marginBottom: '16px' }}>
-            Most analytics tools show you charts. CamCash shows you decisions. There's a difference between knowing your total earnings and knowing your best move right now is going live on Chaturbate with $1,100–$2,200 expected tonight.
-          </p>
-          <a href="/landing" style={s.insightBtn}>See What My Data Says</a>
-        </div>
-      </div>
-
-      <div style={s.cta}>
-        <div style={s.ctaT}>Calculate your exact $/hr from your CSV</div>
-        <div style={s.ctaS}>No spreadsheets. No formulas. Just upload and see your real numbers.</div>
-        <a href="/landing" style={s.ctaBtn}>Upload CSV Free →</a>
-      </div>
 
       <div style={s.faqSection}>
         <h2 style={{ ...s.h2, marginTop: 0 }}>Chaturbate Earnings FAQ</h2>
