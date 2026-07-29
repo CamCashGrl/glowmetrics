@@ -1,20 +1,20 @@
 import ArticleLayout from '../../components/ArticleLayout'
 
 export const metadata = {
-  title: 'What I Actually Made My First 30 Days on Chaturbate (Real Numbers)',
-  description: 'Real earnings data from a Chaturbate model\'s first 30 days: $88.90 total, $5.33/hr average, 507 tips, 146 fans. The honest numbers nobody shares.',
+  title: 'My First Month on Chaturbate: Real Earnings and Hours',
+  description: 'See my real first-month Chaturbate earnings, tips, hours, promotion costs, best day and lessons from exported account data.',
   alternates: { canonical: 'https://www.camcashgrl.com/blog/chaturbate-first-30-days-real-earnings' },
   openGraph: {
-    title: 'What I Actually Made My First 30 Days on Chaturbate (Real Numbers)',
-    description: 'Real earnings data from a Chaturbate model\'s first 30 days: $88.90 total, $5.33/hr average, 507 tips, 146 fans. The honest numbers nobody shares.',
+    title: 'My First Month on Chaturbate: Real Earnings and Hours',
+    description: 'See my real first-month Chaturbate earnings, tips, hours, promotion costs, best day and lessons from exported account data.',
     url: 'https://www.camcashgrl.com/blog/chaturbate-first-30-days-real-earnings',
     type: 'article',
     images: [{ url: 'https://www.camcashgrl.com/og-image.png', width: 1200, height: 630 }],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'What I Actually Made My First 30 Days on Chaturbate (Real Numbers)',
-    description: 'Real earnings data from a Chaturbate model\'s first 30 days: $88.90 total, $5.33/hr average, 507 tips, 146 fans. The honest numbers nobody shares.',
+    title: 'My First Month on Chaturbate: Real Earnings and Hours',
+    description: 'See my real first-month Chaturbate earnings, tips, hours, promotion costs, best day and lessons from exported account data.',
   },
 }
 
@@ -22,10 +22,10 @@ const schema = {
   '@context': 'https://schema.org',
   '@type': 'Article',
   headline: 'What I Actually Made My First 30 Days on Chaturbate (Real Numbers)',
-  description: 'Real earnings data from a Chaturbate model\'s first 30 days: $88.90 total, $5.33/hr average, 507 tips, 146 fans. The honest numbers nobody shares.',
+  description: 'Real earnings data from one Chaturbate model\'s first 30 days: $88.90 total, an estimated $5.33/hr average, 507 tips, 146 fans, plus methodology and what this one case study can and cannot tell you.',
   url: 'https://www.camcashgrl.com/blog/chaturbate-first-30-days-real-earnings',
   datePublished: '2026-07-01',
-  dateModified: '2026-07-01',
+  dateModified: '2026-07-29',
   author: { '@type': 'Person', name: 'CamCashGrl', url: 'https://www.camcashgrl.com' },
   publisher: { '@type': 'Organization', name: 'CamCash', url: 'https://www.camcashgrl.com' },
   mainEntityOfPage: { '@type': 'WebPage', '@id': 'https://www.camcashgrl.com/blog/chaturbate-first-30-days-real-earnings' },
@@ -87,7 +87,7 @@ const s = {
   ul:       { paddingLeft: '20px', marginBottom: '16px' },
   li:       { fontSize: '15px', lineHeight: 1.7, color: '#94a3b8', marginBottom: '6px' },
   meta:     { fontSize: '12px', color: '#475569', marginBottom: '28px', display: 'flex', gap: '16px', flexWrap: 'wrap' },
-  statGrid: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginBottom: '28px' },
+  statGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: '10px', marginBottom: '28px' },
   statCard: { padding: '16px', borderRadius: '10px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', textAlign: 'center' },
   statVal:  { fontSize: '24px', fontWeight: 800, color: '#10b981', marginBottom: '4px' },
   statLbl:  { fontSize: '11px', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em' },
@@ -192,18 +192,41 @@ export default function First30DaysPost() {
         messy and unfiltered.
       </p>
 
+      <div style={s.note}>
+        <p style={{ ...s.p, marginBottom: 0, fontSize: '13px' }}>
+          <strong style={{ color: '#e2e8f0' }}>Methodology:</strong> data source is my exported Chaturbate tip history CSV (Stats &amp; Data → Token Stats)
+          covering March 27 – April 26, 2023. Tokens are converted at Chaturbate's standard $0.05/token model rate.
+          Chaturbate's export records tip timestamps, not stream start/stop times, so hours streamed are an estimate
+          reverse-engineered from the gaps between tips, not an exact clock reading. Promo spend ($21.50) is tracked
+          separately from tip income and subtracted for the "net" figures below. Taxes and other business expenses are
+          not included in any figure on this page.
+        </p>
+      </div>
+
       <div style={s.statGrid}>
         <div style={s.statCard}>
           <div style={s.statVal}>$88.90</div>
-          <div style={s.statLbl}>Total earned</div>
+          <div style={s.statLbl}>Gross earned</div>
+        </div>
+        <div style={s.statCard}>
+          <div style={s.statVal}>~16.7 hrs</div>
+          <div style={s.statLbl}>Estimated hours</div>
         </div>
         <div style={s.statCard}>
           <div style={s.statVal}>$5.33/hr</div>
-          <div style={s.statLbl}>Avg hourly rate</div>
+          <div style={s.statLbl}>Gross hourly rate</div>
         </div>
         <div style={s.statCard}>
-          <div style={s.statVal}>507</div>
-          <div style={s.statLbl}>Tips from 146 fans</div>
+          <div style={s.statVal}>$21.50</div>
+          <div style={s.statLbl}>Promo spend</div>
+        </div>
+        <div style={s.statCard}>
+          <div style={s.statVal}>$67.40</div>
+          <div style={s.statLbl}>Net after promo</div>
+        </div>
+        <div style={s.statCard}>
+          <div style={s.statVal}>~$4.04/hr</div>
+          <div style={s.statLbl}>Net hourly rate</div>
         </div>
       </div>
 
@@ -236,24 +259,31 @@ export default function First30DaysPost() {
         The rest? Pretty quiet. 13 days out of 30 I made literally nothing.
       </p>
 
-      <table style={s.table}>
-        <thead>
-          <tr>
-            <th style={s.th}>Date</th>
-            <th style={s.th}>Tokens</th>
-            <th style={s.th}>Earned</th>
-          </tr>
-        </thead>
-        <tbody>
-          {dailyData.map(({ date, tokens, earned, best }) => (
-            <tr key={date} style={best ? { background: 'rgba(99,102,241,0.06)' } : {}}>
-              <td style={best ? s.tdBold : s.td}>{date}{best ? ' ✨' : ''}</td>
-              <td style={best ? s.tdBold : s.td}>{tokens}</td>
-              <td style={best ? s.tdGreen : s.td}>{earned}</td>
+      <div style={{ overflowX: 'auto', marginBottom: '24px' }}>
+        <table style={{ ...s.table, marginBottom: 0, minWidth: '360px' }}>
+          <thead>
+            <tr>
+              <th style={s.th}>Date</th>
+              <th style={s.th}>Tokens</th>
+              <th style={s.th}>Earned</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {dailyData.map(({ date, tokens, earned, best }) => (
+              <tr key={date} style={best ? { background: 'rgba(99,102,241,0.06)' } : {}}>
+                <td style={best ? s.tdBold : s.td}>{date}{best ? ' ✨' : ''}</td>
+                <td style={best ? s.tdBold : s.td}>{tokens}</td>
+                <td style={best ? s.tdGreen : s.td}>{earned}</td>
+              </tr>
+            ))}
+            <tr style={{ borderTop: '2px solid rgba(255,255,255,0.12)' }}>
+              <td style={s.tdBold}>Total (17 active days of 30)</td>
+              <td style={s.tdBold}>1,778</td>
+              <td style={s.tdGreen}>$88.90</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
 
       <p style={s.p}>
         I didn't even fully understand <em>why</em> March 30th went so well until way later when I started
@@ -263,10 +293,11 @@ export default function First30DaysPost() {
       </p>
 
       <div style={s.highlight}>
-        <div style={s.highlightT}>The classic new-model pattern</div>
+        <div style={s.highlightT}>What my month looked like</div>
         <p style={s.highlightP}>
-          One amazing night, a bunch of mediocre ones, a lot of days with nothing. This is <em>so</em> normal.
-          You're not failing. You're finding your footing.
+          One amazing night, a bunch of mediocre ones, a lot of days with nothing. That pattern is a common experience
+          many new models report anecdotally — but this is one model's one month, not a guarantee of how your first
+          month will go. If your data looks different, that does not automatically mean something is wrong.
         </p>
       </div>
 
@@ -289,7 +320,8 @@ export default function First30DaysPost() {
           $40 session because three of them were regulars who actually cared.
         </div>
         <div style={s.insightSub}>
-          Fan retention {">"} viewer count. Every time. I had zero way to track any of this back then.
+          In my month, fan retention mattered more than viewer count. I would not generalize that to "every time" for
+          every model — but it is worth checking in your own data. I had zero way to track any of this back then.
           I was just watching my token balance and crossing my fingers the good ones would come back.
         </div>
         <a href="/blog/how-to-build-loyal-fans" style={s.insightBtn}>How to Build Loyal Fans →</a>
@@ -311,9 +343,10 @@ export default function First30DaysPost() {
 
       <ul style={s.ul}>
         <li style={s.li}>
-          <strong style={{ color: '#e2e8f0' }}>Consistency matters more than your best night.</strong>{' '}
-          I streamed on 17 out of 30 days. The 13 days I didn't, I made nothing. The platform rewards regularity — both
-          the algorithm and your fans.
+          <strong style={{ color: '#e2e8f0' }}>Consistency mattered more than my best night.</strong>{' '}
+          I streamed on 17 out of 30 days. The 13 days I didn't, I made nothing, by definition. Whether Chaturbate's
+          discovery system specifically rewards regularity is not something the platform publishes, so I can't confirm
+          that part — what I can confirm from my own data is that showing up more often gave me more chances to earn.
         </li>
         <li style={s.li}>
           <strong style={{ color: '#e2e8f0' }}>The "best time to stream" thing is real — but it's YOUR best time.</strong>{' '}
@@ -346,6 +379,10 @@ export default function First30DaysPost() {
         start treating it like a business. That means knowing your real hourly rate, knowing which fans matter,
         and knowing when to stream.
       </p>
+
+      <h2 style={s.h2}>What This Case Study Can and Cannot Tell You</h2>
+      <p style={s.p}><strong style={{ color: '#e2e8f0' }}>What it can tell you:</strong> a real, unedited example of what one new model's first month looked like — including the slow days, the estimation involved in reconstructing hours streamed, and how much a single top fan can matter early on. It's a useful reference point for what "normal and unglamorous" can look like.</p>
+      <p style={s.p}><strong style={{ color: '#e2e8f0' }}>What it cannot tell you:</strong> what your first month will look like. This is one model, one niche, one platform, one set of hours, and one audience — not a benchmark or an average. Don't treat $88.90 or $5.33/hr as a target or a floor. For a broader view of the range across many models, see <a href="/blog/how-much-do-chaturbate-models-make" style={s.iLink}>how much Chaturbate models make</a>, and for the mechanics behind converting tips to payouts, see <a href="/blog/chaturbate-payout-explained" style={s.iLink}>how Chaturbate payouts work</a>. If you're past your first month and want to grow from here, see <a href="/blog/how-to-make-more-money-on-chaturbate" style={s.iLink}>how to make more money on Chaturbate</a>. And if your own earnings swing a lot session to session, <a href="/blog/why-cam-income-is-inconsistent" style={s.iLink}>why cam income is inconsistent</a> walks through common causes.</p>
 
       <div style={{ ...s.insightBig, background: 'rgba(16,185,129,0.05)', border: '1px solid rgba(16,185,129,0.15)', marginTop: '32px' }}>
         <div style={{ ...s.insightBody, color: '#a7f3d0' }}>
