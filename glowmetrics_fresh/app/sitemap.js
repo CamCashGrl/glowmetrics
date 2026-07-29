@@ -46,7 +46,7 @@ export default function sitemap() {
 
     // New creator-product articles
     'cam-room-dice-game-ideas',
-    'cam-room-slow-what-to-do',
+    'what-to-do-when-cam-room-is-slow',
     'cam-session-scripts-for-models',
     'femdom-message-scripts-for-creators',
     'spin-the-wheel-cam-game',

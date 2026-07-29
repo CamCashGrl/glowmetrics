@@ -3,11 +3,11 @@ import ArticleLayout from '../../components/ArticleLayout'
 export const metadata = {
   title: 'Cam Room Slow? 12 Things to Do Before You Log Off',
   description: 'Cam room slow? Get 12 things to try right now, a quick way to tell a slow room from a dead one, and exactly how long to stay online before you log off.',
-  alternates: { canonical: 'https://www.camcashgrl.com/blog/cam-room-slow-what-to-do' },
+  alternates: { canonical: 'https://www.camcashgrl.com/blog/what-to-do-when-cam-room-is-slow' },
   openGraph: {
     title: 'Cam Room Slow? 12 Things to Do Before You Log Off',
     description: 'What to do when camming is slow: 12 immediate tactics, how to diagnose a dead cam room, and when logging off is the right call.',
-    url: 'https://www.camcashgrl.com/blog/cam-room-slow-what-to-do',
+    url: 'https://www.camcashgrl.com/blog/what-to-do-when-cam-room-is-slow',
     type: 'article',
     images: [{ url: 'https://www.camcashgrl.com/og-image.png', width: 1200, height: 630 }],
   },
@@ -23,12 +23,12 @@ const schema = {
   '@type': 'Article',
   headline: 'Cam Room Slow? 12 Things to Do Before You Log Off',
   description: 'Cam room slow? 12 things to try right now, how to tell a slow room from a dead one, and how long to stay online before you log off.',
-  url: 'https://www.camcashgrl.com/blog/cam-room-slow-what-to-do',
+  url: 'https://www.camcashgrl.com/blog/what-to-do-when-cam-room-is-slow',
   datePublished: '2026-07-29',
   dateModified: '2026-07-29',
   author: { '@type': 'Person', name: 'Daphne Dawson', jobTitle: 'Cam Model and CamCash Founder' },
   publisher: { '@type': 'Organization', name: 'CamCash', url: 'https://www.camcashgrl.com' },
-  mainEntityOfPage: { '@type': 'WebPage', '@id': 'https://www.camcashgrl.com/blog/cam-room-slow-what-to-do' },
+  mainEntityOfPage: { '@type': 'WebPage', '@id': 'https://www.camcashgrl.com/blog/what-to-do-when-cam-room-is-slow' },
 }
 
 const faqSchema = {
