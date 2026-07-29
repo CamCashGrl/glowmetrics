@@ -128,7 +128,7 @@ const posts = [
     description: 'Common mistakes that kill cam session earnings.',
   },
   {
-    slug: 'cam-room-slow-what-to-do',
+    slug: 'what-to-do-when-cam-room-is-slow',
     title: 'Cam Room Slow? 12 Things to Do Before You Log Off',
     description: 'Practical moves to try before you end a slow session, plus how to tell if the room is actually dead.',
   },
