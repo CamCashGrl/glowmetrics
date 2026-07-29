@@ -46,6 +46,11 @@ export default function LivePage() {
   const [liveTick, setLiveTick]       = useState(0);
   const [sessions, setSessions]       = useState([]);
   const [currentSessionId, setCurrentSessionId] = useState(null);
+  // Recent Live Mode sessions for the "Recent Live Mode Sessions" section —
+  // pulled from the real live_sessions/live_tips/coaching_events tables
+  // (see fetch in the mount effect below). Never fabricated, never estimated.
+  const [recentSessions, setRecentSessions] = useState([]);
+  const [recentSessionsLoaded, setRecentSessionsLoaded] = useState(false);
 
   // ── DEMO / AUTH / EXT MODAL STATE ────────────────────────────────────
   const [demoTips, setDemoTips]           = useState([]);
@@ -55,6 +60,8 @@ export default function LivePage() {
   const [showDemoPreview, setShowDemoPreview] = useState(false);
   const [showExtModal, setShowExtModal]   = useState(false);
   const [extStep, setExtStep]             = useState(0);
+  const [showWalkthrough, setShowWalkthrough] = useState(false);
+  const [walkthroughStep, setWalkthroughStep] = useState(0);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authMode, setAuthMode]           = useState('signin');
   const [authEmail, setAuthEmail]         = useState('');
@@ -142,6 +149,41 @@ export default function LivePage() {
     return () => clearInterval(liveTickerRef.current);
   }, []);
 
+  // First-time Live Mode walkthrough — shown once per browser (works for
+  // both signed-in and guest/demo visitors, since either can land here with
+  // zero context on what the page does). Reopenable anytime from the "How
+  // it works" nav button, which does not touch the seen flag.
+  useEffect(() => {
+    if (authStatus !== 'live' || typeof window === 'undefined') return;
+    if (localStorage.getItem('cc_live_walkthrough_seen') === '1') return;
+    setShowWalkthrough(true);
+  }, [authStatus]);
+
+  const dismissWalkthrough = () => {
+    setShowWalkthrough(false);
+    setWalkthroughStep(0);
+    if (typeof window !== 'undefined') localStorage.setItem('cc_live_walkthrough_seen', '1');
+  };
+
+  // Escape closes the walkthrough — it's a non-blocking anchored panel, not
+  // a modal, but Escape should still dismiss it like any other overlay.
+  useEffect(() => {
+    if (!showWalkthrough) return;
+    const onKey = (e) => { if (e.key === 'Escape') dismissWalkthrough(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [showWalkthrough]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const WALKTHROUGH_STEPS = [
+    { title: 'Your real-time stream coach', body: 'Live Mode watches your session as it happens and surfaces specific opportunities, warnings, and next actions.' },
+    { title: 'Connect your stream', body: 'Select your platform and confirm the CamCash extension is connected so Live Mode can recognize tips and room activity.' },
+    { title: 'Set an optional goal', body: 'Add a token target so CamCash can calculate goal pace, milestones, and when it may be time for a reminder.' },
+    { title: 'Choose how you want to be coached', body: 'Balanced is recommended for most sessions and mixes revenue, engagement, momentum, and pacing prompts.' },
+    { title: 'Start when you go live', body: 'Begin Live Mode when your stream starts. Keep this page open while CamCash listens for session activity.' },
+    { title: 'Tell CamCash what you did', body: 'Mark prompts Performed or Skipped so your session report can show which recommendations you followed.' },
+    { title: 'Learn after every stream', body: 'After the session ends, review earnings pace, momentum, prompt responses, and performance changes.' },
+  ];
+
   const normalizeTip = useCallback((ev) => {
     const tokens = parseInt(ev.tokens) || 0;
     const usd    = parseFloat(ev.usd) || 0;
@@ -158,10 +200,11 @@ export default function LivePage() {
     // ?__demo=1 forces the unauthenticated demo view (used in preview modal)
     if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('__demo') === '1') {
       setAuthStatus('live');
+      setRecentSessionsLoaded(true);
       return;
     }
     supabase.auth.getUser().then(({ data: { user: u } }) => {
-      if (!u) { setAuthStatus('live'); return; }
+      if (!u) { setAuthStatus('live'); setRecentSessionsLoaded(true); return; }
       setUser(u);
       setAuthStatus('live');
 
@@ -216,6 +259,47 @@ export default function LivePage() {
         .eq('user_id', u.id).gte('date_time', sessionsSince)
         .order('date_time', { ascending: true })
         .then(({ data }) => { if (data) setSessions(detectSessions(data)); });
+
+      // Recent Live Mode Sessions — real ended live_sessions rows, with
+      // earnings/tips summed from live_tips (the same source of truth the
+      // rest of this page reads from) and prompt counts from
+      // coaching_events. No estimation, no fabricated figures.
+      supabase.from('live_sessions')
+        .select('id, started_at, ended_at, stream_platform, total_paused_seconds, status')
+        .eq('user_id', u.id).eq('status', 'ended')
+        .order('started_at', { ascending: false }).limit(5)
+        .then(async ({ data: recent }) => {
+          if (!recent?.length) { setRecentSessionsLoaded(true); return; }
+          const ids = recent.map(s => s.id);
+          const [{ data: recentTips }, { data: recentEvents }] = await Promise.all([
+            supabase.from('live_tips').select('live_session_id, tokens, usd').in('live_session_id', ids),
+            supabase.from('coaching_events').select('session_id, action_status').in('session_id', ids),
+          ]);
+          const enriched = recent.map(s => {
+            const sTips = (recentTips || []).filter(t => t.live_session_id === s.id);
+            const sEvents = (recentEvents || []).filter(e => e.session_id === s.id);
+            const totalUsd = sTips.reduce((sum, t) => sum + (parseFloat(t.usd) || 0), 0);
+            const totalTokens = sTips.reduce((sum, t) => sum + (parseInt(t.tokens) || 0), 0);
+            const startMs = new Date(s.started_at).getTime();
+            const endMs = s.ended_at ? new Date(s.ended_at).getTime() : startMs;
+            const activeSeconds = Math.max(0, (endMs - startMs) / 1000 - (s.total_paused_seconds || 0));
+            return {
+              id: s.id,
+              startedAt: s.started_at,
+              platform: s.stream_platform || 'Unknown',
+              activeSeconds,
+              totalUsd: parseFloat(totalUsd.toFixed(2)),
+              totalTokens,
+              tipCount: sTips.length,
+              perHour: activeSeconds > 0 ? parseFloat((totalUsd / (activeSeconds / 3600)).toFixed(2)) : null,
+              promptCount: sEvents.length,
+              performedCount: sEvents.filter(e => e.action_status === 'performed').length,
+              skippedCount: sEvents.filter(e => e.action_status === 'skipped').length,
+            };
+          });
+          setRecentSessions(enriched);
+          setRecentSessionsLoaded(true);
+        });
     });
 
     return () => { if (liveTipsChannelRef.current) supabase.removeChannel(liveTipsChannelRef.current); };
@@ -718,6 +802,14 @@ export default function LivePage() {
     .slice(-8)
     .map(e => e.normalizedRevenue || 0);
 
+  // Same gating condition the pre-existing "not started" hero already used —
+  // reused here to drive the new Stream Setup / preview / education /
+  // recent-sessions sections without changing when the real active
+  // dashboard below takes over.
+  const isIdle = !liveActive && !liveEvents.length;
+  const extensionConnected = liveEvents.some(e => e.sourceUsed === 'extension');
+  const realtimeConnected = !!liveTipsChannelRef?.current;
+
   // ── RENDER ───────────────────────────────────────────────────────────
 
   return (
@@ -730,6 +822,49 @@ export default function LivePage() {
         @keyframes cc-bar      { from{opacity:0.4;} to{opacity:1;} }
         .cc-card:hover { box-shadow: 0 0 20px rgba(168,85,247,0.2) !important; }
       `}</style>
+
+      {/* ── FIRST-TIME LIVE MODE WALKTHROUGH ──────────────────────────────
+          Non-blocking anchored panel (not a full-screen modal) — the rest
+          of the Stream Setup page stays visible and usable underneath. */}
+      {showWalkthrough && (() => {
+        const steps = WALKTHROUGH_STEPS;
+        const isLast = walkthroughStep === steps.length - 1;
+        const s = steps[walkthroughStep];
+        return (
+          <div role="dialog" aria-label={`Live Mode walkthrough, step ${walkthroughStep + 1} of ${steps.length}`}
+            style={{ position: 'fixed', bottom: 20, right: 20, left: 20, maxWidth: 380, marginLeft: 'auto', zIndex: 210,
+              background: '#0f1420', border: '1px solid rgba(34,211,238,0.35)', borderRadius: 16, padding: '20px 22px',
+              boxShadow: '0 12px 48px rgba(0,0,0,0.5), 0 0 32px rgba(34,211,238,0.18)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <span style={{ fontSize: 10, color: C.cyan, textTransform: 'uppercase', letterSpacing: 1, fontWeight: 800 }}>
+                Live Mode walkthrough · {walkthroughStep + 1} of {steps.length}
+              </span>
+              <button onClick={dismissWalkthrough} aria-label="Close walkthrough" style={{ background: 'transparent', border: 'none', color: C.muted, fontSize: 16, cursor: 'pointer', lineHeight: 1 }}>✕</button>
+            </div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: C.white, marginBottom: 6 }}>{s.title}</div>
+            <div style={{ fontSize: 13, color: C.text, lineHeight: 1.6, marginBottom: 16 }}>{s.body}</div>
+            <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
+              {steps.map((_, i) => (
+                <div key={i} style={{ flex: 1, height: 4, borderRadius: 2, background: i <= walkthroughStep ? C.cyan : 'rgba(255,255,255,0.1)' }} />
+              ))}
+            </div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              {walkthroughStep > 0 && (
+                <button onClick={() => setWalkthroughStep(st => st - 1)} style={{ padding: '8px 14px', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, color: C.muted, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>← Back</button>
+              )}
+              <div style={{ flex: 1 }} />
+              <button onClick={dismissWalkthrough} style={{ padding: '8px 10px', background: 'transparent', border: 'none', color: C.dim, fontSize: 12, cursor: 'pointer', textDecoration: 'underline' }}>
+                {isLast ? 'Close' : 'Skip tour'}
+              </button>
+              {!isLast ? (
+                <Button onClick={() => setWalkthroughStep(st => st + 1)} style={{ padding: '8px 16px', fontSize: 12 }}>Next →</Button>
+              ) : (
+                <Button onClick={dismissWalkthrough} style={{ padding: '8px 16px', fontSize: 12 }}>Finish</Button>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── AUTH MODAL ── */}
       {showAuthModal && (
@@ -860,8 +995,23 @@ export default function LivePage() {
           setLiveEvents(prev => [...prev, ...mapped])
         }} />
 
+        {/* ── PAGE HEADER ────────────────────────────────────────── */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 20 }}>
+          <div>
+            <div style={{ fontSize: 26, fontWeight: 800, color: C.white, marginBottom: 4 }}>Live Mode</div>
+            <div style={{ fontSize: 14, color: C.cyan, fontWeight: 700, marginBottom: 6 }}>Real-time coaching while you stream</div>
+            <div style={{ fontSize: 13, color: C.text, lineHeight: 1.6, maxWidth: 560 }}>
+              Track earnings pace, room momentum, goals, and viewer activity while your AI coach surfaces the next best action.
+            </div>
+          </div>
+          <button onClick={() => { setWalkthroughStep(0); setShowWalkthrough(true); }}
+            style={{ padding: '8px 16px', background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.25)', borderRadius: 8, color: C.cyan, fontWeight: 700, fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+            ❔ How it works
+          </button>
+        </div>
+
         {/* ── OPERATIONAL STATUS BAR ─────────────────────────────── */}
-        <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12, padding: '10px 18px', marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+        <div id="stream-setup-bar" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12, padding: '10px 18px', marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap' }}>
             {[
               { label: 'Extension', ok: liveEvents.some(e => e.sourceUsed === 'extension'), okText: 'Connected', offText: 'Not detected' },
@@ -1092,19 +1242,201 @@ export default function LivePage() {
           )}
         </div>
 
-        {/* ── NOT STARTED ───────────────────────────────────────────── */}
-        {!liveActive && !liveEvents.length && (
-          <div style={{ ...glassCard, borderRadius: 20, padding: '64px 48px', textAlign: 'center', marginBottom: 24, background: 'linear-gradient(135deg, rgba(168,85,247,0.08), rgba(236,72,153,0.06), rgba(34,211,238,0.05))', position: 'relative', overflow: 'hidden', animation: 'cc-bar 4s ease infinite alternate' }}>
-            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: 'linear-gradient(90deg, #a855f7, #ec4899, #22d3ee)', animation: 'cc-bar 2s ease infinite alternate' }} />
-            <div style={{ fontSize: 56, marginBottom: 16 }}>🔴</div>
-            <div style={{ fontSize: 22, fontWeight: 800, color: C.white, marginBottom: 10 }}>Live Command Center</div>
-            <div style={{ fontSize: 14, color: C.muted, maxWidth: 440, margin: '0 auto 28px', lineHeight: 1.75 }}>
-              Your AI coach watches the room in real time — tracking momentum, spotting opportunities, and telling you exactly what to do next to make more money.
+        {/* ── STREAM READINESS ──────────────────────────────────────────
+            Explains the controls in the status bar just above (platform,
+            goal, coaching style, extension, realtime) and shows whether
+            each is ready — it does not duplicate those inputs, since the
+            bar above already wires them straight into the real session
+            handlers. The single Start Stream / Start Live Session button in
+            that bar remains the only start CTA on the page. */}
+        {isIdle && (
+          <div style={{ ...glassCard, borderRadius: 16, padding: '20px 24px', marginBottom: 20 }}>
+            <div style={{ fontSize: 16, fontWeight: 800, color: C.white, marginBottom: 4 }}>Ready to go live?</div>
+            <div style={{ fontSize: 13, color: C.text, marginBottom: 16 }}>
+              Confirm your connection and choose how CamCash should coach this session using the controls above, then start when you&apos;re on cam.
             </div>
-            <button onClick={handleStartStream}
-              style={{ padding: '13px 36px', borderRadius: 12, background: 'linear-gradient(135deg, #10B981, #22D3EE)', border: 'none', color: C.white, fontWeight: 800, fontSize: 16, cursor: 'pointer', boxShadow: '0 0 32px rgba(16,185,129,0.4)' }}>
-              ▶ Start Streaming
-            </button>
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+              {[
+                { label: 'Platform selected', ok: true, okText: `Ready — ${livePlatform}`, offText: 'Choose a platform above', kind: 'ready' },
+                { label: 'Realtime connection', ok: realtimeConnected, okText: 'Ready', offText: 'Connecting…', kind: realtimeConnected ? 'ready' : 'attention' },
+                { label: 'Browser extension', ok: extensionConnected, okText: 'Connected', offText: 'Not connected — tips must be added manually', kind: extensionConnected ? 'ready' : 'optional' },
+                { label: 'Session goal', ok: liveGoalTokens > 0, okText: `${liveGoalTokens} tokens`, offText: 'Optional — not set', kind: liveGoalTokens > 0 ? 'ready' : 'optional' },
+              ].map(item => {
+                const palette = {
+                  ready:     { color: C.green, icon: '✅' },
+                  optional:  { color: C.muted, icon: '➖' },
+                  attention: { color: C.gold,  icon: '⏳' },
+                }[item.kind];
+                return (
+                  <div key={item.label} style={{ flex: '1 1 200px', borderRadius: 10, padding: '10px 14px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                    <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>{item.label}</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: palette.color }}>{palette.icon} {item.ok ? item.okText : item.offText}</div>
+                  </div>
+                );
+              })}
+            </div>
+            {!extensionConnected && (
+              <div style={{ fontSize: 12, color: C.text, marginTop: 14, lineHeight: 1.6 }}>
+                Without the extension, Live Mode can&apos;t automatically detect tips — you can still run a session and add tips manually, but automatic tip detection and full coaching accuracy need the extension connected.{' '}
+                <button onClick={() => { setShowExtModal(true); setExtStep(0); }} style={{ background: 'transparent', border: 'none', color: C.cyan, fontWeight: 700, fontSize: 12, cursor: 'pointer', textDecoration: 'underline', padding: 0 }}>
+                  Connect extension →
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── LIVE COMMAND CENTER PREVIEW ───────────────────────────────
+            Static preview content only — no live analytics queries, no
+            numbers that could be mistaken for the user's real session. */}
+        {isIdle && (
+          <div style={{ ...glassCard, borderRadius: 16, padding: '22px 24px', marginBottom: 20 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+              <div style={{ fontSize: 16, fontWeight: 800, color: C.white }}>Your command center during a stream</div>
+              <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 0.5, color: C.purple, background: 'rgba(168,85,247,0.12)', border: '1px solid rgba(168,85,247,0.3)', borderRadius: 6, padding: '2px 8px' }}>PREVIEW</span>
+            </div>
+            <div style={{ fontSize: 13, color: C.text, marginBottom: 18 }}>Here&apos;s what Live Mode will monitor once your session begins.</div>
+
+            {/* Session Pulse */}
+            <div style={{ fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8 }}>Session Pulse</div>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 20 }}>
+              {[
+                { label: 'Earnings pace', value: 'Calculated live' },
+                { label: 'Goal progress', value: 'Add a goal to track' },
+                { label: 'Momentum', value: 'Waiting for activity' },
+                { label: 'Session duration', value: 'Starts at launch' },
+              ].map(m => (
+                <div key={m.label} style={{ flex: '1 1 150px', borderRadius: 10, padding: '10px 14px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                  <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 4 }}>{m.label}</div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: C.dim }}>{m.value}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Live Coaching */}
+            <div style={{ fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8 }}>Live Coaching</div>
+            <div style={{ fontSize: 12, color: C.text, marginBottom: 10 }}>CamCash surfaces timely actions based on the room&apos;s current behavior.</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
+              {[
+                { title: 'Momentum is rising', body: 'Several tips arrived close together. Keep the current interaction going before changing direction.', reason: 'Triggered by recent tip activity' },
+                { title: 'Goal pace is slipping', body: 'A short goal reminder or tip-menu prompt may help restore pace.', reason: 'Triggered by goal pace' },
+                { title: 'High-value viewer active', body: 'A returning supporter is engaging. Acknowledge them directly while keeping the rest of the room included.', reason: 'Triggered by fan activity' },
+              ].map((ex, i) => (
+                <div key={i} style={{ borderRadius: 10, padding: '12px 14px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: C.white }}>{ex.title}</span>
+                    <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: 0.5, color: C.muted, border: '1px solid rgba(255,255,255,0.15)', borderRadius: 6, padding: '1px 6px' }}>EXAMPLE PROMPT</span>
+                  </div>
+                  <div style={{ fontSize: 12, color: C.text, lineHeight: 1.5, marginBottom: 6 }}>{ex.body}</div>
+                  <div style={{ fontSize: 11, color: C.muted, fontStyle: 'italic' }}>{ex.reason}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Prompt response preview */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
+              <button disabled style={{ padding: '6px 14px', borderRadius: 8, background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)', color: C.green, fontWeight: 700, fontSize: 12, cursor: 'default', opacity: 0.7 }}>✓ Performed</button>
+              <button disabled style={{ padding: '6px 14px', borderRadius: 8, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.12)', color: C.muted, fontWeight: 700, fontSize: 12, cursor: 'default', opacity: 0.7 }}>Skip</button>
+              <span style={{ fontSize: 12, color: C.text }}>Your response helps CamCash compare recommendations with what happened next.</span>
+            </div>
+
+            {/* Activity feed preview */}
+            <div style={{ fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8 }}>Live Activity</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 20 }}>
+              {[
+                'Tip received — example',
+                'Returning viewer joined — example',
+                'Goal milestone reached — example',
+                'Coaching prompt triggered — example',
+                'Session pace changed — example',
+              ].map((line, i) => (
+                <div key={i} style={{ fontSize: 12, color: C.text, padding: '8px 12px', borderRadius: 8, background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>{line}</div>
+              ))}
+            </div>
+
+            {/* After the stream */}
+            <div style={{ fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8 }}>After the stream</div>
+            <div style={{ fontSize: 12, color: C.text, marginBottom: 10, lineHeight: 1.6 }}>
+              Your completed session report helps you understand what worked, what slowed down, and what to test next time.
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {['Earnings and hourly pace', 'Session duration', 'Prompt response summary', 'Goal progress'].map(t => (
+                <span key={t} style={{ fontSize: 11, color: C.muted, border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, padding: '4px 10px' }}>{t}</span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── HOW LIVE MODE WORKS ───────────────────────────────────────── */}
+        {isIdle && (
+          <div style={{ ...glassCard, borderRadius: 16, padding: '20px 24px', marginBottom: 20 }}>
+            <div style={{ fontSize: 16, fontWeight: 800, color: C.white, marginBottom: 14 }}>How Live Mode works</div>
+            <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+              {[
+                { n: 1, title: 'CamCash watches', body: 'Tips, earnings pace, room events, goal progress, and session momentum update while you stream.' },
+                { n: 2, title: 'Your coach recommends', body: 'Live prompts surface specific opportunities, warnings, and next actions based on the current session.' },
+                { n: 3, title: 'You review', body: 'After the stream, review your results and which coaching prompts you performed or skipped.' },
+              ].map(step => (
+                <div key={step.n} style={{ flex: '1 1 220px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                    <div style={{ width: 22, height: 22, borderRadius: '50%', background: 'rgba(34,211,238,0.15)', border: '1px solid rgba(34,211,238,0.35)', color: C.cyan, fontSize: 11, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{step.n}</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: C.white }}>{step.title}</div>
+                  </div>
+                  <div style={{ fontSize: 12, color: C.text, lineHeight: 1.6 }}>{step.body}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── RECENT LIVE MODE SESSIONS ─────────────────────────────────── */}
+        {isIdle && (
+          <div style={{ ...glassCard, borderRadius: 16, padding: '20px 24px', marginBottom: 24 }}>
+            <div style={{ fontSize: 16, fontWeight: 800, color: C.white, marginBottom: 14 }}>Recent Live Mode Sessions</div>
+            {!recentSessionsLoaded ? (
+              <div style={{ fontSize: 13, color: C.muted }}>Loading…</div>
+            ) : recentSessions.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '20px 10px' }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: C.white, marginBottom: 6 }}>No Live Mode sessions yet</div>
+                <div style={{ fontSize: 13, color: C.text, marginBottom: 14, maxWidth: 440, margin: '0 auto 14px' }}>
+                  Your completed streams and coaching results will appear here after your first Live Mode session.
+                </div>
+                <button onClick={() => document.getElementById('stream-setup-bar')?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
+                  style={{ padding: '8px 18px', borderRadius: 8, background: 'rgba(34,211,238,0.1)', border: '1px solid rgba(34,211,238,0.3)', color: C.cyan, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
+                  Set up your first session
+                </button>
+              </div>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                  <thead>
+                    <tr style={{ textAlign: 'left', color: C.muted }}>
+                      {['Date', 'Platform', 'Duration', 'Earnings', '$/hr', 'Tips', 'Prompts', 'Performed', 'Skipped', ''].map(h => (
+                        <th key={h} style={{ padding: '6px 10px', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {recentSessions.map(s => (
+                      <tr key={s.id} style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                        <td style={{ padding: '8px 10px', color: C.text, whiteSpace: 'nowrap' }}>{new Date(s.startedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</td>
+                        <td style={{ padding: '8px 10px', color: C.text }}>{s.platform}</td>
+                        <td style={{ padding: '8px 10px', color: C.text, whiteSpace: 'nowrap' }}>{fmtDuration(s.activeSeconds)}</td>
+                        <td style={{ padding: '8px 10px', color: C.green, fontWeight: 700 }}>${s.totalUsd.toFixed(2)}</td>
+                        <td style={{ padding: '8px 10px', color: C.text }}>{s.perHour !== null ? `$${s.perHour.toFixed(2)}` : '—'}</td>
+                        <td style={{ padding: '8px 10px', color: C.text }}>{s.tipCount}</td>
+                        <td style={{ padding: '8px 10px', color: C.text }}>{s.promptCount}</td>
+                        <td style={{ padding: '8px 10px', color: C.green }}>{s.performedCount}</td>
+                        <td style={{ padding: '8px 10px', color: C.muted }}>{s.skippedCount}</td>
+                        <td style={{ padding: '8px 10px' }}>
+                          <a href={`/dashboard`} style={{ color: C.cyan, fontSize: 11, textDecoration: 'underline' }}>View report →</a>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
 
