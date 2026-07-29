@@ -40,6 +40,7 @@ const DASHBOARD_NAV_LINKS = [
   { href: '/extension', label: 'Chrome Extension' },
   { href: '/demo', label: 'Live Demo' },
   { href: '/guides', label: 'Free Guides & Tools' },
+  { href: '/tools/profile-studio', label: 'Profile Studio' },
   { href: '/contact', label: 'Contact' },
   { href: '/privacy', label: 'Privacy Policy' },
   { href: '/terms', label: 'Terms of Service' },
@@ -200,6 +201,7 @@ export default function SiteFooter({ sidebarOffset = 0, variant = 'full' }) {
           <FooterLink href="/demo">Live Demo</FooterLink>
           <FooterLink href="/blog">All Blog Posts</FooterLink>
           <FooterLink href="/guides">All Free Tools &amp; Guides</FooterLink>
+          <FooterLink href="/tools/profile-studio">Profile Studio</FooterLink>
           <FooterLink href="/dashboard">Dashboard</FooterLink>
           <FooterLink href="/live">Live Mode</FooterLink>
           <FooterLink href="/terms">Terms of Service</FooterLink>

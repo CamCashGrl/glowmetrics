@@ -104,6 +104,7 @@ export default function TokenCalculatorPage() {
           </a>
           <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
             <a href="/guides/cam-model-room-title-generator" style={{ fontSize: 13, color: S.muted, textDecoration: 'none' }}>Title Generator</a>
+            <a href="/tools/profile-studio" style={{ fontSize: 13, color: S.muted, textDecoration: 'none' }}>Profile Studio</a>
             <Button as="a" href="/login" style={{ padding: '8px 20px', fontSize: 13 }}>
               Start Free →
             </Button>

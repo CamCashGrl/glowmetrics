@@ -95,6 +95,39 @@ export default function FreeToolsBanner() {
               Try it free →
             </span>
           </a>
+
+          {/* Profile Studio */}
+          <a
+            href="/tools/profile-studio"
+            style={{
+              display: 'block',
+              background: 'rgba(236,72,153,0.06)',
+              border: '1px solid rgba(236,72,153,0.2)',
+              borderRadius: '12px',
+              padding: '28px 24px',
+              textDecoration: 'none',
+              transition: 'border-color 0.2s, background 0.2s',
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.background = 'rgba(236,72,153,0.12)'
+              e.currentTarget.style.borderColor = 'rgba(236,72,153,0.4)'
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.background = 'rgba(236,72,153,0.06)'
+              e.currentTarget.style.borderColor = 'rgba(236,72,153,0.2)'
+            }}
+          >
+            <div style={{ fontSize: '28px', marginBottom: '12px' }}>✨</div>
+            <div style={{ fontSize: '17px', fontWeight: '700', color: '#f1f5f9', marginBottom: '8px' }}>
+              Creator Profile Studio
+            </div>
+            <p style={{ fontSize: '14px', color: '#94a3b8', margin: '0 0 16px', lineHeight: '1.6' }}>
+              Generate an AI bio and tip menu for your cam profile in seconds. Free to use, no account needed.
+            </p>
+            <span style={{ fontSize: '13px', fontWeight: '600', color: '#ec4899' }}>
+              Try it free →
+            </span>
+          </a>
         </div>
       </div>
     </section>
