@@ -1,19 +1,19 @@
 import ArticleLayout from '../../components/ArticleLayout'
 
 export const metadata = {
-  title: 'How Cam Models Stay Anonymous in 2026',
-  description: 'A practical privacy system for cam models: aliasing, account separation, search removal, room setup, and incident response. Build it before you go live.',
+  title: 'How to Stay Anonymous as a Cam Model: Privacy Checklist',
+  description: 'Protect your identity as a cam model with practical steps for stage names, accounts, room privacy, images, payments and online security.',
   alternates: { canonical: 'https://www.camcashgrl.com/blog/how-cam-models-stay-anonymous' },
   openGraph: {
-    title: 'How Cam Models Stay Anonymous in 2026',
-    description: 'A practical privacy system for cam models: aliasing, account separation, search removal, room setup, and incident response. Build it before you go live.',
+    title: 'How to Stay Anonymous as a Cam Model: Privacy Checklist',
+    description: 'Protect your identity as a cam model with practical steps for stage names, accounts, room privacy, images, payments and online security.',
     url: 'https://www.camcashgrl.com/blog/how-cam-models-stay-anonymous',
     type: 'article',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'How Cam Models Stay Anonymous in 2026',
-    description: 'A practical privacy system for cam models: aliasing, account separation, search removal, room setup, and incident response.',
+    title: 'How to Stay Anonymous as a Cam Model: Privacy Checklist',
+    description: 'Protect your identity as a cam model with practical steps for stage names, accounts, room privacy, images, payments and online security.',
   },
 }
 
@@ -24,7 +24,7 @@ const schema = {
   description: 'A practical privacy system for cam models: aliasing, account separation, search removal, room setup, and incident response. Build it before you go live.',
   url: 'https://www.camcashgrl.com/blog/how-cam-models-stay-anonymous',
   datePublished: '2026-07-07',
-  dateModified: '2026-07-07',
+  dateModified: '2026-07-29',
   author: { '@type': 'Person', name: 'Daphne Dawson', jobTitle: 'Cam Model' },
   publisher: { '@type': 'Organization', name: 'CamCashGrl', url: 'https://www.camcashgrl.com' },
   mainEntityOfPage: { '@type': 'WebPage', '@id': 'https://www.camcashgrl.com/blog/how-cam-models-stay-anonymous' },
@@ -81,7 +81,7 @@ export default function HowCamModelsStayAnonymous() {
         <span>8 min read</span>
       </div>
 
-      <h1 style={s.h1}>How Cam Models Stay Anonymous in 2026</h1>
+      <h1 style={s.h1}>How to Stay Anonymous as a Cam Model: Privacy Checklist</h1>
 
       <p style={s.intro}>
         Privacy is not a "nice to have" in camming. It is a structural work issue. Anonymity is a system — not a switch — and it needs to be built before you go live, not after something goes wrong.
@@ -97,7 +97,9 @@ export default function HowCamModelsStayAnonymous() {
         {[
           ['Build Privacy Before Launch', '#pre-launch'],
           ['Account and Search Protection', '#accounts'],
+          ['Image and Screenshot Privacy', '#images'],
           ['Room Setup for Anonymity', '#room'],
+          ['Quick Anonymity Checklist', '#checklist'],
           ['What to Do If Something Leaks', '#incident'],
           ['Frequently Asked Questions', '#faq'],
         ].map(([label, href], i) => (
@@ -113,7 +115,14 @@ export default function HowCamModelsStayAnonymous() {
 
       <div style={s.layer}>
         <div style={s.layerN}>Layer 1 — Identity separation</div>
-        <p style={{...s.p, marginBottom:0}}>Choose a stage name with no connection to your legal name, hometown, or any username you use elsewhere. Create a dedicated email for all platform accounts and creator communications. Get a separate phone number (Google Voice works) for any platform that requires phone verification. This compartmentalization is the foundation everything else builds on.</p>
+        <p style={{...s.p, marginBottom:12}}>Choose a stage name with no connection to your legal name, hometown, or any username you use elsewhere. Create a dedicated email for all platform accounts and creator communications. Get a separate phone number (Google Voice works) for any platform that requires phone verification. This compartmentalization is the foundation everything else builds on.</p>
+        <p style={{...s.p, marginBottom:0}}>Go a layer deeper than just a separate email:</p>
+        <ul style={{...s.ul, marginBottom:0, marginTop:8}}>
+          <li style={s.li}>Use a <strong style={{color:'#e2e8f0'}}>separate browser profile</strong> (or a separate browser entirely) for creator accounts, so autofill, history, and saved logins never cross over.</li>
+          <li style={s.li}>Set <strong style={{color:'#e2e8f0'}}>account recovery details</strong> (recovery email, recovery phone, security questions) on your creator accounts to information that is not tied to your personal accounts.</li>
+          <li style={s.li}>Do <strong style={{color:'#e2e8f0'}}>not sync personal contacts</strong> to any device or browser profile used for creator accounts — contact-suggestion features can leak your stage identity to people who know your real one, or vice versa.</li>
+          <li style={s.li}>Do not link your creator accounts to any <strong style={{color:'#e2e8f0'}}>personal social media</strong> — no "log in with Google/Facebook" using a personal account, and no cross-posting that connects the two identities.</li>
+        </ul>
       </div>
 
       <div style={s.layer}>
@@ -123,7 +132,7 @@ export default function HowCamModelsStayAnonymous() {
 
       <div style={s.layer}>
         <div style={s.layerN}>Layer 3 — Payment isolation</div>
-        <p style={{...s.p, marginBottom:0}}>Use a dedicated account for platform payouts where possible. Never use your primary personal bank account as your first-choice payout destination. A separate account also simplifies tax tracking significantly.</p>
+        <p style={{...s.p, marginBottom:0}}>Many creators find it easier to stay organized by using a dedicated account for platform payouts rather than mixing them into a primary personal account — this is a practical organizational recommendation, not a strict requirement, and it also simplifies tax tracking. Keep in mind that platforms and financial providers (banks, payment processors) will still require your legal identity for verification purposes regardless of how you organize your accounts — a separate account changes your bookkeeping, not your legal identity requirements.</p>
       </div>
 
       <div style={s.tip}>
@@ -141,6 +150,17 @@ export default function HowCamModelsStayAnonymous() {
 
       <h3 style={s.h3}>Search monitoring</h3>
       <p style={s.p}>Before you go live, search your real name, your stage name, and your email address. Know your current exposure baseline. Google's "Results About You" tool lets you monitor search results for personal details and submit removal requests for qualifying content — including personal sexual content. Use it as an ongoing monitoring habit, not a one-time setup.</p>
+
+      <h2 id="images" style={s.h2}>Image and Screenshot Privacy</h2>
+      <p style={s.p}>Photos and screenshots are one of the easiest ways identity gets connected across accounts, often without anyone meaning to leak anything.</p>
+      <ul style={s.ul}>
+        <li style={s.li}><strong style={{color:'#e2e8f0'}}>Avoid reusing personal photos.</strong> A photo you have posted anywhere under your real identity — even years ago — can potentially be matched back to a creator photo through reverse image search.</li>
+        <li style={s.li}><strong style={{color:'#e2e8f0'}}>Strip location metadata (EXIF data)</strong> from photos before uploading anywhere. Many phones embed GPS coordinates and device info in image files by default.</li>
+        <li style={s.li}><strong style={{color:'#e2e8f0'}}>Know the reverse-image-search risk.</strong> Anyone can run a creator photo through a reverse image search tool. Treat every image you post as searchable and potentially linkable to other photos of you online.</li>
+        <li style={s.li}><strong style={{color:'#e2e8f0'}}>Check reflections and mirrors</strong> — windows, mirrors, phone screens, and even eyes at high resolution can reveal your room, your face, or identifying objects you did not intend to show.</li>
+        <li style={s.li}><strong style={{color:'#e2e8f0'}}>Check for labels and text</strong> in the background — mail, packages, prescription bottles, or anything with your name or address, even partially visible.</li>
+        <li style={s.li}><strong style={{color:'#e2e8f0'}}>Avoid uncropped screenshots</strong> that include personal notifications (texts, emails, calendar reminders) visible in the corner of your screen.</li>
+      </ul>
 
       <h2 id="room" style={s.h2}>Room Setup for Anonymity</h2>
       <div style={{overflowX:'auto', marginBottom:24}}>
@@ -170,6 +190,24 @@ export default function HowCamModelsStayAnonymous() {
             ))}
           </tbody>
         </table>
+      </div>
+
+      <h2 id="checklist" style={s.h2}>Quick Anonymity Checklist</h2>
+      <div style={s.layer}>
+        <ul style={{...s.ul, marginBottom:0}}>
+          {[
+            'Stage name unrelated to legal name, hometown, or other usernames',
+            'Dedicated email and phone number for creator accounts',
+            'Separate browser profile with no synced personal contacts or social logins',
+            'Unique passwords + 2FA (authenticator app) on every creator account',
+            'Room checked for windows, mail, photos, and identifying objects',
+            'Photos stripped of location metadata before posting',
+            'Screenshots checked for reflections, labels, and personal notifications',
+            'Search baseline checked (your name, stage name, email)',
+            'Payout account organized separately from personal spending',
+            'Incident-response plan written down before you need it',
+          ].map(i => <li key={i} style={s.li}>{i}</li>)}
+        </ul>
       </div>
 
       <h2 id="incident" style={s.h2}>What to Do If Something Leaks</h2>
@@ -206,7 +244,7 @@ export default function HowCamModelsStayAnonymous() {
 
       <div style={s.cta}>
         <div style={s.ctaT}>Manage your cam business with your data protected</div>
-        <div style={s.ctaS}>CamCash stores your earnings data securely and never shares it with third parties. Free during beta.</div>
+        <div style={s.ctaS}>CamCash does not sell your data and does not share it with third parties except where required to operate the service (see our privacy policy for details). Free plan available.</div>
         <a href="/landing" style={s.ctaBtn}>Try CamCash free →</a>
       </div>
 
