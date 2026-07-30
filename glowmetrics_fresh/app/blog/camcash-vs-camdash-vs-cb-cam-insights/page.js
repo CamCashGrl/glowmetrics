@@ -147,6 +147,15 @@ export default function CamCashVsCamDashPost() {
           <strong style={{ color: '#cbd5e1' }}>Disclosure:</strong> CamCash publishes this comparison and is one of the products included. We have aimed to separate verified product facts from our own opinions and to explain which workflow each tool may suit.
         </div>
 
+        {/* Dashboard screenshot */}
+        <div style={{ margin: '0 0 40px', borderRadius: '14px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.07)' }}>
+          <img
+            src="/blog-images/camcash-platform-comparsion-dashboard.png"
+            alt="CamCash dashboard showing cross-platform earnings comparison across Chaturbate, BongaCams, and MyFreeCams"
+            style={{ width: '100%', display: 'block' }}
+          />
+        </div>
+
         {/* Best fit at a glance */}
         <section style={{ marginBottom: '48px' }}>
           <h2 style={{ fontSize: '22px', fontWeight: '700', color: '#f1f5f9', marginBottom: '8px' }}>Best Fit at a Glance</h2>
