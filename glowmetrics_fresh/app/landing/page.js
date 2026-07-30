@@ -889,7 +889,7 @@ export default function LandingPage() {
     { q: "Is CamCash free to use?", a: "Yes. The free tier is free forever — install the extension and create an account with no credit card. Premium analytics are optional and unlock deeper insights." },
     { q: "What file formats do you support?", a: "CSV exports from Chaturbate, BongaCams, and MyFreeCams, plus automatic tip capture through the Chrome extension." },
     { q: "Is my data safe and private?", a: "Yes. Your data is encrypted, never shared, and never sold." },
-    { q: "What does early adopter pricing mean?", a: "Sign up now and your premium rate is locked in at $9.99/month forever, even as pricing increases for new users later." },
+    { q: "What does early adopter pricing mean?", a: "Sign up now and your Early Adopter rate stays at $9.99/month while your subscription remains active, even as pricing increases for new users later." },
   ]
 
   return (
@@ -899,7 +899,7 @@ export default function LandingPage() {
       <div style={{ background: "rgba(255,43,174,0.10)", borderBottom: "1px solid rgba(255,43,174,0.22)", padding: "14px 32px", textAlign: "center", position: "relative", zIndex: 2 }}>
         <div style={{ maxWidth: 800, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "center", flexWrap: "wrap", gap: 6 }}>
           <span style={{ fontSize: 14, color: T.textSoft, fontWeight: 600 }}>
-            Early adopter pricing: <span style={{ color: T.pink, fontWeight: 800 }}>$9.99/mo forever</span> ·{" "}
+            Early adopter pricing: <span style={{ color: T.pink, fontWeight: 800 }}>$9.99/mo while subscribed</span> ·{" "}
             <a href="/pricing" style={{ color: T.pink, fontWeight: 800, textDecoration: "none" }}>Lock in your rate →</a>
           </span>
         </div>
@@ -1027,7 +1027,7 @@ export default function LandingPage() {
               ["Built for", "Chaturbate, BongaCams, MyFreeCams, CamSoda & Stripchat"],
               ["What it does", "Finds peak earning hours, ranks top tippers with churn-risk alerts, compares platform payouts, and generates fan re-engagement messages & room titles"],
               ["How you use it", "Install the free Chrome extension or upload a CSV export — no manual data entry"],
-              ["Price", "Free forever for 1 platform. Premium unlocks multi-platform tracking, starting at $9.99/mo for early adopters (locked in for life)"],
+              ["Price", "Free forever for 1 platform. Premium unlocks multi-platform tracking, starting at $9.99/mo for early adopters (rate held while subscribed)"],
               ["Your data", "Encrypted, private, never sold"],
             ].map(([term, desc]) => (
               <div key={term}>
@@ -1109,7 +1109,7 @@ export default function LandingPage() {
           {[
             { num: "1", accent: T.cyan, icon: "🧩", title: "Download Extension", body: "Auto-detect tips instantly. Works without an account. Use immediately.", link: ["/extension", "Download free →"] },
             { num: "2", accent: T.purple, icon: "📊", title: "Create Free Account", body: "Save your analytics, track growth, unlock AI intelligence. Free forever.", link: null, note: "Free forever + Premium optional" },
-            { num: "3", accent: T.pink, icon: "🚀", title: "Lock In Lifetime Pricing", body: "Early adopter: $9.99/month forever.", link: ["/pricing", "Claim early pricing →"] },
+            { num: "3", accent: T.pink, icon: "🚀", title: "Lock In Your Early Adopter Rate", body: "Early adopter: $9.99/month while you stay subscribed.", link: ["?plan=early_adopter_monthly#lp-auth-bottom", "Sign up for early pricing →"] },
           ].map(({ num, accent, icon, title, body, link, note }) => (
             <div key={title} style={{ background: `${accent}0d`, border: `1px solid ${accent}30`, borderRadius: 18, padding: "28px 24px", textAlign: "center", position: "relative" }}>
               <div style={{ width: 30, height: 30, borderRadius: 9, background: T.gradientPrimary, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, fontSize: 13, color: "#06101A", margin: "0 auto 14px", boxShadow: "0 0 14px rgba(22,244,255,0.3)" }}>{num}</div>
@@ -1135,7 +1135,7 @@ export default function LandingPage() {
             { icon: "🌿", text: "Free tier always exists" },
             { icon: "🔍", text: "Transparent about everything" },
             { icon: "🔒", text: "No surprise feature locks" },
-            { icon: "⏰", text: "Lifetime pricing for early adopters" },
+            { icon: "⏰", text: "Early Adopter pricing available while subscribed" },
             { icon: "💜", text: "Built by cam models, for cam models" },
           ].map(({ icon, text }) => (
             <div key={text} style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 12, padding: "14px 16px", display: "flex", alignItems: "center", gap: 10 }}>

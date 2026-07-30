@@ -214,6 +214,7 @@ function PricingSection({
   checkoutLoading,
   setCheckoutLoading,
   user,
+  annualAvailable,
 }) {
   const freeFeatures = [
     'Track 1 cam platform',
@@ -430,16 +431,18 @@ function PricingSection({
               </span>
             </div>
 
-            <p
-              style={{
-                color: C.cyan,
-                fontWeight: 800,
-                fontSize: 14,
-                margin: '0 0 22px',
-              }}
-            >
-              Or $99 per year
-            </p>
+            {annualAvailable && (
+              <p
+                style={{
+                  color: C.cyan,
+                  fontWeight: 800,
+                  fontSize: 14,
+                  margin: '0 0 22px',
+                }}
+              >
+                Or $99 per year
+              </p>
+            )}
 
             <div
               style={{
@@ -485,28 +488,41 @@ function PricingSection({
                   : 'Choose Monthly — $19.99'}
               </Button>
 
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() =>
-                  startCheckout(
-                    'standard_annual',
-                    setCheckoutLoading
-                  )
-                }
-                disabled={checkoutLoading !== null}
-                style={{
-                  display: 'block',
-                  width: '100%',
-                  padding: '13px 0',
-                  fontSize: 14,
-                }}
-              >
-                {checkoutLoading ===
-                'standard_annual'
-                  ? 'Redirecting…'
-                  : 'Choose Annual — $99'}
-              </Button>
+              {annualAvailable ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() =>
+                    startCheckout(
+                      'standard_annual',
+                      setCheckoutLoading
+                    )
+                  }
+                  disabled={checkoutLoading !== null}
+                  style={{
+                    display: 'block',
+                    width: '100%',
+                    padding: '13px 0',
+                    fontSize: 14,
+                  }}
+                >
+                  {checkoutLoading ===
+                  'standard_annual'
+                    ? 'Redirecting…'
+                    : 'Choose Annual — $99'}
+                </Button>
+              ) : (
+                <p
+                  style={{
+                    color: C.muted,
+                    fontSize: 12,
+                    textAlign: 'center',
+                    margin: 0,
+                  }}
+                >
+                  Annual billing isn't available right now — monthly is ready to go.
+                </p>
+              )}
             </div>
           </article>
         </div>
@@ -602,7 +618,7 @@ const FAQ_ITEMS = [
   },
   {
     q: 'How much is Standard?',
-    a: 'Standard is $19.99 per month or $99 per year. Both billing options unlock the same Standard features.',
+    a: 'Standard is $19.99 per month. Annual billing at $99/year unlocks the same features when it\'s available.',
   },
   {
     q: 'Can I switch between monthly and annual billing?',
@@ -891,6 +907,16 @@ export default function PricingClient() {
     useState(null)
 
   const [user, setUser] = useState(null)
+  const [annualAvailable, setAnnualAvailable] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/stripe/plan-config')
+      .then((res) => res.json())
+      .then((data) => { if (!cancelled) setAnnualAvailable(Boolean(data.annualAvailable)) })
+      .catch(() => { if (!cancelled) setAnnualAvailable(false) })
+    return () => { cancelled = true }
+  }, [])
 
   useEffect(() => {
     let mounted = true
@@ -944,6 +970,7 @@ export default function PricingClient() {
           checkoutLoading={checkoutLoading}
           setCheckoutLoading={setCheckoutLoading}
           user={user}
+          annualAvailable={annualAvailable}
         />
 
         <PromiseSection />
