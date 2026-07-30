@@ -8,6 +8,11 @@ export const metadata = {
 
 const posts = [
   {
+    slug: 'how-to-upload-csv-to-camcash',
+    title: 'How to Upload a CSV to CamCash (Step-by-Step SOP + Video)',
+    description: 'A step-by-step walkthrough for exporting your tip history, formatting it in Google Sheets, and uploading it to CamCash — plus the browser extension alternative.',
+  },
+  {
     slug: 'best-cam-model-tools',
     title: 'Best Cam Model Tools',
     description: 'The top tools cam models use to track tips, analyze earnings, and grow income.',

@@ -46,6 +46,7 @@ const DASHBOARD_NAV_LINKS = [
 ]
 
 const DASHBOARD_FEATURED_POSTS = [
+  { href: '/blog/how-to-upload-csv-to-camcash', label: 'How to Upload a CSV to CamCash' },
   { href: '/blog/cam-model-earnings', label: 'How Much Do Cam Models Make?' },
   { href: '/blog/best-cam-model-tools', label: 'Best Cam Model Tools to Track Tips' },
   { href: '/blog/how-to-increase-cam-earnings', label: 'Increase Cam Earnings With Data' },
@@ -136,6 +137,7 @@ export default function SiteFooter({ sidebarOffset = 0, variant = 'full' }) {
           >
             Blog Posts
           </h4>
+          <FooterLink href="/blog/how-to-upload-csv-to-camcash">How to Upload a CSV to CamCash</FooterLink>
           <FooterLink href="/blog/best-cam-model-tools">Best Cam Model Tools to Track Tips</FooterLink>
           <FooterLink href="/blog/cam-model-earnings">How Much Do Cam Models Make?</FooterLink>
           <FooterLink href="/blog/cam-model-taxes">Cam Model Taxes Guide</FooterLink>
