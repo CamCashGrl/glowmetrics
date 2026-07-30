@@ -74,6 +74,7 @@ export default function sitemap() {
     'how-to-re-engage-whales-and-high-tipping-fans',
     'how-to-stay-safe-as-a-cam-model',
     'how-to-track-cam-tips-automatically',
+    'how-to-upload-csv-to-camcash',
     'is-camming-legal',
 
     // Existing and new coaching content

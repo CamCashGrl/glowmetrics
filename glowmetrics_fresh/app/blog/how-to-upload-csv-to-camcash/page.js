@@ -6,9 +6,21 @@ const TITLE = 'How to Upload a CSV to CamCash (Step-by-Step SOP + Video)'
 const DESC =
   'A step-by-step walkthrough for exporting your tip history, formatting it in Google Sheets, and uploading it to CamCash — plus the browser extension alternative.'
 
+// Target keywords: how to upload csv to camcash, upload tip history csv, csv importer guide,
+// export chaturbate csv, cam model csv upload tutorial, camcash csv import help
+
 export const metadata = {
   title: TITLE,
   description: DESC,
+  keywords: [
+    'how to upload csv to camcash',
+    'upload tip history csv',
+    'csv importer guide for cam models',
+    'export chaturbate csv',
+    'cam model csv upload tutorial',
+    'camcash csv import help',
+    'how to import tips into camcash',
+  ],
   alternates: { canonical: URL },
   openGraph: {
     title: TITLE,
@@ -23,8 +35,7 @@ export const metadata = {
   },
 }
 
-const schema = {
-  '@context': 'https://schema.org',
+const howToSchema = {
   '@type': 'HowTo',
   name: 'How to Upload a CSV to CamCash',
   description: DESC,
@@ -37,6 +48,25 @@ const schema = {
     { '@type': 'HowToStep', name: 'Confirm the upload was successful', text: 'Verify the data appears correctly after upload.' },
   ],
 }
+
+const faqs = [
+  { q: 'What file format does CamCash accept for tip history uploads?', a: 'CamCash accepts CSV files (.csv). Export your tip or earnings history from your platform, paste it into Google Sheets if needed, and download it as a Comma Separated Values (.csv) file before uploading.' },
+  { q: 'Can I drag and drop my CSV file into CamCash?', a: 'No. Drag-and-drop is not supported for CSV uploads. Use the "Upload CSV" button in the Import CSV tab, which opens your file picker.' },
+  { q: 'Do I need a subscription to upload CSVs from multiple platforms?', a: 'The free plan tracks one platform. Tracking multiple platforms (Chaturbate, BongaCams, MyFreeCams, and more) at once requires a subscription.' },
+  { q: 'Is there a way to track tips without uploading a CSV?', a: "Yes. Go to the Live Mode page, click Start Stream, then Get Extension. The browser extension automatically tracks tips in real time, so you don't need to manually export and upload a CSV." },
+  { q: 'Why isn’t my CSV loading correctly?', a: 'Select your platform from the dropdown before uploading, and make sure the file is exported correctly (for Chaturbate: Stats & Data → Token Stats; for BongaCams: Reports). CamCash auto-removes duplicate rows, so re-uploading the same file is safe.' },
+]
+
+const faqSchema = {
+  '@type': 'FAQPage',
+  mainEntity: faqs.map(f => ({
+    '@type': 'Question',
+    name: f.q,
+    acceptedAnswer: { '@type': 'Answer', text: f.a },
+  })),
+}
+
+const schema = { '@context': 'https://schema.org', '@graph': [howToSchema, faqSchema] }
 
 const s = {
   h1:      { fontSize: '29px', fontWeight: 800, color: '#f1f5f9', lineHeight: 1.2, marginBottom: '14px', letterSpacing: '-0.02em' },
@@ -146,6 +176,12 @@ export default function HowToUploadCsvPage() {
         Prepare a CSV file from your platform data, upload it into CamCash, and confirm the upload was
         successful. If you'd rather skip CSV uploads entirely, the browser extension tracks tips automatically.
       </p>
+      <p style={s.p}>
+        This is the full walkthrough for uploading tip history to CamCash — whether you're exporting a
+        Chaturbate Token Stats CSV, a BongaCams earnings report, or any other platform export. If you get
+        stuck partway through, the <a href="/dashboard" style={{ color: '#6366f1' }}>Import CSV tab</a>{' '}
+        also has a "CSV help" shortcut that links back to this guide.
+      </p>
 
       <h2 style={s.h2}>Key Steps</h2>
       {STEPS.map((step) => (
@@ -181,6 +217,14 @@ export default function HowToUploadCsvPage() {
         <li style={s.li}>Use the browser extension if you want automatic tracking and want to avoid repeated CSV uploads.</li>
         <li style={s.li}>Keep your source data organized in Google Sheets to make future exports faster.</li>
       </ul>
+
+      <h2 style={s.h2}>Frequently Asked Questions</h2>
+      {faqs.map((item, i) => (
+        <div key={i} style={{ border: '1px solid rgba(255,255,255,0.07)', borderRadius: 10, padding: '16px 20px', marginBottom: 10 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: '#e2e8f0', marginBottom: 8 }}>{item.q}</div>
+          <p style={{ ...s.p, marginBottom: 0 }}>{item.a}</p>
+        </div>
+      ))}
 
       <div style={s.cta}>
         <div style={s.ctaT}>Ready to upload your tip history?</div>

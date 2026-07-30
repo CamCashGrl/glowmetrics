@@ -57,7 +57,7 @@ export default function Page() {
   ];
 
   const relatedBlogs = [
-    { title: 'Cam Model Income Tracking', description: 'The full picture: manual and automatic earnings tracking', href: '/blog/how-to-track-cam-tips-automatically' },
+    { title: 'How to Upload a CSV to CamCash', description: 'Step-by-step SOP with video for importing your tip history', href: '/blog/how-to-upload-csv-to-camcash' },
     { title: 'Live AI Coaching for Cam Models', description: 'Turn live data into more tips while you stream', href: '/blog/live-ai-coaching-cam-models' },
     { title: 'Whale Watch', description: 'Track and profile your high rollers automatically', href: '/blog/cam-model-fan-crm' },
   ];
