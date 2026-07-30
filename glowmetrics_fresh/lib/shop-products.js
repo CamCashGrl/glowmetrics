@@ -393,6 +393,33 @@ Categories inside: Flirty & Playful, Bratty & Princess, Soft Girlfriend & Cozy, 
 Perfect for cam models, new cam girls, livestream creators, and performers on Chaturbate, Stripchat, MyFreeCams, and BongaCams. Digital download; personal use only.`,
     seoKeywords: "cam room titles, high converting stream titles, cam model title ideas",
   },
+  {
+    slug: "chaturbate-earnings-tracker-bundle",
+    title: "Chaturbate Earnings Tracker Bundle | 44-Page Creator Toolkit",
+    shortTitle: "Chaturbate Earnings & Growth Bundle",
+    price: "$14.99",
+    etsyUrl: "https://www.etsy.com/listing/4545112282/chaturbate-earnings-tracker-bundle-44",
+    coverImage: "/shop-images/16_Chaturbate_Earnings_Growth_Bundle_cover.jpg",
+    galleryImages: [
+      "/shop-images/16_Chaturbate_Bundle_Whats_Inside.jpg",
+      "/shop-images/16_Chaturbate_Bundle_Stream_Tracking.jpg",
+      "/shop-images/16_Chaturbate_Bundle_Tip_Menu_Goals.jpg",
+      "/shop-images/16_Chaturbate_Bundle_Best_Time_Challenge.jpg",
+      "/shop-images/16_Chaturbate_Bundle_Followup_Messages.jpg",
+      "/shop-images/16_Chaturbate_Bundle_Checklists_Dashboard.jpg",
+      "/shop-images/16_Chaturbate_Bundle_Summary.jpg",
+    ],
+    description: `Track every stream, plan every goal, and finally see where your Chaturbate income is really coming from with this 44-page practical stream performance workbook.
+
+This bundle includes a 28-page earnings and performance workbook plus a 16-page premium growth-tool bonus section, built for Chaturbate creators who want to track, calculate, test, review, and plan instead of guessing.
+
+What's included: Daily Stream Log and Detailed Session Review pages for tokens, estimated USD, tips, unique tippers, and hourly pace; a Tip Menu Pricing Worksheet plus 50 ready-to-adapt room-goal ideas; a 14-Day Best-Time Streaming Challenge to test and compare your strongest schedule windows; 30 boundary-safe follow-up message starters for re-engaging fans without copy-and-paste spam; Pre-Stream, Room and Offer, and Business Plan checklists; a Monthly Creator Dashboard snapshot; and an Earnings Calculation Worksheet for estimated USD, USD/hour, and net profit.
+
+Product details: 44-page printable digital PDF, instant digital download, large easy-to-read text, reusable pages for every stream. No physical item will be shipped.
+
+For personal creator use only; may not be resold, shared, copied, or redistributed.`,
+    seoKeywords: "Chaturbate earnings tracker, cam model income tracker, stream performance workbook, cam model goal planner",
+  },
 ];
 
 export function getProductBySlug(slug) {
