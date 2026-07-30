@@ -18,7 +18,7 @@ export const metadata = {
   },
 }
 
-const schema = {
+const articleSchema = {
   '@context': 'https://schema.org',
   '@type': 'Article',
   headline: 'Chaturbate Token Tracker: Log and Track Tokens Across Sessions',
@@ -29,6 +29,18 @@ const schema = {
   author: { '@type': 'Organization', name: 'CamCash', url: 'https://www.camcashgrl.com' },
   publisher: { '@type': 'Organization', name: 'CamCash', url: 'https://www.camcashgrl.com' },
   mainEntityOfPage: { '@type': 'WebPage', '@id': 'https://www.camcashgrl.com/guides/chaturbate-token-tracker' },
+}
+
+const faqSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: [
+    { '@type': 'Question', name: 'How much is a Chaturbate token worth?', acceptedAnswer: { '@type': 'Answer', text: 'Chaturbate pays models $0.05 per token. Multiply your token total by 0.05 to get your USD earnings for a session.' } },
+    { '@type': 'Question', name: 'How do I export my Chaturbate tip history?', acceptedAnswer: { '@type': 'Answer', text: "Log in to your Chaturbate broadcaster account, go to your tip history or earnings section, and export as CSV. Chaturbate makes up to 90 days of history available for export." } },
+    { '@type': 'Question', name: 'Why track tokens per hour instead of total tokens?', acceptedAnswer: { '@type': 'Answer', text: 'Total monthly tokens tells you almost nothing about efficiency. Tokens per hour shows which sessions and time windows actually earned the most relative to time invested, which is what drives real income growth.' } },
+    { '@type': 'Question', name: 'Can I track Chaturbate tokens automatically?', acceptedAnswer: { '@type': 'Answer', text: 'Yes. CamCash processes your exported Chaturbate CSV automatically and calculates tokens per hour, top tippers, peak streaming windows, and platform comparisons without manual spreadsheet work.' } },
+    { '@type': 'Question', name: 'What should I look for beyond total tokens earned?', acceptedAnswer: { '@type': 'Answer', text: 'Track tokens per hour, which fans tipped the most in each session, which time windows consistently perform best, and whether your session-over-session trend is improving or declining.' } },
+  ],
 }
 
 const s = {
@@ -53,7 +65,7 @@ const s = {
 export default function ChaturbateTokenTracker() {
   return (
     <ArticleLayout
-      schema={schema}
+      schema={[articleSchema, faqSchema]}
       breadcrumb={[{ label: 'Guides', href: '/guides' }, { label: 'Chaturbate Token Tracker' }]}
     >
       <div style={s.meta}>
@@ -103,6 +115,14 @@ export default function ChaturbateTokenTracker() {
       <p style={s.p}>
         Manual tracking works but takes time. CamCash processes your Chaturbate CSV automatically and outputs revenue per hour, top fan rankings, peak streaming windows, and platform comparisons — without any spreadsheet work. For context on what the numbers mean, read the <a href="/blog/cam-model-earnings" style={s.iLink}>cam model earnings guide</a> or the <a href="/blog/how-much-do-chaturbate-models-make" style={s.iLink}>Chaturbate earnings breakdown</a>.
       </p>
+
+      <h2 style={s.h2}>FAQ</h2>
+      {faqSchema.mainEntity.map((item, i) => (
+        <div key={i} style={{ marginBottom: '16px' }}>
+          <h3 style={s.h3}>{item.name}</h3>
+          <p style={s.p}>{item.acceptedAnswer.text}</p>
+        </div>
+      ))}
 
       <div style={{ marginTop: '36px', paddingTop: '24px', borderTop: '1px solid rgba(255,255,255,0.06)', marginBottom: '36px' }}>
         <div style={{ fontSize: '11px', color: '#475569', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '10px' }}>Related cam model tools:</div>
