@@ -24,7 +24,7 @@ const schema = {
   description: "Cam model income is taxable. Here's exactly what to track, what deductions you can claim, when to pay quarterly, and how to avoid the most common tax mistakes.",
   url: 'https://www.camcashgrl.com/blog/cam-model-taxes',
   datePublished: '2026-01-01',
-  dateModified: '2026-04-27',
+  dateModified: '2026-07-30',
   author: { '@type': 'Person', name: 'Daphne Dawson', jobTitle: 'Cam Model' },
   publisher: { '@type': 'Organization', name: 'CamCash', url: 'https://www.camcashgrl.com' },
   mainEntityOfPage: { '@type': 'WebPage', '@id': 'https://www.camcashgrl.com/blog/cam-model-taxes' },
@@ -97,7 +97,7 @@ export default function CamModelTaxes() {
 
       <div style={s.warn}>
         <strong style={{ color: '#f59e0b' }}>Note:</strong>{' '}
-        <span style={{ color: '#94a3b8' }}>This is general educational information. Tax laws vary by country and individual situation. Consult a tax professional for advice specific to your circumstances.</span>
+        <span style={{ color: '#94a3b8' }}>This is general educational information, not personalized tax advice. Tax laws vary by country, state, and individual situation, and rates or thresholds can change over time. Confirm current figures at irs.gov or with a licensed tax professional before filing.</span>
       </div>
 
       <h2 style={s.h2}>Yes, Cam Model Income Is Taxable</h2>
@@ -124,7 +124,12 @@ export default function CamModelTaxes() {
         </div>
       ))}
 
-      <p style={{ ...s.p, fontSize: '13px', color: '#475569' }}>Key rule: expenses must be ordinary and necessary for your business. Keep receipts for everything.</p>
+      <p style={{ ...s.p, fontSize: '13px', color: '#475569' }}>Key rule: expenses must be ordinary and necessary for your business, and generally only the business-use portion counts. A costume, prop, or piece of equipment used only for streaming is easier to justify than something you also use in daily life — mixed-use items usually need to be prorated, not deducted in full. Not every outfit, cosmetic, device, meal, or trip is automatically deductible; whether something qualifies depends on the specific facts and how clearly it connects to your business. Keep receipts for everything and check with a tax professional on anything you&apos;re unsure about.</p>
+
+      <h2 style={s.h2}>Federal vs. State Tax Obligations</h2>
+      <p style={s.p}>
+        The quarterly deadlines and self-employment tax rate above are federal (IRS) rules. Most states with an income tax also expect you to report self-employment income and may require their own estimated quarterly payments, on a separate schedule from the federal one. A handful of states have no state income tax at all. Because state rules vary significantly and change independently of federal rules, confirm your state&apos;s specific requirements with your state&apos;s tax agency or a tax professional — don&apos;t assume federal rules cover your full obligation.
+      </p>
 
       <h2 style={s.h2}>Quarterly Estimated Taxes</h2>
       <p style={s.p}>This is where many new self-employed earners get blindsided. As a self-employed individual in the US, you're required to pay taxes quarterly — not just once a year.</p>

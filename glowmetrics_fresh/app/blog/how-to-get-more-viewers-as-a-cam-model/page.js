@@ -1,16 +1,16 @@
 import ArticleLayout from '../../components/ArticleLayout'
 
 export const metadata = {
-  title: 'How to Get More Viewers as a Cam Model Across Chaturbate, BongaCams, MFC, Stripchat, and CamSoda | CamCash',
-  description: 'Streaming on multiple cam sites and want more viewers? This cross-platform guide covers viewer growth strategies for Chaturbate, BongaCams, MyFreeCams, Stripchat, and CamSoda — discovery, retention, off-platform promotion, and how to compare platform performance.',
+  title: 'How to Get More Viewers as a Cam Model (Cross-Platform Guide)',
+  description: 'Learn how cam models can attract more viewers with stronger room titles, thumbnails, schedules, platform positioning, promotion and retention.',
   alternates: { canonical: 'https://www.camcashgrl.com/blog/how-to-get-more-viewers-as-a-cam-model' },
   openGraph: {
-    title: 'How to Get More Viewers as a Cam Model Across Chaturbate, BongaCams, MFC, Stripchat, and CamSoda',
+    title: 'How to Get More Viewers as a Cam Model (Cross-Platform Guide)',
     description: 'Cross-platform viewer growth guide for cam models: how each platform ranks rooms differently, what works on Chaturbate vs MFC vs BongaCams, and how to compare your performance across sites.',
     url: 'https://www.camcashgrl.com/blog/how-to-get-more-viewers-as-a-cam-model',
     type: 'article',
   },
-  twitter: { card: 'summary_large_image', title: 'How to Get More Viewers as a Cam Model Across Multiple Platforms', description: 'Cross-platform viewer growth guide: Chaturbate, BongaCams, MFC, Stripchat, CamSoda — what works on each site and how to track what\'s performing.' },
+  twitter: { card: 'summary_large_image', title: 'How to Get More Viewers as a Cam Model', description: 'Cross-platform viewer growth guide: Chaturbate, BongaCams, MFC, Stripchat, CamSoda — what works on each site and how to track what\'s performing.' },
 }
 
 const articleSchema = {
@@ -18,7 +18,7 @@ const articleSchema = {
   headline: 'How to Get More Viewers as a Cam Model Across Multiple Platforms',
   description: 'Cross-platform viewer growth guide for cam models: Chaturbate, BongaCams, MFC, Stripchat, and CamSoda — discovery, retention, off-platform promotion, and platform comparison.',
   url: 'https://www.camcashgrl.com/blog/how-to-get-more-viewers-as-a-cam-model',
-  datePublished: '2026-07-17', dateModified: '2026-07-17',
+  datePublished: '2026-07-17', dateModified: '2026-07-30',
   author: { '@type': 'Person', name: 'Daphne Dawson', jobTitle: 'Cam Model' },
   publisher: { '@type': 'Organization', name: 'CamCashGrl', url: 'https://www.camcashgrl.com' },
   mainEntityOfPage: { '@type': 'WebPage', '@id': 'https://www.camcashgrl.com/blog/how-to-get-more-viewers-as-a-cam-model' },
@@ -110,6 +110,7 @@ export default function HowToGetMoreViewers() {
       <p style={s.p}>Getting more viewers is a two-part problem most models collapse into one. Discovery is getting people into your room. Retention is keeping them there long enough to tip or return. They require different investments and reward different skills.</p>
       <p style={s.p}><strong style={{color:'#e2e8f0'}}>Discovery drivers:</strong> your platform ranking (determined by activity score, session frequency, and tokens earned), your profile photo and headline, and the hours you stream. Working-model Reddit advice is consistent: site rank, profile quality, and schedule consistency directly affect how many viewers even see your room in the first place. If your room is hard to discover, even a strong persona underperforms.</p>
       <p style={s.p}><strong style={{color:'#e2e8f0'}}>Retention drivers:</strong> how quickly you engage newcomers, your room energy and visual activity, goal and tip menu clarity, and whether returning viewers feel recognized. A viewer who enters an active, engaging room is far more likely to stay, tip, and come back than one who enters to find a model scrolling her phone.</p>
+      <p style={s.p}><strong style={{color:'#e2e8f0'}}>Why viewers leave quickly:</strong> most drop-off happens in the first few seconds after entering a room. Common reasons include an unclear or slow-loading first impression, no visible activity or goal, an unclear tip menu, and no acknowledgment that a new viewer arrived. Traffic (getting someone into the room) and tipping (getting them to spend) are separate problems — a room can have plenty of visitors and still convert very few of them into tippers if retention is weak.</p>
 
       <h2 id="growth-loop" style={s.h2}>Build a Repeatable Growth Loop</h2>
       <p style={s.p}>Your growth loop starts with schedule consistency. Pick hours you can repeat for at least four weeks. The platform's discovery algorithm learns your pattern. Your regulars learn when to find you. Both compound over time — but only if you show up at the same times consistently enough to be predictable.</p>
@@ -241,6 +242,31 @@ export default function HowToGetMoreViewers() {
         </table>
       </div>
       <p style={s.p}>Small improvements compounded over a month beat dramatic reinventions every other day. That is the difference between chasing attention and engineering it. Use <a href="/landing" style={s.iLink}>CamCash</a> to track your session data, peak hours, and returning spender rate automatically from your CSV exports.</p>
+
+      <h2 style={s.h2}>Visibility Checklists</h2>
+      <p style={s.p}>Use these two short checklists to build the habit of reviewing discovery and retention on either side of a session.</p>
+      <div style={{display:'flex', gap:16, flexWrap:'wrap', marginBottom:24}}>
+        <div style={{flex:'1 1 260px', border:'1px solid rgba(255,255,255,0.08)', borderRadius:12, padding:'18px 20px'}}>
+          <div style={{fontSize:13, fontWeight:800, color:'#6366f1', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:10}}>Before you go live</div>
+          <ul style={{...s.ul, marginBottom:0}}>
+            <li style={s.li}>Profile photo and headline are current and clear</li>
+            <li style={s.li}>Room title gives a reason to click right now</li>
+            <li style={s.li}>Tags or category match what you&apos;ll actually be doing</li>
+            <li style={s.li}>Tip menu is visible and easy to understand</li>
+            <li style={s.li}>You're streaming at one of your consistent scheduled times</li>
+          </ul>
+        </div>
+        <div style={{flex:'1 1 260px', border:'1px solid rgba(255,255,255,0.08)', borderRadius:12, padding:'18px 20px'}}>
+          <div style={{fontSize:13, fontWeight:800, color:'#6366f1', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:10}}>After you end stream</div>
+          <ul style={{...s.ul, marginBottom:0}}>
+            <li style={s.li}>How many visitors came in versus how many tipped anything</li>
+            <li style={s.li}>Roughly how long visitors stayed before leaving</li>
+            <li style={s.li}>Whether any returning viewers showed up</li>
+            <li style={s.li}>What your room title, tags, or opening did or didn&apos;t work</li>
+            <li style={s.li}>One specific thing to test differently next session</li>
+          </ul>
+        </div>
+      </div>
 
       <h2 id="faq" style={s.h2}>Frequently Asked Questions</h2>
       {[

@@ -85,6 +85,20 @@ export default function CamCashVsCamDashPost() {
           </p>
         </header>
 
+        {/* Disclosure */}
+        <div style={{
+          background: 'rgba(255,255,255,0.03)',
+          border: '1px solid rgba(255,255,255,0.08)',
+          borderRadius: '10px',
+          padding: '14px 18px',
+          marginBottom: '32px',
+          fontSize: '13px',
+          color: '#94a3b8',
+          lineHeight: '1.6',
+        }}>
+          <strong style={{ color: '#e2e8f0' }}>Disclosure:</strong> CamCash is our own product. We built this comparison to be genuinely useful, and we link out to CamDash and CB Cam Insights directly so you can verify anything here yourself — but you should know upfront that we&apos;re not a neutral third party. Pricing and features for competitors can change; check their sites directly for current details.
+        </div>
+
         {/* TL;DR */}
         <div style={{
           background: 'linear-gradient(135deg, rgba(34,211,238,0.07), rgba(232,121,249,0.07))',
@@ -356,7 +370,7 @@ export default function CamCashVsCamDashPost() {
           description: 'Direct comparison of the three main cam model analytics dashboards — platforms supported, features, pricing, and which one actually helps you earn more.',
           url: 'https://www.camcashgrl.com/blog/camcash-vs-camdash-vs-cb-cam-insights',
           datePublished: '2026-06-10',
-          dateModified: '2026-06-10',
+          dateModified: '2026-07-30',
           author: { '@type': 'Person', name: 'Daphne Dawson', jobTitle: 'Cam Model' },
           publisher: { '@type': 'Organization', name: 'CamCash', url: 'https://www.camcashgrl.com' },
         })}} />
@@ -366,7 +380,7 @@ export default function CamCashVsCamDashPost() {
           '@context': 'https://schema.org',
           '@type': 'FAQPage',
           mainEntity: [
-            { '@type': 'Question', name: 'What is the best analytics dashboard for cam models?', acceptedAnswer: { '@type': 'Answer', text: 'CamCash is the best analytics dashboard for cam models who stream on multiple platforms. It supports Chaturbate, BongaCams, MyFreeCams, Stripchat, and CamSoda in one dashboard — the only tool in this space to do so. CamDash is a strong choice for Chaturbate-only models.' } },
+            { '@type': 'Question', name: 'What is the best analytics dashboard for cam models?', acceptedAnswer: { '@type': 'Answer', text: 'It depends on which platforms you stream on. For models who stream on more than one platform, CamCash is the strongest fit — it supports Chaturbate, BongaCams, MyFreeCams, Stripchat, and CamSoda in one dashboard, which none of the others do. For Chaturbate-only broadcasters, CamDash or CB Cam Insights may fit better depending on budget and feature depth. (Disclosure: CamCash is our own product.)' } },
             { '@type': 'Question', name: 'Does CamCash work on BongaCams and MyFreeCams?', acceptedAnswer: { '@type': 'Answer', text: 'Yes. CamCash supports Chaturbate, BongaCams, MyFreeCams, Stripchat, and CamSoda. Upload your CSV export from any platform and CamCash combines everything into one dashboard. CamDash and CB Cam Insights are Chaturbate-only.' } },
             { '@type': 'Question', name: 'How is CamCash different from CamDash?', acceptedAnswer: { '@type': 'Answer', text: 'CamCash supports 5 platforms including BongaCams and MyFreeCams. CamDash supports Chaturbate only. CamCash uses CSV import; CamDash uses the Chaturbate Stats API token. CamCash is free during beta; CamDash costs $3.99/month for Pro features.' } },
             { '@type': 'Question', name: 'Is there a free cam model analytics tool?', acceptedAnswer: { '@type': 'Answer', text: 'Yes. CamCash is completely free during beta — no credit card required, all features included. CamDash and CB Cam Insights both have free tiers but with limited features and session history.' } },

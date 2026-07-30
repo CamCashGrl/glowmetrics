@@ -24,7 +24,7 @@ const schema = {
   description: "If your cam earnings feel unpredictable, there's usually a data-driven reason. Here's what causes inconsistent cam income and exactly how to fix each one.",
   url: 'https://www.camcashgrl.com/blog/why-cam-income-is-inconsistent',
   datePublished: '2026-01-01',
-  dateModified: '2026-04-27',
+  dateModified: '2026-07-30',
   author: { '@type': 'Person', name: 'Daphne Dawson', jobTitle: 'Cam Model' },
   publisher: { '@type': 'Organization', name: 'CamCash', url: 'https://www.camcashgrl.com' },
   mainEntityOfPage: { '@type': 'WebPage', '@id': 'https://www.camcashgrl.com/blog/why-cam-income-is-inconsistent' },
@@ -149,6 +149,16 @@ export default function WhyCamIncomeIsInconsistent() {
 
       <h2 style={s.h2}>The Pattern Behind All 6 Causes</h2>
       <p style={s.p}>Every cause of inconsistent cam income comes down to the same thing: making decisions without enough information. None of these are failures of effort or talent — they're information gaps. And information gaps are fixable.</p>
+
+      <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, padding: '20px 22px', margin: '20px 0 28px' }}>
+        <div style={{ fontSize: 13, fontWeight: 800, color: '#a5b4fc', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>A simple decision framework</div>
+        <ul style={{ ...s.ul, marginBottom: 0 }}>
+          <li style={s.li}><strong style={{ color: '#e2e8f0' }}>Session came in 40%+ below your baseline?</strong> Check whether a top fan went quiet before assuming the whole night was just slow.</li>
+          <li style={s.li}><strong style={{ color: '#e2e8f0' }}>A top fan&apos;s gap since last tip exceeds their normal interval?</strong> That&apos;s your signal to re-engage before the drop shows up in your totals.</li>
+          <li style={s.li}><strong style={{ color: '#e2e8f0' }}>One platform&apos;s $/hr is consistently below the others?</strong> Shift hours toward the stronger platform instead of splitting time evenly out of habit.</li>
+          <li style={s.li}><strong style={{ color: '#e2e8f0' }}>It&apos;s been 2–3 months since you last checked your peak hours?</strong> Re-run the analysis — your old peak window may no longer match your current audience.</li>
+        </ul>
+      </div>
       <p style={s.p}>For a deeper look at growing your overall income, see <a href="/blog/cam-model-earnings" style={s.iLink}>Cam Model Earnings: How Much Do Cam Models Actually Make?</a></p>
       <p style={s.p}>Flat nights often come from quiet rooms you couldn't restart — <a href="/blog/live-ai-coaching-cam-models" style={s.iLink}>in-stream coaching</a> fixes that in the moment.</p>
       <p style={s.p}>Income also dips when whales drift off unnoticed, which is why <a href="/blog/cam-model-fan-crm" style={s.iLink}>tracking your whales</a> (Pro feature — upgrade after signup) matters.</p>
