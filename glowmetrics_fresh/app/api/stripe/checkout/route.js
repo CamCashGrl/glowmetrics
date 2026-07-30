@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { stripe } from '../../../../lib/stripe'
 import { createSupabaseRouteClient } from '../../../../lib/supabase-server'
 import { createClient } from '@supabase/supabase-js'
+import { resolvePriceMap, missingAnnualEnvVars } from '../../../../lib/stripePriceConfig'
 
 export async function POST(request) {
   try {
@@ -76,22 +77,29 @@ export async function POST(request) {
     // Resolve the correct Stripe price ID based on plan_type
     const planType = body.plan_type || 'standard_monthly'
 
-    const PRICE_MAP = {
-      early_adopter_monthly: process.env.STRIPE_PRICE_EARLY_ADOPTER_MONTHLY,
-      early_adopter_annual:  process.env.STRIPE_PRICE_EARLY_ADOPTER_ANNUAL,
-      standard_monthly:      process.env.STRIPE_MONTHLY_PRICE_ID || process.env.STRIPE_PRICE_STANDARD_MONTHLY || process.env.NEXT_PUBLIC_STRIPE_PRICE_ID,
-      standard_annual:       process.env.STRIPE_YEARLY_PRICE_ID || process.env.STRIPE_ANNUAL_PRICE_ID || process.env.STRIPE_PRICE_STANDARD_ANNUAL || process.env.NEXT_PUBLIC_STRIPE_PRICE_ANNUAL,
-    }
+    const PRICE_MAP = resolvePriceMap()
 
     if (!Object.prototype.hasOwnProperty.call(PRICE_MAP, planType)) {
       return NextResponse.json({ error: 'Invalid subscription plan selected.' }, { status: 400 })
     }
 
-    const priceId = PRICE_MAP[planType]
+    const priceId = PRICE_MAP[planType].value
     if (!priceId || !priceId.startsWith('price_')) {
-      console.error(`Checkout: missing or invalid price for ${planType}`)
+      if (planType.includes('annual')) {
+        // Annual has historically had no price configured in this environment
+        // at all — this isn't an unexpected server error, it's a known,
+        // recoverable "not offered right now" state. The client should hide
+        // the option rather than hit this, but guard it here too since the
+        // client's availability check could be stale.
+        console.error(`Checkout: annual plan requested but not configured. Missing env vars: ${missingAnnualEnvVars().join(', ')}`)
+        return NextResponse.json(
+          { error: 'Annual billing is not available right now. Please choose the monthly plan, or try again shortly.' },
+          { status: 503 }
+        )
+      }
+      console.error(`Checkout: missing or invalid price for ${planType} (expected env var: ${PRICE_MAP[planType].source})`)
       return NextResponse.json(
-        { error: `The ${planType.includes('annual') ? 'annual' : 'monthly'} Stripe price is not configured correctly.` },
+        { error: 'This plan is not configured correctly. Please try again shortly.' },
         { status: 500 }
       )
     }
@@ -107,7 +115,16 @@ export async function POST(request) {
       metadata: {
         userId: user.id,
         plan_type: planType,
-      }
+      },
+      // Copies userId onto the Subscription object itself (Checkout Session
+      // metadata alone does not propagate there), so customer.subscription.*
+      // webhook events can match the user via metadata too, not just email.
+      subscription_data: {
+        metadata: {
+          userId: user.id,
+          plan_type: planType,
+        },
+      },
     })
 
     if (!session.url) {

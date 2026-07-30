@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { tokenRate } from '../../../../lib/constants';
+import { isProPlan } from '../../../../lib/plan';
 
 export const dynamic = 'force-dynamic';
 
@@ -142,7 +143,7 @@ export async function POST(req) {
       .select('plan')
       .eq('id', user.id)
       .maybeSingle();
-    const savedToHistory = profile?.plan === 'pro' || profile?.plan === 'unlimited';
+    const savedToHistory = isProPlan(profile?.plan);
 
     if (savedToHistory) {
       await supabaseAdmin.from('tips').insert({
