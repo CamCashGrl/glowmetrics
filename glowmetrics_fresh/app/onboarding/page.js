@@ -434,6 +434,12 @@ const CSS=`
     .ob-card{padding:22px 16px!important;border-radius:24px!important}
     .ob-plat-row{flex-direction:column!important}
   }
+  .ob-shell{max-width:430px}
+  .ob-stat-grid{grid-template-columns:repeat(2,1fr)}
+  @media(min-width:640px){
+    .ob-shell{max-width:620px}
+    .ob-stat-grid{grid-template-columns:repeat(4,1fr)}
+  }
 `
 
 // ── UI components ──────────────────────────────────────────────
@@ -748,7 +754,7 @@ export default function OnboardingPage(){
       <FeedbackBubble/>
 
       {/* ── CARD ── */}
-      <div style={{position:'relative',zIndex:10,width:'100%',maxWidth:430}}>
+      <div className="ob-shell" style={{position:'relative',zIndex:10,width:'100%'}}>
         <div style={{position:'absolute',inset:-2,borderRadius:30,background:'linear-gradient(135deg,rgba(33,230,243,0.9) 0%,rgba(124,92,255,0.45) 45%,rgba(255,47,174,0.9) 100%)',zIndex:-1,filter:'blur(1.5px)',animation:'glowPulse 3.5s ease-in-out infinite'}}/>
         <div style={{position:'absolute',inset:-60,borderRadius:'50%',background:'radial-gradient(circle,rgba(124,92,255,0.10) 0%,transparent 70%)',zIndex:-2,pointerEvents:'none'}}/>
         <div className="ob-card ob-card-inner" style={{position:'relative',borderRadius:28,border:'1px solid rgba(255,255,255,0.12)',background:'linear-gradient(180deg,rgba(10,15,35,0.94),rgba(6,9,24,0.96))',backdropFilter:'blur(34px)',WebkitBackdropFilter:'blur(34px)',padding:'26px 28px 24px',overflow:'hidden',boxShadow:'0 0 46px rgba(33,230,243,0.25),0 0 70px rgba(255,47,174,0.15),0 26px 96px rgba(0,0,0,0.58),inset 0 1px 0 rgba(255,255,255,0.10)'}}>
@@ -812,7 +818,10 @@ export default function OnboardingPage(){
           {/* ══ USERNAME ══ */}
           {step==='username'&&(
             <div style={{animation:'fadeUp 0.3s ease both'}}>
-              <div style={EYE}>Step 1 of 3 — Chaturbate</div>
+              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:4}}>
+                <div style={EYE}>Step 1 of 3 — Chaturbate</div>
+                <button onClick={()=>setStep('platform')} style={{background:'none',border:'none',fontSize:11,fontWeight:700,color:'rgba(100,116,139,0.75)',cursor:'pointer',transition:'color 0.2s'}} onMouseEnter={e=>e.currentTarget.style.color=CYAN} onMouseLeave={e=>e.currentTarget.style.color='rgba(100,116,139,0.75)'}>Change platform</button>
+              </div>
               <div style={{textAlign:'center',marginBottom:22}}>
                 <h1 style={{fontSize:23,fontWeight:900,color:'#F8FAFC',letterSpacing:'-0.025em',lineHeight:1.15,marginBottom:7}}>Start tracking your streams</h1>
                 <p style={{fontSize:13,color:'rgba(166,168,189,0.88)',lineHeight:1.7,maxWidth:360,margin:'0 auto'}}>Enter your username so we can link you directly to your token stats page.</p>
@@ -831,7 +840,7 @@ export default function OnboardingPage(){
                 <div style={{marginTop:5,fontSize:10,color:'rgba(100,116,139,0.45)'}}>Exact username you use to broadcast (not display name)</div>
               </div>
               <OBBtn onClick={handleUsernameSubmit} style={{marginBottom:10}}>Continue to Tip Import →</OBBtn>
-              <OBLinks links={[{label:'← Back',onClick:()=>setStep('platform')},{label:"Skip — I'll navigate there myself",onClick:()=>{setCbUsername('');setStep('paste')}}]}/>
+              <OBSecBtn onClick={()=>{setCbUsername('');setStep('paste')}} style={{width:'100%'}}>Skip — I'll navigate there myself</OBSecBtn>
               <OBTrust/>
             </div>
           )}
@@ -955,7 +964,7 @@ export default function OnboardingPage(){
                   </div>)
                 })}
               </div>
-              <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:7}}>
+              <div className="ob-stat-grid" style={{display:'grid',gap:7}}>
                 {[
                   {icon:'💵',label:'Earnings',value:`$${((preview?.estimatedEarnings||0)*(loadingProgress/100)).toFixed(0)}`,color:CYAN},
                   {icon:'👥',label:'Fans',value:Math.round((preview?.fansDetected||0)*(loadingProgress/100)),color:'#a78bfa'},
@@ -1000,7 +1009,7 @@ export default function OnboardingPage(){
               <div style={EYE}>First Insights</div>
               <h1 style={{fontSize:23,fontWeight:900,color:'#F8FAFC',letterSpacing:'-0.025em',marginBottom:7}}>Your first insights are ready</h1>
               <p style={{fontSize:13,color:'rgba(166,168,189,0.85)',lineHeight:1.65,marginBottom:20}}>Here's a beautiful preview of what we found.</p>
-              <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:9,marginBottom:14}}>
+              <div className="ob-stat-grid" style={{display:'grid',gap:9,marginBottom:14}}>
                 {[
                   {label:'Tips Imported',value:tipsDisplayed,color:CYAN,prefix:'',suffix:' tips',delay:'0s'},
                   {label:'Unique Fans',value:preview?.fansDetected||0,color:'#f59e0b',prefix:'',suffix:' fans',delay:'0.1s'},
