@@ -3088,6 +3088,9 @@ const stopImportMessageRotation = () => {
                   <a href="/shop" style={{ display:'flex', alignItems:'center', padding:'8px 20px', borderRadius:11, background:'linear-gradient(90deg, #16F4FF 0%, #7C5CFF 48%, #FF2BAE 100%)', border:'none', color:'#fff', fontWeight:800, fontSize:13, cursor:'pointer', whiteSpace:'nowrap', textDecoration:'none', boxShadow:'0 0 14px rgba(22,244,255,0.3)', letterSpacing:0.3 }}>
                     🛍️ Shop
                   </a>
+                  <a href="/live/preview" style={{ display:'flex', alignItems:'center', padding:'8px 16px', borderRadius:11, background:'rgba(168,85,247,0.14)', border:'1px solid rgba(168,85,247,0.35)', color:'#a855f7', fontWeight:700, fontSize:13, cursor:'pointer', whiteSpace:'nowrap', textDecoration:'none', letterSpacing:0.3 }}>
+                    🔍 Preview Live Mode
+                  </a>
                   <button onClick={() => { setActiveTab('live'); if (typeof window !== 'undefined') { localStorage.setItem('camcash_tab','live'); window.scrollTo({top:0,behavior:'instant'}); } }} style={{ padding:'8px 20px', borderRadius:11, background:'linear-gradient(135deg,#10B981,#22D3EE)', border:'none', color:'#fff', fontWeight:800, fontSize:13, cursor:'pointer', whiteSpace:'nowrap', boxShadow:'0 0 14px rgba(16,185,129,0.3)', letterSpacing:0.3 }}>
                     ⚡ Go Live
                   </button>

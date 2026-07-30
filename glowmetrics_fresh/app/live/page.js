@@ -949,6 +949,10 @@ export default function LivePage() {
                 'America/Los_Angeles', 'America/Denver', 'America/Chicago', 'America/New_York', 'UTC', 'Europe/London', 'Europe/Berlin'
               ])).map(tz => <option key={tz} value={tz}>{tz}</option>)}
             </select>
+            <Button as="a" href="/live/preview"
+              style={{ padding: '7px 14px', fontSize: 12, whiteSpace: 'nowrap', background: 'rgba(168,85,247,0.14)', border: '1px solid rgba(168,85,247,0.35)', color: C.purple, boxShadow: 'none' }}>
+              🔍 Preview Live Mode
+            </Button>
             <Button as="a" href="/camcash-extension.zip" download="camcash-extension.zip" onClick={() => { setShowExtModal(true); setExtStep(0); }}
               style={{ padding: '7px 14px', fontSize: 12, whiteSpace: 'nowrap' }}>
               📥 Download Extension
