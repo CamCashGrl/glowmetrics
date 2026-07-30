@@ -9,9 +9,8 @@ export const PRODUCTS = [
     shortTitle: "Daddy's Girl Roleplay Bundle",
     price: "$8.99",
     etsyUrl: "https://www.etsy.com/listing/4544543970/daddys-girl-roleplay-script-pack-adult",
-    coverImage: "/shop-images/01_Daddys_Girl_Roleplay_Bundle.png",
+    coverImage: "https://i.etsystatic.com/64033359/r/il/0bea9e/8301249762/il_1080xN.8301249762_fhsh.jpg",
     galleryImages: [
-      "https://i.etsystatic.com/64033359/r/il/0bea9e/8301249762/il_1080xN.8301249762_fhsh.jpg",
       "https://i.etsystatic.com/64033359/r/il/e42ae4/8349145991/il_1080xN.8349145991_37vk.jpg",
       "https://i.etsystatic.com/64033359/r/il/56a8e1/8301249596/il_1080xN.8301249596_adjm.jpg",
       "https://i.etsystatic.com/64033359/r/il/b9a11d/8349146159/il_1080xN.8349146159_93u3.jpg",
@@ -33,9 +32,8 @@ For consensual, unrelated adults only. No physical item will be shipped. For per
     shortTitle: "Playful SPH Cam Script Pack",
     price: "$9.99",
     etsyUrl: "https://www.etsy.com/listing/4541995234/playful-sph-cam-script-pack-adult",
-    coverImage: "/shop-images/02_Playful_SPH_Cam_Script_Pack.png",
+    coverImage: "https://i.etsystatic.com/64033359/r/il/7a51f8/8331116443/il_1080xN.8331116443_pp31.jpg",
     galleryImages: [
-      "https://i.etsystatic.com/64033359/r/il/7a51f8/8331116443/il_1080xN.8331116443_pp31.jpg",
       "https://i.etsystatic.com/64033359/r/il/2f7f18/8283196568/il_1080xN.8283196568_4fx9.jpg",
       "https://i.etsystatic.com/64033359/r/il/65f88e/8283196570/il_1080xN.8283196570_7o4c.jpg",
       "https://i.etsystatic.com/64033359/r/il/7748b0/8283196580/il_1080xN.8283196580_8asv.jpg",
@@ -60,9 +58,8 @@ Created for consenting adults and adult creators only. For personal creator use;
     shortTitle: "VIP Client Tracker ($12.99 tier)",
     price: "$12.99",
     etsyUrl: "https://www.etsy.com/listing/4541972932/cam-model-vip-client-tracker-fillable",
-    coverImage: "/shop-images/03_VIP_Client_Tracker_1299.png",
+    coverImage: "https://i.etsystatic.com/64033359/r/il/03c614/8330941639/il_1080xN.8330941639_8h0k.jpg",
     galleryImages: [
-      "https://i.etsystatic.com/64033359/r/il/03c614/8330941639/il_1080xN.8330941639_8h0k.jpg",
       "https://i.etsystatic.com/64033359/r/il/be871a/8283029190/il_1080xN.8283029190_d74y.jpg",
       "https://i.etsystatic.com/64033359/r/il/f14ded/8330948431/il_1080xN.8330948431_7i3m.jpg",
       "https://i.etsystatic.com/64033359/r/il/2d5e2e/8283029178/il_1080xN.8283029178_gpw9.jpg",
@@ -88,9 +85,8 @@ For personal business use only. May not be resold, shared, copied, or redistribu
     shortTitle: "VIP Client Tracker ($9.99 tier)",
     price: "$9.99",
     etsyUrl: "https://www.etsy.com/listing/4541204773/cam-model-vip-client-tracker-fillable",
-    coverImage: "/shop-images/04_VIP_Client_Tracker_999.png",
+    coverImage: "https://i.etsystatic.com/64033359/r/il/e2dc6d/8325215957/il_1080xN.8325215957_fxfr.jpg",
     galleryImages: [
-      "https://i.etsystatic.com/64033359/r/il/e2dc6d/8325215957/il_1080xN.8325215957_fxfr.jpg",
       "https://i.etsystatic.com/64033359/r/il/de4f1d/8277296660/il_1080xN.8277296660_ql2i.jpg",
       "https://i.etsystatic.com/64033359/r/il/003231/8277296664/il_1080xN.8277296664_dkkf.jpg",
       "https://i.etsystatic.com/64033359/r/il/53c2d1/8277296668/il_1080xN.8277296668_pj6y.jpg",
@@ -117,9 +113,8 @@ Use usernames and creator-safe identifiers only. Always follow platform rules an
     shortTitle: "Cam Model Branding Kit",
     price: "$9.99",
     etsyUrl: "https://www.etsy.com/listing/4541182089/cam-model-branding-kit-workbook-adult",
-    coverImage: "/shop-images/05_Cam_Model_Branding_Kit.png",
+    coverImage: "https://i.etsystatic.com/64033359/r/il/c889ca/8325178355/il_1080xN.8325178355_degl.jpg",
     galleryImages: [
-      "https://i.etsystatic.com/64033359/r/il/c889ca/8325178355/il_1080xN.8325178355_degl.jpg",
       "https://i.etsystatic.com/64033359/r/il/4a1e30/8325178421/il_1080xN.8325178421_4vlg.jpg",
       "https://i.etsystatic.com/64033359/r/il/552d66/8277259966/il_1080xN.8277259966_mddf.jpg",
       "https://i.etsystatic.com/64033359/r/il/db66fb/8277260280/il_1080xN.8277260280_bzvx.jpg",
@@ -141,9 +136,8 @@ Product Details: 53+ page PDF workbook, instant digital download, printable and 
     shortTitle: "Good Morning GFE JOI Script",
     price: "$7.99",
     etsyUrl: "https://www.etsy.com/listing/4541140453/good-morning-gfe-joi-script-for-adult",
-    coverImage: "/shop-images/06_Good_Morning_GFE_JOI_Script.png",
+    coverImage: "https://i.etsystatic.com/64033359/r/il/87cc92/8276965006/il_1080xN.8276965006_m6nf.jpg",
     galleryImages: [
-      "https://i.etsystatic.com/64033359/r/il/87cc92/8276965006/il_1080xN.8276965006_m6nf.jpg",
       "https://i.etsystatic.com/64033359/r/il/09c770/8324881181/il_1080xN.8324881181_a0kx.jpg",
     ],
     description: `Start his morning with a sweet girlfriend voice—and turn it into a dirty, guided experience he will remember all day.
@@ -163,9 +157,8 @@ Great for custom adult videos, personalized voice notes, PPV messages, GFE conte
     shortTitle: "Roll The Dice Game Pack",
     price: "$11.99",
     etsyUrl: "https://www.etsy.com/listing/4541149618/cam-model-roll-the-dice-game-pack",
-    coverImage: "/shop-images/07_Cam_Model_Roll_The_Dice_Game_Pack.png",
+    coverImage: "https://i.etsystatic.com/64033359/r/il/d999e4/8324638981/il_1080xN.8324638981_3rhd.jpg",
     galleryImages: [
-      "https://i.etsystatic.com/64033359/r/il/d999e4/8324638981/il_1080xN.8324638981_3rhd.jpg",
       "https://i.etsystatic.com/64033359/r/il/bc0361/8276815622/il_1080xN.8276815622_3fln.jpg",
       "https://i.etsystatic.com/64033359/r/il/67940e/8276815626/il_1080xN.8276815626_4lhy.jpg",
       "https://i.etsystatic.com/64033359/r/il/11d655/8324732787/il_1080xN.8324732787_oktu.jpg",
@@ -194,9 +187,8 @@ Great for cam models, webcam performers, live-stream entertainers, themed stream
     shortTitle: "Spin The Wheel Template Pack",
     price: "$9.99",
     etsyUrl: "https://www.etsy.com/listing/4538921362/editable-spin-the-wheel-canva-template",
-    coverImage: "/shop-images/08_Editable_Spin_The_Wheel_Template_Pack.png",
+    coverImage: "https://i.etsystatic.com/64033359/r/il/3c0207/8307768195/il_1080xN.8307768195_8kcu.jpg",
     galleryImages: [
-      "https://i.etsystatic.com/64033359/r/il/3c0207/8307768195/il_1080xN.8307768195_8kcu.jpg",
       "https://i.etsystatic.com/64033359/r/il/a7bafc/8307939649/il_1080xN.8307939649_jb9u.jpg",
       "https://i.etsystatic.com/64033359/r/il/3ce897/8307939681/il_1080xN.8307939681_da5r.jpg",
       "https://i.etsystatic.com/64033359/r/il/5c2d32/8307939669/il_1080xN.8307939669_db87.jpg",
@@ -219,9 +211,8 @@ This is a digital product. No physical item will be shipped.`,
     shortTitle: "320 Realistic Tip Menu Ideas",
     price: "$10.99",
     etsyUrl: "https://www.etsy.com/listing/4538766419/cam-model-tip-menu-templates-320-ideas",
-    coverImage: "/shop-images/09_320_Realistic_Tip_Menu_Ideas.png",
+    coverImage: "https://i.etsystatic.com/64033359/r/il/4a1b07/8258613836/il_1080xN.8258613836_s88w.jpg",
     galleryImages: [
-      "https://i.etsystatic.com/64033359/r/il/4a1b07/8258613836/il_1080xN.8258613836_s88w.jpg",
       "https://i.etsystatic.com/64033359/r/il/a3c94e/8306529339/il_1080xN.8306529339_b50k.jpg",
       "https://i.etsystatic.com/64033359/r/il/5a444f/8258613804/il_1080xN.8258613804_hm9l.jpg",
       "https://i.etsystatic.com/64033359/r/il/e4f3fe/8258613828/il_1080xN.8258613828_pt6d.jpg",
@@ -247,9 +238,8 @@ This is a digital product. The Canva templates are editable; the included PDF is
     shortTitle: "Mistress Contract – 128 Slave Rules",
     price: "$11.99",
     etsyUrl: "https://www.etsy.com/listing/4537363646/mistress-contract-128-slave-rules",
-    coverImage: "/shop-images/10_Mistress_Contract_128_Slave_Rules.png",
+    coverImage: "https://i.etsystatic.com/64033359/r/il/84a3cc/8248104022/il_1080xN.8248104022_hopn.jpg",
     galleryImages: [
-      "https://i.etsystatic.com/64033359/r/il/84a3cc/8248104022/il_1080xN.8248104022_hopn.jpg",
       "https://i.etsystatic.com/64033359/r/il/032b8b/8296018843/il_1080xN.8296018843_mzbh.jpg",
       "https://i.etsystatic.com/64033359/r/il/04084f/8248104190/il_1080xN.8248104190_j932.jpg",
       "https://i.etsystatic.com/64033359/r/il/1d9ed0/8248104016/il_1080xN.8248104016_cecu.jpg",
@@ -272,9 +262,8 @@ This workbook does not create legal ownership, replace legal advice, or override
     shortTitle: "Bondage For Beginners",
     price: "$11.99",
     etsyUrl: "https://www.etsy.com/listing/4537346381/bondage-for-beginners-guide-bdsm-safety",
-    coverImage: "/shop-images/11_Bondage_For_Beginners.png",
+    coverImage: "https://i.etsystatic.com/64033359/r/il/bb2b56/8295998099/il_1080xN.8295998099_daoi.jpg",
     galleryImages: [
-      "https://i.etsystatic.com/64033359/r/il/bb2b56/8295998099/il_1080xN.8295998099_daoi.jpg",
       "https://i.etsystatic.com/64033359/r/il/1c247a/8296243681/il_1080xN.8296243681_ijlj.jpg",
       "https://i.etsystatic.com/64033359/r/il/280e16/8296243683/il_1080xN.8296243683_3jkc.jpg",
       "https://i.etsystatic.com/64033359/r/il/50c63c/8248328776/il_1080xN.8248328776_3ctg.jpg",
@@ -296,9 +285,8 @@ This guide does not teach suspension, breath restriction, neck restraint, hogtie
     shortTitle: "101 Sexting Tips",
     price: "$4.99",
     etsyUrl: "https://www.etsy.com/listing/4537171402/101-sexting-tips-for-long-distance",
-    coverImage: "/shop-images/12_101_Sexting_Tips.png",
+    coverImage: "https://i.etsystatic.com/64033359/r/il/8f2560/8246716744/il_1080xN.8246716744_1klf.jpg",
     galleryImages: [
-      "https://i.etsystatic.com/64033359/r/il/8f2560/8246716744/il_1080xN.8246716744_1klf.jpg",
       "https://i.etsystatic.com/64033359/r/il/580d8b/8247080684/il_1080xN.8247080684_6k9t.jpg",
       "https://i.etsystatic.com/64033359/r/il/fdad0a/8247080690/il_1080xN.8247080690_cm6e.jpg",
       "https://i.etsystatic.com/64033359/r/il/03c623/8294911653/il_1080xN.8294911653_a1ym.jpg",
@@ -324,9 +312,8 @@ This is a digital product only, intended for consenting adults 18+. Consent, pri
     shortTitle: "101 Ways To Train Your Sissy",
     price: "$10.99",
     etsyUrl: "https://www.etsy.com/listing/4537118216/101-ways-to-punish-your-sissy-findom",
-    coverImage: "/shop-images/13_101_Ways_To_Train_Your_Sissy.png",
+    coverImage: "https://i.etsystatic.com/64033359/r/il/a0e8a9/8294496283/il_1080xN.8294496283_hm42.jpg",
     galleryImages: [
-      "https://i.etsystatic.com/64033359/r/il/a0e8a9/8294496283/il_1080xN.8294496283_hm42.jpg",
       "https://i.etsystatic.com/64033359/r/il/a6cae8/8294459449/il_1080xN.8294459449_lqvt.jpg",
       "https://i.etsystatic.com/64033359/r/il/7f9b4b/8246542968/il_1080xN.8246542968_cz25.jpg",
       "https://i.etsystatic.com/64033359/r/il/940a37/8246542956/il_1080xN.8246542956_9zw8.jpg",
@@ -350,9 +337,8 @@ All activities must remain consensual and within clearly negotiated boundaries. 
     shortTitle: "How To Train Your PayPig",
     price: "$10.99",
     etsyUrl: "https://www.etsy.com/listing/4536210508/how-to-train-your-paypig-script-plug-and",
-    coverImage: "/shop-images/14_How_To_Train_Your_PayPig.png",
+    coverImage: "https://i.etsystatic.com/64033359/r/il/9fbcd4/8239578466/il_1080xN.8239578466_gm2t.jpg",
     galleryImages: [
-      "https://i.etsystatic.com/64033359/r/il/9fbcd4/8239578466/il_1080xN.8239578466_gm2t.jpg",
       "https://i.etsystatic.com/64033359/r/il/6bdabb/8239579258/il_1080xN.8239579258_q6d4.jpg",
       "https://i.etsystatic.com/64033359/r/il/da267f/8287488107/il_1080xN.8287488107_fbji.jpg",
       "https://i.etsystatic.com/64033359/r/il/0de7e1/8239580330/il_1080xN.8239580330_1xsn.jpg",
@@ -375,9 +361,8 @@ For adult creators 18+. Personal creator use only; may not be resold, shared, or
     shortTitle: "500 High-Converting Cam Room Titles",
     price: "$3.99",
     etsyUrl: "https://www.etsy.com/listing/4532348458/500-high-converting-cam-room-titles-copy",
-    coverImage: "/shop-images/15_500_High_Converting_Cam_Room_Titles.png",
+    coverImage: "https://i.etsystatic.com/64033359/r/il/ceefce/8210187028/il_1080xN.8210187028_npib.jpg",
     galleryImages: [
-      "https://i.etsystatic.com/64033359/r/il/ceefce/8210187028/il_1080xN.8210187028_npib.jpg",
       "https://i.etsystatic.com/64033359/r/il/ba1a16/8258110905/il_1080xN.8258110905_6dct.jpg",
       "https://i.etsystatic.com/64033359/r/il/5a9a0d/8258110929/il_1080xN.8258110929_mlyr.jpg",
       "https://i.etsystatic.com/64033359/r/il/6b3bfb/8210186966/il_1080xN.8210186966_f4k5.jpg",
@@ -392,6 +377,33 @@ Categories inside: Flirty & Playful, Bratty & Princess, Soft Girlfriend & Cozy, 
 
 Perfect for cam models, new cam girls, livestream creators, and performers on Chaturbate, Stripchat, MyFreeCams, and BongaCams. Digital download; personal use only.`,
     seoKeywords: "cam room titles, high converting stream titles, cam model title ideas",
+  },
+  {
+    slug: "chaturbate-earnings-tracker-bundle",
+    title: "Chaturbate Earnings Tracker Bundle | 44-Page Creator Toolkit",
+    shortTitle: "Chaturbate Earnings & Growth Bundle",
+    price: "$14.99",
+    etsyUrl: "https://www.etsy.com/listing/4545112282/chaturbate-earnings-tracker-bundle-44",
+    coverImage: "/shop-images/16_Chaturbate_Earnings_Growth_Bundle_cover.jpg",
+    galleryImages: [
+      "/shop-images/16_Chaturbate_Bundle_Whats_Inside.jpg",
+      "/shop-images/16_Chaturbate_Bundle_Stream_Tracking.jpg",
+      "/shop-images/16_Chaturbate_Bundle_Tip_Menu_Goals.jpg",
+      "/shop-images/16_Chaturbate_Bundle_Best_Time_Challenge.jpg",
+      "/shop-images/16_Chaturbate_Bundle_Followup_Messages.jpg",
+      "/shop-images/16_Chaturbate_Bundle_Checklists_Dashboard.jpg",
+      "/shop-images/16_Chaturbate_Bundle_Summary.jpg",
+    ],
+    description: `Track every stream, plan every goal, and finally see where your Chaturbate income is really coming from with this 44-page practical stream performance workbook.
+
+This bundle includes a 28-page earnings and performance workbook plus a 16-page premium growth-tool bonus section, built for Chaturbate creators who want to track, calculate, test, review, and plan instead of guessing.
+
+What's included: Daily Stream Log and Detailed Session Review pages for tokens, estimated USD, tips, unique tippers, and hourly pace; a Tip Menu Pricing Worksheet plus 50 ready-to-adapt room-goal ideas; a 14-Day Best-Time Streaming Challenge to test and compare your strongest schedule windows; 30 boundary-safe follow-up message starters for re-engaging fans without copy-and-paste spam; Pre-Stream, Room and Offer, and Business Plan checklists; a Monthly Creator Dashboard snapshot; and an Earnings Calculation Worksheet for estimated USD, USD/hour, and net profit.
+
+Product details: 44-page printable digital PDF, instant digital download, large easy-to-read text, reusable pages for every stream. No physical item will be shipped.
+
+For personal creator use only; may not be resold, shared, copied, or redistributed.`,
+    seoKeywords: "Chaturbate earnings tracker, cam model income tracker, stream performance workbook, cam model goal planner",
   },
 ];
 
