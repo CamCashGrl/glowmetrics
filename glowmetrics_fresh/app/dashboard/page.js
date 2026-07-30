@@ -16,6 +16,8 @@ import { track as gtmTrack } from '../../lib/track'
 import { getDashboardReadiness, getModuleLockState, canShowHourlyRate, LockedInsightCard, DashboardProgressCard } from './DashboardPreview'
 import Button from '../../components/ui/Button'
 import EarlyAdopterOffer from './EarlyAdopterOffer'
+import UpgradeModal from '../../components/UpgradeModal'
+import { isProPlan } from '../../lib/plan'
 import { useLiveSessionEngine } from '../live/useLiveSessionEngine'
 
 // Tab-only components loaded on demand instead of in the initial dashboard
@@ -1395,7 +1397,7 @@ export default function Dashboard() {
   const [messageIndex, setMessageIndex] = useState(0)
   const [messageCopied, setMessageCopied] = useState(false)
   const [showUpgradeModal, setShowUpgradeModal] = useState(false)
-  const [showBetaPrompt, setShowBetaPrompt] = useState(false)
+  const [upgradeModalSource, setUpgradeModalSource] = useState(null)
   const [fanSearchOpen, setFanSearchOpen] = useState(false)
   const [fanSearchQuery, setFanSearchQuery] = useState("")
   const [shareModalOpen, setShareModalOpen] = useState(false)
@@ -1442,9 +1444,6 @@ export default function Dashboard() {
   const [liveTick, setLiveTick] = useState(0)
   const [minuteTick, setMinuteTick] = useState(0) // increments every 60s to refresh time-based alerts
   const [betaCount, setBetaCount] = useState(null)
-  const [earlyAccessEmail, setEarlyAccessEmail] = useState('')
-  const [earlyAccessSubmitted, setEarlyAccessSubmitted] = useState(false)
-  const [earlyAccessSubmitting, setEarlyAccessSubmitting] = useState(false)
   const [showFeedback, setShowFeedback] = useState(false)
   const [feedbackType, setFeedbackType] = useState('feature')
   const [feedbackText, setFeedbackText] = useState('')
@@ -1498,7 +1497,7 @@ export default function Dashboard() {
   const phaseChangeLog     = useRef([])
 
   const isBetaUser = true
-  const isPro = profile?.plan === 'pro' || profile?.plan === 'unlimited'
+  const isPro = isProPlan(profile?.plan)
   const uploadLimit = Infinity
 
   const fmtHour = h => { if (h == null || isNaN(h)) return 'N/A'; return h === 0 ? '12 AM' : h < 12 ? h+' AM' : h === 12 ? '12 PM' : (h-12)+' PM' }
@@ -1506,6 +1505,7 @@ export default function Dashboard() {
   const openUpgradeModal = (source) => {
     track('upgrade_click', { source })
     gtmTrack('paywall_hit', { feature: source })
+    setUpgradeModalSource(source)
     setShowUpgradeModal(true)
   }
 
@@ -4659,7 +4659,7 @@ const stopImportMessageRotation = () => {
               <div style={{ ...glassCard, borderRadius: 14, padding: 20, textAlign: "center", border: "1px solid rgba(59,130,246,0.2)" }}>
                 <div style={{ fontSize: 13, color: C.muted, marginBottom: 12 }}>Upload more data to discover more fans • Pro unlocks full profiles & behavior patterns</div>
                 <button onClick={() => openUpgradeModal("whales_empty")} style={{ padding: "8px 20px", borderRadius: 8, background: "linear-gradient(135deg,rgba(59,130,246,0.3),rgba(236,72,153,0.3))", border: "1px solid rgba(59,130,246,0.4)", color: C.white, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-                  🔓 See What Pro Unlocks
+                  🔓 Unlock my full fan list
                 </button>
               </div>
             )}
@@ -6633,12 +6633,12 @@ const stopImportMessageRotation = () => {
         {activeTab === 'planner' && (
           _plannerLock.locked
             ? <div style={{ padding: '32px 0' }}><LockedInsightCard title="Stream Planner" description="Plan your schedule around your best earning windows." lockType="needs_data" requirement={_plannerLock.message} ctaLabel="Upload More Data" ctaAction={() => handleTabChange('upload')} /></div>
-            : <StreamPlanner tips={tips} isPro={true} />
+            : <StreamPlanner tips={tips} isPro={isPro} />
         )}
         {activeTab === 'moneymap' && (
           _moneyMapLock.locked
             ? <div style={{ padding: '32px 0' }}><LockedInsightCard title="Money Map" description="See where and when your money comes from across sessions and platforms." lockType="needs_data" requirement={_moneyMapLock.message} ctaLabel="Upload More Data" ctaAction={() => handleTabChange('upload')} /></div>
-            : <MoneyMap tips={tips} isPro={true} />
+            : <MoneyMap tips={tips} isPro={isPro} />
         )}
       </div>
 
@@ -6999,153 +6999,20 @@ const stopImportMessageRotation = () => {
         )
       })()}
 
-      {/* UPGRADE MODAL */}
+      {/* UPGRADE MODAL — real Stripe checkout, contextual per gate_source */}
       {showUpgradeModal && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.88)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1002, padding: 20 }}>
-          <div style={{ width: 480, background: "rgba(15,20,32,0.97)", backdropFilter: "blur(24px)", borderRadius: 24, border: "1px solid rgba(255,255,255,0.1)", boxShadow: "0 0 80px rgba(59,130,246,0.2), 0 0 160px rgba(236,72,153,0.1)", overflow: "hidden" }}>
-            <div style={{ height: 4, background: "linear-gradient(90deg, #3b82f6, #a855f7, #ec4899)" }} />
-            <div style={{ padding: 36 }}>
-              <div style={{ textAlign: "center", marginBottom: 28 }}>
-                <div style={{ fontSize: 44, marginBottom: 12 }}>🚀</div>
-                <h2 style={{ fontSize: 24, fontWeight: 800, color: C.white, marginBottom: 8 }}>Unlock Your Full Earning Potential</h2>
-                <p style={{ fontSize: 14, color: C.muted, lineHeight: 1.6 }}>You're only seeing a preview of your data.<br/>Here's what's waiting for you inside:</p>
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 28 }}>
-                {[
-                  { icon: "🐳", text: "See ALL your top spenders — not just the top 3" },
-                  { icon: "⏰", text: "Discover your exact highest-earning hours & days" },
-                  { icon: "💡", text: "Unlock 15+ advanced insights & strategy tips" },
-                  { icon: "📈", text: "Full session history with trend analysis" },
-                  { icon: "🤖", text: "AI fan behavior predictions & return forecasts" },
-                  { icon: "💌", text: "Unlimited re-engagement scripts & fan tracking" },
-                ].map(({ icon, text }) => (
-                  <div key={text} style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 14px", background: "rgba(59,130,246,0.08)", border: "1px solid rgba(59,130,246,0.15)", borderRadius: 10 }}>
-                    <span style={{ fontSize: 18 }}>{icon}</span>
-                    <span style={{ fontSize: 13, color: C.white }}>{text}</span>
-                  </div>
-                ))}
-              </div>
-              <div style={{ textAlign: "center", padding: "12px 16px", background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.25)", borderRadius: 10, marginBottom: 24 }}>
-                <div style={{ fontSize: 13, color: C.gold, fontWeight: 600 }}>💡 Most creators miss 30–60% of their earning potential without this</div>
-              </div>
-              {earlyAccessSubmitted ? (
-                <div style={{ textAlign: "center", padding: "8px 0 16px" }}>
-                  <div style={{ fontSize: 32, marginBottom: 8 }}>🎉</div>
-                  <div style={{ fontSize: 16, fontWeight: 700, color: C.white, marginBottom: 6 }}>You're on the list!</div>
-                  <div style={{ fontSize: 13, color: C.muted, marginBottom: 16 }}>We'll email you with a founding user discount when we launch.</div>
-                  <button onClick={() => setShowUpgradeModal(false)} style={{ padding: "10px 28px", borderRadius: 10, background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.1)", color: C.muted, fontSize: 13, cursor: "pointer" }}>Close</button>
-                </div>
-              ) : (
-                <>
-                  <input
-                    type="email"
-                    value={earlyAccessEmail}
-                    onChange={e => setEarlyAccessEmail(e.target.value)}
-                    placeholder="your@email.com"
-                    style={{ width: "100%", padding: "13px 16px", borderRadius: 12, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.15)", color: C.white, fontSize: 14, outline: "none", marginBottom: 10, boxSizing: "border-box" }}
-                    onFocus={e => e.target.style.borderColor = "rgba(34,211,238,0.5)"}
-                    onBlur={e => e.target.style.borderColor = "rgba(255,255,255,0.15)"}
-                  />
-                  <Button
-                    disabled={!earlyAccessEmail.trim() || earlyAccessSubmitting}
-                    onClick={async () => {
-                      if (!earlyAccessEmail.trim()) return
-                      setEarlyAccessSubmitting(true)
-                      track('early_access_signup', { email: earlyAccessEmail })
-                      try {
-                        const { data: { user: currentUser } } = await supabase.auth.getUser()
-                        await supabase.from('early_access').insert({
-                          email: earlyAccessEmail.trim(),
-                          user_id: currentUser?.id || null,
-                          signed_up_at: new Date().toISOString()
-                        }).then(() => {})
-                      } catch(e) {}
-                      setEarlyAccessSubmitted(true)
-                      setEarlyAccessSubmitting(false)
-                      showToast("🎉 You're on the founding user list!")
-                    }}
-                    style={{ width: "100%", padding: "16px", borderRadius: 14, fontSize: 16, marginBottom: 12 }}>
-                    {earlyAccessSubmitting ? "Saving..." : "🔓 Get Early Access"}
-                  </Button>
-                  <div style={{ textAlign: "center", fontSize: 12, color: C.muted, marginBottom: 20 }}>Launching soon • Founding users get lifetime discount</div>
-                  <button onClick={() => setShowUpgradeModal(false)} style={{ width: "100%", padding: "11px", borderRadius: 10, background: "transparent", border: "1px solid rgba(255,255,255,0.1)", color: C.muted, fontSize: 13, cursor: "pointer" }}>
-                    Maybe later
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* BETA PROMPT MODAL */}
-      {showBetaPrompt && !earlyAccessSubmitted && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.88)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1002, padding: 20 }}>
-          <div style={{ width: 460, background: "rgba(15,20,32,0.97)", backdropFilter: "blur(24px)", borderRadius: 24, border: "1px solid rgba(255,255,255,0.1)", boxShadow: "0 0 80px rgba(59,130,246,0.2), 0 0 160px rgba(236,72,153,0.1)", overflow: "hidden" }}>
-            <div style={{ height: 4, background: "linear-gradient(90deg, #22D3EE, #7C5CFF, #EC4899)" }} />
-            <div style={{ padding: 32 }}>
-              <div style={{ textAlign: "center", marginBottom: 22 }}>
-                <div style={{ fontSize: 36, marginBottom: 10 }}>💰</div>
-                <div style={{ fontSize: 20, fontWeight: 800, color: C.white, marginBottom: 10 }}>Your data found missed earnings</div>
-                <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.7 }}>You're using features that will become premium. We built this to help you:</div>
-                <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 6, textAlign: "left" }}>
-                  {[["🐳","Identify your highest paying viewers"], ["⏰","Stream at your most profitable times"], ["📈","Increase tips without more hours"]].map(([icon, text]) => (
-                    <div key={text} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, color: C.white }}>
-                      <span style={{ fontSize: 14 }}>{icon}</span> {text}
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div style={{ padding: 16, background: "rgba(124,92,255,0.1)", border: "1px solid rgba(124,92,255,0.25)", borderRadius: 12, marginBottom: 18 }}>
-                <div style={{ fontSize: 14, color: C.indigo, fontWeight: 700, marginBottom: 8 }}>🚀 Early Access Offer</div>
-                <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.7, marginBottom: 10 }}>Early access users can lock in founding pricing:</div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-                  {["Lock in lifetime pricing before it increases", "Get every future premium feature included", "Keep full access as we expand the product"].map(t => (
-                    <div key={t} style={{ fontSize: 12, color: C.white }}>• {t}</div>
-                  ))}
-                </div>
-              </div>
-              <div style={{ textAlign: "center", padding: "12px 14px", background: "rgba(236,72,153,0.1)", border: "1px solid rgba(236,72,153,0.25)", borderRadius: 10, marginBottom: 16 }}>
-                <div style={{ fontSize: 18, color: C.pink, fontWeight: 800 }}>🔥 Lock in $9.99/mo for life</div>
-                <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>Launch price will be $29/mo — this offer won't last</div>
-              </div>
-              <input
-                type="email"
-                value={earlyAccessEmail}
-                onChange={e => setEarlyAccessEmail(e.target.value)}
-                placeholder="your@email.com"
-                style={{ width: "100%", padding: "12px 14px", borderRadius: 10, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.15)", color: C.white, fontSize: 13, outline: "none", marginBottom: 8, boxSizing: "border-box" }}
-                onFocus={e => e.target.style.borderColor = "rgba(34,211,238,0.5)"}
-                onBlur={e => e.target.style.borderColor = "rgba(255,255,255,0.15)"}
-              />
-              <Button
-                disabled={!earlyAccessEmail.trim() || earlyAccessSubmitting}
-                onClick={async () => {
-                  if (!earlyAccessEmail.trim()) return
-                  setEarlyAccessSubmitting(true)
-                  track('beta_checkout_clicked', { email: earlyAccessEmail, uploadCount })
-                  try {
-                    await supabase.from('early_access').insert({ email: earlyAccessEmail.trim(), user_id: user?.id || null, signed_up_at: new Date().toISOString() })
-                    await supabase.from('beta_users').upsert({ user_id: user?.id, email: earlyAccessEmail.trim(), submitted_early_access: true, saw_beta_prompt: true }, { onConflict: 'user_id' })
-                    await supabase.from('analytics_events').insert({ user_id: user?.id, event_name: 'beta_checkout_clicked', properties: { email: earlyAccessEmail.trim() } })
-                  } catch(e) {}
-                  setEarlyAccessSubmitting(false)
-                  setEarlyAccessSubmitted(true)
-                  setShowBetaPrompt(false)
-                  showToast("🎉 Redirecting to checkout...")
-                  setTimeout(() => window.open("https://buy.stripe.com/8x228r3Qu8dj7zQ1F5f7i01", "_blank"), 500)
-                }}
-                style={{ width: "100%", padding: "14px", fontSize: 14, marginBottom: 8 }}>
-                {earlyAccessSubmitting ? "Saving..." : "🔒 Lock In My Early Access"}
-              </Button>
-              <div style={{ fontSize: 11, color: C.muted, textAlign: "center", marginBottom: 10 }}>Secure Stripe checkout — cancel anytime</div>
-              <button onClick={() => { setShowBetaPrompt(false); track('beta_prompt_dismissed', { uploadCount }) }}
-                style={{ width: "100%", padding: "10px", borderRadius: 10, background: "transparent", border: "1px solid rgba(255,255,255,0.08)", color: C.muted, fontSize: 13, cursor: "pointer" }}>
-                Keep using free beta
-              </button>
-            </div>
-          </div>
-        </div>
+        <UpgradeModal
+          source={upgradeModalSource}
+          featureName={upgradeModalSource}
+          headline="Unlock your complete Fan Intelligence"
+          description="CamCash found additional fans, spending history, and possible recovery opportunities beyond your first 3 free summaries."
+          discoveredValue={
+            whales.length > 3
+              ? `${whales.length - 3} additional fan${whales.length - 3 === 1 ? '' : 's'} analyzed`
+              : null
+          }
+          onClose={() => setShowUpgradeModal(false)}
+        />
       )}
 
       {/* FLOATING FEEDBACK BUTTON — collapsed to a small icon in a safe gutter so it
