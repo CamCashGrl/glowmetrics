@@ -6047,9 +6047,13 @@ const stopImportMessageRotation = () => {
         {activeTab === "upload" && (
           <div style={{ maxWidth: 600, margin: "0 auto" }}>
             <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 8 }}>📥 Import CSV</h1>
-            <p style={{ fontSize: 14, color: C.muted, marginBottom: freePlatformLimitReached ? 16 : 32 }}>
+            <p style={{ fontSize: 14, color: C.muted, marginBottom: 12 }}>
               {isPro ? "Unlimited platforms • Auto-removes duplicates" : freePlatformLimitReached ? `Free plan — tracking ${allPlatforms[0]}. Auto-removes duplicates.` : "Free plan tracks 1 platform. Auto-removes duplicates."}
             </p>
+            <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: freePlatformLimitReached ? 16 : 32 }}>
+              <a href="/blog/how-to-upload-csv-to-camcash" style={{ fontSize: 13, color: C.cyan, textDecoration: "none", fontWeight: 600 }}>📹 Watch the SOP: How to upload a CSV →</a>
+              <a href="#csv-help" style={{ fontSize: 13, color: C.cyan, textDecoration: "none", fontWeight: 600 }}>❓ CSV help →</a>
+            </div>
             {freePlatformLimitReached && (
               <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", borderRadius: 12, background: "rgba(168,85,247,0.08)", border: "1px solid rgba(168,85,247,0.25)", marginBottom: 16 }}>
                 <span style={{ fontSize: 18 }}>🔒</span>
@@ -6235,8 +6239,9 @@ const stopImportMessageRotation = () => {
               </div>
             </div>
 
-            <div style={{ padding: "12px 16px", borderRadius: 10, background: "rgba(34,211,238,0.05)", border: "1px solid rgba(34,211,238,0.15)", fontSize: 12, color: C.muted }}>
+            <div id="csv-help" style={{ padding: "12px 16px", borderRadius: 10, background: "rgba(34,211,238,0.05)", border: "1px solid rgba(34,211,238,0.15)", fontSize: 12, color: C.muted, scrollMarginTop: 80 }}>
               <strong style={{ color: C.cyan }}>CSV not loading?</strong> Try selecting your platform from the dropdown above, then re-upload. For Chaturbate: export from Stats & Data → Token Stats. For BongaCams: export from Reports.
+              {' '}Need a full walkthrough? See the <a href="/blog/how-to-upload-csv-to-camcash" style={{ color: C.cyan }}>step-by-step CSV upload guide</a> (with video).
             </div>
           </div>
         )}
