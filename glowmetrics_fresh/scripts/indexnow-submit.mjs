@@ -2,9 +2,9 @@
  * IndexNow — bulk URL submission (Bing, Yandex, and other IndexNow-enabled engines)
  *
  * Setup (already done for this project):
- * 1. Key generated: 10242b217c60761406b2861f6448cc934fea23f85b77b4b882d7a43aa4e93c7c
- * 2. Key file hosted at: https://www.camcashgrl.com/10242b217c60761406b2861f6448cc934fea23f85b77b4b882d7a43aa4e93c7c.txt
- *    (served from public/10242b217c60761406b2861f6448cc934fea23f85b77b4b882d7a43aa4e93c7c.txt)
+ * 1. Key: 3cf5ba2838574a9ab80e2275baec56e7
+ * 2. Key file hosted at: https://www.camcashgrl.com/3cf5ba2838574a9ab80e2275baec56e7.txt
+ *    (served from public/3cf5ba2838574a9ab80e2275baec56e7.txt)
  *
  * This script fetches the live sitemap and submits every URL in one bulk
  * IndexNow request, so it stays in sync with app/sitemap.js automatically.
@@ -18,7 +18,7 @@
 
 const HOST = 'www.camcashgrl.com'
 const BASE = `https://${HOST}`
-const KEY = '10242b217c60761406b2861f6448cc934fea23f85b77b4b882d7a43aa4e93c7c'
+const KEY = '3cf5ba2838574a9ab80e2275baec56e7'
 const KEY_LOCATION = `${BASE}/${KEY}.txt`
 
 async function getSitemapURLs() {
