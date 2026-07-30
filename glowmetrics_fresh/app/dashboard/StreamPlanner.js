@@ -981,14 +981,34 @@ function StreamPlannerContent({ tips }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 export default function StreamPlanner({ tips = [], isPro = false }) {
   if (!isPro) {
+    // Reuses the same bestWindows() ranking the Pro plan tab is built from —
+    // this is a real finding from the user's own data, not invented copy.
+    // Only surfaced when there's enough session data to be meaningful, and
+    // only when it's an actual improvement (never a fabricated "stronger
+    // window" if the data doesn't show one).
+    const windows = bestWindows(tips)
+    const testedWindows = windows.filter(w => w.confidence !== "needs-testing")
+    const avgUsdPerHr = testedWindows.length
+      ? testedWindows.reduce((s, w) => s + w.avgUsdPerHr, 0) / testedWindows.length
+      : 0
+    const topWindow = testedWindows[0]
+    const liftPct = topWindow && avgUsdPerHr > 0
+      ? Math.round((topWindow.avgUsdPerHr / avgUsdPerHr - 1) * 100)
+      : 0
+
     return (
       <div style={{ background:BG, minHeight:"100%", padding:"32px 24px", boxSizing:"border-box" }}>
         <div style={{ background:"rgba(15,20,32,0.75)", border:"1px solid rgba(255,255,255,0.08)", borderRadius:"16px", padding:"48px 40px", width:"100%", boxSizing:"border-box" }}>
           <h2 style={{ color:"#f1f5f9", fontSize:"22px", fontWeight:"700", marginBottom:"10px", marginTop:0 }}>Stream Planner</h2>
-          <p style={{ color:"#94a3b8", fontSize:"14px", marginBottom:"32px" }}>Get a personalized streaming schedule with whale watch windows, peak earning times, and lift tracking.</p>
+          <p style={{ color:"#94a3b8", fontSize:"14px", marginBottom: liftPct > 0 ? "16px" : "32px" }}>Get a personalized streaming schedule with whale watch windows, peak earning times, and lift tracking.</p>
+          {liftPct > 0 && (
+            <div style={{ background:"rgba(245,158,11,0.08)", border:"1px solid rgba(245,158,11,0.25)", borderRadius:"10px", padding:"14px 16px", marginBottom:"32px", fontSize:"13px", color:"#f59e0b" }}>
+              CamCash found a streaming window in your history earning {liftPct}% more per hour than your average — Pro turns it into a full weekly plan.
+            </div>
+          )}
           <div style={{ display:"flex", gap:"12px", flexWrap:"wrap" }}>
             <a href="/live/demo" style={{ display:"inline-flex", alignItems:"center", gap:"8px", background:"rgba(34,211,238,0.12)", border:"1px solid rgba(34,211,238,0.3)", color:"#22d3ee", fontWeight:"600", padding:"10px 24px", borderRadius:"10px", textDecoration:"none", fontSize:"14px" }}>▶ Watch Demo</a>
-            <Button as="a" href="/pricing" style={{ padding:"10px 24px", fontSize:"14px" }}>Upgrade to Pro</Button>
+            <Button as="a" href="/pricing" style={{ padding:"10px 24px", fontSize:"14px" }}>Unlock my personalized stream plan</Button>
           </div>
         </div>
       </div>
