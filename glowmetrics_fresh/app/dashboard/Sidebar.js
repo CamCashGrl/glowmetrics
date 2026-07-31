@@ -51,6 +51,12 @@ const NAV = [
       { id: "help",   icon: "❓", label: "CSV Help" },
     ]
   },
+  {
+    group: "ACCOUNT",
+    items: [
+      { id: "billing", icon: "💳", label: "Plan & Billing" },
+    ]
+  },
 ]
 
 export default function Sidebar({ activeTab, onTabChange, user, onSignOut, isPro = false }) {
