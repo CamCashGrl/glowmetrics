@@ -116,14 +116,12 @@ export default function TokenCalculatorClient() {
         ⓘ Rates may vary by platform, account type, promotions, or payout rules.
       </div>
 
-      {/* CALCULATOR + ESTIMATED EARNINGS */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(320px,1fr))', gap: 16, marginBottom: 16 }}>
+      {/* CALCULATOR — platform, token amount, and estimated earnings together above the fold */}
+      <div style={{ marginBottom: 16 }}>
+        <div style={card({ border: '1px solid rgba(255,43,174,0.25)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06), 0 0 40px rgba(255,43,174,0.08)' })}>
+          <SectionLabel color={C.cyan}>Calculator</SectionLabel>
 
-        {/* 1. CALCULATOR */}
-        <div style={card()}>
-          <SectionLabel color={C.cyan}>1. Calculator</SectionLabel>
-
-          <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>Choose Platform</div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>Platform</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
             {Object.keys(RATES).map(p => (
               <Chip key={p} label={p} active={platform === p && !useCustom} icon={platform === p && !useCustom ? '✓' : null} onClick={() => { setPlatform(p); setUseCustom(false) }} />
@@ -147,7 +145,7 @@ export default function TokenCalculatorClient() {
           )}
 
           <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>Token Amount</div>
-          <div style={{ position: 'relative', marginBottom: 14 }}>
+          <div style={{ position: 'relative', marginBottom: 20 }}>
             <input
               type="number"
               value={tokens}
@@ -161,13 +159,21 @@ export default function TokenCalculatorClient() {
             </div>
           </div>
 
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>Estimated Earnings</div>
+          <div style={{
+            fontSize: 46, fontWeight: 900, lineHeight: 1, marginBottom: 20,
+            backgroundImage: C.grad, WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent',
+          }}>
+            {fmt$(earnings)}
+          </div>
+
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
             {COMMON.map(t => (
               <Chip key={t} label={fmtN(t)} active={tokenNum === t} onClick={() => setTokens(String(t))} />
             ))}
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '14px 18px', borderRadius: 14, background: 'rgba(255,255,255,0.03)', border: `1px solid ${C.border}` }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '14px 18px', borderRadius: 14, background: 'rgba(255,255,255,0.03)', border: `1px solid ${C.border}`, marginBottom: 20 }}>
             <div>
               <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>Your Rate {!useCustom ? '(Standard)' : '(Custom)'}</div>
               <div style={{ fontSize: 16, fontWeight: 800, color: C.cyan }}>{fmt4(rate)} per token</div>
@@ -176,23 +182,11 @@ export default function TokenCalculatorClient() {
               ↺ Clear
             </button>
           </div>
-        </div>
-
-        {/* 2. ESTIMATED EARNINGS */}
-        <div style={card({ border: '1px solid rgba(255,43,174,0.25)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06), 0 0 40px rgba(255,43,174,0.08)' })}>
-          <SectionLabel color={C.pink}>2. Estimated Earnings</SectionLabel>
-          <div style={{
-            fontSize: 46, fontWeight: 900, lineHeight: 1, marginBottom: 18,
-            backgroundImage: C.grad, WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent',
-          }}>
-            {fmt$(earnings)}
-          </div>
 
           {[
             ['Platform', useCustom ? 'Custom rate' : platform],
             ['Token Amount', fmtN(tokenNum)],
             ['Rate', `${fmt4(rate)} / token`],
-            ['Effective Value', `${fmt4(rate)} per token`],
           ].map(([label, value]) => (
             <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: `1px solid rgba(255,255,255,0.06)`, fontSize: 13 }}>
               <span style={{ color: C.muted }}>{label}</span>
