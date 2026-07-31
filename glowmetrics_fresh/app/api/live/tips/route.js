@@ -134,20 +134,14 @@ export async function POST(req) {
       return Response.json({ error: 'Failed to save tip' }, { status: 500, headers: cors });
     }
 
-    // Basic earnings history counts for every plan tier, same as a CSV
-    // import — free vs. Pro is about depth (multi-platform, Fan CRM, advanced
-    // coaching), not whether a tip counts at all. Every live tip is written
-    // into the permanent `tips` table so Command Center, avg $/hour, Money
-    // Map, and Stream Planner all reflect Live Mode earnings automatically.
-    // (Plan/promo-expiry status no longer needs checking here — this write
-    // is unconditional regardless of plan tier or expiry.)
-    await supabaseAdmin.from('tips').insert({
-      user_id:   user.id,
-      username:  username.trim(),
-      tokens:    parseInt(amount, 10),
-      platform:  platform.toLowerCase(),
-      date_time: receivedAt,
-    });
+    // Mirroring into the permanent `tips` table (Command Center, avg
+    // $/hour, Money Map, Stream Planner) happens in the database via the
+    // sync_live_tip_to_tips() trigger on live_tips — see
+    // supabase/migrations/20260731b_count_live_tips_for_free_tier.sql. Do
+    // not also insert into `tips` here: the trigger already handles it with
+    // proper near-duplicate dedup and the richer `tips` schema
+    // (username_lower, usd_rounded, tip_seq) that a hand-rolled insert here
+    // can't replicate — a second insert would double-count every live tip.
 
     return Response.json(
       { success: true, tip: data[0], savedToHistory: true, message: `Tip from ${username} synced` },
