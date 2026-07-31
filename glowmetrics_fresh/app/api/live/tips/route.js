@@ -1,6 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
 import { tokenRate } from '../../../../lib/constants';
-import { isProPlan } from '../../../../lib/plan';
 
 export const dynamic = 'force-dynamic';
 
@@ -135,28 +134,21 @@ export async function POST(req) {
       return Response.json({ error: 'Failed to save tip' }, { status: 500, headers: cors });
     }
 
-    // Permanent history (dashboard analytics) is a Pro feature — live coaching
-    // and the live tip feed above are free on every supported platform, but
-    // only paid plans get tips written into the historical `tips` table.
-    const { data: profile } = await supabaseAdmin
-      .from('profiles')
-      .select('plan')
-      .eq('id', user.id)
-      .maybeSingle();
-    const savedToHistory = isProPlan(profile?.plan);
-
-    if (savedToHistory) {
-      await supabaseAdmin.from('tips').insert({
-        user_id:   user.id,
-        username:  username.trim(),
-        tokens:    parseInt(amount, 10),
-        platform:  platform.toLowerCase(),
-        date_time: receivedAt,
-      });
-    }
+    // Basic earnings history counts for every plan tier, same as a CSV
+    // import — free vs. Pro is about depth (multi-platform, Fan CRM, advanced
+    // coaching), not whether a tip counts at all. Every live tip is written
+    // into the permanent `tips` table so Command Center, avg $/hour, Money
+    // Map, and Stream Planner all reflect Live Mode earnings automatically.
+    await supabaseAdmin.from('tips').insert({
+      user_id:   user.id,
+      username:  username.trim(),
+      tokens:    parseInt(amount, 10),
+      platform:  platform.toLowerCase(),
+      date_time: receivedAt,
+    });
 
     return Response.json(
-      { success: true, tip: data[0], savedToHistory, message: `Tip from ${username} synced` },
+      { success: true, tip: data[0], savedToHistory: true, message: `Tip from ${username} synced` },
       { headers: cors }
     );
 

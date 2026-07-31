@@ -39,17 +39,18 @@ function StatCard({ label, value, color = TEXT, sub }) {
   )
 }
 
-// Private earnings are additive to — never double-counted with — free-chat
-// tips or Live Mode earnings. Each total below is computed from its own
-// table (paid_sessions / tips / live_tips) and only ever summed here for
-// display, never merged at the row level. See lib/analytics.js's
-// computePaidSessionAnalytics header comment.
-function RevenueTotalsRow({ tipsTotalUSD, privateTotalUSD, liveTotalUSD }) {
-  const combined = (tipsTotalUSD || 0) + (privateTotalUSD || 0) + (liveTotalUSD || 0)
+// Private earnings are additive to — never double-counted with — tips.
+// tipsTotalUSD already includes Live Mode earnings (Live Mode tips are
+// written into the same `tips` table as CSV imports — see
+// app/api/live/tips/route.js), so it isn't broken out as a separate row
+// here. privateTotalUSD is computed from its own table (paid_sessions) and
+// only ever summed here for display, never merged at the row level. See
+// lib/analytics.js's computePaidSessionAnalytics header comment.
+function RevenueTotalsRow({ tipsTotalUSD, privateTotalUSD }) {
+  const combined = (tipsTotalUSD || 0) + (privateTotalUSD || 0)
   const rows = [
-    { label: "Free-chat tips", value: tipsTotalUSD, color: CYAN },
+    { label: "Tips (free-chat + Live Mode)", value: tipsTotalUSD, color: CYAN },
     { label: "Private/paid sessions", value: privateTotalUSD, color: PURPLE },
-    { label: "Live Mode earnings", value: liveTotalUSD, color: GOLD },
   ]
   return (
     <div style={{ ...cardStyle, marginBottom: 20 }}>
@@ -71,11 +72,12 @@ function RevenueTotalsRow({ tipsTotalUSD, privateTotalUSD, liveTotalUSD }) {
 }
 
 // paidSessions: raw rows from the paid_sessions table (page.js's loadData()).
-// tipsTotalUSD / liveTotalUSD: optional, for the revenue-totals summary only —
-// omit either to hide that column rather than show a misleading $0.
+// tipsTotalUSD: optional, for the revenue-totals summary only — omit to hide
+// that row rather than show a misleading $0. Already includes Live Mode
+// earnings (see RevenueTotalsRow comment above).
 // onViewFan(username, platform): optional callback to open the fan profile
 // (Whale Profile Modal) for a row/client, matched by platform+username.
-export default function PrivateSessions({ paidSessions = [], tipsTotalUSD = null, liveTotalUSD = null, onViewFan }) {
+export default function PrivateSessions({ paidSessions = [], tipsTotalUSD = null, onViewFan }) {
   const [platformFilter, setPlatformFilter] = useState("all")
   const [typeFilter, setTypeFilter] = useState("all")
   const [clientFilter, setClientFilter] = useState("")
@@ -119,8 +121,8 @@ export default function PrivateSessions({ paidSessions = [], tipsTotalUSD = null
 
   return (
     <div>
-      {(tipsTotalUSD !== null || liveTotalUSD !== null) && (
-        <RevenueTotalsRow tipsTotalUSD={tipsTotalUSD} privateTotalUSD={stats.totalUSD} liveTotalUSD={liveTotalUSD} />
+      {tipsTotalUSD !== null && (
+        <RevenueTotalsRow tipsTotalUSD={tipsTotalUSD} privateTotalUSD={stats.totalUSD} />
       )}
 
       {/* ── FILTERS ─────────────────────────────────────────── */}

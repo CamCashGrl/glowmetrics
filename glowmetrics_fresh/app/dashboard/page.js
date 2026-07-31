@@ -1375,7 +1375,6 @@ export default function Dashboard() {
   const [profile, setProfile] = useState(null)
   const [tips, setTips] = useState([])
   const [paidSessions, setPaidSessions] = useState([])
-  const [liveTipsTotalUSD, setLiveTipsTotalUSD] = useState(null)
   const [analytics, setAnalytics] = useState(null)
   const [liveAnalytics, setLiveAnalytics] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -2141,14 +2140,6 @@ export default function Dashboard() {
         paidFrom += PAGE
       }
       setPaidSessions(allPaidSessions)
-
-      // Live Mode total, for the Private Sessions page's revenue-sources
-      // summary only — kept as its own query against its own table, never
-      // merged into `tips`/`paidSessions` rows or the `analytics` totals.
-      try {
-        const { data: liveRows, error: liveErr } = await supabase.from("live_tips").select("usd").eq("user_id", uid)
-        if (!liveErr) setLiveTipsTotalUSD((liveRows || []).reduce((sum, r) => sum + (parseFloat(r.usd) || 0), 0))
-      } catch (e) { /* non-fatal — Private Sessions page just omits this total */ }
 
       const { data: engineData } = await supabase.rpc('get_user_insights', { p_user_id: uid, p_timezone: userTz })
       setEngineInsights(engineData)
@@ -6815,7 +6806,6 @@ const stopImportMessageRotation = () => {
           <PrivateSessions
             paidSessions={paidSessions}
             tipsTotalUSD={analytics?.totalUSD ?? null}
-            liveTotalUSD={liveTipsTotalUSD}
             onViewFan={viewFanProfile}
           />
         )}
