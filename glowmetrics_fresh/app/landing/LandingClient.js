@@ -920,16 +920,6 @@ export default function LandingClient() {
   return (
     <div className={dmSans.className} style={{ minHeight: "100vh", background: T.bgMain, color: T.textMuted, overflowX: "hidden" }}>
 
-      {/* ── EARLY ADOPTER BANNER ── */}
-      <div style={{ background: "rgba(255,43,174,0.10)", borderBottom: "1px solid rgba(255,43,174,0.22)", padding: "14px 32px", textAlign: "center", position: "relative", zIndex: 2 }}>
-        <div style={{ maxWidth: 800, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "center", flexWrap: "wrap", gap: 6 }}>
-          <span style={{ fontSize: 14, color: T.textSoft, fontWeight: 600 }}>
-            Early adopter pricing: <span style={{ color: T.pink, fontWeight: 800 }}>$9.99/mo forever</span> ·{" "}
-            <a href="/pricing" style={{ color: T.pink, fontWeight: 800, textDecoration: "none" }}>Lock in your rate →</a>
-          </span>
-        </div>
-      </div>
-
       {/* ── AMBIENT BACKGROUND ── */}
       <div style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 0 }}>
         <div style={{ position: "absolute", inset: 0, backgroundImage: "radial-gradient(1px 1px at 20% 30%, rgba(255,255,255,0.3), transparent), radial-gradient(1px 1px at 60% 10%, rgba(255,255,255,0.22), transparent), radial-gradient(1px 1px at 80% 60%, rgba(255,255,255,0.26), transparent), radial-gradient(1px 1px at 35% 80%, rgba(255,255,255,0.18), transparent), radial-gradient(1px 1px at 90% 85%, rgba(255,255,255,0.22), transparent)" }} />
