@@ -770,7 +770,7 @@ export default function MoneyMap({ tips = [], isPro = false }) {
           )}
           <div style={{display:"flex",gap:"12px",flexWrap:"wrap"}}>
             <a href="/live/demo" style={{display:"inline-flex",alignItems:"center",gap:"8px",background:"rgba(34,211,238,0.12)",border:"1px solid rgba(34,211,238,0.3)",color:"#22d3ee",fontWeight:"600",padding:"10px 24px",borderRadius:"10px",textDecoration:"none",fontSize:"14px"}}>▶ Watch Demo</a>
-            <a href="/pricing" style={{display:"inline-flex",alignItems:"center",background:"linear-gradient(135deg,#22d3ee,#a855f7)",color:"#0a0e1a",fontWeight:"800",padding:"10px 24px",borderRadius:"10px",textDecoration:"none",fontSize:"14px"}}>Show my complete Money Map</a>
+            <a href="/pricing" style={{display:"inline-flex",alignItems:"center",background:"linear-gradient(135deg,#22d3ee,#a855f7)",color:"#0a0e1a",fontWeight:"800",padding:"10px 24px",borderRadius:"10px",textDecoration:"none",fontSize:"14px"}}>Unlock my complete Money Map</a>
           </div>
         </div>
       </div>
