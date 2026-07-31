@@ -108,6 +108,17 @@ export const TRIGGER_LEVEL = {
   goal_hit: 'success', whale_prox: 'info', whale_dep: 'info',
 };
 
+// Display-only confidence/impact bands, keyed off the same TRIGGER_LEVEL
+// tiers above rather than a second independent scale — so a prompt's
+// badge always agrees with its icon/color. Not a probability computed from
+// data; a fixed editorial mapping, same spirit as TRIGGER_ICON.
+export const LEVEL_CONFIDENCE = { critical: 92, warning: 83, success: 88, info: 75 };
+export const LEVEL_IMPACT = {
+  critical: 'High', warning: 'Medium-High', success: 'Medium', info: 'Medium',
+};
+export function promptConfidence(type) { return LEVEL_CONFIDENCE[TRIGGER_LEVEL[type]] ?? 70; }
+export function promptImpact(type) { return LEVEL_IMPACT[TRIGGER_LEVEL[type]] ?? 'Medium'; }
+
 // Returns every currently-qualifying trigger (not just the winner) in fixed
 // rule order — the caller picks the single active one via
 // selectPrimaryTrigger() below. tips must already be session-scoped.
