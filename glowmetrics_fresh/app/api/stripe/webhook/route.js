@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { createClient } from '@supabase/supabase-js'
 import { resolveUserIdForEvent } from '../../../../lib/stripeWebhookUser'
+import { deriveBillingFields } from '../../../../lib/stripeBillingStatus'
+import { logServerEvent } from '../../../../lib/serverAnalytics'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY)
 
@@ -49,13 +51,13 @@ async function updateProfile(supabase, userId, update) {
   return true
 }
 
-async function getCurrentPlan(supabase, userId) {
-  const { data, error } = await supabase.from('profiles').select('plan').eq('id', userId).single()
+async function getCurrentProfile(supabase, userId) {
+  const { data, error } = await supabase.from('profiles').select('plan, billing_status').eq('id', userId).single()
   if (error) {
-    console.error(`Webhook: failed to read current plan for ${userId}`, error.message)
-    return null
+    console.error(`Webhook: failed to read current profile for ${userId}`, error.message)
+    return { plan: null, billing_status: null }
   }
-  return data?.plan ?? null
+  return { plan: data?.plan ?? null, billing_status: data?.billing_status ?? null }
 }
 
 // Resolves the user for an event and logs (rather than silently returning)
@@ -98,25 +100,41 @@ export async function POST(request) {
         })
         if (!userId) break
 
-        const previousPlan = await getCurrentPlan(supabase, userId)
-        const update = { plan: 'pro' }
+        const previous = await getCurrentProfile(supabase, userId)
+        const update = { plan: 'pro', billing_status: 'ok' }
         if (session.customer) update.stripe_customer_id = session.customer
         const ok = await updateProfile(supabase, userId, update)
         if (!ok) {
           return NextResponse.json({ error: 'Failed to update profile' }, { status: 500 })
         }
-        // Only notify on an actual free -> pro transition, so a duplicate
-        // delivery of the same event doesn't re-send the subscriber email.
-        if (previousPlan !== 'pro') {
+        // Only notify/log on an actual free -> pro transition, so a
+        // duplicate delivery of the same event doesn't re-send the
+        // subscriber email or double-count the conversion.
+        if (previous.plan !== 'pro') {
           await sendResendNotification(
             `💰 New CamCash Subscriber — ${email || userId} subscribed to Pro`,
             `${email || userId} just subscribed to the Pro plan.`
           )
+          // Trustworthy, server-confirmed completion — this is the only
+          // place checkout_completed and plan_activated are ever fired.
+          // The client never fires these itself from a `?success=true`
+          // query param alone.
+          await logServerEvent(supabase, {
+            userId,
+            eventName: 'checkout_completed',
+            properties: { plan_type: session.metadata?.plan_type || null, gate_source: session.metadata?.ctx_gateSource || null },
+          })
+          await logServerEvent(supabase, {
+            userId,
+            eventName: 'plan_activated',
+            properties: { plan_type: session.metadata?.plan_type || null, current_plan: 'pro' },
+          })
         }
         break
       }
 
-      case 'customer.subscription.created': {
+      case 'customer.subscription.created':
+      case 'customer.subscription.updated': {
         const sub = event.data.object
         const email = await getEmailFromCustomer(sub.customer)
         const userId = await resolveUser(supabase, {
@@ -126,18 +144,32 @@ export async function POST(request) {
         })
         if (!userId) break
 
-        const previousPlan = await getCurrentPlan(supabase, userId)
-        const update = { plan: 'pro' }
+        const previous = await getCurrentProfile(supabase, userId)
+        const plan = sub.status === 'active' || sub.status === 'trialing' ? 'pro' : 'free'
+        const update = { plan, ...deriveBillingFields(sub) }
         if (sub.customer) update.stripe_customer_id = sub.customer
         const ok = await updateProfile(supabase, userId, update)
         if (!ok) {
           return NextResponse.json({ error: 'Failed to update profile' }, { status: 500 })
         }
-        if (previousPlan !== 'pro') {
-          await sendResendNotification(
-            `💰 New CamCash Subscriber — ${email || userId} subscribed to Pro`,
-            `${email || userId} just subscribed to the Pro plan.`
-          )
+
+        if (plan !== previous.plan) {
+          if (plan === 'pro') {
+            await sendResendNotification(
+              `💰 New CamCash Subscriber — ${email || userId} subscribed to Pro`,
+              `${email || userId} ${event.type === 'customer.subscription.created' ? 'subscribed to' : 'reactivated'} the Pro plan.`
+            )
+            await logServerEvent(supabase, {
+              userId,
+              eventName: 'plan_activated',
+              properties: { plan_type: sub.metadata?.plan_type || null, current_plan: 'pro' },
+            })
+          } else {
+            await sendResendNotification(
+              `❌ CamCash Cancellation — ${email || userId} cancelled their subscription`,
+              `${email || userId}'s subscription status changed to ${sub.status}.`
+            )
+          }
         }
         break
       }
@@ -152,12 +184,12 @@ export async function POST(request) {
         })
         if (!userId) break
 
-        const previousPlan = await getCurrentPlan(supabase, userId)
-        const ok = await updateProfile(supabase, userId, { plan: 'free' })
+        const previous = await getCurrentProfile(supabase, userId)
+        const ok = await updateProfile(supabase, userId, { plan: 'free', billing_status: 'canceled' })
         if (!ok) {
           return NextResponse.json({ error: 'Failed to update profile' }, { status: 500 })
         }
-        if (previousPlan !== 'free') {
+        if (previous.plan !== 'free') {
           await sendResendNotification(
             `❌ CamCash Cancellation — ${email || userId} cancelled their subscription`,
             `${email || userId} cancelled their Pro subscription.`
@@ -166,42 +198,43 @@ export async function POST(request) {
         break
       }
 
-      case 'customer.subscription.updated': {
-        const sub = event.data.object
-        const email = await getEmailFromCustomer(sub.customer)
+      case 'invoice.payment_failed': {
+        const invoice = event.data.object
+        if (!invoice.customer) break
+        const email = await getEmailFromCustomer(invoice.customer)
         const userId = await resolveUser(supabase, {
-          metadataUserId: sub.metadata?.userId,
+          // Invoices don't carry our own metadata — email/customer lookup
+          // is the only option here, which is why this stays a distinct,
+          // logged fallback rather than the primary path used elsewhere.
+          metadataUserId: null,
           customerEmail: email,
           eventType: event.type,
         })
         if (!userId) break
 
-        const previousPlan = await getCurrentPlan(supabase, userId)
-        const plan = sub.status === 'active' ? 'pro' : 'free'
-        const ok = await updateProfile(supabase, userId, { plan })
+        const previous = await getCurrentProfile(supabase, userId)
+        // Deliberately does NOT touch `plan` — a failed payment shows a
+        // billing banner, it does not immediately revoke access. Stripe's
+        // own subscription.updated event (status -> past_due/unpaid) is
+        // what ultimately reflects in `plan` per the dunning settings
+        // configured in the Stripe dashboard.
+        const ok = await updateProfile(supabase, userId, { billing_status: 'past_due' })
         if (!ok) {
           return NextResponse.json({ error: 'Failed to update profile' }, { status: 500 })
         }
-        if (plan !== previousPlan) {
-          if (plan === 'pro') {
-            await sendResendNotification(
-              `💰 New CamCash Subscriber — ${email || userId} subscribed to Pro`,
-              `${email || userId} reactivated their Pro plan.`
-            )
-          } else {
-            await sendResendNotification(
-              `❌ CamCash Cancellation — ${email || userId} cancelled their subscription`,
-              `${email || userId}'s subscription status changed to ${sub.status}.`
-            )
-          }
+        if (previous.billing_status !== 'past_due') {
+          await sendResendNotification(
+            `⚠️ CamCash Payment Failed — ${email || userId}`,
+            `${email || userId}'s latest invoice payment failed. Their billing_status is now past_due.`
+          )
         }
         break
       }
 
       default:
         // Stripe retries indefinitely on any non-2xx response. Events we
-        // deliberately don't act on (e.g. invoice.*, payment_method.*) must
-        // still return success, or Stripe will keep redelivering them forever.
+        // deliberately don't act on must still return success, or Stripe
+        // will keep redelivering them forever.
         return NextResponse.json({ received: true, ignored: event.type })
     }
 
