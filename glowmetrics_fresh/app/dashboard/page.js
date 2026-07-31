@@ -1621,7 +1621,7 @@ export default function Dashboard() {
   //   4. Historical events get _isHistory:true so computeState() excludes
   //      them from timing/pace calculations (only uses them for totals)
   useEffect(() => {
-    if (activeTab !== 'live' || !user) return
+    if (activeTab !== 'live-sessions' || !user) return
     if (liveTipsChannelRef.current) return // singleton guard
 
     isHydratingHistory.current = true
@@ -1843,7 +1843,7 @@ export default function Dashboard() {
           setFlashTipId(normalized._id)
           setTimeout(() => setFlashTipId(null), 2500)
           // Switch to Live Mode tab automatically if user is on another tab
-          setActiveTab('live')
+          setActiveTab('live-sessions')
         })
         .subscribe()
       liveTipsChannelRef.current = liveTipsChannel
@@ -1910,7 +1910,7 @@ export default function Dashboard() {
 
   // ── LIVE MODE: load existing tips when tab is activated ───────────────────
   useEffect(() => {
-    if (activeTab !== 'live' || !user) return
+    if (activeTab !== 'live-sessions' || !user) return
     let cancelled = false
 
     const loadRecentLiveTips = async () => {
@@ -1949,7 +1949,7 @@ export default function Dashboard() {
   // Without this, computeState() / getAlerts() / coaching never update because
   // React only re-renders on state changes — Date.now() alone is not enough.
   useEffect(() => {
-    if (activeTab === 'live' && liveActive) {
+    if (activeTab === 'live-sessions' && liveActive) {
       liveTickerRef.current = setInterval(() => setLiveTick(t => t + 1), 1000)
     } else {
       clearInterval(liveTickerRef.current)
@@ -3088,7 +3088,7 @@ const stopImportMessageRotation = () => {
                   <a href="/shop" style={{ display:'flex', alignItems:'center', padding:'8px 20px', borderRadius:11, background:'linear-gradient(90deg, #16F4FF 0%, #7C5CFF 48%, #FF2BAE 100%)', border:'none', color:'#fff', fontWeight:800, fontSize:13, cursor:'pointer', whiteSpace:'nowrap', textDecoration:'none', boxShadow:'0 0 14px rgba(22,244,255,0.3)', letterSpacing:0.3 }}>
                     🛍️ Shop
                   </a>
-                  <button onClick={() => { setActiveTab('live'); if (typeof window !== 'undefined') { localStorage.setItem('camcash_tab','live'); window.scrollTo({top:0,behavior:'instant'}); } }} style={{ padding:'8px 20px', borderRadius:11, background:'linear-gradient(135deg,#10B981,#22D3EE)', border:'none', color:'#fff', fontWeight:800, fontSize:13, cursor:'pointer', whiteSpace:'nowrap', boxShadow:'0 0 14px rgba(16,185,129,0.3)', letterSpacing:0.3 }}>
+                  <button onClick={() => { setActiveTab('live-sessions'); if (typeof window !== 'undefined') { localStorage.setItem('camcash_tab','live-sessions'); window.scrollTo({top:0,behavior:'instant'}); } }} style={{ padding:'8px 20px', borderRadius:11, background:'linear-gradient(135deg,#10B981,#22D3EE)', border:'none', color:'#fff', fontWeight:800, fontSize:13, cursor:'pointer', whiteSpace:'nowrap', boxShadow:'0 0 14px rgba(16,185,129,0.3)', letterSpacing:0.3 }}>
                     ⚡ Go Live
                   </button>
                 </div>
@@ -4666,7 +4666,7 @@ const stopImportMessageRotation = () => {
           </div>
         )}
 
-        {activeTab === "live" && (() => {
+        {activeTab === "live-sessions" && (() => {
           // ── INLINE LIVE ENGINE (no external import needed) ────────────────
 
           const normalizeTip = (ev) => {
@@ -5144,6 +5144,23 @@ const stopImportMessageRotation = () => {
                   </div>
                 )}
               </div>
+
+              {/* Download extension — always visible until auto-capture is detected, not gated on liveActive */}
+              {!liveEvents.some(e => e.sourceUsed === 'extension') && (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, borderRadius: 14, padding: '14px 20px', marginBottom: 20, background: 'rgba(168,85,247,0.08)', border: '1px solid rgba(168,85,247,0.25)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <span style={{ fontSize: 22 }}>🧩</span>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: C.white }}>Auto-capture your tips</div>
+                      <div style={{ fontSize: 12, color: C.muted }}>Install the CamCash Chrome extension so tips log here automatically while you stream.</div>
+                    </div>
+                  </div>
+                  <a href="/camcash-extension.zip" download="camcash-extension.zip"
+                    style={{ display: 'inline-flex', alignItems: 'center', padding: '9px 18px', borderRadius: 12, background: 'linear-gradient(90deg,#21E6F3,#6C5CFF,#FF2FAE)', color: '#fff', fontWeight: 800, fontSize: 13, textDecoration: 'none', whiteSpace: 'nowrap' }}>
+                    📥 Download Extension
+                  </a>
+                </div>
+              )}
 
               {/* Not started */}
               {!liveActive && !liveEvents.length && (
