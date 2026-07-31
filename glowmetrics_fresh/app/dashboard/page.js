@@ -2562,7 +2562,7 @@ const stopImportMessageRotation = () => {
         const hc = {}
         w.tips.forEach(t => { const h = new Date(t.date_time || t.dateRaw).getUTCHours(); hc[h] = (hc[h] || 0) + 1 })
         const peakH = parseInt(Object.entries(hc).sort((a,b) => b[1]-a[1])[0][0])
-        return (peakH - utcHour + 24) % 24 <= 1
+        return (peakH - now.getUTCHours() + 24) % 24 <= 1
       })
       .sort((a, b) => b.totalUSD - a.totalUSD)
       .slice(0, 3)
