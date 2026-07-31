@@ -144,10 +144,10 @@ export default function TokenCalculatorPage() {
           </div>
         </nav>
 
-        <div style={{ maxWidth: 860, margin: '0 auto', padding: '48px 24px 100px' }}>
+        <div style={{ maxWidth: 860, margin: '0 auto', padding: '24px 24px 100px' }}>
 
           {/* BREADCRUMB */}
-          <nav aria-label="breadcrumb" style={{ marginBottom: 28, fontSize: 13 }}>
+          <nav aria-label="breadcrumb" style={{ marginBottom: 14, fontSize: 13 }}>
             <a href="/landing" style={{ color: S.accent, textDecoration: 'none' }}>Home</a>
             <span style={{ margin: '0 8px', color: S.muted }}>›</span>
             <a href="/landing#guides" style={{ color: S.accent, textDecoration: 'none' }}>Guides</a>
@@ -156,17 +156,17 @@ export default function TokenCalculatorPage() {
           </nav>
 
           {/* HERO */}
-          <div id="calculator-top" style={{ marginBottom: 40 }}>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+          <div id="calculator-top" style={{ marginBottom: 20 }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
               {['Free Tool', '5 Platforms', 'Real Payout Rates', 'No Login Required'].map(chip => (
-                <span key={chip} style={{ padding: '4px 12px', borderRadius: 20, background: S.accentLight, border: `1px solid ${S.accentBorder}`, fontSize: 12, color: S.accent, fontWeight: 600 }}>{chip}</span>
+                <span key={chip} style={{ padding: '3px 10px', borderRadius: 20, background: S.accentLight, border: `1px solid ${S.accentBorder}`, fontSize: 11, color: S.accent, fontWeight: 600 }}>{chip}</span>
               ))}
             </div>
-            <h1 style={{ fontSize: 44, fontWeight: 900, color: S.white, lineHeight: 1.1, marginBottom: 20, letterSpacing: '-0.03em' }}>
+            <h1 style={{ fontSize: 30, fontWeight: 900, color: S.white, lineHeight: 1.15, marginBottom: 10, letterSpacing: '-0.02em' }}>
               Cam Model Token Calculator: Convert Tokens to USD
             </h1>
-            <p style={{ fontSize: 17, lineHeight: 1.7, color: '#CBD5E1', paddingLeft: 20, borderLeft: `3px solid ${S.accent}`, maxWidth: 680 }}>
-              This calculator converts cam-site tokens into estimated broadcaster earnings for Chaturbate, MyFreeCams, Stripchat, BongaCams, and CamSoda. The payout you receive isn't the same as what a viewer pays for those tokens — if your studio or account uses a different rate, switch to Custom Rate below and enter it directly.
+            <p style={{ fontSize: 15, lineHeight: 1.55, color: '#CBD5E1', paddingLeft: 14, borderLeft: `3px solid ${S.accent}`, maxWidth: 680 }}>
+              Converts cam-site tokens into estimated broadcaster earnings for Chaturbate, MyFreeCams, Stripchat, BongaCams, and CamSoda. Your payout isn't the same as what a viewer paid — enter your amount below, or switch to Custom Rate if your studio pays differently.
             </p>
           </div>
 
