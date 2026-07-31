@@ -1,6 +1,8 @@
 "use client"
 import { useState } from "react"
-import { supabase } from "../../lib/supabase"
+import { startCheckout } from "../../lib/checkoutClient"
+import { track } from "../../lib/track"
+import { GATE_CONFIG } from "../../lib/checkoutContext"
 
 // ============================================================
 // CAMCASH — EARLY ADOPTER OFFER CARD
@@ -15,33 +17,10 @@ const C = {
   white: "#F1F5F9", muted: "#475569",
 }
 
-async function startCheckout(planType, setLoading) {
-  setLoading(planType)
-  try {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session?.access_token) {
-      alert('Your login session could not be found. Please sign in again.')
-      return
-    }
-
-    const res = await fetch('/api/stripe/checkout', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${session.access_token}`,
-      },
-      credentials: 'same-origin',
-      body: JSON.stringify({ plan_type: planType }),
-    })
-    const data = await res.json().catch(() => ({}))
-    if (!res.ok) throw new Error(data.error || 'Unable to start Stripe Checkout.')
-    if (!data.url) throw new Error('Stripe Checkout did not return a payment URL.')
-    window.location.assign(data.url)
-  } catch (error) {
-    alert(error?.message || 'Something went wrong. Please try again.')
-  } finally {
-    setLoading(null)
-  }
+const CHECKOUT_CONTEXT = {
+  gateSource: GATE_CONFIG.early_adopter_offer.gateSource,
+  featureName: GATE_CONFIG.early_adopter_offer.featureName,
+  returnPath: GATE_CONFIG.early_adopter_offer.returnTab,
 }
 
 export default function EarlyAdopterOffer({ isPro }) {
@@ -59,7 +38,7 @@ export default function EarlyAdopterOffer({ isPro }) {
       </div>
       <div style={{ fontSize: 11, color: C.muted, marginBottom: 10, lineHeight: 1.5 }}>Keep this Early Adopter rate while your subscription remains active.</div>
       <button
-        onClick={() => startCheckout('early_adopter_monthly', setLoading)}
+        onClick={() => startCheckout('early_adopter_monthly', { context: CHECKOUT_CONTEXT, track, onLoading: setLoading, onError: (message) => alert(message) })}
         disabled={loading !== null}
         style={{ width: "100%", padding: "13px", borderRadius: 12, border: "none", cursor: loading ? "wait" : "pointer", background: `linear-gradient(135deg, ${C.pink}, ${C.purple})`, color: "#fff", fontSize: 14, fontWeight: 800, boxShadow: "0 0 20px rgba(236,72,153,0.35)" }}>
         {loading === 'early_adopter_monthly' ? 'Redirecting…' : 'Subscribe — $9.99/mo →'}

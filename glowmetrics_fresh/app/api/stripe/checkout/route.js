@@ -4,6 +4,7 @@ import { stripe } from '../../../../lib/stripe'
 import { createSupabaseRouteClient } from '../../../../lib/supabase-server'
 import { createClient } from '@supabase/supabase-js'
 import { resolvePriceMap, missingAnnualEnvVars } from '../../../../lib/stripePriceConfig'
+import { contextToMetadata } from '../../../../lib/checkoutContext'
 
 export async function POST(request) {
   try {
@@ -104,17 +105,28 @@ export async function POST(request) {
       )
     }
 
+    // Why the user is upgrading (which feature/gate opened checkout), so the
+    // dashboard can return them to it once Pro activates. Allowlisted and
+    // length-capped by contextToMetadata — never trusts arbitrary client
+    // strings into Stripe metadata.
+    const contextMetadata = contextToMetadata(body.context)
+
     // Create checkout session
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       mode: 'subscription',
       payment_method_types: ['card'],
       line_items: [{ price: priceId, quantity: 1 }],
-      success_url: `${request.headers.get('origin')}/dashboard?success=true&plan=${planType}`,
+      // {CHECKOUT_SESSION_ID} is replaced by Stripe itself before redirecting
+      // back — it's how the dashboard retrieves the trustworthy, server-held
+      // context via GET /api/stripe/checkout-context after return, instead of
+      // relying solely on client-side state that a redirect can lose.
+      success_url: `${request.headers.get('origin')}/dashboard?success=true&plan=${planType}&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${request.headers.get('origin')}/dashboard?canceled=true`,
       metadata: {
         userId: user.id,
         plan_type: planType,
+        ...contextMetadata,
       },
       // Copies userId onto the Subscription object itself (Checkout Session
       // metadata alone does not propagate there), so customer.subscription.*
@@ -123,6 +135,7 @@ export async function POST(request) {
         metadata: {
           userId: user.id,
           plan_type: planType,
+          ...contextMetadata,
         },
       },
     })

@@ -83,7 +83,11 @@ describe('UpgradeModal', () => {
       feature_name: 'whales_empty',
       plan_type: 'standard_monthly',
     })
-    expect(track).toHaveBeenCalledWith('checkout_started', { plan_type: 'standard_monthly' })
+    expect(track).toHaveBeenCalledWith('checkout_started', {
+      plan_type: 'standard_monthly',
+      gate_source: null,
+      feature_name: null,
+    })
   })
 
   it('calls onClose on Escape and on "Not now"', () => {

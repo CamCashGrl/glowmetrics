@@ -5,6 +5,9 @@ import UserCounter from '../components/UserCounter'
 import SiteFooter from '../components/SiteFooter'
 import Button from '../../components/ui/Button'
 import { supabase } from '../../lib/supabase'
+import { startCheckout as startCheckoutRequest } from '../../lib/checkoutClient'
+import { track } from '../../lib/track'
+import { resolveGateConfig } from '../../lib/checkoutContext'
 
 /*
  * IMPORTANT:
@@ -18,56 +21,13 @@ import { supabase } from '../../lib/supabase'
  *   STRIPE_MONTHLY_PRICE_ID
  *   NEXT_PUBLIC_STRIPE_PRICE_ANNUAL
  */
-async function startCheckout(planType, setLoading) {
-  setLoading(planType)
-
-  try {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession()
-
-    if (!session?.access_token) {
-      alert(
-        'Your login session could not be found. Please sign in again, then return to pricing.'
-      )
-      return
-    }
-
-    const response = await fetch('/api/stripe/checkout', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${session.access_token}`,
-      },
-      credentials: 'include',
-      body: JSON.stringify({
-        plan_type: planType,
-      }),
-    })
-
-    const data = await response.json().catch(() => ({}))
-
-    if (!response.ok) {
-      throw new Error(
-        data.error || 'Unable to start Stripe Checkout.'
-      )
-    }
-
-    if (!data.url) {
-      throw new Error(
-        'Stripe Checkout did not return a payment URL.'
-      )
-    }
-
-    window.location.assign(data.url)
-  } catch (error) {
-    alert(
-      error?.message ||
-        'Something went wrong while opening Stripe Checkout. Please try again.'
-    )
-  } finally {
-    setLoading(null)
-  }
+async function startCheckout(planType, setLoading, context) {
+  await startCheckoutRequest(planType, {
+    context,
+    track,
+    onLoading: setLoading,
+    onError: (message) => alert(message),
+  })
 }
 
 const C = {
@@ -215,6 +175,7 @@ function PricingSection({
   setCheckoutLoading,
   user,
   annualAvailable,
+  checkoutContext,
 }) {
   const freeFeatures = [
     'Track 1 cam platform',
@@ -471,7 +432,8 @@ function PricingSection({
                 onClick={() =>
                   startCheckout(
                     'standard_monthly',
-                    setCheckoutLoading
+                    setCheckoutLoading,
+                    checkoutContext
                   )
                 }
                 disabled={checkoutLoading !== null}
@@ -495,7 +457,8 @@ function PricingSection({
                   onClick={() =>
                     startCheckout(
                       'standard_annual',
-                      setCheckoutLoading
+                      setCheckoutLoading,
+                      checkoutContext
                     )
                   }
                   disabled={checkoutLoading !== null}
@@ -908,6 +871,22 @@ export default function PricingClient() {
 
   const [user, setUser] = useState(null)
   const [annualAvailable, setAnnualAvailable] = useState(false)
+  const [checkoutContext, setCheckoutContext] = useState(null)
+
+  // A CTA that sent the visitor here for a specific reason (e.g. Money
+  // Map's "Unlock my complete Money Map" link) tags the URL with ?gate=,
+  // so checkout still carries the right gate_source/returnPath even
+  // though checkout doesn't start until this page.
+  useEffect(() => {
+    const gate = new URLSearchParams(window.location.search).get('gate')
+    if (!gate) return
+    const config = resolveGateConfig(gate)
+    setCheckoutContext({
+      gateSource: config.gateSource,
+      featureName: config.featureName || undefined,
+      returnPath: config.returnTab,
+    })
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -971,6 +950,7 @@ export default function PricingClient() {
           setCheckoutLoading={setCheckoutLoading}
           user={user}
           annualAvailable={annualAvailable}
+          checkoutContext={checkoutContext}
         />
 
         <PromiseSection />

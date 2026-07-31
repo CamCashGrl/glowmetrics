@@ -17,8 +17,12 @@ import { getDashboardReadiness, getModuleLockState, canShowHourlyRate, LockedIns
 import Button from '../../components/ui/Button'
 import EarlyAdopterOffer from './EarlyAdopterOffer'
 import UpgradeModal from '../../components/UpgradeModal'
+import CheckoutReturnBanner from '../../components/CheckoutReturnBanner'
 import { isProPlan } from '../../lib/plan'
 import { shouldShowFanUpgradeGate, shouldShowFanDataNotice, pickAtRiskWhale, additionalFanCount } from '../../lib/fanIntelligenceGating'
+import { resolveGateConfig } from '../../lib/checkoutContext'
+import { parseCheckoutReturnParams, CHECKOUT_POLL_INTERVAL_MS, CHECKOUT_POLL_TIMEOUT_MS } from '../../lib/checkoutReturnState'
+import { readAndClearStoredCheckoutContext } from '../../lib/checkoutClient'
 import { useLiveSessionEngine } from '../live/useLiveSessionEngine'
 
 // Tab-only components loaded on demand instead of in the initial dashboard
@@ -33,6 +37,7 @@ const AnalyticsCharts = dynamic(() => import('./AnalyticsCharts'), { ssr: false,
 const StreamPlanner = dynamic(() => import('./StreamPlanner'), { ssr: false, loading: () => TAB_LOADING })
 const MoneyMap = dynamic(() => import('./MoneyMap'), { ssr: false, loading: () => TAB_LOADING })
 const PrivateSessions = dynamic(() => import('./PrivateSessions'), { ssr: false, loading: () => TAB_LOADING })
+const BillingSection = dynamic(() => import('./BillingSection'), { ssr: false, loading: () => TAB_LOADING })
 const DashboardGrowthCharts = dynamic(() => import('./DashboardGrowthCharts'), { ssr: false })
 const TokenCalculator = dynamic(() => import('../guides/cam-model-token-calculator/TokenCalculatorClient'), { ssr: false, loading: () => TAB_LOADING })
 
@@ -1399,6 +1404,11 @@ export default function Dashboard() {
   const [messageCopied, setMessageCopied] = useState(false)
   const [showUpgradeModal, setShowUpgradeModal] = useState(false)
   const [upgradeModalSource, setUpgradeModalSource] = useState(null)
+  const [upgradeModalFanId, setUpgradeModalFanId] = useState(null)
+  // null | 'activating' | 'active' | 'timeout' | 'canceled' — see the
+  // CHECKOUT RETURN effect below.
+  const [checkoutReturnState, setCheckoutReturnState] = useState(null)
+  const checkoutReturnHandledRef = useRef(false)
   const [fanSearchOpen, setFanSearchOpen] = useState(false)
   const [fanSearchQuery, setFanSearchQuery] = useState("")
   const [shareModalOpen, setShareModalOpen] = useState(false)
@@ -1503,10 +1513,11 @@ export default function Dashboard() {
 
   const fmtHour = h => { if (h == null || isNaN(h)) return 'N/A'; return h === 0 ? '12 AM' : h < 12 ? h+' AM' : h === 12 ? '12 PM' : (h-12)+' PM' }
 
-  const openUpgradeModal = (source) => {
+  const openUpgradeModal = (source, fanId = null) => {
     track('upgrade_click', { source })
     gtmTrack('paywall_hit', { feature: source })
     setUpgradeModalSource(source)
+    setUpgradeModalFanId(fanId)
     setShowUpgradeModal(true)
   }
 
@@ -1560,6 +1571,24 @@ export default function Dashboard() {
       document.querySelector('.dash-main')?.scrollTo({ top: 0, behavior: 'instant' })
       document.documentElement.scrollTop = 0
       document.body.scrollTop = 0
+    }
+  }
+
+  // Manual re-check for the "timeout" banner state — a single fresh read of
+  // the verified plan, not a fabricated success and not another full
+  // 30s poll.
+  const retryCheckoutActivation = async () => {
+    if (!user) return
+    const { data: freshProfile } = await supabase.from('profiles').select('plan').eq('id', user.id).single()
+    if (freshProfile && isProPlan(freshProfile.plan)) {
+      // plan_activated itself is only ever fired server-side (the webhook,
+      // once it confirms the same transition) — this client poll just
+      // updates the UI, so a slow webhook delivery can't double-count it.
+      setProfile((p) => ({ ...(p || {}), plan: freshProfile.plan }))
+      setCheckoutReturnState('active')
+      setTimeout(() => setCheckoutReturnState(null), 6000)
+    } else {
+      showToast('Still processing — try again in a moment, or contact support if this continues.')
     }
   }
 
@@ -1728,11 +1757,26 @@ export default function Dashboard() {
         if (count === 0 && !beta?.onboarding_complete) router.replace('/onboarding')
       })
       setUser(user)
+      // `plan` alone, first and separately from the billing extras below —
+      // this one drives isPro/feature access for the whole dashboard, so it
+      // must never be allowed to silently fail just because a later
+      // migration (billing_status/billing_interval/etc, added for the
+      // Plan & Billing section) hasn't been applied to this environment yet.
       supabase.from('profiles')
         .select('plan')
         .eq('id', user.id)
         .maybeSingle()
-        .then(({ data }) => { if (data) setProfile(data) })
+        .then(({ data }) => { if (data) setProfile((p) => ({ ...(p || {}), ...data })) })
+      // Best-effort — swallow the error (e.g. columns not migrated yet)
+      // rather than let it affect plan/isPro at all.
+      supabase.from('profiles')
+        .select('billing_status, billing_interval, current_period_end, is_early_adopter')
+        .eq('id', user.id)
+        .maybeSingle()
+        .then(({ data, error }) => {
+          if (error) { console.warn('Billing fields not available yet (migration pending?):', error.message); return }
+          if (data) setProfile((p) => ({ ...(p || {}), ...data }))
+        })
       loadData(user.id)
       // Load monthly goal from DB
       supabase.from('user_goals').select('*').eq('user_id', user.id).eq('goal_type', 'monthly').maybeSingle()
@@ -1887,6 +1931,85 @@ export default function Dashboard() {
       // minuteTimer cleared inline
     }
   }, [])
+
+  // ── CHECKOUT RETURN — success/canceled from Stripe redirect ──
+  // The query param alone is never treated as proof of payment: on success
+  // we poll the verified `profiles.plan` (the same source every other plan
+  // check in this file reads) for a bounded window, and only then restore
+  // the feature the user was trying to unlock. Runs once per return.
+  useEffect(() => {
+    if (!user || checkoutReturnHandledRef.current) return
+    if (typeof window === 'undefined') return
+    const { success, canceled, sessionId } = parseCheckoutReturnParams(window.location.search)
+    if (!success && !canceled) return
+    checkoutReturnHandledRef.current = true
+
+    // Clean the URL immediately so a reload/share of this link doesn't
+    // re-trigger the notice or re-run the poll.
+    window.history.replaceState(null, '', window.location.pathname)
+
+    if (canceled) {
+      gtmTrack('checkout_canceled', {})
+      setCheckoutReturnState('canceled')
+      setTimeout(() => setCheckoutReturnState(null), 6000)
+      return
+    }
+
+    gtmTrack('checkout_returned', { has_session_id: Boolean(sessionId) })
+    setCheckoutReturnState('activating')
+    gtmTrack('plan_activation_pending', {})
+
+    ;(async () => {
+      // Trustworthy, server-backed context first (Stripe metadata via the
+      // checkout session); sessionStorage is only a same-tab UX fallback.
+      let context = {}
+      if (sessionId) {
+        try {
+          const { data: { session: authSession } } = await supabase.auth.getSession()
+          const res = await fetch(`/api/stripe/checkout-context?session_id=${encodeURIComponent(sessionId)}`, {
+            headers: authSession?.access_token ? { Authorization: `Bearer ${authSession.access_token}` } : {},
+          })
+          if (res.ok) {
+            const data = await res.json()
+            if (data.context) context = data.context
+          }
+        } catch (e) { /* fall through to sessionStorage */ }
+      }
+      if (!context.returnPath) {
+        context = { ...readAndClearStoredCheckoutContext(), ...context }
+      } else {
+        readAndClearStoredCheckoutContext()
+      }
+
+      const deadline = Date.now() + CHECKOUT_POLL_TIMEOUT_MS
+      let confirmedPlan = null
+      while (Date.now() < deadline) {
+        const { data: freshProfile } = await supabase.from('profiles').select('plan').eq('id', user.id).single()
+        if (freshProfile && isProPlan(freshProfile.plan)) {
+          confirmedPlan = freshProfile.plan
+          break
+        }
+        await new Promise((resolve) => setTimeout(resolve, CHECKOUT_POLL_INTERVAL_MS))
+      }
+
+      if (confirmedPlan) {
+        // plan_activated fires server-side only (webhook) — see note above.
+        setProfile((p) => ({ ...(p || {}), plan: confirmedPlan }))
+        setCheckoutReturnState('active')
+
+        if (context.returnPath) {
+          handleTabChange(context.returnPath)
+        }
+        if (context.fanId && context.returnPath === 'whales') {
+          const [username, platform] = context.fanId.split('::')
+          if (username) setTimeout(() => viewFanProfile(username, platform), 300)
+        }
+        setTimeout(() => setCheckoutReturnState(null), 6000)
+      } else {
+        setCheckoutReturnState('timeout')
+      }
+    })()
+  }, [user])
 
   // ── VISIBILITY REFRESH: only reload if tab was hidden for 15+ min ──
   // Uses visibilitychange instead of focus so switching windows doesn't fire it
@@ -3027,6 +3150,12 @@ const stopImportMessageRotation = () => {
       {/* SIDEBAR — desktop only, hidden on mobile via CSS */}
       <Sidebar activeTab={activeTab} onTabChange={(tab) => { setActiveTab(tab); if (typeof window !== "undefined") { localStorage.setItem("camcash_tab", tab); window.scrollTo({ top: 0, behavior: "instant" }); } }} user={user} onSignOut={async () => { await supabase.auth.signOut(); router.replace("/login"); }} isPro={isPro} />{/* MAIN CONTENT */}
       <div className="dash-main" style={{ marginLeft: 240, width: "calc(100% - 240px)", minWidth: 0, padding: 32, boxSizing: "border-box", overflowX: "hidden" }}>
+
+        <CheckoutReturnBanner
+          state={checkoutReturnState}
+          onRetry={retryCheckoutActivation}
+          onDismiss={() => setCheckoutReturnState(null)}
+        />
 
         {/* ── STICKY COMMAND BAR ── */}
         {(() => {
@@ -6074,7 +6203,7 @@ const stopImportMessageRotation = () => {
                   You're on the free plan (1 platform). Pro adds BongaCams, MyFreeCams, and more so you can compare them.
                 </div>
                 {importStage !== 'locked_preview' && (
-                  <Button as="a" href="/pricing" style={{ flexShrink: 0, padding: "8px 14px", fontSize: 12, whiteSpace: "nowrap" }}>Compare all my platforms →</Button>
+                  <Button as="a" href="/pricing?gate=second_platform" style={{ flexShrink: 0, padding: "8px 14px", fontSize: 12, whiteSpace: "nowrap" }}>Compare all my platforms →</Button>
                 )}
               </div>
             )}
@@ -6172,7 +6301,7 @@ const stopImportMessageRotation = () => {
                             </div>
                             <div style={{ fontSize: 12, color: C.muted, marginBottom: 12 }}>🔒 Unlock their identity, full spending history, and recovery recommendation.</div>
                             <button
-                              onClick={() => openUpgradeModal("post_upload_at_risk_fan")}
+                              onClick={() => openUpgradeModal("post_upload_at_risk_fan", `${atRiskWhale.username}::${atRiskWhale.platform}`)}
                               style={{ padding: "8px 16px", borderRadius: 8, background: "linear-gradient(135deg,rgba(236,72,153,0.3),rgba(168,85,247,0.3))", border: "1px solid rgba(236,72,153,0.4)", color: C.white, fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}
                             >
                               Show me who and how to recover them
@@ -6244,7 +6373,7 @@ const stopImportMessageRotation = () => {
                       🔒 Subscribe to view your insights for <strong style={{ color: C.white }}>{lockedPreview.platform}</strong>
                     </div>
                     <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
-                      <Button as="a" href="/pricing" style={{ padding: "8px 16px", fontSize: 12.5 }}>Add this platform with Pro</Button>
+                      <Button as="a" href="/pricing?gate=second_platform" style={{ padding: "8px 16px", fontSize: 12.5 }}>Add this platform with Pro</Button>
                       <Button variant="secondary" onClick={resetImport} style={{ padding: "8px 16px", fontSize: 12.5 }}>Not now</Button>
                     </div>
                   </div>
@@ -6690,6 +6819,9 @@ const stopImportMessageRotation = () => {
             onViewFan={viewFanProfile}
           />
         )}
+        {activeTab === 'billing' && (
+          <BillingSection profile={profile} isPro={isPro} />
+        )}
         {activeTab === 'planner' && (
           _plannerLock.locked
             ? <div style={{ padding: '32px 0' }}><LockedInsightCard title="Stream Planner" description="Plan your schedule around your best earning windows." lockType="needs_data" requirement={_plannerLock.message} ctaLabel="Upload More Data" ctaAction={() => handleTabChange('upload')} /></div>
@@ -7089,6 +7221,7 @@ const stopImportMessageRotation = () => {
           },
         }
         const config = configs[upgradeModalSource] || configs.whales_empty
+        const gateConfig = resolveGateConfig(upgradeModalSource)
 
         return (
           <UpgradeModal
@@ -7098,6 +7231,12 @@ const stopImportMessageRotation = () => {
             description={config.description}
             discoveredValue={config.discoveredValue}
             benefits={config.benefits}
+            context={{
+              gateSource: gateConfig.gateSource,
+              featureName: gateConfig.featureName || undefined,
+              returnPath: gateConfig.returnTab,
+              fanId: upgradeModalFanId || undefined,
+            }}
             onClose={() => setShowUpgradeModal(false)}
           />
         )

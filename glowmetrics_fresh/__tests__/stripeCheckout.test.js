@@ -95,4 +95,32 @@ describe('POST /api/stripe/checkout', () => {
     const data = await res.json()
     expect(JSON.stringify(data)).not.toMatch(/STRIPE_|price_/)
   })
+
+  it('carries a valid checkout-return context into both session and subscription metadata, prefixed', async () => {
+    await POST(makeRequest({
+      plan_type: 'standard_monthly',
+      context: { gateSource: 'moneymap', returnPath: 'moneymap', fanId: 'someuser::Chaturbate' },
+    }))
+    const args = mockSessionsCreate.mock.calls[0][0]
+    expect(args.metadata.ctx_gateSource).toBe('moneymap')
+    expect(args.metadata.ctx_returnPath).toBe('moneymap')
+    expect(args.metadata.ctx_fanId).toBe('someuser::Chaturbate')
+    expect(args.subscription_data.metadata.ctx_gateSource).toBe('moneymap')
+  })
+
+  it('drops an unsafe/unknown context field instead of passing it through to Stripe metadata', async () => {
+    await POST(makeRequest({
+      plan_type: 'standard_monthly',
+      context: { gateSource: 'moneymap', returnPath: 'https://evil.example.com', rawCsv: 'username,tokens\nfoo,10' },
+    }))
+    const args = mockSessionsCreate.mock.calls[0][0]
+    expect(args.metadata.ctx_returnPath).toBeUndefined()
+    expect(args.metadata.ctx_rawCsv).toBeUndefined()
+  })
+
+  it('appends {CHECKOUT_SESSION_ID} to the success_url so the return can look up server-held context', async () => {
+    await POST(makeRequest({ plan_type: 'standard_monthly' }))
+    const args = mockSessionsCreate.mock.calls[0][0]
+    expect(args.success_url).toContain('session_id={CHECKOUT_SESSION_ID}')
+  })
 })

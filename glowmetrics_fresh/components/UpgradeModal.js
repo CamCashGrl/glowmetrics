@@ -1,7 +1,7 @@
 "use client"
 import { useEffect, useRef, useState } from "react"
-import { supabase } from "../lib/supabase"
 import { track } from "../lib/track"
+import { startCheckout as startCheckoutRequest } from "../lib/checkoutClient"
 import Button from "./ui/Button"
 
 const C = {
@@ -20,37 +20,6 @@ const STANDARD_ANNUAL_PRICE = 99
 const ANNUAL_SAVINGS_PERCENT = Math.round(
   (1 - STANDARD_ANNUAL_PRICE / (STANDARD_MONTHLY_PRICE * 12)) * 100
 )
-
-async function startCheckout(planType, { onLoading, onError }) {
-  onLoading(planType)
-  try {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session?.access_token) {
-      onError("Your login session could not be found. Please sign in again.")
-      return
-    }
-
-    const res = await fetch("/api/stripe/checkout", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${session.access_token}`,
-      },
-      credentials: "same-origin",
-      body: JSON.stringify({ plan_type: planType }),
-    })
-    const data = await res.json().catch(() => ({}))
-    if (!res.ok) throw new Error(data.error || "Unable to start Stripe Checkout.")
-    if (!data.url) throw new Error("Stripe Checkout did not return a payment URL.")
-
-    track("checkout_started", { plan_type: planType })
-    window.location.assign(data.url)
-  } catch (error) {
-    onError(error?.message || "Something went wrong. Please try again.")
-  } finally {
-    onLoading(null)
-  }
-}
 
 /**
  * Shared contextual Pro upgrade modal. The content adapts to whatever gate
@@ -71,6 +40,10 @@ async function startCheckout(planType, { onLoading, onError }) {
  *    list, so a Fan Intelligence gate doesn't advertise Live Mode features
  *  - monthlyPlanType / annualPlanType: plan_type values understood by
  *    /api/stripe/checkout (defaults to the standard plan)
+ *  - context: optional safe checkout-return context (gateSource,
+ *    featureName, returnPath, platform, importId, fanId, liveSessionId) —
+ *    carried through Stripe metadata so the dashboard can return the user
+ *    to this exact feature once Pro activates (see lib/checkoutContext.js)
  *  - onClose: called on dismiss ("Not now" / Escape / backdrop click)
  */
 export default function UpgradeModal({
@@ -82,6 +55,7 @@ export default function UpgradeModal({
   benefits = [],
   monthlyPlanType = "standard_monthly",
   annualPlanType = "standard_annual",
+  context,
   onClose,
 }) {
   const [loadingPlan, setLoadingPlan] = useState(null)
@@ -140,7 +114,7 @@ export default function UpgradeModal({
 
   function handleChoosePlan(planType) {
     track("upgrade_prompt_clicked", { gate_source: source, feature_name: featureName, plan_type: planType })
-    startCheckout(planType, { onLoading: setLoadingPlan, onError: setError })
+    startCheckoutRequest(planType, { context, onLoading: setLoadingPlan, onError: setError, track })
   }
 
   return (

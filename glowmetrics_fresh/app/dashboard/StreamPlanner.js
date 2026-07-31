@@ -1008,7 +1008,7 @@ export default function StreamPlanner({ tips = [], isPro = false }) {
           )}
           <div style={{ display:"flex", gap:"12px", flexWrap:"wrap" }}>
             <a href="/live/demo" style={{ display:"inline-flex", alignItems:"center", gap:"8px", background:"rgba(34,211,238,0.12)", border:"1px solid rgba(34,211,238,0.3)", color:"#22d3ee", fontWeight:"600", padding:"10px 24px", borderRadius:"10px", textDecoration:"none", fontSize:"14px" }}>▶ Watch Demo</a>
-            <Button as="a" href="/pricing" style={{ padding:"10px 24px", fontSize:"14px" }}>Unlock my personalized stream plan</Button>
+            <Button as="a" href="/pricing?gate=streamplanner" style={{ padding:"10px 24px", fontSize:"14px" }}>Unlock my personalized stream plan</Button>
           </div>
         </div>
       </div>
