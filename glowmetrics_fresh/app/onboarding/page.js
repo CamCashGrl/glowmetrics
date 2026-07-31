@@ -748,7 +748,7 @@ export default function OnboardingPage(){
       <FeedbackBubble/>
 
       {/* ── CARD ── */}
-      <div style={{position:'relative',zIndex:10,width:'100%',maxWidth:430}}>
+      <div style={{position:'relative',zIndex:10,width:'100%',maxWidth:720}}>
         <div style={{position:'absolute',inset:-2,borderRadius:30,background:'linear-gradient(135deg,rgba(33,230,243,0.9) 0%,rgba(124,92,255,0.45) 45%,rgba(255,47,174,0.9) 100%)',zIndex:-1,filter:'blur(1.5px)',animation:'glowPulse 3.5s ease-in-out infinite'}}/>
         <div style={{position:'absolute',inset:-60,borderRadius:'50%',background:'radial-gradient(circle,rgba(124,92,255,0.10) 0%,transparent 70%)',zIndex:-2,pointerEvents:'none'}}/>
         <div className="ob-card ob-card-inner" style={{position:'relative',borderRadius:28,border:'1px solid rgba(255,255,255,0.12)',background:'linear-gradient(180deg,rgba(10,15,35,0.94),rgba(6,9,24,0.96))',backdropFilter:'blur(34px)',WebkitBackdropFilter:'blur(34px)',padding:'26px 28px 24px',overflow:'hidden',boxShadow:'0 0 46px rgba(33,230,243,0.25),0 0 70px rgba(255,47,174,0.15),0 26px 96px rgba(0,0,0,0.58),inset 0 1px 0 rgba(255,255,255,0.10)'}}>
@@ -779,7 +779,7 @@ export default function OnboardingPage(){
               <div style={EYE}>Step 1 of 3</div>
               <div style={{textAlign:'center',marginBottom:16}}>
                 <h1 style={{fontSize:23,fontWeight:900,color:'#F8FAFC',letterSpacing:'-0.025em',lineHeight:1.15,marginBottom:7}}>Start tracking your streams</h1>
-                <p style={{fontSize:13,color:'rgba(166,168,189,0.88)',lineHeight:1.7,maxWidth:360,margin:'0 auto'}}>Choose your platform so CamCash can import your tip history and build your first insights.</p>
+                <p style={{fontSize:13,color:'rgba(166,168,189,0.88)',lineHeight:1.6,maxWidth:520,margin:'0 auto'}}>Choose your platform so CamCash can import your tip history and build your first insights.</p>
               </div>
               <div style={{marginBottom:22}}>
                 <div style={{fontSize:10,fontWeight:700,color:'rgba(166,168,189,0.6)',marginBottom:9,letterSpacing:'0.08em',textTransform:'uppercase'}}>Your platform</div>
@@ -815,7 +815,7 @@ export default function OnboardingPage(){
               <div style={EYE}>Step 1 of 3 — Chaturbate</div>
               <div style={{textAlign:'center',marginBottom:22}}>
                 <h1 style={{fontSize:23,fontWeight:900,color:'#F8FAFC',letterSpacing:'-0.025em',lineHeight:1.15,marginBottom:7}}>Start tracking your streams</h1>
-                <p style={{fontSize:13,color:'rgba(166,168,189,0.88)',lineHeight:1.7,maxWidth:360,margin:'0 auto'}}>Enter your username so we can link you directly to your token stats page.</p>
+                <p style={{fontSize:13,color:'rgba(166,168,189,0.88)',lineHeight:1.6,maxWidth:520,margin:'0 auto'}}>Enter your username so we can link you directly to your token stats page.</p>
               </div>
               <div style={{marginBottom:22}}>
                 <div style={{fontSize:10,fontWeight:700,color:'rgba(166,168,189,0.6)',marginBottom:7,letterSpacing:'0.08em',textTransform:'uppercase'}}>Chaturbate username</div>
@@ -842,7 +842,7 @@ export default function OnboardingPage(){
               <div style={EYE}>Step 2 of 3 — {platform.label}</div>
               <div style={{textAlign:'center',marginBottom:16}}>
                 <h1 style={{fontSize:23,fontWeight:900,color:'#F8FAFC',letterSpacing:'-0.025em',lineHeight:1.15,marginBottom:7}}>Paste your tip history</h1>
-                <p style={{fontSize:13,color:'rgba(166,168,189,0.88)',lineHeight:1.7,maxWidth:360,margin:'0 auto'}}>Copy your earning rows from {platform.label} and paste them below. CamCash will clean and organize everything automatically.</p>
+                <p style={{fontSize:13,color:'rgba(166,168,189,0.88)',lineHeight:1.6,maxWidth:520,margin:'0 auto'}}>Copy your earning rows from {platform.label} and paste them below. CamCash will clean and organize everything automatically.</p>
               </div>
 
               {/* BongaCams paid chat notice */}
@@ -858,7 +858,7 @@ export default function OnboardingPage(){
                   <a href={platform.earningsUrl(cbUsername)} target="_blank" rel="noreferrer" style={{flexShrink:0,padding:'5px 11px',borderRadius:9,border:'1px solid rgba(255,47,174,0.35)',background:'rgba(255,255,255,0.03)',color:'rgba(203,213,225,0.85)',fontSize:10,fontWeight:700,textDecoration:'none',whiteSpace:'nowrap',transition:'all 0.2s'}} onMouseEnter={e=>{e.currentTarget.style.borderColor='rgba(33,230,243,0.55)';e.currentTarget.style.color='#fff'}} onMouseLeave={e=>{e.currentTarget.style.borderColor='rgba(255,47,174,0.35)';e.currentTarget.style.color='rgba(203,213,225,0.85)'}}>Open earnings page ↗</a>
                 </div>
                 <p style={{fontSize:12,color:'rgba(148,163,184,0.8)',lineHeight:1.6,marginBottom:10}}>{platform.instructions}</p>
-                <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:8}}>
+                <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))',gap:8}}>
                   {['No password required','You control what gets imported','Takes about 60 seconds'].map(t=>(<div key={t} style={{display:'flex',alignItems:'center',gap:5,fontSize:10,color:'rgba(148,163,184,0.75)'}}><span style={{color:CYAN,fontSize:11}}>✓</span>{t}</div>))}
                 </div>
               </div>
@@ -880,7 +880,7 @@ export default function OnboardingPage(){
               )}
               {importError&&<div style={{marginBottom:10,padding:'9px 12px',borderRadius:11,background:'rgba(248,113,113,0.07)',border:'1px solid rgba(248,113,113,0.22)',fontSize:12,color:'#f87171'}}>⚠️ {importError}</div>}
 
-              <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:9,marginBottom:16}}>
+              <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))',gap:9,marginBottom:16}}>
                 {['Open your earnings page','Highlight the rows you want','Copy and paste them here'].map((t,i)=>(<div key={i} style={{display:'flex',alignItems:'center',gap:7,fontSize:10,color:'rgba(148,163,184,0.8)'}}><div style={{width:19,height:19,borderRadius:'50%',border:'1px solid rgba(33,230,243,0.35)',background:'rgba(33,230,243,0.08)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,fontWeight:900,color:CYAN,flexShrink:0}}>{i+1}</div><span>{t}</span></div>))}
               </div>
 
@@ -1000,7 +1000,7 @@ export default function OnboardingPage(){
               <div style={EYE}>First Insights</div>
               <h1 style={{fontSize:23,fontWeight:900,color:'#F8FAFC',letterSpacing:'-0.025em',marginBottom:7}}>Your first insights are ready</h1>
               <p style={{fontSize:13,color:'rgba(166,168,189,0.85)',lineHeight:1.65,marginBottom:20}}>Here's a beautiful preview of what we found.</p>
-              <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:9,marginBottom:14}}>
+              <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(120px,1fr))',gap:9,marginBottom:14}}>
                 {[
                   {label:'Tips Imported',value:tipsDisplayed,color:CYAN,prefix:'',suffix:' tips',delay:'0s'},
                   {label:'Unique Fans',value:preview?.fansDetected||0,color:'#f59e0b',prefix:'',suffix:' fans',delay:'0.1s'},
@@ -1013,6 +1013,16 @@ export default function OnboardingPage(){
                     {s.isText?s.value:<CountUp to={typeof s.value==='number'?s.value:0} prefix={s.prefix||''} suffix={s.suffix||''} duration={900} decimals={s.decimals||0}/>}
                   </div>
                 </div>))}
+                <button
+                  onClick={()=>router.push('/pricing')}
+                  className="stat-card"
+                  style={{padding:'13px 13px',animation:'statCardIn 0.4s ease 0.4s both',cursor:'pointer',border:'1px solid rgba(255,47,174,0.3)',background:'linear-gradient(160deg,rgba(255,47,174,0.10),rgba(124,92,255,0.06))',textAlign:'left',fontFamily:'inherit'}}
+                >
+                  <div style={{position:'absolute',top:0,left:0,right:0,height:'2px',borderRadius:'14px 14px 0 0',background:`linear-gradient(90deg,${CYAN}00,${PINK}88,${CYAN}00)`}}/>
+                  <div style={{fontSize:16,marginBottom:5}}>🔓</div>
+                  <div style={{fontSize:11,fontWeight:900,color:'#fff',lineHeight:1.25,marginBottom:2}}>Unlock CamCash Pro</div>
+                  <div style={{fontSize:9,color:'rgba(203,213,225,0.7)'}}>See full insights →</div>
+                </button>
               </div>
 
               {/* Paid sessions callout on done screen */}
