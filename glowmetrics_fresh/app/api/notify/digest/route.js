@@ -4,7 +4,10 @@ import { createClient } from '@supabase/supabase-js'
 
 const FOUNDER_EMAIL = 'daphneoncam@gmail.com'
 
-export async function GET() {
+// Shared so /api/cron/daily can call this directly instead of over HTTP —
+// an internal fetch() to this route can hit Vercel's deployment-protection
+// auth wall and get back an HTML challenge page instead of JSON.
+export async function runDailyDigest() {
   try {
     const resend = new Resend(process.env.RESEND_API_KEY)
     const supabaseAdmin = createClient(
@@ -54,7 +57,7 @@ export async function GET() {
     const hasActivity = newSignups.length > 0 || uploads.length > 0 || feedbackRows.length > 0
     if (!hasActivity) {
       console.log('[digest] No activity — skipping email')
-      return NextResponse.json({ success: true, skipped: true, reason: 'no activity' })
+      return { success: true, skipped: true, reason: 'no activity' }
     }
 
     // ── Build HTML ──
@@ -166,9 +169,15 @@ export async function GET() {
       html,
     })
 
-    return NextResponse.json({ success: true, newSignups: newSignups.length, uploads: uploads.length, feedback: feedbackRows.length })
+    return { success: true, newSignups: newSignups.length, uploads: uploads.length, feedback: feedbackRows.length }
   } catch (err) {
     console.error('[notify/digest] Failed:', err.message)
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 })
+    return { success: false, error: err.message, status: 500 }
   }
+}
+
+export async function GET() {
+  const result = await runDailyDigest()
+  const { status = 200, ...body } = result
+  return NextResponse.json(body, { status })
 }

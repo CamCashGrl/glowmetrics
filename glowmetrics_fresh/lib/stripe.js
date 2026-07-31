@@ -1,6 +1,9 @@
 import Stripe from 'stripe'
 
-export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+// .trim() guards against a stray trailing newline/space in the env var value
+// (a common copy-paste mistake in Vercel's dashboard) which otherwise surfaces
+// as a cryptic ERR_INVALID_CHAR on the Authorization header at request time.
+export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY?.trim(), {
   apiVersion: '2023-10-16',
 })
 

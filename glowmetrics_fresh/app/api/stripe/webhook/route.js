@@ -2,7 +2,10 @@ import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { createClient } from '@supabase/supabase-js'
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY)
+// .trim() guards against stray whitespace/newlines in the env var values —
+// Stripe's SDK reports that exact symptom as "signing secret contains whitespace"
+// and as ERR_INVALID_CHAR on the Authorization header.
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY?.trim())
 
 function getSupabaseAdmin() {
   return createClient(
@@ -64,7 +67,7 @@ export async function POST(request) {
     event = stripe.webhooks.constructEvent(
       body,
       signature,
-      process.env.STRIPE_WEBHOOK_SECRET
+      process.env.STRIPE_WEBHOOK_SECRET?.trim()
     )
   } catch (err) {
     console.error('Webhook signature verification failed:', err.message)
