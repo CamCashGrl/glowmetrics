@@ -1368,6 +1368,7 @@ export default function Dashboard() {
   const [promoCodeInput, setPromoCodeInput] = useState('')
   const [promoCodeStatus, setPromoCodeStatus] = useState(null) // { type: 'success'|'error', message }
   const [promoCodeSubmitting, setPromoCodeSubmitting] = useState(false)
+  const [showPromoPopover, setShowPromoPopover] = useState(false)
   const [tips, setTips] = useState([])
   const [paidSessions, setPaidSessions] = useState([])
   const [liveTipsTotalUSD, setLiveTipsTotalUSD] = useState(null)
@@ -3123,7 +3124,46 @@ const stopImportMessageRotation = () => {
                   <div style={{ fontSize:13, fontWeight:800, color: atPeak ? '#10B981' : '#fbbf24', whiteSpace:'nowrap' }}>{_eiPeakLabel ? `${_eiPeakLabel}${peakLabel ? ` · ${peakLabel}` : ''}` : '—'}</div>
                 </div>
                 </div>
-                <div style={{ paddingLeft:12, borderLeft:'1px solid rgba(255,255,255,0.06)', flexShrink:0, display:'flex', gap:8 }}>
+                <div style={{ paddingLeft:12, borderLeft:'1px solid rgba(255,255,255,0.06)', flexShrink:0, display:'flex', gap:8, alignItems:'center', position:'relative' }}>
+                  {!isPro && (
+                    <a href="/pricing" style={{ display:'flex', alignItems:'center', padding:'8px 18px', borderRadius:11, background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.12)', color:'#fff', fontWeight:800, fontSize:13, cursor:'pointer', whiteSpace:'nowrap', textDecoration:'none' }}>
+                      💎 Pricing
+                    </a>
+                  )}
+                  {!isPro && (
+                    <>
+                      <button onClick={() => { setShowPromoPopover(v => !v); setPromoCodeStatus(null) }} style={{ display:'flex', alignItems:'center', padding:'8px 18px', borderRadius:11, background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.12)', color:'#fff', fontWeight:800, fontSize:13, cursor:'pointer', whiteSpace:'nowrap' }}>
+                        🎟️ Promo Code
+                      </button>
+                      {showPromoPopover && (
+                        <div style={{ position:'absolute', top:'calc(100% + 8px)', right:0, zIndex:30, width:260, padding:16, borderRadius:14, background:'rgba(10,14,32,0.97)', border:'1px solid rgba(255,255,255,0.12)', boxShadow:'0 18px 42px rgba(0,0,0,0.5)' }}>
+                          <div style={{ fontSize:12, fontWeight:700, color:'#fff', marginBottom:10 }}>Redeem a promo code</div>
+                          <div style={{ display:'flex', gap:8 }}>
+                            <input
+                              autoFocus
+                              value={promoCodeInput}
+                              onChange={e => { setPromoCodeInput(e.target.value); if (promoCodeStatus) setPromoCodeStatus(null) }}
+                              onKeyDown={e => { if (e.key === 'Enter') redeemPromoCode() }}
+                              placeholder="Enter code"
+                              style={{ flex:1, minWidth:0, padding:'9px 12px', borderRadius:9, background:'rgba(255,255,255,0.06)', border:'1px solid rgba(255,255,255,0.14)', color:'#fff', fontSize:12.5, outline:'none', textTransform:'uppercase' }}
+                            />
+                            <button
+                              onClick={redeemPromoCode}
+                              disabled={promoCodeSubmitting || !promoCodeInput.trim()}
+                              style={{ padding:'9px 16px', borderRadius:9, background:'linear-gradient(90deg, #16F4FF 0%, #7C5CFF 48%, #FF2BAE 100%)', border:'none', color:'#fff', fontWeight:800, fontSize:12.5, cursor:'pointer', opacity: promoCodeSubmitting || !promoCodeInput.trim() ? 0.6 : 1 }}
+                            >
+                              {promoCodeSubmitting ? '…' : 'Apply'}
+                            </button>
+                          </div>
+                          {promoCodeStatus && (
+                            <div style={{ marginTop:10, fontSize:12, color: promoCodeStatus.type === 'success' ? '#22D3EE' : '#f87171' }}>
+                              {promoCodeStatus.type === 'success' ? '✦ ' : ''}{promoCodeStatus.message}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </>
+                  )}
                   <a href="/shop" style={{ display:'flex', alignItems:'center', padding:'8px 20px', borderRadius:11, background:'linear-gradient(90deg, #16F4FF 0%, #7C5CFF 48%, #FF2BAE 100%)', border:'none', color:'#fff', fontWeight:800, fontSize:13, cursor:'pointer', whiteSpace:'nowrap', textDecoration:'none', boxShadow:'0 0 14px rgba(22,244,255,0.3)', letterSpacing:0.3 }}>
                     🛍️ Shop
                   </a>
