@@ -29,7 +29,7 @@ export default function sitemap() {
 
     // New BongaCams articles
     'bongacams-payout-guide',
-    'bongacams-camscore-explained',
+    'bongacams-camscore-exsplained',
 
     'cam-model-boundaries-toxic-chat',
     'cam-model-earnings',
@@ -43,12 +43,13 @@ export default function sitemap() {
     'cam-model-tipping-pattern-data-examples',
     'cam-model-token-to-dollar-ratio-explained',
     'camcash-vs-camdash-vs-cb-cam-insights',
+    'findom-kink-niche',
 
     // New creator-product articles
-    'cam-room-dice-game-ideas',
+    'cam-room-dice-games',
     'what-to-do-when-cam-room-is-slow',
     'cam-session-scripts-for-models',
-    'femdom-message-scripts-for-creators',
+    'findom-message-scripts-for-creators',
     'spin-the-wheel-cam-game',
 
     'chaturbate-best-month-real-numbers',
@@ -79,11 +80,6 @@ export default function sitemap() {
 
     // Existing and new coaching content
     'live-ai-coaching-cam-models',
-    'live-mode-coaching-for-cam-models',
-
-    // New MyFreeCams articles
-    'myfreecams-camscore-explained',
-    'mfc-share-guide-for-models',
 
     'revenue-per-hour-cam-model',
     'viral-cam-room-titles',
@@ -105,6 +101,8 @@ export default function sitemap() {
     'cam-model-top-tippers',
     'chaturbate-best-hours',
     'chaturbate-earnings-tracker',
+    'chaturbate-room-title-generator',
+    'chaturbate-token-calculator',
     'chaturbate-token-tracker',
     'how-to-increase-cam-tips',
     'myfreecams-analytics',
