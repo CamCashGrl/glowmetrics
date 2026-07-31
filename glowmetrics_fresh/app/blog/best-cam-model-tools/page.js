@@ -516,6 +516,7 @@ export default function BestCamModelTools() {
           <a href="/guides/cam-model-token-calculator" style={s.relLink}>→ Chaturbate token calculator</a>
           <a href="/guides/cam-model-room-title-generator" style={s.relLink}>→ Free room title generator</a>
           <a href="/blog/how-to-track-cam-tips-automatically" style={s.relLink}>→ How to Track Cam Tips Automatically — Automate your earnings tracking</a>
+          <a href="/blog/how-to-upload-csv-to-camcash" style={s.relLink}>→ How to Upload a CSV to CamCash — Step-by-step SOP with video</a>
           <a href="/blog/cam-model-fan-crm" style={s.relLink}>→ Whale Watch — Track and profile your high rollers</a>
           <a href="/tools/profile-studio" style={s.relLink}>→ Free cam bio & tip menu generator</a>
         </div>

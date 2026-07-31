@@ -139,6 +139,8 @@ export async function POST(req) {
     // coaching), not whether a tip counts at all. Every live tip is written
     // into the permanent `tips` table so Command Center, avg $/hour, Money
     // Map, and Stream Planner all reflect Live Mode earnings automatically.
+    // (Plan/promo-expiry status no longer needs checking here — this write
+    // is unconditional regardless of plan tier or expiry.)
     await supabaseAdmin.from('tips').insert({
       user_id:   user.id,
       username:  username.trim(),

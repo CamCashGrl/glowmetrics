@@ -114,6 +114,11 @@ export default function AdminPage() {
   const [filterDashboard,  setFilterDashboard]  = useState("all")
   const [sortBy,  setSortBy]  = useState("createdAt")
 
+  const [promoCodes, setPromoCodes]   = useState([])
+  const [promoForm,  setPromoForm]    = useState({ code: "", duration_days: 30, max_redemptions: "1", description: "" })
+  const [promoBusy,  setPromoBusy]    = useState(false)
+  const [promoError, setPromoError]   = useState("")
+
   const load = useCallback(async () => {
     setLoading(true)
     try {
@@ -126,10 +131,56 @@ export default function AdminPage() {
     finally { setLoading(false) }
   }, [router])
 
+  const loadPromoCodes = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/promo-codes")
+      if (res.status === 401) return
+      const d = await res.json()
+      if (!d.error) setPromoCodes(d.codes || [])
+    } catch {}
+  }, [])
+
   useEffect(() => {
     if (!document.cookie.includes("gm_admin=")) { router.replace("/admin/login"); return }
     load()
-  }, [load])
+    loadPromoCodes()
+  }, [load, loadPromoCodes])
+
+  const createPromoCode = async () => {
+    setPromoBusy(true)
+    setPromoError("")
+    try {
+      const res = await fetch("/api/admin/promo-codes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          code: promoForm.code || undefined,
+          duration_days: parseInt(promoForm.duration_days, 10) || 30,
+          max_redemptions: promoForm.max_redemptions === "" ? null : promoForm.max_redemptions,
+          description: promoForm.description || null,
+        }),
+      })
+      const d = await res.json()
+      if (!res.ok) { setPromoError(d.error || "Failed to create code."); return }
+      setPromoForm({ code: "", duration_days: 30, max_redemptions: "1", description: "" })
+      await loadPromoCodes()
+    } catch {
+      setPromoError("Failed to create code.")
+    } finally {
+      setPromoBusy(false)
+    }
+  }
+
+  const togglePromoCode = async (code, active) => {
+    try {
+      await fetch("/api/admin/promo-codes", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code, active }),
+      })
+      await loadPromoCodes()
+    } catch {}
+  }
 
   const logout = () => {
     document.cookie = "gm_admin=;path=/;max-age=0"
@@ -371,6 +422,77 @@ export default function AdminPage() {
             </div>
           </Card>
         </div>
+
+        {/* Promo Codes */}
+        <Card style={{ marginBottom:20 }}>
+          <SectionTitle>Promo Codes — Free Pro</SectionTitle>
+          <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:12 }}>
+            <input
+              placeholder="Code (blank = auto-generate)"
+              value={promoForm.code}
+              onChange={e => setPromoForm(f => ({ ...f, code: e.target.value.toUpperCase() }))}
+              style={{ width:200 }}
+            />
+            <input
+              type="number" min={1} max={365}
+              placeholder="Days"
+              value={promoForm.duration_days}
+              onChange={e => setPromoForm(f => ({ ...f, duration_days: e.target.value }))}
+              style={{ width:80 }}
+            />
+            <input
+              type="number" min={1}
+              placeholder="Max uses (blank = unlimited)"
+              value={promoForm.max_redemptions}
+              onChange={e => setPromoForm(f => ({ ...f, max_redemptions: e.target.value }))}
+              style={{ width:170 }}
+            />
+            <input
+              placeholder="Description (internal note)"
+              value={promoForm.description}
+              onChange={e => setPromoForm(f => ({ ...f, description: e.target.value }))}
+              style={{ width:220 }}
+            />
+            <button
+              onClick={createPromoCode}
+              disabled={promoBusy}
+              style={{ padding:"6px 16px", borderRadius:8, background:`${C.cyan}22`, border:`1px solid ${C.cyan}44`, color:C.cyan, cursor:"pointer", fontSize:12, fontWeight:700, opacity: promoBusy ? 0.6 : 1 }}
+            >
+              {promoBusy ? "Creating…" : "+ Create Code"}
+            </button>
+          </div>
+          {promoError && <div style={{ color:C.red, fontSize:12, marginBottom:12 }}>{promoError}</div>}
+          <div style={{ overflowX:"auto" }}>
+            <table style={{ width:"100%", borderCollapse:"collapse" }}>
+              <thead><tr>
+                <th>Code</th><th>Days Free</th><th>Uses</th><th>Status</th><th>Description</th><th>Created</th><th></th>
+              </tr></thead>
+              <tbody>
+                {promoCodes.length === 0 && (
+                  <tr><td colSpan={7} style={{ textAlign:"center", color:C.muted, padding:16 }}>No promo codes yet</td></tr>
+                )}
+                {promoCodes.map(pc => (
+                  <tr key={pc.id}>
+                    <td style={{ fontFamily:"'DM Mono',monospace", color:C.cyan, fontWeight:700 }}>{pc.code}</td>
+                    <td style={{ fontFamily:"'DM Mono',monospace" }}>{pc.duration_days}</td>
+                    <td style={{ fontFamily:"'DM Mono',monospace" }}>{pc.redemption_count}{pc.max_redemptions ? ` / ${pc.max_redemptions}` : ""}</td>
+                    <td>{pill(pc.active ? "Active" : "Disabled", pc.active ? C.green : C.muted)}</td>
+                    <td style={{ color:C.muted, fontSize:11 }}>{pc.description || "—"}</td>
+                    <td style={{ color:C.muted, whiteSpace:"nowrap" }}>{fmt(pc.created_at)}</td>
+                    <td>
+                      <button
+                        onClick={() => togglePromoCode(pc.code, !pc.active)}
+                        style={{ padding:"4px 10px", borderRadius:6, background:"rgba(255,255,255,0.05)", border:`1px solid ${C.border}`, color:C.muted, cursor:"pointer", fontSize:11 }}
+                      >
+                        {pc.active ? "Disable" : "Enable"}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
 
         {/* Platform Breakdown + Signup Trend */}
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:20, marginBottom:20 }}>

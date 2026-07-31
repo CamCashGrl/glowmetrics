@@ -1373,6 +1373,10 @@ export default function Dashboard() {
     : 'overview'
   const [user, setUser] = useState(null)
   const [profile, setProfile] = useState(null)
+  const [promoCodeInput, setPromoCodeInput] = useState('')
+  const [promoCodeStatus, setPromoCodeStatus] = useState(null) // { type: 'success'|'error', message }
+  const [promoCodeSubmitting, setPromoCodeSubmitting] = useState(false)
+  const [showPromoPopover, setShowPromoPopover] = useState(false)
   const [tips, setTips] = useState([])
   const [paidSessions, setPaidSessions] = useState([])
   const [analytics, setAnalytics] = useState(null)
@@ -1507,7 +1511,12 @@ export default function Dashboard() {
   const phaseChangeLog     = useRef([])
 
   const isBetaUser = true
-  const isPro = isProPlan(profile?.plan)
+  // plan_expires_at is only set for promo-code grants (see redeem_promo_code
+  // RPC) — Stripe-managed subscriptions leave it null and flip `plan` to
+  // 'free' directly via the webhook on cancellation, so a null expiry here
+  // always means "not time-limited."
+  const isPro = (profile?.plan === 'pro' || profile?.plan === 'unlimited') &&
+    (!profile?.plan_expires_at || new Date(profile.plan_expires_at) > new Date())
   const uploadLimit = Infinity
 
   const fmtHour = h => { if (h == null || isNaN(h)) return 'N/A'; return h === 0 ? '12 AM' : h < 12 ? h+' AM' : h === 12 ? '12 PM' : (h-12)+' PM' }
@@ -1518,6 +1527,37 @@ export default function Dashboard() {
     setUpgradeModalSource(source)
     setUpgradeModalFanId(fanId)
     setShowUpgradeModal(true)
+  }
+
+  const redeemPromoCode = async () => {
+    const code = promoCodeInput.trim()
+    if (!code || promoCodeSubmitting) return
+    setPromoCodeSubmitting(true)
+    setPromoCodeStatus(null)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch('/api/promo/redeem', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
+        body: JSON.stringify({ code }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setPromoCodeStatus({ type: 'error', message: data.error || 'Could not redeem that code.' })
+        return
+      }
+      setProfile(p => ({ ...(p || {}), plan: 'pro', plan_expires_at: data.plan_expires_at }))
+      setPromoCodeInput('')
+      setPromoCodeStatus({ type: 'success', message: `Pro unlocked! You're covered through ${new Date(data.plan_expires_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}.` })
+      track('promo_code_redeemed', { code })
+    } catch (e) {
+      setPromoCodeStatus({ type: 'error', message: 'Something went wrong. Please try again.' })
+    } finally {
+      setPromoCodeSubmitting(false)
+    }
   }
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(""), 3500) }
@@ -1650,7 +1690,7 @@ export default function Dashboard() {
   //   4. Historical events get _isHistory:true so computeState() excludes
   //      them from timing/pace calculations (only uses them for totals)
   useEffect(() => {
-    if (activeTab !== 'live' || !user) return
+    if (activeTab !== 'live-sessions' || !user) return
     if (liveTipsChannelRef.current) return // singleton guard
 
     isHydratingHistory.current = true
@@ -1762,7 +1802,7 @@ export default function Dashboard() {
       // migration (billing_status/billing_interval/etc, added for the
       // Plan & Billing section) hasn't been applied to this environment yet.
       supabase.from('profiles')
-        .select('plan')
+        .select('plan, plan_expires_at')
         .eq('id', user.id)
         .maybeSingle()
         .then(({ data }) => { if (data) setProfile((p) => ({ ...(p || {}), ...data })) })
@@ -1887,7 +1927,7 @@ export default function Dashboard() {
           setFlashTipId(normalized._id)
           setTimeout(() => setFlashTipId(null), 2500)
           // Switch to Live Mode tab automatically if user is on another tab
-          setActiveTab('live')
+          setActiveTab('live-sessions')
         })
         .subscribe()
       liveTipsChannelRef.current = liveTipsChannel
@@ -2033,7 +2073,7 @@ export default function Dashboard() {
 
   // ── LIVE MODE: load existing tips when tab is activated ───────────────────
   useEffect(() => {
-    if (activeTab !== 'live' || !user) return
+    if (activeTab !== 'live-sessions' || !user) return
     let cancelled = false
 
     const loadRecentLiveTips = async () => {
@@ -2072,7 +2112,7 @@ export default function Dashboard() {
   // Without this, computeState() / getAlerts() / coaching never update because
   // React only re-renders on state changes — Date.now() alone is not enough.
   useEffect(() => {
-    if (activeTab === 'live' && liveActive) {
+    if (activeTab === 'live-sessions' && liveActive) {
       liveTickerRef.current = setInterval(() => setLiveTick(t => t + 1), 1000)
     } else {
       clearInterval(liveTickerRef.current)
@@ -3209,11 +3249,50 @@ const stopImportMessageRotation = () => {
                   <div style={{ fontSize:13, fontWeight:800, color: atPeak ? '#10B981' : '#fbbf24', whiteSpace:'nowrap' }}>{_eiPeakLabel ? `${_eiPeakLabel}${peakLabel ? ` · ${peakLabel}` : ''}` : '—'}</div>
                 </div>
                 </div>
-                <div style={{ paddingLeft:12, borderLeft:'1px solid rgba(255,255,255,0.06)', flexShrink:0, display:'flex', gap:8 }}>
+                <div style={{ paddingLeft:12, borderLeft:'1px solid rgba(255,255,255,0.06)', flexShrink:0, display:'flex', gap:8, alignItems:'center', position:'relative' }}>
+                  {!isPro && (
+                    <a href="/pricing" style={{ display:'flex', alignItems:'center', padding:'8px 18px', borderRadius:11, background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.12)', color:'#fff', fontWeight:800, fontSize:13, cursor:'pointer', whiteSpace:'nowrap', textDecoration:'none' }}>
+                      💎 Pricing
+                    </a>
+                  )}
+                  {!isPro && (
+                    <>
+                      <button onClick={() => { setShowPromoPopover(v => !v); setPromoCodeStatus(null) }} style={{ display:'flex', alignItems:'center', padding:'8px 18px', borderRadius:11, background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.12)', color:'#fff', fontWeight:800, fontSize:13, cursor:'pointer', whiteSpace:'nowrap' }}>
+                        🎟️ Promo Code
+                      </button>
+                      {showPromoPopover && (
+                        <div style={{ position:'absolute', top:'calc(100% + 8px)', right:0, zIndex:30, width:260, padding:16, borderRadius:14, background:'rgba(10,14,32,0.97)', border:'1px solid rgba(255,255,255,0.12)', boxShadow:'0 18px 42px rgba(0,0,0,0.5)' }}>
+                          <div style={{ fontSize:12, fontWeight:700, color:'#fff', marginBottom:10 }}>Redeem a promo code</div>
+                          <div style={{ display:'flex', gap:8 }}>
+                            <input
+                              autoFocus
+                              value={promoCodeInput}
+                              onChange={e => { setPromoCodeInput(e.target.value); if (promoCodeStatus) setPromoCodeStatus(null) }}
+                              onKeyDown={e => { if (e.key === 'Enter') redeemPromoCode() }}
+                              placeholder="Enter code"
+                              style={{ flex:1, minWidth:0, padding:'9px 12px', borderRadius:9, background:'rgba(255,255,255,0.06)', border:'1px solid rgba(255,255,255,0.14)', color:'#fff', fontSize:12.5, outline:'none', textTransform:'uppercase' }}
+                            />
+                            <button
+                              onClick={redeemPromoCode}
+                              disabled={promoCodeSubmitting || !promoCodeInput.trim()}
+                              style={{ padding:'9px 16px', borderRadius:9, background:'linear-gradient(90deg, #16F4FF 0%, #7C5CFF 48%, #FF2BAE 100%)', border:'none', color:'#fff', fontWeight:800, fontSize:12.5, cursor:'pointer', opacity: promoCodeSubmitting || !promoCodeInput.trim() ? 0.6 : 1 }}
+                            >
+                              {promoCodeSubmitting ? '…' : 'Apply'}
+                            </button>
+                          </div>
+                          {promoCodeStatus && (
+                            <div style={{ marginTop:10, fontSize:12, color: promoCodeStatus.type === 'success' ? '#22D3EE' : '#f87171' }}>
+                              {promoCodeStatus.type === 'success' ? '✦ ' : ''}{promoCodeStatus.message}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </>
+                  )}
                   <a href="/shop" style={{ display:'flex', alignItems:'center', padding:'8px 20px', borderRadius:11, background:'linear-gradient(90deg, #16F4FF 0%, #7C5CFF 48%, #FF2BAE 100%)', border:'none', color:'#fff', fontWeight:800, fontSize:13, cursor:'pointer', whiteSpace:'nowrap', textDecoration:'none', boxShadow:'0 0 14px rgba(22,244,255,0.3)', letterSpacing:0.3 }}>
                     🛍️ Shop
                   </a>
-                  <button onClick={() => { setActiveTab('live'); if (typeof window !== 'undefined') { localStorage.setItem('camcash_tab','live'); window.scrollTo({top:0,behavior:'instant'}); } }} style={{ padding:'8px 20px', borderRadius:11, background:'linear-gradient(135deg,#10B981,#22D3EE)', border:'none', color:'#fff', fontWeight:800, fontSize:13, cursor:'pointer', whiteSpace:'nowrap', boxShadow:'0 0 14px rgba(16,185,129,0.3)', letterSpacing:0.3 }}>
+                  <button onClick={() => { setActiveTab('live-sessions'); if (typeof window !== 'undefined') { localStorage.setItem('camcash_tab','live-sessions'); window.scrollTo({top:0,behavior:'instant'}); } }} style={{ padding:'8px 20px', borderRadius:11, background:'linear-gradient(135deg,#10B981,#22D3EE)', border:'none', color:'#fff', fontWeight:800, fontSize:13, cursor:'pointer', whiteSpace:'nowrap', boxShadow:'0 0 14px rgba(16,185,129,0.3)', letterSpacing:0.3 }}>
                     ⚡ Go Live
                   </button>
                 </div>
@@ -4799,7 +4878,7 @@ const stopImportMessageRotation = () => {
           </div>
         )}
 
-        {activeTab === "live" && (() => {
+        {activeTab === "live-sessions" && (() => {
           // ── INLINE LIVE ENGINE (no external import needed) ────────────────
 
           const normalizeTip = (ev) => {
@@ -5277,6 +5356,23 @@ const stopImportMessageRotation = () => {
                   </div>
                 )}
               </div>
+
+              {/* Download extension — always visible until auto-capture is detected, not gated on liveActive */}
+              {!liveEvents.some(e => e.sourceUsed === 'extension') && (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, borderRadius: 14, padding: '14px 20px', marginBottom: 20, background: 'rgba(168,85,247,0.08)', border: '1px solid rgba(168,85,247,0.25)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <span style={{ fontSize: 22 }}>🧩</span>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: C.white }}>Auto-capture your tips</div>
+                      <div style={{ fontSize: 12, color: C.muted }}>Install the CamCash Chrome extension so tips log here automatically while you stream.</div>
+                    </div>
+                  </div>
+                  <a href="/camcash-extension.zip" download="camcash-extension.zip"
+                    style={{ display: 'inline-flex', alignItems: 'center', padding: '9px 18px', borderRadius: 12, background: 'linear-gradient(90deg,#21E6F3,#6C5CFF,#FF2FAE)', color: '#fff', fontWeight: 800, fontSize: 13, textDecoration: 'none', whiteSpace: 'nowrap' }}>
+                    📥 Download Extension
+                  </a>
+                </div>
+              )}
 
               {/* Not started */}
               {!liveActive && !liveEvents.length && (
@@ -6180,13 +6276,17 @@ const stopImportMessageRotation = () => {
         {activeTab === "upload" && (
           <div style={{ maxWidth: 600, margin: "0 auto" }}>
             <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 8 }}>📥 Import CSV</h1>
-            <p style={{ fontSize: 14, color: C.muted, marginBottom: freePlatformLimitReached ? 16 : 32 }}>
+            <p style={{ fontSize: 14, color: C.muted, marginBottom: 12 }}>
               {isPro ? "Unlimited platforms • Auto-removes duplicates" : freePlatformLimitReached ? `Free plan — tracking ${allPlatforms[0]}. Auto-removes duplicates.` : "Free plan tracks 1 platform. Auto-removes duplicates."}
             </p>
             {/* Single top-of-tab notice. No button here when the richer
                 real-data preview below (locked_preview) is already showing
                 its own CTA — two Subscribe buttons stacked on one screen is
                 exactly the "paywall overload" this tab used to have. */}
+            <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: freePlatformLimitReached ? 16 : 32 }}>
+              <a href="/blog/how-to-upload-csv-to-camcash" style={{ fontSize: 13, color: C.cyan, textDecoration: "none", fontWeight: 600 }}>📹 Watch the SOP: How to upload a CSV →</a>
+              <a href="#csv-help" style={{ fontSize: 13, color: C.cyan, textDecoration: "none", fontWeight: 600 }}>❓ CSV help →</a>
+            </div>
             {freePlatformLimitReached && (
               <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", borderRadius: 12, background: "rgba(168,85,247,0.08)", border: "1px solid rgba(168,85,247,0.25)", marginBottom: 16 }}>
                 <span style={{ fontSize: 18 }}>🔒</span>
@@ -6386,9 +6486,41 @@ const stopImportMessageRotation = () => {
                 // Informational only — the top banner and/or the locked_preview
                 // panel above already carry the one dominant CTA for this tab,
                 // so this explainer doesn't add a competing second button.
-                <p style={{ fontSize: 13, color: C.text, lineHeight: 1.65 }}>
-                  The <strong style={{ color: C.white }}>free plan</strong> tracks <strong style={{ color: C.cyan }}>1 platform</strong> — import as much history as you want from it, no limits. A <strong style={{ color: C.white }}>subscription</strong> unlocks tracking <strong style={{ color: C.pink }}>multiple platforms at once</strong> and lets you compare which cam site pays you best by hour, day, and fan type. <a href="/pricing" style={{ color: C.cyan }}>View plans →</a>
-                </p>
+                <>
+                  <p style={{ fontSize: 13, color: C.text, lineHeight: 1.65 }}>
+                    The <strong style={{ color: C.white }}>free plan</strong> tracks <strong style={{ color: C.cyan }}>1 platform</strong> — import as much history as you want from it, no limits. A <strong style={{ color: C.white }}>subscription</strong> unlocks tracking <strong style={{ color: C.pink }}>multiple platforms at once</strong> and lets you compare which cam site pays you best by hour, day, and fan type. <a href="/pricing" style={{ color: C.cyan }}>View plans →</a>
+                  </p>
+
+                  <div style={{ marginTop: 18 }}>
+                    <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 8 }}>Have a promo code?</div>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      <input
+                        value={promoCodeInput}
+                        onChange={e => { setPromoCodeInput(e.target.value); if (promoCodeStatus) setPromoCodeStatus(null) }}
+                        onKeyDown={e => { if (e.key === 'Enter') redeemPromoCode() }}
+                        placeholder="Enter code"
+                        style={{
+                          flex: "1 1 160px", padding: "10px 14px", borderRadius: 10,
+                          background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.12)",
+                          color: C.white, fontSize: 13, outline: "none", textTransform: "uppercase",
+                        }}
+                      />
+                      <Button
+                        variant="secondary"
+                        onClick={redeemPromoCode}
+                        disabled={promoCodeSubmitting || !promoCodeInput.trim()}
+                        style={{ padding: "10px 20px", fontSize: 13, opacity: promoCodeSubmitting || !promoCodeInput.trim() ? 0.6 : 1 }}
+                      >
+                        {promoCodeSubmitting ? "Applying…" : "Apply"}
+                      </Button>
+                    </div>
+                    {promoCodeStatus && (
+                      <div style={{ marginTop: 8, fontSize: 12.5, color: promoCodeStatus.type === 'success' ? C.indigo : '#f87171' }}>
+                        {promoCodeStatus.type === 'success' ? '✦ ' : ''}{promoCodeStatus.message}
+                      </div>
+                    )}
+                  </div>
+                </>
               )}
 
               <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)", margin: "20px 0 14px" }} />
@@ -6415,8 +6547,9 @@ const stopImportMessageRotation = () => {
               </div>
             </div>
 
-            <div style={{ padding: "12px 16px", borderRadius: 10, background: "rgba(34,211,238,0.05)", border: "1px solid rgba(34,211,238,0.15)", fontSize: 12, color: C.muted }}>
+            <div id="csv-help" style={{ padding: "12px 16px", borderRadius: 10, background: "rgba(34,211,238,0.05)", border: "1px solid rgba(34,211,238,0.15)", fontSize: 12, color: C.muted, scrollMarginTop: 80 }}>
               <strong style={{ color: C.cyan }}>CSV not loading?</strong> Try selecting your platform from the dropdown above, then re-upload. For Chaturbate: export from Stats & Data → Token Stats. For BongaCams: export from Reports.
+              {' '}Need a full walkthrough? See the <a href="/blog/how-to-upload-csv-to-camcash" style={{ color: C.cyan }}>step-by-step CSV upload guide</a> (with video).
             </div>
           </div>
         )}

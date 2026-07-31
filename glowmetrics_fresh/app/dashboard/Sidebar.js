@@ -22,7 +22,8 @@ const NAV = [
     group: "SESSIONS",
     items: [
       { id: "sessions", icon: "🎥", label: "Free Chat Sessions" },
-      { id: "live",     icon: "🔴", label: "Live Mode Sessions" },
+      { id: "live",     icon: "🔴", label: "Live Mode", href: "/live" },
+      { id: "live-sessions", icon: "📋", label: "Live Mode Sessions" },
       { id: "private",  icon: "💎", label: "Private Sessions" },
     ]
   },
@@ -63,17 +64,20 @@ export default function Sidebar({ activeTab, onTabChange, user, onSignOut, isPro
   const [hoveredId, setHoveredId] = useState(null)
   const [mobileOpen, setMobileOpen] = useState(false)
 
-  const renderItem = (id, icon, label) => {
-    const isActive  = activeTab === id
+  const renderItem = (id, icon, label, href) => {
+    const isActive  = !href && activeTab === id
     const isHovered = hoveredId === id
+    const Comp = href ? "a" : "button"
     return (
-      <button key={id}
-        onClick={() => { onTabChange(id); setMobileOpen(false) }}
+      <Comp key={id}
+        {...(href ? { href } : {})}
+        onClick={href ? undefined : () => { onTabChange(id); setMobileOpen(false) }}
         onMouseEnter={() => setHoveredId(id)}
         onMouseLeave={() => setHoveredId(null)}
         style={{
           width: "100%", display: "flex", alignItems: "center", gap: 10,
           padding: "8px 12px", borderRadius: 10, border: "none", cursor: "pointer",
+          textDecoration: "none", boxSizing: "border-box",
           background: isActive
             ? "linear-gradient(135deg,rgba(34,211,238,0.14),rgba(124,92,255,0.08))"
             : isHovered ? "rgba(255,255,255,0.05)" : "transparent",
@@ -88,7 +92,7 @@ export default function Sidebar({ activeTab, onTabChange, user, onSignOut, isPro
         {isActive && (
           <div style={{ marginLeft: "auto", width: 5, height: 5, borderRadius: "50%", background: C.cyan, boxShadow: "0 0 5px #22D3EE" }} />
         )}
-      </button>
+      </Comp>
     )
   }
 
@@ -114,7 +118,7 @@ export default function Sidebar({ activeTab, onTabChange, user, onSignOut, isPro
                 {group.group}
               </div>
             )}
-            {group.items.map(({ id, icon, label }) => renderItem(id, icon, label))}
+            {group.items.map(({ id, icon, label, href }) => renderItem(id, icon, label, href))}
           </div>
         ))}
       </div>
