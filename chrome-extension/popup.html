@@ -103,6 +103,10 @@
       font-size: 12px; color: #cbd5e1; line-height: 1.45; margin-bottom: 8px;
       padding: 8px 10px; background: rgba(248,113,113,0.08); border: 1px solid rgba(248,113,113,0.25); border-radius: 8px;
     }
+    #session-error {
+      font-size: 12px; color: #f87171; line-height: 1.45; margin-bottom: 8px;
+      padding: 8px 10px; background: rgba(248,113,113,0.08); border: 1px solid rgba(248,113,113,0.25); border-radius: 8px;
+    }
     .session-btn-row { display: flex; gap: 7px; }
     .session-btn {
       flex: 1; padding: 9px 0; border-radius: 8px; font-size: 13px; font-weight: 800; cursor: pointer; border: 1px solid transparent;
@@ -225,6 +229,7 @@
           <span id="session-timer"></span>
         </div>
         <div id="session-resolution-prompt" style="display:none;"></div>
+        <div id="session-error" style="display:none;"></div>
         <div class="session-btn-row" id="session-btn-row"></div>
       </div>
 

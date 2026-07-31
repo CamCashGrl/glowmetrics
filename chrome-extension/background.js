@@ -158,13 +158,14 @@ async function liveSessionCall(path, method, body) {
       if (refreshed) res = await doFetch();
     }
     if (!res.ok) {
-      console.error('[CamCash] live session call failed:', path, res.status);
-      return null;
+      const body = await res.json().catch(() => null);
+      console.error('[CamCash] live session call failed:', path, res.status, body);
+      return { error: body?.error || `Request failed (${res.status})`, engineDisabled: !!body?.engineDisabled };
     }
     return await res.json();
   } catch (e) {
     console.error('[CamCash] live session call error:', path, e.message);
-    return null;
+    return { error: e.message };
   }
 }
 
@@ -176,7 +177,7 @@ async function restoreLiveSession() {
 }
 
 async function startLiveSession(platform) {
-  const data = await liveSessionCall('/api/live/session/start', 'POST');
+  const data = await liveSessionCall('/api/live/session/start', 'POST', { platform });
   if (data?.session) liveSession = data.session;
   broadcast({ action: 'state', state: getState() });
   return data;
