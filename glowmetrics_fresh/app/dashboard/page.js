@@ -18,6 +18,7 @@ import Button from '../../components/ui/Button'
 import EarlyAdopterOffer from './EarlyAdopterOffer'
 import UpgradeModal from '../../components/UpgradeModal'
 import { isProPlan } from '../../lib/plan'
+import { shouldShowFanUpgradeGate, shouldShowFanDataNotice, pickAtRiskWhale, additionalFanCount } from '../../lib/fanIntelligenceGating'
 import { useLiveSessionEngine } from '../live/useLiveSessionEngine'
 
 // Tab-only components loaded on demand instead of in the initial dashboard
@@ -2128,6 +2129,10 @@ const stopImportMessageRotation = () => {
         totalUsd: result.totalUsd,
         dateFrom: result.dateFrom,
         dateTo: result.dateTo,
+        // Only the very first successful import gets the expanded "what we
+        // found" reveal below — every later re-upload just gets the plain
+        // confirmation, so returning users aren't re-shown the same pitch.
+        isFirstImport: uploadCount === 0,
       })
       setImportStage('success')
 
@@ -4655,12 +4660,20 @@ const stopImportMessageRotation = () => {
               </div>
             )}
 
-            {filteredWhales.length <= 3 && (
+            {/* Pro users never see this — it's a payment gate, not a data
+                notice, so it must not reappear once someone has already
+                paid, even if their filtered view happens to show <=3 fans. */}
+            {shouldShowFanUpgradeGate(filteredWhales.length, isPro) && (
               <div style={{ ...glassCard, borderRadius: 14, padding: 20, textAlign: "center", border: "1px solid rgba(59,130,246,0.2)" }}>
                 <div style={{ fontSize: 13, color: C.muted, marginBottom: 12 }}>Upload more data to discover more fans • Pro unlocks full profiles & behavior patterns</div>
                 <button onClick={() => openUpgradeModal("whales_empty")} style={{ padding: "8px 20px", borderRadius: 8, background: "linear-gradient(135deg,rgba(59,130,246,0.3),rgba(236,72,153,0.3))", border: "1px solid rgba(59,130,246,0.4)", color: C.white, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
                   🔓 Unlock my full fan list
                 </button>
+              </div>
+            )}
+            {shouldShowFanDataNotice(filteredWhales.length, isPro) && (
+              <div style={{ ...glassCard, borderRadius: 14, padding: 20, textAlign: "center", border: "1px solid rgba(255,255,255,0.08)" }}>
+                <div style={{ fontSize: 13, color: C.muted }}>Upload more data to discover fans in your history.</div>
               </div>
             )}
           </div>
@@ -6050,13 +6063,19 @@ const stopImportMessageRotation = () => {
             <p style={{ fontSize: 14, color: C.muted, marginBottom: freePlatformLimitReached ? 16 : 32 }}>
               {isPro ? "Unlimited platforms • Auto-removes duplicates" : freePlatformLimitReached ? `Free plan — tracking ${allPlatforms[0]}. Auto-removes duplicates.` : "Free plan tracks 1 platform. Auto-removes duplicates."}
             </p>
+            {/* Single top-of-tab notice. No button here when the richer
+                real-data preview below (locked_preview) is already showing
+                its own CTA — two Subscribe buttons stacked on one screen is
+                exactly the "paywall overload" this tab used to have. */}
             {freePlatformLimitReached && (
               <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", borderRadius: 12, background: "rgba(168,85,247,0.08)", border: "1px solid rgba(168,85,247,0.25)", marginBottom: 16 }}>
                 <span style={{ fontSize: 18 }}>🔒</span>
                 <div style={{ flex: 1, fontSize: 12.5, color: C.text, lineHeight: 1.5 }}>
-                  You're on the free plan (1 platform). Upgrade to Pro to add BongaCams, MyFreeCams, and more.
+                  You're on the free plan (1 platform). Pro adds BongaCams, MyFreeCams, and more so you can compare them.
                 </div>
-                <Button as="a" href="/pricing" style={{ flexShrink: 0, padding: "8px 14px", fontSize: 12, whiteSpace: "nowrap" }}>Upgrade →</Button>
+                {importStage !== 'locked_preview' && (
+                  <Button as="a" href="/pricing" style={{ flexShrink: 0, padding: "8px 14px", fontSize: 12, whiteSpace: "nowrap" }}>Compare all my platforms →</Button>
+                )}
               </div>
             )}
             <div style={{ ...glassCard, borderRadius: 14, padding: 32, marginBottom: 16, position: "relative", overflow: "hidden" }}>
@@ -6121,8 +6140,51 @@ const stopImportMessageRotation = () => {
                   {lastUploadResult.skipped > 0 && (
                     <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>{lastUploadResult.skipped} duplicates skipped</div>
                   )}
+
+                  {/* First-import-only reveal — real findings from data that's
+                      already computed by now (loadData ran right after the
+                      upload), never shown again on later re-uploads so it
+                      doesn't turn into a repeated interruption. */}
+                  {lastUploadResult.isFirstImport && (() => {
+                    const fanCount = analytics?.uniqueFanCount || 0
+                    const sessionCount = analytics?.meaningfulSessionCount || 0
+                    const atRiskWhale = pickAtRiskWhale(whales, isPro)
+
+                    if (fanCount === 0 && sessionCount === 0 && !atRiskWhale) return null
+
+                    return (
+                      <div style={{ textAlign: "left", marginTop: 24, paddingTop: 20, borderTop: "1px solid rgba(255,255,255,0.08)" }}>
+                        {(fanCount > 0 || sessionCount > 0) && (
+                          <>
+                            <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.1em", textTransform: "uppercase", color: C.cyan, marginBottom: 10 }}>What CamCash found</div>
+                            <ul style={{ margin: "0 0 4px", padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 6 }}>
+                              {fanCount > 0 && <li style={{ fontSize: 13, color: C.text }}>💛 {fanCount} fan{fanCount === 1 ? "" : "s"} tracked from your history</li>}
+                              {sessionCount > 0 && <li style={{ fontSize: 13, color: C.text }}>📊 {sessionCount} session{sessionCount === 1 ? "" : "s"} identified</li>}
+                              {atRiskWhale && <li style={{ fontSize: 13, color: C.text }}>⚠️ 1 valuable fan may be becoming inactive</li>}
+                            </ul>
+                          </>
+                        )}
+
+                        {atRiskWhale && (
+                          <div style={{ marginTop: 16, borderRadius: 12, border: "1px solid rgba(236,72,153,0.25)", background: "rgba(236,72,153,0.06)", padding: "14px 16px" }}>
+                            <div style={{ fontSize: 13, color: C.white, lineHeight: 1.6, marginBottom: 8 }}>
+                              A high-value fan who has spent <strong style={{ color: C.pink }}>${atRiskWhale.totalUSD.toFixed(0)}</strong> hasn't tipped in <strong style={{ color: C.pink }}>{atRiskWhale.daysSinceLastTip} days</strong>.
+                            </div>
+                            <div style={{ fontSize: 12, color: C.muted, marginBottom: 12 }}>🔒 Unlock their identity, full spending history, and recovery recommendation.</div>
+                            <button
+                              onClick={() => openUpgradeModal("post_upload_at_risk_fan")}
+                              style={{ padding: "8px 16px", borderRadius: 8, background: "linear-gradient(135deg,rgba(236,72,153,0.3),rgba(168,85,247,0.3))", border: "1px solid rgba(236,72,153,0.4)", color: C.white, fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}
+                            >
+                              Show me who and how to recover them
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })()}
+
                   <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 20, flexWrap: "wrap" }}>
-                    <Button onClick={() => handleTabChange('overview')} style={{ padding: "12px 26px", fontSize: 14 }}>View Dashboard</Button>
+                    <Button onClick={() => handleTabChange('overview')} style={{ padding: "12px 26px", fontSize: 14 }}>{lastUploadResult.isFirstImport ? "Continue with my free dashboard" : "View Dashboard"}</Button>
                     <Button variant="secondary" onClick={resetImport} style={{ padding: "12px 22px", fontSize: 13 }}>Import another CSV</Button>
                   </div>
                 </div>
@@ -6182,7 +6244,7 @@ const stopImportMessageRotation = () => {
                       🔒 Subscribe to view your insights for <strong style={{ color: C.white }}>{lockedPreview.platform}</strong>
                     </div>
                     <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
-                      <Button as="a" href="/pricing" style={{ padding: "8px 16px", fontSize: 12.5 }}>Subscribe →</Button>
+                      <Button as="a" href="/pricing" style={{ padding: "8px 16px", fontSize: 12.5 }}>Add this platform with Pro</Button>
                       <Button variant="secondary" onClick={resetImport} style={{ padding: "8px 16px", fontSize: 12.5 }}>Not now</Button>
                     </div>
                   </div>
@@ -6201,14 +6263,12 @@ const stopImportMessageRotation = () => {
                   <span style={{ fontSize: 12, color: C.text }}>— track and compare unlimited platforms</span>
                 </div>
               ) : (
-                <>
-                  <p style={{ fontSize: 13, color: C.text, lineHeight: 1.65, marginBottom: 16 }}>
-                    The <strong style={{ color: C.white }}>free plan</strong> tracks <strong style={{ color: C.cyan }}>1 platform</strong> — import as much history as you want from it, no limits. A <strong style={{ color: C.white }}>subscription</strong> unlocks tracking <strong style={{ color: C.pink }}>multiple platforms at once</strong> and lets you compare which cam site pays you best by hour, day, and fan type.
-                  </p>
-                  <Button onClick={() => router.push('/pricing')} style={{ padding: "12px 26px", fontSize: 13 }}>
-                    View Plans & Subscribe →
-                  </Button>
-                </>
+                // Informational only — the top banner and/or the locked_preview
+                // panel above already carry the one dominant CTA for this tab,
+                // so this explainer doesn't add a competing second button.
+                <p style={{ fontSize: 13, color: C.text, lineHeight: 1.65 }}>
+                  The <strong style={{ color: C.white }}>free plan</strong> tracks <strong style={{ color: C.cyan }}>1 platform</strong> — import as much history as you want from it, no limits. A <strong style={{ color: C.white }}>subscription</strong> unlocks tracking <strong style={{ color: C.pink }}>multiple platforms at once</strong> and lets you compare which cam site pays you best by hour, day, and fan type. <a href="/pricing" style={{ color: C.cyan }}>View plans →</a>
+                </p>
               )}
 
               <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)", margin: "20px 0 14px" }} />
@@ -6999,21 +7059,49 @@ const stopImportMessageRotation = () => {
         )
       })()}
 
-      {/* UPGRADE MODAL — real Stripe checkout, contextual per gate_source */}
-      {showUpgradeModal && (
-        <UpgradeModal
-          source={upgradeModalSource}
-          featureName={upgradeModalSource}
-          headline="Unlock your complete Fan Intelligence"
-          description="CamCash found additional fans, spending history, and possible recovery opportunities beyond your first 3 free summaries."
-          discoveredValue={
-            whales.length > 3
-              ? `${whales.length - 3} additional fan${whales.length - 3 === 1 ? '' : 's'} analyzed`
-              : null
-          }
-          onClose={() => setShowUpgradeModal(false)}
-        />
-      )}
+      {/* UPGRADE MODAL — real Stripe checkout, contextual per gate_source.
+          Content is scoped to whichever gate opened it, not the full Pro
+          feature list, so e.g. a fan-intelligence gate doesn't advertise
+          unrelated Live Mode features. */}
+      {showUpgradeModal && (() => {
+        const extraFans = additionalFanCount(whales.length)
+        const extraFansValue = extraFans > 0 ? `${extraFans} additional fan${extraFans === 1 ? '' : 's'} analyzed` : null
+        const configs = {
+          post_upload_at_risk_fan: {
+            headline: "Unlock this fan's identity and recovery plan",
+            description: "CamCash found a valuable fan who may be going quiet. Pro shows exactly who they are, their full spending history, and a specific recovery action.",
+            discoveredValue: extraFansValue,
+            benefits: [
+              "Full fan identity and spending timeline",
+              "Churn-risk explanation for this fan",
+              "A specific suggested recovery action",
+            ],
+          },
+          whales_empty: {
+            headline: "Unlock your complete Fan Intelligence",
+            description: "CamCash found additional fans, spending history, and possible recovery opportunities beyond your first 3 free summaries.",
+            discoveredValue: extraFansValue,
+            benefits: [
+              "Your complete fan list, not just the top 3",
+              "Full spending timelines and tip frequency",
+              "Churn-risk explanations and recovery suggestions",
+            ],
+          },
+        }
+        const config = configs[upgradeModalSource] || configs.whales_empty
+
+        return (
+          <UpgradeModal
+            source={upgradeModalSource}
+            featureName={upgradeModalSource}
+            headline={config.headline}
+            description={config.description}
+            discoveredValue={config.discoveredValue}
+            benefits={config.benefits}
+            onClose={() => setShowUpgradeModal(false)}
+          />
+        )
+      })()}
 
       {/* FLOATING FEEDBACK BUTTON — collapsed to a small icon in a safe gutter so it
           never sits over a fan card's actions or the bottom of the page content */}
