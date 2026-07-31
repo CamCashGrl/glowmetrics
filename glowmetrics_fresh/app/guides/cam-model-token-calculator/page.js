@@ -2,21 +2,21 @@ import TokenCalculatorClient from './TokenCalculatorClient'
 import Button from '../../../components/ui/Button'
 
 export const metadata = {
-  title: 'Chaturbate, MFC & Stripchat Token Calculator: Convert Tokens to USD',
-  description: 'Free token calculator for Chaturbate, MFC, Stripchat, BongaCams, and CamSoda — convert cam tokens to USD instantly and see your real broadcaster payout rate.',
+  title: 'Cam Token Calculator: Chaturbate, MFC & Stripchat to USD | CamCash',
+  description: 'Free cam token calculator for Chaturbate, MyFreeCams, Stripchat, BongaCams and CamSoda. Convert tokens into estimated model earnings and compare payout rates.',
   keywords: 'token calculator, chaturbate token calculator, cb token calculator, mfc token calculator, stripchat token conversion rate, cam model token calculator, tokens to usd, how much are tokens worth, cam model earnings, broadcaster payout rate',
   alternates: { canonical: 'https://www.camcashgrl.com/guides/cam-model-token-calculator' },
   openGraph: {
-    title: 'Chaturbate, MFC & Stripchat Token Calculator: Convert Tokens to USD',
-    description: 'Free token calculator for Chaturbate, MFC, Stripchat, BongaCams, and CamSoda — convert cam tokens to USD instantly and see your real broadcaster payout rate.',
+    title: 'Cam Token Calculator: Chaturbate, MFC & Stripchat to USD | CamCash',
+    description: 'Free cam token calculator for Chaturbate, MyFreeCams, Stripchat, BongaCams and CamSoda. Convert tokens into estimated model earnings and compare payout rates.',
     url: 'https://www.camcashgrl.com/guides/cam-model-token-calculator',
     type: 'article',
     images: [{ url: 'https://www.camcashgrl.com/og-image.png', width: 1200, height: 630 }],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Chaturbate, MFC & Stripchat Token Calculator: Convert Tokens to USD',
-    description: 'Free token calculator for Chaturbate, MFC, Stripchat, BongaCams, and CamSoda — convert cam tokens to USD instantly and see your real broadcaster payout rate.',
+    title: 'Cam Token Calculator: Chaturbate, MFC & Stripchat to USD | CamCash',
+    description: 'Free cam token calculator for Chaturbate, MyFreeCams, Stripchat, BongaCams and CamSoda. Convert tokens into estimated model earnings and compare payout rates.',
   },
   robots: {
     index: true,
@@ -31,24 +31,15 @@ const faqSchema = {
   '@context': 'https://schema.org',
   '@type': 'FAQPage',
   mainEntity: [
-    { '@type': 'Question', name: 'How much is one Chaturbate token worth?', acceptedAnswer: { '@type': 'Answer', text: 'One Chaturbate token is worth $0.05 to the broadcaster. Viewers purchase tokens at $0.10 each, meaning Chaturbate keeps 50% and the model receives 50%.' } },
-    { '@type': 'Question', name: 'How much does 1,000 tokens make on Chaturbate?', acceptedAnswer: { '@type': 'Answer', text: '1,000 Chaturbate tokens equals $50 to the broadcaster. Viewers pay $100 to purchase 1,000 tokens; Chaturbate keeps the other $50. At 5,000 tokens that\'s $250, and at 10,000 tokens that\'s $500.' } },
-    { '@type': 'Question', name: 'How much does BongaCams pay per token?', acceptedAnswer: { '@type': 'Answer', text: 'BongaCams pays approximately $0.025 per token to broadcasters — half of Chaturbate\'s rate. Viewers buy BongaCams tokens at roughly $0.068 each, so the model receives about 37% of what the viewer pays.' } },
-    { '@type': 'Question', name: 'What is the MyFreeCams (MFC) token rate?', acceptedAnswer: { '@type': 'Answer', text: 'MyFreeCams (MFC) pays approximately $0.05 per token (about $5.00 per 100 tokens). The exact rate can vary slightly based on model level and promotional periods.' } },
-    { '@type': 'Question', name: 'How much does Stripchat pay per token?', acceptedAnswer: { '@type': 'Answer', text: 'Stripchat pays approximately $0.05 per token. Rates can vary based on model tier and payment method, so always check your current rate in your Stripchat dashboard.' } },
-    { '@type': 'Question', name: 'What is the Stripchat token conversion rate for models?', acceptedAnswer: { '@type': 'Answer', text: 'The Stripchat token conversion rate — the model payout rate for converting tokens to USD — is approximately $0.05 per token. That means 1,000 Stripchat tokens converts to about $50 for the model, though the exact payout rate can vary by tier and payment method.' } },
-    { '@type': 'Question', name: 'What is CamSoda\'s token payout rate?', acceptedAnswer: { '@type': 'Answer', text: 'CamSoda pays approximately $0.055 per token — slightly higher than most competitors at the standard tier. This makes 1,000 CamSoda tokens worth about $55 versus $50 on Chaturbate.' } },
-    { '@type': 'Question', name: 'Do cam models pay taxes on token earnings?', acceptedAnswer: { '@type': 'Answer', text: 'Yes. In the United States, cam model earnings are self-employment income. You will typically receive a 1099-NEC from platforms paying over $600/year. You are responsible for self-employment tax (15.3%) plus income tax. Keep detailed records of all earnings, and consider quarterly estimated tax payments.' } },
-    { '@type': 'Question', name: 'What is the difference between viewer rate and broadcaster rate?', acceptedAnswer: { '@type': 'Answer', text: 'The viewer rate is what fans pay to purchase tokens. The broadcaster rate is the lower amount models actually receive. For example, on Chaturbate viewers pay $0.10/token but models receive $0.05/token. This split funds platform operations.' } },
-    { '@type': 'Question', name: 'How can I increase my per-token earnings?', acceptedAnswer: { '@type': 'Answer', text: 'The per-token rate itself is fixed by the platform, but you can increase total earnings by negotiating a higher rate directly with your platform after reaching high traffic milestones, optimizing tip menu pricing, and using platform bonuses or promotional rate periods.' } },
-    { '@type': 'Question', name: 'How do I calculate my hourly rate as a cam model?', acceptedAnswer: { '@type': 'Answer', text: 'Divide your total USD earnings for a session by the number of hours you streamed. For example, if you earned 2,000 tokens in 2 hours on Chaturbate: 2,000 × $0.05 = $100 ÷ 2 hours = $50/hr. Tools like CamCash track this automatically.' } },
-    { '@type': 'Question', name: 'Which cam platform pays models the most?', acceptedAnswer: { '@type': 'Answer', text: 'CamSoda has a slightly higher standard rate ($0.055/token vs $0.05). However, overall earnings depend more on audience size, tip menu strategy, and streaming hours than the per-token rate. The best platform is the one where your audience is largest.' } },
-    { '@type': 'Question', name: 'What is a tip menu and how does it affect earnings?', acceptedAnswer: { '@type': 'Answer', text: 'A tip menu is a list of actions tied to specific token amounts (e.g., 50 tokens = song request, 500 tokens = special request). Well-priced tip menus increase average tip size and give viewers clear goals — which directly increases your token income.' } },
-    { '@type': 'Question', name: 'How many tokens do top Chaturbate models earn per hour?', acceptedAnswer: { '@type': 'Answer', text: 'Top Chaturbate models can earn 5,000–50,000+ tokens per hour during peak sessions. Average active models typically earn 500–2,000 tokens per hour. Using analytics tools to identify your best streaming hours and highest-tipping fans can significantly improve your average.' } },
-    { '@type': 'Question', name: 'What is the minimum payout on Chaturbate?', acceptedAnswer: { '@type': 'Answer', text: 'Chaturbate\'s minimum payout is $50. Payments are issued every two weeks. Most models with moderate traffic reach this threshold easily within a single streaming session.' } },
-    { '@type': 'Question', name: 'Can I negotiate a higher token rate with Chaturbate?', acceptedAnswer: { '@type': 'Answer', text: 'Yes, high-traffic models can contact Chaturbate\'s model support to negotiate a higher per-token rate. This is not publicly advertised. Having consistent high viewership and earnings history strengthens your negotiating position.' } },
-    { '@type': 'Question', name: 'How does the 1099-NEC threshold work for cam models?', acceptedAnswer: { '@type': 'Answer', text: 'If a cam platform pays you $600 or more in a calendar year, they are required to issue a 1099-NEC. However, you must report ALL earnings regardless of whether you receive a 1099. Keep your own records throughout the year.' } },
-    { '@type': 'Question', name: 'What deductions can cam models claim on taxes?', acceptedAnswer: { '@type': 'Answer', text: 'Common deductions include: home office (dedicated streaming space), equipment (camera, lighting, microphone, computer), costumes and accessories used exclusively for work, platform fees, internet service, subscription services used for content, and professional services like accountants.' } },
+    { '@type': 'Question', name: 'How much is one Chaturbate token worth?', acceptedAnswer: { '@type': 'Answer', text: 'One Chaturbate token is worth $0.05 to the broadcaster. Viewers purchase tokens at approximately $0.10 each, meaning Chaturbate keeps about 50% and the model receives 50%.' } },
+    { '@type': 'Question', name: 'How much is 100 Chaturbate tokens?', acceptedAnswer: { '@type': 'Answer', text: '100 Chaturbate tokens equals $5.00 to the broadcaster, at the standard $0.05 per token rate. Viewers pay roughly $10 to purchase those 100 tokens.' } },
+    { '@type': 'Question', name: 'How much is 1,000 MFC tokens worth?', acceptedAnswer: { '@type': 'Answer', text: '1,000 MyFreeCams tokens is worth approximately $50 at the standard $0.05 per token broadcaster rate. Always confirm your exact current rate in your MFC dashboard, since model level and promotions can affect it.' } },
+    { '@type': 'Question', name: 'How much is 10,000 cam tokens in USD?', acceptedAnswer: { '@type': 'Answer', text: 'At the standard $0.05 per token rate used by Chaturbate, MyFreeCams, Stripchat, and CamSoda, 10,000 tokens equals about $500. On BongaCams, which pays $0.025 per token, 10,000 tokens equals about $250.' } },
+    { '@type': 'Question', name: 'Which cam platform pays the most per token?', acceptedAnswer: { '@type': 'Answer', text: 'Chaturbate, MyFreeCams, Stripchat, and CamSoda all use a standard broadcaster rate of about $0.05 per token. BongaCams pays roughly half that, at $0.025 per token. Overall earnings depend far more on audience size and streaming hours than on the per-token rate.' } },
+    { '@type': 'Question', name: 'Why does a viewer pay more than the model receives?', acceptedAnswer: { '@type': 'Answer', text: 'Viewers buy tokens at a retail price that is higher than what platforms pay broadcasters per token. On Chaturbate, for example, viewers pay about $0.10 per token while the model receives $0.05. The difference covers platform operating costs and profit.' } },
+    { '@type': 'Question', name: 'Can studio models enter a custom token rate?', acceptedAnswer: { '@type': 'Answer', text: 'Yes. If your studio or account agreement pays a different rate than the platform standard, select "Custom Rate" in the calculator above and enter your actual per-token payout to get an accurate estimate.' } },
+    { '@type': 'Question', name: 'How do I calculate cam earnings per hour?', acceptedAnswer: { '@type': 'Answer', text: 'Divide your total USD earnings for a session by the hours you streamed. For example, 1,800 tokens at $0.05 each equals $90; divided by 2 hours of streaming, that is $45 per hour.' } },
+    { '@type': 'Question', name: 'Are token rates the same on every platform?', acceptedAnswer: { '@type': 'Answer', text: 'No. Chaturbate, MyFreeCams, Stripchat, and CamSoda currently use a standard $0.05 per token broadcaster rate, while BongaCams pays about $0.025 per token. Rates can also vary by account tier, studio agreement, and promotional periods, so always confirm your actual rate in your platform dashboard.' } },
   ],
 }
 
@@ -88,6 +79,49 @@ const S = {
   border: 'rgba(255,255,255,0.07)',
 }
 
+// Single source of truth for displayed rates: lib/constants.js PLATFORM_TOKEN_RATES.
+// Keep this list in sync with TokenCalculatorClient.js — never hardcode a different value here.
+const PLATFORM_RATES = [
+  { platform: 'Chaturbate', rate: 0.05, color: '#F59E0B', note: 'Most popular platform globally' },
+  { platform: 'MyFreeCams', rate: 0.05, color: '#3B82F6', note: 'Strong North American audience' },
+  { platform: 'Stripchat', rate: 0.05, color: '#EF4444', note: 'Rate varies more by tier/payment method' },
+  { platform: 'BongaCams', rate: 0.025, color: '#8B5CF6', note: 'Lower broadcaster rate than most platforms' },
+  { platform: 'CamSoda', rate: 0.05, color: '#10B981', note: 'Standard rate, on par with most platforms' },
+]
+
+function ConversionGrid({ rate, color }) {
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 12 }}>
+      {[100, 500, 1000, 5000].map(t => (
+        <div key={t} style={{ textAlign: 'center', padding: '12px 8px', borderRadius: 10, background: 'rgba(255,255,255,0.03)', border: `1px solid ${S.border}` }}>
+          <div style={{ fontSize: 12, color: S.muted, marginBottom: 4 }}>{t.toLocaleString()} tokens</div>
+          <div style={{ fontSize: 20, fontWeight: 800, color }}>${(t * rate).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function PlatformSection({ id, name, rate, color, borderColor, blurb, caveat, linkHref, linkLabel }) {
+  return (
+    <section id={id} style={{ marginBottom: 44 }}>
+      <h2 style={{ fontSize: 28, fontWeight: 800, color: S.white, marginBottom: 8, letterSpacing: '-0.02em' }}>{name} Token Value</h2>
+      <div style={{ width: 40, height: 3, background: S.accent, borderRadius: 2, marginBottom: 20 }} />
+      <p style={{ fontSize: 16, lineHeight: 1.8, color: S.text, marginBottom: 18 }}>{blurb}</p>
+      <div style={{ background: S.surface, border: `1px solid ${borderColor}`, borderRadius: 14, padding: '22px 24px', marginBottom: 16 }}>
+        <ConversionGrid rate={rate} color={color} />
+      </div>
+      {caveat && <p style={{ fontSize: 13, color: S.muted, marginBottom: 16 }}>{caveat}</p>}
+      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+        {linkHref && (
+          <a href={linkHref} style={{ fontSize: 14, color: S.accent, textDecoration: 'none' }}>→ {linkLabel}</a>
+        )}
+        <a href="#calculator-top" style={{ fontSize: 13, color: S.muted, textDecoration: 'none' }}>↑ Back to calculator</a>
+      </div>
+    </section>
+  )
+}
+
 export default function TokenCalculatorPage() {
   return (
     <>
@@ -122,169 +156,77 @@ export default function TokenCalculatorPage() {
           </nav>
 
           {/* HERO */}
-          <div style={{ marginBottom: 48 }}>
+          <div id="calculator-top" style={{ marginBottom: 40 }}>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
-              {['Free Tool', '5 Platforms', 'Real Payout Rates', 'Tax Tips Included'].map(chip => (
+              {['Free Tool', '5 Platforms', 'Real Payout Rates', 'No Login Required'].map(chip => (
                 <span key={chip} style={{ padding: '4px 12px', borderRadius: 20, background: S.accentLight, border: `1px solid ${S.accentBorder}`, fontSize: 12, color: S.accent, fontWeight: 600 }}>{chip}</span>
               ))}
             </div>
-            <h1 style={{ fontSize: 48, fontWeight: 900, color: S.white, lineHeight: 1.1, marginBottom: 20, letterSpacing: '-0.03em' }}>
-              Cam Model Token Calculator
+            <h1 style={{ fontSize: 44, fontWeight: 900, color: S.white, lineHeight: 1.1, marginBottom: 20, letterSpacing: '-0.03em' }}>
+              Cam Model Token Calculator: Convert Tokens to USD
             </h1>
-            <p style={{ fontSize: 18, lineHeight: 1.7, color: '#CBD5E1', paddingLeft: 20, borderLeft: `3px solid ${S.accent}`, maxWidth: 680 }}>
-              Enter any token amount and instantly see your USD earnings across all major cam platforms. Uses real broadcaster payout rates — not what viewers pay. See also: <a href="/blog/cam-model-earnings" style={{ color: S.accent, textDecoration: 'none' }}>how cam model earnings actually work</a>.
+            <p style={{ fontSize: 17, lineHeight: 1.7, color: '#CBD5E1', paddingLeft: 20, borderLeft: `3px solid ${S.accent}`, maxWidth: 680 }}>
+              This calculator converts cam-site tokens into estimated broadcaster earnings for Chaturbate, MyFreeCams, Stripchat, BongaCams, and CamSoda. The payout you receive isn't the same as what a viewer pays for those tokens — if your studio or account uses a different rate, switch to Custom Rate below and enter it directly.
             </p>
           </div>
 
           {/* INTERACTIVE TOOL */}
           <TokenCalculatorClient />
 
-          {/* TABLE OF CONTENTS */}
-          <div style={{ background: S.card, border: `1px solid ${S.border}`, borderRadius: 16, padding: '28px 32px', marginBottom: 52, marginTop: 52 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: S.accent, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 16 }}>In this guide</div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '8px 24px' }}>
-              {[
-                ['#convert', 'Convert Cam Tokens to USD'],
-                ['#chaturbate', 'Chaturbate Token Value'],
-                ['#bongacams', 'BongaCams Token Value'],
-                ['#myfreecams', 'MyFreeCams Token Value'],
-                ['#platform-comparison', 'Platform Payout Comparison'],
-                ['#broadcaster-vs-viewer', 'Broadcaster Rate vs Viewer Rate'],
-                ['#token-tracking', 'Why Token Tracking Helps You Earn More'],
-                ['#taxes', 'Taxes & Deductions for Cam Models'],
-                ['#tip-menu', 'Building a Tip Menu That Converts'],
-                ['#faq', 'Token Calculator FAQ'],
-              ].map(([href, label]) => (
-                <a key={href} href={href} style={{ fontSize: 14, color: S.accent, textDecoration: 'none', padding: '4px 0', display: 'block' }}>→ {label}</a>
-              ))}
-            </div>
-          </div>
-
-          {/* SECTION: CONVERT */}
-          <section id="convert" style={{ marginBottom: 52 }}>
-            <h2 style={{ fontSize: 32, fontWeight: 800, color: S.white, marginBottom: 8, letterSpacing: '-0.02em' }}>Convert Cam Tokens to USD</h2>
-            <div style={{ width: 48, height: 3, background: S.accent, borderRadius: 2, marginBottom: 24 }} />
-            <p style={{ fontSize: 16, lineHeight: 1.8, color: S.text, marginBottom: 18 }}>
-              When viewers buy tokens, they pay the retail price — but you receive a different, lower amount called the broadcaster rate. Understanding this split is fundamental to knowing your real income.
+          {/* METHODOLOGY */}
+          <section id="methodology" style={{ marginTop: 44, marginBottom: 44 }}>
+            <h2 style={{ fontSize: 24, fontWeight: 800, color: S.white, marginBottom: 8, letterSpacing: '-0.02em' }}>Rate Verification &amp; Methodology</h2>
+            <div style={{ width: 40, height: 3, background: S.accent, borderRadius: 2, marginBottom: 18 }} />
+            <p style={{ fontSize: 15, lineHeight: 1.75, color: S.text, marginBottom: 12 }}>
+              Estimated earnings = tokens × broadcaster rate. Rates above reflect each platform's standard published payout structure, cross-checked against third-party token calculators. Where an exact current rate can't be verified from an official source, it's labeled as an estimated standard rate — your actual payout can differ based on studio agreements, account tier, or promotional periods, so always confirm the current rate in your own platform dashboard.
             </p>
-            <p style={{ fontSize: 16, lineHeight: 1.8, color: S.text, marginBottom: 28 }}>
-              On Chaturbate, viewers pay approximately $0.10 per token. You receive $0.05 per token. That's a 50/50 split between you and the platform. Across most cam sites, this split ranges from roughly 35–55% in the model's favor — BongaCams sits at the lower end of that range.
+            <p style={{ fontSize: 15, lineHeight: 1.75, color: S.text, marginBottom: 12 }}>
+              Want to know how many tokens you need to hit a specific dollar goal? Enter your token amount in the calculator above — the "Estimated Earnings" panel automatically shows the next $50 milestone and how many more tokens get you there.
             </p>
+            <p style={{ fontSize: 13, color: S.muted }}>
+              Rates last reviewed: July 2026, by the CamCash team.
+            </p>
+          </section>
 
-            {/* Quick reference cards */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 14, marginBottom: 28 }}>
-              {[
-                { platform: 'Chaturbate', rate: '$0.05', per: 'per token', color: '#F59E0B' },
-                { platform: 'BongaCams', rate: '$0.025', per: 'per token', color: '#8B5CF6' },
-                { platform: 'MyFreeCams', rate: '$0.05', per: 'per token', color: '#3B82F6' },
-                { platform: 'Stripchat', rate: '~$0.05', per: 'per token', color: '#EF4444' },
-                { platform: 'CamSoda', rate: '$0.055', per: 'per token', color: '#10B981' },
-              ].map(({ platform, rate, per, color }) => (
+          {/* QUICK REFERENCE TABLE */}
+          <section id="quick-reference" style={{ marginBottom: 44 }}>
+            <h2 style={{ fontSize: 28, fontWeight: 800, color: S.white, marginBottom: 8, letterSpacing: '-0.02em' }}>Quick Token Value Reference</h2>
+            <div style={{ width: 40, height: 3, background: S.accent, borderRadius: 2, marginBottom: 20 }} />
+            <p style={{ fontSize: 16, lineHeight: 1.8, color: S.text, marginBottom: 20 }}>
+              Viewers pay a retail price for tokens; you receive the lower broadcaster rate. On Chaturbate, for example, viewers pay about $0.10 per token while you receive $0.05 — a roughly 50/50 split. BongaCams keeps a larger share of that split than the other platforms.
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 14 }}>
+              {PLATFORM_RATES.map(({ platform, rate, color }) => (
                 <div key={platform} style={{ background: S.surface, border: `1px solid ${S.border}`, borderRadius: 12, padding: '18px 20px' }}>
                   <div style={{ fontSize: 12, color: S.muted, marginBottom: 6 }}>{platform}</div>
-                  <div style={{ fontSize: 28, fontWeight: 900, color, lineHeight: 1 }}>{rate}</div>
-                  <div style={{ fontSize: 12, color: S.muted, marginTop: 4 }}>{per}</div>
+                  <div style={{ fontSize: 26, fontWeight: 900, color, lineHeight: 1 }}>${rate.toFixed(3).replace(/0$/, '')}</div>
+                  <div style={{ fontSize: 12, color: S.muted, marginTop: 4 }}>per token</div>
                 </div>
               ))}
             </div>
-
-            <p style={{ fontSize: 16, lineHeight: 1.8, color: S.text }}>
-              Notice CamSoda's $0.055 rate — that extra half-cent adds up. On 10,000 tokens, that's $550 vs $500 on Chaturbate. Over a month of streaming, the difference can be meaningful.
-            </p>
           </section>
 
-          {/* SECTION: CHATURBATE TOKEN VALUE */}
-          <section id="chaturbate" style={{ marginBottom: 52 }}>
-            <h2 style={{ fontSize: 32, fontWeight: 800, color: S.white, marginBottom: 8, letterSpacing: '-0.02em' }}>Chaturbate Token Value</h2>
-            <div style={{ width: 48, height: 3, background: S.accent, borderRadius: 2, marginBottom: 24 }} />
-            <p style={{ fontSize: 16, lineHeight: 1.8, color: S.text, marginBottom: 18 }}>
-              Chaturbate pays models <strong style={{ color: S.white }}>$0.05 per token</strong> at the standard broadcaster rate. Viewers purchase tokens at approximately $0.10 each, meaning Chaturbate keeps 50% and the model receives 50%.
+          {/* PLATFORM COMPARISON TABLE */}
+          <section id="platform-comparison" style={{ marginBottom: 44 }}>
+            <h2 style={{ fontSize: 28, fontWeight: 800, color: S.white, marginBottom: 8, letterSpacing: '-0.02em' }}>Platform Payout Comparison</h2>
+            <div style={{ width: 40, height: 3, background: S.accent, borderRadius: 2, marginBottom: 20 }} />
+            <p style={{ fontSize: 16, lineHeight: 1.8, color: S.text, marginBottom: 20 }}>
+              Four of the five platforms currently use the same standard $0.05 broadcaster rate — BongaCams is the outlier at roughly half that. Don't pick a platform on rate alone: audience size and streaming hours matter far more to total earnings.
             </p>
-            <div style={{ background: S.surface, border: `1px solid ${S.accentBorder}`, borderRadius: 14, padding: '24px 28px', marginBottom: 24 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 14 }}>
-                {[[100,'$5'],[500,'$25'],[1000,'$50'],[2000,'$100'],[5000,'$250'],[10000,'$500']].map(([t,u]) => (
-                  <div key={t} style={{ textAlign: 'center', padding: '12px 8px', borderRadius: 10, background: 'rgba(245,158,11,0.07)', border: '1px solid rgba(245,158,11,0.15)' }}>
-                    <div style={{ fontSize: 13, color: S.muted, marginBottom: 4 }}>{t.toLocaleString()} tokens</div>
-                    <div style={{ fontSize: 22, fontWeight: 800, color: S.gold }}>{u}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <p style={{ fontSize: 16, lineHeight: 1.8, color: S.text }}>
-              To track your Chaturbate token earnings over time and see how they translate to $/hr, use the <a href="/guides/chaturbate-token-tracker" style={{ color: S.accent, textDecoration: 'none' }}>Chaturbate token tracker</a>. For a full breakdown of what affects hourly rates, see the <a href="/blog/how-much-do-chaturbate-models-make" style={{ color: S.accent, textDecoration: 'none' }}>Chaturbate earnings guide</a>.
-            </p>
-          </section>
-
-          {/* SECTION: BONGACAMS TOKEN VALUE */}
-          <section id="bongacams" style={{ marginBottom: 52 }}>
-            <h2 style={{ fontSize: 32, fontWeight: 800, color: S.white, marginBottom: 8, letterSpacing: '-0.02em' }}>BongaCams Token Value</h2>
-            <div style={{ width: 48, height: 3, background: S.accent, borderRadius: 2, marginBottom: 24 }} />
-            <p style={{ fontSize: 16, lineHeight: 1.8, color: S.text, marginBottom: 18 }}>
-              BongaCams pays models <strong style={{ color: S.white }}>$0.025 per token</strong> — half of Chaturbate's rate. Viewers buy BongaCams tokens at roughly $0.068 each, so the platform keeps a larger share of the split than Chaturbate does.
-            </p>
-            <div style={{ background: S.surface, border: `1px solid rgba(139,92,246,0.3)`, borderRadius: 14, padding: '24px 28px', marginBottom: 24 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 14 }}>
-                {[[100,'$2.50'],[500,'$12.50'],[1000,'$25'],[2000,'$50'],[5000,'$125'],[10000,'$250']].map(([t,u]) => (
-                  <div key={t} style={{ textAlign: 'center', padding: '12px 8px', borderRadius: 10, background: 'rgba(139,92,246,0.07)', border: '1px solid rgba(139,92,246,0.15)' }}>
-                    <div style={{ fontSize: 13, color: S.muted, marginBottom: 4 }}>{t.toLocaleString()} tokens</div>
-                    <div style={{ fontSize: 22, fontWeight: 800, color: '#8B5CF6' }}>{u}</div>
-                  </div>
-                ))}
-              </div>
-              <p style={{ fontSize: 13, color: S.muted, marginTop: 14, marginBottom: 0 }}>Values shown at the standard $0.025/token broadcaster rate.</p>
-            </div>
-          </section>
-
-          {/* SECTION: MYFREECAMS TOKEN VALUE */}
-          <section id="myfreecams" style={{ marginBottom: 52 }}>
-            <h2 style={{ fontSize: 32, fontWeight: 800, color: S.white, marginBottom: 8, letterSpacing: '-0.02em' }}>MyFreeCams Token Value</h2>
-            <div style={{ width: 48, height: 3, background: S.accent, borderRadius: 2, marginBottom: 24 }} />
-            <p style={{ fontSize: 16, lineHeight: 1.8, color: S.text, marginBottom: 18 }}>
-              MyFreeCams pays approximately <strong style={{ color: S.white }}>$0.05 per token</strong> (about $5.00 per 100 tokens). The exact rate can vary slightly based on model level and promotional periods. MFC has a strong North American audience and is especially popular with models who prefer a freemium-style room format.
-            </p>
-            <div style={{ background: S.surface, border: `1px solid rgba(59,130,246,0.3)`, borderRadius: 14, padding: '24px 28px', marginBottom: 24 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 14 }}>
-                {[[100,'$5'],[500,'$25'],[1000,'$50'],[2000,'$100'],[5000,'$250'],[10000,'$500']].map(([t,u]) => (
-                  <div key={t} style={{ textAlign: 'center', padding: '12px 8px', borderRadius: 10, background: 'rgba(59,130,246,0.07)', border: '1px solid rgba(59,130,246,0.15)' }}>
-                    <div style={{ fontSize: 13, color: S.muted, marginBottom: 4 }}>{t.toLocaleString()} tokens</div>
-                    <div style={{ fontSize: 22, fontWeight: 800, color: '#3B82F6' }}>{u}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <p style={{ fontSize: 16, lineHeight: 1.8, color: S.text }}>
-              To compare what you earn per hour across MFC and other platforms, the <a href="/guides/cam-model-income-tracker" style={{ color: S.accent, textDecoration: 'none' }}>cam model income tracker</a> lets you log earnings by platform and session to find your most profitable site.
-            </p>
-          </section>
-
-          {/* SECTION: PLATFORM COMPARISON */}
-          <section id="platform-comparison" style={{ marginBottom: 52 }}>
-            <h2 style={{ fontSize: 32, fontWeight: 800, color: S.white, marginBottom: 8, letterSpacing: '-0.02em' }}>Platform Payout Comparison</h2>
-            <div style={{ width: 48, height: 3, background: S.accent, borderRadius: 2, marginBottom: 24 }} />
-            <p style={{ fontSize: 16, lineHeight: 1.8, color: S.text, marginBottom: 24 }}>
-              The per-token rate is just one factor in your earnings. Audience size, discoverability, tip menu optimization, and streaming hours matter as much or more. That said, here's how the platforms compare on raw payout rate:
-            </p>
-
-            <div style={{ background: S.card, border: `1px solid ${S.border}`, borderRadius: 16, overflow: 'hidden', marginBottom: 28 }}>
+            <div style={{ background: S.card, border: `1px solid ${S.border}`, borderRadius: 16, overflow: 'hidden' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr style={{ background: 'rgba(99,102,241,0.08)' }}>
                     {['Platform', 'Broadcaster Rate', '1,000 tokens = $', '5,000 tokens = $', 'Notes'].map(h => (
-                      <th key={h} style={{ padding: '12px 20px', textAlign: 'left', fontSize: 11, color: S.accent, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700 }}>{h}</th>
+                      <th key={h} scope="col" style={{ padding: '12px 20px', textAlign: 'left', fontSize: 11, color: S.accent, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700 }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {[
-                    { platform: 'Chaturbate', rate: 0.05, note: 'Most popular platform globally' },
-                    { platform: 'BongaCams', rate: 0.025, note: 'Lower broadcaster rate than Chaturbate' },
-                    { platform: 'MyFreeCams', rate: 0.05, note: 'Strong North American audience' },
-                    { platform: 'Stripchat', rate: 0.05, note: 'Growing EU/global audience' },
-                    { platform: 'CamSoda', rate: 0.055, note: 'Slightly higher rate' },
-                  ].map(({ platform, rate, note }, i) => (
+                  {PLATFORM_RATES.map(({ platform, rate, note }, i) => (
                     <tr key={platform} style={{ borderTop: `1px solid ${S.border}`, background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.01)' }}>
                       <td style={{ padding: '13px 20px', color: S.white, fontWeight: 600, fontSize: 14 }}>{platform}</td>
-                      <td style={{ padding: '13px 20px', color: S.gold, fontWeight: 700, fontSize: 14 }}>${rate.toFixed(4)}</td>
+                      <td style={{ padding: '13px 20px', color: S.gold, fontWeight: 700, fontSize: 14 }}>${rate.toFixed(3)}</td>
                       <td style={{ padding: '13px 20px', color: S.green, fontWeight: 800, fontSize: 14 }}>${(1000 * rate).toFixed(2)}</td>
                       <td style={{ padding: '13px 20px', color: S.green, fontWeight: 800, fontSize: 14 }}>${(5000 * rate).toFixed(2)}</td>
                       <td style={{ padding: '13px 20px', color: S.muted, fontSize: 13 }}>{note}</td>
@@ -293,161 +235,133 @@ export default function TokenCalculatorPage() {
                 </tbody>
               </table>
             </div>
-
-            <p style={{ fontSize: 16, lineHeight: 1.8, color: S.text }}>
-              Don't base your platform choice on the rate difference alone. A $0.005/token difference means $5 per 1,000 tokens. If one platform brings you 3× more viewers, that's far more valuable than the rate difference.
-            </p>
           </section>
 
-          {/* SECTION: BROADCASTER VS VIEWER */}
-          <section id="broadcaster-vs-viewer" style={{ marginBottom: 52 }}>
-            <h2 style={{ fontSize: 32, fontWeight: 800, color: S.white, marginBottom: 8, letterSpacing: '-0.02em' }}>Broadcaster Rate vs Viewer Rate</h2>
-            <div style={{ width: 48, height: 3, background: S.accent, borderRadius: 2, marginBottom: 24 }} />
-            <p style={{ fontSize: 16, lineHeight: 1.8, color: S.text, marginBottom: 18 }}>
-              When a viewer tips you 100 tokens, that feels like the transaction is between you and them — but it's actually a three-party exchange. The viewer paid roughly $10 for those 100 tokens. You receive $5. The platform pockets the other $5.
-            </p>
-            <p style={{ fontSize: 16, lineHeight: 1.8, color: S.text, marginBottom: 18 }}>
-              This is why you should always price your tip menu based on your broadcaster rate — not what you think viewers are spending. A 200-token tip that feels "big" to a viewer ($20 out of pocket) earns you only $10.
-            </p>
-            <p style={{ fontSize: 16, lineHeight: 1.8, color: S.text }}>
-              Use this reality to your advantage: frame tips in a way that feels affordable (tokens) while being clear about what you're providing. "500 tokens for a 10-minute private" lands better than "you're paying $25 for 10 minutes" — even though that's exactly what it is.
-            </p>
-          </section>
-
-          {/* SECTION: TOKEN TRACKING */}
-          <section id="token-tracking" style={{ marginBottom: 52 }}>
-            <h2 style={{ fontSize: 32, fontWeight: 800, color: S.white, marginBottom: 8, letterSpacing: '-0.02em' }}>Why Token Tracking Helps You Earn More</h2>
-            <div style={{ width: 48, height: 3, background: S.accent, borderRadius: 2, marginBottom: 24 }} />
-            <p style={{ fontSize: 16, lineHeight: 1.8, color: S.text, marginBottom: 18 }}>
-              Converting tokens to USD tells you what a session was worth. But knowing <em>when</em> those tokens came in — and which fans sent them — is what actually moves your income up. The <a href="/guides/cam-model-income-tracker" style={{ color: S.accent, textDecoration: 'none' }}>cam model income tracker</a> and <a href="/guides/chaturbate-token-tracker" style={{ color: S.accent, textDecoration: 'none' }}>Chaturbate token tracker</a> log this data across sessions so patterns become visible over time. For a full picture of how earnings stack up, read the <a href="/blog/cam-model-earnings" style={{ color: S.accent, textDecoration: 'none' }}>cam model earnings guide</a>.
-            </p>
-            <p style={{ fontSize: 16, lineHeight: 1.8, color: S.text, marginBottom: 24 }}>
-              You can't control the platform's base rate — but you can significantly increase how many tokens flow in per hour:
-            </p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {/* JUMP LINKS */}
+          <div style={{ background: S.card, border: `1px solid ${S.border}`, borderRadius: 16, padding: '24px 28px', marginBottom: 44 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: S.accent, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 14 }}>Jump to a platform</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 20px' }}>
               {[
-                { n: '01', title: 'Complete your profile', body: 'A complete bio, quality photos, and a real profile picture increase discoverability and trust, which brings in more viewers and tips — even though the per-token rate itself stays fixed.' },
-                { n: '02', title: 'Negotiate your rate', body: 'After reaching consistent high traffic, you can contact Chaturbate model support to negotiate a higher per-token rate. This is rarely advertised but happens regularly for top performers.' },
-                { n: '03', title: 'Price your tip menu strategically', body: 'Low-entry items at 25–50 tokens bring hesitant viewers into the tipping habit. High-ticket goals at 5,000–10,000 tokens create excitement and community momentum. Both ends of the menu matter.' },
-                { n: '04', title: 'Use platform bonuses', body: 'Many platforms run promotional rate boosts for certain streaming hours, new models, or special events. Check your platform\'s model support page regularly.' },
-                { n: '05', title: 'Stream during your peak hours', body: 'Analytics show that 2–3 hours within your personal streaming schedule consistently outperform the rest. Tools like CamCash identify exactly which hours and days are most profitable for your audience specifically.' },
-                { n: '06', title: 'Activate tip goals and countdowns', body: 'Room-level goals (e.g., "2,000 tokens to unlock X") drive collective action. Countdowns create urgency. Both features are built into Chaturbate\'s room tools and meaningfully increase average tokens earned per stream.' },
-              ].map(({ n, title, body }) => (
-                <div key={n} style={{ background: S.card, border: `1px solid ${S.border}`, borderRadius: 14, padding: '20px 24px', display: 'flex', gap: 20 }}>
-                  <div style={{ fontSize: 20, fontWeight: 900, color: S.accent, minWidth: 32, opacity: 0.5 }}>{n}</div>
-                  <div>
-                    <div style={{ fontSize: 16, fontWeight: 700, color: S.white, marginBottom: 6 }}>{title}</div>
-                    <div style={{ fontSize: 15, lineHeight: 1.7, color: S.text }}>{body}</div>
-                  </div>
-                </div>
+                ['#chaturbate', 'Chaturbate'],
+                ['#myfreecams', 'MyFreeCams'],
+                ['#stripchat', 'Stripchat'],
+                ['#bongacams', 'BongaCams'],
+                ['#camsoda', 'CamSoda'],
+                ['#broadcaster-vs-viewer', 'Viewer vs. Payout'],
+                ['#hourly-rate', 'Earnings Per Hour'],
+                ['#faq', 'FAQ'],
+              ].map(([href, label]) => (
+                <a key={href} href={href} style={{ fontSize: 14, color: S.accent, textDecoration: 'none' }}>→ {label}</a>
               ))}
             </div>
+          </div>
+
+          {/* PLATFORM SECTIONS */}
+          <PlatformSection
+            id="chaturbate"
+            name="Chaturbate"
+            rate={0.05}
+            color={S.gold}
+            borderColor={S.accentBorder}
+            blurb={<>Chaturbate pays models <strong style={{ color: S.white }}>$0.05 per token</strong> at the standard broadcaster rate. Viewers purchase tokens at approximately $0.10 each, so Chaturbate keeps about 50% and the model receives 50%.</>}
+            linkHref="/guides/chaturbate-token-tracker"
+            linkLabel="Track your Chaturbate token earnings over time"
+          />
+
+          <PlatformSection
+            id="myfreecams"
+            name="MyFreeCams"
+            rate={0.05}
+            color="#3B82F6"
+            borderColor="rgba(59,130,246,0.3)"
+            blurb={<>MyFreeCams pays approximately <strong style={{ color: S.white }}>$0.05 per token</strong> (about $5.00 per 100 tokens). The exact rate can vary slightly by model level and promotional periods.</>}
+            caveat="Estimated standard broadcaster rate. Verify your current rate in your MFC model dashboard."
+            linkHref="/guides/cam-model-income-tracker"
+            linkLabel="Compare MFC earnings against other platforms"
+          />
+
+          <PlatformSection
+            id="stripchat"
+            name="Stripchat"
+            rate={0.05}
+            color="#EF4444"
+            borderColor="rgba(239,68,68,0.3)"
+            blurb={<>Stripchat pays approximately <strong style={{ color: S.white }}>$0.05 per token</strong> at the standard rate. Stripchat's payout can vary more by model tier and payment method than most other platforms.</>}
+            caveat="Estimated standard broadcaster rate. Verify the current rate in your Stripchat dashboard before relying on it."
+            linkHref="/blog/cam-model-earnings"
+            linkLabel="See how earnings break down across platforms"
+          />
+
+          <PlatformSection
+            id="bongacams"
+            name="BongaCams"
+            rate={0.025}
+            color="#8B5CF6"
+            borderColor="rgba(139,92,246,0.3)"
+            blurb={<>BongaCams pays models <strong style={{ color: S.white }}>$0.025 per token</strong> — about half of Chaturbate's rate. Viewers buy BongaCams tokens at roughly $0.068 each, so the platform keeps a larger share of the split.</>}
+            linkHref="/blog/how-much-do-bongacams-models-make"
+            linkLabel="Read the full BongaCams earnings guide"
+          />
+
+          <PlatformSection
+            id="camsoda"
+            name="CamSoda"
+            rate={0.05}
+            color={S.green}
+            borderColor="rgba(16,185,129,0.3)"
+            blurb={<>CamSoda pays approximately <strong style={{ color: S.white }}>$0.05 per token</strong> at the standard rate — on par with Chaturbate, MyFreeCams, and Stripchat rather than meaningfully higher or lower.</>}
+            caveat="Estimated standard broadcaster rate. Verify the current rate in your CamSoda dashboard, since tier and promotions can affect it."
+          />
+
+          {/* BROADCASTER VS VIEWER */}
+          <section id="broadcaster-vs-viewer" style={{ marginBottom: 44 }}>
+            <h2 style={{ fontSize: 28, fontWeight: 800, color: S.white, marginBottom: 8, letterSpacing: '-0.02em' }}>Viewer Cost vs. Broadcaster Payout</h2>
+            <div style={{ width: 40, height: 3, background: S.accent, borderRadius: 2, marginBottom: 20 }} />
+            <p style={{ fontSize: 16, lineHeight: 1.8, color: S.text, marginBottom: 16 }}>
+              A token tip is really a three-party exchange. When a viewer tips 100 tokens on Chaturbate, they paid roughly $10 to buy those tokens — you receive $5, and the platform keeps the other $5. The rate difference is why your tip menu should be priced around your broadcaster rate, not around what you assume viewers are spending.
+            </p>
+            <p style={{ fontSize: 16, lineHeight: 1.8, color: S.text }}>
+              This split funds each platform's operating costs and varies by site — it's the same reason BongaCams' broadcaster rate is lower relative to what viewers pay there.
+            </p>
           </section>
 
-          {/* SECTION: HOURLY RATE */}
-          <section id="hourly-rate" style={{ marginBottom: 52 }}>
-            <h2 style={{ fontSize: 32, fontWeight: 800, color: S.white, marginBottom: 8, letterSpacing: '-0.02em' }}>Calculating Your Real Hourly Rate</h2>
-            <div style={{ width: 48, height: 3, background: S.accent, borderRadius: 2, marginBottom: 24 }} />
-            <p style={{ fontSize: 16, lineHeight: 1.8, color: S.text, marginBottom: 18 }}>
-              Total tokens earned doesn't tell you much on its own. Your hourly rate is the number that lets you make smart decisions about when to stream, for how long, and which goals to set.
-            </p>
-            <div style={{ background: S.surface, border: `1px solid ${S.accentBorder}`, borderRadius: 14, padding: '24px 28px', marginBottom: 24 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: S.accent, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>Simple formula</div>
-              <div style={{ fontSize: 20, fontWeight: 800, color: S.white, fontFamily: 'monospace' }}>
+          {/* HOURLY RATE */}
+          <section id="hourly-rate" style={{ marginBottom: 44 }}>
+            <h2 style={{ fontSize: 28, fontWeight: 800, color: S.white, marginBottom: 8, letterSpacing: '-0.02em' }}>Calculate Cam Earnings Per Hour</h2>
+            <div style={{ width: 40, height: 3, background: S.accent, borderRadius: 2, marginBottom: 20 }} />
+            <div style={{ background: S.surface, border: `1px solid ${S.accentBorder}`, borderRadius: 14, padding: '22px 24px', marginBottom: 18 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: S.accent, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>Formula</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: S.white, fontFamily: 'monospace' }}>
                 Hourly Rate = (Total Tokens × Token Rate) ÷ Stream Hours
               </div>
               <div style={{ fontSize: 14, color: S.muted, marginTop: 10 }}>
                 Example: 1,800 tokens × $0.05 = $90 ÷ 2 hours = <span style={{ color: S.green, fontWeight: 700 }}>$45/hr</span>
               </div>
             </div>
-            <p style={{ fontSize: 16, lineHeight: 1.8, color: S.text, marginBottom: 18 }}>
-              Track this number across multiple sessions. You'll quickly see patterns: Tuesday evenings at $60/hr, Sunday mornings at $18/hr. Once you know your actual hourly rate by day and time, you can stop streaming when it's unprofitable and double down when it's hot.
-            </p>
             <p style={{ fontSize: 16, lineHeight: 1.8, color: S.text }}>
-              CamCash calculates this automatically from your CSV uploads — so you don't have to track it manually. It also shows which fans contributed most to each session, so you can identify your whale viewers.
+              Tracking this per session — not just your token total — is what shows which days and hours are actually worth streaming. The <a href="/guides/chaturbate-best-hours" style={{ color: S.accent, textDecoration: 'none' }}>best hours to stream guide</a> breaks down how to find your personal peak windows.
             </p>
           </section>
 
-          {/* SECTION: TAXES */}
-          <section id="taxes" style={{ marginBottom: 52 }}>
-            <h2 style={{ fontSize: 32, fontWeight: 800, color: S.white, marginBottom: 8, letterSpacing: '-0.02em' }}>Taxes & Deductions for Cam Models</h2>
-            <div style={{ width: 48, height: 3, background: S.accent, borderRadius: 2, marginBottom: 24 }} />
-            <p style={{ fontSize: 16, lineHeight: 1.8, color: S.text, marginBottom: 18 }}>
-              Cam model income is self-employment income in the United States. This means two things: you are responsible for reporting all earnings, and you can deduct legitimate business expenses.
+          {/* RELATED GUIDANCE */}
+          <section id="related-guidance" style={{ marginBottom: 44 }}>
+            <h2 style={{ fontSize: 28, fontWeight: 800, color: S.white, marginBottom: 8, letterSpacing: '-0.02em' }}>Taxes &amp; Earning More From Your Tokens</h2>
+            <div style={{ width: 40, height: 3, background: S.accent, borderRadius: 2, marginBottom: 20 }} />
+            <p style={{ fontSize: 16, lineHeight: 1.8, color: S.text, marginBottom: 16 }}>
+              Cam token payouts are generally treated as self-employment income in the US and require your own tax and expense records. Read the complete <a href="/blog/cam-model-taxes" style={{ color: S.accent, textDecoration: 'none' }}>Cam Model Taxes guide</a> for 1099 thresholds, deductions, and quarterly estimated-payment information.
             </p>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 28 }}>
-              <div style={{ background: S.card, border: `1px solid rgba(239,68,68,0.25)`, borderRadius: 14, padding: '22px 24px' }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: '#EF4444', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 14 }}>What you owe</div>
-                {['Federal income tax (10–37% bracket)', 'Self-employment tax (15.3% on net profit)', 'State income tax (varies by state)', '1099-NEC from platforms paying $600+', 'Quarterly estimated payments (Form 1040-ES)'].map(item => (
-                  <div key={item} style={{ fontSize: 14, color: S.text, padding: '7px 0', borderBottom: `1px solid ${S.border}`, lineHeight: 1.5 }}>⚠️ {item}</div>
-                ))}
-              </div>
-              <div style={{ background: S.card, border: `1px solid rgba(16,185,129,0.25)`, borderRadius: 14, padding: '22px 24px' }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: S.green, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 14 }}>What you can deduct</div>
-                {['Home office (dedicated streaming space)', 'Equipment: camera, mic, lighting, PC', 'Costumes/accessories used for work', 'Internet and streaming services', 'Platform fees and commissions', 'Accountant or tax preparation fees'].map(item => (
-                  <div key={item} style={{ fontSize: 14, color: S.text, padding: '7px 0', borderBottom: `1px solid ${S.border}`, lineHeight: 1.5 }}>✓ {item}</div>
-                ))}
-              </div>
-            </div>
-
-            <p style={{ fontSize: 15, lineHeight: 1.7, color: S.muted, background: S.surface, border: `1px solid ${S.border}`, borderRadius: 10, padding: '14px 18px' }}>
-              <strong style={{ color: S.white }}>Disclaimer:</strong> This is general information only, not tax advice. Consult a CPA or tax professional familiar with self-employment income for guidance specific to your situation.
+            <p style={{ fontSize: 16, lineHeight: 1.8, color: S.text, marginBottom: 16 }}>
+              The per-token rate itself is fixed by the platform, but how much you earn per stream depends heavily on tip menu pricing and how well your room converts viewers into tippers. See <a href="/blog/how-to-increase-chaturbate-tips" style={{ color: S.accent, textDecoration: 'none' }}>How to Increase Chaturbate Tips</a> for menu structure and pricing that actually moves the needle.
             </p>
-          </section>
-
-          {/* SECTION: TIP MENU */}
-          <section id="tip-menu" style={{ marginBottom: 52 }}>
-            <h2 style={{ fontSize: 32, fontWeight: 800, color: S.white, marginBottom: 8, letterSpacing: '-0.02em' }}>Building a Tip Menu That Converts</h2>
-            <div style={{ width: 48, height: 3, background: S.accent, borderRadius: 2, marginBottom: 24 }} />
-            <p style={{ fontSize: 16, lineHeight: 1.8, color: S.text, marginBottom: 18 }}>
-              Your tip menu is your pricing strategy. Every price point sends a signal. Too cheap signals low value. Too expensive stops tips entirely. Here's the structure that works:
+            <p style={{ fontSize: 15, lineHeight: 1.8, color: S.muted }}>
+              Need tip menu graphics and room titles ready to use? Pretty Profitz sells editable tip menu and spin-the-wheel templates on Etsy — use code <strong style={{ color: S.white }}>PRETTY70</strong> for 70% off at <a href="https://prettyprofitz.etsy.com" style={{ color: S.accent, textDecoration: 'none' }} target="_blank" rel="noopener noreferrer">prettyprofitz.etsy.com</a>.
             </p>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 14, marginBottom: 28 }}>
-              {[
-                { tier: 'Entry (25–75 tokens)', eg: 'Song request, shoutout, spin wheel', usd: '$1.25–$3.75', color: '#6366F1' },
-                { tier: 'Engagement (100–300 tokens)', eg: 'Position change, outfit choice, toy tease', usd: '$5–$15', color: '#8B5CF6' },
-                { tier: 'Big Tip (500–1,000 tokens)', eg: 'Special performance, DM access', usd: '$25–$50', color: '#F59E0B' },
-                { tier: 'Whale Goal (5,000+ tokens)', eg: 'Special show, fan club, private room access', usd: '$250+', color: '#10B981' },
-              ].map(({ tier, eg, usd, color }) => (
-                <div key={tier} style={{ background: S.card, border: `1px solid ${S.border}`, borderRadius: 14, padding: '18px 20px' }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color, marginBottom: 8 }}>{tier}</div>
-                  <div style={{ fontSize: 13, color: S.text, lineHeight: 1.6, marginBottom: 8 }}>{eg}</div>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: S.green }}>{usd} to you</div>
-                </div>
-              ))}
-            </div>
-            <p style={{ fontSize: 16, lineHeight: 1.8, color: S.text }}>
-              Review your tip menu analytics quarterly. If you're getting lots of entry tips but no whale tips, raise your mid-tier prices. If tips have stalled entirely, introduce new affordable entry-level options to restart momentum.
-            </p>
-
-            <div style={{ borderRadius: '16px', border: '1px solid rgba(236,72,153,0.25)', background: 'rgba(236,72,153,0.06)', padding: '24px', marginTop: '28px' }}>
-              <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', justifyContent: 'center', marginBottom: '16px' }}>
-                <img src="/blog-images/spin_the_wheel_cover.png" alt="Spin-the-Wheel Template Pack for cam models cover art by Pretty Profitz" style={{ width: '140px', borderRadius: '10px', display: 'block' }} />
-                <img src="/blog-images/500_room_titles.png" alt="500 High-Converting Cam Room Titles digital guide cover art by Pretty Profitz" style={{ width: '140px', borderRadius: '10px', display: 'block' }} />
-              </div>
-              <div style={{ fontSize: '18px', fontWeight: 700, color: S.white, margin: '0 0 8px' }}>Want your tip menu and titles ready to go?</div>
-              <p style={{ fontSize: '14px', color: S.text, margin: '0 0 16px', lineHeight: 1.6 }}>
-                Pretty Profitz sells a Spin-the-Wheel Template Pack (8 editable wheels for tip menu games), a Roll-the-Dice
-                game template, 320+ tip menu designs, and a 500 High-Converting Cam Room Titles guide, all in the same shop.
-              </p>
-              <p style={{ fontSize: '14px', color: S.text, margin: '0 0 16px', lineHeight: 1.6 }}>
-                Use code <strong style={{ color: S.white }}>PRETTY70</strong> at checkout for 70% off.
-              </p>
-              <a href="https://prettyprofitz.etsy.com" style={{ display: 'inline-block', background: 'linear-gradient(90deg, #ec4899, #f59e0b)', color: '#0f172a', padding: '10px 20px', borderRadius: '10px', fontWeight: 700, fontSize: '14px', textDecoration: 'none' }} target="_blank" rel="noopener noreferrer">Shop tip menus &amp; wheel templates on Etsy →</a>
-              <div style={{ display: 'flex', gap: 16, justifyContent: 'center', flexWrap: 'wrap', marginTop: 16, fontSize: 13 }}>
-                <a href="/guides/cam-model-room-title-generator" style={{ color: S.accent, textDecoration: 'none' }}>→ Free cam room title generator</a>
-                <a href="/blog/viral-cam-room-titles" style={{ color: S.accent, textDecoration: 'none' }}>→ Viral cam room titles</a>
-                <a href="/blog/best-cam-model-tools" style={{ color: S.accent, textDecoration: 'none' }}>→ Best cam model tools</a>
-                <a href="/landing" style={{ color: S.accent, textDecoration: 'none' }}>→ Track your real tip earnings on CamCash</a>
-              </div>
-            </div>
           </section>
 
           {/* FAQ SECTION */}
-          <section id="faq" style={{ marginBottom: 52 }}>
-            <h2 style={{ fontSize: 32, fontWeight: 800, color: S.white, marginBottom: 8, letterSpacing: '-0.02em' }}>Token Calculator FAQ</h2>
-            <div style={{ width: 48, height: 3, background: S.accent, borderRadius: 2, marginBottom: 28 }} />
+          <section id="faq" style={{ marginBottom: 44 }}>
+            <h2 style={{ fontSize: 28, fontWeight: 800, color: S.white, marginBottom: 8, letterSpacing: '-0.02em' }}>Token Calculator FAQ</h2>
+            <div style={{ width: 40, height: 3, background: S.accent, borderRadius: 2, marginBottom: 24 }} />
             <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               {faqSchema.mainEntity.map(({ name, acceptedAnswer }) => (
                 <div key={name} style={{ background: S.card, border: `1px solid ${S.border}`, borderRadius: 12, overflow: 'hidden' }}>
@@ -462,15 +376,22 @@ export default function TokenCalculatorPage() {
             </div>
           </section>
 
+          {/* AUTHOR / REVIEWER */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '16px 20px', borderRadius: 12, background: S.card, border: `1px solid ${S.border}`, marginBottom: 44, fontSize: 13, color: S.muted }}>
+            <span style={{ fontSize: 18 }}>✓</span>
+            <span>Written and maintained by the CamCash team. Broadcaster rates are checked against each platform's payout documentation and third-party token calculators — last reviewed July 2026.</span>
+          </div>
+
           {/* RELATED TOOLS */}
-          <section style={{ marginBottom: 52 }}>
-            <h2 style={{ fontSize: 24, fontWeight: 800, color: S.white, marginBottom: 20 }}>Related Tools & Guides</h2>
+          <section style={{ marginBottom: 44 }}>
+            <h2 style={{ fontSize: 22, fontWeight: 800, color: S.white, marginBottom: 20 }}>Related Tools &amp; Guides</h2>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 12 }}>
               {[
                 { href: '/guides/chaturbate-token-tracker', label: 'Chaturbate Token Tracker', desc: 'Log and track tokens earned across sessions' },
                 { href: '/guides/cam-model-income-tracker', label: 'Income Tracker', desc: 'Track $/hr, top fans, and session breakdowns' },
                 { href: '/guides/chaturbate-best-hours', label: 'Best Hours to Stream', desc: 'Find your personal peak streaming times' },
                 { href: '/blog/cam-model-earnings', label: 'Cam Model Earnings Guide', desc: 'How much models make and why it changes' },
+                { href: '/blog/cam-model-taxes', label: 'Cam Model Taxes Guide', desc: '1099s, deductions, and quarterly payments' },
                 { href: '/tools/profile-studio', label: 'Creator Profile Studio', desc: 'Free AI bio and tip menu generator, no sign-up required' },
               ].map(({ href, label, desc }) => (
                 <a key={href} href={href} style={{ background: S.card, border: `1px solid ${S.border}`, borderRadius: 14, padding: '18px 20px', textDecoration: 'none', display: 'block', transition: 'border-color 0.15s' }}>
@@ -480,19 +401,6 @@ export default function TokenCalculatorPage() {
               ))}
             </div>
           </section>
-
-          {/* INTERNAL LINKS BLOCK */}
-          <div style={{ marginTop: '36px', paddingTop: '24px', borderTop: `1px solid ${S.border}`, marginBottom: '36px' }}>
-            <div style={{ fontSize: 11, color: S.muted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>Related cam model tools:</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <a href="/guides/cam-model-token-calculator" style={{ fontSize: 14, color: S.accent, textDecoration: 'none' }}>→ Free cam model token calculator</a>
-              <a href="/guides/chaturbate-earnings-tracker" style={{ fontSize: 14, color: S.accent, textDecoration: 'none' }}>→ Chaturbate earnings tracker</a>
-              <a href="/guides/chaturbate-token-tracker" style={{ fontSize: 14, color: S.accent, textDecoration: 'none' }}>→ Chaturbate token tracker</a>
-              <a href="/guides/chaturbate-best-hours" style={{ fontSize: 14, color: S.accent, textDecoration: 'none' }}>→ Best hours to stream on Chaturbate</a>
-              <a href="/guides/cam-model-income-tracker" style={{ fontSize: 14, color: S.accent, textDecoration: 'none' }}>→ Cam model income tracker</a>
-              <a href="/tools/profile-studio" style={{ fontSize: 14, color: S.accent, textDecoration: 'none' }}>→ Free cam bio & tip menu generator</a>
-            </div>
-          </div>
 
           {/* BOTTOM CTA */}
           <div style={{ padding: '48px 40px', borderRadius: 20, background: `linear-gradient(135deg, ${S.accentLight}, rgba(16,185,129,0.08))`, border: `1px solid ${S.accentBorder}`, textAlign: 'center' }}>
@@ -505,7 +413,7 @@ export default function TokenCalculatorPage() {
               <a href="/login" style={{ display: 'inline-block', padding: '14px 36px', borderRadius: 12, background: S.accent, color: 'white', fontWeight: 800, fontSize: 16, textDecoration: 'none' }}>
                 Start Tracking Free →
               </a>
-              <a href="/demo" style={{ display: 'inline-block', padding: '14px 36px', borderRadius: 12, background: 'transparent', border: `1px solid ${S.border}`, color: S.text, fontWeight: 700, fontSize: 16, textDecoration: 'none' }}>
+              <a href="/landing/demo" style={{ display: 'inline-block', padding: '14px 36px', borderRadius: 12, background: 'transparent', border: `1px solid ${S.border}`, color: S.text, fontWeight: 700, fontSize: 16, textDecoration: 'none' }}>
                 Try the CamCash demo →
               </a>
             </div>
