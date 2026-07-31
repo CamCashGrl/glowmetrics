@@ -139,10 +139,11 @@ export async function POST(req) {
     // only paid plans get tips written into the historical `tips` table.
     const { data: profile } = await supabaseAdmin
       .from('profiles')
-      .select('plan')
+      .select('plan, plan_expires_at')
       .eq('id', user.id)
       .maybeSingle();
-    const savedToHistory = profile?.plan === 'pro' || profile?.plan === 'unlimited';
+    const planActive = !profile?.plan_expires_at || new Date(profile.plan_expires_at) > new Date();
+    const savedToHistory = (profile?.plan === 'pro' || profile?.plan === 'unlimited') && planActive;
 
     if (savedToHistory) {
       await supabaseAdmin.from('tips').insert({
