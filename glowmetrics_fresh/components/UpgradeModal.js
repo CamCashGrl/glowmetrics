@@ -66,6 +66,9 @@ async function startCheckout(planType, { onLoading, onError }) {
  *  - discoveredValue: optional real, already-computed value to show (e.g.
  *    "3 additional high-value fans found") — never invent this if it isn't
  *    a real computed number
+ *  - benefits: short list (3-4 max) of what THIS gate unlocks — keep it
+ *    scoped to the feature that opened the modal, not the full Pro feature
+ *    list, so a Fan Intelligence gate doesn't advertise Live Mode features
  *  - monthlyPlanType / annualPlanType: plan_type values understood by
  *    /api/stripe/checkout (defaults to the standard plan)
  *  - onClose: called on dismiss ("Not now" / Escape / backdrop click)
@@ -76,6 +79,7 @@ export default function UpgradeModal({
   headline = "Unlock your full CamCash dashboard",
   description = "See your best stream windows, full fan rankings, session breakdowns, and platform comparison.",
   discoveredValue,
+  benefits = [],
   monthlyPlanType = "standard_monthly",
   annualPlanType = "standard_annual",
   onClose,
@@ -164,6 +168,17 @@ export default function UpgradeModal({
             <div style={{ textAlign: "center", padding: "12px 16px", background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.25)", borderRadius: 10, marginBottom: 20 }}>
               <div style={{ fontSize: 13, color: C.gold, fontWeight: 600 }}>{discoveredValue}</div>
             </div>
+          )}
+
+          {benefits.length > 0 && (
+            <ul style={{ margin: "0 0 20px", padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 7 }}>
+              {benefits.slice(0, 4).map((benefit) => (
+                <li key={benefit} style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 13, color: C.white }}>
+                  <span aria-hidden="true" style={{ color: C.cyan, flexShrink: 0 }}>✓</span>
+                  {benefit}
+                </li>
+              ))}
+            </ul>
           )}
 
           {error && (
