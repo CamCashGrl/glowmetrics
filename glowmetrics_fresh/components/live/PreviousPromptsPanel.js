@@ -1,7 +1,7 @@
 "use client"
 import { useState } from 'react'
 import { LM } from './theme'
-import { TRIGGER_ICON } from '../../lib/coaching/triggers'
+import { TRIGGER_ICON, promptConfidence } from '../../lib/coaching/triggers'
 
 function timeLabel(ts) {
   if (!ts) return '';
@@ -19,7 +19,12 @@ function PromptRow({ prompt, onRespond, busyId, expanded, onToggle }) {
   const isOpen = expanded === prompt.id;
   const needsResponse = prompt.action_status === 'unmarked';
   return (
-    <div style={{ padding: '12px 4px', borderBottom: `1px solid ${LM.border}` }}>
+    <div style={{
+      padding: '13px 12px', marginBottom: 8, borderRadius: 12,
+      background: needsResponse ? 'rgba(255,155,34,0.06)' : LM.card,
+      border: `1px solid ${needsResponse ? 'rgba(255,155,34,0.25)' : LM.border}`,
+      animation: 'lm-slide-in 0.3s ease',
+    }}>
       <button
         onClick={() => onToggle(prompt.id)}
         aria-expanded={isOpen}
@@ -31,12 +36,15 @@ function PromptRow({ prompt, onRespond, busyId, expanded, onToggle }) {
             <span style={{ fontSize: 13, fontWeight: 700, color: LM.text }}>{prompt.title}</span>
             <span style={{ fontSize: 11, color: LM.textMuted, flexShrink: 0 }}>{timeLabel(prompt.shown_at)}</span>
           </div>
-          <div style={{ fontSize: 12, color: LM.textSecondary, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+          <div style={{ fontSize: 12, color: LM.textSecondary, marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
             {prompt.compact_message || prompt.message}
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 6 }}>
-            <span aria-hidden="true" style={{ color: meta.color, fontSize: 11 }}>{meta.icon}</span>
-            <span style={{ fontSize: 11.5, fontWeight: 700, color: meta.color }}>{meta.label}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 7 }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <span aria-hidden="true" style={{ color: meta.color, fontSize: 11 }}>{meta.icon}</span>
+              <span style={{ fontSize: 11.5, fontWeight: 700, color: meta.color }}>{meta.label}</span>
+            </span>
+            <span style={{ fontSize: 11, color: LM.textMuted }}>· {promptConfidence(prompt.type)}% confidence</span>
           </div>
         </div>
         <span style={{ color: LM.textMuted, fontSize: 13, flexShrink: 0, transform: isOpen ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }} aria-hidden="true">›</span>

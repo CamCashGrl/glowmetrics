@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
 import { computeRoomHealth } from '../../lib/analytics/roomHealth';
+import { computeOpportunityScore } from '../../lib/analytics/opportunity';
 import { computeRevenueVelocity, computeLiveComparison } from '../../lib/analytics/velocity';
 import { computeCoachingState } from '../../lib/coaching/triggers';
 import { detectSessions } from '../../lib/analytics/sessions';
@@ -14,8 +15,10 @@ import Button from '../../components/ui/Button';
 import { useLiveSessionEngine } from './useLiveSessionEngine';
 import { useAccountOverviewStats } from '../../lib/hooks/useAccountOverviewStats';
 import TopStatsStrip from '../../components/dashboard/TopStatsStrip';
-import { LM } from '../../components/live/theme';
+import { LM, LM_KEYFRAMES } from '../../components/live/theme';
 import LiveHeader from '../../components/live/LiveHeader';
+import RoomPulsePanel from '../../components/live/RoomPulsePanel';
+import OpportunityCard from '../../components/live/OpportunityCard';
 import SessionSummary from '../../components/live/SessionSummary';
 import EarningsMomentumPanel from '../../components/live/EarningsMomentumPanel';
 import CoachingPromptCard from '../../components/live/CoachingPromptCard';
@@ -496,14 +499,25 @@ export default function LivePage() {
 
   // ── LIVE INTELLIGENCE LAYER ──────────────────────────────────────────
   void liveTick;
+  const nowMs = Date.now();
   const state          = computeState();
-  // Room Status's score (below) is the single Opportunity/room-health number
-  // used everywhere on this page — Stream Health/Opportunity Score/Recovery
-  // Actions from the old layout duplicated this same signal 2-3x and were
-  // consolidated rather than carried into the redesign.
+  // Room Pulse's score is the single room-heat/health number used
+  // everywhere on this page. Opportunity below is a *different* signal
+  // (goal proximity + recency weighted toward "push now"), not a
+  // duplicate — Stream Health/Recovery Actions from the old layout, which
+  // really did just restate this same score, were the ones consolidated.
   const roomHealth     = computeRoomHealth(state);
+  const opportunity    = computeOpportunityScore(state, roomHealth);
   const velocity       = computeRevenueVelocity(state?.currentUPM ?? 0, sessions);
   const comparison     = computeLiveComparison(state, sessions);
+  // Real, labeled estimate — never a fabricated number. Only shown when
+  // there's an actual historical average to compare against and the
+  // current pace is behind it.
+  const opportunityEstimate = (state && velocity.avgUPH > 0 && velocity.currentUPH < velocity.avgUPH)
+    ? { value: `+$${(velocity.avgUPH - velocity.currentUPH).toFixed(2)}`, caption: 'per hour if you closed the gap to your historical average pace' }
+    : (state && velocity.avgUPH > 0)
+      ? { value: `$${velocity.currentUPH.toFixed(2)}/hr`, caption: 'already at or above your historical average pace' }
+      : null;
 
   // Unique / new tippers — real data only. "New" = never appeared in the
   // last 90 days of imported tip history (lib/analytics/sessions.js keeps
@@ -526,11 +540,17 @@ export default function LivePage() {
   const pace = PACE_CONFIG[state?.paceStatus || 'unknown'];
   const inp2 = { background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, padding: '8px 12px', color: C.white, fontSize: 13, outline: 'none', width: '100%' };
 
-  const revenueHistory = [...liveEvents]
+  // Timestamped, ever-advancing series for the Earnings Momentum chart —
+  // x-axis is real elapsed time, not just "the Nth tip", so the line keeps
+  // moving toward `nowMs` even during quiet stretches (EarningsMomentumPanel
+  // extends it flat to now; it never invents a revenue value).
+  const revenueSeries = [...liveEvents]
     .filter(e => !e._isHistory)
     .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
-    .slice(-10)
-    .reduce((acc, e) => [...acc, (acc[acc.length - 1] || 0) + (e.normalizedRevenue || 0)], []);
+    .reduce((acc, e) => {
+      const running = (acc[acc.length - 1]?.v || 0) + (e.normalizedRevenue || 0);
+      return [...acc, { t: new Date(e.timestamp).getTime(), v: running, delta: e.normalizedRevenue || 0 }];
+    }, []);
 
   const currentPaceLabel = state ? `$${velocity.currentUPH.toFixed(2)}/hr` : '—';
   const goalCurrentLabel = liveGoalTokens > 0 ? `${(state?.totalTokens || 0).toLocaleString()} tokens` : null;
@@ -576,6 +596,7 @@ export default function LivePage() {
       <style>{`
         @keyframes cc-slide-in { from{opacity:0;transform:translateY(-8px);} to{opacity:1;transform:translateY(0);} }
         @keyframes cc-pulse    { 0%,100%{opacity:1;} 50%{opacity:0.35;} }
+        ${LM_KEYFRAMES}
         @media (max-width: 1199px) {
           .lm-grid { grid-template-columns: 1fr !important; }
           .lm-prompts { order: 3; max-height: none !important; }
@@ -890,9 +911,12 @@ export default function LivePage() {
         {/* ── MAIN TWO-COLUMN WORKSPACE ── */}
         <div className="lm-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 320px', gap: 16, alignItems: 'start' }}>
           <div style={{ minWidth: 0 }}>
+            <RoomPulsePanel roomHealth={roomHealth} liveActive={liveActive} hasSession={!!state} />
+
+            <OpportunityCard opportunity={opportunity} estimate={opportunityEstimate} hasSession={!!state} />
+
             <SessionSummary
               state={state}
-              roomHealth={roomHealth}
               comparison={comparison}
               uniqueTippers={uniqueTippers}
               newTippers={newTippers}
@@ -905,7 +929,9 @@ export default function LivePage() {
               goalValue={goalTargetLabel}
               goalCurrent={goalCurrentLabel}
               goalProgressPct={goalProgressPct}
-              chartPoints={revenueHistory}
+              series={revenueSeries}
+              startMs={liveStartTime ? new Date(liveStartTime).getTime() : null}
+              nowMs={nowMs}
             />
 
             <CoachingPromptCard

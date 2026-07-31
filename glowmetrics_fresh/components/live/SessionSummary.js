@@ -25,10 +25,9 @@ function SmallCard({ label, value, sub }) {
 }
 
 // Session summary: two rows of cards sourced entirely from the current
-// session's real state (computeState()/roomHealth) — no metric here repeats
-// anywhere else on the page (Room Status's score is the single Opportunity/
-// Room-health number used across the whole redesign).
-export default function SessionSummary({ state, roomHealth, comparison, tokensDeltaLabel, uniqueTippers = 0, newTippers = 0 }) {
+// session's real state (computeState()). Room state/opportunity score now
+// live in RoomPulsePanel/OpportunityCard — never repeated here.
+export default function SessionSummary({ state, comparison, tokensDeltaLabel, uniqueTippers = 0, newTippers = 0 }) {
   const hasSession = !!state;
   const revenue = state?.totalRevenue ?? 0;
   const tokens = state?.totalTokens ?? 0;
@@ -49,22 +48,6 @@ export default function SessionSummary({ state, roomHealth, comparison, tokensDe
           sub={tokensDeltaLabel || null}
           subColor={LM.green}
         />
-        <div style={{ ...cardBase, flex: 1, minWidth: 0 }}>
-          <div style={labelStyle}>Room Status</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
-            <span style={{ fontSize: 20 }}>{hasSession ? roomHealth.emoji : '⏳'}</span>
-            <span style={{ fontSize: 20, fontWeight: 800, color: hasSession ? roomHealth.color : LM.textMuted }}>
-              {hasSession ? roomHealth.label : 'Waiting'}
-            </span>
-            <span style={{ marginLeft: 'auto', fontSize: 13, fontWeight: 700, color: LM.textSecondary }}>
-              {hasSession ? roomHealth.score : 0}<span style={{ color: LM.textMuted }}>/100</span>
-            </span>
-          </div>
-          <div style={{ height: 6, borderRadius: 6, background: 'rgba(255,255,255,0.06)', marginTop: 10, overflow: 'hidden' }}
-            role="progressbar" aria-valuenow={hasSession ? roomHealth.score : 0} aria-valuemin={0} aria-valuemax={100} aria-label="Room opportunity score">
-            <div style={{ height: '100%', width: `${hasSession ? roomHealth.score : 0}%`, background: `linear-gradient(90deg, ${LM.magenta}, ${LM.orange})`, transition: 'width 0.4s ease' }} />
-          </div>
-        </div>
       </div>
 
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>

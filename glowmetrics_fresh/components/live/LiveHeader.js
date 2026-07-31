@@ -6,9 +6,11 @@ export default function LiveHeader({ isLive, onSettings, onEndSession, onPauseRe
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, marginBottom: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <span style={{
-          padding: '3px 10px', borderRadius: 999, border: `1px solid ${LM.green}`, color: LM.green,
-          fontSize: 11, fontWeight: 800, letterSpacing: 0.6,
+          display: 'inline-flex', alignItems: 'center', gap: 6,
+          padding: '3px 10px 3px 8px', borderRadius: 999, border: `1px solid ${isLive ? LM.green : LM.textMuted}`,
+          color: isLive ? LM.green : LM.textMuted, fontSize: 11, fontWeight: 800, letterSpacing: 0.6,
         }}>
+          {isLive && <span style={{ width: 6, height: 6, borderRadius: '50%', background: LM.green, animation: 'lm-breathe 1.4s ease-in-out infinite' }} />}
           {isLive ? 'LIVE' : 'OFFLINE'}
         </span>
         <h1 style={{ fontSize: 18, fontWeight: 800, color: LM.text, margin: 0 }}>Live Mode</h1>

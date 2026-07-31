@@ -25,10 +25,11 @@ export const LM = {
 }
 
 export const cardBase = {
-  background: LM.panel,
+  background: `linear-gradient(180deg, ${LM.card} 0%, ${LM.panel} 100%)`,
   border: `1px solid ${LM.border}`,
   borderRadius: 14,
   padding: 18,
+  boxShadow: '0 8px 24px rgba(0,0,0,0.28)',
 }
 
 export const labelStyle = {
@@ -38,3 +39,15 @@ export const labelStyle = {
   textTransform: 'uppercase',
   color: LM.textMuted,
 }
+
+// Shared keyframes for Live Mode's "alive" motion language — injected once
+// from page.js's top-level <style> block. Every animated element below
+// references one of these names rather than defining its own.
+export const LM_KEYFRAMES = `
+  @keyframes lm-breathe   { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.55; transform: scale(0.82); } }
+  @keyframes lm-glow      { 0%,100% { box-shadow: 0 0 0 rgba(0,0,0,0); } 50% { box-shadow: 0 0 28px var(--lm-glow-color, rgba(232,42,184,0.35)); } }
+  @keyframes lm-fade-in   { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes lm-slide-in  { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: translateX(0); } }
+  @keyframes lm-point-pulse { 0%,100% { r: 4.5; opacity: 1; } 50% { r: 7; opacity: 0.6; } }
+  @keyframes lm-bar-fill  { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+`

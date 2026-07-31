@@ -22,7 +22,7 @@ export default function RecentEventsPanel({ events, onViewAll }) {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {rows.map((e, i) => (
-            <div key={e._id || i} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div key={e._id || i} style={{ display: 'flex', alignItems: 'center', gap: 10, animation: 'lm-slide-in 0.35s ease' }}>
               <span style={{ width: 26, height: 26, borderRadius: 8, background: 'rgba(25,211,154,0.14)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, flexShrink: 0 }}>💸</span>
               <div style={{ minWidth: 0, flex: 1 }}>
                 <div style={{ fontSize: 13, fontWeight: 600, color: LM.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
