@@ -17,6 +17,8 @@ import { getDashboardReadiness, getModuleLockState, canShowHourlyRate, LockedIns
 import Button from '../../components/ui/Button'
 import EarlyAdopterOffer from './EarlyAdopterOffer'
 import { useLiveSessionEngine } from '../live/useLiveSessionEngine'
+import { computeDailyBriefCore } from '../../lib/liveMode/dailyBriefCore'
+import TopStatsStrip from '../../components/dashboard/TopStatsStrip'
 
 // Tab-only components loaded on demand instead of in the initial dashboard
 // bundle — each is only ever rendered behind an `activeTab === '...'` check,
@@ -2481,68 +2483,14 @@ const stopImportMessageRotation = () => {
   const buildDailyBrief = () => {
     if (!tips || tips.length === 0 || !analytics) return null
     const now = new Date()
-    const utcHour = now.getHours() // local hour — analytics hours are already local
     const DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
     const todayName = DAYS[now.getDay()] // local day of week
 
-    // Best hour: today-specific per platform first, then all-time fallback
-    // Formula: SUM(usd) / COUNT(DISTINCT hour-bucket) for THIS day of week on THIS platform
-    // bestHour values from analytics are already local hours — format directly, no offset
-    const fmtHour = h => h === 0 ? '12 AM' : h < 12 ? `${h} AM` : h === 12 ? '12 PM' : `${h - 12} PM`
-    const platBestTimes = analytics?.platformBestTimes || {}
-    let todayBestPlat = null, todayBestHourNum = null, todayBestAvg = 0
-    Object.entries(platBestTimes).forEach(([plat, times]) => {
-      const todayEntry = times?.bestHourByDay?.[todayName]
-      if (todayEntry && todayEntry.avg > todayBestAvg) {
-        todayBestAvg = todayEntry.avg
-        todayBestHourNum = todayEntry.hour
-        todayBestPlat = plat
-      }
-    })
-    const bestHour = analytics?.bestHour
-    const _bhRaw = todayBestHourNum !== null ? todayBestHourNum : (bestHour ? parseInt(bestHour.hour) : null)
-    const bh = (_bhRaw !== null && !isNaN(_bhRaw)) ? _bhRaw : null
-    const bhLabel = bh === null ? null : fmtHour(bh)
-    const hoursUntilPeak = bh !== null ? (bh - utcHour + 24) % 24 : null
-    const atPeak = hoursUntilPeak === 0 || hoursUntilPeak === 1
-
-    // Best platform per hour
-    const platHourUSD = {}; const platHourSessions = {}
-    tips.forEach(t => {
-      const p = t.platform || 'Chaturbate'
-      const d = new Date(t.date_time || t.dateRaw)
-      const h = d.getHours() // local hour to match analytics.js toLocalHour
-      const bucket = Math.floor(d.getTime() / 3600000)
-      if (!platHourUSD[p]) { platHourUSD[p] = {}; platHourSessions[p] = {} }
-      if (!platHourUSD[p][h]) { platHourUSD[p][h] = 0; platHourSessions[p][h] = new Set() }
-      platHourUSD[p][h] += t.usd || 0
-      platHourSessions[p][h].add(bucket)
-    })
-    let bestPlatNow = null; let bestPlatNowAvg = 0
-    Object.keys(platHourUSD).forEach(plat => {
-      const sessions = platHourSessions[plat][utcHour]?.size || 0
-      if (sessions === 0) return
-      const avg = platHourUSD[plat][utcHour] / sessions
-      if (avg > bestPlatNowAvg) { bestPlatNowAvg = avg; bestPlatNow = plat }
-    })
-    let bestPlatPeak = null; let bestPlatPeakAvg = 0
-    if (bh !== null) {
-      Object.keys(platHourUSD).forEach(plat => {
-        const sessions = platHourSessions[plat][bh]?.size || 0
-        if (sessions === 0) return
-        const avg = platHourUSD[plat][bh] / sessions
-        if (avg > bestPlatPeakAvg) { bestPlatPeakAvg = avg; bestPlatPeak = plat }
-      })
-    }
-    // todayBestPlat/bestPlatPeak/bestPlatNow are time-bucketed (need 3+ session
-    // buckets at a specific hour/day) and are often null for sparse accounts.
-    // Real fallback: the platform with the highest total earnings across all
-    // tips — needs only 1 tip to resolve, so it's never a fake/wrong platform.
-    const platTotalUSD = {}
-    tips.forEach(t => { const p = t.platform || 'Unknown'; platTotalUSD[p] = (platTotalUSD[p] || 0) + (t.usd || 0) })
-    const topEarningPlat = Object.entries(platTotalUSD).sort((a, b) => b[1] - a[1])[0]?.[0] || null
-    const displayPlat = todayBestPlat || bestPlatPeak || bestPlatNow || topEarningPlat
-    const displayAvg = todayBestAvg || bestPlatPeakAvg || bestPlatNowAvg || bestHour?.avg || 0
+    // Peak-window / best-platform math lives in the shared core — reused
+    // as-is by the Live Mode top stats strip so both surfaces agree.
+    const core = computeDailyBriefCore(tips, analytics, now)
+    if (!core) return null
+    const { bh, bhLabel, atPeak, hoursUntilPeak, displayPlat, displayAvg } = core
 
     // Best day
     const bestDay = analytics?.bestDay
@@ -3056,43 +3004,21 @@ const stopImportMessageRotation = () => {
           const safeRevenue = (!isNaN(totalRevenue) && isFinite(totalRevenue)) ? totalRevenue : 0
           return (
             <div className="sticky-command-bar" style={{ position: 'sticky', top: 0, zIndex: 20, marginBottom: 12, marginLeft: -32, marginRight: -32, width: 'calc(100% + 64px)', maxWidth: 'none', padding: '0 32px', background: 'rgba(5,7,15,0.86)', backdropFilter: 'blur(22px)', WebkitBackdropFilter: 'blur(22px)', borderBottom: '1px solid rgba(255,255,255,0.05)', boxShadow: '0 2px 20px rgba(0,0,0,0.4)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', height: 48, gap: 8 }}>
-                {/* Metrics scroll independently so Go Live — outside this container — never gets clipped or scrolled out of view on narrower desktop widths */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 0, overflowX: 'auto', flex: '1 1 auto', minWidth: 0 }}>
-                <div style={{ display:'flex', flexDirection:'column', justifyContent:'center', paddingRight:20, borderRight:'1px solid rgba(255,255,255,0.06)', flexShrink:0 }}>
-                  <div style={{ fontSize:10, color:'#8a93ab', textTransform:'uppercase', letterSpacing:0.6, fontWeight:600, marginBottom:2 }}>Total Earned</div>
-                  <div style={{ fontSize:18, fontWeight:900, background:'linear-gradient(135deg,#60a5fa,#f472b6)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', whiteSpace:'nowrap' }}>${safeRevenue.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
-                </div>
-                <div style={{ display:'flex', flexDirection:'column', justifyContent:'center', padding:'0 20px', borderRight:'1px solid rgba(255,255,255,0.06)', flexShrink:0 }}>
-                  <div title={HOURLY_RATE_TOOLTIP} style={{ fontSize:10, color:'#8a93ab', textTransform:'uppercase', letterSpacing:0.6, fontWeight:600, marginBottom:2, cursor:'help' }}>Estimated $/Hour</div>
-                  {hourlyRateUnlocked ? (
-                    <div title={hourlyRateSubtext} style={{ fontSize:18, fontWeight:900, color:'#22D3EE', whiteSpace:'nowrap', cursor:'help' }}>${safeAvg.toFixed(2)}</div>
-                  ) : (
-                    <div onClick={() => handleTabChange('upload')} title={hourlyRateSubtext} style={{ fontSize:13, fontWeight:700, color:'#7d8aa3', whiteSpace:'nowrap', cursor:'pointer' }}>🔒 Locked</div>
-                  )}
-                </div>
-                <div style={{ display:'flex', flexDirection:'column', justifyContent:'center', padding:'0 20px', borderRight:'1px solid rgba(255,255,255,0.06)', flexShrink:0 }}>
-                  <div style={{ fontSize:10, color:'#8a93ab', textTransform:'uppercase', letterSpacing:0.6, fontWeight:600, marginBottom:2 }}>Momentum</div>
-                  <div style={{ fontSize:13, fontWeight:800, color:momentumColor, whiteSpace:'nowrap', animation: atPeak ? 'cmd-pulse 1.5s infinite' : 'none' }}>{momentum}</div>
-                </div>
-                <div style={{ display:'flex', flexDirection:'column', justifyContent:'center', padding:'0 20px', borderRight:'1px solid rgba(255,255,255,0.06)', flexShrink:0 }}>
-                  <div style={{ fontSize:10, color:'#8a93ab', textTransform:'uppercase', letterSpacing:0.6, fontWeight:600, marginBottom:2 }}>Best Platform</div>
-                  <div style={{ fontSize:13, fontWeight:800, color:'#a78bfa', whiteSpace:'nowrap' }}>{bestPlat || '—'}</div>
-                </div>
-                <div style={{ display:'flex', flexDirection:'column', justifyContent:'center', padding:'0 20px', flexShrink:0 }}>
-                  <div style={{ fontSize:10, color:'#8a93ab', textTransform:'uppercase', letterSpacing:0.6, fontWeight:600, marginBottom:2 }}>Peak Window</div>
-                  <div style={{ fontSize:13, fontWeight:800, color: atPeak ? '#10B981' : '#fbbf24', whiteSpace:'nowrap' }}>{_eiPeakLabel ? `${_eiPeakLabel}${peakLabel ? ` · ${peakLabel}` : ''}` : '—'}</div>
-                </div>
-                </div>
-                <div style={{ paddingLeft:12, borderLeft:'1px solid rgba(255,255,255,0.06)', flexShrink:0, display:'flex', gap:8 }}>
-                  <a href="/shop" style={{ display:'flex', alignItems:'center', padding:'8px 20px', borderRadius:11, background:'linear-gradient(90deg, #16F4FF 0%, #7C5CFF 48%, #FF2BAE 100%)', border:'none', color:'#fff', fontWeight:800, fontSize:13, cursor:'pointer', whiteSpace:'nowrap', textDecoration:'none', boxShadow:'0 0 14px rgba(22,244,255,0.3)', letterSpacing:0.3 }}>
-                    🛍️ Shop
-                  </a>
-                  <button onClick={() => { setActiveTab('live'); if (typeof window !== 'undefined') { localStorage.setItem('camcash_tab','live'); window.scrollTo({top:0,behavior:'instant'}); } }} style={{ padding:'8px 20px', borderRadius:11, background:'linear-gradient(135deg,#10B981,#22D3EE)', border:'none', color:'#fff', fontWeight:800, fontSize:13, cursor:'pointer', whiteSpace:'nowrap', boxShadow:'0 0 14px rgba(16,185,129,0.3)', letterSpacing:0.3 }}>
-                    ⚡ Go Live
-                  </button>
-                </div>
-              </div>
+              <TopStatsStrip
+                revenue={safeRevenue}
+                hourlyRateUnlocked={hourlyRateUnlocked}
+                hourlyRate={safeAvg}
+                hourlyRateSubtext={hourlyRateSubtext}
+                hourlyRateTooltip={HOURLY_RATE_TOOLTIP}
+                onHourlyRateLockedClick={() => handleTabChange('upload')}
+                momentumLabel={momentum}
+                momentumColor={momentumColor}
+                atPeak={atPeak}
+                bestPlatform={bestPlat}
+                peakWindowLabel={_eiPeakLabel}
+                peakEtaLabel={peakLabel}
+                onGoLiveClick={() => { setActiveTab('live'); if (typeof window !== 'undefined') { localStorage.setItem('camcash_tab','live'); window.scrollTo({top:0,behavior:'instant'}); } }}
+              />
             </div>
           )
         })()}
