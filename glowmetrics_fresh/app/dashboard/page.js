@@ -1365,6 +1365,10 @@ export default function Dashboard() {
     : 'overview'
   const [user, setUser] = useState(null)
   const [profile, setProfile] = useState(null)
+  const [promoCodeInput, setPromoCodeInput] = useState('')
+  const [promoCodeStatus, setPromoCodeStatus] = useState(null) // { type: 'success'|'error', message }
+  const [promoCodeSubmitting, setPromoCodeSubmitting] = useState(false)
+  const [showPromoPopover, setShowPromoPopover] = useState(false)
   const [tips, setTips] = useState([])
   const [paidSessions, setPaidSessions] = useState([])
   const [liveTipsTotalUSD, setLiveTipsTotalUSD] = useState(null)
@@ -1498,7 +1502,12 @@ export default function Dashboard() {
   const phaseChangeLog     = useRef([])
 
   const isBetaUser = true
-  const isPro = profile?.plan === 'pro' || profile?.plan === 'unlimited'
+  // plan_expires_at is only set for promo-code grants (see redeem_promo_code
+  // RPC) — Stripe-managed subscriptions leave it null and flip `plan` to
+  // 'free' directly via the webhook on cancellation, so a null expiry here
+  // always means "not time-limited."
+  const isPro = (profile?.plan === 'pro' || profile?.plan === 'unlimited') &&
+    (!profile?.plan_expires_at || new Date(profile.plan_expires_at) > new Date())
   const uploadLimit = Infinity
 
   const fmtHour = h => { if (h == null || isNaN(h)) return 'N/A'; return h === 0 ? '12 AM' : h < 12 ? h+' AM' : h === 12 ? '12 PM' : (h-12)+' PM' }
@@ -1507,6 +1516,37 @@ export default function Dashboard() {
     track('upgrade_click', { source })
     gtmTrack('paywall_hit', { feature: source })
     setShowUpgradeModal(true)
+  }
+
+  const redeemPromoCode = async () => {
+    const code = promoCodeInput.trim()
+    if (!code || promoCodeSubmitting) return
+    setPromoCodeSubmitting(true)
+    setPromoCodeStatus(null)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch('/api/promo/redeem', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
+        body: JSON.stringify({ code }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setPromoCodeStatus({ type: 'error', message: data.error || 'Could not redeem that code.' })
+        return
+      }
+      setProfile(p => ({ ...(p || {}), plan: 'pro', plan_expires_at: data.plan_expires_at }))
+      setPromoCodeInput('')
+      setPromoCodeStatus({ type: 'success', message: `Pro unlocked! You're covered through ${new Date(data.plan_expires_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}.` })
+      track('promo_code_redeemed', { code })
+    } catch (e) {
+      setPromoCodeStatus({ type: 'error', message: 'Something went wrong. Please try again.' })
+    } finally {
+      setPromoCodeSubmitting(false)
+    }
   }
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(""), 3500) }
@@ -1728,7 +1768,7 @@ export default function Dashboard() {
       })
       setUser(user)
       supabase.from('profiles')
-        .select('plan')
+        .select('plan, plan_expires_at')
         .eq('id', user.id)
         .maybeSingle()
         .then(({ data }) => { if (data) setProfile(data) })
@@ -3084,7 +3124,46 @@ const stopImportMessageRotation = () => {
                   <div style={{ fontSize:13, fontWeight:800, color: atPeak ? '#10B981' : '#fbbf24', whiteSpace:'nowrap' }}>{_eiPeakLabel ? `${_eiPeakLabel}${peakLabel ? ` · ${peakLabel}` : ''}` : '—'}</div>
                 </div>
                 </div>
-                <div style={{ paddingLeft:12, borderLeft:'1px solid rgba(255,255,255,0.06)', flexShrink:0, display:'flex', gap:8 }}>
+                <div style={{ paddingLeft:12, borderLeft:'1px solid rgba(255,255,255,0.06)', flexShrink:0, display:'flex', gap:8, alignItems:'center', position:'relative' }}>
+                  {!isPro && (
+                    <a href="/pricing" style={{ display:'flex', alignItems:'center', padding:'8px 18px', borderRadius:11, background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.12)', color:'#fff', fontWeight:800, fontSize:13, cursor:'pointer', whiteSpace:'nowrap', textDecoration:'none' }}>
+                      💎 Pricing
+                    </a>
+                  )}
+                  {!isPro && (
+                    <>
+                      <button onClick={() => { setShowPromoPopover(v => !v); setPromoCodeStatus(null) }} style={{ display:'flex', alignItems:'center', padding:'8px 18px', borderRadius:11, background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.12)', color:'#fff', fontWeight:800, fontSize:13, cursor:'pointer', whiteSpace:'nowrap' }}>
+                        🎟️ Promo Code
+                      </button>
+                      {showPromoPopover && (
+                        <div style={{ position:'absolute', top:'calc(100% + 8px)', right:0, zIndex:30, width:260, padding:16, borderRadius:14, background:'rgba(10,14,32,0.97)', border:'1px solid rgba(255,255,255,0.12)', boxShadow:'0 18px 42px rgba(0,0,0,0.5)' }}>
+                          <div style={{ fontSize:12, fontWeight:700, color:'#fff', marginBottom:10 }}>Redeem a promo code</div>
+                          <div style={{ display:'flex', gap:8 }}>
+                            <input
+                              autoFocus
+                              value={promoCodeInput}
+                              onChange={e => { setPromoCodeInput(e.target.value); if (promoCodeStatus) setPromoCodeStatus(null) }}
+                              onKeyDown={e => { if (e.key === 'Enter') redeemPromoCode() }}
+                              placeholder="Enter code"
+                              style={{ flex:1, minWidth:0, padding:'9px 12px', borderRadius:9, background:'rgba(255,255,255,0.06)', border:'1px solid rgba(255,255,255,0.14)', color:'#fff', fontSize:12.5, outline:'none', textTransform:'uppercase' }}
+                            />
+                            <button
+                              onClick={redeemPromoCode}
+                              disabled={promoCodeSubmitting || !promoCodeInput.trim()}
+                              style={{ padding:'9px 16px', borderRadius:9, background:'linear-gradient(90deg, #16F4FF 0%, #7C5CFF 48%, #FF2BAE 100%)', border:'none', color:'#fff', fontWeight:800, fontSize:12.5, cursor:'pointer', opacity: promoCodeSubmitting || !promoCodeInput.trim() ? 0.6 : 1 }}
+                            >
+                              {promoCodeSubmitting ? '…' : 'Apply'}
+                            </button>
+                          </div>
+                          {promoCodeStatus && (
+                            <div style={{ marginTop:10, fontSize:12, color: promoCodeStatus.type === 'success' ? '#22D3EE' : '#f87171' }}>
+                              {promoCodeStatus.type === 'success' ? '✦ ' : ''}{promoCodeStatus.message}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </>
+                  )}
                   <a href="/shop" style={{ display:'flex', alignItems:'center', padding:'8px 20px', borderRadius:11, background:'linear-gradient(90deg, #16F4FF 0%, #7C5CFF 48%, #FF2BAE 100%)', border:'none', color:'#fff', fontWeight:800, fontSize:13, cursor:'pointer', whiteSpace:'nowrap', textDecoration:'none', boxShadow:'0 0 14px rgba(22,244,255,0.3)', letterSpacing:0.3 }}>
                     🛍️ Shop
                   </a>
@@ -6212,6 +6291,36 @@ const stopImportMessageRotation = () => {
                   <Button onClick={() => router.push('/pricing')} style={{ padding: "12px 26px", fontSize: 13 }}>
                     View Plans & Subscribe →
                   </Button>
+
+                  <div style={{ marginTop: 18 }}>
+                    <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 8 }}>Have a promo code?</div>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      <input
+                        value={promoCodeInput}
+                        onChange={e => { setPromoCodeInput(e.target.value); if (promoCodeStatus) setPromoCodeStatus(null) }}
+                        onKeyDown={e => { if (e.key === 'Enter') redeemPromoCode() }}
+                        placeholder="Enter code"
+                        style={{
+                          flex: "1 1 160px", padding: "10px 14px", borderRadius: 10,
+                          background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.12)",
+                          color: C.white, fontSize: 13, outline: "none", textTransform: "uppercase",
+                        }}
+                      />
+                      <Button
+                        variant="secondary"
+                        onClick={redeemPromoCode}
+                        disabled={promoCodeSubmitting || !promoCodeInput.trim()}
+                        style={{ padding: "10px 20px", fontSize: 13, opacity: promoCodeSubmitting || !promoCodeInput.trim() ? 0.6 : 1 }}
+                      >
+                        {promoCodeSubmitting ? "Applying…" : "Apply"}
+                      </Button>
+                    </div>
+                    {promoCodeStatus && (
+                      <div style={{ marginTop: 8, fontSize: 12.5, color: promoCodeStatus.type === 'success' ? C.indigo : '#f87171' }}>
+                        {promoCodeStatus.type === 'success' ? '✦ ' : ''}{promoCodeStatus.message}
+                      </div>
+                    )}
+                  </div>
                 </>
               )}
 
