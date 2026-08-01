@@ -73,6 +73,18 @@ export async function POST(request) {
       }
     }
 
+    // Users who haven't finished onboarding yet (e.g. picked "Get Started
+    // with Pro" right after signup) should land back in the onboarding
+    // flow after paying, not on the dashboard.
+    const { data: betaUser } = await supabase
+      .from('beta_users')
+      .select('onboarding_complete')
+      .eq('user_id', user.id)
+      .maybeSingle()
+    const successPath = betaUser?.onboarding_complete
+      ? '/dashboard?success=true'
+      : '/onboarding?upgraded=true'
+
     // Resolve the correct Stripe price ID based on plan_type
     const planType = body.plan_type || 'standard_monthly'
 
@@ -102,7 +114,7 @@ export async function POST(request) {
       mode: 'subscription',
       payment_method_types: ['card'],
       line_items: [{ price: priceId, quantity: 1 }],
-      success_url: `${request.headers.get('origin')}/dashboard?success=true&plan=${planType}`,
+      success_url: `${request.headers.get('origin')}${successPath}&plan=${planType}`,
       cancel_url: `${request.headers.get('origin')}/dashboard?canceled=true`,
       metadata: {
         userId: user.id,

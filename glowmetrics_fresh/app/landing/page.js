@@ -93,6 +93,7 @@ function AuthPanel({
   setAuthError, setAuthMsg,
   handleAuth, handleForgotPassword,
   pendingPlan,
+  authStep, choosePro, chooseFree,
 }) {
   const inputStyle = {
     width: "100%", padding: "11px 14px", borderRadius: 12,
@@ -130,79 +131,138 @@ function AuthPanel({
           }}>$</div>
           <div style={{ fontSize: 16, fontWeight: 700, color: "white", letterSpacing: -0.3 }}>CamCash™</div>
           <div style={{ fontSize: 12, color: T.textFaint, marginTop: 3 }}>
-            {isSignUp ? "No credit card required" : "Welcome back 💋"}
+            {authStep === "plan" ? "Account created — now pick how you start" : isSignUp ? "No credit card required" : "Welcome back 💋"}
           </div>
-          {pendingPlan && (
+          {pendingPlan && authStep !== "plan" && (
             <div style={{ fontSize: 12, color: T.cyanSoft, marginTop: 8 }}>
               {isSignUp ? "Sign up" : "Log in"} to continue to checkout
             </div>
           )}
         </div>
 
-        <div style={{
-          display: "flex", borderRadius: 10, overflow: "hidden",
-          border: "1px solid rgba(255,255,255,0.08)", marginBottom: 18,
-          background: "rgba(255,255,255,0.03)",
-        }}>
-          {[["Sign Up", true], ["Log In", false]].map(([label, val]) => (
-            <button key={label} type="button"
-              onClick={() => { setIsSignUp(val); setAuthError(""); setAuthMsg("") }}
-              style={{
-                flex: 1, padding: "9px 0", fontSize: 13, fontWeight: 700,
-                background: isSignUp === val ? "rgba(22,244,255,0.12)" : "transparent",
-                color: isSignUp === val ? T.cyanSoft : "rgba(255,255,255,0.3)",
-                border: "none", cursor: "pointer", transition: "all 0.2s",
-              }}>
-              {label}
+        {authStep === "plan" ? (
+          <div>
+            <div style={{
+              position: "relative", borderRadius: 18, padding: 2,
+              background: T.gradientPrimary,
+              boxShadow: "0 0 30px rgba(22,244,255,0.32), 0 0 34px rgba(255,43,174,0.26)",
+              marginBottom: 12,
+            }}>
+              <div style={{ borderRadius: 16, background: T.bgPanel, padding: "18px 16px" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                  <span style={{
+                    fontSize: 10.5, fontWeight: 900, letterSpacing: "0.6px", textTransform: "uppercase",
+                    color: "#06101A", background: T.gradientPrimary, padding: "4px 10px", borderRadius: 999,
+                  }}>★ Recommended</span>
+                  <span style={{ fontSize: 12, color: T.textMuted, fontWeight: 700 }}>$19.99/mo</span>
+                </div>
+                <div style={{ fontSize: 17, fontWeight: 800, color: "white", marginBottom: 8 }}>Get Started with Pro</div>
+                <ul style={{ margin: "0 0 16px", padding: 0, listStyle: "none" }}>
+                  {["Track all cam platforms", "Full permanent tip history", "Advanced Live Mode + Stream Planner"].map(f => (
+                    <li key={f} style={{ fontSize: 12.5, color: T.textSoft, marginBottom: 6, display: "flex", alignItems: "flex-start", gap: 7 }}>
+                      <span style={{ color: T.cyan, fontWeight: 800 }}>✓</span>{f}
+                    </li>
+                  ))}
+                </ul>
+                <button type="button" disabled={authLoading} onClick={choosePro} style={{
+                  width: "100%", padding: "13px 0", borderRadius: 12, border: "none",
+                  background: authLoading ? "rgba(22,244,255,0.2)" : T.gradientPrimary,
+                  color: "#06101A", fontWeight: 800, fontSize: 15,
+                  cursor: authLoading ? "not-allowed" : "pointer",
+                  boxShadow: authLoading ? "none" : "0 0 24px rgba(22,244,255,0.3), 0 0 30px rgba(255,43,174,0.26)",
+                  transition: "all 0.2s", letterSpacing: 0.2,
+                }}>
+                  {authLoading ? "Redirecting to checkout…" : "Get Started with Pro →"}
+                </button>
+              </div>
+            </div>
+
+            {authError && <div style={{ fontSize: 12, color: T.red, marginBottom: 10, textAlign: "center" }}>{authError}</div>}
+
+            <button type="button" disabled={authLoading} onClick={chooseFree} style={{
+              width: "100%", padding: "12px 0", borderRadius: 12,
+              background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.10)",
+              color: T.textMuted, fontWeight: 700, fontSize: 13,
+              cursor: authLoading ? "not-allowed" : "pointer", marginBottom: 14, transition: "all 0.2s",
+            }}>
+              Continue with Free tier
             </button>
-          ))}
-        </div>
 
-        <form onSubmit={handleAuth}>
-          <input type="email" placeholder="Email address" required
-            value={email} onChange={e => setEmail(e.target.value)} style={inputStyle}
-            onFocus={e => { e.target.style.borderColor = "rgba(22,244,255,0.6)"; e.target.style.boxShadow = "0 0 0 3px rgba(22,244,255,0.10)"; TrackEvents.signupStarted(window?.location?.pathname) }}
-            onBlur={e => { e.target.style.borderColor = "rgba(255,255,255,0.10)"; e.target.style.boxShadow = "none" }}
-          />
-          <input type="password" placeholder={isSignUp ? "Create a password" : "Password"} required
-            value={password} onChange={e => setPassword(e.target.value)}
-            style={{ ...inputStyle, marginBottom: isSignUp ? 4 : 0 }}
-            onFocus={e => { e.target.style.borderColor = "rgba(22,244,255,0.6)"; e.target.style.boxShadow = "0 0 0 3px rgba(22,244,255,0.10)" }}
-            onBlur={e => { e.target.style.borderColor = "rgba(255,255,255,0.10)"; e.target.style.boxShadow = "none" }}
-          />
-          {isSignUp && <PasswordChecklist password={password} />}
-
-          {!isSignUp && (
-            <div style={{ textAlign: "right", marginBottom: 12 }}>
-              <a href="/forgot-password"
-                style={{ fontSize: 12, color: T.textMuted, display: "block", textDecoration: "none" }}>
-                Forgot your password?
+            <div style={{ textAlign: "center" }}>
+              <a href="/pricing" target="_blank" rel="noopener noreferrer"
+                style={{ fontSize: 12, color: T.cyanSoft, textDecoration: "none", fontWeight: 600 }}>
+                See what Pro unlocks →
               </a>
             </div>
-          )}
-          {authError && <div style={{ fontSize: 12, color: T.red, marginBottom: 10, textAlign: "center" }}>{authError}</div>}
-          {authMsg   && <div style={{ fontSize: 12, color: T.cyanSoft,  marginBottom: 10, textAlign: "center" }}>{authMsg}</div>}
+          </div>
+        ) : (
+          <>
+            <div style={{
+              display: "flex", borderRadius: 10, overflow: "hidden",
+              border: "1px solid rgba(255,255,255,0.08)", marginBottom: 18,
+              background: "rgba(255,255,255,0.03)",
+            }}>
+              {[["Sign Up", true], ["Log In", false]].map(([label, val]) => (
+                <button key={label} type="button"
+                  onClick={() => { setIsSignUp(val); setAuthError(""); setAuthMsg("") }}
+                  style={{
+                    flex: 1, padding: "9px 0", fontSize: 13, fontWeight: 700,
+                    background: isSignUp === val ? "rgba(22,244,255,0.12)" : "transparent",
+                    color: isSignUp === val ? T.cyanSoft : "rgba(255,255,255,0.3)",
+                    border: "none", cursor: "pointer", transition: "all 0.2s",
+                  }}>
+                  {label}
+                </button>
+              ))}
+            </div>
 
-          <button type="submit" disabled={authLoading} onClick={() => isSignUp && TrackEvents.signupCtaClicked(window?.location?.pathname)} style={{
-            width: "100%", padding: "13px 0", borderRadius: 12,
-            background: authLoading
-              ? "rgba(22,244,255,0.2)"
-              : T.gradientPrimary,
-            color: "#06101A", fontWeight: 800, fontSize: 15, border: "none",
-            cursor: authLoading ? "not-allowed" : "pointer",
-            boxShadow: authLoading ? "none" : "0 0 24px rgba(22,244,255,0.28), 0 0 30px rgba(255,43,174,0.24)",
-            transition: "all 0.2s", letterSpacing: 0.2,
-          }}>
-            {authLoading
-              ? (isSignUp ? "Creating account…" : "Logging in…")
-              : (isSignUp ? "Start Free →" : "Log In →")}
-          </button>
-        </form>
+            <form onSubmit={handleAuth}>
+              <input type="email" placeholder="Email address" required
+                value={email} onChange={e => setEmail(e.target.value)} style={inputStyle}
+                onFocus={e => { e.target.style.borderColor = "rgba(22,244,255,0.6)"; e.target.style.boxShadow = "0 0 0 3px rgba(22,244,255,0.10)"; TrackEvents.signupStarted(window?.location?.pathname) }}
+                onBlur={e => { e.target.style.borderColor = "rgba(255,255,255,0.10)"; e.target.style.boxShadow = "none" }}
+              />
+              <input type="password" placeholder={isSignUp ? "Create a password" : "Password"} required
+                value={password} onChange={e => setPassword(e.target.value)}
+                style={{ ...inputStyle, marginBottom: isSignUp ? 4 : 0 }}
+                onFocus={e => { e.target.style.borderColor = "rgba(22,244,255,0.6)"; e.target.style.boxShadow = "0 0 0 3px rgba(22,244,255,0.10)" }}
+                onBlur={e => { e.target.style.borderColor = "rgba(255,255,255,0.10)"; e.target.style.boxShadow = "none" }}
+              />
+              {isSignUp && <PasswordChecklist password={password} />}
 
-        {isSignUp && (
-          <p style={{ fontSize: 11, color: T.textFaint, textAlign: "center", marginTop: 12, marginBottom: 0 }}>
-            No credit card · Cancel anytime
-          </p>
+              {!isSignUp && (
+                <div style={{ textAlign: "right", marginBottom: 12 }}>
+                  <a href="/forgot-password"
+                    style={{ fontSize: 12, color: T.textMuted, display: "block", textDecoration: "none" }}>
+                    Forgot your password?
+                  </a>
+                </div>
+              )}
+              {authError && <div style={{ fontSize: 12, color: T.red, marginBottom: 10, textAlign: "center" }}>{authError}</div>}
+              {authMsg   && <div style={{ fontSize: 12, color: T.cyanSoft,  marginBottom: 10, textAlign: "center" }}>{authMsg}</div>}
+
+              <button type="submit" disabled={authLoading} onClick={() => isSignUp && TrackEvents.signupCtaClicked(window?.location?.pathname)} style={{
+                width: "100%", padding: "13px 0", borderRadius: 12,
+                background: authLoading
+                  ? "rgba(22,244,255,0.2)"
+                  : T.gradientPrimary,
+                color: "#06101A", fontWeight: 800, fontSize: 15, border: "none",
+                cursor: authLoading ? "not-allowed" : "pointer",
+                boxShadow: authLoading ? "none" : "0 0 24px rgba(22,244,255,0.28), 0 0 30px rgba(255,43,174,0.24)",
+                transition: "all 0.2s", letterSpacing: 0.2,
+              }}>
+                {authLoading
+                  ? (isSignUp ? "Creating account…" : "Logging in…")
+                  : (isSignUp ? "Start Free →" : "Log In →")}
+              </button>
+            </form>
+
+            {isSignUp && (
+              <p style={{ fontSize: 11, color: T.textFaint, textAlign: "center", marginTop: 12, marginBottom: 0 }}>
+                No credit card · Cancel anytime
+              </p>
+            )}
+          </>
         )}
       </div>
     </div>
@@ -731,6 +791,7 @@ export default function LandingPage() {
   const [authMsg, setAuthMsg]         = useState("")
   const [authError, setAuthError]     = useState("")
   const [pendingPlan, setPendingPlan] = useState(null)
+  const [authStep, setAuthStep]       = useState("form") // 'form' | 'plan'
 
   // Demo cycling state for feature cards
   const [msgIndex, setMsgIndex]       = useState(0)
@@ -834,8 +895,8 @@ export default function LandingPage() {
           }
           track('signup_success'); TrackEvents.signupCompleted(window?.location?.pathname)
           if (pendingPlan && await goToCheckout(pendingPlan)) return
-          // New signups always go through onboarding first — never straight to /dashboard.
-          router.push("/onboarding")
+          // Let new signups choose Pro or Free before continuing into onboarding.
+          setAuthStep("plan"); setAuthLoading(false)
         }
         else { setAuthMsg("Account created! Check your email to confirm, then log in."); setIsSignUp(false); setAuthLoading(false) }
       }
@@ -865,11 +926,25 @@ export default function LandingPage() {
     else setAuthMsg("Password reset email sent — check your inbox.")
   }
 
+  // Post-signup plan choice — account already exists at this point, so
+  // "Pro" just sends them straight to Stripe Checkout and "Free" drops
+  // them into onboarding like any free signup.
+  const choosePro = async () => {
+    setAuthError(""); setAuthLoading(true)
+    track('onboarding_plan_choice', { choice: 'pro' })
+    const ok = await goToCheckout('standard_monthly')
+    if (!ok) { setAuthLoading(false); setAuthError("Couldn't start checkout. Please try again, or continue with the free tier below.") }
+  }
+  const chooseFree = () => {
+    track('onboarding_plan_choice', { choice: 'free' })
+    router.push("/onboarding")
+  }
+
   const authPanelProps = {
     isSignUp, setIsSignUp, email, setEmail, password, setPassword,
     authLoading, authMsg, authError, setAuthError, setAuthMsg,
     handleAuth, handleForgotPassword,
-    pendingPlan,
+    pendingPlan, authStep, choosePro, chooseFree,
   }
 
   // Feature strip data (additive — new section, matches redesign reference)
