@@ -1411,15 +1411,17 @@ export default function Dashboard() {
   // passive effect runs, the modal's autoFocus has already moved focus onto
   // the close button, so reading activeElement here would just capture that.
   const whaleModalTriggerRef = useRef(null)
-  // Prefill + open the promo popover when arriving via an email CTA link
-  // like /dashboard?promo=CAMCASH-XXXXXX, instead of leaving the user to
-  // find and retype the code themselves.
+  // Stash a promo code from an email CTA link (/dashboard?promo=CAMCASH-XXXXXX)
+  // into localStorage right away. A signed-out visitor gets bounced through
+  // /login -> /landing -> back here (or through /onboarding first, for a
+  // brand-new user), and the query string does not survive that round trip —
+  // localStorage does, so the auth-check effect below can pick it back up
+  // once we actually know the user is signed in and staying on this page.
   useEffect(() => {
     if (typeof window === 'undefined') return
     const promoParam = new URLSearchParams(window.location.search).get('promo')
     if (promoParam) {
-      setPromoCodeInput(promoParam.trim().toUpperCase())
-      setShowPromoPopover(true)
+      localStorage.setItem('camcash_pending_promo', promoParam.trim().toUpperCase())
     }
   }, [])
   useEffect(() => {
@@ -1775,7 +1777,17 @@ export default function Dashboard() {
         supabase.from('tips').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
         supabase.from('beta_users').select('onboarding_complete').eq('user_id', user.id).maybeSingle(),
       ]).then(([{ count }, { data: beta }]) => {
-        if (count === 0 && !beta?.onboarding_complete) router.replace('/onboarding')
+        if (count === 0 && !beta?.onboarding_complete) { router.replace('/onboarding'); return }
+        // Signed in and staying on the dashboard — safe to redeem a promo
+        // code stashed by the effect above from an email CTA link.
+        if (typeof window !== 'undefined') {
+          const pendingPromo = localStorage.getItem('camcash_pending_promo')
+          if (pendingPromo) {
+            setPromoCodeInput(pendingPromo)
+            setShowPromoPopover(true)
+            localStorage.removeItem('camcash_pending_promo')
+          }
+        }
       })
       setUser(user)
       supabase.from('profiles')
