@@ -24,6 +24,27 @@ export default function ToolsPage() {
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(300px,1fr))', gap: '24px', marginBottom: '48px' }}>
 
+          {/* Cam Model Name Generator */}
+          <a href="/tools/cam-model-name-generator" style={{ textDecoration: 'none' }}>
+            <div style={{
+              background: 'rgba(255,43,174,0.06)',
+              border: '1px solid rgba(255,43,174,0.22)',
+              borderRadius: '16px',
+              padding: '36px 28px',
+            }}>
+              <div style={{ fontSize: '40px', marginBottom: '16px' }}>💫</div>
+              <h2 style={{ fontSize: '20px', fontWeight: '700', color: '#f1f5f9', margin: '0 0 10px' }}>
+                Cam Model Name Generator
+              </h2>
+              <p style={{ fontSize: '15px', color: '#94a3b8', lineHeight: '1.6', margin: '0 0 20px' }}>
+                Generate cute, sexy, luxury, or bratty stage name ideas with brand strength scoring and domain availability checks.
+              </p>
+              <div style={{ fontSize: '14px', fontWeight: '600', color: '#ff2bae' }}>
+                Try it free →
+              </div>
+            </div>
+          </a>
+
           {/* Creator Profile Studio */}
           <a href="/tools/profile-studio" style={{ textDecoration: 'none' }}>
             <div style={{
@@ -86,6 +107,27 @@ export default function ToolsPage() {
               </div>
             </div>
           </a>
+
+          {/* Income Tracker */}
+          <a href="/guides/cam-model-income-tracker" style={{ textDecoration: 'none' }}>
+            <div style={{
+              background: 'rgba(16,185,129,0.06)',
+              border: '1px solid rgba(16,185,129,0.22)',
+              borderRadius: '16px',
+              padding: '36px 28px',
+            }}>
+              <div style={{ fontSize: '40px', marginBottom: '16px' }}>📊</div>
+              <h2 style={{ fontSize: '20px', fontWeight: '700', color: '#f1f5f9', margin: '0 0 10px' }}>
+                Cam Model Income Tracker
+              </h2>
+              <p style={{ fontSize: '15px', color: '#94a3b8', lineHeight: '1.6', margin: '0 0 20px' }}>
+                See your real earnings by session, hour of day, platform, and individual fan — not just a total token count.
+              </p>
+              <div style={{ fontSize: '14px', fontWeight: '600', color: '#10b981' }}>
+                Try it free →
+              </div>
+            </div>
+          </a>
         </div>
 
         {/* More tools coming */}
@@ -99,7 +141,7 @@ export default function ToolsPage() {
         }}>
           <div style={{ fontSize: '24px', marginBottom: '10px' }}>🔜</div>
           <div style={{ fontSize: '15px', fontWeight: '600', color: '#f1f5f9', marginBottom: '6px' }}>More tools coming soon</div>
-          <div style={{ fontSize: '14px', color: '#475569' }}>Earnings calculator, best-time finder, fan re-engagement tool and more.</div>
+          <div style={{ fontSize: '14px', color: '#475569' }}>Best-time finder, fan re-engagement tool and more.</div>
         </div>
 
       </div>

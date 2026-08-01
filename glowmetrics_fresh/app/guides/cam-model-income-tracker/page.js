@@ -346,6 +346,10 @@ export default function CamModelIncomeTracker() {
           <a href="/guides/cam-model-token-calculator" style={s.relLink}>→ Free cam model token calculator</a>
           <a href="/guides/chaturbate-earnings-tracker" style={s.relLink}>→ Chaturbate earnings tracker</a>
           <a href="/guides/cam-model-top-tippers" style={s.relLink}>→ Cam model top tipper tracker</a>
+          <a href="/guides/chaturbate-room-title-generator" style={s.relLink}>→ Chaturbate room title generator</a>
+          <a href="/tools/cam-model-name-generator" style={s.relLink}>→ Cam model name generator</a>
+          <a href="/tools/profile-studio" style={s.relLink}>→ Creator Profile Studio (bio + tip menu)</a>
+          <a href="/tools" style={s.relLink}>→ All free CamCash tools</a>
           <a href="/blog/why-cam-income-is-inconsistent" style={s.relLink}>→ Why cam income is inconsistent (and how to fix it)</a>
           <a href="/blog/cam-model-earnings" style={s.relLink}>→ Cam model earnings: the complete guide</a>
         </div>

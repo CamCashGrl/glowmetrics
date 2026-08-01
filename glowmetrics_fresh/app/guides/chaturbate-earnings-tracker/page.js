@@ -597,6 +597,40 @@ export default function ChaturbateEarningsTrackerPage() {
             </div>
           </section>
 
+          {/* ── PRINTABLE TRACKER PRODUCTS ────────────────────────────── */}
+          <section style={s.section}>
+            <h2 style={s.h2}>Prefer a Printable Tracker?</h2>
+            <p style={s.p}>
+              CamCash is free and automated, but some models like keeping a physical or fillable-PDF backup too. Pretty Profitz makes a printable Chaturbate stream tracker and a VIP client workbook for exactly that.
+            </p>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 20 }}>
+              <a href="/shop/chaturbate-earnings-tracker-bundle" style={{ textDecoration: "none", display: "block", borderRadius: 16, overflow: "hidden", border: "1px solid rgba(34,211,238,0.2)", background: "rgba(255,255,255,0.03)" }}>
+                <img
+                  src="/shop-images/16_Chaturbate_Bundle_Stream_Tracking.jpg"
+                  alt="Chaturbate Earnings Tracker Bundle — printable daily stream log and session review pages"
+                  style={{ width: "100%", display: "block" }}
+                />
+                <div style={{ padding: "16px 18px" }}>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: "white", marginBottom: 6 }}>Chaturbate Earnings Tracker Bundle</div>
+                  <div style={{ fontSize: 13, color: "#94A3B8", lineHeight: 1.6, marginBottom: 10 }}>44-page printable workbook — daily stream logs, session reviews, tip menu pricing, and a 14-day best-time challenge.</div>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: "#22D3EE" }}>Shop the bundle →</span>
+                </div>
+              </a>
+              <a href="/shop/vip-client-tracker-999" style={{ textDecoration: "none", display: "block", borderRadius: 16, overflow: "hidden", border: "1px solid rgba(236,72,153,0.2)", background: "rgba(255,255,255,0.03)" }}>
+                <img
+                  src="/blog-images/vipclienttracker.png"
+                  alt="VIP Client Tracker — fillable PDF workbook for tracking top cam model clients, tips, and follow-ups"
+                  style={{ width: "100%", display: "block" }}
+                />
+                <div style={{ padding: "16px 18px" }}>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: "white", marginBottom: 6 }}>VIP Client Tracker Workbook</div>
+                  <div style={{ fontSize: 13, color: "#94A3B8", lineHeight: 1.6, marginBottom: 10 }}>Fillable PDF CRM for your top tippers — spending history, preferences, boundaries, and a re-engagement tracker.</div>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: "#EC4899" }}>Shop the workbook →</span>
+                </div>
+              </a>
+            </div>
+          </section>
+
           {/* ── FAQ ───────────────────────────────────────────────────── */}
           <section style={s.section}>
             <h2 style={s.h2}>Frequently Asked Questions</h2>
@@ -681,6 +715,8 @@ export default function ChaturbateEarningsTrackerPage() {
                 { href: "/guides/best-time-to-stream-on-chaturbate", label: "Best Time to Stream on Chaturbate" },
                 { href: "/guides/chaturbate-token-calculator",       label: "Token Calculator" },
                 { href: "/guides/cam-model-income-tracker",          label: "Cam Model Income Tracker" },
+                { href: "/tools/cam-model-name-generator",           label: "Cam Model Name Generator" },
+                { href: "/tools",                                    label: "All Free Tools" },
                 { href: "/blog/how-much-do-chaturbate-models-make",  label: "How Much Do Chaturbate Models Make?" },
                 { href: "/blog/how-much-do-cam-models-make",         label: "How Much Do Cam Models Make?" },
                 { href: "/tools/profile-studio",                     label: "Free Cam Bio & Tip Menu Generator" },
