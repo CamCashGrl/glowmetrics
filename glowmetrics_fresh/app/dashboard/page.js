@@ -2503,7 +2503,7 @@ const stopImportMessageRotation = () => {
       const h = new Date(s.startTime).getHours() // local hour
       return bh !== null && Math.abs(h - bh) <= 1
     })
-    const peakAvg = displayAvg || bestHour?.avg || sessionAvg
+    const peakAvg = displayAvg || sessionAvg
     const predictionLow = Math.max(0, Math.round(peakAvg - (peakAvg * 0.4)))
     const predictionHigh = Math.round(peakAvg + (peakAvg * 0.4))
 
