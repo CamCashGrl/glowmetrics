@@ -1411,6 +1411,17 @@ export default function Dashboard() {
   // passive effect runs, the modal's autoFocus has already moved focus onto
   // the close button, so reading activeElement here would just capture that.
   const whaleModalTriggerRef = useRef(null)
+  // Prefill + open the promo popover when arriving via an email CTA link
+  // like /dashboard?promo=CAMCASH-XXXXXX, instead of leaving the user to
+  // find and retype the code themselves.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const promoParam = new URLSearchParams(window.location.search).get('promo')
+    if (promoParam) {
+      setPromoCodeInput(promoParam.trim().toUpperCase())
+      setShowPromoPopover(true)
+    }
+  }, [])
   useEffect(() => {
     if (selectedWhale) {
       const onKeyDown = (e) => { if (e.key === "Escape") setSelectedWhale(null) }
