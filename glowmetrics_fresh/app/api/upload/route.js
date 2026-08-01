@@ -4,6 +4,18 @@ import { parseCSV, detectPlatform } from '../../../lib/analytics'
 
 const BATCH_SIZE = 250 // Safe batch size — never hit Supabase limits
 
+// Platforms with no verified CSV parser yet. Detected/selected uploads for
+// these are rejected rather than run through the generic header-guessing
+// parser, which would silently produce fabricated or miscategorized data.
+const UNSUPPORTED_UPLOAD_PLATFORMS = ['camsoda']
+
+function unsupportedPlatformResponse(platform) {
+  return NextResponse.json({
+    error: `${platform} CSV import isn't available yet — we don't have a verified parser for ${platform} exports, so we can't guarantee accurate data. Support is coming soon.`,
+    code: 'platform_not_supported',
+  }, { status: 400 })
+}
+
 export async function POST(req) {
   const auth = req.headers.get('Authorization')
   if (!auth) {
@@ -37,7 +49,15 @@ export async function POST(req) {
   // any platform keywords in a clean, already-normalized CSV (e.g. the
   // onboarding paste flow, which sends parsed rows rather than raw text).
   const explicitPlatform = (fd.get('platform') || '').toString().trim()
+  if (UNSUPPORTED_UPLOAD_PLATFORMS.includes(explicitPlatform.toLowerCase())) {
+    return unsupportedPlatformResponse(explicitPlatform)
+  }
+
   const textDetectedPlatform = explicitPlatform || detectPlatform(raw)
+  if (UNSUPPORTED_UPLOAD_PLATFORMS.includes(textDetectedPlatform.toLowerCase())) {
+    return unsupportedPlatformResponse(textDetectedPlatform)
+  }
+
   const parsed = parseCSV(raw)
 
   const rows = parsed.map((row) => {
@@ -70,6 +90,15 @@ export async function POST(req) {
       { error: 'No valid rows found. Check CSV format.' },
       { status: 400 }
     )
+  }
+
+  // Per-row platform fallback inside parseCSV can still land a row on an
+  // unsupported platform even when the file-level detection above didn't
+  // (e.g. mixed-platform pastes). Reject the whole upload rather than
+  // inserting some rows with unverified parsing.
+  const unsupportedRow = rows.find(r => UNSUPPORTED_UPLOAD_PLATFORMS.includes((r.platform || '').toLowerCase()))
+  if (unsupportedRow) {
+    return unsupportedPlatformResponse(unsupportedRow.platform)
   }
 
   // ── OPTIONAL FULL REPLACE ──────────────────────────────────────────────

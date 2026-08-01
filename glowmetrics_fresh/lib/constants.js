@@ -9,7 +9,7 @@ export const PLATFORM_TOKEN_RATES = {
   BongaCams:  0.025,
   MyFreeCams: 0.05,
   Stripchat:  0.05,
-  CamSoda:    0.05,
+  CamSoda:    0.055,
 }
 
 export const DEFAULT_TOKEN_RATE = 0.05

@@ -84,7 +84,7 @@ Token rates live **only** in `lib/constants.js`. Never hardcode them anywhere el
 | Chaturbate  | 0.05            |
 | MyFreeCams  | 0.05            |
 | Stripchat   | 0.05            |
-| CamSoda     | 0.05            |
+| CamSoda     | 0.055           |
 | Default     | 0.05            |
 
 ```js

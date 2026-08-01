@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
+import { tokenRate } from '../../lib/constants';
 import { computeRoomHealth } from '../../lib/analytics/roomHealth';
 import { computeRevenueVelocity, computeLiveComparison } from '../../lib/analytics/velocity';
 import { detectSessionPhase, PHASES, getRecoveryActions, getGoalStrategy } from '../../lib/analytics/sessionPhase';
