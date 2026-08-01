@@ -25,6 +25,7 @@ const sessionLabel = document.getElementById('session-label');
 const sessionTimerEl = document.getElementById('session-timer');
 const sessionBtnRow = document.getElementById('session-btn-row');
 const sessionResolutionPrompt = document.getElementById('session-resolution-prompt');
+const sessionError = document.getElementById('session-error');
 
 const statEarned = document.getElementById('stat-earned');
 const statTokens = document.getElementById('stat-tokens');
@@ -345,6 +346,7 @@ function liveButton(label, cls, onClick) {
 function callLiveAction(action, extra, btn) {
   if (_liveActionPending) return;
   _liveActionPending = true;
+  sessionError.style.display = 'none';
   if (btn) btn.disabled = true;
   // If the background script's reply never arrives — the message port can
   // close early on a dropped connection, a stale/reloading service worker,
@@ -365,6 +367,21 @@ function callLiveAction(action, extra, btn) {
     settled = true;
     clearTimeout(failSafe);
     _liveActionPending = false;
+    if (chrome.runtime.lastError) {
+      sessionError.textContent = '❌ ' + chrome.runtime.lastError.message;
+      sessionError.style.display = 'block';
+      renderLiveSession();
+      return;
+    }
+    if (res?.error) {
+      sessionError.textContent = '❌ ' + (res.engineDisabled
+        ? 'Live sessions aren\'t enabled for this account yet.'
+        : res.error);
+      sessionError.style.display = 'block';
+      renderLiveSession();
+      return;
+    }
+    sessionError.style.display = 'none';
     updateLiveSession(res?.session ?? null);
   });
 }
