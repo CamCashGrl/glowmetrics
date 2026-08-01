@@ -742,6 +742,85 @@ export function generateNextMoves(tips, sessions, whales, predictions, bestHour)
   return moves.sort((a, b) => a.priority - b.priority).slice(0, 5)
 }
 
+// ===============================
+// REVENUE DEPENDENCY RISK
+// ===============================
+// Metric: Revenue Dependency Risk
+// Definition: how concentrated a creator's earnings are in their single
+// highest-spending fan, derived from the already-computed topFanDependency
+// percentages (never recalculated here — single source of truth stays
+// aggregateRows' whale totals).
+// Minimum data: caller only invokes this once there are >= 5 distinct fans
+// (see aggregateRows) — below that, "top fan = 80% of revenue" is just
+// "you have 2 fans" and would be a fabricated-sounding insight.
+// Confidence behavior: no confidence field — level is a direct function of
+// the percentages themselves, not a sample-size estimate.
+function computeDependencyRisk(topFanDependency) {
+  if (!topFanDependency) return null
+  const { top1Pct, top3Pct, lossIfTopFanLeaves } = topFanDependency
+  const level = (top1Pct >= 40 || top3Pct >= 65) ? 'high'
+    : (top1Pct >= 20 || top3Pct >= 40) ? 'medium'
+    : 'low'
+  const message = level === 'high'
+    ? `Your top fan alone accounts for ${top1Pct}% of your revenue. If they stopped tipping, you'd lose roughly $${lossIfTopFanLeaves} — building up more regular tippers would lower the risk.`
+    : level === 'medium'
+    ? `Your top fan makes up ${top1Pct}% of your revenue (${top3Pct}% from your top 3). That's manageable, but worth watching — losing them would cost you about $${lossIfTopFanLeaves}.`
+    : `Your revenue is spread across your fan base — no single fan makes up more than ${top1Pct}% of what you've earned.`
+  return { ...topFanDependency, level, message }
+}
+
+// ===============================
+// PRE-TIP BEHAVIOR
+// ===============================
+// Metric: Pre-Tip Behavior
+// Definition: how tips are paced *within* a stream — the average gap
+// between consecutive tips in the same session, whether tips cluster into
+// bursts, and the session's peak tipping hour (reuses bestHour — never a
+// second "best time" formula).
+// Included: gaps between consecutive tips inside the same detected session
+// (lib/analytics/sessions.js), sessions with 2+ tips only.
+// Excluded: gaps across session boundaries (a new session already means
+// >3hrs or a platform change, which would blow out the average meaninglessly).
+// Minimum data: at least 15 gap samples across at least 5 multi-tip sessions.
+// Below that, returns null ("not enough data") rather than a shaky average.
+function computePreTipBehavior(sessions, bestHour) {
+  const gapsMinutes = []
+  let sessionsWithMultipleTips = 0
+  sessions.forEach(s => {
+    if (!s.tips || s.tips.length < 2) return
+    sessionsWithMultipleTips++
+    const sorted = [...s.tips].sort((a, b) => new Date(a.dateRaw || a.date_time) - new Date(b.dateRaw || b.date_time))
+    for (let i = 1; i < sorted.length; i++) {
+      const gapMin = (new Date(sorted[i].dateRaw || sorted[i].date_time) - new Date(sorted[i - 1].dateRaw || sorted[i - 1].date_time)) / 60000
+      if (gapMin >= 0) gapsMinutes.push(gapMin)
+    }
+  })
+  if (gapsMinutes.length < 15 || sessionsWithMultipleTips < 5) return null
+
+  const avgGapMinutes = parseFloat((gapsMinutes.reduce((a, b) => a + b, 0) / gapsMinutes.length).toFixed(1))
+  const variance = gapsMinutes.reduce((s, g) => s + Math.pow(g - avgGapMinutes, 2), 0) / gapsMinutes.length
+  const coefficientOfVariation = avgGapMinutes > 0 ? Math.sqrt(variance) / avgGapMinutes : 0
+  const burstShare = gapsMinutes.filter(g => g < 2).length / gapsMinutes.length
+  // High variance in gap length + a meaningful share of near-instant repeat
+  // tips = tips arriving in bursts rather than steadily spaced.
+  const clusteringDetected = coefficientOfVariation > 1.2 && burstShare > 0.3
+
+  let peakTippingWindow = null
+  if (bestHour) {
+    const h = parseInt(bestHour.hour)
+    const label = h === 0 ? '12 AM' : h < 12 ? `${h} AM` : h === 12 ? '12 PM' : `${h - 12} PM`
+    peakTippingWindow = { hour: h, label }
+  }
+
+  const recommendation = clusteringDetected
+    ? `Tips tend to arrive in quick bursts rather than spread evenly — call out each tip as it happens to trigger more in the same window.`
+    : avgGapMinutes < 5
+    ? `Fans tip frequently throughout your streams (about every ${avgGapMinutes} min) — keep engagement steady, not just at the start.`
+    : `Tips land roughly ${avgGapMinutes} min apart on average — running a goal or countdown can create more frequent tipping moments.`
+
+  return { avgGapMinutes, peakTippingWindow, clusteringDetected, recommendation }
+}
+
 export function aggregateRows(tips, tz = null) {
   const userTz = tz || (typeof Intl !== 'undefined'
     ? Intl.DateTimeFormat().resolvedOptions().timeZone
@@ -985,12 +1064,15 @@ export function aggregateRows(tips, tz = null) {
   const newKeys = Object.keys(fanTipCounts).filter(k => fanTipCounts[k] === 1)
   const avgReturnSpend = returningKeys.length ? returningKeys.reduce((s, k) => s + fanTipUSD2[k], 0) / returningKeys.length : 0
   const avgNewSpend = newKeys.length ? newKeys.reduce((s, k) => s + fanTipUSD2[k], 0) / newKeys.length : 0
-  const returningVsNew = {
+  // Same >10-total-fans floor generateInsights() already uses for its retention
+  // insight — reused here rather than inventing a second threshold for the
+  // same underlying claim ("your returning fans are worth more").
+  const returningVsNew = Object.keys(fanTipCounts).length > 10 ? {
     returningCount: returningKeys.length, newCount: newKeys.length,
     returningPct: Math.round((returningKeys.length / Math.max(Object.keys(fanTipCounts).length, 1)) * 100),
     avgReturnSpend: parseFloat(avgReturnSpend.toFixed(2)), avgNewSpend: parseFloat(avgNewSpend.toFixed(2)),
     multiplier: avgNewSpend > 0 ? parseFloat((avgReturnSpend / avgNewSpend).toFixed(1)) : null
-  }
+  } : null
 
   // ── TOP FAN DEPENDENCY ────────────────────────────────────────────────
   const sortedWhales = [...whales].sort((a, b) => b.totalUSD - a.totalUSD)
@@ -1003,6 +1085,10 @@ export function aggregateRows(tips, tz = null) {
     top5Pct: Math.round((top5USD / totalUSD) * 100),
     lossIfTopFanLeaves: parseFloat(top1USD.toFixed(2))
   } : null
+
+  // Needs enough distinct fans for a concentration % to mean anything —
+  // below this, "your top fan is 80% of revenue" is just "you have 2 fans".
+  const dependencyRisk = whales.length >= 5 ? computeDependencyRisk(topFanDependency) : null
 
   // ── MONTHLY DATA ──────────────────────────────────────────────────────
   const monthMap = {}
@@ -1093,6 +1179,8 @@ export function aggregateRows(tips, tz = null) {
 
   const momentum = { pct: momentumPct, label: momentumLabel, emoji: momentumEmoji, last30USD, prior30USD }
 
+  const preTipBehavior = computePreTipBehavior(meaningfulSessions, bestHour)
+
   return {
     totalUSD: parseFloat(totalUSD.toFixed(2)),
     totalTokens,
@@ -1108,7 +1196,7 @@ export function aggregateRows(tips, tz = null) {
     estimatedHourlyRate, hourlyRateSessionCount, hourlyRateTotalMinutes,
     hourlyRateTotalUsd, excludedUntimedSessionCount,
     missedRevenueByPlatform, returningVsNew, topFanDependency,
-    dependencyRisk: null, preTipBehavior: null, trueHourlyAvg: [],
+    dependencyRisk, preTipBehavior, trueHourlyAvg: [],
     meaningfulSessions, allValidSessions,
     meaningfulSessionCount: meaningfulSessions.length,
     lowSignalSessionCount: allValidSessions.length - meaningfulSessions.length,

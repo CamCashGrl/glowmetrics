@@ -178,6 +178,16 @@ export function getModuleLockState({ module, totalTips = 0, totalSessions = 0, t
     streamPlanner:        { needsData: totalTips < 25 || totalSessions < 3,           message: 'Stream Planner unlocks after 25+ tips and 3+ meaningful sessions.' },
     forecasting:          { needsData: totalSessions < 8 || totalEarnings < 50,       message: 'Forecasting unlocks after more earnings history.' },
     liveScore:            { needsData: liveModeSessions < 1,                          message: 'Live Mode Score unlocks after your first Live Mode stream.' },
+    // Thresholds below must stay in sync with the real gates in
+    // lib/analytics.js (aggregateRows) — dependencyRisk needs whales.length
+    // >= 5, returningVsNew needs > 10 distinct fans. preTipBehavior's real
+    // gate (15+ tip-gap samples across 5+ multi-tip sessions) isn't a simple
+    // count available here, so its message is intentionally worded without
+    // exact numbers rather than guessing a threshold that could disagree
+    // with the engine.
+    dependencyRisk:       { needsData: totalFans < 5,                                 message: 'Revenue Dependency Risk unlocks after 5+ distinct fans.' },
+    fanLoyalty:           { needsData: totalFans <= 10,                               message: 'Fan Loyalty unlocks after 10+ distinct fans.' },
+    preTipBehavior:       { needsData: totalSessions < 5 || totalTips < 15,           message: 'Tip Behavior Patterns unlocks after enough multi-tip sessions.' },
   }
   const rule = rules[module]
   if (!rule) return { locked: false, lockType: null, message: null }
