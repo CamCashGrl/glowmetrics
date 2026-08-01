@@ -194,18 +194,42 @@ function TopBar({ user }) {
         </span>
       </a>
 
-      <Button
-        as="a"
-        href={user ? '/dashboard' : '/landing'}
-        style={{
-          padding: '8px 18px',
-          fontSize: 13,
-        }}
-      >
-        {user
-          ? 'Back to Dashboard →'
-          : 'Create Free Account →'}
-      </Button>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <a
+          href="/shop"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            padding: '8px 18px',
+            borderRadius: 11,
+            background: C.gradientPrimary,
+            border: 'none',
+            color: '#fff',
+            fontWeight: 800,
+            fontSize: 13,
+            cursor: 'pointer',
+            whiteSpace: 'nowrap',
+            textDecoration: 'none',
+            boxShadow: '0 0 14px rgba(22,244,255,0.3)',
+            letterSpacing: 0.3,
+          }}
+        >
+          🛍️ Shop
+        </a>
+
+        <Button
+          as="a"
+          href={user ? '/dashboard' : '/landing'}
+          style={{
+            padding: '8px 18px',
+            fontSize: 13,
+          }}
+        >
+          {user
+            ? 'Back to Dashboard →'
+            : 'Create Free Account →'}
+        </Button>
+      </div>
     </div>
   )
 }

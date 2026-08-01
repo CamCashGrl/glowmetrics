@@ -37,6 +37,7 @@ const HEADING_STYLE = {
 const DASHBOARD_NAV_LINKS = [
   { href: '/', label: 'Home' },
   { href: '/pricing', label: 'Pricing' },
+  { href: '/shop', label: 'Shop' },
   { href: '/extension', label: 'Chrome Extension' },
   { href: '/demo', label: 'Live Demo' },
   { href: '/guides', label: 'Free Guides & Tools' },
@@ -198,6 +199,7 @@ export default function SiteFooter({ sidebarOffset = 0, variant = 'full' }) {
           </h4>
           <FooterLink href="/">Home</FooterLink>
           <FooterLink href="/pricing">Pricing</FooterLink>
+          <FooterLink href="/shop">Shop</FooterLink>
           <FooterLink href="/extension">Chrome Extension</FooterLink>
           <FooterLink href="/demo">Live Demo</FooterLink>
           <FooterLink href="/blog">All Blog Posts</FooterLink>
