@@ -858,6 +858,9 @@ export default function NameGeneratorClient() {
             {[
               ['/guides/cam-model-room-title-generator','Room Title Generator'],
               ['/guides/cam-model-token-calculator','Token Calculator'],
+              ['/tools/profile-studio','Creator Profile Studio'],
+              ['/guides/cam-model-income-tracker','Income Tracker'],
+              ['/tools','All Free Tools'],
               ['/guides/cam-model-hashtag-generator','Hashtag Generator'],
               ['/blog/best-cam-model-tools','Best Cam Model Tools'],
               ['/blog/how-to-increase-cam-earnings','How to Increase Earnings'],

@@ -260,10 +260,11 @@ export default function ChaturbateRoomTitleGeneratorPage() {
               <h2 style={{ fontSize: 24, fontWeight: 800, color: S.textStrong, marginBottom: 20 }}>Related Tools & Guides</h2>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
                 {[
-                  { href: '/dashboard', label: 'Income Tracker', desc: 'Upload your CSV and see session-by-session earnings in USD' },
+                  { href: '/guides/cam-model-income-tracker', label: 'Income Tracker', desc: 'Upload your CSV and see session-by-session earnings in USD' },
                   { href: '/guides/chaturbate-token-calculator', label: 'Token Calculator', desc: 'Convert any token amount to USD at the real broadcaster rate' },
                   { href: '/tools/cam-model-name-generator', label: 'Name Generator', desc: 'Find a cam model name that builds a long-term brand' },
-                  { href: '/demo', label: 'CamCash Demo', desc: 'See what the full analytics dashboard looks like' },
+                  { href: '/tools/profile-studio', label: 'Creator Profile Studio', desc: 'Build a bio and tip menu personalized to your persona' },
+                  { href: '/tools', label: 'All Free Tools', desc: 'See every free CamCash tool in one place' },
                 ].map(({ href, label, desc }) => (
                   <a key={href} href={href} style={{ background: S.card, border: `1px solid ${S.border}`, borderRadius: 12, padding: '18px 20px', textDecoration: 'none', display: 'block' }}>
                     <div style={{ fontSize: 14, fontWeight: 700, color: S.accent, marginBottom: 6 }}>{label}</div>

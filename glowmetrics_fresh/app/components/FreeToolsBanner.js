@@ -30,6 +30,56 @@ export default function FreeToolsBanner() {
             gap: '20px',
           }}
         >
+          {/* Creator Profile Studio */}
+          <a
+            href="/tools/profile-studio"
+            style={{
+              display: 'block',
+              background: 'linear-gradient(135deg, rgba(22,244,255,0.08), rgba(255,43,174,0.08))',
+              border: '1px solid rgba(22,244,255,0.28)',
+              borderRadius: '12px',
+              padding: '28px 24px',
+              textDecoration: 'none',
+              transition: 'border-color 0.2s, background 0.2s',
+            }}
+          >
+            <div style={{ fontSize: '28px', marginBottom: '12px' }}>✍️</div>
+            <div style={{ fontSize: '17px', fontWeight: '700', color: '#f1f5f9', marginBottom: '8px' }}>
+              Creator Profile Studio
+            </div>
+            <p style={{ fontSize: '14px', color: '#94a3b8', margin: '0 0 16px', lineHeight: '1.6' }}>
+              Build a platform-ready bio and a smartly priced tip menu, personalized to your persona and boundaries.
+            </p>
+            <span style={{ fontSize: '13px', fontWeight: '600', color: '#16F4FF' }}>
+              Try it free →
+            </span>
+          </a>
+
+          {/* Cam Model Name Generator */}
+          <a
+            href="/tools/cam-model-name-generator"
+            style={{
+              display: 'block',
+              background: 'rgba(255,43,174,0.06)',
+              border: '1px solid rgba(255,43,174,0.22)',
+              borderRadius: '12px',
+              padding: '28px 24px',
+              textDecoration: 'none',
+              transition: 'border-color 0.2s, background 0.2s',
+            }}
+          >
+            <div style={{ fontSize: '28px', marginBottom: '12px' }}>💫</div>
+            <div style={{ fontSize: '17px', fontWeight: '700', color: '#f1f5f9', marginBottom: '8px' }}>
+              Cam Model Name Generator
+            </div>
+            <p style={{ fontSize: '14px', color: '#94a3b8', margin: '0 0 16px', lineHeight: '1.6' }}>
+              Generate stage name ideas with brand strength scoring and domain availability checks.
+            </p>
+            <span style={{ fontSize: '13px', fontWeight: '600', color: '#ff2bae' }}>
+              Try it free →
+            </span>
+          </a>
+
           {/* Room Title Generator */}
           <a
             href="/guides/chaturbate-room-title-generator"
@@ -94,6 +144,37 @@ export default function FreeToolsBanner() {
             <span style={{ fontSize: '13px', fontWeight: '600', color: '#22d3ee' }}>
               Try it free →
             </span>
+          </a>
+
+          {/* Income Tracker */}
+          <a
+            href="/guides/cam-model-income-tracker"
+            style={{
+              display: 'block',
+              background: 'rgba(16,185,129,0.06)',
+              border: '1px solid rgba(16,185,129,0.22)',
+              borderRadius: '12px',
+              padding: '28px 24px',
+              textDecoration: 'none',
+              transition: 'border-color 0.2s, background 0.2s',
+            }}
+          >
+            <div style={{ fontSize: '28px', marginBottom: '12px' }}>📊</div>
+            <div style={{ fontSize: '17px', fontWeight: '700', color: '#f1f5f9', marginBottom: '8px' }}>
+              Cam Model Income Tracker
+            </div>
+            <p style={{ fontSize: '14px', color: '#94a3b8', margin: '0 0 16px', lineHeight: '1.6' }}>
+              See real earnings by session, hour, platform, and fan — not just a total token count.
+            </p>
+            <span style={{ fontSize: '13px', fontWeight: '600', color: '#10b981' }}>
+              Try it free →
+            </span>
+          </a>
+        </div>
+
+        <div style={{ textAlign: 'center', marginTop: '24px' }}>
+          <a href="/tools" style={{ fontSize: '13px', color: '#a855f7', textDecoration: 'none' }}>
+            → See all free tools
           </a>
         </div>
       </div>
