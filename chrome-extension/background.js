@@ -143,7 +143,13 @@ async function refreshSession() {
 // one refresh-and-retry, same pattern as syncTip below.
 async function liveSessionCall(path, method, body) {
   await restorePromise;
-  if (!session) return null;
+  // Guest mode stores no auth token (session stays null through restore()),
+  // so there's no account to attach a live_sessions row to. Previously this
+  // returned plain null here, which callLiveAction() in popup.js treats
+  // identically to "no active session" — the button silently reset with no
+  // feedback at all, which is exactly the bug #351 tried to fix for the
+  // authenticated-but-failing case. Guest clicks need the same error path.
+  if (!session) return { error: 'Sign in to start tracking a live session — guest mode doesn\'t save sessions.' };
 
   const doFetch = () => fetch(`${API_BASE}${path}`, {
     method,
