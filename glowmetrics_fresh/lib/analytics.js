@@ -36,14 +36,33 @@ export function calculateConfidence(validSessionCount, streamedHours) {
   return { level: 'Medium', label: 'Likely pattern' }
 }
 
+// Intl.DateTimeFormat construction is expensive (locale/timezone data lookup)
+// and aggregateRows() calls these helpers 3x per tip row — for accounts with
+// tens of thousands of tips that added up to hundreds of thousands of
+// formatter constructions per dashboard load. Cache one formatter per
+// (kind, timezone) pair instead of building a new one on every call.
+const formatterCache = new Map()
+
+function getFormatter(kind, tz) {
+  const key = `${kind}|${tz}`
+  let formatter = formatterCache.get(key)
+  if (formatter) return formatter
+
+  if (kind === 'hour') {
+    formatter = new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', hour12: false })
+  } else if (kind === 'dow') {
+    formatter = new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'long' })
+  } else {
+    formatter = new Intl.DateTimeFormat('en-CA', { timeZone: tz })
+  }
+  formatterCache.set(key, formatter)
+  return formatter
+}
+
 export function toLocalHour(dateStr, tz) {
   try {
     const date = new Date(dateStr)
-    const formatted = new Intl.DateTimeFormat('en-US', {
-      timeZone: tz,
-      hour: 'numeric',
-      hour12: false
-    }).format(date)
+    const formatted = getFormatter('hour', tz).format(date)
     const h = parseInt(formatted)
     return isNaN(h) ? 0 : h === 24 ? 0 : h
   } catch { return new Date(dateStr).getUTCHours() }
@@ -52,10 +71,7 @@ export function toLocalHour(dateStr, tz) {
 export function toLocalDow(dateStr, tz) {
   try {
     const date = new Date(dateStr)
-    const dayName = new Intl.DateTimeFormat('en-US', {
-      timeZone: tz,
-      weekday: 'long'
-    }).format(date)
+    const dayName = getFormatter('dow', tz).format(date)
     return ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
       .indexOf(dayName)
   } catch { return new Date(dateStr).getUTCDay() }
@@ -63,9 +79,7 @@ export function toLocalDow(dateStr, tz) {
 
 function toLocalDateStr(dateStr, tz) {
   try {
-    return new Intl.DateTimeFormat('en-CA', {
-      timeZone: tz
-    }).format(new Date(dateStr)) // returns YYYY-MM-DD
+    return getFormatter('date', tz).format(new Date(dateStr)) // returns YYYY-MM-DD
   } catch { return new Date(dateStr).toISOString().slice(0, 10) }
 }
 
