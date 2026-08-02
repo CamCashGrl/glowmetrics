@@ -58,6 +58,20 @@ function fmtTime(d) {
   return `${Math.floor(mins/1440)}d ago`
 }
 
+// For a promo code's claim window (expires_at), which is usually in the
+// future when created — "Xh left" — but should read "Xh ago" once it's
+// passed, unlike fmtTime above which only ever looks backward.
+function fmtClaimWindow(d) {
+  if (!d) return "Never"
+  const mins = Math.round((new Date(d).getTime() - Date.now()) / 60000)
+  const past = mins < 0
+  const abs = Math.abs(mins)
+  const suffix = past ? "ago" : "left"
+  if (abs < 60) return `${abs}m ${suffix}`
+  if (abs < 1440) return `${Math.floor(abs/60)}h ${suffix}`
+  return `${Math.floor(abs/1440)}d ${suffix}`
+}
+
 const pill = (label, color) => (
   <span style={{ display:"inline-block", padding:"2px 8px", borderRadius:99, fontSize:10, fontWeight:700, letterSpacing:"0.04em", background:`${color}22`, color, border:`1px solid ${color}44` }}>
     {label}
@@ -115,7 +129,7 @@ export default function AdminPage() {
   const [sortBy,  setSortBy]  = useState("createdAt")
 
   const [promoCodes, setPromoCodes]   = useState([])
-  const [promoForm,  setPromoForm]    = useState({ code: "", duration_days: 30, max_redemptions: "1", description: "" })
+  const [promoForm,  setPromoForm]    = useState({ code: "", duration_days: 30, max_redemptions: "1", description: "", claim_window_hours: "48" })
   const [promoBusy,  setPromoBusy]    = useState(false)
   const [promoError, setPromoError]   = useState("")
 
@@ -150,6 +164,11 @@ export default function AdminPage() {
     setPromoBusy(true)
     setPromoError("")
     try {
+      const claimWindowHours = parseInt(promoForm.claim_window_hours, 10)
+      const expiresAt = Number.isFinite(claimWindowHours) && claimWindowHours > 0
+        ? new Date(Date.now() + claimWindowHours * 60 * 60 * 1000).toISOString()
+        : null
+
       const res = await fetch("/api/admin/promo-codes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -158,11 +177,12 @@ export default function AdminPage() {
           duration_days: parseInt(promoForm.duration_days, 10) || 30,
           max_redemptions: promoForm.max_redemptions === "" ? null : promoForm.max_redemptions,
           description: promoForm.description || null,
+          expires_at: expiresAt,
         }),
       })
       const d = await res.json()
       if (!res.ok) { setPromoError(d.error || "Failed to create code."); return }
-      setPromoForm({ code: "", duration_days: 30, max_redemptions: "1", description: "" })
+      setPromoForm({ code: "", duration_days: 30, max_redemptions: "1", description: "", claim_window_hours: "48" })
       await loadPromoCodes()
     } catch {
       setPromoError("Failed to create code.")
@@ -453,6 +473,14 @@ export default function AdminPage() {
               onChange={e => setPromoForm(f => ({ ...f, description: e.target.value }))}
               style={{ width:220 }}
             />
+            <input
+              type="number" min={1}
+              placeholder="Claim window, hrs (blank = never expires)"
+              value={promoForm.claim_window_hours}
+              onChange={e => setPromoForm(f => ({ ...f, claim_window_hours: e.target.value }))}
+              style={{ width:230 }}
+              title="How long the code itself can be redeemed for — separate from the number of Pro days it grants once claimed."
+            />
             <button
               onClick={createPromoCode}
               disabled={promoBusy}
@@ -465,18 +493,24 @@ export default function AdminPage() {
           <div style={{ overflowX:"auto" }}>
             <table style={{ width:"100%", borderCollapse:"collapse" }}>
               <thead><tr>
-                <th>Code</th><th>Days Free</th><th>Uses</th><th>Status</th><th>Description</th><th>Created</th><th></th>
+                <th>Code</th><th>Days Free</th><th>Uses</th><th>Claim Window</th><th>Status</th><th>Description</th><th>Created</th><th></th>
               </tr></thead>
               <tbody>
                 {promoCodes.length === 0 && (
-                  <tr><td colSpan={7} style={{ textAlign:"center", color:C.muted, padding:16 }}>No promo codes yet</td></tr>
+                  <tr><td colSpan={8} style={{ textAlign:"center", color:C.muted, padding:16 }}>No promo codes yet</td></tr>
                 )}
-                {promoCodes.map(pc => (
+                {promoCodes.map(pc => {
+                  const isExpired = pc.expires_at && new Date(pc.expires_at) < new Date()
+                  const status = !pc.active ? { label: "Disabled", color: C.muted }
+                    : isExpired ? { label: "Expired", color: C.red }
+                    : { label: "Active", color: C.green }
+                  return (
                   <tr key={pc.id}>
                     <td style={{ fontFamily:"'DM Mono',monospace", color:C.cyan, fontWeight:700 }}>{pc.code}</td>
                     <td style={{ fontFamily:"'DM Mono',monospace" }}>{pc.duration_days}</td>
                     <td style={{ fontFamily:"'DM Mono',monospace" }}>{pc.redemption_count}{pc.max_redemptions ? ` / ${pc.max_redemptions}` : ""}</td>
-                    <td>{pill(pc.active ? "Active" : "Disabled", pc.active ? C.green : C.muted)}</td>
+                    <td style={{ color:C.muted, fontSize:11, whiteSpace:"nowrap" }}>{fmtClaimWindow(pc.expires_at)}</td>
+                    <td>{pill(status.label, status.color)}</td>
                     <td style={{ color:C.muted, fontSize:11 }}>{pc.description || "—"}</td>
                     <td style={{ color:C.muted, whiteSpace:"nowrap" }}>{fmt(pc.created_at)}</td>
                     <td>
@@ -488,7 +522,8 @@ export default function AdminPage() {
                       </button>
                     </td>
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
           </div>
