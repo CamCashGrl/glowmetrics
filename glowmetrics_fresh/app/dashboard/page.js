@@ -1438,8 +1438,8 @@ export default function Dashboard() {
   const liveEngine = useLiveSessionEngine()
   useEffect(() => {
     const status = liveEngine.serverSession?.status
-    setLiveActive(status === 'live' || status === 'starting')
-    setLiveStartTime(liveEngine.serverSession?.started_at ? new Date(liveEngine.serverSession.started_at) : null)
+    setLiveActive(status === 'live')
+    setLiveStartTime(status === 'live' && liveEngine.serverSession?.started_at ? new Date(liveEngine.serverSession.started_at) : null)
   }, [liveEngine.serverSession?.status, liveEngine.serverSession?.started_at])
   const [liveEvents, setLiveEvents] = useState([])
   // ── SESSION REPLAY (Live Mode Sessions tab) ───────────────────────────
@@ -1487,8 +1487,6 @@ export default function Dashboard() {
   }
   const [liveGoalTokens, setLiveGoalTokens] = useState(0)
   const [livePlatform, setLivePlatform] = useState('Chaturbate')
-  const [liveTipInput, setLiveTipInput] = useState({ username: '', tokens: '', usd: '' })
-  const [liveAlerts, setLiveAlerts] = useState([])
   const [liveTick, setLiveTick] = useState(0)
   const [minuteTick, setMinuteTick] = useState(0) // increments every 60s to refresh time-based alerts
   const [betaCount, setBetaCount] = useState(null)

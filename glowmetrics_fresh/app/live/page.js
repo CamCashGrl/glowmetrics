@@ -48,7 +48,6 @@ export default function LivePage({ embedded = false } = {}) {
   // locally. null when nothing is currently active.
   const [coachingPrompt, setCoachingPrompt] = useState(null);
   const [livePlatform, setLivePlatform] = useState('Chaturbate');
-  const [liveTipInput, setLiveTipInput] = useState({ username: '', tokens: '', usd: '' });
   const [flashTipId, setFlashTipId]   = useState(null);
   const [liveTick, setLiveTick]       = useState(0);
   const [sessions, setSessions]       = useState([]);
@@ -116,8 +115,8 @@ export default function LivePage({ embedded = false } = {}) {
   // rewritten individually.
   useEffect(() => {
     const status = engine.serverSession?.status;
-    setLiveActive(status === 'live' || status === 'starting');
-    setLiveStartTime(engine.serverSession?.started_at ? new Date(engine.serverSession.started_at) : null);
+    setLiveActive(status === 'live');
+    setLiveStartTime(status === 'live' && engine.serverSession?.started_at ? new Date(engine.serverSession.started_at) : null);
   }, [engine.serverSession?.status, engine.serverSession?.started_at]);
 
   // "Clear Session Tips" never deletes rows — it sets tips_cleared_at on the
@@ -436,20 +435,6 @@ export default function LivePage({ embedded = false } = {}) {
     }
   };
 
-  // Demo/local-only: pushes straight into liveEvents for the visual feed,
-  // never reaches the server (no live_tips row, no live_session_id). This
-  // is intentional — real coaching-trigger evaluation runs server-side
-  // against live_tips only, so a manually-typed demo entry can never cause
-  // a persisted coaching prompt, count toward session earnings, or appear
-  // in any future outcome/performance reporting.
-  const addTip = () => {
-    const { username, tokens, usd } = liveTipInput;
-    if (!username && !tokens && !usd) return;
-    const raw = { username: username || 'anonymous', tokens: parseInt(tokens) || 0, usd: parseFloat(usd) || 0, timestamp: new Date(), platform: livePlatform };
-    setLiveEvents(prev => [...prev, normalizeTip(raw)]);
-    setLiveTipInput({ username: '', tokens: '', usd: '' });
-  };
-
   // ── DEMO SIMULATION ──────────────────────────────────────────────────
   const DEMO_TIPPERS = [
     { username: 'VenusRain', tokens: 100, usd: 5.00 },
@@ -765,8 +750,7 @@ export default function LivePage({ embedded = false } = {}) {
         </div>
       )}
 
-      {/* ── STICKY NAV ── (standalone /live only — the dashboard already has its own nav/sign-out) */}
-      {!embedded && (
+      {/* ── STICKY NAV ── stays on every surface this renders on, embedded or not */}
       <div style={{ position: 'sticky', top: 0, zIndex: 50, background: 'rgba(4,8,18,0.92)', backdropFilter: 'blur(20px)', borderBottom: '1px solid rgba(168,85,247,0.18)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 28px', flexWrap: 'wrap', gap: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           <a href="/" style={{ fontWeight: 800, fontSize: 18, background: `linear-gradient(90deg, ${C.purple}, ${C.pink})`, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', textDecoration: 'none' }}>
@@ -801,7 +785,6 @@ export default function LivePage({ embedded = false } = {}) {
           )}
         </div>
       </div>
-      )}
 
       <div style={{ padding: embedded ? '0' : '28px 32px', maxWidth: 1280, margin: '0 auto' }}>
 
@@ -855,7 +838,11 @@ export default function LivePage({ embedded = false } = {}) {
                 <span style={{ fontSize: 11, color: ok ? C.green : '#475569', fontWeight: 600 }}>{ok ? okText : offText}</span>
               </div>
             ))}
-            {engine.serverSession && (
+            {/* Timer only runs once the extension has actually connected
+                (status 'live') — started_at is set the moment 'starting' is
+                created, so gating on serverSession alone would tick the
+                clock before anyone is really tracking anything. */}
+            {engine.serverSession && engine.serverSession.status === 'live' && (
               <>
                 <span style={{ fontSize: 11, color: C.muted, fontVariantNumeric: 'tabular-nums' }}>
                   Session: {fmtDuration(engine.duration?.active_duration_seconds)}
@@ -1332,26 +1319,6 @@ export default function LivePage({ embedded = false } = {}) {
                       </div>
                     )}
                   </div>
-                )}
-
-                {/* Collapsible tip input */}
-                {liveActive && (
-                  <details style={{ ...glassCard, borderRadius: 12 }}>
-                    <summary style={{ padding: '11px 16px', cursor: 'pointer', fontSize: 12, color: C.muted, userSelect: 'none', listStyle: 'none', display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{ fontSize: 14 }}>＋</span> Log a tip manually
-                    </summary>
-                    <div style={{ padding: '0 16px 14px' }}>
-                      <div style={{ fontSize: 10, color: C.muted, marginBottom: 8, padding: '5px 8px', borderRadius: 6, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                        Demo only — shown on this screen but not saved, not counted toward earnings, and never used for coaching prompts.
-                      </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: 8 }}>
-                        <input placeholder="Username" value={liveTipInput.username} onChange={e => setLiveTipInput(p => ({ ...p, username: e.target.value }))} onKeyDown={e => e.key === 'Enter' && addTip()} style={inp2} />
-                        <input type="number" placeholder="Tokens" value={liveTipInput.tokens} onChange={e => setLiveTipInput(p => ({ ...p, tokens: e.target.value }))} onKeyDown={e => e.key === 'Enter' && addTip()} style={inp2} />
-                        <input type="number" placeholder="USD" value={liveTipInput.usd} onChange={e => setLiveTipInput(p => ({ ...p, usd: e.target.value }))} onKeyDown={e => e.key === 'Enter' && addTip()} style={inp2} />
-                        <Button onClick={addTip} style={{ padding: '8px 16px', fontSize: 14, whiteSpace: 'nowrap' }}>+ Add</Button>
-                      </div>
-                    </div>
-                  </details>
                 )}
 
                 {/* Live event feed */}
