@@ -64,13 +64,13 @@ export async function POST(req) {
     const deduplication_key = `${user.id}-${username.trim().toLowerCase()}-${amount}-${platform.toLowerCase()}-${tsMs}`;
 
     // Attribute this tip to the caller's current live_sessions row when it's
-    // 'active', or 'needs_resolution' — never while 'paused' or absent.
-    // needs_resolution is included because a tip landing during that window
-    // is the strongest possible proof the stream never actually stopped: it
-    // both cancels the pending "Are you still there?" auto-end (see
-    // sweep_stale_live_session()) and correctly counts toward the session if
-    // it later resolves back to active. A tip that arrives while paused
-    // still gets saved above (no income data is lost), it just isn't
+    // 'live'+active, or 'inactive_warning' — never while 'live'+paused or
+    // absent. inactive_warning is included because a tip landing during
+    // that window is the strongest possible proof the stream never actually
+    // stopped: it both cancels the pending "Are you still there?" auto-end
+    // (see sweep_stale_live_session()) and correctly counts toward the
+    // session if it later resolves back to live. A tip that arrives while
+    // paused still gets saved above (no income data is lost), it just isn't
     // counted toward this session's analytics. Best-effort: a lookup
     // failure must never block saving the tip itself, so it's wrapped
     // separately from the main insert.
@@ -78,13 +78,15 @@ export async function POST(req) {
     try {
       const { data: activeSession } = await supabaseAdmin
         .from('live_sessions')
-        .select('id, status')
+        .select('id, status, live_substate')
         .eq('user_id', user.id)
-        .in('status', ['active', 'needs_resolution'])
+        .in('status', ['live', 'inactive_warning'])
         .order('started_at', { ascending: false })
         .limit(1)
         .maybeSingle();
-      if (activeSession) live_session_id = activeSession.id;
+      if (activeSession && !(activeSession.status === 'live' && activeSession.live_substate === 'paused')) {
+        live_session_id = activeSession.id;
+      }
     } catch (_) {
       // live_sessions lookup failed — tip is still saved, just unattributed.
     }
@@ -217,7 +219,7 @@ export async function GET(req) {
       .from('live_sessions')
       .select('id, tips_cleared_at')
       .eq('user_id', user.id)
-      .in('status', ['starting', 'active', 'paused', 'stopping', 'needs_resolution'])
+      .in('status', ['starting', 'live', 'inactive_warning', 'ending'])
       .order('started_at', { ascending: false })
       .limit(1)
       .maybeSingle();

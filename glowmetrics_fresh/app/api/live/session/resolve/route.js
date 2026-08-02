@@ -33,7 +33,7 @@ const VALID_CHOICES = ['still_live', 'ended', 'end_at_last_heartbeat', 'choose_e
 // a future end time.
 const FUTURE_BUFFER_MS = 5 * 60 * 1000
 
-// Explicit, user-initiated recovery from needs_resolution. Never invoked
+// Explicit, user-initiated recovery from inactive_warning. Never invoked
 // automatically by any heartbeat.
 export async function POST(req) {
   const cors = corsHeaders(req)
@@ -88,7 +88,7 @@ export async function POST(req) {
     const { data: current } = await supabase
       .from('live_sessions')
       .select('started_at')
-      .eq('status', 'needs_resolution')
+      .eq('status', 'inactive_warning')
       .maybeSingle()
     if (current && parsed.getTime() < new Date(current.started_at).getTime()) {
       return NextResponse.json({ error: 'endTime cannot be before the session started' }, { status: 400, headers: cors })

@@ -10,21 +10,41 @@ export async function OPTIONS(req) {
   return new Response(null, { status: 204, headers: corsHeaders(req) })
 }
 
-const UNRESOLVED_STATUSES = ['starting', 'active', 'paused', 'stopping', 'needs_resolution']
+const UNRESOLVED_STATUSES = ['starting', 'live', 'inactive_warning', 'ending']
 
-function shapeCoachingEvent(row) {
+// Presentation label only — priority stays an integer in the DB (it's what
+// ORDER BY priority uses for tie-breaking in record_coaching_event_if_new),
+// this just maps it for clients that want a human label instead of a number.
+const PRIORITY_LABEL = { 1: 'high', 2: 'high', 3: 'medium', 4: 'low' }
+
+// The single typed payload every consumer (live dashboard, extension,
+// Session Replay) renders as-is — none of them recompute coaching, they
+// only render this object. session_timestamp lets Session Replay show
+// "N minutes into the session" without re-deriving it from shown_at.
+function shapeCoachingEvent(row, sessionStartedAt) {
   if (!row) return null
   return {
     id: row.id,
     type: row.type,
     category: row.category,
-    priority: row.priority,
+    priority: PRIORITY_LABEL[row.priority] || 'medium',
+    priority_rank: row.priority,
     title: row.title,
     message: row.message,
     compact_message: row.compact_message,
+    bullets: row.bullets || [],
+    recommended_action: row.recommended_action,
+    estimated_impact: row.estimated_impact,
+    reason: row.reason,
+    confidence: row.confidence,
+    created_at: row.created_at,
     shown_at: row.shown_at,
     expires_at: row.expires_at,
-    action_status: row.action_status,
+    completion_state: row.action_status,
+    acted_on: row.action_status !== 'unmarked',
+    session_timestamp: sessionStartedAt
+      ? Math.max(0, Math.round((new Date(row.shown_at) - new Date(sessionStartedAt)) / 1000))
+      : null,
     related_tipper_id: row.related_tipper_id,
     related_tipper_name: row.related_tipper_name,
     related_amount_usd: row.related_amount_usd,
@@ -84,7 +104,7 @@ export async function GET(req) {
 
   if (active) {
     return NextResponse.json(
-      { session: { id: session.id }, prompt: shapeCoachingEvent(active) },
+      { session: { id: session.id }, prompt: shapeCoachingEvent(active, session.started_at) },
       { headers: { 'Cache-Control': 'no-store', ...cors } }
     )
   }
@@ -132,6 +152,11 @@ export async function GET(req) {
     p_related_tipper_id: winner.relatedTipperId || null,
     p_related_tipper_name: winner.relatedTipperName || null,
     p_related_amount_usd: winner.relatedAmountUsd ?? null,
+    p_bullets: winner.bullets || [],
+    p_recommended_action: winner.recommendedAction || null,
+    p_estimated_impact: winner.estimatedImpact || null,
+    p_reason: winner.reason || null,
+    p_confidence: winner.confidence ?? null,
   })
 
   if (rpcError) {
@@ -140,7 +165,7 @@ export async function GET(req) {
   }
 
   return NextResponse.json(
-    { session: { id: session.id }, prompt: shapeCoachingEvent(created) },
+    { session: { id: session.id }, prompt: shapeCoachingEvent(created, session.started_at) },
     { headers: { 'Cache-Control': 'no-store', ...cors } }
   )
 }
