@@ -32,6 +32,12 @@ const MoneyMap = dynamic(() => import('./MoneyMap'), { ssr: false, loading: () =
 const PrivateSessions = dynamic(() => import('./PrivateSessions'), { ssr: false, loading: () => TAB_LOADING })
 const DashboardGrowthCharts = dynamic(() => import('./DashboardGrowthCharts'), { ssr: false })
 const TokenCalculator = dynamic(() => import('../guides/cam-model-token-calculator/TokenCalculatorClient'), { ssr: false, loading: () => TAB_LOADING })
+// The exact same Live Engine page component /live uses — not a rebuild, not
+// a second copy. Embedding it directly here means the dashboard's "Live
+// Mode Sessions" tab and the standalone /live page are provably running the
+// identical engine, timer, coaching, and tip feed; there is no way for them
+// to drift apart the way the old fake in-dashboard engine did.
+const LiveEnginePage = dynamic(() => import('../live/page'), { ssr: false, loading: () => TAB_LOADING })
 
 // Analytics tracking — works whether or not @vercel/analytics is installed
 let track = (event, props) => {}
@@ -4760,10 +4766,17 @@ const stopImportMessageRotation = () => {
 
           return (
             <div>
+              {/* The real Live Engine, embedded directly — same component /live
+                  renders, same hook, same timer/coaching/tip feed. Go live
+                  without ever leaving the dashboard. */}
+              <div style={{ marginBottom: 32, borderRadius: 20, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.08)' }}>
+                <LiveEnginePage />
+              </div>
+
               <div style={{ marginBottom: 20 }}>
-                <div style={{ fontSize: 20, fontWeight: 800, color: C.white, marginBottom: 4 }}>Live Mode Sessions</div>
+                <div style={{ fontSize: 20, fontWeight: 800, color: C.white, marginBottom: 4 }}>Past Sessions</div>
                 <div style={{ fontSize: 13, color: C.muted }}>
-                  A read-only history of your past Live Mode sessions — pulled directly from the same session record every surface (dashboard, extension, /live) shares. To go live, use the <b>Live Mode</b> tab.
+                  A read-only history of your past Live Mode sessions — pulled directly from the same session record every surface (dashboard, extension, /live) shares.
                 </div>
               </div>
 
