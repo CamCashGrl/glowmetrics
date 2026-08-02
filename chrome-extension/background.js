@@ -166,7 +166,7 @@ async function liveSessionCall(path, method, body) {
     if (!res.ok) {
       const body = await res.json().catch(() => null);
       console.error('[CamCash] live session call failed:', path, res.status, body);
-      return { error: body?.error || `Request failed (${res.status})`, engineDisabled: !!body?.engineDisabled };
+      return { error: body?.error || `Request failed (${res.status})` };
     }
     return await res.json();
   } catch (e) {

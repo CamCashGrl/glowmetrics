@@ -375,9 +375,7 @@ function callLiveAction(action, extra, btn) {
       return;
     }
     if (res?.error) {
-      sessionError.textContent = '❌ ' + (res.engineDisabled
-        ? 'Live sessions aren\'t enabled for this account yet.'
-        : res.error);
+      sessionError.textContent = '❌ ' + res.error;
       sessionError.style.display = 'block';
       renderLiveSession();
       return;
