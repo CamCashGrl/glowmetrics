@@ -750,7 +750,10 @@ export default function LivePage({ embedded = false } = {}) {
         </div>
       )}
 
-      {/* ── STICKY NAV ── stays on every surface this renders on, embedded or not */}
+      {/* ── STICKY NAV ── standalone /live only. The dashboard already has
+          its own persistent top bar and sidebar — this page's own logo/
+          Sign Out/"Full Dashboard" links are redundant and confusing there. */}
+      {!embedded && (
       <div style={{ position: 'sticky', top: 0, zIndex: 50, background: 'rgba(4,8,18,0.92)', backdropFilter: 'blur(20px)', borderBottom: '1px solid rgba(168,85,247,0.18)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 28px', flexWrap: 'wrap', gap: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           <a href="/" style={{ fontWeight: 800, fontSize: 18, background: `linear-gradient(90deg, ${C.purple}, ${C.pink})`, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', textDecoration: 'none' }}>
@@ -785,13 +788,12 @@ export default function LivePage({ embedded = false } = {}) {
           )}
         </div>
       </div>
+      )}
 
       <div style={{ padding: embedded ? '0' : '28px 32px', maxWidth: 1280, margin: '0 auto' }}>
 
-        {/* "Auto-capture your tips" banner — standalone /live only. Embedded
-            in the dashboard, the operational status bar's own compact
-            Download Extension button below is the single canonical prompt. */}
-        {!embedded && user && !liveEvents.some(e => e.sourceUsed === 'extension') && (
+        {/* "Auto-capture your tips" banner — shown both standalone and embedded. */}
+        {user && !liveEvents.some(e => e.sourceUsed === 'extension') && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, borderRadius: 14, padding: '14px 20px', marginBottom: 20, background: 'rgba(168,85,247,0.08)', border: '1px solid rgba(168,85,247,0.25)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <span style={{ fontSize: 22 }}>🧩</span>
