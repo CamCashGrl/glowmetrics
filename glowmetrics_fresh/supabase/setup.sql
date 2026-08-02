@@ -82,29 +82,11 @@ create index if not exists idx_tips_username   on tips(user_id, username);
 create index if not exists idx_notes_user      on tipper_notes(user_id, tipper_username);
 
 -- ── OPTIONAL ADVANCED ANALYTICS TABLES ───────────────────────────────────────
--- These tables support stream/session-level analytics, show tagging,
--- subscriber tracking, and fan events. They are not required for basic usage
--- but are safe to create for future expansion.
-
-create table if not exists stream_sessions (
-  id              bigserial primary key,
-  user_id         uuid references auth.users(id) on delete cascade not null,
-  platform        text not null,
-  start_time      timestamptz not null,
-  end_time        timestamptz not null,
-  hours_streamed  numeric(6,2) not null default 0,
-  tokens          integer not null default 0,
-  usd             numeric(10,2) not null default 0,
-  tip_count       integer not null default 0,
-  viewers         integer not null default 0,
-  new_followers   integer not null default 0,
-  new_subscribers integer not null default 0,
-  show_type       text,
-  game            text,
-  goal_type       text,
-  event_tag       text,
-  created_at      timestamptz default now()
-);
+-- These tables support show tagging, subscriber tracking, and fan events.
+-- They are not required for basic usage but are safe to create for future
+-- expansion. stream_sessions (a pre-Live-Engine session log) was removed —
+-- Live Mode session tracking now lives entirely in live_sessions
+-- (see supabase/migrations/2026071*_add_live_session_*.sql onward).
 
 create table if not exists fan_events (
   id              bigserial primary key,
@@ -112,7 +94,6 @@ create table if not exists fan_events (
   platform        text not null,
   username        text not null,
   event_type      text not null, -- view, follow, tip, whale, subscribe, cancel
-  stream_session_id bigint references stream_sessions(id) on delete cascade,
   tokens          integer default 0,
   usd             numeric(10,2) default 0,
   created_at      timestamptz default now()
@@ -131,12 +112,8 @@ create table if not exists subscriber_stats (
   unique(user_id, platform, stat_date)
 );
 
-alter table stream_sessions   enable row level security;
 alter table fan_events        enable row level security;
 alter table subscriber_stats  enable row level security;
-
-create policy "sessions_own_rw" on stream_sessions
-  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
 create policy "fan_events_own_rw" on fan_events
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
@@ -144,6 +121,5 @@ create policy "fan_events_own_rw" on fan_events
 create policy "subscriber_stats_own_rw" on subscriber_stats
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
-create index if not exists idx_sessions_user_date on stream_sessions(user_id, start_time);
 create index if not exists idx_fan_events_user    on fan_events(user_id, username);
 create index if not exists idx_subs_user_date     on subscriber_stats(user_id, stat_date);

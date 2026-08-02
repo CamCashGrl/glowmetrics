@@ -10,7 +10,7 @@ export async function OPTIONS(req) {
   return new Response(null, { status: 204, headers: corsHeaders(req) })
 }
 
-const UNRESOLVED_STATUSES = ['starting', 'active', 'paused', 'stopping', 'needs_resolution']
+const UNRESOLVED_STATUSES = ['starting', 'live', 'inactive_warning', 'ending']
 
 // Presentation label only — priority stays an integer in the DB (it's what
 // ORDER BY priority uses for tie-breaking in record_coaching_event_if_new),
