@@ -316,8 +316,9 @@ function setStatusPill(cls, text) {
 
 function renderStatusPill() {
   if (!_liveSession) { setStatusPill('status-offline', 'OFFLINE'); return; }
-  if (_liveSession.status === 'needs_resolution') { setStatusPill('status-attention', 'NEEDS ATTENTION'); return; }
-  if (_liveSession.status === 'paused') { setStatusPill('status-paused', 'PAUSED'); return; }
+  if (_liveSession.status === 'starting') { setStatusPill('status-paused', 'STARTING'); return; }
+  if (_liveSession.status === 'inactive_warning') { setStatusPill('status-attention', 'NEEDS ATTENTION'); return; }
+  if (_liveSession.live_substate === 'paused') { setStatusPill('status-paused', 'PAUSED'); return; }
   setStatusPill('status-live', 'LIVE');
 }
 
@@ -399,7 +400,14 @@ function renderLiveSession() {
     return;
   }
 
-  if (_liveSession.status === 'needs_resolution') {
+  if (_liveSession.status === 'starting') {
+    sessionLabel.textContent = 'STARTING';
+    sessionTimerEl.textContent = '';
+    sessionBtnRow.appendChild(liveButton('Cancel', 'session-btn-stop', (e) => callLiveAction('live_stop', {}, e.target)));
+    return;
+  }
+
+  if (_liveSession.status === 'inactive_warning') {
     sessionLabel.textContent = '';
     sessionTimerEl.textContent = '';
     sessionResolutionPrompt.style.display = 'block';
@@ -409,12 +417,12 @@ function renderLiveSession() {
     return;
   }
 
-  // Only 'active' and 'paused' are live states with further actions.
-  // Anything else ('ended', 'stopping', or anything unrecognized) means
-  // there's nothing left to act on — fall back to idle (Start Stream)
-  // instead of defaulting to the live button set, which previously showed
-  // Pause/Stop even after a session had actually ended.
-  if (_liveSession.status !== 'active' && _liveSession.status !== 'paused') {
+  // Only 'live' (active or paused substate) has further actions. Anything
+  // else ('ended', 'ending', or anything unrecognized) means there's
+  // nothing left to act on — fall back to idle (Start Stream) instead of
+  // defaulting to the live button set, which previously showed Pause/Stop
+  // even after a session had actually ended.
+  if (_liveSession.status !== 'live') {
     _liveSession = null;
     sessionLabel.textContent = '';
     sessionTimerEl.textContent = '';
@@ -425,11 +433,11 @@ function renderLiveSession() {
   }
 
   const elapsedSinceFetch = (Date.now() - _liveSessionFetchedAtMs) / 1000;
-  const liveSecs = _liveSession.status === 'active'
+  const liveSecs = _liveSession.live_substate === 'active'
     ? (_liveSession.active_duration_seconds || 0) + elapsedSinceFetch
     : (_liveSession.active_duration_seconds || 0);
 
-  if (_liveSession.status === 'paused') {
+  if (_liveSession.live_substate === 'paused') {
     sessionLabel.textContent = 'PAUSED';
     sessionTimerEl.textContent = fmtDuration(liveSecs);
     sessionBtnRow.appendChild(liveButton('▶ Resume', 'session-btn-resume', (e) => callLiveAction('live_resume', {}, e.target)));
@@ -442,4 +450,4 @@ function renderLiveSession() {
   }
 }
 
-setInterval(() => { if (_liveSession && _liveSession.status === 'active') renderLiveSession(); }, 1000);
+setInterval(() => { if (_liveSession && _liveSession.status === 'live' && _liveSession.live_substate === 'active') renderLiveSession(); }, 1000);
