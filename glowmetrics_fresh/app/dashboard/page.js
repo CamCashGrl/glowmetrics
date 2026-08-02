@@ -2088,15 +2088,28 @@ export default function Dashboard() {
     else setLoading(true)
     try {
       const userTz = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC'
-      let allData = []
-      let from = 0
       const PAGE = 1000
-      while (true) {
-        const { data, error } = await supabase.from("tips").select("*").eq("user_id", uid).order("date_time", { ascending: true }).range(from, from + PAGE - 1)
-        if (error) break
-        if (data?.length) allData = [...allData, ...data]
-        if (!data || data.length < PAGE) break
-        from += PAGE
+      // First page also asks for the exact row count, so the remaining pages
+      // (if any) can be fired off in parallel instead of one round trip at a
+      // time — with tens of thousands of rows the old serial loop meant
+      // dozens of sequential awaits before the dashboard could paint at all.
+      let allData = []
+      const { data: firstPage, count, error: firstErr } = await supabase
+        .from("tips").select("*", { count: 'exact' }).eq("user_id", uid)
+        .order("date_time", { ascending: true }).range(0, PAGE - 1)
+      if (!firstErr && firstPage) {
+        allData = firstPage
+        const total = count ?? firstPage.length
+        if (total > PAGE) {
+          const remainingRanges = []
+          for (let from = PAGE; from < total; from += PAGE) remainingRanges.push(from)
+          const pages = await Promise.all(remainingRanges.map(from =>
+            supabase.from("tips").select("*").eq("user_id", uid).order("date_time", { ascending: true }).range(from, from + PAGE - 1)
+          ))
+          for (const { data, error } of pages) {
+            if (!error && data?.length) allData = allData.concat(data)
+          }
+        }
       }
       if (allData.length) {
         setTips(allData)
@@ -2107,11 +2120,6 @@ export default function Dashboard() {
         } catch (engineErr) {
           console.error('[loadData] runEngine failed:', engineErr)
         }
-        // Save to cache
-        try {
-          sessionStorage.setItem(`camcash_tips_${uid}`, JSON.stringify(allData))
-          sessionStorage.setItem(`camcash_tips_time_${uid}`, Date.now().toString())
-        } catch(e) {} // quota exceeded — fine, skip cache
       }
       // paid_sessions (BongaCams Private/Full-Private/Group/Spy) — separate
       // table, separate state, never merged into `tips`/`analytics`. Same
