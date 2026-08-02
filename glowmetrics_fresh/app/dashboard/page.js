@@ -4751,6 +4751,12 @@ const stopImportMessageRotation = () => {
           </div>
         )}
 
+        {activeTab === "live" && (
+          <div style={{ borderRadius: 20, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.08)' }}>
+            <LiveEnginePage />
+          </div>
+        )}
+
         {activeTab === "live-sessions" && (() => {
           const fmtSessionDuration = (secs) => {
             const s = Math.max(0, Math.floor(secs || 0))
@@ -4766,17 +4772,10 @@ const stopImportMessageRotation = () => {
 
           return (
             <div>
-              {/* The real Live Engine, embedded directly — same component /live
-                  renders, same hook, same timer/coaching/tip feed. Go live
-                  without ever leaving the dashboard. */}
-              <div style={{ marginBottom: 32, borderRadius: 20, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.08)' }}>
-                <LiveEnginePage />
-              </div>
-
               <div style={{ marginBottom: 20 }}>
-                <div style={{ fontSize: 20, fontWeight: 800, color: C.white, marginBottom: 4 }}>Past Sessions</div>
+                <div style={{ fontSize: 20, fontWeight: 800, color: C.white, marginBottom: 4 }}>Live Mode Sessions</div>
                 <div style={{ fontSize: 13, color: C.muted }}>
-                  A read-only history of your past Live Mode sessions — pulled directly from the same session record every surface (dashboard, extension, /live) shares.
+                  A read-only report of your past Live Mode sessions — pulled directly from the same session record every surface (dashboard, extension, Live Mode tab) shares. To go live, use the <b>Live Mode</b> tab.
                 </div>
               </div>
 

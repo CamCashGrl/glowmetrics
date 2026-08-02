@@ -22,7 +22,8 @@ const NAV = [
     group: "SESSIONS",
     items: [
       { id: "sessions", icon: "🎥", label: "Free Chat Sessions" },
-      { id: "live-sessions", icon: "🔴", label: "Live Mode" },
+      { id: "live",     icon: "🔴", label: "Live Mode" },
+      { id: "live-sessions", icon: "📋", label: "Live Mode Sessions" },
       { id: "private",  icon: "💎", label: "Private Sessions" },
     ]
   },
