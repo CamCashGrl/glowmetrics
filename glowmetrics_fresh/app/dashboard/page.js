@@ -3173,7 +3173,7 @@ const stopImportMessageRotation = () => {
                 </div>
                 </div>
                 <div style={{ paddingLeft:12, borderLeft:'1px solid rgba(255,255,255,0.06)', flexShrink:0, display:'flex', gap:8, alignItems:'center', position:'relative' }}>
-                  <button onClick={() => { setActiveTab('live-sessions'); if (typeof window !== 'undefined') { localStorage.setItem('camcash_tab','live-sessions'); window.scrollTo({top:0,behavior:'instant'}); } }} style={{ padding:'8px 20px', borderRadius:11, background:'linear-gradient(135deg,#10B981,#22D3EE)', border:'none', color:'#fff', fontWeight:800, fontSize:13, cursor:'pointer', whiteSpace:'nowrap', boxShadow:'0 0 14px rgba(16,185,129,0.3)', letterSpacing:0.3 }}>
+                  <button onClick={() => { setActiveTab('live'); if (typeof window !== 'undefined') { localStorage.setItem('camcash_tab','live'); window.scrollTo({top:0,behavior:'instant'}); } }} style={{ padding:'8px 20px', borderRadius:11, background:'linear-gradient(135deg,#10B981,#22D3EE)', border:'none', color:'#fff', fontWeight:800, fontSize:13, cursor:'pointer', whiteSpace:'nowrap', boxShadow:'0 0 14px rgba(16,185,129,0.3)', letterSpacing:0.3 }}>
                     ⚡ Go Live
                   </button>
                 </div>
@@ -4751,11 +4751,7 @@ const stopImportMessageRotation = () => {
           </div>
         )}
 
-        {activeTab === "live" && (
-          <div style={{ borderRadius: 20, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.08)' }}>
-            <LiveEnginePage />
-          </div>
-        )}
+        {activeTab === "live" && <LiveEnginePage embedded />}
 
         {activeTab === "live-sessions" && (() => {
           const fmtSessionDuration = (secs) => {

@@ -28,7 +28,14 @@ const glassCard = {
   boxShadow: '0 0 40px rgba(59,130,246,0.15), 0 0 80px rgba(236,72,153,0.08)',
 };
 
-export default function LivePage() {
+// embedded=true when rendered inside the dashboard's Live Mode tab
+// (app/dashboard/page.js) instead of the standalone /live route. Suppresses
+// this page's own top nav, sign-in/sign-out, "Full Dashboard" link, and the
+// marketing/onboarding sections aimed at a brand-new unauthenticated
+// visitor — none of that makes sense for someone already inside the
+// dashboard. The actual engine (status bar, room hero, coaching, tip feed,
+// stats) renders identically either way — same component, same hook.
+export default function LivePage({ embedded = false } = {}) {
   const [user, setUser]               = useState(null);
   const [authStatus, setAuthStatus]   = useState('connecting');
   const [liveActive, setLiveActive]   = useState(false);
@@ -668,7 +675,7 @@ export default function LivePage() {
   // ── RENDER ───────────────────────────────────────────────────────────
 
   return (
-    <div style={{ minHeight: '100vh', background: C.bg, fontFamily: 'system-ui', color: C.white }}>
+    <div style={{ minHeight: embedded ? 'auto' : '100vh', background: embedded ? 'transparent' : C.bg, fontFamily: 'system-ui', color: C.white }}>
       <style>{`
         @keyframes cc-slide-in { from{opacity:0;transform:translateY(-8px);} to{opacity:1;transform:translateY(0);} }
         @keyframes cc-slide    { from{opacity:0;transform:translateY(-6px);} to{opacity:1;transform:translateY(0);} }
@@ -758,7 +765,8 @@ export default function LivePage() {
         </div>
       )}
 
-      {/* ── STICKY NAV ────────────────────────────────────────────── */}
+      {/* ── STICKY NAV ── (standalone /live only — the dashboard already has its own nav/sign-out) */}
+      {!embedded && (
       <div style={{ position: 'sticky', top: 0, zIndex: 50, background: 'rgba(4,8,18,0.92)', backdropFilter: 'blur(20px)', borderBottom: '1px solid rgba(168,85,247,0.18)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 28px', flexWrap: 'wrap', gap: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           <a href="/" style={{ fontWeight: 800, fontSize: 18, background: `linear-gradient(90deg, ${C.purple}, ${C.pink})`, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', textDecoration: 'none' }}>
@@ -793,10 +801,14 @@ export default function LivePage() {
           )}
         </div>
       </div>
+      )}
 
-      <div style={{ padding: '28px 32px', maxWidth: 1280, margin: '0 auto' }}>
+      <div style={{ padding: embedded ? '0' : '28px 32px', maxWidth: 1280, margin: '0 auto' }}>
 
-        {user && !liveEvents.some(e => e.sourceUsed === 'extension') && (
+        {/* "Auto-capture your tips" banner — standalone /live only. Embedded
+            in the dashboard, the operational status bar's own compact
+            Download Extension button below is the single canonical prompt. */}
+        {!embedded && user && !liveEvents.some(e => e.sourceUsed === 'extension') && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, borderRadius: 14, padding: '14px 20px', marginBottom: 20, background: 'rgba(168,85,247,0.08)', border: '1px solid rgba(168,85,247,0.25)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <span style={{ fontSize: 22 }}>🧩</span>
@@ -1515,7 +1527,7 @@ export default function LivePage() {
                       ? `${liveEvents.filter(e => e.sourceUsed === 'extension').length} tips captured automatically`
                       : 'Install the CamCash Chrome extension — tips appear here automatically.'}
                   </div>
-                  {!liveEvents.some(e => e.sourceUsed === 'extension') && (
+                  {!embedded && !liveEvents.some(e => e.sourceUsed === 'extension') && (
                     <Button as="a" href="/camcash-extension.zip" download="camcash-extension.zip" style={{ padding: '6px 14px', fontSize: 11 }}>📥 Download Extension →</Button>
                   )}
                 </div>
@@ -1568,7 +1580,10 @@ export default function LivePage() {
           </div>
         )}
 
-        {/* ── EXTENSION + ACCESS + QR ──────────────────────────────── */}
+        {/* ── EXTENSION + ACCESS + QR ── (standalone /live only — marketing
+            content aimed at a new unauthenticated visitor; not relevant to
+            someone already inside the dashboard) */}
+        {!embedded && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20, marginTop: 12 }}>
 
           {/* Extension card */}
@@ -1644,6 +1659,7 @@ export default function LivePage() {
             </div>
           </div>
         </div>
+        )}
 
       </div>
 
