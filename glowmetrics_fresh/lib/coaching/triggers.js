@@ -80,6 +80,11 @@ export function computeCoachingState({ tips, startedAt, goalTokens, now = Date.n
 
   const topEntry = Object.entries(tipperMap).sort((a, b) => b[1] - a[1])[0];
 
+  // Real measured pace delta (not a guess) — fUPM is first-half $/min,
+  // sUPM is second-half $/min, both already computed above. Exposed so
+  // triggers can state an actual percentage instead of just a direction.
+  const paceDeltaPct = fUPM > 0 ? Math.round(((sUPM - fUPM) / fUPM) * 100) : null;
+
   return {
     totalRevenue: parseFloat(totalRevenue.toFixed(2)),
     totalTokens,
@@ -87,6 +92,8 @@ export function computeCoachingState({ tips, startedAt, goalTokens, now = Date.n
     timeSinceLastTip,
     goalProgress,
     paceStatus,
+    paceDeltaPct,
+    paceWindowMins: parseFloat(halfMins.toFixed(1)),
     liveOnlyCount: tips.length,
     topTipper: topEntry ? { username: topEntry[0], revenue: parseFloat(topEntry[1].toFixed(2)) } : null,
   };
@@ -119,7 +126,7 @@ export const TRIGGER_LEVEL = {
 // and both are deterministically testable together.
 export function evaluateCoachingTriggers({ state, tips, strategy, now = Date.now() }) {
   if (!state) return [];
-  const { timeSinceLastTip, paceStatus, goalProgress, topTipper, totalRevenue, elapsedMins, liveOnlyCount } = state;
+  const { timeSinceLastTip, paceStatus, goalProgress, topTipper, totalRevenue, elapsedMins, liveOnlyCount, paceDeltaPct, paceWindowMins } = state;
 
   const deadAirCrit = strategy === 'aggressive' ? 6 : 8;
   const deadAirHigh = strategy === 'aggressive' ? 4 : 5;
@@ -136,6 +143,8 @@ export function evaluateCoachingTriggers({ state, tips, strategy, now = Date.now
       type: 'dead_air_critical', priority: 1, dedupeKey: 'dead_air_critical',
       title: context, message: `${context} — ${action}`, compactMessage: action,
       icon: '🚨', level: 'critical',
+      reason: context, confidence: Math.min(1, timeSinceLastTip / (deadAirCrit * 2)),
+      recommendedAction: action, bullets: [action],
     });
   }
 
@@ -146,6 +155,8 @@ export function evaluateCoachingTriggers({ state, tips, strategy, now = Date.now
       type: 'goal_push', priority: 1, dedupeKey: 'goal_push',
       title: context, message: `${context} — ${action}`, compactMessage: `${goalProgress}% to goal — push NOW, announce the reward`,
       icon: '🎯', level: 'critical',
+      reason: context, confidence: goalProgress / 100,
+      recommendedAction: action, bullets: [action],
     });
   }
 
@@ -160,6 +171,8 @@ export function evaluateCoachingTriggers({ state, tips, strategy, now = Date.now
       type: 'dead_air_high', priority: 2, dedupeKey: 'dead_air_high',
       title: context, message: `${context} — ${action}`, compactMessage: `${Math.round(timeSinceLastTip)} min since last tip — ${action}`,
       icon: '⚠️', level: 'warning',
+      reason: context, confidence: Math.min(1, timeSinceLastTip / deadAirCrit),
+      recommendedAction: action, bullets: [action],
     });
   }
 
@@ -168,10 +181,15 @@ export function evaluateCoachingTriggers({ state, tips, strategy, now = Date.now
     const action = strategy === 'aggressive'
       ? `Announce a limited-time exclusive offer right now`
       : `Activate toy or set a micro-goal to restart momentum`;
+    const reason = paceDeltaPct !== null
+      ? `Token pace has fallen ${Math.abs(paceDeltaPct)}% below your session average over the last ${Math.round(paceWindowMins)} minutes.`
+      : context;
     fired.push({
       type: 'pace_below', priority: 2, dedupeKey: 'pace_below',
       title: context, message: `${context} — ${action}`, compactMessage: `Pace dropping — ${action}`,
       icon: '📉', level: 'warning',
+      reason, confidence: paceDeltaPct !== null ? Math.min(1, Math.abs(paceDeltaPct) / 50) : 0.5,
+      recommendedAction: action, bullets: [action],
     });
   }
 
@@ -182,6 +200,8 @@ export function evaluateCoachingTriggers({ state, tips, strategy, now = Date.now
       type: 'stream_fatigue', priority: 2, dedupeKey: 'stream_fatigue',
       title: context, message: `${context} — ${action}`, compactMessage: `Stream fatigue — ${action}`,
       icon: '😴', level: 'warning',
+      reason: context, confidence: Math.min(1, elapsedMins / 150),
+      recommendedAction: action, bullets: [action],
     });
   }
 
@@ -191,10 +211,15 @@ export function evaluateCoachingTriggers({ state, tips, strategy, now = Date.now
       ? `Raise your goal amount RIGHT NOW while the room is hot`
       : `Don't break the energy — keep doing exactly what you're doing`;
     const compactMessage = strategy === 'aggressive' ? `Momentum is hot — ${action}` : `Momentum building — ${action}`;
+    const reason = paceDeltaPct !== null
+      ? `Token pace is up ${Math.abs(paceDeltaPct)}% above your session average over the last ${Math.round(paceWindowMins)} minutes.`
+      : context;
     fired.push({
       type: 'pace_above', priority: 3, dedupeKey: 'pace_above',
       title: context, message: `${context} — ${action}`, compactMessage,
       icon: '🔥', level: 'success',
+      reason, confidence: paceDeltaPct !== null ? Math.min(1, Math.abs(paceDeltaPct) / 50) : 0.5,
+      recommendedAction: action, bullets: [action],
     });
   }
 
@@ -205,6 +230,8 @@ export function evaluateCoachingTriggers({ state, tips, strategy, now = Date.now
       type: 'goal_hit', priority: 3, dedupeKey: 'goal_hit',
       title: context, message: `${context} ${action}`, compactMessage: `Goal hit! ${action}`,
       icon: '🎉', level: 'success',
+      reason: context, confidence: 1,
+      recommendedAction: action, bullets: [action],
     });
   }
 
@@ -235,6 +262,8 @@ export function evaluateCoachingTriggers({ state, tips, strategy, now = Date.now
           compactMessage: `${uname} tips every ~${avgMins} min — ${sinceMins} min since their last. Call them out!`,
           icon: '🐋', level: 'info',
           relatedTipperId: uname, relatedTipperName: uname,
+          reason: context, confidence: Math.min(1, (ratio - 1)),
+          recommendedAction: action, bullets: [action],
         });
         break; // only the first qualifying tipper per evaluation, matching the original's `surfaced` flag
       }
@@ -251,6 +280,8 @@ export function evaluateCoachingTriggers({ state, tips, strategy, now = Date.now
       compactMessage: `${topTipper.username} is ${pctStr}% of revenue — give them attention`,
       icon: '🐳', level: 'info',
       relatedTipperId: topTipper.username, relatedTipperName: topTipper.username, relatedAmountUsd: topTipper.revenue,
+      reason: context, confidence: Math.min(1, topTipper.revenue / totalRevenue),
+      recommendedAction: action, bullets: [action],
     });
   }
 
