@@ -9,7 +9,7 @@
     },
     {
       "path": "/api/cron/live-session-sweep",
-      "schedule": "*/5 * * * *"
+      "schedule": "0 14 * * *"
     }
   ]
 }
