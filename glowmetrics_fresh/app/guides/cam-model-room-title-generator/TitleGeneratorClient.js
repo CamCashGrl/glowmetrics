@@ -1,5 +1,6 @@
 'use client'
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import Button from '../../../components/ui/Button'
 
 // ─── Design tokens ─────────────────────────────────────────────────────────────
@@ -449,7 +450,20 @@ function HashtagGenerator() {
 
 // ─── Main export ──────────────────────────────────────────────────────────────
 export default function TitleGeneratorClient() {
+  return (
+    <Suspense fallback={null}>
+      <TitleGeneratorClientInner />
+    </Suspense>
+  )
+}
+
+function TitleGeneratorClientInner() {
   const [activeTab, setActiveTab] = useState('titles')
+  const searchParams = useSearchParams()
+
+  useEffect(() => {
+    if (searchParams.get('tab') === 'hashtags') setActiveTab('hashtags')
+  }, [searchParams])
 
   return (
     <div style={{ background: S.bg }}>
