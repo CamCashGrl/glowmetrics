@@ -76,6 +76,13 @@ const FREE_TOOLS = [
   },
 ]
 
+const UPGRADE_GALLERY = [
+  { src: IMG('full-cover-web.jpg'), lg: IMG('full-cover-lg.jpg'), alt: 'Pretty Profitz VIP Client Tracker cover' },
+  { src: IMG('full-whats-included-web.jpg'), lg: IMG('full-whats-included-lg.jpg'), alt: "What's included in the full VIP Client Tracker" },
+  { src: IMG('full-charts-web.jpg'), lg: IMG('full-charts-lg.jpg'), alt: 'Monthly VIP Overview and VIP Relationship Scorecard pages' },
+  { src: IMG('full-master-list-preview-web.jpg'), lg: IMG('full-master-list-preview-lg.jpg'), alt: 'VIP Master List page from the full workbook' },
+]
+
 const UPGRADE_BULLETS = [
   '30+ Premium Creator Business Worksheets',
   'Monthly Overview Dashboard',
@@ -437,6 +444,7 @@ function Lightbox({ item, onClose }) {
 // ─── Page ────────────────────────────────────────────────────────────────
 export default function FreeVipTrackerClient() {
   const [lightboxItem, setLightboxItem] = useState(null)
+  const [activeUpgradeImg, setActiveUpgradeImg] = useState(0)
 
   return (
     <div
@@ -741,17 +749,43 @@ export default function FreeVipTrackerClient() {
           }}
           className="vip-upgrade-card"
         >
-          <img
-            src={FULL_PRODUCT.coverImage}
-            alt={FULL_PRODUCT.shortTitle}
-            loading="lazy"
-            style={{
-              width: '100%',
-              borderRadius: 18,
-              border: '1px solid rgba(255,255,255,0.1)',
-              boxShadow: '0 20px 50px rgba(0,0,0,0.5)',
-            }}
-          />
+          <div>
+            <button
+              onClick={() => setLightboxItem(UPGRADE_GALLERY[activeUpgradeImg])}
+              style={{ display: 'block', width: '100%', padding: 0, border: 'none', background: 'none', cursor: 'zoom-in' }}
+            >
+              <img
+                src={UPGRADE_GALLERY[activeUpgradeImg].src}
+                alt={UPGRADE_GALLERY[activeUpgradeImg].alt}
+                loading="lazy"
+                style={{
+                  width: '100%',
+                  borderRadius: 18,
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  boxShadow: '0 20px 50px rgba(0,0,0,0.5)',
+                }}
+              />
+            </button>
+            <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+              {UPGRADE_GALLERY.map((img, i) => (
+                <button
+                  key={img.src}
+                  onClick={() => setActiveUpgradeImg(i)}
+                  style={{
+                    flex: 1,
+                    padding: 0,
+                    borderRadius: 10,
+                    overflow: 'hidden',
+                    cursor: 'pointer',
+                    background: 'rgba(5,9,24,0.72)',
+                    border: i === activeUpgradeImg ? `2px solid ${C.cyan}` : '1px solid rgba(255,255,255,0.12)',
+                  }}
+                >
+                  <img src={img.src} alt="" style={{ width: '100%', aspectRatio: '1 / 1', objectFit: 'cover', display: 'block' }} />
+                </button>
+              ))}
+            </div>
+          </div>
           <div>
             <h3 style={{ fontSize: 22, fontWeight: 800, color: C.white, margin: '0 0 6px' }}>
               Pretty Profitz VIP Client Tracker
