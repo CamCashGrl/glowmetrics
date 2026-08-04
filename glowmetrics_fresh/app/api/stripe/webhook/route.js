@@ -12,7 +12,7 @@ function getSupabaseAdmin() {
 }
 
 async function getUserByEmail(supabase, email) {
-  const { data, error } = await supabase.auth.admin.listUsers()
+  const { data, error } = await supabase.auth.admin.listUsers({ perPage: 1000 })
   if (error) return null
   return data.users.find(u => u.email === email) || null
 }
@@ -20,6 +20,32 @@ async function getUserByEmail(supabase, email) {
 async function getEmailFromCustomer(customerId) {
   const customer = await stripe.customers.retrieve(customerId)
   return customer?.email || null
+}
+
+// Resolves the Supabase user id for a Stripe event, preferring the
+// identifiers we control (checkout metadata.userId, profiles.stripe_customer_id)
+// over an email lookup against auth.admin.listUsers() — email can change,
+// and a Stripe customer created outside our checkout route may not match a
+// Supabase user by email at all.
+async function resolveUserId(supabase, { metadataUserId, customerId }) {
+  if (metadataUserId) return metadataUserId
+
+  if (customerId) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('stripe_customer_id', customerId)
+      .single()
+    if (profile?.id) return profile.id
+
+    const email = await getEmailFromCustomer(customerId)
+    if (email) {
+      const user = await getUserByEmail(supabase, email)
+      if (user) return user.id
+    }
+  }
+
+  return null
 }
 
 async function sendResendNotification(subject, text) {
@@ -54,6 +80,12 @@ async function updateProfile(supabase, userId, update) {
   return true
 }
 
+// Stripe subscription statuses that should keep/grant Pro access.
+// `past_due`/`unpaid` intentionally keep access during Stripe's own retry
+// window instead of yanking it on the first failed charge — Stripe will
+// fire another `customer.subscription.updated` once it resolves either way.
+const ACTIVE_STATUSES = new Set(['active', 'trialing', 'past_due'])
+
 export async function POST(request) {
   const supabase = getSupabaseAdmin()
   const body = await request.text()
@@ -75,16 +107,18 @@ export async function POST(request) {
     switch (event.type) {
       case 'checkout.session.completed': {
         const session = event.data.object
-        const email = session.customer_details?.email || session.customer_email
-        if (!email) break
-        const user = await getUserByEmail(supabase, email)
-        if (!user) break
+        const userId = await resolveUserId(supabase, {
+          metadataUserId: session.metadata?.userId,
+          customerId: session.customer,
+        })
+        if (!userId) break
         const update = { plan: 'pro' }
         if (session.customer) update.stripe_customer_id = session.customer
-        const ok = await updateProfile(supabase, user.id, update)
+        const ok = await updateProfile(supabase, userId, update)
         if (!ok) {
           return NextResponse.json({ error: 'Failed to update profile' }, { status: 500 })
         }
+        const email = session.customer_details?.email || session.customer_email || userId
         await sendResendNotification(
           `💰 New CamCash Subscriber — ${email} subscribed to Pro`,
           `${email} just subscribed to the Pro plan.`
@@ -94,16 +128,18 @@ export async function POST(request) {
 
       case 'customer.subscription.created': {
         const sub = event.data.object
-        const email = await getEmailFromCustomer(sub.customer)
-        if (!email) break
-        const user = await getUserByEmail(supabase, email)
-        if (!user) break
+        const userId = await resolveUserId(supabase, {
+          metadataUserId: sub.metadata?.userId,
+          customerId: sub.customer,
+        })
+        if (!userId) break
         const update = { plan: 'pro' }
         if (sub.customer) update.stripe_customer_id = sub.customer
-        const ok = await updateProfile(supabase, user.id, update)
+        const ok = await updateProfile(supabase, userId, update)
         if (!ok) {
           return NextResponse.json({ error: 'Failed to update profile' }, { status: 500 })
         }
+        const email = await getEmailFromCustomer(sub.customer) || userId
         await sendResendNotification(
           `💰 New CamCash Subscriber — ${email} subscribed to Pro`,
           `${email} just subscribed to the Pro plan.`
@@ -113,14 +149,16 @@ export async function POST(request) {
 
       case 'customer.subscription.deleted': {
         const sub = event.data.object
-        const email = await getEmailFromCustomer(sub.customer)
-        if (!email) break
-        const user = await getUserByEmail(supabase, email)
-        if (!user) break
-        const ok = await updateProfile(supabase, user.id, { plan: 'free' })
+        const userId = await resolveUserId(supabase, {
+          metadataUserId: sub.metadata?.userId,
+          customerId: sub.customer,
+        })
+        if (!userId) break
+        const ok = await updateProfile(supabase, userId, { plan: 'free' })
         if (!ok) {
           return NextResponse.json({ error: 'Failed to update profile' }, { status: 500 })
         }
+        const email = await getEmailFromCustomer(sub.customer) || userId
         await sendResendNotification(
           `❌ CamCash Cancellation — ${email} cancelled their subscription`,
           `${email} cancelled their Pro subscription.`
@@ -130,20 +168,29 @@ export async function POST(request) {
 
       case 'customer.subscription.updated': {
         const sub = event.data.object
-        const email = await getEmailFromCustomer(sub.customer)
-        if (!email) break
-        const user = await getUserByEmail(supabase, email)
-        if (!user) break
-        const plan = sub.status === 'active' ? 'pro' : 'free'
-        const ok = await updateProfile(supabase, user.id, { plan })
+        const userId = await resolveUserId(supabase, {
+          metadataUserId: sub.metadata?.userId,
+          customerId: sub.customer,
+        })
+        if (!userId) break
+        const plan = ACTIVE_STATUSES.has(sub.status) ? 'pro' : 'free'
+        const ok = await updateProfile(supabase, userId, { plan })
         if (!ok) {
           return NextResponse.json({ error: 'Failed to update profile' }, { status: 500 })
         }
+        const email = await getEmailFromCustomer(sub.customer) || userId
         if (plan === 'pro') {
-          await sendResendNotification(
-            `💰 New CamCash Subscriber — ${email} subscribed to Pro`,
-            `${email} reactivated their Pro plan.`
-          )
+          if (sub.status === 'past_due') {
+            await sendResendNotification(
+              `⚠️ CamCash Payment Past Due — ${email}`,
+              `${email}'s subscription payment is past due. Access is still active during Stripe's retry window.`
+            )
+          } else {
+            await sendResendNotification(
+              `💰 New CamCash Subscriber — ${email} subscribed to Pro`,
+              `${email} reactivated their Pro plan.`
+            )
+          }
         } else {
           await sendResendNotification(
             `❌ CamCash Cancellation — ${email} cancelled their subscription`,

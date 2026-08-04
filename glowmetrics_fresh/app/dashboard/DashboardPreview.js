@@ -17,6 +17,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { isProPlan } from '../../lib/plan'
 
 // ── BRAND TOKENS ─────────────────────────────────────────────
 const C = {
@@ -118,8 +119,8 @@ export function getDashboardStage({ tipCount = 0, sessionCount = 0, totalEarning
   return 'ready'
 }
 
-export function getPlanAccess(userPlan = 'free', trackedPlatformCount = 0) {
-  const isPro = userPlan === 'pro'
+export function getPlanAccess(userPlan = 'free', trackedPlatformCount = 0, planExpiresAt = null) {
+  const isPro = isProPlan({ plan: userPlan, plan_expires_at: planExpiresAt })
   return {
     isPro, isFree: !isPro,
     canTrackMultiplePlatforms: isPro,
@@ -129,8 +130,8 @@ export function getPlanAccess(userPlan = 'free', trackedPlatformCount = 0) {
   }
 }
 
-export function getFeatureLockState({ feature, userPlan = 'free', totalTips = 0, totalSessions = 0, totalFans = 0, totalEarnings = 0, totalStreamMinutes = 0, importedPlatforms = [], liveModeSessions = 0 }) {
-  const isPro = userPlan === 'pro'
+export function getFeatureLockState({ feature, userPlan = 'free', planExpiresAt = null, totalTips = 0, totalSessions = 0, totalFans = 0, totalEarnings = 0, totalStreamMinutes = 0, importedPlatforms = [], liveModeSessions = 0 }) {
+  const isPro = isProPlan({ plan: userPlan, plan_expires_at: planExpiresAt })
   const platformCount = importedPlatforms?.length || 0
   const rules = {
     bestStreamingTimes:    { needsData: totalSessions < 3 || totalTips < 25, requiresPro: false, dataMessage: 'Unlocks after 3+ sessions with timestamps.', proMessage: null },
@@ -352,7 +353,7 @@ export function EmptyDashboard({ onImport, onLiveMode }) {
 // ============================================================
 // DashboardPreview — main component
 // ============================================================
-export function DashboardPreview({ tips = [], analytics, userPlan = 'free', onAddHistory, onContinue, onUpgrade, onLiveMode }) {
+export function DashboardPreview({ tips = [], analytics, userPlan = 'free', planExpiresAt = null, onAddHistory, onContinue, onUpgrade, onLiveMode }) {
   const router = useRouter()
 
   // ── Safe derived values ───────────────────────────────────
@@ -396,7 +397,7 @@ export function DashboardPreview({ tips = [], analytics, userPlan = 'free', onAd
 
   // Readiness + plan
   const readiness = getDashboardReadiness({ totalTips, totalSessions, totalFans, totalEarnings })
-  const plan      = getPlanAccess(userPlan, platformCount)
+  const plan      = getPlanAccess(userPlan, platformCount, planExpiresAt)
   const isPro     = plan.isPro
 
   // Hero copy by readiness
@@ -441,7 +442,7 @@ export function DashboardPreview({ tips = [], analytics, userPlan = 'free', onAd
   const progressPct = Math.round((progressItems.filter(i => i.done).length / progressItems.length) * 100)
 
   // Feature locks
-  const lockArgs = { userPlan, totalTips, totalSessions, totalFans, totalEarnings, totalStreamMinutes, importedPlatforms: platforms, liveModeSessions }
+  const lockArgs = { userPlan, planExpiresAt, totalTips, totalSessions, totalFans, totalEarnings, totalStreamMinutes, importedPlatforms: platforms, liveModeSessions }
   const locks = {
     bestTimes:    getFeatureLockState({ feature: 'bestStreamingTimes', ...lockArgs }),
     topFans:      getFeatureLockState({ feature: 'topFans', ...lockArgs }),
