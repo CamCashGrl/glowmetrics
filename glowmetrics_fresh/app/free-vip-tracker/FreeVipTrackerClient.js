@@ -100,6 +100,20 @@ const ETSY_PROMO_CODE = 'PRETTY20'
 
 const CAMCASH_PLATFORMS = ['Chaturbate', 'BongaCams', 'MyFreeCams', 'Stripchat', 'CamSoda']
 
+const CAMCASH_QUICK_POINTS = [
+  'Free analytics dashboard for cam models',
+  'Upload a CSV — see results instantly',
+  'Know your top tippers & best hours',
+  'Compare Chaturbate, BongaCams, MyFreeCams & more',
+  'Free forever · Pro from $19.99/mo',
+]
+
+const CAMCASH_SCREENSHOTS = [
+  { src: '/blog-images/camcash-earnings-stats.webp', alt: 'CamCash dashboard showing monthly earnings, average $/hour, return rate, and tonight\'s forecast' },
+  { src: '/blog-images/camcash-best-hours-heatmap.webp', alt: 'CamCash revenue timing and platform ROI heatmap by day of week' },
+  { src: '/blog-images/camcash-fan-intelligence.webp', alt: 'CamCash Fan Intelligence panel showing top VIP fans and lifetime spend' },
+]
+
 const CAMCASH_FREE_FEATURES = [
   'Track 1 cam platform',
   'Upload tip history by CSV',
@@ -883,18 +897,40 @@ export default function FreeVipTrackerClient() {
             padding: '44px 40px',
           }}
         >
-          <div style={{ textAlign: 'center', marginBottom: 32 }}>
-            <h2 id="what-is-camcash" style={{ fontSize: 'clamp(24px, 3vw, 32px)', fontWeight: 800, margin: '0 0 14px', letterSpacing: '-0.02em' }}>
+          <div style={{ textAlign: 'center', marginBottom: 28 }}>
+            <h2 id="what-is-camcash" style={{ fontSize: 'clamp(24px, 3vw, 32px)', fontWeight: 800, margin: '0 0 8px', letterSpacing: '-0.02em' }}>
               Skip the spreadsheets. Try CamCash.
             </h2>
-            <p style={{ fontSize: 15.5, color: C.text, margin: '0 auto', maxWidth: 640, lineHeight: 1.65 }}>
-              <strong style={{ color: C.white }}>CamCash</strong> is a free analytics dashboard built specifically for
-              cam models and content creators. Trackers like this one are great for client notes — but for real-time
-              tips, top spenders, and your best-earning hours, CamCash reads your actual tip history and does the
-              math automatically. Upload a CSV export from your platform (or connect Live Mode) and CamCash instantly
-              shows your top tippers, peak earning hours, best-performing sessions, and platform-by-platform
-              comparisons — no spreadsheet required.
+            <p style={{ fontSize: 15.5, color: C.text, margin: 0 }}>
+              Trackers are great for client notes. For your actual numbers, CamCash does the math for you.
             </p>
+          </div>
+
+          <div className="vip-camcash-intro" style={{ display: 'grid', gridTemplateColumns: '0.85fr 1.15fr', gap: 28, alignItems: 'center', marginBottom: 36 }}>
+            <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+              {CAMCASH_QUICK_POINTS.map((p) => (
+                <li key={p} style={{ display: 'flex', gap: 10, fontSize: 15, color: C.text, marginBottom: 13, lineHeight: 1.4 }}>
+                  <span style={{ color: C.cyan, flexShrink: 0, fontWeight: 800 }}>✓</span> {p}
+                </li>
+              ))}
+            </ul>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 10 }}>
+              {CAMCASH_SCREENSHOTS.map((s) => (
+                <img
+                  key={s.src}
+                  src={s.src}
+                  alt={s.alt}
+                  loading="lazy"
+                  style={{
+                    width: '100%',
+                    borderRadius: 14,
+                    border: `1px solid ${C.border}`,
+                    boxShadow: '0 14px 34px rgba(0,0,0,0.35)',
+                    display: 'block',
+                  }}
+                />
+              ))}
+            </div>
           </div>
 
           <h3 style={{ fontSize: 13, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase', color: C.cyan, textAlign: 'center', margin: '0 0 14px' }}>
@@ -990,6 +1026,7 @@ export default function FreeVipTrackerClient() {
         @media (max-width: 720px) {
           .vip-upgrade-card { grid-template-columns: 1fr !important; }
           .vip-tier-grid { grid-template-columns: 1fr !important; }
+          .vip-camcash-intro { grid-template-columns: 1fr !important; }
         }
       `}</style>
 
