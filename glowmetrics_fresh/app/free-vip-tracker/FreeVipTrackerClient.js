@@ -96,12 +96,39 @@ const UPGRADE_BULLETS = [
   'Editable Canva Template',
 ]
 
+const ETSY_PROMO_CODE = 'PRETTY20'
+
+const CAMCASH_PLATFORMS = ['Chaturbate', 'BongaCams', 'MyFreeCams', 'Stripchat', 'CamSoda']
+
+const CAMCASH_FREE_FEATURES = [
+  'Track 1 cam platform',
+  'Upload tip history by CSV',
+  'Basic earnings dashboard & session analytics',
+  'Live tip detection & real-time alerts',
+  'Basic Live Mode coaching',
+  'Top 3 fans & basic fan insights',
+]
+
+const CAMCASH_PRO_FEATURES = [
+  'Track all supported platforms at once',
+  'Full permanent tip history',
+  'Full fan profiles & CRM tools',
+  'Cross-platform earnings comparisons',
+  'Advanced Live Mode coaching',
+  'Private-session analytics',
+  'Churn & re-engagement insights',
+  'Full best-time analysis, Stream Planner & Money Map',
+  'Advanced recommendations & reports',
+]
+
 const FAQS = [
   { q: 'Is it free?', a: 'Yes. The VIP Client Mini Tracker is completely free to download, with no signup or email required.' },
   { q: 'Can I edit it in Canva?', a: 'Yes. The tracker is designed to work as an editable Canva template as well as a printable PDF, so you can customize colors, fonts, and layout.' },
   { q: 'Does it work on mobile?', a: 'Yes. You can fill it out digitally on your phone or tablet, or print it out and fill it in by hand.' },
   { q: 'Can I print it?', a: 'Yes. It is formatted as a print-ready PDF that works on standard letter-size paper.' },
   { q: 'What information should I record?', a: 'Track usernames, platforms, preferences, boundaries, session notes, tips, and spending patterns — keep it creator-safe and only record what helps you serve your VIPs better.' },
+  { q: 'What is CamCash?', a: 'CamCash is a free analytics dashboard for cam models and content creators. Upload a tip history CSV from Chaturbate, BongaCams, MyFreeCams, Stripchat, or CamSoda and CamCash automatically shows your top tippers, peak earning hours, best-performing sessions, and platform comparisons.' },
+  { q: 'Is CamCash free to use?', a: 'Yes. CamCash has a free tier forever — track one platform, upload CSVs, and see a basic earnings dashboard with no credit card required. The Pro tier ($19.99/mo or $99/yr) unlocks all platforms, full tip history, advanced fan CRM tools, and more.' },
 ]
 
 // ─── Small building blocks ──────────────────────────────────────────────────
@@ -821,31 +848,115 @@ export default function FreeVipTrackerClient() {
             >
               View on Etsy →
             </a>
+            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12, marginTop: 16 }}>
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  fontSize: 13,
+                  fontWeight: 800,
+                  color: C.gold,
+                  background: 'rgba(255,200,87,0.1)',
+                  border: '1px solid rgba(255,200,87,0.3)',
+                  borderRadius: 999,
+                  padding: '7px 14px',
+                }}
+              >
+                🎁 Use code <strong>{ETSY_PROMO_CODE}</strong> for 20% off at Etsy checkout
+              </span>
+              <a href="/shop" style={{ fontSize: 13.5, fontWeight: 700, color: C.cyan, textDecoration: 'none' }}>
+                Browse the full Pretty Profitz shop →
+              </a>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* ── SKIP THE SPREADSHEETS / JOIN CAMCASH ──────────────────── */}
-      <section style={{ maxWidth: 1000, margin: '0 auto', padding: '24px 24px 48px' }}>
+      {/* ── WHAT IS CAMCASH ────────────────────────────────────── */}
+      <section style={{ maxWidth: 1000, margin: '0 auto', padding: '24px 24px 48px' }} aria-labelledby="what-is-camcash">
         <div
           style={{
             borderRadius: 26,
             border: '1px solid rgba(22,244,255,0.28)',
             background: 'linear-gradient(135deg, rgba(22,244,255,0.08), rgba(255,43,174,0.08))',
-            padding: '40px 36px',
-            textAlign: 'center',
+            padding: '44px 40px',
           }}
         >
-          <h3 style={{ fontSize: 'clamp(22px, 2.8vw, 28px)', fontWeight: 800, margin: '0 0 12px', letterSpacing: '-0.02em' }}>
-            Skip the spreadsheets. Try CamCash.
+          <div style={{ textAlign: 'center', marginBottom: 32 }}>
+            <h2 id="what-is-camcash" style={{ fontSize: 'clamp(24px, 3vw, 32px)', fontWeight: 800, margin: '0 0 14px', letterSpacing: '-0.02em' }}>
+              Skip the spreadsheets. Try CamCash.
+            </h2>
+            <p style={{ fontSize: 15.5, color: C.text, margin: '0 auto', maxWidth: 640, lineHeight: 1.65 }}>
+              <strong style={{ color: C.white }}>CamCash</strong> is a free analytics dashboard built specifically for
+              cam models and content creators. Trackers like this one are great for client notes — but for real-time
+              tips, top spenders, and your best-earning hours, CamCash reads your actual tip history and does the
+              math automatically. Upload a CSV export from your platform (or connect Live Mode) and CamCash instantly
+              shows your top tippers, peak earning hours, best-performing sessions, and platform-by-platform
+              comparisons — no spreadsheet required.
+            </p>
+          </div>
+
+          <h3 style={{ fontSize: 13, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase', color: C.cyan, textAlign: 'center', margin: '0 0 14px' }}>
+            Platforms We Support
           </h3>
-          <p style={{ fontSize: 15.5, color: C.text, margin: '0 0 26px', maxWidth: 560, marginLeft: 'auto', marginRight: 'auto' }}>
-            Trackers are great for client notes — but for real-time tips, top spenders, and your best-earning
-            hours, CamCash does the math for you automatically.
-          </p>
-          <Button as="a" href="/login" style={{ padding: '16px 34px', fontSize: 16 }}>
-            Start Free with CamCash →
-          </Button>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, justifyContent: 'center', marginBottom: 36 }}>
+            {CAMCASH_PLATFORMS.map((p) => (
+              <span
+                key={p}
+                style={{
+                  fontSize: 13.5,
+                  fontWeight: 700,
+                  color: C.white,
+                  background: 'rgba(255,255,255,0.06)',
+                  border: `1px solid ${C.border}`,
+                  borderRadius: 999,
+                  padding: '8px 16px',
+                }}
+              >
+                {p}
+              </span>
+            ))}
+          </div>
+
+          <div className="vip-tier-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 32 }}>
+            <div style={{ borderRadius: 20, border: `1px solid ${C.border}`, background: C.cardSoft, padding: '24px 22px' }}>
+              <h3 style={{ fontSize: 12.5, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: C.cyan, margin: '0 0 4px' }}>
+                Free Tier
+              </h3>
+              <p style={{ fontSize: 22, fontWeight: 800, color: C.white, margin: '0 0 16px' }}>$0 / forever</p>
+              <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+                {CAMCASH_FREE_FEATURES.map((f) => (
+                  <li key={f} style={{ display: 'flex', gap: 8, fontSize: 13.5, color: C.text, marginBottom: 9, lineHeight: 1.5 }}>
+                    <span style={{ color: C.cyan, flexShrink: 0 }}>✓</span> {f}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div style={{ borderRadius: 20, border: `1px solid rgba(255,43,174,0.4)`, background: C.cardSoft, padding: '24px 22px' }}>
+              <h3 style={{ fontSize: 12.5, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: C.pink, margin: '0 0 4px' }}>
+                Pro Tier
+              </h3>
+              <p style={{ fontSize: 22, fontWeight: 800, color: C.white, margin: '0 0 16px' }}>$19.99 / mo <span style={{ fontSize: 13, fontWeight: 600, color: C.muted }}>or $99/yr</span></p>
+              <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+                {CAMCASH_PRO_FEATURES.map((f) => (
+                  <li key={f} style={{ display: 'flex', gap: 8, fontSize: 13.5, color: C.text, marginBottom: 9, lineHeight: 1.5 }}>
+                    <span style={{ color: C.pink, flexShrink: 0 }}>✓</span> {f}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+
+          <div style={{ textAlign: 'center' }}>
+            <Button as="a" href="/login" style={{ padding: '16px 34px', fontSize: 16 }}>
+              Start Free with CamCash →
+            </Button>
+            <p style={{ fontSize: 13, color: C.faint, margin: '14px 0 0' }}>
+              No credit card required. See full plan details on the{' '}
+              <a href="/pricing" style={{ color: C.cyan, textDecoration: 'none' }}>pricing page</a>.
+            </p>
+          </div>
         </div>
       </section>
 
@@ -878,6 +989,7 @@ export default function FreeVipTrackerClient() {
       <style>{`
         @media (max-width: 720px) {
           .vip-upgrade-card { grid-template-columns: 1fr !important; }
+          .vip-tier-grid { grid-template-columns: 1fr !important; }
         }
       `}</style>
 

@@ -11,6 +11,10 @@ export const metadata = {
     'cam model crm free',
     'creator client tracker pdf',
     'vip client mini tracker',
+    'camcash',
+    'cam model analytics',
+    'chaturbate tip tracker',
+    'cam model crm software',
   ],
   alternates: { canonical: 'https://www.camcashgrl.com/free-vip-tracker' },
   openGraph: {
@@ -80,6 +84,41 @@ const faqSchema = {
       name: 'What information should I record?',
       acceptedAnswer: { '@type': 'Answer', text: 'Track usernames, platforms, preferences, boundaries, session notes, tips, and spending patterns — keep it creator-safe and only record what helps you serve your VIPs better.' },
     },
+    {
+      '@type': 'Question',
+      name: 'What is CamCash?',
+      acceptedAnswer: { '@type': 'Answer', text: 'CamCash is a free analytics dashboard for cam models and content creators. Upload a tip history CSV from Chaturbate, BongaCams, MyFreeCams, Stripchat, or CamSoda and CamCash automatically shows your top tippers, peak earning hours, best-performing sessions, and platform comparisons.' },
+    },
+    {
+      '@type': 'Question',
+      name: 'Is CamCash free to use?',
+      acceptedAnswer: { '@type': 'Answer', text: 'Yes. CamCash has a free tier forever — track one platform, upload CSVs, and see a basic earnings dashboard with no credit card required. The Pro tier ($19.99/mo or $99/yr) unlocks all platforms, full tip history, advanced fan CRM tools, and more.' },
+    },
+  ],
+}
+
+const softwareApplicationSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'SoftwareApplication',
+  name: 'CamCash',
+  applicationCategory: 'BusinessApplication',
+  operatingSystem: 'Web',
+  url: 'https://www.camcashgrl.com',
+  description:
+    'Free analytics dashboard for cam models on Chaturbate, BongaCams, MyFreeCams, Stripchat, and CamSoda. See top tippers, peak earning hours, and platform comparisons.',
+  offers: [
+    { '@type': 'Offer', name: 'Free', price: '0', priceCurrency: 'USD' },
+    { '@type': 'Offer', name: 'Pro (monthly)', price: '19.99', priceCurrency: 'USD' },
+    { '@type': 'Offer', name: 'Pro (annual)', price: '99', priceCurrency: 'USD' },
+  ],
+  featureList: [
+    'Chaturbate, BongaCams, MyFreeCams, Stripchat & CamSoda tip tracking',
+    'Top tipper identification and churn risk alerts',
+    'Peak earning hour detection',
+    'Cross-platform earnings comparison',
+    'Session breakdown with revenue timeline',
+    'Fan re-engagement messages',
+    'Live Mode coaching',
   ],
 }
 
@@ -114,6 +153,10 @@ export default function FreeVipTrackerPage() {
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(productSchema) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(softwareApplicationSchema) }}
       />
       <FreeVipTrackerClient />
     </>
