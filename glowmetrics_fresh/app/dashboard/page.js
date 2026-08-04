@@ -76,9 +76,13 @@ const IMPORT_MESSAGES = [
   "Reading your CSV…",
   "Detecting platform…",
   "Importing tips…",
-  "Calculating earnings…",
-  "Finding top fans…",
-  "Building your dashboard…",
+  "Analyzing your top spenders…",
+  "Finding your peak stream hours…",
+  "Analyzing your fans…",
+  "Calculating your earnings…",
+  "Gathering AI insights…",
+  "Creating your personalized streaming schedule…",
+  "Updating your dashboard…",
 ]
 
 const glassCard = {
@@ -2394,6 +2398,23 @@ const stopImportMessageRotation = () => {
     return true
   }))
 
+  // Free plan: Top Fans CRM grid caps at the 3 highest spenders (already
+  // sorted into `whales` by total spend upstream). Pro sees everyone.
+  const FREE_FAN_LIMIT = 3
+  const visibleWhales = isPro ? filteredWhales : filteredWhales.slice(0, FREE_FAN_LIMIT)
+  const hiddenWhales = isPro ? [] : filteredWhales.slice(FREE_FAN_LIMIT)
+  const lockedFanStats = memoOn(derivedCacheRef.current, 'lockedFanStats', [filteredWhales, isPro], () => {
+    if (isPro) return null
+    const hidden = filteredWhales.slice(FREE_FAN_LIMIT)
+    if (hidden.length === 0) return null
+    return {
+      hiddenCount: hidden.length,
+      goneCold: hidden.filter(w => w.tier === 'Dormant' || (w.churnRisk?.level === 'High' || w.churnRisk?.level === 'Critical')).length,
+      whaleTier: hidden.filter(w => w.tier === 'Whale').length,
+      hiddenLifetimeValue: hidden.reduce((s, w) => s + (w.totalUSD || 0), 0),
+    }
+  })
+
   const allPlatforms = memoOn(derivedCacheRef.current, 'allPlatforms', [tips], () => [...new Set(tips.map(t => t.platform))])
   const freePlatformLimitReached = !isPro && allPlatforms.length > 0
 
@@ -4503,7 +4524,7 @@ const stopImportMessageRotation = () => {
               </div>
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 14, marginBottom: 20 }}>
-                {filteredWhales.map((w, i) => {
+                {visibleWhales.map((w, i) => {
                   const tc = TIER_COLORS[w.tier] || C.cyan
                   const days = w.daysSinceLastTip ?? (w.lastTipDate ? Math.floor((Date.now() - new Date(w.lastTipDate)) / 86400000) : null)
                   const relScore = Math.min(100, Math.round((w.tipCount * 3) + (w.totalUSD / 10) + (days < 7 ? 20 : days < 30 ? 10 : 0)))
@@ -4599,6 +4620,45 @@ const stopImportMessageRotation = () => {
                     </div>
                   )
                 })}
+              </div>
+            )}
+
+            {/* 🔒 LOCKED FAN STATS — shown to free users once there are more
+                fans than the free grid displays. Real counts pulled from the
+                same filteredWhales list, not a generic upsell. */}
+            {lockedFanStats && (
+              <div style={{ ...glassCard, borderRadius: 16, padding: 24, marginBottom: 20, border: '1px solid rgba(236,72,153,0.25)', position: 'relative', overflow: 'hidden' }}>
+                <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: 'linear-gradient(90deg, #22D3EE, #EC4899)' }} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 10, background: 'linear-gradient(135deg, #EC4899, #a855f7)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>🔒</div>
+                  <div>
+                    <div style={{ fontSize: 15, fontWeight: 800, color: C.white }}>
+                      {lockedFanStats.hiddenCount} more {lockedFanStats.hiddenCount === 1 ? 'fan' : 'fans'} you're not seeing
+                    </div>
+                    <div style={{ fontSize: 12, color: C.muted }}>Here's what's in your data right now</div>
+                  </div>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, marginBottom: 18 }}>
+                  <div style={{ padding: '12px 14px', background: 'rgba(255,255,255,0.03)', borderRadius: 12, border: '1px solid rgba(255,255,255,0.07)' }}>
+                    <div style={{ fontSize: 20, fontWeight: 900, color: C.white, marginBottom: 2 }}>{lockedFanStats.hiddenCount}</div>
+                    <div style={{ fontSize: 11, color: C.muted }}>Top spenders found</div>
+                  </div>
+                  <div style={{ padding: '12px 14px', background: 'rgba(255,255,255,0.03)', borderRadius: 12, border: '1px solid rgba(255,255,255,0.07)' }}>
+                    <div style={{ fontSize: 20, fontWeight: 900, color: lockedFanStats.goneCold > 0 ? C.red : C.white, marginBottom: 2 }}>{lockedFanStats.goneCold}</div>
+                    <div style={{ fontSize: 11, color: C.muted }}>Whales gone cold</div>
+                  </div>
+                  <div style={{ padding: '12px 14px', background: 'rgba(255,255,255,0.03)', borderRadius: 12, border: '1px solid rgba(255,255,255,0.07)' }}>
+                    <div style={{ fontSize: 20, fontWeight: 900, color: C.gold, marginBottom: 2 }}>{lockedFanStats.whaleTier}</div>
+                    <div style={{ fontSize: 11, color: C.muted }}>In the Whale tier</div>
+                  </div>
+                  <div style={{ padding: '12px 14px', background: 'rgba(255,255,255,0.03)', borderRadius: 12, border: '1px solid rgba(255,255,255,0.07)' }}>
+                    <div style={{ fontSize: 20, fontWeight: 900, color: C.green, marginBottom: 2 }}>${lockedFanStats.hiddenLifetimeValue.toFixed(0)}</div>
+                    <div style={{ fontSize: 11, color: C.muted }}>Lifetime value, unseen</div>
+                  </div>
+                </div>
+                <button onClick={() => openUpgradeModal('whales_cutoff')} style={{ width: '100%', padding: '12px 20px', borderRadius: 10, background: 'linear-gradient(135deg,#22D3EE,#EC4899)', border: 'none', color: '#06101A', fontSize: 13, fontWeight: 800, cursor: 'pointer' }}>
+                  🔓 See All {filteredWhales.length} Fans
+                </button>
               </div>
             )}
 
