@@ -22,7 +22,7 @@ export default function ToolsPage() {
           </p>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(300px,1fr))', gap: '24px', marginBottom: '48px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(300px,100%),1fr))', gap: '24px', marginBottom: '48px' }}>
 
           {/* Cam Model Name Generator */}
           <a href="/tools/cam-model-name-generator" style={{ textDecoration: 'none' }}>

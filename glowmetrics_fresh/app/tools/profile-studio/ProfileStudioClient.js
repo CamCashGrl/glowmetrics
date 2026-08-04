@@ -104,8 +104,8 @@ export default function ProfileStudioClient() {
   return (
     <PageShell>
       <nav aria-label="site" style={{
-        padding: '16px 32px', borderBottom: `1px solid ${T.border}`, display: 'flex',
-        justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0,
+        padding: '16px 32px', borderBottom: `1px solid ${T.border}`, display: 'flex', flexWrap: 'wrap',
+        justifyContent: 'space-between', alignItems: 'center', gap: 10, position: 'sticky', top: 0,
         background: 'rgba(5,7,19,0.92)', backdropFilter: 'blur(16px)', zIndex: 40,
       }}>
         <a href="/landing" style={{ fontWeight: 800, fontSize: 15, color: T.white, textDecoration: 'none', letterSpacing: '-0.2px', display: 'flex', alignItems: 'center', gap: 6 }}>

@@ -129,11 +129,11 @@ export default function ChaturbateTokenCalculatorPage() {
 
       <div style={{ background: S.bg, minHeight: '100vh', color: S.text, fontFamily: 'Inter, system-ui, sans-serif' }}>
 
-        <nav style={{ padding: '18px 40px', borderBottom: `1px solid ${S.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, background: S.bg, zIndex: 50 }}>
+        <nav style={{ padding: '18px 20px', borderBottom: `1px solid ${S.border}`, display: 'flex', flexWrap: 'wrap', gap: 10, justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, background: S.bg, zIndex: 50 }}>
           <a href="/landing" style={{ fontWeight: 700, fontSize: 15, color: S.white, textDecoration: 'none', letterSpacing: '-0.2px' }}>
             💜 CamCash
           </a>
-          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
             <a href="/guides/chaturbate-room-title-generator" style={{ fontSize: 13, color: S.muted, textDecoration: 'none' }}>Title Generator</a>
             <a href="/dashboard" style={{ fontSize: 13, color: S.muted, textDecoration: 'none' }}>Dashboard</a>
             <Button as="a" href="/login" style={{ padding: '8px 20px', fontSize: 13 }}>

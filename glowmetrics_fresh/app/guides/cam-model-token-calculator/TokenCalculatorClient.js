@@ -117,7 +117,7 @@ export default function TokenCalculatorClient() {
       </div>
 
       {/* CALCULATOR + ESTIMATED EARNINGS */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(320px,1fr))', gap: 16, marginBottom: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(320px,100%),1fr))', gap: 16, marginBottom: 16 }}>
 
         {/* 1. CALCULATOR */}
         <div style={card()}>
@@ -141,7 +141,7 @@ export default function TokenCalculatorClient() {
                 onChange={e => setCustomRate(e.target.value)}
                 placeholder="e.g. 0.05"
                 className="cc-input"
-                style={{ width: 180, padding: '10px 14px', borderRadius: 10, background: 'rgba(5,9,24,0.72)', border: `1px solid ${C.border}`, color: C.white, fontSize: 15 }}
+                style={{ width: '100%', maxWidth: 180, padding: '10px 14px', borderRadius: 10, background: 'rgba(5,9,24,0.72)', border: `1px solid ${C.border}`, color: C.white, fontSize: 16 }}
               />
             </div>
           )}
@@ -240,14 +240,15 @@ export default function TokenCalculatorClient() {
       </div>
 
       {/* QUICK CONVERSION + COMPARE PLATFORMS */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(320px,1fr))', gap: 16, marginBottom: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(320px,100%),1fr))', gap: 16, marginBottom: 16 }}>
 
         <div style={card({ padding: 0, overflow: 'hidden' })}>
           <div style={{ padding: '20px 22px 14px' }}>
             <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase', color: C.cyan, marginBottom: 4 }}>Quick Conversion Reference</div>
             <div style={{ fontSize: 12, color: C.muted }}>Estimates for {useCustom ? 'your custom rate' : platform}</div>
           </div>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', minWidth: 320, borderCollapse: 'collapse' }}>
             <thead>
               <tr>
                 {['Tokens', 'Estimated Earnings'].map(h => (
@@ -267,6 +268,7 @@ export default function TokenCalculatorClient() {
               })}
             </tbody>
           </table>
+          </div>
           <div style={{ padding: '12px 22px', fontSize: 11, color: C.faint, fontStyle: 'italic' }}>Rates update when you change platforms. ⓘ</div>
         </div>
 
@@ -275,7 +277,8 @@ export default function TokenCalculatorClient() {
             <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase', color: C.purple, marginBottom: 4 }}>Compare Platform Earnings</div>
             <div style={{ fontSize: 12, color: C.muted }}>Estimates for {fmtN(compareTokens)} tokens</div>
           </div>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', minWidth: 480, borderCollapse: 'collapse' }}>
             <thead>
               <tr>
                 {['Platform', 'Rate', 'Estimated Earnings', 'Difference'].map(h => (
@@ -303,6 +306,7 @@ export default function TokenCalculatorClient() {
               })}
             </tbody>
           </table>
+          </div>
           <div style={{ padding: '12px 22px', fontSize: 11, color: C.faint, fontStyle: 'italic' }}>Rates are estimates and vary by account and promotions. ⓘ</div>
         </div>
       </div>
