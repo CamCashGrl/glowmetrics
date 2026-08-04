@@ -34,11 +34,11 @@ const GALLERY = [
 ]
 
 const FEATURES = [
-  { icon: '👑', title: 'VIP Master List', desc: 'Organize your regulars and high-value clients.' },
-  { icon: '🗒️', title: 'VIP Profile', desc: 'Track preferences, boundaries, and important creator-safe notes.' },
-  { icon: '🎥', title: 'Streaming Session Log', desc: 'Log every stream to discover your most productive sessions.' },
-  { icon: '💸', title: 'Tip & Spending History', desc: 'Track purchases, tips, and spending patterns over time.' },
-  { icon: '📊', title: 'Platform Tip Tracker', desc: 'Compare activity across multiple platforms.' },
+  { icon: '👑', title: 'VIP Master List', desc: 'Keep all of your regulars and highest-value clients organized in one place.' },
+  { icon: '🗒️', title: 'VIP Profile', desc: 'Record creator-safe notes, preferences, communication details, favorite platforms, and relationship history.' },
+  { icon: '🎥', title: 'Streaming Session Log', desc: 'Track your streaming schedule, hours, earnings, and top supporters to identify your most productive sessions.' },
+  { icon: '💸', title: 'Tip & Spending History', desc: 'Log purchases, tips, and important spending milestones over time.' },
+  { icon: '📊', title: 'Platform Tip Tracker', desc: 'Compare activity across different platforms and monitor your earnings at a glance.' },
 ]
 
 const WHY_POINTS = [
@@ -77,14 +77,16 @@ const FREE_TOOLS = [
 ]
 
 const UPGRADE_BULLETS = [
-  '24+ Pages',
-  'Monthly VIP dashboards',
-  'VIP relationship scorecards',
-  'Follow-up planner',
-  'Re-engagement tracker',
-  'Tip & spending revenue logs',
+  '30+ Premium Creator Business Worksheets',
+  'Monthly Overview Dashboard',
+  'VIP Relationship Scorecards',
+  'Follow-Up Planner',
+  'Re-Engagement Planner',
+  'VIP Tier Builder',
+  'Revenue & Earnings Logs',
+  'Creator Response & Boundary Templates',
   'Printable PDF',
-  'Editable Canva template',
+  'Editable Canva Template',
 ]
 
 const FAQS = [
@@ -755,7 +757,8 @@ export default function FreeVipTrackerClient() {
               Pretty Profitz VIP Client Tracker
             </h3>
             <p style={{ fontSize: 15, color: C.muted, margin: '0 0 20px' }}>
-              The full workbook, built for creators who want to go all in on client relationships.
+              Client organization, business tracking, client management, and creator resources — everything
+              in the mini tracker, plus a complete system for growing VIP relationships.
             </p>
             <ul style={{ listStyle: 'none', margin: '0 0 26px', padding: 0, columns: 2, columnGap: 24 }}>
               {UPGRADE_BULLETS.map((b) => (
