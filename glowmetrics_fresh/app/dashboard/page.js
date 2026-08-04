@@ -16,7 +16,6 @@ import { track as gtmTrack } from '../../lib/track'
 import { isProPlan } from '../../lib/plan'
 import { getDashboardReadiness, getModuleLockState, canShowHourlyRate, LockedInsightCard, DashboardProgressCard } from './DashboardPreview'
 import Button from '../../components/ui/Button'
-import EarlyAdopterOffer from './EarlyAdopterOffer'
 import { useLiveSessionEngine } from '../live/useLiveSessionEngine'
 
 // Tab-only components loaded on demand instead of in the initial dashboard
@@ -4152,8 +4151,6 @@ const stopImportMessageRotation = () => {
                 )}
               </div>
             )}
-
-            <EarlyAdopterOffer isPro={isPro} />
 
           </div>
         )}
