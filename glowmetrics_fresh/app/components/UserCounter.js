@@ -14,38 +14,17 @@ export default function UserCounter({ variant = 'full' }) {
         setLoading(false)
       })
       .catch(() => {
-        setData({ total: 0, remaining: 100, earlyAdopterOpen: true })
+        setData({ total: 0 })
         setLoading(false)
       })
   }, [])
 
-  const remaining = data?.remaining ?? 100
-  const earlyAdopterOpen = data?.earlyAdopterOpen ?? true
   const total = data?.total ?? 0
-
-  const urgencyColor =
-    remaining > 50 ? '#10b981' : remaining > 20 ? '#f59e0b' : '#ec4899'
-
   const dash = '--'
+  const label = loading ? dash : total.toLocaleString()
 
   // ── pill ────────────────────────────────────────────────────────────────────
   if (variant === 'pill') {
-    if (!earlyAdopterOpen && !loading) {
-      return (
-        <span style={{
-          display: 'inline-block',
-          padding: '4px 12px',
-          borderRadius: 999,
-          fontSize: 12,
-          fontWeight: 600,
-          background: 'rgba(71,85,105,0.3)',
-          color: '#64748b',
-          border: '1px solid rgba(71,85,105,0.3)',
-        }}>
-          Early adopter offer closed
-        </span>
-      )
-    }
     return (
       <span style={{
         display: 'inline-flex',
@@ -56,43 +35,28 @@ export default function UserCounter({ variant = 'full' }) {
         fontSize: 12,
         fontWeight: 700,
         background: 'rgba(0,0,0,0.3)',
-        color: urgencyColor,
-        border: `1px solid ${urgencyColor}40`,
+        color: '#10b981',
+        border: '1px solid rgba(16,185,129,0.4)',
         letterSpacing: '0.2px',
       }}>
-        ⚡ {loading ? dash : remaining} spots left
+        🎉 {label} creators joined
       </span>
     )
   }
 
   // ── compact ─────────────────────────────────────────────────────────────────
   if (variant === 'compact') {
-    if (!earlyAdopterOpen && !loading) {
-      return (
-        <span style={{ fontSize: 13, color: '#475569', fontStyle: 'italic' }}>
-          Early adopter offer closed
-        </span>
-      )
-    }
     return (
-      <span style={{ fontSize: 14, fontWeight: 700, color: urgencyColor }}>
-        {loading ? dash : remaining}/100 spots remaining
+      <span style={{ fontSize: 14, fontWeight: 700, color: '#10b981' }}>
+        {label} creators joined
       </span>
     )
   }
 
   // ── full (default) ──────────────────────────────────────────────────────────
-  if (!earlyAdopterOpen && !loading) {
-    return (
-      <p style={{ fontSize: 14, color: '#475569', fontStyle: 'italic', margin: 0 }}>
-        Early adopter offer closed
-      </p>
-    )
-  }
-
   return (
-    <p style={{ fontSize: 15, fontWeight: 600, color: urgencyColor, margin: 0 }}>
-      🎉 {loading ? dash : total} creators joined · {loading ? dash : remaining} early adopter spots left
+    <p style={{ fontSize: 15, fontWeight: 600, color: '#10b981', margin: 0 }}>
+      🎉 {label} creators have joined CamCash
     </p>
   )
 }

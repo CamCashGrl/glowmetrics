@@ -311,21 +311,13 @@ function ProUpsellModal({platform,onSkip}){
           <h2 style={{fontSize:20,fontWeight:900,color:'#fff',marginBottom:6}}>You're adding {platform.label}</h2>
           <p style={{fontSize:13,color:'rgba(148,163,184,0.8)',lineHeight:1.6}}>Multi-platform tracking is a Pro feature. Upgrade to sync all platforms and see your full earnings picture.</p>
         </div>
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:16}}>
+        <div style={{marginBottom:16}}>
           <div style={{background:'rgba(167,139,250,0.08)',border:'1.5px solid rgba(167,139,250,0.4)',borderRadius:14,padding:16,position:'relative'}}>
-            <div style={{position:'absolute',top:0,right:0,background:'linear-gradient(135deg,#a78bfa,#7c3aed)',borderRadius:'0 14px 0 10px',padding:'3px 10px',fontSize:10,fontWeight:700,color:'#fff'}}>BEST DEAL</div>
-            <div style={{fontSize:11,color:'#a78bfa',fontWeight:700,marginBottom:6,textTransform:'uppercase'}}>Early Adopter</div>
-            <div style={{fontSize:24,fontWeight:900,color:'#fff'}}>$9.99</div>
-            <div style={{fontSize:11,color:'rgba(148,163,184,0.7)',marginBottom:12}}>/month · locked forever</div>
-            {['All platforms','Save history forever','AI pattern learning','Fan behavior analysis','Lifetime price lock ✦'].map(f=>(<div key={f} style={{display:'flex',gap:6,alignItems:'center',fontSize:12,color:'rgba(203,213,225,0.9)',marginBottom:4}}><span style={{color:'#a78bfa'}}>✓</span>{f}</div>))}
-            <button onClick={()=>window.open('https://www.camcashgrl.com/pricing','_blank')} style={{width:'100%',marginTop:12,padding:'10px',borderRadius:10,border:'none',cursor:'pointer',background:'linear-gradient(135deg,#a78bfa,#7c3aed)',color:'#fff',fontSize:13,fontWeight:700}}>Lock in $9.99/mo →</button>
-          </div>
-          <div style={{background:'rgba(255,255,255,0.03)',border:'1px solid rgba(255,255,255,0.08)',borderRadius:14,padding:16}}>
-            <div style={{fontSize:11,color:'rgba(148,163,184,0.7)',fontWeight:700,marginBottom:6,textTransform:'uppercase'}}>Standard</div>
+            <div style={{fontSize:11,color:'#a78bfa',fontWeight:700,marginBottom:6,textTransform:'uppercase'}}>Creator Pro</div>
             <div style={{fontSize:24,fontWeight:900,color:'#fff'}}>$19.99</div>
-            <div style={{fontSize:11,color:'rgba(148,163,184,0.7)',marginBottom:16}}>/month</div>
-            {['All platforms','Save history forever','AI pattern learning','Fan behavior analysis'].map(f=>(<div key={f} style={{display:'flex',gap:6,alignItems:'center',fontSize:12,color:'rgba(148,163,184,0.8)',marginBottom:4}}><span style={{color:'#21E6F3'}}>✓</span>{f}</div>))}
-            <button onClick={()=>window.open('https://www.camcashgrl.com/pricing','_blank')} style={{width:'100%',marginTop:12,padding:'10px',borderRadius:10,border:'1px solid rgba(255,255,255,0.12)',cursor:'pointer',background:'rgba(255,255,255,0.05)',color:'rgba(148,163,184,0.8)',fontSize:13,fontWeight:600}}>Get Standard →</button>
+            <div style={{fontSize:11,color:'rgba(148,163,184,0.7)',marginBottom:12}}>/month · or $99/year</div>
+            {['All platforms','Save history forever','AI pattern learning','Fan behavior analysis'].map(f=>(<div key={f} style={{display:'flex',gap:6,alignItems:'center',fontSize:12,color:'rgba(203,213,225,0.9)',marginBottom:4}}><span style={{color:'#a78bfa'}}>✓</span>{f}</div>))}
+            <button onClick={()=>window.open('https://www.camcashgrl.com/pricing','_blank')} style={{width:'100%',marginTop:12,padding:'10px',borderRadius:10,border:'none',cursor:'pointer',background:'linear-gradient(135deg,#a78bfa,#7c3aed)',color:'#fff',fontSize:13,fontWeight:700}}>Upgrade to Pro →</button>
           </div>
         </div>
         <div style={{background:'rgba(33,230,243,0.06)',border:'1px solid rgba(33,230,243,0.15)',borderRadius:10,padding:'10px 14px',marginBottom:14,fontSize:12,color:'rgba(148,163,184,0.8)',textAlign:'center'}}>
