@@ -6,6 +6,7 @@ import { supabase } from '../../lib/supabase'
 // Token rates — single source of truth, never hardcode below this line
 import { PLATFORM_TOKEN_RATES, tokenRate } from '../../lib/constants'
 import { track } from '../../lib/track'
+import { isProPlan } from '../../lib/plan'
 import OnboardingExitSurvey from '@/components/OnboardingExitSurvey'
 
 
@@ -558,8 +559,8 @@ export default function OnboardingPage(){
       if(!user){router.replace('/login');return}
       const{data}=await supabase.from('beta_users').select('onboarding_complete').eq('user_id',user.id).single()
       if(data?.onboarding_complete){router.replace('/dashboard');return}
-      const{data:profile}=await supabase.from('profiles').select('plan').eq('id',user.id).single()
-      setUserPlan(profile?.plan==='pro'?'pro':'free')
+      const{data:profile}=await supabase.from('profiles').select('plan, plan_expires_at').eq('id',user.id).single()
+      setUserPlan(isProPlan(profile)?'pro':'free')
       setUser(user);setBooting(false)
     })()
   },[router])

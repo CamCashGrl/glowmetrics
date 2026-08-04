@@ -107,6 +107,12 @@ export async function POST(request) {
       metadata: {
         userId: user.id,
         plan_type: planType,
+      },
+      subscription_data: {
+        metadata: {
+          userId: user.id,
+          plan_type: planType,
+        }
       }
     })
 
