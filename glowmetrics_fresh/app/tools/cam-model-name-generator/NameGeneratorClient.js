@@ -416,17 +416,26 @@ export default function NameGeneratorClient() {
     } catch (_) {}
   }, [mode, keyword, count])
 
+  const fetchWithTimeout = useCallback((url, ms = 7000) => {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), ms)
+    return fetch(url, { signal: controller.signal })
+      .then(r => r.json())
+      .catch(() => null)
+      .finally(() => clearTimeout(timer))
+  }, [])
+
   const checkDomain = useCallback(async name => {
     if (domainStatus[name]) return
     setDomainStatus(p => ({ ...p, [name]: 'loading' }))
     const slug = name.toLowerCase().replace(/[^a-z0-9]/g,'')
     try {
       const [r1,r2,r3] = await Promise.all([
-        fetch(`https://api.domainsdb.info/v1/domains/search?domain=${slug}&zone=com`).then(r=>r.json()).catch(()=>null),
-        fetch(`https://api.domainsdb.info/v1/domains/search?domain=${slug}&zone=net`).then(r=>r.json()).catch(()=>null),
-        fetch(`https://api.domainsdb.info/v1/domains/search?domain=${slug}&zone=co`).then(r=>r.json()).catch(()=>null),
+        fetchWithTimeout(`https://api.domainsdb.info/v1/domains/search?domain=${slug}&zone=com`),
+        fetchWithTimeout(`https://api.domainsdb.info/v1/domains/search?domain=${slug}&zone=net`),
+        fetchWithTimeout(`https://api.domainsdb.info/v1/domains/search?domain=${slug}&zone=co`),
       ])
-      const chk = (res,ext) => res?.domains?.some(d=>d.name===`${slug}.${ext}`) ? 'taken' : 'available'
+      const chk = (res,ext) => res == null ? 'unknown' : (res.domains?.some(d=>d.name===`${slug}.${ext}`) ? 'taken' : 'available')
       setDomainStatus(p => ({ ...p, [name]: { com: chk(r1,'com'), net: chk(r2,'net'), co: chk(r3,'co') } }))
     } catch (_) {
       setDomainStatus(p => ({ ...p, [name]: { com:'unknown', net:'unknown', co:'unknown' } }))
@@ -861,7 +870,7 @@ export default function NameGeneratorClient() {
               ['/tools/profile-studio','Creator Profile Studio'],
               ['/guides/cam-model-income-tracker','Income Tracker'],
               ['/tools','All Free Tools'],
-              ['/guides/cam-model-hashtag-generator','Hashtag Generator'],
+              ['/guides/cam-model-room-title-generator?tab=hashtags','Hashtag Generator'],
               ['/blog/best-cam-model-tools','Best Cam Model Tools'],
               ['/blog/how-to-increase-cam-earnings','How to Increase Earnings'],
               ['/blog/how-to-build-loyal-fans','Build Loyal Fans'],

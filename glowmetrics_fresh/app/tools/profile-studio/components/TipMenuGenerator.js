@@ -1,5 +1,6 @@
 'use client'
 import { useState, useMemo } from 'react'
+import Image from 'next/image'
 import {
   T, Card, SectionLabel, FieldLabel, TextInput, Select, PillGroup, SingleSelectPills,
   PrimaryButton, SecondaryButton, StepDots, LoadingStaged, ErrorBanner, EmptyState, Badge, TextArea, Toggle,
@@ -454,7 +455,7 @@ export default function TipMenuGenerator({ isLoggedIn, sharedProfile, onSharedPr
 
           <div style={{ borderRadius: 16, border: '1px solid rgba(255,43,174,0.25)', background: 'rgba(255,43,174,0.06)', padding: 24, marginTop: 24 }}>
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center', marginBottom: 16 }}>
-              <img src="/blog-images/spin_the_wheel_cover.png" alt="Spin-the-Wheel Template Pack for cam models cover art by Pretty Profitz" style={{ width: 140, borderRadius: 10, display: 'block' }} />
+              <Image src="/blog-images/spin_the_wheel_cover.png" alt="Spin-the-Wheel Template Pack for cam models cover art by Pretty Profitz" width={140} height={181} style={{ width: 140, height: 'auto', borderRadius: 10, display: 'block' }} />
             </div>
             <div style={{ fontSize: 18, fontWeight: 700, color: T.white, margin: '0 0 8px', textAlign: 'center' }}>Want a designed, printable version of this menu?</div>
             <p style={{ fontSize: 14, color: T.muted, margin: '0 0 16px', lineHeight: 1.6, textAlign: 'center' }}>

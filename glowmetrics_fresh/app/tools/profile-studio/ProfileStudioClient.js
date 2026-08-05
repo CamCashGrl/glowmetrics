@@ -1,16 +1,40 @@
 'use client'
 import { useEffect, useState } from 'react'
+import dynamic from 'next/dynamic'
 import { PageShell, T, GRADIENT, Accordion } from './components/theme'
-import BioGenerator from './components/BioGenerator'
-import TipMenuGenerator from './components/TipMenuGenerator'
-import DraftsPanel from './components/DraftsPanel'
 import Button from '../../../components/ui/Button'
 import { track } from '../../../lib/track'
-import {
-  Hero, WhatYouGet, SupportedFormats, ExampleResults, HowItWorks, PlatformFormats,
-  ComparisonSection, PrivacySection, CreatorStylePresets, WrittenGuides, FAQSection,
-  MoreFreeTools, FinalCTA,
-} from './components/MarketingSections'
+
+// Loaded on demand — only the active tab's generator (or an opened accordion
+// section) ships to the client, instead of all of them up front.
+const LoadingFallback = () => (
+  <div style={{ padding: '40px 20px', textAlign: 'center', color: T.faint, fontSize: 13 }}>Loading…</div>
+)
+
+const BioGenerator = dynamic(() => import('./components/BioGenerator'), { ssr: false, loading: LoadingFallback })
+const TipMenuGenerator = dynamic(() => import('./components/TipMenuGenerator'), { ssr: false, loading: LoadingFallback })
+const DraftsPanel = dynamic(() => import('./components/DraftsPanel'), { ssr: false, loading: LoadingFallback })
+
+function marketingSection(name) {
+  return dynamic(() => import('./components/MarketingSections').then(m => ({ default: m[name] })), {
+    ssr: false,
+    loading: LoadingFallback,
+  })
+}
+
+const Hero = marketingSection('Hero')
+const WhatYouGet = marketingSection('WhatYouGet')
+const SupportedFormats = marketingSection('SupportedFormats')
+const ExampleResults = marketingSection('ExampleResults')
+const HowItWorks = marketingSection('HowItWorks')
+const PlatformFormats = marketingSection('PlatformFormats')
+const ComparisonSection = marketingSection('ComparisonSection')
+const PrivacySection = marketingSection('PrivacySection')
+const CreatorStylePresets = marketingSection('CreatorStylePresets')
+const WrittenGuides = marketingSection('WrittenGuides')
+const FAQSection = marketingSection('FAQSection')
+const MoreFreeTools = marketingSection('MoreFreeTools')
+const FinalCTA = marketingSection('FinalCTA')
 
 const TABS = [
   { id: 'bio', label: 'Bio Generator', icon: '✍️', desc: 'Create short and full bios for cam platforms, subscription pages, social media, and promotional use.' },
@@ -42,7 +66,7 @@ export default function ProfileStudioClient() {
     fetch('/api/profile-studio/profile')
       .then(async res => {
         if (cancelled) return
-        if (res.status === 401) { setAuthState('out'); return }
+        if (!res.ok) { setAuthState('out'); return }
         const data = await res.json()
         setAuthState('in')
         setSharedProfile(data.profile || {})

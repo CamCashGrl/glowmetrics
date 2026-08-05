@@ -1,3 +1,4 @@
+import Image from 'next/image'
 import TokenCalculatorClient from './TokenCalculatorClient'
 import Button from '../../../components/ui/Button'
 
@@ -600,8 +601,8 @@ export default function TokenCalculatorPage() {
 
             <div style={{ borderRadius: '16px', border: '1px solid rgba(236,72,153,0.25)', background: 'rgba(236,72,153,0.06)', padding: '24px', marginTop: '28px' }}>
               <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', justifyContent: 'center', marginBottom: '16px' }}>
-                <img src="/blog-images/spin_the_wheel_cover.png" alt="Spin-the-Wheel Template Pack for cam models cover art by Pretty Profitz" style={{ width: '140px', borderRadius: '10px', display: 'block' }} />
-                <img src="/blog-images/500_room_titles.png" alt="500 High-Converting Cam Room Titles digital guide cover art by Pretty Profitz" style={{ width: '140px', borderRadius: '10px', display: 'block' }} />
+                <Image src="/blog-images/spin_the_wheel_cover.png" alt="Spin-the-Wheel Template Pack for cam models cover art by Pretty Profitz" width={140} height={181} style={{ width: '140px', height: 'auto', borderRadius: '10px', display: 'block' }} />
+                <Image src="/blog-images/500_room_titles.png" alt="500 High-Converting Cam Room Titles digital guide cover art by Pretty Profitz" width={140} height={105} style={{ width: '140px', height: 'auto', borderRadius: '10px', display: 'block' }} />
               </div>
               <div style={{ fontSize: '18px', fontWeight: 700, color: S.white, margin: '0 0 8px' }}>Want your tip menu and titles ready to go?</div>
               <p style={{ fontSize: '14px', color: S.text, margin: '0 0 16px', lineHeight: 1.6 }}>

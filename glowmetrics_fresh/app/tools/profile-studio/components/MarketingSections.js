@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import Image from 'next/image'
 import { T, Card, Badge, GRADIENT, PrimaryButton, SecondaryButton } from './theme'
 import { FAQS } from './faqData'
 import { BIO_FORMATS, MENU_STYLES } from '../../../../lib/profileStudio/constants'
@@ -504,7 +505,7 @@ export function MoreFreeTools() {
 
       <Card highlight style={{ padding: 24, borderColor: 'rgba(255,43,174,0.25)' }}>
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center', marginBottom: 16 }}>
-          <img src="/blog-images/spin_the_wheel_cover.png" alt="Spin-the-Wheel Template Pack for cam models cover art by Pretty Profitz" style={{ width: 120, borderRadius: 10, display: 'block' }} />
+          <Image src="/blog-images/spin_the_wheel_cover.png" alt="Spin-the-Wheel Template Pack for cam models cover art by Pretty Profitz" width={120} height={155} style={{ width: 120, height: 'auto', borderRadius: 10, display: 'block' }} />
         </div>
         <div style={{ fontSize: 16, fontWeight: 700, color: T.white, margin: '0 0 8px', textAlign: 'center' }}>Want a designed, printable tip menu?</div>
         <p style={{ fontSize: 13.5, color: T.muted, margin: '0 0 14px', lineHeight: 1.6, textAlign: 'center' }}>
