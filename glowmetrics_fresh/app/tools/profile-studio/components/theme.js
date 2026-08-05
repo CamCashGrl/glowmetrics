@@ -133,7 +133,7 @@ const baseInputStyle = {
   background: T.input,
   border: `1px solid ${T.border}`,
   color: T.white,
-  fontSize: 14,
+  fontSize: 16,
   fontFamily: 'inherit',
 }
 

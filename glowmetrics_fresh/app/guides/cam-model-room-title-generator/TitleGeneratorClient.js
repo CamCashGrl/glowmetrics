@@ -301,7 +301,7 @@ function TitleGenerator() {
             style={{
               width: '100%', padding: '9px 12px', borderRadius: '7px',
               border: `1px solid ${S.border}`, background: S.surface,
-              color: S.textStrong, fontSize: '13px', outline: 'none', boxSizing: 'border-box',
+              color: S.textStrong, fontSize: '16px', outline: 'none', boxSizing: 'border-box',
             }}
           />
         </div>
@@ -322,7 +322,7 @@ function TitleGenerator() {
             style={{
               width: '100%', padding: '9px 12px', borderRadius: '7px',
               border: `1px solid ${S.border}`, background: S.surface,
-              color: S.textStrong, fontSize: '13px', outline: 'none', boxSizing: 'border-box',
+              color: S.textStrong, fontSize: '16px', outline: 'none', boxSizing: 'border-box',
             }}
           />
         </div>
@@ -471,8 +471,8 @@ function TitleGeneratorClientInner() {
       {/* Nav */}
       <div style={{
         borderBottom: `1px solid ${S.border}`, padding: '14px 20px',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        background: S.surface, gap: 16,
+        display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between',
+        background: S.surface, gap: 12,
       }}>
         <a href="/" style={{ textDecoration: 'none', fontWeight: 700, fontSize: '15px', color: S.textStrong, letterSpacing: '-0.2px', flexShrink: 0 }}>
           💜 CamCash

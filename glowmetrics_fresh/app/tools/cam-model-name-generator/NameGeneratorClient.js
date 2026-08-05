@@ -328,7 +328,7 @@ function ComparePanel({ names, items, onClose }) {
     { key: 'social', label: 'Social Handle' },
   ]
   return (
-    <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 100, background: 'rgba(3,7,17,0.97)', backdropFilter: 'blur(20px)', border: `1px solid ${C.border}`, borderBottom: 'none', borderRadius: '18px 18px 0 0', padding: '20px 24px 28px', boxShadow: '0 -8px 40px rgba(0,0,0,0.6)' }}>
+    <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 100, maxHeight: '80vh', overflowY: 'auto', background: 'rgba(3,7,17,0.97)', backdropFilter: 'blur(20px)', border: `1px solid ${C.border}`, borderBottom: 'none', borderRadius: '18px 18px 0 0', padding: '20px 24px calc(28px + env(safe-area-inset-bottom, 0px))', boxShadow: '0 -8px 40px rgba(0,0,0,0.6)' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
         <div style={{ fontSize: 14, fontWeight: 800, color: C.white }}>⚖️ Name Comparison</div>
         <button onClick={onClose} style={{ background: 'transparent', border: `1px solid ${C.border}`, borderRadius: 7, color: C.muted, fontSize: 14, cursor: 'pointer', padding: '4px 10px' }}>✕</button>
@@ -496,9 +496,9 @@ export default function NameGeneratorClient() {
       `}</style>
 
       {/* NAV */}
-      <nav style={{ padding: '16px 32px', borderBottom: `1px solid ${C.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, background: 'rgba(3,7,17,0.95)', backdropFilter: 'blur(16px)', zIndex: 40 }}>
+      <nav style={{ padding: '16px 32px', borderBottom: `1px solid ${C.border}`, display: 'flex', flexWrap: 'wrap', gap: 10, justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, background: 'rgba(3,7,17,0.95)', backdropFilter: 'blur(16px)', zIndex: 40 }}>
         <a href="/landing" style={{ fontWeight: 700, fontSize: 15, color: C.white, textDecoration: 'none', letterSpacing: '-0.2px' }}>💜 CamCash</a>
-        <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap' }}>
           <a href="/tools" style={{ fontSize: 13, color: C.muted, textDecoration: 'none' }}>All Tools</a>
           <a href="/guides/cam-model-room-title-generator" style={{ fontSize: 13, color: C.muted, textDecoration: 'none' }}>Title Generator</a>
           <a href="/guides/cam-model-token-calculator" style={{ fontSize: 13, color: C.muted, textDecoration: 'none' }}>Token Calc</a>
@@ -579,7 +579,7 @@ export default function NameGeneratorClient() {
                 type="text" value={keyword} onChange={e => setKeyword(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleGenerate()}
                 placeholder="e.g. rose, luna, star…"
-                style={{ width: '100%', padding: '12px 16px', borderRadius: 10, background: 'rgba(255,255,255,0.05)', border: `1px solid ${C.border}`, color: C.white, fontSize: 14, transition: 'border-color 0.15s' }}
+                style={{ width: '100%', padding: '12px 16px', borderRadius: 10, background: 'rgba(255,255,255,0.05)', border: `1px solid ${C.border}`, color: C.white, fontSize: 16, transition: 'border-color 0.15s' }}
               />
             </div>
             <div style={{ flex: '1 1 150px' }}>
