@@ -11,6 +11,7 @@ export default function sitemap() {
     { url: `${base}/affiliates`,                     priority: 0.7, changeFrequency: 'monthly' },
     { url: `${base}/analytics`,                      priority: 0.7, changeFrequency: 'monthly' },
     { url: `${base}/tools`,                          priority: 0.7, changeFrequency: 'monthly' },
+    { url: `${base}/free-vip-tracker`,                priority: 0.8, changeFrequency: 'monthly' },
     { url: `${base}/tools/cam-model-name-generator`, priority: 0.7, changeFrequency: 'monthly' },
     { url: `${base}/tools/profile-studio`,           priority: 0.7, changeFrequency: 'monthly' },
     { url: `${base}/contact`,                        priority: 0.6, changeFrequency: 'monthly' },
