@@ -749,7 +749,7 @@ export function aggregateRows(tips, tz = null) {
       totalUSD: 0, totalTokens: 0, totalTips: 0, avgTipSize: 0,
       topTippers: [], platforms: [], sessions: [], insights: [],
       predictions: null, whaleAlerts: [], lossAlerts: [], nextMoves: [],
-      bestDay: null, bestHour: null, platformBestTimes: {},
+      bestDay: null, bestHour: null, earlySignalHour: null, platformBestTimes: {},
       monthlyData: [], bestMonth: null, tipTypeBreakdown: [],
       privateShowFans: [], spyShowFans: [], earningsVelocity: null, totalStreamMinutes: 0,
       estimatedHourlyRate: 0, hourlyRateSessionCount: 0, hourlyRateTotalMinutes: 0,
@@ -813,6 +813,17 @@ export function aggregateRows(tips, tz = null) {
   const bestDay  = [...dayAvgs].sort((a, b) => b.avg - a.avg)[0] || null
   const worstDay = [...dayAvgs].sort((a, b) => a.avg - b.avg)[0] || null
   const bestHour = [...hourAvgs].sort((a, b) => b.avg - a.avg)[0] || null
+
+  // Same exact pipeline as bestHour (median USD per local-hour bucket) but
+  // with the 3-session floor dropped to 1 — a lower-confidence "early
+  // signal" candidate for when there isn't enough data yet for a confident
+  // bestHour. Never shown as "Best Time" — always labeled Early Signal, per
+  // the confidence-labeling rule (never present low-confidence data as fact).
+  const earlySignalHour = !bestHour
+    ? (Object.keys(hourTipsUSD)
+        .map(h => ({ hour: h, avg: parseFloat(calcMedian(Object.values(hourBucketAmts[h])).toFixed(2)), total: hourTipsUSD[h], count: hourBucketSets[h].size }))
+        .sort((a, b) => b.avg - a.avg)[0] || null)
+    : null
 
   const whales      = identifyWhales(tips)
   const insights    = generateInsights(tips, meaningfulSessions, bestDay, worstDay, bestHour, whales)
@@ -1098,7 +1109,7 @@ export function aggregateRows(tips, tz = null) {
     topTippers, platforms, sessions: allValidSessions,
     insights: validateInsights(insights),
     predictions, whaleAlerts, lossAlerts, nextMoves, whales,
-    bestDay, bestHour, platformBestTimes,
+    bestDay, bestHour, earlySignalHour, platformBestTimes,
     monthlyData, bestMonth,
     tipTypeBreakdown, privateShowFans, spyShowFans,
     earningsVelocity, totalStreamMinutes, platformVelocity,

@@ -51,8 +51,9 @@ const NAV = [
   {
     group: "SUPPORT",
     items: [
-      { id: "upload", icon: "📥", label: "Import CSV" },
-      { id: "help",   icon: "❓", label: "CSV Help" },
+      { id: "upload",   icon: "📥", label: "Import CSV" },
+      { id: "help",     icon: "❓", label: "CSV Help" },
+      { id: "settings", icon: "⚙️", label: "Account & Billing" },
     ]
   },
 ]
