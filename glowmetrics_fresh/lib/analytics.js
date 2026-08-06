@@ -634,20 +634,17 @@ export function generateInsights(tips, sessions, bestDay, worstDay, bestHour, pr
   if (!tips.length || !sessions.length) return insights
   const now = Date.now()
 
-  if (bestDay && worstDay && bestDay.day !== worstDay.day) {
-    const daySessionMap = {}
-    sessions.forEach(s => {
-      const d = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][new Date(s.startTime).getUTCDay()]
-      if (!daySessionMap[d]) daySessionMap[d] = []
-      daySessionMap[d].push(s.totalUSD)
-    })
-    const bestDayAvg = daySessionMap[bestDay.day] ? daySessionMap[bestDay.day].reduce((a,b) => a+b, 0) / daySessionMap[bestDay.day].length : 0
-    const otherDaysSessions = Object.entries(daySessionMap).filter(([d]) => d !== bestDay.day).flatMap(([_, vals]) => vals)
-    const overallDayAvg = otherDaysSessions.length ? otherDaysSessions.reduce((a,b) => a+b, 0) / otherDaysSessions.length : 0
-    const mult = overallDayAvg > 0 ? (bestDayAvg / overallDayAvg).toFixed(1) : null
-    const costOfMissing = parseFloat((bestDayAvg - overallDayAvg).toFixed(2))
+  // Reuses bestDay.avg/worstDay.avg exactly as computed upstream in
+  // aggregateRows() (median-per-date, local timezone) — this used to
+  // recompute its own "day average" from a mean of session totals grouped
+  // by UTC day-of-week, which produced a different number for the same
+  // "Sunday average" concept than the Best Streaming Day stat shown
+  // elsewhere on the same screen. One formula, one number, everywhere.
+  if (bestDay && worstDay && bestDay.day !== worstDay.day && bestDay.avg > 0) {
+    const mult = worstDay.avg > 0 ? (bestDay.avg / worstDay.avg).toFixed(1) : null
+    const costOfMissing = parseFloat((bestDay.avg - worstDay.avg).toFixed(2))
     if (mult && parseFloat(mult) > 1 && costOfMissing > 0) {
-      insights.push({ icon: '📅', text: `${bestDay.day}s are your highest-earning day — you avg $${bestDayAvg.toFixed(0)} on ${bestDay.day}s vs $${overallDayAvg.toFixed(0)} on other days (${mult}x more). Missing one ${bestDay.day} costs you ~$${costOfMissing.toFixed(0)}`, type: 'day', priority: 1 })
+      insights.push({ icon: '📅', text: `${bestDay.day}s are your highest-earning day — you avg $${bestDay.avg.toFixed(0)} on ${bestDay.day}s vs $${worstDay.avg.toFixed(0)} on your lowest day (${worstDay.day}) (${mult}x more). Missing one ${bestDay.day} costs you ~$${costOfMissing.toFixed(0)}`, type: 'day', priority: 1 })
     }
   }
 

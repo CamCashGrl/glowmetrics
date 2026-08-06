@@ -6,6 +6,15 @@
 // single source of truth elsewhere (see the formula-requirements rules).
 import { useEffect } from 'react'
 import { track as gtmTrack } from '../../lib/track'
+import { PLATFORM_TOKEN_RATES } from '../../lib/constants'
+
+// Imported tip data can carry any casing ('chaturbate', 'ChatUrBate', etc.)
+// — display the canonical spelling from the one source of truth instead of
+// showing whatever casing happened to be in this user's file.
+const PLATFORM_DISPLAY_NAMES = Object.fromEntries(
+  Object.keys(PLATFORM_TOKEN_RATES).map(name => [name.toLowerCase(), name])
+)
+const displayPlatform = (p) => (p && PLATFORM_DISPLAY_NAMES[p.toLowerCase()]) || p
 
 const C = {
   cyan: '#22D3EE', pink: '#EC4899', gold: '#F59E0B', green: '#10B981',
@@ -22,12 +31,12 @@ const fmtUsd = v => `$${(v || 0).toLocaleString(undefined, { maximumFractionDigi
 
 function StatCard({ icon, label, value, sub }) {
   return (
-    <div style={{ borderRadius: 16, padding: '16px 18px', background: 'rgba(12,16,34,0.7)', border: '1px solid rgba(255,255,255,0.08)' }}>
+    <div style={{ borderRadius: 16, padding: '16px 18px', background: 'rgba(12,16,34,0.7)', border: '1px solid rgba(255,255,255,0.08)', minWidth: 0 }}>
       <div style={{ fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
         <span>{icon}</span>{label}
       </div>
-      <div style={{ fontSize: 22, fontWeight: 800, color: C.white }}>{value}</div>
-      {sub && <div style={{ fontSize: 11, color: C.dim, marginTop: 3 }}>{sub}</div>}
+      <div title={typeof value === 'string' ? value : undefined} style={{ fontSize: 22, fontWeight: 800, color: C.white, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{value}</div>
+      {sub && <div style={{ fontSize: 11, color: C.dim, marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sub}</div>}
     </div>
   )
 }
@@ -87,7 +96,7 @@ export default function CreatorReport({ analytics, tips = [], isPro = false, onU
         <StatCard
           icon="🎯"
           label="Most Profitable Platform"
-          value={topPlatform ? topPlatform.platform : (platforms.length === 1 ? platforms[0].platform : 'Add a 2nd platform to compare')}
+          value={topPlatform ? displayPlatform(topPlatform.platform) : (platforms.length === 1 ? displayPlatform(platforms[0].platform) : 'Add a 2nd platform to compare')}
           sub={topPlatform ? `${fmtUsd(topPlatform.usdPerHour)}/hr` : (platforms.length <= 1 && !isPro ? 'Creator Pro compares all your platforms' : null)}
         />
       </div>
