@@ -21,6 +21,34 @@ import { useLiveSessionEngine } from '../live/useLiveSessionEngine'
 // Tab-only components loaded on demand instead of in the initial dashboard
 // bundle — each is only ever rendered behind an `activeTab === '...'` check,
 // and StreamPlanner/MoneyMap alone pull in all of recharts.
+// Behavior-triggered upgrade copy — keyed by the `source` passed to
+// openUpgradeModal(source). Each trigger fires because of something the
+// user actually just did, so the headline should say that back to them
+// instead of one generic pitch for every context. Falls back to
+// UPGRADE_COPY.default for any source not listed here.
+const UPGRADE_COPY = {
+  default: {
+    headline: "Unlock Your Full Earning Potential",
+    subhead: "You're only seeing a preview of your data. Here's what's waiting for you inside:",
+  },
+  multi_platform: {
+    headline: "You've tracked 1 platform",
+    subhead: "Compare all your platforms with Creator Pro to see exactly where you actually earn best.",
+  },
+  whales_cutoff: {
+    headline: "You've found your top fans",
+    subhead: "See your full fan list — every VIP, not just the first 3 — and track them over time.",
+  },
+  whales_empty: {
+    headline: "Unlock Your Full Fan Insights",
+    subhead: "See your highest-value fans, repeat spenders, and who's worth re-engaging.",
+  },
+  creator_report: {
+    headline: "You have enough data for deeper insights",
+    subhead: "Upgrade to unlock your remaining personalized recommendations for next stream.",
+  },
+}
+
 const TAB_LOADING = (
   <div style={{ padding: "80px 0", textAlign: "center" }}>
     <div style={{ width: 40, height: 40, border: "2px solid #1e2d45", borderTop: "2px solid #22D3EE", borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto" }} />
@@ -1411,6 +1439,7 @@ export default function Dashboard() {
   const [messageIndex, setMessageIndex] = useState(0)
   const [messageCopied, setMessageCopied] = useState(false)
   const [showUpgradeModal, setShowUpgradeModal] = useState(false)
+  const [upgradeModalSource, setUpgradeModalSource] = useState(null)
   const [fanSearchOpen, setFanSearchOpen] = useState(false)
   const [fanSearchQuery, setFanSearchQuery] = useState("")
   const [shareModalOpen, setShareModalOpen] = useState(false)
@@ -1571,6 +1600,7 @@ export default function Dashboard() {
   const openUpgradeModal = (source) => {
     track('upgrade_click', { source })
     gtmTrack('paywall_hit', { feature: source })
+    setUpgradeModalSource(source || 'default')
     setShowUpgradeModal(true)
   }
 
@@ -5501,7 +5531,7 @@ const stopImportMessageRotation = () => {
                 <div style={{ flex: 1, fontSize: 12.5, color: C.text, lineHeight: 1.5 }}>
                   You're on the free plan (1 platform). Upgrade to Pro to add BongaCams, MyFreeCams, and more.
                 </div>
-                <Button as="a" href="/pricing" style={{ flexShrink: 0, padding: "8px 14px", fontSize: 12, whiteSpace: "nowrap" }}>Upgrade →</Button>
+                <Button onClick={() => openUpgradeModal('multi_platform')} style={{ flexShrink: 0, padding: "8px 14px", fontSize: 12, whiteSpace: "nowrap" }}>Upgrade →</Button>
               </div>
             )}
             <div style={{ ...glassCard, borderRadius: 14, padding: 32, marginBottom: 16, position: "relative", overflow: "hidden" }}>
@@ -6483,8 +6513,8 @@ const stopImportMessageRotation = () => {
             <div style={{ padding: 36 }}>
               <div style={{ textAlign: "center", marginBottom: 28 }}>
                 <div style={{ fontSize: 44, marginBottom: 12 }}>🚀</div>
-                <h2 style={{ fontSize: 24, fontWeight: 800, color: C.white, marginBottom: 8 }}>Unlock Your Full Earning Potential</h2>
-                <p style={{ fontSize: 14, color: C.muted, lineHeight: 1.6 }}>You're only seeing a preview of your data.<br/>Here's what's waiting for you inside:</p>
+                <h2 style={{ fontSize: 24, fontWeight: 800, color: C.white, marginBottom: 8 }}>{(UPGRADE_COPY[upgradeModalSource] || UPGRADE_COPY.default).headline}</h2>
+                <p style={{ fontSize: 14, color: C.muted, lineHeight: 1.6 }}>{(UPGRADE_COPY[upgradeModalSource] || UPGRADE_COPY.default).subhead}</p>
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 28 }}>
                 {[
