@@ -26,6 +26,7 @@ const TAB_LOADING = (
     <div style={{ width: 40, height: 40, border: "2px solid #1e2d45", borderTop: "2px solid #22D3EE", borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto" }} />
   </div>
 )
+const CreatorReport = dynamic(() => import('./CreatorReport'), { ssr: false, loading: () => TAB_LOADING })
 const AnalyticsCharts = dynamic(() => import('./AnalyticsCharts'), { ssr: false, loading: () => TAB_LOADING })
 const StreamPlanner = dynamic(() => import('./StreamPlanner'), { ssr: false, loading: () => TAB_LOADING })
 const MoneyMap = dynamic(() => import('./MoneyMap'), { ssr: false, loading: () => TAB_LOADING })
@@ -1511,6 +1512,7 @@ export default function Dashboard() {
   const [feedbackType, setFeedbackType] = useState('feature')
   const [feedbackText, setFeedbackText] = useState('')
   const [feedbackSent, setFeedbackSent] = useState(false)
+  const [feedbackSubmitting, setFeedbackSubmitting] = useState(false)
   const [tipPage, setTipPage] = useState(0)
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
@@ -3258,6 +3260,12 @@ const stopImportMessageRotation = () => {
             readiness={dashboardReadiness}
             onImport={() => handleTabChange('upload')}
           />
+        )}
+
+        {activeTab === "report" && (
+          <div style={{ animation: "fadeUp 0.3s ease" }}>
+            <CreatorReport analytics={analytics} tips={tips} isPro={isPro} onUpgrade={() => openUpgradeModal('creator_report')} />
+          </div>
         )}
 
         {activeTab === "overview" && (
@@ -6578,10 +6586,38 @@ const stopImportMessageRotation = () => {
                     onBlur={e => e.target.style.borderColor = "rgba(255,255,255,0.1)"}
                   />
                   <Button
-                    disabled={!feedbackText.trim()}
-                    onClick={() => { track('feedback_submitted', { type: feedbackType, length: feedbackText.length }); setFeedbackSent(true) }}
+                    disabled={!feedbackText.trim() || feedbackSubmitting}
+                    onClick={async () => {
+                      if (!feedbackText.trim() || feedbackSubmitting) return
+                      setFeedbackSubmitting(true)
+                      const typeLabel = feedbackType === 'feature' ? 'Feature Request' : 'Bug Report'
+                      const payload = {
+                        message: `[${typeLabel}] ${feedbackText.trim()}`,
+                        page_url: typeof window !== 'undefined' ? window.location.href : '',
+                        page_title: typeof window !== 'undefined' ? document.title : '',
+                        user_agent: typeof window !== 'undefined' ? navigator.userAgent : '',
+                        referrer: typeof document !== 'undefined' ? document.referrer : '',
+                        user_id: user?.id || null,
+                        created_at: new Date().toISOString(),
+                      }
+                      // Same two-step pattern as the site-wide FeedbackWidget: persist
+                      // to Supabase first (so it always shows up in /admin even if the
+                      // email fails), then fire the notification email — never block
+                      // the "thanks" confirmation on either one.
+                      try { await supabase.from('feedback').insert([payload]) } catch (_) {}
+                      try {
+                        await fetch('/api/feedback', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify(payload),
+                        })
+                      } catch (_) {}
+                      track('feedback_submitted', { type: feedbackType, length: feedbackText.length })
+                      setFeedbackSubmitting(false)
+                      setFeedbackSent(true)
+                    }}
                     style={{ width: "100%", padding: "12px", fontSize: 14 }}>
-                    {feedbackType === 'feature' ? '✨ Submit Feature Request' : '🐛 Submit Bug Report'}
+                    {feedbackSubmitting ? 'Sending…' : feedbackType === 'feature' ? '✨ Submit Feature Request' : '🐛 Submit Bug Report'}
                   </Button>
                 </>
               )}

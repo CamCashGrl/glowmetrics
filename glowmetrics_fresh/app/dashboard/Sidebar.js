@@ -12,7 +12,10 @@ const C = {
 const NAV = [
   {
     group: null,
-    items: [{ id: "overview", icon: "⚡", label: "Command Center" }]
+    items: [
+      { id: "report",   icon: "🧾", label: "Creator Report" },
+      { id: "overview", icon: "⚡", label: "Command Center" },
+    ]
   },
   {
     group: "FANS",

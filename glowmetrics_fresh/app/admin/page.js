@@ -226,7 +226,7 @@ export default function AdminPage() {
     </div>
   )
 
-  const { kpis, funnel, stageBreakdown, platformBreakdown, users=[], importHealth, liveMode, extension, subscriptions, feedback, signupsByDay=[], utmBreakdown={}, generatedAt } = data || {}
+  const { kpis, funnel, stageBreakdown, platformBreakdown, users=[], importHealth, liveMode, extension, subscriptions, strayPlans=[], feedback, signupsByDay=[], utmBreakdown={}, generatedAt } = data || {}
 
   // Filter + sort users
   const filtered = users
@@ -442,6 +442,27 @@ export default function AdminPage() {
             </div>
           </Card>
         </div>
+
+        {/* Plan integrity — profiles.plan values outside free/pro/unlimited are
+            silently treated as free everywhere in the app. See the
+            2026-08-06 standard_monthly incident: a real paying/granted user
+            sat un-recognized as Pro until this was caught by hand. */}
+        {strayPlans.length > 0 && (
+          <Card style={{ marginBottom:20, border:"1px solid rgba(248,113,113,0.35)" }}>
+            <SectionTitle>⚠️ Plan Integrity — {strayPlans.length} account{strayPlans.length !== 1 ? "s" : ""} with an unrecognized plan value</SectionTitle>
+            <div style={{ fontSize:11, color:C.muted, marginBottom:12 }}>
+              These profiles have a `plan` value other than free/pro/unlimited — the app treats them as free regardless of billing status. Fix directly in Supabase.
+            </div>
+            <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+              {strayPlans.map(sp => (
+                <div key={sp.userId} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderBottom:`1px solid rgba(255,255,255,0.04)` }}>
+                  <span style={{ fontSize:12, color:C.text }}>{sp.email || sp.userId}</span>
+                  <span style={{ fontSize:12, fontWeight:800, color:"#f87171", fontFamily:"'DM Mono',monospace" }}>{sp.plan}</span>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
 
         {/* Promo Codes */}
         <Card style={{ marginBottom:20 }}>
