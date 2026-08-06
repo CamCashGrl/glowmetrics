@@ -26,6 +26,7 @@ const TAB_LOADING = (
     <div style={{ width: 40, height: 40, border: "2px solid #1e2d45", borderTop: "2px solid #22D3EE", borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto" }} />
   </div>
 )
+const CreatorReport = dynamic(() => import('./CreatorReport'), { ssr: false, loading: () => TAB_LOADING })
 const AnalyticsCharts = dynamic(() => import('./AnalyticsCharts'), { ssr: false, loading: () => TAB_LOADING })
 const StreamPlanner = dynamic(() => import('./StreamPlanner'), { ssr: false, loading: () => TAB_LOADING })
 const MoneyMap = dynamic(() => import('./MoneyMap'), { ssr: false, loading: () => TAB_LOADING })
@@ -3258,6 +3259,12 @@ const stopImportMessageRotation = () => {
             readiness={dashboardReadiness}
             onImport={() => handleTabChange('upload')}
           />
+        )}
+
+        {activeTab === "report" && (
+          <div style={{ animation: "fadeUp 0.3s ease" }}>
+            <CreatorReport analytics={analytics} tips={tips} isPro={isPro} onUpgrade={() => openUpgradeModal('creator_report')} />
+          </div>
         )}
 
         {activeTab === "overview" && (
