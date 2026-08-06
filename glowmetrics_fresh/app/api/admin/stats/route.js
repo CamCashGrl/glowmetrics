@@ -224,6 +224,21 @@ export async function GET(req) {
   }
   subBreakdown.free += Math.max(0, totalRealUsers - subs.length)
 
+  // Plan integrity — profiles.plan should only ever be 'free', 'pro', or
+  // 'unlimited' (the only values isProPlan()/lib/plan.js recognizes as paid).
+  // Anything else means a row was set outside the normal webhook/promo-
+  // redemption code paths (e.g. a manual DB edit) and is silently being
+  // treated as free by the entire app, paid or not — surface it rather than
+  // let it sit undetected. See the 2026-08-06 standard_monthly incident.
+  const KNOWN_PLAN_VALUES = new Set(['free', 'pro', 'unlimited'])
+  const strayPlans = profiles
+    .filter(p => p.plan && !KNOWN_PLAN_VALUES.has(p.plan))
+    .map(p => ({
+      userId: p.id,
+      email: allUsers.find(u => u.id === p.id)?.email || null,
+      plan: p.plan,
+    }))
+
   // Dashboard stage breakdown (real users only)
   const stageBreakdown = {}
   for (const u of userRows) {
@@ -269,6 +284,7 @@ export async function GET(req) {
     liveMode,
     extension,
     subscriptions: subBreakdown,
+    strayPlans,
     feedback,
     signupsByDay,
     generatedAt:  now.toISOString(),
