@@ -27,6 +27,7 @@ const TAB_LOADING = (
   </div>
 )
 const CreatorReport = dynamic(() => import('./CreatorReport'), { ssr: false, loading: () => TAB_LOADING })
+const Settings = dynamic(() => import('./Settings'), { ssr: false, loading: () => TAB_LOADING })
 const AnalyticsCharts = dynamic(() => import('./AnalyticsCharts'), { ssr: false, loading: () => TAB_LOADING })
 const StreamPlanner = dynamic(() => import('./StreamPlanner'), { ssr: false, loading: () => TAB_LOADING })
 const MoneyMap = dynamic(() => import('./MoneyMap'), { ssr: false, loading: () => TAB_LOADING })
@@ -1833,7 +1834,7 @@ export default function Dashboard() {
       })
       setUser(user)
       supabase.from('profiles')
-        .select('plan, plan_expires_at')
+        .select('plan, plan_expires_at, stripe_customer_id')
         .eq('id', user.id)
         .maybeSingle()
         .then(({ data }) => { if (data) setProfile(data) })
@@ -3268,6 +3269,10 @@ const stopImportMessageRotation = () => {
           </div>
         )}
 
+        {activeTab === "settings" && (
+          <Settings user={user} profile={profile} isPro={isPro} supabase={supabase} />
+        )}
+
         {activeTab === "overview" && (
           <div style={{ animation: "fadeUp 0.3s ease" }}>
 
@@ -3470,11 +3475,21 @@ const stopImportMessageRotation = () => {
                   <div style={{ flex: 1, minWidth: 130, padding: '11px 14px', borderRadius: 11, background: bestTimeLock.locked ? 'rgba(255,255,255,0.03)' : atPeak ? 'rgba(16,185,129,0.12)' : 'rgba(34,211,238,0.07)', border: `1px solid ${bestTimeLock.locked ? 'rgba(255,255,255,0.08)' : atPeak ? 'rgba(16,185,129,0.4)' : 'rgba(34,211,238,0.18)'}` }}>
                     <div style={{ fontSize: 10, color: C.muted, marginBottom: 3, textTransform: 'uppercase', letterSpacing: 1 }}>Best Time</div>
                     {bestTimeLock.locked ? (
-                      <>
-                        <div style={{ fontSize: 14, fontWeight: 800, color: '#64748b' }}>🔒 Locked</div>
-                        <div style={{ fontSize: 11, color: C.muted, marginTop: 2, lineHeight: 1.4 }}>{bestTimeLock.message}</div>
-                        <button onClick={() => handleTabChange('upload')} style={{ marginTop: 6, padding: '4px 10px', borderRadius: 100, border: '1px solid rgba(34,211,238,0.3)', background: 'rgba(34,211,238,0.08)', color: C.cyan, fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>Upload More Data</button>
-                      </>
+                      analytics?.earlySignalHour ? (
+                        <>
+                          <div style={{ fontSize: 14, fontWeight: 800, color: C.indigo }}>⚡ {fmtHour(parseInt(analytics.earlySignalHour.hour))}</div>
+                          <div style={{ fontSize: 11, color: C.muted, marginTop: 2, lineHeight: 1.4 }}>
+                            Early signal · ~${analytics.earlySignalHour.avg.toFixed(0)} avg so far
+                          </div>
+                          <button onClick={() => handleTabChange('upload')} style={{ marginTop: 6, padding: '4px 10px', borderRadius: 100, border: '1px solid rgba(124,92,255,0.3)', background: 'rgba(124,92,255,0.08)', color: C.indigo, fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>Add data to confirm</button>
+                        </>
+                      ) : (
+                        <>
+                          <div style={{ fontSize: 14, fontWeight: 800, color: '#64748b' }}>🔒 Locked</div>
+                          <div style={{ fontSize: 11, color: C.muted, marginTop: 2, lineHeight: 1.4 }}>{bestTimeLock.message}</div>
+                          <button onClick={() => handleTabChange('upload')} style={{ marginTop: 6, padding: '4px 10px', borderRadius: 100, border: '1px solid rgba(34,211,238,0.3)', background: 'rgba(34,211,238,0.08)', color: C.cyan, fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>Upload More Data</button>
+                        </>
+                      )
                     ) : (
                       <>
                         <div style={{ fontSize: 14, fontWeight: 800, color: atPeak ? C.green : C.white }}>{bhLabel}</div>
