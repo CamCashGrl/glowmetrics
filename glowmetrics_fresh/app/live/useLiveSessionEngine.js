@@ -26,6 +26,7 @@ export function useLiveSessionEngine() {
   const [serverSession, setServerSession] = useState(null)
   const [actionPending, setActionPending] = useState(false)
   const [actionError, setActionError] = useState(null)
+  const [actionErrorCode, setActionErrorCode] = useState(null)
   // Set only for a terminal resolve() outcome, so the UI can show which of
   // the 4 terminal choices just happened; cleared once the transient
   // 'resolved' display window ends. Never touched by 'still_live'.
@@ -156,6 +157,7 @@ export function useLiveSessionEngine() {
     if (actionPending) return
     setActionPending(true)
     setActionError(null)
+    setActionErrorCode(null)
     try {
       const res = await fetch('/api/live/session/start', {
         method: 'POST',
@@ -164,6 +166,7 @@ export function useLiveSessionEngine() {
       const data = await res.json()
       if (!res.ok) {
         setActionError(data.error)
+        setActionErrorCode(data.code || null)
         return
       }
       setServerSession(data.session)
@@ -313,6 +316,7 @@ export function useLiveSessionEngine() {
     serverSession,
     actionPending,
     actionError,
+    actionErrorCode,
     lastResolution,
     duration,
     goLive,
