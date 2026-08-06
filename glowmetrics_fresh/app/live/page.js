@@ -60,6 +60,7 @@ export default function LivePage({ embedded = false } = {}) {
   const [showDemoPreview, setShowDemoPreview] = useState(false);
   const [showExtModal, setShowExtModal]   = useState(false);
   const [extStep, setExtStep]             = useState(0);
+  const [showIntroModal, setShowIntroModal] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authMode, setAuthMode]           = useState('signin');
   const [authEmail, setAuthEmail]         = useState('');
@@ -218,6 +219,19 @@ export default function LivePage({ embedded = false } = {}) {
 
     return () => { if (liveTipsChannelRef.current) supabase.removeChannel(liveTipsChannelRef.current); };
   }, [normalizeTip]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // First-ever visit to Live Mode (standalone or the dashboard's Live Mode
+  // tab): explain what it does and how the extension fits in before anyone
+  // hits Start Stream cold. Shown once per browser, not tied to onboarding.
+  useEffect(() => {
+    if (authStatus !== 'live' || !user) return;
+    try {
+      if (!localStorage.getItem('camcash_live_mode_intro_seen')) {
+        setShowIntroModal(true);
+        localStorage.setItem('camcash_live_mode_intro_seen', '1');
+      }
+    } catch (_) { /* localStorage unavailable — skip the intro, not worth blocking on */ }
+  }, [authStatus, user]);
 
   // Start/Stop are handled entirely by the engine (engine.goLive / engine.stop)
   // — see the Start Stream / End Stream buttons below. There is no separate
@@ -701,6 +715,46 @@ export default function LivePage({ embedded = false } = {}) {
         </div>
       )}
 
+      {/* ── LIVE MODE INTRO MODAL — first visit only ── */}
+      {showIntroModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(4,8,18,0.9)', backdropFilter: 'blur(14px)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          <div style={{ background: '#0f1420', border: '1px solid rgba(168,85,247,0.3)', borderRadius: 20, padding: '36px 32px', width: '100%', maxWidth: 460, boxShadow: '0 0 60px rgba(168,85,247,0.2)', position: 'relative' }}>
+            <button onClick={() => setShowIntroModal(false)} style={{ position: 'absolute', top: 14, right: 16, background: 'transparent', border: 'none', color: C.muted, fontSize: 20, cursor: 'pointer', lineHeight: 1 }}>✕</button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+              <span style={{ fontSize: 30 }}>⚡</span>
+              <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 1, padding: '3px 8px', borderRadius: 6, background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.35)', color: C.gold }}>BETA</span>
+            </div>
+            <div style={{ fontSize: 21, fontWeight: 800, color: C.white, marginBottom: 10 }}>Welcome to Live Mode</div>
+            <div style={{ fontSize: 14, color: C.muted, lineHeight: 1.7, marginBottom: 18 }}>
+              Live Mode tracks your tips and coaches you in real time while you stream — pacing alerts, who's tipping, and what's actually working right now, instead of finding out after the fact.
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 22 }}>
+              {[
+                ['🧩', 'Install the free Chrome extension and tips log here automatically — no copy/paste, nothing to remember mid-stream.'],
+                ['🎯', 'Get live coaching prompts: pacing, top tippers, and re-engagement nudges as they happen.'],
+                ['📊', 'End your stream to a real recap — earnings, best moments, what to repeat next time.'],
+              ].map(([icon, text]) => (
+                <div key={text} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                  <span style={{ fontSize: 16 }}>{icon}</span>
+                  <span style={{ fontSize: 13, color: C.text, lineHeight: 1.6 }}>{text}</span>
+                </div>
+              ))}
+            </div>
+            <div style={{ fontSize: 11, color: C.muted, marginBottom: 18 }}>
+              This is a beta feature — expect it to keep improving, and let us know if something feels off.
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <Button onClick={() => { setShowIntroModal(false); setShowExtModal(true); setExtStep(0); }} style={{ width: '100%', padding: '12px 0', fontSize: 14 }}>
+                📥 Get the Extension
+              </Button>
+              <button onClick={() => setShowIntroModal(false)} style={{ width: '100%', padding: '10px 0', background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, color: C.muted, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+                Skip for now, I'll explore on my own
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── EXT INSTALL MODAL ── */}
       {showExtModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(4,8,18,0.9)', backdropFilter: 'blur(14px)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
@@ -763,6 +817,7 @@ export default function LivePage({ embedded = false } = {}) {
             <div style={{ width: 7, height: 7, borderRadius: '50%', background: C.green, boxShadow: `0 0 8px ${C.green}`, animation: 'cc-pulse 1.2s ease-in-out infinite' }} />
             <span style={{ fontSize: 11, fontWeight: 800, color: C.green, letterSpacing: 1 }}>LIVE</span>
           </div>
+          <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 1, padding: '3px 8px', borderRadius: 6, background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.35)', color: C.gold }}>BETA</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           <span style={{ fontSize: 12, color: C.muted }}>{user?.email}</span>
@@ -791,6 +846,15 @@ export default function LivePage({ embedded = false } = {}) {
       )}
 
       <div style={{ padding: embedded ? '0' : '28px 32px', maxWidth: 1280, margin: '0 auto' }}>
+
+        {/* Beta badge — the sticky nav's copy is hidden when embedded in the
+            dashboard tab, so this is the only place it shows there. */}
+        {embedded && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+            <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 1, padding: '3px 8px', borderRadius: 6, background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.35)', color: C.gold }}>BETA</span>
+            <span style={{ fontSize: 12, color: C.muted }}>Live Mode is still evolving — let us know if something feels off.</span>
+          </div>
+        )}
 
         {/* "Auto-capture your tips" banner — shown both standalone and embedded. */}
         {user && !liveEvents.some(e => e.sourceUsed === 'extension') && (
@@ -1008,7 +1072,12 @@ export default function LivePage({ embedded = false } = {}) {
                   </span>
                 )}
                 {engine.actionError && (
-                  <span style={{ fontSize: 11, color: C.red }}>{engine.actionError}</span>
+                  <span style={{ fontSize: 11, color: C.red }}>
+                    {engine.actionError}
+                    {engine.actionErrorCode === 'platform_limit_reached' && (
+                      <> — <a href="/pricing" style={{ color: C.cyan, fontWeight: 700 }}>Upgrade to Pro</a></>
+                    )}
+                  </span>
                 )}
             </>
           </div>

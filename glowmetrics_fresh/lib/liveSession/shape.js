@@ -32,6 +32,16 @@ export function shapeLiveSession(row) {
 // Sanitized error shaping — never returns a raw DB error string to the client.
 export function sanitizedErrorResponse(error) {
   console.error('[live-session]', error)
+  if (error?.message?.includes('PLATFORM_LIMIT_REACHED')) {
+    return {
+      status: 402,
+      body: {
+        error: "You're on the free plan, which runs Live Mode on one platform. Upgrade to use Live Mode on multiple platforms.",
+        code: 'platform_limit_reached',
+        upgradeUrl: '/pricing',
+      },
+    }
+  }
   if (error?.code === '22023') {
     return { status: 400, body: { error: 'Unrecognized value.' } }
   }

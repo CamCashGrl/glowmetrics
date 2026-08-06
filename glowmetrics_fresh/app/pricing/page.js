@@ -3,12 +3,11 @@ import PricingClient from './PricingClient'
 export const metadata = {
   title: 'Transparent Pricing — CamCash Cam Model Analytics',
   description:
-    'CamCash pricing: Free tier forever + optional premium at $19.99/month. Early adopters lock in $9.99/month lifetime. Transparent, no surprises.',
+    'CamCash pricing: Free tier forever + Creator Pro at $19.99/month or $99/year. Transparent, no surprises.',
   keywords: [
     'free analytics',
     'affordable creator tools',
-    'lifetime pricing',
-    'early adopter discount',
+    'creator pro pricing',
     'cam model tools pricing',
   ],
 }
