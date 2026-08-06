@@ -4699,7 +4699,8 @@ const stopImportMessageRotation = () => {
                     <div style={{ fontSize: 11, color: C.muted }}>Lifetime value, unseen</div>
                   </div>
                 </div>
-                <button onClick={() => openUpgradeModal('whales_cutoff')} style={{ width: '100%', padding: '12px 20px', borderRadius: 10, background: 'linear-gradient(135deg,#22D3EE,#EC4899)', border: 'none', color: '#06101A', fontSize: 13, fontWeight: 800, cursor: 'pointer' }}>
+                <style>{`@keyframes upgradeGlow { 0%,100% { box-shadow: 0 0 14px rgba(34,211,238,0.5), 0 0 28px rgba(236,72,153,0.25); } 50% { box-shadow: 0 0 26px rgba(34,211,238,0.75), 0 0 48px rgba(236,72,153,0.4); } }`}</style>
+                <button onClick={() => openUpgradeModal('whales_cutoff')} style={{ width: '100%', padding: '12px 20px', borderRadius: 10, background: 'linear-gradient(135deg,#22D3EE,#EC4899)', border: 'none', color: '#06101A', fontSize: 13, fontWeight: 800, cursor: 'pointer', animation: 'upgradeGlow 2.2s ease-in-out infinite' }}>
                   🔓 See All {filteredWhales.length} Fans
                 </button>
               </div>
