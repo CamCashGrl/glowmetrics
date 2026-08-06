@@ -1,3 +1,4 @@
+import Image from 'next/image'
 import ArticleLayout from '../../components/ArticleLayout'
 
 export const metadata = {
@@ -168,10 +169,12 @@ export default function CamModelIncomeTracker() {
       </p>
 
       <div style={{ margin: '0 0 32px', borderRadius: '12px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.07)' }}>
-        <img
+        <Image
           src="/blog-images/camcash-platform-comparsion-dashboard.png"
           alt="Cam model income tracker dashboard showing earnings by platform, stream session, and top tipper"
-          style={{ width: '100%', display: 'block' }}
+          width={1911}
+          height={824}
+          style={{ width: '100%', height: 'auto', display: 'block' }}
         />
       </div>
 

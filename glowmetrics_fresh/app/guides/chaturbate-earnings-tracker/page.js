@@ -1,5 +1,6 @@
 // app/guides/chaturbate-earnings-tracker/page.js
 // EXPANDED — do not remove existing sections, only add to them
+import Image from 'next/image'
 import Button from '../../../components/ui/Button'
 
 import ChaturbateCalculator from './ChaturbateCalculator'
@@ -617,10 +618,12 @@ export default function ChaturbateEarningsTrackerPage() {
                 </div>
               </a>
               <a href="/shop/vip-client-tracker-999" style={{ textDecoration: "none", display: "block", borderRadius: 16, overflow: "hidden", border: "1px solid rgba(236,72,153,0.2)", background: "rgba(255,255,255,0.03)" }}>
-                <img
+                <Image
                   src="/blog-images/vipclienttracker.png"
                   alt="VIP Client Tracker — fillable PDF workbook for tracking top cam model clients, tips, and follow-ups"
-                  style={{ width: "100%", display: "block" }}
+                  width={1402}
+                  height={1122}
+                  style={{ width: "100%", height: "auto", display: "block" }}
                 />
                 <div style={{ padding: "16px 18px" }}>
                   <div style={{ fontSize: 15, fontWeight: 700, color: "white", marginBottom: 6 }}>VIP Client Tracker Workbook</div>
