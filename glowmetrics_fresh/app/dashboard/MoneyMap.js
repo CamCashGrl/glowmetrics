@@ -331,14 +331,14 @@ function MoneyMapTab({ tips }) {
               ))}
               {/* Day rows */}
               {DAYS.map((day,di)=>[
-                <div key={`day-${di}`} style={{position:"sticky",left:0,background:BG,zIndex:2,color:SLATE,fontSize:"11px",fontWeight:"600",display:"flex",alignItems:"center",paddingRight:"8px"}}>{day}</div>,
+                <div key={`day-${di}`} style={{position:"sticky",left:0,background:BG,zIndex:2,color:SLATE,fontSize:"11px",fontWeight:"600",height:"32px",display:"flex",alignItems:"center",paddingRight:"8px"}}>{day}</div>,
                 ...TWO_HR_SLOTS.map(slot=>{
                   const key=`${di}_${slot}`
                   const cell=grid[key]
                   const val=cell?.[metric]||0
                   const isSelected=selected?.day===di&&selected?.slot===slot
                   return (
-                    <div key={slot}
+                    <div key={`cell-${di}-${slot}`}
                       onClick={()=>setSelected(isSelected?null:{day:di,slot})}
                       title={`${day} ${fmtHour(slot)}: ${metric==="usd"?fmtUsd(val):Math.round(val)}`}
                       style={{
