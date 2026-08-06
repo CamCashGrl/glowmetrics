@@ -248,11 +248,14 @@ const CTIP = ({ active, payload }) => {
 }
 
 // ─── TAB: Money Map ───────────────────────────────────────────────────────────
-function MoneyMapTab({ tips }) {
+function MoneyMapTab({ tips, isPro=true }) {
   const [platform, setPlatform] = useState("all")
   const [metric, setMetric]     = useState("usd")
-  const [range, setRange]       = useState("all")
+  const [range, setRange]       = useState(isPro ? "all" : "30d")
   const [selected, setSelected] = useState(null)
+  const RANGE_OPTIONS = isPro
+    ? [["all","All Time"],["90d","90 Days"],["30d","30 Days"],["7d","7 Days"]]
+    : [["30d","30 Days"],["7d","7 Days"]]
 
   const platforms = useMemo(()=>{
     const s = new Set(tips.map(t=>normPlatform(t.platform)))
@@ -310,13 +313,18 @@ function MoneyMapTab({ tips }) {
           }}>{l}</button>
         ))}
         <span style={{color:SLATE,fontSize:"12px",fontWeight:"600",marginLeft:"8px"}}>Range:</span>
-        {[["all","All Time"],["90d","90 Days"],["30d","30 Days"],["7d","7 Days"]].map(([v,l])=>(
+        {RANGE_OPTIONS.map(([v,l])=>(
           <button key={v} onClick={()=>setRange(v)} style={{
             padding:"4px 12px",borderRadius:"20px",border:`1px solid ${range===v?CYAN:BORDER}`,
             background:range===v?"rgba(34,211,238,0.1)":"transparent",
             color:range===v?CYAN:SLATE,fontSize:"12px",cursor:"pointer",fontWeight:"600"
           }}>{l}</button>
         ))}
+        {!isPro && (
+          <a href="/pricing" style={{marginLeft:"4px",fontSize:"11px",color:PURPLE,fontWeight:"600",textDecoration:"none"}}>
+            ✦ Pro unlocks 90-day &amp; all-time history
+          </a>
+        )}
       </div>
 
       <div style={{display:"flex",gap:"16px",flexWrap:"wrap"}}>
@@ -708,8 +716,22 @@ function TrendsTab({ tips, sessions }) {
   )
 }
 
+// Sessions/Platforms/Trends stay Pro-only — the Money Map tab itself (a real
+// heatmap, just capped to the last 30 days) is free's "somewhat useful"
+// slice, per product direction: free should never be a dead end, just less.
+function LockedTabPanel({ label }) {
+  return (
+    <div style={{textAlign:"center",padding:"60px 24px",background:CARD,border:`1px solid ${BORDER}`,borderRadius:"16px"}}>
+      <div style={{fontSize:"32px",marginBottom:"12px"}}>🔒</div>
+      <div style={{color:TEXT,fontSize:"16px",fontWeight:"700",marginBottom:"8px"}}>{label} is a Creator Pro feature</div>
+      <div style={{color:SLATE,fontSize:"13px",marginBottom:"20px"}}>Your Money Map heatmap is free — upgrade to unlock session breakdowns, platform comparisons, and trend analysis.</div>
+      <a href="/pricing" style={{display:"inline-flex",alignItems:"center",background:"linear-gradient(135deg,#22d3ee,#a855f7)",color:"#0a0e1a",fontWeight:"800",padding:"10px 24px",borderRadius:"10px",textDecoration:"none",fontSize:"14px"}}>Upgrade to Pro</a>
+    </div>
+  )
+}
+
 // ─── Inner content (all hooks here) ──────────────────────────────────────────
-function MoneyMapContent({ tips }) {
+function MoneyMapContent({ tips, isPro=true }) {
   const [tab, setTab] = useState("map")
 
   const sessions = useMemo(()=>groupIntoSessions(tips),[tips])
@@ -724,9 +746,9 @@ function MoneyMapContent({ tips }) {
 
   const TABS = [
     {id:"map",     label:"💰 Money Map"},
-    {id:"sessions",label:"📅 Sessions"},
-    {id:"platforms",label:"🏆 Platforms"},
-    {id:"trends",  label:"📈 Trends"},
+    {id:"sessions",label: isPro ? "📅 Sessions" : "🔒 Sessions"},
+    {id:"platforms",label: isPro ? "🏆 Platforms" : "🔒 Platforms"},
+    {id:"trends",  label: isPro ? "📈 Trends" : "🔒 Trends"},
   ]
 
   return (
@@ -741,31 +763,16 @@ function MoneyMapContent({ tips }) {
 
       <TabBar tabs={TABS} active={tab} onSelect={setTab}/>
 
-      {tab==="map"       && <MoneyMapTab tips={tips}/>}
-      {tab==="sessions"  && <SessionsTab sessions={sessions}/>}
-      {tab==="platforms" && <PlatformsTab tips={tips} sessions={sessions}/>}
-      {tab==="trends"    && <TrendsTab tips={tips} sessions={sessions}/>}
+      {tab==="map" && <MoneyMapTab tips={tips} isPro={isPro}/>}
+      {tab==="sessions"  && (!isPro ? <LockedTabPanel label="Session Breakdowns"/>   : <SessionsTab sessions={sessions}/>)}
+      {tab==="platforms" && (!isPro ? <LockedTabPanel label="Platform Comparison"/>  : <PlatformsTab tips={tips} sessions={sessions}/>)}
+      {tab==="trends"    && (!isPro ? <LockedTabPanel label="Trend Analysis"/>       : <TrendsTab tips={tips} sessions={sessions}/>)}
     </div>
   )
 }
 
 // ─── Exported component ───────────────────────────────────────────────────────
 export default function MoneyMap({ tips = [], isPro = false }) {
-  if (!isPro) {
-    return (
-      <div style={{width:"100%",padding:"32px 24px",boxSizing:"border-box"}}>
-        <div style={{background:"rgba(15,20,32,0.75)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:"16px",padding:"48px 40px",width:"100%",boxSizing:"border-box"}}>
-          <h2 style={{color:"#f1f5f9",fontSize:"22px",fontWeight:"700",marginBottom:"10px",marginTop:0}}>Money Map</h2>
-          <p style={{color:"#94a3b8",fontSize:"14px",marginBottom:"32px"}}>Visualize your earnings with heatmaps, session breakdowns, platform comparisons, and trend analysis.</p>
-          <div style={{display:"flex",gap:"12px",flexWrap:"wrap"}}>
-            <a href="/live/demo" style={{display:"inline-flex",alignItems:"center",gap:"8px",background:"rgba(34,211,238,0.12)",border:"1px solid rgba(34,211,238,0.3)",color:"#22d3ee",fontWeight:"600",padding:"10px 24px",borderRadius:"10px",textDecoration:"none",fontSize:"14px"}}>▶ Watch Demo</a>
-            <a href="/pricing" style={{display:"inline-flex",alignItems:"center",background:"linear-gradient(135deg,#22d3ee,#a855f7)",color:"#0a0e1a",fontWeight:"800",padding:"10px 24px",borderRadius:"10px",textDecoration:"none",fontSize:"14px"}}>Upgrade to Pro</a>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
   if (tips.length < 20) {
     return (
       <div style={{textAlign:"center",padding:"60px 24px"}}>
@@ -777,5 +784,5 @@ export default function MoneyMap({ tips = [], isPro = false }) {
     )
   }
 
-  return <MoneyMapContent tips={tips}/>
+  return <MoneyMapContent tips={tips} isPro={isPro}/>
 }

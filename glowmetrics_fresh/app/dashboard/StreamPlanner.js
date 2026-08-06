@@ -359,7 +359,7 @@ const GRID_LEGEND = [
   ["weak","Proven weak"],["untested","Untested"],["promising","Under-tested promising"],["whale","Whale window"],
 ]
 
-function PlanTab({ tips, windows, whales, prefs, savePrefs }) {
+function PlanTab({ tips, windows, whales, prefs, savePrefs, isPro=true }) {
   const [showCustomize, setShow] = useState(false)
   const [whyOpen, setWhyOpen]    = useState(null)
 
@@ -530,6 +530,10 @@ function PlanTab({ tips, windows, whales, prefs, savePrefs }) {
                 </span>
                 {row.off ? (
                   <span style={{ color:MUTED, fontSize:12, gridColumn:"2/7" }}>Day off</span>
+                ) : !isPro && !row.isToday ? (
+                  <span style={{ color:MUTED, fontSize:12, gridColumn:"2/7", filter:"blur(3px)", userSelect:"none" }}>
+                    {row.window ? `${localHr(row.window.utcHour)}–${localHr(row.window.utcHour + 2)} on ${row.window.topPlatform || "your top platform"} · ${fmt$(row.window.avgUsdPerHr)}/hr` : "No matching window yet"}
+                  </span>
                 ) : row.window ? (
                   <>
                     <span style={{ color:TEXT, fontSize:12 }}>{localHr(row.window.utcHour)}–{localHr(row.window.utcHour + 2)}</span>
@@ -552,10 +556,26 @@ function PlanTab({ tips, windows, whales, prefs, savePrefs }) {
             </React.Fragment>
           ))}
         </div>
+        {!isPro && (
+          <div style={{ marginTop:12, textAlign:"center" }}>
+            <a href="/pricing" style={{ fontSize:12, color:PURPLE, fontWeight:600, textDecoration:"none" }}>
+              ✦ Upgrade to Pro to see your full 7-day plan, not just tonight
+            </a>
+          </div>
+        )}
       </div>
 
-      {/* D — Hidden Peak Finder */}
-      {hidden.length > 0 && (
+      {/* D — Hidden Peak Finder + E — Opportunity Grid — Pro only. Free's
+          "somewhat useful" slice is Tonight's Brief + today's row above;
+          these two go deeper into full-week pattern data. */}
+      {!isPro ? (
+        <div style={{ ...cardS(), textAlign:"center", padding:"32px 24px" }}>
+          <div style={{ fontSize:26, marginBottom:8 }}>🔒</div>
+          <div style={{ color:TEXT, fontSize:14, fontWeight:700, marginBottom:6 }}>Untested Opportunities &amp; the full Opportunity Grid are Creator Pro features</div>
+          <div style={{ color:MUTED, fontSize:12, marginBottom:16 }}>See every day/time block worth testing, not just tonight's window.</div>
+          <Button as="a" href="/pricing" style={{ padding:"9px 22px", fontSize:13 }}>Upgrade to Pro</Button>
+        </div>
+      ) : hidden.length > 0 && (
         <div style={cardS()}>
           <SecHead title="Untested Opportunities" sub="Windows worth testing based on your existing patterns" />
           <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(240px,1fr))", gap:10 }}>
@@ -584,7 +604,8 @@ function PlanTab({ tips, windows, whales, prefs, savePrefs }) {
         </div>
       )}
 
-      {/* E — Opportunity Grid */}
+      {/* E — Opportunity Grid — Pro only, see the combined lock card above */}
+      {isPro && (
       <div style={cardS()}>
         <SecHead title="Opportunity Grid" sub="7 days × 6 time blocks — avg $/hr where data exists" />
         <div style={{ overflowX:"auto" }}>
@@ -620,6 +641,7 @@ function PlanTab({ tips, windows, whales, prefs, savePrefs }) {
           ))}
         </div>
       </div>
+      )}
     </div>
   )
 }
@@ -935,7 +957,20 @@ function ProgressTab({ tips, windows, prefs }) {
 
 const TABS = [{ id:"plan", label:"Plan" }, { id:"whales", label:"Whales" }, { id:"progress", label:"Progress" }]
 
-function StreamPlannerContent({ tips }) {
+// Whales/Progress stay Pro-only — free's "somewhat useful" slice on this
+// tool is Tonight's Brief + today's row in the Plan tab (see PlanTab).
+function LockedPlannerTab({ title, body }) {
+  return (
+    <div style={{ ...cardS(), textAlign:"center", padding:"48px 32px" }}>
+      <div style={{ fontSize:32, marginBottom:12 }}>🔒</div>
+      <div style={{ color:PRIMARY, fontSize:16, fontWeight:700, marginBottom:8 }}>{title} is a Creator Pro feature</div>
+      <div style={{ color:TEXT, fontSize:13, lineHeight:1.6, marginBottom:20 }}>{body}</div>
+      <Button as="a" href="/pricing" style={{ padding:"10px 24px", fontSize:14 }}>Upgrade to Pro</Button>
+    </div>
+  )
+}
+
+function StreamPlannerContent({ tips, isPro=true }) {
   const [tab, setTab]   = useState("plan")
   const [prefs, setPrefs] = useState(DEFAULT_PREFS)
 
@@ -964,14 +999,14 @@ function StreamPlannerContent({ tips }) {
       <div style={{ display:"flex", borderBottom:`1px solid ${BORDER}`, marginBottom:24 }}>
         {TABS.map((t) => (
           <button key={t.id} onClick={() => setTab(t.id)} style={{ padding:"10px 20px", background:"none", border:"none", cursor:"pointer", fontSize:14, color:tab === t.id ? PRIMARY : FAINT, fontWeight:tab === t.id ? 700 : 400, borderBottom:tab === t.id ? `2px solid ${CYAN}` : "2px solid transparent", marginBottom:-1, transition:"all 0.15s" }}>
-            {t.label}
+            {!isPro && t.id !== "plan" ? `🔒 ${t.label}` : t.label}
           </button>
         ))}
       </div>
 
-      {tab === "plan"     && <PlanTab     tips={tips} windows={windows} whales={whales} prefs={prefs} savePrefs={savePrefs} />}
-      {tab === "whales"   && <WhalesTab   tips={tips} whales={whales} />}
-      {tab === "progress" && <ProgressTab tips={tips} windows={windows} prefs={prefs} />}
+      {tab === "plan"     && <PlanTab tips={tips} windows={windows} whales={whales} prefs={prefs} savePrefs={savePrefs} isPro={isPro} />}
+      {tab === "whales"   && (isPro ? <WhalesTab tips={tips} whales={whales} /> : <LockedPlannerTab title="Whale Windows" body="See exactly when your top fans historically show up, so you can be live when they are." />)}
+      {tab === "progress" && (isPro ? <ProgressTab tips={tips} windows={windows} prefs={prefs} /> : <LockedPlannerTab title="Plan Progress" body="Track how closely you're sticking to your recommended schedule over time." />)}
     </div>
   )
 }
@@ -980,21 +1015,6 @@ function StreamPlannerContent({ tips }) {
 // ROOT EXPORT
 // ═══════════════════════════════════════════════════════════════════════════════
 export default function StreamPlanner({ tips = [], isPro = false }) {
-  if (!isPro) {
-    return (
-      <div style={{ background:BG, minHeight:"100%", padding:"32px 24px", boxSizing:"border-box" }}>
-        <div style={{ background:"rgba(15,20,32,0.75)", border:"1px solid rgba(255,255,255,0.08)", borderRadius:"16px", padding:"48px 40px", width:"100%", boxSizing:"border-box" }}>
-          <h2 style={{ color:"#f1f5f9", fontSize:"22px", fontWeight:"700", marginBottom:"10px", marginTop:0 }}>Stream Planner</h2>
-          <p style={{ color:"#94a3b8", fontSize:"14px", marginBottom:"32px" }}>Get a personalized streaming schedule with whale watch windows, peak earning times, and lift tracking.</p>
-          <div style={{ display:"flex", gap:"12px", flexWrap:"wrap" }}>
-            <a href="/live/demo" style={{ display:"inline-flex", alignItems:"center", gap:"8px", background:"rgba(34,211,238,0.12)", border:"1px solid rgba(34,211,238,0.3)", color:"#22d3ee", fontWeight:"600", padding:"10px 24px", borderRadius:"10px", textDecoration:"none", fontSize:"14px" }}>▶ Watch Demo</a>
-            <Button as="a" href="/pricing" style={{ padding:"10px 24px", fontSize:"14px" }}>Upgrade to Pro</Button>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
   if (tips.length < 20) {
     return (
       <div style={{ background:BG, minHeight:"100%", display:"flex", alignItems:"center", justifyContent:"center", padding:24 }}>
@@ -1009,5 +1029,5 @@ export default function StreamPlanner({ tips = [], isPro = false }) {
     )
   }
 
-  return <StreamPlannerContent tips={tips} />
+  return <StreamPlannerContent tips={tips} isPro={isPro} />
 }
