@@ -55,8 +55,8 @@ const STEPS = [
     n: 6,
     icon: '📊',
     title: 'Sync Your Data to Dashboard',
-    badge: 'PRO ONLY',
-    body: 'Your tips and analytics sync to your CamCashGrl dashboard for full session breakdowns, insights & predictions.',
+    badge: 'FREE — 1 PLATFORM',
+    body: 'Your tips and analytics sync to your CamCashGrl dashboard automatically — free on your first platform. Track a second platform with Live Mode by upgrading to Pro.',
   },
 ]
 
@@ -136,8 +136,8 @@ const LIVE_MODE_GUIDE_HTML = `
   </div>
 
   <div style="margin-bottom:28px;border-radius:16px;background:rgba(255,200,87,0.08);border:1px solid rgba(255,200,87,0.3);padding:18px 20px;">
-    <p style="margin:0 0 4px;font-size:13px;font-weight:800;color:#FFC857;">👑 Coaching Is Free</p>
-    <p style="margin:0;font-size:13px;color:#D7D9EA;line-height:1.5;">Real-time coaching is always free for everyone. Upgrading to Pro unlocks tip data syncing, history, insights & advanced analytics.</p>
+    <p style="margin:0 0 4px;font-size:13px;font-weight:800;color:#FFC857;">👑 Free On Your First Platform</p>
+    <p style="margin:0;font-size:13px;color:#D7D9EA;line-height:1.5;">Real-time coaching and automatic tip tracking are free for everyone on one platform. Upgrading to Pro unlocks Live Mode on every platform you work, plus full history, insights & advanced analytics.</p>
   </div>
 
   <div style="border-radius:16px;border:1px solid rgba(255,43,174,0.35);padding:20px 24px;margin-bottom:32px;text-align:center;">
