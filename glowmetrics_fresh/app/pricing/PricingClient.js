@@ -240,31 +240,31 @@ function PricingSection({
   user,
 }) {
   const freeFeatures = [
-    'Track 1 cam platform',
-    'Upload tip history by CSV',
-    'Basic earnings dashboard',
-    'Basic session analytics',
-    'Live tip detection',
-    'Real-time alerts',
-    'Basic Live Mode coaching',
-    'Top 3 fans',
-    'Limited recent tip history',
-    'Basic fan insights',
+    'See exactly how your platform is really performing',
+    'Import your tip history in minutes — no manual entry',
+    'Know your numbers at a glance',
+    'See which streams actually went well',
+    'Watch tips roll in automatically while you stream',
+    'Never miss a big tip or a new fan',
+    'Get simple in-stream coaching as you go',
+    'Know who your top 3 supporters are',
+    'Keep a running view of your recent activity',
+    'Start learning who actually supports you',
   ]
 
   const standardFeatures = [
-    'Track all supported cam platforms',
-    'Full permanent tip history',
-    'Expanded fan insights',
-    'Full fan profiles and CRM tools',
-    'Cross-platform earnings comparisons',
-    'Advanced Live Mode coaching',
-    'Private-session analytics',
-    'Churn and re-engagement insights',
-    'Full best-time analysis',
-    'Stream Planner',
-    'Money Map',
-    'Advanced recommendations and reports',
+    'Know exactly which platform earns you the most',
+    'See your whole business, not just the last few weeks',
+    'Understand your fans on a deeper level',
+    'Never lose track of another VIP',
+    'See exactly which platforms deserve more of your time',
+    'Get told what’s working, mid-stream — not just what happened',
+    'Know which private shows are actually worth your time',
+    'Catch fans before they disappear for good',
+    'Know exactly when to go live for the best return',
+    'Turn insight into an actual schedule, done for you',
+    'See the shape of your income at a glance',
+    'Receive personalized coaching after every stream',
   ]
 
   return (
@@ -283,6 +283,41 @@ function PricingSection({
           margin: '0 auto',
         }}
       >
+        <div style={{ textAlign: 'center', marginBottom: 40 }}>
+          <h1
+            style={{
+              fontSize: 'clamp(28px, 4vw, 40px)',
+              fontWeight: 900,
+              letterSpacing: '-1px',
+              margin: '0 0 12px',
+              color: C.white,
+            }}
+          >
+            Free forever.{' '}
+            <span
+              style={{
+                background: C.gradientPrimary,
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                backgroundClip: 'text',
+              }}
+            >
+              Creator Pro when you're ready.
+            </span>
+          </h1>
+          <p
+            style={{
+              fontSize: 15,
+              color: C.text,
+              maxWidth: 560,
+              margin: '0 auto',
+              lineHeight: 1.6,
+            }}
+          >
+            Start with a real, working analytics dashboard — not a trial. Upgrade when you want to know exactly where, when, and who to focus on to earn more.
+          </p>
+        </div>
+
         <div
           style={{
             display: 'grid',
@@ -348,8 +383,9 @@ function PricingSection({
                 margin: '0 0 24px',
               }}
             >
-              Start tracking your earnings and using
-              CamCash without a credit card.
+              Perfect for creators getting started — real
+              insights from your real data, no credit card
+              required.
             </p>
 
             <div
@@ -428,7 +464,7 @@ function PricingSection({
                 margin: '0 0 12px',
               }}
             >
-              Standard
+              Creator Pro
             </p>
 
             <div style={{ marginBottom: 6 }}>
@@ -459,10 +495,22 @@ function PricingSection({
                 color: C.cyan,
                 fontWeight: 800,
                 fontSize: 14,
-                margin: '0 0 22px',
+                margin: '0 0 6px',
               }}
             >
               Or $99 per year
+            </p>
+
+            <p
+              style={{
+                color: C.text,
+                fontSize: 14,
+                lineHeight: 1.6,
+                margin: '0 0 22px',
+              }}
+            >
+              Built for creators serious about growing
+              their income.
             </p>
 
             <div
@@ -543,7 +591,7 @@ function PromiseSection() {
   const promises = [
     'The free plan will always exist and remain genuinely useful',
     'Core live tracking and basic coaching stay free',
-    'Standard unlocks full history, deeper insights, and multi-platform tracking',
+    'Creator Pro unlocks full history, deeper insights, and multi-platform tracking',
     'No surprise feature locks after launch',
     '30 days notice before material pricing or plan changes',
     'Built by cam models, for cam models',
@@ -618,15 +666,15 @@ const FAQ_ITEMS = [
   },
   {
     q: 'How many platforms can I track for free?',
-    a: 'The free plan supports one cam platform. Standard unlocks tracking across every supported platform and adds cross-platform comparisons.',
+    a: 'The free plan supports one cam platform. Creator Pro unlocks tracking across every supported platform and adds cross-platform comparisons.',
   },
   {
-    q: 'What does the Standard plan include?',
-    a: 'Standard includes all supported platforms, full permanent tip history, expanded fan profiles, CRM tools, cross-platform earnings comparisons, advanced Live Mode coaching, private-session analytics, churn and re-engagement insights, full best-time analysis, Stream Planner, Money Map, and advanced reports.',
+    q: 'What does Creator Pro include?',
+    a: 'Creator Pro includes all supported platforms, full permanent tip history, expanded fan profiles, CRM tools, cross-platform earnings comparisons, advanced Live Mode coaching, private-session analytics, churn and re-engagement insights, full best-time analysis, Stream Planner, Money Map, and advanced reports.',
   },
   {
-    q: 'How much is Standard?',
-    a: 'Standard is $19.99 per month or $99 per year. Both billing options unlock the same Standard features.',
+    q: 'How much is Creator Pro?',
+    a: 'Creator Pro is $19.99 per month or $99 per year. Both billing options unlock the same features.',
   },
   {
     q: 'Can I switch between monthly and annual billing?',
