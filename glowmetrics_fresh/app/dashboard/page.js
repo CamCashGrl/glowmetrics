@@ -4663,6 +4663,40 @@ const stopImportMessageRotation = () => {
                     </div>
                   )
                 })}
+                {/* Blurred preview cards — real fans #4+ from this account's own
+                    data, not a generic mock. Proves the depth is real instead of
+                    just disappearing past the free cutoff. */}
+                {!isPro && hiddenWhales.slice(0, 3).map((w, i) => (
+                  <div key={`locked-${i}`}
+                    onClick={() => openUpgradeModal('whales_cutoff')}
+                    style={{ ...glassCard, borderRadius: 16, padding: 16, border: '1px solid rgba(236,72,153,0.2)', cursor: 'pointer', position: 'relative', overflow: 'hidden' }}>
+                    <div style={{ filter: 'blur(5px)', userSelect: 'none', pointerEvents: 'none' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                        <div style={{ width: 36, height: 36, borderRadius: 10, background: `linear-gradient(135deg, ${C.pink}, ${C.indigo})`, flexShrink: 0 }} />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 14, fontWeight: 700, color: C.white, marginBottom: 3 }}>{w.username}</div>
+                          <div style={{ display: 'flex', gap: 5 }}>
+                            <span style={{ padding: '1px 6px', borderRadius: 100, background: 'rgba(255,255,255,0.08)', color: C.text, fontSize: 9, fontWeight: 700 }}>{w.tier}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', rowGap: 8, columnGap: 10, padding: '10px 0', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                        <div>
+                          <div style={{ fontSize: 14, fontWeight: 800, color: C.white }}>${(w.totalUSD || 0).toFixed(2)}</div>
+                          <div style={{ fontSize: 10, color: C.text }}>Lifetime spend</div>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 14, fontWeight: 800, color: C.white }}>{w.tipCount}</div>
+                          <div style={{ fontSize: 10, color: C.text }}>Total tips</div>
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, background: 'rgba(10,12,24,0.35)' }}>
+                      <div style={{ fontSize: 22 }}>🔒</div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: C.white, textAlign: 'center', padding: '0 16px' }}>Upgrade to see this fan</div>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
 
