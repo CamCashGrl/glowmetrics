@@ -36,6 +36,14 @@ export function calculateConfidence(validSessionCount, streamedHours) {
   return { level: 'Medium', label: 'Likely pattern' }
 }
 
+// 24-hour numeric hour -> 12-hour label, wrapping correctly past midnight
+// (e.g. 23 + 2 -> "1 AM", not "25:00"). Single source of truth for any
+// hour-range display — never hand-roll ":00" hour strings in a component.
+export function fmt12Hour(h) {
+  const hh = ((h % 24) + 24) % 24
+  return hh === 0 ? '12 AM' : hh < 12 ? `${hh} AM` : hh === 12 ? '12 PM' : `${hh - 12} PM`
+}
+
 export function toLocalHour(dateStr, tz) {
   try {
     const date = new Date(dateStr)
@@ -506,7 +514,7 @@ export function identifyWhales(tips) {
       expectedNextTip: calcExpectedNextTip(daysSinceLastTip, avgDaysBetweenTips),
       hasPrivates: privateTips.length > 0, privateCount: privateTips.length,
       privateSpent: parseFloat(privateTips.reduce((s, t) => s + t.usd, 0).toFixed(2)),
-      typicalOnlineHours: mostActiveHour ? `${mostActiveHour[0]}:00 - ${parseInt(mostActiveHour[0]) + 2}:00` : 'Unknown',
+      typicalOnlineHours: mostActiveHour ? `${fmt12Hour(parseInt(mostActiveHour[0]))} - ${fmt12Hour(parseInt(mostActiveHour[0]) + 2)}` : 'Unknown',
       tipNotes: f.tipNotes, tips: f.tips, isTopSpender: percentileRank <= 0.05, spendPercentile
     }
   }).sort((a, b) => b.totalUSD - a.totalUSD)
@@ -530,7 +538,14 @@ function calcChurnRisk(d, avg, count) {
 }
 
 function calcLifetimeValue(spent, days, count) {
-  if (days < 7 || count < 2) return { prediction: spent, confidence: 'Low' }
+  if (days < 7 || count < 2) {
+    // Same per-day-rate projection as the confident branch below, just
+    // labeled Low confidence — was previously omitting `monthly` entirely,
+    // which rendered as a blank "$—" in the fan intelligence panel instead
+    // of a rough early estimate.
+    const perDayEarly = spent / Math.max(days, 1)
+    return { prediction: spent, confidence: 'Low', monthly: parseFloat((perDayEarly * 30).toFixed(2)) }
+  }
   const p = (spent / days) * 365
   return { prediction: parseFloat(p.toFixed(2)), confidence: count > 10 ? 'High' : count > 5 ? 'Medium' : 'Low', monthly: parseFloat((p / 12).toFixed(2)) }
 }
