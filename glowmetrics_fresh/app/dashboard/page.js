@@ -56,6 +56,7 @@ const TAB_LOADING = (
 )
 const CreatorReport = dynamic(() => import('./CreatorReport'), { ssr: false, loading: () => TAB_LOADING })
 const Settings = dynamic(() => import('./Settings'), { ssr: false, loading: () => TAB_LOADING })
+const OnboardingChecklist = dynamic(() => import('./OnboardingChecklist'), { ssr: false })
 const AnalyticsCharts = dynamic(() => import('./AnalyticsCharts'), { ssr: false, loading: () => TAB_LOADING })
 const StreamPlanner = dynamic(() => import('./StreamPlanner'), { ssr: false, loading: () => TAB_LOADING })
 const MoneyMap = dynamic(() => import('./MoneyMap'), { ssr: false, loading: () => TAB_LOADING })
@@ -1405,6 +1406,12 @@ export default function Dashboard() {
     : 'overview'
   const [user, setUser] = useState(null)
   const [profile, setProfile] = useState(null)
+  // Which tabs this browser has ever opened — powers the onboarding
+  // checklist's action items (report/whales/live) without a DB write.
+  const [visitedTabs, setVisitedTabs] = useState(() => {
+    if (typeof window === 'undefined') return []
+    try { return JSON.parse(localStorage.getItem('camcash_visited_tabs') || '[]') } catch (_) { return [] }
+  })
   const [promoCodeInput, setPromoCodeInput] = useState('')
   const [promoCodeStatus, setPromoCodeStatus] = useState(null) // { type: 'success'|'error', message }
   const [promoCodeSubmitting, setPromoCodeSubmitting] = useState(false)
@@ -1687,6 +1694,18 @@ export default function Dashboard() {
       document.body.scrollTop = 0
     }
   }
+
+  // Record every tab this browser opens, for the onboarding checklist —
+  // watches activeTab directly rather than wrapping every setActiveTab call
+  // site (Sidebar and the "Go Live" button both set it without going
+  // through handleTabChange).
+  useEffect(() => {
+    if (!activeTab || visitedTabs.includes(activeTab)) return
+    const next = [...visitedTabs, activeTab]
+    setVisitedTabs(next)
+    try { localStorage.setItem('camcash_visited_tabs', JSON.stringify(next)) } catch (_) {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab])
 
   // Counter bump when new tips arrive
   useEffect(() => {
@@ -3305,6 +3324,14 @@ const stopImportMessageRotation = () => {
 
         {activeTab === "overview" && (
           <div style={{ animation: "fadeUp 0.3s ease" }}>
+
+            <OnboardingChecklist
+              tips={tips}
+              isPro={isPro}
+              visitedTabs={visitedTabs}
+              onNavigate={handleTabChange}
+              onUpgrade={() => openUpgradeModal('default')}
+            />
 
             {/* ═══════════════════════════════════════
                 1. MONEY SNAPSHOT
