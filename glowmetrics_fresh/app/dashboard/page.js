@@ -1563,7 +1563,6 @@ export default function Dashboard() {
   const [noteTarget, setNoteTarget] = useState(null)
   const [noteText, setNoteText] = useState('')
   const [noteSaving, setNoteSaving] = useState(false)
-  const [engineInsights, setEngineInsights] = useState(null)
 
   // ── ANIMATION STATE ──────────────────────────────────────
   const [counterBumping, setCounterBumping] = useState(false)
@@ -2191,8 +2190,14 @@ export default function Dashboard() {
         if (!liveErr) setLiveTipsTotalUSD((liveRows || []).reduce((sum, r) => sum + (parseFloat(r.usd) || 0), 0))
       } catch (e) { /* non-fatal — Private Sessions page just omits this total */ }
 
-      const { data: engineData } = await supabase.rpc('get_user_insights', { p_user_id: uid, p_timezone: userTz })
-      setEngineInsights(engineData)
+      // get_user_insights RPC call removed — its three dashboard consumers
+      // (today's best hour, best platform label, go-live banner) now read
+      // exclusively from the canonical aggregateRows() engine via
+      // dailyBrief/canonicalPeakLabel above. See lib/analytics.js
+      // consolidation notes (calcStreakDays, computeSessionLengthOptimization)
+      // for the two capabilities migrated out of that RPC. The RPC itself is
+      // left in place in the database, not dropped, pending a deliberate,
+      // separate decision.
       setLastRefreshed(new Date())
     } finally {
       if (silent) setIsRefreshing(false)
@@ -2950,13 +2955,12 @@ const stopImportMessageRotation = () => {
 
   // ── CANONICAL PEAK HOUR ──────────────────────────────────────────────────────
   // Single source of truth used by the header, Daily Brief, and Losing Money.
-  // Prefer engineInsights daily_plan (most specific), then today's analytics best
-  // hour from dailyBrief, then the all-time analytics best hour as final fallback.
-  // All three sources are already user-local hours: get_user_insights is called
-  // with p_timezone above, so daily_plan.best_hour comes back local (not UTC);
-  // dailyBrief.bh and analytics.bestHour.hour were already local via toLocalHour().
+  // Both sources are computed from the canonical aggregateRows() engine (see
+  // lib/analytics.js) and are already user-local hours: dailyBrief.bh is
+  // derived from analytics.platformBestTimes/bestHour above, and
+  // analytics.bestHour.hour is already local via toLocalHour(). Prefer
+  // today's more-specific dailyBrief value, then the all-time fallback.
   const canonicalPeakHourLocal = (
-    engineInsights?.daily_plan?.best_hour ??
     dailyBrief?.bh ??
     (analytics?.bestHour ? parseInt(analytics.bestHour.hour) : null)
   )
@@ -3445,7 +3449,10 @@ const stopImportMessageRotation = () => {
             isBestDay, bestDay, sessionAvg, peakAvg, predictionLow, predictionHigh,
             reengageFans, likelyOnline, sessionsAtPeakCount } = dailyBrief
           const bhLabel = canonicalPeakLabel || _bhLabel
-          const displayPlat = engineInsights?.summary?.best_platform || _displayPlat
+          // Already canonical — displayPlat comes from dailyBrief, which is
+          // derived entirely from analytics.platformBestTimes / raw tips
+          // (see buildDailyBrief above), not a separate source.
+          const displayPlat = _displayPlat
           // Real threshold from getModuleLockState('bestStreamingTimes'): 25+ tips
           // and 3+ meaningful sessions — matches the >=3 session-bucket requirement
           // bestHour/platformBestTimes use internally (lib/analytics.js).
@@ -3666,17 +3673,28 @@ const stopImportMessageRotation = () => {
                 if (!isDupe) merged.push({ icon: a.icon, color: a.color || C.cyan, text: `${a.title} — ${a.message}`, cta: false, source: 'alert' })
               })
 
-              // Prepend engineInsights go_live_status as the top signal when available
-              if (engineInsights?.go_live_status?.status) {
-                const gl = engineInsights.go_live_status
-                const glColor = gl.status === 'peak' ? C.green : gl.status === 'good' ? C.cyan : C.muted
-                const glIcon = gl.status === 'peak' ? '🟢' : gl.status === 'good' ? '⚡' : '⏰'
-                const localHour = (new Date().getUTCHours() - new Date().getTimezoneOffset() / 60 + 24) % 24
-                const localLabel = localHour === 0 ? '12 AM' : localHour < 12 ? `${Math.floor(localHour)} AM` : localHour === 12 ? '12 PM' : `${Math.floor(localHour) - 12} PM`
-                const glText = gl.multiplier
-                  ? `${gl.status === 'peak' ? 'Peak hour right now' : 'Good time to stream'} (${localLabel}) — this window earns ${gl.multiplier}x your average. Go live on ${engineInsights?.summary?.best_platform || 'your top platform'}.`
-                  : `Go-live signal: ${gl.status} — check your stream timing`
-                merged.unshift({ icon: glIcon, color: glColor, text: glText, cta: false, source: 'engine' })
+              // Prepend a go-live signal as the top action when relevant — built
+              // entirely from dailyBrief / canonicalPeakLabel (both derived
+              // from the canonical aggregateRows() engine, see buildDailyBrief
+              // and canonicalPeakHourLocal above), not a separate source. No
+              // numeric "Nx your average" multiplier is shown here — that
+              // figure had no canonical equivalent and is not fabricated (see
+              // lib/analytics.js consolidation notes). dailyBrief and
+              // canonicalPeakLabel are component-level consts, in scope here
+              // even though this block sits outside the dailyBrief IIFE above.
+              const goLivePlat = dailyBrief?.displayPlat
+              if (dailyBrief?.atPeak && canonicalPeakLabel) {
+                merged.unshift({
+                  icon: '🟢', color: C.green,
+                  text: `Peak hour right now (${canonicalPeakLabel}) — your data shows this is historically your best-earning window. Go live on ${goLivePlat || 'your top platform'}.`,
+                  cta: false, source: 'engine',
+                })
+              } else if (canonicalPeakLabel && dailyBrief?.hoursUntilPeak != null && dailyBrief.hoursUntilPeak <= 2) {
+                merged.unshift({
+                  icon: '⚡', color: C.cyan,
+                  text: `Good time to stream — your peak window (${canonicalPeakLabel}) is coming up soon. Go live on ${goLivePlat || 'your top platform'}.`,
+                  cta: false, source: 'engine',
+                })
               }
 
               const actions = merged.slice(0, 3)

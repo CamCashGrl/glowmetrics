@@ -12,6 +12,18 @@
  * @param {Array} tips - tip rows with { dateRaw|date_time, platform, tokens, usd, username }
  * @returns {Array} sessions — see finalizeSession() below for shape
  */
+// public.tips.usd is a Postgres `numeric` column, which commonly round-trips
+// through JSON as a string rather than a number — every other usd
+// accumulation site in lib/analytics.js already guards against this with
+// `parseFloat(...) || 0`; this file was the one place that didn't. Handles
+// number, numeric string, 0, null, and undefined safely; never used for
+// token-rate/earnings math itself, only to safely coerce an already-computed
+// usd value before summing it.
+export function toUsdNumber(v) {
+  const n = parseFloat(v)
+  return Number.isFinite(n) ? n : 0
+}
+
 export function detectSessions(tips) {
   if (!tips || tips.length === 0) return []
   const parsed = tips.map(t => {
@@ -46,7 +58,7 @@ function finalizeSession(s) {
   const durationMinutes = Math.max(rawMinutes, 1)
   const durationHours = durationMinutes / 60
   let totalTokens = 0, totalUSD = 0
-  for (const t of s.tips) { totalTokens += t.tokens || 0; totalUSD += t.usd || 0 }
+  for (const t of s.tips) { totalTokens += t.tokens || 0; totalUSD += toUsdNumber(t.usd) }
   const tipCount = s.tips.length
   const uniqueFans = s.fans.size
   const usdPerMinute = !durationUnknown ? parseFloat((totalUSD / durationMinutes).toFixed(3)) : null
@@ -56,8 +68,8 @@ function finalizeSession(s) {
   const firstHalf = sorted.filter(t => t.timestamp.getTime() <= midMs)
   const secondHalf = sorted.filter(t => t.timestamp.getTime() > midMs)
   const halfMins = Math.max(durationMinutes / 2, 1)
-  const firstHalfUPM = firstHalf.reduce((a, t) => a + (t.usd || 0), 0) / halfMins
-  const secondHalfUPM = secondHalf.reduce((a, t) => a + (t.usd || 0), 0) / halfMins
+  const firstHalfUPM = firstHalf.reduce((a, t) => a + toUsdNumber(t.usd), 0) / halfMins
+  const secondHalfUPM = secondHalf.reduce((a, t) => a + toUsdNumber(t.usd), 0) / halfMins
   let velocityTrend = 'unknown'
   if (!durationUnknown && durationMinutes >= 10) {
     if (secondHalfUPM > firstHalfUPM * 1.15) velocityTrend = 'growing'
@@ -66,7 +78,7 @@ function finalizeSession(s) {
   }
 
   const tipperMap = {}
-  sorted.forEach(t => { const u = t.username || 'unknown'; tipperMap[u] = (tipperMap[u] || 0) + (t.usd || 0) })
+  sorted.forEach(t => { const u = t.username || 'unknown'; tipperMap[u] = (tipperMap[u] || 0) + toUsdNumber(t.usd) })
   const topEntry = Object.entries(tipperMap).sort((a, b) => b[1] - a[1])[0]
   const topContributor = topEntry ? topEntry[0] : null
   const topContributorPct = topEntry && totalUSD > 0 ? Math.round((topEntry[1] / totalUSD) * 100) : 0
