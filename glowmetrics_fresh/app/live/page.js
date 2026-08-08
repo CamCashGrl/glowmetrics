@@ -856,23 +856,6 @@ export default function LivePage({ embedded = false } = {}) {
           </div>
         )}
 
-        {/* "Auto-capture your tips" banner — shown both standalone and embedded. */}
-        {user && !liveEvents.some(e => e.sourceUsed === 'extension') && (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, borderRadius: 14, padding: '14px 20px', marginBottom: 20, background: 'rgba(168,85,247,0.08)', border: '1px solid rgba(168,85,247,0.25)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <span style={{ fontSize: 22 }}>🧩</span>
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 800, color: C.white }}>Auto-capture your tips</div>
-                <div style={{ fontSize: 12, color: C.muted }}>Install the CamCash Chrome extension so tips log here automatically while you stream.</div>
-              </div>
-            </div>
-            <Button as="a" href="/camcash-extension.zip" download="camcash-extension.zip"
-              onClick={() => { setShowExtModal(true); setExtStep(0); }}
-              style={{ padding: '9px 18px', fontSize: 13, whiteSpace: 'nowrap' }}>
-              📥 Download Extension
-            </Button>
-          </div>
-        )}
 
         <EventsSync onNewTip={(events) => {
           const mapped = events.map(e => normalizeTip({
