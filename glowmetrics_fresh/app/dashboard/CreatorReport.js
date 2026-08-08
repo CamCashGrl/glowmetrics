@@ -29,14 +29,28 @@ const fmtHour = h => {
 
 const fmtUsd = v => `$${(v || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}`
 
-function StatCard({ icon, label, value, sub }) {
+// Same accent/glow language as the overview tab's stat-grid-4 cards
+// (.stat-card / .card-glow-* / fadeUp are declared globally in
+// app/dashboard/page.js and apply here too since this always renders
+// inside that page) — kept in sync intentionally, not redefined.
+const STAT_ACCENTS = [
+  { accent: '#f472b6', glowClass: 'card-glow-pink' },
+  { accent: '#22d3ee', glowClass: 'card-glow-cyan' },
+  { accent: '#a78bfa', glowClass: 'card-glow-violet' },
+  { accent: '#fbbf24', glowClass: 'card-glow-gold' },
+]
+
+function StatCard({ icon, label, value, sub, index = 0 }) {
+  const { accent, glowClass } = STAT_ACCENTS[index % STAT_ACCENTS.length]
   return (
-    <div style={{ borderRadius: 16, padding: '16px 18px', background: 'rgba(12,16,34,0.7)', border: '1px solid rgba(255,255,255,0.08)', minWidth: 0 }}>
-      <div style={{ fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
-        <span>{icon}</span>{label}
+    <div className={`stat-card ${glowClass}`} style={{ borderRadius: 16, padding: '13px 16px', background: 'rgba(15,20,32,0.75)', border: '1px solid rgba(255,255,255,0.08)', backdropFilter: 'blur(20px)', minWidth: 0, position: 'relative', overflow: 'hidden', animation: `fadeUp 0.3s ease ${index * 0.06}s both` }}>
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg,${accent}80,${accent}20)`, borderRadius: '16px 16px 0 0' }} />
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+        <span style={{ fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 700 }}>{label}</span>
+        <span style={{ fontSize: 16, opacity: 0.75 }}>{icon}</span>
       </div>
-      <div title={typeof value === 'string' ? value : undefined} style={{ fontSize: 22, fontWeight: 800, color: C.white, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{value}</div>
-      {sub && <div style={{ fontSize: 11, color: C.dim, marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sub}</div>}
+      <div title={typeof value === 'string' ? value : undefined} style={{ fontSize: 'clamp(18px, 2vw, 22px)', fontWeight: 900, color: accent, lineHeight: 1.15, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{value}</div>
+      {sub && <div style={{ fontSize: 11, color: C.dim, marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sub}</div>}
     </div>
   )
 }
@@ -88,12 +102,13 @@ export default function CreatorReport({ analytics, tips = [], isPro = false, onU
 
       {/* ── STAT GRID ── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginBottom: 20 }}>
-        <StatCard icon="💰" label="Total Earnings" value={fmtUsd(totalUSD)} sub={`${tips.length} tips tracked`} />
-        <StatCard icon="⏱️" label="Avg $/Hour" value={hourlyRate > 0 ? fmtUsd(hourlyRate) : 'Not enough data yet'} />
-        <StatCard icon="📅" label="Best Streaming Day" value={bestDay?.day || 'Not enough data yet'} sub={bestDay ? `~${fmtUsd(bestDay.avg)} avg` : null} />
-        <StatCard icon="⏰" label="Best Streaming Time" value={fmtHour(bestHour?.hour) || 'Not enough data yet'} sub={bestHour ? `~${fmtUsd(bestHour.avg)} avg per session` : null} />
-        <StatCard icon="👑" label="Top Supporter" value={topSupporter?.username || 'Not enough data yet'} sub={topSupporter ? `${fmtUsd(topSupporter.usd)} lifetime` : null} />
+        <StatCard index={0} icon="💰" label="Total Earnings" value={fmtUsd(totalUSD)} sub={`${tips.length} tips tracked`} />
+        <StatCard index={1} icon="⏱️" label="Avg $/Hour" value={hourlyRate > 0 ? fmtUsd(hourlyRate) : 'Not enough data yet'} />
+        <StatCard index={2} icon="📅" label="Best Streaming Day" value={bestDay?.day || 'Not enough data yet'} sub={bestDay ? `~${fmtUsd(bestDay.avg)} avg` : null} />
+        <StatCard index={3} icon="⏰" label="Best Streaming Time" value={fmtHour(bestHour?.hour) || 'Not enough data yet'} sub={bestHour ? `~${fmtUsd(bestHour.avg)} avg per session` : null} />
+        <StatCard index={0} icon="👑" label="Top Supporter" value={topSupporter?.username || 'Not enough data yet'} sub={topSupporter ? `${fmtUsd(topSupporter.usd)} lifetime` : null} />
         <StatCard
+          index={1}
           icon="🎯"
           label="Most Profitable Platform"
           value={topPlatform ? displayPlatform(topPlatform.platform) : (platforms.length === 1 ? displayPlatform(platforms[0].platform) : 'Add a 2nd platform to compare')}
