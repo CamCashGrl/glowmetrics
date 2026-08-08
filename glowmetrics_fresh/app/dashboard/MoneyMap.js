@@ -352,12 +352,7 @@ function MoneyMapTab({ tips, isPro=true }) {
                       style={{
                         height:"32px",borderRadius:"4px",cursor:"pointer",
                         background:heatColor(val,maxVal,metric),
-                        // Zero-value cells get a near-invisible fill (see heatColor)
-                        // — without a visible border they read as gaps in the page
-                        // rather than defined "no data" cells, which is what made
-                        // sparse rows (e.g. a low-activity Mon/Tue/Wed) look broken
-                        // or cut off instead of just empty.
-                        border:isSelected?`2px solid ${CYAN}`:`1px solid rgba(255,255,255,0.08)`,
+                        border:isSelected?`2px solid ${CYAN}`:`2px solid transparent`,
                         transition:"all .15s",
                       }}
                     />
