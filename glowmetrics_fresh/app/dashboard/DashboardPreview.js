@@ -179,6 +179,11 @@ export function getModuleLockState({ module, totalTips = 0, totalSessions = 0, t
     streamPlanner:        { needsData: totalTips < 25 || totalSessions < 3,           message: 'Stream Planner unlocks after 25+ tips and 3+ meaningful sessions.' },
     forecasting:          { needsData: totalSessions < 8 || totalEarnings < 50,       message: 'Forecasting unlocks after more earnings history.' },
     liveScore:            { needsData: liveModeSessions < 1,                          message: 'Live Mode Score unlocks after your first Live Mode stream.' },
+    // TX Hub itself is always visible (free preview); only its deeper
+    // sections (full history, search, export, breakdowns) are Pro-gated —
+    // see app/api/tx-hub/route.js's `capabilities` payload, the single
+    // source of truth for that finer-grained gating.
+    txHub:                { needsData: totalTips < 1 && totalSessions < 1,            message: 'TX Hub unlocks once you import your first transactions.' },
   }
   const rule = rules[module]
   if (!rule) return { locked: false, lockType: null, message: null }
