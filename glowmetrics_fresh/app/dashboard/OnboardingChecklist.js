@@ -84,7 +84,7 @@ export default function OnboardingChecklist({ tips = [], isPro = false, visitedT
               <div key={item.id}
                 onClick={() => !item.done && item.tab && onNavigate?.(item.tab)}
                 style={{ display: 'flex', alignItems: 'center', gap: 9, cursor: !item.done && item.tab ? 'pointer' : 'default' }}>
-                <span style={{ width: 16, height: 16, borderRadius: '50%', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 900, background: item.done ? C.green : 'rgba(255,255,255,0.06)', border: item.done ? 'none' : '1px solid rgba(255,255,255,0.18)', color: '#06101A' }}>
+                <span className={!item.done ? 'ob-todo-dot' : ''} style={{ width: 16, height: 16, borderRadius: '50%', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 900, background: item.done ? C.green : 'rgba(34,211,238,0.08)', border: item.done ? 'none' : '1px solid rgba(34,211,238,0.4)', color: '#06101A' }}>
                   {item.done ? '✓' : ''}
                 </span>
                 <span style={{ fontSize: 12.5, fontWeight: item.done ? 500 : 600, color: item.done ? C.muted : C.white, opacity: item.done ? 0.7 : 1, textDecoration: item.done ? 'line-through' : 'none' }}>{item.label}</span>
@@ -103,15 +103,25 @@ export default function OnboardingChecklist({ tips = [], isPro = false, visitedT
 
       <style jsx>{`
         @keyframes obProgressGrow { from { width: 0; } }
-        .ob-progress-fill { animation: obProgressGrow 0.6s ease-out; }
+        @keyframes obProgressShimmer {
+          0%, 100% { box-shadow: 0 0 6px rgba(34,211,238,0.35), 0 0 3px rgba(236,72,153,0.25); }
+          50% { box-shadow: 0 0 14px rgba(34,211,238,0.65), 0 0 8px rgba(236,72,153,0.45); }
+        }
+        .ob-progress-fill { animation: obProgressGrow 0.6s ease-out, obProgressShimmer 3s ease-in-out 0.6s infinite; }
         @keyframes obAmbientGlow {
           0%, 100% { box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 0 0 rgba(34,211,238,0); }
           50% { box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 0 22px rgba(34,211,238,0.16), 0 0 14px rgba(168,85,247,0.1); }
         }
         .ob-checklist-glow { animation: obAmbientGlow 3.6s ease-in-out infinite; }
+        @keyframes obTodoPulse {
+          0%, 100% { box-shadow: 0 0 0 rgba(34,211,238,0); }
+          50% { box-shadow: 0 0 8px rgba(34,211,238,0.55), 0 0 3px rgba(34,211,238,0.4); }
+        }
+        .ob-todo-dot { animation: obTodoPulse 2.6s ease-in-out infinite; }
         @media (prefers-reduced-motion: reduce) {
           .ob-progress-fill { animation: none; }
           .ob-checklist-glow { animation: none; }
+          .ob-todo-dot { animation: none; }
         }
       `}</style>
     </div>
