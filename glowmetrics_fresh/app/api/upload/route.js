@@ -132,6 +132,11 @@ export async function POST(req) {
   // ── LOG TO csv_uploads ─────────────────────────────────────────────────
   // Shared by the success path below and the platform-limit block path, so a
   // blocked attempt still leaves an audit row instead of vanishing entirely.
+  // uploadRef is generated once, outside logCsvUpload, so the same value
+  // identifies this request's csv_uploads row AND (on success) its
+  // dashboard_events fingerprint — one import, one event, traceable back to
+  // its audit-log row.
+  const uploadRef = crypto.randomUUID()
   const logCsvUpload = async (status) => {
     try {
       // Build sorted array of unique "YYYY-MM" strings covered
@@ -142,7 +147,7 @@ export async function POST(req) {
 
       await supabase.from('csv_uploads').insert({
         user_id:        user.id,
-        upload_ref:     crypto.randomUUID(),
+        upload_ref:     uploadRef,
         platform:       detectedPlatform,
         file_name:      file.name || 'upload.csv',
         date_from:      summaryDateFrom,
@@ -285,6 +290,51 @@ export async function POST(req) {
   if (paidErrors.length > 0) {
     response.paidSessionsWarnings = paidErrors
     console.warn('[UPLOAD] Paid-session batches completed with errors:', paidErrors)
+  }
+
+  // ── DASHBOARD EVENT (Living Dashboard Intelligence — Phase 1) ───────────
+  // Fires only when this import actually persisted new rows and no batch
+  // errored — mirrors the same success gate the founder notification below
+  // already uses (errors.length === 0), extended to also require at least
+  // one inserted row so re-uploading an already-imported file (everything
+  // deduped, inserted === 0) does not create a "your data is updated" event
+  // for data that isn't actually new. There is no separate server-side
+  // analytics-recalculation step in this pipeline (aggregateRows/runEngine
+  // only runs client-side in app/dashboard/page.js) — this event marks
+  // successful persistence, not a completed recompute, and says so in its
+  // metadata rather than implying analytics ran here.
+  const importSucceeded = errors.length === 0 && paidErrors.length === 0
+  const rowsPersisted = inserted > 0 || paidInserted > 0
+  if (importSucceeded && rowsPersisted) {
+    try {
+      await supabase.rpc('record_dashboard_event_if_new', {
+        p_event_type: 'import_completed',
+        p_source: 'csv_import',
+        p_priority: 'medium',
+        p_title: 'Your data is updated',
+        p_message: `Your latest ${detectedPlatform} import is complete. CamCash found new information in your data.`,
+        p_fingerprint: `import_completed:${uploadRef}`,
+        p_metadata: {
+          upload_ref: uploadRef,
+          platform: detectedPlatform,
+          rows_inserted: inserted,
+          rows_skipped: skipped,
+          paid_sessions_inserted: paidInserted,
+          paid_sessions_skipped: paidSkipped,
+          total_usd: summaryTotalUsd,
+          total_tokens: summaryTotalTokens,
+          date_from: summaryDateFrom ? summaryDateFrom.toISOString() : null,
+          date_to: summaryDateTo ? summaryDateTo.toISOString() : null,
+        },
+        p_related_entity_type: 'csv_upload',
+        p_related_entity_id: uploadRef,
+      })
+    } catch (eventErr) {
+      // Non-fatal — the import itself already succeeded and was logged to
+      // csv_uploads; a failed dashboard-event write must never fail or roll
+      // back a successful import.
+      console.warn('[UPLOAD] Failed to record dashboard_events row:', eventErr.message)
+    }
   }
 
   // ── FOUNDER NOTIFICATION (non-blocking) ───────────────────────────────
