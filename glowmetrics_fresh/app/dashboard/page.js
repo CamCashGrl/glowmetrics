@@ -3099,6 +3099,31 @@ const stopImportMessageRotation = () => {
            hamburger button (36px + 14px) both at rest and once scrolled. */
         @media (max-width: 768px) { .sticky-command-bar { top: 56px !important; margin-bottom: 68px !important; } }
 
+        /* ── COMMAND BAR "WAKE UP" — plays once on mount (page load/navigation
+           into /dashboard), never replays on in-app tab switches since the bar
+           itself never remounts when activeTab changes. Short + staggered:
+           pill first, KPIs settle in next, Go Live gets one glow sweep. ── */
+        @keyframes cmdbarFadeSlide { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes golive-wake-sweep {
+          0%   { box-shadow: 0 0 16px rgba(16,185,129,0.25); }
+          40%  { box-shadow: 0 0 28px rgba(34,211,238,0.55), 0 0 15px rgba(16,185,129,0.4); }
+          100% { box-shadow: 0 0 16px rgba(16,185,129,0.25); }
+        }
+        .cmdbar-wake .cmdbar-kpi { animation: cmdbarFadeSlide 400ms ease-out both; }
+        .cmdbar-wake .cmdbar-kpi-1 { animation-delay: 60ms; }
+        .cmdbar-wake .cmdbar-kpi-2 { animation-delay: 110ms; }
+        .cmdbar-wake .cmdbar-kpi-3 { animation-delay: 160ms; }
+        .cmdbar-wake .cmdbar-kpi-4 { animation-delay: 200ms; }
+        .cmdbar-wake .cmdbar-kpi-5 { animation-delay: 240ms; }
+        .cmdbar-wake-pill { animation: cmdbarFadeSlide 350ms ease-out both; }
+        .cmdbar-wake-btn { animation: cmdbarFadeSlide 400ms ease-out 120ms both, golive-wake-sweep 900ms ease-out 550ms 1; }
+        .cmdbar-golive { transition: transform 150ms ease, box-shadow 150ms ease, filter 150ms ease; }
+        .cmdbar-golive:hover { transform: translateY(-1px); filter: brightness(1.06); box-shadow: 0 0 22px rgba(34,211,238,0.35), 0 0 14px rgba(16,185,129,0.3); }
+        @media (prefers-reduced-motion: reduce) {
+          .cmdbar-wake .cmdbar-kpi, .cmdbar-wake-pill, .cmdbar-wake-btn { animation: none !important; }
+          .cmdbar-golive:hover { transform: none; }
+        }
+
         @keyframes shimmer-sweep {
           0%   { background-position: -200% center; }
           100% { background-position: 200% center; }
@@ -3236,69 +3261,100 @@ const stopImportMessageRotation = () => {
           const _eiPeakLabel = canonicalPeakLabel || brief?.bhLabel
           const bestPlat = brief?.displayPlat || (tips.length > 0 ? tips[0]?.platform : null)
           const safeRevenue = (!isNaN(totalRevenue) && isFinite(totalRevenue)) ? totalRevenue : 0
+
+          // ── truthful live status — single source of truth is useLiveSessionEngine,
+          // never a second status system. 'active' phase covers server status 'live';
+          // live_substate further distinguishes actively-broadcasting from paused. ──
+          const livePhase = liveEngine.phase
+          const liveSubstate = liveEngine.serverSession?.live_substate
+          const isPaused = livePhase === 'active' && liveSubstate === 'paused'
+          const statusInfo =
+            livePhase === 'starting' ? { label: 'STARTING', color: '#F59E0B', pulse: true } :
+            livePhase === 'inactive_warning' ? { label: 'INACTIVE', color: '#FB923C', pulse: true } :
+            (livePhase === 'justEnded' || livePhase === 'resolved') ? { label: 'ENDING', color: '#94A3B8', pulse: false } :
+            livePhase === 'active' ? { label: isPaused ? 'LIVE · PAUSED' : 'LIVE', color: '#10B981', pulse: !isPaused } :
+            { label: 'OFFLINE', color: '#64748B', pulse: false }
+          const liveDurationLabel = (() => {
+            if (livePhase !== 'active' || !liveEngine.duration) return null
+            const secs = liveEngine.duration.active_duration_seconds || 0
+            const h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60)
+            return h > 0 ? `Live for ${h}h ${m}m` : `Live for ${m}m`
+          })()
+          const updatedLabel = lastRefreshed ? `Updated ${lastRefreshed.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : null
+
           return (
-            <div className="sticky-command-bar" style={{ position: 'sticky', top: 0, zIndex: 20, marginBottom: 12, marginLeft: -32, marginRight: -32, width: 'calc(100% + 64px)', maxWidth: 'none', padding: '0 32px', background: 'rgba(5,7,15,0.86)', backdropFilter: 'blur(22px)', WebkitBackdropFilter: 'blur(22px)', borderBottom: '1px solid rgba(255,255,255,0.05)', boxShadow: '0 2px 20px rgba(0,0,0,0.4)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', height: 48, gap: 8 }}>
-                {/* Metrics scroll independently so Go Live — outside this container — never gets clipped or scrolled out of view on narrower desktop widths */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 0, overflowX: 'auto', flex: '1 1 auto', minWidth: 0 }}>
-                <div style={{ display:'flex', flexDirection:'column', justifyContent:'center', paddingRight:20, borderRight:'1px solid rgba(255,255,255,0.06)', flexShrink:0 }}>
-                  <div style={{ fontSize:10, color:'#8a93ab', textTransform:'uppercase', letterSpacing:0.6, fontWeight:600, marginBottom:2 }}>Total Earned</div>
-                  <div style={{ fontSize:18, fontWeight:900, background:'linear-gradient(135deg,#60a5fa,#f472b6)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', whiteSpace:'nowrap' }}>${safeRevenue.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+            <div className="sticky-command-bar cmdbar-wake" style={{ position: 'sticky', top: 0, zIndex: 20, marginBottom: 14, marginLeft: -32, marginRight: -32, width: 'calc(100% + 64px)', maxWidth: 'none', padding: '14px 32px', background: 'rgba(5,7,15,0.88)', backdropFilter: 'blur(22px)', WebkitBackdropFilter: 'blur(22px)', borderBottom: '1px solid rgba(255,255,255,0.06)', boxShadow: '0 2px 24px rgba(0,0,0,0.45)' }}>
+
+              {/* primary row — Total Earned dominant, secondary metrics + Go Live, wraps instead of clipping/scrolling */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px 24px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '10px 24px', minWidth: 0 }}>
+                  <div className="cmdbar-kpi cmdbar-kpi-1" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', flexShrink: 0 }}>
+                    <div style={{ fontSize: 10, color: '#8a93ab', textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700, marginBottom: 3 }}>Total Earned</div>
+                    <div style={{ fontSize: 26, fontWeight: 900, lineHeight: 1, background: 'linear-gradient(135deg,#60a5fa,#f472b6)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', whiteSpace: 'nowrap' }}>${safeRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                  </div>
+
+                  <div style={{ width: 1, height: 34, background: 'rgba(255,255,255,0.07)', flexShrink: 0 }} />
+
+                  <div className="cmdbar-kpi cmdbar-kpi-2" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', flexShrink: 0 }}>
+                    <div title={HOURLY_RATE_TOOLTIP} style={{ fontSize: 10, color: '#8a93ab', textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700, marginBottom: 3, cursor: 'help' }}>Est. $/Hour</div>
+                    {hourlyRateUnlocked ? (
+                      <div title={hourlyRateSubtext} style={{ fontSize: 18, fontWeight: 800, color: '#22D3EE', whiteSpace: 'nowrap', cursor: 'help' }}>${safeAvg.toFixed(2)}</div>
+                    ) : (
+                      <div onClick={() => handleTabChange('upload')} title={hourlyRateSubtext} style={{ fontSize: 13, fontWeight: 700, color: '#7d8aa3', whiteSpace: 'nowrap', cursor: 'pointer' }}>🔒 Locked</div>
+                    )}
+                  </div>
+
+                  <div style={{ width: 1, height: 34, background: 'rgba(255,255,255,0.07)', flexShrink: 0 }} />
+
+                  <div className="cmdbar-kpi cmdbar-kpi-3" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', flexShrink: 0 }}>
+                    <div style={{ fontSize: 10, color: '#8a93ab', textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700, marginBottom: 3 }}>Momentum</div>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: momentumColor, whiteSpace: 'nowrap', animation: atPeak ? 'cmd-pulse 1.5s infinite' : 'none' }}>{momentum}</div>
+                  </div>
+
+                  <div className="cmdbar-kpi cmdbar-kpi-4" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', flexShrink: 0, opacity: 0.85 }}>
+                    <div style={{ fontSize: 10, color: '#8a93ab', textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700, marginBottom: 3 }}>Best Platform</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: '#a78bfa', whiteSpace: 'nowrap' }}>{bestPlat || '—'}</div>
+                  </div>
+
+                  <div className="cmdbar-kpi cmdbar-kpi-5" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', flexShrink: 0, opacity: 0.85 }}>
+                    <div style={{ fontSize: 10, color: '#8a93ab', textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700, marginBottom: 3 }}>Peak Window</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: atPeak ? '#10B981' : '#fbbf24', whiteSpace: 'nowrap' }}>{_eiPeakLabel ? `${_eiPeakLabel}${peakLabel ? ` · ${peakLabel}` : ''}` : '—'}</div>
+                  </div>
                 </div>
-                <div style={{ display:'flex', flexDirection:'column', justifyContent:'center', padding:'0 20px', borderRight:'1px solid rgba(255,255,255,0.06)', flexShrink:0 }}>
-                  <div title={HOURLY_RATE_TOOLTIP} style={{ fontSize:10, color:'#8a93ab', textTransform:'uppercase', letterSpacing:0.6, fontWeight:600, marginBottom:2, cursor:'help' }}>Estimated $/Hour</div>
-                  {hourlyRateUnlocked ? (
-                    <div title={hourlyRateSubtext} style={{ fontSize:18, fontWeight:900, color:'#22D3EE', whiteSpace:'nowrap', cursor:'help' }}>${safeAvg.toFixed(2)}</div>
-                  ) : (
-                    <div onClick={() => handleTabChange('upload')} title={hourlyRateSubtext} style={{ fontSize:13, fontWeight:700, color:'#7d8aa3', whiteSpace:'nowrap', cursor:'pointer' }}>🔒 Locked</div>
-                  )}
+
+                <button className="cmdbar-golive cmdbar-wake-btn" onClick={() => { setActiveTab('live'); if (typeof window !== 'undefined') { localStorage.setItem('camcash_tab', 'live'); window.scrollTo({ top: 0, behavior: 'instant' }); } }} style={{ padding: '10px 22px', borderRadius: 12, background: 'linear-gradient(135deg,#10B981,#22D3EE)', border: 'none', color: '#fff', fontWeight: 800, fontSize: 13, cursor: 'pointer', whiteSpace: 'nowrap', boxShadow: '0 0 16px rgba(16,185,129,0.25)', letterSpacing: 0.3, flexShrink: 0 }}>
+                  ⚡ Go Live
+                </button>
+              </div>
+
+              {/* secondary row — truthful status pill + updated/live-duration + refresh + new-tip feedback */}
+              <div className="cmdbar-wake-pill" style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10, flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '3px 10px', borderRadius: 20, background: `${statusInfo.color}1A`, border: `1px solid ${statusInfo.color}40` }}>
+                  <div style={{ width: 6, height: 6, borderRadius: '50%', background: statusInfo.color, boxShadow: `0 0 6px ${statusInfo.color}`, animation: statusInfo.pulse ? 'pulse-msg 2s infinite' : 'none' }} />
+                  <span style={{ fontSize: 11, fontWeight: 700, color: statusInfo.color, letterSpacing: 0.3 }}>{statusInfo.label}</span>
                 </div>
-                <div style={{ display:'flex', flexDirection:'column', justifyContent:'center', padding:'0 20px', borderRight:'1px solid rgba(255,255,255,0.06)', flexShrink:0 }}>
-                  <div style={{ fontSize:10, color:'#8a93ab', textTransform:'uppercase', letterSpacing:0.6, fontWeight:600, marginBottom:2 }}>Momentum</div>
-                  <div style={{ fontSize:13, fontWeight:800, color:momentumColor, whiteSpace:'nowrap', animation: atPeak ? 'cmd-pulse 1.5s infinite' : 'none' }}>{momentum}</div>
-                </div>
-                <div style={{ display:'flex', flexDirection:'column', justifyContent:'center', padding:'0 20px', borderRight:'1px solid rgba(255,255,255,0.06)', flexShrink:0 }}>
-                  <div style={{ fontSize:10, color:'#8a93ab', textTransform:'uppercase', letterSpacing:0.6, fontWeight:600, marginBottom:2 }}>Best Platform</div>
-                  <div style={{ fontSize:13, fontWeight:800, color:'#a78bfa', whiteSpace:'nowrap' }}>{bestPlat || '—'}</div>
-                </div>
-                <div style={{ display:'flex', flexDirection:'column', justifyContent:'center', padding:'0 20px', flexShrink:0 }}>
-                  <div style={{ fontSize:10, color:'#8a93ab', textTransform:'uppercase', letterSpacing:0.6, fontWeight:600, marginBottom:2 }}>Peak Window</div>
-                  <div style={{ fontSize:13, fontWeight:800, color: atPeak ? '#10B981' : '#fbbf24', whiteSpace:'nowrap' }}>{_eiPeakLabel ? `${_eiPeakLabel}${peakLabel ? ` · ${peakLabel}` : ''}` : '—'}</div>
-                </div>
-                </div>
-                <div style={{ paddingLeft:12, borderLeft:'1px solid rgba(255,255,255,0.06)', flexShrink:0, display:'flex', gap:8, alignItems:'center', position:'relative' }}>
-                  <button onClick={() => { setActiveTab('live'); if (typeof window !== 'undefined') { localStorage.setItem('camcash_tab','live'); window.scrollTo({top:0,behavior:'instant'}); } }} style={{ padding:'8px 20px', borderRadius:11, background:'linear-gradient(135deg,#10B981,#22D3EE)', border:'none', color:'#fff', fontWeight:800, fontSize:13, cursor:'pointer', whiteSpace:'nowrap', boxShadow:'0 0 14px rgba(16,185,129,0.3)', letterSpacing:0.3 }}>
-                    ⚡ Go Live
-                  </button>
-                </div>
+
+                {(liveDurationLabel || updatedLabel) && (
+                  <span key={liveDurationLabel || (lastRefreshed && lastRefreshed.getTime())} className={!liveDurationLabel ? 'recently-updated' : ''} style={{ fontSize: 11, color: '#7d8aa3', padding: '2px 6px', borderRadius: 4 }}>
+                    {liveDurationLabel || updatedLabel}
+                  </span>
+                )}
+
+                {isRefreshing && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#94A3B8' }}>
+                    <div style={{ width: 12, height: 12, border: '1.5px solid rgba(34,211,238,0.3)', borderTopColor: '#22D3EE', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+                    Refreshing...
+                  </div>
+                )}
+                {newTipCount > 0 && (
+                  <div style={{ padding: '3px 10px', borderRadius: 20, background: 'rgba(236,72,153,0.15)', border: '1px solid rgba(236,72,153,0.35)', fontSize: 11, fontWeight: 700, color: '#EC4899', animation: 'alertEnter 0.3s ease forwards' }}>
+                    +<span key={newTipCount} className={counterBumping ? 'counter-bump' : ''}>{newTipCount}</span> new tip{newTipCount > 1 ? 's' : ''}
+                  </div>
+                )}
               </div>
             </div>
           )
         })()}
-
-        {/* ── LIVE STATUS BAR ── */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "3px 10px", borderRadius: 20, background: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.25)" }}>
-            <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#10B981", boxShadow: "0 0 6px #10B981", animation: "pulse-msg 2s infinite" }} />
-            <span style={{ fontSize: 11, fontWeight: 700, color: "#10B981" }}>LIVE</span>
-          </div>
-          {isRefreshing && (
-            <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "#94A3B8" }}>
-              <div style={{ width: 12, height: 12, border: "1.5px solid rgba(34,211,238,0.3)", borderTopColor: "#22D3EE", borderRadius: "50%", animation: "spin 0.7s linear infinite" }} />
-              Refreshing...
-            </div>
-          )}
-          {lastRefreshed && !isRefreshing && (
-            <span key={lastRefreshed.getTime()} className="recently-updated" style={{ fontSize: 11, color: "#7d8aa3", padding: "2px 6px", borderRadius: 4 }}>
-              Updated {lastRefreshed.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-            </span>
-          )}
-          {newTipCount > 0 && (
-            <div style={{ padding: "3px 10px", borderRadius: 20, background: "rgba(236,72,153,0.15)", border: "1px solid rgba(236,72,153,0.35)", fontSize: 11, fontWeight: 700, color: "#EC4899", animation: "alertEnter 0.3s ease forwards" }}>
-              +<span key={newTipCount} className={counterBumping ? "counter-bump" : ""}>{newTipCount}</span> new tip{newTipCount > 1 ? "s" : ""}
-            </div>
-          )}
-        </div>
 
         {/* ── DASHBOARD PROGRESS CARD — visible on all tabs when data is warming up ── */}
         {_isLowData && (
