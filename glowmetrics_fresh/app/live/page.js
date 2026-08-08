@@ -162,7 +162,24 @@ export default function LivePage({ embedded = false } = {}) {
       setAuthStatus('live');
       return;
     }
-    supabase.auth.getUser().then(({ data: { user: u } }) => {
+    // getSession() reads the already-validated local session (no network
+    // round-trip) instead of getUser(), which re-validates against the auth
+    // server on every call — that extra hop was the single point of failure
+    // that left this screen stuck on "Connecting…" forever whenever it was
+    // slow or rejected, since the promise had no .catch to fall back from.
+    // A safety timeout below guarantees we leave 'connecting' either way.
+    let settled = false;
+    const safetyTimer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      setAuthStatus('live');
+    }, 8000);
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      const u = session?.user || null;
+      clearTimeout(safetyTimer);
+      if (settled) return; // safety timer already fired and resolved this render
+      settled = true;
       if (!u) { setAuthStatus('live'); return; }
       setUser(u);
       setAuthStatus('live');
@@ -215,9 +232,17 @@ export default function LivePage({ embedded = false } = {}) {
         .eq('user_id', u.id).gte('date_time', sessionsSince)
         .order('date_time', { ascending: true })
         .then(({ data }) => { if (data) setSessions(detectSessions(data)); });
+    }).catch(() => {
+      clearTimeout(safetyTimer);
+      if (settled) return;
+      settled = true;
+      setAuthStatus('live');
     });
 
-    return () => { if (liveTipsChannelRef.current) supabase.removeChannel(liveTipsChannelRef.current); };
+    return () => {
+      clearTimeout(safetyTimer);
+      if (liveTipsChannelRef.current) supabase.removeChannel(liveTipsChannelRef.current);
+    };
   }, [normalizeTip]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // First-ever visit to Live Mode (standalone or the dashboard's Live Mode
