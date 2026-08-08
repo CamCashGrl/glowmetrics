@@ -148,10 +148,15 @@ export async function POST(req) {
     const savedToHistory = (profile?.plan === 'pro' || profile?.plan === 'unlimited') && planActive;
 
     if (savedToHistory) {
+      // Reuse tipData.usd (already computed above for the live_tips insert)
+      // instead of leaving this column to its default — omitting it here
+      // silently wrote $0.00 for every mirrored tip regardless of the real
+      // token amount.
       await supabaseAdmin.from('tips').insert({
         user_id:   user.id,
         username:  username.trim(),
-        tokens:    parseInt(amount, 10),
+        tokens:    tipData.tokens,
+        usd:       tipData.usd,
         platform:  platform.toLowerCase(),
         date_time: receivedAt,
       });
