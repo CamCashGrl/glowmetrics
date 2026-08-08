@@ -170,6 +170,48 @@ async function main() {
     await page.close();
   }
 
+  // ---- Test 11: comma-formatted token amounts (whale tips) still parse ----
+  {
+    const page = await freshPage(browser);
+    await appendChatLine(page, 'whaleuser tipped 1,000 tokens');
+    const sent = await page.evaluate(() => window.__sent);
+    const tip = sent.find(m => m.action === 'tip' && m.username === 'whaleuser');
+    check('T11: comma-formatted tip amount parsed', tip?.tokens === 1000);
+    await page.close();
+  }
+
+  // ---- Test 12: a leading icon/emoji glyph ahead of the username still parses ----
+  {
+    const page = await freshPage(browser);
+    await appendChatLine(page, '🎁 giftuser tipped 40 tokens');
+    const sent = await page.evaluate(() => window.__sent);
+    const tip = sent.find(m => m.action === 'tip');
+    check('T12: icon-prefixed tip line parsed', tip?.username === 'giftuser' && tip?.tokens === 40);
+    await page.close();
+  }
+
+  // ---- Test 13: text changed via characterData (no new child nodes) is still caught ----
+  // Simulates a virtualized/windowed chat list that reuses an already-appended
+  // row element and updates its text in place rather than appending a new node.
+  {
+    const page = await freshPage(browser);
+    await page.evaluate(() => {
+      const row = document.createElement('div');
+      row.textContent = 'placeholder';
+      document.getElementById('chat_area').appendChild(row);
+    });
+    await page.waitForTimeout(50);
+    await page.evaluate(() => {
+      const row = document.getElementById('chat_area').lastChild;
+      row.textContent = 'reuseduser tipped 30 tokens';
+    });
+    await page.waitForTimeout(50);
+    const sent = await page.evaluate(() => window.__sent);
+    const tip = sent.find(m => m.action === 'tip' && m.username === 'reuseduser');
+    check('T13: in-place text update (characterData mutation) still detected', tip?.tokens === 30);
+    await page.close();
+  }
+
   await browser.close();
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail > 0 ? 1 : 0);

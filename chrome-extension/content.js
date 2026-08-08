@@ -11,19 +11,24 @@
   if (host.includes('myfreecams')) platform = 'myfreecams';
 
   // ─── Tip / event patterns ───────────────────────────────────────────────────
+  // Token counts use (\d[\d,]*) rather than (\d+) so a big tip rendered with
+  // thousands separators (e.g. "1,000 tokens") still parses — a plain \d+
+  // stops at the first comma and either mis-captures a truncated amount or
+  // fails the match entirely, silently dropping exactly the highest-value
+  // tips.
   const TIP_PATTERNS = {
     chaturbate: [
-      /^(.+?) tipped (\d+) token/i,
-      /^(.+?): tipped (\d+)/i,
-      /^(.+?) sent (\d+) token/i,
+      /^(.+?) tipped (\d[\d,]*) token/i,
+      /^(.+?): tipped (\d[\d,]*)/i,
+      /^(.+?) sent (\d[\d,]*) token/i,
     ],
     bongacams: [
-      /^(.+?) sent (\d+) token/i,
-      /^(.+?) tipped (\d+)/i,
+      /^(.+?) sent (\d[\d,]*) token/i,
+      /^(.+?) tipped (\d[\d,]*)/i,
     ],
     myfreecams: [
-      /^(.+?) tips? (\d+) token/i,
-      /^(.+?) tip[pt]ed (\d+)/i,
+      /^(.+?) tips? (\d[\d,]*) token/i,
+      /^(.+?) tip[pt]ed (\d[\d,]*)/i,
     ],
   };
 
@@ -66,11 +71,19 @@
       seenMsgs = new Set(arr.slice(arr.length - 200));
     }
 
+    // Real chat lines are frequently prefixed with a gift/icon glyph, emoji,
+    // or badge text (rendered as a sibling node ahead of the username but
+    // concatenated into the same textContent) that the anchored ^ patterns
+    // below would otherwise reject outright. Strip any leading run of
+    // non-alphanumeric characters before matching so "🎁 shadowfax99 tipped
+    // 25 tokens" matches exactly like "shadowfax99 tipped 25 tokens" does.
+    const forMatch = clean.replace(/^[^a-z0-9]+/i, '');
+
     const patterns = TIP_PATTERNS[platform] || TIP_PATTERNS.chaturbate;
     for (const pat of patterns) {
-      const m = clean.match(pat);
+      const m = forMatch.match(pat);
       if (m) {
-        const tokens = parseInt(m[2], 10);
+        const tokens = parseInt(m[2].replace(/,/g, ''), 10);
         if (isNaN(tokens) || tokens <= 0) continue;
         chrome.runtime.sendMessage({ action: 'tip', username: m[1].trim(), tokens, platform });
         return;
@@ -78,7 +91,7 @@
     }
 
     for (const pat of ENTER_PATTERNS) {
-      const m = clean.match(pat);
+      const m = forMatch.match(pat);
       if (m) {
         chrome.runtime.sendMessage({ action: 'entered', username: m[1].trim() });
         return;
@@ -96,9 +109,20 @@
             processText(added.textContent);
           }
         }
+        // Some chat UIs (virtualized/windowed lists in particular) reuse a
+        // fixed pool of already-appended row nodes and update their text via
+        // characterData mutations rather than appending new elements — a
+        // childList-only observer sees nothing for those lines. Read the
+        // nearest element's full textContent (not just the changed text
+        // node) since a real line is usually split across several sibling
+        // text/inline nodes and the tip regex needs the whole thing.
+        if (mut.type === 'characterData') {
+          const el = mut.target.nodeType === Node.ELEMENT_NODE ? mut.target : mut.target.parentElement;
+          if (el) processText(el.textContent);
+        }
       }
     });
-    observer.observe(node, { childList: true, subtree: true });
+    observer.observe(node, { childList: true, subtree: true, characterData: true });
     chrome.runtime.sendMessage({ action: 'connected', platform });
   }
 
