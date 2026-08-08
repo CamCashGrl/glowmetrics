@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { parseCSV, detectPlatform } from '../../../lib/analytics'
+import { runImportCompletedPipeline } from '../../../lib/intelligence/pipeline'
 
 const BATCH_SIZE = 250 // Safe batch size — never hit Supabase limits
 
@@ -292,31 +293,30 @@ export async function POST(req) {
     console.warn('[UPLOAD] Paid-session batches completed with errors:', paidErrors)
   }
 
-  // ── DASHBOARD EVENT (Living Dashboard Intelligence — Phase 1) ───────────
+  // ── DASHBOARD INTELLIGENCE PIPELINE ──────────────────────────────────────
   // Fires only when this import actually persisted new rows and no batch
   // errored — mirrors the same success gate the founder notification below
   // already uses (errors.length === 0), extended to also require at least
   // one inserted row so re-uploading an already-imported file (everything
   // deduped, inserted === 0) does not create a "your data is updated" event
-  // for data that isn't actually new. There is no separate server-side
-  // analytics-recalculation step in this pipeline (aggregateRows/runEngine
-  // only runs client-side in app/dashboard/page.js) — this event marks
-  // successful persistence, not a completed recompute, and says so in its
-  // metadata rather than implying analytics ran here.
+  // for data that isn't actually new. The pipeline itself (lib/intelligence/
+  // pipeline.js) runs the canonical server-side analytics
+  // (lib/serverAnalytics.js -> aggregateRows(), untouched), records an
+  // import_completed dashboard_events row, and persists the resulting
+  // analytics_snapshots row so future diff-based event types (peak window,
+  // whale, pace, ...) have a "previous state" to compare against. Never
+  // fails or rolls back a successful import — every step inside the
+  // pipeline is independently non-fatal.
   const importSucceeded = errors.length === 0 && paidErrors.length === 0
   const rowsPersisted = inserted > 0 || paidInserted > 0
   if (importSucceeded && rowsPersisted) {
     try {
-      await supabase.rpc('record_dashboard_event_if_new', {
-        p_event_type: 'import_completed',
-        p_source: 'csv_import',
-        p_priority: 'medium',
-        p_title: 'Your data is updated',
-        p_message: `Your latest ${detectedPlatform} import is complete. CamCash found new information in your data.`,
-        p_fingerprint: `import_completed:${uploadRef}`,
-        p_metadata: {
-          upload_ref: uploadRef,
-          platform: detectedPlatform,
+      await runImportCompletedPipeline({
+        userId: user.id,
+        supabase,
+        uploadRef,
+        platform: detectedPlatform,
+        metadata: {
           rows_inserted: inserted,
           rows_skipped: skipped,
           paid_sessions_inserted: paidInserted,
@@ -326,14 +326,12 @@ export async function POST(req) {
           date_from: summaryDateFrom ? summaryDateFrom.toISOString() : null,
           date_to: summaryDateTo ? summaryDateTo.toISOString() : null,
         },
-        p_related_entity_type: 'csv_upload',
-        p_related_entity_id: uploadRef,
       })
-    } catch (eventErr) {
+    } catch (pipelineErr) {
       // Non-fatal — the import itself already succeeded and was logged to
-      // csv_uploads; a failed dashboard-event write must never fail or roll
-      // back a successful import.
-      console.warn('[UPLOAD] Failed to record dashboard_events row:', eventErr.message)
+      // csv_uploads; a failed intelligence-pipeline run must never fail or
+      // roll back a successful import.
+      console.warn('[UPLOAD] Dashboard intelligence pipeline failed:', pipelineErr.message)
     }
   }
 
