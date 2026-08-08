@@ -48,12 +48,24 @@ export async function POST(req) {
     }
 
     const body = await req.json();
-    const { username, amount, platform, timestamp } = body;
+    const { username, amount, platform, timestamp, isTest } = body;
 
     if (!username || !amount || !platform) {
       return Response.json(
         { error: 'Missing required fields: username, amount, platform' },
         { status: 400, headers: cors }
+      );
+    }
+
+    // The popup's "Test Tip" button proves the extension can reach this
+    // route (auth token valid, network path working) without ever writing
+    // anything real — not live_tips (which would inflate a genuinely live
+    // session's earnings-per-hour/tip-count with fake data) and not the
+    // permanent tips history. Short-circuits before any DB access.
+    if (isTest) {
+      return Response.json(
+        { success: true, tip: null, savedToHistory: false, message: `Test tip from ${username} acknowledged (not saved)` },
+        { headers: cors }
       );
     }
 
@@ -148,10 +160,15 @@ export async function POST(req) {
     const savedToHistory = (profile?.plan === 'pro' || profile?.plan === 'unlimited') && planActive;
 
     if (savedToHistory) {
+      // Reuse tipData.usd (already computed above for the live_tips insert)
+      // instead of leaving this column to its default — omitting it here
+      // silently wrote $0.00 for every mirrored tip regardless of the real
+      // token amount.
       await supabaseAdmin.from('tips').insert({
         user_id:   user.id,
         username:  username.trim(),
-        tokens:    parseInt(amount, 10),
+        tokens:    tipData.tokens,
+        usd:       tipData.usd,
         platform:  platform.toLowerCase(),
         date_time: receivedAt,
       });
