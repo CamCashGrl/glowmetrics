@@ -18,6 +18,30 @@ import { getDashboardReadiness, getModuleLockState, canShowHourlyRate, LockedIns
 import Button from '../../components/ui/Button'
 import { useLiveSessionEngine } from '../live/useLiveSessionEngine'
 
+// ── BOUNDARY NORMALIZATION ──────────────────────────────────────────────
+// Applied once, right where Supabase-fetched tips/paid_sessions rows enter
+// state (loadData's initial fetch and the realtime insert batch below) —
+// not at each of this file's many local usd/tokens calculations
+// individually, and not inside lib/analytics.js's aggregateRows(), which
+// stays untouched. Investigation confirmed tips.usd/tokens already arrive
+// as real JS numbers via supabase-js/PostgREST's default serialization
+// (this project's own generated types declare `usd: number`), so this is
+// defense-in-depth against that ever changing, not a fix for an active bug.
+// Never invents a value: a genuinely invalid/non-numeric field becomes
+// `null` (not 0, not NaN), so every existing `x || 0` fallback throughout
+// this file keeps behaving exactly as it did before this normalization.
+function toSafeNumber(v) {
+  if (v === null || v === undefined) return v
+  if (typeof v === 'number') return Number.isFinite(v) ? v : null
+  const n = parseFloat(v)
+  return Number.isFinite(n) ? n : null
+}
+
+function normalizeNumericFields(rows) {
+  if (!rows || rows.length === 0) return rows
+  return rows.map(r => ({ ...r, usd: toSafeNumber(r.usd), tokens: toSafeNumber(r.tokens) }))
+}
+
 // Tab-only components loaded on demand instead of in the initial dashboard
 // bundle — each is only ever rendered behind an `activeTab === '...'` check,
 // and StreamPlanner/MoneyMap alone pull in all of recharts.
@@ -1922,7 +1946,7 @@ export default function Dashboard() {
         clearTimeout(tipFlushTimerRef.current)
         tipFlushTimerRef.current = null
         tipBatchStartRef.current = 0
-        const batch = pendingTipInsertsRef.current
+        const batch = normalizeNumericFields(pendingTipInsertsRef.current)
         if (!batch.length) return
         pendingTipInsertsRef.current = []
 
@@ -2159,6 +2183,7 @@ export default function Dashboard() {
         }
       }
       if (allData.length) {
+        allData = normalizeNumericFields(allData)
         setTips(allData)
         try {
           const result = runEngine(allData, userTz)
@@ -2180,7 +2205,7 @@ export default function Dashboard() {
         if (!data || data.length < PAGE) break
         paidFrom += PAGE
       }
-      setPaidSessions(allPaidSessions)
+      setPaidSessions(normalizeNumericFields(allPaidSessions))
 
       // Live Mode total, for the Private Sessions page's revenue-sources
       // summary only — kept as its own query against its own table, never
