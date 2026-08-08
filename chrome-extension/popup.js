@@ -287,6 +287,7 @@ document.getElementById('test-tip-btn').addEventListener('click', () => {
     username: 'TestTipper',
     tokens: 50,
     platform: 'chaturbate',
+    isTest: true,
   }, () => {
     loadTips();
   });
