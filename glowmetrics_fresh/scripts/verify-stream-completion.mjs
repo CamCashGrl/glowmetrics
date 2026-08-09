@@ -39,7 +39,7 @@ function computeRevenueVelocity(currentUPM, sessions) {
 const MIN_DURATION_MINUTES = 15
 const MIN_TIP_COUNT = 2
 const MIN_HISTORICAL_SESSIONS = 3
-const RELIABLE_RESOLUTION_TYPES = new Set(['normal_stop', 'auto_ended_inactivity'])
+const RELIABLE_RESOLUTION_TYPES = new Set(['normal_stop', 'auto_ended_inactivity', 'end_at_last_heartbeat'])
 
 function formatDuration(minutes) {
   const hours = Math.floor(minutes / 60)
@@ -285,7 +285,21 @@ check('12. 10-30% -> medium priority', evaluateStreamCompletion({ session: makeS
 
 // Additional gates explicitly required by the spec, not numbered above:
 check('is_inaccurate session: never fires regardless of performance', evaluateStreamCompletion({ session: makeSession({ session_earnings_usd: 200, is_inaccurate: true }), historicalSessions: BASELINE_SESSIONS }), null)
-check('resolve-path resolution_type (unreliable earnings data): never fires', evaluateStreamCompletion({ session: makeSession({ session_earnings_usd: 200, session_resolution_type: 'chosen_end_time' }), historicalSessions: BASELINE_SESSIONS }), null)
+check('chosen_end_time resolution_type (self-reported precision): never fires', evaluateStreamCompletion({ session: makeSession({ session_earnings_usd: 200, session_resolution_type: 'chosen_end_time' }), historicalSessions: BASELINE_SESSIONS }), null)
+check('marked_invalid resolution_type: never fires', evaluateStreamCompletion({ session: makeSession({ session_earnings_usd: 200, session_resolution_type: 'marked_invalid', is_inaccurate: true }), historicalSessions: BASELINE_SESSIONS }), null)
+
+// Live-session-finalization audit follow-up: resolve_live_session()'s
+// 'ended'/'end_at_last_heartbeat' choices now finalize real metrics through
+// the same shared helper as stop_live_session() (see supabase/migrations/
+// 20260809_centralize_live_session_finalization.sql), and are derived from
+// the same system-observed heartbeat timestamps as auto_ended_inactivity —
+// so a qualifying end_at_last_heartbeat session now correctly fires.
+{
+  const session = makeSession({ session_resolution_type: 'end_at_last_heartbeat', session_earnings_usd: 117 })
+  const result = evaluateStreamCompletion({ session, historicalSessions: BASELINE_SESSIONS })
+  check('end_at_last_heartbeat resolution_type (previously-excluded resolve path, now reliable): fires', result !== null, true)
+  check('end_at_last_heartbeat: correct priority', result?.priority, 'high')
+}
 check('insufficient tip count (<2): never fires even with real earnings', evaluateStreamCompletion({ session: makeSession({ session_earnings_usd: 200, tip_count: 1 }), historicalSessions: BASELINE_SESSIONS }), null)
 check('zero tip count / zero earnings: never fires', evaluateStreamCompletion({ session: makeSession({ session_earnings_usd: 0, tip_count: 0 }), historicalSessions: BASELINE_SESSIONS }), null)
 check('null session: never fires', evaluateStreamCompletion({ session: null, historicalSessions: BASELINE_SESSIONS }), null)

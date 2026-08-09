@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server'
 import { getLiveSessionCaller } from '../../../../../lib/liveSession/auth'
 import { shapeLiveSession, sanitizedErrorResponse } from '../../../../../lib/liveSession/shape'
 import { corsHeaders } from '../../../../../lib/liveSession/cors'
+import { runStreamCompletionPipeline } from '../../../../../lib/intelligence/streamCompletion'
 
 export async function OPTIONS(req) {
   return new Response(null, { status: 204, headers: corsHeaders(req) })
@@ -104,6 +105,20 @@ export async function POST(req) {
   if (error) {
     const { status, body } = sanitizedErrorResponse(error)
     return NextResponse.json(body, { status, headers: cors })
+  }
+
+  // Dashboard intelligence — same pipeline as /api/live/session/stop, now
+  // reachable from this path too since resolve_live_session() finalizes
+  // real metrics for every ending choice (see supabase/migrations/
+  // 20260809_centralize_live_session_finalization.sql). Never blocks or
+  // fails the resolve response; a no-op for 'still_live' (data.status stays
+  // 'live') since evaluateStreamCompletion requires ended_at.
+  if (data && data.status === 'ended') {
+    try {
+      await runStreamCompletionPipeline({ userId: user.id, supabase, session: data })
+    } catch (intelligenceErr) {
+      console.warn('[live/session/resolve] Stream completion intelligence pipeline failed:', intelligenceErr.message)
+    }
   }
 
   return NextResponse.json({ session: shapeLiveSession(data), resolved: !!data }, { headers: cors })

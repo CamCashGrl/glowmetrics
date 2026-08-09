@@ -23,22 +23,33 @@
 //     this event fires only for those two bands; 'neutral' and below never
 //     fire (that is the anti-noise gate, not a priority difference).
 //
-// Only two live_sessions finalization paths reliably compute
-// session_earnings_usd/tip_count/etc. today — stop_live_session() (RPC)
-// and sweep_stale_live_session() (RPC) — confirmed by reading both
-// function bodies directly against production. resolve_live_session()'s
-// other choices ('ended', 'end_at_last_heartbeat', 'choose_end_time') do
-// NOT compute these fields (left at their column defaults), so this
-// pipeline is deliberately gated to session_resolution_type IN
-// ('normal_stop', 'auto_ended_inactivity') only — see the Phase 2 report
-// for why this is flagged as a real, pre-existing gap rather than silently
-// trusted.
+// As of the live-session-finalization audit (see supabase/migrations/
+// 20260809_centralize_live_session_finalization.sql), all four termination
+// paths — stop_live_session(), sweep_stale_live_session(),
+// sweep_all_stale_live_sessions(), and resolve_live_session() — compute
+// session_earnings_usd/tip_count/etc. through one shared helper
+// (_finalize_live_session_metrics), so the data is no longer missing for
+// any resolution type. This gate is still kept, but now reflects timestamp
+// PRECISION, not data availability:
+//   - normal_stop / auto_ended_inactivity: system-observed end time
+//     (explicit stop click, or last heartbeat before the inactivity
+//     deadline) — high confidence.
+//   - end_at_last_heartbeat (resolve_live_session's 'ended' and
+//     'end_at_last_heartbeat' choices): also derived from the same
+//     extension/website heartbeat timestamps, same precision basis as
+//     auto_ended_inactivity — included for the same reason.
+//   - chosen_end_time: the user manually picks an end time — real data,
+//     but self-reported precision, deliberately excluded to avoid a
+//     user-adjustable value feeding a "you outperformed your baseline"
+//     claim.
+//   - marked_invalid: already excluded via the is_inaccurate check below,
+//     regardless of this set.
 //
 // live_session_analysis_context is NOT used here — confirmed empty (0
 // rows) in production, nothing populates it, and everything this event
 // needs (session_earnings_usd, tip_count, started_at/ended_at,
 // total_paused_seconds) already lives directly on the live_sessions row
-// itself, computed by the same RPCs that finalize the session.
+// itself, computed by the same finalization helper.
 
 import { computeRevenueVelocity } from '../analytics/velocity'
 import { getServerAnalytics } from '../serverAnalytics'
@@ -46,7 +57,7 @@ import { getServerAnalytics } from '../serverAnalytics'
 const MIN_DURATION_MINUTES = 15
 const MIN_TIP_COUNT = 2
 const MIN_HISTORICAL_SESSIONS = 3
-const RELIABLE_RESOLUTION_TYPES = new Set(['normal_stop', 'auto_ended_inactivity'])
+const RELIABLE_RESOLUTION_TYPES = new Set(['normal_stop', 'auto_ended_inactivity', 'end_at_last_heartbeat'])
 
 function formatDuration(minutes) {
   const hours = Math.floor(minutes / 60)
