@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { parseCSV, detectPlatform } from '../../../lib/analytics'
 import { runImportCompletedPipeline } from '../../../lib/intelligence/pipeline'
+import { runNewWhalePipeline } from '../../../lib/intelligence/newWhale'
 
 const BATCH_SIZE = 250 // Safe batch size — never hit Supabase limits
 
@@ -311,7 +312,7 @@ export async function POST(req) {
   const rowsPersisted = inserted > 0 || paidInserted > 0
   if (importSucceeded && rowsPersisted) {
     try {
-      await runImportCompletedPipeline({
+      const { analytics } = await runImportCompletedPipeline({
         userId: user.id,
         supabase,
         uploadRef,
@@ -327,6 +328,16 @@ export async function POST(req) {
           date_to: summaryDateTo ? summaryDateTo.toISOString() : null,
         },
       })
+
+      // Phase 4 — new_whale_detected. Reuses generateWhaleAlerts()'s own
+      // existing 'new_whale' rule (already part of `analytics` above, no
+      // second engine call) — see lib/intelligence/newWhale.js. Same
+      // non-fatal contract as the pipeline call above.
+      try {
+        await runNewWhalePipeline({ userId: user.id, supabase, whaleAlerts: analytics?.whaleAlerts })
+      } catch (whaleErr) {
+        console.warn('[UPLOAD] New-whale intelligence pipeline failed:', whaleErr.message)
+      }
     } catch (pipelineErr) {
       // Non-fatal — the import itself already succeeded and was logged to
       // csv_uploads; a failed intelligence-pipeline run must never fail or

@@ -102,5 +102,11 @@ export async function runImportCompletedPipeline({
     console.warn('[intelligence] Failed to persist analytics_snapshots row:', snapshotWriteErr.message)
   }
 
-  return { event, currentSnapshot, previousSnapshot }
+  // `analytics` (the full, unmodified getServerAnalytics()/aggregateRows()
+  // result) is returned alongside the snapshot so later pipelines called
+  // from the same upload request (e.g. runNewWhalePipeline) can reuse
+  // fields like whaleAlerts without a second getServerAnalytics() call —
+  // purely additive to this function's existing contract, nothing above
+  // this line changes.
+  return { event, currentSnapshot, previousSnapshot, analytics }
 }
