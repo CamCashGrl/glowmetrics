@@ -37,6 +37,12 @@ export async function GET(req) {
 
   if (status) query = query.eq('status', status)
   if (priority) query = query.eq('priority', priority)
+  // Events without an expires_at (most event types) are unaffected — this
+  // only ever excludes a row that explicitly opted into expiring (currently
+  // only peak_window, via its own expiresInMinutes). A row past its own
+  // expires_at is never "current" again regardless of status, so it's
+  // simply not listed here — status/seen/dismissed semantics are untouched.
+  query = query.or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
 
   const { data, error } = await query
   if (error) {

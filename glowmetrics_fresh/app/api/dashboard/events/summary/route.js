@@ -24,10 +24,14 @@ export async function GET(req) {
     return NextResponse.json({ error: 'Invalid session' }, { status: 401 })
   }
 
+  // Same expiration rule as GET /api/dashboard/events — a row past its own
+  // expires_at (currently only ever set by peak_window) never counts as a
+  // current "new" event, regardless of status.
   const { data: newEvents, error } = await supabase
     .from('dashboard_events')
     .select('*')
     .eq('status', 'new')
+    .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
     .order('created_at', { ascending: false })
     .limit(50)
 

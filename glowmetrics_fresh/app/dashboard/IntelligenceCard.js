@@ -30,18 +30,19 @@ const GROUP = {
   platform_gap_detected: "PLATFORM",
   weekly_momentum_up: "MOMENTUM",
   weekly_momentum_down: "MOMENTUM",
-  stream_below_baseline: "MOMENTUM",
-  stream_outperformed_baseline: "MOMENTUM",
+  stream_below_baseline: "STREAM PERFORMANCE",
+  stream_outperformed_baseline: "STREAM PERFORMANCE",
+  import_completed: "IMPORT",
 }
 
 const ICON = {
   peak_window: "🔥",
   new_whale_detected: "🐋",
-  platform_gap_detected: "🎯",
+  platform_gap_detected: "⚖️",
   weekly_momentum_up: "📈",
   weekly_momentum_down: "📉",
-  stream_below_baseline: "🐢",
-  stream_outperformed_baseline: "⚡",
+  stream_below_baseline: "📊",
+  stream_outperformed_baseline: "📊",
   import_completed: "📥",
 }
 

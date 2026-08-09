@@ -90,6 +90,17 @@ export function evaluatePeakWindow({ bestHour, confidenceLevel, nowHour, nowMinu
     ? `${label} has historically been one of your best times to stream — you've typically earned about $${avg.toFixed(2)} during this hour. Past pattern, not a guarantee.`
     : `In about ${minutesUntilPeak} minute${minutesUntilPeak === 1 ? '' : 's'}, you'll enter ${label} — historically one of your best times to stream (about $${avg.toFixed(2)} typical). Past pattern, not a guarantee.`
 
+  // How many minutes from "now" until this event's own relevant window (the
+  // same 2-hour inPeak block checked above: startHour through startHour+2)
+  // actually ends — derived from startHour/nowHour/nowMinute already
+  // computed above, not a new number. Elapsed-minutes math is timezone-
+  // invariant (both sides are "local" in the same sense), so no tz
+  // conversion is needed here beyond what evaluatePeakWindow already does.
+  // Used only to set the RPC's existing p_expires_at parameter — never
+  // stored in metadata, never displayed, never affects inPeak/approaching.
+  const windowEndHour = (startHour + 2) % 24
+  const expiresInMinutes = ((windowEndHour * 60 - (nowHour * 60 + nowMinute)) + 1440) % 1440
+
   return {
     event: {
       priority: 'medium',
@@ -105,6 +116,7 @@ export function evaluatePeakWindow({ bestHour, confidenceLevel, nowHour, nowMinu
         historical_session_count: historicalSessionCount ?? bestHour.count ?? null,
       },
     },
+    expiresInMinutes,
     reason: null,
   }
 }
@@ -114,6 +126,22 @@ export function evaluatePeakWindow({ bestHour, confidenceLevel, nowHour, nowMinu
 // generate at most one event per day while still recurring daily. Never
 // fails or blocks the caller — matches the established non-fatal pattern
 // from runStreamCompletionPipeline/runImportCompletedPipeline.
+//
+// p_expires_at (added post-UI-surfacing): peak_window is the one event type
+// whose usefulness is inherently time-boxed — "you're in/approaching your
+// peak window" stops being a current, actionable insight once that window
+// (the same 2-hour inPeak block evaluatePeakWindow already checks) has
+// passed, regardless of the 24h dedup cooldown above. Without an expiry the
+// event would keep showing status='new' — and get presented by the UI as a
+// current insight — for up to 24h after the window it was actually about
+// had ended (found via real production data once the UI actually surfaced
+// these events for the first time). Uses evaluatePeakWindow's own
+// expiresInMinutes (derived from the same startHour/nowHour/nowMinute
+// already used for inPeak/approaching, not a new number) so the event
+// expires exactly when its own window ends — never earlier, never a fixed
+// arbitrary duration. record_dashboard_event_if_new's p_expires_at
+// parameter already existed and was simply never populated by this caller;
+// no RPC or schema change.
 const COOLDOWN_SECONDS = 24 * 60 * 60
 
 export async function runPeakWindowPipeline({ supabase, bestHour, confidenceLevel, nowHour, nowMinute, historicalSessionCount }) {
@@ -133,6 +161,7 @@ export async function runPeakWindowPipeline({ supabase, bestHour, confidenceLeve
       p_fingerprint: evaluation.event.fingerprint,
       p_metadata: evaluation.event.metadata,
       p_cooldown_seconds: COOLDOWN_SECONDS,
+      p_expires_at: new Date(Date.now() + evaluation.expiresInMinutes * 60000).toISOString(),
     })
     if (error) throw error
     event = data

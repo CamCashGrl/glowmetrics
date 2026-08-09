@@ -20,9 +20,9 @@ const C = {
 
 const PRIORITY_ACCENT = { critical: C.red, high: C.gold, medium: C.cyan, low: C.muted }
 const ICON = {
-  peak_window: "🔥", new_whale_detected: "🐋", platform_gap_detected: "🎯",
+  peak_window: "🔥", new_whale_detected: "🐋", platform_gap_detected: "⚖️",
   weekly_momentum_up: "📈", weekly_momentum_down: "📉",
-  stream_below_baseline: "🐢", stream_outperformed_baseline: "⚡", import_completed: "📥",
+  stream_below_baseline: "📊", stream_outperformed_baseline: "📊", import_completed: "📥",
 }
 
 function timeAgo(iso) {
