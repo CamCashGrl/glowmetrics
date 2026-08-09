@@ -92,5 +92,12 @@ export async function getServerAnalytics(userId, supabase) {
     loadUserTimezone(supabase, userId),
   ])
 
-  return aggregateRows(tips, timezone)
+  // `tips` (the raw rows this function already loaded) is spliced onto
+  // aggregateRows()'s own return object as an additive field — purely
+  // additive, no existing field renamed or changed. aggregateRows() itself
+  // never returns the raw array (only `totalTips`, a count), and some
+  // intelligence evaluators (e.g. weekly momentum, which needs to see the
+  // prior 7-14 day window aggregateRows() doesn't expose on its own) need
+  // the raw rows without triggering a second loadAllTips() fetch.
+  return { ...aggregateRows(tips, timezone), tips }
 }

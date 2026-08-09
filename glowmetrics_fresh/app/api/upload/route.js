@@ -3,6 +3,8 @@ import { createClient } from '@supabase/supabase-js'
 import { parseCSV, detectPlatform } from '../../../lib/analytics'
 import { runImportCompletedPipeline } from '../../../lib/intelligence/pipeline'
 import { runNewWhalePipeline } from '../../../lib/intelligence/newWhale'
+import { runPlatformGapPipeline } from '../../../lib/intelligence/platformComparison'
+import { runWeeklyMomentumPipeline } from '../../../lib/intelligence/weeklyMomentum'
 
 const BATCH_SIZE = 250 // Safe batch size — never hit Supabase limits
 
@@ -337,6 +339,29 @@ export async function POST(req) {
         await runNewWhalePipeline({ userId: user.id, supabase, whaleAlerts: analytics?.whaleAlerts })
       } catch (whaleErr) {
         console.warn('[UPLOAD] New-whale intelligence pipeline failed:', whaleErr.message)
+      }
+
+      // Phase 6 — platform_gap_detected. Reuses the exact 2x-multiplier
+      // rule already shown on the dashboard's Platform Comparison tab,
+      // against `analytics.platforms` (already part of `analytics` above,
+      // no second engine call) — see lib/intelligence/platformComparison.js.
+      // Same non-fatal contract as the pipeline calls above.
+      try {
+        await runPlatformGapPipeline({ userId: user.id, supabase, platforms: analytics?.platforms })
+      } catch (platformErr) {
+        console.warn('[UPLOAD] Platform-gap intelligence pipeline failed:', platformErr.message)
+      }
+
+      // Phase 7 — weekly_momentum_up / weekly_momentum_down. Reuses
+      // generateInsights()'s existing weekly comparison rule against the
+      // raw tips already loaded by getServerAnalytics() (now returned as
+      // analytics.tips — see lib/serverAnalytics.js) — no second fetch.
+      // See lib/intelligence/weeklyMomentum.js. Same non-fatal contract as
+      // the pipeline calls above.
+      try {
+        await runWeeklyMomentumPipeline({ userId: user.id, supabase, tips: analytics?.tips })
+      } catch (momentumErr) {
+        console.warn('[UPLOAD] Weekly-momentum intelligence pipeline failed:', momentumErr.message)
       }
     } catch (pipelineErr) {
       // Non-fatal — the import itself already succeeded and was logged to
