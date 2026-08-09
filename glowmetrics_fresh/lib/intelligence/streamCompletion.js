@@ -71,6 +71,7 @@
 
 import { computeRevenueVelocity } from '../analytics/velocity'
 import { getServerAnalytics } from '../serverAnalytics'
+import { evaluateStreamBelowBaseline } from './streamBelowBaseline'
 
 const MIN_DURATION_MINUTES = 15
 const MIN_TIP_COUNT = 2
@@ -144,8 +145,19 @@ export function evaluateStreamCompletion({ session, historicalSessions }) {
 // RPC (unmodified shape from Phase 1). Never fails or blocks the caller —
 // every step is independently non-fatal, matching the import pipeline's
 // established pattern.
+//
+// Phase 5 addition: also runs evaluateStreamBelowBaseline() (see
+// lib/intelligence/streamBelowBaseline.js) against the SAME already-fetched
+// analytics — never a second getServerAnalytics() call. The two evaluators
+// are mutually exclusive by construction (computeRevenueVelocity()'s trend
+// is a single classification per session: excellent/good belong to the
+// evaluator above, slow/poor to the below-baseline one, neutral to
+// neither), so at most one of `event`/`belowBaselineEvent` is ever non-null
+// for a given session. `event`/`evaluation`'s meaning is unchanged from
+// before this addition — existing callers reading those two fields see
+// identical behavior.
 export async function runStreamCompletionPipeline({ userId, supabase, session }) {
-  if (!session) return { event: null, evaluation: null }
+  if (!session) return { event: null, evaluation: null, belowBaselineEvent: null, belowBaselineEvaluation: null }
   if (!userId || !supabase) throw new Error('runStreamCompletionPipeline requires userId and a Supabase client')
 
   let analytics = null
@@ -153,30 +165,54 @@ export async function runStreamCompletionPipeline({ userId, supabase, session })
     analytics = await getServerAnalytics(userId, supabase)
   } catch (analyticsErr) {
     console.warn('[intelligence] Failed to load server analytics for stream completion:', analyticsErr.message)
-    return { event: null, evaluation: null }
+    return { event: null, evaluation: null, belowBaselineEvent: null, belowBaselineEvaluation: null }
   }
 
-  const evaluation = evaluateStreamCompletion({ session, historicalSessions: analytics?.sessions || [] })
-  if (!evaluation) return { event: null, evaluation: null }
+  const historicalSessions = analytics?.sessions || []
+  const evaluation = evaluateStreamCompletion({ session, historicalSessions })
+  const belowBaselineEvaluation = evaluateStreamBelowBaseline({ session, historicalSessions })
 
   let event = null
-  try {
-    const { data, error } = await supabase.rpc('record_dashboard_event_if_new', {
-      p_event_type: 'stream_outperformed_baseline',
-      p_source: 'live_session',
-      p_priority: evaluation.priority,
-      p_title: evaluation.title,
-      p_message: evaluation.message,
-      p_fingerprint: evaluation.fingerprint,
-      p_metadata: evaluation.metadata,
-      p_related_entity_type: 'live_session',
-      p_related_entity_id: session.id,
-    })
-    if (error) throw error
-    event = data
-  } catch (eventErr) {
-    console.warn('[intelligence] Failed to record stream_outperformed_baseline event:', eventErr.message)
+  if (evaluation) {
+    try {
+      const { data, error } = await supabase.rpc('record_dashboard_event_if_new', {
+        p_event_type: 'stream_outperformed_baseline',
+        p_source: 'live_session',
+        p_priority: evaluation.priority,
+        p_title: evaluation.title,
+        p_message: evaluation.message,
+        p_fingerprint: evaluation.fingerprint,
+        p_metadata: evaluation.metadata,
+        p_related_entity_type: 'live_session',
+        p_related_entity_id: session.id,
+      })
+      if (error) throw error
+      event = data
+    } catch (eventErr) {
+      console.warn('[intelligence] Failed to record stream_outperformed_baseline event:', eventErr.message)
+    }
   }
 
-  return { event, evaluation }
+  let belowBaselineEvent = null
+  if (belowBaselineEvaluation) {
+    try {
+      const { data, error } = await supabase.rpc('record_dashboard_event_if_new', {
+        p_event_type: 'stream_below_baseline',
+        p_source: 'live_session',
+        p_priority: belowBaselineEvaluation.priority,
+        p_title: belowBaselineEvaluation.title,
+        p_message: belowBaselineEvaluation.message,
+        p_fingerprint: belowBaselineEvaluation.fingerprint,
+        p_metadata: belowBaselineEvaluation.metadata,
+        p_related_entity_type: 'live_session',
+        p_related_entity_id: session.id,
+      })
+      if (error) throw error
+      belowBaselineEvent = data
+    } catch (eventErr) {
+      console.warn('[intelligence] Failed to record stream_below_baseline event:', eventErr.message)
+    }
+  }
+
+  return { event, evaluation, belowBaselineEvent, belowBaselineEvaluation }
 }
