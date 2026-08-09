@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
-import { parseCSV, detectPlatform, aggregateRows as runEngine } from "../../lib/analytics"
+import { parseCSV, detectPlatform, aggregateRows as runEngine, toLocalHour } from "../../lib/analytics"
 import { computeRoomHealth, ROOM_STATES, MOMENTUM_DIRECTIONS } from "../../lib/analytics/roomHealth"
 import { computeRevenueVelocity, computeLiveComparison } from "../../lib/analytics/velocity"
 import { detectSessionPhase, PHASES, getRecoveryActions, getGoalStrategy } from "../../lib/analytics/sessionPhase"
@@ -165,12 +165,39 @@ function buildImportPreview(rawText, platform) {
   const totalUsd = rows.reduce((sum, r) => sum + (r.usd || 0), 0)
   const fanTotals = rows.reduce((acc, r) => { acc[r.username] = (acc[r.username] || 0) + r.tokens; return acc }, {})
   const topSpender = Object.entries(fanTotals).sort((a, b) => b[1] - a[1])[0]
+  const hourTotals = rows.reduce((acc, r) => {
+    const h = toLocalHour(r.dateRaw || r.date_time)
+    if (h === null || h === undefined || isNaN(h)) return acc
+    acc[h] = (acc[h] || 0) + (r.tokens || 0)
+    return acc
+  }, {})
+  const bestHourEntry = Object.entries(hourTotals).sort((a, b) => b[1] - a[1])[0]
+  const fmtHour = (h) => { const n = parseInt(h); return n === 0 ? '12am' : n < 12 ? `${n}am` : n === 12 ? '12pm' : `${n - 12}pm` }
   return {
     tipsDetected: rows.length,
     fansDetected: Object.keys(fanTotals).length,
     estimatedEarnings: parseFloat(totalUsd.toFixed(2)),
     topSpender: topSpender ? topSpender[0] : null,
+    bestHour: bestHourEntry ? fmtHour(bestHourEntry[0]) : null,
   }
+}
+
+// Animated count-up used on the import success screen — same easing as
+// onboarding's "First Insights" stat cards.
+function CountUp({ to, prefix = '', suffix = '', duration = 900, decimals = 0 }) {
+  const [val, setVal] = useState(0)
+  useEffect(() => {
+    const start = Date.now()
+    const tick = () => {
+      const p = Math.min((Date.now() - start) / duration, 1)
+      const e = 1 - Math.pow(1 - p, 3)
+      const v = e * to
+      setVal(decimals ? +v.toFixed(decimals) : Math.round(v))
+      if (p < 1) requestAnimationFrame(tick)
+    }
+    requestAnimationFrame(tick)
+  }, [to, duration, decimals])
+  return <>{prefix}{decimals ? val.toFixed(decimals) : val.toLocaleString()}{suffix}</>
 }
 
 // Sparkle burst — ports the same completion animation used in onboarding's
@@ -2255,6 +2282,12 @@ const stopImportMessageRotation = () => {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) { showToast("❌ Not logged in"); setImportStage('error'); setLastUploadResult({ success: false, error: 'Not logged in.' }); return }
 
+      // Read the file client-side too so the success screen can show the
+      // same "fans / earnings / top spender / best hour" preview onboarding
+      // shows, instead of just a bare confirmation line.
+      let rawText = ''
+      try { rawText = await file.text() } catch (e) {}
+
       const fd = new FormData()
       fd.append('file', file)
       if (forcePlatform) fd.append('platform', forcePlatform)
@@ -2285,6 +2318,7 @@ const stopImportMessageRotation = () => {
         ? `✅ Imported ${result.inserted} tips (${result.skipped} duplicates skipped)`
         : `✅ Imported ${result.inserted} tips from ${result.platform}!`
       showToast(msg)
+      const preview = buildImportPreview(rawText, result.platform || forcePlatform || uploadPlatform || null)
       setLastUploadResult({
         success: true,
         inserted: result.inserted,
@@ -2293,8 +2327,12 @@ const stopImportMessageRotation = () => {
         totalUsd: result.totalUsd,
         dateFrom: result.dateFrom,
         dateTo: result.dateTo,
+        paidInserted: result.paidSessionsInserted || 0,
+        preview,
       })
       setImportStage('success')
+      setShowImportSparkle(true)
+      setTimeout(() => setShowImportSparkle(false), 2400)
 
       // Google Ads — CSV Upload conversion
       try {
@@ -3022,6 +3060,7 @@ const stopImportMessageRotation = () => {
         .whale-row:hover { background: rgba(59,130,246,0.08) !important; transform: translateX(2px); }
         @keyframes pulse-msg { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.25); } }
         @keyframes fadeUp { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
+        @keyframes statCardIn { from { opacity:0; transform:translateY(8px) scale(0.97); } to { opacity:1; transform:translateY(0) scale(1); } }
         @keyframes spin { to { transform: rotate(360deg); } }
 
         /* ── ALERT ANIMATIONS ── */
@@ -5694,27 +5733,67 @@ const stopImportMessageRotation = () => {
               )}
 
               {importStage === 'success' && lastUploadResult?.success && (
-                <div style={{ textAlign: "center" }}>
-                  <div style={{ position: "relative", width: 56, height: 56, margin: "0 auto 14px" }}>
+                <div style={{ textAlign: "center", animation: "fadeUp 0.4s ease both" }}>
+                  <div style={{ position: "relative", width: 64, height: 64, margin: "0 auto 16px" }}>
                     <div className="import-flash-ring" style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "radial-gradient(circle,rgba(34,211,238,0.55),rgba(236,72,153,0.35) 60%,transparent 70%)" }} />
-                    <div className="import-check-badge" style={{ position: "relative", width: 56, height: 56, borderRadius: "50%", background: "linear-gradient(135deg,#10B981,#22D3EE)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, color: "#fff", boxShadow: "0 0 24px rgba(16,185,129,0.45)" }}>✓</div>
+                    <div className="import-check-badge" style={{ position: "relative", width: 64, height: 64, borderRadius: "50%", background: "linear-gradient(135deg,#10B981,#22D3EE)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, fontWeight: 900, color: "#fff", boxShadow: "0 0 55px rgba(16,185,129,0.35),0 0 24px rgba(16,185,129,0.45)" }}>✓</div>
                   </div>
-                  <div style={{ fontSize: 16, fontWeight: 800, color: C.white, marginBottom: 8 }}>Success — your tips were imported.</div>
-                  <div style={{ fontSize: 13.5, color: C.text, lineHeight: 1.6 }}>
-                    Imported <strong style={{ color: C.white }}>{(lastUploadResult.inserted || 0).toLocaleString()}</strong> tips from <strong style={{ color: C.cyan }}>{lastUploadResult.platform}</strong>
+                  <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.18em", textTransform: "uppercase", color: C.cyan, marginBottom: 8 }}>Import Complete</div>
+                  <h1 style={{ fontSize: 20, fontWeight: 900, color: C.white, marginBottom: 6 }}>Your tips were imported</h1>
+                  <div style={{ fontSize: 13.5, color: C.text, lineHeight: 1.6, marginBottom: 18 }}>
+                    <strong style={{ color: C.white }}>{(lastUploadResult.inserted || 0).toLocaleString()}</strong> tips from <strong style={{ color: C.cyan }}>{lastUploadResult.platform}</strong>
                     {typeof lastUploadResult.totalUsd === 'number' && (
                       <> — <strong style={{ color: C.green }}>${lastUploadResult.totalUsd.toFixed(2)}</strong> tracked</>
                     )}
+                    {(formatImportDate(lastUploadResult.dateFrom) && formatImportDate(lastUploadResult.dateTo)) && (
+                      <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>
+                        {formatImportDate(lastUploadResult.dateFrom)} – {formatImportDate(lastUploadResult.dateTo)}
+                      </div>
+                    )}
+                    {lastUploadResult.skipped > 0 && (
+                      <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>{lastUploadResult.skipped} duplicates skipped</div>
+                    )}
                   </div>
-                  {(formatImportDate(lastUploadResult.dateFrom) && formatImportDate(lastUploadResult.dateTo)) && (
-                    <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>
-                      {formatImportDate(lastUploadResult.dateFrom)} – {formatImportDate(lastUploadResult.dateTo)}
+
+                  {lastUploadResult.preview && (
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 10, marginBottom: 16 }}>
+                      {[
+                        { label: "Tips Imported", value: lastUploadResult.inserted || 0, color: C.cyan, suffix: "" },
+                        { label: "Unique Fans", value: lastUploadResult.preview.fansDetected || 0, color: C.gold, suffix: "" },
+                        { label: "Est. Earnings", value: lastUploadResult.preview.estimatedEarnings || 0, color: C.green, prefix: "$", decimals: 2 },
+                        { label: "Top Spender", value: lastUploadResult.preview.topSpender || "—", color: C.pink, isText: true },
+                      ].map((s, i) => (
+                        <div key={s.label} className="stat-card" style={{ ...glassCard, borderRadius: 14, padding: "12px 14px", position: "relative", overflow: "hidden", textAlign: "left", animation: `statCardIn 0.4s ease ${i * 0.1}s both` }}>
+                          <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg,${s.color}00,${s.color}88,${s.color}00)` }} />
+                          <div style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em", color: C.muted, marginBottom: 5 }}>{s.label}</div>
+                          <div style={{ fontSize: s.isText ? 14 : 17, fontWeight: 900, color: s.color, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {s.isText ? s.value : <CountUp to={typeof s.value === 'number' ? s.value : 0} prefix={s.prefix || ''} suffix={s.suffix || ''} decimals={s.decimals || 0} />}
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   )}
-                  {lastUploadResult.skipped > 0 && (
-                    <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>{lastUploadResult.skipped} duplicates skipped</div>
+
+                  {lastUploadResult.paidInserted > 0 && (
+                    <div style={{ borderRadius: 12, border: "1px solid rgba(255,47,174,0.2)", background: "rgba(255,47,174,0.04)", padding: "10px 13px", marginBottom: 12, textAlign: "left", display: "flex", gap: 9, alignItems: "flex-start" }}>
+                      <span style={{ fontSize: 14, flexShrink: 0 }}>💳</span>
+                      <div style={{ fontSize: 11, color: C.text, lineHeight: 1.55 }}>
+                        <strong style={{ color: C.pink }}>{lastUploadResult.paidInserted} paid chat sessions</strong> were also imported and are tracked separately under Private Sessions.
+                      </div>
+                    </div>
                   )}
-                  <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 20, flexWrap: "wrap" }}>
+
+                  {lastUploadResult.preview?.bestHour && (
+                    <div style={{ borderRadius: 14, border: `1px solid ${C.pink}33`, background: "rgba(255,47,174,0.05)", padding: "13px 15px", marginBottom: 16, textAlign: "left", display: "flex", gap: 10 }}>
+                      <span style={{ fontSize: 18, flexShrink: 0 }}>⚡</span>
+                      <div>
+                        <div style={{ fontSize: 10, fontWeight: 800, color: C.pink, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 4 }}>Best insight</div>
+                        <p style={{ fontSize: 13, color: C.white, lineHeight: 1.6 }}>Your earnings peak around <strong style={{ color: C.pink }}>{lastUploadResult.preview.bestHour}</strong>. That's your sweet spot — prioritize streaming then.</p>
+                      </div>
+                    </div>
+                  )}
+
+                  <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
                     <Button onClick={() => handleTabChange('overview')} style={{ padding: "12px 26px", fontSize: 14 }}>View Dashboard</Button>
                     <Button variant="secondary" onClick={resetImport} style={{ padding: "12px 22px", fontSize: 13 }}>Import another CSV</Button>
                   </div>
