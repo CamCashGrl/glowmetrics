@@ -7,7 +7,7 @@
 import { PLATFORM_TOKEN_RATES, DEFAULT_TOKEN_RATE, tokenRate } from './constants'
 // Session grouping lives in ONE place — lib/analytics/sessions.js
 // Shared with app/live/page.js. Do not redefine this logic here.
-import { detectSessions } from './analytics/sessions'
+import { detectSessions, toUsdNumber } from './analytics/sessions'
 
 // ===============================
 // TIMEZONE HELPERS
@@ -465,7 +465,7 @@ export function identifyWhales(tips) {
   tips.forEach(t => {
     const key = t.username.toLowerCase()
     if (!fanMap[key]) { fanMap[key] = { username: t.username, totalUSD: 0, totalTokens: 0, tipCount: 0, tips: [], platform: t.platform, tipNotes: [] } }
-    fanMap[key].totalUSD += t.usd || 0
+    fanMap[key].totalUSD += toUsdNumber(t.usd)
     fanMap[key].totalTokens += t.tokens || 0
     fanMap[key].tipCount += 1
     fanMap[key].tips.push(t)
@@ -513,7 +513,7 @@ export function identifyWhales(tips) {
       lifetimeValue: calcLifetimeValue(f.totalUSD, lifetimeDays, f.tipCount),
       expectedNextTip: calcExpectedNextTip(daysSinceLastTip, avgDaysBetweenTips),
       hasPrivates: privateTips.length > 0, privateCount: privateTips.length,
-      privateSpent: parseFloat(privateTips.reduce((s, t) => s + t.usd, 0).toFixed(2)),
+      privateSpent: parseFloat(privateTips.reduce((s, t) => s + toUsdNumber(t.usd), 0).toFixed(2)),
       typicalOnlineHours: mostActiveHour ? `${fmt12Hour(parseInt(mostActiveHour[0]))} - ${fmt12Hour(parseInt(mostActiveHour[0]) + 2)}` : 'Unknown',
       tipNotes: f.tipNotes, tips: f.tips, isTopSpender: percentileRank <= 0.05, spendPercentile
     }
@@ -592,11 +592,11 @@ export function predictRevenue(tips, sessions) {
   const predictions = {}
   const now = Date.now()
   const last7 = tips.filter(t => (now - new Date(t.dateRaw || t.date_time)) / 86400000 <= 7)
-  predictions.next7Days = { amount: parseFloat(last7.reduce((s, t) => s + t.usd, 0).toFixed(2)), confidence: last7.length > 20 ? 'High' : last7.length > 10 ? 'Medium' : 'Low' }
+  predictions.next7Days = { amount: parseFloat(last7.reduce((s, t) => s + toUsdNumber(t.usd), 0).toFixed(2)), confidence: last7.length > 20 ? 'High' : last7.length > 10 ? 'Medium' : 'Low' }
   const last30 = tips.filter(t => (now - new Date(t.dateRaw || t.date_time)) / 86400000 <= 30)
   const prev30 = tips.filter(t => { const d = (now - new Date(t.dateRaw || t.date_time)) / 86400000; return d > 30 && d <= 60 })
-  const last30Rev = last30.reduce((s, t) => s + t.usd, 0)
-  const prev30Rev = prev30.reduce((s, t) => s + t.usd, 0)
+  const last30Rev = last30.reduce((s, t) => s + toUsdNumber(t.usd), 0)
+  const prev30Rev = prev30.reduce((s, t) => s + toUsdNumber(t.usd), 0)
   const weeklyTrend = prev30Rev > 0 ? ((last30Rev - prev30Rev) / prev30Rev) * 100 : null
   predictions.next30Days = { amount: parseFloat(last30Rev.toFixed(2)), confidence: last30.length > 50 ? 'High' : last30.length > 25 ? 'Medium' : 'Low', trend: weeklyTrend !== null ? parseFloat(weeklyTrend.toFixed(1)) : null }
   const todayDow = new Date().getUTCDay()
@@ -629,8 +629,8 @@ export function generateLossAlerts(tips, sessions, whales, bestHour) {
   const thisWeek = tips.filter(t => (now - new Date(t.dateRaw || t.date_time)) / 86400000 <= 7)
   const lastWeek = tips.filter(t => { const d = (now - new Date(t.dateRaw || t.date_time)) / 86400000; return d > 7 && d <= 14 })
   if (thisWeek.length >= 5 && lastWeek.length >= 5) {
-    const thisAvg = thisWeek.reduce((s, t) => s + t.usd, 0) / thisWeek.length
-    const lastAvg = lastWeek.reduce((s, t) => s + t.usd, 0) / lastWeek.length
+    const thisAvg = thisWeek.reduce((s, t) => s + toUsdNumber(t.usd), 0) / thisWeek.length
+    const lastAvg = lastWeek.reduce((s, t) => s + toUsdNumber(t.usd), 0) / lastWeek.length
     const drop = Math.round(((lastAvg - thisAvg) / lastAvg) * 100)
     if (drop >= 15) alerts.push({ type: 'tip_drop', severity: 'warning', icon: '📉', message: `Your avg tip dropped ${drop}% this week ($${lastAvg.toFixed(2)} → $${thisAvg.toFixed(2)})`, action: 'Focus on high-value fans during your next stream' })
   }
@@ -675,7 +675,7 @@ export function generateInsights(tips, sessions, bestDay, worstDay, bestHour, pr
   const trueWhales = whales.filter(w => w.tier === 'Whale')
   const topWhales = (trueWhales.length > 0 ? trueWhales : whales.filter(w => w.tier === 'Shark')).slice(0, 5)
   const wE = topWhales.reduce((s, w) => s + w.totalUSD, 0)
-  const tE = tips.reduce((s, t) => s + t.usd, 0)
+  const tE = tips.reduce((s, t) => s + toUsdNumber(t.usd), 0)
   if (wE > 0 && tE > 0 && topWhales.length > 0) {
     const pct = Math.round((wE / tE) * 100)
     insights.push({ icon: '🐳', text: `Your top ${topWhales.length} fan${topWhales.length > 1 ? 's' : ''} generate${topWhales.length === 1 ? 's' : ''} ${pct}% of your revenue. Losing even one of them would cost you $${(wE / topWhales.length).toFixed(0)} on average — keep them engaged`, type: 'whales', priority: 2 })
@@ -697,7 +697,7 @@ export function generateInsights(tips, sessions, bestDay, worstDay, bestHour, pr
   tips.forEach(t => {
     const k = t.username.toLowerCase()
     fanTipCounts[k] = (fanTipCounts[k] || 0) + 1
-    fanTipUSD[k] = (fanTipUSD[k] || 0) + (t.usd || 0)
+    fanTipUSD[k] = (fanTipUSD[k] || 0) + toUsdNumber(t.usd)
   })
   const returning = Object.values(fanTipCounts).filter(c => c > 1).length
   const total = Object.keys(fanTipCounts).length
@@ -715,8 +715,8 @@ export function generateInsights(tips, sessions, bestDay, worstDay, bestHour, pr
   const thisWeek = tips.filter(t => (now - new Date(t.dateRaw || t.date_time)) / 86400000 <= 7)
   const lastWeek = tips.filter(t => { const d = (now - new Date(t.dateRaw || t.date_time)) / 86400000; return d > 7 && d <= 14 })
   if (thisWeek.length > 0 && lastWeek.length > 0) {
-    const thisRev = thisWeek.reduce((s, t) => s + t.usd, 0)
-    const lastRev = lastWeek.reduce((s, t) => s + t.usd, 0)
+    const thisRev = thisWeek.reduce((s, t) => s + toUsdNumber(t.usd), 0)
+    const lastRev = lastWeek.reduce((s, t) => s + toUsdNumber(t.usd), 0)
     const change = Math.round(((thisRev - lastRev) / lastRev) * 100)
     if (Math.abs(change) >= 10) {
       insights.push({ icon: change >= 0 ? '📈' : '📉', text: change >= 0 ? `You're up ${change}% this week vs last week ($${thisRev.toFixed(0)} vs $${lastRev.toFixed(0)}) — keep the momentum going` : `You're down ${Math.abs(change)}% this week vs last ($${thisRev.toFixed(0)} vs $${lastRev.toFixed(0)}) — increase stream frequency to recover`, type: 'momentum', priority: 2 })
@@ -754,6 +754,136 @@ export function generateNextMoves(tips, sessions, whales, predictions, bestHour)
   return moves.sort((a, b) => a.priority - b.priority).slice(0, 5)
 }
 
+// ===============================
+// STREAK TRACKING
+// Migrated from the legacy get_user_insights Postgres RPC (see
+// docs/architecture audit) — ported to the canonical engine rather than
+// left as a second SQL implementation. Consecutive local-calendar days with
+// real revenue (usd > 0), counting backward from the most recent day that
+// had any — NOT from real wall-clock "today". This mirrors the RPC's own
+// semantics (it grouped by calendar date and measured the run containing
+// the latest date in the data, never referencing NOW() for this specific
+// metric) and is why a stale/inactive account's streak is simply "however
+// many consecutive days precede their last real activity", never a
+// fabricated 0 or a NOW()-anchored false decline — that failure mode is
+// specific to the RPC's separate `today_pacing_pct`/`trend_pct` fields,
+// which are intentionally NOT ported (see `momentum` above, which already
+// has the correct "Inactive, not Declining" guard for that case).
+// ===============================
+export function calcStreakDays(tips, tz) {
+  const dailyTotals = {}
+  tips.forEach(t => {
+    const usd = toUsdNumber(t.usd)
+    if (usd <= 0) return
+    const dateKey = toLocalDateStr(t.dateRaw || t.date_time, tz)
+    dailyTotals[dateKey] = (dailyTotals[dateKey] || 0) + usd
+  })
+  const activeDates = Object.keys(dailyTotals).sort()
+  if (activeDates.length === 0) return 0
+
+  let streak = 1
+  for (let i = activeDates.length - 1; i > 0; i--) {
+    const cur = new Date(activeDates[i] + 'T00:00:00Z')
+    const prev = new Date(activeDates[i - 1] + 'T00:00:00Z')
+    const diffDays = Math.round((cur - prev) / 86400000)
+    if (diffDays === 1) streak++
+    else break
+  }
+  return streak
+}
+
+// ===============================
+// SESSION-LENGTH OPTIMIZATION
+// Migrated from the legacy get_user_insights Postgres RPC. That RPC
+// redefined "session" inline as a >90-minute gap — a second, competing
+// session definition. This port instead reuses the sessions this file
+// already computed via detectSessions() (the one and only canonical
+// session boundary, SESSION_GAP_MS = 3 hours), bucketing each tip by its
+// position within its own canonical session rather than re-deriving
+// sessions from scratch. Uses the plain mean per bucket (not the
+// median-per-time-bucket rule that governs bestDay/bestHour) — this is a
+// "how does a $/tip average trend across a session's own timeline"
+// statistic, not a "which day/hour genuinely tends to be best" claim, so
+// the peak-window confidence rule doesn't apply to it the same way; a
+// minimum sample size per bucket is still required before a bucket is
+// reported, matching this file's general "don't display noise" posture.
+// ===============================
+const SESSION_LENGTH_MIN_SAMPLE = 3
+const SESSION_LENGTH_DECAY_WINDOW_MIN = 90
+const SESSION_LENGTH_DECAY_THRESHOLD = 0.8
+
+export function computeSessionLengthOptimization(sessions) {
+  const empty = {
+    avg0to15: null, avg15to30: null, avg30to60: null, avg60Plus: null,
+    bestBucket: null, decayAtMinute: null,
+    sampleCounts: { '0-15': 0, '15-30': 0, '30-60': 0, '60+': 0 },
+  }
+  if (!sessions || sessions.length === 0) return empty
+
+  const buckets = { '0-15': [], '15-30': [], '30-60': [], '60+': [] }
+  const minuteSamples = {} // minute (0-90) -> usd[]
+
+  sessions.forEach(s => {
+    const startMs = new Date(s.startTime).getTime()
+    if (isNaN(startMs)) return
+    ;(s.tips || []).forEach(t => {
+      const usd = toUsdNumber(t.usd)
+      if (usd <= 0) return
+      const tipMs = t.timestamp instanceof Date ? t.timestamp.getTime() : new Date(t.dateRaw || t.date_time).getTime()
+      if (isNaN(tipMs)) return
+      const minutesIn = (tipMs - startMs) / 60000
+      if (!Number.isFinite(minutesIn) || minutesIn < 0) return
+
+      if (minutesIn <= 15) buckets['0-15'].push(usd)
+      else if (minutesIn <= 30) buckets['15-30'].push(usd)
+      else if (minutesIn <= 60) buckets['30-60'].push(usd)
+      else buckets['60+'].push(usd)
+
+      if (minutesIn <= SESSION_LENGTH_DECAY_WINDOW_MIN) {
+        const m = Math.round(minutesIn)
+        if (!minuteSamples[m]) minuteSamples[m] = []
+        minuteSamples[m].push(usd)
+      }
+    })
+  })
+
+  const mean = arr => arr.reduce((a, b) => a + b, 0) / arr.length
+  const bucketAvg = arr => arr.length >= SESSION_LENGTH_MIN_SAMPLE ? parseFloat(mean(arr).toFixed(2)) : null
+
+  const avg0to15 = bucketAvg(buckets['0-15'])
+  const avg15to30 = bucketAvg(buckets['15-30'])
+  const avg30to60 = bucketAvg(buckets['30-60'])
+  const avg60Plus = bucketAvg(buckets['60+'])
+
+  const namedBuckets = { '0-15': avg0to15, '15-30': avg15to30, '30-60': avg30to60, '60+': avg60Plus }
+  let bestBucket = null, bestAvg = -Infinity
+  Object.entries(namedBuckets).forEach(([name, avg]) => {
+    if (avg !== null && avg > bestAvg) { bestAvg = avg; bestBucket = name }
+  })
+
+  const allUsd = sessions.flatMap(s => (s.tips || []).map(t => toUsdNumber(t.usd))).filter(v => v > 0)
+  const overallAvg = allUsd.length >= SESSION_LENGTH_MIN_SAMPLE ? mean(allUsd) : 0
+
+  let decayAtMinute = null
+  if (overallAvg > 0) {
+    const minutes = Object.keys(minuteSamples).map(Number).sort((a, b) => a - b)
+    for (const m of minutes) {
+      const arr = minuteSamples[m]
+      if (arr.length < SESSION_LENGTH_MIN_SAMPLE) continue
+      if (mean(arr) < overallAvg * SESSION_LENGTH_DECAY_THRESHOLD) { decayAtMinute = m; break }
+    }
+  }
+
+  return {
+    avg0to15, avg15to30, avg30to60, avg60Plus,
+    bestBucket, decayAtMinute,
+    sampleCounts: {
+      '0-15': buckets['0-15'].length, '15-30': buckets['15-30'].length,
+      '30-60': buckets['30-60'].length, '60+': buckets['60+'].length,
+    },
+  }
+}
+
 export function aggregateRows(tips, tz = null) {
   const userTz = tz || (typeof Intl !== 'undefined'
     ? Intl.DateTimeFormat().resolvedOptions().timeZone
@@ -771,7 +901,13 @@ export function aggregateRows(tips, tz = null) {
       hourlyRateTotalUsd: 0, excludedUntimedSessionCount: 0,
       platformVelocity: {}, missedRevenueByPlatform: {},
       returningVsNew: null, topFanDependency: null,
-      dependencyRisk: null, preTipBehavior: null, trueHourlyAvg: []
+      dependencyRisk: null, preTipBehavior: null, trueHourlyAvg: [],
+      streakDays: 0,
+      sessionLengthOptimization: {
+        avg0to15: null, avg15to30: null, avg30to60: null, avg60Plus: null,
+        bestBucket: null, decayAtMinute: null,
+        sampleCounts: { '0-15': 0, '15-30': 0, '30-60': 0, '60+': 0 },
+      },
     }
   }
 
@@ -808,7 +944,7 @@ export function aggregateRows(tips, tz = null) {
     const dateKey = toLocalDateStr(t.dateRaw || t.date_time, userTz)
     const h = toLocalHour(t.dateRaw || t.date_time, userTz)
     const hBucket = Math.floor(dt.getTime() / 3600000)
-    const usd = t.usd || 0
+    const usd = toUsdNumber(t.usd)
     if (!dayTipsUSD[dow]) { dayTipsUSD[dow] = 0; dayActiveDates[dow] = new Set(); dayDateAmts[dow] = {} }
     dayTipsUSD[dow] += usd
     dayActiveDates[dow].add(dateKey)
@@ -848,7 +984,7 @@ export function aggregateRows(tips, tz = null) {
   const nextMoves   = generateNextMoves(tips, meaningfulSessions, whales, predictions, bestHour)
 
   let totalUSD = 0, totalTokens = 0
-  for (const t of tips) { totalUSD += t.usd || 0; totalTokens += t.tokens || 0 }
+  for (const t of tips) { totalUSD += toUsdNumber(t.usd); totalTokens += t.tokens || 0 }
 
   const platformMap = {}
   meaningfulSessions.forEach(s => {
@@ -888,7 +1024,7 @@ export function aggregateRows(tips, tz = null) {
     const dow = UTC_DAYS[toLocalDow(t.dateRaw || t.date_time, userTz)]
     const dateKey = toLocalDateStr(t.dateRaw || t.date_time, userTz)
     const hBucket = Math.floor(dt.getTime() / 3600000)
-    const usd = t.usd || 0
+    const usd = toUsdNumber(t.usd)
 
     if (!platHourUSD[p]) { platHourUSD[p] = {}; platHourBuckets[p] = {}; platHourBucketAmts[p] = {} }
     if (!platHourUSD[p][h]) { platHourUSD[p][h] = 0; platHourBuckets[p][h] = new Set(); platHourBucketAmts[p][h] = {} }
@@ -1002,7 +1138,7 @@ export function aggregateRows(tips, tz = null) {
   tips.forEach(t => {
     const k = t.username.toLowerCase()
     fanTipCounts[k] = (fanTipCounts[k] || 0) + 1
-    fanTipUSD2[k] = (fanTipUSD2[k] || 0) + (t.usd || 0)
+    fanTipUSD2[k] = (fanTipUSD2[k] || 0) + toUsdNumber(t.usd)
   })
   const returningKeys = Object.keys(fanTipCounts).filter(k => fanTipCounts[k] > 1)
   const newKeys = Object.keys(fanTipCounts).filter(k => fanTipCounts[k] === 1)
@@ -1034,7 +1170,7 @@ export function aggregateRows(tips, tz = null) {
     if (isNaN(dt.getTime())) return
     const key = `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}`
     if (!monthMap[key]) monthMap[key] = { usd: 0, tips: 0, fans: new Set(), sessions: 0 }
-    monthMap[key].usd += t.usd || 0
+    monthMap[key].usd += toUsdNumber(t.usd)
     monthMap[key].tips += 1
     monthMap[key].fans.add(t.username.toLowerCase())
   })
@@ -1054,7 +1190,7 @@ export function aggregateRows(tips, tz = null) {
   tips.forEach(t => {
     const type = t.tip_type || 'Tip'
     if (!tipTypeMap[type]) tipTypeMap[type] = { usd: 0, count: 0, fans: new Set() }
-    tipTypeMap[type].usd += t.usd || 0
+    tipTypeMap[type].usd += toUsdNumber(t.usd)
     tipTypeMap[type].count += 1
     tipTypeMap[type].fans.add(t.username.toLowerCase())
   })
@@ -1071,7 +1207,7 @@ export function aggregateRows(tips, tz = null) {
     if (type.includes('private')) {
       const k = t.username.toLowerCase()
       if (!privateFanMap[k]) privateFanMap[k] = { username: t.username, usd: 0, count: 0 }
-      privateFanMap[k].usd += t.usd || 0
+      privateFanMap[k].usd += toUsdNumber(t.usd)
       privateFanMap[k].count += 1
     }
     if (type.includes('spy')) spyFanSet.add(t.username.toLowerCase())
@@ -1116,6 +1252,9 @@ export function aggregateRows(tips, tz = null) {
 
   const momentum = { pct: momentumPct, label: momentumLabel, emoji: momentumEmoji, last30USD, prior30USD }
 
+  const streakDays = calcStreakDays(tips, userTz)
+  const sessionLengthOptimization = computeSessionLengthOptimization(sessions)
+
   return {
     totalUSD: parseFloat(totalUSD.toFixed(2)),
     totalTokens,
@@ -1136,6 +1275,8 @@ export function aggregateRows(tips, tz = null) {
     meaningfulSessionCount: meaningfulSessions.length,
     lowSignalSessionCount: allValidSessions.length - meaningfulSessions.length,
     momentum,
+    streakDays,
+    sessionLengthOptimization,
   }
 }
 

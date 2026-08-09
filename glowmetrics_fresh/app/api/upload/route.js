@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { parseCSV, detectPlatform } from '../../../lib/analytics'
+import { runImportCompletedPipeline } from '../../../lib/intelligence/pipeline'
+import { runNewWhalePipeline } from '../../../lib/intelligence/newWhale'
+import { runPlatformGapPipeline } from '../../../lib/intelligence/platformComparison'
+import { runWeeklyMomentumPipeline } from '../../../lib/intelligence/weeklyMomentum'
 
 const BATCH_SIZE = 250 // Safe batch size — never hit Supabase limits
 
@@ -132,6 +136,11 @@ export async function POST(req) {
   // ── LOG TO csv_uploads ─────────────────────────────────────────────────
   // Shared by the success path below and the platform-limit block path, so a
   // blocked attempt still leaves an audit row instead of vanishing entirely.
+  // uploadRef is generated once, outside logCsvUpload, so the same value
+  // identifies this request's csv_uploads row AND (on success) its
+  // dashboard_events fingerprint — one import, one event, traceable back to
+  // its audit-log row.
+  const uploadRef = crypto.randomUUID()
   const logCsvUpload = async (status) => {
     try {
       // Build sorted array of unique "YYYY-MM" strings covered
@@ -142,7 +151,7 @@ export async function POST(req) {
 
       await supabase.from('csv_uploads').insert({
         user_id:        user.id,
-        upload_ref:     crypto.randomUUID(),
+        upload_ref:     uploadRef,
         platform:       detectedPlatform,
         file_name:      file.name || 'upload.csv',
         date_from:      summaryDateFrom,
@@ -285,6 +294,81 @@ export async function POST(req) {
   if (paidErrors.length > 0) {
     response.paidSessionsWarnings = paidErrors
     console.warn('[UPLOAD] Paid-session batches completed with errors:', paidErrors)
+  }
+
+  // ── DASHBOARD INTELLIGENCE PIPELINE ──────────────────────────────────────
+  // Fires only when this import actually persisted new rows and no batch
+  // errored — mirrors the same success gate the founder notification below
+  // already uses (errors.length === 0), extended to also require at least
+  // one inserted row so re-uploading an already-imported file (everything
+  // deduped, inserted === 0) does not create a "your data is updated" event
+  // for data that isn't actually new. The pipeline itself (lib/intelligence/
+  // pipeline.js) runs the canonical server-side analytics
+  // (lib/serverAnalytics.js -> aggregateRows(), untouched), records an
+  // import_completed dashboard_events row, and persists the resulting
+  // analytics_snapshots row so future diff-based event types (peak window,
+  // whale, pace, ...) have a "previous state" to compare against. Never
+  // fails or rolls back a successful import — every step inside the
+  // pipeline is independently non-fatal.
+  const importSucceeded = errors.length === 0 && paidErrors.length === 0
+  const rowsPersisted = inserted > 0 || paidInserted > 0
+  if (importSucceeded && rowsPersisted) {
+    try {
+      const { analytics } = await runImportCompletedPipeline({
+        userId: user.id,
+        supabase,
+        uploadRef,
+        platform: detectedPlatform,
+        metadata: {
+          rows_inserted: inserted,
+          rows_skipped: skipped,
+          paid_sessions_inserted: paidInserted,
+          paid_sessions_skipped: paidSkipped,
+          total_usd: summaryTotalUsd,
+          total_tokens: summaryTotalTokens,
+          date_from: summaryDateFrom ? summaryDateFrom.toISOString() : null,
+          date_to: summaryDateTo ? summaryDateTo.toISOString() : null,
+        },
+      })
+
+      // Phase 4 — new_whale_detected. Reuses generateWhaleAlerts()'s own
+      // existing 'new_whale' rule (already part of `analytics` above, no
+      // second engine call) — see lib/intelligence/newWhale.js. Same
+      // non-fatal contract as the pipeline call above.
+      try {
+        await runNewWhalePipeline({ userId: user.id, supabase, whaleAlerts: analytics?.whaleAlerts })
+      } catch (whaleErr) {
+        console.warn('[UPLOAD] New-whale intelligence pipeline failed:', whaleErr.message)
+      }
+
+      // Phase 6 — platform_gap_detected. Reuses the exact 2x-multiplier
+      // rule already shown on the dashboard's Platform Comparison tab,
+      // against `analytics.platforms` (already part of `analytics` above,
+      // no second engine call) — see lib/intelligence/platformComparison.js.
+      // Same non-fatal contract as the pipeline calls above.
+      try {
+        await runPlatformGapPipeline({ userId: user.id, supabase, platforms: analytics?.platforms })
+      } catch (platformErr) {
+        console.warn('[UPLOAD] Platform-gap intelligence pipeline failed:', platformErr.message)
+      }
+
+      // Phase 7 — weekly_momentum_up / weekly_momentum_down. Reuses
+      // generateInsights()'s existing weekly comparison rule against the
+      // raw tips already loaded by getServerAnalytics() (now returned as
+      // analytics.tips — see lib/serverAnalytics.js) — no second fetch.
+      // See lib/intelligence/weeklyMomentum.js. Same non-fatal contract as
+      // the pipeline calls above.
+      try {
+        await runWeeklyMomentumPipeline({ userId: user.id, supabase, tips: analytics?.tips })
+      } catch (momentumErr) {
+        console.warn('[UPLOAD] Weekly-momentum intelligence pipeline failed:', momentumErr.message)
+      }
+    } catch (pipelineErr) {
+      // Non-fatal — the import itself already succeeded and was logged to
+      // csv_uploads; a failed intelligence-pipeline run must never fail or
+      // roll back a successful import.
+      console.warn('[UPLOAD] Dashboard intelligence pipeline failed:', pipelineErr.message)
+    }
   }
 
   // ── FOUNDER NOTIFICATION (non-blocking) ───────────────────────────────

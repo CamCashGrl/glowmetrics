@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
-import { parseCSV, detectPlatform, aggregateRows as runEngine } from "../../lib/analytics"
+import { parseCSV, detectPlatform, aggregateRows as runEngine, calculateConfidence } from "../../lib/analytics"
 import { computeRoomHealth, ROOM_STATES, MOMENTUM_DIRECTIONS } from "../../lib/analytics/roomHealth"
 import { computeRevenueVelocity, computeLiveComparison } from "../../lib/analytics/velocity"
 import { detectSessionPhase, PHASES, getRecoveryActions, getGoalStrategy } from "../../lib/analytics/sessionPhase"
@@ -10,6 +10,8 @@ import { computeOpportunityScore, computeStreamHealth } from "../../lib/analytic
 import { computeCoachingState } from "../../lib/coaching/triggers"
 import dynamic from "next/dynamic"
 import Sidebar from "./Sidebar"
+import IntelligenceCard from "./IntelligenceCard"
+import NotificationPanel from "./NotificationPanel"
 import SiteFooter from "../components/SiteFooter"
 import { PLATFORM_TOKEN_RATES, tokenRate } from "../../lib/constants"
 import { track as gtmTrack } from '../../lib/track'
@@ -17,6 +19,30 @@ import { isProPlan } from '../../lib/plan'
 import { getDashboardReadiness, getModuleLockState, canShowHourlyRate, LockedInsightCard, DashboardProgressCard } from './DashboardPreview'
 import Button from '../../components/ui/Button'
 import { useLiveSessionEngine } from '../live/useLiveSessionEngine'
+
+// ── BOUNDARY NORMALIZATION ──────────────────────────────────────────────
+// Applied once, right where Supabase-fetched tips/paid_sessions rows enter
+// state (loadData's initial fetch and the realtime insert batch below) —
+// not at each of this file's many local usd/tokens calculations
+// individually, and not inside lib/analytics.js's aggregateRows(), which
+// stays untouched. Investigation confirmed tips.usd/tokens already arrive
+// as real JS numbers via supabase-js/PostgREST's default serialization
+// (this project's own generated types declare `usd: number`), so this is
+// defense-in-depth against that ever changing, not a fix for an active bug.
+// Never invents a value: a genuinely invalid/non-numeric field becomes
+// `null` (not 0, not NaN), so every existing `x || 0` fallback throughout
+// this file keeps behaving exactly as it did before this normalization.
+function toSafeNumber(v) {
+  if (v === null || v === undefined) return v
+  if (typeof v === 'number') return Number.isFinite(v) ? v : null
+  const n = parseFloat(v)
+  return Number.isFinite(n) ? n : null
+}
+
+function normalizeNumericFields(rows) {
+  if (!rows || rows.length === 0) return rows
+  return rows.map(r => ({ ...r, usd: toSafeNumber(r.usd), tokens: toSafeNumber(r.tokens) }))
+}
 
 // Tab-only components loaded on demand instead of in the initial dashboard
 // bundle — each is only ever rendered behind an `activeTab === '...'` check,
@@ -1563,7 +1589,6 @@ export default function Dashboard() {
   const [noteTarget, setNoteTarget] = useState(null)
   const [noteText, setNoteText] = useState('')
   const [noteSaving, setNoteSaving] = useState(false)
-  const [engineInsights, setEngineInsights] = useState(null)
 
   // ── ANIMATION STATE ──────────────────────────────────────
   const [counterBumping, setCounterBumping] = useState(false)
@@ -1576,6 +1601,19 @@ export default function Dashboard() {
   const prevTipCountRef = useRef(0)
   const realtimeChannelRef = useRef(null)
   const liveTipsChannelRef = useRef(null)
+  const dashboardEventsChannelRef = useRef(null)
+
+  // ── DASHBOARD INTELLIGENCE (retrospective/account-level dashboard_events) ──
+  // Surfaces the existing, already-tested dashboard_events pipeline — never
+  // recomputes or persists anything itself. Single fetch of the recent list
+  // feeds both IntelligenceCard (curated single-event highlight) and
+  // NotificationPanel (full NEW/RECENT/HISTORY history), kept in sync by one
+  // realtime channel below, exactly mirroring the existing tips/live_tips
+  // channel pattern already used elsewhere in this file.
+  const [dashboardEvents, setDashboardEvents] = useState([])
+  const [dashboardEventsLoading, setDashboardEventsLoading] = useState(false)
+  const [unreadEventCount, setUnreadEventCount] = useState(0)
+  const [notifPanelOpen, setNotifPanelOpen] = useState(false)
   const refreshTimerRef = useRef(null)
   const liveTickerRef = useRef(null)
   const derivedCacheRef = useRef({}) // see memoOn() — caches expensive per-render recomputation below
@@ -1643,6 +1681,99 @@ export default function Dashboard() {
   }
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(""), 3500) }
+
+  // ── DASHBOARD INTELLIGENCE: initial fetch ──────────────────────────────
+  // One GET against the existing, unmodified /api/dashboard/events route
+  // (no new API). Feeds both IntelligenceCard and NotificationPanel from a
+  // single source of truth; the realtime channel below keeps it fresh.
+  useEffect(() => {
+    if (!user) return
+    let cancelled = false
+    setDashboardEventsLoading(true)
+    ;(async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session?.access_token) return
+        const res = await fetch('/api/dashboard/events?limit=50', {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        })
+        const data = await res.json()
+        if (cancelled) return
+        const list = Array.isArray(data?.events) ? data.events : []
+        setDashboardEvents(list)
+        setUnreadEventCount(list.filter(e => e.status === 'new').length)
+      } catch (_) {
+      } finally {
+        if (!cancelled) setDashboardEventsLoading(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [user])
+
+  // ── DASHBOARD INTELLIGENCE: realtime ───────────────────────────────────
+  // dashboard_events is already in the supabase_realtime publication.
+  // Mirrors the exact channel/singleton-guard/cleanup pattern already used
+  // by the tips_live_${user.id} and live_tips_ext_${user.id} channels above.
+  useEffect(() => {
+    if (!user) return
+    if (dashboardEventsChannelRef.current) return
+
+    const channel = supabase
+      .channel(`dashboard_events_${user.id}`)
+      .on('postgres_changes', {
+        event: 'INSERT', schema: 'public', table: 'dashboard_events',
+        filter: `user_id=eq.${user.id}`
+      }, (payload) => {
+        const row = payload.new
+        setDashboardEvents(prev => (prev.some(e => e.id === row.id) ? prev : [row, ...prev]))
+        if (row.status === 'new') setUnreadEventCount(c => c + 1)
+      })
+      .subscribe()
+    dashboardEventsChannelRef.current = channel
+
+    return () => {
+      if (dashboardEventsChannelRef.current) {
+        supabase.removeChannel(dashboardEventsChannelRef.current)
+        dashboardEventsChannelRef.current = null
+      }
+    }
+  }, [user])
+
+  // ── DASHBOARD INTELLIGENCE: seen/dismiss actions ───────────────────────
+  // Both call the existing PATCH /api/dashboard/events/[id] route — no new
+  // API, no new RPC. Local state updates optimistically off the RPC's own
+  // response shape.
+  const markDashboardEventSeen = async (id) => {
+    const target = dashboardEvents.find(e => e.id === id)
+    if (!target || target.status !== 'new') return
+    setDashboardEvents(prev => prev.map(e => e.id === id ? { ...e, status: 'seen', seen_at: new Date().toISOString() } : e))
+    setUnreadEventCount(c => Math.max(0, c - 1))
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) return
+      await fetch(`/api/dashboard/events/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ action: 'seen' }),
+      })
+    } catch (_) {}
+  }
+
+  const dismissDashboardEvent = async (id) => {
+    const target = dashboardEvents.find(e => e.id === id)
+    const wasNew = target?.status === 'new'
+    setDashboardEvents(prev => prev.map(e => e.id === id ? { ...e, status: 'dismissed', dismissed_at: new Date().toISOString() } : e))
+    if (wasNew) setUnreadEventCount(c => Math.max(0, c - 1))
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) return
+      await fetch(`/api/dashboard/events/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ action: 'dismiss' }),
+      })
+    } catch (_) {}
+  }
 
   // ── SAVE TIPPER NOTE ─────────────────────────────────────────────
   const saveTipperNote = async (username, note, followUp = false) => {
@@ -1923,7 +2054,7 @@ export default function Dashboard() {
         clearTimeout(tipFlushTimerRef.current)
         tipFlushTimerRef.current = null
         tipBatchStartRef.current = 0
-        const batch = pendingTipInsertsRef.current
+        const batch = normalizeNumericFields(pendingTipInsertsRef.current)
         if (!batch.length) return
         pendingTipInsertsRef.current = []
 
@@ -2160,11 +2291,45 @@ export default function Dashboard() {
         }
       }
       if (allData.length) {
+        allData = normalizeNumericFields(allData)
         setTips(allData)
         try {
           const result = runEngine(allData, userTz)
           setAnalytics(result)
           lastEngineTipsFingerprintRef.current = { length: allData.length, lastId: allData[allData.length - 1]?.id ?? null }
+
+          // Dashboard intelligence — peak_window. Fire-and-forget, never
+          // blocks or fails this load. Only wired into the primary full
+          // load (not the realtime tip-insert debounce above), since the
+          // peak hour itself doesn't change mid-session and the RPC's own
+          // 24h cooldown already prevents re-firing — no benefit to
+          // re-checking on every tip. Current hour/minute use plain
+          // Date methods (browser-local), which are exactly equivalent to
+          // `userTz` here (Intl.DateTimeFormat().resolvedOptions().timeZone
+          // always resolves to the same zone the browser's own Date methods
+          // already use — see the existing precedent/comment a few hundred
+          // lines below this in analytics.bestHour.hour's local-hour
+          // handling), so no separate timezone conversion is introduced.
+          try {
+            const meaningfulSessions = result?.meaningfulSessions || []
+            const streamedHours = meaningfulSessions
+              .filter(s => !s.durationUnknown)
+              .reduce((sum, s) => sum + (s.durationHours || 0), 0)
+            const confidence = calculateConfidence(meaningfulSessions.length, streamedHours)
+            const now = new Date()
+            fetch('/api/intelligence/peak-window', {
+              method: 'POST',
+              body: JSON.stringify({
+                bestHour: result?.bestHour || null,
+                confidenceLevel: confidence.level,
+                nowHour: now.getHours(),
+                nowMinute: now.getMinutes(),
+                historicalSessionCount: result?.bestHour?.count ?? null,
+              }),
+            }).catch(() => {}) // best-effort — never surfaced to the user
+          } catch (peakWindowErr) {
+            console.warn('[loadData] peak_window check failed:', peakWindowErr)
+          }
         } catch (engineErr) {
           console.error('[loadData] runEngine failed:', engineErr)
         }
@@ -2181,7 +2346,7 @@ export default function Dashboard() {
         if (!data || data.length < PAGE) break
         paidFrom += PAGE
       }
-      setPaidSessions(allPaidSessions)
+      setPaidSessions(normalizeNumericFields(allPaidSessions))
 
       // Live Mode total, for the Private Sessions page's revenue-sources
       // summary only — kept as its own query against its own table, never
@@ -2191,8 +2356,14 @@ export default function Dashboard() {
         if (!liveErr) setLiveTipsTotalUSD((liveRows || []).reduce((sum, r) => sum + (parseFloat(r.usd) || 0), 0))
       } catch (e) { /* non-fatal — Private Sessions page just omits this total */ }
 
-      const { data: engineData } = await supabase.rpc('get_user_insights', { p_user_id: uid, p_timezone: userTz })
-      setEngineInsights(engineData)
+      // get_user_insights RPC call removed — its three dashboard consumers
+      // (today's best hour, best platform label, go-live banner) now read
+      // exclusively from the canonical aggregateRows() engine via
+      // dailyBrief/canonicalPeakLabel above. See lib/analytics.js
+      // consolidation notes (calcStreakDays, computeSessionLengthOptimization)
+      // for the two capabilities migrated out of that RPC. The RPC itself is
+      // left in place in the database, not dropped, pending a deliberate,
+      // separate decision.
       setLastRefreshed(new Date())
     } finally {
       if (silent) setIsRefreshing(false)
@@ -2950,13 +3121,12 @@ const stopImportMessageRotation = () => {
 
   // ── CANONICAL PEAK HOUR ──────────────────────────────────────────────────────
   // Single source of truth used by the header, Daily Brief, and Losing Money.
-  // Prefer engineInsights daily_plan (most specific), then today's analytics best
-  // hour from dailyBrief, then the all-time analytics best hour as final fallback.
-  // All three sources are already user-local hours: get_user_insights is called
-  // with p_timezone above, so daily_plan.best_hour comes back local (not UTC);
-  // dailyBrief.bh and analytics.bestHour.hour were already local via toLocalHour().
+  // Both sources are computed from the canonical aggregateRows() engine (see
+  // lib/analytics.js) and are already user-local hours: dailyBrief.bh is
+  // derived from analytics.platformBestTimes/bestHour above, and
+  // analytics.bestHour.hour is already local via toLocalHour(). Prefer
+  // today's more-specific dailyBrief value, then the all-time fallback.
   const canonicalPeakHourLocal = (
-    engineInsights?.daily_plan?.best_hour ??
     dailyBrief?.bh ??
     (analytics?.bestHour ? parseInt(analytics.bestHour.hour) : null)
   )
@@ -3227,7 +3397,16 @@ const stopImportMessageRotation = () => {
       </div>
 
       {/* SIDEBAR — desktop only, hidden on mobile via CSS */}
-      <Sidebar activeTab={activeTab} onTabChange={(tab) => { setActiveTab(tab); if (typeof window !== "undefined") { localStorage.setItem("camcash_tab", tab); window.scrollTo({ top: 0, behavior: "instant" }); } }} user={user} onSignOut={async () => { await supabase.auth.signOut(); router.replace("/login"); }} isPro={isPro} />{/* MAIN CONTENT */}
+      <Sidebar activeTab={activeTab} onTabChange={(tab) => { setActiveTab(tab); if (typeof window !== "undefined") { localStorage.setItem("camcash_tab", tab); window.scrollTo({ top: 0, behavior: "instant" }); } }} user={user} onSignOut={async () => { await supabase.auth.signOut(); router.replace("/login"); }} isPro={isPro} unreadCount={unreadEventCount} onBellClick={() => setNotifPanelOpen(o => !o)} />
+      <NotificationPanel
+        open={notifPanelOpen}
+        onClose={() => setNotifPanelOpen(false)}
+        events={dashboardEvents}
+        loading={dashboardEventsLoading}
+        onMarkSeen={markDashboardEventSeen}
+        onDismiss={dismissDashboardEvent}
+      />
+      {/* MAIN CONTENT */}
       <div className="dash-main" style={{ marginLeft: 240, width: "calc(100% - 240px)", minWidth: 0, padding: 32, boxSizing: "border-box", overflowX: "hidden" }}>
 
         {/* ── STICKY COMMAND BAR ── */}
@@ -3389,6 +3568,12 @@ const stopImportMessageRotation = () => {
               onUpgrade={() => openUpgradeModal('default')}
             />
 
+            <IntelligenceCard
+              events={dashboardEvents}
+              onMarkSeen={markDashboardEventSeen}
+              onOpenPanel={() => setNotifPanelOpen(true)}
+            />
+
             {/* ═══════════════════════════════════════
                 1. MONEY SNAPSHOT
             ═══════════════════════════════════════ */}
@@ -3501,7 +3686,10 @@ const stopImportMessageRotation = () => {
             isBestDay, bestDay, sessionAvg, peakAvg, predictionLow, predictionHigh,
             reengageFans, likelyOnline, sessionsAtPeakCount } = dailyBrief
           const bhLabel = canonicalPeakLabel || _bhLabel
-          const displayPlat = engineInsights?.summary?.best_platform || _displayPlat
+          // Already canonical — displayPlat comes from dailyBrief, which is
+          // derived entirely from analytics.platformBestTimes / raw tips
+          // (see buildDailyBrief above), not a separate source.
+          const displayPlat = _displayPlat
           // Real threshold from getModuleLockState('bestStreamingTimes'): 25+ tips
           // and 3+ meaningful sessions — matches the >=3 session-bucket requirement
           // bestHour/platformBestTimes use internally (lib/analytics.js).
@@ -3722,17 +3910,28 @@ const stopImportMessageRotation = () => {
                 if (!isDupe) merged.push({ icon: a.icon, color: a.color || C.cyan, text: `${a.title} — ${a.message}`, cta: false, source: 'alert' })
               })
 
-              // Prepend engineInsights go_live_status as the top signal when available
-              if (engineInsights?.go_live_status?.status) {
-                const gl = engineInsights.go_live_status
-                const glColor = gl.status === 'peak' ? C.green : gl.status === 'good' ? C.cyan : C.muted
-                const glIcon = gl.status === 'peak' ? '🟢' : gl.status === 'good' ? '⚡' : '⏰'
-                const localHour = (new Date().getUTCHours() - new Date().getTimezoneOffset() / 60 + 24) % 24
-                const localLabel = localHour === 0 ? '12 AM' : localHour < 12 ? `${Math.floor(localHour)} AM` : localHour === 12 ? '12 PM' : `${Math.floor(localHour) - 12} PM`
-                const glText = gl.multiplier
-                  ? `${gl.status === 'peak' ? 'Peak hour right now' : 'Good time to stream'} (${localLabel}) — this window earns ${gl.multiplier}x your average. Go live on ${engineInsights?.summary?.best_platform || 'your top platform'}.`
-                  : `Go-live signal: ${gl.status} — check your stream timing`
-                merged.unshift({ icon: glIcon, color: glColor, text: glText, cta: false, source: 'engine' })
+              // Prepend a go-live signal as the top action when relevant — built
+              // entirely from dailyBrief / canonicalPeakLabel (both derived
+              // from the canonical aggregateRows() engine, see buildDailyBrief
+              // and canonicalPeakHourLocal above), not a separate source. No
+              // numeric "Nx your average" multiplier is shown here — that
+              // figure had no canonical equivalent and is not fabricated (see
+              // lib/analytics.js consolidation notes). dailyBrief and
+              // canonicalPeakLabel are component-level consts, in scope here
+              // even though this block sits outside the dailyBrief IIFE above.
+              const goLivePlat = dailyBrief?.displayPlat
+              if (dailyBrief?.atPeak && canonicalPeakLabel) {
+                merged.unshift({
+                  icon: '🟢', color: C.green,
+                  text: `Peak hour right now (${canonicalPeakLabel}) — your data shows this is historically your best-earning window. Go live on ${goLivePlat || 'your top platform'}.`,
+                  cta: false, source: 'engine',
+                })
+              } else if (canonicalPeakLabel && dailyBrief?.hoursUntilPeak != null && dailyBrief.hoursUntilPeak <= 2) {
+                merged.unshift({
+                  icon: '⚡', color: C.cyan,
+                  text: `Good time to stream — your peak window (${canonicalPeakLabel}) is coming up soon. Go live on ${goLivePlat || 'your top platform'}.`,
+                  cta: false, source: 'engine',
+                })
               }
 
               const actions = merged.slice(0, 3)
