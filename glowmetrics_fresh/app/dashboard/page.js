@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
-import { parseCSV, detectPlatform, aggregateRows as runEngine } from "../../lib/analytics"
+import { parseCSV, detectPlatform, aggregateRows as runEngine, calculateConfidence } from "../../lib/analytics"
 import { computeRoomHealth, ROOM_STATES, MOMENTUM_DIRECTIONS } from "../../lib/analytics/roomHealth"
 import { computeRevenueVelocity, computeLiveComparison } from "../../lib/analytics/velocity"
 import { detectSessionPhase, PHASES, getRecoveryActions, getGoalStrategy } from "../../lib/analytics/sessionPhase"
@@ -2189,6 +2189,39 @@ export default function Dashboard() {
           const result = runEngine(allData, userTz)
           setAnalytics(result)
           lastEngineTipsFingerprintRef.current = { length: allData.length, lastId: allData[allData.length - 1]?.id ?? null }
+
+          // Dashboard intelligence — peak_window. Fire-and-forget, never
+          // blocks or fails this load. Only wired into the primary full
+          // load (not the realtime tip-insert debounce above), since the
+          // peak hour itself doesn't change mid-session and the RPC's own
+          // 24h cooldown already prevents re-firing — no benefit to
+          // re-checking on every tip. Current hour/minute use plain
+          // Date methods (browser-local), which are exactly equivalent to
+          // `userTz` here (Intl.DateTimeFormat().resolvedOptions().timeZone
+          // always resolves to the same zone the browser's own Date methods
+          // already use — see the existing precedent/comment a few hundred
+          // lines below this in analytics.bestHour.hour's local-hour
+          // handling), so no separate timezone conversion is introduced.
+          try {
+            const meaningfulSessions = result?.meaningfulSessions || []
+            const streamedHours = meaningfulSessions
+              .filter(s => !s.durationUnknown)
+              .reduce((sum, s) => sum + (s.durationHours || 0), 0)
+            const confidence = calculateConfidence(meaningfulSessions.length, streamedHours)
+            const now = new Date()
+            fetch('/api/intelligence/peak-window', {
+              method: 'POST',
+              body: JSON.stringify({
+                bestHour: result?.bestHour || null,
+                confidenceLevel: confidence.level,
+                nowHour: now.getHours(),
+                nowMinute: now.getMinutes(),
+                historicalSessionCount: result?.bestHour?.count ?? null,
+              }),
+            }).catch(() => {}) // best-effort — never surfaced to the user
+          } catch (peakWindowErr) {
+            console.warn('[loadData] peak_window check failed:', peakWindowErr)
+          }
         } catch (engineErr) {
           console.error('[loadData] runEngine failed:', engineErr)
         }
