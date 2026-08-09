@@ -24,6 +24,27 @@ export const dynamic = 'force-dynamic'
 // caller to force-expire sessions ahead of schedule — Vercel Cron sends
 // this as a Bearer token automatically when the env var is set
 // (https://vercel.com/docs/cron-jobs/manage-cron-jobs#securing-cron-jobs).
+//
+// KNOWN GAP (documented, not fixed — see live-session-finalization audit,
+// supabase/migrations/20260809_centralize_live_session_finalization.sql):
+// sweep_all_stale_live_sessions() now finalizes session_earnings_usd/
+// tip_count/etc. correctly for every session it auto-ends, same as every
+// other termination path. But unlike stop_live_session() (via
+// app/api/live/session/stop) and resolve_live_session() (via
+// app/api/live/session/resolve), nothing here calls
+// runStreamCompletionPipeline() (lib/intelligence/streamCompletion.js)
+// afterward. A session that's finalized purely by this cron sweep — the
+// user closed the tab/extension and never checked back in — can have
+// fully correct, qualifying metrics and still never produce a
+// stream_outperformed_baseline event, purely because this path has no
+// per-session Node-side hook (sweep_all_stale_live_sessions() processes
+// every stale session for every user in one SQL call; the intelligence
+// pipeline needs a Supabase client + userId per session, which this route
+// never has since it only gets back a swept count, not the session rows).
+// Not fixed here — deliberately scoped out. Fixing it means either having
+// the RPC return the finalized session rows so this route can loop over
+// them, or a separate polling mechanism; either is real, additional
+// design work belonging to its own change.
 export async function GET(req) {
   const cronSecret = process.env.CRON_SECRET
   if (cronSecret) {

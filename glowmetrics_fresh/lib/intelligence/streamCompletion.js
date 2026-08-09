@@ -50,6 +50,24 @@
 // needs (session_earnings_usd, tip_count, started_at/ended_at,
 // total_paused_seconds) already lives directly on the live_sessions row
 // itself, computed by the same finalization helper.
+//
+// KNOWN GAP (documented, not fixed): runStreamCompletionPipeline() below
+// is only ever called from app/api/live/session/stop (normal_stop) and
+// app/api/live/session/resolve (end_at_last_heartbeat/chosen_end_time/
+// mark_invalid). It is NOT called from anywhere in the
+// sweep_all_stale_live_sessions() path (app/api/cron/live-session-sweep —
+// see that route's own comment) or the self-scoped sweep_stale_live_session()
+// path (auto_ended_inactivity, triggered from GET /api/live/session and
+// the heartbeat routes). A session auto-ended by either sweep can have
+// fully correct, qualifying finalized metrics (session_resolution_type =
+// 'auto_ended_inactivity' is already in RELIABLE_RESOLUTION_TYPES above)
+// and still never produce a stream_outperformed_baseline event, purely
+// because no caller in those paths invokes this pipeline. Left unaddressed
+// here on purpose — closing it requires deciding where a per-session hook
+// belongs for paths that today can't even detect a finalization happened:
+// sweep_all_stale_live_sessions() (cron) returns only a swept count, and
+// sweep_stale_live_session() (self-scoped) RETURNS VOID — neither gives
+// its caller the finalized session row this pipeline needs.
 
 import { computeRevenueVelocity } from '../analytics/velocity'
 import { getServerAnalytics } from '../serverAnalytics'
