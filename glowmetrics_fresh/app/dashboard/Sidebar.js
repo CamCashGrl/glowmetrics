@@ -58,9 +58,10 @@ const NAV = [
   },
 ]
 
-export default function Sidebar({ activeTab, onTabChange, user, onSignOut, isPro = false }) {
+export default function Sidebar({ activeTab, onTabChange, user, onSignOut, isPro = false, unreadCount = 0, onBellClick }) {
   const [hoveredId, setHoveredId] = useState(null)
   const [mobileOpen, setMobileOpen] = useState(false)
+  const badgeLabel = unreadCount > 9 ? "9+" : String(unreadCount)
 
   const renderItem = (id, icon, label, href) => {
     const isActive  = !href && activeTab === id
@@ -96,15 +97,40 @@ export default function Sidebar({ activeTab, onTabChange, user, onSignOut, isPro
 
   const sidebarContent = (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", padding: "18px 12px" }}>
-      {/* Logo */}
-      <div style={{ display: "flex", alignItems: "center", gap: 9, padding: "0 4px", marginBottom: 22 }}>
-        <div style={{ width: 30, height: 30, borderRadius: 8, background: "linear-gradient(135deg,#22D3EE,#EC4899)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 900, color: "white", boxShadow: "0 0 14px rgba(34,211,238,0.3)", flexShrink: 0 }}>$</div>
-        <div>
-          <div style={{ fontSize: 15, fontWeight: 800, color: C.white, letterSpacing: -0.4 }}>
-            Cam<span style={{ background: "linear-gradient(90deg,#22D3EE,#EC4899)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Cash</span>
+      {/* Logo + notification bell */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 9, padding: "0 4px", marginBottom: 22 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0 }}>
+          <div style={{ width: 30, height: 30, borderRadius: 8, background: "linear-gradient(135deg,#22D3EE,#EC4899)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 900, color: "white", boxShadow: "0 0 14px rgba(34,211,238,0.3)", flexShrink: 0 }}>$</div>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 15, fontWeight: 800, color: C.white, letterSpacing: -0.4 }}>
+              Cam<span style={{ background: "linear-gradient(90deg,#22D3EE,#EC4899)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Cash</span>
+            </div>
+            <div style={{ fontSize: 9, color: "#7d8aa3", letterSpacing: 0.8, textTransform: "uppercase", marginTop: 1, whiteSpace: "nowrap" }}>Creator Intelligence</div>
           </div>
-          <div style={{ fontSize: 9, color: "#7d8aa3", letterSpacing: 0.8, textTransform: "uppercase", marginTop: 1 }}>Creator Intelligence</div>
         </div>
+        <button
+          onClick={onBellClick}
+          title="Notifications"
+          style={{
+            position: "relative", flexShrink: 0, width: 32, height: 32, borderRadius: 9,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            background: unreadCount > 0 ? "rgba(16,185,129,0.1)" : "rgba(255,255,255,0.04)",
+            border: `1px solid ${unreadCount > 0 ? "rgba(16,185,129,0.3)" : "rgba(255,255,255,0.1)"}`,
+            cursor: "pointer", fontSize: 14,
+          }}
+        >
+          🔔
+          {unreadCount > 0 && (
+            <span style={{
+              position: "absolute", top: -4, right: -4, minWidth: 15, height: 15, padding: "0 3px",
+              borderRadius: 8, background: C.cyan, color: "#05070f",
+              fontSize: 9, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center",
+              boxShadow: "0 0 6px rgba(34,211,238,0.6)", lineHeight: 1,
+            }}>
+              {badgeLabel}
+            </span>
+          )}
+        </button>
       </div>
 
       {/* Nav groups */}
@@ -161,6 +187,22 @@ export default function Sidebar({ activeTab, onTabChange, user, onSignOut, isPro
         className="sidebar-mobile-btn"
         style={{ position: "fixed", top: 14, left: 14, zIndex: 200, width: 36, height: 36, borderRadius: 10, background: "rgba(6,9,20,0.95)", border: "1px solid rgba(255,255,255,0.1)", color: C.white, fontSize: 18, cursor: "pointer", display: "none", alignItems: "center", justifyContent: "center" }}>
         ☰
+      </button>
+
+      <button onClick={onBellClick}
+        className="sidebar-mobile-btn"
+        title="Notifications"
+        style={{ position: "fixed", top: 14, left: 58, zIndex: 200, width: 36, height: 36, borderRadius: 10, background: "rgba(6,9,20,0.95)", border: `1px solid ${unreadCount > 0 ? "rgba(16,185,129,0.4)" : "rgba(255,255,255,0.1)"}`, color: C.white, fontSize: 15, cursor: "pointer", display: "none", alignItems: "center", justifyContent: "center" }}>
+        🔔
+        {unreadCount > 0 && (
+          <span style={{
+            position: "absolute", top: -4, right: -4, minWidth: 15, height: 15, padding: "0 3px",
+            borderRadius: 8, background: C.cyan, color: "#05070f",
+            fontSize: 9, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1,
+          }}>
+            {badgeLabel}
+          </span>
+        )}
       </button>
 
       {mobileOpen && (

@@ -10,6 +10,8 @@ import { computeOpportunityScore, computeStreamHealth } from "../../lib/analytic
 import { computeCoachingState } from "../../lib/coaching/triggers"
 import dynamic from "next/dynamic"
 import Sidebar from "./Sidebar"
+import IntelligenceCard from "./IntelligenceCard"
+import NotificationPanel from "./NotificationPanel"
 import SiteFooter from "../components/SiteFooter"
 import { PLATFORM_TOKEN_RATES, tokenRate } from "../../lib/constants"
 import { track as gtmTrack } from '../../lib/track'
@@ -1599,6 +1601,19 @@ export default function Dashboard() {
   const prevTipCountRef = useRef(0)
   const realtimeChannelRef = useRef(null)
   const liveTipsChannelRef = useRef(null)
+  const dashboardEventsChannelRef = useRef(null)
+
+  // ── DASHBOARD INTELLIGENCE (retrospective/account-level dashboard_events) ──
+  // Surfaces the existing, already-tested dashboard_events pipeline — never
+  // recomputes or persists anything itself. Single fetch of the recent list
+  // feeds both IntelligenceCard (curated single-event highlight) and
+  // NotificationPanel (full NEW/RECENT/HISTORY history), kept in sync by one
+  // realtime channel below, exactly mirroring the existing tips/live_tips
+  // channel pattern already used elsewhere in this file.
+  const [dashboardEvents, setDashboardEvents] = useState([])
+  const [dashboardEventsLoading, setDashboardEventsLoading] = useState(false)
+  const [unreadEventCount, setUnreadEventCount] = useState(0)
+  const [notifPanelOpen, setNotifPanelOpen] = useState(false)
   const refreshTimerRef = useRef(null)
   const liveTickerRef = useRef(null)
   const derivedCacheRef = useRef({}) // see memoOn() — caches expensive per-render recomputation below
@@ -1666,6 +1681,99 @@ export default function Dashboard() {
   }
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(""), 3500) }
+
+  // ── DASHBOARD INTELLIGENCE: initial fetch ──────────────────────────────
+  // One GET against the existing, unmodified /api/dashboard/events route
+  // (no new API). Feeds both IntelligenceCard and NotificationPanel from a
+  // single source of truth; the realtime channel below keeps it fresh.
+  useEffect(() => {
+    if (!user) return
+    let cancelled = false
+    setDashboardEventsLoading(true)
+    ;(async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session?.access_token) return
+        const res = await fetch('/api/dashboard/events?limit=50', {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        })
+        const data = await res.json()
+        if (cancelled) return
+        const list = Array.isArray(data?.events) ? data.events : []
+        setDashboardEvents(list)
+        setUnreadEventCount(list.filter(e => e.status === 'new').length)
+      } catch (_) {
+      } finally {
+        if (!cancelled) setDashboardEventsLoading(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [user])
+
+  // ── DASHBOARD INTELLIGENCE: realtime ───────────────────────────────────
+  // dashboard_events is already in the supabase_realtime publication.
+  // Mirrors the exact channel/singleton-guard/cleanup pattern already used
+  // by the tips_live_${user.id} and live_tips_ext_${user.id} channels above.
+  useEffect(() => {
+    if (!user) return
+    if (dashboardEventsChannelRef.current) return
+
+    const channel = supabase
+      .channel(`dashboard_events_${user.id}`)
+      .on('postgres_changes', {
+        event: 'INSERT', schema: 'public', table: 'dashboard_events',
+        filter: `user_id=eq.${user.id}`
+      }, (payload) => {
+        const row = payload.new
+        setDashboardEvents(prev => (prev.some(e => e.id === row.id) ? prev : [row, ...prev]))
+        if (row.status === 'new') setUnreadEventCount(c => c + 1)
+      })
+      .subscribe()
+    dashboardEventsChannelRef.current = channel
+
+    return () => {
+      if (dashboardEventsChannelRef.current) {
+        supabase.removeChannel(dashboardEventsChannelRef.current)
+        dashboardEventsChannelRef.current = null
+      }
+    }
+  }, [user])
+
+  // ── DASHBOARD INTELLIGENCE: seen/dismiss actions ───────────────────────
+  // Both call the existing PATCH /api/dashboard/events/[id] route — no new
+  // API, no new RPC. Local state updates optimistically off the RPC's own
+  // response shape.
+  const markDashboardEventSeen = async (id) => {
+    const target = dashboardEvents.find(e => e.id === id)
+    if (!target || target.status !== 'new') return
+    setDashboardEvents(prev => prev.map(e => e.id === id ? { ...e, status: 'seen', seen_at: new Date().toISOString() } : e))
+    setUnreadEventCount(c => Math.max(0, c - 1))
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) return
+      await fetch(`/api/dashboard/events/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ action: 'seen' }),
+      })
+    } catch (_) {}
+  }
+
+  const dismissDashboardEvent = async (id) => {
+    const target = dashboardEvents.find(e => e.id === id)
+    const wasNew = target?.status === 'new'
+    setDashboardEvents(prev => prev.map(e => e.id === id ? { ...e, status: 'dismissed', dismissed_at: new Date().toISOString() } : e))
+    if (wasNew) setUnreadEventCount(c => Math.max(0, c - 1))
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) return
+      await fetch(`/api/dashboard/events/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ action: 'dismiss' }),
+      })
+    } catch (_) {}
+  }
 
   // ── SAVE TIPPER NOTE ─────────────────────────────────────────────
   const saveTipperNote = async (username, note, followUp = false) => {
@@ -3264,7 +3372,16 @@ const stopImportMessageRotation = () => {
       </div>
 
       {/* SIDEBAR — desktop only, hidden on mobile via CSS */}
-      <Sidebar activeTab={activeTab} onTabChange={(tab) => { setActiveTab(tab); if (typeof window !== "undefined") { localStorage.setItem("camcash_tab", tab); window.scrollTo({ top: 0, behavior: "instant" }); } }} user={user} onSignOut={async () => { await supabase.auth.signOut(); router.replace("/login"); }} isPro={isPro} />{/* MAIN CONTENT */}
+      <Sidebar activeTab={activeTab} onTabChange={(tab) => { setActiveTab(tab); if (typeof window !== "undefined") { localStorage.setItem("camcash_tab", tab); window.scrollTo({ top: 0, behavior: "instant" }); } }} user={user} onSignOut={async () => { await supabase.auth.signOut(); router.replace("/login"); }} isPro={isPro} unreadCount={unreadEventCount} onBellClick={() => setNotifPanelOpen(o => !o)} />
+      <NotificationPanel
+        open={notifPanelOpen}
+        onClose={() => setNotifPanelOpen(false)}
+        events={dashboardEvents}
+        loading={dashboardEventsLoading}
+        onMarkSeen={markDashboardEventSeen}
+        onDismiss={dismissDashboardEvent}
+      />
+      {/* MAIN CONTENT */}
       <div className="dash-main" style={{ marginLeft: 240, width: "calc(100% - 240px)", minWidth: 0, padding: 32, boxSizing: "border-box", overflowX: "hidden" }}>
 
         {/* ── STICKY COMMAND BAR ── */}
@@ -3393,6 +3510,12 @@ const stopImportMessageRotation = () => {
               visitedTabs={visitedTabs}
               onNavigate={handleTabChange}
               onUpgrade={() => openUpgradeModal('default')}
+            />
+
+            <IntelligenceCard
+              events={dashboardEvents}
+              onMarkSeen={markDashboardEventSeen}
+              onOpenPanel={() => setNotifPanelOpen(true)}
             />
 
             {/* ═══════════════════════════════════════
