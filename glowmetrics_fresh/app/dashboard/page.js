@@ -116,6 +116,325 @@ const IMPORT_MESSAGES = [
   "Updating your dashboard…",
 ]
 
+// Post-import "Creator Command Center" analysis sequence. The engine already
+// computes everything in one aggregateRows() pass (see lib/analytics.js) —
+// these steps aren't separate backend calculations, they're a staggered UI
+// reveal of that single already-computed result, each one grounded in a real
+// field off the `analytics` object. No step here fabricates a number.
+const COMMAND_CENTER_TASKS = [
+  { key: 'import',       label: 'Importing your tip history' },
+  { key: 'platforms',    label: 'Identifying your streaming platforms' },
+  { key: 'peak',         label: 'Finding your peak streaming hours' },
+  { key: 'supporters',   label: 'Identifying your top supporters' },
+  { key: 'platformEarn', label: 'Calculating your highest-earning platform' },
+  { key: 'sessions',     label: 'Analyzing your best-performing sessions' },
+  { key: 'vip',          label: 'Scanning for VIP opportunities' },
+  { key: 'compare',      label: 'Comparing your platform performance' },
+  { key: 'build',        label: 'Building your personalized dashboard' },
+]
+
+// Truthful per-task result copy, computed strictly from the real analytics
+// engine output + the actual upload response — never invented. Falls back to
+// an honest "not enough data" style line when a field isn't available yet.
+function getCommandCenterTaskResult(key, { analytics, lastUploadResult, fmtHour }) {
+  const a = analytics || {}
+  switch (key) {
+    case 'import': {
+      const n = lastUploadResult?.inserted || 0
+      return `${n.toLocaleString()} tip${n === 1 ? '' : 's'} imported from ${lastUploadResult?.platform || 'your file'}`
+    }
+    case 'platforms': {
+      const plats = (a.platforms || []).map(p => p.platform)
+      if (plats.length) return `${plats.length} platform${plats.length > 1 ? 's' : ''} identified: ${plats.join(', ')}`
+      return lastUploadResult?.platform ? `Platform detected: ${lastUploadResult.platform}` : 'Detecting platforms…'
+    }
+    case 'peak': {
+      if (a.bestHour) return `Peak window identified: ${fmtHour(parseInt(a.bestHour.hour))}`
+      if (a.earlySignalHour) return `Early signal around ${fmtHour(parseInt(a.earlySignalHour.hour))}`
+      return 'Not enough data yet for a peak window'
+    }
+    case 'supporters': {
+      const top = a.topTippers?.[0]
+      return top ? `Top supporter found: ${top.username}` : 'No supporters detected yet'
+    }
+    case 'platformEarn': {
+      const best = [...(a.platforms || [])].filter(p => p.hours > 0).sort((x, y) => y.usdPerHour - x.usdPerHour)[0]
+      return best ? `${best.platform} is earning the most per hour (~$${best.usdPerHour}/hr)` : 'Not enough session data yet'
+    }
+    case 'sessions': {
+      const best = [...(a.meaningfulSessions || [])].sort((x, y) => (y.totalUSD || 0) - (x.totalUSD || 0))[0]
+      return best ? `Best session found: $${best.totalUSD.toFixed(2)} on ${best.platform}` : 'Not enough session data yet'
+    }
+    case 'vip': {
+      const vipCount = (a.whales || []).filter(w => w.tier === 'Whale' || w.tier === 'Shark').length
+      return vipCount > 0 ? `${vipCount} VIP-tier supporter${vipCount > 1 ? 's' : ''} found` : 'No new VIP opportunities detected'
+    }
+    case 'compare': {
+      const n = (a.platforms || []).length
+      return n > 1 ? `Compared ${n} platforms head-to-head` : 'Only one platform detected so far'
+    }
+    case 'build':
+      return 'Your Creator Command Center is ready'
+    default:
+      return ''
+  }
+}
+
+// Small presentational pieces shared by the reveal cards below — kept tiny
+// and dumb (no data logic) so all the truthful-copy decisions stay in
+// getCommandCenterTaskResult / PostImportCommandCenter, not scattered here.
+function CCCard({ icon, label, accent, delay, children }) {
+  return (
+    <div style={{ ...glassCard, borderRadius: 14, padding: "14px 16px", position: "relative", overflow: "hidden", animation: `fadeUp 0.4s ease ${delay}s both` }}>
+      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg,${accent}00,${accent}88,${accent}00)` }} />
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+        <span style={{ fontSize: 14 }}>{icon}</span>
+        <span style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.1em", color: C.muted }}>{label}</span>
+      </div>
+      {children}
+    </div>
+  )
+}
+function CCValue({ color, children }) { return <div style={{ fontSize: 18, fontWeight: 900, color }}>{children}</div> }
+function CCSub({ children }) { return <div style={{ fontSize: 11.5, color: C.muted, marginTop: 3 }}>{children}</div> }
+function CCBadge({ color, children }) {
+  return <span style={{ display: "inline-block", marginTop: 4, padding: "2px 8px", borderRadius: 100, fontSize: 10, fontWeight: 700, color, background: `${color}18`, border: `1px solid ${color}40` }}>{children}</span>
+}
+
+// The post-import "Creator Command Center" experience: shimmer -> analyzing
+// (staggered, truthful task reveal) -> personalized insight reveal, gated by
+// Pro/Basic. Every value shown is read straight off the `analytics` object
+// (lib/analytics.js aggregateRows output) or the real /api/upload response —
+// nothing here computes a new metric or invents a number.
+function PostImportCommandCenter({
+  successPhase, analysisStepsDone, lastUploadResult, analytics, isPro, fmtHour,
+  preSnapshot, onOpenDashboard, onImportAnother, onUpgrade,
+}) {
+  const a = analytics || {}
+
+  if (successPhase === "shimmer") {
+    return (
+      <div style={{ textAlign: "center", padding: "46px 0 40px" }}>
+        <div className="cc-shimmer-sweep" />
+        <div className="cc-badge-pop" style={{ width: 56, height: 56, margin: "0 auto 14px", borderRadius: "50%", background: "linear-gradient(135deg,#10B981,#22D3EE)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, color: "#fff", boxShadow: "0 0 40px rgba(34,211,238,0.4)" }}>✓</div>
+        <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.16em", textTransform: "uppercase", color: C.cyan }}>Data processed</div>
+      </div>
+    )
+  }
+
+  if (successPhase === "analyzing") {
+    const pct = Math.round((analysisStepsDone / COMMAND_CENTER_TASKS.length) * 100)
+    return (
+      <div style={{ textAlign: "center", animation: "fadeUp 0.4s ease both" }}>
+        <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.18em", textTransform: "uppercase", color: C.cyan, marginBottom: 8 }}>Creator Intelligence</div>
+        <h1 style={{ fontSize: 19, fontWeight: 900, color: C.white, marginBottom: 6, letterSpacing: "-0.01em" }}>Building Your Creator Command Center</h1>
+        <p style={{ fontSize: 13, color: C.muted, marginBottom: 20 }}>Analyzing your streaming history and finding what matters.</p>
+
+        <div className="cc-progress-track" style={{ marginBottom: 22 }}>
+          <div className="cc-progress-fill" style={{ width: `${pct}%` }} />
+        </div>
+
+        <div style={{ textAlign: "left" }}>
+          {COMMAND_CENTER_TASKS.map((t, i) => {
+            const status = i < analysisStepsDone ? "complete" : i === analysisStepsDone ? "active" : "pending"
+            const result = status === "complete" ? getCommandCenterTaskResult(t.key, { analytics: a, lastUploadResult, fmtHour }) : null
+            return (
+              <div key={t.key} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "6px 0", opacity: status === "pending" ? 0.4 : 1, transition: "opacity 0.3s ease" }}>
+                <div className={status === "active" ? "cc-task-active" : ""} style={{
+                  width: 18, height: 18, borderRadius: "50%", flexShrink: 0, marginTop: 1,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  background: status === "complete" ? "linear-gradient(135deg,#10B981,#22D3EE)" : status === "active" ? "rgba(34,211,238,0.16)" : "rgba(255,255,255,0.06)",
+                  border: status === "active" ? "1.5px solid rgba(34,211,238,0.55)" : "1px solid rgba(255,255,255,0.1)",
+                }}>
+                  {status === "complete" && <span style={{ fontSize: 9, color: "#fff", fontWeight: 900 }}>✓</span>}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 12.5, fontWeight: status === "pending" ? 500 : 700, color: status === "complete" ? C.white : status === "active" ? C.cyan : C.muted }}>{t.label}</div>
+                  {result && <div style={{ fontSize: 11.5, color: C.text, marginTop: 2 }}>{result}</div>}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    )
+  }
+
+  // ── REVEAL ──────────────────────────────────────────────────────────
+  const bestPlatform = [...(a.platforms || [])].filter(p => p.hours > 0).sort((x, y) => y.usdPerHour - x.usdPerHour)[0] || null
+  const bestSession = [...(a.meaningfulSessions || [])].sort((x, y) => (y.totalUSD || 0) - (x.totalUSD || 0))[0] || null
+  const vipFans = (a.whales || []).filter(w => w.tier === "Whale" || w.tier === "Shark").sort((x, y) => y.totalUSD - x.totalUSD)
+  const topFans = (a.topTippers || []).slice(0, 5)
+  const totalSupporters = (a.whales || []).length
+  const platformsDetected = (a.platforms || []).map(p => p.platform)
+
+  const peakChanged = !!(preSnapshot?.bestHour && a.bestHour && String(preSnapshot.bestHour.hour) !== String(a.bestHour.hour))
+  const prevVipUsernames = new Set((preSnapshot?.whales || []).filter(w => w.tier === "Whale").map(w => w.username.toLowerCase()))
+  const newVips = preSnapshot ? (a.whales || []).filter(w => w.tier === "Whale" && !prevVipUsernames.has(w.username.toLowerCase())) : []
+  const prevBestPlatform = preSnapshot ? [...(preSnapshot.platforms || [])].filter(p => p.hours > 0).sort((x, y) => y.usdPerHour - x.usdPerHour)[0] : null
+  const platformChanged = !!(prevBestPlatform && bestPlatform && prevBestPlatform.platform !== bestPlatform.platform)
+  const whatChanged = []
+  if (peakChanged) whatChanged.push(`Your peak shifted from ${fmtHour(parseInt(preSnapshot.bestHour.hour))} to ${fmtHour(parseInt(a.bestHour.hour))}.`)
+  if (newVips.length > 0) whatChanged.push(`You now have ${newVips.length === 1 ? "a new high-value supporter" : `${newVips.length} new high-value supporters`}: ${newVips.map(w => w.username).join(", ")}.`)
+  if (platformChanged) whatChanged.push(`${bestPlatform.platform} is now outperforming your previous top platform (${prevBestPlatform.platform}).`)
+
+  let ccDelayIdx = 0
+  const nextDelay = () => (ccDelayIdx++) * 0.12
+
+  return (
+    <div style={{ animation: "fadeUp 0.4s ease both" }}>
+      <div style={{ textAlign: "center", marginBottom: 22 }}>
+        <div className="cc-badge-pop" style={{ width: 56, height: 56, margin: "0 auto 14px", borderRadius: "50%", background: "linear-gradient(135deg,#10B981,#22D3EE)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, color: "#fff", boxShadow: "0 0 45px rgba(34,211,238,0.4)" }}>✓</div>
+        <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.18em", textTransform: "uppercase", color: C.cyan, marginBottom: 8 }}>Creator Command Center</div>
+        <h1 style={{ fontSize: 20, fontWeight: 900, color: C.white, marginBottom: 6 }}>Your Creator Command Center is ready</h1>
+        <p style={{ fontSize: 13, color: C.muted, lineHeight: 1.6 }}>We analyzed your data and found personalized insights about your cam business.</p>
+      </div>
+
+      {isPro ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 20, textAlign: "left" }}>
+          <CCCard icon="⏰" label="Peak Streaming Window" accent={C.cyan} delay={nextDelay()}>
+            {a.bestHour ? (
+              <>
+                <CCValue color={C.cyan}>{fmtHour(parseInt(a.bestHour.hour))}</CCValue>
+                {peakChanged ? <CCBadge color={C.pink}>Updated just now</CCBadge> : preSnapshot ? <CCSub>Same as your last import</CCSub> : null}
+              </>
+            ) : a.earlySignalHour ? (
+              <>
+                <CCValue color={C.gold}>{fmtHour(parseInt(a.earlySignalHour.hour))}</CCValue>
+                <CCBadge color={C.gold}>Early signal</CCBadge>
+              </>
+            ) : <CCSub>Not enough data yet</CCSub>}
+          </CCCard>
+
+          <CCCard icon="👑" label="Top Supporter" accent={C.gold} delay={nextDelay()}>
+            {topFans[0] ? (
+              <>
+                <CCValue color={C.gold}>{topFans[0].username}</CCValue>
+                <CCSub>${topFans[0].usd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} total{topFans[0].count ? ` · ${topFans[0].count} tips` : ""}</CCSub>
+              </>
+            ) : <CCSub>Not enough data yet</CCSub>}
+          </CCCard>
+
+          {topFans.length > 1 && (
+            <CCCard icon="🫂" label="Top Supporters" accent={C.pink} delay={nextDelay()}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 4 }}>
+                {topFans.map(f => (
+                  <div key={f.username} style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5 }}>
+                    <span style={{ color: C.white }}>{f.username}</span>
+                    <span style={{ color: C.text }}>${f.usd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  </div>
+                ))}
+              </div>
+            </CCCard>
+          )}
+
+          <CCCard icon="💎" label="Highest-Earning Platform" accent={C.green} delay={nextDelay()}>
+            {bestPlatform ? (
+              <>
+                <CCValue color={C.green}>{bestPlatform.platform}</CCValue>
+                <CCSub>~${bestPlatform.usdPerHour}/hr average</CCSub>
+              </>
+            ) : <CCSub>Not enough session data yet</CCSub>}
+          </CCCard>
+
+          {(a.platforms || []).length > 1 && (
+            <CCCard icon="📊" label="Platform Performance" accent={C.blue} delay={nextDelay()}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 4 }}>
+                {[...a.platforms].sort((x, y) => y.totalUSD - x.totalUSD).map(p => (
+                  <div key={p.platform} style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5 }}>
+                    <span style={{ color: C.white }}>{p.platform}</span>
+                    <span style={{ color: C.text }}>${p.totalUSD.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{p.hours > 0 ? ` · $${p.usdPerHour}/hr` : ""}</span>
+                  </div>
+                ))}
+              </div>
+            </CCCard>
+          )}
+
+          <CCCard icon="🔥" label="Best-Performing Session" accent={C.pink} delay={nextDelay()}>
+            {bestSession ? (
+              <>
+                <CCValue color={C.pink}>${bestSession.totalUSD.toFixed(2)}</CCValue>
+                <CCSub>{bestSession.platform} · {new Date(bestSession.startTime).toLocaleDateString()}</CCSub>
+              </>
+            ) : <CCSub>Not enough session data yet</CCSub>}
+          </CCCard>
+
+          <CCCard icon="🐳" label="VIP Activity" accent={C.gold} delay={nextDelay()}>
+            {vipFans.length > 0 ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 4 }}>
+                {vipFans.slice(0, 5).map(w => (
+                  <div key={w.username} style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5 }}>
+                    <span style={{ color: C.white }}>{w.tier === "Whale" ? "🐳" : "🦈"} {w.username}</span>
+                    <span style={{ color: C.text }}>${w.totalUSD.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  </div>
+                ))}
+              </div>
+            ) : <CCSub>No VIP-tier supporters detected yet</CCSub>}
+          </CCCard>
+
+          {a.momentum && a.momentum.label !== "No data" && (
+            <CCCard icon={a.momentum.emoji} label="Performance Changes" accent={a.momentum.label === "Declining" ? C.red : C.green} delay={nextDelay()}>
+              <CCValue color={a.momentum.label === "Declining" ? C.red : C.green}>{a.momentum.label}</CCValue>
+              <CCSub>Last 30 days: ${a.momentum.last30USD.toFixed(2)} vs prior 30: ${a.momentum.prior30USD.toFixed(2)}</CCSub>
+            </CCCard>
+          )}
+
+          {whatChanged.length > 0 && (
+            <CCCard icon="⚡" label="What Changed Since Your Last Import" accent={C.pink} delay={nextDelay()}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 4 }}>
+                {whatChanged.map((line, i) => <div key={i} style={{ fontSize: 12.5, color: C.text, lineHeight: 1.5 }}>{line}</div>)}
+              </div>
+            </CCCard>
+          )}
+        </div>
+      ) : (
+        <>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 10, marginBottom: 10 }}>
+            {[
+              { label: "Total Earnings", value: a.totalUSD || 0, color: C.green, prefix: "$", decimals: 2 },
+              { label: "Total Tips", value: a.totalTips || 0, color: C.cyan },
+              { label: "Total Supporters", value: totalSupporters, color: C.gold },
+              { label: "Total Sessions", value: a.meaningfulSessionCount || 0, color: C.pink },
+            ].map((s, i) => (
+              <div key={s.label} className="stat-card" style={{ ...glassCard, borderRadius: 14, padding: "12px 14px", position: "relative", overflow: "hidden", textAlign: "left", animation: `statCardIn 0.4s ease ${i * 0.1}s both` }}>
+                <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg,${s.color}00,${s.color}88,${s.color}00)` }} />
+                <div style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em", color: C.muted, marginBottom: 5 }}>{s.label}</div>
+                <div style={{ fontSize: 17, fontWeight: 900, color: s.color }}>
+                  <CountUp to={s.value} prefix={s.prefix || ""} decimals={s.decimals || 0} />
+                </div>
+              </div>
+            ))}
+          </div>
+          {platformsDetected.length > 0 && (
+            <div style={{ fontSize: 12, color: C.muted, marginBottom: 22, textAlign: "left" }}>Platforms detected: <strong style={{ color: C.text }}>{platformsDetected.join(", ")}</strong></div>
+          )}
+
+          <div style={{ textAlign: "center", margin: "22px 0 14px" }}>
+            <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.16em", textTransform: "uppercase", color: C.pink }}>We Found More In Your Data</div>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 18 }}>
+            <LockedInsightCard lockType="requires_pro" title="Your Peak Streaming Window" description="See the exact hours when you're earning the most." />
+            <LockedInsightCard lockType="requires_pro" title="Your Highest-Earning Platform" description="Find out which platform gives you the best return for your time." />
+            <LockedInsightCard lockType="requires_pro" title="Your VIP Opportunities" description="Discover your highest-value supporters and emerging VIPs." />
+            <LockedInsightCard lockType="requires_pro" title="Your Performance Changes" description="See what's improving, declining, and changing over time." />
+          </div>
+          <button onClick={onUpgrade} style={{ width: "100%", padding: "14px 20px", borderRadius: 12, border: "none", cursor: "pointer", background: "linear-gradient(90deg,#22D3EE,#7C5CFF,#EC4899)", color: "#06101A", fontSize: 14, fontWeight: 900, letterSpacing: "0.02em", marginBottom: 22, boxShadow: "0 0 24px rgba(34,211,238,0.28), 0 0 34px rgba(236,72,153,0.22)" }}>
+            Unlock Your Complete Command Center →
+          </button>
+        </>
+      )}
+
+      <div style={{ textAlign: "center", borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 18 }}>
+        <div style={{ fontSize: 13, fontWeight: 800, color: C.white, marginBottom: 12 }}>Your Command Center is ready</div>
+        <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
+          <Button onClick={onOpenDashboard} style={{ padding: "12px 26px", fontSize: 14 }}>Open Command Center →</Button>
+          <Button variant="secondary" onClick={onImportAnother} style={{ padding: "12px 22px", fontSize: 13 }}>Import another CSV</Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 const glassCard = {
   background: "rgba(15,20,32,0.75)",
   border: "1px solid rgba(255,255,255,0.08)",
@@ -1460,6 +1779,15 @@ export default function Dashboard() {
   // instead of a hard block (see denyWithPlatformPreview / handleCSV below)
   const [lockedPreview, setLockedPreview] = useState(null)
   const [showImportSparkle, setShowImportSparkle] = useState(false)
+  // Post-import "Creator Command Center" reveal: success -> shimmer -> analyzing -> reveal.
+  // successPhase only matters while importStage === 'success'.
+  const [successPhase, setSuccessPhase] = useState('shimmer')
+  const [analysisStepsDone, setAnalysisStepsDone] = useState(0)
+  const successTimersRef = useRef([])
+  // Snapshot of the engine result from BEFORE this import, captured only when
+  // real previous data existed — powers the "what changed since last import"
+  // comparisons without ever fabricating a change.
+  const preImportSnapshotRef = useRef(null)
   const [activeTab, setActiveTab] = useState(initialTab)
   const [toast, setToast] = useState("")
   const [uploadCount, setUploadCount] = useState(0)
@@ -2148,6 +2476,7 @@ export default function Dashboard() {
   // Stop the rotating-microcopy interval if the dashboard unmounts mid-import
   useEffect(() => () => {
     if (importMessageTimerRef.current) clearInterval(importMessageTimerRef.current)
+    successTimersRef.current.forEach(id => { clearTimeout(id); clearInterval(id) })
   }, [])
 
   const handleSignOut = async () => {
@@ -2233,11 +2562,48 @@ const stopImportMessageRotation = () => {
     }
   }
 
+  const stopSuccessSequence = () => {
+    successTimersRef.current.forEach(id => { clearTimeout(id); clearInterval(id) })
+    successTimersRef.current = []
+  }
+
+  // Drives shimmer -> analyzing (staggered task reveal) -> reveal. The engine
+  // result is already fully computed by this point (handleCSV awaits
+  // loadData() first) — this only paces how the UI presents it.
+  const runPostImportSequence = () => {
+    stopSuccessSequence()
+    setSuccessPhase('shimmer')
+    setAnalysisStepsDone(0)
+    const shimmerTimer = setTimeout(() => {
+      setSuccessPhase('analyzing')
+      let step = 0
+      const stepTimer = setInterval(() => {
+        step += 1
+        setAnalysisStepsDone(step)
+        if (step >= COMMAND_CENTER_TASKS.length) {
+          clearInterval(stepTimer)
+          const revealTimer = setTimeout(() => {
+            setSuccessPhase('reveal')
+            setShowImportSparkle(true)
+            const sparkleTimer = setTimeout(() => setShowImportSparkle(false), 2400)
+            successTimersRef.current.push(sparkleTimer)
+          }, 550)
+          successTimersRef.current.push(revealTimer)
+        }
+      }, 420)
+      successTimersRef.current.push(stepTimer)
+    }, 650)
+    successTimersRef.current.push(shimmerTimer)
+  }
+
   const resetImport = () => {
     stopImportMessageRotation()
+    stopSuccessSequence()
     setImportStage('idle')
     setLastUploadResult(null)
     setLockedPreview(null)
+    setSuccessPhase('shimmer')
+    setAnalysisStepsDone(0)
   }
 
   // Shows a quick preview of what's in a blocked import (tips/fans/earnings/
@@ -2268,6 +2634,13 @@ const stopImportMessageRotation = () => {
       await denyWithPlatformPreview(file, forcePlatform)
       return
     }
+    // Snapshot the engine result from BEFORE this import — only when the
+    // creator actually had prior data — so the reveal can later show real
+    // "what changed since your last import" comparisons instead of guessing.
+    preImportSnapshotRef.current = (analytics && analytics.totalTips > 0) ? analytics : null
+    stopSuccessSequence()
+    setSuccessPhase('shimmer')
+    setAnalysisStepsDone(0)
     setImportStage('processing')
     setImportMessageIdx(0)
     setLastUploadResult(null)
@@ -2281,12 +2654,6 @@ const stopImportMessageRotation = () => {
     try {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) { showToast("❌ Not logged in"); setImportStage('error'); setLastUploadResult({ success: false, error: 'Not logged in.' }); return }
-
-      // Read the file client-side too so the success screen can show the
-      // same "fans / earnings / top spender / best hour" preview onboarding
-      // shows, instead of just a bare confirmation line.
-      let rawText = ''
-      try { rawText = await file.text() } catch (e) {}
 
       const fd = new FormData()
       fd.append('file', file)
@@ -2318,7 +2685,6 @@ const stopImportMessageRotation = () => {
         ? `✅ Imported ${result.inserted} tips (${result.skipped} duplicates skipped)`
         : `✅ Imported ${result.inserted} tips from ${result.platform}!`
       showToast(msg)
-      const preview = buildImportPreview(rawText, result.platform || forcePlatform || uploadPlatform || null)
       setLastUploadResult({
         success: true,
         inserted: result.inserted,
@@ -2328,11 +2694,7 @@ const stopImportMessageRotation = () => {
         dateFrom: result.dateFrom,
         dateTo: result.dateTo,
         paidInserted: result.paidSessionsInserted || 0,
-        preview,
       })
-      setImportStage('success')
-      setShowImportSparkle(true)
-      setTimeout(() => setShowImportSparkle(false), 2400)
 
       // Google Ads — CSV Upload conversion
       try {
@@ -2347,9 +2709,15 @@ const stopImportMessageRotation = () => {
 
       setUploadCount(c => c + 1)
       if (typeof window !== 'undefined') localStorage.setItem('camcash_onboarded', '1')
-      // Force reload after upload — bypass cache so new tips appear immediately
+      // Force reload after upload — bypass cache so new tips appear immediately.
+      // This runs BEFORE the success/reveal screens mount so the "Creator
+      // Command Center" analysis is built from the real, freshly-recomputed
+      // engine output — never a stale pre-import snapshot.
       try { sessionStorage.removeItem(`camcash_tips_${user.id}`) } catch(e) {}
       await loadData(user.id, true, { silent: true })
+
+      setImportStage('success')
+      runPostImportSequence()
 
     } catch (err) {
       showToast("❌ " + err.message)
@@ -3213,6 +3581,28 @@ const stopImportMessageRotation = () => {
         }
         .import-flash-ring { animation: import-flash 900ms ease-out; }
         .import-check-badge { animation: import-check-pop 420ms cubic-bezier(0.34,1.3,0.64,1); }
+
+        /* ── POST-IMPORT "CREATOR COMMAND CENTER" SEQUENCE ── */
+        .cc-shimmer-sweep {
+          position: absolute; inset: 0; pointer-events: none; z-index: 2;
+          background: linear-gradient(100deg, transparent 32%, rgba(34,211,238,0.16) 45%, rgba(124,92,255,0.24) 50%, rgba(236,72,153,0.16) 55%, transparent 68%);
+          transform: translateX(-130%);
+          animation: cc-shimmer-sweep 0.7s cubic-bezier(0.22,0.61,0.36,1) both;
+        }
+        @keyframes cc-shimmer-sweep {
+          from { transform: translateX(-130%); }
+          to   { transform: translateX(130%); }
+        }
+        @keyframes cc-pop {
+          0%   { opacity: 0; transform: scale(0.6); }
+          60%  { opacity: 1; transform: scale(1.12); }
+          100% { opacity: 1; transform: scale(1); }
+        }
+        .cc-badge-pop { animation: cc-pop 0.5s cubic-bezier(0.34,1.3,0.64,1) both; }
+        @keyframes cc-task-pulse { 0%,100% { opacity: 1; box-shadow: 0 0 0 rgba(34,211,238,0.5); } 50% { opacity: 0.6; box-shadow: 0 0 10px rgba(34,211,238,0.5); } }
+        .cc-task-active { animation: cc-task-pulse 1.1s ease-in-out infinite; }
+        .cc-progress-track { position: relative; height: 5px; border-radius: 5px; overflow: hidden; background: rgba(255,255,255,0.07); }
+        .cc-progress-fill { height: 100%; border-radius: 5px; background: linear-gradient(90deg,#21E6F3,#6C5CFF,#FF2FAE); box-shadow: 0 0 12px rgba(108,92,255,0.55); transition: width 0.4s cubic-bezier(0.22,0.61,0.36,1); }
 
         /* ── FAN CARD / MESSAGE (HEART-ENVELOPE) ──
            .heart-envelope-btn is hover/focus-only (cheap, no continuous
@@ -5733,71 +6123,18 @@ const stopImportMessageRotation = () => {
               )}
 
               {importStage === 'success' && lastUploadResult?.success && (
-                <div style={{ textAlign: "center", animation: "fadeUp 0.4s ease both" }}>
-                  <div style={{ position: "relative", width: 64, height: 64, margin: "0 auto 16px" }}>
-                    <div className="import-flash-ring" style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "radial-gradient(circle,rgba(34,211,238,0.55),rgba(236,72,153,0.35) 60%,transparent 70%)" }} />
-                    <div className="import-check-badge" style={{ position: "relative", width: 64, height: 64, borderRadius: "50%", background: "linear-gradient(135deg,#10B981,#22D3EE)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, fontWeight: 900, color: "#fff", boxShadow: "0 0 55px rgba(16,185,129,0.35),0 0 24px rgba(16,185,129,0.45)" }}>✓</div>
-                  </div>
-                  <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.18em", textTransform: "uppercase", color: C.cyan, marginBottom: 8 }}>Import Complete</div>
-                  <h1 style={{ fontSize: 20, fontWeight: 900, color: C.white, marginBottom: 6 }}>Your tips were imported</h1>
-                  <div style={{ fontSize: 13.5, color: C.text, lineHeight: 1.6, marginBottom: 18 }}>
-                    <strong style={{ color: C.white }}>{(lastUploadResult.inserted || 0).toLocaleString()}</strong> tips from <strong style={{ color: C.cyan }}>{lastUploadResult.platform}</strong>
-                    {typeof lastUploadResult.totalUsd === 'number' && (
-                      <> — <strong style={{ color: C.green }}>${lastUploadResult.totalUsd.toFixed(2)}</strong> tracked</>
-                    )}
-                    {(formatImportDate(lastUploadResult.dateFrom) && formatImportDate(lastUploadResult.dateTo)) && (
-                      <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>
-                        {formatImportDate(lastUploadResult.dateFrom)} – {formatImportDate(lastUploadResult.dateTo)}
-                      </div>
-                    )}
-                    {lastUploadResult.skipped > 0 && (
-                      <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>{lastUploadResult.skipped} duplicates skipped</div>
-                    )}
-                  </div>
-
-                  {lastUploadResult.preview && (
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 10, marginBottom: 16 }}>
-                      {[
-                        { label: "Tips Imported", value: lastUploadResult.inserted || 0, color: C.cyan, suffix: "" },
-                        { label: "Unique Fans", value: lastUploadResult.preview.fansDetected || 0, color: C.gold, suffix: "" },
-                        { label: "Est. Earnings", value: lastUploadResult.preview.estimatedEarnings || 0, color: C.green, prefix: "$", decimals: 2 },
-                        { label: "Top Spender", value: lastUploadResult.preview.topSpender || "—", color: C.pink, isText: true },
-                      ].map((s, i) => (
-                        <div key={s.label} className="stat-card" style={{ ...glassCard, borderRadius: 14, padding: "12px 14px", position: "relative", overflow: "hidden", textAlign: "left", animation: `statCardIn 0.4s ease ${i * 0.1}s both` }}>
-                          <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg,${s.color}00,${s.color}88,${s.color}00)` }} />
-                          <div style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em", color: C.muted, marginBottom: 5 }}>{s.label}</div>
-                          <div style={{ fontSize: s.isText ? 14 : 17, fontWeight: 900, color: s.color, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                            {s.isText ? s.value : <CountUp to={typeof s.value === 'number' ? s.value : 0} prefix={s.prefix || ''} suffix={s.suffix || ''} decimals={s.decimals || 0} />}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {lastUploadResult.paidInserted > 0 && (
-                    <div style={{ borderRadius: 12, border: "1px solid rgba(255,47,174,0.2)", background: "rgba(255,47,174,0.04)", padding: "10px 13px", marginBottom: 12, textAlign: "left", display: "flex", gap: 9, alignItems: "flex-start" }}>
-                      <span style={{ fontSize: 14, flexShrink: 0 }}>💳</span>
-                      <div style={{ fontSize: 11, color: C.text, lineHeight: 1.55 }}>
-                        <strong style={{ color: C.pink }}>{lastUploadResult.paidInserted} paid chat sessions</strong> were also imported and are tracked separately under Private Sessions.
-                      </div>
-                    </div>
-                  )}
-
-                  {lastUploadResult.preview?.bestHour && (
-                    <div style={{ borderRadius: 14, border: `1px solid ${C.pink}33`, background: "rgba(255,47,174,0.05)", padding: "13px 15px", marginBottom: 16, textAlign: "left", display: "flex", gap: 10 }}>
-                      <span style={{ fontSize: 18, flexShrink: 0 }}>⚡</span>
-                      <div>
-                        <div style={{ fontSize: 10, fontWeight: 800, color: C.pink, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 4 }}>Best insight</div>
-                        <p style={{ fontSize: 13, color: C.white, lineHeight: 1.6 }}>Your earnings peak around <strong style={{ color: C.pink }}>{lastUploadResult.preview.bestHour}</strong>. That's your sweet spot — prioritize streaming then.</p>
-                      </div>
-                    </div>
-                  )}
-
-                  <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
-                    <Button onClick={() => handleTabChange('overview')} style={{ padding: "12px 26px", fontSize: 14 }}>View Dashboard</Button>
-                    <Button variant="secondary" onClick={resetImport} style={{ padding: "12px 22px", fontSize: 13 }}>Import another CSV</Button>
-                  </div>
-                </div>
+                <PostImportCommandCenter
+                  successPhase={successPhase}
+                  analysisStepsDone={analysisStepsDone}
+                  lastUploadResult={lastUploadResult}
+                  analytics={analytics}
+                  isPro={isPro}
+                  fmtHour={fmtHour}
+                  preSnapshot={preImportSnapshotRef.current}
+                  onOpenDashboard={() => handleTabChange('overview')}
+                  onImportAnother={resetImport}
+                  onUpgrade={() => openUpgradeModal('post_import_reveal')}
+                />
               )}
 
               {importStage === 'error' && lastUploadResult && (
