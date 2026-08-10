@@ -1113,6 +1113,14 @@ export default function LivePage({ embedded = false } = {}) {
                   </div>
                 </div>
               )}
+              {comparison.vsBestPct !== null && (
+                <div style={{ flex: '1 1 130px', borderRadius: 10, padding: '10px 14px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                  <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 4 }}>vs Your Best Session</div>
+                  <div style={{ fontSize: 18, fontWeight: 900, color: (comparison.vsBestPct ?? 0) >= 0 ? C.green : C.red }}>
+                    {(comparison.vsBestPct ?? 0) >= 0 ? '+' : ''}{comparison.vsBestPct}%
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

@@ -1,6 +1,7 @@
 "use client"
 import React, { useState, useMemo, useEffect, useCallback } from "react"
 import Button from "../../components/ui/Button"
+import { calcChurnRisk } from "../../lib/analytics"
 import {
   ResponsiveContainer, LineChart, Line,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -198,10 +199,14 @@ function detectWhales(tips) {
     const avgReturnDays = dates.length >= 2
       ? Math.round(dates.slice(1).reduce((s, d, i) => s + (d - dates[i]) / 86_400_000, 0) / (dates.length - 1))
       : null
+    const daysSince = Math.floor((Date.now() - lastSeen.getTime()) / 86_400_000)
     return {
       username, platform: u.platform, totalTokens, usdValue, lastSeen,
-      daysSince: Math.floor((Date.now() - lastSeen.getTime()) / 86_400_000),
+      daysSince,
       bestUtcDay: bd, bestUtcHour: bh, avgReturnDays,
+      // Same calcChurnRisk() formula used app-wide (lib/analytics.js) — do
+      // not invent a separate day-threshold rule here.
+      churnRisk: calcChurnRisk(daysSince, avgReturnDays || 30, u.tips.length),
     }
   }).filter((w) => w.totalTokens >= 500).sort((a, b) => b.usdValue - a.usdValue)
 }
@@ -690,10 +695,17 @@ function WhalesTab({ tips, whales }) {
 
   const overdue = whales.filter((w) => w.avgReturnDays && w.daysSince > w.avgReturnDays && w.daysSince >= 7)
 
-  const statusOf = (w) =>
-    w.daysSince < 7  ? { label:"Active",  bg:"rgba(16,185,129,0.10)",  color:GREEN } :
-    w.daysSince < 14 ? { label:"At Risk", bg:"rgba(245,158,11,0.10)",  color:GOLD  } :
-                       { label:"Overdue", bg:"rgba(248,113,113,0.10)", color:RED   }
+  // Derived from calcChurnRisk() (lib/analytics.js) — the same churn formula
+  // used everywhere else in the app — instead of a separate fixed-day rule.
+  const statusOf = (w) => {
+    switch (w.churnRisk?.level) {
+      case 'Low':      return { label: "Active",  bg: "rgba(16,185,129,0.10)",  color: GREEN }
+      case 'Medium':   return { label: "At Risk", bg: "rgba(245,158,11,0.10)",  color: GOLD  }
+      case 'High':
+      case 'Critical': return { label: "Overdue", bg: "rgba(248,113,113,0.10)", color: RED   }
+      default:         return { label: "New",     bg: "rgba(148,163,184,0.10)", color: MUTED }
+    }
+  }
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:20 }}>

@@ -528,7 +528,7 @@ function calcTipProbability(d, avg) {
   return                     { level: 'Low',           percentage: 15 }
 }
 
-function calcChurnRisk(d, avg, count) {
+export function calcChurnRisk(d, avg, count) {
   if (count < 3) return { level: 'Unknown', risk: 'Insufficient data' }
   const r = d / avg
   if (r < 1) return { level: 'Low',      risk: 'Active' }
@@ -1027,6 +1027,22 @@ export function aggregateRows(tips, tz = null) {
     lossIfTopFanLeaves: parseFloat(top1USD.toFixed(2))
   } : null
 
+  // dependencyRisk is derived entirely from topFanDependency above — never
+  // recompute top1/top3/top5 shares here, just add the level/message the
+  // dashboard card needs. High/Medium thresholds only; below 20% is not
+  // flagged (card only renders when level !== 'low').
+  const dependencyRisk = topFanDependency ? (() => {
+    const { top1Pct, top3Pct, lossIfTopFanLeaves } = topFanDependency
+    const topFanName = sortedWhales[0]?.username || 'Your top fan'
+    if (top1Pct >= 40) {
+      return { level: 'high', top1Pct, top3Pct: topFanDependency.top3Pct, top5Pct: topFanDependency.top5Pct, lossIfTopFanLeaves, message: `${topFanName} alone makes up ${top1Pct}% of your total revenue. If they stop tipping, you'd lose $${lossIfTopFanLeaves} — diversify your fan base to reduce this risk.` }
+    }
+    if (top1Pct >= 20 || top3Pct >= 50) {
+      return { level: 'medium', top1Pct, top3Pct: topFanDependency.top3Pct, top5Pct: topFanDependency.top5Pct, lossIfTopFanLeaves, message: `${topFanName} makes up ${top1Pct}% of your total revenue. Keep growing your fan base so no single fan controls this much of your income.` }
+    }
+    return { level: 'low', top1Pct, top3Pct: topFanDependency.top3Pct, top5Pct: topFanDependency.top5Pct, lossIfTopFanLeaves, message: 'Your revenue is well distributed across fans.' }
+  })() : null
+
   // ── MONTHLY DATA ──────────────────────────────────────────────────────
   const monthMap = {}
   tips.forEach(t => {
@@ -1131,7 +1147,7 @@ export function aggregateRows(tips, tz = null) {
     estimatedHourlyRate, hourlyRateSessionCount, hourlyRateTotalMinutes,
     hourlyRateTotalUsd, excludedUntimedSessionCount,
     missedRevenueByPlatform, returningVsNew, topFanDependency,
-    dependencyRisk: null, preTipBehavior: null, trueHourlyAvg: [],
+    dependencyRisk, preTipBehavior: null, trueHourlyAvg: [],
     meaningfulSessions, allValidSessions,
     meaningfulSessionCount: meaningfulSessions.length,
     lowSignalSessionCount: allValidSessions.length - meaningfulSessions.length,

@@ -2367,6 +2367,7 @@ const stopImportMessageRotation = () => {
   const insights = analytics?.insights || []
   const platforms = analytics?.platforms || []
   const dependencyRisk = analytics?.dependencyRisk || null
+  const predictions = analytics?.predictions || null
   const preTipBehavior = analytics?.preTipBehavior || null
   const trueHourlyAvg  = analytics?.trueHourlyAvg  || []
   const alerts = liveAnalytics?.whaleAlerts || analytics?.whaleAlerts || []
@@ -4255,6 +4256,39 @@ const stopImportMessageRotation = () => {
                       ))}
                     </div>
                   </div>
+                </div>
+              </div>
+            )}
+
+            {/* Revenue Forecast — next7Days/next30Days/tonightStream from predictRevenue() */}
+            {predictions && (predictions.next7Days || predictions.next30Days || predictions.tonightStream) && (
+              <div style={{ ...glassCard, borderRadius: 14, padding: 20, marginBottom: 20 }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: C.white, marginBottom: 12 }}>Revenue Forecast</div>
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                  {predictions.next7Days && (
+                    <div style={{ padding: "10px 14px", borderRadius: 8, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", minWidth: 130 }}>
+                      <div style={{ fontSize: 10, color: C.muted }}>Last 7 days</div>
+                      <div style={{ fontSize: 16, fontWeight: 800, color: C.white }}>${predictions.next7Days.amount}</div>
+                      <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>{predictions.next7Days.confidence} confidence</div>
+                    </div>
+                  )}
+                  {predictions.next30Days && (
+                    <div style={{ padding: "10px 14px", borderRadius: 8, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", minWidth: 130 }}>
+                      <div style={{ fontSize: 10, color: C.muted }}>Last 30 days</div>
+                      <div style={{ fontSize: 16, fontWeight: 800, color: C.white }}>${predictions.next30Days.amount}</div>
+                      <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>
+                        {predictions.next30Days.confidence} confidence
+                        {predictions.next30Days.trend !== null && ` · ${predictions.next30Days.trend >= 0 ? '+' : ''}${predictions.next30Days.trend}% vs prior 30d`}
+                      </div>
+                    </div>
+                  )}
+                  {predictions.tonightStream && (
+                    <div style={{ padding: "10px 14px", borderRadius: 8, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", minWidth: 160 }}>
+                      <div style={{ fontSize: 10, color: C.muted }}>Expected tonight (same weekday)</div>
+                      <div style={{ fontSize: 16, fontWeight: 800, color: C.white }}>${predictions.tonightStream.expected} <span style={{ fontSize: 11, fontWeight: 400, color: C.muted }}>(${predictions.tonightStream.range.min}–${predictions.tonightStream.range.max})</span></div>
+                      <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>{predictions.tonightStream.confidence} confidence</div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
