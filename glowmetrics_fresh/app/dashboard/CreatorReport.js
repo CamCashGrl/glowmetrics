@@ -58,22 +58,30 @@ export default function CreatorReport({ analytics, tips = [], isPro = false, onU
   const warningInsight     = insights.find(i => i.icon === '📉') || null
   const opportunityInsight = insights.find(i => i !== warningInsight) || null
 
-  const hasEnoughData = tips.length >= 10 && (analytics?.meaningfulSessionCount || 0) >= 2
+  // Every individual section below (StatCards, Opportunity/Warning,
+  // Recommended Actions) already has its own "Not enough data yet" fallback
+  // built in — none of that logic changed. The only thing gated here now is
+  // showing a report at all vs. showing nothing: with zero tips there's
+  // nothing real to report (fmtUsd(totalUSD) would just read "$0", 0 tips
+  // tracked, which is a fabricated-looking blank state, not an honest one).
+  // The previous 10-tips/2-sessions bar blocked the entire report even when
+  // most sections were individually ready to show real, partial data.
+  const hasAnyData = tips.length > 0
 
   const track = (name, props) => { try { gtmTrack(name, props) } catch (_) {} }
 
   useEffect(() => {
-    track('creator_report_viewed', { hasEnoughData, isPro })
+    track('creator_report_viewed', { hasAnyData, isPro })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  if (!hasEnoughData) {
+  if (!hasAnyData) {
     return (
       <div style={{ borderRadius: 22, padding: '48px 32px', textAlign: 'center', background: 'rgba(12,16,34,0.78)', border: '1px solid rgba(255,255,255,0.09)' }}>
         <div style={{ fontSize: 40, marginBottom: 12 }}>🧾</div>
         <div style={{ fontSize: 18, fontWeight: 800, color: C.white, marginBottom: 8 }}>Your Creator Report is warming up</div>
         <div style={{ fontSize: 13, color: C.muted, maxWidth: 420, margin: '0 auto' }}>
-          Import a bit more tip history — at least 10 tips across 2+ sessions — and CamCash will build a full report of your earnings, best times, and next moves.
+          Import your tip history and CamCash will build a report of your earnings, best times, and next moves — filling in more detail as you add data.
         </div>
       </div>
     )

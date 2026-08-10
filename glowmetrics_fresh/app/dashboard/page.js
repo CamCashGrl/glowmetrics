@@ -3523,6 +3523,50 @@ const stopImportMessageRotation = () => {
             />
 
             {/* ═══════════════════════════════════════
+                MONTHLY GOAL PREVIEW — only when a goal is actually set.
+                Reuses analytics.monthlyData (the same canonical source the
+                Monthly tab's own goal tracker reads), not a recomputation
+                from raw tips — this is the one number on the page that's
+                worth checking daily and currently has zero presence outside
+                the Monthly tab. No goal set -> a single subtle prompt, not a
+                full card, so this doesn't become new clutter for users who
+                haven't opted in.
+            ═══════════════════════════════════════ */}
+            {(() => {
+              if (tips.length === 0) return null
+              const now = new Date()
+              const thisMonthKey = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`
+              const thisMonthEntry = (analytics?.monthlyData || []).find(m => m.month === thisMonthKey)
+              const thisMonthUSD = thisMonthEntry?.usd || 0
+
+              if (!monthlyGoal) {
+                return (
+                  <div onClick={() => handleTabChange('monthly')} style={{ ...glassCard, borderRadius: 14, padding: '14px 18px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+                    <span style={{ fontSize: 16 }}>🎯</span>
+                    <span style={{ fontSize: 13, color: C.muted }}>Set a monthly earnings goal to track your progress here — <span style={{ color: C.cyan, fontWeight: 700 }}>set one now →</span></span>
+                  </div>
+                )
+              }
+
+              const goalPct = Math.min(100, Math.round((thisMonthUSD / monthlyGoal) * 100))
+              return (
+                <div onClick={() => handleTabChange('monthly')} style={{ ...glassCard, borderRadius: 14, padding: '16px 20px', marginBottom: 20, cursor: 'pointer', border: '1px solid rgba(16,185,129,0.2)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: 15 }}>🎯</span>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: C.text, textTransform: 'uppercase', letterSpacing: 0.6 }}>Monthly Goal</span>
+                    </div>
+                    <span style={{ fontSize: 13, fontWeight: 800, color: goalPct >= 100 ? C.green : goalPct >= 70 ? C.gold : C.cyan }}>{goalPct}%</span>
+                  </div>
+                  <div style={{ height: 8, borderRadius: 4, background: 'rgba(255,255,255,0.08)', overflow: 'hidden', marginBottom: 6 }}>
+                    <div style={{ height: '100%', width: `${goalPct}%`, borderRadius: 4, background: goalPct >= 100 ? 'linear-gradient(90deg,#10B981,#22D3EE)' : goalPct >= 70 ? 'linear-gradient(90deg,#F59E0B,#10B981)' : 'linear-gradient(90deg,#22D3EE,#7C5CFF)', transition: 'width 0.8s ease' }} />
+                  </div>
+                  <div style={{ fontSize: 12, color: C.muted }}>${thisMonthUSD.toFixed(0)} of ${monthlyGoal.toFixed(0)} this month</div>
+                </div>
+              )
+            })()}
+
+            {/* ═══════════════════════════════════════
                 1. MONEY SNAPSHOT
             ═══════════════════════════════════════ */}
             {(() => {
