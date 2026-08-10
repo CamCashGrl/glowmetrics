@@ -173,6 +173,392 @@ function buildImportPreview(rawText, platform) {
   }
 }
 
+// ============================================================
+// POST-IMPORT REVEAL — "Creator Command Center" experience
+// ============================================================
+// Three scenarios, determined in computeImportScenario() by comparing this
+// import's platform against the account's platform set from BEFORE this
+// import (preSnapshot):
+//   'first_import'  — no prior data at all (preSnapshot is null)
+//   'same_platform' — re-importing a platform the account already had
+//   'new_platform'  — a platform not seen before this import. Only reachable
+//                     by Pro accounts — the free plan's platform limit
+//                     already blocks this upstream in handleCSV via
+//                     denyWithPlatformPreview, before 'success' is ever
+//                     reached, so there is no free+new_platform case to
+//                     design for.
+// Every value shown anywhere below is read straight off the `analytics`
+// object (aggregateRows() output) or the real /api/upload response —
+// nothing here computes a new metric or invents a number.
+
+const COMMAND_CENTER_TASKS = [
+  { key: 'import',     label: 'Importing your tip history' },
+  { key: 'platforms',  label: 'Identifying your streaming platforms' },
+  { key: 'peak',       label: 'Finding your peak streaming hours' },
+  { key: 'supporters', label: 'Identifying your top supporters' },
+  { key: 'vip',        label: 'Scanning for VIP opportunities' },
+  { key: 'compare',    label: 'Comparing your platform performance' },
+  { key: 'build',      label: 'Updating your Command Center' },
+]
+
+function getCommandCenterTaskResult(key, { analytics, lastUploadResult, fmtHour }) {
+  const a = analytics || {}
+  switch (key) {
+    case 'import': {
+      const n = lastUploadResult?.inserted || 0
+      return `${n.toLocaleString()} tip${n === 1 ? '' : 's'} imported from ${lastUploadResult?.platform || 'your file'}`
+    }
+    case 'platforms': {
+      const plats = (a.platforms || []).map(p => p.platform)
+      return plats.length ? `${plats.length} platform${plats.length > 1 ? 's' : ''} tracked: ${plats.join(', ')}` : 'Detecting platforms…'
+    }
+    case 'peak':
+      if (a.bestHour) return `Peak window identified: ${fmtHour(parseInt(a.bestHour.hour))}`
+      if (a.earlySignalHour) return `Early signal around ${fmtHour(parseInt(a.earlySignalHour.hour))}`
+      return 'Not enough data yet for a peak window'
+    case 'supporters': {
+      const top = a.topTippers?.[0]
+      return top ? `Top supporter: ${top.username}` : 'No supporters detected yet'
+    }
+    case 'vip': {
+      const n = (a.whales || []).filter(w => w.tier === 'Whale' || w.tier === 'Shark').length
+      return n > 0 ? `${n} VIP-tier supporter${n > 1 ? 's' : ''} found` : 'No VIP-tier supporters yet'
+    }
+    case 'compare': {
+      const n = (a.platforms || []).length
+      return n > 1 ? `Compared ${n} platforms head-to-head` : 'Only one platform tracked so far'
+    }
+    case 'build':
+      return 'Your Command Center is up to date'
+    default:
+      return ''
+  }
+}
+
+// Real boolean comparisons against real prior/current analytics — never
+// inferred or guessed. `changes` feeds both the reveal screen's inline
+// badges and (via onOpenDashboard in PostImportReveal) the dashboard-level
+// "NEW" highlight state.
+function computeImportScenario({ preSnapshot, analytics, lastUploadResult }) {
+  const a = analytics || {}
+  if (!preSnapshot) return { scenario: 'first_import', changes: {} }
+
+  const prevPlatforms = new Set((preSnapshot.platforms || []).map(p => p.platform))
+  const isNewPlatform = !!lastUploadResult?.platform && !prevPlatforms.has(lastUploadResult.platform)
+  const scenario = isNewPlatform ? 'new_platform' : 'same_platform'
+
+  const peakChanged = !!(preSnapshot.bestHour && a.bestHour && String(preSnapshot.bestHour.hour) !== String(a.bestHour.hour))
+  const prevTopSupporter = preSnapshot.topTippers?.[0]?.username?.toLowerCase() || null
+  const newTopSupporter = a.topTippers?.[0]?.username?.toLowerCase() || null
+  const topSupporterChanged = !!(prevTopSupporter && newTopSupporter && prevTopSupporter !== newTopSupporter)
+  const prevVipUsernames = new Set((preSnapshot.whales || []).filter(w => w.tier === 'Whale').map(w => w.username.toLowerCase()))
+  const newVips = (a.whales || []).filter(w => w.tier === 'Whale' && !prevVipUsernames.has(w.username.toLowerCase()))
+  const prevBestPlatform = [...(preSnapshot.platforms || [])].filter(p => p.hours > 0).sort((x, y) => y.usdPerHour - x.usdPerHour)[0] || null
+  const newBestPlatform = [...(a.platforms || [])].filter(p => p.hours > 0).sort((x, y) => y.usdPerHour - x.usdPerHour)[0] || null
+  const bestPlatformChanged = !!(prevBestPlatform && newBestPlatform && prevBestPlatform.platform !== newBestPlatform.platform)
+
+  return { scenario, changes: { peakChanged, topSupporterChanged, newVips, bestPlatformChanged, isNewPlatform } }
+}
+
+// Small presentational pieces shared by the reveal cards below — kept tiny
+// and dumb (no data logic) so all truthful-copy decisions stay in
+// getCommandCenterTaskResult / computeImportScenario / PostImportReveal.
+function CCCard({ icon, label, accent, delay, children }) {
+  return (
+    <div style={{ ...glassCard, borderRadius: 14, padding: "14px 16px", position: "relative", overflow: "hidden", animation: `fadeUp 0.4s ease ${delay}s both` }}>
+      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg,${accent}00,${accent}88,${accent}00)` }} />
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+        <span style={{ fontSize: 14 }}>{icon}</span>
+        <span style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.1em", color: C.muted }}>{label}</span>
+      </div>
+      {children}
+    </div>
+  )
+}
+function CCValue({ color, children }) { return <div style={{ fontSize: 18, fontWeight: 900, color }}>{children}</div> }
+function CCSub({ children }) { return <div style={{ fontSize: 11.5, color: C.muted, marginTop: 3 }}>{children}</div> }
+function CCBadge({ color, children }) {
+  return <span style={{ display: "inline-block", marginTop: 4, padding: "2px 8px", borderRadius: 100, fontSize: 10, fontWeight: 700, color, background: `${color}18`, border: `1px solid ${color}40` }}>{children}</span>
+}
+
+// Animated count-up used on the free-tier import success screen.
+function CountUp({ to, prefix = '', duration = 900, decimals = 0 }) {
+  const [val, setVal] = useState(0)
+  useEffect(() => {
+    const start = Date.now()
+    const tick = () => {
+      const p = Math.min((Date.now() - start) / duration, 1)
+      const e = 1 - Math.pow(1 - p, 3)
+      const v = e * to
+      setVal(decimals ? +v.toFixed(decimals) : Math.round(v))
+      if (p < 1) requestAnimationFrame(tick)
+    }
+    requestAnimationFrame(tick)
+  }, [to, duration, decimals])
+  return <>{prefix}{decimals ? val.toFixed(decimals) : val.toLocaleString()}</>
+}
+
+function RevealHeader({ headline, subhead }) {
+  return (
+    <div style={{ textAlign: "center", marginBottom: 22 }}>
+      <div className="cc-badge-pop" style={{ width: 56, height: 56, margin: "0 auto 14px", borderRadius: "50%", background: "linear-gradient(135deg,#10B981,#22D3EE)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, color: "#fff", boxShadow: "0 0 45px rgba(34,211,238,0.4)" }}>✓</div>
+      <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.18em", textTransform: "uppercase", color: C.cyan, marginBottom: 8 }}>Creator Command Center</div>
+      <h1 style={{ fontSize: 20, fontWeight: 900, color: C.white, marginBottom: 6 }}>{headline}</h1>
+      <p style={{ fontSize: 13, color: C.muted, lineHeight: 1.6 }}>{subhead}</p>
+    </div>
+  )
+}
+function UpgradeCTA({ router, full }) {
+  return (
+    <button onClick={() => router.push('/pricing')} style={{ width: "100%", padding: full ? "14px 20px" : "12px 18px", borderRadius: 12, border: "none", cursor: "pointer", background: "linear-gradient(90deg,#22D3EE,#7C5CFF,#EC4899)", color: "#06101A", fontSize: full ? 14 : 13, fontWeight: 900, letterSpacing: "0.02em", marginBottom: 22, boxShadow: "0 0 24px rgba(34,211,238,0.28), 0 0 34px rgba(236,72,153,0.22)" }}>
+      Upgrade to see your full insights →
+    </button>
+  )
+}
+function RevealFooter({ onOpenDashboard, onImportAnother, label }) {
+  return (
+    <div style={{ textAlign: "center", borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 18 }}>
+      <div style={{ fontSize: 13, fontWeight: 800, color: C.white, marginBottom: 12 }}>{label}</div>
+      <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
+        <Button onClick={onOpenDashboard} style={{ padding: "12px 26px", fontSize: 14 }}>Continue to Dashboard →</Button>
+        <Button variant="secondary" onClick={onImportAnother} style={{ padding: "12px 22px", fontSize: 13 }}>Import another CSV</Button>
+      </div>
+    </div>
+  )
+}
+
+function PostImportReveal({
+  successPhase, analysisStepsDone, lastUploadResult, analytics, isPro,
+  scenario, changes, onOpenDashboard, onImportAnother, router, fmtHour,
+}) {
+  const a = analytics || {}
+
+  if (successPhase === "shimmer") {
+    return (
+      <div style={{ textAlign: "center", padding: "46px 0 40px" }}>
+        <div className="cc-shimmer-sweep" />
+        <div className="cc-badge-pop" style={{ width: 56, height: 56, margin: "0 auto 14px", borderRadius: "50%", background: "linear-gradient(135deg,#10B981,#22D3EE)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, color: "#fff", boxShadow: "0 0 40px rgba(34,211,238,0.4)" }}>✓</div>
+        <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.16em", textTransform: "uppercase", color: C.cyan }}>Data processed</div>
+      </div>
+    )
+  }
+
+  if (successPhase === "analyzing") {
+    const pct = Math.round((analysisStepsDone / COMMAND_CENTER_TASKS.length) * 100)
+    return (
+      <div style={{ textAlign: "center", animation: "fadeUp 0.4s ease both" }}>
+        <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.18em", textTransform: "uppercase", color: C.cyan, marginBottom: 8 }}>Creator Intelligence</div>
+        <h1 style={{ fontSize: 19, fontWeight: 900, color: C.white, marginBottom: 6, letterSpacing: "-0.01em" }}>Updating Your Command Center</h1>
+        <p style={{ fontSize: 13, color: C.muted, marginBottom: 20 }}>Analyzing your streaming history and finding what's new.</p>
+        <div className="cc-progress-track" style={{ marginBottom: 22 }}>
+          <div className="cc-progress-fill" style={{ width: `${pct}%` }} />
+        </div>
+        <div style={{ textAlign: "left" }}>
+          {COMMAND_CENTER_TASKS.map((t, i) => {
+            const status = i < analysisStepsDone ? "complete" : i === analysisStepsDone ? "active" : "pending"
+            const result = status === "complete" ? getCommandCenterTaskResult(t.key, { analytics: a, lastUploadResult, fmtHour }) : null
+            return (
+              <div key={t.key} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "6px 0", opacity: status === "pending" ? 0.4 : 1, transition: "opacity 0.3s ease" }}>
+                <div className={status === "active" ? "cc-task-active" : ""} style={{
+                  width: 18, height: 18, borderRadius: "50%", flexShrink: 0, marginTop: 1,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  background: status === "complete" ? "linear-gradient(135deg,#10B981,#22D3EE)" : status === "active" ? "rgba(34,211,238,0.16)" : "rgba(255,255,255,0.06)",
+                  border: status === "active" ? "1.5px solid rgba(34,211,238,0.55)" : "1px solid rgba(255,255,255,0.1)",
+                }}>
+                  {status === "complete" && <span style={{ fontSize: 9, color: "#fff", fontWeight: 900 }}>✓</span>}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 12.5, fontWeight: status === "pending" ? 500 : 700, color: status === "complete" ? C.white : status === "active" ? C.cyan : C.muted }}>{t.label}</div>
+                  {result && <div style={{ fontSize: 11.5, color: C.text, marginTop: 2 }}>{result}</div>}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    )
+  }
+
+  // ── REVEAL ──────────────────────────────────────────────────────────
+  const bestPlatform = [...(a.platforms || [])].filter(p => p.hours > 0).sort((x, y) => y.usdPerHour - x.usdPerHour)[0] || null
+  const vipFans = (a.whales || []).filter(w => w.tier === "Whale" || w.tier === "Shark").sort((x, y) => y.totalUSD - x.totalUSD)
+  const topFans = (a.topTippers || []).slice(0, 5)
+  const totalSupporters = (a.whales || []).length
+  const platformsDetected = (a.platforms || []).map(p => p.platform)
+
+  const headline = scenario === 'first_import'
+    ? 'Your Creator Command Center is ready'
+    : scenario === 'new_platform'
+    ? `${lastUploadResult?.platform || 'Your new platform'} is now tracked`
+    : 'Your dashboard has been updated'
+  const subhead = scenario === 'first_import'
+    ? "We analyzed your data and found personalized insights about your cam business."
+    : scenario === 'new_platform'
+    ? "We compared it against your existing platforms — here's what changed."
+    : "Here's what's new since your last import."
+
+  let delayIdx = 0
+  const nextDelay = () => (delayIdx++) * 0.12
+
+  // FREE, same-platform re-import: a small partial-mix card — some real
+  // facts unlocked, a couple of deeper ones still teased. Distinct from the
+  // full-locked-wall treatment below, which is only for a first import.
+  if (!isPro && scenario === 'same_platform') {
+    return (
+      <div style={{ animation: "fadeUp 0.4s ease both" }}>
+        <RevealHeader headline={headline} subhead={subhead} />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 20, textAlign: 'left' }}>
+          <CCCard icon="📥" label="This Import" accent={C.cyan} delay={nextDelay()}>
+            <CCValue color={C.cyan}>{(lastUploadResult?.inserted || 0).toLocaleString()} new tips</CCValue>
+            <CCSub>${(lastUploadResult?.totalUsd || 0).toFixed(2)} tracked from {lastUploadResult?.platform}</CCSub>
+          </CCCard>
+          <CCCard icon="💰" label="Lifetime Total" accent={C.green} delay={nextDelay()}>
+            <CCValue color={C.green}>${(a.totalUSD || 0).toFixed(2)}</CCValue>
+            <CCSub>{totalSupporters} total supporters</CCSub>
+          </CCCard>
+          {(changes.peakChanged || changes.topSupporterChanged) && (
+            <CCCard icon="🔔" label="Something Changed" accent={C.pink} delay={nextDelay()}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {changes.peakChanged && <div style={{ fontSize: 12.5, color: C.text }}>Your peak streaming window shifted.</div>}
+                {changes.topSupporterChanged && <div style={{ fontSize: 12.5, color: C.text }}>Your top supporter changed.</div>}
+              </div>
+            </CCCard>
+          )}
+          <LockedInsightCard lockType="requires_pro" title="Your Peak Streaming Window" description="See the exact hours you're earning the most, updated with this import." />
+          <LockedInsightCard lockType="requires_pro" title="Your VIP Activity" description="See which high-value supporters are active right now." />
+        </div>
+        <UpgradeCTA router={router} />
+        <RevealFooter onOpenDashboard={onOpenDashboard} onImportAnother={onImportAnother} label="Your dashboard has been updated!" />
+      </div>
+    )
+  }
+
+  // FREE, first import: full locked-teaser wall.
+  if (!isPro) {
+    return (
+      <div style={{ animation: "fadeUp 0.4s ease both" }}>
+        <RevealHeader headline={headline} subhead={subhead} />
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 10, marginBottom: 10 }}>
+          {[
+            { label: "Total Earnings", value: a.totalUSD || 0, color: C.green, prefix: "$", decimals: 2 },
+            { label: "Total Tips", value: a.totalTips || 0, color: C.cyan },
+            { label: "Total Supporters", value: totalSupporters, color: C.gold },
+            { label: "Total Sessions", value: a.meaningfulSessionCount || 0, color: C.pink },
+          ].map((s, i) => (
+            <div key={s.label} className="stat-card" style={{ ...glassCard, borderRadius: 14, padding: "12px 14px", position: "relative", overflow: "hidden", textAlign: "left", animation: `statCardIn 0.4s ease ${i * 0.1}s both` }}>
+              <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg,${s.color}00,${s.color}88,${s.color}00)` }} />
+              <div style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em", color: C.muted, marginBottom: 5 }}>{s.label}</div>
+              <div style={{ fontSize: 17, fontWeight: 900, color: s.color }}><CountUp to={s.value} prefix={s.prefix || ""} decimals={s.decimals || 0} /></div>
+            </div>
+          ))}
+        </div>
+        {platformsDetected.length > 0 && (
+          <div style={{ fontSize: 12, color: C.muted, marginBottom: 22, textAlign: "left" }}>Platforms detected: <strong style={{ color: C.text }}>{platformsDetected.join(", ")}</strong></div>
+        )}
+        <div style={{ textAlign: "center", margin: "22px 0 14px" }}>
+          <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.16em", textTransform: "uppercase", color: C.pink }}>We Found More In Your Data</div>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 18 }}>
+          <LockedInsightCard lockType="requires_pro" title="Your Peak Streaming Window" description="See the exact hours when you're earning the most." />
+          <LockedInsightCard lockType="requires_pro" title="Your Highest-Earning Platform" description="Find out which platform gives you the best return for your time." />
+          <LockedInsightCard lockType="requires_pro" title="Your VIP Opportunities" description="Discover your highest-value supporters and emerging VIPs." />
+          <LockedInsightCard lockType="requires_pro" title="Your Performance Changes" description="See what's improving, declining, and changing over time." />
+        </div>
+        <UpgradeCTA router={router} full />
+        <RevealFooter onOpenDashboard={onOpenDashboard} onImportAnother={onImportAnother} label="Your dashboard has been updated!" />
+      </div>
+    )
+  }
+
+  // ── PRO: full reveal for all 3 scenarios, "what changed" surfaced inline ──
+  const whatChanged = []
+  if (changes.peakChanged) whatChanged.push(`Your peak window shifted to ${fmtHour(parseInt(a.bestHour.hour))}.`)
+  if (changes.topSupporterChanged) whatChanged.push(`${topFans[0]?.username || 'A new supporter'} is now your top supporter.`)
+  if (changes.newVips?.length > 0) whatChanged.push(`${changes.newVips.length === 1 ? 'A new VIP supporter' : `${changes.newVips.length} new VIP supporters`}: ${changes.newVips.map(w => w.username).join(', ')}.`)
+  if (changes.bestPlatformChanged) whatChanged.push(`${bestPlatform?.platform} is now your highest-earning platform.`)
+  if (scenario === 'new_platform') whatChanged.unshift(`${lastUploadResult?.platform} is now part of your platform comparison.`)
+
+  return (
+    <div style={{ animation: "fadeUp 0.4s ease both" }}>
+      <RevealHeader headline={headline} subhead={subhead} />
+      <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 20, textAlign: "left" }}>
+        <CCCard icon="⏰" label="Peak Streaming Window" accent={C.cyan} delay={nextDelay()}>
+          {a.bestHour ? (
+            <>
+              <CCValue color={C.cyan}>{fmtHour(parseInt(a.bestHour.hour))}</CCValue>
+              {changes.peakChanged ? <CCBadge color={C.pink}>Updated just now</CCBadge> : scenario !== 'first_import' ? <CCSub>Same as your last import</CCSub> : null}
+            </>
+          ) : a.earlySignalHour ? (
+            <><CCValue color={C.gold}>{fmtHour(parseInt(a.earlySignalHour.hour))}</CCValue><CCBadge color={C.gold}>Early signal</CCBadge></>
+          ) : <CCSub>Not enough data yet</CCSub>}
+        </CCCard>
+
+        <CCCard icon="👑" label="Top Supporter" accent={C.gold} delay={nextDelay()}>
+          {topFans[0] ? (
+            <>
+              <CCValue color={C.gold}>{topFans[0].username}</CCValue>
+              <CCSub>${topFans[0].usd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} total{topFans[0].count ? ` · ${topFans[0].count} tips` : ""}</CCSub>
+              {changes.topSupporterChanged && <CCBadge color={C.pink}>New top supporter</CCBadge>}
+            </>
+          ) : <CCSub>Not enough data yet</CCSub>}
+        </CCCard>
+
+        <CCCard icon="💎" label="Highest-Earning Platform" accent={C.green} delay={nextDelay()}>
+          {bestPlatform ? (
+            <>
+              <CCValue color={C.green}>{bestPlatform.platform}</CCValue>
+              <CCSub>~${bestPlatform.usdPerHour}/hr average</CCSub>
+              {changes.bestPlatformChanged && <CCBadge color={C.pink}>Changed</CCBadge>}
+            </>
+          ) : <CCSub>Not enough session data yet</CCSub>}
+        </CCCard>
+
+        {(a.platforms || []).length > 1 && (
+          <CCCard icon="📊" label="Platform Performance" accent={C.blue} delay={nextDelay()}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 4 }}>
+              {[...a.platforms].sort((x, y) => y.totalUSD - x.totalUSD).map(p => (
+                <div key={p.platform} style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5 }}>
+                  <span style={{ color: C.white }}>{p.platform}{p.platform === lastUploadResult?.platform && scenario === 'new_platform' ? ' 🆕' : ''}</span>
+                  <span style={{ color: C.text }}>${p.totalUSD.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{p.hours > 0 ? ` · $${p.usdPerHour}/hr` : ""}</span>
+                </div>
+              ))}
+            </div>
+          </CCCard>
+        )}
+
+        <CCCard icon="🐳" label="VIP Activity" accent={C.gold} delay={nextDelay()}>
+          {vipFans.length > 0 ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 4 }}>
+              {vipFans.slice(0, 5).map(w => (
+                <div key={w.username} style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5 }}>
+                  <span style={{ color: C.white }}>{w.tier === "Whale" ? "🐳" : "🦈"} {w.username}{changes.newVips?.some(v => v.username === w.username) ? ' 🆕' : ''}</span>
+                  <span style={{ color: C.text }}>${w.totalUSD.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </div>
+              ))}
+            </div>
+          ) : <CCSub>No VIP-tier supporters detected yet</CCSub>}
+        </CCCard>
+
+        {a.momentum && a.momentum.label !== "No data" && (
+          <CCCard icon={a.momentum.emoji} label="Performance Changes" accent={a.momentum.label === "Declining" ? C.red : C.green} delay={nextDelay()}>
+            <CCValue color={a.momentum.label === "Declining" ? C.red : C.green}>{a.momentum.label}</CCValue>
+            <CCSub>Last 30 days: ${a.momentum.last30USD.toFixed(2)} vs prior 30: ${a.momentum.prior30USD.toFixed(2)}</CCSub>
+          </CCCard>
+        )}
+
+        {whatChanged.length > 0 && (
+          <CCCard icon="⚡" label={scenario === 'new_platform' ? 'What This Platform Added' : "What Changed Since Your Last Import"} accent={C.pink} delay={nextDelay()}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 4 }}>
+              {whatChanged.map((line, i) => <div key={i} style={{ fontSize: 12.5, color: C.text, lineHeight: 1.5 }}>{line}</div>)}
+            </div>
+          </CCCard>
+        )}
+      </div>
+      <RevealFooter onOpenDashboard={onOpenDashboard} onImportAnother={onImportAnother} label="Your dashboard has been updated!" />
+    </div>
+  )
+}
+
 // Sparkle burst — ports the same completion animation used in onboarding's
 // "First Insights" step so the platform-limit preview feels visually
 // consistent with a real completed import.
@@ -1433,6 +1819,21 @@ export default function Dashboard() {
   // instead of a hard block (see denyWithPlatformPreview / handleCSV below)
   const [lockedPreview, setLockedPreview] = useState(null)
   const [showImportSparkle, setShowImportSparkle] = useState(false)
+  // Post-import "Creator Command Center" reveal: success -> shimmer -> analyzing -> reveal.
+  const [successPhase, setSuccessPhase] = useState('shimmer')
+  const [analysisStepsDone, setAnalysisStepsDone] = useState(0)
+  const [importScenario, setImportScenario] = useState({ scenario: 'first_import', changes: {} })
+  const successTimersRef = useRef([])
+  // Snapshot of the engine result from BEFORE this import — only captured
+  // when real prior data existed — powers computeImportScenario()'s
+  // same-platform/new-platform detection and "what changed" comparisons
+  // without ever fabricating a change.
+  const preImportSnapshotRef = useRef(null)
+  // Set only when the user clicks "Continue to Dashboard" from the reveal —
+  // drives the transient "✨ NEW" badges on the dashboard itself, per the
+  // request that changes stay visible after leaving the reveal screen, not
+  // just inside it. Auto-clears itself (see the effect near loadData).
+  const [dashboardHighlights, setDashboardHighlights] = useState(null)
   const [activeTab, setActiveTab] = useState(initialTab)
   const [toast, setToast] = useState("")
   const [uploadCount, setUploadCount] = useState(0)
@@ -2121,7 +2522,17 @@ export default function Dashboard() {
   // Stop the rotating-microcopy interval if the dashboard unmounts mid-import
   useEffect(() => () => {
     if (importMessageTimerRef.current) clearInterval(importMessageTimerRef.current)
+    successTimersRef.current.forEach(id => { clearTimeout(id); clearInterval(id) })
   }, [])
+
+  // dashboardHighlights is meant to read as "this just happened," not as a
+  // permanent badge — clears itself ~14s after being set so it doesn't
+  // linger as stale clutter on a later visit.
+  useEffect(() => {
+    if (!dashboardHighlights) return
+    const id = setTimeout(() => setDashboardHighlights(null), 14000)
+    return () => clearTimeout(id)
+  }, [dashboardHighlights])
 
   const handleSignOut = async () => {
     await supabase.auth.signOut()
@@ -2134,6 +2545,11 @@ export default function Dashboard() {
     // success/error confirmation stays visible while data refreshes in the background.
     if (silent) setIsRefreshing(true)
     else setLoading(true)
+    // Freshly-computed analytics, returned to the caller so a post-import
+    // flow can read the real new state synchronously instead of racing
+    // React's async setAnalytics() — every existing caller already ignores
+    // this return value, so this is purely additive.
+    let freshAnalytics = null
     try {
       const userTz = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC'
       const PAGE = 1000
@@ -2164,6 +2580,7 @@ export default function Dashboard() {
         try {
           const result = runEngine(allData, userTz)
           setAnalytics(result)
+          freshAnalytics = result
           lastEngineTipsFingerprintRef.current = { length: allData.length, lastId: allData[allData.length - 1]?.id ?? null }
         } catch (engineErr) {
           console.error('[loadData] runEngine failed:', engineErr)
@@ -2194,6 +2611,7 @@ export default function Dashboard() {
       const { data: engineData } = await supabase.rpc('get_user_insights', { p_user_id: uid, p_timezone: userTz })
       setEngineInsights(engineData)
       setLastRefreshed(new Date())
+      return freshAnalytics
     } finally {
       if (silent) setIsRefreshing(false)
       else setLoading(false)
@@ -2206,11 +2624,48 @@ const stopImportMessageRotation = () => {
     }
   }
 
+  const stopSuccessSequence = () => {
+    successTimersRef.current.forEach(id => { clearTimeout(id); clearInterval(id) })
+    successTimersRef.current = []
+  }
+
   const resetImport = () => {
     stopImportMessageRotation()
+    stopSuccessSequence()
     setImportStage('idle')
     setLastUploadResult(null)
     setLockedPreview(null)
+    setSuccessPhase('shimmer')
+    setAnalysisStepsDone(0)
+  }
+
+  // Drives shimmer -> analyzing (staggered task reveal) -> reveal. The
+  // engine result is already fully computed by the time this runs (handleCSV
+  // awaits loadData() first) — this only paces how the UI presents it.
+  const runPostImportSequence = () => {
+    stopSuccessSequence()
+    setSuccessPhase('shimmer')
+    setAnalysisStepsDone(0)
+    const shimmerTimer = setTimeout(() => {
+      setSuccessPhase('analyzing')
+      let step = 0
+      const stepTimer = setInterval(() => {
+        step += 1
+        setAnalysisStepsDone(step)
+        if (step >= COMMAND_CENTER_TASKS.length) {
+          clearInterval(stepTimer)
+          const revealTimer = setTimeout(() => {
+            setSuccessPhase('reveal')
+            setShowImportSparkle(true)
+            const sparkleTimer = setTimeout(() => setShowImportSparkle(false), 2400)
+            successTimersRef.current.push(sparkleTimer)
+          }, 550)
+          successTimersRef.current.push(revealTimer)
+        }
+      }, 420)
+      successTimersRef.current.push(stepTimer)
+    }, 650)
+    successTimersRef.current.push(shimmerTimer)
   }
 
   // Shows a quick preview of what's in a blocked import (tips/fans/earnings/
@@ -2241,6 +2696,14 @@ const stopImportMessageRotation = () => {
       await denyWithPlatformPreview(file, forcePlatform)
       return
     }
+    // Snapshot the engine result from BEFORE this import — only when the
+    // creator actually had prior data — so computeImportScenario() can
+    // later tell same-platform-reimport apart from a genuinely new
+    // platform, and build real "what changed" comparisons.
+    preImportSnapshotRef.current = (analytics && analytics.totalTips > 0) ? analytics : null
+    stopSuccessSequence()
+    setSuccessPhase('shimmer')
+    setAnalysisStepsDone(0)
     setImportStage('processing')
     setImportMessageIdx(0)
     setLastUploadResult(null)
@@ -2294,7 +2757,6 @@ const stopImportMessageRotation = () => {
         dateFrom: result.dateFrom,
         dateTo: result.dateTo,
       })
-      setImportStage('success')
 
       // Google Ads — CSV Upload conversion
       try {
@@ -2309,9 +2771,20 @@ const stopImportMessageRotation = () => {
 
       setUploadCount(c => c + 1)
       if (typeof window !== 'undefined') localStorage.setItem('camcash_onboarded', '1')
-      // Force reload after upload — bypass cache so new tips appear immediately
+      // Force reload after upload — bypass cache so new tips appear immediately.
+      // Runs BEFORE the success/reveal screens mount so the Command Center
+      // analysis is built from the real, freshly-recomputed engine output —
+      // never a stale pre-import snapshot.
       try { sessionStorage.removeItem(`camcash_tips_${user.id}`) } catch(e) {}
-      await loadData(user.id, true, { silent: true })
+      const freshAnalytics = await loadData(user.id, true, { silent: true })
+
+      setImportScenario(computeImportScenario({
+        preSnapshot: preImportSnapshotRef.current,
+        analytics: freshAnalytics,
+        lastUploadResult: { platform: result.platform },
+      }))
+      setImportStage('success')
+      runPostImportSequence()
 
     } catch (err) {
       showToast("❌ " + err.message)
@@ -3175,6 +3648,29 @@ const stopImportMessageRotation = () => {
         .import-flash-ring { animation: import-flash 900ms ease-out; }
         .import-check-badge { animation: import-check-pop 420ms cubic-bezier(0.34,1.3,0.64,1); }
 
+        /* ── POST-IMPORT "CREATOR COMMAND CENTER" REVEAL ── */
+        .cc-shimmer-sweep {
+          position: absolute; inset: 0; pointer-events: none; z-index: 2;
+          background: linear-gradient(100deg, transparent 32%, rgba(34,211,238,0.16) 45%, rgba(124,92,255,0.24) 50%, rgba(236,72,153,0.16) 55%, transparent 68%);
+          transform: translateX(-130%);
+          animation: cc-shimmer-sweep 0.7s cubic-bezier(0.22,0.61,0.36,1) both;
+        }
+        @keyframes cc-shimmer-sweep {
+          from { transform: translateX(-130%); }
+          to   { transform: translateX(130%); }
+        }
+        @keyframes cc-pop {
+          0%   { opacity: 0; transform: scale(0.6); }
+          60%  { opacity: 1; transform: scale(1.12); }
+          100% { opacity: 1; transform: scale(1); }
+        }
+        .cc-badge-pop { animation: cc-pop 0.5s cubic-bezier(0.34,1.3,0.64,1) both; }
+        @keyframes cc-task-pulse { 0%,100% { opacity: 1; box-shadow: 0 0 0 rgba(34,211,238,0.5); } 50% { opacity: 0.6; box-shadow: 0 0 10px rgba(34,211,238,0.5); } }
+        .cc-task-active { animation: cc-task-pulse 1.1s ease-in-out infinite; }
+        .cc-progress-track { position: relative; height: 5px; border-radius: 5px; overflow: hidden; background: rgba(255,255,255,0.07); }
+        .cc-progress-fill { height: 100%; border-radius: 5px; background: linear-gradient(90deg,#21E6F3,#6C5CFF,#FF2FAE); box-shadow: 0 0 12px rgba(108,92,255,0.55); transition: width 0.4s cubic-bezier(0.22,0.61,0.36,1); }
+        @keyframes statCardIn { from { opacity:0; transform:translateY(8px) scale(0.97); } to { opacity:1; transform:translateY(0) scale(1); } }
+
         /* ── FAN CARD / MESSAGE (HEART-ENVELOPE) ──
            .heart-envelope-btn is hover/focus-only (cheap, no continuous
            repaint) and is safe on every per-row instance across a fan list
@@ -3449,7 +3945,11 @@ const stopImportMessageRotation = () => {
                 { label:"Total Fans", accent:'#a78bfa', glowClass:'card-glow-violet', trend:fansGrowth,
                   value: whales.length > 0 ? whales.length.toLocaleString() : '—',
                   sub: fansActiveLast30 > 0 ? `${fansActiveLast30} active in last 30 days` : 'None active in the last 30 days',
-                  icon:'👥' },
+                  icon:'👥',
+                  // Transient highlight set by the post-import reveal's
+                  // "Continue to Dashboard" — see dashboardHighlights above.
+                  // Clears itself after ~14s; never persists across a reload.
+                  isNew: !!(dashboardHighlights?.topSupporterChanged || (dashboardHighlights?.newVips && dashboardHighlights.newVips.length > 0)) },
                 { label:"Meaningful Sessions", accent:'#fbbf24', glowClass:'card-glow-gold', trend:sessGrowth,
                   value: meaningfulSessions.length > 0 ? meaningfulSessions.length.toLocaleString() : (sessions.length > 0 ? '0' : '—'),
                   sub: meaningfulSessions.length > 0
@@ -3468,7 +3968,12 @@ const stopImportMessageRotation = () => {
                         {/* accent top bar */}
                         <div style={{ position:'absolute', top:0, left:0, right:0, height:3, background:`linear-gradient(90deg,${s.accent}80,${s.accent}20)`, borderRadius:'16px 16px 0 0' }} />
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                          <span style={{ fontSize: 11, color: C.text, textTransform: "uppercase", letterSpacing: 0.6, fontWeight: 700 }}>{s.label}</span>
+                          <span style={{ fontSize: 11, color: C.text, textTransform: "uppercase", letterSpacing: 0.6, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
+                            {s.label}
+                            {s.isNew && (
+                              <span style={{ fontSize: 9, fontWeight: 800, color: C.green, padding: '1px 6px', borderRadius: 20, background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.4)' }}>NEW</span>
+                            )}
+                          </span>
                           <span style={{ fontSize: 18, opacity: 0.75 }}>{s.icon}</span>
                         </div>
                         <div className={s.isHero ? 'hero-revenue-shimmer' : ''} style={{ fontSize: 'clamp(20px, 2.4vw, 26px)', fontWeight: 900, lineHeight: 1.1, marginBottom: 4, ...(s.isHero ? {} : { color: s.accent }) }}>
@@ -3586,7 +4091,12 @@ const stopImportMessageRotation = () => {
                   </div>
 
                   <div style={{ flex: 1, minWidth: 130, padding: '11px 14px', borderRadius: 11, background: bestTimeLock.locked ? 'rgba(255,255,255,0.03)' : atPeak ? 'rgba(16,185,129,0.12)' : 'rgba(34,211,238,0.07)', border: `1px solid ${bestTimeLock.locked ? 'rgba(255,255,255,0.08)' : atPeak ? 'rgba(16,185,129,0.4)' : 'rgba(34,211,238,0.18)'}` }}>
-                    <div style={{ fontSize: 10, color: C.muted, marginBottom: 3, textTransform: 'uppercase', letterSpacing: 1 }}>Best Time</div>
+                    <div style={{ fontSize: 10, color: C.muted, marginBottom: 3, textTransform: 'uppercase', letterSpacing: 1, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      Best Time
+                      {dashboardHighlights?.peakChanged && (
+                        <span style={{ fontSize: 9, fontWeight: 800, color: C.green, padding: '1px 6px', borderRadius: 20, background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.4)' }}>NEW</span>
+                      )}
+                    </div>
                     {bestTimeLock.locked ? (
                       analytics?.earlySignalHour ? (
                         <>
@@ -5694,31 +6204,28 @@ const stopImportMessageRotation = () => {
               )}
 
               {importStage === 'success' && lastUploadResult?.success && (
-                <div style={{ textAlign: "center" }}>
-                  <div style={{ position: "relative", width: 56, height: 56, margin: "0 auto 14px" }}>
-                    <div className="import-flash-ring" style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "radial-gradient(circle,rgba(34,211,238,0.55),rgba(236,72,153,0.35) 60%,transparent 70%)" }} />
-                    <div className="import-check-badge" style={{ position: "relative", width: 56, height: 56, borderRadius: "50%", background: "linear-gradient(135deg,#10B981,#22D3EE)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, color: "#fff", boxShadow: "0 0 24px rgba(16,185,129,0.45)" }}>✓</div>
-                  </div>
-                  <div style={{ fontSize: 16, fontWeight: 800, color: C.white, marginBottom: 8 }}>Success — your tips were imported.</div>
-                  <div style={{ fontSize: 13.5, color: C.text, lineHeight: 1.6 }}>
-                    Imported <strong style={{ color: C.white }}>{(lastUploadResult.inserted || 0).toLocaleString()}</strong> tips from <strong style={{ color: C.cyan }}>{lastUploadResult.platform}</strong>
-                    {typeof lastUploadResult.totalUsd === 'number' && (
-                      <> — <strong style={{ color: C.green }}>${lastUploadResult.totalUsd.toFixed(2)}</strong> tracked</>
-                    )}
-                  </div>
-                  {(formatImportDate(lastUploadResult.dateFrom) && formatImportDate(lastUploadResult.dateTo)) && (
-                    <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>
-                      {formatImportDate(lastUploadResult.dateFrom)} – {formatImportDate(lastUploadResult.dateTo)}
-                    </div>
-                  )}
-                  {lastUploadResult.skipped > 0 && (
-                    <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>{lastUploadResult.skipped} duplicates skipped</div>
-                  )}
-                  <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 20, flexWrap: "wrap" }}>
-                    <Button onClick={() => handleTabChange('overview')} style={{ padding: "12px 26px", fontSize: 14 }}>View Dashboard</Button>
-                    <Button variant="secondary" onClick={resetImport} style={{ padding: "12px 22px", fontSize: 13 }}>Import another CSV</Button>
-                  </div>
-                </div>
+                <PostImportReveal
+                  successPhase={successPhase}
+                  analysisStepsDone={analysisStepsDone}
+                  lastUploadResult={lastUploadResult}
+                  analytics={analytics}
+                  isPro={isPro}
+                  scenario={importScenario.scenario}
+                  changes={importScenario.changes}
+                  router={router}
+                  fmtHour={fmtHour}
+                  onOpenDashboard={() => {
+                    // Carries the real "what changed" flags forward onto the
+                    // dashboard itself (see Money Snapshot / Daily Brief),
+                    // instead of letting them disappear with this screen.
+                    const c = importScenario.changes || {}
+                    if (c.peakChanged || c.topSupporterChanged || (c.newVips && c.newVips.length > 0) || c.bestPlatformChanged) {
+                      setDashboardHighlights(c)
+                    }
+                    handleTabChange('overview')
+                  }}
+                  onImportAnother={resetImport}
+                />
               )}
 
               {importStage === 'error' && lastUploadResult && (
