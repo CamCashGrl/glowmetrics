@@ -32,8 +32,12 @@ const UPGRADE_COPY = {
     subhead: "You're only seeing a preview of your data. Here's what's waiting for you inside:",
   },
   multi_platform: {
-    headline: "You've tracked 1 platform",
-    subhead: "Compare all your platforms with Creator Pro to see exactly where you actually earn best.",
+    headline: "You've reached the free 2-platform limit",
+    subhead: "Upgrade to Creator Pro to track unlimited platforms and compare exactly where you actually earn best.",
+  },
+  platform_comparison: {
+    headline: "You're tracking multiple platforms",
+    subhead: "Unlock the combined view — which platform pays better per hour, your totals across all of them, and where to shift your time.",
   },
   whales_cutoff: {
     headline: "You've found your top fans",
@@ -2236,8 +2240,8 @@ const stopImportMessageRotation = () => {
 
   const handleCSV = async (file, forcePlatform = null) => {
     if (!file || !user) return
-    // Free plan tracks a single platform — instead of a hard block, show a
-    // quick preview of the file's contents plus a soft paywall below it.
+    // Free plan tracks up to 2 platforms — instead of a hard block on the
+    // 3rd, show a quick preview of the file's contents plus a soft paywall.
     if (freePlatformLimitReached && forcePlatform && !allPlatforms.includes(forcePlatform)) {
       await denyWithPlatformPreview(file, forcePlatform)
       return
@@ -2461,7 +2465,9 @@ const stopImportMessageRotation = () => {
   })
 
   const allPlatforms = memoOn(derivedCacheRef.current, 'allPlatforms', [tips], () => [...new Set(tips.map(t => t.platform))])
-  const freePlatformLimitReached = !isPro && allPlatforms.length > 0
+  // Free tier tracks up to 2 platforms (see 20260811_raise_free_tier_csv_platform_limit_to_two.sql)
+  // — enough to reach the cross-platform comparison locked card on the Platforms tab.
+  const freePlatformLimitReached = !isPro && allPlatforms.length > 1
 
   // ── Build "What's Next" alerts — smarter, personalized, prioritized
   const buildWhatsNextAlerts = () => {
@@ -4471,49 +4477,69 @@ const stopImportMessageRotation = () => {
                 </div>
               </div>
 
-              {/* PLATFORM RECOMMENDATION BANNER */}
-              {displayPlatforms.length >= 2 && (() => {
-                const sorted = [...displayPlatforms].sort((a, b) => b.usdPerHour - a.usdPerHour)
-                const top = sorted[0]
-                const bottom = sorted[sorted.length - 1]
-                if (top.usdPerHour > 0 && bottom.usdPerHour > 0 && top.usdPerHour >= bottom.usdPerHour * 2) {
-                  const mult = (top.usdPerHour / bottom.usdPerHour).toFixed(1)
-                  return (
-                    <div style={{ padding: "14px 18px", borderRadius: 12, background: "linear-gradient(135deg, rgba(34,211,238,0.1), rgba(124,92,255,0.1))", border: "1px solid rgba(34,211,238,0.3)", marginBottom: 20, display: "flex", alignItems: "center", gap: 12 }}>
-                      <span style={{ fontSize: 20 }}>⚡</span>
-                      <div>
-                        <div style={{ fontSize: 14, fontWeight: 700, color: C.white }}>You earn {mult}x more per hour on {top.platform} than {bottom.platform}</div>
-                        <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>${(top.usdPerHour || 0).toFixed(2)}/hr vs ${(bottom.usdPerHour || 0).toFixed(2)}/hr — consider shifting more time to {top.platform}</div>
-                      </div>
-                    </div>
-                  )
-                }
-                return null
-              })()}
+              {/* CROSS-PLATFORM COMPARISON — real per-platform cards below stay
+                  free for everyone; the combined/comparison view above them
+                  (recommendation banner + summary row) is what Pro pays for.
+                  Free users with 2+ platforms see a locked card built from
+                  their own real platform count, not a generic upgrade nag. */}
+              {displayPlatforms.length >= 2 && (!isPro ? (
+                <div style={{ marginBottom: 24 }}>
+                  <LockedInsightCard
+                    title="Cross-Platform Comparison"
+                    description={`You're tracking ${displayPlatforms.length} platforms — unlock which one pays better per hour, your combined totals, and where to shift your time.`}
+                    lockType="requires_pro"
+                    requirement="Upgrade to Pro to compare earnings across platforms"
+                    ctaLabel="Upgrade to Pro"
+                    ctaAction={() => openUpgradeModal('platform_comparison')}
+                  />
+                </div>
+              ) : (
+                <>
+                  {/* PLATFORM RECOMMENDATION BANNER */}
+                  {(() => {
+                    const sorted = [...displayPlatforms].sort((a, b) => b.usdPerHour - a.usdPerHour)
+                    const top = sorted[0]
+                    const bottom = sorted[sorted.length - 1]
+                    if (top.usdPerHour > 0 && bottom.usdPerHour > 0 && top.usdPerHour >= bottom.usdPerHour * 2) {
+                      const mult = (top.usdPerHour / bottom.usdPerHour).toFixed(1)
+                      return (
+                        <div style={{ padding: "14px 18px", borderRadius: 12, background: "linear-gradient(135deg, rgba(34,211,238,0.1), rgba(124,92,255,0.1))", border: "1px solid rgba(34,211,238,0.3)", marginBottom: 20, display: "flex", alignItems: "center", gap: 12 }}>
+                          <span style={{ fontSize: 20 }}>⚡</span>
+                          <div>
+                            <div style={{ fontSize: 14, fontWeight: 700, color: C.white }}>You earn {mult}x more per hour on {top.platform} than {bottom.platform}</div>
+                            <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>${(top.usdPerHour || 0).toFixed(2)}/hr vs ${(bottom.usdPerHour || 0).toFixed(2)}/hr — consider shifting more time to {top.platform}</div>
+                          </div>
+                        </div>
+                      )
+                    }
+                    return null
+                  })()}
 
-              {/* SUMMARY ROW — only when 2+ platforms */}
-              {displayPlatforms.length >= 2 && (() => {
-                const topRev = [...displayPlatforms].sort((a, b) => b.totalUSD - a.totalUSD)[0]
-                const topEff = [...displayPlatforms].sort((a, b) => b.usdPerHour - a.usdPerHour)[0]
-                const totalHours = displayPlatforms.reduce((s, p) => s + p.hours, 0)
-                const totalEarned = displayPlatforms.reduce((s, p) => s + p.totalUSD, 0)
-                return (
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 28 }}>
-                    {[
-                      { icon: "💰", label: "Top Revenue", value: topRev.platform, sub: `$${(topRev.totalUSD || 0).toFixed(2)} total`, color: C.gold },
-                      { icon: "⚡", label: "Most Efficient", value: topEff.platform, sub: `$${(topEff.usdPerHour || 0).toFixed(2)}/hour`, color: C.cyan },
-                      { icon: "🕒", label: "Total Hours", value: `${totalHours.toFixed(1)}h`, sub: `across ${displayPlatforms.length} platforms`, color: C.pink },
-                      { icon: "💵", label: "Combined Earned", value: `$${totalEarned.toFixed(2)}`, sub: platformTimeFilter === "ALL" ? "all time" : `last ${platformTimeFilter}`, color: C.green },
-                    ].map(({ icon, label, value, sub, color }) => (
-                      <div key={label} className="dash-card" style={{ ...glassCard, borderRadius: 14, padding: 20 }}>
-                        <div style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>{icon} {label}</div>
-                        <div style={{ fontSize: 20, fontWeight: 800, color, marginBottom: 4 }}>{value}</div>
-                        <div style={{ fontSize: 12, color: C.muted }}>{sub}</div>
+                  {/* SUMMARY ROW */}
+                  {(() => {
+                    const topRev = [...displayPlatforms].sort((a, b) => b.totalUSD - a.totalUSD)[0]
+                    const topEff = [...displayPlatforms].sort((a, b) => b.usdPerHour - a.usdPerHour)[0]
+                    const totalHours = displayPlatforms.reduce((s, p) => s + p.hours, 0)
+                    const totalEarned = displayPlatforms.reduce((s, p) => s + p.totalUSD, 0)
+                    return (
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 28 }}>
+                        {[
+                          { icon: "💰", label: "Top Revenue", value: topRev.platform, sub: `$${(topRev.totalUSD || 0).toFixed(2)} total`, color: C.gold },
+                          { icon: "⚡", label: "Most Efficient", value: topEff.platform, sub: `$${(topEff.usdPerHour || 0).toFixed(2)}/hour`, color: C.cyan },
+                          { icon: "🕒", label: "Total Hours", value: `${totalHours.toFixed(1)}h`, sub: `across ${displayPlatforms.length} platforms`, color: C.pink },
+                          { icon: "💵", label: "Combined Earned", value: `$${totalEarned.toFixed(2)}`, sub: platformTimeFilter === "ALL" ? "all time" : `last ${platformTimeFilter}`, color: C.green },
+                        ].map(({ icon, label, value, sub, color }) => (
+                          <div key={label} className="dash-card" style={{ ...glassCard, borderRadius: 14, padding: 20 }}>
+                            <div style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>{icon} {label}</div>
+                            <div style={{ fontSize: 20, fontWeight: 800, color, marginBottom: 4 }}>{value}</div>
+                            <div style={{ fontSize: 12, color: C.muted }}>{sub}</div>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                )
-              })()}
+                    )
+                  })()}
+                </>
+              ))}
 
               {/* PLATFORM CARDS */}
               {displayPlatforms.map((p, i) => {
@@ -5719,7 +5745,7 @@ const stopImportMessageRotation = () => {
           <div style={{ maxWidth: 600, margin: "0 auto" }}>
             <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 8 }}>📥 Import CSV</h1>
             <p style={{ fontSize: 14, color: C.muted, marginBottom: 12 }}>
-              {isPro ? "Unlimited platforms • Auto-removes duplicates" : freePlatformLimitReached ? `Free plan — tracking ${allPlatforms[0]}. Auto-removes duplicates.` : "Free plan tracks 1 platform. Auto-removes duplicates."}
+              {isPro ? "Unlimited platforms • Auto-removes duplicates" : freePlatformLimitReached ? `Free plan — tracking ${allPlatforms.join(' & ')}. Auto-removes duplicates.` : "Free plan tracks up to 2 platforms. Auto-removes duplicates."}
             </p>
             <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: freePlatformLimitReached ? 16 : 32 }}>
               <a href="/blog/how-to-upload-csv-to-camcash" style={{ fontSize: 13, color: C.cyan, textDecoration: "none", fontWeight: 600 }}>📹 Watch the SOP: How to upload a CSV →</a>
@@ -5729,7 +5755,7 @@ const stopImportMessageRotation = () => {
               <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", borderRadius: 12, background: "rgba(168,85,247,0.08)", border: "1px solid rgba(168,85,247,0.25)", marginBottom: 16 }}>
                 <span style={{ fontSize: 18 }}>🔒</span>
                 <div style={{ flex: 1, fontSize: 12.5, color: C.text, lineHeight: 1.5 }}>
-                  You're on the free plan (1 platform). Upgrade to Pro to add BongaCams, MyFreeCams, and more.
+                  You're on the free plan ({allPlatforms.length} platforms tracked — the free limit). Upgrade to Pro for unlimited platforms and the full cross-platform comparison view.
                 </div>
                 <Button onClick={() => openUpgradeModal('multi_platform')} style={{ flexShrink: 0, padding: "8px 14px", fontSize: 12, whiteSpace: "nowrap" }}>Upgrade →</Button>
               </div>
@@ -5878,7 +5904,7 @@ const stopImportMessageRotation = () => {
               ) : (
                 <>
                   <p style={{ fontSize: 13, color: C.text, lineHeight: 1.65, marginBottom: 16 }}>
-                    The <strong style={{ color: C.white }}>free plan</strong> tracks <strong style={{ color: C.cyan }}>1 platform</strong> — import as much history as you want from it, no limits. A <strong style={{ color: C.white }}>subscription</strong> unlocks tracking <strong style={{ color: C.pink }}>multiple platforms at once</strong> and lets you compare which cam site pays you best by hour, day, and fan type.
+                    The <strong style={{ color: C.white }}>free plan</strong> tracks <strong style={{ color: C.cyan }}>up to 2 platforms</strong> — import as much history as you want from them, no limits. A <strong style={{ color: C.white }}>subscription</strong> unlocks <strong style={{ color: C.pink }}>unlimited platforms</strong> and the full cross-platform comparison view — which cam site pays you best by hour, day, and fan type.
                   </p>
                   <Button onClick={() => router.push('/pricing')} style={{ padding: "12px 26px", fontSize: 13 }}>
                     View Plans & Subscribe →
