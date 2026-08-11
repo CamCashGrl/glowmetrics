@@ -34,15 +34,17 @@ export default function OnboardingChecklist({ tips = [], isPro = false, visitedT
   const allDone = doneCount === items.length
 
   // Shown once the core checklist is complete, as the natural next action —
-  // kept OUT of items/doneCount so free users (who can never satisfy it,
-  // since a 2nd platform import is Pro-gated at upload) can still reach
-  // "all done" instead of being stuck at 4/5 forever.
+  // kept OUT of items/doneCount so a user who genuinely only has one
+  // platform to track isn't stuck below 100% forever. Free tracks up to 2
+  // platforms (20260811_raise_free_tier_csv_platform_limit_to_two.sql), so
+  // this always routes straight to Import — the actual upsell moment lives
+  // on the Platforms tab once 2 platforms' worth of data exists there.
   const platformStep = {
     id: 'platform2',
-    label: isPro ? 'Add a 2nd platform' : 'Unlock multi-platform tracking',
+    label: 'Add a 2nd platform',
     done: platformCount > 1,
-    tab: isPro ? 'upload' : null,
-    upgrade: !isPro,
+    tab: 'upload',
+    upgrade: false,
   }
 
   const dismiss = () => {
