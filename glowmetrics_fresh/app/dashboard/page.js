@@ -2639,13 +2639,29 @@ const stopImportMessageRotation = () => {
     setAnalysisStepsDone(0)
   }
 
-  // Drives shimmer -> analyzing (staggered task reveal) -> reveal. The
-  // engine result is already fully computed by the time this runs (handleCSV
-  // awaits loadData() first) — this only paces how the UI presents it.
-  const runPostImportSequence = () => {
+  // Drives shimmer -> analyzing (staggered task reveal) -> reveal.
+  //
+  // The upload itself has already succeeded by the time this runs — this
+  // animation starts immediately and is NEVER blocked on the background
+  // data reload (tips + paid_sessions + live_tips + get_user_insights).
+  // Only the final transition into 'reveal' waits for `dataPromise` (the
+  // reload + scenario computation), and even that wait is capped by a hard
+  // timeout below, so a slow or genuinely stuck reload can never leave the
+  // screen frozen the way it did before this fix — it just reveals with
+  // whatever analytics state already has instead of hanging forever.
+  const runPostImportSequence = (dataPromise) => {
     stopSuccessSequence()
     setSuccessPhase('shimmer')
     setAnalysisStepsDone(0)
+
+    const safeDataPromise = Promise.race([
+      Promise.resolve(dataPromise).catch(() => null),
+      new Promise(resolve => {
+        const timeoutTimer = setTimeout(() => resolve(null), 12000)
+        successTimersRef.current.push(timeoutTimer)
+      }),
+    ])
+
     const shimmerTimer = setTimeout(() => {
       setSuccessPhase('analyzing')
       let step = 0
@@ -2654,13 +2670,15 @@ const stopImportMessageRotation = () => {
         setAnalysisStepsDone(step)
         if (step >= COMMAND_CENTER_TASKS.length) {
           clearInterval(stepTimer)
-          const revealTimer = setTimeout(() => {
-            setSuccessPhase('reveal')
-            setShowImportSparkle(true)
-            const sparkleTimer = setTimeout(() => setShowImportSparkle(false), 2400)
-            successTimersRef.current.push(sparkleTimer)
-          }, 550)
-          successTimersRef.current.push(revealTimer)
+          safeDataPromise.then(() => {
+            const revealTimer = setTimeout(() => {
+              setSuccessPhase('reveal')
+              setShowImportSparkle(true)
+              const sparkleTimer = setTimeout(() => setShowImportSparkle(false), 2400)
+              successTimersRef.current.push(sparkleTimer)
+            }, 550)
+            successTimersRef.current.push(revealTimer)
+          })
         }
       }, 420)
       successTimersRef.current.push(stepTimer)
@@ -2771,20 +2789,29 @@ const stopImportMessageRotation = () => {
 
       setUploadCount(c => c + 1)
       if (typeof window !== 'undefined') localStorage.setItem('camcash_onboarded', '1')
-      // Force reload after upload — bypass cache so new tips appear immediately.
-      // Runs BEFORE the success/reveal screens mount so the Command Center
-      // analysis is built from the real, freshly-recomputed engine output —
-      // never a stale pre-import snapshot.
-      try { sessionStorage.removeItem(`camcash_tips_${user.id}`) } catch(e) {}
-      const freshAnalytics = await loadData(user.id, true, { silent: true })
 
-      setImportScenario(computeImportScenario({
-        preSnapshot: preImportSnapshotRef.current,
-        analytics: freshAnalytics,
-        lastUploadResult: { platform: result.platform },
-      }))
+      // The upload itself already succeeded — move into the shimmer/reveal
+      // sequence right away instead of blocking 'processing' on the full
+      // background reload (tips + paid_sessions + live_tips +
+      // get_user_insights). A slow or stuck reload used to freeze the whole
+      // screen here; now the reveal animation runs regardless, and only its
+      // final step waits on this promise, bounded by the safety timeout
+      // inside runPostImportSequence.
+      try { sessionStorage.removeItem(`camcash_tips_${user.id}`) } catch(e) {}
+      const dataPromise = loadData(user.id, true, { silent: true })
+        .then(freshAnalytics => {
+          setImportScenario(computeImportScenario({
+            preSnapshot: preImportSnapshotRef.current,
+            analytics: freshAnalytics,
+            lastUploadResult: { platform: result.platform },
+          }))
+        })
+        .catch(reloadErr => {
+          console.error('[handleCSV] background reload after import failed:', reloadErr)
+        })
+
       setImportStage('success')
-      runPostImportSequence()
+      runPostImportSequence(dataPromise)
 
     } catch (err) {
       showToast("❌ " + err.message)
