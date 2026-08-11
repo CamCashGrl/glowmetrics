@@ -1,6 +1,7 @@
-// Standalone verification for the BongaCams paid-chat/spy-mode CSV-file-
-// upload routing fix (lib/analytics.js's parseWithHeaders + BC_PAID_CHAT_TYPES,
-// and app/api/upload/route.js's tips/paid_sessions split).
+// Standalone verification for the paid-chat/spy-mode CSV-file-upload
+// routing (lib/analytics.js's parseWithHeaders + detectPaidSessionType,
+// and app/api/upload/route.js's tips/paid_sessions split), across all
+// three platforms (BongaCams, Chaturbate, MyFreeCams).
 //
 // This repo has no test framework configured (no jest/vitest, no "test"
 // script in package.json), and lib/analytics.js can't be `import`-ed
@@ -26,10 +27,20 @@ function tokenRate(platform) {
   return PLATFORM_TOKEN_RATES_LOWER[platform.toLowerCase()] ?? DEFAULT_TOKEN_RATE
 }
 
-// ── Mirrors lib/analytics.js's BC_PAID_CHAT_TYPES + parseWithHeaders' match ─
-const BC_PAID_CHAT_TYPES = ['Private Chat', 'Full-Private Chat', 'Group Chat', 'Spy Mode']
-function matchBCPaidChatType(tipTypeLower) {
-  return BC_PAID_CHAT_TYPES.find(t => t.toLowerCase() === tipTypeLower) || null
+// ── Mirrors lib/analytics.js's PAID_SESSION_TYPE_PATTERNS + detectPaidSessionType() ─
+// Keyword-based (not exact-string) so it matches every platform's own label
+// text: BongaCams ("Private Chat"/"Full-Private Chat"/"Group Chat"/"Spy
+// Mode"), Chaturbate & MyFreeCams ("Private Show"/"Spy Show"/"Group Show").
+const PAID_SESSION_TYPE_PATTERNS = [
+  { re: /full[\s-]?private/i, label: 'Full-Private Chat' },
+  { re: /private/i,           label: 'Private Chat' },
+  { re: /spy/i,                label: 'Spy Mode' },
+  { re: /group/i,              label: 'Group Chat' },
+]
+function detectPaidSessionType(tipType) {
+  if (!tipType) return null
+  const found = PAID_SESSION_TYPE_PATTERNS.find(p => p.re.test(tipType))
+  return found ? found.label : null
 }
 
 // Mirrors the relevant slice of parseWithHeaders(): given an already
@@ -37,15 +48,14 @@ function matchBCPaidChatType(tipTypeLower) {
 // tokens == "Tokens Earned", usd == "Your Payout"), returns the same
 // tokens/usd/is_paid_session/session_type fields parseCSV() would produce.
 function classifyRow({ tip_type = '', tokens = 0, usd = 0, platform = 'BongaCams' }) {
-  const tipType = tip_type.toLowerCase()
-  const bcPaidChatType = matchBCPaidChatType(tipType)
+  const paidSessionType = detectPaidSessionType(tip_type)
   const finalTokens = tokens > 0 ? tokens : Math.round(usd / tokenRate(platform))
   const finalUsd = usd > 0 ? parseFloat(usd.toFixed(2)) : parseFloat((tokens * tokenRate(platform)).toFixed(2))
   return {
     tokens: finalTokens,
     usd: finalUsd,
-    is_paid_session: !!bcPaidChatType,
-    session_type: bcPaidChatType,
+    is_paid_session: !!paidSessionType,
+    session_type: paidSessionType,
   }
 }
 
@@ -64,10 +74,26 @@ function check(name, actual, expected) {
   else { fail++; console.log(`FAIL  ${name}\n      expected: ${JSON.stringify(expected)}\n      actual:   ${JSON.stringify(actual)}`) }
 }
 
-// ── All four paid-chat types are flagged, exact literal match ─────────────
+// ── BongaCams: all four paid-chat types are flagged, exact literal match ──
+const BC_PAID_CHAT_TYPES = ['Private Chat', 'Full-Private Chat', 'Group Chat', 'Spy Mode']
 for (const t of BC_PAID_CHAT_TYPES) {
   const r = classifyRow({ tip_type: t, tokens: 200, usd: 5, platform: 'BongaCams' })
-  check(`"${t}" flagged as paid session`, { is_paid_session: r.is_paid_session, session_type: r.session_type }, { is_paid_session: true, session_type: t })
+  check(`BongaCams "${t}" flagged as paid session`, { is_paid_session: r.is_paid_session, session_type: r.session_type }, { is_paid_session: true, session_type: t })
+}
+
+// ── Chaturbate & MyFreeCams: platform-native labels also flagged, ─────────
+// canonicalized to the same 4 labels PrivateSessions.js's TYPE_COLORS/filter
+// expect (this is the actual fix — these platforms previously fell through
+// to plain tips because their label text never exactly matched BongaCams').
+for (const platform of ['Chaturbate', 'MyFreeCams']) {
+  check(`${platform} "Private Show" flagged as Private Chat`,
+    classifyRow({ tip_type: 'Private Show', tokens: 100, usd: 5, platform }).session_type, 'Private Chat')
+  check(`${platform} "Spy Show" flagged as Spy Mode`,
+    classifyRow({ tip_type: 'Spy Show', tokens: 20, usd: 1, platform }).session_type, 'Spy Mode')
+  check(`${platform} "Group Show" flagged as Group Chat`,
+    classifyRow({ tip_type: 'Group Show', tokens: 50, usd: 2.5, platform }).session_type, 'Group Chat')
+  check(`${platform} "Full Private Show" flagged as Full-Private Chat`,
+    classifyRow({ tip_type: 'Full Private Show', tokens: 300, usd: 15, platform }).session_type, 'Full-Private Chat')
 }
 
 // ── Case-insensitive match ─────────────────────────────────────────────────
@@ -75,6 +101,8 @@ check('"spy mode" (lowercase) matches Spy Mode',
   classifyRow({ tip_type: 'spy mode', tokens: 10, usd: 1 }).session_type, 'Spy Mode')
 check('"PRIVATE CHAT" (uppercase) matches Private Chat',
   classifyRow({ tip_type: 'PRIVATE CHAT', tokens: 10, usd: 1 }).session_type, 'Private Chat')
+check('"private show" (lowercase, Chaturbate wording) matches Private Chat',
+  classifyRow({ tip_type: 'private show', tokens: 10, usd: 1, platform: 'Chaturbate' }).session_type, 'Private Chat')
 
 // ── Regular tip rows are NOT flagged, and continue to tips unchanged ──────
 for (const t of ['Tip', 'Tips', 'Freechat', 'Sale', '']) {
@@ -100,20 +128,24 @@ for (const t of ['Tip', 'Tips', 'Freechat', 'Sale', '']) {
 }
 
 // ── Full-file routing: mixed CSV splits tips vs paid sessions correctly ───
+// Mixed across all three platforms — this is the scenario from the bug
+// report (private chats from all 3 platforms not reaching paid_sessions).
 {
   const rawRows = [
-    { tip_type: 'Tip', tokens: 500, usd: 12.5 },
-    { tip_type: 'Private Chat', tokens: 300, usd: 18.75 },
-    { tip_type: 'Spy Mode', tokens: 20, usd: 0 },
-    { tip_type: 'Tips', tokens: 100, usd: 2.5 },
-    { tip_type: 'Full-Private Chat', tokens: 800, usd: 60 },
-    { tip_type: 'Group Chat', tokens: 50, usd: 3.5 },
+    { tip_type: 'Tip', tokens: 500, usd: 12.5, platform: 'BongaCams' },
+    { tip_type: 'Private Chat', tokens: 300, usd: 18.75, platform: 'BongaCams' },
+    { tip_type: 'Spy Mode', tokens: 20, usd: 0, platform: 'BongaCams' },
+    { tip_type: 'Tip', tokens: 100, usd: 5, platform: 'Chaturbate' },
+    { tip_type: 'Private Show', tokens: 400, usd: 20, platform: 'Chaturbate' },
+    { tip_type: 'Spy Show', tokens: 60, usd: 3, platform: 'Chaturbate' },
+    { tip_type: 'Tip', tokens: 200, usd: 10, platform: 'MyFreeCams' },
+    { tip_type: 'Group Show', tokens: 150, usd: 7.5, platform: 'MyFreeCams' },
   ]
   const classified = rawRows.map(classifyRow)
   const { tipRows, paidSessionRows } = splitRows(classified)
-  check('mixed file: 2 regular tip rows land in tipRows', tipRows.length, 2)
-  check('mixed file: 4 paid-chat/spy rows land in paidSessionRows', paidSessionRows.length, 4)
-  check('mixed file: no paid session types leak into tipRows',
+  check('3-platform mixed file: 3 regular tip rows land in tipRows', tipRows.length, 3)
+  check('3-platform mixed file: 5 private/spy/group rows land in paidSessionRows', paidSessionRows.length, 5)
+  check('3-platform mixed file: no paid session types leak into tipRows',
     tipRows.some(r => r.session_type), false)
 }
 

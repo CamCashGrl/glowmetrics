@@ -53,9 +53,10 @@ export async function POST(req) {
       tip_note:  row.tip_note  || row.note || row.message || '',
       tokens,
       usd,
-      // BongaCams paid-chat/spy-mode rows are flagged by parseCSV() (see
-      // lib/analytics.js's BC_PAID_CHAT_TYPES) so they can be routed to
-      // paid_sessions below instead of tips.
+      // Private-chat/spy-mode/group-chat rows (any of the 3 platforms) are
+      // flagged by parseCSV() (see lib/analytics.js's
+      // PAID_SESSION_TYPE_PATTERNS/detectPaidSessionType) so they can be
+      // routed to paid_sessions below instead of tips.
       is_paid_session: row.is_paid_session === true,
       session_type:    row.session_type || null,
     }
@@ -210,8 +211,8 @@ export async function POST(req) {
 
   // ── BATCH INSERT PAID CHAT / SPY-MODE SESSIONS ──────────────────────────
   // Same RPC the onboarding paste flow's /api/upload-paid-sessions uses, so
-  // rows flagged by parseCSV() (BC_PAID_CHAT_TYPES, lib/analytics.js) land in
-  // paid_sessions instead of tips regardless of which import path sent them.
+  // rows flagged by parseCSV() (detectPaidSessionType, lib/analytics.js) land
+  // in paid_sessions instead of tips regardless of which import path sent them.
   let paidInserted = 0
   let paidSkipped  = 0
   const paidErrors = []
