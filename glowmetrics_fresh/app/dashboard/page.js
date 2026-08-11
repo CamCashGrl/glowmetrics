@@ -62,6 +62,7 @@ const StreamPlanner = dynamic(() => import('./StreamPlanner'), { ssr: false, loa
 const MoneyMap = dynamic(() => import('./MoneyMap'), { ssr: false, loading: () => TAB_LOADING })
 const PrivateSessions = dynamic(() => import('./PrivateSessions'), { ssr: false, loading: () => TAB_LOADING })
 const DashboardGrowthCharts = dynamic(() => import('./DashboardGrowthCharts'), { ssr: false })
+const FanGrowthCarousel = dynamic(() => import('./FanGrowthCarousel'), { ssr: false })
 const TokenCalculator = dynamic(() => import('../guides/cam-model-token-calculator/TokenCalculatorClient'), { ssr: false, loading: () => TAB_LOADING })
 // The exact same Live Engine page component /live uses — not a rebuild, not
 // a second copy. Embedding it directly here means the dashboard's "Live
@@ -3489,6 +3490,12 @@ const stopImportMessageRotation = () => {
                 TOKENS VS HOURS ONLINE + MONTHLY GROWTH
             ═══════════════════════════════════════ */}
             {tips.length > 0 && <DashboardGrowthCharts tips={tips} sessions={sessions} />}
+
+            {/* ═══════════════════════════════════════
+                FAN GROWTH CAROUSEL — fan growth historic,
+                new vs returning fans, always platform-labeled
+            ═══════════════════════════════════════ */}
+            {tips.length > 0 && <FanGrowthCarousel tips={tips} sessions={sessions} />}
 
             {/* ═══════════════════════════════════════
                 DAILY BRIEF — overview only, below earnings
