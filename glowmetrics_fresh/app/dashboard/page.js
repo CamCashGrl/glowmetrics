@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
-import { parseCSV, detectPlatform, aggregateRows as runEngine } from "../../lib/analytics"
+import { parseCSV, detectPlatform, aggregateRows as runEngine, toLocalDow } from "../../lib/analytics"
 import { computeRoomHealth, ROOM_STATES, MOMENTUM_DIRECTIONS } from "../../lib/analytics/roomHealth"
 import { computeRevenueVelocity, computeLiveComparison } from "../../lib/analytics/velocity"
 import { detectSessionPhase, PHASES, getRecoveryActions, getGoalStrategy } from "../../lib/analytics/sessionPhase"
@@ -1506,6 +1506,7 @@ export default function Dashboard() {
   const [replayLoading, setReplayLoading] = useState(false)
   const [replayLoaded, setReplayLoaded] = useState(false)
   const [expandedReplayId, setExpandedReplayId] = useState(null)
+  const [expandedHeatCell, setExpandedHeatCell] = useState(null)
   const [replayCoachingEvents, setReplayCoachingEvents] = useState({})
   const [replayCoachingLoading, setReplayCoachingLoading] = useState(null)
 
@@ -3861,36 +3862,40 @@ const stopImportMessageRotation = () => {
                 )
               })()}
 
-              {/* Platform day heatmap */}
+              {/* Platform day heatmap — sourced from analytics.platformBestTimes (same
+                  local-timezone, median-based, min-3-active-days figures as the "Best day"
+                  callout above) so this grid can never show a different number for the same
+                  platform+day than the rest of the page. */}
               {(() => {
                 const UTC_DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
-                const platDayUSD = {}; const platDayDates = {}
-                tips.forEach(t => {
-                  const p = t.platform; const dt = new Date(t.date_time || t.dateRaw)
-                  const shortDay = UTC_DAYS[dt.getUTCDay()]; const dateKey = dt.toISOString().slice(0, 10)
-                  if (!platDayUSD[p]) platDayUSD[p] = {}
-                  if (!platDayDates[p]) platDayDates[p] = {}
-                  platDayUSD[p][shortDay] = (platDayUSD[p][shortDay] || 0) + (t.usd || 0)
-                  if (!platDayDates[p][shortDay]) platDayDates[p][shortDay] = new Set()
-                  platDayDates[p][shortDay].add(dateKey)
-                })
-                const platDayAvg = {}
-                Object.keys(platDayUSD).forEach(p => {
-                  platDayAvg[p] = {}
-                  UTC_DAYS.forEach(d => {
-                    const total = platDayUSD[p][d] || 0; const activeDays = platDayDates[p]?.[d]?.size || 1
-                    platDayAvg[p][d] = total > 0 ? parseFloat((total / activeDays).toFixed(2)) : 0
+                const FULL_DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
+                const DAY_ABBR = { Sunday: 'Sun', Monday: 'Mon', Tuesday: 'Tue', Wednesday: 'Wed', Thursday: 'Thu', Friday: 'Fri', Saturday: 'Sat' }
+                const platTimes = analytics?.platformBestTimes || {}
+                const platList = Object.keys(platTimes).filter(p => (platTimes[p]?.allDays || []).length > 0)
+                if (platList.length < 1) return null
+
+                const platDayEntry = {}
+                platList.forEach(p => {
+                  platDayEntry[p] = {}
+                  ;(platTimes[p].allDays || []).forEach(entry => {
+                    const short = DAY_ABBR[entry.day]
+                    if (short) platDayEntry[p][short] = entry
                   })
                 })
-                const platList = Object.keys(platDayAvg)
-                if (platList.length < 1) return null
-                const todayShort = UTC_DAYS[new Date().getUTCDay()]
-                const todayLong = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][new Date().getUTCDay()]
+
+                const userTz = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC'
+                const todayIdx = toLocalDow(new Date().toISOString(), userTz)
+                const todayShort = UTC_DAYS[todayIdx]
+                const todayLong = FULL_DAYS[todayIdx]
+
+                const meaningfulSessions = analytics?.meaningfulSessions || []
+                const platColors = { Chaturbate: C.cyan, BongaCams: C.pink, MyFreeCams: C.gold }
+
                 return (
                   <div>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
                       <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>Platform by Day of Week</span>
-                      <span style={{ fontSize: 11, color: C.muted, padding: "2px 8px", borderRadius: 20, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}>avg $/active day</span>
+                      <span style={{ fontSize: 11, color: C.muted, padding: "2px 8px", borderRadius: 20, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}>avg $/active day (median)</span>
                     </div>
                     <div className="heatmap-wrap" style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
                     <div style={{ display: "grid", gridTemplateColumns: "80px repeat(7, 1fr)", gap: 3, minWidth: 480 }}>
@@ -3899,29 +3904,84 @@ const stopImportMessageRotation = () => {
                         <div key={d} style={{ textAlign: "center", fontSize: 11, fontWeight: 700, color: d === todayShort ? C.cyan : C.muted, paddingBottom: 4 }}>{d}</div>
                       ))}
                       {platList.map(plat => {
-                        const dayVals = UTC_DAYS.map(d => platDayAvg[plat][d] || 0)
+                        const dayVals = UTC_DAYS.map(d => platDayEntry[plat][d]?.avg || 0)
                         const maxVal = Math.max(...dayVals, 0.01)
                         return [
                           <div key={plat + '_l'} style={{ fontSize: 10, fontWeight: 700, color: C.text, display: "flex", alignItems: "center", paddingRight: 4, lineHeight: 1.3 }}>{plat.replace('BongaCams','Bonga').replace(/chaturbate/i,'CB').replace('MyFreeCams','MFC')}</div>,
                           ...UTC_DAYS.map(d => {
-                            const val = platDayAvg[plat][d] || 0
+                            const entry = platDayEntry[plat][d]
+                            const val = entry?.avg || 0
+                            const hasData = !!entry
                             const intensity = maxVal > 0 ? val / maxVal : 0
                             const isToday = d === todayShort
-                            const bg = val === 0 ? "rgba(255,255,255,0.03)" : intensity < 0.25 ? "rgba(34,211,238,0.12)" : intensity < 0.5 ? "rgba(34,211,238,0.30)" : intensity < 0.75 ? "rgba(34,211,238,0.60)" : "rgba(34,211,238,0.90)"
+                            const isSelected = expandedHeatCell?.plat === plat && expandedHeatCell?.day === d
+                            const bg = !hasData ? "rgba(255,255,255,0.03)" : intensity < 0.25 ? "rgba(34,211,238,0.12)" : intensity < 0.5 ? "rgba(34,211,238,0.30)" : intensity < 0.75 ? "rgba(34,211,238,0.60)" : "rgba(34,211,238,0.90)"
                             return (
-                              <div key={d} title={`${plat} ${d}: avg $${val.toFixed(2)}/day`}
-                                onClick={() => { if (val > 0) { setChartDrillDay(d); handleTabChange("whales") } }}
-                                style={{ height: 32, borderRadius: 5, background: bg, border: isToday ? "2px solid rgba(34,211,238,0.7)" : "1px solid rgba(255,255,255,0.05)", display: "flex", alignItems: "center", justifyContent: "center", cursor: val > 0 ? "pointer" : "default", transition: "all 0.15s", transform: "scale(1)" }}
-                                onMouseEnter={e => { if (val > 0) { e.currentTarget.style.transform = "scale(1.08)"; e.currentTarget.style.boxShadow = "0 0 8px rgba(34,211,238,0.5)" } }}
+                              <div key={d} title={hasData ? `${plat} ${d}: avg $${val.toFixed(2)}/active day (median of ${entry.activeDays} days) — click for details` : `${plat} ${d}: Not enough data yet`}
+                                onClick={() => { if (hasData) setExpandedHeatCell(isSelected ? null : { plat, day: d }) }}
+                                style={{ height: 32, borderRadius: 5, background: bg, border: isSelected ? "2px solid #fff" : isToday ? "2px solid rgba(34,211,238,0.7)" : "1px solid rgba(255,255,255,0.05)", display: "flex", alignItems: "center", justifyContent: "center", cursor: hasData ? "pointer" : "default", transition: "all 0.15s", transform: "scale(1)" }}
+                                onMouseEnter={e => { if (hasData) { e.currentTarget.style.transform = "scale(1.08)"; e.currentTarget.style.boxShadow = "0 0 8px rgba(34,211,238,0.5)" } }}
                                 onMouseLeave={e => { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.boxShadow = "" }}>
-                                {val > 0 && <span style={{ fontSize: 9, fontWeight: 700, color: intensity > 0.45 ? "#fff" : C.muted }}>${val >= 100 ? Math.round(val) : val.toFixed(0)}</span>}
+                                {hasData && <span style={{ fontSize: 9, fontWeight: 700, color: intensity > 0.45 ? "#fff" : C.muted }}>${val >= 100 ? Math.round(val) : val.toFixed(0)}</span>}
                               </div>
                             )
                           })
                         ]
                       })}
                     </div>
-                    <div style={{ marginTop: 8, fontSize: 11, color: C.muted }}>Today ({todayLong}) highlighted in cyan. Darker = more earnings. Click any cell to filter Top Fans by that day. <span style={{ color: C.cyan }}>Click any cell to filter Top Fans by that day.</span></div>
+
+                    {/* Expanded detail panel — replaces the old behavior of jumping straight
+                        to the Fans tab on click. Shows the same figures the platform ROI
+                        cards above use (median avg/active day, total, best hour) plus a
+                        day-specific $/hr computed from meaningful sessions only. */}
+                    {expandedHeatCell && (() => {
+                      const { plat, day } = expandedHeatCell
+                      const entry = platDayEntry[plat]?.[day]
+                      if (!entry) return null
+                      const fullDayName = FULL_DAYS[UTC_DAYS.indexOf(day)]
+                      const col = platColors[plat] || C.blue
+                      const daySessions = meaningfulSessions.filter(s => s.platform === plat && toLocalDow(s.startTime, userTz) === UTC_DAYS.indexOf(day))
+                      const dayHours = daySessions.reduce((sum, s) => sum + (s.durationHours || 0), 0)
+                      const dayUSD = daySessions.reduce((sum, s) => sum + (s.totalUSD || 0), 0)
+                      const dayHourlyRate = dayHours > 0 ? dayUSD / dayHours : null
+                      const bestHourEntry = platTimes[plat]?.bestHourByDay?.[fullDayName]
+                      const fmtH = h => { const _off = new Date().getTimezoneOffset() / -60; const _lh = Math.round(((h + _off) % 24 + 24) % 24); return _lh === 0 ? '12 AM' : _lh < 12 ? `${_lh} AM` : _lh === 12 ? '12 PM' : `${_lh - 12} PM` }
+                      return (
+                        <div style={{ marginTop: 10, padding: "14px 16px", borderRadius: 12, background: `${col}0d`, border: `1px solid ${col}30` }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                            <span style={{ fontSize: 13, fontWeight: 800, color: C.white }}>{plat.replace('BongaCams','Bonga').replace('MyFreeCams','MFC')} — {fullDayName}s</span>
+                            <button onClick={() => setExpandedHeatCell(null)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 13 }}>✕</button>
+                          </div>
+                          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 10 }}>
+                            <div>
+                              <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", marginBottom: 2 }}>Avg / active day</div>
+                              <div style={{ fontSize: 16, fontWeight: 800, color: C.white }}>${entry.avg.toFixed(2)}</div>
+                            </div>
+                            <div>
+                              <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", marginBottom: 2 }}>Total earned</div>
+                              <div style={{ fontSize: 16, fontWeight: 800, color: C.white }}>${(entry.total || 0).toFixed(0)}</div>
+                              <div style={{ fontSize: 10, color: C.muted }}>across {entry.activeDays} {fullDayName}s</div>
+                            </div>
+                            <div>
+                              <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", marginBottom: 2 }}>$/hr this day</div>
+                              <div style={{ fontSize: 16, fontWeight: 800, color: C.white }}>{dayHourlyRate !== null ? `$${dayHourlyRate.toFixed(2)}/hr` : 'Not enough data yet'}</div>
+                            </div>
+                            <div>
+                              <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", marginBottom: 2 }}>Best hour</div>
+                              <div style={{ fontSize: 16, fontWeight: 800, color: C.white }}>{bestHourEntry ? fmtH(bestHourEntry.hour) : 'Not enough data yet'}</div>
+                              {bestHourEntry && <div style={{ fontSize: 10, color: C.muted }}>${bestHourEntry.avg.toFixed(0)} avg that hour</div>}
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => { setChartDrillDay(day); handleTabChange("whales") }}
+                            style={{ marginTop: 12, padding: "6px 12px", borderRadius: 8, background: `${col}20`, border: `1px solid ${col}50`, color: col, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                            View top fans from {fullDayName}s →
+                          </button>
+                        </div>
+                      )
+                    })()}
+
+                    <div style={{ marginTop: 8, fontSize: 11, color: C.muted }}>Today ({todayLong}) highlighted in cyan. Darker = more earnings. Click any cell for a full breakdown.</div>
                   </div>
                   </div>
                 )
