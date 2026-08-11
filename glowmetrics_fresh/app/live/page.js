@@ -13,6 +13,7 @@ import EventsSync from './EventsSync';
 import Button from '../../components/ui/Button';
 import { useLiveSessionEngine } from './useLiveSessionEngine';
 import { TRIGGER_LEVEL, TRIGGER_ICON } from '../../lib/coaching/triggers';
+import { getPlanAccess, LockedInsightCard } from '../dashboard/DashboardPreview';
 
 const C = {
   bg: '#040812', card: 'rgba(15,20,32,0.75)', border: 'rgba(168,85,247,0.2)',
@@ -47,6 +48,18 @@ export default function LivePage({ embedded = false } = {}) {
   // server-persisted engine (GET /api/live/coaching) — never computed
   // locally. null when nothing is currently active.
   const [coachingPrompt, setCoachingPrompt] = useState(null);
+  // Plan/profile, loaded once on mount alongside `user` (see the auth effect
+  // below) — same 'plan, plan_expires_at' shape app/dashboard/page.js reads,
+  // used to gate the AI Coach + Session Coaching Activity panels below via
+  // the shared getPlanAccess/getModuleLockState pattern (DashboardPreview.js).
+  // Coaching content is never sent to a free caller in the first place — see
+  // the server-side gate in app/api/live/coaching/route.js — this is only
+  // the UI-side lock.
+  const [profile, setProfile] = useState(null);
+  // Compact recent coaching_events for the CURRENT session only — powers the
+  // "Session Coaching Activity" panel. Not the full post-session report
+  // (that lives exclusively in the dashboard's Live Mode Sessions tab).
+  const [sessionCoachingEvents, setSessionCoachingEvents] = useState([]);
   const [livePlatform, setLivePlatform] = useState('Chaturbate');
   const [flashTipId, setFlashTipId]   = useState(null);
   const [liveTick, setLiveTick]       = useState(0);
@@ -166,6 +179,9 @@ export default function LivePage({ embedded = false } = {}) {
       if (!u) { setAuthStatus('live'); return; }
       setUser(u);
       setAuthStatus('live');
+
+      supabase.from('profiles').select('plan, plan_expires_at').eq('id', u.id).maybeSingle()
+        .then(({ data }) => { if (data) setProfile(data); });
 
       // Load last 12h of tips as history
       const since = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString();
@@ -384,6 +400,29 @@ export default function LivePage({ embedded = false } = {}) {
     const id = setInterval(fetchPrompt, 15000);
     return () => { cancelled = true; clearInterval(id); };
   }, [engine.serverSession?.id]);
+
+  // Session Coaching Activity (compact panel) — same coaching_events select
+  // shape as the dashboard's Live Mode Sessions tab coaching timeline
+  // (app/dashboard/page.js loadReplayCoachingEvents), scoped to the CURRENT
+  // in-progress session only. Pro-gated same as the AI Coach centerpiece —
+  // skipped entirely for free users so there's nothing to poll for.
+  const isProUser = getPlanAccess(profile?.plan, 1, profile?.plan_expires_at).isPro;
+  useEffect(() => {
+    const sessionId = engine.serverSession?.id;
+    if (!sessionId || !isProUser) { setSessionCoachingEvents([]); return; }
+    let cancelled = false;
+    const fetchEvents = () => {
+      supabase.from('coaching_events')
+        .select('id, type, priority, title, message, action_status, shown_at')
+        .eq('session_id', sessionId)
+        .order('shown_at', { ascending: false })
+        .limit(20)
+        .then(({ data }) => { if (!cancelled) setSessionCoachingEvents(data || []); });
+    };
+    fetchEvents();
+    const id = setInterval(fetchEvents, 15000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [engine.serverSession?.id, isProUser]);
 
   // Reads coaching_strategy/coaching_goal_tokens back FROM the server
   // whenever a session is discovered — covers both a page refresh of an
@@ -1193,7 +1232,18 @@ export default function LivePage({ embedded = false } = {}) {
             })()}
 
             {/* ── AI COACH CENTERPIECE ─────────────────────────────── */}
-            {(() => {
+            {!isProUser && (
+              <div style={{ marginBottom: 20 }}>
+                <LockedInsightCard
+                  title="Live Coaching"
+                  description="Let CamCash coach your stream in real time using your pace, goals and stream performance."
+                  lockType="requires_pro"
+                  ctaLabel="Unlock Live Coaching"
+                  ctaAction={() => { window.location.href = '/pricing'; }}
+                />
+              </div>
+            )}
+            {isProUser && (() => {
               // topAlert is derived entirely from the single canonical
               // coachingPrompt fetched from the server — never locally
               // computed. There is no restAlerts anymore: this phase shows
@@ -1261,6 +1311,39 @@ export default function LivePage({ embedded = false } = {}) {
                         <div style={{ fontSize: 10, color: C.muted, lineHeight: 1.5 }}>{goalStrategy.suggestion}</div>
                       </div>
                     )}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* ── SESSION COACHING ACTIVITY (compact, current session only) ── */}
+            {/* This is NOT the full post-session report — Session Overview,
+                Performance comparison, and Coaching Performance breakdowns
+                live exclusively in the dashboard's Live Mode Sessions tab
+                (app/dashboard/page.js). This panel is a lightweight, live,
+                current-session-only activity log. */}
+            {isProUser && engine.serverSession && sessionCoachingEvents.length > 0 && (() => {
+              const performed = sessionCoachingEvents.filter(e => e.action_status === 'performed').length;
+              const skipped   = sessionCoachingEvents.filter(e => e.action_status === 'skipped').length;
+              const unmarked  = sessionCoachingEvents.filter(e => e.action_status === 'unmarked').length;
+              const STATUS_ICON = { performed: '✓', skipped: '✕', unmarked: '•' };
+              const STATUS_COLOR = { performed: C.green, skipped: C.muted, unmarked: C.cyan };
+              return (
+                <div style={{ ...glassCard, borderRadius: 14, padding: '16px 20px', marginBottom: 20 }}>
+                  <div style={{ fontSize: 10, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 6 }}>Session Activity</div>
+                  <div style={{ fontSize: 13, color: C.text, marginBottom: 12 }}>
+                    {sessionCoachingEvents.length} prompt{sessionCoachingEvents.length === 1 ? '' : 's'} · {performed} performed · {skipped} skipped{unmarked ? ` · ${unmarked} unmarked` : ''}
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {sessionCoachingEvents.slice(0, 6).map(ev => (
+                      <div key={ev.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+                        <span style={{ color: STATUS_COLOR[ev.action_status] || C.muted, fontWeight: 800, width: 14 }}>{STATUS_ICON[ev.action_status] || '•'}</span>
+                        <span style={{ color: C.text, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.title}</span>
+                        <span style={{ color: C.dim, fontSize: 11, flexShrink: 0 }}>
+                          {ev.shown_at ? new Date(ev.shown_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                        </span>
+                      </div>
+                    ))}
                   </div>
                 </div>
               );

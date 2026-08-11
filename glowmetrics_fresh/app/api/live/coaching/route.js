@@ -5,6 +5,7 @@ import { getLiveSessionCaller } from '../../../../lib/liveSession/auth'
 import { sanitizedErrorResponse } from '../../../../lib/liveSession/shape'
 import { corsHeaders } from '../../../../lib/liveSession/cors'
 import { computeCoachingState, evaluateCoachingTriggers, selectPrimaryTrigger, TRIGGER_META } from '../../../../lib/coaching/triggers'
+import { isProPlan } from '../../../../lib/plan'
 
 export async function OPTIONS(req) {
   return new Response(null, { status: 204, headers: corsHeaders(req) })
@@ -80,6 +81,29 @@ export async function GET(req) {
   // No active Live Mode session — safe idle response, both surfaces no-op.
   if (!session) {
     return NextResponse.json({ session: null, prompt: null }, { headers: { 'Cache-Control': 'no-store', ...cors } })
+  }
+
+  // Live coaching is a Pro-only capability (see getModuleLockState's
+  // `liveCoaching` rule in app/dashboard/DashboardPreview.js — the UI-side
+  // mirror of this same gate). Free callers still get a valid session
+  // envelope (so the rest of Live Mode keeps working) but never a prompt —
+  // this is the actual enforcement point; the client-side lock is only UX.
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('plan, plan_expires_at')
+    .eq('id', user.id)
+    .maybeSingle()
+
+  if (profileError) {
+    const { status, body } = sanitizedErrorResponse(profileError)
+    return NextResponse.json(body, { status, headers: cors })
+  }
+
+  if (!isProPlan(profile)) {
+    return NextResponse.json(
+      { session: { id: session.id }, prompt: null },
+      { headers: { 'Cache-Control': 'no-store', ...cors } }
+    )
   }
 
   // An already-active, unexpired, unanswered prompt takes priority over

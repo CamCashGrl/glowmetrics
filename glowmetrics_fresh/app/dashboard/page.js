@@ -1514,7 +1514,7 @@ export default function Dashboard() {
     setReplayLoading(true)
     supabase
       .from('live_sessions')
-      .select('id, stream_platform, started_at, ended_at, total_paused_seconds, session_earnings_usd, session_tokens, tip_count, unique_tipper_count, largest_tip_usd, session_resolution_type, is_inaccurate')
+      .select('id, stream_platform, started_at, ended_at, total_paused_seconds, session_earnings_usd, session_tokens, tip_count, unique_tipper_count, largest_tip_usd, average_tip_usd, earnings_per_active_hour, tips_per_active_hour, duration_confidence, session_resolution_type, is_inaccurate')
       .eq('user_id', user.id)
       .eq('status', 'ended')
       .order('started_at', { ascending: false })
@@ -5045,6 +5045,35 @@ const stopImportMessageRotation = () => {
                   : 0
                 const isExpanded = expandedReplayId === s.id
                 const events = replayCoachingEvents[s.id]
+                const coachingLock = getModuleLockState({ module: 'liveCoaching', isPro })
+
+                // $/hr for the collapsed card — prefer the real populated
+                // earnings_per_active_hour column; fall back to computing it
+                // from active seconds the same way, labeling as estimated
+                // whenever the exact column isn't populated (never presented
+                // as exact when it isn't — see duration_confidence below).
+                const hasExactRate = typeof s.earnings_per_active_hour === 'number'
+                const activeHours = activeSecs / 3600
+                const fallbackRate = activeHours > 0 ? (s.session_earnings_usd || 0) / activeHours : null
+                const displayRate = hasExactRate ? s.earnings_per_active_hour : fallbackRate
+
+                // Peak Window Adherence — reuses the already-computed
+                // aggregateRows platformBestTimes/bestHour (analytics var in
+                // scope from the top of this component). Shown only when a
+                // valid comparison exists for this session's platform/hour.
+                const sessionHour = new Date(s.started_at).getHours()
+                const platTimes = analytics?.platformBestTimes?.[s.stream_platform]
+                const platBestHour = platTimes ? parseInt(platTimes.bestHour ?? platTimes.hour, 10) : null
+                const globalBestHour = analytics?.bestHour ? parseInt(analytics.bestHour.hour, 10) : null
+                const isPeakWindowSession = (platBestHour !== null && !isNaN(platBestHour) && platBestHour === sessionHour)
+                  || (globalBestHour !== null && !isNaN(globalBestHour) && globalBestHour === sessionHour)
+
+                // Performance comparison — only rendered when a real
+                // historical baseline exists (never fabricated).
+                const baselineRate = platTimes?.avg ?? (globalBestHour === sessionHour ? analytics?.bestHour?.avg : null)
+                const hasBaseline = typeof baselineRate === 'number' && baselineRate > 0 && typeof displayRate === 'number'
+                const vsBaselinePct = hasBaseline ? Math.round(((displayRate - baselineRate) / baselineRate) * 100) : null
+
                 return (
                   <div key={s.id} style={{ ...glassCard, borderRadius: 14, padding: 18, marginBottom: 12, opacity: s.is_inaccurate ? 0.6 : 1 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
@@ -5060,8 +5089,17 @@ const stopImportMessageRotation = () => {
                       <div style={{ display: 'flex', gap: 18, alignItems: 'center' }}>
                         <div style={{ textAlign: 'right' }}>
                           <div style={{ fontSize: 16, fontWeight: 800, color: C.green }}>${(s.session_earnings_usd || 0).toFixed(2)}</div>
-                          <div style={{ fontSize: 10, color: C.muted }}>{s.tip_count || 0} tips · {s.unique_tipper_count || 0} supporters</div>
+                          <div style={{ fontSize: 10, color: C.muted }}>
+                            {s.tip_count || 0} tips · {s.unique_tipper_count || 0} supporters
+                            {typeof displayRate === 'number' && ` · ${hasExactRate ? '' : '~'}$${displayRate.toFixed(0)}/hr${hasExactRate ? '' : ' est.'}`}
+                          </div>
                         </div>
+                        {events?.length > 0 && (
+                          <div title={`${events.length} coaching prompt${events.length === 1 ? '' : 's'}`}
+                            style={{ padding: '2px 8px', borderRadius: 100, background: 'rgba(34,211,238,0.12)', border: '1px solid rgba(34,211,238,0.3)', color: C.cyan, fontSize: 10, fontWeight: 700 }}>
+                            {events.length} 💡
+                          </div>
+                        )}
                         <button
                           onClick={() => {
                             const next = isExpanded ? null : s.id
@@ -5069,37 +5107,118 @@ const stopImportMessageRotation = () => {
                             if (next) loadReplayCoachingEvents(s.id)
                           }}
                           style={{ padding: '6px 12px', borderRadius: 8, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.15)', color: C.muted, fontWeight: 700, fontSize: 11, cursor: 'pointer' }}>
-                          {isExpanded ? 'Hide' : 'Coaching timeline'}
+                          {isExpanded ? 'Hide' : 'Full report'}
                         </button>
                       </div>
                     </div>
                     {isExpanded && (
-                      <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
-                        {replayCoachingLoading === s.id && (
-                          <div style={{ fontSize: 12, color: C.muted }}>Loading coaching timeline…</div>
-                        )}
-                        {replayCoachingLoading !== s.id && events && events.length === 0 && (
-                          <div style={{ fontSize: 12, color: C.muted }}>No coaching prompts fired during this session.</div>
-                        )}
-                        {replayCoachingLoading !== s.id && events && events.length > 0 && (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                            {events.map((e) => (
-                              <div key={e.id} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 12 }}>
-                                <span style={{ color: C.dim, minWidth: 62, fontVariantNumeric: 'tabular-nums' }}>
-                                  {new Date(e.shown_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
-                                </span>
-                                <span style={{
-                                  padding: '1px 7px', borderRadius: 5, fontSize: 10, fontWeight: 700, flexShrink: 0,
-                                  background: e.action_status === 'performed' ? 'rgba(16,185,129,0.15)' : e.action_status === 'skipped' ? 'rgba(148,163,184,0.15)' : 'rgba(245,158,11,0.15)',
-                                  color: e.action_status === 'performed' ? C.green : e.action_status === 'skipped' ? C.muted : C.gold,
-                                }}>
-                                  {e.action_status === 'performed' ? 'Done' : e.action_status === 'skipped' ? 'Skipped' : 'Unmarked'}
-                                </span>
-                                <span style={{ color: C.white }}>{e.title || e.message}</span>
-                              </div>
-                            ))}
+                      <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid rgba(255,255,255,0.08)', display: 'flex', flexDirection: 'column', gap: 18 }}>
+
+                        {/* ── SESSION OVERVIEW ── */}
+                        <div>
+                          <div style={{ fontSize: 10, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8 }}>Session Overview</div>
+                          {isPeakWindowSession && (
+                            <div style={{ fontSize: 12, color: C.gold, marginBottom: 8 }}>🔥 Peak Window Session — you started this stream during one of your strongest historical windows.</div>
+                          )}
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))', gap: 10, fontSize: 12 }}>
+                            <div><div style={{ color: C.dim, fontSize: 10 }}>Platform</div><div style={{ color: C.white }}>{s.stream_platform || 'Chaturbate'}</div></div>
+                            <div><div style={{ color: C.dim, fontSize: 10 }}>Started</div><div style={{ color: C.white }}>{new Date(s.started_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</div></div>
+                            <div><div style={{ color: C.dim, fontSize: 10 }}>Duration</div><div style={{ color: C.white }}>{fmtSessionDuration(activeSecs)}</div></div>
+                            <div><div style={{ color: C.dim, fontSize: 10 }}>Earnings</div><div style={{ color: C.green }}>${(s.session_earnings_usd || 0).toFixed(2)}</div></div>
+                            <div><div style={{ color: C.dim, fontSize: 10 }}>Tips</div><div style={{ color: C.white }}>{s.tip_count || 0}</div></div>
+                            <div><div style={{ color: C.dim, fontSize: 10 }}>Avg Tip</div><div style={{ color: C.white }}>{typeof s.average_tip_usd === 'number' ? `$${s.average_tip_usd.toFixed(2)}` : '—'}</div></div>
+                            <div><div style={{ color: C.dim, fontSize: 10 }}>Largest Tip</div><div style={{ color: C.white }}>${(s.largest_tip_usd || 0).toFixed(2)}</div></div>
+                            <div><div style={{ color: C.dim, fontSize: 10 }}>$/hr</div><div style={{ color: C.white }}>{typeof displayRate === 'number' ? `${hasExactRate ? '' : '~'}$${displayRate.toFixed(0)}${hasExactRate ? '' : ' est.'}` : 'Not enough data yet'}</div></div>
+                            <div><div style={{ color: C.dim, fontSize: 10 }}>Tips/hr</div><div style={{ color: C.white }}>{typeof s.tips_per_active_hour === 'number' ? s.tips_per_active_hour.toFixed(1) : '—'}</div></div>
+                          </div>
+                          {s.duration_confidence === 'estimated' && (
+                            <div style={{ fontSize: 11, color: C.muted, marginTop: 8 }}>⚠ Duration is estimated for this session — figures above are approximate, not exact.</div>
+                          )}
+                        </div>
+
+                        {/* ── PERFORMANCE ── */}
+                        {hasBaseline && (
+                          <div>
+                            <div style={{ fontSize: 10, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8 }}>Performance</div>
+                            <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', fontSize: 12 }}>
+                              <div><div style={{ color: C.dim, fontSize: 10 }}>Your Session</div><div style={{ color: C.white, fontSize: 16, fontWeight: 800 }}>${displayRate.toFixed(0)}/hr</div></div>
+                              <div><div style={{ color: C.dim, fontSize: 10 }}>Historical Average</div><div style={{ color: C.white, fontSize: 16, fontWeight: 800 }}>${baselineRate.toFixed(0)}/hr</div></div>
+                              <div><div style={{ color: C.dim, fontSize: 10 }}>vs Average</div><div style={{ color: vsBaselinePct >= 0 ? C.green : C.red, fontSize: 16, fontWeight: 800 }}>{vsBaselinePct >= 0 ? '+' : ''}{vsBaselinePct}%</div></div>
+                            </div>
                           </div>
                         )}
+                        {!hasBaseline && (
+                          <div>
+                            <div style={{ fontSize: 10, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 6 }}>Performance</div>
+                            <div style={{ fontSize: 12, color: C.muted }}>Not enough data yet</div>
+                          </div>
+                        )}
+
+                        {/* ── COACHING PERFORMANCE (Pro-gated) ── */}
+                        <div>
+                          <div style={{ fontSize: 10, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8 }}>Coaching Performance</div>
+                          {coachingLock.locked ? (
+                            <LockedInsightCard title="Coaching Performance" description="Track which coaching strategies you actually follow and how consistently you use them." lockType={coachingLock.lockType} requirement={coachingLock.message} ctaLabel="Upgrade to Pro" ctaAction={() => handleTabChange('settings')} />
+                          ) : (
+                            (() => {
+                              if (replayCoachingLoading === s.id) return <div style={{ fontSize: 12, color: C.muted }}>Loading…</div>
+                              if (!events || events.length === 0) return <div style={{ fontSize: 12, color: C.muted }}>No coaching prompts fired during this session.</div>
+                              const performed = events.filter(e => e.action_status === 'performed').length
+                              const skipped = events.filter(e => e.action_status === 'skipped').length
+                              const unmarked = events.filter(e => e.action_status === 'unmarked').length
+                              const marked = performed + skipped
+                              const rate = marked > 0 ? Math.round((performed / marked) * 100) : null
+                              const byType = {}
+                              events.forEach(e => { byType[e.type] = (byType[e.type] || 0) + 1 })
+                              return (
+                                <div>
+                                  <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', fontSize: 12, marginBottom: 10 }}>
+                                    <div><div style={{ color: C.dim, fontSize: 10 }}>Shown</div><div style={{ color: C.white, fontWeight: 700 }}>{events.length}</div></div>
+                                    <div><div style={{ color: C.dim, fontSize: 10 }}>Performed</div><div style={{ color: C.green, fontWeight: 700 }}>{performed}</div></div>
+                                    <div><div style={{ color: C.dim, fontSize: 10 }}>Skipped</div><div style={{ color: C.muted, fontWeight: 700 }}>{skipped}</div></div>
+                                    <div><div style={{ color: C.dim, fontSize: 10 }}>Unmarked</div><div style={{ color: C.gold, fontWeight: 700 }}>{unmarked}</div></div>
+                                    {rate !== null && <div><div style={{ color: C.dim, fontSize: 10 }}>Follow Rate</div><div style={{ color: C.cyan, fontWeight: 700 }}>{rate}%</div></div>}
+                                  </div>
+                                  <div style={{ fontSize: 11, color: C.muted, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                                    {Object.entries(byType).map(([type, count]) => (
+                                      <span key={type}>{type.replace(/_/g, ' ')}: {count}</span>
+                                    ))}
+                                  </div>
+                                </div>
+                              )
+                            })()
+                          )}
+                        </div>
+
+                        {/* ── COACHING TIMELINE ── */}
+                        <div>
+                          <div style={{ fontSize: 10, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8 }}>Coaching Timeline</div>
+                          {replayCoachingLoading === s.id && (
+                            <div style={{ fontSize: 12, color: C.muted }}>Loading coaching timeline…</div>
+                          )}
+                          {replayCoachingLoading !== s.id && events && events.length === 0 && (
+                            <div style={{ fontSize: 12, color: C.muted }}>No coaching prompts fired during this session.</div>
+                          )}
+                          {replayCoachingLoading !== s.id && events && events.length > 0 && (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                              {events.map((e) => (
+                                <div key={e.id} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 12 }}>
+                                  <span style={{ color: C.dim, minWidth: 62, fontVariantNumeric: 'tabular-nums' }}>
+                                    {new Date(e.shown_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+                                  </span>
+                                  <span style={{
+                                    padding: '1px 7px', borderRadius: 5, fontSize: 10, fontWeight: 700, flexShrink: 0,
+                                    background: e.action_status === 'performed' ? 'rgba(16,185,129,0.15)' : e.action_status === 'skipped' ? 'rgba(148,163,184,0.15)' : 'rgba(245,158,11,0.15)',
+                                    color: e.action_status === 'performed' ? C.green : e.action_status === 'skipped' ? C.muted : C.gold,
+                                  }}>
+                                    {e.action_status === 'performed' ? 'Done' : e.action_status === 'skipped' ? 'Skipped' : 'Unmarked'}
+                                  </span>
+                                  <span style={{ color: C.white }}>{e.title || e.message}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>
