@@ -190,7 +190,7 @@ export async function POST(req) {
         // indistinguishable from a request that never ran at all.
         await logCsvUpload('blocked')
         return NextResponse.json({
-          error: `You're on the free plan, which tracks one platform. Upgrade to add ${detectedPlatform} alongside your existing platform data.`,
+          error: `You're on the free plan, which tracks up to 2 platforms. Upgrade to add ${detectedPlatform} alongside your existing platform data.`,
           code: 'platform_limit_reached',
           upgradeUrl: '/pricing',
         }, { status: 402 })
@@ -241,7 +241,7 @@ export async function POST(req) {
         // the paid-session half, same as onboarding's two independent
         // requests would behave if the paid-sessions call failed on its own.
         return NextResponse.json({
-          error: `You're on the free plan, which tracks one platform. Upgrade to add ${detectedPlatform} alongside your existing platform data.`,
+          error: `You're on the free plan, which tracks up to 2 platforms. Upgrade to add ${detectedPlatform} alongside your existing platform data.`,
           code: 'platform_limit_reached',
           upgradeUrl: '/pricing',
         }, { status: 402 })
