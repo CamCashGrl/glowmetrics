@@ -42,7 +42,6 @@ const NAV = [
     items: [
       { id: "titles",    icon: "🎬", label: "Room Titles" },
       { id: "calc",      icon: "🪙", label: "Token Calc"  },
-      { id: "data",      icon: "📝", label: "Edit Data" },
       { id: "analytics", icon: "📊", label: "Analytics" },
       { id: "planner",   icon: "🗓️", label: "Stream Planner" },
       { id: "moneymap",  icon: "🗺️", label: "Money Map" },
@@ -51,6 +50,7 @@ const NAV = [
   {
     group: "SUPPORT",
     items: [
+      { id: "data",     icon: "📝", label: "Edit Data" },
       { id: "upload",   icon: "📥", label: "Import CSV" },
       { id: "help",     icon: "❓", label: "CSV Help" },
       { id: "settings", icon: "⚙️", label: "Account & Billing" },
