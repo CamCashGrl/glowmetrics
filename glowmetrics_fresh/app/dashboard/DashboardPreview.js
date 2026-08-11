@@ -529,12 +529,12 @@ export function DashboardPreview({ tips = [], analytics, userPlan = 'free', plan
               ) : platformCount === 0 ? (
                 <>
                   <div style={{ fontSize: 13, fontWeight: 800, color: C.white, marginBottom: 4 }}>Free plan</div>
-                  <div style={{ fontSize: 12, color: C.text, lineHeight: 1.6 }}>Track up to 2 platforms for free. Choose your first platform to start building your dashboard.</div>
+                  <div style={{ fontSize: 12, color: C.text, lineHeight: 1.6 }}>Track 1 platform for free. Choose your first platform to start building your dashboard.</div>
                 </>
               ) : (
                 <>
-                  <div style={{ fontSize: 13, fontWeight: 800, color: C.white, marginBottom: 4 }}>Free plan · {platformCount} of 2 platforms active</div>
-                  <div style={{ fontSize: 12, color: C.text, lineHeight: 1.6 }}>You're tracking <strong style={{ color: C.cyan }}>{platforms.join(' & ')}</strong> for free. Upgrade to Pro for unlimited platforms and the full cross-platform comparison view.</div>
+                  <div style={{ fontSize: 13, fontWeight: 800, color: C.white, marginBottom: 4 }}>Free plan · 1 platform active</div>
+                  <div style={{ fontSize: 12, color: C.text, lineHeight: 1.6 }}>You're tracking <strong style={{ color: C.cyan }}>{platforms[0]}</strong> for free. Upgrade to Pro when you're ready to track more platforms and compare where you earn best.</div>
                 </>
               )}
             </div>
@@ -551,7 +551,7 @@ export function DashboardPreview({ tips = [], analytics, userPlan = 'free', plan
           </div>
           {!isPro && (
             <div style={{ marginTop: 12, fontSize: 11, color: C.muted, padding: '8px 12px', borderRadius: 10, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
-              Your free plan includes up to 2 active platforms. Pro unlocks unlimited platform tracking and the cross-platform comparison view. You can keep tracking up to 2 platforms for free forever.
+              Your free plan includes 1 active platform. Pro unlocks multi-platform tracking and comparisons. You can keep tracking 1 platform for free forever.
             </div>
           )}
         </div>
@@ -628,7 +628,7 @@ export function DashboardPreview({ tips = [], analytics, userPlan = 'free', plan
           <SnapshotMetricCard
             label="Platforms"
             value={platformCount > 0 ? platforms.join(', ') : 'None yet'}
-            helper={isPro ? 'Pro multi-platform tracking enabled' : 'Free plan tracks up to 2 platforms'}
+            helper={isPro ? 'Pro multi-platform tracking enabled' : 'Free plan tracks 1 platform'}
             status={platformCount > 0 ? 'ready' : 'locked'}
           />
         </div>
