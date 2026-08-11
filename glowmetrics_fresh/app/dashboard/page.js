@@ -3391,8 +3391,9 @@ const stopImportMessageRotation = () => {
               tips={tips}
               isPro={isPro}
               visitedTabs={visitedTabs}
+              platformCount={allPlatforms.length}
               onNavigate={handleTabChange}
-              onUpgrade={() => openUpgradeModal('default')}
+              onUpgrade={(reason) => openUpgradeModal(reason || 'default')}
             />
 
             {/* ═══════════════════════════════════════
