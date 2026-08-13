@@ -308,12 +308,29 @@ function parseCSVLine(line) {
   return result
 }
 
-// BongaCams paid-chat/spy-mode session types, matched against a row's
-// "Chat Type" column (normalized to tip_type by normalizeHeaderName above).
-// Duplicated from the identical BC_PAID_TYPES list in app/onboarding/page.js
-// on purpose — that list drives the paste-flow's own client-side detection
-// and is out of scope here; consolidating the two is a separate follow-up.
-const BC_PAID_CHAT_TYPES = ['Private Chat', 'Full-Private Chat', 'Group Chat', 'Spy Mode']
+// Paid-chat/private-session detection, matched against a row's "Chat Type"
+// / "Transaction Type" column (normalized to tip_type by normalizeHeaderName
+// above). Session-based revenue uses different label text per platform
+// (BongaCams: "Private Chat" / "Full-Private Chat" / "Group Chat" / "Spy
+// Mode"; Chaturbate & MyFreeCams: "Private Show" / "Spy Show" / "Group
+// Show"), so this matches by keyword rather than an exact per-platform
+// string and canonicalizes every match to the same four labels — those are
+// what PrivateSessions.js's TYPE_COLORS map and type filter expect,
+// regardless of which platform the row came from. Order matters: "full
+// private" is checked before the plain "private" pattern since it's a
+// substring of it.
+const PAID_SESSION_TYPE_PATTERNS = [
+  { re: /full[\s-]?private/i, label: 'Full-Private Chat' },
+  { re: /private/i,           label: 'Private Chat' },
+  { re: /spy/i,                label: 'Spy Mode' },
+  { re: /group/i,              label: 'Group Chat' },
+]
+
+function detectPaidSessionType(tipType) {
+  if (!tipType) return null
+  const found = PAID_SESSION_TYPE_PATTERNS.find(p => p.re.test(tipType))
+  return found ? found.label : null
+}
 
 function parseWithHeaders(lines, platform) {
   const rawHeaders = parseCSVLine(lines[0])
@@ -329,11 +346,6 @@ function parseWithHeaders(lines, platform) {
 
     const action = (row.action || '').toLowerCase()
     const tipType = (row.tip_type || '').toLowerCase()
-    // Exact (case-insensitive) match against the four BongaCams paid-chat
-    // types — same match semantics as onboarding's detectBCPaidRow(), just
-    // applied to the already header-mapped tip_type field instead of
-    // scanning raw columns.
-    const bcPaidChatType = BC_PAID_CHAT_TYPES.find(t => t.toLowerCase() === tipType) || null
 
     if (action.includes('transfer') || action.includes('cash') ||
         action.includes('outbound tip') || action.includes('promoted room') ||
@@ -362,6 +374,11 @@ function parseWithHeaders(lines, platform) {
       } else continue
     }
     if (!username) continue
+
+    // Recomputed from row.tip_type (not the earlier `tipType` const) so the
+    // action-derived "Private Show"/"Spy Show" values set just above are
+    // picked up too, not just tip_type as it was in the raw CSV column.
+    const paidSessionType = detectPaidSessionType(row.tip_type)
 
     // Strip $, comma, AND whitespace (incl. NBSP/narrow-NBSP thousands
     // separators like BongaCams' "1 507") before parsing — parseInt
@@ -398,7 +415,7 @@ function parseWithHeaders(lines, platform) {
       // Paid-chat/spy-mode rows must be routed to paid_sessions, not tips —
       // stamped here so callers (e.g. /api/upload) can split the flat
       // parseCSV() result without re-deriving the classification themselves.
-      ...(bcPaidChatType ? { is_paid_session: true, session_type: bcPaidChatType } : {}),
+      ...(paidSessionType ? { is_paid_session: true, session_type: paidSessionType } : {}),
     })
   }
   return results
