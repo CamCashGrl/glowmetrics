@@ -3260,7 +3260,12 @@ const stopImportMessageRotation = () => {
           const hoursUntilLocal = canonicalPeakHourLocal != null ? (canonicalPeakHourLocal - localNow + 24) % 24 : brief?.hoursUntilPeak
           const peakLabel = hoursUntilLocal === 0 ? 'NOW' : hoursUntilLocal === 1 ? 'in 1 hr' : (hoursUntilLocal > 0 && !isNaN(hoursUntilLocal)) ? `in ${hoursUntilLocal}h` : null
           const _eiPeakLabel = canonicalPeakLabel || brief?.bhLabel
-          const bestPlat = brief?.displayPlat || (tips.length > 0 ? tips[0]?.platform : null)
+          // Same precedence as the Daily Brief card below (engineInsights first,
+          // then the client-side hour-bucketed calc) — these used to be computed
+          // independently, which could show two different "best platform" values
+          // on the same screen. tips[0]?.platform is not a real fallback (just
+          // whichever tip happens to be first in the array), so it's dropped.
+          const bestPlat = engineInsights?.summary?.best_platform || brief?.displayPlat || null
           const safeRevenue = (!isNaN(totalRevenue) && isFinite(totalRevenue)) ? totalRevenue : 0
 
           // ── truthful live status — single source of truth is useLiveSessionEngine,
