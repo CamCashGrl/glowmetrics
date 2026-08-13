@@ -2485,14 +2485,16 @@ const stopImportMessageRotation = () => {
   // events (already fired by openUpgradeModal('platform_comparison') when
   // the card's CTA is clicked) and Stripe's webhook-driven subscription
   // event downstream, so the full funnel is: viewed → clicked → converted.
-  // Fires once per session (not every render/tab-revisit) via the ref guard.
-  useEffect(() => {
-    if (activeTab !== 'platforms' || isPro || platformComparisonViewedRef.current) return
-    if (allPlatforms.length < 2) return
+  // Fires once per session via the ref guard. Plain inline code, not a
+  // hook — this section runs after the `if (loading) return` early-exit
+  // above, so a real useEffect() here would violate the Rules of Hooks
+  // (see the memoOn comment near the top of this file for the same reason
+  // useMemo isn't used down here either).
+  if (activeTab === 'platforms' && !isPro && !platformComparisonViewedRef.current && allPlatforms.length >= 2) {
     platformComparisonViewedRef.current = true
     track('platform_comparison_locked_viewed', { platformCount: allPlatforms.length })
     gtmTrack('platform_comparison_locked_viewed', { platformCount: allPlatforms.length })
-  }, [activeTab, isPro, allPlatforms.length])
+  }
 
   // ── Build "What's Next" alerts — smarter, personalized, prioritized
   const buildWhatsNextAlerts = () => {
@@ -2984,22 +2986,20 @@ const stopImportMessageRotation = () => {
   // (Daily Brief's forecast, Session Breakdown's analysis). Same fire-once
   // pattern as platform_comparison_locked_viewed above; paired with the
   // existing upgrade_click/paywall_hit events already fired by
-  // openUpgradeModal('daily_forecast'/'session_breakdown').
-  useEffect(() => {
-    if (isPro || dailyForecastLockViewedRef.current) return
-    if (!dailyBrief?.bhLabel) return
+  // openUpgradeModal('daily_forecast'/'session_breakdown'). Plain inline
+  // code, not hooks — same reason as platform_comparison_locked_viewed
+  // above (this section runs after the `if (loading) return` early-exit).
+  if (!isPro && !dailyForecastLockViewedRef.current && dailyBrief?.bhLabel) {
     dailyForecastLockViewedRef.current = true
     track('daily_forecast_locked_viewed', {})
     gtmTrack('daily_forecast_locked_viewed', {})
-  }, [isPro, dailyBrief?.bhLabel])
+  }
 
-  useEffect(() => {
-    if (activeTab !== 'sessions' || isPro || sessionBreakdownLockViewedRef.current) return
-    if (!sessions.length) return
+  if (activeTab === 'sessions' && !isPro && !sessionBreakdownLockViewedRef.current && sessions.length) {
     sessionBreakdownLockViewedRef.current = true
     track('session_breakdown_locked_viewed', { sessionCount: sessions.length })
     gtmTrack('session_breakdown_locked_viewed', { sessionCount: sessions.length })
-  }, [activeTab, isPro, sessions.length])
+  }
 
   // ── CANONICAL PEAK HOUR ──────────────────────────────────────────────────────
   // Single source of truth used by the header, Daily Brief, and Losing Money.
