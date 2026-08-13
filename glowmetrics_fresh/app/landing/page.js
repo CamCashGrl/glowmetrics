@@ -807,11 +807,11 @@ export default function LandingPage() {
         body: JSON.stringify({ email }),
       })
       const captchaData = await captchaRes.json()
-      if (!captchaData.ok) { setAuthError(captchaData.error || 'Security check failed.'); setAuthLoading(false); return }
+      if (!captchaData.ok) { track('signup_captcha_failed'); setAuthError(captchaData.error || 'Security check failed.'); setAuthLoading(false); return }
       let attribution = null
       try { attribution = JSON.parse(localStorage.getItem('camcash_attribution') || 'null') } catch {}
       const { error } = await supabase.auth.signUp({ email, password })
-      if (error) { setAuthError(friendlyAuthError(error.message)); setAuthLoading(false) }
+      if (error) { track('signup_auth_error', { reason: error.message }); setAuthError(friendlyAuthError(error.message)); setAuthLoading(false) }
       else {
         if (typeof twq === 'function') twq('event', 'tw-rc0w2-rcj9h', {})
         fetch('/api/admin/notify-signup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, source: 'landing' }) }).catch(() => {})
