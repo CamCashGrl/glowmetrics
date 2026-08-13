@@ -67,11 +67,11 @@ export default function HomePage() {
         <h2>Top Tipper Tracking</h2>
         <p>See every fan ranked by lifetime spend. Know who your whales are, when they last tipped, and whether they're at risk of going cold. Get personalized re-engagement messages for fans who've gone quiet.</p>
         <h2>Peak Earning Hours</h2>
-        <p>CamCash analyzes your tip history to find the 2-3 hour windows where you earn 40-80% more than your average. Stream at the right time for your specific audience.</p>
+        <p>CamCash analyzes your tip history to find your predictable earning windows for free. Creator Pro unlocks the exact 2-3 hour window and your personalized $ forecast for streaming then.</p>
         <h2>Platform Comparison</h2>
-        <p>See your actual $/hour on Chaturbate vs BongaCams vs MyFreeCams so you can put more time where it pays off most.</p>
+        <p>Track your real totals and hours on Chaturbate, BongaCams, and MyFreeCams for free. Creator Pro unlocks the $/hour comparison across all your platforms, so you know exactly where your time pays off most.</p>
         <h2>Session Breakdown</h2>
-        <p>Every session gets a full timeline — when tips came in, who drove the revenue, and what to do differently next time.</p>
+        <p>Every session gets a free earnings timeline — when tips came in and how much you earned. Creator Pro adds the full breakdown: who drove the revenue and exactly what to do differently next time.</p>
         <h2>Room Title Generator</h2>
         <p>Generate high-converting room titles based on your toy type, token goal, and vibe. Free to use without an account.</p>
         <h2>How It Works</h2>

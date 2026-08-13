@@ -9,6 +9,7 @@ import { computeOpportunityScore, computeStreamHealth } from '../../lib/analytic
 import { detectSessions } from '../../lib/analytics/sessions';
 import { computeBestTimes } from '../../lib/analytics';
 import { tokenRate } from '../../lib/constants';
+import { isProPlan } from '../../lib/plan';
 import FeedbackWidget from '../components/FeedbackWidget';
 import EventsSync from './EventsSync';
 import Button from '../../components/ui/Button';
@@ -58,6 +59,11 @@ export default function LivePage({ embedded = false } = {}) {
   // all-time analytics. The window stays intentionally different (see the
   // fetch below); the calculation method no longer is.
   const [bestTimes, setBestTimes]     = useState(null);
+  // Free vs Pro coaching disclosure — fetched once at mount, same source
+  // (profiles.plan/plan_expires_at) the dashboard uses via isProPlan(). Not
+  // yet used to gate any specific coaching prompt (see the entry-screen
+  // banner below); this is the disclosure/plumbing half of that work.
+  const [isPro, setIsPro]             = useState(false);
 
   // ── DEMO / AUTH / EXT MODAL STATE ────────────────────────────────────
   const [demoTips, setDemoTips]           = useState([]);
@@ -173,6 +179,8 @@ export default function LivePage({ embedded = false } = {}) {
       if (!u) { setAuthStatus('live'); return; }
       setUser(u);
       setAuthStatus('live');
+      supabase.from('profiles').select('plan, plan_expires_at').eq('id', u.id).maybeSingle()
+        .then(({ data }) => { if (data) setIsPro(isProPlan(data)); });
 
       // Load last 12h of tips as history
       const since = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString();
@@ -1128,6 +1136,14 @@ export default function LivePage({ embedded = false } = {}) {
               style={{ padding: '13px 36px', borderRadius: 12, background: 'linear-gradient(135deg, #10B981, #22D3EE)', border: 'none', color: C.white, fontWeight: 800, fontSize: 16, cursor: engine.actionPending ? 'default' : 'pointer', opacity: engine.actionPending ? 0.6 : 1, boxShadow: '0 0 32px rgba(16,185,129,0.4)' }}>
               {engine.actionPending ? 'Starting…' : '▶ Start Streaming'}
             </button>
+            {/* Disclosed here, before a session starts — never mid-stream.
+                No specific coaching prompt is gated behind Pro yet; this is
+                the honest baseline so that when one is, it isn't a surprise. */}
+            {!isPro && (
+              <div style={{ marginTop: 16, fontSize: 12, color: C.muted }}>
+                Free includes real-time tips and live coaching. <a href="/pricing" style={{ color: '#22D3EE', fontWeight: 600, textDecoration: 'none' }}>Pro unlocks advanced coaching →</a>
+              </div>
+            )}
           </div>
         )}
 

@@ -39,6 +39,14 @@ const UPGRADE_COPY = {
     headline: "You're tracking multiple platforms",
     subhead: "Unlock the combined view — which platform pays better per hour, your totals across all of them, and where to shift your time.",
   },
+  session_breakdown: {
+    headline: "Your sessions have a story to tell",
+    subhead: "Upgrade to Pro to see what drove each session's performance, your top tippers per stream, and exactly what to change next time.",
+  },
+  daily_forecast: {
+    headline: "Know before you go live",
+    subhead: "Upgrade to Pro to unlock your full income forecast and exact peak streaming window, not just a directional hint.",
+  },
   whales_cutoff: {
     headline: "You've found your top fans",
     subhead: "See your full fan list — every VIP, not just the first 3 — and track them over time.",
@@ -1431,6 +1439,8 @@ export default function Dashboard() {
   const [importMessageIdx, setImportMessageIdx] = useState(0)
   const importMessageTimerRef = useRef(null)
   const platformComparisonViewedRef = useRef(false)
+  const sessionBreakdownLockViewedRef = useRef(false)
+  const dailyForecastLockViewedRef = useRef(false)
   const uploading = importStage === 'processing'
   const [uploadPlatform, setUploadPlatform] = useState("")
   const [lastUploadResult, setLastUploadResult] = useState(null)
@@ -2970,6 +2980,27 @@ const stopImportMessageRotation = () => {
   // re-runs every minuteTick (as well as when the underlying data changes)
   const dailyBrief = memoOn(derivedCacheRef.current, 'dailyBrief', [tips, analytics, whales, minuteTick], buildDailyBrief)
 
+  // Conversion funnel — impression of the two other locked-preview surfaces
+  // (Daily Brief's forecast, Session Breakdown's analysis). Same fire-once
+  // pattern as platform_comparison_locked_viewed above; paired with the
+  // existing upgrade_click/paywall_hit events already fired by
+  // openUpgradeModal('daily_forecast'/'session_breakdown').
+  useEffect(() => {
+    if (isPro || dailyForecastLockViewedRef.current) return
+    if (!dailyBrief?.bhLabel) return
+    dailyForecastLockViewedRef.current = true
+    track('daily_forecast_locked_viewed', {})
+    gtmTrack('daily_forecast_locked_viewed', {})
+  }, [isPro, dailyBrief?.bhLabel])
+
+  useEffect(() => {
+    if (activeTab !== 'sessions' || isPro || sessionBreakdownLockViewedRef.current) return
+    if (!sessions.length) return
+    sessionBreakdownLockViewedRef.current = true
+    track('session_breakdown_locked_viewed', { sessionCount: sessions.length })
+    gtmTrack('session_breakdown_locked_viewed', { sessionCount: sessions.length })
+  }, [activeTab, isPro, sessions.length])
+
   // ── CANONICAL PEAK HOUR ──────────────────────────────────────────────────────
   // Single source of truth used by the header, Daily Brief, and Losing Money.
   // Prefer engineInsights daily_plan (most specific), then today's analytics best
@@ -3560,8 +3591,13 @@ const stopImportMessageRotation = () => {
 
               <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
 
-                {/* ═══ BEST TIME TO STREAM ALERT ═══ */}
-                {bhLabel && (
+                {/* ═══ BEST TIME TO STREAM ALERT ═══
+                    Free still learns a predictable window exists (and gets the
+                    real-time "go live now" nudge if they happen to be in it —
+                    that's too time-sensitive and too basic a capability to
+                    withhold) but the exact hour, $ forecast, and "+101% more"
+                    analysis are Pro. */}
+                {bhLabel && (isPro ? (
                   <div style={{ padding: '14px 16px', borderRadius: 13, background: atPeak ? 'linear-gradient(135deg,rgba(16,185,129,0.15),rgba(34,211,238,0.08))' : 'linear-gradient(135deg,rgba(124,92,255,0.12),rgba(34,211,238,0.06))', border: `1px solid ${atPeak ? 'rgba(16,185,129,0.4)' : 'rgba(124,92,255,0.35)'}`, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
                     <div style={{ fontSize: 22, flexShrink: 0, marginTop: 1 }}>{atPeak ? '🟢' : '⏰'}</div>
                     <div style={{ flex: 1 }}>
@@ -3596,7 +3632,25 @@ const stopImportMessageRotation = () => {
                       )}
                     </div>
                   </div>
-                )}
+                ) : (
+                  <div style={{ padding: '14px 16px', borderRadius: 13, background: atPeak ? 'linear-gradient(135deg,rgba(16,185,129,0.15),rgba(34,211,238,0.08))' : 'linear-gradient(135deg,rgba(124,92,255,0.12),rgba(34,211,238,0.06))', border: `1px solid ${atPeak ? 'rgba(16,185,129,0.4)' : 'rgba(124,92,255,0.35)'}`, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                    <div style={{ fontSize: 22, flexShrink: 0, marginTop: 1 }}>{atPeak ? '🟢' : '🔒'}</div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: atPeak ? C.green : C.white, marginBottom: 5 }}>
+                        {atPeak
+                          ? `You're in your peak window right now — go live`
+                          : `Your data shows a predictable peak earning window today`
+                        }
+                      </div>
+                      <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.65 }}>
+                        {atPeak
+                          ? `Pro shows exactly how much more this window is worth and for how much longer it lasts.`
+                          : `Pro shows the exact hour, which platform, and your $ forecast if you stream then.`}
+                      </div>
+                      <button onClick={() => openUpgradeModal('daily_forecast')} style={{ marginTop: 8, padding: '5px 12px', borderRadius: 100, border: '1px solid rgba(124,92,255,0.35)', background: 'rgba(124,92,255,0.12)', color: C.indigo, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Unlock Pro →</button>
+                    </div>
+                  </div>
+                ))}
 
                 {/* ROW 1 — Today / Peak Window / Best Platform */}
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
@@ -3631,6 +3685,11 @@ const stopImportMessageRotation = () => {
                           <button onClick={() => handleTabChange('upload')} style={{ marginTop: 6, padding: '4px 10px', borderRadius: 100, border: '1px solid rgba(34,211,238,0.3)', background: 'rgba(34,211,238,0.08)', color: C.cyan, fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>Upload More Data</button>
                         </>
                       )
+                    ) : !isPro ? (
+                      <>
+                        <div style={{ fontSize: 14, fontWeight: 800, color: '#64748b' }}>🔒 Pattern found</div>
+                        <div style={{ fontSize: 11, color: C.muted, marginTop: 2, lineHeight: 1.4 }}>Pro shows the exact hour</div>
+                      </>
                     ) : (
                       <>
                         <div style={{ fontSize: 14, fontWeight: 800, color: atPeak ? C.green : C.white }}>{bhLabel}</div>
@@ -3650,9 +3709,18 @@ const stopImportMessageRotation = () => {
                   {bhLabel && (
                     <div style={{ flex: 1, minWidth: 130, padding: '11px 14px', borderRadius: 11, background: 'rgba(16,185,129,0.07)', border: '1px solid rgba(16,185,129,0.18)' }}>
                       <div style={{ fontSize: 10, color: C.muted, marginBottom: 3, textTransform: 'uppercase', letterSpacing: 1 }}>Income Forecast</div>
-                      <div style={{ fontSize: 14, fontWeight: 800, color: C.green }}>${predictionLow}–${predictionHigh}</div>
-                      <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>if you stream at {bhLabel}</div>
-                      {sessionsAtPeakCount < 2 && <div style={{ fontSize: 10, color: C.muted, marginTop: 3, fontStyle: 'italic' }}>based on limited data</div>}
+                      {isPro ? (
+                        <>
+                          <div style={{ fontSize: 14, fontWeight: 800, color: C.green }}>${predictionLow}–${predictionHigh}</div>
+                          <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>if you stream at {bhLabel}</div>
+                          {sessionsAtPeakCount < 2 && <div style={{ fontSize: 10, color: C.muted, marginTop: 3, fontStyle: 'italic' }}>based on limited data</div>}
+                        </>
+                      ) : (
+                        <>
+                          <div style={{ fontSize: 14, fontWeight: 800, color: '#64748b' }}>🔒 Pro</div>
+                          <div style={{ fontSize: 11, color: C.muted, marginTop: 2, lineHeight: 1.4 }}>See your $ range</div>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>
@@ -4492,6 +4560,25 @@ const stopImportMessageRotation = () => {
                 </div>
               </div>
 
+              {/* SINGLE-PLATFORM STATE — a dedicated opportunity card, not a
+                  comparison table with one row. Sets the free/Pro boundary
+                  before any work is invested, per the no-surprise-locks rule:
+                  a user tracking one platform should understand up front
+                  what a 2nd platform would unlock, not discover it later. */}
+              {displayPlatforms.length === 1 && (
+                <div style={{ padding: "16px 20px", borderRadius: 14, background: "linear-gradient(135deg, rgba(124,92,255,0.08), rgba(34,211,238,0.06))", border: "1px solid rgba(124,92,255,0.25)", marginBottom: 24, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: C.white, marginBottom: 4 }}>Tracking {displayPlatforms[0].platform}</div>
+                    <div style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.5 }}>
+                      {isPro
+                        ? "Add another platform and this page becomes a real comparison — which one is actually worth more of your time."
+                        : "Add a 2nd platform (free, up to 2) and CamCash will show you which one is actually worth more of your time."}
+                    </div>
+                  </div>
+                  <Button onClick={() => handleTabChange('upload')} style={{ padding: "9px 20px", fontSize: 12.5, flexShrink: 0 }}>Add a platform →</Button>
+                </div>
+              )}
+
               {/* CROSS-PLATFORM COMPARISON — real per-platform cards below stay
                   free for everyone; the combined/comparison view above them
                   (recommendation banner + summary row) is what Pro pays for.
@@ -4588,17 +4675,24 @@ const stopImportMessageRotation = () => {
                       </div>
                     </div>
 
-                    {/* STAT GRID */}
+                    {/* STAT GRID — Total Revenue and Avg Session are basic totals,
+                        free for everyone. $/Hour and Avg Tip Size are the
+                        efficiency-analysis layer, Pro (only meaningfully
+                        "locked" once there's something to compare it against). */}
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 20 }}>
                       {[
-                        { label: "Total Revenue", value: `$${(p.totalUSD || 0).toFixed(2)}`, color: C.green },
-                        { label: "$/Hour", value: `$${(p.usdPerHour || 0).toFixed(2)}`, color: C.cyan },
-                        { label: "Avg Session", value: `$${(avgSessionUSD || 0).toFixed(2)}`, color: C.pink },
-                        { label: "Avg Tip Size", value: `$${(p.avgTipSize || 0).toFixed(2)}`, color: C.gold },
-                      ].map(({ label, value, color }) => (
+                        { label: "Total Revenue", value: `$${(p.totalUSD || 0).toFixed(2)}`, color: C.green, pro: false },
+                        { label: "$/Hour", value: `$${(p.usdPerHour || 0).toFixed(2)}`, color: C.cyan, pro: true },
+                        { label: "Avg Session", value: `$${(avgSessionUSD || 0).toFixed(2)}`, color: C.pink, pro: false },
+                        { label: "Avg Tip Size", value: `$${(p.avgTipSize || 0).toFixed(2)}`, color: C.gold, pro: true },
+                      ].map(({ label, value, color, pro }) => (
                         <div key={label} style={{ background: "rgba(255,255,255,0.04)", borderRadius: 10, padding: "14px 16px", border: "1px solid rgba(255,255,255,0.06)" }}>
                           <div style={{ fontSize: 11, color: C.muted, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>{label}</div>
-                          <div style={{ fontSize: 20, fontWeight: 800, color }}>{value}</div>
+                          {pro && !isPro && displayPlatforms.length > 1 ? (
+                            <div style={{ fontSize: 15, fontWeight: 800, color: '#64748b' }}>🔒 Pro</div>
+                          ) : (
+                            <div style={{ fontSize: 20, fontWeight: 800, color }}>{value}</div>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -4691,8 +4785,12 @@ const stopImportMessageRotation = () => {
                       )
                     })()}
 
-                    {/* INSIGHTS */}
-                    {insights.length > 0 && (
+                    {/* INSIGHTS — largely comparative claims ("earns X% more than
+                        your average", "highest revenue platform"), so Pro once
+                        there's more than one platform to compare against. A
+                        single tracked platform's insights (best day, peak time)
+                        aren't comparative and stay free. */}
+                    {insights.length > 0 && (isPro || displayPlatforms.length === 1) ? (
                       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                         {insights.map((ins, j) => (
                           <div key={j} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: "rgba(255,255,255,0.03)", borderRadius: 8, border: "1px solid rgba(255,255,255,0.06)" }}>
@@ -4701,7 +4799,12 @@ const stopImportMessageRotation = () => {
                           </div>
                         ))}
                       </div>
-                    )}
+                    ) : insights.length > 0 && displayPlatforms.length > 1 ? (
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: "rgba(124,92,255,0.06)", borderRadius: 8, border: "1px solid rgba(124,92,255,0.2)" }}>
+                        <span style={{ fontSize: 16, flexShrink: 0 }}>🔒</span>
+                        <span style={{ fontSize: 13, color: C.text }}>Pro compares this platform against your others — {insights.length} insight{insights.length !== 1 ? 's' : ''} found</span>
+                      </div>
+                    ) : null}
                   </div>
                 )
               })}
@@ -5587,33 +5690,50 @@ const stopImportMessageRotation = () => {
                         </div>
                       )}
 
-                      {/* INSIGHTS + RECOMMENDATIONS side by side */}
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-                        {/* INSIGHTS */}
-                        <div style={{ padding: "14px 16px", background: "rgba(34,211,238,0.06)", border: "1px solid rgba(34,211,238,0.2)", borderRadius: 12 }}>
-                          <div style={{ fontSize: 12, fontWeight: 700, color: C.cyan, marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>💡 What Happened</div>
-                          <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-                            {bd.insights.map((ins, ii) => (
-                              <div key={ii} style={{ fontSize: 12, color: C.text, lineHeight: 1.5, display: "flex", gap: 6 }}>
-                                <span style={{ color: C.cyan, flexShrink: 0 }}>→</span>
-                                <span>{ins}</span>
-                              </div>
-                            ))}
+                      {/* INSIGHTS + RECOMMENDATIONS — the "why it happened / what to
+                          do about it" layer is Pro; the timeline and totals above stay
+                          free for everyone. Shown as a visible locked card, not silent
+                          absence, so the boundary is obvious before anyone goes looking
+                          for it. */}
+                      {isPro ? (
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                          {/* INSIGHTS */}
+                          <div style={{ padding: "14px 16px", background: "rgba(34,211,238,0.06)", border: "1px solid rgba(34,211,238,0.2)", borderRadius: 12 }}>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: C.cyan, marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>💡 What Happened</div>
+                            <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+                              {bd.insights.map((ins, ii) => (
+                                <div key={ii} style={{ fontSize: 12, color: C.text, lineHeight: 1.5, display: "flex", gap: 6 }}>
+                                  <span style={{ color: C.cyan, flexShrink: 0 }}>→</span>
+                                  <span>{ins}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                          {/* RECOMMENDATIONS */}
+                          <div style={{ padding: "14px 16px", background: "rgba(236,72,153,0.06)", border: "1px solid rgba(236,72,153,0.2)", borderRadius: 12 }}>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: C.pink, marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>🚀 Do This Next Time</div>
+                            <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+                              {bd.recommendations.map((rec, ri) => (
+                                <div key={ri} style={{ fontSize: 12, color: C.text, lineHeight: 1.5, display: "flex", gap: 6 }}>
+                                  <span style={{ color: C.pink, flexShrink: 0 }}>•</span>
+                                  <span>{rec}</span>
+                                </div>
+                              ))}
+                            </div>
                           </div>
                         </div>
-                        {/* RECOMMENDATIONS */}
-                        <div style={{ padding: "14px 16px", background: "rgba(236,72,153,0.06)", border: "1px solid rgba(236,72,153,0.2)", borderRadius: 12 }}>
-                          <div style={{ fontSize: 12, fontWeight: 700, color: C.pink, marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>🚀 Do This Next Time</div>
-                          <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-                            {bd.recommendations.map((rec, ri) => (
-                              <div key={ri} style={{ fontSize: 12, color: C.text, lineHeight: 1.5, display: "flex", gap: 6 }}>
-                                <span style={{ color: C.pink, flexShrink: 0 }}>•</span>
-                                <span>{rec}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
+                      ) : (
+                        <LockedInsightCard
+                          title="What Happened & What To Do Next"
+                          description={bd.performance === 'high'
+                            ? `This was one of your top sessions ($${s.totalUSD} vs $${allAvg.toFixed(0)} avg) — Pro breaks down exactly what drove it and how to repeat it.`
+                            : `Pro breaks down what drove this session's performance — spikes, top tippers, pacing — and exactly what to change next time.`}
+                          lockType="requires_pro"
+                          requirement="Upgrade to Pro to unlock session analysis"
+                          ctaLabel="Upgrade to Pro"
+                          ctaAction={() => openUpgradeModal('session_breakdown')}
+                        />
+                      )}
 
                     </div>
                   </div>
