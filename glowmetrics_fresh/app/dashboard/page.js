@@ -3376,7 +3376,7 @@ const stopImportMessageRotation = () => {
 
         {activeTab === "report" && (
           <div style={{ animation: "fadeUp 0.3s ease" }}>
-            <CreatorReport analytics={analytics} tips={tips} isPro={isPro} onUpgrade={() => openUpgradeModal('creator_report')} />
+            <CreatorReport analytics={analytics} tips={tips} isPro={isPro} onUpgrade={() => openUpgradeModal('creator_report')} engineInsights={engineInsights} />
           </div>
         )}
 
@@ -4368,34 +4368,50 @@ const stopImportMessageRotation = () => {
             ? tips.filter(t => now - new Date(t.date_time).getTime() <= filterMs)
             : tips
 
-          // Rebuild platform stats from filtered tips using same logic as engine
-          const pfMap = {}
-          filteredTips.forEach(t => {
-            const k = t.platform || "Unknown"
-            if (!pfMap[k]) pfMap[k] = { platform: k, totalUSD: 0, tips: 0, sessions: new Set(), hours: 0 }
-            pfMap[k].totalUSD += t.usd || 0
-            pfMap[k].tips += 1
-          })
-          // Overlay session data for hour counts
-          const filteredSessions = filterMs
-            ? sessions.filter(s => now - new Date(s.startTime).getTime() <= filterMs)
-            : sessions
-          filteredSessions.forEach(s => {
-            if (!pfMap[s.platform]) pfMap[s.platform] = { platform: s.platform, totalUSD: 0, tips: 0, sessions: new Set(), hours: 0 }
-            pfMap[s.platform].sessions.add(s.id || s.startTime)
-            pfMap[s.platform].hours += s.durationHours || 0
-          })
-          const filteredPlatforms = Object.values(pfMap).map(p => ({
-            platform: p.platform,
-            totalUSD: parseFloat((p.totalUSD || 0).toFixed(2)),
-            sessions: p.sessions.size,
-            hours: parseFloat((p.hours || 0).toFixed(1)),
-            usdPerHour: p.hours > 0 ? parseFloat((p.totalUSD / Math.max(p.hours, 0.5)).toFixed(2)) : 0,
-            avgTipSize: p.tips > 0 ? parseFloat((p.totalUSD / p.tips).toFixed(2)) : 0,
-            tipCount: p.tips
-          })).sort((a, b) => b.totalUSD - a.totalUSD)
-
-          const displayPlatforms = filteredPlatforms.length > 0 ? filteredPlatforms : platforms
+          // At "ALL" (the default), use the canonical `analytics.platforms`
+          // array (lib/analytics.js, already computed once from
+          // meaningfulSessions) instead of recomputing the same numbers here
+          // — this is what previously let this tab's totals/$-per-hour drift
+          // from Creator Report's, which already reads the canonical array.
+          // A specific time window (7D/30D/90D) genuinely needs its own
+          // filtered recomputation, since the canonical array doesn't carry
+          // a date range — that part stays page-specific.
+          let displayPlatforms
+          if (!filterMs) {
+            displayPlatforms = platforms.length > 0 ? platforms.map(p => ({
+              platform: p.platform,
+              totalUSD: p.totalUSD,
+              sessions: p.sessions,
+              hours: parseFloat((p.hours || 0).toFixed(1)),
+              usdPerHour: p.usdPerHour,
+              avgTipSize: p.avgTipSize,
+              tipCount: p.tips,
+            })) : []
+          } else {
+            const pfMap = {}
+            filteredTips.forEach(t => {
+              const k = t.platform || "Unknown"
+              if (!pfMap[k]) pfMap[k] = { platform: k, totalUSD: 0, tips: 0, sessions: new Set(), hours: 0 }
+              pfMap[k].totalUSD += t.usd || 0
+              pfMap[k].tips += 1
+            })
+            const filteredSessions = sessions.filter(s => now - new Date(s.startTime).getTime() <= filterMs)
+            filteredSessions.forEach(s => {
+              if (!pfMap[s.platform]) pfMap[s.platform] = { platform: s.platform, totalUSD: 0, tips: 0, sessions: new Set(), hours: 0 }
+              pfMap[s.platform].sessions.add(s.id || s.startTime)
+              pfMap[s.platform].hours += s.durationHours || 0
+            })
+            displayPlatforms = Object.values(pfMap).map(p => ({
+              platform: p.platform,
+              totalUSD: parseFloat((p.totalUSD || 0).toFixed(2)),
+              sessions: p.sessions.size,
+              hours: parseFloat((p.hours || 0).toFixed(1)),
+              usdPerHour: p.hours > 0 ? parseFloat((p.totalUSD / Math.max(p.hours, 0.5)).toFixed(2)) : 0,
+              avgTipSize: p.tips > 0 ? parseFloat((p.totalUSD / p.tips).toFixed(2)) : 0,
+              tipCount: p.tips
+            }))
+          }
+          displayPlatforms = [...displayPlatforms].sort((a, b) => b.totalUSD - a.totalUSD)
           const maxUSD = Math.max(...displayPlatforms.map(p => p.totalUSD), 1)
           const maxUPH = Math.max(...displayPlatforms.map(p => p.usdPerHour), 1)
 

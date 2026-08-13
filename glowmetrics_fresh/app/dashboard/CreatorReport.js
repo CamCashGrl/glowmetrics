@@ -55,14 +55,23 @@ function StatCard({ icon, label, value, sub, index = 0 }) {
   )
 }
 
-export default function CreatorReport({ analytics, tips = [], isPro = false, onUpgrade }) {
+export default function CreatorReport({ analytics, tips = [], isPro = false, onUpgrade, engineInsights = null }) {
   const totalUSD    = analytics?.totalUSD || 0
   const hourlyRate   = analytics?.estimatedHourlyRate || 0
   const bestDay      = analytics?.bestDay || null
   const bestHour     = analytics?.bestHour || null
   const topSupporter = analytics?.topTippers?.[0] || null
   const platforms    = analytics?.platforms || []
-  const topPlatform  = platforms.length > 1 ? [...platforms].sort((a, b) => b.usdPerHour - a.usdPerHour)[0] : null
+  // Headline claim defers to the same canonical value Overview uses
+  // (engineInsights.summary.best_platform) instead of re-deriving its own
+  // ranking, so the two pages can't disagree about which platform is "best."
+  // Falls back to the local sort only when engineInsights hasn't loaded yet.
+  const canonicalBestPlatform = engineInsights?.summary?.best_platform
+    ? platforms.find(p => p.platform === engineInsights.summary.best_platform)
+    : null
+  const topPlatform  = platforms.length > 1
+    ? (canonicalBestPlatform || [...platforms].sort((a, b) => b.usdPerHour - a.usdPerHour)[0])
+    : null
   const insights     = analytics?.insights || []
   const nextMoves    = analytics?.nextMoves || []
 
