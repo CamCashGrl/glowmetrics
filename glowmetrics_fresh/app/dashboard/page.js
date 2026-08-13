@@ -1430,6 +1430,7 @@ export default function Dashboard() {
   const [importStage, setImportStage] = useState('idle')
   const [importMessageIdx, setImportMessageIdx] = useState(0)
   const importMessageTimerRef = useRef(null)
+  const platformComparisonViewedRef = useRef(false)
   const uploading = importStage === 'processing'
   const [uploadPlatform, setUploadPlatform] = useState("")
   const [lastUploadResult, setLastUploadResult] = useState(null)
@@ -2468,6 +2469,20 @@ const stopImportMessageRotation = () => {
   // Free tier tracks up to 2 platforms (see 20260811_raise_free_tier_csv_platform_limit_to_two.sql)
   // — enough to reach the cross-platform comparison locked card on the Platforms tab.
   const freePlatformLimitReached = !isPro && allPlatforms.length > 1
+
+  // Conversion funnel step 1 — impression of the locked cross-platform
+  // comparison card. Paired with the existing 'paywall_hit'/upgrade_click
+  // events (already fired by openUpgradeModal('platform_comparison') when
+  // the card's CTA is clicked) and Stripe's webhook-driven subscription
+  // event downstream, so the full funnel is: viewed → clicked → converted.
+  // Fires once per session (not every render/tab-revisit) via the ref guard.
+  useEffect(() => {
+    if (activeTab !== 'platforms' || isPro || platformComparisonViewedRef.current) return
+    if (allPlatforms.length < 2) return
+    platformComparisonViewedRef.current = true
+    track('platform_comparison_locked_viewed', { platformCount: allPlatforms.length })
+    gtmTrack('platform_comparison_locked_viewed', { platformCount: allPlatforms.length })
+  }, [activeTab, isPro, allPlatforms.length])
 
   // ── Build "What's Next" alerts — smarter, personalized, prioritized
   const buildWhatsNextAlerts = () => {

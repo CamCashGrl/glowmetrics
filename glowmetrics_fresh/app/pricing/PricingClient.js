@@ -662,15 +662,15 @@ function PromiseSection() {
 const FAQ_ITEMS = [
   {
     q: 'Will the free plan always be available?',
-    a: 'Yes. The free plan will always exist and remain genuinely useful. It includes one tracked platform, CSV uploads, basic earnings and session analytics, live tip detection, real-time alerts, basic Live Mode coaching, top-three fan insights, and limited recent tip history.',
+    a: 'Yes. The free plan will always exist and remain genuinely useful. It includes up to 2 tracked platforms, CSV uploads, basic earnings and session analytics, live tip detection, real-time alerts, basic Live Mode coaching, top-three fan insights, and limited recent tip history.',
   },
   {
     q: 'How many platforms can I track for free?',
-    a: 'The free plan supports one cam platform. Creator Pro unlocks tracking across every supported platform and adds cross-platform comparisons.',
+    a: 'The free plan supports up to 2 cam platforms, with each platform’s earnings fully visible. Creator Pro unlocks unlimited platforms plus the cross-platform comparison view — seeing which platform pays best by hour, day, and fan type.',
   },
   {
     q: 'What does Creator Pro include?',
-    a: 'Creator Pro includes all supported platforms, full permanent tip history, expanded fan profiles, CRM tools, cross-platform earnings comparisons, advanced Live Mode coaching, private-session analytics, churn and re-engagement insights, full best-time analysis, Stream Planner, Money Map, and advanced reports.',
+    a: 'Creator Pro includes unlimited platforms, full permanent tip history, expanded fan profiles, CRM tools, cross-platform earnings comparisons, advanced Live Mode coaching, private-session analytics, churn and re-engagement insights, full best-time analysis, Stream Planner, Money Map, and advanced reports.',
   },
   {
     q: 'How much is Creator Pro?',
