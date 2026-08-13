@@ -139,6 +139,7 @@ export function getFeatureLockState({ feature, userPlan = 'free', planExpiresAt 
     whales:                { needsData: totalFans < 10 || totalEarnings < 50, requiresPro: false, dataMessage: 'Unlocks after enough repeat fan activity.', proMessage: null },
     platformComparison:    { needsData: isPro && platformCount < 2, requiresPro: !isPro, dataMessage: 'Import at least 2 platforms to compare earnings.', proMessage: 'Upgrade to Pro to compare earnings across platforms.' },
     multiPlatformTracking: { needsData: false, requiresPro: !isPro, dataMessage: null, proMessage: 'Upgrade to Pro to track more than one platform.' },
+    liveCoaching:          { needsData: false, requiresPro: !isPro, dataMessage: null, proMessage: 'Upgrade to Pro to unlock real-time Live Mode coaching.' },
     crossPlatformBestTimes:{ needsData: isPro && (platformCount < 2 || totalSessions < 3), requiresPro: !isPro, dataMessage: 'Import sessions from at least 2 platforms to unlock cross-platform timing insights.', proMessage: 'Upgrade to Pro to unlock cross-platform best times.' },
     sessionPerformance:    { needsData: totalSessions < 3, requiresPro: false, dataMessage: 'Unlocks after multiple completed sessions.', proMessage: null },
     averageHourly:         { needsData: totalSessions < 3 || totalStreamMinutes < 60, requiresPro: false, dataMessage: 'Unlocks after at least 60 minutes of tracked stream time.', proMessage: null },
@@ -163,7 +164,7 @@ export const canShowHourlyRate   = ({ sessionCount, totalStreamMinutes }) => ses
 
 // ── MODULE LOCK STATE ─────────────────────────────────────────────────────────
 // Single source of truth for per-module data thresholds.
-// Only platformROI and multiPlatformTracking are ever Pro-gated.
+// Only platformROI, multiPlatformTracking, and liveCoaching are ever Pro-gated.
 // Money Map and Stream Planner are data-gated only — never paywalled.
 export function getModuleLockState({ module, totalTips = 0, totalSessions = 0, totalFans = 0, totalEarnings = 0, totalStreamMinutes = 0, importedPlatformCount = 0, isPro = false, liveModeSessions = 0 }) {
   const rules = {
@@ -174,6 +175,7 @@ export function getModuleLockState({ module, totalTips = 0, totalSessions = 0, t
     sessionBreakdown:     { needsData: totalSessions < 3,                             message: 'Session Breakdown unlocks after multiple completed sessions.' },
     platformROI:          { needsData: importedPlatformCount < 2, requiresPro: !isPro && importedPlatformCount >= 1, message: !isPro ? 'Platform ROI unlocks after upgrading to Pro and importing at least 2 platforms.' : 'Import at least 2 platforms to compare earnings.' },
     multiPlatformTracking:{ needsData: false, requiresPro: !isPro,                   message: 'Upgrade to Pro to track more than one platform.' },
+    liveCoaching:         { needsData: false, requiresPro: !isPro,                   message: 'Upgrade to Pro to unlock real-time Live Mode coaching.' },
     fanRecovery:          { needsData: totalFans < 20 || totalEarnings < 50,          message: 'Fan Recovery unlocks after enough repeat fan history.' },
     moneyMap:             { needsData: totalTips < 50 || totalSessions < 5,           message: 'Money Map unlocks after 50+ tips and 5+ meaningful sessions.' },
     streamPlanner:        { needsData: totalTips < 25 || totalSessions < 3,           message: 'Stream Planner unlocks after 25+ tips and 3+ meaningful sessions.' },
