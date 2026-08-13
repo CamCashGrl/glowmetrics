@@ -754,48 +754,17 @@ export function generateNextMoves(tips, sessions, whales, predictions, bestHour)
   return moves.sort((a, b) => a.priority - b.priority).slice(0, 5)
 }
 
-export function aggregateRows(tips, tz = null) {
+// Canonical best-day / best-hour computation (median USD per local-hour or
+// local-day bucket, 3+ active buckets required for confidence) — the single
+// source of truth for "when should I stream" across the product. Extracted
+// out of aggregateRows() so pages that don't need the full aggregation
+// pipeline (e.g. Live Mode's real-time coaching, which intentionally scopes
+// to a recent rolling window rather than full lifetime history) can still
+// use the exact same formula instead of recomputing their own version.
+export function computeBestTimes(tips, tz = null) {
   const userTz = tz || (typeof Intl !== 'undefined'
     ? Intl.DateTimeFormat().resolvedOptions().timeZone
     : 'UTC')
-
-  if (!tips || tips.length === 0) {
-    return {
-      totalUSD: 0, totalTokens: 0, totalTips: 0, avgTipSize: 0,
-      topTippers: [], platforms: [], sessions: [], insights: [],
-      predictions: null, whaleAlerts: [], lossAlerts: [], nextMoves: [],
-      bestDay: null, bestHour: null, earlySignalHour: null, platformBestTimes: {},
-      monthlyData: [], bestMonth: null, tipTypeBreakdown: [],
-      privateShowFans: [], spyShowFans: [], earningsVelocity: null, totalStreamMinutes: 0,
-      estimatedHourlyRate: 0, hourlyRateSessionCount: 0, hourlyRateTotalMinutes: 0,
-      hourlyRateTotalUsd: 0, excludedUntimedSessionCount: 0,
-      platformVelocity: {}, missedRevenueByPlatform: {},
-      returningVsNew: null, topFanDependency: null,
-      dependencyRisk: null, preTipBehavior: null, trueHourlyAvg: []
-    }
-  }
-
-  const sessions = detectSessions(tips)
-
-  // ── SESSION QUALITY CLASSIFICATION ───────────────────────────────────
-  const classifySession = (s) => {
-    const mins = s.durationMinutes || 0
-    const usd  = s.totalUSD || 0
-    if (mins < 2 && usd === 0) return 'invalid'
-    if (mins < 15 && usd < 10) return 'low_signal'
-    return 'meaningful'
-  }
-  const scoreSession = (s) => {
-    const mins = s.durationMinutes || 0
-    const usd  = s.totalUSD || 0
-    const durationScore = Math.min(mins / 120, 1)
-    const revenueScore  = Math.min(usd  / 100, 1)
-    return parseFloat(((durationScore * 0.4) + (revenueScore * 0.6)).toFixed(3))
-  }
-  sessions.forEach(s => { s.sessionQuality = classifySession(s); s.sessionWeight = scoreSession(s) })
-
-  const meaningfulSessions = sessions.filter(s => s.sessionQuality === 'meaningful')
-  const allValidSessions   = sessions.filter(s => s.sessionQuality !== 'invalid')
 
   const dayTipsUSD = {}, dayActiveDates = {}, hourTipsUSD = {}, hourBucketSets = {}
   const dayDateAmts = {}, hourBucketAmts = {}
@@ -839,6 +808,54 @@ export function aggregateRows(tips, tz = null) {
         .map(h => ({ hour: h, avg: parseFloat(calcMedian(Object.values(hourBucketAmts[h])).toFixed(2)), total: hourTipsUSD[h], count: hourBucketSets[h].size }))
         .sort((a, b) => b.avg - a.avg)[0] || null)
     : null
+
+  return { bestDay, worstDay, bestHour, earlySignalHour }
+}
+
+export function aggregateRows(tips, tz = null) {
+  const userTz = tz || (typeof Intl !== 'undefined'
+    ? Intl.DateTimeFormat().resolvedOptions().timeZone
+    : 'UTC')
+
+  if (!tips || tips.length === 0) {
+    return {
+      totalUSD: 0, totalTokens: 0, totalTips: 0, avgTipSize: 0,
+      topTippers: [], platforms: [], sessions: [], insights: [],
+      predictions: null, whaleAlerts: [], lossAlerts: [], nextMoves: [],
+      bestDay: null, bestHour: null, earlySignalHour: null, platformBestTimes: {},
+      monthlyData: [], bestMonth: null, tipTypeBreakdown: [],
+      privateShowFans: [], spyShowFans: [], earningsVelocity: null, totalStreamMinutes: 0,
+      estimatedHourlyRate: 0, hourlyRateSessionCount: 0, hourlyRateTotalMinutes: 0,
+      hourlyRateTotalUsd: 0, excludedUntimedSessionCount: 0,
+      platformVelocity: {}, missedRevenueByPlatform: {},
+      returningVsNew: null, topFanDependency: null,
+      dependencyRisk: null, preTipBehavior: null, trueHourlyAvg: []
+    }
+  }
+
+  const sessions = detectSessions(tips)
+
+  // ── SESSION QUALITY CLASSIFICATION ───────────────────────────────────
+  const classifySession = (s) => {
+    const mins = s.durationMinutes || 0
+    const usd  = s.totalUSD || 0
+    if (mins < 2 && usd === 0) return 'invalid'
+    if (mins < 15 && usd < 10) return 'low_signal'
+    return 'meaningful'
+  }
+  const scoreSession = (s) => {
+    const mins = s.durationMinutes || 0
+    const usd  = s.totalUSD || 0
+    const durationScore = Math.min(mins / 120, 1)
+    const revenueScore  = Math.min(usd  / 100, 1)
+    return parseFloat(((durationScore * 0.4) + (revenueScore * 0.6)).toFixed(3))
+  }
+  sessions.forEach(s => { s.sessionQuality = classifySession(s); s.sessionWeight = scoreSession(s) })
+
+  const meaningfulSessions = sessions.filter(s => s.sessionQuality === 'meaningful')
+  const allValidSessions   = sessions.filter(s => s.sessionQuality !== 'invalid')
+
+  const { bestDay, worstDay, bestHour, earlySignalHour } = computeBestTimes(tips, userTz)
 
   const whales      = identifyWhales(tips)
   const insights    = generateInsights(tips, meaningfulSessions, bestDay, worstDay, bestHour, whales)
