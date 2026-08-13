@@ -5227,7 +5227,18 @@ const stopImportMessageRotation = () => {
           </div>
         )}
 
-        {activeTab === "live" && <LiveEnginePage embedded />}
+        {activeTab === "live" && (isPro ? <LiveEnginePage embedded /> : (
+          <div style={{ padding: '32px 0' }}>
+            <LockedInsightCard
+              title="Live Mode"
+              description="Real-time tip tracking and live coaching — momentum, room health, and what to do right now to keep the room hot."
+              lockType="requires_pro"
+              requirement="Upgrade to Pro to unlock Live Mode"
+              ctaLabel="Upgrade to Pro"
+              ctaAction={() => openUpgradeModal('live_mode')}
+            />
+          </div>
+        ))}
 
         {activeTab === "live-sessions" && (() => {
           const fmtSessionDuration = (secs) => {

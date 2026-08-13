@@ -1132,17 +1132,23 @@ export default function LivePage({ embedded = false } = {}) {
             <div style={{ fontSize: 14, color: C.muted, maxWidth: 440, margin: '0 auto 28px', lineHeight: 1.75 }}>
               Your AI coach watches the room in real time — tracking momentum, spotting opportunities, and telling you exactly what to do next to make more money.
             </div>
-            <button disabled={engine.actionPending} onClick={handleGoLive}
-              style={{ padding: '13px 36px', borderRadius: 12, background: 'linear-gradient(135deg, #10B981, #22D3EE)', border: 'none', color: C.white, fontWeight: 800, fontSize: 16, cursor: engine.actionPending ? 'default' : 'pointer', opacity: engine.actionPending ? 0.6 : 1, boxShadow: '0 0 32px rgba(16,185,129,0.4)' }}>
-              {engine.actionPending ? 'Starting…' : '▶ Start Streaming'}
-            </button>
-            {/* Disclosed here, before a session starts — never mid-stream.
-                No specific coaching prompt is gated behind Pro yet; this is
-                the honest baseline so that when one is, it isn't a surprise. */}
-            {!isPro && (
-              <div style={{ marginTop: 16, fontSize: 12, color: C.muted }}>
-                Free includes real-time tips and live coaching. <a href="/pricing" style={{ color: '#22D3EE', fontWeight: 600, textDecoration: 'none' }}>Pro unlocks advanced coaching →</a>
-              </div>
+            {/* Live Mode is Pro-only — disclosed here, before a session
+                starts, not as a surprise mid-stream or after configuring
+                anything. */}
+            {isPro ? (
+              <button disabled={engine.actionPending} onClick={handleGoLive}
+                style={{ padding: '13px 36px', borderRadius: 12, background: 'linear-gradient(135deg, #10B981, #22D3EE)', border: 'none', color: C.white, fontWeight: 800, fontSize: 16, cursor: engine.actionPending ? 'default' : 'pointer', opacity: engine.actionPending ? 0.6 : 1, boxShadow: '0 0 32px rgba(16,185,129,0.4)' }}>
+                {engine.actionPending ? 'Starting…' : '▶ Start Streaming'}
+              </button>
+            ) : (
+              <>
+                <a href="/pricing" style={{ display: 'inline-block', padding: '13px 36px', borderRadius: 12, background: 'linear-gradient(135deg, #a855f7, #ec4899)', color: C.white, fontWeight: 800, fontSize: 16, textDecoration: 'none', boxShadow: '0 0 32px rgba(168,85,247,0.35)' }}>
+                  🔒 Upgrade to Pro to go live
+                </a>
+                <div style={{ marginTop: 14, fontSize: 12, color: C.muted }}>
+                  Live Mode — real-time tips and coaching — is a Creator Pro feature.
+                </div>
+              </>
             )}
           </div>
         )}

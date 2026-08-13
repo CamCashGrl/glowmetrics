@@ -66,6 +66,9 @@ export default function Sidebar({ activeTab, onTabChange, user, onSignOut, isPro
     const isActive  = !href && activeTab === id
     const isHovered = hoveredId === id
     const Comp = href ? "a" : "button"
+    // Disclosed in the nav itself, before anyone clicks in — same
+    // convention Stream Planner's locked tabs already use.
+    const locked = !isPro && id === "live"
     return (
       <Comp key={id}
         {...(href ? { href } : {})}
@@ -83,7 +86,7 @@ export default function Sidebar({ activeTab, onTabChange, user, onSignOut, isPro
           transition: "all 0.15s", marginBottom: 2,
         }}
       >
-        <span style={{ fontSize: 16, flexShrink: 0, opacity: isActive ? 1 : 0.7 }}>{icon}</span>
+        <span style={{ fontSize: 16, flexShrink: 0, opacity: isActive ? 1 : 0.7 }}>{locked ? "🔒" : icon}</span>
         <span style={{ fontSize: 13, fontWeight: isActive ? 700 : 500, color: isActive ? C.white : C.text, letterSpacing: -0.2 }}>
           {label}
         </span>
