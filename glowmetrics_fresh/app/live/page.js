@@ -7,6 +7,7 @@ import { computeRevenueVelocity, computeLiveComparison } from '../../lib/analyti
 import { detectSessionPhase, PHASES, getRecoveryActions, getGoalStrategy } from '../../lib/analytics/sessionPhase';
 import { computeOpportunityScore, computeStreamHealth } from '../../lib/analytics/opportunity';
 import { detectSessions } from '../../lib/analytics/sessions';
+import { computeBestTimes } from '../../lib/analytics';
 import { tokenRate } from '../../lib/constants';
 import FeedbackWidget from '../components/FeedbackWidget';
 import EventsSync from './EventsSync';
@@ -51,6 +52,12 @@ export default function LivePage({ embedded = false } = {}) {
   const [flashTipId, setFlashTipId]   = useState(null);
   const [liveTick, setLiveTick]       = useState(0);
   const [sessions, setSessions]       = useState([]);
+  // Canonical bestHour/bestDay (same formula as the dashboard's Overview and
+  // Creator Report — lib/analytics.js computeBestTimes) computed over this
+  // page's own recent-90-day window, not injected from the dashboard's
+  // all-time analytics. The window stays intentionally different (see the
+  // fetch below); the calculation method no longer is.
+  const [bestTimes, setBestTimes]     = useState(null);
 
   // ── DEMO / AUTH / EXT MODAL STATE ────────────────────────────────────
   const [demoTips, setDemoTips]           = useState([]);
@@ -214,7 +221,12 @@ export default function LivePage({ embedded = false } = {}) {
       supabase.from('tips').select('username, platform, tokens, usd, date_time')
         .eq('user_id', u.id).gte('date_time', sessionsSince)
         .order('date_time', { ascending: true })
-        .then(({ data }) => { if (data) setSessions(detectSessions(data)); });
+        .then(({ data }) => {
+          if (data) {
+            setSessions(detectSessions(data));
+            setBestTimes(computeBestTimes(data));
+          }
+        });
     });
 
     return () => { if (liveTipsChannelRef.current) supabase.removeChannel(liveTipsChannelRef.current); };
@@ -611,21 +623,15 @@ export default function LivePage({ embedded = false } = {}) {
     return { target: next, remaining, minsEst, progress };
   })();
 
-  // Peak Hour Countdown (computed from sessions history)
+  // Peak Hour Countdown — the peak hour itself comes from computeBestTimes,
+  // the same canonical calculation Overview and Creator Report use (median
+  // USD per local-hour bucket, 3+ active buckets required), so this can't
+  // disagree with what the dashboard told the user earlier. Everything
+  // below (is it happening right now, how many minutes are left) is
+  // real-time application logic specific to this page.
   const peakHourData = (() => {
-    if (sessions.length < 5) return null;
-    const hourRevenue = {};
-    const hourCount = {};
-    sessions.forEach(s => {
-      if (!s.startTime || !(s.totalUSD > 0)) return;
-      const h = new Date(s.startTime).getHours();
-      hourRevenue[h] = (hourRevenue[h] || 0) + (s.totalUSD || 0);
-      hourCount[h] = (hourCount[h] || 0) + 1;
-    });
-    if (!Object.keys(hourRevenue).length) return null;
-    const avgByHour = Object.entries(hourRevenue).map(([h, rev]) => ({ hour: parseInt(h), avg: rev / hourCount[h] }));
-    const sorted = avgByHour.sort((a, b) => b.avg - a.avg);
-    const peakHour = sorted[0].hour;
+    if (!bestTimes?.bestHour) return null;
+    const peakHour = parseInt(bestTimes.bestHour.hour, 10);
     const peakEnd = (peakHour + 2) % 24;
     const now = new Date();
     const nowH = now.getHours();
@@ -635,6 +641,15 @@ export default function LivePage({ embedded = false } = {}) {
     const peakEndMins = peakEnd * 60 - (nowH * 60 + nowM);
     const minsRemaining = peakEndMins > 0 ? peakEndMins : peakEndMins + 1440;
     if (minsRemaining > 120) return null;
+    // "% of revenue from the peak window" is a supporting stat, not the peak
+    // hour determination itself — still fine to derive from this page's own
+    // session data.
+    const hourRevenue = {};
+    sessions.forEach(s => {
+      if (!s.startTime || !(s.totalUSD > 0)) return;
+      const h = new Date(s.startTime).getHours();
+      hourRevenue[h] = (hourRevenue[h] || 0) + (s.totalUSD || 0);
+    });
     const peakRevTotal = (hourRevenue[peakHour] || 0) + (hourRevenue[(peakHour + 1) % 24] || 0);
     const totalRev = Object.values(hourRevenue).reduce((s, v) => s + v, 0);
     const pct = totalRev > 0 ? Math.round((peakRevTotal / totalRev) * 100) : null;
