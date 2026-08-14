@@ -2985,12 +2985,24 @@ const stopImportMessageRotation = () => {
   // ── MONTH-OVER-MONTH GROWTH ── used by Momentum indicator and KPI cards
   // Canonical source: analytics.monthlyData (lib/analytics.js), bucketed by
   // creator-local calendar month with growthPct pre-computed once — see
-  // canonical-analytics-rules.md's Monthly-Growth Reconciliation. The last
-  // entry is the most recent month with tip data (i.e. "this month" for an
-  // active creator). Do not recompute month boundaries here.
+  // canonical-analytics-rules.md's Monthly-Growth Reconciliation. Do not
+  // recompute month boundaries here.
+  //
+  // monthlyData only contains months that actually have tip data — it is
+  // NOT guaranteed to have an entry for the real current calendar month, so
+  // "last entry" is not a safe stand-in for "this month" (a creator who
+  // hasn't tipped yet this month would otherwise see last month's revenue
+  // mislabeled as "this month"). Match the real current-month key instead,
+  // via the same resolved-timezone contract lib/timezone.js defines.
   const _momMonthly = analytics?.monthlyData || []
-  const _momThisMonth = _momMonthly.length ? _momMonthly[_momMonthly.length - 1] : null
-  const _momPrevMonth = _momMonthly.length > 1 ? _momMonthly[_momMonthly.length - 2] : null
+  const _momTz = resolveCreatorTimezone(profile?.timezone).timezone
+  const _momCurrentKey = (() => {
+    try { return new Intl.DateTimeFormat('en-CA', { timeZone: _momTz }).format(new Date()).slice(0, 7) }
+    catch { return null }
+  })()
+  const _momThisIdx = _momCurrentKey ? _momMonthly.findIndex(m => m.month === _momCurrentKey) : -1
+  const _momThisMonth = _momThisIdx >= 0 ? _momMonthly[_momThisIdx] : null
+  const _momPrevMonth = _momThisIdx > 0 ? _momMonthly[_momThisIdx - 1] : null
   const _momThisRev = _momThisMonth?.usd ?? 0
   const _momPrevRev = _momPrevMonth?.usd ?? 0
   const growthPct = _momThisMonth?.growthPct ?? null
