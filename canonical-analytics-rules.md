@@ -221,4 +221,90 @@ the existing canonical implementations are confirmed correct and unchanged.
    conflicts, can proceed once the entitlement contract (already specced) exists.
 
 ---
+
+## ADDENDUM — FINAL DECISIONS (A–D), PER APPROVAL ROUND 2
+
+Four items resolved by direct investigation, not guessed at, per your instruction.
+
+### A. `meaningfulSessions` vs. all canonical sessions for platform $/hr
+
+**Traced `classifySession()` (`lib/analytics.js`, inside `aggregateRows()`):**
+```
+mins < 2  && usd === 0   → 'invalid'
+mins < 15 && usd < 10    → 'low_signal'
+else                      → 'meaningful'
+```
+`meaningfulSessions = sessions.filter(s => s.sessionQuality === 'meaningful')`.
+`allValidSessions = sessions.filter(s => s.sessionQuality !== 'invalid')` (includes
+`low_signal`, used only for a "how much low-signal data exists" count, not for stats).
+
+**Where it's used today — confirmed by direct grep, not assumed:** `platforms` (the platform
+$/hr calculation itself), `insights`, `predictions`, `lossAlerts`, `nextMoves`,
+`timedSessions`/hourly-rate eligibility, and `page.js`'s own month-over-month comparison
+block (line 3420+) **all** already filter to `meaningfulSessions`. This is not an isolated
+choice — it's the load-bearing population for nearly every downstream statistic in the
+current app.
+
+**Would switching to all sessions materially change platform rankings?** Yes, and in the
+wrong direction — including `low_signal` sessions (sub-15-minute, sub-$10 sessions, by
+definition low-information blips) would pull $/hr averages toward noise, and `invalid`
+sessions (near-zero-duration, zero-revenue — likely accidental tip-tracker artifacts, not
+real streams) have no place in a $/hr calculation at all.
+
+**Recommendation: B — `meaningfulSessions`.** This isn't a new decision — it's confirming the
+existing, already-pervasive convention should extend to the canonical best-time/platform work
+too, rather than introducing a second population definition alongside it.
+
+### B. Exact confidence thresholds
+
+Three named categories, per your instruction not to blur "insufficient" into "promising":
+
+| Category | Threshold | Presentation rule |
+|---|---|---|
+| **Insufficient data** | < 2 meaningful sessions in the day×hour bucket | **Never shown as a best-time claim of any kind** — the bucket simply doesn't appear as a candidate |
+| **Promising / early signal** | Exactly 2 sessions, OR 1 session performing notably above the account's overall median $/hr (reusing the existing `untestedWindows()`/`earlySignalHour` logic: "one session already beat your average") | Shown, but **explicitly labeled** "early signal — needs more data," never labeled "best time" or presented as fact |
+| **Statistically supported** | ≥ 3 meaningful sessions in the bucket | Eligible to be shown as "best window." Two sub-tiers for UI nuance only (both count as statistically supported, neither is "insufficient"): **medium** (3–4 sessions), **high** (≥5 sessions) |
+
+The ≥3-session threshold is not arbitrary — it's the same minimum both `get_user_insights`
+and `computeBestTimes()` already independently converged on (as tip-count/occurrence gates);
+this reconciliation carries that same number forward as the session-count gate, keeping
+continuity with what's already been in production rather than inventing a new number.
+
+### C. Exact mathematical definition of "best"
+
+**Best window = the day×hour bucket, among all buckets meeting the "statistically supported"
+threshold (≥3 meaningful sessions), with the highest median session `$/hour`.** Median, not
+mean — per the earlier reconciliation, to avoid one large-tip session distorting the result.
+If no bucket meets the statistically-supported threshold, there is no "best window" to
+declare — the system falls back to showing the best available "promising/early signal"
+candidate, always labeled as such, never substituted silently for a real "best time" claim.
+Ties (identical median $/hr) resolve to the bucket with the higher session count, then the
+more recent bucket if still tied.
+
+### D. Exact creator timezone source
+
+**Traced directly:** the app has **no persisted per-user timezone preference in `profiles`**.
+Every dashboard call site computes it fresh, client-side, at the moment of use:
+```js
+const userTz = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC'
+```
+confirmed duplicated inline at **five separate locations** in `app/dashboard/page.js` (lines
+1942, 2022, 2139, 3891, and the `get_user_insights` RPC call site at 2195 which passes it as
+`p_timezone`) — itself a minor duplication worth a one-line helper extraction, though outside
+this reconciliation's scope. **`app/live/page.js` uses a second, different mechanism** —
+`liveTimezone`, a user-selectable value persisted in `localStorage` (`cc_live_timezone`),
+defaulting to the same `Intl.DateTimeFormat()` detection only on first use. This is a real,
+previously undocumented inconsistency: the main dashboard always trusts the browser's current
+detected timezone with no override, while Live Mode allows the user to override it and
+remembers their choice.
+
+**Implication for the canonical server-side service:** the server has no independent way to
+know a user's timezone — it must be supplied by the client on every call, exactly as
+`get_user_insights` already does via `p_timezone`. **Recommendation:** standardize on the
+dashboard's pattern (live-detected via `Intl`, passed explicitly per request) as canonical for
+all server-side insight calls; treat Live Mode's persisted-override behavior as a deliberate,
+separate UX choice for that specific surface, not something to unify away without a product
+decision — flagging the inconsistency rather than silently resolving it in either direction.
+
+---
 No code changed. No UI changed. No entitlement logic changed. Reconciliation only.
