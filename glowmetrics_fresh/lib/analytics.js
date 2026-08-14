@@ -923,6 +923,21 @@ export function aggregateRows(tips, tz = null) {
   }))
 
   // ── PER-PLATFORM BEST TIMES ───────────────────────────────────────────
+  // Audit checklist decision, documented once per "explicitly document
+  // genuine deferrals" rather than left silent: this full per-platform
+  // day×hour grid (bestHourByDay, allHours, allDays — what the Platforms
+  // tab heatmap actually renders) is intentionally NOT migrated onto the
+  // canonical bestTimes.js engine. Canonical's per-platform output today
+  // (platforms[].bestLocalDay/bestLocalHour/bestWindowConfidence, added in
+  // Phase 1) is single-window only — there is no legitimate existing UI
+  // consumer of a single best window to simply repoint, and the checklist
+  // explicitly forbids inventing one just to claim migration completion.
+  // Extending computeCanonicalBestTimes() to emit a full grid (median-based,
+  // session-level, local-native — instead of this block's mean-based,
+  // tip-level, local-native grid) is real, separately-scoped follow-up
+  // work: it needs its own test plan proving grid-shape parity across every
+  // day×hour cell, not just the single top window bestTimes.js already
+  // verifies. Deferred with this rationale, not silently left unexplained.
   const UTC_DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
   const platHourUSD = {}, platHourBuckets = {}, platDayUSD = {}, platDayDates = {}
   const platDayHourUSD = {}, platDayHourBuckets = {}
@@ -1029,6 +1044,19 @@ export function aggregateRows(tips, tz = null) {
   })
 
   // ── MISSED REVENUE BY PLATFORM ────────────────────────────────────────
+  // Audit checklist decision, documented once: three missed-revenue
+  // implementations remain (this one, driving the Platform tab cards;
+  // get_user_insights' missed_opportunity, SQL; and the canonical
+  // computeMissedRevenue() in lib/analytics/missedRevenue.js). The confirmed
+  // correctness bug here (comparing a local-tz best hour against a raw UTC
+  // session hour) was fixed regardless of the implementation's age — see
+  // the "sessionsNotAtBestHour" comment below. Full consolidation onto the
+  // canonical module is deferred for the same reason as PER-PLATFORM BEST
+  // TIMES above: this feeds the same platformBestTimes grid, so migrating
+  // one without the other would leave the Platform tab internally
+  // inconsistent (a missed-revenue figure computed against a different
+  // "best hour" than the heatmap right next to it). Both migrate together,
+  // scoped with the grid-parity work above, not independently.
   const missedRevenueByPlatform = {}
   Object.keys(platformBestTimes).forEach(p => {
     const bestHourData = platformBestTimes[p].hour
