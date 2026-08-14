@@ -306,5 +306,87 @@ all server-side insight calls; treat Live Mode's persisted-override behavior as 
 separate UX choice for that specific surface, not something to unify away without a product
 decision — flagging the inconsistency rather than silently resolving it in either direction.
 
+### DST verification (new this round)
+
+Traced `toLocalHour()`/`toLocalDow()`/`toLocalDateStr()` (`lib/analytics.js`, 47–78): all
+three use `Intl.DateTimeFormat` with `timeZone: tz` set to the IANA zone string (e.g.
+`"America/New_York"`), never a fixed UTC offset. The ECMAScript `Intl` API resolves IANA zone
+names against their actual DST transition rules — **DST is handled correctly** by
+construction, not by any extra logic needing to be written. Server-side, `get_user_insights`'s
+`date_time AT TIME ZONE p_timezone` behaves identically in Postgres when `p_timezone` is a
+named zone (confirmed it always is, since the client passes the same
+`Intl.DateTimeFormat().resolvedOptions().timeZone` string both places). **One minor,
+previously unflagged risk:** each client function silently falls back to raw
+`getUTCHours()`/`getUTCDay()` if `Intl.DateTimeFormat` throws (e.g. a malformed zone string),
+with no signal to the caller that a fallback occurred — worth a log line when this happens,
+not a blocking issue, and not a DST correctness bug (the fallback itself is DST-agnostic UTC,
+just silently different from the intended local-time answer).
+
+---
+
+## FINAL IMPLEMENTATION-READY SPECIFICATION
+
+Consolidated reference — every prior section's decision, in one place, in the structure
+requested.
+
+| Metric | Canonical function/source | Exact rule | Inputs | Output | Timezone behavior | Confidence rule | Free contract | Pro contract | Migrating consumers | Deprecated/duplicate |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Earnings | `aggregateRows()` totals | `SUM(tips.usd)` | `tips` | `totalUSD` | N/A | N/A | Full | Full | None — already single-sourced | None |
+| Monthly growth | `aggregateRows().monthlyData`/`bestMonth`, extended with growth % | Calendar-month (local) `SUM(usd)`, growth % = `(this-prev)/prev*100` | `tips` | Monthly series + growth % | Local-native (via `toLocalDateStr`) | N/A | Full | Full | `page.js` inline block, `DashboardGrowthCharts.js` | Both consumers' independent recomputation retired once they read the extended field |
+| Sessions | `detectSessions()`, unchanged | 3hr gap; platform change always starts a new session; start/end = first/last tip timestamp | `tips` | Session array | N/A (session boundaries are timestamp-based; local-hour/day derived downstream) | N/A | Full | Full | Stream Planner | `groupIntoSessions()` (4hr gap, no platform boundary, 30-min duration floor) — retired |
+| Platforms | `aggregateRows().platforms`, extended with per-platform best-day/hour | $/hr = `SUM(usd)/SUM(hours)` over **`meaningfulSessions`** (session quality ≥ 'meaningful': ≥2min duration or nonzero $, ≥15min or ≥$10) | `meaningfulSessions` | Per-platform `usdPerHour`/`tokensPerHour`/`avgTipSize` + best-day/hour once Best-Time lands | Local-native, once best-day/hour is added | N/A for totals; inherits Best-Time's tiers for the added best-day/hour fields | Totals/hours only | $/hr, avg tip, comparison, best-day/hour | Stream Planner's `platformEfficiency()` | `platformEfficiency()` — retired |
+| Best times | Extended `get_user_insights` (or a new server insight module it consumes — see Architecture Rule below) | Best window = bucket with **highest median session $/hour** among buckets with **≥3 meaningful sessions**. Session-level, not tip-level. | `meaningfulSessions` (canonical, post session-migration) | Day×hour grid, each cell tagged `insufficient` / `promising` / `supported` (medium/high) | **Local-native** — `Intl`-based, DST-correct (see above); timezone supplied per-request by the client (`Intl.DateTimeFormat().resolvedOptions().timeZone`), no persisted server-side preference | See table below | Directional signal + real-time in-window boolean only (unchanged from PR #407) | Full grid, all confidence tiers | `buildDailyBrief()`, Sticky Bar, Losing Money, Smart Insights, Stream Planner's `bestWindows()`, Creator Report's Best Streaming Time card, `missedRevenueByPlatform`'s internal bucketing, `generateLossAlerts()`'s `peak_missed` branch | `computeBestTimes()` (kept as a documented reference implementation of the median/local-timezone approach, but no longer the operative path once the server grid exists — **flagging this as a call for you**: retire entirely or keep as a client-side fallback for when the server hasn't loaded yet); `predictRevenue()` (dead code, safe to delete outright) |
+| Missed revenue | Extended `get_user_insights`, three distinct fields sharing canonical best-time input | `today_missed` (today's passed best-hour vs. actual), `cumulative_by_platform` (historical, per platform), `recent_streak_missed` (rolling 3-day) — **kept separate, never merged into one number** | Canonical sessions + canonical best-time grid | 3 named fields | Local-native, inherited from Best-Time | Inherited from Best-Time | Qualitative pattern signal only | Full figures, all 3 fields | "Losing Money" card → Opportunities | `missedRevenueByPlatform`, `generateLossAlerts()`'s `peak_missed` branch — both retired once the 3-field service exists |
+| Fan intelligence | `identifyWhales()`, unchanged | No rule conflict found this round | `tips` | Ranked fan array | N/A | N/A | Top 3 | Full list | None structurally — needs a server wrapper + row-limit redaction, not a calculation change | None |
+| Churn/re-engagement | `generateWhaleAlerts()`, `generateLossAlerts()` minus `peak_missed` | No rule conflict found | `whales`, `tips`, `sessions` | Alert objects | N/A | N/A | Aggregate count only (already-approved disposition change) | Named fans, $ values, suggested action | "Losing Money" card → AUDIENCE/Fans | None — needs a server wrapper + the approved redaction, not a calculation change |
+| Session opportunities | `getSessionBreakdown()`, needs a server wrapper | No rule conflict — confirmed this function already consumes canonical `detectSessions()` output via `analytics.sessions`, not a separate implementation | Session object | Insight/recommendation text | Inherits session timestamps | N/A | Raw timeline | Causal detail | Sessions tab | None |
+| Platform opportunities | Extends the Platforms row | Comparison narrative over canonical platform stats | Canonical platforms | Comparison text | N/A | N/A | Totals | Comparison | Platforms tab, Opportunities (new) | None |
+| Timing opportunities | Extends the Best-Times row | Same grid, opportunity-framed | Canonical best-times | Opportunity cards | Inherited | Inherited | Count/category | Full detail | Opportunities (new) | None |
+| Recommendations | `generateNextMoves()`, unchanged, repointed | No rule conflict — needs its `bestHour` input repointed from `computeBestTimes()`'s output to the new canonical best-time grid once it exists | `tips`, `sessions`, `whales`, canonical best-time | Prioritized action list | Inherited | N/A | Move #1 | Full list | Creator Report, Opportunities | CSS-blur gate on moves #2+ retired in favor of server-side truncation |
+
+### Confidence tiers, final (session-count based, per meaningfulSessions)
+
+| Tier | Threshold | Can be labeled "best"? |
+|---|---|---|
+| Insufficient | < 2 meaningful sessions in the bucket | No — never appears as a candidate |
+| Promising / early signal | Exactly 2 sessions, or 1 session beating the account's overall median $/hr | No — shown only as "early signal, needs more data" |
+| Supported (medium) | 3–4 meaningful sessions | Yes |
+| Supported (high) | ≥ 5 meaningful sessions | Yes, highest confidence label |
+
+### Architecture rule, restated per your Section 9 instruction
+
+`get_user_insights` must **not** become the monolith that owns all twelve calculations
+inline. The recommended split: a new server-side module (plain JS or a set of focused SQL
+functions, matching whichever of `lib/analytics.js`'s functions are being reused) computes
+each canonical metric; a thin, shared redaction layer (per `entitlement-contract.md`, already
+approved) applies the Free/Pro split; `get_user_insights` (or its successor endpoint) becomes
+the **orchestration point that calls these**, not the place the business logic itself lives.
+This keeps calculation and entitlement genuinely separate, as instructed.
+
+### Migration order (unchanged from the prior round, restated for completeness)
+
+1. Sessions (`detectSessions()` — Stream Planner migrates off `groupIntoSessions()`).
+2. Monthly growth (low-risk consolidation).
+3. Best-time canonical grid (largest, most consequential — depends on #1).
+4. Platform extension (best-day/hour — depends on #3).
+5. Missed-revenue 3-field consolidation (depends on #3).
+6. Session-opportunity, platform-opportunity, and recommendation server wrappers (lowest
+   technical risk, no rule conflicts, gated only on the entitlement contract existing).
+
+### Testing requirements, final
+
+Fixtures needed before any consumer migrates, covering every edge case requested: a
+whale-heavy account (one large tip skewing mean but not median — proves the median choice
+matters), a sparse account (<10 tips, confirms the `has_data:false` gate), an account at
+exactly the minimum threshold (exactly 10 tips, exactly 3 sessions in one bucket — boundary
+condition), a multi-platform account with platform-switching mid-session (proves the
+session/platform-boundary rule produces the expected 2-session split, not 1), a session
+crossing midnight local time (proves day-bucket assignment uses the session's start time
+consistently), and an account with tip history spanning a DST transition (proves the
+`Intl`-based local-hour conversion doesn't shift by an hour incorrectly across the transition
+date). Each canonical function should have a fixture-driven test asserting its exact output
+against hand-computed expected values for these cases before Stream Planner, Creator Report,
+or any other consumer is repointed to it.
+
 ---
 No code changed. No UI changed. No entitlement logic changed. Reconciliation only.
