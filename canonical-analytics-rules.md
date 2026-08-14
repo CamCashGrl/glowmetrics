@@ -389,4 +389,203 @@ against hand-computed expected values for these cases before Stream Planner, Cre
 or any other consumer is repointed to it.
 
 ---
+
+## FINAL PRODUCT DECISIONS
+
+Every remaining open question resolved explicitly. No unresolved items remain below unless
+stated as genuinely requiring your sign-off.
+
+### 1. Canonical session rule
+
+`detectSessions()`, unchanged: 3-hour gap, platform change always starts a new session,
+session boundaries = first/last tip timestamp. **Final, no remaining ambiguity.**
+
+### 2. Canonical best-time rule
+
+Best window = the day×hour bucket, among buckets meeting the confidence threshold in #3 below,
+with the **highest median session $/hour**. Session-level (not tip-level), local-native
+timezone (per #4), computed over `meaningfulSessions` (per #5). If no bucket meets the
+minimum threshold to be called "Best Time," the system shows the strongest
+"promising/early-signal" candidate instead, always labeled as such. Ties resolve to higher
+session count, then more recent bucket. **Final.**
+
+### 3. Confidence thresholds — the contradiction resolved
+
+The prior draft had two different numbers in two places (a genuine inconsistency, not a
+typo — one section carried over `bestWindows()`'s existing UI thresholds unmodified, the
+other proposed reusing the old tip-count gate of 3). Neither is retained as-is. Reasoning:
+the old ≥3 threshold was calibrated for **individual tips within an hour bucket** — a
+comparatively low-variance, high-frequency unit. Session-level $/hour is a much
+higher-variance unit (one big-tip night, one slow night, a promo push) — 3 *sessions* is not
+an equivalent amount of evidence to 3 *tips*, and treating it as such would mean confidently
+labeling "Best Time" off a pattern that could easily be a coincidence. Raising the bar here is
+a deliberate strengthening for a business-critical recommendation, not an arbitrary choice in
+either direction.
+
+| Tier | Minimum sessions | Meaning | Can be called "Best Time"? | Free behavior | Pro behavior |
+|---|---|---|---|---|---|
+| Insufficient | < 2 sessions | No usable signal yet | No — bucket doesn't appear as a candidate at all | Not shown | Not shown |
+| Low / early signal | 2–3 sessions | A pattern exists but could plausibly be coincidence | **No** — shown only as "early signal, needs more data," never as a recommendation to act on | Not shown | Shown, explicitly labeled, not actionable framing |
+| Medium / supported | 4–5 sessions | Enough repetition that the pattern is probably real | **Yes**, labeled "medium confidence" | Not shown (directional signal only, per the existing Daily Brief design) | Shown as an actionable "Best Time," medium-confidence label |
+| High confidence | 6+ sessions | Well-established, repeated pattern | **Yes**, labeled "high confidence" | Not shown | Shown as an actionable "Best Time," high-confidence label |
+
+**This directly matches the structure you proposed** (<2 / 2–3 / 4–5 / 6+), adopted because
+the reasoning holds: session-level evidence needs more repetition than tip-level evidence did
+before a claim this consequential ("here's your best time to work") is made. **Final.**
+
+### 4. Canonical timezone contract
+
+**Traced completely, not assumed:**
+- **Not stored per profile** — no timezone column exists in `profiles` (confirmed against the
+  live schema this session).
+- **Always live-detected from the browser**, fresh, at the moment of use:
+  `Intl.DateTimeFormat().resolvedOptions().timeZone`, an IANA zone string (e.g.
+  `"America/New_York"`), never a fixed offset.
+- **Cannot currently be changed/overridden by the creator on the main dashboard** — no UI for
+  it exists. **Live Mode is the one exception**: it has its own separate, user-selectable,
+  `localStorage`-persisted override (`cc_live_timezone`), independent of the dashboard's
+  mechanism. This is a real, confirmed inconsistency between two parts of the same product —
+  flagging again, not resolving it here, since unifying them is a UX decision (should the
+  dashboard also let a creator override their detected timezone?) outside this analytics
+  reconciliation's scope.
+- **If missing/invalid:** each conversion function (`toLocalHour`/`toLocalDow`/
+  `toLocalDateStr`) silently falls back to raw UTC via a try/catch. Recommend adding a
+  logged warning on this fallback path so it's visible in monitoring, not changing the
+  fallback behavior itself.
+- **DST:** handled correctly by construction — IANA zone names carry their own DST rules;
+  confirmed on both the client (`Intl.DateTimeFormat`) and server (Postgres `AT TIME ZONE`
+  with a named zone) sides.
+- **Historical tips — current timezone or timezone-at-time-of-tip?** **Current timezone,
+  applied uniformly across all historical data.** There is no data captured anywhere in the
+  schema recording what timezone a creator was in when each historical tip occurred — only a
+  UTC timestamp. Reconstructing a per-tip historical timezone isn't possible without new data
+  collection (and isn't proposed here). **This is the explicit, stated decision, not a silent
+  default**: a creator's full tip history gets re-bucketed under whatever timezone they're
+  currently detected in, every time analytics run. For the overwhelming majority of creators
+  (who don't relocate across timezones), this is invisible. For one who does, their historical
+  "best hour" could shift after a move — an acceptable, documented tradeoff given the
+  alternative (capturing and storing per-tip timezone) is a materially larger data-model
+  change not currently justified. **Final, unless you want per-tip timezone capture added as
+  a future data-collection item** — flagging that as the one piece of this section that could
+  go the other way with more infrastructure, not proposing it now.
+
+### 5. Platform $/hr population
+
+**`classifySession()` traced completely:**
+```
+mins < 2  && usd === 0   → 'invalid'      (near-zero duration, zero revenue — tracking artifact)
+mins < 15 && usd < 10    → 'low_signal'   (brief, low-earning — not representative effort)
+else                      → 'meaningful'
+```
+**Why it exists:** a data-quality gate, not a business rule about what "counts" as real work.
+Its purpose is excluding sessions where the duration/revenue signal is too thin to trust in a
+rate calculation — specifically to prevent near-zero-duration sessions from producing
+absurd $/hr outliers (a $5 tip in a session with a 1-minute inferred duration computes to
+$300/hr, a number with no real meaning).
+
+**Which surfaces rely on it:** confirmed by direct grep — `platforms` (the $/hr calculation
+itself), `insights`, `predictions`, `lossAlerts`, `nextMoves`, hourly-rate eligibility, and
+`page.js`'s own month-over-month comparison block. This is the existing, pervasive convention
+for "a session real enough to compute a rate from," not an isolated choice made once.
+
+**Would `meaningfulSessions` make a platform look artificially *better*?** No — the filter is
+symmetric. It excludes noise in both directions (a session could be excluded for being too
+short-and-low-earning, which would otherwise have dragged the average *down* with a
+noisy/unrepresentative number, just as easily as it could exclude an artifact that would have
+inflated it).
+
+**Would using all sessions make a platform look artificially *worse*?** Yes, specifically —
+near-zero-duration "invalid" sessions have undefined or extreme $/hr by construction
+(`durationHours` near zero), and would distort the platform average toward these outliers,
+not toward a more "complete" picture. Including them isn't more accurate; it's noisier.
+
+**Final recommendation: B — `meaningfulSessions`.** Not merely "already used everywhere," but
+principled: it's the correct population for a *rate* calculation specifically because rate
+calculations are the ones most sensitive to near-zero-denominator noise. **Final, no
+remaining ambiguity.**
+
+### 6. Monthly-growth calendar definition
+
+**Current behavior, confirmed:** all three existing implementations (`aggregateRows()`'s
+`monthlyData`, `page.js`'s inline momentum block, `DashboardGrowthCharts.js`) bucket by **UTC
+calendar month** (`getUTCFullYear()`/`getUTCMonth()`), not local time.
+
+**Why this matters, concretely:** a creator behind UTC (most of the Americas) working late on
+local month-end could have those tips land in UTC's *next* month; a creator ahead of UTC could
+have early-next-month local tips land in UTC's *previous* month. Near any month boundary, this
+measurably misattributes earnings between months from the creator's own lived perspective.
+
+**Recommendation: B — creator-local calendar month.** Not just for boundary correctness on
+its own — **for internal consistency with every other canonical rule in this document**, all
+of which are now local-native (best-time, day-of-week, session bucketing). Leaving monthly
+growth as the one UTC-bucketed exception would mean a tip could register as "this month" for
+the Daily Brief/best-time surfaces and "last month" for the earnings-trend surface,
+simultaneously, for the same tip — an internal contradiction, not just an edge case. Implement
+via the same `toLocalDateStr()`-based key derivation already used elsewhere (extract
+`YYYY-MM` from its `YYYY-MM-DD` output) rather than `getUTCFullYear()`/`getUTCMonth()`.
+
+**This changes visible numbers for any creator not in UTC — essentially everyone — near month
+boundaries specifically.** Flagging as a real, visible-number change requiring your explicit
+sign-off, same category as the best-time and session rule changes already approved.
+
+### 7. Missed-revenue definitions
+
+Unchanged from the prior round: three distinct fields (`today_missed`,
+`cumulative_by_platform`, `recent_streak_missed`), kept separate, sharing the canonical
+best-time grid as their common input rather than each recomputing "best hour" independently.
+**Final.**
+
+### 8. Canonical analytics architecture
+
+Restructured into three explicit, separately-testable layers, per your instruction:
+
+```
+RAW DATA
+   ↓
+A. CANONICAL ANALYTICS   — pure business-rule calculations, no plan-awareness at all.
+   (extends lib/analytics.js: sessions, monthly growth, platforms, best-times,
+    missed revenue, fan intelligence, recommendations — reused, not reimplemented)
+   ↓
+B. SERVER-SIDE INSIGHT SERVICE   — assembles whatever a given screen/request needs
+   by calling into (A). Orchestration only — no business logic of its own, no
+   entitlement logic of its own.
+   ↓
+C. ENTITLEMENT / REDACTION   — a single shared module (per entitlement-contract.md,
+   already approved) that takes (B)'s full result + is_pro and returns the
+   Free-preview or Pro-full shape. Contains zero analytics calculations of its own.
+   ↓
+UI
+```
+
+**On `get_user_insights` specifically:** it becomes a **thin compatibility layer** — its
+existing callers keep working unchanged, but its body stops containing calculation logic
+inline (as it does today) and instead calls into (B), which calls into (A), then (C) applies
+redaction. This satisfies "if it can remain a thin compatibility layer, fine" — it does not
+need to be deleted or replaced wholesale, only internally restructured so calculation and
+entitlement are no longer interleaved in one 500-line SQL function body. **Final — this is the
+approved architecture, restated precisely per your Section 4 instruction.**
+
+### 9. Free vs. Pro data contract
+
+Unchanged from `entitlement-contract.md` (already approved): `{unlocked: false, preview: {...}}`
+vs. `{unlocked: true, data: {...}}`, applied uniformly by layer C above, never computed
+per-insight-type as a one-off. **Final.**
+
+---
+
+## REMAINING ITEMS THAT GENUINELY REQUIRE YOUR SIGN-OFF (not resolved unilaterally)
+
+1. **Best-time confidence thresholds** (§3) — a real, visible-number and visible-label change
+   from what any current implementation shows.
+2. **Session canonicalization** (§1) — Stream Planner's numbers change once migrated.
+3. **Monthly-growth calendar switch to local time** (§6) — changes which month a tip counts
+   toward for any non-UTC creator near a boundary.
+4. **Historical-tips-use-current-timezone** (§4) — the one alternative (capturing per-tip
+   timezone at collection time) would require a data-model change beyond this reconciliation's
+   scope; flagging that door as open, not proposing walking through it now.
+
+Everything else in this document is a confirmed, evidence-based determination, not an open
+question.
+
+---
 No code changed. No UI changed. No entitlement logic changed. Reconciliation only.
