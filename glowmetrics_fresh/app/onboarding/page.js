@@ -109,7 +109,14 @@ function parseRows(rawText,platformId){
   const rows=[];let skipped=0
   const dateLineRe=/^([A-Za-z]{3}\s+\d{1,2}(?:st|nd|rd|th)?,\s+\d{4},\s+\d{1,2}:\d{2}\s+[AP]M)/i
   const tipFromRe=/^Tip From:\s*(.+)/i
-  const tokensLineRe=/^(\d+)\s+(\d+)$/
+  // Two numbers ("tokens  running_balance"), each allowing a thousands-comma
+  // (e.g. "500  12,345") — same bug class already fixed for BongaCams
+  // (scripts/verify-bongacams-tokens-thousands-separator.mjs). Kept in
+  // lockstep with lib/analytics.js's CB_TOKENS_LINE_RE/CB_TOKENS_SINGLE_RE
+  // (the server-side parser /api/upload actually uses) so this preview
+  // never shows a row count the real import can't reproduce.
+  const tokensLineRe=/^([\d,]+)\s+([\d,]+)$/
+  const tokensSingleRe=/^([\d,]+)$/
   const isMultiLine=lines.some(l=>tipFromRe.test(l))
   if(isMultiLine){
     let i=0
@@ -118,9 +125,16 @@ function parseRows(rawText,platformId){
       if(dateMatch){
         const ts=tryParseDate(dateMatch[1]);const actionLine=lines[i+1]||'';const tipMatch=actionLine.match(tipFromRe)
         if(ts&&tipMatch){
-          const username=tipMatch[1].trim();let tokensLine=lines[i+2]||'';let note='';let tMatch=tokensLine.match(tokensLineRe)
-          if(!tMatch&&lines[i+3]){note=tokensLine;tokensLine=lines[i+3]||'';tMatch=tokensLine.match(tokensLineRe)}
-          if(tMatch){const tokens=parseInt(tMatch[1],10);if(tokens>=1){const usd=+(tokens*rate).toFixed(2);rows.push({ts,username,tokens,usd,note})}else skipped++}else skipped++
+          const username=tipMatch[1].trim();let tokensLine=lines[i+2]||'';let note=''
+          let tMatch=tokensLine.match(tokensLineRe)
+          let singleMatch=!tMatch?tokensLine.match(tokensSingleRe):null
+          if(!tMatch&&!singleMatch&&lines[i+3]){
+            note=tokensLine;tokensLine=lines[i+3]||''
+            tMatch=tokensLine.match(tokensLineRe)
+            singleMatch=!tMatch?tokensLine.match(tokensSingleRe):null
+          }
+          const tokensRaw=tMatch?tMatch[1]:(singleMatch?singleMatch[1]:null)
+          if(tokensRaw){const tokens=parseInt(tokensRaw.replace(/,/g,''),10);if(tokens>=1){const usd=+(tokens*rate).toFixed(2);rows.push({ts,username,tokens,usd,note})}else skipped++}else skipped++
         }
         i++
       }else i++
@@ -215,6 +229,33 @@ function buildPreview(rawText,platformId,platformLabel){
     bestHour:bestHour?fmtHour(bestHour[0]):null,
     sampleRows:rows.slice(0,5).map(r=>({date:r.ts.toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}),fan:r.username,tokens:r.tokens,amount:r.usd,platform:platformLabel})),
   }
+}
+
+// Zero-rows diagnostic — replaces the old one-size-fits-all "we couldn't
+// find any tip rows" message with a specific reason, based on exactly how
+// far the parse got. Chaturbate's multi-line format was 49 of 56
+// onboarding_paste_parse_failed events (by far the dominant one), so it
+// gets the most granular checks; the columnar platforms get a simpler
+// but still specific check.
+function diagnosePasteFailure(rawText,platformId){
+  const lines=rawText.split('\n').map(l=>l.trim()).filter(Boolean)
+  if(!lines.length)return 'Paste your tip history above first.'
+  if(platformId==='chaturbate'){
+    const dateLineRe=/^([A-Za-z]{3}\s+\d{1,2}(?:st|nd|rd|th)?,\s+\d{4},\s+\d{1,2}:\d{2}\s+[AP]M)/i
+    const tipFromRe=/^Tip From:\s*(.+)/i
+    const hasDateLines=lines.some(l=>dateLineRe.test(l))
+    const hasTipFromLines=lines.some(l=>tipFromRe.test(l))
+    if(!hasDateLines&&!hasTipFromLines)return "We couldn't recognize this as Chaturbate's Token Stats format. Go to your profile → Token Stats tab, select All Time, then copy the whole table (dates, \"Tip From:\" lines, and token amounts together)."
+    if(hasDateLines&&!hasTipFromLines)return 'We found dates but no "Tip From:" lines. Make sure you copied the full table, not just the date column.'
+    if(!hasDateLines&&hasTipFromLines)return "We found tip lines but couldn't read the dates next to them. Make sure each tip's date/time line is included above its \"Tip From:\" line."
+    return "We found tips and dates but couldn't read the token amounts. Make sure the token number (and running balance, if shown) directly follows each \"Tip From:\" line, unedited."
+  }
+  // Columnar platforms (BongaCams, MyFreeCams, generic CSV) — at least one
+  // recognizable date/timestamp is the minimum bar; below that, nothing
+  // else in the row can be trusted either.
+  const hasAnyDateLike=lines.some(l=>tryParseDate(l.split(/\t|,/)[0]||l))
+  if(!hasAnyDateLike)return "We couldn't find any recognizable dates in what you pasted. Make sure each row includes its date/time, and that rows are separated by line breaks the way they appear on the page."
+  return "We found rows but couldn't read the token/dollar amounts. Make sure you copied the full table, including the amount columns, without extra edits."
 }
 
 // ── Ambient particle canvas ────────────────────────────────────
@@ -606,8 +647,9 @@ export default function OnboardingPage(){
     if(!pasteText.trim()){setParseError('Paste your tip history above first.');return}
     const p=buildPreview(pasteText,platformId,platform.label)
     if(!p||( p.tipsDetected===0&&p.paidSessionsDetected===0)){
-      setParseError("We couldn't find any tip rows. Make sure you copied the full table including dates and token amounts.")
-      track('onboarding_paste_parse_failed',{platform:platformId})
+      const reason=diagnosePasteFailure(pasteText,platformId)
+      setParseError(reason)
+      track('onboarding_paste_parse_failed',{platform:platformId,reason})
       return
     }
     setPreview(p)

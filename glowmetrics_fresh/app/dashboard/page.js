@@ -14,6 +14,7 @@ import SiteFooter from "../components/SiteFooter"
 import { PLATFORM_TOKEN_RATES, tokenRate } from "../../lib/constants"
 import { track as gtmTrack } from '../../lib/track'
 import { isProPlan } from '../../lib/plan'
+import { resolveCreatorTimezone, autoPopulateTimezoneIfMissing } from '../../lib/timezone'
 import { getDashboardReadiness, getModuleLockState, canShowHourlyRate, LockedInsightCard, DashboardProgressCard } from './DashboardPreview'
 import Button from '../../components/ui/Button'
 import { useLiveSessionEngine } from '../live/useLiveSessionEngine'
@@ -1884,7 +1885,7 @@ export default function Dashboard() {
       })
       setUser(user)
       supabase.from('profiles')
-        .select('plan, plan_expires_at, stripe_customer_id')
+        .select('plan, plan_expires_at, stripe_customer_id, timezone')
         .eq('id', user.id)
         .maybeSingle()
         .then(({ data }) => { if (data) setProfile(data) })
@@ -1939,6 +1940,11 @@ export default function Dashboard() {
           if (!newRows.length) return prev
           const updated = [...prev, ...newRows].sort((a,b) => new Date(a.date_time)-new Date(b.date_time))
           try {
+            // Browser-fallback tier only (see lib/timezone.js) — this is the
+            // "NO DB calls" lightweight recompute path, so it can't re-fetch
+            // profiles.timezone here; loadData()'s full reload path resolves
+            // the canonical profile timezone and is what corrects this on
+            // the next full load.
             const userTz = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC'
             const r = runEngine(updated, userTz)
             if (r) setAnalytics(r)
@@ -2136,7 +2142,14 @@ export default function Dashboard() {
     if (silent) setIsRefreshing(true)
     else setLoading(true)
     try {
-      const userTz = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC'
+      // Canonical timezone contract (canonical-analytics-rules.md): the
+      // creator's saved profiles.timezone is the source of truth; browser
+      // detection is fallback-only, used to auto-populate the profile once
+      // (see autoPopulateTimezoneIfMissing) rather than being read live on
+      // every load.
+      const { data: profileTzRow } = await supabase.from('profiles').select('timezone').eq('id', uid).maybeSingle()
+      const { timezone: userTz } = resolveCreatorTimezone(profileTzRow?.timezone)
+      autoPopulateTimezoneIfMissing(supabase, uid, profileTzRow?.timezone)
       const PAGE = 1000
       // First page also asks for the exact row count, so the remaining pages
       // (if any) can be fired off in parallel instead of one round trip at a
@@ -2682,7 +2695,14 @@ const stopImportMessageRotation = () => {
         todayBestPlat = plat
       }
     })
-    const bestHour = analytics?.bestHour
+    // Phase 1B: all-time fallback now reads the canonical best-time result
+    // (lib/analytics/bestTimes.js — session-based, median $/hour,
+    // confidence-tiered) instead of the legacy tip-level computeBestTimes()
+    // output, per the approved Best-Time Migration Matrix. Same {hour, avg}
+    // shape preserved so every downstream consumer below (bhLabel,
+    // displayAvg, peakAvg, sessionsAtPeak) is unaffected by the source swap.
+    const _canonicalBest = analytics?.canonicalBestTimes?.bestWindow
+    const bestHour = _canonicalBest ? { hour: _canonicalBest.localHour, avg: _canonicalBest.medianUsdPerHour } : null
     const _bhRaw = todayBestHourNum !== null ? todayBestHourNum : (bestHour ? parseInt(bestHour.hour) : null)
     const bh = (_bhRaw !== null && !isNaN(_bhRaw)) ? _bhRaw : null
     const bhLabel = bh === null ? null : fmtHour(bh)
@@ -2951,15 +2971,19 @@ const stopImportMessageRotation = () => {
 
   // ── CANONICAL PEAK HOUR ──────────────────────────────────────────────────────
   // Single source of truth used by the header, Daily Brief, and Losing Money.
-  // Prefer engineInsights daily_plan (most specific), then today's analytics best
-  // hour from dailyBrief, then the all-time analytics best hour as final fallback.
-  // All three sources are already user-local hours: get_user_insights is called
-  // with p_timezone above, so daily_plan.best_hour comes back local (not UTC);
-  // dailyBrief.bh and analytics.bestHour.hour were already local via toLocalHour().
+  // Prefer engineInsights daily_plan (most specific — SQL, get_user_insights;
+  // not migrated in Phase 1B, see the approved Best-Time Migration Matrix),
+  // then today's analytics best hour from dailyBrief (which itself now falls
+  // back to the canonical result — see buildDailyBrief() above), then the
+  // canonical all-time best-time result as final fallback. All three sources
+  // are already user-local hours: get_user_insights is called with
+  // p_timezone above, so daily_plan.best_hour comes back local (not UTC);
+  // dailyBrief.bh and canonicalBestTimes.bestWindow.localHour were already
+  // local via toLocalHour()/AT TIME ZONE respectively.
   const canonicalPeakHourLocal = (
     engineInsights?.daily_plan?.best_hour ??
     dailyBrief?.bh ??
-    (analytics?.bestHour ? parseInt(analytics.bestHour.hour) : null)
+    (analytics?.canonicalBestTimes?.bestWindow ? analytics.canonicalBestTimes.bestWindow.localHour : null)
   )
   const canonicalPeakLabel = canonicalPeakHourLocal != null
     ? (() => { const _lh = ((canonicalPeakHourLocal % 24) + 24) % 24; return _lh===0?'12 AM':_lh<12?`${_lh} AM`:_lh===12?'12 PM':`${_lh-12} PM` })()
@@ -2970,17 +2994,29 @@ const stopImportMessageRotation = () => {
   void minuteTick // ensures re-render when minute changes
 
   // ── MONTH-OVER-MONTH GROWTH ── used by Momentum indicator and KPI cards
-  const _momNow = new Date()
-  const _momMonthKey = `${_momNow.getUTCFullYear()}-${_momNow.getUTCMonth()}`
-  const { momThisRev: _momThisRev, momPrevRev: _momPrevRev, growthPct } = memoOn(
-    derivedCacheRef.current, 'momentum', [tips, _momMonthKey], () => {
-      const momThisStart = new Date(Date.UTC(_momNow.getUTCFullYear(), _momNow.getUTCMonth(), 1))
-      const momPrevStart = new Date(Date.UTC(_momNow.getUTCFullYear(), _momNow.getUTCMonth() - 1, 1))
-      const momThisRev = tips.reduce((s, t) => new Date(t.date_time || t.dateRaw) >= momThisStart ? s + (t.usd || 0) : s, 0)
-      const momPrevRev = tips.reduce((s, t) => { const d = new Date(t.date_time || t.dateRaw); return d >= momPrevStart && d < momThisStart ? s + (t.usd || 0) : s }, 0)
-      const growthPct = (momPrevRev > 0 && momThisRev > 0) ? Math.round(((momThisRev - momPrevRev) / momPrevRev) * 100) : null
-      return { momThisRev, momPrevRev, growthPct }
-    })
+  // Canonical source: analytics.monthlyData (lib/analytics.js), bucketed by
+  // creator-local calendar month with growthPct pre-computed once — see
+  // canonical-analytics-rules.md's Monthly-Growth Reconciliation. Do not
+  // recompute month boundaries here.
+  //
+  // monthlyData only contains months that actually have tip data — it is
+  // NOT guaranteed to have an entry for the real current calendar month, so
+  // "last entry" is not a safe stand-in for "this month" (a creator who
+  // hasn't tipped yet this month would otherwise see last month's revenue
+  // mislabeled as "this month"). Match the real current-month key instead,
+  // via the same resolved-timezone contract lib/timezone.js defines.
+  const _momMonthly = analytics?.monthlyData || []
+  const _momTz = resolveCreatorTimezone(profile?.timezone).timezone
+  const _momCurrentKey = (() => {
+    try { return new Intl.DateTimeFormat('en-CA', { timeZone: _momTz }).format(new Date()).slice(0, 7) }
+    catch { return null }
+  })()
+  const _momThisIdx = _momCurrentKey ? _momMonthly.findIndex(m => m.month === _momCurrentKey) : -1
+  const _momThisMonth = _momThisIdx >= 0 ? _momMonthly[_momThisIdx] : null
+  const _momPrevMonth = _momThisIdx > 0 ? _momMonthly[_momThisIdx - 1] : null
+  const _momThisRev = _momThisMonth?.usd ?? 0
+  const _momPrevRev = _momPrevMonth?.usd ?? 0
+  const growthPct = _momThisMonth?.growthPct ?? null
 
   // ── DASHBOARD READINESS — always renders real dashboard, module-level locking ─
   const {
@@ -3381,7 +3417,13 @@ const stopImportMessageRotation = () => {
         )}
 
         {activeTab === "settings" && (
-          <Settings user={user} profile={profile} isPro={isPro} supabase={supabase} />
+          <Settings
+            user={user} profile={profile} isPro={isPro} supabase={supabase}
+            onTimezoneSaved={(tz) => {
+              setProfile(p => ({ ...(p || {}), timezone: tz }))
+              loadData(user.id, true, { silent: true })
+            }}
+          />
         )}
 
         {activeTab === "overview" && (
@@ -3402,12 +3444,16 @@ const stopImportMessageRotation = () => {
               // ── empty state — show null; DashboardProgressCard above covers zero-data ──
               if (tips.length === 0) return null
 
-              const now = new Date()
-              const thisMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
-              const prevMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1))
-              const thisMonthRev = tips.filter(t => new Date(t.date_time || t.dateRaw) >= thisMonthStart).reduce((s, t) => s + (t.usd || 0), 0)
-              const prevMonthRev = tips.filter(t => { const d = new Date(t.date_time || t.dateRaw); return d >= prevMonthStart && d < thisMonthStart }).reduce((s, t) => s + (t.usd || 0), 0)
-              const growthPct = (prevMonthRev > 0 && thisMonthRev > 0) ? Math.round(((thisMonthRev - prevMonthRev) / prevMonthRev) * 100) : null
+              // Canonical local-calendar-month boundaries + revenue/growth — read
+              // from analytics.monthlyData (lib/analytics.js) rather than
+              // recomputing with UTC month math. See _momMonthly above.
+              const thisMonthEntry = _momThisMonth
+              const prevMonthEntry = _momPrevMonth
+              const thisMonthStart = thisMonthEntry ? new Date(`${thisMonthEntry.month}-01T00:00:00Z`) : new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1))
+              const prevMonthStart = prevMonthEntry ? new Date(`${prevMonthEntry.month}-01T00:00:00Z`) : new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth() - 1, 1))
+              const thisMonthRev = thisMonthEntry?.usd ?? 0
+              const prevMonthRev = prevMonthEntry?.usd ?? 0
+              const growthPct = thisMonthEntry?.growthPct ?? null
               const safeRevenue = (!isNaN(totalRevenue) && isFinite(totalRevenue)) ? totalRevenue : 0
               const safeThisMonthRev = (!isNaN(thisMonthRev) && isFinite(thisMonthRev)) ? thisMonthRev : 0
               const topPct = safeRevenue > 0 ? Math.max(1, Math.min(25, Math.round(100 - (safeRevenue / 50)))) : null
@@ -3493,7 +3539,7 @@ const stopImportMessageRotation = () => {
             {/* ═══════════════════════════════════════
                 TOKENS VS HOURS ONLINE + MONTHLY GROWTH
             ═══════════════════════════════════════ */}
-            {tips.length > 0 && <DashboardGrowthCharts tips={tips} sessions={sessions} />}
+            {tips.length > 0 && <DashboardGrowthCharts tips={tips} sessions={sessions} monthlyData={analytics?.monthlyData} />}
 
             {/* ═══════════════════════════════════════
                 DAILY BRIEF — overview only, below earnings
@@ -3594,11 +3640,11 @@ const stopImportMessageRotation = () => {
                   <div style={{ flex: 1, minWidth: 130, padding: '11px 14px', borderRadius: 11, background: bestTimeLock.locked ? 'rgba(255,255,255,0.03)' : atPeak ? 'rgba(16,185,129,0.12)' : 'rgba(34,211,238,0.07)', border: `1px solid ${bestTimeLock.locked ? 'rgba(255,255,255,0.08)' : atPeak ? 'rgba(16,185,129,0.4)' : 'rgba(34,211,238,0.18)'}` }}>
                     <div style={{ fontSize: 10, color: C.muted, marginBottom: 3, textTransform: 'uppercase', letterSpacing: 1 }}>Best Time</div>
                     {bestTimeLock.locked ? (
-                      analytics?.earlySignalHour ? (
+                      analytics?.canonicalBestTimes?.earlySignal ? (
                         <>
-                          <div style={{ fontSize: 14, fontWeight: 800, color: C.indigo }}>⚡ {fmtHour(parseInt(analytics.earlySignalHour.hour))}</div>
+                          <div style={{ fontSize: 14, fontWeight: 800, color: C.indigo }}>⚡ {fmtHour(analytics.canonicalBestTimes.earlySignal.localHour)}</div>
                           <div style={{ fontSize: 11, color: C.muted, marginTop: 2, lineHeight: 1.4 }}>
-                            Early signal · ~${analytics.earlySignalHour.avg.toFixed(0)} avg so far
+                            Early signal · ~${analytics.canonicalBestTimes.earlySignal.medianUsdPerHour.toFixed(0)} avg so far
                           </div>
                           <button onClick={() => handleTabChange('upload')} style={{ marginTop: 6, padding: '4px 10px', borderRadius: 100, border: '1px solid rgba(124,92,255,0.3)', background: 'rgba(124,92,255,0.08)', color: C.indigo, fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>Add data to confirm</button>
                         </>
