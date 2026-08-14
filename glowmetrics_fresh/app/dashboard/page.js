@@ -3551,7 +3551,7 @@ const stopImportMessageRotation = () => {
         {dailyBrief && (() => {
           const { todayName, bhLabel: _bhLabel, bh, atPeak, hoursUntilPeak, displayPlat: _displayPlat, displayAvg,
             isBestDay, bestDay, sessionAvg, peakAvg, predictionLow, predictionHigh,
-            reengageFans, likelyOnline, sessionsAtPeakCount } = dailyBrief
+            sessionsAtPeakCount } = dailyBrief
           const bhLabel = canonicalPeakLabel || _bhLabel
           const displayPlat = engineInsights?.summary?.best_platform || _displayPlat
           // Real threshold from getModuleLockState('bestStreamingTimes'): 25+ tips
@@ -3681,72 +3681,16 @@ const stopImportMessageRotation = () => {
                   )}
                 </div>
 
-                {/* ROW 2 — Likely Online + Re-engage */}
-                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-
-                  {/* Likely Online */}
-                  {likelyOnline.length > 0 && (
-                    <div style={{ flex: 1, minWidth: 200, padding: '12px 14px', borderRadius: 11, background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.18)' }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: C.green, marginBottom: 9, display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: C.green, display: 'inline-block', boxShadow: `0 0 5px ${C.green}`, animation: 'pulse-msg 2s infinite' }}/>
-                        Likely Online Right Now
-                      </div>
-                      {likelyOnline.map((w, i) => (
-                        <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: i < likelyOnline.length - 1 ? 7 : 0 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <div style={{ width: 26, height: 26, borderRadius: '50%', background: `linear-gradient(135deg,#10B981,#22D3EE)`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, color: '#fff', flexShrink: 0 }}>
-                              {w.username[0].toUpperCase()}
-                            </div>
-                            <div>
-                              <div style={{ fontSize: 12, fontWeight: 700, color: C.white }}>{w.username}</div>
-                              <div style={{ fontSize: 10, color: C.muted }}>${w.totalUSD.toFixed(0)} lifetime · {w.platform}</div>
-                            </div>
-                          </div>
-                          <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }}
-                            className="heart-envelope-btn"
-                            aria-label={`Message ${w.username}`}
-                            title="Message fan"
-                            style={{ padding: 6, borderRadius: 8, background: 'none', border: 'none', color: C.green, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><EnvelopeHeartIcon size={17} /></button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Re-engage */}
-                  {!atPeak && reengageFans.length > 0 && (
-                    <div style={{ flex: 1, minWidth: 200, padding: '12px 14px', borderRadius: 11, background: 'rgba(236,72,153,0.06)', border: '1px solid rgba(236,72,153,0.18)' }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: C.pink, marginBottom: 9, display: 'flex', alignItems: 'center', gap: 6 }}>
-                        ⚠️ Re-engage Today
-                      </div>
-                      {reengageFans.map((w, i) => (
-                        <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: i < reengageFans.length - 1 ? 7 : 0 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <div style={{ width: 26, height: 26, borderRadius: '50%', background: `linear-gradient(135deg,#EC4899,#7C5CFF)`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, color: '#fff', flexShrink: 0 }}>
-                              {w.username[0].toUpperCase()}
-                            </div>
-                            <div>
-                              <div style={{ fontSize: 12, fontWeight: 700, color: C.white }}>{w.username}</div>
-                              <div style={{ fontSize: 10, color: C.muted }}>${w.totalUSD.toFixed(0)} · {w.avgTipSize >= 50*0.05 ? Math.round(w.avgTipSize/0.05) + ' tok avg' : w.totalTokens + ' tok'} · {w.daysSinceLastTip}d gone</div>
-                            </div>
-                          </div>
-                          <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }}
-                            className="heart-envelope-btn"
-                            aria-label={`Message ${w.username}`}
-                            title="Message fan"
-                            style={{ padding: 6, borderRadius: 8, background: 'none', border: 'none', color: C.pink, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><EnvelopeHeartIcon size={17} /></button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* If neither list has data */}
-                  {likelyOnline.length === 0 && reengageFans.length === 0 && (
-                    <div style={{ flex: 1, padding: '12px 14px', borderRadius: 11, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', fontSize: 12, color: C.muted }}>
-                      No fan alerts right now — check back after more sessions.
-                    </div>
-                  )}
-                </div>
-
+                {/* "Likely Online" / "Re-engage" fan alerts intentionally NOT
+                    duplicated here — they're computed from a different,
+                    less-detailed formula than the confidence-scored, action-
+                    ready versions already below in "Your Top Earners"
+                    (Likely Online Now / At Risk — Re-engage), which is the
+                    single canonical home for this content. Two independent
+                    calculations of "who's likely online" rendered as two
+                    separate cards on the same page could show DIFFERENT
+                    fans for the same claim — removed rather than fixed in
+                    place, since "Your Top Earners" already covers this. */}
               </div>
             </div>
           )
