@@ -2695,7 +2695,14 @@ const stopImportMessageRotation = () => {
         todayBestPlat = plat
       }
     })
-    const bestHour = analytics?.bestHour
+    // Phase 1B: all-time fallback now reads the canonical best-time result
+    // (lib/analytics/bestTimes.js — session-based, median $/hour,
+    // confidence-tiered) instead of the legacy tip-level computeBestTimes()
+    // output, per the approved Best-Time Migration Matrix. Same {hour, avg}
+    // shape preserved so every downstream consumer below (bhLabel,
+    // displayAvg, peakAvg, sessionsAtPeak) is unaffected by the source swap.
+    const _canonicalBest = analytics?.canonicalBestTimes?.bestWindow
+    const bestHour = _canonicalBest ? { hour: _canonicalBest.localHour, avg: _canonicalBest.medianUsdPerHour } : null
     const _bhRaw = todayBestHourNum !== null ? todayBestHourNum : (bestHour ? parseInt(bestHour.hour) : null)
     const bh = (_bhRaw !== null && !isNaN(_bhRaw)) ? _bhRaw : null
     const bhLabel = bh === null ? null : fmtHour(bh)
@@ -2964,15 +2971,19 @@ const stopImportMessageRotation = () => {
 
   // ── CANONICAL PEAK HOUR ──────────────────────────────────────────────────────
   // Single source of truth used by the header, Daily Brief, and Losing Money.
-  // Prefer engineInsights daily_plan (most specific), then today's analytics best
-  // hour from dailyBrief, then the all-time analytics best hour as final fallback.
-  // All three sources are already user-local hours: get_user_insights is called
-  // with p_timezone above, so daily_plan.best_hour comes back local (not UTC);
-  // dailyBrief.bh and analytics.bestHour.hour were already local via toLocalHour().
+  // Prefer engineInsights daily_plan (most specific — SQL, get_user_insights;
+  // not migrated in Phase 1B, see the approved Best-Time Migration Matrix),
+  // then today's analytics best hour from dailyBrief (which itself now falls
+  // back to the canonical result — see buildDailyBrief() above), then the
+  // canonical all-time best-time result as final fallback. All three sources
+  // are already user-local hours: get_user_insights is called with
+  // p_timezone above, so daily_plan.best_hour comes back local (not UTC);
+  // dailyBrief.bh and canonicalBestTimes.bestWindow.localHour were already
+  // local via toLocalHour()/AT TIME ZONE respectively.
   const canonicalPeakHourLocal = (
     engineInsights?.daily_plan?.best_hour ??
     dailyBrief?.bh ??
-    (analytics?.bestHour ? parseInt(analytics.bestHour.hour) : null)
+    (analytics?.canonicalBestTimes?.bestWindow ? analytics.canonicalBestTimes.bestWindow.localHour : null)
   )
   const canonicalPeakLabel = canonicalPeakHourLocal != null
     ? (() => { const _lh = ((canonicalPeakHourLocal % 24) + 24) % 24; return _lh===0?'12 AM':_lh<12?`${_lh} AM`:_lh===12?'12 PM':`${_lh-12} PM` })()
@@ -3629,11 +3640,11 @@ const stopImportMessageRotation = () => {
                   <div style={{ flex: 1, minWidth: 130, padding: '11px 14px', borderRadius: 11, background: bestTimeLock.locked ? 'rgba(255,255,255,0.03)' : atPeak ? 'rgba(16,185,129,0.12)' : 'rgba(34,211,238,0.07)', border: `1px solid ${bestTimeLock.locked ? 'rgba(255,255,255,0.08)' : atPeak ? 'rgba(16,185,129,0.4)' : 'rgba(34,211,238,0.18)'}` }}>
                     <div style={{ fontSize: 10, color: C.muted, marginBottom: 3, textTransform: 'uppercase', letterSpacing: 1 }}>Best Time</div>
                     {bestTimeLock.locked ? (
-                      analytics?.earlySignalHour ? (
+                      analytics?.canonicalBestTimes?.earlySignal ? (
                         <>
-                          <div style={{ fontSize: 14, fontWeight: 800, color: C.indigo }}>⚡ {fmtHour(parseInt(analytics.earlySignalHour.hour))}</div>
+                          <div style={{ fontSize: 14, fontWeight: 800, color: C.indigo }}>⚡ {fmtHour(analytics.canonicalBestTimes.earlySignal.localHour)}</div>
                           <div style={{ fontSize: 11, color: C.muted, marginTop: 2, lineHeight: 1.4 }}>
-                            Early signal · ~${analytics.earlySignalHour.avg.toFixed(0)} avg so far
+                            Early signal · ~${analytics.canonicalBestTimes.earlySignal.medianUsdPerHour.toFixed(0)} avg so far
                           </div>
                           <button onClick={() => handleTabChange('upload')} style={{ marginTop: 6, padding: '4px 10px', borderRadius: 100, border: '1px solid rgba(124,92,255,0.3)', background: 'rgba(124,92,255,0.08)', color: C.indigo, fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>Add data to confirm</button>
                         </>
