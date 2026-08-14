@@ -70,6 +70,11 @@ function tokensVsHoursSeries(tips, sessions, mode) {
   }))
 }
 
+// Fallback only — used when the canonical analytics.monthlyData prop isn't
+// available yet. Prefer canonicalMonthlySeries() below, which reads
+// lib/analytics.js's local-calendar-month bucketing (the source of truth
+// per canonical-analytics-rules.md's Monthly-Growth Reconciliation) instead
+// of recomputing UTC month boundaries here.
 function monthlyUsdSeries(tips) {
   const map = {}
   for (const t of tips) {
@@ -83,6 +88,15 @@ function monthlyUsdSeries(tips) {
     .sort((a, b) => a.key.localeCompare(b.key))
     .slice(-6)
     .map((row) => ({ ...row, label: MONTH_FMT.format(row.sortDate), usd: parseFloat(row.usd.toFixed(2)) }))
+}
+
+// Adapts analytics.monthlyData (month: "YYYY-MM", usd, growthPct) into this
+// chart's { key, sortDate, label, usd } row shape.
+function canonicalMonthlySeries(monthlyData) {
+  return monthlyData.slice(-6).map((m) => {
+    const sortDate = new Date(`${m.month}-01T00:00:00Z`)
+    return { key: m.month, sortDate, usd: m.usd, growthPct: m.growthPct, label: MONTH_FMT.format(sortDate) }
+  })
 }
 
 const GrowthTooltip = ({ active, payload, label }) => {
@@ -102,17 +116,24 @@ const GrowthTooltip = ({ active, payload, label }) => {
   )
 }
 
-export default function DashboardGrowthCharts({ tips, sessions }) {
+export default function DashboardGrowthCharts({ tips, sessions, monthlyData }) {
   const [mode, setMode] = useState("weekly")
 
   const series = useMemo(() => tokensVsHoursSeries(tips, sessions || [], mode), [tips, sessions, mode])
-  const monthly = useMemo(() => monthlyUsdSeries(tips), [tips])
+  const monthly = useMemo(
+    () => (monthlyData && monthlyData.length ? canonicalMonthlySeries(monthlyData) : monthlyUsdSeries(tips)),
+    [tips, monthlyData]
+  )
 
   const thisMonth = monthly[monthly.length - 1] || null
   const prevMonth = monthly[monthly.length - 2] || null
-  const growthPct = thisMonth && prevMonth && prevMonth.usd > 0
-    ? Math.round(((thisMonth.usd - prevMonth.usd) / prevMonth.usd) * 100)
-    : null
+  // Prefer the canonical growthPct already computed by lib/analytics.js;
+  // fall back to a local calc only when monthlyData wasn't supplied.
+  const growthPct = thisMonth?.growthPct !== undefined
+    ? thisMonth.growthPct
+    : (thisMonth && prevMonth && prevMonth.usd > 0
+        ? Math.round(((thisMonth.usd - prevMonth.usd) / prevMonth.usd) * 100)
+        : null)
   const isPositive = growthPct !== null && growthPct >= 0
   // monthly[] only has an entry for months that actually have tip data, so the
   // last entry is "the current calendar month" only when its key matches today —

@@ -14,6 +14,7 @@ import SiteFooter from "../components/SiteFooter"
 import { PLATFORM_TOKEN_RATES, tokenRate } from "../../lib/constants"
 import { track as gtmTrack } from '../../lib/track'
 import { isProPlan } from '../../lib/plan'
+import { resolveCreatorTimezone, autoPopulateTimezoneIfMissing } from '../../lib/timezone'
 import { getDashboardReadiness, getModuleLockState, canShowHourlyRate, LockedInsightCard, DashboardProgressCard } from './DashboardPreview'
 import Button from '../../components/ui/Button'
 import { useLiveSessionEngine } from '../live/useLiveSessionEngine'
@@ -1884,7 +1885,7 @@ export default function Dashboard() {
       })
       setUser(user)
       supabase.from('profiles')
-        .select('plan, plan_expires_at, stripe_customer_id')
+        .select('plan, plan_expires_at, stripe_customer_id, timezone')
         .eq('id', user.id)
         .maybeSingle()
         .then(({ data }) => { if (data) setProfile(data) })
@@ -1939,6 +1940,11 @@ export default function Dashboard() {
           if (!newRows.length) return prev
           const updated = [...prev, ...newRows].sort((a,b) => new Date(a.date_time)-new Date(b.date_time))
           try {
+            // Browser-fallback tier only (see lib/timezone.js) — this is the
+            // "NO DB calls" lightweight recompute path, so it can't re-fetch
+            // profiles.timezone here; loadData()'s full reload path resolves
+            // the canonical profile timezone and is what corrects this on
+            // the next full load.
             const userTz = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC'
             const r = runEngine(updated, userTz)
             if (r) setAnalytics(r)
@@ -2136,7 +2142,14 @@ export default function Dashboard() {
     if (silent) setIsRefreshing(true)
     else setLoading(true)
     try {
-      const userTz = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC'
+      // Canonical timezone contract (canonical-analytics-rules.md): the
+      // creator's saved profiles.timezone is the source of truth; browser
+      // detection is fallback-only, used to auto-populate the profile once
+      // (see autoPopulateTimezoneIfMissing) rather than being read live on
+      // every load.
+      const { data: profileTzRow } = await supabase.from('profiles').select('timezone').eq('id', uid).maybeSingle()
+      const { timezone: userTz } = resolveCreatorTimezone(profileTzRow?.timezone)
+      autoPopulateTimezoneIfMissing(supabase, uid, profileTzRow?.timezone)
       const PAGE = 1000
       // First page also asks for the exact row count, so the remaining pages
       // (if any) can be fired off in parallel instead of one round trip at a
@@ -2970,17 +2983,17 @@ const stopImportMessageRotation = () => {
   void minuteTick // ensures re-render when minute changes
 
   // ── MONTH-OVER-MONTH GROWTH ── used by Momentum indicator and KPI cards
-  const _momNow = new Date()
-  const _momMonthKey = `${_momNow.getUTCFullYear()}-${_momNow.getUTCMonth()}`
-  const { momThisRev: _momThisRev, momPrevRev: _momPrevRev, growthPct } = memoOn(
-    derivedCacheRef.current, 'momentum', [tips, _momMonthKey], () => {
-      const momThisStart = new Date(Date.UTC(_momNow.getUTCFullYear(), _momNow.getUTCMonth(), 1))
-      const momPrevStart = new Date(Date.UTC(_momNow.getUTCFullYear(), _momNow.getUTCMonth() - 1, 1))
-      const momThisRev = tips.reduce((s, t) => new Date(t.date_time || t.dateRaw) >= momThisStart ? s + (t.usd || 0) : s, 0)
-      const momPrevRev = tips.reduce((s, t) => { const d = new Date(t.date_time || t.dateRaw); return d >= momPrevStart && d < momThisStart ? s + (t.usd || 0) : s }, 0)
-      const growthPct = (momPrevRev > 0 && momThisRev > 0) ? Math.round(((momThisRev - momPrevRev) / momPrevRev) * 100) : null
-      return { momThisRev, momPrevRev, growthPct }
-    })
+  // Canonical source: analytics.monthlyData (lib/analytics.js), bucketed by
+  // creator-local calendar month with growthPct pre-computed once — see
+  // canonical-analytics-rules.md's Monthly-Growth Reconciliation. The last
+  // entry is the most recent month with tip data (i.e. "this month" for an
+  // active creator). Do not recompute month boundaries here.
+  const _momMonthly = analytics?.monthlyData || []
+  const _momThisMonth = _momMonthly.length ? _momMonthly[_momMonthly.length - 1] : null
+  const _momPrevMonth = _momMonthly.length > 1 ? _momMonthly[_momMonthly.length - 2] : null
+  const _momThisRev = _momThisMonth?.usd ?? 0
+  const _momPrevRev = _momPrevMonth?.usd ?? 0
+  const growthPct = _momThisMonth?.growthPct ?? null
 
   // ── DASHBOARD READINESS — always renders real dashboard, module-level locking ─
   const {
@@ -3381,7 +3394,13 @@ const stopImportMessageRotation = () => {
         )}
 
         {activeTab === "settings" && (
-          <Settings user={user} profile={profile} isPro={isPro} supabase={supabase} />
+          <Settings
+            user={user} profile={profile} isPro={isPro} supabase={supabase}
+            onTimezoneSaved={(tz) => {
+              setProfile(p => ({ ...(p || {}), timezone: tz }))
+              loadData(user.id, true, { silent: true })
+            }}
+          />
         )}
 
         {activeTab === "overview" && (
@@ -3402,12 +3421,16 @@ const stopImportMessageRotation = () => {
               // ── empty state — show null; DashboardProgressCard above covers zero-data ──
               if (tips.length === 0) return null
 
-              const now = new Date()
-              const thisMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
-              const prevMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1))
-              const thisMonthRev = tips.filter(t => new Date(t.date_time || t.dateRaw) >= thisMonthStart).reduce((s, t) => s + (t.usd || 0), 0)
-              const prevMonthRev = tips.filter(t => { const d = new Date(t.date_time || t.dateRaw); return d >= prevMonthStart && d < thisMonthStart }).reduce((s, t) => s + (t.usd || 0), 0)
-              const growthPct = (prevMonthRev > 0 && thisMonthRev > 0) ? Math.round(((thisMonthRev - prevMonthRev) / prevMonthRev) * 100) : null
+              // Canonical local-calendar-month boundaries + revenue/growth — read
+              // from analytics.monthlyData (lib/analytics.js) rather than
+              // recomputing with UTC month math. See _momMonthly above.
+              const thisMonthEntry = _momThisMonth
+              const prevMonthEntry = _momPrevMonth
+              const thisMonthStart = thisMonthEntry ? new Date(`${thisMonthEntry.month}-01T00:00:00Z`) : new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1))
+              const prevMonthStart = prevMonthEntry ? new Date(`${prevMonthEntry.month}-01T00:00:00Z`) : new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth() - 1, 1))
+              const thisMonthRev = thisMonthEntry?.usd ?? 0
+              const prevMonthRev = prevMonthEntry?.usd ?? 0
+              const growthPct = thisMonthEntry?.growthPct ?? null
               const safeRevenue = (!isNaN(totalRevenue) && isFinite(totalRevenue)) ? totalRevenue : 0
               const safeThisMonthRev = (!isNaN(thisMonthRev) && isFinite(thisMonthRev)) ? thisMonthRev : 0
               const topPct = safeRevenue > 0 ? Math.max(1, Math.min(25, Math.round(100 - (safeRevenue / 50)))) : null
@@ -3493,7 +3516,7 @@ const stopImportMessageRotation = () => {
             {/* ═══════════════════════════════════════
                 TOKENS VS HOURS ONLINE + MONTHLY GROWTH
             ═══════════════════════════════════════ */}
-            {tips.length > 0 && <DashboardGrowthCharts tips={tips} sessions={sessions} />}
+            {tips.length > 0 && <DashboardGrowthCharts tips={tips} sessions={sessions} monthlyData={analytics?.monthlyData} />}
 
             {/* ═══════════════════════════════════════
                 DAILY BRIEF — overview only, below earnings

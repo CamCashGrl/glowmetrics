@@ -5,6 +5,10 @@ import {
   ResponsiveContainer, LineChart, Line,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from "recharts"
+// Canonical session detection — see the comment above toWeekPlanSession()
+// for the full migration note. Do not reintroduce a local session grouping
+// function in this file.
+import { detectMeaningfulSessions } from "../../lib/analytics/sessions"
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // DESIGN TOKENS
@@ -45,42 +49,43 @@ const todayLocalName = () => new Date().toLocaleDateString("en-US", { weekday: "
 // PURE DATA FUNCTIONS (no hooks)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-// Group tips into sessions — tips within 4hr window = same session
-function groupIntoSessions(tips) {
-  if (!tips?.length) return []
-  const sorted = [...tips].sort((a, b) => new Date(a.date_time) - new Date(b.date_time))
-  const raw = []
-  let cur = null
-  sorted.forEach((t) => {
-    const dt = new Date(t.date_time)
-    if (!cur || dt - cur.end > 4 * 3_600_000) {
-      cur = { start: dt, end: dt, tips: [t] }
-      raw.push(cur)
-    } else {
-      cur.end = dt
-      cur.tips.push(t)
-    }
-  })
-  return raw.map((s) => {
-    const durationHrs = Math.max(0.5, (s.end - s.start) / 3_600_000)
-    const totalUsd    = s.tips.reduce((n, t) => n + (parseFloat(t.usd) || 0), 0)
-    const totalTokens = s.tips.reduce((n, t) => n + (parseFloat(t.tokens) || 0), 0)
-    const pc = {}
-    s.tips.forEach((t) => { if (t.platform) pc[t.platform] = (pc[t.platform] || 0) + 1 })
-    return {
-      start: s.start, end: s.end, durationHrs, totalUsd, totalTokens,
-      usdHr: totalUsd / durationHrs,
-      utcDay: s.start.getUTCDay(), utcHour: s.start.getUTCHours(),
-      platform:  Object.entries(pc).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null,
-      platforms: Object.keys(pc),
-      tips: s.tips,
-    }
-  })
+// Session detection is canonical — detectMeaningfulSessions() (imported
+// below, from lib/analytics/sessions.js), NOT a second implementation here.
+// This fixes the confirmed, approved-as-a-real-conflict discrepancy this
+// file previously had: a 4-hour gap with no platform boundary, vs.
+// detectSessions()'s 3-hour gap where any platform change starts a new
+// session (see canonical-analytics-rules.md's Session Reconciliation). A
+// creator who tips-hops between two platforms within 4 hours now correctly
+// counts as two sessions here, matching every other surface in the app.
+//
+// toWeekPlanSession() adapts detectSessions()'s canonical field names
+// (startTime/totalUSD/usdPerHour/durationHours) to the {start, end,
+// durationHrs, totalUsd, usdHr, utcDay, utcHour} shape this file's existing
+// platformEfficiency()/bestWindows()/rendering code already expects — field
+// values are now sourced from the canonical calculation; the utcDay/utcHour
+// bucketing itself is UNCHANGED (still literal UTC) in this pass. Migrating
+// this file's best-time/platform-efficiency AGGREGATION onto
+// lib/analytics/bestTimes.js's local-native median/confidence-tier grid is
+// deliberately NOT done in this PR — that also requires migrating
+// detectWhales()'s UTC-based bestUtcDay/bestUtcHour to local time (needed
+// so the whale-window cross-reference below stays internally consistent),
+// which is real additional scope beyond the approved session-rule fix.
+// Documented as explicit follow-up work in the Phase 1 PR description, not
+// silently deferred.
+function toWeekPlanSession(s) {
+  return {
+    start: new Date(s.startTime), end: new Date(s.endTime),
+    durationHrs: s.durationHours, totalUsd: s.totalUSD, totalTokens: s.totalTokens,
+    usdHr: s.usdPerHour ?? 0,
+    utcDay: new Date(s.startTime).getUTCDay(), utcHour: new Date(s.startTime).getUTCHours(),
+    platform: s.platform, platforms: [s.platform],
+    tips: s.tips,
+  }
 }
 
 // Returns { [platform]: { usdPerHr, tokensPerHr, avgTip, sessionCount, bestUtcDay, bestUtcHour } }
 function platformEfficiency(tips) {
-  const sessions = groupIntoSessions(tips)
+  const sessions = detectMeaningfulSessions(tips).map(toWeekPlanSession)
   const acc = {}
   sessions.forEach((s) => {
     if (!s.platform) return
@@ -108,7 +113,7 @@ function platformEfficiency(tips) {
 
 // Returns [{ utcDay, utcHour, avgUsdPerHr, totalUsd, sessionCount, confidence, topPlatform, newTipperRate }]
 function bestWindows(tips) {
-  const sessions = groupIntoSessions(tips)
+  const sessions = detectMeaningfulSessions(tips).map(toWeekPlanSession)
   const firstSeen = {}
   ;[...tips].sort((a, b) => new Date(a.date_time) - new Date(b.date_time)).forEach((t) => {
     const u = t.username || "unknown"
@@ -410,7 +415,7 @@ function PlanTab({ tips, windows, whales, prefs, savePrefs, isPro=true }) {
     return active.length ? { hour: active[0].bestUtcHour, count: active.length } : null
   }, [whales])
 
-  const sessions       = useMemo(() => groupIntoSessions(tips), [tips])
+  const sessions       = useMemo(() => detectMeaningfulSessions(tips).map(toWeekPlanSession), [tips])
   const avgSessionUsd  = sessions.length ? sessions.reduce((n, s) => n + s.totalUsd, 0) / sessions.length : 0
 
   const whyReasons = (row) => {
@@ -807,7 +812,7 @@ function WhalesTab({ tips, whales }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function ProgressTab({ tips, windows, prefs }) {
-  const sessions = useMemo(() => groupIntoSessions(tips), [tips])
+  const sessions = useMemo(() => detectMeaningfulSessions(tips).map(toWeekPlanSession), [tips])
   const topWindows = useMemo(() => windows.filter((w) => w.sessionCount >= 2).slice(0, 10), [windows])
 
   const score = useMemo(() => planMatchScore(tips, topWindows), [tips, topWindows])
