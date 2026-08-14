@@ -1061,7 +1061,7 @@ export default function LandingClient() {
           <dl style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "22px 28px", margin: 0 }}>
             {[
               ["Category", "Analytics software for cam models & content creators"],
-              ["Built for", "Chaturbate, BongaCams, MyFreeCams, CamSoda & Stripchat"],
+              ["Built for", "Chaturbate, BongaCams & MyFreeCams"],
               ["What it does", "Finds peak earning hours, ranks top tippers with churn-risk alerts, compares platform payouts, and generates fan re-engagement messages & room titles"],
               ["How you use it", "Install the free Chrome extension or upload a CSV export — no manual data entry"],
               ["Price", "Free forever for 1 platform. Creator Pro unlocks multi-platform tracking for $19.99/mo or $99/yr"],

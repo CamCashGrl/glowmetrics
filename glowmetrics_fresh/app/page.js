@@ -63,7 +63,7 @@ export default function HomePage() {
         whiteSpace: 'nowrap', pointerEvents: 'none',
       }}>
         <h1>CamCash — Free Cam Model Analytics Dashboard</h1>
-        <p>CamCash is a free analytics tool for cam models on Chaturbate, BongaCams, MyFreeCams, CamSoda, and Stripchat. Upload your CSV to instantly see your top tippers, peak earning hours, best streaming days, platform comparison, and personalized recommendations to increase your income.</p>
+        <p>CamCash is a free analytics tool for cam models on Chaturbate, BongaCams, and MyFreeCams. Upload your CSV to instantly see your top tippers, peak earning hours, best streaming days, platform comparison, and personalized recommendations to increase your income.</p>
         <h2>Top Tipper Tracking</h2>
         <p>See every fan ranked by lifetime spend. Know who your whales are, when they last tipped, and whether they're at risk of going cold. Get personalized re-engagement messages for fans who've gone quiet.</p>
         <h2>Peak Earning Hours</h2>
