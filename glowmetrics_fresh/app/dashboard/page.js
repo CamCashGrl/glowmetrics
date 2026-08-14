@@ -1613,6 +1613,22 @@ export default function Dashboard() {
     setShowUpgradeModal(true)
   }
 
+  // ── PRO PREVIEW IMPRESSION TRACKING ─────────────────────────────────────
+  // One event (pro_preview_viewed) with a `feature` property, not a
+  // separate event per locked surface — so "which Pro value proposition
+  // caused engagement" is one queryable dimension, not N event names.
+  // Distinct from upgrade_click/paywall_hit (fired by openUpgradeModal
+  // above, the CLICK side of the funnel on every CTA already) — this is
+  // the IMPRESSION side: the free user actually saw the locked preview,
+  // whether or not they clicked it. Deduped per session via a ref so
+  // re-renders of the same surface don't spam the event.
+  const proPreviewFiredRef = useRef(new Set())
+  const trackProPreviewViewed = (feature) => {
+    if (proPreviewFiredRef.current.has(feature)) return
+    proPreviewFiredRef.current.add(feature)
+    gtmTrack('pro_preview_viewed', { feature })
+  }
+
   const redeemPromoCode = async () => {
     const code = promoCodeInput.trim()
     if (!code || promoCodeSubmitting) return
@@ -1691,7 +1707,7 @@ export default function Dashboard() {
     // the funnel's "Pro preview viewed" step for that surface specifically,
     // fired at the moment of actually landing on it, not just clicking an
     // upgrade CTA (which upgrade_click/paywall_hit already cover elsewhere).
-    if (tab === 'live' && !isPro) gtmTrack('pro_preview_viewed', { feature: 'live_mode' })
+    if (tab === 'live' && !isPro) trackProPreviewViewed('live_mode')
     setActiveTab(tab)
     if (typeof window !== 'undefined') {
       localStorage.setItem('camcash_tab', tab)
@@ -2487,6 +2503,9 @@ const stopImportMessageRotation = () => {
   const FREE_FAN_LIMIT = 3
   const visibleWhales = isPro ? filteredWhales : filteredWhales.slice(0, FREE_FAN_LIMIT)
   const hiddenWhales = isPro ? [] : filteredWhales.slice(FREE_FAN_LIMIT)
+  // Impression, not the .map() below — one event per time the locked fan
+  // preview is actually on screen, not one per blurred card rendered.
+  if (activeTab === 'whales' && !isPro && hiddenWhales.length > 0) trackProPreviewViewed('whale_intelligence')
   const lockedFanStats = memoOn(derivedCacheRef.current, 'lockedFanStats', [filteredWhales, isPro], () => {
     if (isPro) return null
     const hidden = filteredWhales.slice(FREE_FAN_LIMIT)
@@ -3584,6 +3603,11 @@ const stopImportMessageRotation = () => {
           // and 3+ meaningful sessions — matches the >=3 session-bucket requirement
           // bestHour/platformBestTimes use internally (lib/analytics.js).
           const bestTimeLock = !bhLabel ? getModuleLockState({ module: 'bestStreamingTimes', totalTips: tips.length, totalSessions: analytics?.meaningfulSessionCount || 0 }) : { locked: false }
+          // Only an impression when there's an actual locked PRO state to see
+          // (bestTimeLock.locked is a data-insufficiency lock, not a Pro
+          // lock — that's a different, non-Pro empty state, not counted here).
+          if (!isPro && !bestTimeLock.locked) trackProPreviewViewed('best_time')
+          if (!isPro && bhLabel) trackProPreviewViewed('income_forecast')
           return (
             <div style={{ marginBottom: 20, borderRadius: 18, overflow: 'hidden', border: `1px solid ${atPeak ? 'rgba(16,185,129,0.45)' : 'rgba(124,92,255,0.3)'}`, background: 'rgba(10,12,24,0.7)', backdropFilter: 'blur(16px)', animation: 'fadeUp 0.3s ease both' }}>
 
@@ -4530,6 +4554,7 @@ const stopImportMessageRotation = () => {
                 const bottom = sorted[sorted.length - 1]
                 if (top.usdPerHour > 0 && bottom.usdPerHour > 0 && top.usdPerHour >= bottom.usdPerHour * 2) {
                   const mult = (top.usdPerHour / bottom.usdPerHour).toFixed(1)
+                  if (!isPro) trackProPreviewViewed('platform_comparison')
                   return (
                     <div style={{ padding: "14px 18px", borderRadius: 12, background: "linear-gradient(135deg, rgba(34,211,238,0.1), rgba(124,92,255,0.1))", border: "1px solid rgba(34,211,238,0.3)", marginBottom: 20, display: "flex", alignItems: "center", gap: 12 }}>
                       <span style={{ fontSize: 20 }}>⚡</span>
