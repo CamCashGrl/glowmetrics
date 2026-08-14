@@ -118,14 +118,14 @@ function GhostButton({ children, onClick }) {
 // One measured fact. Never a claim without a number behind it.
 function Chip({ icon, title, value, sub, accent = C.pink }) {
   return (
-    <div style={card({ padding: "13px 15px", display: "flex", gap: 11, alignItems: "flex-start", minWidth: 0 })}>
-      <div style={{ fontSize: 15, flexShrink: 0, marginTop: 1 }}>{icon}</div>
+    <div style={card({ padding: "18px 20px", display: "flex", gap: 13, alignItems: "flex-start", minWidth: 0 })}>
+      <div style={{ fontSize: 19, flexShrink: 0, marginTop: 1 }}>{icon}</div>
       <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: 11, color: C.muted, fontWeight: 600 }}>{title}</div>
+        <div style={{ fontSize: 12.5, color: C.muted, fontWeight: 600 }}>{title}</div>
         {/* wraps rather than truncating — at 2-up on a 390px screen these
             were clipping to "8:00 AM - 1..." and "4 high-valu..." */}
-        <div style={{ fontSize: 14, fontWeight: 800, color: accent, marginTop: 3, lineHeight: 1.35 }}>{value}</div>
-        {sub && <div style={{ fontSize: 10.5, color: C.muted, marginTop: 2 }}>{sub}</div>}
+        <div style={{ fontSize: 17, fontWeight: 800, color: accent, marginTop: 5, lineHeight: 1.3 }}>{value}</div>
+        {sub && <div style={{ fontSize: 12, color: C.muted, marginTop: 5, lineHeight: 1.45 }}>{sub}</div>}
       </div>
     </div>
   )
@@ -133,10 +133,10 @@ function Chip({ icon, title, value, sub, accent = C.pink }) {
 
 function Stat({ value, label: l, delta, accent = C.white }) {
   return (
-    <div style={card({ padding: "15px 17px" })}>
-      <div style={{ fontSize: 20, fontWeight: 800, color: accent, letterSpacing: "-0.02em" }}>{value}</div>
+    <div style={card({ padding: "20px 20px" })}>
+      <div style={{ fontSize: 26, fontWeight: 800, color: accent, letterSpacing: "-0.02em" }}>{value}</div>
       <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 5, flexWrap: "wrap" }}>
-        <span style={{ fontSize: 11.5, color: C.muted }}>{l}</span>
+        <span style={{ fontSize: 13, color: C.muted }}>{l}</span>
         {delta != null && (
           <span style={{ fontSize: 11, fontWeight: 700, color: delta >= 0 ? C.green : "#F87171" }}>
             {delta >= 0 ? "+" : ""}{delta}%
@@ -163,24 +163,24 @@ function Stat({ value, label: l, delta, accent = C.white }) {
 function WindowProof({ windowRate, baselineRate, sessions, tierLabel, dayLabel, hourLabel }) {
   const max = Math.max(windowRate, baselineRate, 0.01)
   const Bar = ({ v, title, sub, gradient }) => (
-    <div style={{ marginBottom: 14 }}>
+    <div style={{ marginBottom: 20 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
-        <span style={{ fontSize: 12, color: C.text }}>{title}</span>
-        <span style={{ fontSize: 15, fontWeight: 800, color: gradient ? C.white : C.text }}>{fmtUsd(v)}/hr</span>
+        <span style={{ fontSize: 14, color: gradient ? C.white : C.text, fontWeight: gradient ? 700 : 500 }}>{title}</span>
+        <span style={{ fontSize: 22, fontWeight: 800, color: gradient ? C.cyan : C.text, letterSpacing: "-0.02em", whiteSpace: "nowrap" }}>{fmtUsd(v)}/hr</span>
       </div>
-      <div style={{ height: 10, borderRadius: 6, background: "rgba(255,255,255,0.05)", overflow: "hidden" }}>
+      <div style={{ height: 18, borderRadius: 9, background: "rgba(255,255,255,0.05)", overflow: "hidden" }}>
         <div style={{
-          width: `${Math.max((v / max) * 100, 4)}%`, height: "100%", borderRadius: 6,
+          width: `${Math.max((v / max) * 100, 4)}%`, height: "100%", borderRadius: 9,
           background: gradient ? CTA_GRADIENT : "rgba(148,163,184,0.35)",
           boxShadow: gradient ? "0 0 14px rgba(34,211,238,0.35)" : "none",
         }} />
       </div>
-      {sub && <div style={{ fontSize: 10.5, color: C.muted, marginTop: 5 }}>{sub}</div>}
+      {sub && <div style={{ fontSize: 12, color: C.muted, marginTop: 7 }}>{sub}</div>}
     </div>
   )
   return (
     <div>
-      <div style={{ ...label, marginBottom: 12 }}>Why this window</div>
+      <div style={{ ...label, fontSize: 12, marginBottom: 16 }}>Why this window</div>
       <Bar v={windowRate} gradient title={`${dayLabel}s ${hourLabel}`} sub={`${sessions} qualifying session${sessions === 1 ? "" : "s"} · ${tierLabel}`} />
       <Bar v={baselineRate} title="Your typical hour" sub="median across every qualifying session" />
     </div>
@@ -253,13 +253,13 @@ export default function CommandCenter({
   // canonical grid, summed per local hour. Presentational shaping of an
   // existing canonical array, not a new metric.
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
 
       {/* ── HEADER ─────────────────────────────────────────────────── */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 10 }}>
         <div>
-          <div style={{ fontSize: 21, fontWeight: 800, color: C.white, letterSpacing: "-0.02em" }}>👋 {greeting}</div>
-          <div style={{ fontSize: 13.5, color: C.muted, marginTop: 4 }}>
+          <div style={{ fontSize: 27, fontWeight: 800, color: C.white, letterSpacing: "-0.025em" }}>👋 {greeting}</div>
+          <div style={{ fontSize: 15, color: C.muted, marginTop: 6 }}>
             {hasWindow ? "Here's how to make more money today." : "Here's what your data says so far."}
           </div>
         </div>
@@ -270,23 +270,33 @@ export default function CommandCenter({
         background: hasWindow ? HERO_GRADIENT : "rgba(15,20,32,0.75)",
         backdropFilter: "blur(20px)",
         border: hasWindow ? "1px solid rgba(34,211,238,0.28)" : `1px solid ${C.border}`,
-        borderRadius: 18, padding: 26, position: "relative", overflow: "hidden",
+        borderRadius: 22, padding: 38, position: "relative", overflow: "hidden",
       }}>
         {hasWindow && <div style={{ position: "absolute", right: -70, top: -70, width: 300, height: 300, borderRadius: "50%", background: "rgba(34,211,238,0.12)", filter: "blur(80px)", pointerEvents: "none" }} />}
-        <div style={{ position: "relative", display: "flex", justifyContent: "space-between", gap: 26, flexWrap: "wrap" }}>
-          <div style={{ flex: "1 1 380px", minWidth: 0 }}>
-            <div style={{ ...label, color: hasWindow ? C.cyan : C.muted, marginBottom: 10 }}>Your next best move</div>
+        <div style={{ position: "relative", display: "flex", justifyContent: "space-between", gap: 40, flexWrap: "wrap" }}>
+          <div style={{ flex: "1 1 420px", minWidth: 0 }}>
+            <div style={{ ...label, fontSize: 12, color: hasWindow ? C.cyan : C.muted, marginBottom: 14 }}>Your next best move</div>
 
             {hasWindow ? (
               <>
-                <div style={{ fontSize: 26, fontWeight: 800, color: C.white, letterSpacing: "-0.03em", lineHeight: 1.2 }}>
+                <div style={{ fontSize: 38, fontWeight: 800, color: C.white, letterSpacing: "-0.035em", lineHeight: 1.12 }}>
                   Go live {fmtWindow(bestWindow.localHour)}
                   {bestWindow.topPlatform ? <> on {bestWindow.topPlatform}</> : null}
                 </div>
-                <div style={{ fontSize: 13.5, color: C.text, marginTop: 11, lineHeight: 1.6, maxWidth: 460 }}>
+                {/* Confidence + sample sit directly under the recommendation
+                    instead of being buried in a chip further down the page. */}
+                <div style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap", marginTop: 14 }}>
+                  <span style={{ fontSize: 12.5, fontWeight: 700, color: C.gold, background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.28)", padding: "5px 12px", borderRadius: 20 }}>
+                    {TIER_COPY[bestWindow.tier] || "Pattern"}
+                  </span>
+                  <span style={{ fontSize: 13, color: C.text }}>
+                    based on <strong style={{ color: C.white }}>{bestWindow.sessionCount} qualifying session{bestWindow.sessionCount === 1 ? "" : "s"}</strong> in this window
+                  </span>
+                </div>
+                <div style={{ fontSize: 16, color: C.text, marginTop: 16, lineHeight: 1.62, maxWidth: 500 }}>
                   {bestWindow.localDay}s are your highest-earning window. You average{" "}
                   <strong style={{ color: C.cyan }}>{fmtUsd(bestWindow.medianUsdPerHour)}/hr</strong> here
-                  {pctAbove != null && pctAbove > 0 && <> — <strong style={{ color: C.cyan }}>{pctAbove}% higher</strong> than your overall rate</>}.
+                  {pctAbove != null && pctAbove > 0 && <> — <strong style={{ color: C.cyan }}>{pctAbove}% higher</strong> than your typical hour</>}.
                 </div>
               </>
             ) : (
@@ -302,8 +312,8 @@ export default function CommandCenter({
               </>
             )}
 
-            <div style={{ marginTop: 20 }}>
-              <BrandButton onClick={onPlanStream}>{hasWindow ? "Plan My Stream" : "Open Stream Planner"}</BrandButton>
+            <div style={{ marginTop: 26 }}>
+              <BrandButton onClick={onPlanStream} style={{ padding: "15px 28px", fontSize: 16, borderRadius: 12 }}>{hasWindow ? "Plan My Stream" : "Open Stream Planner"}</BrandButton>
             </div>
           </div>
 
@@ -361,22 +371,22 @@ export default function CommandCenter({
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(290px, 1fr))", gap: 14 }}>
         <div style={card({ padding: 20 })}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-            <div style={{ fontSize: 14.5, fontWeight: 800, color: C.white }}>Who deserves your attention</div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: C.white }}>Who deserves your attention</div>
           </div>
           {returningSoon.length > 0 ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 11 }}>
               {returningSoon.map((w, i) => (
-                <div key={i} style={{ display: "flex", alignItems: "center", gap: 11, padding: "10px 12px", borderRadius: 11, background: C.card2, border: `1px solid ${C.border}` }}>
-                  <div style={{ width: 32, height: 32, borderRadius: "50%", background: "linear-gradient(135deg,#22D3EE,#7C5CFF)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800, color: C.white, flexShrink: 0 }}>
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: 13, padding: "14px 15px", borderRadius: 12, background: C.card2, border: `1px solid ${C.border}` }}>
+                  <div style={{ width: 38, height: 38, borderRadius: "50%", background: "linear-gradient(135deg,#22D3EE,#7C5CFF)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 800, color: C.white, flexShrink: 0 }}>
                     {w.username.slice(0, 1).toUpperCase()}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: C.white, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{w.username}</div>
-                    <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
+                    <div style={{ fontSize: 14.5, fontWeight: 700, color: C.white, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{w.username}</div>
+                    <div style={{ fontSize: 12.5, color: C.muted, marginTop: 4, lineHeight: 1.45 }}>
                       {fmtUsd0(w.totalUSD)} lifetime · {w.tipCount} tips · usually every ~{Math.round(w.avgDaysBetweenTips)}d
                     </div>
                   </div>
-                  <div style={{ fontSize: 10, fontWeight: 700, padding: "4px 9px", borderRadius: 20, whiteSpace: "nowrap", flexShrink: 0,
+                  <div style={{ fontSize: 11.5, fontWeight: 700, padding: "6px 11px", borderRadius: 20, whiteSpace: "nowrap", flexShrink: 0,
                     background: w.expectedNextTip === "Overdue" ? "rgba(236,72,153,0.14)" : "rgba(16,185,129,0.13)",
                     color: w.expectedNextTip === "Overdue" ? C.pink : C.green }}>
                     {w.expectedNextTip}
@@ -385,7 +395,7 @@ export default function CommandCenter({
               ))}
             </div>
           ) : (
-            <div style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.6 }}>
+            <div style={{ fontSize: 13.5, color: C.muted, lineHeight: 1.65 }}>
               No supporters are inside their typical return window right now. This fills in as your fans build a repeat pattern — it needs at least 3 tips from someone before it will make a call.
             </div>
           )}
@@ -393,7 +403,7 @@ export default function CommandCenter({
         </div>
 
         <div style={card({ padding: 20 })}>
-          <div style={{ fontSize: 14.5, fontWeight: 800, color: C.white, marginBottom: 14 }}>Your money story</div>
+          <div style={{ fontSize: 16, fontWeight: 800, color: C.white, marginBottom: 14 }}>Your money story</div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(88px, 1fr))", gap: 10 }}>
             <Stat value={fmtUsd(totalUSD)} label="Total earnings" accent={C.white} />
             <Stat value={`${fmtUsd(hourlyRate)}`} label="Per hour" accent={C.green} />
@@ -413,20 +423,34 @@ export default function CommandCenter({
           rendered when there is a real, personalized thing being held back. */}
       {!isPro && hasWindow && (
         <div style={{
-          display: "flex", justifyContent: "space-between", alignItems: "center", gap: 18, flexWrap: "wrap",
-          padding: "18px 22px", borderRadius: 16,
+          display: "flex", justifyContent: "space-between", alignItems: "center", gap: 22, flexWrap: "wrap",
+          padding: "24px 26px", borderRadius: 18,
           background: "linear-gradient(115deg, rgba(124,92,255,0.10), rgba(236,72,153,0.08))",
           border: "1px solid rgba(124,92,255,0.26)",
         }}>
-          <div style={{ minWidth: 240, flex: 1 }}>
-            <div style={{ fontSize: 15, fontWeight: 800, color: C.white }}>Want the full strategy?</div>
-            <div style={{ fontSize: 12.5, color: C.text, marginTop: 5, lineHeight: 1.6 }}>
-              You can see <strong style={{ color: C.cyan }}>{bestWindow.localDay}s {fmtWindow(bestWindow.localHour)}</strong>
-              {overlap?.count ? <> and that <strong style={{ color: C.cyan }}>{overlap.count} high-value fan{overlap.count === 1 ? "" : "s"}</strong> show up in it</> : null}.
-              Pro adds exact peak minutes, a personalized weekly schedule, fan-activity predictions, and revenue forecasting.
+          <div style={{ minWidth: 280, flex: 1 }}>
+            <div style={{ fontSize: 17, fontWeight: 800, color: C.white, letterSpacing: "-0.015em" }}>
+              You found the window. Pro builds the week around it.
+            </div>
+            <div style={{ fontSize: 14, color: C.text, marginTop: 8, lineHeight: 1.65 }}>
+              You already know <strong style={{ color: C.cyan }}>{bestWindow.localDay}s {fmtWindow(bestWindow.localHour)}</strong> is where you earn most
+              {topGap ? <> and that the gap there is worth <strong style={{ color: C.green }}>{fmtUsd(topGap.rateGapUsdPerHour)}/hr</strong></> : null}.
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 7, marginTop: 13 }}>
+              {[
+                `Every ranked window for the week, not just the top one`,
+                topGap ? `Which platform to run in each window — ${topGap.platform} is only your biggest gap today` : `Which platform to run in each window`,
+                overlap?.count ? `Alerts when your ${overlap.count} high-value fan${overlap.count === 1 ? "" : "s"} in this window go quiet` : `Alerts when a high-value supporter goes quiet`,
+                `A forecast you can hold next week's schedule against`,
+              ].map((line, i) => (
+                <div key={i} style={{ display: "flex", gap: 9, alignItems: "flex-start", fontSize: 13.5, color: C.text, lineHeight: 1.5 }}>
+                  <span style={{ color: C.indigo, fontWeight: 800, flexShrink: 0 }}>→</span>
+                  <span>{line}</span>
+                </div>
+              ))}
             </div>
           </div>
-          <BrandButton onClick={() => onUpgrade?.("command_center_strategy")}>Upgrade to Pro →</BrandButton>
+          <BrandButton onClick={() => onUpgrade?.("command_center_strategy")} style={{ padding: "14px 26px", fontSize: 15.5, borderRadius: 12, flexShrink: 0 }}>Build My Strategy →</BrandButton>
         </div>
       )}
     </div>
