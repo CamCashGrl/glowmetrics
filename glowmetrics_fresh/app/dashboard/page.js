@@ -2422,8 +2422,6 @@ const stopImportMessageRotation = () => {
   const insights = analytics?.insights || []
   const platforms = analytics?.platforms || []
   const dependencyRisk = analytics?.dependencyRisk || null
-  const preTipBehavior = analytics?.preTipBehavior || null
-  const trueHourlyAvg  = analytics?.trueHourlyAvg  || []
   const alerts = liveAnalytics?.whaleAlerts || analytics?.whaleAlerts || []
   const lossAlerts = liveAnalytics?.lossAlerts || analytics?.lossAlerts || []
   const nextMoves = liveAnalytics?.nextMoves || analytics?.nextMoves || []
@@ -4461,34 +4459,18 @@ const stopImportMessageRotation = () => {
               </div>
             )}
 
-            {preTipBehavior && (
-              <div style={{ ...glassCard, borderRadius: 14, padding: 20, marginBottom: 20 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-                  <div style={{ fontSize: 20 }}>🧠</div>
-                  <div style={{ fontSize: 16, fontWeight: 700, color: C.white }}>Tip Behavior Patterns</div>
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
-                  <div style={{ padding: "12px 14px", background: "rgba(255,255,255,0.04)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.06)" }}>
-                    <div style={{ fontSize: 10, color: C.muted, marginBottom: 4, textTransform: "uppercase" }}>Avg gap between tips</div>
-                    <div style={{ fontSize: 20, fontWeight: 800, color: C.cyan }}>{preTipBehavior.avgGapMinutes} min</div>
-                  </div>
-                  {preTipBehavior.peakTippingWindow && (
-                    <div style={{ padding: "12px 14px", background: "rgba(255,255,255,0.04)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.06)" }}>
-                      <div style={{ fontSize: 10, color: C.muted, marginBottom: 4, textTransform: "uppercase" }}>Peak tipping window</div>
-                      <div style={{ fontSize: 20, fontWeight: 800, color: C.gold }}>{preTipBehavior.peakTippingWindow.label}</div>
-                    </div>
-                  )}
-                </div>
-                <div style={{ padding: "10px 14px", background: "rgba(236,72,153,0.06)", border: "1px solid rgba(236,72,153,0.2)", borderRadius: 9, fontSize: 13, color: C.text }}>
-                  💡 {preTipBehavior.recommendation}
-                </div>
-                {preTipBehavior.clusteringDetected && (
-                  <div style={{ marginTop: 8, padding: "8px 12px", background: "rgba(34,211,238,0.06)", border: "1px solid rgba(34,211,238,0.2)", borderRadius: 8, fontSize: 12, color: C.cyan }}>
-                    🔥 Tip clustering detected — fans tip in bursts. Acknowledge tips publicly to trigger more.
-                  </div>
-                )}
-              </div>
-            )}
+            {/* The "Tip Behavior Patterns" card that used to sit here was
+                removed in the dead-UI pass: analytics.preTipBehavior was
+                permanently null, so it never rendered. It wasn't implemented
+                instead because its "peak tipping window" duplicated
+                canonicalBestTimes.bestWindow (the single best-time source
+                everything else was just consolidated onto) and its
+                clusteringDetected/recommendation fields had no definition
+                anywhere — filling them in would have meant inventing
+                metrics. Avg-gap-between-tips remains available from the SQL
+                engine (get_user_insights' session_optimization) if a future
+                card wants it, sourced from there rather than a second JS
+                implementation. */}
 
           </div>
         )}
@@ -4742,9 +4724,11 @@ const stopImportMessageRotation = () => {
                       ))}
                     </div>
 
-                    {/* HOURLY HEATMAP — uses trueHourlyAvg (avg per active day per UTC hour) */}
+                    {/* HOURLY HEATMAP — total $ per hour-of-day for this platform.
+                        Previously commented as using analytics.trueHourlyAvg; it
+                        never did (that field was permanently [] and is now removed).
+                        The real source is platformTimes[platform].hours, below. */}
                     {(() => {
-                      // Filter trueHourlyAvg to this platform using platformTimes for totals
                       const hourData = platformTimes[p.platform]?.hours || {}
                       const maxEarning = Math.max(...Object.values(hourData), 1)
                       return (

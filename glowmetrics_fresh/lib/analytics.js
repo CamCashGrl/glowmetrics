@@ -832,7 +832,7 @@ export function aggregateRows(tips, tz = null) {
       hourlyRateTotalUsd: 0, excludedUntimedSessionCount: 0,
       platformVelocity: {}, missedRevenueByPlatform: {},
       returningVsNew: null, topFanDependency: null,
-      dependencyRisk: null, preTipBehavior: null, trueHourlyAvg: [],
+      dependencyRisk: null,
       canonicalBestTimes: { grid: [], bestWindow: null, earlySignal: null }
     }
   }
@@ -1118,6 +1118,52 @@ export function aggregateRows(tips, tz = null) {
     lossIfTopFanLeaves: parseFloat(top1USD.toFixed(2))
   } : null
 
+  // ── REVENUE DEPENDENCY RISK ───────────────────────────────────────────
+  // A severity label + factual restatement over topFanDependency's
+  // already-computed percentages. No new statistic is derived here — every
+  // number below comes from the block immediately above.
+  //
+  // Previously this was hardcoded `null` while app/dashboard/page.js
+  // carried a full "Revenue Dependency Risk" card gated on it, so that card
+  // could never render. Worse, the Smart Insights block explicitly defers
+  // the concentration-risk framing to this card ("that card owns the
+  // concentration-risk claim"), so the insight was reaching users nowhere
+  // at all — while /guides/chaturbate-earnings-tracker, several blog posts,
+  // and the /landing/demo page all advertise exactly this feature.
+  //
+  // Thresholds come from this product's own published editorial standard
+  // rather than being invented here: the 50%-from-one-fan line appears in
+  // app/blog/how-to-increase-cam-earnings ("if one fan contributed 50%+ of
+  // a session's income, that's a concentration risk") and
+  // app/blog/how-to-re-engage-whales-and-high-tipping-fans ("just 1-3
+  // people represent 50%+ of total earnings"). Cross-checked against
+  // app/landing/demo's own characterization of top1=42%/top3=72% as
+  // "Moderate concentration" — those exact inputs classify as 'medium'
+  // here, so the dashboard and the marketing demo cannot contradict.
+  //
+  // Sample-size guard: below 5 unique fans these percentages are
+  // arithmetically trivial (with 4 fans, top5Pct is always 100%), so no
+  // claim is made at all — returning null hides the card rather than
+  // telling a creator with 3 fans that she has "high risk". 5 is the same
+  // unique-fan threshold DashboardPreview.js's canShowWhales() already
+  // uses to gate whale-related surfaces, not a new number.
+  const DEPENDENCY_MIN_FANS = 5
+  const dependencyRisk = (topFanDependency && whales.length >= DEPENDENCY_MIN_FANS)
+    ? (() => {
+        const { top1Pct, top3Pct, top5Pct, lossIfTopFanLeaves } = topFanDependency
+        const level = (top1Pct >= 50 || top3Pct >= 80) ? 'high'
+                    : (top1Pct >= 30 || top3Pct >= 60) ? 'medium'
+                    : 'low'
+        const message =
+          level === 'high'
+            ? `Your top fan is ${top1Pct}% of all revenue. If they stopped tipping, that's $${lossIfTopFanLeaves.toFixed(2)} of your $${totalUSD.toFixed(2)} lifetime total.`
+            : level === 'medium'
+              ? `Your top 3 fans are ${top3Pct}% of all revenue, and your top fan alone is ${top1Pct}%. Widening your tipping base lowers what one fan's departure costs you.`
+              : `Your revenue is spread across your fan base — your top fan is ${top1Pct}% and your top 5 are ${top5Pct}% of the total.`
+        return { level, message, top1Pct, top3Pct, top5Pct, lossIfTopFanLeaves, fanCount: whales.length }
+      })()
+    : null
+
   // ── MONTHLY DATA ──────────────────────────────────────────────────────
   // Canonical: creator-local calendar month, not UTC — see
   // canonical-analytics-rules.md's Monthly-Growth Reconciliation for why
@@ -1259,21 +1305,18 @@ export function aggregateRows(tips, tz = null) {
     earningsVelocity, totalStreamMinutes, platformVelocity,
     estimatedHourlyRate, hourlyRateSessionCount, hourlyRateTotalMinutes,
     hourlyRateTotalUsd, excludedUntimedSessionCount,
-    missedRevenueByPlatform, returningVsNew, topFanDependency,
-    // Permanently null/empty — NOT placeholders awaiting implementation.
-    // app/dashboard/page.js reads all three and gates real UI on them
-    // (Revenue Dependency Risk card, Pre-Tip Behavior card, the per-platform
-    // hourly heatmap's trueHourlyAvg filter), so those surfaces are
-    // unreachable in production by construction. Kept as explicit keys
-    // rather than deleted because the consumers read them with `|| null` /
-    // `|| []` and removing the keys would change nothing at runtime while
-    // making the dead-UI relationship harder to find. Surfaced in the
-    // repo-wide analytics consistency audit as DEFERRED: either implement
-    // these calculations or delete the dead consumer UI — not decided here,
-    // because "dependency risk" overlaps topFanDependency (which IS
-    // computed, just above) and consolidating them is a product decision,
-    // not a mechanical fix.
-    dependencyRisk: null, preTipBehavior: null, trueHourlyAvg: [],
+    missedRevenueByPlatform, returningVsNew, topFanDependency, dependencyRisk,
+    // preTipBehavior and trueHourlyAvg intentionally removed rather than
+    // left as permanently-null keys. preTipBehavior's dashboard card was
+    // deleted in the same pass: its "peak tipping window" duplicated
+    // canonicalBestTimes.bestWindow (the single source every other
+    // best-time surface was just consolidated onto), and its
+    // clusteringDetected/recommendation fields had no definition anywhere
+    // in the codebase — implementing them would have meant inventing
+    // unsupported metrics. trueHourlyAvg was never actually read by the
+    // per-platform hourly heatmap that a stale comment claimed used it
+    // (that heatmap reads platformTimes[platform].hours); it was a dead
+    // key with a misleading pointer.
     meaningfulSessions, allValidSessions,
     meaningfulSessionCount: meaningfulSessions.length,
     lowSignalSessionCount: allValidSessions.length - meaningfulSessions.length,

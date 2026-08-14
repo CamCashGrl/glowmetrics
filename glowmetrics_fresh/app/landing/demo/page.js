@@ -183,10 +183,16 @@ const DEMO_ANALYTICS = {
   ],
   privateShowFans: [{ username:"private_king", count:2, usd:3500 }],
   spyShowFans: ["nightrider_cb", "cbfan_ultra"],
-  preTipBehavior: { insight:"Your tippers are 4x more active in the first 15 minutes of a stream — opening with an aggressive goal locks in momentum early." },
+  // preTipBehavior/trueHourlyAvg removed — the dashboard features they
+  // previewed were deleted as dead UI (permanently-null analytics fields
+  // whose cards could never render). A marketing demo must not advertise a
+  // card the product doesn't ship. The Revenue Concentration card below
+  // stays: analytics.dependencyRisk is now genuinely implemented, and this
+  // demo's own top1=42%/top3=72% "Moderate concentration" wording is the
+  // cross-check the real thresholds were validated against.
   dependencyRisk: null,
   whaleAlerts: [], lossAlerts: [], nextMoves: [],
-  trueHourlyAvg: [], bestDay: { day:"Thursday", avg:6200 },
+  bestDay: { day:"Thursday", avg:6200 },
 }
 
 const DEMO_TOTAL_REVENUE = DEMO_ANALYTICS.totalUSD
@@ -514,7 +520,6 @@ export default function DemoDashboard() {
   const missedRevenueByPlat= DEMO_ANALYTICS.missedRevenueByPlatform
   const returningVsNew     = DEMO_ANALYTICS.returningVsNew
   const topFanDependency   = DEMO_ANALYTICS.topFanDependency
-  const preTipBehavior     = DEMO_ANALYTICS.preTipBehavior
   const realTimeAlerts     = []
   const whatsNextAlerts    = [
     { type:"online_now",  icon:"🟢", title:"kingwhale99 is likely online right now", message:"Your top whale ($1,000 lifetime) peaks at 1 AM UTC — you're in their window. Go live on Chaturbate immediately.", cta:"Message", whale:DEMO_WHALES[0] },
@@ -925,12 +930,6 @@ export default function DemoDashboard() {
                 {expandInsights && (
                   <div style={{ padding:"0 22px 22px", borderTop:"1px solid rgba(255,255,255,0.06)" }}>
                     <div style={{ display:"flex", flexDirection:"column", gap:8, paddingTop:16 }}>
-                      {preTipBehavior && (
-                        <div style={{ padding:"12px 14px", borderRadius:11, background:"rgba(34,211,238,0.05)", border:"1px solid rgba(34,211,238,0.15)" }}>
-                          <div style={{ fontSize:12, fontWeight:700, color:C.cyan, marginBottom:4 }}>⚡ Pre-Stream Tip Behavior</div>
-                          <div style={{ fontSize:12, color:C.text, lineHeight:1.6 }}>{preTipBehavior.insight}</div>
-                        </div>
-                      )}
                       <div style={{ padding:"12px 14px", borderRadius:11, background:"rgba(245,158,11,0.06)", border:"1px solid rgba(245,158,11,0.2)" }}>
                         <div style={{ fontSize:12, fontWeight:700, color:C.gold, marginBottom:4 }}>⚠️ Revenue Concentration</div>
                         <div style={{ fontSize:12, color:C.text }}>Top fan = <span style={{ fontWeight:700, color:C.gold }}>{topFanDependency.top1Pct}%</span> of all revenue. Top 3 fans = <span style={{ fontWeight:700 }}>{topFanDependency.top3Pct}%</span>. Moderate concentration — keep building your base.</div>
