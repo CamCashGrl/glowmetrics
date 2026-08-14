@@ -79,8 +79,16 @@ const avg = (arr) => arr.length ? arr.reduce((s, x) => s + (x.totalUSD || 0), 0)
     !dashboard.includes('analytics.sessions.reduce((s, x) => s + x.totalUSD, 0) / analytics.sessions.length'))
   check('Daily Brief sessionAvg reads meaningfulSessions', dashboard.includes('const _avgPop = analytics?.meaningfulSessions || []'))
   check('Title Generator buildCtx reads meaningfulSessions', dashboard.includes('const _ctxSessions = analytics?.meaningfulSessions || []'))
-  check('Overview KPI card still uses meaningfulSessions (unchanged, already correct)',
-    dashboard.includes('const avgSessionUSD = meaningfulSessions.length ? meaningfulSessions.reduce'))
+  // The old Overview "Avg Per Session" KPI card was removed in the Command
+  // Center redesign (it led the page with totals; the new hierarchy leads with
+  // the insight). Its role is now served by CommandCenter reading the frozen
+  // analytics.meaningfulSessionCount, so the population discipline is enforced
+  // by the engine rather than by a card recomputing it.
+  const commandCenter = stripComments(readFileSync(new URL('../app/dashboard/CommandCenter.js', import.meta.url), 'utf8'))
+  check('Command Center reads meaningfulSessionCount from the frozen layer',
+    commandCenter.includes('analytics?.meaningfulSessionCount'))
+  check('Command Center does not recompute a session average itself',
+    !/sessions\s*\.\s*reduce/.test(commandCenter))
 }
 
 // ══════════════════════════════════════════════════════════════════════

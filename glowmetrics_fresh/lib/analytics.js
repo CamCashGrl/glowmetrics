@@ -845,7 +845,7 @@ export function aggregateRows(tips, tz = null) {
       platformVelocity: {}, missedRevenue: { today_missed: null, cumulative_by_platform: {}, recent_streak_missed: null },
       returningVsNew: null, topFanDependency: null,
       dependencyRisk: null,
-      canonicalBestTimes: { grid: [], bestWindow: null, earlySignal: null }
+      canonicalBestTimes: { grid: [], bestWindow: null, earlySignal: null }, bestWindowFanOverlap: null
     }
   }
 
@@ -892,6 +892,38 @@ export function aggregateRows(tips, tz = null) {
     ? { hour: canonicalBestTimes.bestWindow.localHour, avg: canonicalBestTimes.bestWindow.medianUsdPerHour }
     : null
   const nextMoves   = generateNextMoves(tips, meaningfulSessions, whales, predictions, canonicalBestHourForNextMoves, userTz)
+
+  // ── BEST-WINDOW FAN OVERLAP ──────────────────────────────────────────
+  // Which of this creator's highest-value fans actually tip inside her
+  // strongest earning window. Additive composition of two values that are
+  // already canonical (canonicalBestTimes.bestWindow + identifyWhales) — it
+  // introduces no new definition of "best window" or "fan value", and no
+  // consumer recomputes either. Exposed so the Command Center can state the
+  // relationship without doing this arithmetic in a component, which is the
+  // pattern the analytics audit removed everywhere else.
+  //
+  // Counts a fan as overlapping when at least one of their tips lands in the
+  // window's exact local day+hour bucket. Restricted to fans with >=3 tips so
+  // a single coincidental tip cannot manufacture an "overlap".
+  const bestWindowFanOverlap = canonicalBestTimes.bestWindow
+    ? (() => {
+        const w = canonicalBestTimes.bestWindow
+        const DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
+        const matches = whales.filter(f => {
+          if (f.tipCount < 3) return false
+          return (f.tips || []).some(t => {
+            const ts = t.dateRaw || t.date_time
+            return DAYS[toLocalDow(ts, userTz)] === w.localDay && toLocalHour(ts, userTz) === w.localHour
+          })
+        })
+        const sorted = [...matches].sort((a, b) => b.totalUSD - a.totalUSD)
+        return {
+          count: sorted.length,
+          totalUSD: parseFloat(sorted.reduce((sum, f) => sum + (f.totalUSD || 0), 0).toFixed(2)),
+          fans: sorted.slice(0, 3).map(f => ({ username: f.username, totalUSD: f.totalUSD, tipCount: f.tipCount })),
+        }
+      })()
+    : null
 
   let totalUSD = 0, totalTokens = 0
   for (const t of tips) { totalUSD += t.usd || 0; totalTokens += t.tokens || 0 }
@@ -1306,7 +1338,7 @@ export function aggregateRows(tips, tz = null) {
     earningsVelocity, totalStreamMinutes, platformVelocity,
     estimatedHourlyRate, hourlyRateSessionCount, hourlyRateTotalMinutes,
     hourlyRateTotalUsd, excludedUntimedSessionCount,
-    missedRevenue, returningVsNew, topFanDependency, dependencyRisk,
+    missedRevenue, returningVsNew, topFanDependency, dependencyRisk, bestWindowFanOverlap,
     // preTipBehavior and trueHourlyAvg intentionally removed rather than
     // left as permanently-null keys. preTipBehavior's dashboard card was
     // deleted in the same pass: its "peak tipping window" duplicated

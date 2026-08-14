@@ -16,6 +16,7 @@ import { PLATFORM_TOKEN_RATES, tokenRate } from "../../lib/constants"
 import { track as gtmTrack } from '../../lib/track'
 import { isProPlan } from '../../lib/plan'
 import { resolveCreatorTimezone, autoPopulateTimezoneIfMissing } from '../../lib/timezone'
+import CommandCenter from './CommandCenter'
 import { getDashboardReadiness, getModuleLockState, canShowHourlyRate, LockedInsightCard, DashboardProgressCard } from './DashboardPreview'
 import Button from '../../components/ui/Button'
 import { useLiveSessionEngine } from '../live/useLiveSessionEngine'
@@ -3574,308 +3575,22 @@ const stopImportMessageRotation = () => {
               onUpgrade={() => openUpgradeModal('default')}
             />
 
-            {/* ═══════════════════════════════════════
-                1. MONEY SNAPSHOT
-            ═══════════════════════════════════════ */}
-            {(() => {
-              // ── empty state — show null; DashboardProgressCard above covers zero-data ──
-              if (tips.length === 0) return null
-
-              // Canonical local-calendar-month boundaries + revenue/growth — read
-              // from analytics.monthlyData (lib/analytics.js) rather than
-              // recomputing with UTC month math. See _momMonthly above.
-              const thisMonthEntry = _momThisMonth
-              const prevMonthEntry = _momPrevMonth
-              const thisMonthStart = thisMonthEntry ? new Date(`${thisMonthEntry.month}-01T00:00:00Z`) : new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1))
-              const prevMonthStart = prevMonthEntry ? new Date(`${prevMonthEntry.month}-01T00:00:00Z`) : new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth() - 1, 1))
-              const thisMonthRev = thisMonthEntry?.usd ?? 0
-              const prevMonthRev = prevMonthEntry?.usd ?? 0
-              const growthPct = thisMonthEntry?.growthPct ?? null
-              const safeRevenue = (!isNaN(totalRevenue) && isFinite(totalRevenue)) ? totalRevenue : 0
-              const safeThisMonthRev = (!isNaN(thisMonthRev) && isFinite(thisMonthRev)) ? thisMonthRev : 0
-              const topPct = safeRevenue > 0 ? Math.max(1, Math.min(25, Math.round(100 - (safeRevenue / 50)))) : null
-              const sessionsLast30 = sessions.filter(s => (Date.now() - new Date(s.startTime)) / 86400000 <= 30).length
-              const fansActiveLast30 = new Set(tips.filter(t => (Date.now() - new Date(t.date_time || t.dateRaw)) / 86400000 <= 30).map(t => t.username)).size
-
-              // ── Per-card month-over-month trend ──
-              // Meaningful sessions only (analytics.meaningfulSessions), matching the
-              // valid-session rule used everywhere else — never the raw session list.
-              const meaningfulSessions = analytics?.meaningfulSessions || []
-              const thisMonthMeaningful = meaningfulSessions.filter(s => new Date(s.startTime) >= thisMonthStart)
-              const prevMonthMeaningful = meaningfulSessions.filter(s => { const d = new Date(s.startTime); return d >= prevMonthStart && d < thisMonthStart })
-              const sessGrowth = (prevMonthMeaningful.length > 0 && thisMonthMeaningful.length > 0)
-                ? Math.round(((thisMonthMeaningful.length - prevMonthMeaningful.length) / prevMonthMeaningful.length) * 100) : null
-
-              const avgSessionUSD = meaningfulSessions.length ? meaningfulSessions.reduce((s,x) => s+(x.totalUSD||0),0) / meaningfulSessions.length : 0
-              const tmAvgSession = thisMonthMeaningful.length ? thisMonthMeaningful.reduce((s,x) => s+(x.totalUSD||0),0) / thisMonthMeaningful.length : null
-              const pmAvgSession = prevMonthMeaningful.length ? prevMonthMeaningful.reduce((s,x) => s+(x.totalUSD||0),0) / prevMonthMeaningful.length : null
-              const avgSessionGrowth = (tmAvgSession !== null && pmAvgSession !== null && pmAvgSession > 0)
-                ? Math.round(((tmAvgSession - pmAvgSession) / pmAvgSession) * 100) : null
-
-              const thisMonthFans = new Set(tips.filter(t => new Date(t.date_time || t.dateRaw) >= thisMonthStart).map(t => t.username)).size
-              const prevMonthFans = new Set(tips.filter(t => { const d = new Date(t.date_time || t.dateRaw); return d >= prevMonthStart && d < thisMonthStart }).map(t => t.username)).size
-              const fansGrowth = (prevMonthFans > 0 && thisMonthFans > 0) ? Math.round(((thisMonthFans - prevMonthFans) / prevMonthFans) * 100) : null
-
-              // trend badge renderer
-              const TrendBadge = ({ pct }) => {
-                if (pct === null || isNaN(pct)) return null
-                const up = pct >= 0
-                return <span style={{ fontSize:10, fontWeight:700, color: up ? '#10B981' : '#f87171', marginLeft:6 }}>{up ? '↑' : '↓'}{Math.abs(pct)}%</span>
-              }
-
-              // Card row intentionally shows different metrics than the sticky command
-              // bar above (which already covers Total Earned / Estimated $/Hour) —
-              // these four add depth instead of repeating the same headline numbers.
-              const cardDefs = [
-                { label:"Earnings This Month", accent:'#f472b6', glowClass:'card-glow-pink', trend:growthPct,
-                  value: `$${safeThisMonthRev.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}`,
-                  sub: topPct ? `Top ${topPct}% of models on this platform` : 'Upload more data to rank',
-                  icon:'💰', isHero:true },
-                { label:"Avg Per Session", accent:'#22d3ee', glowClass:'card-glow-cyan', trend:avgSessionGrowth,
-                  value: meaningfulSessions.length > 0 ? `$${avgSessionUSD.toFixed(2)}` : '—',
-                  sub: meaningfulSessions.length > 0 ? `Across ${meaningfulSessions.length.toLocaleString()} meaningful sessions` : 'Not enough data yet',
-                  icon:'🎯' },
-                { label:"Total Fans", accent:'#a78bfa', glowClass:'card-glow-violet', trend:fansGrowth,
-                  value: (analytics?.uniqueFanCount ?? 0) > 0 ? analytics.uniqueFanCount.toLocaleString() : '—',
-                  sub: fansActiveLast30 > 0 ? `${fansActiveLast30} active in last 30 days` : 'None active in the last 30 days',
-                  icon:'👥' },
-                { label:"Meaningful Sessions", accent:'#fbbf24', glowClass:'card-glow-gold', trend:sessGrowth,
-                  value: meaningfulSessions.length > 0 ? meaningfulSessions.length.toLocaleString() : (sessions.length > 0 ? '0' : '—'),
-                  sub: meaningfulSessions.length > 0
-                    ? `${sessions.length.toLocaleString()} tracked · ${(analytics?.lowSignalSessionCount || 0).toLocaleString()} low-signal`
-                    : (sessions.length > 0 ? `${sessions.length} detected, none meaningful yet` : (sessionsLast30 > 0 ? `${sessionsLast30} in last 30 days` : 'No sessions yet')),
-                  icon:'🎥' }
-              ]
-
-              // Earnings velocity per platform for velocity strip
-              const velPlatforms = Object.entries(platformVelocity).filter(([,v]) => v !== null).sort((a,b) => (b[1]||0)-(a[1]||0))
-              return (
-                <>
-                  <div className="stat-grid-4" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 14 }}>
-                    {cardDefs.map((s, i) => (
-                      <div key={i} className={`stat-card ${s.glowClass}`} style={{ ...glassCard, borderRadius: 16, padding: "13px 16px", position: "relative", overflow: "hidden", animation: `fadeUp 0.3s ease ${i * 0.06}s both`, cursor:'default', display:'flex', flexDirection:'column' }}>
-                        {/* accent top bar */}
-                        <div style={{ position:'absolute', top:0, left:0, right:0, height:3, background:`linear-gradient(90deg,${s.accent}80,${s.accent}20)`, borderRadius:'16px 16px 0 0' }} />
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                          <span style={{ fontSize: 11, color: C.text, textTransform: "uppercase", letterSpacing: 0.6, fontWeight: 700 }}>{s.label}</span>
-                          <span style={{ fontSize: 18, opacity: 0.75 }}>{s.icon}</span>
-                        </div>
-                        <div className={s.isHero ? 'hero-revenue-shimmer' : ''} style={{ fontSize: 'clamp(20px, 2.4vw, 26px)', fontWeight: 900, lineHeight: 1.1, marginBottom: 4, ...(s.isHero ? {} : { color: s.accent }) }}>
-                          {s.value}<TrendBadge pct={s.trend} />
-                        </div>
-                        <div style={{ fontSize: 11.5, color: C.text, lineHeight: 1.35 }}>{s.sub}</div>
-                      </div>
-                    ))}
-                  </div>
-                  {/* section divider */}
-                  <div style={{ height:1, background:'linear-gradient(90deg,transparent,rgba(255,255,255,0.06),transparent)', marginBottom:14 }} />
-                </>
-              )
-            })()}
-
-            {/* ═══════════════════════════════════════
-                TOKENS VS HOURS ONLINE + MONTHLY GROWTH
-            ═══════════════════════════════════════ */}
-            {tips.length > 0 && <DashboardGrowthCharts tips={tips} sessions={sessions} monthlyData={analytics?.monthlyData} timezone={creatorTz} />}
-
-            {/* ═══════════════════════════════════════
-                DAILY BRIEF — overview only, below earnings
-            ═══════════════════════════════════════ */}
-        {/* ═══════════════════════════════════════════════════════
-            DAILY BRIEF — always visible, above all tabs
-            Refreshes based on UTC time + your real session data
-        ═══════════════════════════════════════════════════════ */}
-        {dailyBrief && (() => {
-          const { todayName, bhLabel: _bhLabel, bh, atPeak, hoursUntilPeak, displayPlat: _displayPlat, displayAvg,
-            isBestDay, bestDay, sessionAvg, peakAvg, predictionLow, predictionHigh,
-            sessionsAtPeakCount } = dailyBrief
-          // This card's copy explicitly says "today" ("Your best time to
-          // stream today is...", "Since it's {todayName}...") — it must read
-          // the today-specific chain, not the generic canonicalPeakLabel
-          // (which can legitimately be a different day's window and would
-          // make this card's "today" framing false).
-          const bhLabel = canonicalTodaySpecificLabel || _bhLabel
-          const displayPlat = engineInsights?.summary?.best_platform || _displayPlat
-          // Real threshold from getModuleLockState('bestStreamingTimes'): 25+ tips
-          // and 3+ meaningful sessions — matches the >=3 session-bucket requirement
-          // bestHour/platformBestTimes use internally (lib/analytics.js).
-          const bestTimeLock = !bhLabel ? getModuleLockState({ module: 'bestStreamingTimes', totalTips: tips.length, totalSessions: analytics?.meaningfulSessionCount || 0 }) : { locked: false }
-          // Only an impression when there's an actual locked PRO state to see
-          // (bestTimeLock.locked is a data-insufficiency lock, not a Pro
-          // lock — that's a different, non-Pro empty state, not counted here).
-          if (!isPro && !bestTimeLock.locked) trackProPreviewViewed('best_time')
-          if (!isPro && bhLabel) trackProPreviewViewed('income_forecast')
-          return (
-            <div style={{ marginBottom: 20, borderRadius: 18, overflow: 'hidden', border: `1px solid ${atPeak ? 'rgba(16,185,129,0.45)' : 'rgba(124,92,255,0.3)'}`, background: 'rgba(10,12,24,0.7)', backdropFilter: 'blur(16px)', animation: 'fadeUp 0.3s ease both' }}>
-
-              {/* Header bar */}
-              <div style={{ padding: '13px 20px', background: atPeak ? 'linear-gradient(135deg,rgba(16,185,129,0.2),rgba(34,211,238,0.1))' : 'linear-gradient(135deg,rgba(124,92,255,0.18),rgba(34,211,238,0.08))', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <div style={{ width: 32, height: 32, borderRadius: 9, background: atPeak ? 'linear-gradient(135deg,#10B981,#22D3EE)' : 'linear-gradient(135deg,#7C5CFF,#22D3EE)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15 }}>
-                    {atPeak ? '🟢' : '📋'}
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 15, fontWeight: 800, color: C.white }}>
-                      {atPeak ? 'Peak Window LIVE — Go Live Now' : 'Daily Brief'}
-                    </div>
-                    <div style={{ fontSize: 11, color: C.muted }}>{todayName} · based on your real session history</div>
-                  </div>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                  {atPeak
-                    ? <div style={{ padding: '4px 12px', borderRadius: 20, background: 'rgba(16,185,129,0.2)', border: '1px solid rgba(16,185,129,0.5)', fontSize: 12, fontWeight: 700, color: C.green }}>🟢 Peak Now</div>
-                    : bhLabel && <div style={{ padding: '4px 12px', borderRadius: 20, background: 'rgba(124,92,255,0.12)', border: '1px solid rgba(124,92,255,0.3)', fontSize: 12, fontWeight: 600, color: C.indigo }}>⏰ Peak in {hoursUntilPeak}h</div>
-                  }
-                </div>
-              </div>
-
-              <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-
-                {/* ═══ BEST TIME TO STREAM ALERT ═══ */}
-                {bhLabel && (
-                  <div style={{ padding: '14px 16px', borderRadius: 13, background: atPeak ? 'linear-gradient(135deg,rgba(16,185,129,0.15),rgba(34,211,238,0.08))' : 'linear-gradient(135deg,rgba(124,92,255,0.12),rgba(34,211,238,0.06))', border: `1px solid ${atPeak ? 'rgba(16,185,129,0.4)' : 'rgba(124,92,255,0.35)'}`, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-                    <div style={{ fontSize: 22, flexShrink: 0, marginTop: 1 }}>{atPeak ? '🟢' : '⏰'}</div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 13, fontWeight: 800, color: atPeak ? C.green : C.white, marginBottom: 5 }}>
-                        {atPeak
-                          ? `Your peak window is RIGHT NOW — go live on ${displayPlat} immediately`
-                          : `Your best time to stream today is ${bhLabel} on ${displayPlat}`
-                        }
-                      </div>
-                      <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.65 }}>
-                        {`Since it's ${todayName}`}
-                        {isBestDay ? ` (your highest-earning day)` : ``}
-                        {`, you peak at ${bhLabel} on ${displayPlat} with `}
-                        {/* "/hr" not "/session": displayAvg is a per-hour figure
-                            (see the peakAvg unit note in buildDailyBrief). It was
-                            labeled "avg/session" while carrying $/hour, and the
-                            forecast below is derived from it. */}
-                        <span style={{ color: C.gold, fontWeight: 700 }}>${displayAvg.toFixed(0)}/hr avg</span>
-                        {`. A 60-minute stream in that window is worth about `}
-                        <span style={{ color: C.green, fontWeight: 700 }}>${predictionLow}–${predictionHigh}</span>
-                        {` at that rate.`}
-                        {/* Removed: "longer sessions earn +101% more on average".
-                            That figure was hardcoded in the JSX — not derived from
-                            this creator's data, or from any calculation in the
-                            codebase — while being presented as her own statistic. */}
-                      </div>
-                      {!atPeak && hoursUntilPeak !== null && hoursUntilPeak > 0 && (
-                        <div style={{ marginTop: 8, fontSize: 11, color: C.indigo, fontWeight: 600 }}>
-                          ⏳ {hoursUntilPeak === 1 ? 'Starting in ~1 hour — prep your room now' : `${hoursUntilPeak} hours away — set a reminder`}
-                        </div>
-                      )}
-                      {atPeak && (
-                        <div style={{ marginTop: 8, fontSize: 11, color: C.green, fontWeight: 700 }}>
-                          🔥 This window closes in ~{(60 - new Date().getUTCMinutes())} minutes — don't wait
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* ROW 1 — Today / Peak Window / Best Platform */}
-                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                  <div style={{ flex: 1, minWidth: 130, padding: '11px 14px', borderRadius: 11, background: 'rgba(124,92,255,0.08)', border: '1px solid rgba(124,92,255,0.18)' }}>
-                    <div style={{ fontSize: 10, color: C.muted, marginBottom: 3, textTransform: 'uppercase', letterSpacing: 1 }}>Today</div>
-                    <div style={{ fontSize: 14, fontWeight: 800, color: C.white }}>{todayName}</div>
-                    <div style={{ fontSize: 11, color: C.indigo, marginTop: 2 }}>
-                      {(() => {
-                        // bestDay.avg is canonicalBestTimes.bestWindow.medianUsdPerHour
-                        // ($/hour); sessionAvg is $/session. Mixing them behind one
-                        // "/session" label meant this line's unit depended on which
-                        // fallback tier happened to resolve. Uses the canonical
-                        // $/hour value only, labeled as such.
-                        const _bdA = bestDay?.avg
-                        const _safeA = (!isNaN(_bdA) && isFinite(_bdA) && _bdA > 0) ? _bdA : null
-                        if (isBestDay) return _safeA ? `🏆 Your best day — $${_safeA.toFixed(0)}/hr avg` : '🏆 Your best day'
-                        return _safeA ? `~$${_safeA.toFixed(0)}/hr in your best window` : 'Not enough data yet'
-                      })()}
-                    </div>
-                  </div>
-
-                  {/* Exact peak hour / $ forecast is Pro-only, per product decision:
-                      Free confirms a real pattern exists (qualitative, honest,
-                      never fabricated) with a locked preview of what Pro reveals;
-                      Pro gets the precise hour and $ range. This gate also covers
-                      "Best Platform"'s and "Income Forecast"'s own bhLabel-derived
-                      text below, since both would otherwise leak the exact hour
-                      even with Best Time itself locked. */}
-                  <div style={{ flex: 1, minWidth: 130, padding: '11px 14px', borderRadius: 11, background: bestTimeLock.locked ? 'rgba(255,255,255,0.03)' : (isPro && atPeak) ? 'rgba(16,185,129,0.12)' : 'rgba(34,211,238,0.07)', border: `1px solid ${bestTimeLock.locked ? 'rgba(255,255,255,0.08)' : (isPro && atPeak) ? 'rgba(16,185,129,0.4)' : 'rgba(34,211,238,0.18)'}` }}>
-                    <div style={{ fontSize: 10, color: C.muted, marginBottom: 3, textTransform: 'uppercase', letterSpacing: 1 }}>Best Time</div>
-                    {bestTimeLock.locked ? (
-                      analytics?.canonicalBestTimes?.earlySignal ? (
-                        <>
-                          <div style={{ fontSize: 14, fontWeight: 800, color: C.indigo }}>⚡ {fmtHour(analytics.canonicalBestTimes.earlySignal.localHour)}</div>
-                          <div style={{ fontSize: 11, color: C.muted, marginTop: 2, lineHeight: 1.4 }}>
-                            Early signal · ~${analytics.canonicalBestTimes.earlySignal.medianUsdPerHour.toFixed(0)} avg so far
-                          </div>
-                          <button onClick={() => handleTabChange('upload')} style={{ marginTop: 6, padding: '4px 10px', borderRadius: 100, border: '1px solid rgba(124,92,255,0.3)', background: 'rgba(124,92,255,0.08)', color: C.indigo, fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>Add data to confirm</button>
-                        </>
-                      ) : (
-                        <>
-                          <div style={{ fontSize: 14, fontWeight: 800, color: '#64748b' }}>🔒 Locked</div>
-                          <div style={{ fontSize: 11, color: C.muted, marginTop: 2, lineHeight: 1.4 }}>{bestTimeLock.message}</div>
-                          <button onClick={() => handleTabChange('upload')} style={{ marginTop: 6, padding: '4px 10px', borderRadius: 100, border: '1px solid rgba(34,211,238,0.3)', background: 'rgba(34,211,238,0.08)', color: C.cyan, fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>Upload More Data</button>
-                        </>
-                      )
-                    ) : !isPro ? (
-                      <>
-                        <div style={{ fontSize: 14, fontWeight: 800, color: C.indigo }}>🔒 Pattern found</div>
-                        <div style={{ fontSize: 11, color: C.muted, marginTop: 2, lineHeight: 1.4 }}>You have a predictable earning window{atPeak ? ' — may be active right now' : ''}</div>
-                        <button onClick={() => openUpgradeModal('best_time_locked')} style={{ marginTop: 6, padding: '4px 10px', borderRadius: 100, border: '1px solid rgba(34,211,238,0.3)', background: 'rgba(34,211,238,0.08)', color: C.cyan, fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>See exact hour</button>
-                      </>
-                    ) : (
-                      <>
-                        <div style={{ fontSize: 14, fontWeight: 800, color: atPeak ? C.green : C.white }}>{bhLabel}</div>
-                        <div style={{ fontSize: 11, color: atPeak ? C.green : C.cyan, marginTop: 2 }}>
-                          {atPeak ? 'ON RIGHT NOW — stream!' : hoursUntilPeak !== null ? `in ${hoursUntilPeak}h${(!isNaN(displayAvg) && displayAvg > 0) ? ` · $${displayAvg.toFixed(0)} avg` : ''}` : ''}
-                        </div>
-                      </>
-                    )}
-                  </div>
-
-                  <div style={{ flex: 1, minWidth: 130, padding: '11px 14px', borderRadius: 11, background: 'rgba(245,158,11,0.07)', border: '1px solid rgba(245,158,11,0.18)' }}>
-                    <div style={{ fontSize: 10, color: C.muted, marginBottom: 3, textTransform: 'uppercase', letterSpacing: 1 }}>Best Platform</div>
-                    <div style={{ fontSize: 14, fontWeight: 800, color: C.white }}>{displayPlat}</div>
-                    <div style={{ fontSize: 11, color: C.gold, marginTop: 2 }}>
-                      {!isPro ? 'Pro shows your exact peak window' :
-                        (!isNaN(displayAvg) && displayAvg > 0) ? `$${displayAvg.toFixed(0)} avg at ${bhLabel || 'peak'}` : bhLabel ? `at ${bhLabel}` : 'Not enough data yet'}
-                    </div>
-                  </div>
-
-                  {bhLabel && (
-                    <div style={{ flex: 1, minWidth: 130, padding: '11px 14px', borderRadius: 11, background: 'rgba(16,185,129,0.07)', border: '1px solid rgba(16,185,129,0.18)' }}>
-                      <div style={{ fontSize: 10, color: C.muted, marginBottom: 3, textTransform: 'uppercase', letterSpacing: 1 }}>Income Forecast</div>
-                      {!isPro ? (
-                        <>
-                          <div style={{ fontSize: 14, fontWeight: 800, color: '#64748b' }}>🔒 Pro</div>
-                          <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>See your exact $ range</div>
-                        </>
-                      ) : (
-                        <>
-                          <div style={{ fontSize: 14, fontWeight: 800, color: C.green }}>${predictionLow}–${predictionHigh}</div>
-                          <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>if you stream at {bhLabel}</div>
-                          {sessionsAtPeakCount < 2 && <div style={{ fontSize: 10, color: C.muted, marginTop: 3, fontStyle: 'italic' }}>based on limited data</div>}
-                        </>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                {/* "Likely Online" / "Re-engage" fan alerts intentionally NOT
-                    duplicated here — they're computed from a different,
-                    less-detailed formula than the confidence-scored, action-
-                    ready versions already below in "Your Top Earners"
-                    (Likely Online Now / At Risk — Re-engage), which is the
-                    single canonical home for this content. Two independent
-                    calculations of "who's likely online" rendered as two
-                    separate cards on the same page could show DIFFERENT
-                    fans for the same claim — removed rather than fixed in
-                    place, since "Your Top Earners" already covers this. */}
-              </div>
-            </div>
-          )
-        })()}
+            {/* ═══════════════════════════════════════════════════════
+                COMMAND CENTER — DISCOVER -> EXPLAIN -> OPPORTUNITY ->
+                ACTION -> MEASURE. Replaces the former sections 1-3
+                (Money Snapshot KPI wall, growth charts, Daily Brief),
+                which led with totals and buried the insight.
+                All values read from the frozen analytics layer.
+            ═══════════════════════════════════════════════════════ */}
+            <CommandCenter
+              analytics={analytics}
+              isPro={isPro}
+              firstName={profile?.display_name || null}
+              onPlanStream={() => handleTabChange('planner')}
+              onViewFans={() => handleTabChange('whales')}
+              onSeePerformance={() => handleTabChange('platforms')}
+              onUpgrade={(src) => openUpgradeModal(src)}
+            />
 
             {/* section divider */}
             <div style={{ height:1, background:'linear-gradient(90deg,transparent,rgba(255,255,255,0.06),transparent)', margin:'4px 0 24px' }} />
@@ -4559,6 +4274,15 @@ const stopImportMessageRotation = () => {
                 card wants it, sourced from there rather than a second JS
                 implementation. */}
 
+          </div>
+        )}
+
+        {/* Trend charts live on Performance, not the Command Center — the
+            Command Center answers "what should I do next", this answers
+            "what happened". Relocated here from the old Overview tab. */}
+        {activeTab === "platforms" && tips.length > 0 && (
+          <div style={{ marginBottom: 16 }}>
+            <DashboardGrowthCharts tips={tips} sessions={sessions} monthlyData={analytics?.monthlyData} timezone={creatorTz} />
           </div>
         )}
 
