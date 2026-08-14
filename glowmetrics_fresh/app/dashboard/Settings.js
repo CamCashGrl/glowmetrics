@@ -5,6 +5,17 @@
 // /api/stripe/portal route, which just had no UI pointing at it.
 import { useState } from 'react'
 import { track as gtmTrack } from '../../lib/track'
+import { resolveCreatorTimezone, detectBrowserTimezone } from '../../lib/timezone'
+
+// Curated common IANA zones for the override dropdown — not exhaustive, but
+// covers the timezones a creator is realistically in. Falls back to showing
+// the raw saved/detected value even if it isn't in this list.
+const COMMON_TIMEZONES = [
+  'America/Los_Angeles', 'America/Denver', 'America/Chicago', 'America/New_York',
+  'America/Sao_Paulo', 'Europe/London', 'Europe/Paris', 'Europe/Berlin',
+  'Europe/Moscow', 'Africa/Johannesburg', 'Asia/Dubai', 'Asia/Kolkata',
+  'Asia/Bangkok', 'Asia/Singapore', 'Asia/Tokyo', 'Australia/Sydney', 'UTC',
+]
 
 const C = {
   cyan: '#22D3EE', pink: '#EC4899', gold: '#F59E0B', green: '#10B981',
@@ -18,14 +29,40 @@ function fmtDate(iso) {
   } catch (_) { return null }
 }
 
-export default function Settings({ user, profile, isPro, supabase }) {
+export default function Settings({ user, profile, isPro, supabase, onTimezoneSaved }) {
   const [portalLoading, setPortalLoading] = useState(false)
   const [checkoutLoading, setCheckoutLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [editingTz, setEditingTz] = useState(false)
+  const [tzSaving, setTzSaving] = useState(false)
+  const [tzDraft, setTzDraft] = useState('')
 
   const hasStripeCustomer = !!profile?.stripe_customer_id
   const expiresAt = fmtDate(profile?.plan_expires_at)
   const isTimeLimited = isPro && !!profile?.plan_expires_at
+
+  const { timezone: resolvedTz, source: tzSource } = resolveCreatorTimezone(profile?.timezone)
+
+  const startEditingTz = () => {
+    setTzDraft(profile?.timezone || detectBrowserTimezone() || resolvedTz)
+    setEditingTz(true)
+  }
+
+  const saveTimezone = async () => {
+    if (!tzDraft) return
+    setTzSaving(true)
+    try {
+      const { error: tzErr } = await supabase.from('profiles').update({ timezone: tzDraft }).eq('id', user.id)
+      if (tzErr) throw tzErr
+      gtmTrack('timezone_updated', { timezone: tzDraft })
+      setEditingTz(false)
+      onTimezoneSaved?.(tzDraft)
+    } catch (e) {
+      setError(e?.message || 'Could not save timezone. Please try again.')
+    } finally {
+      setTzSaving(false)
+    }
+  }
 
   const openBillingPortal = async () => {
     setError(null)
@@ -127,11 +164,51 @@ export default function Settings({ user, profile, isPro, supabase }) {
           <span style={{ fontSize: 13, color: C.white, fontWeight: 600 }}>{user?.email}</span>
         </div>
         {user?.created_at && (
-          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
             <span style={{ fontSize: 13, color: C.muted }}>Member since</span>
             <span style={{ fontSize: 13, color: C.white, fontWeight: 600 }}>{fmtDate(user.created_at)}</span>
           </div>
         )}
+
+        {/* Timezone — the canonical source used by all time-of-day analytics
+            (Best Time, session bucketing, monthly calendar boundaries). A
+            saved preference here always wins over browser detection. */}
+        <div style={{ padding: '8px 0' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: 13, color: C.muted }}>Timezone</span>
+            {!editingTz && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 13, color: C.white, fontWeight: 600 }}>{resolvedTz}</span>
+                <button onClick={startEditingTz} style={{ fontSize: 11, color: C.cyan, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+                  {tzSource === 'profile' ? 'Change' : 'Set'}
+                </button>
+              </div>
+            )}
+          </div>
+          {tzSource !== 'profile' && !editingTz && (
+            <div style={{ fontSize: 11, color: C.dim, marginTop: 4 }}>
+              Detected from your browser — not yet saved to your account.
+            </div>
+          )}
+          {editingTz && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
+              <select
+                value={tzDraft}
+                onChange={(e) => setTzDraft(e.target.value)}
+                style={{ fontSize: 13, color: C.white, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, padding: '6px 8px', flex: 1 }}
+              >
+                {!COMMON_TIMEZONES.includes(tzDraft) && <option value={tzDraft}>{tzDraft}</option>}
+                {COMMON_TIMEZONES.map(tz => <option key={tz} value={tz}>{tz}</option>)}
+              </select>
+              <button onClick={saveTimezone} disabled={tzSaving} style={{ fontSize: 12, fontWeight: 700, color: '#06101A', background: C.cyan, border: 'none', borderRadius: 8, padding: '6px 12px', cursor: tzSaving ? 'default' : 'pointer', opacity: tzSaving ? 0.6 : 1 }}>
+                {tzSaving ? 'Saving…' : 'Save'}
+              </button>
+              <button onClick={() => setEditingTz(false)} disabled={tzSaving} style={{ fontSize: 12, color: C.muted, background: 'none', border: 'none', cursor: 'pointer' }}>
+                Cancel
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )

@@ -7,20 +7,16 @@
 import { PLATFORM_TOKEN_RATES, DEFAULT_TOKEN_RATE, tokenRate } from './constants'
 // Session grouping lives in ONE place — lib/analytics/sessions.js
 // Shared with app/live/page.js. Do not redefine this logic here.
-import { detectSessions } from './analytics/sessions'
-
-// ===============================
-// TIMEZONE HELPERS
-// ===============================
-
-function calcMedian(arr) {
-  if (!arr || arr.length === 0) return 0
-  const sorted = [...arr].sort((a, b) => a - b)
-  const mid = Math.floor(sorted.length / 2)
-  return sorted.length % 2 === 0
-    ? (sorted[mid - 1] + sorted[mid]) / 2
-    : sorted[mid]
-}
+import { detectSessions, classifySession as classifySessionQuality } from './analytics/sessions'
+// Local-timezone + median primitives live in this leaf module (no imports of
+// its own) specifically so lib/analytics/bestTimes.js can depend on them
+// without creating a circular import with this file (this file's platforms
+// calculation calls into bestTimes.js — see the PLATFORMS section below).
+// Re-exported here so existing importers of toLocalHour/toLocalDow/calcMedian
+// from 'lib/analytics' keep working unchanged.
+import { calcMedian, toLocalHour, toLocalDow, toLocalDateStr } from './analytics/localTime'
+import { computeCanonicalBestTimes } from './analytics/bestTimes'
+export { calcMedian, toLocalHour, toLocalDow }
 
 // ===============================
 // DATA CONFIDENCE
@@ -42,39 +38,6 @@ export function calculateConfidence(validSessionCount, streamedHours) {
 export function fmt12Hour(h) {
   const hh = ((h % 24) + 24) % 24
   return hh === 0 ? '12 AM' : hh < 12 ? `${hh} AM` : hh === 12 ? '12 PM' : `${hh - 12} PM`
-}
-
-export function toLocalHour(dateStr, tz) {
-  try {
-    const date = new Date(dateStr)
-    const formatted = new Intl.DateTimeFormat('en-US', {
-      timeZone: tz,
-      hour: 'numeric',
-      hour12: false
-    }).format(date)
-    const h = parseInt(formatted)
-    return isNaN(h) ? 0 : h === 24 ? 0 : h
-  } catch { return new Date(dateStr).getUTCHours() }
-}
-
-export function toLocalDow(dateStr, tz) {
-  try {
-    const date = new Date(dateStr)
-    const dayName = new Intl.DateTimeFormat('en-US', {
-      timeZone: tz,
-      weekday: 'long'
-    }).format(date)
-    return ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
-      .indexOf(dayName)
-  } catch { return new Date(dateStr).getUTCDay() }
-}
-
-function toLocalDateStr(dateStr, tz) {
-  try {
-    return new Intl.DateTimeFormat('en-CA', {
-      timeZone: tz
-    }).format(new Date(dateStr)) // returns YYYY-MM-DD
-  } catch { return new Date(dateStr).toISOString().slice(0, 10) }
 }
 
 // ===============================
@@ -846,20 +809,18 @@ export function aggregateRows(tips, tz = null) {
       hourlyRateTotalUsd: 0, excludedUntimedSessionCount: 0,
       platformVelocity: {}, missedRevenueByPlatform: {},
       returningVsNew: null, topFanDependency: null,
-      dependencyRisk: null, preTipBehavior: null, trueHourlyAvg: []
+      dependencyRisk: null, preTipBehavior: null, trueHourlyAvg: [],
+      canonicalBestTimes: { grid: [], bestWindow: null, earlySignal: null }
     }
   }
 
   const sessions = detectSessions(tips)
 
   // ── SESSION QUALITY CLASSIFICATION ───────────────────────────────────
-  const classifySession = (s) => {
-    const mins = s.durationMinutes || 0
-    const usd  = s.totalUSD || 0
-    if (mins < 2 && usd === 0) return 'invalid'
-    if (mins < 15 && usd < 10) return 'low_signal'
-    return 'meaningful'
-  }
+  // classifySession() itself now lives in lib/analytics/sessions.js
+  // (imported as classifySessionQuality below) so other consumers — e.g.
+  // StreamPlanner's migration off its own quality-agnostic session
+  // population — use the exact same thresholds, not a second copy of them.
   const scoreSession = (s) => {
     const mins = s.durationMinutes || 0
     const usd  = s.totalUSD || 0
@@ -867,7 +828,7 @@ export function aggregateRows(tips, tz = null) {
     const revenueScore  = Math.min(usd  / 100, 1)
     return parseFloat(((durationScore * 0.4) + (revenueScore * 0.6)).toFixed(3))
   }
-  sessions.forEach(s => { s.sessionQuality = classifySession(s); s.sessionWeight = scoreSession(s) })
+  sessions.forEach(s => { s.sessionQuality = classifySessionQuality(s); s.sessionWeight = scoreSession(s) })
 
   const meaningfulSessions = sessions.filter(s => s.sessionQuality === 'meaningful')
   const allValidSessions   = sessions.filter(s => s.sessionQuality !== 'invalid')
@@ -879,7 +840,23 @@ export function aggregateRows(tips, tz = null) {
   const predictions = predictRevenue(tips, meaningfulSessions)
   const whaleAlerts = generateWhaleAlerts(whales)
   const lossAlerts  = generateLossAlerts(tips, meaningfulSessions, whales, bestHour)
-  const nextMoves   = generateNextMoves(tips, meaningfulSessions, whales, predictions, bestHour)
+
+  // Canonical account-wide best-time grid — session-based, median $/hour,
+  // confidence-tiered (lib/analytics/bestTimes.js). generateNextMoves()'s
+  // best-time dependency is repointed to this per canonical-analytics-
+  // rules.md's Phase 1 scope; generateInsights()/generateLossAlerts() above
+  // are intentionally NOT repointed in this pass — their bestHour usage is
+  // out of Phase 1's approved scope (missed-revenue's peak_missed concept
+  // is being replaced separately via lib/analytics/missedRevenue.js, not
+  // patched in place here).
+  const canonicalBestTimes = computeCanonicalBestTimes(meaningfulSessions, userTz)
+  // Thin shape-adapter so generateNextMoves() doesn't need its own edit —
+  // same { hour, avg } shape it already expects from computeBestTimes(),
+  // now sourced from the canonical, confidence-gated bestWindow instead.
+  const canonicalBestHourForNextMoves = canonicalBestTimes.bestWindow
+    ? { hour: canonicalBestTimes.bestWindow.localHour, avg: canonicalBestTimes.bestWindow.medianUsdPerHour }
+    : null
+  const nextMoves   = generateNextMoves(tips, meaningfulSessions, whales, predictions, canonicalBestHourForNextMoves)
 
   let totalUSD = 0, totalTokens = 0
   for (const t of tips) { totalUSD += t.usd || 0; totalTokens += t.tokens || 0 }
@@ -894,11 +871,26 @@ export function aggregateRows(tips, tz = null) {
     platformMap[s.platform].tips        += s.tipCount
   })
 
+  // Canonical best local day/hour per platform — reuses the same day×hour
+  // grid/confidence-tier logic as the account-wide canonical best-time
+  // calculation (lib/analytics/bestTimes.js), just scoped to this
+  // platform's own meaningfulSessions, instead of StreamPlanner's retired
+  // platformEfficiency() independently computing bestUtcDay/bestUtcHour.
+  const platformBestWindow = {}
+  Object.keys(platformMap).forEach(p => {
+    const platSessions = meaningfulSessions.filter(s => s.platform === p)
+    const { bestWindow } = computeCanonicalBestTimes(platSessions, userTz)
+    platformBestWindow[p] = bestWindow
+  })
+
   const platforms = Object.values(platformMap).map(p => ({
     ...p,
     usdPerHour:    p.hours > 0 ? parseFloat((p.totalUSD    / p.hours).toFixed(2)) : 0,
     tokensPerHour: p.hours > 0 ? Math.round( p.totalTokens / p.hours)             : 0,
-    avgTipSize:    p.tips  > 0 ? parseFloat((p.totalUSD    / p.tips).toFixed(2))  : 0
+    avgTipSize:    p.tips  > 0 ? parseFloat((p.totalUSD    / p.tips).toFixed(2))  : 0,
+    bestLocalDay:  platformBestWindow[p.platform]?.localDay ?? null,
+    bestLocalHour: platformBestWindow[p.platform]?.localHour ?? null,
+    bestWindowConfidence: platformBestWindow[p.platform]?.tier ?? null,
   }))
 
   const topTippers = whales.map((w, i) => ({
@@ -1062,25 +1054,44 @@ export function aggregateRows(tips, tz = null) {
   } : null
 
   // ── MONTHLY DATA ──────────────────────────────────────────────────────
+  // Canonical: creator-local calendar month, not UTC — see
+  // canonical-analytics-rules.md's Monthly-Growth Reconciliation for why
+  // (consistency with every other now-local-native rule; a UTC boundary can
+  // misattribute a tip to the wrong month from the creator's own lived
+  // perspective). This is the single source of truth page.js's inline
+  // momentum block and DashboardGrowthCharts.js should read from instead of
+  // independently recomputing.
   const monthMap = {}
+  const monthKeyLocal = (dateStr) => {
+    const local = toLocalDateStr(dateStr, userTz) // YYYY-MM-DD
+    return local ? local.slice(0, 7) : null // YYYY-MM
+  }
   tips.forEach(t => {
     const dt = new Date(t.dateRaw || t.date_time)
     if (isNaN(dt.getTime())) return
-    const key = `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}`
+    const key = monthKeyLocal(t.dateRaw || t.date_time)
+    if (!key) return
     if (!monthMap[key]) monthMap[key] = { usd: 0, tips: 0, fans: new Set(), sessions: 0 }
     monthMap[key].usd += t.usd || 0
     monthMap[key].tips += 1
     monthMap[key].fans.add(t.username.toLowerCase())
   })
   allValidSessions.forEach(s => {
-    const dt = new Date(s.startTime)
-    const key = `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}`
-    if (monthMap[key]) monthMap[key].sessions += 1
+    const key = monthKeyLocal(s.startTime)
+    if (key && monthMap[key]) monthMap[key].sessions += 1
   })
-  const monthlyData = Object.entries(monthMap).sort(([a], [b]) => a.localeCompare(b)).map(([month, d]) => ({
+  const monthlyDataUnsorted = Object.entries(monthMap).sort(([a], [b]) => a.localeCompare(b)).map(([month, d]) => ({
     month, usd: parseFloat(d.usd.toFixed(2)), tips: d.tips, fans: d.fans.size, sessions: d.sessions,
     usdPerFan: d.fans.size > 0 ? parseFloat((d.usd / d.fans.size).toFixed(2)) : 0
   }))
+  // growthPct computed here once, canonically, so consumers (page.js's
+  // momentum block, DashboardGrowthCharts.js) never need their own copy of
+  // this formula.
+  const monthlyData = monthlyDataUnsorted.map((m, i) => {
+    const prev = i > 0 ? monthlyDataUnsorted[i - 1] : null
+    const growthPct = prev && prev.usd > 0 ? Math.round(((m.usd - prev.usd) / prev.usd) * 100) : null
+    return { ...m, growthPct }
+  })
   const bestMonth = monthlyData.length > 0 ? [...monthlyData].sort((a, b) => b.usd - a.usd)[0] : null
 
   // ── TIP TYPE BREAKDOWN ────────────────────────────────────────────────
@@ -1170,6 +1181,14 @@ export function aggregateRows(tips, tz = null) {
     meaningfulSessionCount: meaningfulSessions.length,
     lowSignalSessionCount: allValidSessions.length - meaningfulSessions.length,
     momentum,
+    // Canonical best-time grid (lib/analytics/bestTimes.js) — session-based,
+    // median $/hour, confidence-tiered, local-native timezone. Exposed here
+    // for consumers migrating per canonical-analytics-rules.md; bestDay/
+    // bestHour/platformBestTimes above are computeBestTimes()'s existing
+    // tip-level output, kept unchanged as a reference implementation, not
+    // yet the operative path for any UI surface — that migration is tracked
+    // separately per the approved consumer migration order.
+    canonicalBestTimes,
   }
 }
 
