@@ -59,7 +59,15 @@ export default function CreatorReport({ analytics, tips = [], isPro = false, onU
   const totalUSD    = analytics?.totalUSD || 0
   const hourlyRate   = analytics?.estimatedHourlyRate || 0
   const bestDay      = analytics?.bestDay || null
-  const bestHour     = analytics?.bestHour || null
+  // Phase 1B: reads the canonical best-time result (lib/analytics/bestTimes.js
+  // — session-based, median $/hour, confidence-tiered) instead of the legacy
+  // tip-level computeBestTimes() output, per the approved Best-Time Migration
+  // Matrix (same underlying field the dashboard header now reads too, so
+  // this page and Overview can no longer disagree on "Best Streaming Time").
+  const _canonicalBestWindow = analytics?.canonicalBestTimes?.bestWindow
+  const bestHour     = _canonicalBestWindow
+    ? { hour: _canonicalBestWindow.localHour, avg: _canonicalBestWindow.medianUsdPerHour }
+    : null
   const topSupporter = analytics?.topTippers?.[0] || null
   const platforms    = analytics?.platforms || []
   // Headline claim defers to the same canonical value Overview uses
