@@ -9,6 +9,7 @@ import {
 // for the full migration note. Do not reintroduce a local session grouping
 // function in this file.
 import { detectMeaningfulSessions } from "../../lib/analytics/sessions"
+import { WHALE_LIFETIME_TOKEN_THRESHOLD } from "../../lib/constants"
 import { toLocalDow, toLocalHour } from "../../lib/analytics/localTime"
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -236,7 +237,7 @@ function detectWhales(tips, tz) {
       daysSince: Math.floor((Date.now() - lastSeen.getTime()) / 86_400_000),
       bestUtcDay: bd, bestUtcHour: bh, avgReturnDays,
     }
-  }).filter((w) => w.totalTokens >= 500).sort((a, b) => b.usdValue - a.usdValue)
+  }).filter((w) => w.totalTokens >= WHALE_LIFETIME_TOKEN_THRESHOLD).sort((a, b) => b.usdValue - a.usdValue)
 }
 
 // Compare avg $/hr for sessions with 1 platform vs 2 vs 3+

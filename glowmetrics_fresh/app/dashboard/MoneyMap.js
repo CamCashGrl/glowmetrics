@@ -5,6 +5,7 @@ import {
   PieChart, Pie, Cell, Label,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from "recharts"
+import { WHALE_LIFETIME_TOKEN_THRESHOLD } from "../../lib/constants"
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const BG     = "#0a0e1a"
@@ -148,7 +149,7 @@ function detectWhales(tips) {
     if (t.platform) map[u].platforms.add(normPlatform(t.platform))
   }
   return Object.values(map)
-    .map(w=>({...w, platforms:w.platforms.size, isWhale:w.tokens>=500}))
+    .map(w=>({...w, platforms:w.platforms.size, isWhale:w.tokens>=WHALE_LIFETIME_TOKEN_THRESHOLD}))
     .sort((a,b)=>b.usd-a.usd)
 }
 

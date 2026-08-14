@@ -919,7 +919,13 @@ function TitleGenerator({ C, glassCard, analytics, tips, sessions, whales }) {
     const hoursUntilPeak = bestHour !== null ? (bestHour - currentHour + 24) % 24 : 99
     const isPeakNow = hoursUntilPeak <= 1
     const peakSoon = hoursUntilPeak <= 3 && !isPeakNow
-    const avgSessionUSD = sessions?.length ? sessions.reduce((s,x) => s + x.totalUSD, 0) / sessions.length : 0
+    // meaningfulSessions — same canonical population the Overview KPI card and
+    // the Daily Brief now use. Previously read the page-level `sessions`
+    // (= analytics.sessions = allValidSessions), giving the Title Generator a
+    // third, lower average than the two figures shown on Overview.
+    const _ctxSessions = analytics?.meaningfulSessions || []
+    const avgSessionUSD = _ctxSessions.length
+      ? _ctxSessions.reduce((s, x) => s + (x.totalUSD || 0), 0) / _ctxSessions.length : 0
     return {
       isPeakNow, peakSoon, bestHour, bestHourLabel, hoursUntilPeak,
       tokenGoal: overrides.tokenGoal !== undefined ? overrides.tokenGoal : tokenGoal,
@@ -2800,15 +2806,33 @@ const stopImportMessageRotation = () => {
       ? { day: analytics.canonicalBestTimes.bestWindow.localDay, avg: analytics.canonicalBestTimes.bestWindow.medianUsdPerHour }
       : null
     const isBestDay = bestDay?.day === todayName
-    const sessionAvg = analytics?.sessions?.length
-      ? analytics.sessions.reduce((s, x) => s + x.totalUSD, 0) / analytics.sessions.length : 0
+    // meaningfulSessions, not analytics.sessions (= allValidSessions, which
+    // still includes low_signal sessions). The Overview KPI card's "Avg Per
+    // Session" already uses meaningfulSessions, and lib/analytics/sessions.js
+    // documents that population as "the population every rate calculation
+    // should use" — so reading allValidSessions here put two different
+    // answers to "what is a session worth?" on the same screen. On the real
+    // regression CSV that gap is $2.79 (168 allValid) vs $5.10 (78
+    // meaningful) — the same class of contradiction reported as
+    // "$2 avg vs $10 avg per session".
+    const _avgPop = analytics?.meaningfulSessions || []
+    const sessionAvg = _avgPop.length
+      ? _avgPop.reduce((s, x) => s + (x.totalUSD || 0), 0) / _avgPop.length : 0
 
     // Income prediction for peak window — use median-based displayAvg as single source of truth
     const sessionsAtPeak = (analytics?.sessions || []).filter(s => {
       const h = new Date(s.startTime).getHours() // local hour
       return bh !== null && Math.abs(h - bh) <= 1
     })
-    const peakAvg = displayAvg || bestHour?.avg || sessionAvg
+    // UNIT CONSISTENCY: every tier here is $/HOUR — displayAvg resolves to a
+    // per-hour-bucket figure (todayBestAvg/bestPlatPeakAvg/bestPlatNowAvg,
+    // all "$ earned within an hour"), and bestHour.avg is
+    // canonicalBestTimes.bestWindow.medianUsdPerHour. sessionAvg was
+    // previously the last fallback here, silently swapping in a $/SESSION
+    // value and feeding it to a forecast rendered as an hourly figure.
+    // Dropped rather than converted: if no $/hour figure qualifies, the
+    // honest output is no forecast, not one in the wrong unit.
+    const peakAvg = displayAvg || bestHour?.avg || 0
     const predictionLow = Math.max(0, Math.round(peakAvg - (peakAvg * 0.4)))
     const predictionHigh = Math.round(peakAvg + (peakAvg * 0.4))
 
@@ -3685,14 +3709,18 @@ const stopImportMessageRotation = () => {
                         {`Since it's ${todayName}`}
                         {isBestDay ? ` (your highest-earning day)` : ``}
                         {`, you peak at ${bhLabel} on ${displayPlat} with `}
-                        <span style={{ color: C.gold, fontWeight: 700 }}>${displayAvg.toFixed(0)} avg/session</span>
-                        {`. Stream `}
-                        <span style={{ color: C.cyan, fontWeight: 700 }}>60+ min</span>
-                        {` to earn `}
+                        {/* "/hr" not "/session": displayAvg is a per-hour figure
+                            (see the peakAvg unit note in buildDailyBrief). It was
+                            labeled "avg/session" while carrying $/hour, and the
+                            forecast below is derived from it. */}
+                        <span style={{ color: C.gold, fontWeight: 700 }}>${displayAvg.toFixed(0)}/hr avg</span>
+                        {`. A 60-minute stream in that window is worth about `}
                         <span style={{ color: C.green, fontWeight: 700 }}>${predictionLow}–${predictionHigh}</span>
-                        {` — longer sessions earn `}
-                        <span style={{ color: C.indigo, fontWeight: 700 }}>+101% more</span>
-                        {` on average.`}
+                        {` at that rate.`}
+                        {/* Removed: "longer sessions earn +101% more on average".
+                            That figure was hardcoded in the JSX — not derived from
+                            this creator's data, or from any calculation in the
+                            codebase — while being presented as her own statistic. */}
                       </div>
                       {!atPeak && hoursUntilPeak !== null && hoursUntilPeak > 0 && (
                         <div style={{ marginTop: 8, fontSize: 11, color: C.indigo, fontWeight: 600 }}>
@@ -3715,10 +3743,15 @@ const stopImportMessageRotation = () => {
                     <div style={{ fontSize: 14, fontWeight: 800, color: C.white }}>{todayName}</div>
                     <div style={{ fontSize: 11, color: C.indigo, marginTop: 2 }}>
                       {(() => {
-                        const _bdA = bestDay?.avg || sessionAvg
+                        // bestDay.avg is canonicalBestTimes.bestWindow.medianUsdPerHour
+                        // ($/hour); sessionAvg is $/session. Mixing them behind one
+                        // "/session" label meant this line's unit depended on which
+                        // fallback tier happened to resolve. Uses the canonical
+                        // $/hour value only, labeled as such.
+                        const _bdA = bestDay?.avg
                         const _safeA = (!isNaN(_bdA) && isFinite(_bdA) && _bdA > 0) ? _bdA : null
-                        if (isBestDay) return _safeA ? `🏆 Your best day — avg $${_safeA.toFixed(0)}/session` : '🏆 Your best day'
-                        return _safeA ? `avg ~$${_safeA.toFixed(0)}/session` : 'Not enough data yet'
+                        if (isBestDay) return _safeA ? `🏆 Your best day — $${_safeA.toFixed(0)}/hr avg` : '🏆 Your best day'
+                        return _safeA ? `~$${_safeA.toFixed(0)}/hr in your best window` : 'Not enough data yet'
                       })()}
                     </div>
                   </div>
@@ -5498,7 +5531,10 @@ const stopImportMessageRotation = () => {
             if (s.uniqueFans <= 2 && s.tipCount > 10)
               recommendations.push("Diversify your audience — most tips came from 1–2 fans. Engage lurkers with low-barrier goals")
             if (durationMins < 30 && s.totalUSD > 0)
-              recommendations.push(`You earned $${s.totalUSD} in ${Math.round(durationMins)} min. Extending to 45–60 min could 2x your earnings`)
+              // "could 2x your earnings" removed — that multiplier was hardcoded,
+              // not derived from this creator's short-vs-long session history or
+              // any calculation in the codebase, while reading as her own data.
+              recommendations.push(`You earned $${s.totalUSD} in ${Math.round(durationMins)} min — short sessions give tipping momentum less time to build. Try extending to 45–60 min`)
             if (spikes.length >= 2)
               recommendations.push("Multiple spike moments detected — identify what triggered them and recreate it intentionally")
             if (revenuePerMin > 0 && revenuePerMin < 0.10)
