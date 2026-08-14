@@ -1686,6 +1686,12 @@ export default function Dashboard() {
   // Tab persistence
   const handleTabChange = (tab) => {
     gtmTrack('tab_switched', { tab_name: tab })
+    // Live Mode is the one tab that's ENTIRELY a locked Pro preview for
+    // free users (see the isPro gate a few hundred lines below) — this is
+    // the funnel's "Pro preview viewed" step for that surface specifically,
+    // fired at the moment of actually landing on it, not just clicking an
+    // upgrade CTA (which upgrade_click/paywall_hit already cover elsewhere).
+    if (tab === 'live' && !isPro) gtmTrack('pro_preview_viewed', { feature: 'live_mode' })
     setActiveTab(tab)
     if (typeof window !== 'undefined') {
       localStorage.setItem('camcash_tab', tab)
@@ -1849,6 +1855,26 @@ export default function Dashboard() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, user])
+
+  useEffect(() => {
+    // Stripe redirects here with ?success=true&plan=X after checkout
+    // completes (app/api/stripe/checkout/route.js's success_url) — this was
+    // previously unhandled: no funnel event, no user-visible confirmation
+    // that the upgrade actually went through. Closes the funnel's final
+    // step (signup->import->first-insight->pro-preview->upgrade-click->
+    // checkout-started->subscription-completed). Strips the query params
+    // after firing so a page refresh doesn't double-count.
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search)
+      if (params.get('success') === 'true') {
+        gtmTrack('subscription_completed', { plan_type: params.get('plan') || null })
+        window.history.replaceState({}, '', window.location.pathname)
+      } else if (params.get('canceled') === 'true') {
+        gtmTrack('checkout_canceled', {})
+        window.history.replaceState({}, '', window.location.pathname)
+      }
+    }
+  }, [])
 
   useEffect(() => {
     // Restore saved tab

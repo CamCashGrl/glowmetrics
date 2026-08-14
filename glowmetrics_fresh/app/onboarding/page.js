@@ -603,6 +603,10 @@ export default function OnboardingPage(){
   useEffect(()=>{
     if(!user)return
     track('onboarding_step_viewed',{step,platform:platformId})
+    // Named distinctly from the generic step_viewed event so the funnel's
+    // "first useful insight" step is directly queryable, per the funnel
+    // instrumentation checklist, without filtering step_viewed by 'done'.
+    if(step==='done')track('first_insight_viewed',{platform:platformId,tipsImported:importResult?.inserted??0})
   },[step,user])
 
   async function markDone(){
@@ -659,6 +663,7 @@ export default function OnboardingPage(){
   async function handleImport(previewArg){
     const p=previewArg||preview
     if(!user)return
+    track('import_started',{platform:platformId,source:'paste',rows:p?.tipsDetected??0})
     setImportError('');setUpgradeBlocked(null);setStep('loading');setLoadingMsgIdx(0);setLoadingProgress(0)
     try{
       const{data:{session}}=await supabase.auth.getSession()
@@ -725,6 +730,7 @@ export default function OnboardingPage(){
 
   async function handleCsvUpload(file){
     if(!file||!user)return
+    track('import_started',{platform:platformId,source:'csv'})
     setCsvUploading(true);setCsvError('');setStep('loading');setLoadingProgress(0)
     try{
       const{data:{session}}=await supabase.auth.getSession()

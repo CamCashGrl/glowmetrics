@@ -5,6 +5,7 @@ import UserCounter from '../components/UserCounter'
 import SiteFooter from '../components/SiteFooter'
 import Button from '../../components/ui/Button'
 import { supabase } from '../../lib/supabase'
+import { track } from '../../lib/track'
 
 /*
  * IMPORTANT:
@@ -59,6 +60,11 @@ async function startCheckout(planType, setLoading) {
       )
     }
 
+    // Fires once a real Stripe Checkout session exists (not just a button
+    // click) — the funnel step between "upgrade CTA clicked" and Stripe's
+    // own hosted checkout, completing signup->import->first-insight->
+    // pro-preview->upgrade-click->checkout-started->subscription tracking.
+    track('checkout_started', { plan_type: planType })
     window.location.assign(data.url)
   } catch (error) {
     alert(
