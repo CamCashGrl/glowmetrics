@@ -5736,9 +5736,18 @@ const stopImportMessageRotation = () => {
                       ) : (
                         <LockedInsightCard
                           title="What Happened & What To Do Next"
-                          description={bd.performance === 'high'
-                            ? `This was one of your top sessions ($${s.totalUSD} vs $${allAvg.toFixed(0)} avg) — Pro breaks down exactly what drove it and how to repeat it.`
-                            : `Pro breaks down what drove this session's performance — spikes, top tippers, pacing — and exactly what to change next time.`}
+                          description={(() => {
+                            // Same avg getSessionBreakdown() computes internally for
+                            // its own performance grading — that value is scoped to
+                            // the function, not returned, so recomputed here from the
+                            // same displaySessions this whole tab already has in scope.
+                            const sessAvg = displaySessions.length > 0
+                              ? displaySessions.reduce((sum, x) => sum + x.totalUSD, 0) / displaySessions.length
+                              : 0
+                            return bd.performance === 'high'
+                              ? `This was one of your top sessions ($${s.totalUSD} vs $${sessAvg.toFixed(0)} avg) — Pro breaks down exactly what drove it and how to repeat it.`
+                              : `Pro breaks down what drove this session's performance — spikes, top tippers, pacing — and exactly what to change next time.`
+                          })()}
                           lockType="requires_pro"
                           requirement="Upgrade to Pro to unlock session analysis"
                           ctaLabel="Upgrade to Pro"
