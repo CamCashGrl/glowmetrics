@@ -82,9 +82,28 @@ function validateInsights(insights = []) {
 //   Tip From: username123
 //   500  12345
 // (date line / "Tip From: user" line / "tokens  running_balance" line)
-const CB_DATE_LINE_RE = /^([A-Za-z]{3})\s+(\d{1,2}),\s+(\d{4}),\s+(\d{1,2}):(\d{2})\s+(AM|PM)$/i
+//
+// Two real-world variants confirmed against actual failed-paste patterns
+// (49 of 56 onboarding_paste_parse_failed events were Chaturbate, by far
+// the dominant activation blocker — see the funnel data behind this fix):
+//   1. Day-of-month ordinal suffixes ("Jun 18th, 2026, 8:27 PM") — the
+//      onboarding preview's client-side date matcher already accepted
+//      these (app/onboarding/page.js's tryParseDate), but THIS server-side
+//      matcher did not. That meant some pastes showed a successful preview
+//      but then silently imported zero/fewer rows than previewed — not
+//      even visible as a distinct failure event, since onboarding_paste_
+//      parse_failed only fires on the client-preview step.
+//   2. A running balance over 999 formatted with a thousands-comma
+//      ("500  12,345") — the same class of bug already found and fixed for
+//      BongaCams (scripts/verify-bongacams-tokens-thousands-separator.mjs),
+//      applied here proactively since Chaturbate's stat page can format
+//      large numbers the same way.
+// Also tolerates a tokens-only line (no running balance) as a fallback,
+// since not every page view/account shows a running balance column.
+const CB_DATE_LINE_RE = /^([A-Za-z]{3})\s+(\d{1,2})(?:st|nd|rd|th)?,\s+(\d{4}),\s+(\d{1,2}):(\d{2})\s+(AM|PM)$/i
 const CB_TIP_FROM_RE = /^Tip From:\s*(.+)$/i
-const CB_TOKENS_LINE_RE = /^(\d+)\s+(\d+)$/
+const CB_TOKENS_LINE_RE = /^([\d,]+)\s+([\d,]+)$/
+const CB_TOKENS_SINGLE_RE = /^([\d,]+)$/
 const CB_MONTHS = { jan:1, feb:2, mar:3, apr:4, may:5, jun:6, jul:7, aug:8, sep:9, oct:10, nov:11, dec:12 }
 
 function parseChaturbateMultiLine(lines) {
@@ -103,14 +122,17 @@ function parseChaturbateMultiLine(lines) {
     let tokensLine = (lines[i + 2] || '').trim()
     let note = ''
     let tMatch = tokensLine.match(CB_TOKENS_LINE_RE)
-    if (!tMatch && lines[i + 3]) {
+    let singleMatch = !tMatch ? tokensLine.match(CB_TOKENS_SINGLE_RE) : null
+    if (!tMatch && !singleMatch && lines[i + 3]) {
       note = tokensLine
       tokensLine = (lines[i + 3] || '').trim()
       tMatch = tokensLine.match(CB_TOKENS_LINE_RE)
+      singleMatch = !tMatch ? tokensLine.match(CB_TOKENS_SINGLE_RE) : null
     }
 
-    if (tMatch) {
-      const tokens = parseInt(tMatch[1], 10)
+    const tokensRaw = tMatch ? tMatch[1] : (singleMatch ? singleMatch[1] : null)
+    if (tokensRaw) {
+      const tokens = parseInt(tokensRaw.replace(/,/g, ''), 10)
       if (username && tokens >= 1) {
         let h = parseInt(hr, 10)
         if (/pm/i.test(ampm) && h !== 12) h += 12
