@@ -56,6 +56,19 @@ function StatCard({ icon, label, value, sub, index = 0 }) {
 }
 
 export default function CreatorReport({ analytics, tips = [], isPro = false, onUpgrade, engineInsights = null }) {
+  // "What changed" — the one dimension Creator Report lacked entirely
+  // before (a static all-time snapshot, same headline totals Overview
+  // already shows). Reads the canonical month-over-month growthPct already
+  // computed once in analytics.monthlyData (lib/analytics.js) — no new
+  // calculation, same source Overview's own momentum indicator uses, so
+  // this can't disagree with it. A full "periodic performance review"
+  // restructuring (what worked/didn't, narrative framing per period) is
+  // real, larger follow-up work — this is the bounded, safe piece of it
+  // available without that redesign.
+  const _monthly = analytics?.monthlyData || []
+  const _latestMonth = _monthly.length ? _monthly[_monthly.length - 1] : null
+  const monthGrowthPct = _latestMonth?.growthPct ?? null
+
   const totalUSD    = analytics?.totalUSD || 0
   const hourlyRate   = analytics?.estimatedHourlyRate || 0
   const bestDay      = analytics?.bestDay || null
@@ -119,7 +132,7 @@ export default function CreatorReport({ analytics, tips = [], isPro = false, onU
 
       {/* ── STAT GRID ── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginBottom: 20 }}>
-        <StatCard index={0} icon="💰" label="Total Earnings" value={fmtUsd(totalUSD)} sub={`${tips.length} tips tracked`} />
+        <StatCard index={0} icon="💰" label="Total Earnings" value={fmtUsd(totalUSD)} sub={monthGrowthPct !== null ? `${monthGrowthPct >= 0 ? '↑' : '↓'} ${Math.abs(monthGrowthPct)}% vs last month` : `${tips.length} tips tracked`} />
         <StatCard index={1} icon="⏱️" label="Avg $/Hour" value={hourlyRate > 0 ? fmtUsd(hourlyRate) : 'Not enough data yet'} />
         <StatCard index={2} icon="📅" label="Best Streaming Day" value={bestDay?.day || 'Not enough data yet'} sub={bestDay ? `~${fmtUsd(bestDay.avg)} avg` : null} />
         <StatCard index={3} icon="⏰" label="Best Streaming Time" value={fmtHour(bestHour?.hour) || 'Not enough data yet'} sub={bestHour ? `~${fmtUsd(bestHour.avg)} avg per session` : null} />
