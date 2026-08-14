@@ -14,12 +14,26 @@ function shimBestHour(bestWindow) {
   return bestWindow ? { hour: bestWindow.localHour, avg: bestWindow.medianUsdPerHour } : null
 }
 
-// Mirrors app/dashboard/page.js's canonicalPeakHourLocal fallback chain.
-function canonicalPeakHourLocal(engineInsights, dailyBriefBh, canonicalBestTimes) {
+// Mirrors app/dashboard/page.js's canonicalPeakHourLocal — post best-time
+// reconciliation, this answers ONLY "what is my general peak/best time to
+// stream" and is sourced from canonicalBestTimes.bestWindow alone. SQL's
+// engineInsights.daily_plan.best_hour answers a genuinely different,
+// narrower question ("best hour for today's specific weekday") and must
+// never feed this generic value — see canonicalTodaySpecificHourLocal below
+// for where that SQL source is actually supposed to be used.
+function canonicalPeakHourLocal(canonicalBestTimes) {
+  return canonicalBestTimes?.bestWindow ? canonicalBestTimes.bestWindow.localHour : null
+}
+
+// Mirrors app/dashboard/page.js's canonicalTodaySpecificHourLocal — used
+// ONLY by the Daily Brief card, whose copy explicitly says "today". This is
+// the one place engineInsights.daily_plan.best_hour is allowed to win,
+// because it's actually answering the question that card is asking.
+function canonicalTodaySpecificHourLocal(engineInsights, dailyBriefBh) {
   return (
     engineInsights?.daily_plan?.best_hour ??
     dailyBriefBh ??
-    (canonicalBestTimes?.bestWindow ? canonicalBestTimes.bestWindow.localHour : null)
+    null
   )
 }
 
@@ -45,29 +59,46 @@ function check(name, actual, expected) {
 }
 
 // ══════════════════════════════════════════════════════════════════════
-// 2. Fallback chain precedence unchanged — engineInsights still wins,
-//    then dailyBrief.bh, then the (now-canonical) all-time fallback.
+// 2. Generic peak-window claim — canonical bestWindow ONLY, SQL never wins.
+//    This is the exact reconciliation fix: before it, engineInsights.daily_
+//    plan.best_hour won over this value unconditionally, so the command-bar
+//    "Peak Window" KPI and "You're Losing Money" card (neither of which say
+//    "today") could silently show a completely different, narrower SQL
+//    calculation instead of the account-wide canonical answer.
+// ══════════════════════════════════════════════════════════════════════
+{
+  // Even with a present, well-formed SQL daily_plan value, the generic
+  // chain must ignore it entirely — it takes no engineInsights argument at
+  // all anymore, which is itself the regression guard (a future edit that
+  // re-adds an engineInsights param here would be the bug coming back).
+  const result = canonicalPeakHourLocal({ bestWindow: { localHour: 8, medianUsdPerHour: 40 } })
+  check('generic peak claim reads canonicalBestTimes.bestWindow directly', result, 8)
+}
+{
+  const result = canonicalPeakHourLocal({ bestWindow: null })
+  check('no qualifying canonical window -> null (no crash, no fabricated hour, no SQL fallback)', result, null)
+}
+{
+  const result = canonicalPeakHourLocal(undefined)
+  check('canonicalBestTimes itself undefined (e.g. analytics not loaded yet) -> null, not a throw', result, null)
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// 2b. Today-specific claim (Daily Brief card only) — SQL daily_plan wins
+//     here, because this is the one question it's actually answering.
 // ══════════════════════════════════════════════════════════════════════
 {
   const engineInsights = { daily_plan: { best_hour: 14 } }
-  const result = canonicalPeakHourLocal(engineInsights, 20, { bestWindow: { localHour: 8 } })
-  check('engineInsights.daily_plan.best_hour still wins over everything else', result, 14)
+  const result = canonicalTodaySpecificHourLocal(engineInsights, 20)
+  check('today-specific claim: engineInsights.daily_plan.best_hour wins (this IS its question)', result, 14)
 }
 {
-  const result = canonicalPeakHourLocal(null, 20, { bestWindow: { localHour: 8 } })
-  check('dailyBrief.bh still wins over the canonical all-time fallback', result, 20)
+  const result = canonicalTodaySpecificHourLocal(null, 20)
+  check('today-specific claim: dailyBrief.bh used when SQL daily_plan is absent', result, 20)
 }
 {
-  const result = canonicalPeakHourLocal(null, null, { bestWindow: { localHour: 8, medianUsdPerHour: 40 } })
-  check('canonical bestWindow.localHour used as final fallback when higher tiers are absent', result, 8)
-}
-{
-  const result = canonicalPeakHourLocal(null, null, { bestWindow: null })
-  check('all tiers absent -> null (no crash, no fabricated hour)', result, null)
-}
-{
-  const result = canonicalPeakHourLocal(null, null, undefined)
-  check('canonicalBestTimes itself undefined (e.g. analytics not loaded yet) -> null, not a throw', result, null)
+  const result = canonicalTodaySpecificHourLocal(null, null)
+  check('today-specific claim: null when both sources absent (no crash, no fabricated hour)', result, null)
 }
 
 // ══════════════════════════════════════════════════════════════════════

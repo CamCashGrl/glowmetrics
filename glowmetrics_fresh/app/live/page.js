@@ -6,8 +6,8 @@ import { computeRoomHealth } from '../../lib/analytics/roomHealth';
 import { computeRevenueVelocity, computeLiveComparison } from '../../lib/analytics/velocity';
 import { detectSessionPhase, PHASES, getRecoveryActions, getGoalStrategy } from '../../lib/analytics/sessionPhase';
 import { computeOpportunityScore, computeStreamHealth } from '../../lib/analytics/opportunity';
-import { detectSessions } from '../../lib/analytics/sessions';
-import { computeBestTimes } from '../../lib/analytics';
+import { detectSessions, detectMeaningfulSessions } from '../../lib/analytics/sessions';
+import { computeCanonicalBestTimes } from '../../lib/analytics/bestTimes';
 import { tokenRate } from '../../lib/constants';
 import FeedbackWidget from '../components/FeedbackWidget';
 import EventsSync from './EventsSync';
@@ -52,11 +52,16 @@ export default function LivePage({ embedded = false } = {}) {
   const [flashTipId, setFlashTipId]   = useState(null);
   const [liveTick, setLiveTick]       = useState(0);
   const [sessions, setSessions]       = useState([]);
-  // Canonical bestHour/bestDay (same formula as the dashboard's Overview and
-  // Creator Report — lib/analytics.js computeBestTimes) computed over this
-  // page's own recent-90-day window, not injected from the dashboard's
-  // all-time analytics. The window stays intentionally different (see the
-  // fetch below); the calculation method no longer is.
+  // Canonical bestHour/bestDay — computeCanonicalBestTimes() (lib/analytics/
+  // bestTimes.js), the same session-based, median-$/hour, confidence-tiered
+  // engine Overview and Creator Report use — computed over this page's own
+  // recent-90-day window, not injected from the dashboard's all-time
+  // analytics. The window is intentionally different (see the fetch below,
+  // a "personal best from recent memory" is more actionable here than an
+  // all-time figure); the FORMULA is not — this page previously called the
+  // legacy tip-level-mean computeBestTimes() instead, which could disagree
+  // with the dashboard's canonical answer for reasons that had nothing to
+  // do with the intentional 90-day window.
   const [bestTimes, setBestTimes]     = useState(null);
 
   // ── DEMO / AUTH / EXT MODAL STATE ────────────────────────────────────
@@ -224,7 +229,15 @@ export default function LivePage({ embedded = false } = {}) {
         .then(({ data }) => {
           if (data) {
             setSessions(detectSessions(data));
-            setBestTimes(computeBestTimes(data));
+            // Shimmed to the {bestHour:{hour,avg}} shape peakHourData below
+            // already expects — same adaptation app/dashboard/page.js and
+            // CreatorReport.js use for their own bestWindow migration, so
+            // this page's rendering code needed no changes.
+            const { bestWindow } = computeCanonicalBestTimes(detectMeaningfulSessions(data), liveTimezone);
+            setBestTimes({
+              bestHour: bestWindow ? { hour: bestWindow.localHour, avg: bestWindow.medianUsdPerHour } : null,
+              bestDay: bestWindow ? { day: bestWindow.localDay, avg: bestWindow.medianUsdPerHour } : null,
+            });
           }
         });
     });
@@ -623,12 +636,12 @@ export default function LivePage({ embedded = false } = {}) {
     return { target: next, remaining, minsEst, progress };
   })();
 
-  // Peak Hour Countdown — the peak hour itself comes from computeBestTimes,
-  // the same canonical calculation Overview and Creator Report use (median
-  // USD per local-hour bucket, 3+ active buckets required), so this can't
-  // disagree with what the dashboard told the user earlier. Everything
-  // below (is it happening right now, how many minutes are left) is
-  // real-time application logic specific to this page.
+  // Peak Hour Countdown — the peak hour itself comes from
+  // computeCanonicalBestTimes(), the same engine Overview and Creator
+  // Report use (session-based, median $/hour, confidence-tiered), applied
+  // to this page's own recent-90-day session window (see bestTimes above).
+  // Everything below (is it happening right now, how many minutes are left)
+  // is real-time application logic specific to this page.
   const peakHourData = (() => {
     if (!bestTimes?.bestHour) return null;
     const peakHour = parseInt(bestTimes.bestHour.hour, 10);

@@ -900,20 +900,19 @@ function TitleGenerator({ C, glassCard, analytics, tips, sessions, whales }) {
     const now = new Date()
     const currentHour = now.getHours() // local hour, not UTC
     const todayDay = now.toLocaleDateString("en-US", { weekday: "long" })
-    const _analyticsBestHourCtx = analytics?.bestHour || null
-    let bestHour = null
-    if (_analyticsBestHourCtx) {
-      bestHour = parseInt(_analyticsBestHourCtx.hour) // already local from analytics.js toLocalHour
-    } else {
-      const hourUSD = {}; const hourCount = {}
-      ;(sessions || []).forEach(s => {
-        const h = new Date(s.startTime).getHours() // local hour
-        hourUSD[h] = (hourUSD[h] || 0) + s.totalUSD
-        hourCount[h] = (hourCount[h] || 0) + 1
-      })
-      const bestHourEntry = Object.entries(hourUSD).map(([h, usd]) => [h, usd / (hourCount[h] || 1)]).sort((a,b) => b[1]-a[1])[0]
-      bestHour = bestHourEntry ? parseInt(bestHourEntry[0]) : null
-    }
+    // Generic "peak" claim (the Title Generator's chips say "Peak NOW"/"Peak
+    // in Xh" — no "today" framing), so this reads canonicalBestTimes.
+    // bestWindow directly — same source as the command-bar Peak Window KPI
+    // — instead of the legacy analytics.bestHour, with its own second,
+    // hand-rolled mean-based fallback calculated from `sessions` right here
+    // when analytics.bestHour was absent. That fallback was a third
+    // independent "best hour" formula that could disagree with both the
+    // legacy field it backstopped and the canonical engine; the canonical
+    // engine already has its own confidence-tiered handling for sparse data,
+    // so no local fallback calculation is needed here at all.
+    const bestHour = analytics?.canonicalBestTimes?.bestWindow
+      ? analytics.canonicalBestTimes.bestWindow.localHour
+      : null
     // bestHour is already a local hour — format directly, no offset needed
     const fmtLocalHour = h => h === 0 ? "12 AM" : h < 12 ? `${h} AM` : h === 12 ? "12 PM" : `${h - 12} PM`
     const bestHourLabel = (bestHour === null || isNaN(bestHour)) ? null : fmtLocalHour(bestHour)
@@ -2792,8 +2791,16 @@ const stopImportMessageRotation = () => {
     const displayPlat = todayBestPlat || bestPlatPeak || bestPlatNow || topEarningPlat
     const displayAvg = todayBestAvg || bestPlatPeakAvg || bestPlatNowAvg || bestHour?.avg || 0
 
-    // Best day
-    const bestDay = analytics?.bestDay
+    // Best day — canonicalBestTimes.bestWindow, not legacy analytics.bestDay
+    // (tip-level mean). This card already reads the canonical hour (bh,
+    // above) for "today's peak"; using the legacy field just for "is today
+    // your best day" let the two halves of the same card disagree — e.g. bh
+    // correctly reflecting a Wednesday canonical window while isBestDay was
+    // computed against a legacy "Friday" answer, so the 🏆 badge could be
+    // wrong on the exact day the canonical hour says is best.
+    const bestDay = analytics?.canonicalBestTimes?.bestWindow
+      ? { day: analytics.canonicalBestTimes.bestWindow.localDay, avg: analytics.canonicalBestTimes.bestWindow.medianUsdPerHour }
+      : null
     const isBestDay = bestDay?.day === todayName
     const sessionAvg = analytics?.sessions?.length
       ? analytics.sessions.reduce((s, x) => s + x.totalUSD, 0) / analytics.sessions.length : 0
@@ -3014,24 +3021,50 @@ const stopImportMessageRotation = () => {
   // re-runs every minuteTick (as well as when the underlying data changes)
   const dailyBrief = memoOn(derivedCacheRef.current, 'dailyBrief', [tips, analytics, whales, minuteTick], buildDailyBrief)
 
-  // ── CANONICAL PEAK HOUR ──────────────────────────────────────────────────────
-  // Single source of truth used by the header, Daily Brief, and Losing Money.
-  // Prefer engineInsights daily_plan (most specific — SQL, get_user_insights;
-  // not migrated in Phase 1B, see the approved Best-Time Migration Matrix),
-  // then today's analytics best hour from dailyBrief (which itself now falls
-  // back to the canonical result — see buildDailyBrief() above), then the
-  // canonical all-time best-time result as final fallback. All three sources
-  // are already user-local hours: get_user_insights is called with
-  // p_timezone above, so daily_plan.best_hour comes back local (not UTC);
-  // dailyBrief.bh and canonicalBestTimes.bestWindow.localHour were already
-  // local via toLocalHour()/AT TIME ZONE respectively.
-  const canonicalPeakHourLocal = (
-    engineInsights?.daily_plan?.best_hour ??
-    dailyBrief?.bh ??
-    (analytics?.canonicalBestTimes?.bestWindow ? analytics.canonicalBestTimes.bestWindow.localHour : null)
-  )
+  // ── BEST-TIME SOURCE RECONCILIATION ─────────────────────────────────────
+  // Per the Free/Pro UX audit's best-time reconciliation pass: ONE metric,
+  // ONE definition, ONE source of truth, per distinct product question —
+  // and any surface answering a genuinely different question must be
+  // labeled as such, never silently substituted for the generic claim.
+  //
+  // Two genuinely different questions get asked on this page:
+  //
+  // 1. "What is my peak/best time to stream, in general?" (no day-of-week
+  //    scoping) — the command-bar "Peak Window" KPI, the "You're Losing
+  //    Money" missed-revenue card, and Smart Insights' peak-window insight
+  //    all ask this. canonicalBestTimes.bestWindow (lib/analytics/bestTimes.js
+  //    — session-based, median $/hour, confidence-tiered) is the DEFAULT,
+  //    authoritative source for this question, full stop. It used to lose to
+  //    engineInsights.daily_plan.best_hour (the SQL get_user_insights engine)
+  //    whenever that was present — meaning a completely different, narrower
+  //    SQL calculation (see canonicalTodaySpecificHourLocal below) could
+  //    silently override the canonical account-wide answer on a generic
+  //    "peak window" label with no indication anything had changed sources.
+  const canonicalPeakHourLocal = analytics?.canonicalBestTimes?.bestWindow
+    ? analytics.canonicalBestTimes.bestWindow.localHour
+    : null
   const canonicalPeakLabel = canonicalPeakHourLocal != null
     ? (() => { const _lh = ((canonicalPeakHourLocal % 24) + 24) % 24; return _lh===0?'12 AM':_lh<12?`${_lh} AM`:_lh===12?'12 PM':`${_lh-12} PM` })()
+    : null
+
+  // 2. "What is my best hour specifically for TODAY's day-of-week,
+  //    historically?" — a genuinely different, narrower question (SQL's
+  //    get_user_insights filters to tips that fell on today's weekday, min 2;
+  //    the canonical engine has no such day-of-week-only mode). Used ONLY by
+  //    the Daily Brief card below, whose copy explicitly says "today" — never
+  //    by a surface using generic "peak window" language. dailyBrief.bh is
+  //    itself already a graceful degradation chain (today-specific JS
+  //    calculation, then the canonical account-wide window as a last
+  //    resort — see buildDailyBrief() above), so this alone is the correct
+  //    fallback order for a "today" claim; it must not also feed the
+  //    generic peak-window claim above.
+  const canonicalTodaySpecificHourLocal = (
+    engineInsights?.daily_plan?.best_hour ??
+    dailyBrief?.bh ??
+    null
+  )
+  const canonicalTodaySpecificLabel = canonicalTodaySpecificHourLocal != null
+    ? (() => { const _lh = ((canonicalTodaySpecificHourLocal % 24) + 24) % 24; return _lh===0?'12 AM':_lh<12?`${_lh} AM`:_lh===12?'12 PM':`${_lh-12} PM` })()
     : null
 
   // re-runs every minuteTick (as well as when the underlying data changes)
@@ -3597,7 +3630,12 @@ const stopImportMessageRotation = () => {
           const { todayName, bhLabel: _bhLabel, bh, atPeak, hoursUntilPeak, displayPlat: _displayPlat, displayAvg,
             isBestDay, bestDay, sessionAvg, peakAvg, predictionLow, predictionHigh,
             sessionsAtPeakCount } = dailyBrief
-          const bhLabel = canonicalPeakLabel || _bhLabel
+          // This card's copy explicitly says "today" ("Your best time to
+          // stream today is...", "Since it's {todayName}...") — it must read
+          // the today-specific chain, not the generic canonicalPeakLabel
+          // (which can legitimately be a different day's window and would
+          // make this card's "today" framing false).
+          const bhLabel = canonicalTodaySpecificLabel || _bhLabel
           const displayPlat = engineInsights?.summary?.best_platform || _displayPlat
           // Real threshold from getModuleLockState('bestStreamingTimes'): 25+ tips
           // and 3+ meaningful sessions — matches the >=3 session-bucket requirement
