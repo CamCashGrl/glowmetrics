@@ -16,6 +16,7 @@ import { detectSessions, classifySession as classifySessionQuality } from './ana
 // from 'lib/analytics' keep working unchanged.
 import { calcMedian, toLocalHour, toLocalDow, toLocalDateStr } from './analytics/localTime'
 import { computeCanonicalBestTimes } from './analytics/bestTimes'
+import { computeMissedRevenue } from './analytics/missedRevenue'
 export { calcMedian, toLocalHour, toLocalDow }
 
 // ===============================
@@ -624,7 +625,7 @@ export function predictRevenue(tips, sessions, tz = 'UTC') {
   return predictions
 }
 
-export function generateLossAlerts(tips, sessions, whales, bestHour) {
+export function generateLossAlerts(tips, sessions, whales, bestHour, tz = 'UTC') {
   const alerts = []
   const now = Date.now()
   if (bestHour) {
@@ -841,7 +842,7 @@ export function aggregateRows(tips, tz = null) {
       privateShowFans: [], spyShowFans: [], earningsVelocity: null, totalStreamMinutes: 0,
       estimatedHourlyRate: 0, hourlyRateSessionCount: 0, hourlyRateTotalMinutes: 0,
       hourlyRateTotalUsd: 0, excludedUntimedSessionCount: 0,
-      platformVelocity: {}, missedRevenueByPlatform: {},
+      platformVelocity: {}, missedRevenue: { today_missed: null, cumulative_by_platform: {}, recent_streak_missed: null },
       returningVsNew: null, topFanDependency: null,
       dependencyRisk: null,
       canonicalBestTimes: { grid: [], bestWindow: null, earlySignal: null }
@@ -873,7 +874,7 @@ export function aggregateRows(tips, tz = null) {
   const insights    = generateInsights(tips, meaningfulSessions, bestDay, worstDay, bestHour, whales)
   const predictions = predictRevenue(tips, meaningfulSessions, userTz)
   const whaleAlerts = generateWhaleAlerts(whales)
-  const lossAlerts  = generateLossAlerts(tips, meaningfulSessions, whales, bestHour)
+  const lossAlerts  = generateLossAlerts(tips, meaningfulSessions, whales, bestHour, userTz)
 
   // Canonical account-wide best-time grid — session-based, median $/hour,
   // confidence-tiered (lib/analytics/bestTimes.js). generateNextMoves()'s
@@ -1065,39 +1066,28 @@ export function aggregateRows(tips, tz = null) {
     platformVelocity[p.platform] = p.hours > 0 ? p.usdPerHour : null
   })
 
-  // ── MISSED REVENUE BY PLATFORM ────────────────────────────────────────
-  // Audit checklist decision, documented once: three missed-revenue
-  // implementations remain (this one, driving the Platform tab cards;
-  // get_user_insights' missed_opportunity, SQL; and the canonical
-  // computeMissedRevenue() in lib/analytics/missedRevenue.js). The confirmed
-  // correctness bug here (comparing a local-tz best hour against a raw UTC
-  // session hour) was fixed regardless of the implementation's age — see
-  // the "sessionsNotAtBestHour" comment below. Full consolidation onto the
-  // canonical module is deferred for the same reason as PER-PLATFORM BEST
-  // TIMES above: this feeds the same platformBestTimes grid, so migrating
-  // one without the other would leave the Platform tab internally
-  // inconsistent (a missed-revenue figure computed against a different
-  // "best hour" than the heatmap right next to it). Both migrate together,
-  // scoped with the grid-parity work above, not independently.
-  const missedRevenueByPlatform = {}
-  Object.keys(platformBestTimes).forEach(p => {
-    const bestHourData = platformBestTimes[p].hour
-    if (!bestHourData) return
-    const platSessions = timedSessions.filter(s => s.platform === p)
-    if (platSessions.length < 3) return
-    const overallAvg = platSessions.reduce((s, x) => s + x.totalUSD, 0) / platSessions.length
-    const bestHourAvg = bestHourData.avg
-    if (bestHourAvg <= overallAvg * 1.2) return
-    // BUGFIX: bestHourData.hour is a LOCAL hour (platformBestTimes buckets via
-    // toLocalHour(..., userTz)) — comparing it against a raw UTC hour silently
-    // miscounted "sessions not at best hour" for any creator not in UTC. Both
-    // sides must use the same local-time interpretation.
-    const sessionsNotAtBestHour = platSessions.filter(s => Math.abs(toLocalHour(s.startTime, userTz) - bestHourData.hour) > 1).length
-    const missedRevenue = parseFloat(((bestHourAvg - overallAvg) * sessionsNotAtBestHour).toFixed(2))
-    if (missedRevenue > 5) {
-      missedRevenueByPlatform[p] = { bestHour: bestHourData.hour, bestHourAvg, overallAvg: parseFloat(overallAvg.toFixed(2)), sessionsNotAtBestHour, missedRevenue, multiplier: parseFloat((bestHourAvg / overallAvg).toFixed(1)) }
-    }
-  })
+  // ── MISSED REVENUE ───────────────────────────────────────────────────
+  // Canonical: lib/analytics/missedRevenue.js. This replaces the legacy
+  // missedRevenueByPlatform that used to be computed inline here.
+  //
+  // The legacy version had a genuine unit mismatch: it subtracted a MEAN
+  // $/SESSION (platSessions totalUSD / count) from a MEDIAN $/HOUR
+  // (platformBestTimes' hour-bucket figure) and multiplied the difference by
+  // a session count — three incompatible units in one expression. A 3-hour
+  // session and a 20-minute session contributed identically to the "per
+  // session" side while the other side was a rate. The canonical version
+  // subtracts median $/hour from median $/hour, so the difference is a real
+  // rate gap.
+  //
+  // Its previously-documented deferral reason — that migrating this without
+  // the platformBestTimes grid would leave "the Platform tab internally
+  // inconsistent (a missed-revenue figure computed against a different best
+  // hour than the heatmap right next to it)" — was factually wrong: the
+  // missed-revenue card renders on the OVERVIEW tab, not beside the Platforms
+  // heatmap. Nothing is adjacent to contradict, and the Platform ROI card's
+  // own "Best window" badge already reads the canonical per-platform window,
+  // so this migration increases consistency rather than splitting it.
+  const missedRevenue = computeMissedRevenue(meaningfulSessions, userTz)
 
   // ── RETURNING VS NEW ──────────────────────────────────────────────────
   const fanTipCounts = {}, fanTipUSD2 = {}
@@ -1316,7 +1306,7 @@ export function aggregateRows(tips, tz = null) {
     earningsVelocity, totalStreamMinutes, platformVelocity,
     estimatedHourlyRate, hourlyRateSessionCount, hourlyRateTotalMinutes,
     hourlyRateTotalUsd, excludedUntimedSessionCount,
-    missedRevenueByPlatform, returningVsNew, topFanDependency, dependencyRisk,
+    missedRevenue, returningVsNew, topFanDependency, dependencyRisk,
     // preTipBehavior and trueHourlyAvg intentionally removed rather than
     // left as permanently-null keys. preTipBehavior's dashboard card was
     // deleted in the same pass: its "peak tipping window" duplicated

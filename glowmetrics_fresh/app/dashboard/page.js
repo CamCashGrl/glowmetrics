@@ -2469,7 +2469,10 @@ const stopImportMessageRotation = () => {
   const platformBestTimes     = analytics?.platformBestTimes     || {}
   const earningsVelocity      = analytics?.earningsVelocity      ?? null
   const platformVelocity      = analytics?.platformVelocity      || {}
-  const missedRevenueByPlat   = analytics?.missedRevenueByPlatform || {}
+  // Canonical missed revenue (lib/analytics/missedRevenue.js): median $/hr in
+  // the platform's own best day+hour window vs its overall median $/hr, times
+  // sessions outside that window. Meaningful sessions only, creator-local.
+  const missedRevenueByPlat   = analytics?.missedRevenue?.cumulative_by_platform || {}
   const returningVsNew        = analytics?.returningVsNew        || null
   const topFanDependency      = analytics?.topFanDependency      || null
 
@@ -4358,9 +4361,11 @@ const stopImportMessageRotation = () => {
                   (a.type === 'churn_risk') ? hasStreamedEnough(a.whale) : true
                 ).slice(0, 3)
               ].slice(0, 6)
+              // computeMissedRevenue() already applies the 1.2x gap threshold and
+              // the >=$1/hr rate-gap floor; no second filter here. Ranked by the
+              // measured rate gap — no cumulative dollar total is produced.
               const missedEntries = Object.entries(missedRevenueByPlat)
-                .filter(([,m]) => m.missedRevenue > 5)
-                .sort((a,b) => b[1].missedRevenue - a[1].missedRevenue)
+                .sort((a,b) => b[1].rateGapUsdPerHour - a[1].rateGapUsdPerHour)
               if (!allAlerts.length && !missedEntries.length) return null
               const peakHourLabel = canonicalPeakLabel
               return (
@@ -4373,23 +4378,31 @@ const stopImportMessageRotation = () => {
                     </div>
                   </div>
 
-                  {/* Missed Revenue — formula: (bestHourAvg - overallAvg) × sessionsNotAtBestHour */}
+                  {/* Missed Revenue — canonical (lib/analytics/missedRevenue.js).
+                      Definition, stated here so the number is auditable:
+                      (this platform's best-window median $/hr - its overall
+                      median $/hr) x sessions outside that window. Meaningful
+                      sessions only, bucketed in the creator's local timezone.
+                      The previous card subtracted a MEAN $/session from a
+                      MEDIAN $/hr, described a PER-PLATFORM hour using the
+                      ACCOUNT-wide peak label, and fell back to a hardcoded
+                      "5x" multiplier when the real one was missing. */}
                   {missedEntries.length > 0 && (
                     <div style={{ marginBottom: 14 }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: C.orange, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 8 }}>💸 Missed Revenue (by streaming off-peak)</div>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: C.orange, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 8 }}>💸 Missed Revenue (streaming outside your best window)</div>
                       {missedEntries.map(([plat, m], i) => (
                         <div key={i} style={{ padding: "12px 14px", borderRadius: 10, marginBottom: 8, background: "rgba(251,146,60,0.08)", border: "1px solid rgba(251,146,60,0.22)" }}>
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, flexWrap: "wrap" }}>
                             <div>
                               <div style={{ fontSize: 13, fontWeight: 700, color: C.white, marginBottom: 3 }}>
-                                📉 {plat} — peak hour earns <span style={{ color: C.cyan }}>{m.multiplier || (m.bestHourAvg && m.overallAvg ? (m.bestHourAvg/m.overallAvg).toFixed(1) : "5")}x</span> your avg session. Shift more streams to {peakHourLabel} to add ~<span style={{ color: C.green }}>${Math.round((m.bestHourAvg||0) - (m.overallAvg||0))}/stream</span>
+                                📉 {plat} — {m.bestLocalDay}s {((m.bestLocalHour%24)+24)%24 === 0 ? '12 AM' : ((m.bestLocalHour%24)+24)%24 < 12 ? `${((m.bestLocalHour%24)+24)%24} AM` : ((m.bestLocalHour%24)+24)%24 === 12 ? '12 PM' : `${((m.bestLocalHour%24)+24)%24 - 12} PM`} earns{m.overallMedianUsdPerHour > 0 ? <> <span style={{ color: C.cyan }}>{(m.bestWindowMedianUsdPerHour / m.overallMedianUsdPerHour).toFixed(1)}x</span></> : null} <span style={{ color: C.green }}>${(m.bestWindowMedianUsdPerHour - m.overallMedianUsdPerHour).toFixed(2)}/hr</span> more than your typical hour on this platform
                               </div>
                               <div style={{ fontSize: 12, color: C.muted }}>
-                                {m.sessionsNotAtBestHour} sessions ran off-peak · Best hour is {peakHourLabel} (${m.bestHourAvg.toFixed(0)} avg) vs your overall ${m.overallAvg.toFixed(0)} avg
+                                {m.sessionsNotAtBestWindow} session{m.sessionsNotAtBestWindow === 1 ? '' : 's'} ran outside it · ${m.bestWindowMedianUsdPerHour.toFixed(2)}/hr in-window vs ${m.overallMedianUsdPerHour.toFixed(2)}/hr overall (median, meaningful sessions)
                               </div>
                             </div>
                             <div style={{ fontSize: 11, padding: "3px 9px", borderRadius: 20, background: "rgba(251,146,60,0.2)", color: C.orange, fontWeight: 700, whiteSpace: "nowrap" }}>
-                              Stream at {peakHourLabel}
+                              Stream {m.bestLocalDay}s
                             </div>
                           </div>
                         </div>

@@ -1,4 +1,18 @@
-// Canonical missed-revenue calculation — three distinct fields, kept separate
+// Canonical missed-revenue calculation. THE authoritative user-facing
+// definition, stated once here and echoed in the dashboard card's own copy:
+//
+//   cumulative_by_platform[p].rateGapUsdPerHour =
+//     p's best-window median $/hr  -  p's overall median $/hr
+//
+//   scope       : meaningfulSessions only (lib/analytics/sessions.js)
+//   timezone    : the creator's resolved profiles.timezone, throughout
+//   output      : a measured RATE GAP ($/hr), plus the hours and sessions that
+//                 ran outside the window. No cumulative dollar total — see the
+//                 note at the calculation for why one cannot be supported.
+//   gating      : window beats the platform's overall median by >1.2x, the
+//                 platform has >=3 sessions, and the rate gap is >=$1/hr
+//
+// Three distinct fields, kept separate
 // per canonical-analytics-rules.md's explicit determination (B: "related but
 // different calculations, not the same concept" — merging them into one
 // number would lose real, distinct information each currently captures).
@@ -83,20 +97,45 @@ export function computeMissedRevenue(meaningfulSessions, tz, now = new Date()) {
       ? [...overallMedianRates].sort((a, b) => a - b)[Math.floor(overallMedianRates.length / 2)]
       : 0
     if (platBest.medianUsdPerHour <= overallMedian * 1.2) continue // not a meaningful gap
-    const notAtBestWindow = platSessions.filter(s => {
+    const offWindowSessions = platSessions.filter(s => {
       const d = LOCAL_DAY_NAMES[toLocalDow(s.startTime, tz)]
       const h = toLocalHour(s.startTime, tz)
       return !(d === platBest.localDay && h === platBest.localHour)
-    }).length
-    const missedRevenue = parseFloat(((platBest.medianUsdPerHour - overallMedian) * notAtBestWindow).toFixed(2))
-    if (missedRevenue > 5) {
+    })
+    const notAtBestWindow = offWindowSessions.length
+    // DENOMINATOR: the rate gap is $/HOUR, so it must be multiplied by HOURS
+    // actually streamed off-window — not by a session COUNT. Multiplying a
+    // rate by a count yields no meaningful unit, and systematically overstated
+    // the figure for accounts whose sessions run under an hour (on the real
+    // 1912-row regression CSV that was $368.52 of "missed" revenue against
+    // $469.52 lifetime earnings — 78%, from sessions averaging ~1.1h).
+    const offWindowHours = offWindowSessions.reduce((sum, s) => sum + (s.durationHours || 0), 0)
+    // NO CUMULATIVE DOLLAR FIGURE IS PRODUCED, deliberately.
+    //
+    // The obvious formula — rate gap x off-window hours — implies the creator
+    // could have streamed every one of those hours inside a window that exists
+    // for ~1 hour a week, and that her peak rate would hold across all of
+    // them. On the real 1912-row regression CSV that yields $427 "missed"
+    // against $469 lifetime earnings (91%): arithmetically derivable, but a
+    // counterfactual no data supports. Capping at the window's weekly
+    // recurrence does not rescue it (that span is 97 weeks vs 85.8 off-window
+    // hours, so the cap never binds).
+    //
+    // What IS measured, and all this returns: the rate gap between the
+    // window and the platform's typical hour, how many hours/sessions ran
+    // outside it, and which window it is. Those are facts. Ranking uses the
+    // rate gap directly rather than a synthesized dollar total.
+    const rateGapUsdPerHour = parseFloat((platBest.medianUsdPerHour - overallMedian).toFixed(2))
+    if (rateGapUsdPerHour >= 1) {
+
       cumulative_by_platform[platform] = {
         bestLocalDay: platBest.localDay,
         bestLocalHour: platBest.localHour,
         bestWindowMedianUsdPerHour: platBest.medianUsdPerHour,
         overallMedianUsdPerHour: parseFloat(overallMedian.toFixed(2)),
         sessionsNotAtBestWindow: notAtBestWindow,
-        missedRevenue,
+        offWindowHours: parseFloat(offWindowHours.toFixed(2)),
+        rateGapUsdPerHour,
       }
     }
   }

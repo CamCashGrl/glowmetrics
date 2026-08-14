@@ -7,6 +7,7 @@ import {
 } from "recharts"
 import { WHALE_LIFETIME_TOKEN_THRESHOLD } from "../../lib/constants"
 import { toLocalHour, toLocalDow, toLocalDateStr } from "../../lib/analytics/localTime"
+import { detectSessions } from "../../lib/analytics/sessions"
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const BG     = "#0a0e1a"
@@ -67,41 +68,28 @@ function normPlatform(raw) {
 }
 
 // ─── Pure data functions ──────────────────────────────────────────────────────
+// Adapts the canonical detectSessions() (lib/analytics/sessions.js) to the
+// {start, end, usd, tokens, tipsCount, tippers, durationMins, localHourStart,
+// platform} shape this file's charts already expect.
+//
+// This file previously had its own grouping: a 4-hour gap with NO platform
+// boundary, versus the canonical 3-hour gap where a platform change starts a
+// new session. On the real 1912-row regression CSV that produced 158 sessions
+// here against 168 everywhere else — a 6% discrepancy in a user-facing session
+// count, with no reason for the two to differ. Session-count/duration figures
+// on the Money Map now match the Overview, Creator Report and Stream Planner.
 function groupIntoSessions(tips, tz) {
   if (!tips?.length) return []
-  const sorted = [...tips].sort((a,b)=>new Date(a.date_time)-new Date(b.date_time))
-  const GAP = 4*60*60*1000
-  const sessions = []
-  let cur = null
-  for (const t of sorted) {
-    const ts = new Date(t.date_time).getTime()
-    if (!cur || ts - cur.lastTs > GAP) {
-      if (cur) sessions.push(cur)
-      const d = new Date(t.date_time)
-      cur = {
-        start: d,
-        end: d,
-        lastTs: ts,
-        tokens: 0,
-        usd: 0,
-        tipsCount: 0,
-        tippers: new Set(),
-        platform: normPlatform(t.platform),
-      }
-    }
-    cur.tokens   += Number(t.tokens||0)
-    cur.usd      += Number(t.usd||0)
-    cur.tipsCount++
-    if (t.username) cur.tippers.add(t.username)
-    cur.end    = new Date(t.date_time)
-    cur.lastTs = ts
-  }
-  if (cur) sessions.push(cur)
-  return sessions.map(s => ({
-    ...s,
-    tippers: s.tippers.size,
-    durationMins: (s.end - s.start) / 60000 || 5,
-    localHourStart: localHourDecFromDate(s.start, tz),
+  return detectSessions(tips).map(s => ({
+    start: new Date(s.startTime),
+    end: new Date(s.endTime),
+    tokens: s.totalTokens,
+    usd: s.totalUSD,
+    tipsCount: s.tipCount,
+    tippers: s.uniqueFans,
+    platform: normPlatform(s.platform),
+    durationMins: s.durationMinutes || 5,
+    localHourStart: localHourDecFromDate(s.startTime, tz),
   }))
 }
 
