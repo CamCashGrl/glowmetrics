@@ -63,7 +63,12 @@ check('does not claim a tier the engine calls insufficient', !src.includes('insu
 check('hero is gated on a real window', src.includes('const hasWindow = !!bestWindow'))
 check('evidence chips are gated on hasWindow', /hasWindow\s*&&\s*\(\s*<div style=\{\{ display: "grid"/.test(src))
 check('fan overlap chip handles the null case', src.includes('overlap?.count'))
-check('opportunity block is gated on a real measured gap', src.includes('hasWindow && topGap'))
+// The hero's right column is gated on hasWindow, and the opportunity figure
+// inside it is separately gated on a real measured topGap — so neither can
+// render without the canonical value behind it.
+check('hero right column is gated on a real window', /\{hasWindow && \(/.test(src))
+check('opportunity figure is separately gated on a measured gap', /\{topGap && \(/.test(src))
+check('opportunity is quoted for the recommended 2-hour window', src.includes('const WINDOW_HOURS = 2'))
 check('falls back to earlySignal rather than inventing a window', src.includes('earlySignal ?'))
 check('states plainly when there is not enough history', raw.includes('Not enough history for a reliable window yet'))
 

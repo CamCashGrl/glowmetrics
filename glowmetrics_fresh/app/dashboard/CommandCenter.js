@@ -57,7 +57,15 @@ const CTA_GRADIENT  = "linear-gradient(90deg,#22D3EE 0%,#7C5CFF 48%,#EC4899 100%
 const HERO_GRADIENT = "linear-gradient(120deg, rgba(34,211,238,0.10) 0%, rgba(124,92,255,0.12) 46%, rgba(236,72,153,0.10) 100%)"
 
 const fmtUsd  = (n) => `$${Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-const fmtUsd0 = (n) => `$${Math.round(Number(n || 0)).toLocaleString("en-US")}`
+const fmtUsd0 = (n) => {
+  const v = Number(n || 0)
+  // Round to whole dollars only when that does not collapse a real value to
+  // "$0" — a $0.32 lifetime fan rendering as "$0 lifetime" reads as a bug.
+  return v > 0 && v < 10 ? `$${v.toFixed(2)}` : `$${Math.round(v).toLocaleString("en-US")}`
+}
+// Hours: 1 decimal below 10h so a sparse account never shows "0h" beside a
+// per-hour rate, which reads as a contradiction.
+const fmtHours = (h) => (h > 0 && h < 10 ? `${h.toFixed(1)}h` : `${Math.round(h)}h`)
 const fmtHour = (h) => {
   const n = ((h % 24) + 24) % 24
   return n === 0 ? "12:00 AM" : n < 12 ? `${n}:00 AM` : n === 12 ? "12:00 PM" : `${n - 12}:00 PM`
@@ -114,7 +122,9 @@ function Chip({ icon, title, value, sub, accent = C.pink }) {
       <div style={{ fontSize: 15, flexShrink: 0, marginTop: 1 }}>{icon}</div>
       <div style={{ minWidth: 0 }}>
         <div style={{ fontSize: 11, color: C.muted, fontWeight: 600 }}>{title}</div>
-        <div style={{ fontSize: 14, fontWeight: 800, color: accent, marginTop: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{value}</div>
+        {/* wraps rather than truncating — at 2-up on a 390px screen these
+            were clipping to "8:00 AM - 1..." and "4 high-valu..." */}
+        <div style={{ fontSize: 14, fontWeight: 800, color: accent, marginTop: 3, lineHeight: 1.35 }}>{value}</div>
         {sub && <div style={{ fontSize: 10.5, color: C.muted, marginTop: 2 }}>{sub}</div>}
       </div>
     </div>
@@ -133,6 +143,46 @@ function Stat({ value, label: l, delta, accent = C.white }) {
           </span>
         )}
       </div>
+    </div>
+  )
+}
+
+// Proof beside the recommendation: the recommended window's median $/hr
+// against the platform's typical hour.
+//
+// This replaced a 24-bar hour-of-day chart. That chart could not be made
+// honest on real data: scoped to the recommended day, the production CSV has
+// eight Wednesday buckets, and hour 6 shows $42.09/hr from ONE session —
+// exactly the "one good night" the engine's confidence tiers exist to
+// discount. Drawn at true height it dwarfed the $9.52/hr recommendation
+// (4 sessions), so the chart visibly argued against the headline above it.
+// Restricting the chart to buckets meeting the same 4-session bar left a
+// single bar, which read as broken. A 24-bar distribution implies a precision
+// this data does not have; a two-value comparison states exactly what the
+// recommendation rests on.
+function WindowProof({ windowRate, baselineRate, sessions, tierLabel, dayLabel, hourLabel }) {
+  const max = Math.max(windowRate, baselineRate, 0.01)
+  const Bar = ({ v, title, sub, gradient }) => (
+    <div style={{ marginBottom: 14 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
+        <span style={{ fontSize: 12, color: C.text }}>{title}</span>
+        <span style={{ fontSize: 15, fontWeight: 800, color: gradient ? C.white : C.text }}>{fmtUsd(v)}/hr</span>
+      </div>
+      <div style={{ height: 10, borderRadius: 6, background: "rgba(255,255,255,0.05)", overflow: "hidden" }}>
+        <div style={{
+          width: `${Math.max((v / max) * 100, 4)}%`, height: "100%", borderRadius: 6,
+          background: gradient ? CTA_GRADIENT : "rgba(148,163,184,0.35)",
+          boxShadow: gradient ? "0 0 14px rgba(34,211,238,0.35)" : "none",
+        }} />
+      </div>
+      {sub && <div style={{ fontSize: 10.5, color: C.muted, marginTop: 5 }}>{sub}</div>}
+    </div>
+  )
+  return (
+    <div>
+      <div style={{ ...label, marginBottom: 12 }}>Why this window</div>
+      <Bar v={windowRate} gradient title={`${dayLabel}s ${hourLabel}`} sub={`${sessions} qualifying session${sessions === 1 ? "" : "s"} · ${tierLabel}`} />
+      <Bar v={baselineRate} title="Your typical hour" sub="median across every qualifying session" />
     </div>
   )
 }
@@ -188,9 +238,13 @@ export default function CommandCenter({
   const baseline = topGap?.overallMedianUsdPerHour ?? null
   const pctAbove = (bestWindow && baseline > 0)
     ? Math.round(((bestWindow.medianUsdPerHour - baseline) / baseline) * 100) : null
-  const avgSessionHours = (sessionCount > 0 && streamHours > 0) ? streamHours / sessionCount : 2
-  const oppLow  = topGap ? topGap.rateGapUsdPerHour * Math.max(1, avgSessionHours) : null
-  const oppHigh = topGap ? topGap.rateGapUsdPerHour * Math.max(1, avgSessionHours) * 1.5 : null
+  // Opportunity is quoted for the WINDOW WE RECOMMEND (a 2-hour bucket, the
+  // same span fmtWindow renders), not the account's average session length.
+  // Quoting a 1.1-hour basis under a "go live 8-10 AM" headline understated
+  // the very thing the CTA asks for.
+  const WINDOW_HOURS = 2
+  const oppLow  = topGap ? topGap.rateGapUsdPerHour * WINDOW_HOURS : null
+  const oppHigh = topGap ? topGap.rateGapUsdPerHour * WINDOW_HOURS * 1.5 : null
 
   const hasWindow = !!bestWindow
   const greeting = `Good ${new Date().getHours() < 12 ? "morning" : new Date().getHours() < 18 ? "afternoon" : "evening"}, ${firstName || "there"}`
@@ -198,13 +252,6 @@ export default function CommandCenter({
   // Hourly distribution for the evidence bar chart — read straight off the
   // canonical grid, summed per local hour. Presentational shaping of an
   // existing canonical array, not a new metric.
-  const hourBars = useMemo(() => {
-    const byHour = Array.from({ length: 24 }, () => 0)
-    grid.forEach(g => { byHour[g.localHour] = Math.max(byHour[g.localHour], g.medianUsdPerHour || 0) })
-    const max = Math.max(...byHour, 0.01)
-    return byHour.map((v, h) => ({ h, v, pct: v / max }))
-  }, [grid])
-
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 
@@ -260,17 +307,32 @@ export default function CommandCenter({
             </div>
           </div>
 
-          {/* OPPORTUNITY — measured rate gap only. The frozen layer
-              deliberately produces no cumulative "you lost $X" figure. */}
-          {hasWindow && topGap && (
-            <div style={{ flex: "0 1 250px", textAlign: "right", minWidth: 190 }}>
-              <div style={{ ...label, color: C.muted }}>Estimated opportunity</div>
-              <div style={{ fontSize: 30, fontWeight: 800, color: C.white, letterSpacing: "-0.03em", marginTop: 8 }}>
-                +{fmtUsd0(oppLow)} – {fmtUsd0(oppHigh)}
-              </div>
-              <div style={{ fontSize: 11.5, color: C.muted, marginTop: 5 }}>
-                for a {Math.max(1, avgSessionHours).toFixed(1)}-hour stream at the {fmtUsd(topGap.rateGapUsdPerHour)}/hr gap
-              </div>
+          {/* RIGHT: opportunity + the chart that proves it. The reference
+              puts the earnings-per-hour distribution here; leaving this half
+              empty was the single largest visual defect in the first pass. */}
+          {hasWindow && (
+            <div style={{ flex: "1 1 340px", minWidth: 280 }}>
+              {topGap && (
+                <div style={{ textAlign: "right", marginBottom: 16 }}>
+                  <div style={{ ...label, color: C.muted }}>Estimated opportunity</div>
+                  <div style={{ fontSize: 30, fontWeight: 800, color: C.green, letterSpacing: "-0.03em", marginTop: 6 }}>
+                    +{fmtUsd0(oppLow)} – {fmtUsd0(oppHigh)}
+                  </div>
+                  <div style={{ fontSize: 11.5, color: C.muted, marginTop: 4 }}>
+                    if you stream the full 2-hour window, at the {fmtUsd(topGap.rateGapUsdPerHour)}/hr gap
+                  </div>
+                </div>
+              )}
+              {baseline != null && (
+                <WindowProof
+                  windowRate={bestWindow.medianUsdPerHour}
+                  baselineRate={baseline}
+                  sessions={bestWindow.sessionCount}
+                  tierLabel={TIER_COPY[bestWindow.tier] || "Pattern"}
+                  dayLabel={bestWindow.localDay}
+                  hourLabel={fmtWindow(bestWindow.localHour)}
+                />
+              )}
             </div>
           )}
         </div>
@@ -278,54 +340,22 @@ export default function CommandCenter({
 
       {/* ── EVIDENCE CHIPS ─────────────────────────────────────────── */}
       {hasWindow && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 11 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(158px, 1fr))", gap: 11 }}>
           <Chip icon="🕐" title="Best window" value={fmtWindow(bestWindow.localHour)} sub={`${bestWindow.localDay}s · ${TIER_COPY[bestWindow.tier] || "Pattern"}`} />
           <Chip icon="👥" title={overlap?.count ? "Fans active in it" : "Fan overlap"}
                 value={overlap?.count ? `${overlap.count} high-value fan${overlap.count === 1 ? "" : "s"}` : "None yet"}
                 sub={overlap?.count ? `${fmtUsd0(overlap.totalUSD)} lifetime combined` : "No repeat fans in this window"}
                 accent={overlap?.count ? C.indigo : C.muted} />
           {topPlatform && (
-            <Chip icon="📈" title={`${topPlatform.platform} is #1`} value={`${fmtUsd(topPlatform.usdPerHour)}/hr`} sub={`${topPlatform.sessions} sessions · ${(topPlatform.hours || 0).toFixed(0)}h`} accent={C.cyan} />
+            <Chip icon="📈" title={`${topPlatform.platform} is #1`} value={`${fmtUsd(topPlatform.usdPerHour)}/hr`} sub={`${topPlatform.sessions} sessions · ${fmtHours(topPlatform.hours || 0)}`} accent={C.cyan} />
           )}
           <Chip icon="📊" title="Sample behind it" value={`${bestWindow.sessionCount} session${bestWindow.sessionCount === 1 ? "" : "s"}`} sub={TIER_COPY[bestWindow.tier] || "Pattern"} accent={C.gold} />
         </div>
       )}
 
-      {/* ── WHY THIS IS YOUR BEST MOVE ─────────────────────────────── */}
-      {hasWindow && (
-        <div style={card({ padding: 22 })}>
-          <div style={{ fontSize: 15, fontWeight: 800, color: C.white }}>Why this is your best move</div>
-          <div style={{ fontSize: 12.5, color: C.muted, marginTop: 4 }}>
-            We analyzed your {streamHours.toFixed(0)} tracked hours across {sessionCount} qualifying session{sessionCount === 1 ? "" : "s"} and found a repeating pattern.
-          </div>
-
-          <div style={{ marginTop: 18 }}>
-            <div style={{ ...label, marginBottom: 9 }}>Median $/hr by hour of day</div>
-            <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 92 }}>
-              {hourBars.map(({ h, v, pct }) => {
-                const isBest = h === bestWindow.localHour
-                return (
-                  <div key={h} title={v > 0 ? `${fmtHour(h)} — ${fmtUsd(v)}/hr` : `${fmtHour(h)} — no qualifying sessions`}
-                       style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "flex-end", height: "100%", minWidth: 0 }}>
-                    <div style={{
-                      height: `${Math.max(pct * 100, v > 0 ? 6 : 2)}%`,
-                      background: isBest ? CTA_GRADIENT : v > 0 ? "rgba(124,92,255,0.38)" : "rgba(255,255,255,0.05)",
-                      borderRadius: 3,
-                      boxShadow: isBest ? "0 0 14px rgba(34,211,238,0.45)" : "none",
-                    }} />
-                  </div>
-                )
-              })}
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, fontSize: 9.5, color: C.muted }}>
-              <span>12 AM</span><span>6 AM</span><span>12 PM</span><span>6 PM</span><span>11 PM</span>
-            </div>
-            <div style={{ fontSize: 11.5, color: C.muted, marginTop: 9 }}>
-              Highlighted bar is your best window. Bars show the canonical median $/hr per hour bucket — empty hours have no qualifying sessions.
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Chart moved into the hero (above). The standalone "Why this is your
+          best move" card was removed: it duplicated the same distribution in a
+          second card while the hero sat half-empty. */}
 
       {/* ── FANS + PERFORMANCE ─────────────────────────────────────── */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(290px, 1fr))", gap: 14 }}>
@@ -364,10 +394,10 @@ export default function CommandCenter({
 
         <div style={card({ padding: 20 })}>
           <div style={{ fontSize: 14.5, fontWeight: 800, color: C.white, marginBottom: 14 }}>Your money story</div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 10 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(88px, 1fr))", gap: 10 }}>
             <Stat value={fmtUsd(totalUSD)} label="Total earnings" accent={C.white} />
             <Stat value={`${fmtUsd(hourlyRate)}`} label="Per hour" accent={C.green} />
-            <Stat value={`${streamHours.toFixed(0)}h`} label="Total hours" accent={C.white} />
+            <Stat value={fmtHours(streamHours)} label="Total hours" accent={C.white} />
             <Stat value={sessionCount.toLocaleString()} label="Sessions" accent={C.white} />
             <Stat value={fanCount.toLocaleString()} label="Fans" accent={C.indigo} />
             {momentum && momentum.label !== "No data" && (
