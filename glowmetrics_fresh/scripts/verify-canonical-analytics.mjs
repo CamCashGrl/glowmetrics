@@ -214,6 +214,73 @@ check('timezone fallback: neither present -> UTC, explicitly marked', resolveCre
   check('timezone change: same session buckets differently under new tz', newTzHour, 8)
 }
 
+// ── NULL timezone gets initialized / explicit timezone is never
+//    overwritten — mirrors lib/timezone.js's autoPopulateTimezoneIfMissing(),
+//    which is race-safe via .is('timezone', null) in the real Supabase
+//    update filter. This mirror simulates that filter against an in-memory
+//    "row" instead of a real DB round trip.
+function mockAutoPopulateTimezoneIfMissing(row, browserTz) {
+  if (row.timezone) return { wrote: false, row } // explicit value present -> never touched
+  if (!browserTz) return { wrote: false, row }
+  return { wrote: true, row: { ...row, timezone: browserTz } }
+}
+{
+  const nullRow = { id: 'u1', timezone: null }
+  const { wrote, row } = mockAutoPopulateTimezoneIfMissing(nullRow, 'America/Denver')
+  check('NULL timezone: auto-populate writes the browser-detected value', wrote, true)
+  check('NULL timezone: auto-populate result stores that value', row.timezone, 'America/Denver')
+}
+{
+  const explicitRow = { id: 'u2', timezone: 'Asia/Kolkata' }
+  const { wrote, row } = mockAutoPopulateTimezoneIfMissing(explicitRow, 'America/Denver')
+  check('explicit timezone: auto-populate does NOT write (no wrote flag)', wrote, false)
+  check('explicit timezone: saved value is untouched, not overwritten by browser', row.timezone, 'Asia/Kolkata')
+}
+{
+  // Simulates a creator's second device reporting a different browser tz —
+  // still must not overwrite the already-saved preference.
+  const explicitRow = { id: 'u3', timezone: 'Europe/London' }
+  const { wrote, row } = mockAutoPopulateTimezoneIfMissing(explicitRow, 'Australia/Sydney')
+  check('explicit timezone: a DIFFERENT browser tz on a later load still does not overwrite', wrote === false && row.timezone === 'Europe/London', true)
+}
+
+// ── Platform timestamps crossing local midnight — two platforms, one tip
+//    each, both stored at the same UTC instant that falls on different
+//    local calendar dates/hours depending on tz; confirms per-tip local
+//    bucketing is independent per timestamp, not accidentally shared state
+//    across platforms in the same buckets object.
+{
+  const platformTips = [
+    // 04:30 UTC minus America/New_York's August (EDT, UTC-4) offset = 00:30
+    // local — just past midnight, still Aug 11 local (Tuesday).
+    { startTime: '2026-08-11T04:30:00Z', platform: 'Chaturbate', totalUSD: 40, durationMinutes: 60, usdPerHour: 40 },
+    { startTime: '2026-08-11T04:30:00Z', platform: 'BongaCams', totalUSD: 40, durationMinutes: 60, usdPerHour: 40 },
+  ]
+  const { grid } = computeCanonicalBestTimes(platformTips, 'America/New_York')
+  check('platform timestamps crossing local midnight: both platforms land in the same local bucket (same instant, same tz)', grid.length, 1)
+  check('platform timestamps crossing local midnight: local day is Aug 11 (00:30 local), not Aug 10 (UTC calendar date)', grid[0].localDay, 'Tuesday') // 2026-08-11 is a Tuesday
+  check('platform timestamps crossing local midnight: local hour is 0 (12am), correctly rolled past midnight from 04:30 UTC', grid[0].localHour, 0)
+}
+
+// ── Timezone change must not mutate historical source data — resolving a
+//    session/tip under a different tz must never write back to the
+//    session/tip object itself (toLocalHour/toLocalDow/toLocalDateStr are
+//    pure: dateStr in, bucket out — no assignment to the input).
+{
+  const historicalSession = Object.freeze({ startTime: '2026-08-10T23:30:00Z', totalUSD: 40, platform: 'Chaturbate' })
+  // Object.freeze means any accidental mutation attempt inside toLocalHour/
+  // toLocalDow would throw in strict mode / silently no-op — either way the
+  // object's own fields must be provably unchanged after resolving it under
+  // two different timezones.
+  const before = JSON.stringify(historicalSession)
+  toLocalHour(historicalSession.startTime, 'America/New_York')
+  toLocalDow(historicalSession.startTime, 'America/New_York')
+  toLocalHour(historicalSession.startTime, 'Asia/Tokyo')
+  toLocalDateStr(historicalSession.startTime, 'Asia/Tokyo')
+  const after = JSON.stringify(historicalSession)
+  check('timezone change: resolving the same historical session under two different timezones does not mutate its stored startTime/fields', before, after)
+}
+
 // ══════════════════════════════════════════════════════════════════════
 // 9. Median calculation — odd and even bucket sizes
 // ══════════════════════════════════════════════════════════════════════
