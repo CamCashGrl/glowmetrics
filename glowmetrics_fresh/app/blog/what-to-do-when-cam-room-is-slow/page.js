@@ -166,7 +166,7 @@ export default function BlogPost() {
       <div style={s.cta}>
         <div style={s.ctaTitle}>Get told what to do before the room goes cold</div>
         <p style={s.ctaText}>CamCash's Live Mode watches tip pace and time-since-last-tip during your stream and surfaces one specific coaching prompt — like flagging a dead-air stretch or a goal that's close enough to push — the moment the pattern shows up, instead of leaving you to notice it on your own.</p>
-        <a href="/landing" style={s.ctaBtn}>Try Live Mode Coaching Free →</a>
+        <a href="/landing" style={s.ctaBtn}>Try Live Mode Coaching →</a>
       </div>
 
       <h2 style={s.h2}>How Long to Stay Online When Your Cam Room Is Slow</h2>
