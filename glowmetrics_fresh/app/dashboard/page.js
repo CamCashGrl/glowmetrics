@@ -4247,15 +4247,18 @@ const stopImportMessageRotation = () => {
                     })
                   }
 
-                  // 3. Session average vs top fan contribution
+                  // 3. Top fan re-engagement timing. The "concentration is a
+                  // risk" framing is intentionally NOT duplicated here when
+                  // the Revenue Dependency Risk card (below) is already
+                  // showing — that card owns the concentration-risk claim
+                  // (same top1/top3 %, same $ figures), so this insight
+                  // always uses the re-engagement-timing framing instead,
+                  // which dependencyRisk doesn't cover.
                   const _topWhale = whales?.[0]
                   if (_topWhale && _topWhale.totalUSD > 0) {
-                    const _pct = totalRevenue > 0 ? Math.round((_topWhale.totalUSD / totalRevenue) * 100) : 0
                     _ins.push({
-                      title: `${_topWhale.username} accounts for ${_pct}% of your lifetime revenue`,
-                      body: _pct >= 30
-                        ? `High fan concentration is a risk — if they churn your earnings drop sharply. Nurture 2–3 backup whales to reduce dependency.`
-                        : `They've spent $${_topWhale.totalUSD.toFixed(0)} lifetime. A personalised message when they've been quiet for 7+ days typically brings them back.`,
+                      title: `${_topWhale.username} is your top lifetime supporter`,
+                      body: `They've spent $${_topWhale.totalUSD.toFixed(0)} lifetime. A personalised message when they've been quiet for 7+ days typically brings them back.`,
                       action: _topWhale.daysSinceLastTip > 7 ? `Send ${_topWhale.username} a re-engage message now` : `Keep ${_topWhale.username} warm — they tipped recently`
                     })
                   } else if (avgPerHour > 0) {
