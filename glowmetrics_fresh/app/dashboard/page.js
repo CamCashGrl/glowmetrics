@@ -3585,6 +3585,37 @@ const stopImportMessageRotation = () => {
             <CommandCenter
               analytics={analytics}
               isPro={isPro}
+              nowActions={(() => {
+                // Moved from the old Overview's "Make Money Right Now"
+                // section. Merges nextMoves + top realTimeAlerts, dedupes,
+                // and prepends the SQL engine's go-live signal, capped at 3.
+                const merged = []
+                ;(nextMoves || []).forEach(a => {
+                  merged.push({ icon: a.icon, color: a.color || C.cyan, text: a.text, cta: a.cta, username: a.username, source: 'move' })
+                })
+                ;(realTimeAlerts || []).slice(0, 3).forEach(a => {
+                  const isDupe = merged.some(m => m.text && a.message && m.text.toLowerCase().includes((a.title || '').toLowerCase().slice(0, 20)))
+                  if (!isDupe) merged.push({ icon: a.icon, color: a.color || C.cyan, text: `${a.title} — ${a.message}`, cta: false, source: 'alert' })
+                })
+                if (engineInsights?.go_live_status?.status) {
+                  const gl = engineInsights.go_live_status
+                  const glColor = gl.status === 'peak' ? C.green : gl.status === 'good' ? C.cyan : C.muted
+                  const glIcon = gl.status === 'peak' ? '🟢' : gl.status === 'good' ? '⚡' : '⏰'
+                  // get_user_insights is called with p_timezone, so
+                  // go_live_status.current_hour is ALREADY creator-local.
+                  const localHour = gl.current_hour ?? toLocalHour(new Date().toISOString(), creatorTz)
+                  const localLabel = localHour === 0 ? '12 AM' : localHour < 12 ? `${Math.floor(localHour)} AM` : localHour === 12 ? '12 PM' : `${Math.floor(localHour) - 12} PM`
+                  const glText = gl.multiplier
+                    ? `${gl.status === 'peak' ? 'Peak hour right now' : 'Good time to stream'} (${localLabel}) — this window earns ${gl.multiplier}x your average. Go live on ${engineInsights?.summary?.best_platform || 'your top platform'}.`
+                    : `Go-live signal: ${gl.status} — check your stream timing`
+                  merged.unshift({ icon: glIcon, color: glColor, text: glText, cta: false, source: 'engine' })
+                }
+                return merged.slice(0, 3)
+              })()}
+              onMessageFan={(username) => {
+                const w = whales.find(wh => wh.username === username)
+                if (w) { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }
+              }}
               firstName={profile?.display_name || null}
               onPlanStream={() => handleTabChange('planner')}
               onViewFans={() => handleTabChange('whales')}
@@ -3592,82 +3623,67 @@ const stopImportMessageRotation = () => {
               onUpgrade={(src) => openUpgradeModal(src)}
             />
 
-            {/* section divider */}
-            <div style={{ height:1, background:'linear-gradient(90deg,transparent,rgba(255,255,255,0.06),transparent)', margin:'4px 0 24px' }} />
-            {/* ═══════════════════════════════════════
-                2. PRIMARY ACTION CENTER — "Make Money Right Now"
-                Merges: What Should I Do + Live Intelligence top alerts
-                Shows max 3 actions ranked by revenue impact
-            ═══════════════════════════════════════ */}
-            {(() => {
-              // Merge nextMoves + top realTimeAlerts, deduplicate, cap at 3
-              const merged = []
+            {/* ═══════════════════════════════════════════════════════
+                The Overview's old stacked sections were RELOCATED, not
+                deleted, so this tab is one Command Center rather than a
+                Command Center with a second dashboard underneath:
 
-              // Add nextMoves first (already ranked by priority)
-              ;(nextMoves || []).forEach(a => {
-                merged.push({ icon: a.icon, color: a.color || C.cyan, text: a.text, cta: a.cta, username: a.username, source: 'move' })
-              })
+                  "Make Money Right Now"  -> CommandCenter (nowActions prop
+                                             below; the same merge of
+                                             go_live_status + nextMoves +
+                                             realTimeAlerts, rendered inside
+                                             the Command Center's hierarchy)
+                  "What's Working"        -> Performance (platforms tab)
+                  "Your Top Earners"      -> Fans (whales tab)
+                  "You're Losing Money"   -> Performance (platforms tab)
+                  "Revenue Dependency Risk" -> Performance (platforms tab)
 
-              // Add top realTimeAlerts that aren't duplicated
-              ;(realTimeAlerts || []).slice(0, 3).forEach(a => {
-                const isDupe = merged.some(m => m.text && a.message && m.text.toLowerCase().includes((a.title || '').toLowerCase().slice(0, 20)))
-                if (!isDupe) merged.push({ icon: a.icon, color: a.color || C.cyan, text: `${a.title} — ${a.message}`, cta: false, source: 'alert' })
-              })
+                "Smart Insights" was NOT relocated. All three of its insights
+                restated a claim already on screen: peak-window (the Command
+                Center hero), highest-ROI platform (the hero's evidence chip
+                and Performance's Platform ROI cards) and top lifetime
+                supporter (Who deserves your attention, and the Fans tab). Its
+                only other branch was a fallback asserting "sessions over 60
+                minutes earn disproportionately more", which no calculation in
+                this repo produces. Per the cleanup rule -- keep genuinely
+                synthesized insights, drop repeated claims -- nothing in it
+                survived. No logic was lost: every figure it read is still
+                rendered by the card that owns it.
+            ═══════════════════════════════════════════════════════ */}
 
-              // Prepend engineInsights go_live_status as the top signal when available
-              if (engineInsights?.go_live_status?.status) {
-                const gl = engineInsights.go_live_status
-                const glColor = gl.status === 'peak' ? C.green : gl.status === 'good' ? C.cyan : C.muted
-                const glIcon = gl.status === 'peak' ? '🟢' : gl.status === 'good' ? '⚡' : '⏰'
-                // get_user_insights is called with p_timezone, so
-                // go_live_status.current_hour is ALREADY creator-local. This
-                // previously recomputed it from UTC + the browser's offset,
-                // which disagreed with the SQL engine's own hour whenever the
-                // browser zone differed from the saved profile zone.
-                const localHour = gl.current_hour ?? toLocalHour(new Date().toISOString(), creatorTz)
-                const localLabel = localHour === 0 ? '12 AM' : localHour < 12 ? `${Math.floor(localHour)} AM` : localHour === 12 ? '12 PM' : `${Math.floor(localHour) - 12} PM`
-                const glText = gl.multiplier
-                  ? `${gl.status === 'peak' ? 'Peak hour right now' : 'Good time to stream'} (${localLabel}) — this window earns ${gl.multiplier}x your average. Go live on ${engineInsights?.summary?.best_platform || 'your top platform'}.`
-                  : `Go-live signal: ${gl.status} — check your stream timing`
-                merged.unshift({ icon: glIcon, color: glColor, text: glText, cta: false, source: 'engine' })
-              }
+            {/* The "Tip Behavior Patterns" card that used to sit here was
+                removed in the dead-UI pass: analytics.preTipBehavior was
+                permanently null, so it never rendered. It wasn't implemented
+                instead because its "peak tipping window" duplicated
+                canonicalBestTimes.bestWindow (the single best-time source
+                everything else was just consolidated onto) and its
+                clusteringDetected/recommendation fields had no definition
+                anywhere — filling them in would have meant inventing
+                metrics. Avg-gap-between-tips remains available from the SQL
+                engine (get_user_insights' session_optimization) if a future
+                card wants it, sourced from there rather than a second JS
+                implementation. */}
 
-              const actions = merged.slice(0, 3)
-              if (!actions.length) return null
+          </div>
+        )}
 
-              return (
-                <div style={{ ...glassCard, borderRadius: 18, padding: 24, marginBottom: 28, border: "1px solid rgba(34,211,238,0.2)", animation: "fadeUp 0.3s ease 0.1s both" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
-                    <div style={{ width: 36, height: 36, borderRadius: 10, background: "linear-gradient(135deg,#22D3EE,#7C5CFF)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>⚡</div>
-                    <div>
-                      <div style={{ fontSize: 18, fontWeight: 800, color: C.white }}>Make Money Right Now</div>
-                      <div style={{ fontSize: 12, color: C.muted }}>Ranked by estimated revenue impact from your real data</div>
-                    </div>
-                  </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                    {actions.map((a, i) => (
-                      <div key={i} className={`alert-enter alert-pulse-info alert-row`} style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, padding: "14px 16px", background: i === 0 ? `${a.color}18` : `${a.color}0d`, border: `1px solid ${i === 0 ? a.color + '50' : a.color + '28'}`, borderRadius: 12, boxShadow: i === 0 ? `0 0 18px ${a.color}18` : 'none', animationDelay: `${i * 40}ms` }}
-                        onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.boxShadow = `0 4px 20px ${a.color}28` }}
-                        onMouseLeave={e => { e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = i === 0 ? `0 0 18px ${a.color}18` : 'none' }}>
-                        <div style={{ display: "flex", gap: 12, alignItems: "flex-start", flex: 1 }}>
-                          <span style={{ fontSize: 20, flexShrink: 0 }}>{a.icon}</span>
-                          <div style={{ fontSize: 14, color: C.white, lineHeight: 1.55 }}>{a.text}</div>
-                        </div>
-                        {a.cta && (
-                          <button onClick={() => { const w = whales.find(wh => wh.username === a.username); if (w) { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) } }}
-                            className="heart-envelope-btn"
-                            aria-label={`Message ${a.username}`}
-                            title="Message fan"
-                            style={{ flexShrink: 0, padding: 6, borderRadius: 8, background: "none", border: "none", color: C.pink, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><EnvelopeHeartIcon size={18} /></button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )
-            })()}
+        {/* Trend charts live on Performance, not the Command Center — the
+            Command Center answers "what should I do next", this answers
+            "what happened". Relocated here from the old Overview tab. */}
+        {activeTab === "platforms" && tips.length > 0 && (
+          <div style={{ marginBottom: 16 }}>
+            <DashboardGrowthCharts tips={tips} sessions={sessions} monthlyData={analytics?.monthlyData} timezone={creatorTz} />
+          </div>
+        )}
 
-            {/* section divider */}
+        {/* ═══════════════════════════════════════════════════════
+            RELOCATED FROM OVERVIEW. Performance answers "what happened",
+            so the evidence and diagnosis live here rather than beside the
+            Command Center's recommendation.
+        ═══════════════════════════════════════════════════════ */}
+        {activeTab === "platforms" && (
+          <>
+{/* section divider */}
             <div style={{ height:1, background:'linear-gradient(90deg,transparent,rgba(255,255,255,0.06),transparent)', margin:'4px 0 24px' }} />
             {/* ═══════════════════════════════════════
                 3. WHAT'S WORKING — Strategy
@@ -3798,7 +3814,12 @@ const stopImportMessageRotation = () => {
                   })
                 })
 
-                const userTz = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC'
+                // Creator-local (lib/timezone.js resolveCreatorTimezone), NOT
+                // Intl.DateTimeFormat().resolvedOptions().timeZone. The browser
+                // zone is only ever a fallback for auto-populating the profile;
+                // using it to bucket sessions made this grid disagree with every
+                // other day/hour bucket on the page.
+                const userTz = _momTz
                 const todayIdx = toLocalDow(new Date().toISOString(), userTz)
                 const todayShort = UTC_DAYS[todayIdx]
                 const todayLong = FULL_DAYS[todayIdx]
@@ -3906,154 +3927,6 @@ const stopImportMessageRotation = () => {
             {/* section divider */}
             <div style={{ height:1, background:'linear-gradient(90deg,transparent,rgba(255,255,255,0.06),transparent)', margin:'4px 0 24px' }} />
             {/* ═══════════════════════════════════════
-                4. YOUR TOP EARNERS
-                A. Likely Online Now  B. Milestones  C. At Risk
-            ═══════════════════════════════════════ */}
-            {(() => {
-              const currentUTCHourTE = toLocalHour(new Date().toISOString(), creatorTz)
-              const labelH = h => { const _lh=((h%24)+24)%24; return _lh===0?'12 AM':_lh<12?`${_lh} AM`:_lh===12?'12 PM':`${_lh-12} PM` }
-
-              const likelyOnline = whales
-                .filter(w => w.tipCount >= 3)
-                .map(w => {
-                  const fanTips = (w.tips && w.tips.length > 0) ? w.tips : tips.filter(t => t.username.toLowerCase() === w.username.toLowerCase())
-                  const hourCounts = {}
-                  fanTips.forEach(t => { const h = toLocalHour(t.date_time || t.dateRaw, creatorTz); hourCounts[h] = (hourCounts[h] || 0) + 1 })
-                  const sorted = Object.entries(hourCounts).sort((a,b) => b[1]-a[1])
-                  if (!sorted.length) return null
-                  const peakHour = parseInt(sorted[0][0])
-                  const hoursAway = (peakHour - currentUTCHourTE + 24) % 24
-                  // peakFraction: share of this fan's tips that fall at their peak hour
-                  const peakFraction = sorted[0][1] / fanTips.length
-                  // proximityDecay: current hour vs peak hour (exact match = 1.0, 1h off = 0.65, 2h off = 0.35)
-                  const proximityDecay = hoursAway === 0 ? 1.0 : hoursAway === 1 ? 0.65 : 0.35
-                  // Scale by 200 so a fan with 40% tips at peak + exact match → 80%; 25% + 1h off → 33%
-                  const confidence = Math.min(90, Math.max(25, Math.round(peakFraction * 200 * proximityDecay)))
-                  return { ...w, peakHour, hoursAway, confidence, peakLabel: labelH(peakHour) }
-                })
-                .filter(Boolean)
-                .filter(w => w.hoursAway <= 2 && w.confidence >= 35)
-                .sort((a,b) => b.totalUSD - a.totalUSD)
-                .slice(0, 3)
-
-              // Deduplicate: a fan should only appear in one category (highest priority wins)
-              // Priority: Likely Online > Close to Milestone > At Risk
-              const seenUsernames = new Set(likelyOnline.map(w => w.username.toLowerCase()))
-
-              const milestones = (whatsNextAlerts || [])
-                .filter(a => a.type === 'milestone' && !seenUsernames.has((a.username || '').toLowerCase()))
-                .slice(0, 3)
-              milestones.forEach(a => seenUsernames.add((a.username || '').toLowerCase()))
-
-              const atRisk = reengageList
-                .filter(({ whale: w }) => !seenUsernames.has(w.username.toLowerCase()))
-                .slice(0, 3)
-
-              const hasAny = likelyOnline.length || milestones.length || atRisk.length
-              if (!hasAny) return null
-
-              const fanCard = (w, opts = {}) => (
-                <div style={{ padding: "12px 14px", borderRadius: 12, background: opts.bg || "rgba(255,255,255,0.03)", border: opts.border || "1px solid rgba(255,255,255,0.07)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", transition: "transform 0.15s, box-shadow 0.15s", cursor: "default" }}
-                  onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-1px) scale(1.01)"; e.currentTarget.style.boxShadow = opts.hoverGlow || "0 4px 16px rgba(255,255,255,0.06)" }}
-                  onMouseLeave={e => { e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = "" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 160 }}>
-                    <div style={{ width: 36, height: 36, borderRadius: 9, background: opts.avatarBg || "rgba(34,211,238,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 800, color: opts.avatarColor || C.cyan, flexShrink: 0 }}>
-                      {w.username.charAt(0).toUpperCase()}
-                    </div>
-                    <div>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: C.white }}>{w.username}</div>
-                      <div style={{ fontSize: 11, color: C.muted }}>
-                      <span style={{ color: C.white, fontWeight: 600 }}>${w.totalUSD.toFixed(0)}</span> lifetime
-                      {opts.sub ? ` · ${opts.sub}` : ''}
-                      {w.tipCount > 1 && ` · ${w.tipCount} tips`}
-                      {w.avgDaysBetweenTips && w.tipCount > 1 && <span style={{ color: w.churnRisk?.level === 'High' || w.churnRisk?.level === 'Critical' ? C.red : C.muted }}>{` · every ~${Math.round(w.avgDaysBetweenTips)}d`}</span>}
-                      {` · ${w.platform}`}
-                    </div>
-                    </div>
-                  </div>
-                  {opts.badge && <span style={{ fontSize: 11, padding: "3px 9px", borderRadius: 20, background: opts.badgeBg, color: opts.badgeColor, fontWeight: 700, whiteSpace: "nowrap" }}>{opts.badge}</span>}
-                  {opts.action && (
-                    <button onClick={opts.action} style={{ padding: "6px 12px", borderRadius: 8, background: opts.btnBg || "linear-gradient(135deg,#22D3EE,#EC4899)", border: "none", color: C.white, fontSize: 11, fontWeight: 700, cursor: "pointer", flexShrink: 0, animation: opts.pulseBtn ? "pulse-msg 2.5s infinite" : "none" }}>
-                      {opts.btnLabel || "💌"}
-                    </button>
-                  )}
-                </div>
-              )
-
-              return (
-                <div style={{ ...glassCard, borderRadius: 18, padding: 24, marginBottom: 28, animation: "fadeUp 0.3s ease 0.2s both" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
-                    <div style={{ width: 36, height: 36, borderRadius: 10, background: "linear-gradient(135deg,#EC4899,#7C5CFF)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>👑</div>
-                    <div>
-                      <div style={{ fontSize: 18, fontWeight: 800, color: C.white }}>Your Top Earners</div>
-                      <div style={{ fontSize: 12, color: C.muted }}>Who's online, who's close to a milestone, who needs a message</div>
-                    </div>
-                  </div>
-
-                  {/* A. Likely Online Now */}
-                  {likelyOnline.length > 0 && (
-                    <div style={{ marginBottom: 20 }}>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: C.green, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10, display: "flex", alignItems: "center", gap: 6 }}>
-                        <div style={{ width: 7, height: 7, borderRadius: "50%", background: C.green, boxShadow: `0 0 6px ${C.green}` }} />
-                        Likely Online Now
-                      </div>
-                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                        {likelyOnline.map((w, i) => fanCard(w, {
-                          bg: "rgba(16,185,129,0.07)", border: "1px solid rgba(16,185,129,0.22)", hoverGlow: "0 4px 16px rgba(16,185,129,0.15)",
-                          avatarBg: "rgba(16,185,129,0.18)", avatarColor: C.green,
-                          sub: `peaks at ${w.peakLabel}`,
-                          badge: `${w.confidence}% likely`, badgeBg: "rgba(16,185,129,0.2)", badgeColor: C.green,
-                          action: () => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) },
-                          btnBg: "none", pulseBtn: true
-                        }))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* B. Close to Milestone */}
-                  {milestones.length > 0 && (
-                    <div style={{ marginBottom: 20 }}>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: C.gold, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10 }}>💰 Close to Milestone</div>
-                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                        {milestones.map((a, i) => {
-                          const w = a.whale
-                          if (!w) return null
-                          return fanCard(w, {
-                            bg: "rgba(245,158,11,0.07)", border: "1px solid rgba(245,158,11,0.22)", hoverGlow: "0 4px 16px rgba(245,158,11,0.12)",
-                            avatarBg: "rgba(245,158,11,0.18)", avatarColor: C.gold,
-                            sub: a.message?.match(/\$[\d.]+ away/)?.[0] || '',
-                            action: () => { if (a.whale) { setMessageTarget(a.whale); setMessageIndex(0); setMessageCopied(false) } },
-                            btnBg: "linear-gradient(135deg,#F59E0B,#EC4899)", pulseBtn: false
-                          })
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* C. At Risk — Re-engage */}
-                  {atRisk.length > 0 && (
-                    <div>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: C.orange, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10 }}>⚠️ At Risk — Re-engage</div>
-                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                        {atRisk.map(({ whale: w, days, urgency, msg }, i) => fanCard(w, {
-                          bg: `${urgency}08`, border: `1px solid ${urgency}25`, hoverGlow: `0 4px 16px ${urgency}18`,
-                          avatarBg: `${urgency}20`, avatarColor: urgency,
-                          sub: `${days}d since last tip`,
-                          badge: `${days}d ago`, badgeBg: `${urgency}20`, badgeColor: urgency,
-                          action: () => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) },
-                          btnBg: `linear-gradient(135deg,${urgency},#EC4899)`, pulseBtn: i === 0,
-                          btnLabel: "💌"
-                        }))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )
-            })()}
-
-            {/* section divider */}
-            <div style={{ height:1, background:'linear-gradient(90deg,transparent,rgba(255,255,255,0.06),transparent)', margin:'4px 0 24px' }} />
-            {/* ═══════════════════════════════════════
                 5. YOU'RE LOSING MONEY — Risk / Loss + Missed Revenue
             ═══════════════════════════════════════ */}
             {(() => {
@@ -4137,102 +4010,6 @@ const stopImportMessageRotation = () => {
               )
             })()}
 
-            {/* ═══════════════════════════════════════
-                6. SMART INSIGHTS — scannable, lower priority
-            ═══════════════════════════════════════ */}
-            <div style={{ ...glassCard, borderRadius: 18, padding: 24, marginBottom: 28, animation: "fadeUp 0.3s ease 0.3s both" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
-                  <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(34,211,238,0.12)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>💡</div>
-                  <div style={{ fontSize: 18, fontWeight: 800, color: C.white }}>Smart Insights</div>
-                </div>
-
-                {(() => {
-                  // Build insights from data already in scope — no API call needed
-                  const _ins = []
-
-                  // 1. Peak hour insight — reads label, $/hr, sample size, and
-                  // platform from ONE bucket (analytics.canonicalBestTimes.bestWindow,
-                  // lib/analytics/bestTimes.js). Previously this stitched together
-                  // three independent sources — engineInsights.daily_plan.best_hour
-                  // (a separate SQL engine) for the hour label, dailyBrief.displayAvg
-                  // (a same-clock-hour $ sum, not a $/hr rate) for the dollar figure,
-                  // and analytics.estimatedHourlyRate for the "overall rate" it was
-                  // divided against — three numbers with no guarantee of agreeing,
-                  // which is how "peak window" ended up reading as 0.4x the overall
-                  // rate. bestWindow's medianUsdPerHour is, by construction, the
-                  // highest among confidence-qualified buckets, so comparing it
-                  // against the same estimatedHourlyRate denominator can no longer
-                  // produce a peak window that reads as below average.
-                  const _bw = analytics?.canonicalBestTimes?.bestWindow
-                  if (_bw) {
-                    const _bwLabel = (h => h === 0 ? '12 AM' : h < 12 ? `${h} AM` : h === 12 ? '12 PM' : `${h - 12} PM`)(_bw.localHour)
-                    const _bwPlat = (_bw.topPlatform || 'your top platform').replace('BongaCams', 'Bonga').replace('MyFreeCams', 'MFC').replace(/chaturbate/i, 'Chaturbate')
-                    const _bwRatio = avgPerHour > 0 ? Math.round((_bw.medianUsdPerHour / avgPerHour) * 10) / 10 : null
-                    _ins.push({
-                      title: `Your peak window is ${_bwLabel} on ${_bwPlat}`,
-                      body: _bwRatio !== null
-                        ? `Sessions at this hour average $${_bw.medianUsdPerHour.toFixed(2)}/hr — ${_bwRatio}x your overall $${avgPerHour.toFixed(2)}/hr rate, based on ${_bw.sessionCount} session${_bw.sessionCount === 1 ? '' : 's'} (${_bw.tier} confidence). Go live during this window to maximise earnings.`
-                        : `Sessions at this hour average $${_bw.medianUsdPerHour.toFixed(2)}/hr across ${_bw.sessionCount} session${_bw.sessionCount === 1 ? '' : 's'} (${_bw.tier} confidence).`,
-                      action: `Schedule your next stream around ${_bwLabel}`
-                    })
-                  }
-
-                  // 2. Best platform insight
-                  const _topPlatEntry = Object.entries(platformVelocity || {}).filter(([,v]) => v != null).sort((a,b) => b[1]-a[1])[0]
-                  if (_topPlatEntry) {
-                    const [_tp, _tv] = _topPlatEntry
-                    const _tpLabel = _tp.replace('BongaCams','Bonga').replace('MyFreeCams','MFC').replace(/chaturbate/i,'Chaturbate')
-                    _ins.push({
-                      title: `${_tpLabel} is your highest-ROI platform at $${_tv.toFixed(2)}/hr`,
-                      body: Object.keys(platformVelocity).length > 1
-                        ? `Focus your high-effort streams here. Lower-ROI platforms can fill off-peak slots, but ${_tpLabel} should get your peak-hour time.`
-                        : `Your sessions here average $${_tv.toFixed(2)}/hr. Consistent streaming builds compounding fan loyalty — each session raises your baseline.`,
-                      action: `Prioritise ${_tpLabel} for peak-hour streams`
-                    })
-                  }
-
-                  // 3. Top fan re-engagement timing. The "concentration is a
-                  // risk" framing is intentionally NOT duplicated here when
-                  // the Revenue Dependency Risk card (below) is already
-                  // showing — that card owns the concentration-risk claim
-                  // (same top1/top3 %, same $ figures), so this insight
-                  // always uses the re-engagement-timing framing instead,
-                  // which dependencyRisk doesn't cover.
-                  const _topWhale = whales?.[0]
-                  if (_topWhale && _topWhale.totalUSD > 0) {
-                    _ins.push({
-                      title: `${_topWhale.username} is your top lifetime supporter`,
-                      body: `They've spent $${_topWhale.totalUSD.toFixed(0)} lifetime. A personalised message when they've been quiet for 7+ days typically brings them back.`,
-                      action: _topWhale.daysSinceLastTip > 7 ? `Send ${_topWhale.username} a re-engage message now` : `Keep ${_topWhale.username} warm — they tipped recently`
-                    })
-                  } else if (avgPerHour > 0) {
-                    // Fallback: session avg insight
-                    const _sessAvg = sessions.length > 0 ? totalRevenue / sessions.length : 0
-                    _ins.push({
-                      title: `You average $${_sessAvg.toFixed(0)} per session at $${avgPerHour.toFixed(2)}/hr`,
-                      body: `Sessions over 60 minutes earn disproportionately more — longer streams let tipping patterns compound. Aim for at least one 90-min session per week.`,
-                      action: `Try a 90-min stream at your peak hour`
-                    })
-                  }
-
-                  if (_ins.length === 0) return (
-                    <div style={{ fontSize: 13, color: C.muted, padding: '12px 0' }}>Upload more session data to generate personalised insights.</div>
-                  )
-
-                  return (
-                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                      {_ins.map((ins, i) => (
-                        <div key={i} style={{ padding: "13px 16px", borderRadius: 10, background: "rgba(34,211,238,0.06)", border: "1px solid rgba(34,211,238,0.15)" }}>
-                          <div style={{ fontSize: 13, fontWeight: 700, color: C.white, marginBottom: 4, lineHeight: 1.4 }}>{ins.title}</div>
-                          <div style={{ fontSize: 12, color: C.text, lineHeight: 1.55, marginBottom: 8 }}>{ins.body}</div>
-                          <div style={{ fontSize: 11, color: C.cyan, fontWeight: 600 }}>👉 {ins.action}</div>
-                        </div>
-                      ))}
-                    </div>
-                  )
-                })()}
-              </div>
-
             {/* Dependency risk + pre-tip behavior — kept, moved lower */}
             {dependencyRisk && dependencyRisk.level !== 'low' && (
               <div style={{ ...glassCard, borderRadius: 14, padding: 20, marginBottom: 20, border: `1px solid ${dependencyRisk.level === 'high' ? 'rgba(248,113,113,0.3)' : 'rgba(245,158,11,0.3)'}` }}>
@@ -4261,29 +4038,8 @@ const stopImportMessageRotation = () => {
               </div>
             )}
 
-            {/* The "Tip Behavior Patterns" card that used to sit here was
-                removed in the dead-UI pass: analytics.preTipBehavior was
-                permanently null, so it never rendered. It wasn't implemented
-                instead because its "peak tipping window" duplicated
-                canonicalBestTimes.bestWindow (the single best-time source
-                everything else was just consolidated onto) and its
-                clusteringDetected/recommendation fields had no definition
-                anywhere — filling them in would have meant inventing
-                metrics. Avg-gap-between-tips remains available from the SQL
-                engine (get_user_insights' session_optimization) if a future
-                card wants it, sourced from there rather than a second JS
-                implementation. */}
-
-          </div>
-        )}
-
-        {/* Trend charts live on Performance, not the Command Center — the
-            Command Center answers "what should I do next", this answers
-            "what happened". Relocated here from the old Overview tab. */}
-        {activeTab === "platforms" && tips.length > 0 && (
-          <div style={{ marginBottom: 16 }}>
-            <DashboardGrowthCharts tips={tips} sessions={sessions} monthlyData={analytics?.monthlyData} timezone={creatorTz} />
-          </div>
+            
+          </>
         )}
 
         {activeTab === "platforms" && (() => {
@@ -4641,6 +4397,165 @@ const stopImportMessageRotation = () => {
             </div>
           )
         })()}
+
+        {/* ═══════════════════════════════════════════════════════
+            RELOCATED FROM OVERVIEW. Fans answers "who should I pay
+            attention to", so the ranked priority fans and their actions
+            lead this tab.
+        ═══════════════════════════════════════════════════════ */}
+        {activeTab === "whales" && (
+          <>
+{/* section divider */}
+            <div style={{ height:1, background:'linear-gradient(90deg,transparent,rgba(255,255,255,0.06),transparent)', margin:'4px 0 24px' }} />
+            {/* ═══════════════════════════════════════
+                4. YOUR TOP EARNERS
+                A. Likely Online Now  B. Milestones  C. At Risk
+            ═══════════════════════════════════════ */}
+            {(() => {
+              const currentUTCHourTE = toLocalHour(new Date().toISOString(), creatorTz)
+              const labelH = h => { const _lh=((h%24)+24)%24; return _lh===0?'12 AM':_lh<12?`${_lh} AM`:_lh===12?'12 PM':`${_lh-12} PM` }
+
+              const likelyOnline = whales
+                .filter(w => w.tipCount >= 3)
+                .map(w => {
+                  const fanTips = (w.tips && w.tips.length > 0) ? w.tips : tips.filter(t => t.username.toLowerCase() === w.username.toLowerCase())
+                  const hourCounts = {}
+                  fanTips.forEach(t => { const h = toLocalHour(t.date_time || t.dateRaw, creatorTz); hourCounts[h] = (hourCounts[h] || 0) + 1 })
+                  const sorted = Object.entries(hourCounts).sort((a,b) => b[1]-a[1])
+                  if (!sorted.length) return null
+                  const peakHour = parseInt(sorted[0][0])
+                  const hoursAway = (peakHour - currentUTCHourTE + 24) % 24
+                  // peakFraction: share of this fan's tips that fall at their peak hour
+                  const peakFraction = sorted[0][1] / fanTips.length
+                  // proximityDecay: current hour vs peak hour (exact match = 1.0, 1h off = 0.65, 2h off = 0.35)
+                  const proximityDecay = hoursAway === 0 ? 1.0 : hoursAway === 1 ? 0.65 : 0.35
+                  // Scale by 200 so a fan with 40% tips at peak + exact match → 80%; 25% + 1h off → 33%
+                  const confidence = Math.min(90, Math.max(25, Math.round(peakFraction * 200 * proximityDecay)))
+                  return { ...w, peakHour, hoursAway, confidence, peakTips: sorted[0][1], peakOfTips: fanTips.length, peakLabel: labelH(peakHour) }
+                })
+                .filter(Boolean)
+                .filter(w => w.hoursAway <= 2 && w.confidence >= 35)
+                .sort((a,b) => b.totalUSD - a.totalUSD)
+                .slice(0, 3)
+
+              // Deduplicate: a fan should only appear in one category (highest priority wins)
+              // Priority: Likely Online > Close to Milestone > At Risk
+              const seenUsernames = new Set(likelyOnline.map(w => w.username.toLowerCase()))
+
+              const milestones = (whatsNextAlerts || [])
+                .filter(a => a.type === 'milestone' && !seenUsernames.has((a.username || '').toLowerCase()))
+                .slice(0, 3)
+              milestones.forEach(a => seenUsernames.add((a.username || '').toLowerCase()))
+
+              const atRisk = reengageList
+                .filter(({ whale: w }) => !seenUsernames.has(w.username.toLowerCase()))
+                .slice(0, 3)
+
+              const hasAny = likelyOnline.length || milestones.length || atRisk.length
+              if (!hasAny) return null
+
+              const fanCard = (w, opts = {}) => (
+                <div style={{ padding: "12px 14px", borderRadius: 12, background: opts.bg || "rgba(255,255,255,0.03)", border: opts.border || "1px solid rgba(255,255,255,0.07)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", transition: "transform 0.15s, box-shadow 0.15s", cursor: "default" }}
+                  onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-1px) scale(1.01)"; e.currentTarget.style.boxShadow = opts.hoverGlow || "0 4px 16px rgba(255,255,255,0.06)" }}
+                  onMouseLeave={e => { e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = "" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 160 }}>
+                    <div style={{ width: 36, height: 36, borderRadius: 9, background: opts.avatarBg || "rgba(34,211,238,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 800, color: opts.avatarColor || C.cyan, flexShrink: 0 }}>
+                      {w.username.charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: C.white }}>{w.username}</div>
+                      <div style={{ fontSize: 11, color: C.muted }}>
+                      <span style={{ color: C.white, fontWeight: 600 }}>${w.totalUSD.toFixed(0)}</span> lifetime
+                      {opts.sub ? ` · ${opts.sub}` : ''}
+                      {w.tipCount > 1 && ` · ${w.tipCount} tips`}
+                      {w.avgDaysBetweenTips && w.tipCount > 1 && <span style={{ color: w.churnRisk?.level === 'High' || w.churnRisk?.level === 'Critical' ? C.red : C.muted }}>{` · every ~${Math.round(w.avgDaysBetweenTips)}d`}</span>}
+                      {` · ${w.platform}`}
+                    </div>
+                    </div>
+                  </div>
+                  {opts.badge && <span style={{ fontSize: 11, padding: "3px 9px", borderRadius: 20, background: opts.badgeBg, color: opts.badgeColor, fontWeight: 700, whiteSpace: "nowrap" }}>{opts.badge}</span>}
+                  {opts.action && (
+                    <button onClick={opts.action} style={{ padding: "6px 12px", borderRadius: 8, background: opts.btnBg || "linear-gradient(135deg,#22D3EE,#EC4899)", border: "none", color: C.white, fontSize: 11, fontWeight: 700, cursor: "pointer", flexShrink: 0, animation: opts.pulseBtn ? "pulse-msg 2.5s infinite" : "none" }}>
+                      {opts.btnLabel || "💌"}
+                    </button>
+                  )}
+                </div>
+              )
+
+              return (
+                <div style={{ ...glassCard, borderRadius: 18, padding: 24, marginBottom: 28, animation: "fadeUp 0.3s ease 0.2s both" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
+                    <div style={{ width: 36, height: 36, borderRadius: 10, background: "linear-gradient(135deg,#EC4899,#7C5CFF)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>👑</div>
+                    <div>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: C.white }}>Your Top Earners</div>
+                      <div style={{ fontSize: 12, color: C.muted }}>Who's online, who's close to a milestone, who needs a message</div>
+                    </div>
+                  </div>
+
+                  {/* A. Likely Online Now */}
+                  {likelyOnline.length > 0 && (
+                    <div style={{ marginBottom: 20 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: C.green, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10, display: "flex", alignItems: "center", gap: 6 }}>
+                        <div style={{ width: 7, height: 7, borderRadius: "50%", background: C.green, boxShadow: `0 0 6px ${C.green}` }} />
+                        Likely Online Now
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        {likelyOnline.map((w, i) => fanCard(w, {
+                          bg: "rgba(16,185,129,0.07)", border: "1px solid rgba(16,185,129,0.22)", hoverGlow: "0 4px 16px rgba(16,185,129,0.15)",
+                          avatarBg: "rgba(16,185,129,0.18)", avatarColor: C.green,
+                          sub: `peaks at ${w.peakLabel}`,
+                          badge: `${w.peakTips} of ${w.peakOfTips} tips at this hour`, badgeBg: "rgba(16,185,129,0.2)", badgeColor: C.green,
+                          action: () => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) },
+                          btnBg: "none", pulseBtn: true
+                        }))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* B. Close to Milestone */}
+                  {milestones.length > 0 && (
+                    <div style={{ marginBottom: 20 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: C.gold, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10 }}>💰 Close to Milestone</div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        {milestones.map((a, i) => {
+                          const w = a.whale
+                          if (!w) return null
+                          return fanCard(w, {
+                            bg: "rgba(245,158,11,0.07)", border: "1px solid rgba(245,158,11,0.22)", hoverGlow: "0 4px 16px rgba(245,158,11,0.12)",
+                            avatarBg: "rgba(245,158,11,0.18)", avatarColor: C.gold,
+                            sub: a.message?.match(/\$[\d.]+ away/)?.[0] || '',
+                            action: () => { if (a.whale) { setMessageTarget(a.whale); setMessageIndex(0); setMessageCopied(false) } },
+                            btnBg: "linear-gradient(135deg,#F59E0B,#EC4899)", pulseBtn: false
+                          })
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* C. At Risk — Re-engage */}
+                  {atRisk.length > 0 && (
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: C.orange, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10 }}>⚠️ At Risk — Re-engage</div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        {atRisk.map(({ whale: w, days, urgency, msg }, i) => fanCard(w, {
+                          bg: `${urgency}08`, border: `1px solid ${urgency}25`, hoverGlow: `0 4px 16px ${urgency}18`,
+                          avatarBg: `${urgency}20`, avatarColor: urgency,
+                          sub: `${days}d since last tip`,
+                          badge: `${days}d ago`, badgeBg: `${urgency}20`, badgeColor: urgency,
+                          action: () => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) },
+                          btnBg: `linear-gradient(135deg,${urgency},#EC4899)`, pulseBtn: i === 0,
+                          btnLabel: "💌"
+                        }))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
+
+            
+          </>
+        )}
 
         {activeTab === "whales" && (
           <div>

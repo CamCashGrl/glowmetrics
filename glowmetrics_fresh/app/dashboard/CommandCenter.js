@@ -195,6 +195,13 @@ export default function CommandCenter({
   onViewFans,
   onSeePerformance,
   onUpgrade,
+  // Relocated from the old Overview's "Make Money Right Now" section. The
+  // merge (go-live signal + nextMoves + realTimeAlerts, capped at 3) happens
+  // in the dashboard where those sources already live; this component only
+  // renders the prepared list. Same rule as every other value here: nothing
+  // is computed locally.
+  nowActions = [],
+  onMessageFan,
 }) {
   // ── All values READ from the frozen layer. No local aggregation. ──
   const bestWindow   = analytics?.canonicalBestTimes?.bestWindow || null
@@ -360,6 +367,41 @@ export default function CommandCenter({
             <Chip icon="📈" title={`${topPlatform.platform} is #1`} value={`${fmtUsd(topPlatform.usdPerHour)}/hr`} sub={`${topPlatform.sessions} sessions · ${fmtHours(topPlatform.hours || 0)}`} accent={C.cyan} />
           )}
           <Chip icon="📊" title="Sample behind it" value={`${bestWindow.sessionCount} session${bestWindow.sessionCount === 1 ? "" : "s"}`} sub={TIER_COPY[bestWindow.tier] || "Pattern"} accent={C.gold} />
+        </div>
+      )}
+
+      {/* ── RIGHT NOW ──────────────────────────────────────────────
+          The hero says what to do next; this says what is worth doing in
+          the next few minutes. Time-sensitive and capped at three, so it
+          stays an action list rather than the alert wall it replaced. */}
+      {nowActions.length > 0 && (
+        <div style={card({ padding: 20 })}>
+          <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 14 }}>
+            <span style={{ fontSize: 17 }}>⚡</span>
+            <div style={{ fontSize: 16, fontWeight: 800, color: C.white }}>Right now</div>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {nowActions.map((a, i) => (
+              <div key={i} style={{
+                display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12,
+                padding: "14px 15px", borderRadius: 12,
+                background: i === 0 ? `${a.color}18` : `${a.color}0d`,
+                border: `1px solid ${i === 0 ? a.color + "50" : a.color + "28"}`,
+              }}>
+                <div style={{ display: "flex", gap: 12, alignItems: "flex-start", flex: 1, minWidth: 0 }}>
+                  <span style={{ fontSize: 19, flexShrink: 0 }}>{a.icon}</span>
+                  <div style={{ fontSize: 14, color: C.white, lineHeight: 1.55, minWidth: 0, overflowWrap: "anywhere" }}>{a.text}</div>
+                </div>
+                {a.cta && a.username && (
+                  <button onClick={() => onMessageFan?.(a.username)}
+                    aria-label={`Message ${a.username}`} title="Message fan"
+                    style={{ flexShrink: 0, padding: "7px 12px", borderRadius: 9, background: "rgba(236,72,153,0.14)", border: "1px solid rgba(236,72,153,0.3)", color: C.pink, fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>
+                    Message
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
