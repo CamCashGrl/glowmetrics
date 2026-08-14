@@ -133,8 +133,8 @@ function Chip({ icon, title, value, sub, accent = C.pink }) {
 
 function Stat({ value, label: l, delta, accent = C.white }) {
   return (
-    <div style={card({ padding: "20px 20px" })}>
-      <div style={{ fontSize: 26, fontWeight: 800, color: accent, letterSpacing: "-0.02em" }}>{value}</div>
+    <div style={card({ padding: "18px 16px" })}>
+      <div style={{ fontSize: 26, fontWeight: 800, color: accent, letterSpacing: "-0.02em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{value}</div>
       <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 5, flexWrap: "wrap" }}>
         <span style={{ fontSize: 13, color: C.muted }}>{l}</span>
         {delta != null && (
@@ -164,8 +164,8 @@ function WindowProof({ windowRate, baselineRate, sessions, tierLabel, dayLabel, 
   const max = Math.max(windowRate, baselineRate, 0.01)
   const Bar = ({ v, title, sub, gradient }) => (
     <div style={{ marginBottom: 20 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
-        <span style={{ fontSize: 14, color: gradient ? C.white : C.text, fontWeight: gradient ? 700 : 500 }}>{title}</span>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
+        <span style={{ fontSize: 14, color: gradient ? C.white : C.text, fontWeight: gradient ? 700 : 500, minWidth: 0 }}>{title}</span>
         <span style={{ fontSize: 22, fontWeight: 800, color: gradient ? C.cyan : C.text, letterSpacing: "-0.02em", whiteSpace: "nowrap" }}>{fmtUsd(v)}/hr</span>
       </div>
       <div style={{ height: 18, borderRadius: 9, background: "rgba(255,255,255,0.05)", overflow: "hidden" }}>
@@ -368,7 +368,7 @@ export default function CommandCenter({
           second card while the hero sat half-empty. */}
 
       {/* ── FANS + PERFORMANCE ─────────────────────────────────────── */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(290px, 1fr))", gap: 14 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(290px, 1fr))", gap: 14, alignItems: "start" }}>
         <div style={card({ padding: 20 })}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
             <div style={{ fontSize: 16, fontWeight: 800, color: C.white }}>Who deserves your attention</div>
@@ -404,7 +404,7 @@ export default function CommandCenter({
 
         <div style={card({ padding: 20 })}>
           <div style={{ fontSize: 16, fontWeight: 800, color: C.white, marginBottom: 14 }}>Your money story</div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(88px, 1fr))", gap: 10 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(132px, 1fr))", gap: 10 }}>
             <Stat value={fmtUsd(totalUSD)} label="Total earnings" accent={C.white} />
             <Stat value={`${fmtUsd(hourlyRate)}`} label="Per hour" accent={C.green} />
             <Stat value={fmtHours(streamHours)} label="Total hours" accent={C.white} />
