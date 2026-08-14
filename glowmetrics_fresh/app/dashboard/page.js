@@ -3927,20 +3927,31 @@ const stopImportMessageRotation = () => {
                                 scopes — the unlabeled "total" wording was the bug, not the math. */}
                             <div style={{ fontSize: 11, color: C.muted, marginBottom: bestTime ? 8 : 0 }}>${(p.totalUSD || 0).toFixed(0)} in sessions · {(p.hours || 0).toFixed(0)}h streamed</div>
                             {(() => {
-                            const todayUTCName = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][new Date().getUTCDay()]
+                            // Local day (canonical creator timezone, _momTz — resolveCreatorTimezone,
+                            // lib/timezone.js), not new Date().getUTCDay(). The previous UTC version
+                            // could literally name the wrong day here for a creator far from UTC —
+                            // this "Today" badge is time-sensitive, not just a label.
+                            const todayLocalName = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][toLocalDow(new Date().toISOString(), _momTz)]
                             const ptimes = analytics?.platformBestTimes?.[p.platform]
-                            const todayHour = ptimes?.bestHourByDay?.[todayUTCName]
-                            const bestDayEntry = ptimes?.bestDay
+                            const todayHour = ptimes?.bestHourByDay?.[todayLocalName]
+                            // Canonical per-platform single-window fields (p.bestLocalDay/
+                            // bestLocalHour/bestWindowConfidence — lib/analytics.js's aggregateRows(),
+                            // computeCanonicalBestTimes() scoped to this platform's own sessions).
+                            // These were computed but never rendered anywhere in the app before this
+                            // fix — the "Best day" badge below read the legacy platformBestTimes grid's
+                            // bestDay (tip-level mean) instead, a second, independently-computed answer
+                            // to the same question sitting right next to this platform's own ROI number.
                             return (
                               <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 4 }}>
-                                {bestDayEntry && (
+                                {p.bestLocalDay != null && p.bestLocalHour != null && (
                                   <div style={{ padding: '5px 8px', borderRadius: 8, background: `${col}10`, border: `1px solid ${col}25`, fontSize: 11, color: col }}>
-                                    Best day: <strong>{bestDayEntry.day}s</strong> ${(bestDayEntry.avg || 0).toFixed(0)} avg
+                                    Best window: <strong>{p.bestLocalDay}s {fmtH(p.bestLocalHour)}</strong>
+                                    {p.bestWindowConfidence && p.bestWindowConfidence !== 'high' && <span style={{ opacity: 0.7 }}> ({p.bestWindowConfidence})</span>}
                                   </div>
                                 )}
                                 {todayHour && (
                                   <div style={{ padding: '5px 8px', borderRadius: 8, background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.25)', fontSize: 11, color: '#10B981' }}>
-                                    Today ({todayUTCName}): <strong>{fmtH(todayHour.hour)}</strong> ${(todayHour.avg || 0).toFixed(0)}/hr avg
+                                    Today ({todayLocalName}): <strong>{fmtH(todayHour.hour)}</strong> ${(todayHour.avg || 0).toFixed(0)}/hr avg
                                   </div>
                                 )}
                               </div>
@@ -6532,7 +6543,7 @@ const stopImportMessageRotation = () => {
         {activeTab === 'planner' && (
           _plannerLock.locked
             ? <div style={{ padding: '32px 0' }}><LockedInsightCard title="Stream Planner" description="Plan your schedule around your best earning windows." lockType="needs_data" requirement={_plannerLock.message} ctaLabel="Upload More Data" ctaAction={() => handleTabChange('upload')} /></div>
-            : <StreamPlanner tips={tips} isPro={isPro} />
+            : <StreamPlanner tips={tips} isPro={isPro} timezone={_momTz} />
         )}
         {activeTab === 'moneymap' && (
           _moneyMapLock.locked

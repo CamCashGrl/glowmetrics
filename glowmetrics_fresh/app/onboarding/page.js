@@ -1088,7 +1088,17 @@ export default function OnboardingPage(){
                 <div>
                   <div style={{fontSize:10,fontWeight:800,color:PINK,textTransform:'uppercase',letterSpacing:'0.1em',marginBottom:4}}>Best first insight</div>
                   {preview?.bestHour?(
-                    <p style={{fontSize:13,color:'rgba(248,250,252,0.9)',lineHeight:1.6}}>Your earnings peak around <strong style={{color:PINK}}>{preview.bestHour}</strong>. That's your sweet spot — prioritize streaming then.</p>
+                    // preview.bestHour is the single hour with the highest total
+                    // token sum across the just-parsed rows (buildPreview() above)
+                    // — no minimum-sample or confidence-tier requirement, unlike
+                    // the dashboard's canonical bestWindow (session-based, median,
+                    // requires 4+ sessions before it's shown as "your best time" at
+                    // all). This preview can legitimately be one or two rows'
+                    // worth of signal. "Your sweet spot" overstated that as a
+                    // settled fact; framing it as an early read from this import
+                    // — confirmed or revised once the dashboard has full session
+                    // data — matches what this number actually is.
+                    <p style={{fontSize:13,color:'rgba(248,250,252,0.9)',lineHeight:1.6}}>This import shows an early signal around <strong style={{color:PINK}}>{preview.bestHour}</strong> — your dashboard will confirm this once it has more sessions to work with.</p>
                   ):(
                     <p style={{fontSize:12,color:'rgba(148,163,184,0.7)',lineHeight:1.6}}>Import more history to unlock your peak streaming windows.</p>
                   )}

@@ -9,6 +9,7 @@ import {
 // for the full migration note. Do not reintroduce a local session grouping
 // function in this file.
 import { detectMeaningfulSessions } from "../../lib/analytics/sessions"
+import { toLocalDow, toLocalHour } from "../../lib/analytics/localTime"
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // DESIGN TOKENS
@@ -39,11 +40,24 @@ const fmt$  = (v) => `$${Number(v).toFixed(2)}`
 const fmtK  = (v) => v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(Math.round(v))
 const TIP_S = { background: "#0f1726", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "8px 12px", color: PRIMARY, fontSize: 12 }
 
-// UTC hour → local display e.g. "9 PM"
-const localHr  = (utcH) => new Date(Date.UTC(2000, 0, 1, ((utcH % 24) + 24) % 24)).toLocaleTimeString([], { hour: "numeric", hour12: true })
-// UTC day index → local weekday name (2024-01-07 is a Sunday)
-const localDay = (utcD) => new Date(Date.UTC(2024, 0, 7 + utcD)).toLocaleDateString("en-US", { weekday: "long" })
-const todayLocalName = () => new Date().toLocaleDateString("en-US", { weekday: "long" })
+// Pure label formatters — NOT timezone conversions. The utcDay/utcHour
+// field names below are kept for minimal blast radius across this file's
+// many call sites, but as of the local-time bucketing fix (toWeekPlanSession
+// below), the values they hold are already the creator's real local day/hour
+// (via toLocalDow/toLocalHour with the canonical creator timezone — see
+// lib/timezone.js's resolveCreatorTimezone(), same contract every other
+// canonical calculation in this app uses). Previously these functions did a
+// SECOND, WRONG conversion here: bucketing happened by literal UTC day/hour,
+// then this file re-derived a "local" label using the BROWSER's own runtime
+// timezone (via Date.UTC + toLocaleDateString/toLocaleTimeString) instead of
+// the creator's saved profile timezone — two different bugs stacked (raw UTC
+// bucketing, then a browser-timezone-not-creator-timezone relabel), each of
+// which could put tips in the wrong day/hour cell independently, most
+// visibly for creators near a UTC day boundary. Since the values are correct
+// local day/hour now, formatting them needs no Date/timezone math at all.
+const localHr  = (h) => { const n = ((h % 24) + 24) % 24; return n === 0 ? '12 AM' : n < 12 ? `${n} AM` : n === 12 ? '12 PM' : `${n - 12} PM` }
+const localDay = (d) => ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"][((d % 7) + 7) % 7]
+const todayLocalName = (tz) => ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"][toLocalDow(new Date().toISOString(), tz)]
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PURE DATA FUNCTIONS (no hooks)
@@ -61,31 +75,36 @@ const todayLocalName = () => new Date().toLocaleDateString("en-US", { weekday: "
 // toWeekPlanSession() adapts detectSessions()'s canonical field names
 // (startTime/totalUSD/usdPerHour/durationHours) to the {start, end,
 // durationHrs, totalUsd, usdHr, utcDay, utcHour} shape this file's existing
-// platformEfficiency()/bestWindows()/rendering code already expects — field
-// values are now sourced from the canonical calculation; the utcDay/utcHour
-// bucketing itself is UNCHANGED (still literal UTC) in this pass. Migrating
-// this file's best-time/platform-efficiency AGGREGATION onto
-// lib/analytics/bestTimes.js's local-native median/confidence-tier grid is
-// deliberately NOT done in this PR — that also requires migrating
-// detectWhales()'s UTC-based bestUtcDay/bestUtcHour to local time (needed
-// so the whale-window cross-reference below stays internally consistent),
-// which is real additional scope beyond the approved session-rule fix.
-// Documented as explicit follow-up work in the Phase 1 PR description, not
-// silently deferred.
-function toWeekPlanSession(s) {
+// platformEfficiency()/bestWindows()/rendering code already expects.
+//
+// utcDay/utcHour field NAMES are kept (renaming every call site in this
+// 1000+ line file was more blast radius than the fix needed), but as of the
+// best-time reconciliation pass, the VALUES are the creator's real local
+// day/hour — toLocalDow()/toLocalHour() with the canonical creator timezone
+// (lib/timezone.js's resolveCreatorTimezone(), the same contract every other
+// canonical calculation in this app uses), not literal UTC. Previously this
+// bucketed by literal UTC day/hour and left it to the display layer
+// (localDay()/localHr() above) to relabel — except those functions did the
+// relabeling using the BROWSER's own runtime timezone, not the creator's
+// saved profile timezone, so a session near a UTC day boundary could land
+// in the wrong day/hour cell for reasons having nothing to do with which
+// timezone the creator actually streams in. detectWhales() below is fixed
+// the same way in the same pass, so its bestUtcDay/bestUtcHour stay
+// consistent with this grid's cells for whale-window cross-referencing.
+function toWeekPlanSession(s, tz) {
   return {
     start: new Date(s.startTime), end: new Date(s.endTime),
     durationHrs: s.durationHours, totalUsd: s.totalUSD, totalTokens: s.totalTokens,
     usdHr: s.usdPerHour ?? 0,
-    utcDay: new Date(s.startTime).getUTCDay(), utcHour: new Date(s.startTime).getUTCHours(),
+    utcDay: toLocalDow(s.startTime, tz), utcHour: toLocalHour(s.startTime, tz),
     platform: s.platform, platforms: [s.platform],
     tips: s.tips,
   }
 }
 
 // Returns { [platform]: { usdPerHr, tokensPerHr, avgTip, sessionCount, bestUtcDay, bestUtcHour } }
-function platformEfficiency(tips) {
-  const sessions = detectMeaningfulSessions(tips).map(toWeekPlanSession)
+function platformEfficiency(tips, tz) {
+  const sessions = detectMeaningfulSessions(tips).map((s) => toWeekPlanSession(s, tz))
   const acc = {}
   sessions.forEach((s) => {
     if (!s.platform) return
@@ -112,8 +131,8 @@ function platformEfficiency(tips) {
 }
 
 // Returns [{ utcDay, utcHour, avgUsdPerHr, totalUsd, sessionCount, confidence, topPlatform, newTipperRate }]
-function bestWindows(tips) {
-  const sessions = detectMeaningfulSessions(tips).map(toWeekPlanSession)
+function bestWindows(tips, tz) {
+  const sessions = detectMeaningfulSessions(tips).map((s) => toWeekPlanSession(s, tz))
   const firstSeen = {}
   ;[...tips].sort((a, b) => new Date(a.date_time) - new Date(b.date_time)).forEach((t) => {
     const u = t.username || "unknown"
@@ -179,8 +198,15 @@ function untestedWindows(tips, allWindows) {
   return out.slice(0, 5)
 }
 
-// Whale = 500+ tokens lifetime
-function detectWhales(tips) {
+// Whale = 500+ tokens lifetime. This is a StreamPlanner-local whale
+// detection (500+ tokens lifetime, no tier breakdown), distinct from
+// lib/analytics.js's identifyWhales() (percentile-ranked Whale/Shark/
+// Regular/Dormant tiers) — a genuinely different purpose: this file only
+// needs "who counts as worth cross-referencing against the schedule grid,"
+// not the full fan-intelligence tiering the Fans tab shows. Flagged for the
+// record, not consolidated in this pass — see the repo-wide analytics
+// consistency audit's whale-metrics finding.
+function detectWhales(tips, tz) {
   const byUser = {}
   tips.forEach((t) => {
     const u = t.username || "unknown"
@@ -193,8 +219,10 @@ function detectWhales(tips) {
     const lastSeen    = new Date(Math.max(...u.tips.map((t) => new Date(t.date_time).getTime())))
     const slots = {}
     u.tips.forEach((t) => {
-      const dt = new Date(t.date_time)
-      const k  = `${dt.getUTCDay()}-${dt.getUTCHours()}`
+      // Local day/hour (see toWeekPlanSession's comment) — previously
+      // getUTCDay()/getUTCHours(), which could disagree with the grid these
+      // whale windows get cross-referenced against (whaleKeys below).
+      const k = `${toLocalDow(t.date_time, tz)}-${toLocalHour(t.date_time, tz)}`
       slots[k] = (slots[k] || 0) + 1
     })
     const top      = Object.entries(slots).sort((a, b) => b[1] - a[1])[0]
@@ -242,12 +270,14 @@ function monthlyTotals(tips) {
   })
 }
 
-// % of tips that fall within recommended windows (±1 hr tolerance)
-function planMatchScore(tips, recommendedWindows) {
+// % of tips that fall within recommended windows (±1 hr tolerance).
+// recommendedWindows come from bestWindows() and carry LOCAL day/hour (see
+// toWeekPlanSession's comment) — this must bucket tips the same way, or
+// every tip would compare against the wrong window near a UTC day boundary.
+function planMatchScore(tips, recommendedWindows, tz) {
   if (!tips.length || !recommendedWindows.length) return 0
   const inPlan = tips.filter((t) => {
-    const dt = new Date(t.date_time)
-    const d = dt.getUTCDay(), h = dt.getUTCHours()
+    const d = toLocalDow(t.date_time, tz), h = toLocalHour(t.date_time, tz)
     return recommendedWindows.some((w) => w.utcDay === d && Math.abs(w.utcHour - h) <= 1)
   })
   return Math.round((inPlan.length / tips.length) * 100)
@@ -320,13 +350,6 @@ const GRID_BLOCKS = [
 const PLAN_MODES = ["💰 Max Earnings","📈 Growth Mode","🐋 Whale Watch","🧪 Testing Mode","🔋 Low Burnout","🚨 Emergency Goal"]
 const modeName = (m) => m.replace(/^\S+\s/, "")
 
-// Local-hour of a UTC hour (for availability block filtering)
-function localHourOf(utcHour) {
-  const parts = new Intl.DateTimeFormat("en-US", { hour: "numeric", hour12: false })
-    .formatToParts(new Date(Date.UTC(2000, 0, 1, utcHour)))
-  return parseInt(parts.find((p) => p.type === "hour")?.value ?? "0") % 24
-}
-
 // ═══════════════════════════════════════════════════════════════════════════════
 // PLAN TAB
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -364,7 +387,7 @@ const GRID_LEGEND = [
   ["weak","Proven weak"],["untested","Untested"],["promising","Under-tested promising"],["whale","Whale window"],
 ]
 
-function PlanTab({ tips, windows, whales, prefs, savePrefs, isPro=true }) {
+function PlanTab({ tips, windows, whales, prefs, savePrefs, isPro=true, timezone='UTC' }) {
   const [showCustomize, setShow] = useState(false)
   const [whyOpen, setWhyOpen]    = useState(null)
 
@@ -376,8 +399,12 @@ function PlanTab({ tips, windows, whales, prefs, savePrefs, isPro=true }) {
     return new Set(Object.entries(m).filter(([, n]) => n >= 2).map(([k]) => k))
   }, [whales])
 
-  const blockEnabled = useCallback((utcHour) => {
-    const lh = localHourOf(utcHour)
+  // windows[].utcHour is already the creator's real local hour (see
+  // toWeekPlanSession's comment) — no further conversion needed here.
+  // Previously this ran the hour through a SECOND conversion (localHourOf,
+  // now removed), which double-converted an already-local value.
+  const blockEnabled = useCallback((hour) => {
+    const lh = ((hour % 24) + 24) % 24
     return (
       (prefs.blocks.Morning   && lh >= 6  && lh < 12) ||
       (prefs.blocks.Afternoon && lh >= 12 && lh < 18) ||
@@ -387,7 +414,7 @@ function PlanTab({ tips, windows, whales, prefs, savePrefs, isPro=true }) {
   }, [prefs.blocks])
 
   const weekPlan = useMemo(() => {
-    const today = todayLocalName()
+    const today = todayLocalName(timezone)
     const mode  = prefs.mode
     return Array.from({ length: 7 }, (_, utcDay) => {
       const dayName = localDay(utcDay)
@@ -405,17 +432,20 @@ function PlanTab({ tips, windows, whales, prefs, savePrefs, isPro=true }) {
       else                                cands = [...cands].sort((a, b) => b.avgUsdPerHr - a.avgUsdPerHr)
       return { utcDay, dayName, off: false, window: cands[0] ?? null, isToday: dayName === today, isWhale: whaleKeys.has(cands[0] ? `${cands[0].utcDay}-${cands[0].utcHour}` : "") }
     })
-  }, [windows, prefs, whaleKeys, hidden, blockEnabled])
+  }, [windows, prefs, whaleKeys, hidden, blockEnabled, timezone])
 
   const tonight = weekPlan.find((d) => d.isToday && !d.off && d.window)
 
   const whaleTonight = useMemo(() => {
-    const todayUTC = new Date().getUTCDay()
+    // Local day-of-week (see toWeekPlanSession's comment) — previously
+    // getUTCDay(), which wouldn't reliably match whales[].bestUtcDay (now
+    // also local) near a UTC day boundary.
+    const todayUTC = toLocalDow(new Date().toISOString(), timezone)
     const active = whales.filter((w) => w.bestUtcDay === todayUTC && w.daysSince < 14)
     return active.length ? { hour: active[0].bestUtcHour, count: active.length } : null
-  }, [whales])
+  }, [whales, timezone])
 
-  const sessions       = useMemo(() => detectMeaningfulSessions(tips).map(toWeekPlanSession), [tips])
+  const sessions       = useMemo(() => detectMeaningfulSessions(tips).map((s) => toWeekPlanSession(s, timezone)), [tips, timezone])
   const avgSessionUsd  = sessions.length ? sessions.reduce((n, s) => n + s.totalUsd, 0) / sessions.length : 0
 
   const whyReasons = (row) => {
@@ -655,7 +685,7 @@ function PlanTab({ tips, windows, whales, prefs, savePrefs, isPro=true }) {
 // WHALES TAB
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function WhalesTab({ tips, whales }) {
+function WhalesTab({ tips, whales, timezone='UTC' }) {
   const [sortBy, setSortBy] = useState("value")
 
   const sorted = useMemo(() => {
@@ -666,12 +696,12 @@ function WhalesTab({ tips, whales }) {
   }, [whales, sortBy])
 
   const whaleTonight = useMemo(() => {
-    const todayUTC = new Date().getUTCDay()
+    const todayUTC = toLocalDow(new Date().toISOString(), timezone)
     const active = whales.filter((w) => w.bestUtcDay === todayUTC && w.daysSince < 14)
     if (!active.length) return null
     const h = active[0].bestUtcHour
     return { startHr: h, count: active.length }
-  }, [whales])
+  }, [whales, timezone])
 
   // Whale visit frequency per grid cell
   const whaleGrid = useMemo(() => {
@@ -680,13 +710,12 @@ function WhalesTab({ tips, whales }) {
     tips.forEach((t) => {
       const tok = parseFloat(t.tokens) || 0
       if (!whales.some((w) => w.username === (t.username || "unknown"))) return
-      const dt = new Date(t.date_time)
-      const k  = `${dt.getUTCDay()}-${Math.floor(dt.getUTCHours() / 4)}`
+      const k = `${toLocalDow(t.date_time, timezone)}-${Math.floor(toLocalHour(t.date_time, timezone) / 4)}`
       freq[k] = (freq[k] || 0) + 1
       if (freq[k] > max) max = freq[k]
     })
     return { freq, max }
-  }, [tips, whales])
+  }, [tips, whales, timezone])
 
   const totalRevenue = tips.reduce((n, t) => n + (parseFloat(t.usd) || 0), 0)
   const top3Share = totalRevenue > 0
@@ -811,14 +840,14 @@ function WhalesTab({ tips, whales }) {
 // PROGRESS TAB
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function ProgressTab({ tips, windows, prefs }) {
-  const sessions = useMemo(() => detectMeaningfulSessions(tips).map(toWeekPlanSession), [tips])
+function ProgressTab({ tips, windows, prefs, timezone='UTC' }) {
+  const sessions = useMemo(() => detectMeaningfulSessions(tips).map((s) => toWeekPlanSession(s, timezone)), [tips, timezone])
   const topWindows = useMemo(() => windows.filter((w) => w.sessionCount >= 2).slice(0, 10), [windows])
 
-  const score = useMemo(() => planMatchScore(tips, topWindows), [tips, topWindows])
+  const score = useMemo(() => planMatchScore(tips, topWindows, timezone), [tips, topWindows, timezone])
 
   const breakdown = useMemo(() => {
-    const platEff   = platformEfficiency(tips)
+    const platEff   = platformEfficiency(tips, timezone)
     const bestPlat  = Object.entries(platEff).sort((a, b) => b[1].usdPerHr - a[1].usdPerHr)[0]?.[0]
     const platPct   = bestPlat && tips.length
       ? Math.round(tips.filter((t) => t.platform === bestPlat).length / tips.length * 100)
@@ -830,7 +859,7 @@ function ProgressTab({ tips, windows, prefs }) {
         }).length / prefs.testPlan.length * 100)
       : 0
     return { windowPct: score, platPct, testedPct }
-  }, [tips, sessions, score, prefs.testPlan])
+  }, [tips, sessions, score, prefs.testPlan, timezone])
 
   const isOnPlan = useCallback((s) => topWindows.some((w) => w.utcDay === s.utcDay && Math.abs(w.utcHour - s.utcHour) <= 1), [topWindows])
 
@@ -846,6 +875,11 @@ function ProgressTab({ tips, windows, prefs }) {
   }, [sessions])
 
   const liftChart = useMemo(() => {
+    // Week-of-year bucketing for this trend chart still uses UTC calendar
+    // boundaries — a different, lower-stakes issue than the day/hour "best
+    // time" bucketing fixed above (a session near midnight UTC can land in
+    // the adjacent ISO week here, not the wrong day/hour cell). Not fixed in
+    // this pass; noted for the record rather than silently left as-is.
     const weeks = {}
     sessions.forEach((s) => {
       const d   = s.start
@@ -975,7 +1009,7 @@ function LockedPlannerTab({ title, body }) {
   )
 }
 
-function StreamPlannerContent({ tips, isPro=true }) {
+function StreamPlannerContent({ tips, isPro=true, timezone='UTC' }) {
   const [tab, setTab]   = useState("plan")
   const [prefs, setPrefs] = useState(DEFAULT_PREFS)
 
@@ -991,8 +1025,8 @@ function StreamPlannerContent({ tips, isPro=true }) {
     try { localStorage.setItem(PREFS_KEY, JSON.stringify(next)) } catch {}
   }, [])
 
-  const windows = useMemo(() => bestWindows(tips),  [tips])
-  const whales  = useMemo(() => detectWhales(tips), [tips])
+  const windows = useMemo(() => bestWindows(tips, timezone),  [tips, timezone])
+  const whales  = useMemo(() => detectWhales(tips, timezone), [tips, timezone])
 
   return (
     <div style={{ background:BG, minHeight:"100%", padding:24 }}>
@@ -1009,9 +1043,9 @@ function StreamPlannerContent({ tips, isPro=true }) {
         ))}
       </div>
 
-      {tab === "plan"     && <PlanTab tips={tips} windows={windows} whales={whales} prefs={prefs} savePrefs={savePrefs} isPro={isPro} />}
-      {tab === "whales"   && (isPro ? <WhalesTab tips={tips} whales={whales} /> : <LockedPlannerTab title="Whale Windows" body="See exactly when your top fans historically show up, so you can be live when they are." />)}
-      {tab === "progress" && (isPro ? <ProgressTab tips={tips} windows={windows} prefs={prefs} /> : <LockedPlannerTab title="Plan Progress" body="Track how closely you're sticking to your recommended schedule over time." />)}
+      {tab === "plan"     && <PlanTab tips={tips} windows={windows} whales={whales} prefs={prefs} savePrefs={savePrefs} isPro={isPro} timezone={timezone} />}
+      {tab === "whales"   && (isPro ? <WhalesTab tips={tips} whales={whales} timezone={timezone} /> : <LockedPlannerTab title="Whale Windows" body="See exactly when your top fans historically show up, so you can be live when they are." />)}
+      {tab === "progress" && (isPro ? <ProgressTab tips={tips} windows={windows} prefs={prefs} timezone={timezone} /> : <LockedPlannerTab title="Plan Progress" body="Track how closely you're sticking to your recommended schedule over time." />)}
     </div>
   )
 }
@@ -1019,7 +1053,7 @@ function StreamPlannerContent({ tips, isPro=true }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // ROOT EXPORT
 // ═══════════════════════════════════════════════════════════════════════════════
-export default function StreamPlanner({ tips = [], isPro = false }) {
+export default function StreamPlanner({ tips = [], isPro = false, timezone = 'UTC' }) {
   if (tips.length < 20) {
     return (
       <div style={{ background:BG, minHeight:"100%", display:"flex", alignItems:"center", justifyContent:"center", padding:24 }}>
@@ -1034,5 +1068,5 @@ export default function StreamPlanner({ tips = [], isPro = false }) {
     )
   }
 
-  return <StreamPlannerContent tips={tips} isPro={isPro} />
+  return <StreamPlannerContent tips={tips} isPro={isPro} timezone={timezone} />
 }
