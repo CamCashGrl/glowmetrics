@@ -3074,13 +3074,13 @@ const stopImportMessageRotation = () => {
     const readiness = getDashboardReadiness({
       totalTips:     tips.length,
       totalSessions: analytics?.meaningfulSessionCount || 0,
-      totalFans:     analytics?.uniqueFanCount || [...new Set(tips.map(t => (t.username || '').toLowerCase()).filter(Boolean))].length,
+      totalFans:     analytics?.uniqueFanCount ?? 0,
       totalEarnings: analytics?.totalUSD || 0,
       dateRangeDays: drRangeDays,
       streamDays:    drStreamDays,
     })
     const isLowData  = readiness !== 'ready'
-    const modLockArgs = { totalTips: tips.length, totalSessions: analytics?.meaningfulSessionCount || 0, totalFans: analytics?.uniqueFanCount || 0, totalEarnings: analytics?.totalUSD || 0, totalStreamMinutes: analytics?.totalStreamMinutes || 0, importedPlatformCount: drPlatCount, isPro, liveModeSessions: 0 }
+    const modLockArgs = { totalTips: tips.length, totalSessions: analytics?.meaningfulSessionCount || 0, totalFans: analytics?.uniqueFanCount ?? 0, totalEarnings: analytics?.totalUSD || 0, totalStreamMinutes: analytics?.totalStreamMinutes || 0, importedPlatformCount: drPlatCount, isPro, liveModeSessions: 0 }
     const plannerLock  = getModuleLockState({ module: 'streamPlanner',  ...modLockArgs })
     const moneyMapLock = getModuleLockState({ module: 'moneyMap',       ...modLockArgs })
     return { dashboardReadiness: readiness, _isLowData: isLowData, _plannerLock: plannerLock, _moneyMapLock: moneyMapLock }
@@ -3448,7 +3448,7 @@ const stopImportMessageRotation = () => {
           <DashboardProgressCard
             totalTips={tips.length}
             totalSessions={analytics?.meaningfulSessionCount || 0}
-            totalFans={analytics?.uniqueFanCount || 0}
+            totalFans={analytics?.uniqueFanCount ?? 0}
             totalEarnings={analytics?.totalUSD || 0}
             readiness={dashboardReadiness}
             onImport={() => handleTabChange('upload')}
@@ -3544,7 +3544,7 @@ const stopImportMessageRotation = () => {
                   sub: meaningfulSessions.length > 0 ? `Across ${meaningfulSessions.length.toLocaleString()} meaningful sessions` : 'Not enough data yet',
                   icon:'🎯' },
                 { label:"Total Fans", accent:'#a78bfa', glowClass:'card-glow-violet', trend:fansGrowth,
-                  value: whales.length > 0 ? whales.length.toLocaleString() : '—',
+                  value: (analytics?.uniqueFanCount ?? 0) > 0 ? analytics.uniqueFanCount.toLocaleString() : '—',
                   sub: fansActiveLast30 > 0 ? `${fansActiveLast30} active in last 30 days` : 'None active in the last 30 days',
                   icon:'👥' },
                 { label:"Meaningful Sessions", accent:'#fbbf24', glowClass:'card-glow-gold', trend:sessGrowth,
@@ -4295,16 +4295,30 @@ const stopImportMessageRotation = () => {
                   // Build insights from data already in scope — no API call needed
                   const _ins = []
 
-                  // 1. Peak hour insight
-                  if (canonicalPeakLabel) {
-                    const _pPlat = dailyBrief?.displayPlat || 'your top platform'
-                    const _pAvg = dailyBrief?.displayAvg
+                  // 1. Peak hour insight — reads label, $/hr, sample size, and
+                  // platform from ONE bucket (analytics.canonicalBestTimes.bestWindow,
+                  // lib/analytics/bestTimes.js). Previously this stitched together
+                  // three independent sources — engineInsights.daily_plan.best_hour
+                  // (a separate SQL engine) for the hour label, dailyBrief.displayAvg
+                  // (a same-clock-hour $ sum, not a $/hr rate) for the dollar figure,
+                  // and analytics.estimatedHourlyRate for the "overall rate" it was
+                  // divided against — three numbers with no guarantee of agreeing,
+                  // which is how "peak window" ended up reading as 0.4x the overall
+                  // rate. bestWindow's medianUsdPerHour is, by construction, the
+                  // highest among confidence-qualified buckets, so comparing it
+                  // against the same estimatedHourlyRate denominator can no longer
+                  // produce a peak window that reads as below average.
+                  const _bw = analytics?.canonicalBestTimes?.bestWindow
+                  if (_bw) {
+                    const _bwLabel = (h => h === 0 ? '12 AM' : h < 12 ? `${h} AM` : h === 12 ? '12 PM' : `${h - 12} PM`)(_bw.localHour)
+                    const _bwPlat = (_bw.topPlatform || 'your top platform').replace('BongaCams', 'Bonga').replace('MyFreeCams', 'MFC').replace(/chaturbate/i, 'Chaturbate')
+                    const _bwRatio = avgPerHour > 0 ? Math.round((_bw.medianUsdPerHour / avgPerHour) * 10) / 10 : null
                     _ins.push({
-                      title: `Your peak window is ${canonicalPeakLabel} on ${_pPlat}`,
-                      body: _pAvg > 0
-                        ? `Sessions at this hour average $${_pAvg.toFixed(0)} — ${Math.round(_pAvg / Math.max(avgPerHour, 0.01) * 10) / 10}x your overall rate. Go live during this window to maximise earnings.`
-                        : `This is when your fans are most active. Streaming at this time consistently will grow your peak-hour session count.`,
-                      action: `Schedule your next stream around ${canonicalPeakLabel}`
+                      title: `Your peak window is ${_bwLabel} on ${_bwPlat}`,
+                      body: _bwRatio !== null
+                        ? `Sessions at this hour average $${_bw.medianUsdPerHour.toFixed(2)}/hr — ${_bwRatio}x your overall $${avgPerHour.toFixed(2)}/hr rate, based on ${_bw.sessionCount} session${_bw.sessionCount === 1 ? '' : 's'} (${_bw.tier} confidence). Go live during this window to maximise earnings.`
+                        : `Sessions at this hour average $${_bw.medianUsdPerHour.toFixed(2)}/hr across ${_bw.sessionCount} session${_bw.sessionCount === 1 ? '' : 's'} (${_bw.tier} confidence).`,
+                      action: `Schedule your next stream around ${_bwLabel}`
                     })
                   }
 

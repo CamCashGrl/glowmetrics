@@ -823,7 +823,8 @@ export function aggregateRows(tips, tz = null) {
     return {
       totalUSD: 0, totalTokens: 0, totalTips: 0, avgTipSize: 0,
       topTippers: [], platforms: [], sessions: [], insights: [],
-      predictions: null, whaleAlerts: [], lossAlerts: [], nextMoves: [],
+      predictions: null, whales: [], whaleAlerts: [], lossAlerts: [], nextMoves: [],
+      uniqueFanCount: 0,
       bestDay: null, bestHour: null, earlySignalHour: null, platformBestTimes: {},
       monthlyData: [], bestMonth: null, tipTypeBreakdown: [],
       privateShowFans: [], spyShowFans: [], earningsVelocity: null, totalStreamMinutes: 0,
@@ -1223,6 +1224,15 @@ export function aggregateRows(tips, tz = null) {
     topTippers, platforms, sessions: allValidSessions,
     insights: validateInsights(insights),
     predictions, whaleAlerts, lossAlerts, nextMoves, whales,
+    // Canonical unique-fan count — identifyWhales() returns exactly one
+    // entry per unique username in `tips` (see its allFans.map at the end),
+    // so its length IS the unique fan count, not just "whale" fans despite
+    // the function name. This is the single source every "Total Fans" /
+    // fan-count consumer should read (app/dashboard/page.js previously read
+    // a same-named field that was never actually returned here, and
+    // separately a "Total Fans" KPI card read whales.length directly instead
+    // of a canonical field — both are migrated to this in the same pass).
+    uniqueFanCount: whales.length,
     bestDay, bestHour, earlySignalHour, platformBestTimes,
     monthlyData, bestMonth,
     tipTypeBreakdown, privateShowFans, spyShowFans,
