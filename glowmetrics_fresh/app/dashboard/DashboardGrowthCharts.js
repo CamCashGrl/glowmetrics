@@ -95,7 +95,7 @@ function monthlyUsdSeries(tips) {
 function canonicalMonthlySeries(monthlyData) {
   return monthlyData.slice(-6).map((m) => {
     const sortDate = new Date(`${m.month}-01T00:00:00Z`)
-    return { key: m.month, sortDate, usd: m.usd, growthPct: m.growthPct, label: MONTH_FMT.format(sortDate) }
+    return { key: m.month, sortDate, usd: m.usd, growthPct: m.growthPct, gapMonths: m.gapMonths, label: MONTH_FMT.format(sortDate) }
   })
 }
 
@@ -212,7 +212,19 @@ export default function DashboardGrowthCharts({ tips, sessions, monthlyData }) {
                   color: isPositive ? GREEN : RED,
                 }}>
                   {isPositive ? "▲" : "▼"} {Math.abs(growthPct)}%
-                  <span style={{ color: MUTED, fontWeight: 500, marginLeft: 4 }}>vs last month</span>
+                  {/* thisMonth.gapMonths > 0 means the "previous month" this % is
+                      measured against wasn't actually last month — one or more
+                      zero-activity calendar months sit between them (lib/analytics.js's
+                      monthlyData only has entries for months with real tip data).
+                      A gap makes an otherwise-correct percentage read as continuous
+                      month-over-month growth when it isn't — flag it instead of
+                      silently saying "vs last month" for a comparison that skipped
+                      several months. */}
+                  <span style={{ color: MUTED, fontWeight: 500, marginLeft: 4 }}>
+                    {thisMonth.gapMonths > 0
+                      ? `vs last active month (${thisMonth.gapMonths}mo gap)`
+                      : "vs last month"}
+                  </span>
                 </div>
               )}
             </div>

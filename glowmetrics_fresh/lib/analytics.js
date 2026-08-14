@@ -1142,10 +1142,20 @@ export function aggregateRows(tips, tz = null) {
   // growthPct computed here once, canonically, so consumers (page.js's
   // momentum block, DashboardGrowthCharts.js) never need their own copy of
   // this formula.
+  //
+  // monthMap only contains months with actual tip data (see the forEach
+  // above — a month with zero tips never gets a key), so `prev` here is the
+  // previous ACTIVE month, not necessarily the previous CALENDAR month. A
+  // 4-month gap with zero activity, followed by one small tip, can produce a
+  // mathematically correct but wildly misleading growthPct (e.g. 2,883%) if
+  // displayed as plain "monthly growth" with no indication of the gap.
+  // gapMonths lets consumers show that context instead of a bare percentage.
+  const monthIndex = (ym) => { const [y, mo] = ym.split('-').map(Number); return y * 12 + mo }
   const monthlyData = monthlyDataUnsorted.map((m, i) => {
     const prev = i > 0 ? monthlyDataUnsorted[i - 1] : null
     const growthPct = prev && prev.usd > 0 ? Math.round(((m.usd - prev.usd) / prev.usd) * 100) : null
-    return { ...m, growthPct }
+    const gapMonths = prev ? monthIndex(m.month) - monthIndex(prev.month) - 1 : null
+    return { ...m, growthPct, prevMonth: prev?.month || null, gapMonths }
   })
   const bestMonth = monthlyData.length > 0 ? [...monthlyData].sort((a, b) => b.usd - a.usd)[0] : null
 

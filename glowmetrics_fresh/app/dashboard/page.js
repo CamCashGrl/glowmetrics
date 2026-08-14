@@ -3881,7 +3881,13 @@ const stopImportMessageRotation = () => {
                             {isTop && <div style={{ position: "absolute", top: 8, right: 8, fontSize: 9, padding: "2px 6px", borderRadius: 10, background: `${col}25`, color: col, fontWeight: 700 }}>TOP ROI</div>}
                             <div style={{ fontSize: 11, fontWeight: 700, color: col, marginBottom: 6 }}>{p.platform.replace('BongaCams','Bonga').replace('MyFreeCams','MFC')}</div>
                             <div style={{ fontSize: 22, fontWeight: 900, color: C.white, marginBottom: 2 }}>{roi !== null ? `$${(roi || 0).toFixed(2)}/hr` : '—'}</div>
-                            <div style={{ fontSize: 11, color: C.muted, marginBottom: bestTime ? 8 : 0 }}>${(p.totalUSD || 0).toFixed(0)} total · {(p.hours || 0).toFixed(0)}h streamed</div>
+                            {/* "in sessions" (not "total") — this is meaningful-session-scoped
+                                earnings (p.totalUSD, built from analytics.platforms), which can be
+                                less than the account-wide Total Earned figure elsewhere on this tab
+                                (analytics.totalUSD counts every tip, including ones outside any
+                                qualifying session). Both are real, correct numbers with different
+                                scopes — the unlabeled "total" wording was the bug, not the math. */}
+                            <div style={{ fontSize: 11, color: C.muted, marginBottom: bestTime ? 8 : 0 }}>${(p.totalUSD || 0).toFixed(0)} in sessions · {(p.hours || 0).toFixed(0)}h streamed</div>
                             {(() => {
                             const todayUTCName = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][new Date().getUTCDay()]
                             const ptimes = analytics?.platformBestTimes?.[p.platform]
@@ -4603,10 +4609,14 @@ const stopImportMessageRotation = () => {
                 return (
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 28 }}>
                     {[
-                      { icon: "💰", label: "Top Revenue", value: topRev.platform, sub: `$${(topRev.totalUSD || 0).toFixed(2)} total`, color: C.gold },
+                      { icon: "💰", label: "Top Revenue", value: topRev.platform, sub: `$${(topRev.totalUSD || 0).toFixed(2)} in sessions`, color: C.gold },
                       { icon: "⚡", label: "Most Efficient", value: topEff.platform, sub: `$${(topEff.usdPerHour || 0).toFixed(2)}/hour`, color: C.cyan },
                       { icon: "🕒", label: "Total Hours", value: `${totalHours.toFixed(1)}h`, sub: `across ${displayPlatforms.length} platforms`, color: C.pink },
-                      { icon: "💵", label: "Combined Earned", value: `$${totalEarned.toFixed(2)}`, sub: platformTimeFilter === "ALL" ? "all time" : `last ${platformTimeFilter}`, color: C.green },
+                      // "in sessions" — same session-scope caveat as the Overview
+                      // Platform ROI card. This sum of per-platform totalUSD can be
+                      // less than the account-wide Total Earned figure (which counts
+                      // every tip, including ones outside any qualifying session).
+                      { icon: "💵", label: "Combined Earned (in sessions)", value: `$${totalEarned.toFixed(2)}`, sub: platformTimeFilter === "ALL" ? "all time" : `last ${platformTimeFilter}`, color: C.green },
                     ].map(({ icon, label, value, sub, color }) => (
                       <div key={label} className="dash-card" style={{ ...glassCard, borderRadius: 14, padding: 20 }}>
                         <div style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>{icon} {label}</div>
@@ -7113,7 +7123,12 @@ const stopImportMessageRotation = () => {
 
       {shareModalOpen && (() => {
         const topFan = whales[0]
-        const bestDayLabel = analyticsbestDay?.day || null
+        // Canonical (session-based, median $/hour) best window, not the legacy
+        // tip-level analyticsbestDay — the two can disagree (e.g. legacy "best
+        // day" landing on a day the canonical engine wouldn't even qualify as
+        // confident), and this share card should say the same day the rest of
+        // the app is being migrated to treat as authoritative.
+        const bestDayLabel = analytics?.canonicalBestTimes?.bestWindow?.localDay || null
         const platforms = [...new Set(tips.map(t => t.platform))].join(" & ")
         const oneTimerPct = whales.length > 0 ? Math.round((whales.filter(w => w.tipCount === 1).length / whales.length) * 100) : 0
         const cardLines = [

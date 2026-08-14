@@ -101,5 +101,29 @@ function check(name, actual, expected) {
   check('early signal avg reads from medianUsdPerHour', avgUsed, 30)
 }
 
+// ══════════════════════════════════════════════════════════════════════
+// 5. Creator Report's "Best Streaming Day" — migrated in the Free/Pro UX
+//    audit's B-item pass to derive from the SAME bestWindow as bestHour
+//    above, instead of separately reading legacy analytics.bestDay. Before
+//    this fix, Creator Report could show a canonical bestHour ("Wed 12 PM")
+//    right next to a legacy bestDay ("Friday") for the same account — two
+//    different sources contradicting each other inside one component.
+//    Confirmed on a real account: legacy bestDay = Friday, canonical
+//    bestWindow.localDay = Wednesday.
+// ══════════════════════════════════════════════════════════════════════
+function shimBestDay(bestWindow) {
+  return bestWindow ? { day: bestWindow.localDay, avg: bestWindow.medianUsdPerHour } : null
+}
+{
+  const bestWindow = { localDay: 'Wednesday', localHour: 12, medianUsdPerHour: 9.52, sessionCount: 4, tier: 'supported' }
+  const legacyBestDay = { day: 'Friday', avg: 2.34, total: 60.4, count: 16 } // real divergent legacy value
+  const shimmedDay = shimBestDay(bestWindow)
+  const shimmedHour = shimBestHour(bestWindow)
+  check('bestDay shim produces {day, avg} shape', shimmedDay, { day: 'Wednesday', avg: 9.52 })
+  check('bestDay and bestHour now derive from the same bestWindow (never disagree on which day)', shimmedDay.day, bestWindow.localDay)
+  check('bestDay no longer matches the legacy, independently-sourced value', shimmedDay.day !== legacyBestDay.day, true)
+  check('bestDay is null (not a stale legacy value) when no canonical window qualifies yet', shimBestDay(null), null)
+}
+
 console.log(`\n${pass} passed, ${fail} failed`)
 if (fail > 0) process.exit(1)
