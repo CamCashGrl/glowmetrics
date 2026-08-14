@@ -5128,7 +5128,49 @@ const stopImportMessageRotation = () => {
           </div>
         )}
 
-        {activeTab === "live" && <LiveEnginePage embedded />}
+        {activeTab === "live" && (isPro ? <LiveEnginePage embedded /> : (() => {
+          // Live Mode is Pro-only (real-time coaching/room-health/predictive
+          // nudges is Layer 3 "Action" intelligence). Per the no-surprise-
+          // locks rule: this must be visible and explained BEFORE the user
+          // starts a session, never discovered mid-stream — so free users
+          // never reach LiveEnginePage at all, not even to see it locked
+          // once inside. Personalized where the user's own real data
+          // supports it; never a fabricated number.
+          const bw = analytics?.canonicalBestTimes?.bestWindow
+          const bestWindowLine = bw
+            ? `Your data shows a real earning pattern around ${fmtHour(bw.localHour)} — Live Mode tracks your pace against it in real time and tells you when you're ahead or behind.`
+            : whales.length > 0
+              ? `You have ${whales.length} repeat fan${whales.length === 1 ? '' : 's'} in your history. Live Mode flags them the moment they show up in a session, in real time.`
+              : `Live Mode tracks your session pace, room health, and fan activity in real time while you stream.`
+          return (
+            <div style={{ maxWidth: 640, margin: '0 auto', padding: '32px 0' }}>
+              <div style={{ textAlign: 'center', marginBottom: 24 }}>
+                <div style={{ fontSize: 40, marginBottom: 10 }}>🔴</div>
+                <div style={{ fontSize: 20, fontWeight: 800, color: C.white, marginBottom: 8 }}>Live Mode is a Pro feature</div>
+                <div style={{ fontSize: 13, color: C.muted, maxWidth: 440, margin: '0 auto', lineHeight: 1.6 }}>{bestWindowLine}</div>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 24 }}>
+                {[
+                  { icon: '⚡', label: 'Real-time revenue pace', desc: 'See exactly how tonight compares to your average as tips come in.' },
+                  { icon: '🐳', label: 'Whale alerts', desc: 'Know instantly when a top fan joins your room.' },
+                  { icon: '🧭', label: 'Room-health coaching', desc: 'Live prompts when engagement or pace is slipping.' },
+                  { icon: '🎯', label: 'Peak-window countdown', desc: 'A live countdown to your own historical best hour.' },
+                ].map((f, i) => (
+                  <div key={i} style={{ padding: '14px 16px', borderRadius: 12, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                    <div style={{ fontSize: 18, marginBottom: 6 }}>{f.icon}</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: C.white, marginBottom: 3 }}>{f.label}</div>
+                    <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.4 }}>{f.desc}</div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <button onClick={() => openUpgradeModal('live_mode_locked')} style={{ padding: '12px 28px', borderRadius: 10, border: 'none', cursor: 'pointer', fontWeight: 800, fontSize: 13, color: '#06101A', background: 'linear-gradient(135deg,#22D3EE,#EC4899)', animation: 'upgradeGlow 2.2s ease-in-out infinite' }}>
+                  Upgrade to Pro — unlock Live Mode
+                </button>
+              </div>
+            </div>
+          )
+        })())}
 
         {activeTab === "live-sessions" && (() => {
           const fmtSessionDuration = (secs) => {
