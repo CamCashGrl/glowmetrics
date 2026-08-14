@@ -58,6 +58,23 @@ function tryParseDate(str){
   const d=new Date(s);if(!isNaN(d.getTime()))return d;return null
 }
 
+// A column is only safe to treat as a token/usd number if it is numeric in
+// its ENTIRETY (after stripping $, commas, whitespace) — parseFloat() alone
+// parses a leading numeric prefix and ignores the rest (parseFloat('21yeacock')
+// === 21, parseFloat('93marian') === 93), which silently misclassifies a
+// numeric-leading username as a token/usd value instead of the username. That
+// shifts every later column in the row (the real username is lost, the
+// transaction-type column — e.g. "Tips" — gets used as the username instead,
+// and tokens/usd end up swapped), collapsing every affected fan into one fake
+// bucket and inflating totals. Confirmed against a real 1912-row BongaCams
+// export: 4 numeric-leading usernames ("21yeacock", "93marian", "85hn5n",
+// "141414av2") all collapsed into a single fake "Tips" fan, undercounting
+// unique fans (315 vs the real 318) and overstating total revenue by ~$78
+// (their real token counts were misassigned into the usd field).
+function isFullyNumeric(str){
+  return /^-?\d+(\.\d+)?$/.test((str||'').replace(/[$,\s]/g,'').trim())
+}
+
 // Detects if a BongaCams tab-separated row is a paid chat session
 // Returns session_type string or null
 function detectBCPaidRow(cols){
@@ -89,11 +106,11 @@ function parseBCPaidSessions(rawText){
       // separators like BongaCams' "1 507") before parsing — parseFloat
       // otherwise stops at the first non-numeric character and silently
       // truncates e.g. "1 507" tokens down to 1.
-      const n=parseFloat(col.replace(/[$,\s]/g,''))
+      const n=isFullyNumeric(col)?parseFloat(col.replace(/[$,\s]/g,'')):NaN
       if(!isNaN(n)&&n>0){
         if(Number.isInteger(n)&&n<100000&&tokens===0)tokens=Math.round(n)
         else if(n<50000&&usd===0)usd=n
-      } else if(col.length>1&&col.length<=50&&isNaN(parseFloat(col))&&!username){
+      } else if(col.length>1&&col.length<=50&&!isFullyNumeric(col)&&!username){
         username=col
       }
     }
@@ -157,7 +174,7 @@ function parseRows(rawText,platformId){
     const rest=cols.filter((_,i)=>i!==tsIdx)
     let tokens=null,usd=null,username=null,note=''
     for(const col of rest){
-      const n=parseFloat(col.replace(/[$,]/g,''))
+      const n=isFullyNumeric(col)?parseFloat(col.replace(/[$,]/g,'')):NaN
       if(!isNaN(n)&&n>0){
         if(Number.isInteger(n)&&n>=1&&n<100000&&tokens===null)tokens=n
         else if(!Number.isInteger(n)&&n<5000&&usd===null)usd=n
@@ -168,7 +185,7 @@ function parseRows(rawText,platformId){
         // estimate. Once tokens is known and usd isn't, treat the next
         // positive number as the real payout regardless of its integer-ness.
         else if(tokens!==null&&usd===null)usd=n
-      }else if(col.length>0&&isNaN(parseFloat(col))){
+      }else if(col.length>0&&!isFullyNumeric(col)){
         if(username===null&&col.length<=50&&col.length>1)username=col
         else if(note===''&&col.length>0)note=col
       }
