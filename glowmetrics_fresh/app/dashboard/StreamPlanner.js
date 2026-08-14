@@ -10,7 +10,7 @@ import {
 // function in this file.
 import { detectMeaningfulSessions } from "../../lib/analytics/sessions"
 import { WHALE_LIFETIME_TOKEN_THRESHOLD } from "../../lib/constants"
-import { toLocalDow, toLocalHour } from "../../lib/analytics/localTime"
+import { toLocalDow, toLocalHour, toLocalDateStr } from "../../lib/analytics/localTime"
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // DESIGN TOKENS
@@ -252,24 +252,10 @@ function multiStreamAnalysis(sessions) {
   }))
 }
 
-// Last 6 months: [{ month, totalUsd, momChange }]
-function monthlyTotals(tips) {
-  const map = {}
-  tips.forEach((t) => {
-    const dt = new Date(t.date_time)
-    const k  = `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}`
-    map[k]   = (map[k] || 0) + (parseFloat(t.usd) || 0)
-  })
-  const sorted = Object.entries(map).sort(([a], [b]) => a.localeCompare(b)).slice(-6)
-  return sorted.map(([k, totalUsd], i) => {
-    const prev = i > 0 ? sorted[i - 1][1] : null
-    return {
-      month:     MONTHS[parseInt(k.split("-")[1]) - 1],
-      totalUsd:  parseFloat(totalUsd.toFixed(2)),
-      momChange: prev && prev > 0 ? ((totalUsd - prev) / prev) * 100 : null,
-    }
-  })
-}
+// monthlyTotals() removed — it was defined here but never called by any
+// consumer in this file. It duplicated lib/analytics.js's monthlyData
+// (which is already creator-local-month bucketed and carries growthPct +
+// gapMonths); reviving it would have meant a second monthly aggregation.
 
 // % of tips that fall within recommended windows (±1 hr tolerance).
 // recommendedWindows come from bestWindows() and carry LOCAL day/hour (see
@@ -876,16 +862,28 @@ function ProgressTab({ tips, windows, prefs, timezone='UTC' }) {
   }, [sessions])
 
   const liftChart = useMemo(() => {
-    // Week-of-year bucketing for this trend chart still uses UTC calendar
-    // boundaries — a different, lower-stakes issue than the day/hour "best
-    // time" bucketing fixed above (a session near midnight UTC can land in
-    // the adjacent ISO week here, not the wrong day/hour cell). Not fixed in
-    // this pass; noted for the record rather than silently left as-is.
+    // Week buckets run Monday–Sunday in the CREATOR's resolved timezone.
+    //
+    // This previously derived the week from UTC calendar fields
+    // (getUTCDay/getUTCFullYear/getUTCMonth/getUTCDate), so a session late on
+    // a local Sunday — which is already Monday in UTC — was pushed into the
+    // FOLLOWING week's bucket, and a session early on a local Monday west of
+    // UTC fell back into the previous one. Same defect class as the day/hour
+    // bucketing fixed elsewhere in this file, just at week granularity.
+    //
+    // toLocalDateStr gives the session's local calendar date directly; the
+    // Monday anchor is then computed with plain arithmetic on that date, so
+    // no second timezone conversion is introduced and DST transitions (which
+    // shift wall-clock time but never change which local date it is) can't
+    // move a session across a week boundary.
     const weeks = {}
     sessions.forEach((s) => {
-      const d   = s.start
-      const dow = d.getUTCDay()
-      const mon = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - (dow === 0 ? 6 : dow - 1)))
+      const localYmd = toLocalDateStr(s.start.toISOString(), timezone) // YYYY-MM-DD
+      const dow = toLocalDow(s.start.toISOString(), timezone)          // 0 = Sunday
+      const [y, m, d] = localYmd.split("-").map(Number)
+      // Anchor to Monday of this local week (Sunday belongs to the week that
+      // began 6 days earlier, matching the Mon–Sun convention above).
+      const mon = new Date(Date.UTC(y, m - 1, d - (dow === 0 ? 6 : dow - 1)))
       const k   = mon.toISOString().slice(0, 10)
       if (!weeks[k]) weeks[k] = { on: [], off: [], ts: mon.getTime() }
       weeks[k][isOnPlan(s) ? "on" : "off"].push(s.usdHr)
@@ -898,7 +896,7 @@ function ProgressTab({ tips, windows, prefs, timezone='UTC' }) {
         offPlan: v.off.length ? parseFloat((v.off.reduce((a, b) => a + b, 0) / v.off.length).toFixed(2)) : null,
       }
     })
-  }, [sessions, isOnPlan])
+  }, [sessions, isOnPlan, timezone])
 
   const missed = useMemo(() => {
     const out = []

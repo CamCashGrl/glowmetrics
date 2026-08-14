@@ -30,6 +30,7 @@ import { NextResponse } from 'next/server'
 import { createSupabaseRouteClient } from '../../../../lib/supabase-server'
 import { isProPlan } from '../../../../lib/plan'
 import { identifyWhales } from '../../../../lib/analytics'
+import { resolveCreatorTimezone } from '../../../../lib/timezone'
 import { redact } from '../../../../lib/entitlement'
 
 const FREE_WHALE_COUNT = 3
@@ -44,7 +45,7 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { data: profile } = await supabase
-    .from('profiles').select('plan, plan_expires_at').eq('id', user.id).maybeSingle()
+    .from('profiles').select('plan, plan_expires_at, timezone').eq('id', user.id).maybeSingle()
   const isPro = isProPlan(profile)
 
   const PAGE = 1000
@@ -65,7 +66,11 @@ export async function GET() {
     }
   }
 
-  const whales = tips.length ? identifyWhales(tips) : []
+  // Creator's resolved timezone — identifyWhales() buckets each fan's
+  // typicalOnlineHours by local hour, so this route must resolve it the same
+  // way the dashboard does rather than defaulting to UTC.
+  const { timezone: creatorTz } = resolveCreatorTimezone(profile?.timezone)
+  const whales = tips.length ? identifyWhales(tips, creatorTz) : []
   const hiddenCount = Math.max(whales.length - FREE_WHALE_COUNT, 0)
 
   // Basic identity for the top FREE_WHALE_COUNT fans (username/totalUSD/

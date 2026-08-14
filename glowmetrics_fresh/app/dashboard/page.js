@@ -2,7 +2,8 @@
 import React, { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
-import { parseCSV, detectPlatform, aggregateRows as runEngine, toLocalDow } from "../../lib/analytics"
+import { parseCSV, detectPlatform, aggregateRows as runEngine, toLocalDow, toLocalHour } from "../../lib/analytics"
+import { toLocalDateStr } from "../../lib/analytics/localTime"
 import { computeRoomHealth, ROOM_STATES, MOMENTUM_DIRECTIONS } from "../../lib/analytics/roomHealth"
 import { computeRevenueVelocity, computeLiveComparison } from "../../lib/analytics/velocity"
 import { detectSessionPhase, PHASES, getRecoveryActions, getGoalStrategy } from "../../lib/analytics/sessionPhase"
@@ -212,12 +213,14 @@ function ImportSparkle() {
   return <canvas ref={ref} style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 9999 }} />
 }
 
+// Formats an ALREADY creator-local hour (its only caller reads
+// platformTimes[...].hours, which is bucketed with toLocalHour). It used to
+// treat the input as UTC and shift it by the BROWSER's offset — a second
+// conversion in a different zone than the analytics.
 const formatHour = (hour) => {
-  const utcHour = parseInt(hour)
-  if (isNaN(utcHour)) return "—"
-  const offsetHours = new Date().getTimezoneOffset() / -60
-  const localHour = ((utcHour + offsetHours) % 24 + 24) % 24
-  const h = Math.round(localHour)
+  const localHourIn = parseInt(hour)
+  if (isNaN(localHourIn)) return "—"
+  const h = ((localHourIn % 24) + 24) % 24
   if (h === 0) return "12 AM"
   if (h < 12) return `${h} AM`
   if (h === 12) return "12 PM"
@@ -2470,30 +2473,51 @@ const stopImportMessageRotation = () => {
   const returningVsNew        = analytics?.returningVsNew        || null
   const topFanDependency      = analytics?.topFanDependency      || null
 
+  // ── RESOLVED CREATOR TIMEZONE ────────────────────────────────────────
+  // THE single timezone value every local-time analytical calculation on
+  // this page consumes. Contract (lib/timezone.js): profiles.timezone is
+  // the source of truth; the browser's zone is a fallback used only to
+  // auto-populate the profile once, never read live as the analytical
+  // basis. Defined here (rather than lower down, where it used to live as
+  // _momTz) because platformTimes below is the first analytical consumer.
+  const creatorTz = resolveCreatorTimezone(profile?.timezone).timezone
+
   // Build platformTimes from INDIVIDUAL TIPS (not session start time)
-  // so hour/day reflects when money actually came in, not when the session started
-  // Use UTC to match the database timestamps
-  const UTC_DAYS_LONG = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
-  const platformTimes = memoOn(derivedCacheRef.current, 'platformTimes', [tips], () => {
+  // so hour/day reflects when money actually came in, not when the session
+  // started.
+  //
+  // Bucketed in the creator's resolved timezone via toLocalHour/toLocalDow
+  // (lib/analytics/localTime.js — the same primitives the canonical
+  // bestTimes engine and Stream Planner use). Previously this used
+  // getUTCHours()/getUTCDay(), so the "Earnings by hour of day" heatmap and
+  // the per-platform day totals were bucketed in UTC while being presented
+  // as the creator's own hours — a tip at 7 PM Pacific landed in the 02:00
+  // bucket, and one after 4 PM Pacific was attributed to the next day.
+  const LOCAL_DAYS_LONG = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
+  const platformTimes = memoOn(derivedCacheRef.current, 'platformTimes', [tips, creatorTz], () => {
     const pt = {}
     tips.forEach(t => {
       if (!pt[t.platform]) pt[t.platform] = { hours: {}, days: {} }
-      const dt = new Date(t.date_time || t.dateRaw)
-      const hour = dt.getUTCHours()
-      const day = UTC_DAYS_LONG[dt.getUTCDay()]
+      const ts = t.date_time || t.dateRaw
+      const hour = toLocalHour(ts, creatorTz)
+      const day = LOCAL_DAYS_LONG[toLocalDow(ts, creatorTz)]
       pt[t.platform].hours[hour] = (pt[t.platform].hours[hour] || 0) + (t.usd || 0)
       pt[t.platform].days[day]   = (pt[t.platform].days[day]   || 0) + (t.usd || 0)
     })
     return pt
   })
 
-  const filteredWhales = memoOn(derivedCacheRef.current, 'filteredWhales', [whales, whaleFilter, platformFilter, chartDrillDay, tips], () => whales.filter(w => {
+  const filteredWhales = memoOn(derivedCacheRef.current, 'filteredWhales', [whales, whaleFilter, platformFilter, chartDrillDay, tips, creatorTz], () => whales.filter(w => {
     if (whaleFilter !== "ALL" && w.tier !== whaleFilter) return false
     if (platformFilter !== "ALL" && w.platform !== platformFilter) return false
     if (chartDrillDay) {
       const fanTips = (w.tips && w.tips.length > 0) ? w.tips : tips.filter(t => t.username?.toLowerCase() === w.username?.toLowerCase())
       const tippedOnDay = fanTips.some(t => {
-        const dayShort = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][new Date(t.date_time || t.dateRaw).getUTCDay()]
+        // Creator-local day, matching the day label the drill-down was
+        // launched from (platformTimes, now local). Was getUTCDay(), so
+        // "View top fans from Wednesdays" could filter on a different day
+        // than the card the creator clicked.
+        const dayShort = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][toLocalDow(t.date_time || t.dateRaw, creatorTz)]
         return dayShort === chartDrillDay
       })
       if (!tippedOnDay) return false
@@ -2606,18 +2630,23 @@ const stopImportMessageRotation = () => {
       const hourCounts = {}
       fanTips.forEach(t => {
         // FIX: use getUTCHours() — tips stored in UTC
-        const h = new Date(t.date_time || t.dateRaw).getUTCHours()
+        // Creator-local hour, not getUTCHours() — this fan's "peak hour" is
+        // shown to the creator as a local time, so it must be bucketed in the
+        // same zone it is compared against and displayed in.
+        const h = toLocalHour(t.date_time || t.dateRaw, creatorTz)
         hourCounts[h] = (hourCounts[h] || 0) + 1
       })
       const bestHour = Object.entries(hourCounts).sort((a, b) => b[1] - a[1])[0]
       if (!bestHour) return
       const peakHour = parseInt(bestHour[0])
-      const currentUTCHr = new Date().getUTCHours()
+      const currentUTCHr = toLocalHour(new Date().toISOString(), creatorTz)
       const hoursAway = (peakHour - currentUTCHr + 24) % 24
       const _pf0 = bestHour[1] / fanTips.length
       const _pd0 = hoursAway === 0 ? 1.0 : hoursAway === 1 ? 0.65 : 0.35
       const probability = Math.min(90, Math.max(25, Math.round(_pf0 * 200 * _pd0)))
-      const label = (() => { const _off=new Date().getTimezoneOffset()/-60; const _lh=Math.round(((peakHour+_off)%24+24)%24); return _lh===0?'12 AM':_lh<12?`${_lh} AM`:_lh===12?'12 PM':`${_lh-12} PM` })()
+      // peakHour is already creator-local; format only (was re-offsetting by
+      // the BROWSER's zone on top of a UTC bucket).
+      const label = (() => { const _lh=((peakHour%24)+24)%24; return _lh===0?'12 AM':_lh<12?`${_lh} AM`:_lh===12?'12 PM':`${_lh-12} PM` })()
       if (hoursAway <= 2 && probability >= 40) {
         onlineNow.push({
           type: 'online_now', icon: '🟢', color: C.green, severity: 'success',
@@ -2725,7 +2754,9 @@ const stopImportMessageRotation = () => {
   const buildDailyBrief = () => {
     if (!tips || tips.length === 0 || !analytics) return null
     const now = new Date()
-    const utcHour = now.getHours() // local hour — analytics hours are already local
+    // Creator-local current hour. Was the BROWSER's hour; all the analytics
+    // hours it is compared against below are creator-local.
+    const utcHour = toLocalHour(now.toISOString(), creatorTz)
     const DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
     const todayName = DAYS[now.getDay()] // local day of week
 
@@ -2889,7 +2920,7 @@ const stopImportMessageRotation = () => {
         if (!w.tips || w.tips.length < 3) return false
         if (w.totalUSD < 3) return false
         const hc = {}
-        w.tips.forEach(t => { const h = new Date(t.date_time || t.dateRaw).getUTCHours(); hc[h] = (hc[h] || 0) + 1 })
+        w.tips.forEach(t => { const h = toLocalHour(t.date_time || t.dateRaw, creatorTz); hc[h] = (hc[h] || 0) + 1 })
         const peakH = parseInt(Object.entries(hc).sort((a,b) => b[1]-a[1])[0][0])
         return (peakH - utcHour + 24) % 24 <= 1
       })
@@ -2903,8 +2934,10 @@ const stopImportMessageRotation = () => {
 
   const buildRealTimeAlerts = () => {
     const now = Date.now()
-    const alertCurrentHour = new Date().getUTCHours()
-    const currentDay = new Date().toLocaleDateString('en-US', { weekday: 'long' })
+    // Creator-local "now" — both of these are compared against tip data that
+    // is now bucketed in the creator's zone, and surfaced in alert copy.
+    const alertCurrentHour = toLocalHour(new Date().toISOString(), creatorTz)
+    const currentDay = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][toLocalDow(new Date().toISOString(), creatorTz)]
     const alerts = []
 
     // --- PLATFORM DAY-OF-WEEK PERFORMANCE ---
@@ -2913,8 +2946,7 @@ const stopImportMessageRotation = () => {
     const platDayMap = {}
     tips.forEach(t => {
       const p = t.platform
-      const d = new Date(t.date_time || t.dateRaw)
-      const day = UTC_DAYS_LONG[d.getUTCDay()]
+      const day = UTC_DAYS_LONG[toLocalDow(t.date_time || t.dateRaw, creatorTz)]
       if (!platDayMap[p]) platDayMap[p] = {}
       if (!platDayMap[p][day]) platDayMap[p][day] = 0
       platDayMap[p][day] += t.usd || 0
@@ -2930,14 +2962,17 @@ const stopImportMessageRotation = () => {
 
     // --- PLATFORM vs PLATFORM HOUR COMPARISON ---
     // FIX: use avg USD per hour-session (not raw cumulative totals)
-    // FIX: use getUTCHours() — tips are stored in UTC
+    // Bucketed in the creator's resolved timezone (was getUTCHours()): the
+    // resulting hour is compared against "now" and rendered as a local time.
     const platHourUSD = {}; const platHourSessions = {}
     tips.forEach(t => {
       const p = t.platform
       const d = new Date(t.date_time || t.dateRaw)
-      // Floor to UTC hour-bucket key for deduplication
+      // Absolute hour-bucket key for session dedup — intentionally UTC-based
+      // (it is an opaque identity key, never displayed or compared to a
+      // wall-clock hour), so it is correct regardless of timezone.
       const bucketKey = Math.floor(d.getTime() / 3600000)
-      const h = d.getUTCHours()
+      const h = toLocalHour(t.date_time || t.dateRaw, creatorTz)
       if (!platHourUSD[p]) { platHourUSD[p] = {}; platHourSessions[p] = {} }
       if (!platHourUSD[p][h]) { platHourUSD[p][h] = 0; platHourSessions[p][h] = new Set() }
       platHourUSD[p][h] += t.usd || 0
@@ -2954,8 +2989,7 @@ const stopImportMessageRotation = () => {
     })
 
     const platNames = Object.keys(platHourAvg)
-    // Use UTC current hour to match stored data
-    const currentUTCHour = new Date().getUTCHours()
+    const currentUTCHour = toLocalHour(new Date().toISOString(), creatorTz)
     if (platNames.length >= 2) {
       platNames.forEach(plat => {
         const hourVal = platHourAvg[plat][currentUTCHour] || 0
@@ -2964,7 +2998,7 @@ const stopImportMessageRotation = () => {
           const otherVal = platHourAvg[other][currentUTCHour] || 0
           if (hourVal > 0 && otherVal > 0 && hourVal >= otherVal * 1.5) {
             const mult = (hourVal / otherVal).toFixed(1)
-            const label = (() => { const _off=new Date().getTimezoneOffset()/-60; const _lh=Math.round(((currentUTCHour+_off)%24+24)%24); return _lh===0?'12 AM':_lh<12?`${_lh} AM`:_lh===12?'12 PM':`${_lh-12} PM` })()
+            const label = (() => { const _lh=((currentUTCHour%24)+24)%24; return _lh===0?'12 AM':_lh<12?`${_lh} AM`:_lh===12?'12 PM':`${_lh-12} PM` })()
             alerts.push({
               type: 'platform_hour', priority: 1, icon: '⚡', color: '#22D3EE',
               title: `Right now ${plat} earns ${mult}x more than ${other}`,
@@ -2994,7 +3028,7 @@ const stopImportMessageRotation = () => {
       if (!sortedHours.length) return
 
       const peakHour = parseInt(sortedHours[0][0]) // already local
-      const hoursAway = (peakHour - new Date().getHours() + 24) % 24
+      const hoursAway = (peakHour - toLocalHour(new Date().toISOString(), creatorTz) + 24) % 24
       const _pf1 = sortedHours[0][1] / fanTips.length
       const _pd1 = hoursAway === 0 ? 1.0 : hoursAway === 1 ? 0.65 : 0.35
       const confidence = Math.min(90, Math.max(25, Math.round(_pf1 * 200 * _pd1)))
@@ -3106,7 +3140,7 @@ const stopImportMessageRotation = () => {
   // mislabeled as "this month"). Match the real current-month key instead,
   // via the same resolved-timezone contract lib/timezone.js defines.
   const _momMonthly = analytics?.monthlyData || []
-  const _momTz = resolveCreatorTimezone(profile?.timezone).timezone
+  const _momTz = creatorTz // single resolved source, hoisted above platformTimes
   const _momCurrentKey = (() => {
     try { return new Intl.DateTimeFormat('en-CA', { timeZone: _momTz }).format(new Date()).slice(0, 7) }
     catch { return null }
@@ -3392,7 +3426,7 @@ const stopImportMessageRotation = () => {
           const momentumColor = !liveActive ? '#475569'
             : atPeak ? '#10B981'
             : liveRoomHealth.directionColor
-          const localNow = new Date().getHours()
+          const localNow = toLocalHour(new Date().toISOString(), creatorTz)
           const hoursUntilLocal = canonicalPeakHourLocal != null ? (canonicalPeakHourLocal - localNow + 24) % 24 : brief?.hoursUntilPeak
           const peakLabel = hoursUntilLocal === 0 ? 'NOW' : hoursUntilLocal === 1 ? 'in 1 hr' : (hoursUntilLocal > 0 && !isNaN(hoursUntilLocal)) ? `in ${hoursUntilLocal}h` : null
           const _eiPeakLabel = canonicalPeakLabel || brief?.bhLabel
@@ -3639,7 +3673,7 @@ const stopImportMessageRotation = () => {
             {/* ═══════════════════════════════════════
                 TOKENS VS HOURS ONLINE + MONTHLY GROWTH
             ═══════════════════════════════════════ */}
-            {tips.length > 0 && <DashboardGrowthCharts tips={tips} sessions={sessions} monthlyData={analytics?.monthlyData} />}
+            {tips.length > 0 && <DashboardGrowthCharts tips={tips} sessions={sessions} monthlyData={analytics?.monthlyData} timezone={creatorTz} />}
 
             {/* ═══════════════════════════════════════
                 DAILY BRIEF — overview only, below earnings
@@ -3867,7 +3901,12 @@ const stopImportMessageRotation = () => {
                 const gl = engineInsights.go_live_status
                 const glColor = gl.status === 'peak' ? C.green : gl.status === 'good' ? C.cyan : C.muted
                 const glIcon = gl.status === 'peak' ? '🟢' : gl.status === 'good' ? '⚡' : '⏰'
-                const localHour = (new Date().getUTCHours() - new Date().getTimezoneOffset() / 60 + 24) % 24
+                // get_user_insights is called with p_timezone, so
+                // go_live_status.current_hour is ALREADY creator-local. This
+                // previously recomputed it from UTC + the browser's offset,
+                // which disagreed with the SQL engine's own hour whenever the
+                // browser zone differed from the saved profile zone.
+                const localHour = gl.current_hour ?? toLocalHour(new Date().toISOString(), creatorTz)
                 const localLabel = localHour === 0 ? '12 AM' : localHour < 12 ? `${Math.floor(localHour)} AM` : localHour === 12 ? '12 PM' : `${Math.floor(localHour) - 12} PM`
                 const glText = gl.multiplier
                   ? `${gl.status === 'peak' ? 'Peak hour right now' : 'Good time to stream'} (${localLabel}) — this window earns ${gl.multiplier}x your average. Go live on ${engineInsights?.summary?.best_platform || 'your top platform'}.`
@@ -3929,7 +3968,9 @@ const stopImportMessageRotation = () => {
 
               {/* Platform ROI + Per-Platform Best Time (mandatory: always show platform context) */}
               {(() => {
-                const fmtH = h => { if (h == null || isNaN(h)) return 'N/A'; const _off=new Date().getTimezoneOffset()/-60; const _lh=Math.round(((h+_off)%24+24)%24); return _lh===0?'12 AM':_lh<12?`${_lh} AM`:_lh===12?'12 PM':`${_lh-12} PM` }
+                // Inputs are already creator-local (canonical bestLocalHour /
+                // platformBestTimes, both toLocalHour-based) — format only.
+                const fmtH = h => { if (h == null || isNaN(h)) return 'N/A'; const _lh=((h%24)+24)%24; return _lh===0?'12 AM':_lh<12?`${_lh} AM`:_lh===12?'12 PM':`${_lh-12} PM` }
                 const platColors = { Chaturbate: C.cyan, BongaCams: C.pink, MyFreeCams: C.gold }
                 const allPlats = [...(analytics?.platforms || [])].sort((a,b) => b.totalUSD - a.totalUSD)
                 if (!allPlats.length) return null
@@ -4101,7 +4142,7 @@ const stopImportMessageRotation = () => {
                       const dayUSD = daySessions.reduce((sum, s) => sum + (s.totalUSD || 0), 0)
                       const dayHourlyRate = dayHours > 0 ? dayUSD / dayHours : null
                       const bestHourEntry = platTimes[plat]?.bestHourByDay?.[fullDayName]
-                      const fmtH = h => { const _off = new Date().getTimezoneOffset() / -60; const _lh = Math.round(((h + _off) % 24 + 24) % 24); return _lh === 0 ? '12 AM' : _lh < 12 ? `${_lh} AM` : _lh === 12 ? '12 PM' : `${_lh - 12} PM` }
+                      const fmtH = h => { const _lh = ((h % 24) + 24) % 24; return _lh === 0 ? '12 AM' : _lh < 12 ? `${_lh} AM` : _lh === 12 ? '12 PM' : `${_lh - 12} PM` }
                       return (
                         <div style={{ marginTop: 10, padding: "14px 16px", borderRadius: 12, background: `${col}0d`, border: `1px solid ${col}30` }}>
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
@@ -4151,15 +4192,15 @@ const stopImportMessageRotation = () => {
                 A. Likely Online Now  B. Milestones  C. At Risk
             ═══════════════════════════════════════ */}
             {(() => {
-              const currentUTCHourTE = new Date().getUTCHours()
-              const labelH = h => { const _off=new Date().getTimezoneOffset()/-60; const _lh=Math.round(((h+_off)%24+24)%24); return _lh===0?'12 AM':_lh<12?`${_lh} AM`:_lh===12?'12 PM':`${_lh-12} PM` }
+              const currentUTCHourTE = toLocalHour(new Date().toISOString(), creatorTz)
+              const labelH = h => { const _lh=((h%24)+24)%24; return _lh===0?'12 AM':_lh<12?`${_lh} AM`:_lh===12?'12 PM':`${_lh-12} PM` }
 
               const likelyOnline = whales
                 .filter(w => w.tipCount >= 3)
                 .map(w => {
                   const fanTips = (w.tips && w.tips.length > 0) ? w.tips : tips.filter(t => t.username.toLowerCase() === w.username.toLowerCase())
                   const hourCounts = {}
-                  fanTips.forEach(t => { const h = new Date(t.date_time || t.dateRaw).getUTCHours(); hourCounts[h] = (hourCounts[h] || 0) + 1 })
+                  fanTips.forEach(t => { const h = toLocalHour(t.date_time || t.dateRaw, creatorTz); hourCounts[h] = (hourCounts[h] || 0) + 1 })
                   const sorted = Object.entries(hourCounts).sort((a,b) => b[1]-a[1])
                   if (!sorted.length) return null
                   const peakHour = parseInt(sorted[0][0])
@@ -4580,9 +4621,9 @@ const stopImportMessageRotation = () => {
               const activeDates = new Set(
                 tips.filter(t => {
                   if (t.platform !== p.platform) return false
-                  const dt = new Date(t.date_time || t.dateRaw)
-                  return UTC_DAYS_LONG[dt.getUTCDay()] === day
-                }).map(t => new Date(t.date_time || t.dateRaw).toISOString().slice(0,10))
+                  // Local weekday, matching platformTimes' now-local day keys.
+                  return UTC_DAYS_LONG[toLocalDow(t.date_time || t.dateRaw, creatorTz)] === day
+                }).map(t => toLocalDateStr(t.date_time || t.dateRaw, creatorTz))
               ).size
               return [day, activeDates > 0 ? total / activeDates : 0]
             })
@@ -4766,7 +4807,10 @@ const stopImportMessageRotation = () => {
                       const maxEarning = Math.max(...Object.values(hourData), 1)
                       return (
                         <div style={{ marginBottom: 20 }}>
-                          <div style={{ fontSize: 11, color: C.muted, marginBottom: 8 }}>⏰ Earnings by hour of day (UTC total)</div>
+                          {/* "your local time", not "(UTC total)" — platformTimes is
+                              now bucketed in the creator's resolved timezone, so the
+                              label finally matches the data. */}
+                          <div style={{ fontSize: 11, color: C.muted, marginBottom: 8 }}>⏰ Earnings by hour of day (your local time)</div>
                           <div style={{ display: "flex", gap: 2, flexWrap: "nowrap", overflowX: "auto" }}>
                             {Array.from({ length: 24 }, (_, h) => {
                               const val = hourData[h] || 0
@@ -4778,7 +4822,13 @@ const stopImportMessageRotation = () => {
                                 : intensity < 0.66
                                 ? "rgba(34,211,238,0.55)"
                                 : "rgba(34,211,238,0.95)"
-                              const label = (() => { const _off=new Date().getTimezoneOffset()/-60; const _lh=Math.round(((h+_off)%24+24)%24); return _lh===0?"12a":_lh<12?`${_lh}a`:_lh===12?"12p":`${_lh-12}p` })()
+                              {/* `h` is already a creator-local hour (platformTimes
+                                  buckets with toLocalHour). This previously applied
+                                  the BROWSER's getTimezoneOffset() on top of a UTC
+                                  bucket — a second, different conversion that was
+                                  wrong whenever the browser's zone differed from the
+                                  creator's saved one. Pure formatting now. */}
+                              const label = (() => { const _lh = ((h % 24) + 24) % 24; return _lh===0?"12a":_lh<12?`${_lh}a`:_lh===12?"12p":`${_lh-12}p` })()
                               return (
                                 <div key={h} title={`${label}: $${val.toFixed(0)}`} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, flex: "0 0 auto" }}>
                                   <div style={{ width: 18, height: 24, borderRadius: 3, background: bg, border: "1px solid rgba(255,255,255,0.06)" }} />
@@ -6179,12 +6229,18 @@ const stopImportMessageRotation = () => {
           const bestMo = analytics?.bestMonth
           const totalUSD = analytics?.totalUSD || 0
           const now = new Date()
-          const thisMonthKey = `${now.getUTCFullYear()}-${String(now.getUTCMonth()+1).padStart(2,'0')}`
+          // Creator-local calendar month/day. analytics.monthlyData is keyed by
+          // LOCAL month (lib/analytics.js's monthKeyLocal), so a UTC-derived key
+          // could miss the current month entirely near a month boundary — and
+          // dayOfMonth feeds the end-of-month projection below.
+          const _localYmd = toLocalDateStr(now.toISOString(), creatorTz)   // YYYY-MM-DD
+          const thisMonthKey = _localYmd.slice(0, 7)
+          const [_lY, _lM, _lD] = _localYmd.split('-').map(Number)
           const thisMonth = monthly.find(m => m.month === thisMonthKey)
           const thisMonthUSD = thisMonth?.usd || 0
           const goalPct = monthlyGoal > 0 ? Math.min(100, Math.round((thisMonthUSD / monthlyGoal) * 100)) : null
-          const daysInMonth = new Date(now.getUTCFullYear(), now.getUTCMonth()+1, 0).getDate()
-          const dayOfMonth = now.getUTCDate()
+          const daysInMonth = new Date(_lY, _lM, 0).getDate()
+          const dayOfMonth = _lD
           const daysLeft = daysInMonth - dayOfMonth
           const projectedEnd = thisMonthUSD > 0 ? Math.round(thisMonthUSD / dayOfMonth * daysInMonth) : null
           const maxBarUSD = Math.max(...monthly.map(m => m.usd), 1)
@@ -6558,6 +6614,7 @@ const stopImportMessageRotation = () => {
             tipsTotalUSD={analytics?.totalUSD ?? null}
             liveTotalUSD={liveTipsTotalUSD}
             onViewFan={viewFanProfile}
+            timezone={creatorTz}
           />
         )}
         {activeTab === 'planner' && (
@@ -6568,7 +6625,7 @@ const stopImportMessageRotation = () => {
         {activeTab === 'moneymap' && (
           _moneyMapLock.locked
             ? <div style={{ padding: '32px 0' }}><LockedInsightCard title="Money Map" description="See where and when your money comes from across sessions and platforms." lockType="needs_data" requirement={_moneyMapLock.message} ctaLabel="Upload More Data" ctaAction={() => handleTabChange('upload')} /></div>
-            : <MoneyMap tips={tips} isPro={isPro} />
+            : <MoneyMap tips={tips} isPro={isPro} timezone={creatorTz} />
         )}
       </div>
 
@@ -6638,7 +6695,7 @@ const stopImportMessageRotation = () => {
         const dayKeys = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]
         const dayCounts = { Mon:0,Tue:0,Wed:0,Thu:0,Fri:0,Sat:0,Sun:0 }
         whaleTips.forEach(t => {
-          const d = new Date(t.date_time).getUTCDay()
+          const d = toLocalDow(t.date_time, creatorTz)
           const key = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][d]
           if (key in dayCounts) dayCounts[key]++
         })
