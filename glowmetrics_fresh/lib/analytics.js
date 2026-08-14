@@ -1037,11 +1037,21 @@ export function aggregateRows(tips, tz = null) {
   const hourlyRateSessionCount = hourlyRateSessions.length
   const excludedUntimedSessionCount = meaningfulSessions.filter(s => !isHourlyRateEligible(s)).length
 
+  // Derived from platforms[].usdPerHour (computed once above from the same
+  // platformMap) rather than recomputing totalUSD/hours a second time — the
+  // two were previously independent implementations of the identical
+  // formula over the identical inputs, which is exactly the duplicate-
+  // calculation class this audit exists to remove. Kept as a separate
+  // {platform: rate} map because several consumers index by platform name
+  // (Smart Insights' top-platform pick, the Platform ROI card's `roi`, the
+  // velocity strip) and reshaping all of them is churn without benefit.
+  // The null-vs-0 distinction is preserved deliberately: null means "no
+  // timed hours recorded, rate unknowable" (consumers filter on `!= null`
+  // to hide the platform entirely), whereas platforms[].usdPerHour uses 0
+  // for the same case because its consumers render a numeric cell.
   const platformVelocity = {}
-  Object.keys(platformMap).forEach(p => {
-    const pHours = platformMap[p].hours
-    const pUSD = platformMap[p].totalUSD
-    platformVelocity[p] = pHours > 0 ? parseFloat((pUSD / pHours).toFixed(2)) : null
+  platforms.forEach(p => {
+    platformVelocity[p.platform] = p.hours > 0 ? p.usdPerHour : null
   })
 
   // ── MISSED REVENUE BY PLATFORM ────────────────────────────────────────
@@ -1250,6 +1260,19 @@ export function aggregateRows(tips, tz = null) {
     estimatedHourlyRate, hourlyRateSessionCount, hourlyRateTotalMinutes,
     hourlyRateTotalUsd, excludedUntimedSessionCount,
     missedRevenueByPlatform, returningVsNew, topFanDependency,
+    // Permanently null/empty — NOT placeholders awaiting implementation.
+    // app/dashboard/page.js reads all three and gates real UI on them
+    // (Revenue Dependency Risk card, Pre-Tip Behavior card, the per-platform
+    // hourly heatmap's trueHourlyAvg filter), so those surfaces are
+    // unreachable in production by construction. Kept as explicit keys
+    // rather than deleted because the consumers read them with `|| null` /
+    // `|| []` and removing the keys would change nothing at runtime while
+    // making the dead-UI relationship harder to find. Surfaced in the
+    // repo-wide analytics consistency audit as DEFERRED: either implement
+    // these calculations or delete the dead consumer UI — not decided here,
+    // because "dependency risk" overlaps topFanDependency (which IS
+    // computed, just above) and consolidating them is a product decision,
+    // not a mechanical fix.
     dependencyRisk: null, preTipBehavior: null, trueHourlyAvg: [],
     meaningfulSessions, allValidSessions,
     meaningfulSessionCount: meaningfulSessions.length,
