@@ -4488,7 +4488,16 @@ const stopImportMessageRotation = () => {
                 </div>
               </div>
 
-              {/* PLATFORM RECOMMENDATION BANNER */}
+              {/* PLATFORM RECOMMENDATION BANNER — the actionable cross-platform
+                  strategy call ("shift time to X"), not just a comparison
+                  number. This is the "decisions / cross-platform strategy"
+                  layer the checklist names as Pro's differentiator for
+                  2-platform accounts; the raw per-platform stats and cards
+                  below stay free either way, since that's genuinely useful
+                  comparison data, not a manufactured wall. Free sees the
+                  same real finding qualitatively (never fabricated — only
+                  shown when the underlying 2x threshold is actually met),
+                  Pro sees the exact multiplier and $ figures. */}
               {displayPlatforms.length >= 2 && (() => {
                 const sorted = [...displayPlatforms].sort((a, b) => b.usdPerHour - a.usdPerHour)
                 const top = sorted[0]
@@ -4498,10 +4507,22 @@ const stopImportMessageRotation = () => {
                   return (
                     <div style={{ padding: "14px 18px", borderRadius: 12, background: "linear-gradient(135deg, rgba(34,211,238,0.1), rgba(124,92,255,0.1))", border: "1px solid rgba(34,211,238,0.3)", marginBottom: 20, display: "flex", alignItems: "center", gap: 12 }}>
                       <span style={{ fontSize: 20 }}>⚡</span>
-                      <div>
-                        <div style={{ fontSize: 14, fontWeight: 700, color: C.white }}>You earn {mult}x more per hour on {top.platform} than {bottom.platform}</div>
-                        <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>${(top.usdPerHour || 0).toFixed(2)}/hr vs ${(bottom.usdPerHour || 0).toFixed(2)}/hr — consider shifting more time to {top.platform}</div>
+                      <div style={{ flex: 1 }}>
+                        {isPro ? (
+                          <>
+                            <div style={{ fontSize: 14, fontWeight: 700, color: C.white }}>You earn {mult}x more per hour on {top.platform} than {bottom.platform}</div>
+                            <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>${(top.usdPerHour || 0).toFixed(2)}/hr vs ${(bottom.usdPerHour || 0).toFixed(2)}/hr — consider shifting more time to {top.platform}</div>
+                          </>
+                        ) : (
+                          <>
+                            <div style={{ fontSize: 14, fontWeight: 700, color: C.white }}>🔒 One of your platforms earns significantly more per hour than another</div>
+                            <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>Pro shows the exact multiplier and how much time to shift for the biggest gain</div>
+                          </>
+                        )}
                       </div>
+                      {!isPro && (
+                        <button onClick={() => openUpgradeModal('platform_strategy_locked')} style={{ flexShrink: 0, padding: '8px 16px', borderRadius: 9, border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 12, color: '#06101A', background: 'linear-gradient(135deg,#22D3EE,#EC4899)' }}>Upgrade</button>
+                      )}
                     </div>
                   )
                 }
