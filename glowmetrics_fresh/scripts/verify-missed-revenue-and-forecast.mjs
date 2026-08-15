@@ -36,6 +36,12 @@ const missedMod = read('../lib/analytics/missedRevenue.js')
 // comments they are verifying.
 const missedModRaw = readFileSync(new URL('../lib/analytics/missedRevenue.js', import.meta.url), 'utf8')
 const dashboard = read('../app/dashboard/page.js')
+// Phase 3 moved the missed-revenue ranking and per-platform confidence
+// display out of page.js's inline "You're Losing Money" JSX and into
+// app/dashboard/Performance.js, which reads the same canonical fields
+// through props instead of a local block. Checks below that assert on
+// rendered UI (not on the engine itself) check the union of both files.
+const performance = read('../app/dashboard/Performance.js')
 
 // ══════════════════════════════════════════════════════════════════════
 // 1. MISSED REVENUE — one implementation, canonical, wired to the UI.
@@ -50,7 +56,7 @@ check('no fabricated "5x" multiplier fallback remains', !dashboard.includes(': "
 // No cumulative dollar total is produced or displayed.
 check('canonical module emits no missedRevenue dollar total', !missedMod.includes('missedRevenue,'))
 check('canonical module emits the measured rate gap instead', missedMod.includes('rateGapUsdPerHour'))
-check('dashboard ranks by the measured rate gap', dashboard.includes('b[1].rateGapUsdPerHour - a[1].rateGapUsdPerHour'))
+check('dashboard ranks by the measured rate gap', performance.includes('b.rateGapUsdPerHour - a.rateGapUsdPerHour'))
 
 // Denominator/scope/timezone are stated in the module itself.
 check('module documents scope = meaningful sessions', missedModRaw.includes('meaningfulSessions only'))
@@ -106,8 +112,13 @@ function tonightStream(sameDayTotals) {
   // Units: the Daily Brief forecast is derived from a $/hour figure and is
   // presented as an hourly rate, never mixed with a $/session value.
   check('peakAvg chain contains no $/session fallback', !dashboard.includes('displayAvg || bestHour?.avg || sessionAvg'))
-  check('Daily Brief labels the rate as $/hr', dashboard.includes('/hr avg'))
-  check('no "avg/session" label on an hourly figure', !dashboard.includes('avg/session'))
+  // The legacy Platform Comparison card's literal "$X/hr avg" badge was
+  // removed in the Phase 3 Performance rebuild (Performance.js labels the
+  // same figure "hourly rate" next to an explicit "/hr" suffix instead).
+  // The protected property — an hourly figure never mislabeled as
+  // per-session — is the assertion directly below, which still holds.
+  check('platform hourly rates are explicitly labeled "/hr", never left unitless', performance.includes('usdPerHour)}/hr') && performance.includes('hourly rate'))
+  check('no "avg/session" label on an hourly figure', !dashboard.includes('avg/session') && !performance.includes('avg/session'))
 }
 {
   // Confidence vocabulary must come from sample size, and the UI must not
@@ -117,7 +128,8 @@ function tonightStream(sameDayTotals) {
   check('3 sessions -> promising', tierFor(3) === 'promising')
   check('4 sessions -> supported (lowest tier allowed to claim "best")', tierFor(4) === 'supported')
   check('6+ sessions -> high', tierFor(6) === 'high')
-  check('dashboard surfaces the confidence tier rather than hiding it', dashboard.includes('confidence)') || dashboard.includes('bestWindowConfidence'))
+  check('dashboard surfaces the confidence tier rather than hiding it',
+    dashboard.includes('confidence)') || dashboard.includes('bestWindowConfidence') || performance.includes('bestWindowConfidence'))
 }
 
 console.log(`\n${pass} passed, ${fail} failed`)

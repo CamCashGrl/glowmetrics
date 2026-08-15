@@ -844,7 +844,7 @@ export function aggregateRows(tips, tz = null) {
       hourlyRateTotalUsd: 0, excludedUntimedSessionCount: 0,
       platformVelocity: {}, missedRevenue: { today_missed: null, cumulative_by_platform: {}, recent_streak_missed: null },
       returningVsNew: null, topFanDependency: null,
-      dependencyRisk: null,
+      dependencyRisk: null, sessionPerformance: null, latestPlatformDelta: null,
       canonicalBestTimes: { grid: [], bestWindow: null, earlySignal: null }, bestWindowFanOverlap: null
     }
   }
@@ -1081,6 +1081,47 @@ export function aggregateRows(tips, tz = null) {
   const hourlyRateSessionCount = hourlyRateSessions.length
   const excludedUntimedSessionCount = meaningfulSessions.filter(s => !isHourlyRateEligible(s)).length
 
+  // ── SESSION PERFORMANCE ─────────────────────────────────────────────────
+  // "Which kinds of streams actually make me money?" — a median split of the
+  // same rate-eligible population estimatedHourlyRate is built from
+  // (hourlyRateSessions/isHourlyRateEligible above), not a new population or
+  // a new definition of "session value." Two buckets (above/at-or-below the
+  // median $/hr), not arbitrary tiers — a real computed split, not an
+  // invented multiplier. Mirrors identifyWhales' percentile-based tiering,
+  // the precedent for splitting a population by its own distribution rather
+  // than a fixed threshold.
+  const sessionPerformance = (() => {
+    const avgMeaningfulSessionUSD = meaningfulSessions.length > 0
+      ? parseFloat((meaningfulSessions.reduce((s, x) => s + x.totalUSD, 0) / meaningfulSessions.length).toFixed(2))
+      : 0
+    const timedMeaningful = meaningfulSessions.filter(s => !s.durationUnknown)
+    const avgMeaningfulSessionMinutes = timedMeaningful.length > 0
+      ? Math.round(timedMeaningful.reduce((s, x) => s + x.durationMinutes, 0) / timedMeaningful.length)
+      : null
+
+    if (hourlyRateSessions.length < 4) {
+      return {
+        avgMeaningfulSessionUSD, avgMeaningfulSessionMinutes,
+        rateEligibleCount: hourlyRateSessions.length,
+        distribution: null, // not enough rate-eligible sessions for a meaningful split
+      }
+    }
+    const rates = hourlyRateSessions.map(s => s.totalUSD / (s.durationMinutes / 60))
+    const medianRate = calcMedian(rates)
+    const above = hourlyRateSessions.filter((s, i) => rates[i] > medianRate)
+    const belowOrAt = hourlyRateSessions.filter((s, i) => rates[i] <= medianRate)
+    const avgRate = (arr) => arr.length ? parseFloat((arr.reduce((s, x) => s + (x.totalUSD / (x.durationMinutes / 60)), 0) / arr.length).toFixed(2)) : 0
+    return {
+      avgMeaningfulSessionUSD, avgMeaningfulSessionMinutes,
+      rateEligibleCount: hourlyRateSessions.length,
+      distribution: {
+        medianUsdPerHour: parseFloat(medianRate.toFixed(2)),
+        aboveMedian: { count: above.length, avgUsdPerHour: avgRate(above) },
+        belowOrAtMedian: { count: belowOrAt.length, avgUsdPerHour: avgRate(belowOrAt) },
+      },
+    }
+  })()
+
   // Derived from platforms[].usdPerHour (computed once above from the same
   // platformMap) rather than recomputing totalUSD/hours a second time — the
   // two were previously independent implementations of the identical
@@ -1215,22 +1256,48 @@ export function aggregateRows(tips, tz = null) {
     if (isNaN(dt.getTime())) return
     const key = monthKeyLocal(t.dateRaw || t.date_time)
     if (!key) return
-    if (!monthMap[key]) monthMap[key] = { usd: 0, tips: 0, fans: new Set(), sessions: 0 }
+    if (!monthMap[key]) monthMap[key] = { usd: 0, tips: 0, fans: new Set(), sessions: 0, hourlyUsd: 0, hourlyMinutes: 0 }
     monthMap[key].usd += t.usd || 0
     monthMap[key].tips += 1
     monthMap[key].fans.add(t.username.toLowerCase())
   })
-  allValidSessions.forEach(s => {
+  // Sessions: bucketed from meaningfulSessions, the same population
+  // meaningfulSessionCount (the account-wide "Sessions" figure everywhere
+  // else — Command Center, the relocated Overview cards) is built from. This
+  // used to bucket from allValidSessions, a superset that also counts
+  // low_signal sessions — so a per-month "Sessions" figure here could never
+  // sum to the one account-wide total the rest of the app shows under the
+  // same unlabeled word. No consumer read the old field for its exact
+  // value (verified: DashboardGrowthCharts and the momentum block only ever
+  // read .usd/.growthPct/.month), so this corrects the population without
+  // changing any number a screen was already relying on.
+  meaningfulSessions.forEach(s => {
     const key = monthKeyLocal(s.startTime)
     if (key && monthMap[key]) monthMap[key].sessions += 1
   })
+  // Hours + $/hour: bucketed from hourlyRateSessions, the EXACT population
+  // estimatedHourlyRate is built from (isHourlyRateEligible, defined above)
+  // — so a month's usdPerHour uses the same eligibility rule and the same
+  // weighted numerator/denominator as the account-wide rate, not a second
+  // implementation of "hourly rate."
+  hourlyRateSessions.forEach(s => {
+    const key = monthKeyLocal(s.startTime)
+    if (key && monthMap[key]) {
+      monthMap[key].hourlyUsd += s.totalUSD
+      monthMap[key].hourlyMinutes += s.durationMinutes
+    }
+  })
   const monthlyDataUnsorted = Object.entries(monthMap).sort(([a], [b]) => a.localeCompare(b)).map(([month, d]) => ({
     month, usd: parseFloat(d.usd.toFixed(2)), tips: d.tips, fans: d.fans.size, sessions: d.sessions,
-    usdPerFan: d.fans.size > 0 ? parseFloat((d.usd / d.fans.size).toFixed(2)) : 0
+    usdPerFan: d.fans.size > 0 ? parseFloat((d.usd / d.fans.size).toFixed(2)) : 0,
+    hours: parseFloat((d.hourlyMinutes / 60).toFixed(2)),
+    usdPerHour: d.hourlyMinutes > 0 ? parseFloat((d.hourlyUsd / (d.hourlyMinutes / 60)).toFixed(2)) : null,
   }))
   // growthPct computed here once, canonically, so consumers (page.js's
   // momentum block, DashboardGrowthCharts.js) never need their own copy of
-  // this formula.
+  // this formula. Reused for every metric Performance's "What changed?"
+  // section compares — earnings, $/hour, hours, sessions, fans — through
+  // one function instead of five separate percent-change implementations.
   //
   // monthMap only contains months with actual tip data (see the forEach
   // above — a month with zero tips never gets a key), so `prev` here is the
@@ -1240,13 +1307,50 @@ export function aggregateRows(tips, tz = null) {
   // displayed as plain "monthly growth" with no indication of the gap.
   // gapMonths lets consumers show that context instead of a bare percentage.
   const monthIndex = (ym) => { const [y, mo] = ym.split('-').map(Number); return y * 12 + mo }
+  const pctChange = (cur, prev) => (cur == null || prev == null || prev === 0) ? null : Math.round(((cur - prev) / prev) * 100)
   const monthlyData = monthlyDataUnsorted.map((m, i) => {
     const prev = i > 0 ? monthlyDataUnsorted[i - 1] : null
     const growthPct = prev && prev.usd > 0 ? Math.round(((m.usd - prev.usd) / prev.usd) * 100) : null
     const gapMonths = prev ? monthIndex(m.month) - monthIndex(prev.month) - 1 : null
-    return { ...m, growthPct, prevMonth: prev?.month || null, gapMonths }
+    return {
+      ...m, growthPct, prevMonth: prev?.month || null, gapMonths,
+      usdPerHourGrowthPct: prev ? pctChange(m.usdPerHour, prev.usdPerHour) : null,
+      hoursGrowthPct: prev ? pctChange(m.hours, prev.hours) : null,
+      sessionsGrowthPct: prev ? pctChange(m.sessions, prev.sessions) : null,
+      fansGrowthPct: prev ? pctChange(m.fans, prev.fans) : null,
+    }
   })
   const bestMonth = monthlyData.length > 0 ? [...monthlyData].sort((a, b) => b.usd - a.usd)[0] : null
+
+  // ── LATEST-PERIOD PLATFORM ATTRIBUTION ──────────────────────────────────
+  // "Which platform drove the change?" — scoped to just the two most recent
+  // ACTIVE months (the same pair monthlyData's own growthPct compares), not
+  // a full per-platform time series. Built from the same tips already
+  // grouped into monthMap above; platform is read off each tip directly, so
+  // this introduces no new session/session-quality population.
+  const latestPlatformDelta = (() => {
+    if (monthlyData.length < 2) return null
+    const cur = monthlyData[monthlyData.length - 1]
+    const prev = monthlyData[monthlyData.length - 2]
+    const byPlatform = {}
+    tips.forEach(t => {
+      const key = monthKeyLocal(t.dateRaw || t.date_time)
+      if (key !== cur.month && key !== prev.month) return
+      const p = t.platform || 'Unknown'
+      if (!byPlatform[p]) byPlatform[p] = { platform: p, curUSD: 0, prevUSD: 0 }
+      byPlatform[p][key === cur.month ? 'curUSD' : 'prevUSD'] += t.usd || 0
+    })
+    const totalDeltaUSD = cur.usd - prev.usd
+    const rows = Object.values(byPlatform)
+      .map(p => ({
+        platform: p.platform,
+        curUSD: parseFloat(p.curUSD.toFixed(2)),
+        prevUSD: parseFloat(p.prevUSD.toFixed(2)),
+        deltaUSD: parseFloat((p.curUSD - p.prevUSD).toFixed(2)),
+      }))
+      .sort((a, b) => Math.abs(b.deltaUSD) - Math.abs(a.deltaUSD))
+    return { curMonth: cur.month, prevMonth: prev.month, totalDeltaUSD: parseFloat(totalDeltaUSD.toFixed(2)), gapMonths: cur.gapMonths, platforms: rows }
+  })()
 
   // ── TIP TYPE BREAKDOWN ────────────────────────────────────────────────
   const tipTypeMap = {}
@@ -1350,7 +1454,7 @@ export function aggregateRows(tips, tz = null) {
     // per-platform hourly heatmap that a stale comment claimed used it
     // (that heatmap reads platformTimes[platform].hours); it was a dead
     // key with a misleading pointer.
-    meaningfulSessions, allValidSessions,
+    meaningfulSessions, allValidSessions, sessionPerformance, latestPlatformDelta,
     meaningfulSessionCount: meaningfulSessions.length,
     lowSignalSessionCount: allValidSessions.length - meaningfulSessions.length,
     momentum,

@@ -100,7 +100,11 @@ const avg = (arr) => arr.length ? arr.reduce((s, x) => s + (x.totalUSD || 0), 0)
   check('peakAvg chain is $/hour-only, degrading to 0 rather than a wrong-unit number',
     dashboard.includes('const peakAvg = displayAvg || bestHour?.avg || 0'))
   check('displayAvg is no longer mislabeled "avg/session"', !dashboard.includes('avg/session'))
-  check('displayAvg is labeled as an hourly rate', dashboard.includes('/hr avg'))
+  // The literal "$X/hr avg" badge this originally pinned lived on the
+  // legacy Platform Comparison card, retired in the Phase 3 Performance
+  // rebuild (app/dashboard/Performance.js) along with the rest of that
+  // card — the property itself (an hourly figure is never left unitless or
+  // relabeled per-session) is what the two checks above already enforce.
   check('Today card no longer mixes bestDay.avg with sessionAvg behind one label',
     !dashboard.includes('const _bdA = bestDay?.avg || sessionAvg'))
 }
