@@ -3233,7 +3233,15 @@ const stopImportMessageRotation = () => {
           // independently, which could show two different "best platform" values
           // on the same screen. tips[0]?.platform is not a real fallback (just
           // whichever tip happens to be first in the array), so it's dropped.
-          const bestPlat = engineInsights?.summary?.best_platform || brief?.displayPlat || null
+          // ONE canonical answer (analytics.bestPlatformByRate) — ranked by
+          // usdPerHour, excluding the parser's "Unknown" bucket and any
+          // platform with no measurable hours. engineInsights' best_platform
+          // ranks by AVG(usd) PER TIP, which on the owner's real account
+          // returned "Unknown" (13 undetected tips averaging $13.51 vs
+          // Chaturbate's $0.36 across 4,835), so this KPI read
+          // "Best Platform: Unknown" while the Creator Report showed the
+          // same bucket at $0.00/hr.
+          const bestPlat = analytics?.bestPlatformByRate?.platform || null
           const safeRevenue = (!isNaN(totalRevenue) && isFinite(totalRevenue)) ? totalRevenue : 0
 
           // ── truthful live status — single source of truth is useLiveSessionEngine,
@@ -3400,7 +3408,7 @@ const stopImportMessageRotation = () => {
                   const localHour = gl.current_hour ?? toLocalHour(new Date().toISOString(), creatorTz)
                   const localLabel = localHour === 0 ? '12 AM' : localHour < 12 ? `${Math.floor(localHour)} AM` : localHour === 12 ? '12 PM' : `${Math.floor(localHour) - 12} PM`
                   const glText = gl.multiplier
-                    ? `${gl.status === 'peak' ? 'Peak hour right now' : 'Good time to stream'} (${localLabel}) — this window earns ${gl.multiplier}x your average. Go live on ${engineInsights?.summary?.best_platform || 'your top platform'}.`
+                    ? `${gl.status === 'peak' ? 'Peak hour right now' : 'Good time to stream'} (${localLabel}) — this window earns ${gl.multiplier}x your average. Go live on ${analytics?.bestPlatformByRate?.platform || 'your top platform'}.`
                     : `Go-live signal: ${gl.status} — check your stream timing`
                   merged.unshift({ icon: glIcon, color: glColor, text: glText, cta: false, source: 'engine' })
                 }

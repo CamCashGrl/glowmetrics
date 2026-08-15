@@ -4,7 +4,7 @@
 
 // Token rates live in ONE place — lib/constants.js
 // Do not define rates here. Import only.
-import { PLATFORM_TOKEN_RATES, DEFAULT_TOKEN_RATE, tokenRate } from './constants'
+import { PLATFORM_TOKEN_RATES, DEFAULT_TOKEN_RATE, tokenRate, UNDETECTED_PLATFORM } from './constants'
 // Session grouping lives in ONE place — lib/analytics/sessions.js
 // Shared with app/live/page.js. Do not redefine this logic here.
 import { detectSessions, classifySession as classifySessionQuality } from './analytics/sessions'
@@ -678,11 +678,20 @@ export function generateInsights(tips, sessions, bestDay, worstDay, bestHour, pr
   // by UTC day-of-week, which produced a different number for the same
   // "Sunday average" concept than the Best Streaming Day stat shown
   // elsewhere on the same screen. One formula, one number, everywhere.
+  //
+  // UNIT, STATED EXPLICITLY: bestDay.avg is MEDIAN DOLLARS PER DAY STREAMED
+  // — total tips on each calendar date that day-of-week, then the median
+  // across those dates. It is NOT a $/hour rate. The Creator Report's "Best
+  // Streaming Time" card shows canonicalBestTimes.bestWindow.medianUsdPerHour,
+  // a $/HOUR median, and on the owner's real account the two rendered side
+  // by side as "Saturday ~$18 avg" and "you avg $4 on Saturdays" — one
+  // finding that read as a contradiction because neither said what it
+  // measured. Both are correct; the wording now names the unit.
   if (bestDay && worstDay && bestDay.day !== worstDay.day && bestDay.avg > 0) {
     const mult = worstDay.avg > 0 ? (bestDay.avg / worstDay.avg).toFixed(1) : null
     const costOfMissing = parseFloat((bestDay.avg - worstDay.avg).toFixed(2))
     if (mult && parseFloat(mult) > 1 && costOfMissing > 0) {
-      insights.push({ icon: '📅', text: `${bestDay.day}s are your highest-earning day — you avg $${bestDay.avg.toFixed(0)} on ${bestDay.day}s vs $${worstDay.avg.toFixed(0)} on your lowest day (${worstDay.day}) (${mult}x more). Missing one ${bestDay.day} costs you ~$${costOfMissing.toFixed(0)}`, type: 'day', priority: 1 })
+      insights.push({ icon: '📅', text: `${bestDay.day}s are your highest-earning day — you take home a median $${bestDay.avg.toFixed(0)} on each ${bestDay.day} you stream vs $${worstDay.avg.toFixed(0)} on your lowest day (${worstDay.day}) (${mult}x more). Missing one ${bestDay.day} costs you ~$${costOfMissing.toFixed(0)}`, type: 'day', priority: 1 })
     }
   }
 
@@ -854,6 +863,7 @@ export function aggregateRows(tips, tz = null) {
       platformVelocity: {}, missedRevenue: { today_missed: null, cumulative_by_platform: {}, recent_streak_missed: null },
       returningVsNew: null, topFanDependency: null,
       dependencyRisk: null, sessionPerformance: null, latestPlatformDelta: null,
+      bestPlatformByRate: null, rankablePlatformCount: 0,
       canonicalBestTimes: { grid: [], bestWindow: null, earlySignal: null }, bestWindowFanOverlap: null
     }
   }
@@ -973,6 +983,29 @@ export function aggregateRows(tips, tz = null) {
     bestLocalHour: platformBestWindow[p.platform]?.localHour ?? null,
     bestWindowConfidence: platformBestWindow[p.platform]?.tier ?? null,
   }))
+
+  // ── BEST PLATFORM — ONE canonical answer ────────────────────────────
+  // "Unknown" is the CSV parser's undetected-platform bucket (see
+  // detectPlatform()), not a platform the creator streams on. It must never
+  // be presented as their best or most profitable platform.
+  //
+  // On the owner's real account this was doing visible damage: 13 Unknown
+  // tips totalling $175.60 average $13.51/tip, against Chaturbate's $0.36
+  // and BongaCams' $0.20 across 7,635 tips — so any ranking by average tip
+  // size crowned "Unknown". get_user_insights' best_platform does exactly
+  // that (AVG(usd) per tip, HAVING COUNT(*) >= 5), which is why both the
+  // command bar and the Creator Report read "Best Platform: Unknown".
+  //
+  // Ranked by usdPerHour — the same statistic every surface DISPLAYS
+  // underneath the claim — and platforms with no measurable streamed hours
+  // are excluded, because "most profitable per hour" is meaningless without
+  // a denominator.
+  const rankablePlatforms = platforms.filter(
+    p => p.platform !== UNDETECTED_PLATFORM && p.usdPerHour > 0
+  )
+  const bestPlatformByRate = rankablePlatforms.length
+    ? [...rankablePlatforms].sort((a, b) => b.usdPerHour - a.usdPerHour)[0]
+    : null
 
   const topTippers = whales.map((w, i) => ({
     rank: i + 1, username: w.username, usd: w.totalUSD, tokens: w.totalTokens, count: w.tipCount,
@@ -1469,6 +1502,7 @@ export function aggregateRows(tips, tz = null) {
     // (that heatmap reads platformTimes[platform].hours); it was a dead
     // key with a misleading pointer.
     meaningfulSessions, allValidSessions, sessionPerformance, latestPlatformDelta,
+    bestPlatformByRate, rankablePlatformCount: rankablePlatforms.length,
     meaningfulSessionCount: meaningfulSessions.length,
     lowSignalSessionCount: allValidSessions.length - meaningfulSessions.length,
     momentum,

@@ -91,16 +91,21 @@ export default function CreatorReport({ analytics, tips = [], isPro = false, onU
     : null
   const topSupporter = analytics?.topTippers?.[0] || null
   const platforms    = analytics?.platforms || []
-  // Headline claim defers to the same canonical value Overview uses
-  // (engineInsights.summary.best_platform) instead of re-deriving its own
-  // ranking, so the two pages can't disagree about which platform is "best."
-  // Falls back to the local sort only when engineInsights hasn't loaded yet.
-  const canonicalBestPlatform = engineInsights?.summary?.best_platform
-    ? platforms.find(p => p.platform === engineInsights.summary.best_platform)
-    : null
-  const topPlatform  = platforms.length > 1
-    ? (canonicalBestPlatform || [...platforms].sort((a, b) => b.usdPerHour - a.usdPerHour)[0])
-    : null
+  // Reads the ONE canonical answer (analytics.bestPlatformByRate), which
+  // ranks by usdPerHour — the same statistic this card displays underneath
+  // the name — and excludes the parser's "Unknown" bucket plus any platform
+  // with no measurable streamed hours.
+  //
+  // This previously deferred to engineInsights.summary.best_platform, which
+  // ranks by AVERAGE USD PER TIP (get_user_insights: AVG(usd) ... HAVING
+  // COUNT(*) >= 5). On the owner's real account that crowned "Unknown" — 13
+  // undetected-platform tips averaging $13.51 each, against Chaturbate's
+  // $0.36 across 4,835 tips — and then rendered "$0.00/hr" beneath it,
+  // because Unknown has no qualifying session hours. Two different
+  // statistics under one claim, headlined by a bucket that is not a
+  // platform at all.
+  const topPlatform = analytics?.bestPlatformByRate || null
+  const rankableCount = analytics?.rankablePlatformCount ?? 0
   const insights     = analytics?.insights || []
   const nextMoves    = analytics?.nextMoves || []
 
@@ -142,15 +147,17 @@ export default function CreatorReport({ analytics, tips = [], isPro = false, onU
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginBottom: 20 }}>
         <StatCard index={0} icon="💰" label="Total Earnings" value={fmtUsd(totalUSD)} sub={monthGrowthPct !== null ? `${monthGrowthPct >= 0 ? '↑' : '↓'} ${Math.abs(monthGrowthPct)}% vs last month` : `${tips.length} tips tracked`} />
         <StatCard index={1} icon="⏱️" label="Avg $/Hour" value={hourlyRate > 0 ? fmtUsd(hourlyRate) : 'Not enough data yet'} />
-        <StatCard index={2} icon="📅" label="Best Streaming Day" value={bestDay?.day || 'Not enough data yet'} sub={bestDay ? `~${fmtUsd(bestDay.avg)} avg` : null} />
-        <StatCard index={3} icon="⏰" label="Best Streaming Time" value={fmtHour(bestHour?.hour) || 'Not enough data yet'} sub={bestHour ? `~${fmtUsd(bestHour.avg)} avg per session` : null} />
+        <StatCard index={2} icon="📅" label="Best Streaming Day" value={bestDay?.day || 'Not enough data yet'} sub={_canonicalBestWindow ? `${_canonicalBestWindow.sessionCount} qualifying session${_canonicalBestWindow.sessionCount === 1 ? '' : 's'}` : null} />
+        <StatCard index={3} icon="⏰" label="Best Streaming Time" value={fmtHour(bestHour?.hour) || 'Not enough data yet'} sub={bestHour ? `${fmtUsd(bestHour.avg)}/hr median` : null} />
         <StatCard index={0} icon="👑" label="Top Supporter" value={topSupporter?.username || 'Not enough data yet'} sub={topSupporter ? `${fmtUsd(topSupporter.usd)} lifetime` : null} />
         <StatCard
           index={1}
           icon="🎯"
           label="Most Profitable Platform"
-          value={topPlatform ? displayPlatform(topPlatform.platform) : (platforms.length === 1 ? displayPlatform(platforms[0].platform) : 'Add a 2nd platform to compare')}
-          sub={topPlatform ? `${fmtUsd(topPlatform.usdPerHour)}/hr` : (platforms.length <= 1 && !isPro ? 'Creator Pro compares all your platforms' : null)}
+          value={topPlatform ? displayPlatform(topPlatform.platform) : 'Not enough data yet'}
+          sub={topPlatform
+            ? `${fmtUsd(topPlatform.usdPerHour)}/hr${rankableCount > 1 ? ` · best of ${rankableCount}` : ''}`
+            : 'Needs a platform with measurable streamed hours'}
         />
       </div>
 

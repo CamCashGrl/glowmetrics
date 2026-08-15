@@ -57,3 +57,10 @@ export function viewerRate(platform) {
 // / "500+ tokens lifetime" vs the tier badges). Keep them distinct; just
 // don't duplicate the number.
 export const WHALE_LIFETIME_TOKEN_THRESHOLD = 500
+
+// The CSV parser's bucket for a row whose platform could not be detected
+// (see detectPlatform()/parseCSV in lib/analytics.js). It is an ABSENCE of
+// a platform, not a platform — so it must never be ranked as a creator's
+// best or most profitable one. Kept here rather than as a scattered string
+// literal so every consumer excludes the same value.
+export const UNDETECTED_PLATFORM = 'Unknown'
