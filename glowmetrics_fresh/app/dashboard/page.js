@@ -4838,7 +4838,7 @@ const stopImportMessageRotation = () => {
         {activeTab === 'planner' && (
           _plannerLock.locked
             ? <div style={{ padding: '32px 0' }}><LockedInsightCard title="Stream Planner" description="Plan your schedule around your best earning windows." lockType="needs_data" requirement={_plannerLock.message} ctaLabel="Upload More Data" ctaAction={() => handleTabChange('upload')} /></div>
-            : <StreamPlanner tips={tips} isPro={isPro} timezone={_momTz} />
+            : <StreamPlanner tips={tips} isPro={isPro} timezone={_momTz} analytics={analytics} />
         )}
         {activeTab === 'moneymap' && (
           _moneyMapLock.locked

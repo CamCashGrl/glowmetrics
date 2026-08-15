@@ -76,7 +76,7 @@ const todayLocalName = (tz) => ["Sunday","Monday","Tuesday","Wednesday","Thursda
 // toWeekPlanSession() adapts detectSessions()'s canonical field names
 // (startTime/totalUSD/usdPerHour/durationHours) to the {start, end,
 // durationHrs, totalUsd, usdHr, utcDay, utcHour} shape this file's existing
-// platformEfficiency()/bestWindows()/rendering code already expects.
+// platformEfficiency()/windowsFromCanonical()/rendering code already expects.
 //
 // utcDay/utcHour field NAMES are kept (renaming every call site in this
 // 1000+ line file was more blast radius than the fix needed), but as of the
@@ -103,71 +103,74 @@ function toWeekPlanSession(s, tz) {
   }
 }
 
-// Returns { [platform]: { usdPerHr, tokensPerHr, avgTip, sessionCount, bestUtcDay, bestUtcHour } }
-function platformEfficiency(tips, tz) {
-  const sessions = detectMeaningfulSessions(tips).map((s) => toWeekPlanSession(s, tz))
-  const acc = {}
-  sessions.forEach((s) => {
-    if (!s.platform) return
-    if (!acc[s.platform]) acc[s.platform] = { usd: 0, tokens: 0, hrs: 0, tipCount: 0, slots: {} }
-    const a = acc[s.platform]
-    a.usd += s.totalUsd; a.tokens += s.totalTokens; a.hrs += s.durationHrs; a.tipCount += s.tips.length
-    const k = `${s.utcDay}-${s.utcHour}`
-    if (!a.slots[k]) a.slots[k] = { utcDay: s.utcDay, utcHour: s.utcHour, sum: 0, n: 0 }
-    a.slots[k].sum += s.usdHr; a.slots[k].n++
-  })
-  const out = {}
-  Object.entries(acc).forEach(([plat, a]) => {
-    const best = Object.values(a.slots).sort((x, y) => y.sum / y.n - x.sum / x.n)[0] ?? null
-    out[plat] = {
-      usdPerHr:     a.hrs > 0 ? a.usd / a.hrs : 0,
-      tokensPerHr:  a.hrs > 0 ? a.tokens / a.hrs : 0,
-      avgTip:       a.tipCount > 0 ? a.usd / a.tipCount : 0,
-      sessionCount: Object.values(a.slots).reduce((n, s) => n + s.n, 0),
-      bestUtcDay:   best?.utcDay ?? null,
-      bestUtcHour:  best?.utcHour ?? null,
-    }
-  })
-  return out
+// platformEfficiency() REMOVED. It bucketed sessions by day/hour to produce a
+// per-platform bestUtcDay/bestUtcHour using the MEAN of session rates — a
+// THIRD best-time calculation in this file, on a statistic no other surface
+// uses. Nothing ever read those two fields; its only consumer wanted
+// "which platform earns most per hour", which analytics.platforms already
+// carries canonically (usdPerHour, built once from meaningfulSessions), along
+// with a per-platform best window computed by the same
+// computeCanonicalBestTimes() the account-wide grid uses.
+// Windows come from the CANONICAL grid (lib/analytics/bestTimes.js), not a
+// second calculation here.
+//
+// WHY THIS REPLACED bestWindows(tips, tz)
+// That function was an independent answer to "when is my best time", and it
+// disagreed with the canonical one in two ways that could put a different
+// window at the top of this page than the Command Center recommends:
+//
+//   - it averaged session rates (MEAN), while canonical uses the MEDIAN, so
+//     one exceptional night could carry a window here that the rest of the
+//     app does not rank;
+//   - its confidence thresholds were different (>=5 high, >=3 medium,
+//     >=2 low), so a 3-session bucket read "Medium" here while the canonical
+//     tiers call the same bucket 'promising' — explicitly not enough to be
+//     labelled a best time anywhere else.
+//
+// This maps the canonical grid into the row shape the planner UI already
+// renders. `avgUsdPerHr` keeps its property name (the grid, the sort, the
+// prefs and the whole render path key off it) but now carries the canonical
+// MEDIAN — every label that shows it says "median $/hr", so the number and
+// its description agree.
+const CANON_DAY_INDEX = {
+  Sunday: 0, Monday: 1, Tuesday: 2, Wednesday: 3, Thursday: 4, Friday: 5, Saturday: 6,
 }
 
-// Returns [{ utcDay, utcHour, avgUsdPerHr, totalUsd, sessionCount, confidence, topPlatform, newTipperRate }]
-function bestWindows(tips, tz) {
-  const sessions = detectMeaningfulSessions(tips).map((s) => toWeekPlanSession(s, tz))
-  const firstSeen = {}
-  ;[...tips].sort((a, b) => new Date(a.date_time) - new Date(b.date_time)).forEach((t) => {
-    const u = t.username || "unknown"
-    if (!(u in firstSeen)) firstSeen[u] = new Date(t.date_time).getTime()
-  })
-  const map = {}
-  sessions.forEach((s) => {
-    const k = `${s.utcDay}-${s.utcHour}`
-    if (!map[k]) map[k] = { utcDay: s.utcDay, utcHour: s.utcHour, sessions: [], pu: {}, newTips: 0, allTips: 0 }
-    const m = map[k]
-    m.sessions.push(s)
-    if (s.platform) m.pu[s.platform] = (m.pu[s.platform] || 0) + s.totalUsd
-    s.tips.forEach((t) => {
-      m.allTips++
-      const u = t.username || "unknown"
-      if (firstSeen[u] === new Date(t.date_time).getTime()) m.newTips++
-    })
-  })
-  return Object.values(map).map((m) => {
-    const cnt = m.sessions.length
-    return {
-      utcDay: m.utcDay, utcHour: m.utcHour,
-      avgUsdPerHr:   m.sessions.reduce((n, s) => n + s.usdHr, 0) / cnt,
-      totalUsd:      m.sessions.reduce((n, s) => n + s.totalUsd, 0),
-      sessionCount:  cnt,
-      confidence:    cnt >= 5 ? "high" : cnt >= 3 ? "medium" : cnt >= 2 ? "low" : "needs-testing",
-      topPlatform:   Object.entries(m.pu).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null,
-      newTipperRate: m.allTips > 0 ? m.newTips / m.allTips : 0,
-    }
-  }).sort((a, b) => b.avgUsdPerHr - a.avgUsdPerHr)
-}
+// The SAME tier gate canonical bestWindow applies. Everything below
+// 'supported' can be shown as something to TEST, never as a recommendation.
+//
+// This gate is why swapping mean->median was not sufficient on its own. On the
+// real regression CSV the highest-median bucket is Wednesday 06:00 at
+// $42.09/hr from ONE session (tier 'insufficient') — the exact single-night
+// outlier the Command Center's own chart was rebuilt to stop showing. Without
+// this filter the planner would head its weekly schedule with that window
+// while the Command Center recommends Wednesday 08:00 ($9.52/hr, 4 sessions,
+// 'supported'): two surfaces, two different answers to "when should I work".
+const RECOMMENDABLE_TIERS = new Set(['supported', 'high'])
+export function isRecommendableWindow(w) { return RECOMMENDABLE_TIERS.has(w?.confidence) }
 
+function windowsFromCanonical(canonicalBestTimes) {
+  const grid = canonicalBestTimes?.grid || []
+  return grid
+    .map((g) => ({
+      utcDay: CANON_DAY_INDEX[g.localDay],
+      utcHour: g.localHour,
+      avgUsdPerHr: g.medianUsdPerHour,
+      totalUsd: g.totalUsd,
+      sessionCount: g.sessionCount,
+      confidence: g.tier,
+      topPlatform: g.topPlatform,
+      newTipperRate: g.newTipperRate ?? 0,
+    }))
+    .filter((w) => w.utcDay != null)
+    .sort((a, b) => b.avgUsdPerHr - a.avgUsdPerHr)
+}
 // Windows with 0-1 sessions that show promise based on nearby strong windows
 function untestedWindows(tips, allWindows) {
+  // Mean of the per-window MEDIANS — a rough centre of the grid used only to
+  // decide which low-sample windows are worth TESTING. It is never presented
+  // as the creator's hourly rate (analytics.estimatedHourlyRate owns that),
+  // and never used to rank a recommendation.
   const overallAvg = allWindows.length
     ? allWindows.reduce((n, w) => n + w.avgUsdPerHr, 0) / allWindows.length
     : 0
@@ -178,7 +181,7 @@ function untestedWindows(tips, allWindows) {
   // Under-tested (1 session) with above-average early results
   allWindows.forEach((w) => {
     if (w.sessionCount === 1 && w.avgUsdPerHr > overallAvg) {
-      out.push({ ...w, reason: `One session here already beat your ${fmt$(overallAvg)}/hr average.`, testsNeeded: 2 })
+      out.push({ ...w, reason: `One session here already beat your ${fmt$(overallAvg)}/hr typical window.`, testsNeeded: 2 })
     }
   })
   // Untested but adjacent (±1-2 hrs same day) to a strong window
@@ -190,7 +193,7 @@ function untestedWindows(tips, allWindows) {
         out.push({
           utcDay: s.utcDay, utcHour: h, sessionCount: 0, avgUsdPerHr: 0,
           confidence: "untested", topPlatform: s.topPlatform, newTipperRate: 0,
-          reason: `Right next to your strong ${localHr(s.utcHour)} window (${fmt$(s.avgUsdPerHr)}/hr).`,
+          reason: `Right next to your strong ${localHr(s.utcHour)} window (median ${fmt$(s.avgUsdPerHr)}/hr).`,
           testsNeeded: 3,
         })
       }
@@ -258,7 +261,7 @@ function multiStreamAnalysis(sessions) {
 // gapMonths); reviving it would have meant a second monthly aggregation.
 
 // % of tips that fall within recommended windows (±1 hr tolerance).
-// recommendedWindows come from bestWindows() and carry LOCAL day/hour (see
+// recommendedWindows come from windowsFromCanonical() and carry LOCAL day/hour (see
 // toWeekPlanSession's comment) — this must bucket tips the same way, or
 // every tip would compare against the wrong window near a UTC day boundary.
 function planMatchScore(tips, recommendedWindows, tz) {
@@ -286,16 +289,20 @@ const DEFAULT_PREFS = {
 // ═══════════════════════════════════════════════════════════════════════════════
 // UI PRIMITIVES
 // ═══════════════════════════════════════════════════════════════════════════════
+// The CANONICAL confidence tiers (lib/analytics/bestTimes.js), with the same
+// wording the Command Center and Performance use. The planner previously had
+// its own high/medium/low vocabulary on its own thresholds, so one bucket
+// could be "Medium" here and "Early signal" there.
 const CONF = {
-  high:            { bg: "rgba(34,211,238,0.1)", color: CYAN,   label: "High" },
-  medium:          { bg: "rgba(168,85,247,0.1)", color: PURPLE, label: "Medium" },
-  low:             { bg: "rgba(245,158,11,0.1)", color: GOLD,   label: "Low" },
-  "needs-testing": { bg: "rgba(99,102,241,0.1)", color: INDIGO, label: "Needs Testing" },
-  untested:        { bg: "rgba(99,102,241,0.1)", color: INDIGO, label: "Untested" },
+  high:         { bg: "rgba(34,211,238,0.1)", color: CYAN,   label: "Strong pattern" },
+  supported:    { bg: "rgba(168,85,247,0.1)", color: PURPLE, label: "Supported pattern" },
+  promising:    { bg: "rgba(245,158,11,0.1)", color: GOLD,   label: "Early signal" },
+  insufficient: { bg: "rgba(99,102,241,0.1)", color: INDIGO, label: "Not enough data" },
+  untested:     { bg: "rgba(99,102,241,0.1)", color: INDIGO, label: "Untested" },
 }
 
 function ConfBadge({ level }) {
-  const c = CONF[level] || CONF["needs-testing"]
+  const c = CONF[level] || CONF.insufficient
   return <span style={{ display:"inline-block", padding:"2px 8px", borderRadius:5, background:c.bg, color:c.color, fontSize:11, fontWeight:600, whiteSpace:"nowrap" }}>{c.label}</span>
 }
 
@@ -351,7 +358,12 @@ function gridCell(windows, whaleKeys, prefs, utcDay, blockHours) {
   const q75  = all[Math.floor(all.length * 0.25)] ?? 0
   const med  = all[Math.floor(all.length * 0.5)]  ?? 0
   let status
-  if (best.sessionCount >= 5 && best.avgUsdPerHr >= q75)       status = "peak"
+  // "Proven peak" uses the SAME tier gate as the schedule itself, rather than
+  // a third sample-size threshold of its own — a cell can only be called
+  // proven if the window behind it is one the planner would actually
+  // recommend. (This was `sessionCount >= 5`, which straddled the canonical
+  // 'supported' (4-5) and 'high' (6+) tiers.)
+  if (isRecommendableWindow(best) && best.avgUsdPerHr >= q75)  status = "peak"
   else if (best.sessionCount <= 1 && best.avgUsdPerHr >= med)  status = "promising"
   else if (best.sessionCount >= 3 && best.avgUsdPerHr < med * 0.6) status = "weak"
   else if (best.avgUsdPerHr >= med)                            status = "strong"
@@ -379,6 +391,10 @@ function PlanTab({ tips, windows, whales, prefs, savePrefs, isPro=true, timezone
   const [whyOpen, setWhyOpen]    = useState(null)
 
   const hidden = useMemo(() => untestedWindows(tips, windows), [tips, windows])
+  // Only tier-qualified windows may be RECOMMENDED. The full `windows` grid is
+  // still used for the heatmap and the test finder, where a low-sample bucket
+  // is legitimately interesting — it just can't head the schedule.
+  const recommendable = useMemo(() => windows.filter(isRecommendableWindow), [windows])
 
   const whaleKeys = useMemo(() => {
     const m = {}
@@ -406,7 +422,7 @@ function PlanTab({ tips, windows, whales, prefs, savePrefs, isPro=true, timezone
     return Array.from({ length: 7 }, (_, utcDay) => {
       const dayName = localDay(utcDay)
       if (!prefs.days[dayName]) return { utcDay, dayName, off: true, isToday: dayName === today }
-      let cands = windows.filter((w) => w.utcDay === utcDay && blockEnabled(w.utcHour))
+      let cands = recommendable.filter((w) => w.utcDay === utcDay && blockEnabled(w.utcHour))
       if (mode === "Growth Mode")        cands = [...cands].sort((a, b) => b.newTipperRate - a.newTipperRate || b.avgUsdPerHr - a.avgUsdPerHr)
       else if (mode === "Whale Watch")   cands = [...cands].sort((a, b) => (whaleKeys.has(`${b.utcDay}-${b.utcHour}`) ? 1 : 0) - (whaleKeys.has(`${a.utcDay}-${a.utcHour}`) ? 1 : 0) || b.avgUsdPerHr - a.avgUsdPerHr)
       else if (mode === "Testing Mode") {
@@ -419,7 +435,7 @@ function PlanTab({ tips, windows, whales, prefs, savePrefs, isPro=true, timezone
       else                                cands = [...cands].sort((a, b) => b.avgUsdPerHr - a.avgUsdPerHr)
       return { utcDay, dayName, off: false, window: cands[0] ?? null, isToday: dayName === today, isWhale: whaleKeys.has(cands[0] ? `${cands[0].utcDay}-${cands[0].utcHour}` : "") }
     })
-  }, [windows, prefs, whaleKeys, hidden, blockEnabled, timezone])
+  }, [recommendable, prefs, whaleKeys, hidden, blockEnabled, timezone])
 
   const tonight = weekPlan.find((d) => d.isToday && !d.off && d.window)
 
@@ -437,7 +453,7 @@ function PlanTab({ tips, windows, whales, prefs, savePrefs, isPro=true, timezone
 
   const whyReasons = (row) => {
     const w = row.window
-    const out = [`${w.sessionCount || "No"} past session${w.sessionCount !== 1 ? "s" : ""} in this window${w.sessionCount ? ` averaging ${fmt$(w.avgUsdPerHr)}/hr` : ""}.`]
+    const out = [`${w.sessionCount || "No"} past session${w.sessionCount !== 1 ? "s" : ""} in this window${w.sessionCount ? ` at a median ${fmt$(w.avgUsdPerHr)}/hr` : ""}.`]
     if (w.topPlatform)        out.push(`${w.topPlatform} earned the most here historically.`)
     if (row.isWhale)          out.push(`Two or more of your whales typically appear in this window.`)
     if (w.newTipperRate > 0.3) out.push(`${Math.round(w.newTipperRate * 100)}% of tips here came from first-time fans — good for growth.`)
@@ -466,7 +482,7 @@ function PlanTab({ tips, windows, whales, prefs, savePrefs, isPro=true, timezone
                   <ConfBadge level={tonight.window.confidence} />
                 </div>
                 <div style={{ color:TEXT, fontSize:13, lineHeight:1.7 }}>
-                  Expected <strong style={{ color:CYAN }}>{fmt$(tonight.window.avgUsdPerHr)}/hr</strong>
+                  Median <strong style={{ color:CYAN }}>{fmt$(tonight.window.avgUsdPerHr)}/hr</strong> in this window
                   {" · "}Suggested first goal: <strong style={{ color:PRIMARY }}>{fmt$(Math.max(10, avgSessionUsd * 0.3))}</strong>
                   {" · "}Minimum stay-live: <strong style={{ color:PRIMARY }}>{prefs.minSession === "None" ? "no minimum" : prefs.minSession}</strong>
                 </div>
@@ -541,12 +557,12 @@ function PlanTab({ tips, windows, whales, prefs, savePrefs, isPro=true, timezone
       <div style={cardS()}>
         <SecHead title="This Week's Plan" sub={`Mode: ${prefs.mode} — times shown in your local timezone`} />
         <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
-          <div style={{ display:"grid", gridTemplateColumns:"95px 1fr 130px 80px 120px 60px", gap:8, padding:"0 10px", color:MUTED, fontSize:11 }}>
-            <span>Day</span><span>Best Window</span><span>Platform</span><span>$/hr</span><span>Confidence</span><span/>
+          <div className="planner-week-head" style={{ display:"grid", gridTemplateColumns:"95px 1fr 130px 80px 120px 60px", gap:8, padding:"0 10px", color:MUTED, fontSize:11 }}>
+            <span>Day</span><span>Best Window</span><span>Platform</span><span>Median $/hr</span><span>Confidence</span><span/>
           </div>
           {weekPlan.map((row) => (
             <React.Fragment key={row.utcDay}>
-              <div style={{ display:"grid", gridTemplateColumns:"95px 1fr 130px 80px 120px 60px", gap:8, alignItems:"center", padding:"10px", borderRadius:8, background:row.isToday ? "rgba(34,211,238,0.04)" : "rgba(255,255,255,0.02)", border:`1px solid ${row.isToday ? "rgba(34,211,238,0.18)" : BORDER}` }}>
+              <div className="planner-week-row" style={{ display:"grid", gridTemplateColumns:"95px 1fr 130px 80px 120px 60px", gap:8, alignItems:"center", padding:"10px", borderRadius:8, background:row.isToday ? "rgba(34,211,238,0.04)" : "rgba(255,255,255,0.02)", border:`1px solid ${row.isToday ? "rgba(34,211,238,0.18)" : BORDER}` }}>
                 <span style={{ color:row.off ? MUTED : row.isToday ? CYAN : PRIMARY, fontSize:13, fontWeight:600 }}>
                   {row.dayName.slice(0, 3)}{row.isToday ? " 📍" : ""}{row.isWhale ? " 🐋" : ""}
                 </span>
@@ -629,7 +645,7 @@ function PlanTab({ tips, windows, whales, prefs, savePrefs, isPro=true, timezone
       {/* E — Opportunity Grid — Pro only, see the combined lock card above */}
       {isPro && (
       <div style={cardS()}>
-        <SecHead title="Opportunity Grid" sub="7 days × 6 time blocks — avg $/hr where data exists" />
+        <SecHead title="Opportunity Grid" sub="7 days × 6 time blocks — median $/hr where data exists, in your local time" />
         <div style={{ overflowX:"auto" }}>
           <div style={{ minWidth:560 }}>
             <div style={{ display:"grid", gridTemplateColumns:"64px repeat(7,1fr)", gap:3, marginBottom:4 }}>
@@ -643,7 +659,7 @@ function PlanTab({ tips, windows, whales, prefs, savePrefs, isPro=true, timezone
                   const cell = gridCell(windows, whaleKeys, prefs, utcDay, blk.hours)
                   const st   = CELL_STYLE[cell.status]
                   return (
-                    <div key={utcDay} title={`${UTC_DAYS[utcDay]} ${blk.label} UTC: ${cell.status}`} style={{ height:36, borderRadius:5, background:st.bg, border:`1px solid ${st.bdr}`, display:"flex", alignItems:"center", justifyContent:"center" }}>
+                    <div key={utcDay} title={`${UTC_DAYS[utcDay]} ${blk.label} (your local time): ${cell.status}`} style={{ height:36, borderRadius:5, background:st.bg, border:`1px solid ${st.bdr}`, display:"flex", alignItems:"center", justifyContent:"center" }}>
                       <span style={{ color:st.txt, fontSize:10, fontWeight:600 }}>
                         {cell.avg !== null ? `$${cell.avg.toFixed(0)}` : "—"}
                       </span>
@@ -827,15 +843,19 @@ function WhalesTab({ tips, whales, timezone='UTC' }) {
 // PROGRESS TAB
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function ProgressTab({ tips, windows, prefs, timezone='UTC' }) {
+function ProgressTab({ tips, windows, prefs, timezone='UTC', analytics=null }) {
   const sessions = useMemo(() => detectMeaningfulSessions(tips).map((s) => toWeekPlanSession(s, timezone)), [tips, timezone])
-  const topWindows = useMemo(() => windows.filter((w) => w.sessionCount >= 2).slice(0, 10), [windows])
+  // Same tier gate as the plan itself — adherence is measured against what the
+  // planner actually recommends, not against every bucket in the grid.
+  const topWindows = useMemo(() => windows.filter(isRecommendableWindow).slice(0, 10), [windows])
 
   const score = useMemo(() => planMatchScore(tips, topWindows, timezone), [tips, topWindows, timezone])
 
   const breakdown = useMemo(() => {
-    const platEff   = platformEfficiency(tips, timezone)
-    const bestPlat  = Object.entries(platEff).sort((a, b) => b[1].usdPerHr - a[1].usdPerHr)[0]?.[0]
+    // Canonical per-platform $/hr (lib/analytics.js's platforms[]), not a
+    // local recomputation.
+    const bestPlat = [...(analytics?.platforms || [])]
+      .sort((a, b) => (b.usdPerHour || 0) - (a.usdPerHour || 0))[0]?.platform
     const platPct   = bestPlat && tips.length
       ? Math.round(tips.filter((t) => t.platform === bestPlat).length / tips.length * 100)
       : 0
@@ -846,7 +866,7 @@ function ProgressTab({ tips, windows, prefs, timezone='UTC' }) {
         }).length / prefs.testPlan.length * 100)
       : 0
     return { windowPct: score, platPct, testedPct }
-  }, [tips, sessions, score, prefs.testPlan, timezone])
+  }, [tips, sessions, score, prefs.testPlan, analytics?.platforms])
 
   const isOnPlan = useCallback((s) => topWindows.some((w) => w.utcDay === s.utcDay && Math.abs(w.utcHour - s.utcHour) <= 1), [topWindows])
 
@@ -1008,7 +1028,7 @@ function LockedPlannerTab({ title, body }) {
   )
 }
 
-function StreamPlannerContent({ tips, isPro=true, timezone='UTC' }) {
+function StreamPlannerContent({ tips, isPro=true, timezone='UTC', analytics=null }) {
   const [tab, setTab]   = useState("plan")
   const [prefs, setPrefs] = useState(DEFAULT_PREFS)
 
@@ -1024,7 +1044,7 @@ function StreamPlannerContent({ tips, isPro=true, timezone='UTC' }) {
     try { localStorage.setItem(PREFS_KEY, JSON.stringify(next)) } catch {}
   }, [])
 
-  const windows = useMemo(() => bestWindows(tips, timezone),  [tips, timezone])
+  const windows = useMemo(() => windowsFromCanonical(analytics?.canonicalBestTimes), [analytics?.canonicalBestTimes])
   const whales  = useMemo(() => detectWhales(tips, timezone), [tips, timezone])
 
   return (
@@ -1044,7 +1064,7 @@ function StreamPlannerContent({ tips, isPro=true, timezone='UTC' }) {
 
       {tab === "plan"     && <PlanTab tips={tips} windows={windows} whales={whales} prefs={prefs} savePrefs={savePrefs} isPro={isPro} timezone={timezone} />}
       {tab === "whales"   && (isPro ? <WhalesTab tips={tips} whales={whales} timezone={timezone} /> : <LockedPlannerTab title="Whale Windows" body="See exactly when your top fans historically show up, so you can be live when they are." />)}
-      {tab === "progress" && (isPro ? <ProgressTab tips={tips} windows={windows} prefs={prefs} timezone={timezone} /> : <LockedPlannerTab title="Plan Progress" body="Track how closely you're sticking to your recommended schedule over time." />)}
+      {tab === "progress" && (isPro ? <ProgressTab tips={tips} windows={windows} prefs={prefs} timezone={timezone} analytics={analytics} /> : <LockedPlannerTab title="Plan Progress" body="Track how closely you're sticking to your recommended schedule over time." />)}
     </div>
   )
 }
@@ -1052,7 +1072,7 @@ function StreamPlannerContent({ tips, isPro=true, timezone='UTC' }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // ROOT EXPORT
 // ═══════════════════════════════════════════════════════════════════════════════
-export default function StreamPlanner({ tips = [], isPro = false, timezone = 'UTC' }) {
+export default function StreamPlanner({ tips = [], isPro = false, timezone = 'UTC', analytics = null }) {
   if (tips.length < 20) {
     return (
       <div style={{ background:BG, minHeight:"100%", display:"flex", alignItems:"center", justifyContent:"center", padding:24 }}>
@@ -1067,5 +1087,5 @@ export default function StreamPlanner({ tips = [], isPro = false, timezone = 'UT
     )
   }
 
-  return <StreamPlannerContent tips={tips} isPro={isPro} timezone={timezone} />
+  return <StreamPlannerContent tips={tips} isPro={isPro} timezone={timezone} analytics={analytics} />
 }
