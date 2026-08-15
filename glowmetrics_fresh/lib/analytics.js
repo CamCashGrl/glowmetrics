@@ -524,6 +524,15 @@ export function identifyWhales(tips, tz = 'UTC') {
       hasPrivates: privateTips.length > 0, privateCount: privateTips.length,
       privateSpent: parseFloat(privateTips.reduce((s, t) => s + t.usd, 0).toFixed(2)),
       typicalOnlineHours: mostActiveHour ? `${fmt12Hour(parseInt(mostActiveHour[0]))} - ${fmt12Hour(parseInt(mostActiveHour[0]) + 2)}` : 'Unknown',
+      // The NUMERIC form of the same bucket typicalOnlineHours formats, plus
+      // the counts behind it. Exposed because the Fans tab needs to compare
+      // this hour against the current hour ("is this fan usually around right
+      // now?"), which a pre-formatted "8 PM - 10 PM" string can't support —
+      // so page.js was re-bucketing every fan's tips by creator-local hour to
+      // recover it, a second implementation of this exact calculation. Same
+      // hourCounts, same toLocalHour, computed once here.
+      peakLocalHour: mostActiveHour ? parseInt(mostActiveHour[0]) : null,
+      peakHourTipCount: mostActiveHour ? mostActiveHour[1] : 0,
       tipNotes: f.tipNotes, tips: f.tips, isTopSpender: percentileRank <= 0.05, spendPercentile
     }
   }).sort((a, b) => b.totalUSD - a.totalUSD)
@@ -921,6 +930,11 @@ export function aggregateRows(tips, tz = null) {
           count: sorted.length,
           totalUSD: parseFloat(sorted.reduce((sum, f) => sum + (f.totalUSD || 0), 0).toFixed(2)),
           fans: sorted.slice(0, 3).map(f => ({ username: f.username, totalUSD: f.totalUSD, tipCount: f.tipCount })),
+          // Lowercased usernames of EVERY overlapping fan (not just the top 3
+          // shown in `fans`), so a per-fan surface can ask "is this fan one of
+          // them?" without re-running the day+hour match itself. Membership
+          // only — no new figure.
+          usernames: sorted.map(f => f.username.toLowerCase()),
         }
       })()
     : null

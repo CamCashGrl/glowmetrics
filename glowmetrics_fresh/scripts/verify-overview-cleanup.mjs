@@ -33,6 +33,7 @@ function check(name, cond, detail) {
 const raw = readFileSync(new URL('../app/dashboard/page.js', import.meta.url), 'utf8')
 const cc = readFileSync(new URL('../app/dashboard/CommandCenter.js', import.meta.url), 'utf8')
 const perf = readFileSync(new URL('../app/dashboard/Performance.js', import.meta.url), 'utf8')
+const fans = readFileSync(new URL('../app/dashboard/Fans.js', import.meta.url), 'utf8')
 
 // Assertions about what REACHES THE SCREEN must not be satisfied by the
 // explanatory comments the relocation deliberately left behind.
@@ -71,9 +72,14 @@ check('the whales (Fans) region is identifiable', !!FANS)
 //    tab renders <Performance>, and Performance.js contains the equivalent
 //    evidence, reading the same canonical fields.
 // ══════════════════════════════════════════════════════════════════════
-check('"Your Top Earners" still renders (not deleted)', src.includes('>Your Top Earners<'))
-check('"Your Top Earners" renders in Fans', FANS.includes('>Your Top Earners<'))
+// "Your Top Earners" was relocated to the whales tab in Phase 2, then
+// replaced in Phase 4 by app/dashboard/Fans.js — so, like the Performance
+// sections above, it is now checked as CAPABILITY rather than literal markup.
+check('the whales tab renders the Fans component (not the old inline sections)',
+  FANS.includes('<Fans'))
 check('"Your Top Earners" no longer renders on Overview', !(OVERVIEW || '').includes('>Your Top Earners<'))
+check('the top-earner ranking survived into Fans, reading the canonical whales array',
+  fans.includes('analytics?.whales') && fans.includes('b.totalUSD - a.totalUSD'))
 
 check('the platforms tab renders the Performance component (not the old inline sections)',
   PLATFORMS.includes('<Performance'))
@@ -94,10 +100,15 @@ check('missed-revenue ranking exists in Performance, reading the canonical modul
   perf.includes('analytics?.missedRevenue?.cumulative_by_platform') && perf.includes('rateGapUsdPerHour'))
 check('dependency-risk figures exist in Performance, reading the canonical field',
   perf.includes('analytics?.dependencyRisk') && perf.includes('dep.top1Pct'))
-check('"Likely Online Now" fan list moved to Fans', FANS.includes('Likely Online Now'))
-check('"Close to Milestone" moved to Fans', FANS.includes('Close to Milestone'))
-check('"At Risk — Re-engage" moved to Fans', FANS.includes('At Risk — Re-engage'))
-check('the fan message action moved with the list', FANS.includes('setMessageTarget'))
+// The old three fixed buckets (Likely Online / Close to Milestone / At Risk)
+// became rule-driven priority bands in Fans.js, each stating its own reason
+// and action. Checked as capability: the equivalent timing, churn and
+// best-window signals all still drive the list, from canonical fields.
+check('a returning-soon signal still drives the list', fans.includes('returning_soon') && fans.includes('expectedNextTip'))
+check('an at-risk/cooling signal still drives the list', fans.includes('cooling_off') && fans.includes('churnRisk'))
+check('an overdue signal still drives the list', fans.includes('overdue_high_value'))
+check('best-window overlap still drives the list', fans.includes('best_window') && fans.includes('bestWindowUsernames'))
+check('the fan message action survived the rebuild', FANS.includes('setMessageTarget') && fans.includes('onMessage'))
 
 // ══════════════════════════════════════════════════════════════════════
 // 3. "MAKE MONEY RIGHT NOW" LANDED INSIDE THE COMMAND CENTER, and the
@@ -124,7 +135,7 @@ check('its peak-window claim is still owned by the Command Center hero',
   cc.includes('bestWindow.medianUsdPerHour'))
 check('its highest-ROI-platform claim is still owned by Performance',
   perf.includes('platformEfficiencyGap'))
-check('its top-supporter claim is still owned by the Fans tab', FANS.includes('lifetime'))
+check('its top-supporter claim is still owned by the Fans tab', fans.includes('lifetime'))
 check('the unsupported "60-minute sessions earn disproportionately more" claim is gone',
   !src.includes('earn disproportionately more'))
 check('the removal is documented rather than silent',
@@ -171,12 +182,18 @@ check('Overview renders no second stack of glass cards after the Command Center'
   // 6b. "{n}% likely" was peakFraction * 200 * proximityDecay clamped to
   //     25-90 — a hand-rolled score shown as a probability. The score still
   //     ranks and gates the list; only the fabricated claim is gone.
-  check('no fabricated "% likely" probability is rendered', !src.includes('% likely`'))
-  check('the badge states the observation instead', src.includes('tips at this hour'))
-  check('the heuristic still gates the list (behaviour preserved)',
-    src.includes('w.confidence >= 35'))
-  check('the badge figures come from the fan\'s own tips',
-    src.includes('peakTips: sorted[0][1]') && src.includes('peakOfTips: fanTips.length'))
+  // Phase 4 removed the hand-rolled score entirely rather than relabelling
+  // it: Fans.js shows no probability at all, and the row states the
+  // canonical observation ("usually every ~7d, last seen 12d ago"). The
+  // defect class is structurally closed, not patched.
+  check('no fabricated "% likely" probability is rendered anywhere',
+    !src.includes('% likely') && !fans.includes('% likely'))
+  check('no fan surface renders calcTipProbability\'s uncalibrated percentage',
+    !fans.includes('tipProbability?.percentage') && !fans.includes('tipProbability.percentage'))
+  check('the fan row states the canonical return interval instead',
+    fans.includes('avgDaysBetweenTips') && fans.includes('daysSinceLastTip'))
+  check('the peak hour comes from the canonical field, not a re-bucketing in the page',
+    fans.includes('peakLocalHour') && !src.includes('hourCounts[h] = (hourCounts[h] || 0) + 1'))
 }
 
 console.log(`\n${pass} passed, ${fail} failed`)
