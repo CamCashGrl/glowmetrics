@@ -111,6 +111,15 @@ export default function sitemap() {
     'myfreecams-analytics',
   ]
 
+  const featureSlugs = [
+    'cam-earnings-analyzer',
+    'top-fans',
+    'best-hours',
+    'live-mode',
+    'multi-platform-analytics',
+    'profile-studio',
+  ]
+
   const blogPages = blogSlugs.map(slug => ({
     url: `${base}/blog/${slug}`,
     lastModified: today,
@@ -125,5 +134,12 @@ export default function sitemap() {
     priority: 0.7,
   }))
 
-  return [...staticPages, ...blogPages, ...guidePages]
+  const featurePages = featureSlugs.map(slug => ({
+    url: `${base}/features/${slug}`,
+    lastModified: today,
+    changeFrequency: 'monthly',
+    priority: 0.8,
+  }))
+
+  return [...staticPages, ...blogPages, ...guidePages, ...featurePages]
 }
