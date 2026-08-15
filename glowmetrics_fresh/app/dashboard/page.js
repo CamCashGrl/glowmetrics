@@ -33,8 +33,20 @@ const UPGRADE_COPY = {
     subhead: "You're only seeing a preview of your data. Here's what's waiting for you inside:",
   },
   multi_platform: {
-    headline: "You've tracked 1 platform",
-    subhead: "Compare all your platforms with Creator Pro to see exactly where you actually earn best.",
+    headline: "You've reached the free 2-platform limit",
+    subhead: "Upgrade to Creator Pro to track unlimited platforms and compare exactly where you actually earn best.",
+  },
+  platform_comparison: {
+    headline: "You're tracking multiple platforms",
+    subhead: "Unlock the combined view — which platform pays better per hour, your totals across all of them, and where to shift your time.",
+  },
+  session_breakdown: {
+    headline: "Your sessions have a story to tell",
+    subhead: "Upgrade to Pro to see what drove each session's performance, your top tippers per stream, and exactly what to change next time.",
+  },
+  daily_forecast: {
+    headline: "Know before you go live",
+    subhead: "Upgrade to Pro to unlock your full income forecast and exact peak streaming window, not just a directional hint.",
   },
   whales_cutoff: {
     headline: "You've found your top fans",
@@ -1427,6 +1439,9 @@ export default function Dashboard() {
   const [importStage, setImportStage] = useState('idle')
   const [importMessageIdx, setImportMessageIdx] = useState(0)
   const importMessageTimerRef = useRef(null)
+  const platformComparisonViewedRef = useRef(false)
+  const sessionBreakdownLockViewedRef = useRef(false)
+  const dailyForecastLockViewedRef = useRef(false)
   const uploading = importStage === 'processing'
   const [uploadPlatform, setUploadPlatform] = useState("")
   const [lastUploadResult, setLastUploadResult] = useState(null)
@@ -2249,8 +2264,8 @@ const stopImportMessageRotation = () => {
 
   const handleCSV = async (file, forcePlatform = null) => {
     if (!file || !user) return
-    // Free plan tracks a single platform — instead of a hard block, show a
-    // quick preview of the file's contents plus a soft paywall below it.
+    // Free plan tracks up to 2 platforms — instead of a hard block on the
+    // 3rd, show a quick preview of the file's contents plus a soft paywall.
     if (freePlatformLimitReached && forcePlatform && !allPlatforms.includes(forcePlatform)) {
       await denyWithPlatformPreview(file, forcePlatform)
       return
@@ -2474,7 +2489,25 @@ const stopImportMessageRotation = () => {
   })
 
   const allPlatforms = memoOn(derivedCacheRef.current, 'allPlatforms', [tips], () => [...new Set(tips.map(t => t.platform))])
-  const freePlatformLimitReached = !isPro && allPlatforms.length > 0
+  // Free tier tracks up to 2 platforms (see 20260811_raise_free_tier_csv_platform_limit_to_two.sql)
+  // — enough to reach the cross-platform comparison locked card on the Platforms tab.
+  const freePlatformLimitReached = !isPro && allPlatforms.length > 1
+
+  // Conversion funnel step 1 — impression of the locked cross-platform
+  // comparison card. Paired with the existing 'paywall_hit'/upgrade_click
+  // events (already fired by openUpgradeModal('platform_comparison') when
+  // the card's CTA is clicked) and Stripe's webhook-driven subscription
+  // event downstream, so the full funnel is: viewed → clicked → converted.
+  // Fires once per session via the ref guard. Plain inline code, not a
+  // hook — this section runs after the `if (loading) return` early-exit
+  // above, so a real useEffect() here would violate the Rules of Hooks
+  // (see the memoOn comment near the top of this file for the same reason
+  // useMemo isn't used down here either).
+  if (activeTab === 'platforms' && !isPro && !platformComparisonViewedRef.current && allPlatforms.length >= 2) {
+    platformComparisonViewedRef.current = true
+    track('platform_comparison_locked_viewed', { platformCount: allPlatforms.length })
+    gtmTrack('platform_comparison_locked_viewed', { platformCount: allPlatforms.length })
+  }
 
   // ── Build "What's Next" alerts — smarter, personalized, prioritized
   const buildWhatsNextAlerts = () => {
@@ -2969,6 +3002,25 @@ const stopImportMessageRotation = () => {
   // re-runs every minuteTick (as well as when the underlying data changes)
   const dailyBrief = memoOn(derivedCacheRef.current, 'dailyBrief', [tips, analytics, whales, minuteTick], buildDailyBrief)
 
+  // Conversion funnel — impression of the two other locked-preview surfaces
+  // (Daily Brief's forecast, Session Breakdown's analysis). Same fire-once
+  // pattern as platform_comparison_locked_viewed above; paired with the
+  // existing upgrade_click/paywall_hit events already fired by
+  // openUpgradeModal('daily_forecast'/'session_breakdown'). Plain inline
+  // code, not hooks — same reason as platform_comparison_locked_viewed
+  // above (this section runs after the `if (loading) return` early-exit).
+  if (!isPro && !dailyForecastLockViewedRef.current && dailyBrief?.bhLabel) {
+    dailyForecastLockViewedRef.current = true
+    track('daily_forecast_locked_viewed', {})
+    gtmTrack('daily_forecast_locked_viewed', {})
+  }
+
+  if (activeTab === 'sessions' && !isPro && !sessionBreakdownLockViewedRef.current && sessions.length) {
+    sessionBreakdownLockViewedRef.current = true
+    track('session_breakdown_locked_viewed', { sessionCount: sessions.length })
+    gtmTrack('session_breakdown_locked_viewed', { sessionCount: sessions.length })
+  }
+
   // ── CANONICAL PEAK HOUR ──────────────────────────────────────────────────────
   // Single source of truth used by the header, Daily Brief, and Losing Money.
   // Prefer engineInsights daily_plan (most specific — SQL, get_user_insights;
@@ -3433,8 +3485,9 @@ const stopImportMessageRotation = () => {
               tips={tips}
               isPro={isPro}
               visitedTabs={visitedTabs}
+              platformCount={allPlatforms.length}
               onNavigate={handleTabChange}
-              onUpgrade={() => openUpgradeModal('default')}
+              onUpgrade={(reason) => openUpgradeModal(reason || 'default')}
             />
 
             {/* ═══════════════════════════════════════
@@ -3584,8 +3637,13 @@ const stopImportMessageRotation = () => {
 
               <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
 
-                {/* ═══ BEST TIME TO STREAM ALERT ═══ */}
-                {bhLabel && (
+                {/* ═══ BEST TIME TO STREAM ALERT ═══
+                    Free still learns a predictable window exists (and gets the
+                    real-time "go live now" nudge if they happen to be in it —
+                    that's too time-sensitive and too basic a capability to
+                    withhold) but the exact hour, $ forecast, and "+101% more"
+                    analysis are Pro. */}
+                {bhLabel && (isPro ? (
                   <div style={{ padding: '14px 16px', borderRadius: 13, background: atPeak ? 'linear-gradient(135deg,rgba(16,185,129,0.15),rgba(34,211,238,0.08))' : 'linear-gradient(135deg,rgba(124,92,255,0.12),rgba(34,211,238,0.06))', border: `1px solid ${atPeak ? 'rgba(16,185,129,0.4)' : 'rgba(124,92,255,0.35)'}`, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
                     <div style={{ fontSize: 22, flexShrink: 0, marginTop: 1 }}>{atPeak ? '🟢' : '⏰'}</div>
                     <div style={{ flex: 1 }}>
@@ -3620,7 +3678,25 @@ const stopImportMessageRotation = () => {
                       )}
                     </div>
                   </div>
-                )}
+                ) : (
+                  <div style={{ padding: '14px 16px', borderRadius: 13, background: atPeak ? 'linear-gradient(135deg,rgba(16,185,129,0.15),rgba(34,211,238,0.08))' : 'linear-gradient(135deg,rgba(124,92,255,0.12),rgba(34,211,238,0.06))', border: `1px solid ${atPeak ? 'rgba(16,185,129,0.4)' : 'rgba(124,92,255,0.35)'}`, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                    <div style={{ fontSize: 22, flexShrink: 0, marginTop: 1 }}>{atPeak ? '🟢' : '🔒'}</div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: atPeak ? C.green : C.white, marginBottom: 5 }}>
+                        {atPeak
+                          ? `You're in your peak window right now — go live`
+                          : `Your data shows a predictable peak earning window today`
+                        }
+                      </div>
+                      <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.65 }}>
+                        {atPeak
+                          ? `Pro shows exactly how much more this window is worth and for how much longer it lasts.`
+                          : `Pro shows the exact hour, which platform, and your $ forecast if you stream then.`}
+                      </div>
+                      <button onClick={() => openUpgradeModal('daily_forecast')} style={{ marginTop: 8, padding: '5px 12px', borderRadius: 100, border: '1px solid rgba(124,92,255,0.35)', background: 'rgba(124,92,255,0.12)', color: C.indigo, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Unlock Pro →</button>
+                    </div>
+                  </div>
+                ))}
 
                 {/* ROW 1 — Today / Peak Window / Best Platform */}
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
@@ -3655,6 +3731,11 @@ const stopImportMessageRotation = () => {
                           <button onClick={() => handleTabChange('upload')} style={{ marginTop: 6, padding: '4px 10px', borderRadius: 100, border: '1px solid rgba(34,211,238,0.3)', background: 'rgba(34,211,238,0.08)', color: C.cyan, fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>Upload More Data</button>
                         </>
                       )
+                    ) : !isPro ? (
+                      <>
+                        <div style={{ fontSize: 14, fontWeight: 800, color: '#64748b' }}>🔒 Pattern found</div>
+                        <div style={{ fontSize: 11, color: C.muted, marginTop: 2, lineHeight: 1.4 }}>Pro shows the exact hour</div>
+                      </>
                     ) : (
                       <>
                         <div style={{ fontSize: 14, fontWeight: 800, color: atPeak ? C.green : C.white }}>{bhLabel}</div>
@@ -3674,9 +3755,18 @@ const stopImportMessageRotation = () => {
                   {bhLabel && (
                     <div style={{ flex: 1, minWidth: 130, padding: '11px 14px', borderRadius: 11, background: 'rgba(16,185,129,0.07)', border: '1px solid rgba(16,185,129,0.18)' }}>
                       <div style={{ fontSize: 10, color: C.muted, marginBottom: 3, textTransform: 'uppercase', letterSpacing: 1 }}>Income Forecast</div>
-                      <div style={{ fontSize: 14, fontWeight: 800, color: C.green }}>${predictionLow}–${predictionHigh}</div>
-                      <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>if you stream at {bhLabel}</div>
-                      {sessionsAtPeakCount < 2 && <div style={{ fontSize: 10, color: C.muted, marginTop: 3, fontStyle: 'italic' }}>based on limited data</div>}
+                      {isPro ? (
+                        <>
+                          <div style={{ fontSize: 14, fontWeight: 800, color: C.green }}>${predictionLow}–${predictionHigh}</div>
+                          <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>if you stream at {bhLabel}</div>
+                          {sessionsAtPeakCount < 2 && <div style={{ fontSize: 10, color: C.muted, marginTop: 3, fontStyle: 'italic' }}>based on limited data</div>}
+                        </>
+                      ) : (
+                        <>
+                          <div style={{ fontSize: 14, fontWeight: 800, color: '#64748b' }}>🔒 Pro</div>
+                          <div style={{ fontSize: 11, color: C.muted, marginTop: 2, lineHeight: 1.4 }}>See your $ range</div>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>
@@ -4516,49 +4606,88 @@ const stopImportMessageRotation = () => {
                 </div>
               </div>
 
-              {/* PLATFORM RECOMMENDATION BANNER */}
-              {displayPlatforms.length >= 2 && (() => {
-                const sorted = [...displayPlatforms].sort((a, b) => b.usdPerHour - a.usdPerHour)
-                const top = sorted[0]
-                const bottom = sorted[sorted.length - 1]
-                if (top.usdPerHour > 0 && bottom.usdPerHour > 0 && top.usdPerHour >= bottom.usdPerHour * 2) {
-                  const mult = (top.usdPerHour / bottom.usdPerHour).toFixed(1)
-                  return (
-                    <div style={{ padding: "14px 18px", borderRadius: 12, background: "linear-gradient(135deg, rgba(34,211,238,0.1), rgba(124,92,255,0.1))", border: "1px solid rgba(34,211,238,0.3)", marginBottom: 20, display: "flex", alignItems: "center", gap: 12 }}>
-                      <span style={{ fontSize: 20 }}>⚡</span>
-                      <div>
-                        <div style={{ fontSize: 14, fontWeight: 700, color: C.white }}>You earn {mult}x more per hour on {top.platform} than {bottom.platform}</div>
-                        <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>${(top.usdPerHour || 0).toFixed(2)}/hr vs ${(bottom.usdPerHour || 0).toFixed(2)}/hr — consider shifting more time to {top.platform}</div>
-                      </div>
+              {/* SINGLE-PLATFORM STATE — a dedicated opportunity card, not a
+                  comparison table with one row. Sets the free/Pro boundary
+                  before any work is invested, per the no-surprise-locks rule:
+                  a user tracking one platform should understand up front
+                  what a 2nd platform would unlock, not discover it later. */}
+              {displayPlatforms.length === 1 && (
+                <div style={{ padding: "16px 20px", borderRadius: 14, background: "linear-gradient(135deg, rgba(124,92,255,0.08), rgba(34,211,238,0.06))", border: "1px solid rgba(124,92,255,0.25)", marginBottom: 24, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: C.white, marginBottom: 4 }}>Tracking {displayPlatforms[0].platform}</div>
+                    <div style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.5 }}>
+                      {isPro
+                        ? "Add another platform and this page becomes a real comparison — which one is actually worth more of your time."
+                        : "Add a 2nd platform (free, up to 2) and CamCash will show you which one is actually worth more of your time."}
                     </div>
-                  )
-                }
-                return null
-              })()}
-
-              {/* SUMMARY ROW — only when 2+ platforms */}
-              {displayPlatforms.length >= 2 && (() => {
-                const topRev = [...displayPlatforms].sort((a, b) => b.totalUSD - a.totalUSD)[0]
-                const topEff = [...displayPlatforms].sort((a, b) => b.usdPerHour - a.usdPerHour)[0]
-                const totalHours = displayPlatforms.reduce((s, p) => s + p.hours, 0)
-                const totalEarned = displayPlatforms.reduce((s, p) => s + p.totalUSD, 0)
-                return (
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 28 }}>
-                    {[
-                      { icon: "💰", label: "Top Revenue", value: topRev.platform, sub: `$${(topRev.totalUSD || 0).toFixed(2)} total`, color: C.gold },
-                      { icon: "⚡", label: "Most Efficient", value: topEff.platform, sub: `$${(topEff.usdPerHour || 0).toFixed(2)}/hour`, color: C.cyan },
-                      { icon: "🕒", label: "Total Hours", value: `${totalHours.toFixed(1)}h`, sub: `across ${displayPlatforms.length} platforms`, color: C.pink },
-                      { icon: "💵", label: "Combined Earned", value: `$${totalEarned.toFixed(2)}`, sub: platformTimeFilter === "ALL" ? "all time" : `last ${platformTimeFilter}`, color: C.green },
-                    ].map(({ icon, label, value, sub, color }) => (
-                      <div key={label} className="dash-card" style={{ ...glassCard, borderRadius: 14, padding: 20 }}>
-                        <div style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>{icon} {label}</div>
-                        <div style={{ fontSize: 20, fontWeight: 800, color, marginBottom: 4 }}>{value}</div>
-                        <div style={{ fontSize: 12, color: C.muted }}>{sub}</div>
-                      </div>
-                    ))}
                   </div>
-                )
-              })()}
+                  <Button onClick={() => handleTabChange('upload')} style={{ padding: "9px 20px", fontSize: 12.5, flexShrink: 0 }}>Add a platform →</Button>
+                </div>
+              )}
+
+              {/* CROSS-PLATFORM COMPARISON — real per-platform cards below stay
+                  free for everyone; the combined/comparison view above them
+                  (recommendation banner + summary row) is what Pro pays for.
+                  Free users with 2+ platforms see a locked card built from
+                  their own real platform count, not a generic upgrade nag. */}
+              {displayPlatforms.length >= 2 && (!isPro ? (
+                <div style={{ marginBottom: 24 }}>
+                  <LockedInsightCard
+                    title="Cross-Platform Comparison"
+                    description={`You're tracking ${displayPlatforms.length} platforms — unlock which one pays better per hour, your combined totals, and where to shift your time.`}
+                    lockType="requires_pro"
+                    requirement="Upgrade to Pro to compare earnings across platforms"
+                    ctaLabel="Upgrade to Pro"
+                    ctaAction={() => openUpgradeModal('platform_comparison')}
+                  />
+                </div>
+              ) : (
+                <>
+                  {/* PLATFORM RECOMMENDATION BANNER */}
+                  {(() => {
+                    const sorted = [...displayPlatforms].sort((a, b) => b.usdPerHour - a.usdPerHour)
+                    const top = sorted[0]
+                    const bottom = sorted[sorted.length - 1]
+                    if (top.usdPerHour > 0 && bottom.usdPerHour > 0 && top.usdPerHour >= bottom.usdPerHour * 2) {
+                      const mult = (top.usdPerHour / bottom.usdPerHour).toFixed(1)
+                      return (
+                        <div style={{ padding: "14px 18px", borderRadius: 12, background: "linear-gradient(135deg, rgba(34,211,238,0.1), rgba(124,92,255,0.1))", border: "1px solid rgba(34,211,238,0.3)", marginBottom: 20, display: "flex", alignItems: "center", gap: 12 }}>
+                          <span style={{ fontSize: 20 }}>⚡</span>
+                          <div>
+                            <div style={{ fontSize: 14, fontWeight: 700, color: C.white }}>You earn {mult}x more per hour on {top.platform} than {bottom.platform}</div>
+                            <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>${(top.usdPerHour || 0).toFixed(2)}/hr vs ${(bottom.usdPerHour || 0).toFixed(2)}/hr — consider shifting more time to {top.platform}</div>
+                          </div>
+                        </div>
+                      )
+                    }
+                    return null
+                  })()}
+
+                  {/* SUMMARY ROW */}
+                  {(() => {
+                    const topRev = [...displayPlatforms].sort((a, b) => b.totalUSD - a.totalUSD)[0]
+                    const topEff = [...displayPlatforms].sort((a, b) => b.usdPerHour - a.usdPerHour)[0]
+                    const totalHours = displayPlatforms.reduce((s, p) => s + p.hours, 0)
+                    const totalEarned = displayPlatforms.reduce((s, p) => s + p.totalUSD, 0)
+                    return (
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 28 }}>
+                        {[
+                          { icon: "💰", label: "Top Revenue", value: topRev.platform, sub: `$${(topRev.totalUSD || 0).toFixed(2)} total`, color: C.gold },
+                          { icon: "⚡", label: "Most Efficient", value: topEff.platform, sub: `$${(topEff.usdPerHour || 0).toFixed(2)}/hour`, color: C.cyan },
+                          { icon: "🕒", label: "Total Hours", value: `${totalHours.toFixed(1)}h`, sub: `across ${displayPlatforms.length} platforms`, color: C.pink },
+                          { icon: "💵", label: "Combined Earned", value: `$${totalEarned.toFixed(2)}`, sub: platformTimeFilter === "ALL" ? "all time" : `last ${platformTimeFilter}`, color: C.green },
+                        ].map(({ icon, label, value, sub, color }) => (
+                          <div key={label} className="dash-card" style={{ ...glassCard, borderRadius: 14, padding: 20 }}>
+                            <div style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>{icon} {label}</div>
+                            <div style={{ fontSize: 20, fontWeight: 800, color, marginBottom: 4 }}>{value}</div>
+                            <div style={{ fontSize: 12, color: C.muted }}>{sub}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  })()}
+                </>
+              ))}
 
               {/* PLATFORM CARDS */}
               {displayPlatforms.map((p, i) => {
@@ -4592,17 +4721,24 @@ const stopImportMessageRotation = () => {
                       </div>
                     </div>
 
-                    {/* STAT GRID */}
+                    {/* STAT GRID — Total Revenue and Avg Session are basic totals,
+                        free for everyone. $/Hour and Avg Tip Size are the
+                        efficiency-analysis layer, Pro (only meaningfully
+                        "locked" once there's something to compare it against). */}
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 20 }}>
                       {[
-                        { label: "Total Revenue", value: `$${(p.totalUSD || 0).toFixed(2)}`, color: C.green },
-                        { label: "$/Hour", value: `$${(p.usdPerHour || 0).toFixed(2)}`, color: C.cyan },
-                        { label: "Avg Session", value: `$${(avgSessionUSD || 0).toFixed(2)}`, color: C.pink },
-                        { label: "Avg Tip Size", value: `$${(p.avgTipSize || 0).toFixed(2)}`, color: C.gold },
-                      ].map(({ label, value, color }) => (
+                        { label: "Total Revenue", value: `$${(p.totalUSD || 0).toFixed(2)}`, color: C.green, pro: false },
+                        { label: "$/Hour", value: `$${(p.usdPerHour || 0).toFixed(2)}`, color: C.cyan, pro: true },
+                        { label: "Avg Session", value: `$${(avgSessionUSD || 0).toFixed(2)}`, color: C.pink, pro: false },
+                        { label: "Avg Tip Size", value: `$${(p.avgTipSize || 0).toFixed(2)}`, color: C.gold, pro: true },
+                      ].map(({ label, value, color, pro }) => (
                         <div key={label} style={{ background: "rgba(255,255,255,0.04)", borderRadius: 10, padding: "14px 16px", border: "1px solid rgba(255,255,255,0.06)" }}>
                           <div style={{ fontSize: 11, color: C.muted, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>{label}</div>
-                          <div style={{ fontSize: 20, fontWeight: 800, color }}>{value}</div>
+                          {pro && !isPro && displayPlatforms.length > 1 ? (
+                            <div style={{ fontSize: 15, fontWeight: 800, color: '#64748b' }}>🔒 Pro</div>
+                          ) : (
+                            <div style={{ fontSize: 20, fontWeight: 800, color }}>{value}</div>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -4695,8 +4831,12 @@ const stopImportMessageRotation = () => {
                       )
                     })()}
 
-                    {/* INSIGHTS */}
-                    {insights.length > 0 && (
+                    {/* INSIGHTS — largely comparative claims ("earns X% more than
+                        your average", "highest revenue platform"), so Pro once
+                        there's more than one platform to compare against. A
+                        single tracked platform's insights (best day, peak time)
+                        aren't comparative and stay free. */}
+                    {insights.length > 0 && (isPro || displayPlatforms.length === 1) ? (
                       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                         {insights.map((ins, j) => (
                           <div key={j} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: "rgba(255,255,255,0.03)", borderRadius: 8, border: "1px solid rgba(255,255,255,0.06)" }}>
@@ -4705,7 +4845,12 @@ const stopImportMessageRotation = () => {
                           </div>
                         ))}
                       </div>
-                    )}
+                    ) : insights.length > 0 && displayPlatforms.length > 1 ? (
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: "rgba(124,92,255,0.06)", borderRadius: 8, border: "1px solid rgba(124,92,255,0.2)" }}>
+                        <span style={{ fontSize: 16, flexShrink: 0 }}>🔒</span>
+                        <span style={{ fontSize: 13, color: C.text }}>Pro compares this platform against your others — {insights.length} insight{insights.length !== 1 ? 's' : ''} found</span>
+                      </div>
+                    ) : null}
                   </div>
                 )
               })}
@@ -5128,7 +5273,18 @@ const stopImportMessageRotation = () => {
           </div>
         )}
 
-        {activeTab === "live" && <LiveEnginePage embedded />}
+        {activeTab === "live" && (isPro ? <LiveEnginePage embedded /> : (
+          <div style={{ padding: '32px 0' }}>
+            <LockedInsightCard
+              title="Live Mode"
+              description="Real-time tip tracking and live coaching — momentum, room health, and what to do right now to keep the room hot."
+              lockType="requires_pro"
+              requirement="Upgrade to Pro to unlock Live Mode"
+              ctaLabel="Upgrade to Pro"
+              ctaAction={() => openUpgradeModal('live_mode')}
+            />
+          </div>
+        ))}
 
         {activeTab === "live-sessions" && (() => {
           const fmtSessionDuration = (secs) => {
@@ -5591,33 +5747,59 @@ const stopImportMessageRotation = () => {
                         </div>
                       )}
 
-                      {/* INSIGHTS + RECOMMENDATIONS side by side */}
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-                        {/* INSIGHTS */}
-                        <div style={{ padding: "14px 16px", background: "rgba(34,211,238,0.06)", border: "1px solid rgba(34,211,238,0.2)", borderRadius: 12 }}>
-                          <div style={{ fontSize: 12, fontWeight: 700, color: C.cyan, marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>💡 What Happened</div>
-                          <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-                            {bd.insights.map((ins, ii) => (
-                              <div key={ii} style={{ fontSize: 12, color: C.text, lineHeight: 1.5, display: "flex", gap: 6 }}>
-                                <span style={{ color: C.cyan, flexShrink: 0 }}>→</span>
-                                <span>{ins}</span>
-                              </div>
-                            ))}
+                      {/* INSIGHTS + RECOMMENDATIONS — the "why it happened / what to
+                          do about it" layer is Pro; the timeline and totals above stay
+                          free for everyone. Shown as a visible locked card, not silent
+                          absence, so the boundary is obvious before anyone goes looking
+                          for it. */}
+                      {isPro ? (
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                          {/* INSIGHTS */}
+                          <div style={{ padding: "14px 16px", background: "rgba(34,211,238,0.06)", border: "1px solid rgba(34,211,238,0.2)", borderRadius: 12 }}>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: C.cyan, marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>💡 What Happened</div>
+                            <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+                              {bd.insights.map((ins, ii) => (
+                                <div key={ii} style={{ fontSize: 12, color: C.text, lineHeight: 1.5, display: "flex", gap: 6 }}>
+                                  <span style={{ color: C.cyan, flexShrink: 0 }}>→</span>
+                                  <span>{ins}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                          {/* RECOMMENDATIONS */}
+                          <div style={{ padding: "14px 16px", background: "rgba(236,72,153,0.06)", border: "1px solid rgba(236,72,153,0.2)", borderRadius: 12 }}>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: C.pink, marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>🚀 Do This Next Time</div>
+                            <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+                              {bd.recommendations.map((rec, ri) => (
+                                <div key={ri} style={{ fontSize: 12, color: C.text, lineHeight: 1.5, display: "flex", gap: 6 }}>
+                                  <span style={{ color: C.pink, flexShrink: 0 }}>•</span>
+                                  <span>{rec}</span>
+                                </div>
+                              ))}
+                            </div>
                           </div>
                         </div>
-                        {/* RECOMMENDATIONS */}
-                        <div style={{ padding: "14px 16px", background: "rgba(236,72,153,0.06)", border: "1px solid rgba(236,72,153,0.2)", borderRadius: 12 }}>
-                          <div style={{ fontSize: 12, fontWeight: 700, color: C.pink, marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>🚀 Do This Next Time</div>
-                          <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-                            {bd.recommendations.map((rec, ri) => (
-                              <div key={ri} style={{ fontSize: 12, color: C.text, lineHeight: 1.5, display: "flex", gap: 6 }}>
-                                <span style={{ color: C.pink, flexShrink: 0 }}>•</span>
-                                <span>{rec}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
+                      ) : (
+                        <LockedInsightCard
+                          title="What Happened & What To Do Next"
+                          description={(() => {
+                            // Same avg getSessionBreakdown() computes internally for
+                            // its own performance grading — that value is scoped to
+                            // the function, not returned, so recomputed here from the
+                            // same displaySessions this whole tab already has in scope.
+                            const sessAvg = displaySessions.length > 0
+                              ? displaySessions.reduce((sum, x) => sum + x.totalUSD, 0) / displaySessions.length
+                              : 0
+                            return bd.performance === 'high'
+                              ? `This was one of your top sessions ($${s.totalUSD} vs $${sessAvg.toFixed(0)} avg) — Pro breaks down exactly what drove it and how to repeat it.`
+                              : `Pro breaks down what drove this session's performance — spikes, top tippers, pacing — and exactly what to change next time.`
+                          })()}
+                          lockType="requires_pro"
+                          requirement="Upgrade to Pro to unlock session analysis"
+                          ctaLabel="Upgrade to Pro"
+                          ctaAction={() => openUpgradeModal('session_breakdown')}
+                        />
+                      )}
 
                     </div>
                   </div>
@@ -5764,7 +5946,7 @@ const stopImportMessageRotation = () => {
           <div style={{ maxWidth: 600, margin: "0 auto" }}>
             <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 8 }}>📥 Import CSV</h1>
             <p style={{ fontSize: 14, color: C.muted, marginBottom: 12 }}>
-              {isPro ? "Unlimited platforms • Auto-removes duplicates" : freePlatformLimitReached ? `Free plan — tracking ${allPlatforms[0]}. Auto-removes duplicates.` : "Free plan tracks 1 platform. Auto-removes duplicates."}
+              {isPro ? "Unlimited platforms • Auto-removes duplicates" : freePlatformLimitReached ? `Free plan — tracking ${allPlatforms.join(' & ')}. Auto-removes duplicates.` : "Free plan tracks up to 2 platforms. Auto-removes duplicates."}
             </p>
             <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: freePlatformLimitReached ? 16 : 32 }}>
               <a href="/blog/how-to-upload-csv-to-camcash" style={{ fontSize: 13, color: C.cyan, textDecoration: "none", fontWeight: 600 }}>📹 Watch the SOP: How to upload a CSV →</a>
@@ -5774,7 +5956,7 @@ const stopImportMessageRotation = () => {
               <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", borderRadius: 12, background: "rgba(168,85,247,0.08)", border: "1px solid rgba(168,85,247,0.25)", marginBottom: 16 }}>
                 <span style={{ fontSize: 18 }}>🔒</span>
                 <div style={{ flex: 1, fontSize: 12.5, color: C.text, lineHeight: 1.5 }}>
-                  You're on the free plan (1 platform). Upgrade to Pro to add BongaCams, MyFreeCams, and more.
+                  You're on the free plan ({allPlatforms.length} platforms tracked — the free limit). Upgrade to Pro for unlimited platforms and the full cross-platform comparison view.
                 </div>
                 <Button onClick={() => openUpgradeModal('multi_platform')} style={{ flexShrink: 0, padding: "8px 14px", fontSize: 12, whiteSpace: "nowrap" }}>Upgrade →</Button>
               </div>
@@ -5923,7 +6105,7 @@ const stopImportMessageRotation = () => {
               ) : (
                 <>
                   <p style={{ fontSize: 13, color: C.text, lineHeight: 1.65, marginBottom: 16 }}>
-                    The <strong style={{ color: C.white }}>free plan</strong> tracks <strong style={{ color: C.cyan }}>1 platform</strong> — import as much history as you want from it, no limits. A <strong style={{ color: C.white }}>subscription</strong> unlocks tracking <strong style={{ color: C.pink }}>multiple platforms at once</strong> and lets you compare which cam site pays you best by hour, day, and fan type.
+                    The <strong style={{ color: C.white }}>free plan</strong> tracks <strong style={{ color: C.cyan }}>up to 2 platforms</strong> — import as much history as you want from them, no limits. A <strong style={{ color: C.white }}>subscription</strong> unlocks <strong style={{ color: C.pink }}>unlimited platforms</strong> and the full cross-platform comparison view — which cam site pays you best by hour, day, and fan type.
                   </p>
                   <Button onClick={() => router.push('/pricing')} style={{ padding: "12px 26px", fontSize: 13 }}>
                     View Plans & Subscribe →

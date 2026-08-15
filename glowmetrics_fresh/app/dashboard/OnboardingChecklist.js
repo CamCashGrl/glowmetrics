@@ -13,7 +13,7 @@ const C = {
 const GRAD = 'linear-gradient(90deg,#22D3EE,#a855f7,#EC4899)'
 const DISMISS_KEY = 'camcash_checklist_dismissed'
 
-export default function OnboardingChecklist({ tips = [], isPro = false, visitedTabs = [], onNavigate, onUpgrade }) {
+export default function OnboardingChecklist({ tips = [], isPro = false, visitedTabs = [], platformCount = 0, onNavigate, onUpgrade }) {
   const [dismissed, setDismissed] = useState(true) // default true until localStorage read, avoids a flash on load
   const [hydrated, setHydrated] = useState(false)
 
@@ -32,6 +32,20 @@ export default function OnboardingChecklist({ tips = [], isPro = false, visitedT
   const doneCount = items.filter(i => i.done).length
   const pct = Math.round((doneCount / items.length) * 100)
   const allDone = doneCount === items.length
+
+  // Shown once the core checklist is complete, as the natural next action —
+  // kept OUT of items/doneCount so a user who genuinely only has one
+  // platform to track isn't stuck below 100% forever. Free tracks up to 2
+  // platforms (20260811_raise_free_tier_csv_platform_limit_to_two.sql), so
+  // this always routes straight to Import — the actual upsell moment lives
+  // on the Platforms tab once 2 platforms' worth of data exists there.
+  const platformStep = {
+    id: 'platform2',
+    label: 'Add a 2nd platform',
+    done: platformCount > 1,
+    tab: 'upload',
+    upgrade: false,
+  }
 
   const dismiss = () => {
     setDismissed(true)
@@ -63,12 +77,22 @@ export default function OnboardingChecklist({ tips = [], isPro = false, visitedT
       <button onClick={dismiss} aria-label="Dismiss checklist" style={{ position: 'absolute', top: 12, right: 14, background: 'transparent', border: 'none', color: C.muted, fontSize: 14, cursor: 'pointer', lineHeight: 1 }}>✕</button>
 
       {allDone ? (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ fontSize: 20 }}>🎉</div>
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 800, color: C.white, marginBottom: 1 }}>You're all set up!</div>
-            <div style={{ fontSize: 11, color: C.muted }}>You've explored everything CamCash has to offer on the free plan.</div>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ fontSize: 20 }}>🎉</div>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: C.white, marginBottom: 1 }}>You're all set up!</div>
+              <div style={{ fontSize: 11, color: C.muted }}>You've explored everything CamCash has to offer on the free plan.</div>
+            </div>
           </div>
+          {!platformStep.done && (
+            <div
+              onClick={() => platformStep.upgrade ? onUpgrade?.('multi_platform') : onNavigate?.(platformStep.tab)}
+              style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 9, cursor: 'pointer' }}>
+              <span className="ob-todo-dot" style={{ width: 16, height: 16, borderRadius: '50%', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.4)' }} />
+              <span style={{ fontSize: 12.5, fontWeight: 600, color: C.white }}>{platformStep.label} →</span>
+            </div>
+          )}
         </div>
       ) : (
         <>
@@ -82,8 +106,12 @@ export default function OnboardingChecklist({ tips = [], isPro = false, visitedT
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {items.map(item => (
               <div key={item.id}
-                onClick={() => !item.done && item.tab && onNavigate?.(item.tab)}
-                style={{ display: 'flex', alignItems: 'center', gap: 9, cursor: !item.done && item.tab ? 'pointer' : 'default' }}>
+                onClick={() => {
+                  if (item.done) return
+                  if (item.upgrade) onUpgrade?.('multi_platform')
+                  else if (item.tab) onNavigate?.(item.tab)
+                }}
+                style={{ display: 'flex', alignItems: 'center', gap: 9, cursor: !item.done && (item.tab || item.upgrade) ? 'pointer' : 'default' }}>
                 <span className={!item.done ? 'ob-todo-dot' : ''} style={{ width: 16, height: 16, borderRadius: '50%', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 900, background: item.done ? C.green : 'rgba(34,211,238,0.08)', border: item.done ? 'none' : '1px solid rgba(34,211,238,0.4)', color: '#06101A' }}>
                   {item.done ? '✓' : ''}
                 </span>
