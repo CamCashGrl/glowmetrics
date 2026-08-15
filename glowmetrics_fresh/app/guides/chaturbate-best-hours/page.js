@@ -1,20 +1,20 @@
 import ArticleLayout from '../../components/ArticleLayout'
 
 export const metadata = {
-  title: 'Best Hours to Stream on Chaturbate: Find Your Highest-Earning Time',
-  description: 'Find the best hours to stream on Chaturbate by tracking tips, viewers, repeat fans, and earnings by time of day.',
+  title: 'Chaturbate Hours: Find Your Highest-Earning Time to Stream',
+  description: 'Chaturbate hours that actually pay: find your highest-earning time slots by tracking your own tips, viewers, and repeat fans — not generic platform averages.',
   alternates: { canonical: 'https://www.camcashgrl.com/guides/chaturbate-best-hours' },
   openGraph: {
-    title: 'Best Hours to Stream on Chaturbate: Find Your Highest-Earning Time',
-    description: 'Find the best hours to stream on Chaturbate by tracking tips, viewers, repeat fans, and earnings by time of day.',
+    title: 'Chaturbate Hours: Find Your Highest-Earning Time to Stream',
+    description: 'Chaturbate hours that actually pay: find your highest-earning time slots by tracking your own tips, viewers, and repeat fans — not generic platform averages.',
     url: 'https://www.camcashgrl.com/guides/chaturbate-best-hours',
     type: 'article',
     images: [{ url: 'https://www.camcashgrl.com/og-image.png', width: 1200, height: 630 }],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Best Hours to Stream on Chaturbate: Find Your Highest-Earning Time',
-    description: 'Find the best hours to stream on Chaturbate by tracking tips, viewers, repeat fans, and earnings by time of day.',
+    title: 'Chaturbate Hours: Find Your Highest-Earning Time to Stream',
+    description: 'Chaturbate hours that actually pay: find your highest-earning time slots by tracking your own tips, viewers, and repeat fans.',
   },
 }
 

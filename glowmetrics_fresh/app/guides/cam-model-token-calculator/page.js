@@ -3,21 +3,21 @@ import TokenCalculatorClient from './TokenCalculatorClient'
 import Button from '../../../components/ui/Button'
 
 export const metadata = {
-  title: 'Chaturbate, MFC & Stripchat Token Calculator: Convert Tokens to USD',
-  description: 'Free token calculator for Chaturbate, MFC, Stripchat, BongaCams, and CamSoda — convert cam tokens to USD instantly and see your real broadcaster payout rate.',
+  title: 'Free Cam Token Calculator: Convert Tokens to USD Instantly',
+  description: 'Convert Chaturbate, MFC, Stripchat, BongaCams & CamSoda tokens to USD instantly. See your exact broadcaster payout rate — free, no signup required.',
   keywords: 'token calculator, chaturbate token calculator, cb token calculator, mfc token calculator, stripchat token conversion rate, cam model token calculator, tokens to usd, how much are tokens worth, cam model earnings, broadcaster payout rate',
   alternates: { canonical: 'https://www.camcashgrl.com/guides/cam-model-token-calculator' },
   openGraph: {
-    title: 'Chaturbate, MFC & Stripchat Token Calculator: Convert Tokens to USD',
-    description: 'Free token calculator for Chaturbate, MFC, Stripchat, BongaCams, and CamSoda — convert cam tokens to USD instantly and see your real broadcaster payout rate.',
+    title: 'Free Cam Token Calculator: Convert Tokens to USD Instantly',
+    description: 'Convert Chaturbate, MFC, Stripchat, BongaCams & CamSoda tokens to USD instantly. See your exact broadcaster payout rate — free, no signup required.',
     url: 'https://www.camcashgrl.com/guides/cam-model-token-calculator',
     type: 'article',
     images: [{ url: 'https://www.camcashgrl.com/og-image.png', width: 1200, height: 630 }],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Chaturbate, MFC & Stripchat Token Calculator: Convert Tokens to USD',
-    description: 'Free token calculator for Chaturbate, MFC, Stripchat, BongaCams, and CamSoda — convert cam tokens to USD instantly and see your real broadcaster payout rate.',
+    title: 'Free Cam Token Calculator: Convert Tokens to USD Instantly',
+    description: 'Convert Chaturbate, MFC, Stripchat, BongaCams & CamSoda tokens to USD instantly — free, no signup required.',
   },
   robots: {
     index: true,
