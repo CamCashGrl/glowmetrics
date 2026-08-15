@@ -90,6 +90,16 @@ export function getRecoveryActions(phase) {
 /**
  * Intelligent goal strategy based on current state.
  *
+ * NOTE ON `probability`: these values (100/85/72/25/50) are hardcoded
+ * literals, not a computed likelihood — nothing derives or calibrates them.
+ * They are NO LONGER DISPLAYED anywhere: the Live Mode goal card now shows
+ * state.goalProgress, a real measured figure (totalTokens / goalTokens).
+ * The field is retained only as the branch label for the rules below; do not
+ * render it as a percentage to a creator.
+ *
+ * `timing`, `urgency` and `suggestion` ARE derived from real goalProgress and
+ * paceStatus, and remain safe to show.
+ *
  * @param {object|null} state      — computeSessionState() result
  * @param {object}      roomHealth — computeRoomHealth() result
  * @returns {{ probability, timing, suggestion, urgency }}

@@ -127,6 +127,12 @@ html, body { overflow-x: hidden; max-width: 100vw; }
   /* Heatmap table — allow horizontal scroll */
   .heatmap-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 
+  /* Live Mode: the coaching action is the most important element on the
+     page, and at 390px its card padding plus the fixed 350px side rail left
+     it too narrow — the message rendered clipped mid-sentence. */
+  .cc-coach-card { padding: 18px 16px !important; }
+  .cc-live-split { grid-template-columns: 1fr !important; }
+
   /* Stream Planner weekly schedule.
      The desktop layout is a 6-column grid (95px 1fr 130px 80px 120px 60px)
      — about 485px of fixed track before gaps, so at 390px it rendered past

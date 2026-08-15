@@ -70,7 +70,10 @@ export function computeRoomHealth(state) {
   else if (paceStatus === 'below')                         direction = 'FALLING'
   else                                                      direction = 'STABLE'
 
-  // Confidence increases with more data
+  // Rough data-sufficiency score. NOT a calibrated confidence and NOT
+  // displayed as a percentage — Live Mode shows the observation behind it
+  // ("N tips · M min") instead. Retained for internal ordering only; do not
+  // render it to a creator as "% confidence".
   const confidence = Math.min(100, Math.floor((liveOnlyCount / 5) * 60 + (elapsedMins / 20) * 40))
 
   return {

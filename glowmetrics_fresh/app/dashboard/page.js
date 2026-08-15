@@ -3567,7 +3567,7 @@ const stopImportMessageRotation = () => {
               </div>
               <div style={{ textAlign: 'center' }}>
                 <button onClick={() => openUpgradeModal('live_mode_locked')} style={{ padding: '12px 28px', borderRadius: 10, border: 'none', cursor: 'pointer', fontWeight: 800, fontSize: 13, color: '#06101A', background: 'linear-gradient(135deg,#22D3EE,#EC4899)', animation: 'upgradeGlow 2.2s ease-in-out infinite' }}>
-                  Upgrade to Pro — unlock Live Mode
+                  Turn On Live Coaching →
                 </button>
               </div>
             </div>
