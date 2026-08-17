@@ -138,7 +138,7 @@ export function getFeatureLockState({ feature, userPlan = 'free', planExpiresAt 
     topFans:               { needsData: totalFans < 5 || totalTips < 10, requiresPro: false, dataMessage: 'Unlocks after more fan and tip activity.', proMessage: null },
     whales:                { needsData: totalFans < 10 || totalEarnings < 50, requiresPro: false, dataMessage: 'Unlocks after enough repeat fan activity.', proMessage: null },
     platformComparison:    { needsData: isPro && platformCount < 2, requiresPro: !isPro, dataMessage: 'Import at least 2 platforms to compare earnings.', proMessage: 'Upgrade to Pro to compare earnings across platforms.' },
-    multiPlatformTracking: { needsData: false, requiresPro: !isPro, dataMessage: null, proMessage: 'Upgrade to Pro to track more than one platform.' },
+    multiPlatformTracking: { needsData: !isPro && platformCount >= 3, requiresPro: !isPro && platformCount >= 3, dataMessage: null, proMessage: 'Upgrade to Pro to add a 4th platform and unlock broader cross-platform analysis.' },
     crossPlatformBestTimes:{ needsData: isPro && (platformCount < 2 || totalSessions < 3), requiresPro: !isPro, dataMessage: 'Import sessions from at least 2 platforms to unlock cross-platform timing insights.', proMessage: 'Upgrade to Pro to unlock cross-platform best times.' },
     sessionPerformance:    { needsData: totalSessions < 3, requiresPro: false, dataMessage: 'Unlocks after multiple completed sessions.', proMessage: null },
     averageHourly:         { needsData: totalSessions < 3 || totalStreamMinutes < 60, requiresPro: false, dataMessage: 'Unlocks after at least 60 minutes of tracked stream time.', proMessage: null },
@@ -529,18 +529,23 @@ export function DashboardPreview({ tips = [], analytics, userPlan = 'free', plan
               ) : platformCount === 0 ? (
                 <>
                   <div style={{ fontSize: 13, fontWeight: 800, color: C.white, marginBottom: 4 }}>Free plan</div>
-                  <div style={{ fontSize: 12, color: C.text, lineHeight: 1.6 }}>Track 1 platform for free. Choose your first platform to start building your dashboard.</div>
+                  <div style={{ fontSize: 12, color: C.text, lineHeight: 1.6 }}>Track up to 3 platforms for free. Choose your first platform to start building your dashboard.</div>
                 </>
               ) : (
                 <>
-                  <div style={{ fontSize: 13, fontWeight: 800, color: C.white, marginBottom: 4 }}>Free plan · 1 platform active</div>
-                  <div style={{ fontSize: 12, color: C.text, lineHeight: 1.6 }}>You're tracking <strong style={{ color: C.cyan }}>{platforms[0]}</strong> for free. Upgrade to Pro when you're ready to track more platforms and compare where you earn best.</div>
+                  <div style={{ fontSize: 13, fontWeight: 800, color: C.white, marginBottom: 4 }}>Free plan · {platformCount} of 3 platforms active</div>
+                  <div style={{ fontSize: 12, color: C.text, lineHeight: 1.6 }}>You're tracking <strong style={{ color: C.cyan }}>{platforms[0]}</strong> for free. You can track up to 3 platforms on Free. Upgrade to Pro when you want to add more and compare where you earn best.</div>
                 </>
               )}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {isPro ? (
                 <button onClick={onAddHistory} style={primaryBtn()}>Add Another Platform</button>
+              ) : platformCount < 3 ? (
+                <>
+                  <button onClick={onAddHistory} style={primaryBtn()}>Add Another Platform</button>
+                  <button onClick={onContinue} style={secondaryBtn({ fontSize: 11 })}>Keep Tracking {platforms[0]}</button>
+                </>
               ) : (
                 <>
                   <button onClick={onUpgrade} style={primaryBtn()}>Upgrade to Pro</button>
@@ -719,7 +724,7 @@ export function DashboardPreview({ tips = [], analytics, userPlan = 'free', plan
           <TopAccent color="rgba(124,92,255,0.4)" />
           {platformCount === 0 ? (
             <>
-              <div style={{ fontSize: 14, fontWeight: 800, color: C.white, marginBottom: 6 }}>Choose 1 platform to track for free</div>
+              <div style={{ fontSize: 14, fontWeight: 800, color: C.white, marginBottom: 6 }}>Choose up to 3 platforms to track for free</div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: 10, marginTop: 14 }}>
                 {ALL_PLATFORMS.map(p => (
                   <button key={p} onClick={onAddHistory} style={{ padding: '10px 14px', borderRadius: 12, border: '1px solid rgba(34,211,238,0.25)', background: 'rgba(34,211,238,0.05)', color: C.white, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
