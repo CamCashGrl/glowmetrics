@@ -1016,7 +1016,7 @@ export default function LandingPage() {
               ["Built for", "Chaturbate, BongaCams & MyFreeCams"],
               ["What it does", "Finds peak earning hours, ranks top tippers with churn-risk alerts, compares platform payouts, and generates fan re-engagement messages & room titles"],
               ["How you use it", "Install the free Chrome extension or upload a CSV export — no manual data entry"],
-              ["Price", "Free forever for 1 platform. Creator Pro unlocks multi-platform tracking for $19.99/mo or $99/yr"],
+              ["Price", "Free: up to 3 platforms with a 31-day history window. Pro adds more platforms and full-history comparison for $19.99/mo or $99/yr"],
               ["Your data", "Encrypted, private, never sold"],
             ].map(([term, desc]) => (
               <div key={term}>
