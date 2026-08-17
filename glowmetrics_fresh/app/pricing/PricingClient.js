@@ -247,7 +247,8 @@ function PricingSection({
 }) {
   const freeFeatures = [
     'See exactly how your platform is really performing',
-    'Import your tip history in minutes — no manual entry',
+    'Import up to 31 days of tip history per platform in minutes — no manual entry',
+    'Track up to 3 platforms on the Free plan',
     'Know your numbers at a glance',
     'See which streams actually went well',
     'Watch tips roll in automatically while you stream',
@@ -260,7 +261,7 @@ function PricingSection({
 
   const standardFeatures = [
     'Know exactly which platform earns you the most',
-    'See your whole business, not just the last few weeks',
+    'See your whole business with full historical imports',
     'Understand your fans on a deeper level',
     'Never lose track of another VIP',
     'See exactly which platforms deserve more of your time',
@@ -668,11 +669,11 @@ function PromiseSection() {
 const FAQ_ITEMS = [
   {
     q: 'Will the free plan always be available?',
-    a: 'Yes. The free plan will always exist and remain genuinely useful. It includes one tracked platform, CSV uploads, basic earnings and session analytics, live tip detection, real-time alerts, top-three fan insights, and limited recent tip history.',
+    a: 'Yes. The free plan will always exist and remain genuinely useful. It includes up to 3 tracked platforms, CSV uploads, basic earnings and session analytics, live tip detection, real-time alerts, top-three fan insights, and limited recent tip history.',
   },
   {
     q: 'How many platforms can I track for free?',
-    a: 'The free plan supports one cam platform. Creator Pro unlocks tracking across every supported platform and adds cross-platform comparisons.',
+    a: 'The free plan supports up to 3 cam platforms with a 31-day history window per platform. Creator Pro unlocks additional platforms, full history, and cross-platform comparisons.',
   },
   {
     q: 'What does Creator Pro include?',
