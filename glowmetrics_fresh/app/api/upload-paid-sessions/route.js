@@ -100,7 +100,7 @@ export async function POST(req) {
 
       if (error.message?.includes('PLATFORM_LIMIT_REACHED')) {
         return NextResponse.json({
-          error: 'Free tier tracks 1 platform. Upgrade to Standard ($19.99/mo) to track multiple platforms.',
+          error: 'Free tier tracks up to 3 platforms. Upgrade to Pro ($19.99/mo) to add more platforms and compare them.',
           code: 'platform_limit_reached',
           upgradeUrl: '/pricing',
         }, { status: 402 })
