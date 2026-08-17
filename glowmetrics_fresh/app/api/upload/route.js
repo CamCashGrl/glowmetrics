@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { parseCSV, detectPlatform } from '../../../lib/analytics'
+import { FREE_MAX_PLATFORMS, filterFreeHistory, isPaidPlan, normalizePlatform } from '../../../lib/planLimits'
 
 const BATCH_SIZE = 250 // Safe batch size — never hit Supabase limits
 
@@ -21,6 +22,13 @@ export async function POST(req) {
   if (ue || !user) {
     return NextResponse.json({ error: 'Invalid session' }, { status: 401 })
   }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('plan')
+    .eq('id', user.id)
+    .maybeSingle()
+  const isPro = isPaidPlan(profile?.plan)
 
   const fd = await req.formData()
   const file = fd.get('file')
@@ -71,6 +79,66 @@ export async function POST(req) {
       { error: 'No valid rows found. Check CSV format.' },
       { status: 400 }
     )
+  }
+
+  // ── FREE-PLAN IMPORT BOUNDARIES ────────────────────────────────────────
+  // Free can track up to 3 platforms. Older CSV rows are never deleted from
+  // the database; the analytics/import view simply retains the most recent
+  // 31-day window for Free.
+  let existingPlatformRows = []
+  try {
+    const [tipPlatforms, livePlatforms, paidPlatforms] = await Promise.all([
+      supabase.from('tips').select('platform').eq('user_id', user.id),
+      supabase.from('live_tips').select('platform').eq('user_id', user.id),
+      supabase.from('paid_sessions').select('platform').eq('user_id', user.id),
+    ])
+    existingPlatformRows = [
+      ...(tipPlatforms.data || []),
+      ...(livePlatforms.data || []),
+      ...(paidPlatforms.data || []),
+    ]
+  } catch (_) {}
+
+  const existingPlatforms = [...new Set(
+    existingPlatformRows.map(r => normalizePlatform(r.platform)).filter(Boolean)
+  )]
+  const incomingPlatforms = [...new Set(
+    rows.map(r => normalizePlatform(r.platform || detectedPlatform)).filter(Boolean)
+  )]
+  const combinedPlatforms = [...new Set([...existingPlatforms, ...incomingPlatforms])]
+
+  if (!isPro && combinedPlatforms.length > FREE_MAX_PLATFORMS) {
+    const newPlatforms = incomingPlatforms.filter(p => !existingPlatforms.includes(p))
+    return NextResponse.json({
+      error: `Free supports up to ${FREE_MAX_PLATFORMS} platforms. Upgrade to Pro to add more platforms and compare them.`,
+      code: 'platform_limit_reached',
+      maxPlatforms: FREE_MAX_PLATFORMS,
+      currentPlatforms: existingPlatforms,
+      incomingPlatforms: newPlatforms,
+      upgradeUrl: '/pricing',
+    }, { status: 402 })
+  }
+
+  const originalRowCount = rows.length
+  let historyRemovedCount = 0
+  let historyWindowStart = null
+  let historyWindowEnd = null
+
+  if (!isPro) {
+    const historyResult = filterFreeHistory(rows)
+    rows.splice(0, rows.length, ...historyResult.rows)
+    historyRemovedCount = historyResult.removedCount
+    historyWindowStart = historyResult.windowStart
+    historyWindowEnd = historyResult.windowEnd
+
+    if (!rows.length) {
+      return NextResponse.json({
+        error: 'This CSV does not contain data inside the Free plan’s 31-day history window. Upgrade to Pro to analyze the full history.',
+        code: 'history_limit_reached',
+        historyDays: 31,
+        upgradeUrl: '/pricing',
+      }, { status: 402 })
+    }
   }
 
   // ── OPTIONAL FULL REPLACE ──────────────────────────────────────────────
@@ -191,7 +259,7 @@ export async function POST(req) {
         // indistinguishable from a request that never ran at all.
         await logCsvUpload('blocked')
         return NextResponse.json({
-          error: `You're on the free plan, which tracks one platform. Upgrade to add ${detectedPlatform} alongside your existing platform data.`,
+          error: `You're on the free plan, which tracks up to ${FREE_MAX_PLATFORMS} platforms. Upgrade to add more platforms and compare them.`,
           code: 'platform_limit_reached',
           upgradeUrl: '/pricing',
         }, { status: 402 })
@@ -242,7 +310,7 @@ export async function POST(req) {
         // the paid-session half, same as onboarding's two independent
         // requests would behave if the paid-sessions call failed on its own.
         return NextResponse.json({
-          error: `You're on the free plan, which tracks one platform. Upgrade to add ${detectedPlatform} alongside your existing platform data.`,
+          error: `You're on the free plan, which tracks up to ${FREE_MAX_PLATFORMS} platforms. Upgrade to add more platforms and compare them.`,
           code: 'platform_limit_reached',
           upgradeUrl: '/pricing',
         }, { status: 402 })
@@ -272,6 +340,14 @@ export async function POST(req) {
     dateTo:    summaryDateTo ? summaryDateTo.toISOString() : null,
     paidSessionsInserted: paidInserted,
     paidSessionsSkipped:  paidSkipped,
+    historyLimited: !isPro,
+    historyDays: !isPro ? 31 : null,
+    historyRemovedCount,
+    historyOriginalRows: originalRowCount,
+    historyWindowStart,
+    historyWindowEnd,
+    platformsTracked: combinedPlatforms,
+    freePlatformLimit: !isPro ? FREE_MAX_PLATFORMS : null,
   }
 
   if (errors.length > 0) {
