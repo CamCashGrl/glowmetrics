@@ -1,20 +1,20 @@
 import ArticleLayout from '../../components/ArticleLayout'
 
 export const metadata = {
-  title: 'How Much Do Chaturbate Models Make? $3–$60/Hr (2026 Data)',
-  description: 'Real Chaturbate earnings by experience level: $3–$60/hr, verified token payout rates, monthly income examples, and a documented first-30-days case study. Updated July 2026.',
+  title: 'How Much Do Chaturbate Models Make in 2026? Real Earnings',
+  description: 'See realistic Chaturbate earnings by experience level, including hourly and monthly examples, token values, income factors and calculation methods.',
   alternates: { canonical: 'https://www.camcashgrl.com/blog/how-much-do-chaturbate-models-make' },
   openGraph: {
-    title: 'How Much Do Chaturbate Models Make? $3–$60/Hr (2026 Data)',
-    description: 'Real Chaturbate earnings by experience level: $3–$60/hr, verified token payout rates, and monthly income examples — plus a documented first-30-days case study.',
+    title: 'How Much Do Chaturbate Models Make in 2026? Real Earnings',
+    description: 'Realistic Chaturbate earnings by experience level, including hourly and monthly examples, token values, income factors and calculation methods.',
     url: 'https://www.camcashgrl.com/blog/how-much-do-chaturbate-models-make',
     type: 'article',
     images: [{ url: 'https://www.camcashgrl.com/og-image.png', width: 1200, height: 630 }],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'How Much Do Chaturbate Models Make? $3–$60/Hr (2026 Data)',
-    description: 'Real Chaturbate earnings by experience level, hourly and monthly examples, and verified token payout rates.',
+    title: 'How Much Do Chaturbate Models Make in 2026? Real Earnings',
+    description: 'Realistic Chaturbate earnings by experience level, hourly and monthly examples, and verified token values.',
   },
 }
 

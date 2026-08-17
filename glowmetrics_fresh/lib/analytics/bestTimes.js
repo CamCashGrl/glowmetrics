@@ -70,18 +70,40 @@ const CAN_BE_BEST_TIME = new Set([CONFIDENCE_TIER.SUPPORTED, CONFIDENCE_TIER.HIG
 export function computeCanonicalBestTimes(meaningfulSessions, tz) {
   const buckets = {}
 
+  // First time each fan appears anywhere in this session population, so a
+  // bucket can report what share of its tips came from a fan's very first
+  // tip — the "is this window good for GROWTH, not just revenue?" signal the
+  // Stream Planner ranks by in Growth Mode. Scoped to meaningfulSessions,
+  // the same population every other figure in this grid uses, so it cannot
+  // disagree with the sessionCount sitting beside it.
+  const firstSeenAt = {}
+  for (const s of meaningfulSessions) {
+    for (const t of (s.tips || [])) {
+      const u = (t.username || 'unknown').toLowerCase()
+      const ts = new Date(t.dateRaw || t.date_time).getTime()
+      if (!Number.isFinite(ts)) continue
+      if (!(u in firstSeenAt) || ts < firstSeenAt[u]) firstSeenAt[u] = ts
+    }
+  }
+
   for (const s of meaningfulSessions) {
     if (!s.startTime || s.usdPerHour == null) continue
     const localDay = LOCAL_DAY_NAMES[toLocalDow(s.startTime, tz)]
     const localHour = toLocalHour(s.startTime, tz)
     const key = `${localDay}-${localHour}`
     if (!buckets[key]) {
-      buckets[key] = { localDay, localHour, rates: [], totalUsd: 0, platformUsd: {}, lastActiveAt: s.startTime }
+      buckets[key] = { localDay, localHour, rates: [], totalUsd: 0, platformUsd: {}, lastActiveAt: s.startTime, newTips: 0, allTips: 0 }
     }
     const b = buckets[key]
     b.rates.push(s.usdPerHour)
     b.totalUsd += s.totalUSD || 0
     b.platformUsd[s.platform] = (b.platformUsd[s.platform] || 0) + (s.totalUSD || 0)
+    for (const t of (s.tips || [])) {
+      b.allTips++
+      const u = (t.username || 'unknown').toLowerCase()
+      const ts = new Date(t.dateRaw || t.date_time).getTime()
+      if (firstSeenAt[u] === ts) b.newTips++
+    }
     if (new Date(s.startTime) > new Date(b.lastActiveAt)) b.lastActiveAt = s.startTime
   }
 
@@ -97,6 +119,10 @@ export function computeCanonicalBestTimes(meaningfulSessions, tz) {
       tier: tierForSessionCount(sessionCount),
       topPlatform,
       lastActiveAt: b.lastActiveAt,
+      // Share of this bucket's tips that were the tipper's first ever. A
+      // growth signal, deliberately NOT part of the bestWindow ranking —
+      // bestWindow still ranks purely on median $/hour.
+      newTipperRate: b.allTips > 0 ? parseFloat((b.newTips / b.allTips).toFixed(3)) : 0,
     }
   })
 

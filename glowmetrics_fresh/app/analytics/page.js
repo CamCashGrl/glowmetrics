@@ -1,8 +1,19 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { supabase } from '../../lib/supabase'
+import { useRouter } from 'next/navigation'
 
-const STEP_ORDER = ['platform', 'username', 'paste', 'csv', 'preview', 'loading', 'live', 'step4', 'done']
+// SECURITY: this page is internal (cross-user signup/onboarding data,
+// including other creators' display names and Chaturbate usernames). It
+// previously queried Supabase straight from the browser with the anon key
+// and NO authentication -- anyone who typed the URL got the page, and what
+// it returned depended purely on whichever RLS policy each table happened
+// to carry.
+//
+// It now follows the same pattern as the rest of /admin: the cookie check
+// below is a redirect for UX only, and the real gate is server side in
+// /api/admin/funnel, which verifies the HMAC gm_admin token before running
+// any query. The browser no longer issues a single cross-user query itself.
+
 const STEP_LABELS = {
   platform: 'Chose platform',
   username: 'Entered CB username',
@@ -24,89 +35,37 @@ function timeAgo(iso) {
 }
 
 export default function FunnelPage() {
+  const router = useRouter()
   const [d, setD] = useState(null)
   const [stepFunnel, setStepFunnel] = useState([])
   const [dropoffs, setDropoffs] = useState([])
+  const [denied, setDenied] = useState(false)
 
   useEffect(() => {
+    // UX redirect only. Deleting or forging this cookie does not grant
+    // access -- /api/admin/funnel verifies the signed token server side.
+    if (!document.cookie.includes('gm_admin=')) { router.replace('/admin/login'); return }
+    let cancelled = false
     async function load() {
-      const { count: signups } = await supabase
-        .from('beta_users')
-        .select('*', { count: 'exact', head: true })
-
-      const { count: onboarded } = await supabase
-        .from('beta_users')
-        .select('*', { count: 'exact', head: true })
-        .eq('onboarding_complete', true)
-
-      const { data: tipsData } = await supabase
-        .from('tips')
-        .select('user_id')
-        .limit(1000)
-
-      const activated = new Set(tipsData?.map(t => t.user_id) || []).size
-      setD({ signups: signups || 0, onboarded: onboarded || 0, activated })
-
-      // Per-step onboarding funnel + drop-off list, built from onboarding_step_viewed events
-      const { data: stepEvents } = await supabase
-        .from('analytics_events')
-        .select('user_id, properties, created_at')
-        .eq('event_name', 'onboarding_step_viewed')
-        .order('created_at', { ascending: false })
-        .limit(2000)
-
-      const { data: completedEvents } = await supabase
-        .from('analytics_events')
-        .select('user_id')
-        .eq('event_name', 'onboarding_completed')
-      const completedSet = new Set((completedEvents || []).map(e => e.user_id))
-
-      const reachedByStep = {}
-      const lastStepByUser = new Map()
-      for (const e of stepEvents || []) {
-        const step = e.properties?.step
-        if (!e.user_id || !step) continue
-        if (!reachedByStep[step]) reachedByStep[step] = new Set()
-        reachedByStep[step].add(e.user_id)
-        if (!lastStepByUser.has(e.user_id)) {
-          lastStepByUser.set(e.user_id, { step, platform: e.properties?.platform, at: e.created_at })
-        }
-      }
-
-      setStepFunnel(
-        STEP_ORDER
-          .map(step => ({ step, label: STEP_LABELS[step], value: reachedByStep[step]?.size || 0 }))
-          .filter(s => s.value > 0)
-      )
-
-      const userIds = [...lastStepByUser.keys()].filter(id => !completedSet.has(id))
-      let profileById = {}
-      if (userIds.length) {
-        const { data: profiles } = await supabase
-          .from('profiles')
-          .select('id, display_name, chaturbate_username')
-          .in('id', userIds)
-        profileById = Object.fromEntries((profiles || []).map(p => [p.id, p]))
-      }
-      setDropoffs(
-        userIds
-          .map(id => {
-            const last = lastStepByUser.get(id)
-            const p = profileById[id]
-            return {
-              userId: id,
-              label: p?.chaturbate_username || p?.display_name || `${id.slice(0, 8)}…`,
-              ...last,
-            }
-          })
-          .sort((a, b) => new Date(b.at) - new Date(a.at))
-          .slice(0, 20)
-      )
+      const res = await fetch('/api/admin/funnel', { credentials: 'include' })
+      if (!res.ok) { if (!cancelled) setDenied(true); return }
+      const json = await res.json()
+      if (cancelled) return
+      setD(json.totals)
+      setStepFunnel(json.stepFunnel || [])
+      setDropoffs(json.dropoffs || [])
     }
     load()
-  }, [])
+    return () => { cancelled = true }
+  }, [router])
 
   const C = { bg:'#05070f', card:'#121826', border:'#1e2d45', white:'#F1F5F9', muted:'#475569' }
+
+  if (denied) return (
+    <div style={{ minHeight:'100vh', background:C.bg, display:'flex',
+      alignItems:'center', justifyContent:'center', color:'#94A3B8',
+      fontFamily:'Inter,sans-serif' }}>Not authorised.</div>
+  )
 
   if (!d) return (
     <div style={{ minHeight:'100vh', background:C.bg, display:'flex',

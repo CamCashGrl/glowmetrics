@@ -4,7 +4,7 @@
 
 // Token rates live in ONE place — lib/constants.js
 // Do not define rates here. Import only.
-import { PLATFORM_TOKEN_RATES, DEFAULT_TOKEN_RATE, tokenRate } from './constants'
+import { PLATFORM_TOKEN_RATES, DEFAULT_TOKEN_RATE, tokenRate, UNDETECTED_PLATFORM } from './constants'
 // Session grouping lives in ONE place — lib/analytics/sessions.js
 // Shared with app/live/page.js. Do not redefine this logic here.
 import { detectSessions, classifySession as classifySessionQuality } from './analytics/sessions'
@@ -16,6 +16,7 @@ import { detectSessions, classifySession as classifySessionQuality } from './ana
 // from 'lib/analytics' keep working unchanged.
 import { calcMedian, toLocalHour, toLocalDow, toLocalDateStr } from './analytics/localTime'
 import { computeCanonicalBestTimes } from './analytics/bestTimes'
+import { computeMissedRevenue } from './analytics/missedRevenue'
 export { calcMedian, toLocalHour, toLocalDow }
 
 // ===============================
@@ -462,7 +463,10 @@ function parseHeaderless(lines, platform) {
 // detectSessions/finalizeSession live in ./analytics/sessions.js — shared with
 // app/live/page.js. Do not redefine this grouping logic here.
 
-export function identifyWhales(tips) {
+// tz: creator's resolved timezone (lib/timezone.js). Optional so existing
+// callers keep working; defaults to UTC, which is what the hour bucketing
+// below did unconditionally before.
+export function identifyWhales(tips, tz = 'UTC') {
   const fanMap = {}
   tips.forEach(t => {
     const key = t.username.toLowerCase()
@@ -497,7 +501,10 @@ export function identifyWhales(tips) {
 
     const privateTips = f.tips.filter(t => t.tip_type?.toLowerCase().includes('private') || t.tip_note?.toLowerCase().includes('private'))
     const hourCounts = {}
-    f.tips.forEach(t => { const h = new Date(t.dateRaw || t.date_time).getUTCHours(); hourCounts[h] = (hourCounts[h] || 0) + 1 })
+    // Creator-local hour — this drives typicalOnlineHours, rendered as
+    // "Typically online 8 PM - 10 PM". Was getUTCHours(), so the range shown
+    // was in UTC while being read as the creator's own clock.
+    f.tips.forEach(t => { const h = toLocalHour(t.dateRaw || t.date_time, tz); hourCounts[h] = (hourCounts[h] || 0) + 1 })
     const mostActiveHour = Object.entries(hourCounts).sort((a, b) => b[1] - a[1])[0]
     const spendPercentile = Math.round((1 - percentileRank) * 100)
     const tipDates = [...f.tips].sort((a, b) => new Date(a.dateRaw || a.date_time) - new Date(b.dateRaw || b.date_time)).map(t => new Date(t.dateRaw || t.date_time))
@@ -517,6 +524,15 @@ export function identifyWhales(tips) {
       hasPrivates: privateTips.length > 0, privateCount: privateTips.length,
       privateSpent: parseFloat(privateTips.reduce((s, t) => s + t.usd, 0).toFixed(2)),
       typicalOnlineHours: mostActiveHour ? `${fmt12Hour(parseInt(mostActiveHour[0]))} - ${fmt12Hour(parseInt(mostActiveHour[0]) + 2)}` : 'Unknown',
+      // The NUMERIC form of the same bucket typicalOnlineHours formats, plus
+      // the counts behind it. Exposed because the Fans tab needs to compare
+      // this hour against the current hour ("is this fan usually around right
+      // now?"), which a pre-formatted "8 PM - 10 PM" string can't support —
+      // so page.js was re-bucketing every fan's tips by creator-local hour to
+      // recover it, a second implementation of this exact calculation. Same
+      // hourCounts, same toLocalHour, computed once here.
+      peakLocalHour: mostActiveHour ? parseInt(mostActiveHour[0]) : null,
+      peakHourTipCount: mostActiveHour ? mostActiveHour[1] : 0,
       tipNotes: f.tipNotes, tips: f.tips, isTopSpender: percentileRank <= 0.05, spendPercentile
     }
   }).sort((a, b) => b.totalUSD - a.totalUSD)
@@ -589,7 +605,7 @@ export function generateWhaleAlerts(whales) {
   return alerts.sort((a, b) => order[a.severity] - order[b.severity])
 }
 
-export function predictRevenue(tips, sessions) {
+export function predictRevenue(tips, sessions, tz = 'UTC') {
   if (!sessions.length) return null
   const predictions = {}
   const now = Date.now()
@@ -601,8 +617,10 @@ export function predictRevenue(tips, sessions) {
   const prev30Rev = prev30.reduce((s, t) => s + t.usd, 0)
   const weeklyTrend = prev30Rev > 0 ? ((last30Rev - prev30Rev) / prev30Rev) * 100 : null
   predictions.next30Days = { amount: parseFloat(last30Rev.toFixed(2)), confidence: last30.length > 50 ? 'High' : last30.length > 25 ? 'Medium' : 'Low', trend: weeklyTrend !== null ? parseFloat(weeklyTrend.toFixed(1)) : null }
-  const todayDow = new Date().getUTCDay()
-  const sameDaySessions = sessions.filter(s => new Date(s.startTime).getUTCDay() === todayDow)
+  // Creator-local day-of-week: "today" in the forecast means the creator's
+  // today, and the sessions it is matched against must be bucketed the same way.
+  const todayDow = toLocalDow(new Date().toISOString(), tz)
+  const sameDaySessions = sessions.filter(s => toLocalDow(s.startTime, tz) === todayDow)
   if (sameDaySessions.length >= 3) {
     const amounts = sameDaySessions.map(s => s.totalUSD).sort((a, b) => a - b)
     const avg = amounts.reduce((s, x) => s + x, 0) / amounts.length
@@ -616,13 +634,16 @@ export function predictRevenue(tips, sessions) {
   return predictions
 }
 
-export function generateLossAlerts(tips, sessions, whales, bestHour) {
+export function generateLossAlerts(tips, sessions, whales, bestHour, tz = 'UTC') {
   const alerts = []
   const now = Date.now()
   if (bestHour) {
     const bh = parseInt(bestHour.hour)
     const recentSessions = sessions.filter(s => (now - new Date(s.startTime)) / 86400000 <= 3)
-    const recentAtPeak = recentSessions.filter(s => Math.abs(new Date(s.startTime).getUTCHours() - bh) <= 1)
+    // bh is a creator-local hour (canonical bestWindow), so the session hour
+    // it is compared against must be local too — this was comparing a local
+    // peak hour against a UTC session hour.
+    const recentAtPeak = recentSessions.filter(s => Math.abs(toLocalHour(s.startTime, tz) - bh) <= 1)
     if (recentSessions.length > 0 && recentAtPeak.length === 0) {
       const label = bh === 0 ? '12 AM' : bh < 12 ? `${bh} AM` : bh === 12 ? '12 PM' : `${bh - 12} PM`
       alerts.push({ type: 'peak_missed', severity: 'warning', icon: '🚨', message: `You haven't streamed during your peak window (${label}) in 3 days — estimated loss: $${(bestHour.avg * 3).toFixed(2)}`, action: `Go live at ${label} to recover this` })
@@ -657,11 +678,20 @@ export function generateInsights(tips, sessions, bestDay, worstDay, bestHour, pr
   // by UTC day-of-week, which produced a different number for the same
   // "Sunday average" concept than the Best Streaming Day stat shown
   // elsewhere on the same screen. One formula, one number, everywhere.
+  //
+  // UNIT, STATED EXPLICITLY: bestDay.avg is MEDIAN DOLLARS PER DAY STREAMED
+  // — total tips on each calendar date that day-of-week, then the median
+  // across those dates. It is NOT a $/hour rate. The Creator Report's "Best
+  // Streaming Time" card shows canonicalBestTimes.bestWindow.medianUsdPerHour,
+  // a $/HOUR median, and on the owner's real account the two rendered side
+  // by side as "Saturday ~$18 avg" and "you avg $4 on Saturdays" — one
+  // finding that read as a contradiction because neither said what it
+  // measured. Both are correct; the wording now names the unit.
   if (bestDay && worstDay && bestDay.day !== worstDay.day && bestDay.avg > 0) {
     const mult = worstDay.avg > 0 ? (bestDay.avg / worstDay.avg).toFixed(1) : null
     const costOfMissing = parseFloat((bestDay.avg - worstDay.avg).toFixed(2))
     if (mult && parseFloat(mult) > 1 && costOfMissing > 0) {
-      insights.push({ icon: '📅', text: `${bestDay.day}s are your highest-earning day — you avg $${bestDay.avg.toFixed(0)} on ${bestDay.day}s vs $${worstDay.avg.toFixed(0)} on your lowest day (${worstDay.day}) (${mult}x more). Missing one ${bestDay.day} costs you ~$${costOfMissing.toFixed(0)}`, type: 'day', priority: 1 })
+      insights.push({ icon: '📅', text: `${bestDay.day}s are your highest-earning day — you take home a median $${bestDay.avg.toFixed(0)} on each ${bestDay.day} you stream vs $${worstDay.avg.toFixed(0)} on your lowest day (${worstDay.day}) (${mult}x more). Missing one ${bestDay.day} costs you ~$${costOfMissing.toFixed(0)}`, type: 'day', priority: 1 })
     }
   }
 
@@ -728,12 +758,12 @@ export function generateInsights(tips, sessions, bestDay, worstDay, bestHour, pr
   return insights.sort((a, b) => a.priority - b.priority)
 }
 
-export function generateNextMoves(tips, sessions, whales, predictions, bestHour) {
+export function generateNextMoves(tips, sessions, whales, predictions, bestHour, tz = 'UTC') {
   const moves = []
   const now = Date.now()
   if (bestHour) {
     const bh = parseInt(bestHour.hour)
-    const currentHour = new Date().getUTCHours()
+    const currentHour = toLocalHour(new Date().toISOString(), tz)
     const hoursUntil = (bh - currentHour + 24) % 24
     const label = bh === 0 ? '12 AM' : bh < 12 ? `${bh} AM` : bh === 12 ? '12 PM' : `${bh - 12} PM`
     if (hoursUntil === 0 || hoursUntil === 1) moves.push({ icon: '🔥', color: '#FB923C', text: `Go live NOW — ${label} is your peak earning time. Your data shows you average $${bestHour.avg.toFixed(0)}/session at this hour`, priority: 0 })
@@ -823,16 +853,18 @@ export function aggregateRows(tips, tz = null) {
     return {
       totalUSD: 0, totalTokens: 0, totalTips: 0, avgTipSize: 0,
       topTippers: [], platforms: [], sessions: [], insights: [],
-      predictions: null, whaleAlerts: [], lossAlerts: [], nextMoves: [],
+      predictions: null, whales: [], whaleAlerts: [], lossAlerts: [], nextMoves: [],
+      uniqueFanCount: 0,
       bestDay: null, bestHour: null, earlySignalHour: null, platformBestTimes: {},
       monthlyData: [], bestMonth: null, tipTypeBreakdown: [],
       privateShowFans: [], spyShowFans: [], earningsVelocity: null, totalStreamMinutes: 0,
       estimatedHourlyRate: 0, hourlyRateSessionCount: 0, hourlyRateTotalMinutes: 0,
       hourlyRateTotalUsd: 0, excludedUntimedSessionCount: 0,
-      platformVelocity: {}, missedRevenueByPlatform: {},
+      platformVelocity: {}, missedRevenue: { today_missed: null, cumulative_by_platform: {}, recent_streak_missed: null },
       returningVsNew: null, topFanDependency: null,
-      dependencyRisk: null, preTipBehavior: null, trueHourlyAvg: [],
-      canonicalBestTimes: { grid: [], bestWindow: null, earlySignal: null }
+      dependencyRisk: null, sessionPerformance: null, latestPlatformDelta: null,
+      bestPlatformByRate: null, rankablePlatformCount: 0,
+      canonicalBestTimes: { grid: [], bestWindow: null, earlySignal: null }, bestWindowFanOverlap: null
     }
   }
 
@@ -857,11 +889,11 @@ export function aggregateRows(tips, tz = null) {
 
   const { bestDay, worstDay, bestHour, earlySignalHour } = computeBestTimes(tips, userTz)
 
-  const whales      = identifyWhales(tips)
+  const whales      = identifyWhales(tips, userTz)
   const insights    = generateInsights(tips, meaningfulSessions, bestDay, worstDay, bestHour, whales)
-  const predictions = predictRevenue(tips, meaningfulSessions)
+  const predictions = predictRevenue(tips, meaningfulSessions, userTz)
   const whaleAlerts = generateWhaleAlerts(whales)
-  const lossAlerts  = generateLossAlerts(tips, meaningfulSessions, whales, bestHour)
+  const lossAlerts  = generateLossAlerts(tips, meaningfulSessions, whales, bestHour, userTz)
 
   // Canonical account-wide best-time grid — session-based, median $/hour,
   // confidence-tiered (lib/analytics/bestTimes.js). generateNextMoves()'s
@@ -878,7 +910,44 @@ export function aggregateRows(tips, tz = null) {
   const canonicalBestHourForNextMoves = canonicalBestTimes.bestWindow
     ? { hour: canonicalBestTimes.bestWindow.localHour, avg: canonicalBestTimes.bestWindow.medianUsdPerHour }
     : null
-  const nextMoves   = generateNextMoves(tips, meaningfulSessions, whales, predictions, canonicalBestHourForNextMoves)
+  const nextMoves   = generateNextMoves(tips, meaningfulSessions, whales, predictions, canonicalBestHourForNextMoves, userTz)
+
+  // ── BEST-WINDOW FAN OVERLAP ──────────────────────────────────────────
+  // Which of this creator's highest-value fans actually tip inside her
+  // strongest earning window. Additive composition of two values that are
+  // already canonical (canonicalBestTimes.bestWindow + identifyWhales) — it
+  // introduces no new definition of "best window" or "fan value", and no
+  // consumer recomputes either. Exposed so the Command Center can state the
+  // relationship without doing this arithmetic in a component, which is the
+  // pattern the analytics audit removed everywhere else.
+  //
+  // Counts a fan as overlapping when at least one of their tips lands in the
+  // window's exact local day+hour bucket. Restricted to fans with >=3 tips so
+  // a single coincidental tip cannot manufacture an "overlap".
+  const bestWindowFanOverlap = canonicalBestTimes.bestWindow
+    ? (() => {
+        const w = canonicalBestTimes.bestWindow
+        const DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
+        const matches = whales.filter(f => {
+          if (f.tipCount < 3) return false
+          return (f.tips || []).some(t => {
+            const ts = t.dateRaw || t.date_time
+            return DAYS[toLocalDow(ts, userTz)] === w.localDay && toLocalHour(ts, userTz) === w.localHour
+          })
+        })
+        const sorted = [...matches].sort((a, b) => b.totalUSD - a.totalUSD)
+        return {
+          count: sorted.length,
+          totalUSD: parseFloat(sorted.reduce((sum, f) => sum + (f.totalUSD || 0), 0).toFixed(2)),
+          fans: sorted.slice(0, 3).map(f => ({ username: f.username, totalUSD: f.totalUSD, tipCount: f.tipCount })),
+          // Lowercased usernames of EVERY overlapping fan (not just the top 3
+          // shown in `fans`), so a per-fan surface can ask "is this fan one of
+          // them?" without re-running the day+hour match itself. Membership
+          // only — no new figure.
+          usernames: sorted.map(f => f.username.toLowerCase()),
+        }
+      })()
+    : null
 
   let totalUSD = 0, totalTokens = 0
   for (const t of tips) { totalUSD += t.usd || 0; totalTokens += t.tokens || 0 }
@@ -915,6 +984,29 @@ export function aggregateRows(tips, tz = null) {
     bestWindowConfidence: platformBestWindow[p.platform]?.tier ?? null,
   }))
 
+  // ── BEST PLATFORM — ONE canonical answer ────────────────────────────
+  // "Unknown" is the CSV parser's undetected-platform bucket (see
+  // detectPlatform()), not a platform the creator streams on. It must never
+  // be presented as their best or most profitable platform.
+  //
+  // On the owner's real account this was doing visible damage: 13 Unknown
+  // tips totalling $175.60 average $13.51/tip, against Chaturbate's $0.36
+  // and BongaCams' $0.20 across 7,635 tips — so any ranking by average tip
+  // size crowned "Unknown". get_user_insights' best_platform does exactly
+  // that (AVG(usd) per tip, HAVING COUNT(*) >= 5), which is why both the
+  // command bar and the Creator Report read "Best Platform: Unknown".
+  //
+  // Ranked by usdPerHour — the same statistic every surface DISPLAYS
+  // underneath the claim — and platforms with no measurable streamed hours
+  // are excluded, because "most profitable per hour" is meaningless without
+  // a denominator.
+  const rankablePlatforms = platforms.filter(
+    p => p.platform !== UNDETECTED_PLATFORM && p.usdPerHour > 0
+  )
+  const bestPlatformByRate = rankablePlatforms.length
+    ? [...rankablePlatforms].sort((a, b) => b.usdPerHour - a.usdPerHour)[0]
+    : null
+
   const topTippers = whales.map((w, i) => ({
     rank: i + 1, username: w.username, usd: w.totalUSD, tokens: w.totalTokens, count: w.tipCount,
     status: w.tier === 'Whale' ? '🐳 WHALE' : w.tier === 'Shark' ? '🦈 SHARK' : w.tier === 'Dormant' ? '💤 DORMANT' : '🐟 REGULAR',
@@ -923,6 +1015,21 @@ export function aggregateRows(tips, tz = null) {
   }))
 
   // ── PER-PLATFORM BEST TIMES ───────────────────────────────────────────
+  // Audit checklist decision, documented once per "explicitly document
+  // genuine deferrals" rather than left silent: this full per-platform
+  // day×hour grid (bestHourByDay, allHours, allDays — what the Platforms
+  // tab heatmap actually renders) is intentionally NOT migrated onto the
+  // canonical bestTimes.js engine. Canonical's per-platform output today
+  // (platforms[].bestLocalDay/bestLocalHour/bestWindowConfidence, added in
+  // Phase 1) is single-window only — there is no legitimate existing UI
+  // consumer of a single best window to simply repoint, and the checklist
+  // explicitly forbids inventing one just to claim migration completion.
+  // Extending computeCanonicalBestTimes() to emit a full grid (median-based,
+  // session-level, local-native — instead of this block's mean-based,
+  // tip-level, local-native grid) is real, separately-scoped follow-up
+  // work: it needs its own test plan proving grid-shape parity across every
+  // day×hour cell, not just the single top window bestTimes.js already
+  // verifies. Deferred with this rationale, not silently left unexplained.
   const UTC_DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
   const platHourUSD = {}, platHourBuckets = {}, platDayUSD = {}, platDayDates = {}
   const platDayHourUSD = {}, platDayHourBuckets = {}
@@ -1021,33 +1128,86 @@ export function aggregateRows(tips, tz = null) {
   const hourlyRateSessionCount = hourlyRateSessions.length
   const excludedUntimedSessionCount = meaningfulSessions.filter(s => !isHourlyRateEligible(s)).length
 
+  // ── SESSION PERFORMANCE ─────────────────────────────────────────────────
+  // "Which kinds of streams actually make me money?" — a median split of the
+  // same rate-eligible population estimatedHourlyRate is built from
+  // (hourlyRateSessions/isHourlyRateEligible above), not a new population or
+  // a new definition of "session value." Two buckets (above/at-or-below the
+  // median $/hr), not arbitrary tiers — a real computed split, not an
+  // invented multiplier. Mirrors identifyWhales' percentile-based tiering,
+  // the precedent for splitting a population by its own distribution rather
+  // than a fixed threshold.
+  const sessionPerformance = (() => {
+    const avgMeaningfulSessionUSD = meaningfulSessions.length > 0
+      ? parseFloat((meaningfulSessions.reduce((s, x) => s + x.totalUSD, 0) / meaningfulSessions.length).toFixed(2))
+      : 0
+    const timedMeaningful = meaningfulSessions.filter(s => !s.durationUnknown)
+    const avgMeaningfulSessionMinutes = timedMeaningful.length > 0
+      ? Math.round(timedMeaningful.reduce((s, x) => s + x.durationMinutes, 0) / timedMeaningful.length)
+      : null
+
+    if (hourlyRateSessions.length < 4) {
+      return {
+        avgMeaningfulSessionUSD, avgMeaningfulSessionMinutes,
+        rateEligibleCount: hourlyRateSessions.length,
+        distribution: null, // not enough rate-eligible sessions for a meaningful split
+      }
+    }
+    const rates = hourlyRateSessions.map(s => s.totalUSD / (s.durationMinutes / 60))
+    const medianRate = calcMedian(rates)
+    const above = hourlyRateSessions.filter((s, i) => rates[i] > medianRate)
+    const belowOrAt = hourlyRateSessions.filter((s, i) => rates[i] <= medianRate)
+    const avgRate = (arr) => arr.length ? parseFloat((arr.reduce((s, x) => s + (x.totalUSD / (x.durationMinutes / 60)), 0) / arr.length).toFixed(2)) : 0
+    return {
+      avgMeaningfulSessionUSD, avgMeaningfulSessionMinutes,
+      rateEligibleCount: hourlyRateSessions.length,
+      distribution: {
+        medianUsdPerHour: parseFloat(medianRate.toFixed(2)),
+        aboveMedian: { count: above.length, avgUsdPerHour: avgRate(above) },
+        belowOrAtMedian: { count: belowOrAt.length, avgUsdPerHour: avgRate(belowOrAt) },
+      },
+    }
+  })()
+
+  // Derived from platforms[].usdPerHour (computed once above from the same
+  // platformMap) rather than recomputing totalUSD/hours a second time — the
+  // two were previously independent implementations of the identical
+  // formula over the identical inputs, which is exactly the duplicate-
+  // calculation class this audit exists to remove. Kept as a separate
+  // {platform: rate} map because several consumers index by platform name
+  // (Smart Insights' top-platform pick, the Platform ROI card's `roi`, the
+  // velocity strip) and reshaping all of them is churn without benefit.
+  // The null-vs-0 distinction is preserved deliberately: null means "no
+  // timed hours recorded, rate unknowable" (consumers filter on `!= null`
+  // to hide the platform entirely), whereas platforms[].usdPerHour uses 0
+  // for the same case because its consumers render a numeric cell.
   const platformVelocity = {}
-  Object.keys(platformMap).forEach(p => {
-    const pHours = platformMap[p].hours
-    const pUSD = platformMap[p].totalUSD
-    platformVelocity[p] = pHours > 0 ? parseFloat((pUSD / pHours).toFixed(2)) : null
+  platforms.forEach(p => {
+    platformVelocity[p.platform] = p.hours > 0 ? p.usdPerHour : null
   })
 
-  // ── MISSED REVENUE BY PLATFORM ────────────────────────────────────────
-  const missedRevenueByPlatform = {}
-  Object.keys(platformBestTimes).forEach(p => {
-    const bestHourData = platformBestTimes[p].hour
-    if (!bestHourData) return
-    const platSessions = timedSessions.filter(s => s.platform === p)
-    if (platSessions.length < 3) return
-    const overallAvg = platSessions.reduce((s, x) => s + x.totalUSD, 0) / platSessions.length
-    const bestHourAvg = bestHourData.avg
-    if (bestHourAvg <= overallAvg * 1.2) return
-    // BUGFIX: bestHourData.hour is a LOCAL hour (platformBestTimes buckets via
-    // toLocalHour(..., userTz)) — comparing it against a raw UTC hour silently
-    // miscounted "sessions not at best hour" for any creator not in UTC. Both
-    // sides must use the same local-time interpretation.
-    const sessionsNotAtBestHour = platSessions.filter(s => Math.abs(toLocalHour(s.startTime, userTz) - bestHourData.hour) > 1).length
-    const missedRevenue = parseFloat(((bestHourAvg - overallAvg) * sessionsNotAtBestHour).toFixed(2))
-    if (missedRevenue > 5) {
-      missedRevenueByPlatform[p] = { bestHour: bestHourData.hour, bestHourAvg, overallAvg: parseFloat(overallAvg.toFixed(2)), sessionsNotAtBestHour, missedRevenue, multiplier: parseFloat((bestHourAvg / overallAvg).toFixed(1)) }
-    }
-  })
+  // ── MISSED REVENUE ───────────────────────────────────────────────────
+  // Canonical: lib/analytics/missedRevenue.js. This replaces the legacy
+  // missedRevenueByPlatform that used to be computed inline here.
+  //
+  // The legacy version had a genuine unit mismatch: it subtracted a MEAN
+  // $/SESSION (platSessions totalUSD / count) from a MEDIAN $/HOUR
+  // (platformBestTimes' hour-bucket figure) and multiplied the difference by
+  // a session count — three incompatible units in one expression. A 3-hour
+  // session and a 20-minute session contributed identically to the "per
+  // session" side while the other side was a rate. The canonical version
+  // subtracts median $/hour from median $/hour, so the difference is a real
+  // rate gap.
+  //
+  // Its previously-documented deferral reason — that migrating this without
+  // the platformBestTimes grid would leave "the Platform tab internally
+  // inconsistent (a missed-revenue figure computed against a different best
+  // hour than the heatmap right next to it)" — was factually wrong: the
+  // missed-revenue card renders on the OVERVIEW tab, not beside the Platforms
+  // heatmap. Nothing is adjacent to contradict, and the Platform ROI card's
+  // own "Best window" badge already reads the canonical per-platform window,
+  // so this migration increases consistency rather than splitting it.
+  const missedRevenue = computeMissedRevenue(meaningfulSessions, userTz)
 
   // ── RETURNING VS NEW ──────────────────────────────────────────────────
   const fanTipCounts = {}, fanTipUSD2 = {}
@@ -1079,6 +1239,52 @@ export function aggregateRows(tips, tz = null) {
     lossIfTopFanLeaves: parseFloat(top1USD.toFixed(2))
   } : null
 
+  // ── REVENUE DEPENDENCY RISK ───────────────────────────────────────────
+  // A severity label + factual restatement over topFanDependency's
+  // already-computed percentages. No new statistic is derived here — every
+  // number below comes from the block immediately above.
+  //
+  // Previously this was hardcoded `null` while app/dashboard/page.js
+  // carried a full "Revenue Dependency Risk" card gated on it, so that card
+  // could never render. Worse, the Smart Insights block explicitly defers
+  // the concentration-risk framing to this card ("that card owns the
+  // concentration-risk claim"), so the insight was reaching users nowhere
+  // at all — while /guides/chaturbate-earnings-tracker, several blog posts,
+  // and the /landing/demo page all advertise exactly this feature.
+  //
+  // Thresholds come from this product's own published editorial standard
+  // rather than being invented here: the 50%-from-one-fan line appears in
+  // app/blog/how-to-increase-cam-earnings ("if one fan contributed 50%+ of
+  // a session's income, that's a concentration risk") and
+  // app/blog/how-to-re-engage-whales-and-high-tipping-fans ("just 1-3
+  // people represent 50%+ of total earnings"). Cross-checked against
+  // app/landing/demo's own characterization of top1=42%/top3=72% as
+  // "Moderate concentration" — those exact inputs classify as 'medium'
+  // here, so the dashboard and the marketing demo cannot contradict.
+  //
+  // Sample-size guard: below 5 unique fans these percentages are
+  // arithmetically trivial (with 4 fans, top5Pct is always 100%), so no
+  // claim is made at all — returning null hides the card rather than
+  // telling a creator with 3 fans that she has "high risk". 5 is the same
+  // unique-fan threshold DashboardPreview.js's canShowWhales() already
+  // uses to gate whale-related surfaces, not a new number.
+  const DEPENDENCY_MIN_FANS = 5
+  const dependencyRisk = (topFanDependency && whales.length >= DEPENDENCY_MIN_FANS)
+    ? (() => {
+        const { top1Pct, top3Pct, top5Pct, lossIfTopFanLeaves } = topFanDependency
+        const level = (top1Pct >= 50 || top3Pct >= 80) ? 'high'
+                    : (top1Pct >= 30 || top3Pct >= 60) ? 'medium'
+                    : 'low'
+        const message =
+          level === 'high'
+            ? `Your top fan is ${top1Pct}% of all revenue. If they stopped tipping, that's $${lossIfTopFanLeaves.toFixed(2)} of your $${totalUSD.toFixed(2)} lifetime total.`
+            : level === 'medium'
+              ? `Your top 3 fans are ${top3Pct}% of all revenue, and your top fan alone is ${top1Pct}%. Widening your tipping base lowers what one fan's departure costs you.`
+              : `Your revenue is spread across your fan base — your top fan is ${top1Pct}% and your top 5 are ${top5Pct}% of the total.`
+        return { level, message, top1Pct, top3Pct, top5Pct, lossIfTopFanLeaves, fanCount: whales.length }
+      })()
+    : null
+
   // ── MONTHLY DATA ──────────────────────────────────────────────────────
   // Canonical: creator-local calendar month, not UTC — see
   // canonical-analytics-rules.md's Monthly-Growth Reconciliation for why
@@ -1097,28 +1303,101 @@ export function aggregateRows(tips, tz = null) {
     if (isNaN(dt.getTime())) return
     const key = monthKeyLocal(t.dateRaw || t.date_time)
     if (!key) return
-    if (!monthMap[key]) monthMap[key] = { usd: 0, tips: 0, fans: new Set(), sessions: 0 }
+    if (!monthMap[key]) monthMap[key] = { usd: 0, tips: 0, fans: new Set(), sessions: 0, hourlyUsd: 0, hourlyMinutes: 0 }
     monthMap[key].usd += t.usd || 0
     monthMap[key].tips += 1
     monthMap[key].fans.add(t.username.toLowerCase())
   })
-  allValidSessions.forEach(s => {
+  // Sessions: bucketed from meaningfulSessions, the same population
+  // meaningfulSessionCount (the account-wide "Sessions" figure everywhere
+  // else — Command Center, the relocated Overview cards) is built from. This
+  // used to bucket from allValidSessions, a superset that also counts
+  // low_signal sessions — so a per-month "Sessions" figure here could never
+  // sum to the one account-wide total the rest of the app shows under the
+  // same unlabeled word. No consumer read the old field for its exact
+  // value (verified: DashboardGrowthCharts and the momentum block only ever
+  // read .usd/.growthPct/.month), so this corrects the population without
+  // changing any number a screen was already relying on.
+  meaningfulSessions.forEach(s => {
     const key = monthKeyLocal(s.startTime)
     if (key && monthMap[key]) monthMap[key].sessions += 1
   })
+  // Hours + $/hour: bucketed from hourlyRateSessions, the EXACT population
+  // estimatedHourlyRate is built from (isHourlyRateEligible, defined above)
+  // — so a month's usdPerHour uses the same eligibility rule and the same
+  // weighted numerator/denominator as the account-wide rate, not a second
+  // implementation of "hourly rate."
+  hourlyRateSessions.forEach(s => {
+    const key = monthKeyLocal(s.startTime)
+    if (key && monthMap[key]) {
+      monthMap[key].hourlyUsd += s.totalUSD
+      monthMap[key].hourlyMinutes += s.durationMinutes
+    }
+  })
   const monthlyDataUnsorted = Object.entries(monthMap).sort(([a], [b]) => a.localeCompare(b)).map(([month, d]) => ({
     month, usd: parseFloat(d.usd.toFixed(2)), tips: d.tips, fans: d.fans.size, sessions: d.sessions,
-    usdPerFan: d.fans.size > 0 ? parseFloat((d.usd / d.fans.size).toFixed(2)) : 0
+    usdPerFan: d.fans.size > 0 ? parseFloat((d.usd / d.fans.size).toFixed(2)) : 0,
+    hours: parseFloat((d.hourlyMinutes / 60).toFixed(2)),
+    usdPerHour: d.hourlyMinutes > 0 ? parseFloat((d.hourlyUsd / (d.hourlyMinutes / 60)).toFixed(2)) : null,
   }))
   // growthPct computed here once, canonically, so consumers (page.js's
   // momentum block, DashboardGrowthCharts.js) never need their own copy of
-  // this formula.
+  // this formula. Reused for every metric Performance's "What changed?"
+  // section compares — earnings, $/hour, hours, sessions, fans — through
+  // one function instead of five separate percent-change implementations.
+  //
+  // monthMap only contains months with actual tip data (see the forEach
+  // above — a month with zero tips never gets a key), so `prev` here is the
+  // previous ACTIVE month, not necessarily the previous CALENDAR month. A
+  // 4-month gap with zero activity, followed by one small tip, can produce a
+  // mathematically correct but wildly misleading growthPct (e.g. 2,883%) if
+  // displayed as plain "monthly growth" with no indication of the gap.
+  // gapMonths lets consumers show that context instead of a bare percentage.
+  const monthIndex = (ym) => { const [y, mo] = ym.split('-').map(Number); return y * 12 + mo }
+  const pctChange = (cur, prev) => (cur == null || prev == null || prev === 0) ? null : Math.round(((cur - prev) / prev) * 100)
   const monthlyData = monthlyDataUnsorted.map((m, i) => {
     const prev = i > 0 ? monthlyDataUnsorted[i - 1] : null
     const growthPct = prev && prev.usd > 0 ? Math.round(((m.usd - prev.usd) / prev.usd) * 100) : null
-    return { ...m, growthPct }
+    const gapMonths = prev ? monthIndex(m.month) - monthIndex(prev.month) - 1 : null
+    return {
+      ...m, growthPct, prevMonth: prev?.month || null, gapMonths,
+      usdPerHourGrowthPct: prev ? pctChange(m.usdPerHour, prev.usdPerHour) : null,
+      hoursGrowthPct: prev ? pctChange(m.hours, prev.hours) : null,
+      sessionsGrowthPct: prev ? pctChange(m.sessions, prev.sessions) : null,
+      fansGrowthPct: prev ? pctChange(m.fans, prev.fans) : null,
+    }
   })
   const bestMonth = monthlyData.length > 0 ? [...monthlyData].sort((a, b) => b.usd - a.usd)[0] : null
+
+  // ── LATEST-PERIOD PLATFORM ATTRIBUTION ──────────────────────────────────
+  // "Which platform drove the change?" — scoped to just the two most recent
+  // ACTIVE months (the same pair monthlyData's own growthPct compares), not
+  // a full per-platform time series. Built from the same tips already
+  // grouped into monthMap above; platform is read off each tip directly, so
+  // this introduces no new session/session-quality population.
+  const latestPlatformDelta = (() => {
+    if (monthlyData.length < 2) return null
+    const cur = monthlyData[monthlyData.length - 1]
+    const prev = monthlyData[monthlyData.length - 2]
+    const byPlatform = {}
+    tips.forEach(t => {
+      const key = monthKeyLocal(t.dateRaw || t.date_time)
+      if (key !== cur.month && key !== prev.month) return
+      const p = t.platform || 'Unknown'
+      if (!byPlatform[p]) byPlatform[p] = { platform: p, curUSD: 0, prevUSD: 0 }
+      byPlatform[p][key === cur.month ? 'curUSD' : 'prevUSD'] += t.usd || 0
+    })
+    const totalDeltaUSD = cur.usd - prev.usd
+    const rows = Object.values(byPlatform)
+      .map(p => ({
+        platform: p.platform,
+        curUSD: parseFloat(p.curUSD.toFixed(2)),
+        prevUSD: parseFloat(p.prevUSD.toFixed(2)),
+        deltaUSD: parseFloat((p.curUSD - p.prevUSD).toFixed(2)),
+      }))
+      .sort((a, b) => Math.abs(b.deltaUSD) - Math.abs(a.deltaUSD))
+    return { curMonth: cur.month, prevMonth: prev.month, totalDeltaUSD: parseFloat(totalDeltaUSD.toFixed(2)), gapMonths: cur.gapMonths, platforms: rows }
+  })()
 
   // ── TIP TYPE BREAKDOWN ────────────────────────────────────────────────
   const tipTypeMap = {}
@@ -1195,15 +1474,35 @@ export function aggregateRows(tips, tz = null) {
     topTippers, platforms, sessions: allValidSessions,
     insights: validateInsights(insights),
     predictions, whaleAlerts, lossAlerts, nextMoves, whales,
+    // Canonical unique-fan count — identifyWhales() returns exactly one
+    // entry per unique username in `tips` (see its allFans.map at the end),
+    // so its length IS the unique fan count, not just "whale" fans despite
+    // the function name. This is the single source every "Total Fans" /
+    // fan-count consumer should read (app/dashboard/page.js previously read
+    // a same-named field that was never actually returned here, and
+    // separately a "Total Fans" KPI card read whales.length directly instead
+    // of a canonical field — both are migrated to this in the same pass).
+    uniqueFanCount: whales.length,
     bestDay, bestHour, earlySignalHour, platformBestTimes,
     monthlyData, bestMonth,
     tipTypeBreakdown, privateShowFans, spyShowFans,
     earningsVelocity, totalStreamMinutes, platformVelocity,
     estimatedHourlyRate, hourlyRateSessionCount, hourlyRateTotalMinutes,
     hourlyRateTotalUsd, excludedUntimedSessionCount,
-    missedRevenueByPlatform, returningVsNew, topFanDependency,
-    dependencyRisk: null, preTipBehavior: null, trueHourlyAvg: [],
-    meaningfulSessions, allValidSessions,
+    missedRevenue, returningVsNew, topFanDependency, dependencyRisk, bestWindowFanOverlap,
+    // preTipBehavior and trueHourlyAvg intentionally removed rather than
+    // left as permanently-null keys. preTipBehavior's dashboard card was
+    // deleted in the same pass: its "peak tipping window" duplicated
+    // canonicalBestTimes.bestWindow (the single source every other
+    // best-time surface was just consolidated onto), and its
+    // clusteringDetected/recommendation fields had no definition anywhere
+    // in the codebase — implementing them would have meant inventing
+    // unsupported metrics. trueHourlyAvg was never actually read by the
+    // per-platform hourly heatmap that a stale comment claimed used it
+    // (that heatmap reads platformTimes[platform].hours); it was a dead
+    // key with a misleading pointer.
+    meaningfulSessions, allValidSessions, sessionPerformance, latestPlatformDelta,
+    bestPlatformByRate, rankablePlatformCount: rankablePlatforms.length,
     meaningfulSessionCount: meaningfulSessions.length,
     lowSignalSessionCount: allValidSessions.length - meaningfulSessions.length,
     momentum,
@@ -1224,7 +1523,7 @@ export function aggregateRows(tips, tz = null) {
 // Completely separate from tip analytics — never mixed.
 // ============================================================
 
-export function computePaidSessionAnalytics(sessions) {
+export function computePaidSessionAnalytics(sessions, tz = 'UTC') {
   if (!sessions || sessions.length === 0) return null
 
   const totalUSD     = sessions.reduce((s, r) => s + (parseFloat(r.usd) || 0), 0)
@@ -1314,7 +1613,7 @@ export function computePaidSessionAnalytics(sessions) {
   // ── PEAK HOURS FOR PAID SESSIONS ───────────────────────────
   const hourMap = {}
   sessions.forEach(s => {
-    const h = new Date(s.date_time).getUTCHours()
+    const h = toLocalHour(s.date_time, tz)
     if (!hourMap[h]) hourMap[h] = { usd: 0, count: 0 }
     hourMap[h].usd   += parseFloat(s.usd) || 0
     hourMap[h].count += 1
@@ -1333,8 +1632,7 @@ export function computePaidSessionAnalytics(sessions) {
   // ── MONTHLY TREND ──────────────────────────────────────────
   const monthMap = {}
   sessions.forEach(s => {
-    const dt  = new Date(s.date_time)
-    const key = `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}`
+    const key = toLocalDateStr(s.date_time, tz).slice(0, 7)
     if (!monthMap[key]) monthMap[key] = { usd: 0, count: 0, clients: new Set() }
     monthMap[key].usd     += parseFloat(s.usd) || 0
     monthMap[key].count   += 1

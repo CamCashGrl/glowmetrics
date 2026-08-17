@@ -9,7 +9,13 @@ export default function sitemap() {
     { url: `${base}/landing`,                        priority: 0.8, changeFrequency: 'monthly' },
     { url: `${base}/extension`,                      priority: 0.8, changeFrequency: 'monthly' },
     { url: `${base}/affiliates`,                     priority: 0.7, changeFrequency: 'monthly' },
-    { url: `${base}/analytics`,                      priority: 0.7, changeFrequency: 'monthly' },
+    // /analytics removed — it's not public marketing content, it's an
+    // internal onboarding-funnel/drop-off monitoring dashboard (see
+    // app/analytics/page.js's FunnelPage). Listing it here was actively
+    // telling Google to index an internal ops tool. Also added to
+    // robots.js's disallow list. It currently has no authentication at
+    // all — flagged separately as a real access-control gap, not silently
+    // "fixed" with new auth code here.
     { url: `${base}/tools`,                          priority: 0.7, changeFrequency: 'monthly' },
     { url: `${base}/free-vip-tracker`,                priority: 0.8, changeFrequency: 'monthly' },
     { url: `${base}/tools/cam-model-name-generator`, priority: 0.7, changeFrequency: 'monthly' },
@@ -30,7 +36,7 @@ export default function sitemap() {
 
     // New BongaCams articles
     'bongacams-payout-guide',
-    'bongacams-camscore-explained',
+    'bongacams-camscore-exsplained',
 
     'cam-model-boundaries-toxic-chat',
     'cam-model-earnings',
@@ -46,10 +52,11 @@ export default function sitemap() {
     'camcash-vs-camdash-vs-cb-cam-insights',
 
     // New creator-product articles
-    'cam-room-dice-game-ideas',
+    'cam-room-dice-games',
     'what-to-do-when-cam-room-is-slow',
     'cam-session-scripts-for-models',
-    'femdom-message-scripts-for-creators',
+    'findom-message-scripts-for-creators',
+    'findom-kink-niche',
     'spin-the-wheel-cam-game',
 
     'chaturbate-best-month-real-numbers',
@@ -80,11 +87,16 @@ export default function sitemap() {
 
     // Existing and new coaching content
     'live-ai-coaching-cam-models',
-    'live-mode-coaching-for-cam-models',
+    // 'live-mode-coaching-for-cam-models' removed — no static page exists
+    // for this slug and blog_posts (Supabase) is empty, so the dynamic
+    // [slug] fallback also has nothing for it. This sitemap entry was a
+    // guaranteed 404 for Google. Re-add only once real content exists at
+    // this URL.
 
     // New MyFreeCams articles
-    'myfreecams-camscore-explained',
-    'mfc-share-guide-for-models',
+    // 'myfreecams-camscore-explained' and 'mfc-share-guide-for-models'
+    // removed for the same reason — no static page, no matching row in the
+    // (empty) blog_posts table. Guaranteed 404s, not indexable content.
 
     'revenue-per-hour-cam-model',
     'viral-cam-room-titles',
@@ -106,18 +118,15 @@ export default function sitemap() {
     'cam-model-top-tippers',
     'chaturbate-best-hours',
     'chaturbate-earnings-tracker',
+    // 'chaturbate-room-title-generator' and 'chaturbate-token-calculator'
+    // deliberately NOT included — next.config.mjs 301-redirects both to
+    // their cam-model-* equivalents above (a Search Console-driven fix,
+    // per that file's own comments). A sitemap should list only the final
+    // canonical destination, never a URL that immediately redirects; their
+    // page.js files exist but are unreachable (the redirect fires first).
     'chaturbate-token-tracker',
     'how-to-increase-cam-tips',
     'myfreecams-analytics',
-  ]
-
-  const featureSlugs = [
-    'cam-earnings-analyzer',
-    'top-fans',
-    'best-hours',
-    'live-mode',
-    'multi-platform-analytics',
-    'profile-studio',
   ]
 
   const blogPages = blogSlugs.map(slug => ({
@@ -134,12 +143,5 @@ export default function sitemap() {
     priority: 0.7,
   }))
 
-  const featurePages = featureSlugs.map(slug => ({
-    url: `${base}/features/${slug}`,
-    lastModified: today,
-    changeFrequency: 'monthly',
-    priority: 0.8,
-  }))
-
-  return [...staticPages, ...blogPages, ...guidePages, ...featurePages]
+  return [...staticPages, ...blogPages, ...guidePages]
 }

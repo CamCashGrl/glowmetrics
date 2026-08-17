@@ -98,6 +98,7 @@ export default function Settings({ user, profile, isPro, supabase, onTimezoneSav
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok || !data.url) throw new Error(data.error || 'Unable to start checkout.')
+      gtmTrack('checkout_started', { source: 'settings', plan_type: 'standard_monthly' })
       window.location.assign(data.url)
     } catch (e) {
       setError(e?.message || 'Something went wrong starting checkout. Please try again.')

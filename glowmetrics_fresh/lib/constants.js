@@ -41,3 +41,26 @@ export const DEFAULT_VIEWER_RATE = 0.10
 export function viewerRate(platform) {
   return PLATFORM_VIEWER_RATES[platform] ?? DEFAULT_VIEWER_RATE
 }
+
+// Absolute lifetime-spend threshold for the "whale" label used by
+// StreamPlanner's Whale Roster/Whale Watch and MoneyMap's Whales stat. Both
+// hardcoded `500` independently before this constant existed.
+//
+// This is deliberately NOT the same concept as lib/analytics.js's
+// identifyWhales() tiers (Whale/Shark/Regular/Dormant), which are RELATIVE —
+// percentile ranks within a given creator's own fan base, so a creator's
+// top-5% "Whale" may have spent far less than 500 tokens, and a creator with
+// many big spenders may have dozens of 500+ fans who don't rank top-5%.
+// Both answer real questions ("who are my biggest spenders in absolute
+// terms?" vs "who are my top fans relative to my own base?"), and both
+// surfaces label themselves accordingly ("Fans with 500+ tokens lifetime"
+// / "500+ tokens lifetime" vs the tier badges). Keep them distinct; just
+// don't duplicate the number.
+export const WHALE_LIFETIME_TOKEN_THRESHOLD = 500
+
+// The CSV parser's bucket for a row whose platform could not be detected
+// (see detectPlatform()/parseCSV in lib/analytics.js). It is an ABSENCE of
+// a platform, not a platform — so it must never be ranked as a creator's
+// best or most profitable one. Kept here rather than as a scattered string
+// literal so every consumer excludes the same value.
+export const UNDETECTED_PLATFORM = 'Unknown'

@@ -130,36 +130,18 @@ export default function ToolsPage() {
           </a>
         </div>
 
-        {/* Full dashboard features */}
-        <div style={{ textAlign: 'center', marginBottom: '28px', marginTop: '16px' }}>
-          <div style={{ fontSize: '11px', fontWeight: '700', letterSpacing: '0.12em', textTransform: 'uppercase', color: '#22D3EE', marginBottom: '12px' }}>
-            Inside the CamCash Dashboard
-          </div>
-          <h2 style={{ fontSize: 'clamp(22px,3vw,30px)', fontWeight: '800', margin: '0 0 12px', color: '#f1f5f9' }}>
-            What CamCash can actually do for you
-          </h2>
-          <p style={{ fontSize: '15px', color: '#64748b', margin: 0, maxWidth: '480px', marginLeft: 'auto', marginRight: 'auto' }}>
-            Upload your tip history and unlock a full analytics dashboard, not just one-off tools.
-          </p>
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(260px,100%),1fr))', gap: '16px', marginBottom: '48px' }}>
-          {[
-            { href: '/features/cam-earnings-analyzer', icon: '📊', title: 'Earnings Analyzer', body: 'Earnings, sessions, $/hour, and fans from your CSV.' },
-            { href: '/features/top-fans', icon: '👑', title: 'Top Fans', body: 'See who actually drives your income.' },
-            { href: '/features/best-hours', icon: '🗓️', title: 'Best Hours', body: 'Find your highest-earning windows.' },
-            { href: '/features/live-mode', icon: '🔴', title: 'Live Mode', body: 'Real-time coaching while you stream.' },
-            { href: '/features/multi-platform-analytics', icon: '🎯', title: 'Multi-Platform Analytics', body: 'Compare every platform in one place.' },
-            { href: '/features/profile-studio', icon: '✍️', title: 'Profile Studio', body: 'Bio and tip-menu copy that converts.' },
-          ].map(({ href, icon, title, body }) => (
-            <a key={href} href={href} style={{ textDecoration: 'none' }}>
-              <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '14px', padding: '22px 20px' }}>
-                <div style={{ fontSize: '26px', marginBottom: '10px' }}>{icon}</div>
-                <div style={{ fontSize: '15px', fontWeight: '700', color: '#f1f5f9', marginBottom: '6px' }}>{title}</div>
-                <div style={{ fontSize: '13px', color: '#64748b', lineHeight: 1.5 }}>{body}</div>
-              </div>
-            </a>
-          ))}
+        {/* More tools coming */}
+        <div style={{
+          textAlign: 'center',
+          padding: '32px',
+          background: 'rgba(255,255,255,0.02)',
+          border: '1px solid rgba(255,255,255,0.06)',
+          borderRadius: '12px',
+          marginBottom: '16px',
+        }}>
+          <div style={{ fontSize: '24px', marginBottom: '10px' }}>🔜</div>
+          <div style={{ fontSize: '15px', fontWeight: '600', color: '#f1f5f9', marginBottom: '6px' }}>More tools coming soon</div>
+          <div style={{ fontSize: '14px', color: '#475569' }}>Best-time finder, fan re-engagement tool and more.</div>
         </div>
 
       </div>
