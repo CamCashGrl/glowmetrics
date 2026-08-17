@@ -910,9 +910,9 @@ export default function LandingClient() {
   ]
 
   const faqs = [
-    { q: "Is CamCash free to use?", a: "Yes. The free tier is free forever — install the extension and create an account with no credit card. The free tier tracks 1 platform (live via the extension, or by uploading your tip data). Premium analytics and multi-platform tracking are optional upgrades." },
+    { q: "Is CamCash free to use?", a: "Yes. The free tier is free forever — install the extension and create an account with no credit card. The free tier tracks up to 3 platforms, with a 31-day history window per platform. Premium analytics and multi-platform tracking are optional upgrades." },
     { q: "What file formats do you support?", a: "CSV exports from Chaturbate, BongaCams, and MyFreeCams, plus automatic tip capture through the Chrome extension." },
-    { q: "Can I track more than one platform for free?", a: "The free tier tracks 1 platform at a time. If you work on more than one platform, the Standard plan ($19.99/month) unlocks tracking multiple platforms at once." },
+    { q: "How many platforms can I track for free?", a: "The free tier supports up to 3 platforms. Pro ($19.99/month) unlocks additional platforms plus cross-platform comparison and deeper strategy at once." },
     { q: "Is my data safe and private?", a: "Yes. Your data is encrypted, never shared, and never sold." },
   ]
 
@@ -983,7 +983,7 @@ export default function LandingClient() {
                 ["⚡", "Your best stream time, calculated from your real data"],
                 ["👑", "Top fan alerts — who to message and when"],
                 ["📊", "Platform ROI — where your time is actually worth more"],
-                ["🔓", "Free tier tracks 1 platform (extension or CSV upload) — $19.99/mo to track multiple"],
+                ["🔓", "Free tier: 3 platforms + 31 days of history — Pro adds more platforms and full-history comparison"],
               ].map(([icon, text]) => (
                 <div key={text} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, color: T.textFaint }}>
                   <span style={{ fontSize: 14 }}>{icon}</span>
