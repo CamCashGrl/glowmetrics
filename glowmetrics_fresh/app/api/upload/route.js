@@ -1,9 +1,31 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { parseCSV, detectPlatform } from '../../../lib/analytics'
-import { FREE_MAX_PLATFORMS, isPaidPlan, normalizePlatform, splitFreeHistory, splitFreePlatforms, summarizeRows } from '../../../lib/planLimits'
+import { parseCSV, detectPlatform, aggregateRows } from '../../../lib/analytics'
+import { FREE_MAX_PLATFORMS, filterFreeHistory, isPaidPlan, normalizePlatform } from '../../../lib/planLimits'
 
 const BATCH_SIZE = 250 // Safe batch size — never hit Supabase limits
+
+// Real, non-fabricated summary stats for a subset of rows — reuses the
+// canonical aggregateRows() pipeline (lib/analytics.js) instead of a second
+// earnings/session/fan-count implementation, per the conversion-boundary
+// spec's "do not duplicate analytics" requirement. Only pulls the handful
+// of primitive fields the locked-preview UI needs; never invents a number
+// aggregateRows didn't itself compute.
+function summarizeRows(rows) {
+  if (!rows.length) {
+    return { tips: 0, totalUsd: 0, sessions: 0, fans: 0, dateFrom: null, dateTo: null }
+  }
+  const a = aggregateRows(rows)
+  const dates = rows.map(r => new Date(r.date_time)).filter(d => !isNaN(d))
+  return {
+    tips: rows.length,
+    totalUsd: a.totalUSD,
+    sessions: a.meaningfulSessionCount,
+    fans: a.uniqueFanCount,
+    dateFrom: dates.length ? new Date(Math.min(...dates)).toISOString() : null,
+    dateTo: dates.length ? new Date(Math.max(...dates)).toISOString() : null,
+  }
+}
 
 export async function POST(req) {
   const auth = req.headers.get('Authorization')
@@ -46,6 +68,11 @@ export async function POST(req) {
   // onboarding paste flow, which sends parsed rows rather than raw text).
   const explicitPlatform = (fd.get('platform') || '').toString().trim()
   const textDetectedPlatform = explicitPlatform || detectPlatform(raw)
+  // Declared immediately — everything below (row mapping, platform-set
+  // computation) depends on this, and a `const` referenced before this line
+  // executes throws (temporal dead zone), which previously crashed every
+  // upload where per-row platform detection came back empty.
+  const detectedPlatform = textDetectedPlatform || 'Unknown'
   const parsed = parseCSV(raw)
 
   const rows = parsed.map((row) => {
@@ -55,7 +82,7 @@ export async function POST(req) {
     return {
       user_id:   user.id,
       date_time: row.dateRaw || row.date_time || null,
-      platform:  row.platform && row.platform !== 'Unknown' ? row.platform : textDetectedPlatform,
+      platform:  row.platform && row.platform !== 'Unknown' ? row.platform : detectedPlatform,
       username:  row.username  || 'Unknown',
       tip_type:  row.tip_type  || 'Tip',
       tip_note:  row.tip_note  || row.note || row.message || '',
@@ -81,20 +108,24 @@ export async function POST(req) {
     )
   }
 
-  // ── DETECT PLATFORM ─────────────────────────────────────────────────────
-  // Resolved up front (moved from later in the file) so every row.platform
-  // is final before the Free-plan classification below runs on it.
-  const detectedPlatform = textDetectedPlatform
-  rows.forEach(r => { if (!r.platform || r.platform === 'Unknown') r.platform = detectedPlatform })
+  // ── FULL-FILE ANALYSIS (before any Free-plan boundary is applied) ──────
+  // Computed on the complete parsed file so the response can always tell the
+  // user the truth about what was in their CSV, even for the portion Free
+  // can't show. Never recomputed piecemeal later — every "locked preview"
+  // number below is a subset of this same real data.
+  const fullFileSummary = summarizeRows(rows)
 
-  // ── FREE-PLAN IMPORT BOUNDARIES ────────────────────────────────────────
-  // Free can track up to 3 platforms and a 31-day analytics history window.
-  // IMPORTANT: this is a classification step, not a rejection step. Every
-  // row from the uploaded file gets imported — the CSV itself is never
-  // partially or fully thrown out because parts of it fall outside what
-  // Free can currently show. Rows outside Free's boundaries are summarized
-  // (real numbers, computed from this exact file) and returned to the
-  // dashboard as a locked preview, instead of a 402 that discards them.
+  // ── FREE-PLAN PLATFORM BOUNDARY ─────────────────────────────────────────
+  // Free can track up to FREE_MAX_PLATFORMS platforms. This used to be an
+  // all-or-nothing gate that rejected the entire CSV the moment a 4th
+  // platform showed up. Now: platforms the account already has stay
+  // allowed; new platforms fill any remaining free slots; anything beyond
+  // that is still not inserted for Free (the insert_tips_dedup /
+  // insert_paid_sessions_dedup RPCs enforce this same cap independently on
+  // their own, so rows for a genuinely blocked platform would be rejected
+  // at the database layer even if this route tried to insert them) — but
+  // instead of silently discarding it, we compute a real preview of what's
+  // in it so the user can see exactly what upgrading would unlock.
   let existingPlatformRows = []
   try {
     const [tipPlatforms, livePlatforms, paidPlatforms] = await Promise.all([
@@ -112,53 +143,84 @@ export async function POST(req) {
   const existingPlatforms = [...new Set(
     existingPlatformRows.map(r => normalizePlatform(r.platform)).filter(Boolean)
   )]
-  const incomingPlatforms = [...new Set(
-    rows.map(r => normalizePlatform(r.platform || detectedPlatform)).filter(Boolean)
+  // First-seen order within this upload, so which platform "wins" a free
+  // slot is deterministic and matches the order rows appear in the file.
+  const incomingPlatformsInOrder = [...new Set(
+    rows.map(r => normalizePlatform(r.platform)).filter(Boolean)
   )]
-  const combinedPlatforms = [...new Set([...existingPlatforms, ...incomingPlatforms])]
 
-  const originalRowCount = rows.length
-  let historyRemovedCount = 0
+  let allowedPlatforms = existingPlatforms
+  let blockedPlatforms = []
+  if (!isPro) {
+    const slotsLeft = () => Math.max(0, FREE_MAX_PLATFORMS - allowedPlatforms.length)
+    const newlyAllowed = []
+    incomingPlatformsInOrder.forEach(p => {
+      if (allowedPlatforms.includes(p) || newlyAllowed.includes(p)) return
+      if (slotsLeft() - newlyAllowed.length > 0) newlyAllowed.push(p)
+      else blockedPlatforms.push(p)
+    })
+    allowedPlatforms = [...allowedPlatforms, ...newlyAllowed]
+  } else {
+    allowedPlatforms = [...new Set([...existingPlatforms, ...incomingPlatformsInOrder])]
+  }
+
+  const platformAllowedRows = rows.filter(r => !blockedPlatforms.includes(normalizePlatform(r.platform)))
+  const platformBlockedRows = rows.filter(r => blockedPlatforms.includes(normalizePlatform(r.platform)))
+
+  // Real per-platform preview of what's blocked — grouped so the UI can
+  // show "Stripchat: 312 tips, $428.17, 9 sessions" instead of one lump sum
+  // across every locked platform.
+  const lockedPlatformPreview = blockedPlatforms.map(p => {
+    const platRows = platformBlockedRows.filter(r => normalizePlatform(r.platform) === p)
+    return { platform: platRows[0]?.platform || p, ...summarizeRows(platRows) }
+  })
+
+  if (!platformAllowedRows.length && platformBlockedRows.length) {
+    // Every row in this file belongs to a platform beyond the Free cap.
+    // Nothing to insert, but the user still gets a real preview instead of
+    // a bare rejection.
+    return NextResponse.json({
+      error: `Free supports up to ${FREE_MAX_PLATFORMS} platforms. Upgrade to Pro to add ${blockedPlatforms.length > 1 ? 'these platforms' : 'this platform'} and compare them.`,
+      code: 'platform_limit_reached',
+      maxPlatforms: FREE_MAX_PLATFORMS,
+      currentPlatforms: existingPlatforms,
+      lockedPlatformPreview,
+      fullFileSummary,
+      upgradeUrl: '/pricing',
+    }, { status: 402 })
+  }
+
+  // ── FREE-PLAN HISTORY BOUNDARY ──────────────────────────────────────────
+  // IMPORTANT: this no longer removes rows before insertion. The 31-day
+  // window is a Free *analytics/presentation* boundary (enforced client-side
+  // in app/dashboard/page.js, same as it already was) — not a reason to
+  // throw away source data. Every allowed-platform row gets inserted; we
+  // only use filterFreeHistory() here to calculate what falls outside the
+  // Free-visible window, for the response.
+  let historyExcludedRows = []
   let historyWindowStart = null
   let historyWindowEnd = null
-  let excludedHistory = null
-  let excludedPlatforms = []
-  let platformsTracked = combinedPlatforms
-
   if (!isPro) {
-    // Platform cap: classify, don't reject. Rows for platforms beyond the
-    // Free cap are pulled out (and summarized below) rather than sent to
-    // insert_tips_dedup, since that RPC enforces the same cap at the DB
-    // level — pre-filtering here avoids a batch failing there.
-    const platformSplit = splitFreePlatforms(rows, existingPlatforms)
-    platformsTracked = platformSplit.allowedPlatforms
-
-    if (platformSplit.excluded.length) {
-      const byPlatform = new Map()
-      for (const row of platformSplit.excluded) {
-        const key = normalizePlatform(row.platform) || 'unknown'
-        if (!byPlatform.has(key)) byPlatform.set(key, [])
-        byPlatform.get(key).push(row)
-      }
-      excludedPlatforms = [...byPlatform.entries()].map(([platform, platformRows]) => ({
-        platform,
-        ...summarizeRows(platformRows),
-      }))
-    }
-
-    // History window: same principle — classify the platform-allowed rows,
-    // don't drop the file to zero just because all of it is older than 31
-    // days. `rows` becomes only the Free-visible half for insertion below;
-    // the excluded half is summarized for the locked preview.
-    const historySplit = splitFreeHistory(platformSplit.visible)
-    rows.splice(0, rows.length, ...historySplit.visible)
-    historyRemovedCount = historySplit.excluded.length
-    historyWindowStart = historySplit.windowStart
-    historyWindowEnd = historySplit.windowEnd
-    if (historySplit.excluded.length) {
-      excludedHistory = summarizeRows(historySplit.excluded)
-    }
+    const historyResult = filterFreeHistory(platformAllowedRows)
+    // filterFreeHistory() returns the same row objects it was given (not
+    // copies), so reference equality correctly identifies which original
+    // rows survived the window filter.
+    const keptRows = new Set(historyResult.rows)
+    historyExcludedRows = platformAllowedRows.filter(r => !keptRows.has(r))
+    historyWindowStart = historyResult.windowStart
+    historyWindowEnd = historyResult.windowEnd
   }
+  const historyExcludedSummary = summarizeRows(historyExcludedRows)
+  // Everything Free can actually see right now from this upload.
+  const excludedRowSet = new Set(historyExcludedRows)
+  const freeVisibleRows = isPro
+    ? platformAllowedRows
+    : platformAllowedRows.filter(r => !excludedRowSet.has(r))
+  const freeResultsSummary = summarizeRows(freeVisibleRows)
+
+  // Rows that actually go to the database — always the full allowed-platform
+  // set, regardless of plan. Nothing derived above ever mutates this.
+  const rowsToInsert = platformAllowedRows
 
   // ── OPTIONAL FULL REPLACE ──────────────────────────────────────────────
   if (replace) {
@@ -178,8 +240,8 @@ export async function POST(req) {
   // here (rather than filtering in lib/analytics.js) lets parseCSV() keep
   // returning one flat array, which app/dashboard/page.js's own parseCSV
   // caller still relies on.
-  const tipRows = rows.filter(r => !r.is_paid_session)
-  const paidSessionRows = rows.filter(r => r.is_paid_session)
+  const tipRows = rowsToInsert.filter(r => !r.is_paid_session)
+  const paidSessionRows = rowsToInsert.filter(r => r.is_paid_session)
 
   // ── ASSIGN DEDUP SEQUENCE ACROSS THE WHOLE FILE ─────────────────────────
   // Two rows can legitimately share the same (user, username, tokens, usd,
@@ -268,10 +330,13 @@ export async function POST(req) {
       console.error(`[UPLOAD] Batch ${batchNum}/${totalBatches} error:`, message)
 
       if (message?.includes('PLATFORM_LIMIT_REACHED')) {
-        // Log the attempt — including any rows earlier batches in this same
-        // request already inserted — before returning. Without this, a
-        // correctly-rejected upload leaves zero trace in csv_uploads,
-        // indistinguishable from a request that never ran at all.
+        // The database-level RPC enforces the same platform cap
+        // independently of the pre-check above (e.g. a platform this route
+        // considered "allowed" based on a stale existingPlatforms read can
+        // still be rejected here under concurrent uploads). Log the
+        // attempt — including any rows earlier batches in this same request
+        // already inserted — before returning, so a correctly-rejected
+        // upload leaves a trace in csv_uploads instead of vanishing.
         await logCsvUpload('blocked')
         return NextResponse.json({
           error: `You're on the free plan, which tracks up to ${FREE_MAX_PLATFORMS} platforms. Upgrade to add more platforms and compare them.`,
@@ -355,19 +420,29 @@ export async function POST(req) {
     dateTo:    summaryDateTo ? summaryDateTo.toISOString() : null,
     paidSessionsInserted: paidInserted,
     paidSessionsSkipped:  paidSkipped,
+
+    // ── Free-plan conversion boundary data — all real, derived from this
+    // upload, never fabricated. See summarizeRows()/aggregateRows() above.
     historyLimited: !isPro,
     historyDays: !isPro ? 31 : null,
-    historyRemovedCount,
-    historyOriginalRows: originalRowCount,
     historyWindowStart,
     historyWindowEnd,
-    platformsTracked,
+    // Section A — what Free can actually see right now.
+    freeResults: !isPro ? freeResultsSummary : null,
+    // Section B — real totals for data that exists but falls outside the
+    // Free history window. historyRemovedCount kept for backward
+    // compatibility with UI already reading it as a row count.
+    historyRemovedCount: historyExcludedRows.length,
+    excludedHistory: !isPro && historyExcludedRows.length ? historyExcludedSummary : null,
+    // Section B (continued) — real per-platform totals for platforms this
+    // upload contained that Free can't add right now.
+    lockedPlatformPreview: !isPro && lockedPlatformPreview.length ? lockedPlatformPreview : null,
+    // The complete picture, so the UI never has to guess what "everything"
+    // would have looked like.
+    fullFileSummary,
+
+    platformsTracked: allowedPlatforms,
     freePlatformLimit: !isPro ? FREE_MAX_PLATFORMS : null,
-    // Real, computed-from-this-file numbers for anything Free couldn't show —
-    // used by the dashboard's locked-preview UI. null/[] when everything was
-    // visible, or when the user is already Pro (nothing is excluded for Pro).
-    excludedHistory,
-    excludedPlatforms,
   }
 
   if (errors.length > 0) {
