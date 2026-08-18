@@ -155,6 +155,38 @@ if (passed !== checks.length) process.exit(1)
     mixed.excluded.every(r => r.platform === 'Stripchat')])
 }
 
+// ── Delete -> re-upload, and post-checkout unlock ─────────────────────
+{
+  const uploadSrc = read('app/api/upload/route.js')
+  const dash = read('app/dashboard/page.js')
+
+  // No permanent upload quota: csv_uploads / csv_upload_count are an audit
+  // trail, never a gate. Verified against production too — the owner's
+  // account has 19 csv_uploads rows and still imports.
+  extra.push(['Upload route enforces no per-account upload quota',
+    !/csv_upload_count/.test(uploadSrc) && !/uploadsRemaining|FREE_MAX_UPLOADS|upload_limit/.test(uploadSrc)])
+  extra.push(['Upload route only refuses a file with no usable rows at all',
+    /No valid rows found/.test(uploadSrc)])
+  extra.push(['Deleting tips does not touch the csv_uploads audit trail',
+    /from\("tips"\)\.delete\(\)/.test(dash) && !/from\(['"]csv_uploads['"]\)\.delete/.test(dash)])
+
+  // Post-checkout entitlement refresh (priority 7).
+  extra.push(['Returning from checkout re-reads entitlement', /refreshEntitlement/.test(dash)])
+  extra.push(['It polls, because the Stripe webhook can land after the redirect',
+    /attempt < 6/.test(dash)])
+  extra.push(['It uses the single canonical plan predicate', /if \(isProPlan\(data\)\)/.test(dash)])
+  extra.push(['It reloads data so full history appears without a re-upload',
+    /loadData\(u\.id, true, \{ silent: true \}\)/.test(dash)])
+  extra.push(['It never writes an entitlement client-side',
+    !/from\(['"]profiles['"]\)[\s\S]{0,80}\.update\(\{[^}]*plan:/.test(dash)])
+
+  // Honest unlock copy: history needs no re-upload; a blocked platform does.
+  extra.push(['History card states it unlocks with no re-upload',
+    /unlocks them instantly, with no re-upload/.test(dash)])
+  extra.push(['Platform card no longer implies the whole upload must be redone',
+    !/Upgrade, then re-upload this file/.test(dash)])
+}
+
 for (const [name, ok] of extra) {
   if (!ok) { console.error(`FAIL: ${name}`); extraFailed++ } else { console.log(`PASS: ${name}`) }
 }

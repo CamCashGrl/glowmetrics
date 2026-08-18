@@ -1893,6 +1893,49 @@ export default function Dashboard() {
       if (params.get('success') === 'true') {
         gtmTrack('subscription_completed', { plan_type: params.get('plan') || null })
         window.history.replaceState({}, '', window.location.pathname)
+
+        // ── POST-CHECKOUT ENTITLEMENT REFRESH ───────────────────────────
+        // Previously this fired the funnel event and stopped. The client
+        // kept the `profile` it loaded at mount (plan: 'free'), so a creator
+        // returning from a SUCCESSFUL checkout still saw every locked card
+        // locked and every blurred preview blurred until they manually
+        // reloaded — the exact "did my payment work?" moment the conversion
+        // flow exists to avoid.
+        //
+        // profiles.plan is flipped by the Stripe webhook, which can land
+        // slightly after the browser redirect, so a single read can race it.
+        // Poll briefly and stop as soon as the plan is paid. Read-only: this
+        // never writes an entitlement client-side, it only observes the one
+        // the webhook already set.
+        let cancelled = false
+        const refreshEntitlement = async () => {
+          const { data: { user: u } } = await supabase.auth.getUser()
+          if (!u || cancelled) return
+          for (let attempt = 0; attempt < 6 && !cancelled; attempt++) {
+            const { data } = await supabase
+              .from('profiles')
+              .select('plan, plan_expires_at, stripe_customer_id, timezone')
+              .eq('id', u.id)
+              .maybeSingle()
+            if (data) {
+              setProfile(data)
+              // isProPlan() is the single entitlement predicate (lib/plan.js)
+              // — never re-implement the plan test here.
+              if (isProPlan(data)) {
+                // Re-run the loader so Pro sees the FULL history immediately:
+                // loadData() applies filterFreeHistory() only for non-Pro, so
+                // the rows already in the database become visible without any
+                // re-upload.
+                loadData(u.id, true, { silent: true })
+                showToast('✨ Pro is active — your full history is unlocked')
+                return
+              }
+            }
+            await new Promise(r => setTimeout(r, 1500))
+          }
+        }
+        refreshEntitlement()
+        return () => { cancelled = true }
       } else if (params.get('canceled') === 'true') {
         gtmTrack('checkout_canceled', {})
         window.history.replaceState({}, '', window.location.pathname)
@@ -4378,7 +4421,7 @@ const stopImportMessageRotation = () => {
                             {blurStat("Extra Sessions", lastUploadResult.excludedHistory.sessions.toLocaleString(), C.gold)}
                           </div>
                           <div style={{ fontSize: 12.5, color: C.text, lineHeight: 1.55 }}>
-                            <strong style={{ color: C.white }}>{lastUploadResult.excludedHistory.tips.toLocaleString()} tips</strong> ({formatImportDate(lastUploadResult.excludedHistory.dateFrom)} – {formatImportDate(lastUploadResult.excludedHistory.dateTo)}) fall outside your Free {FREE_HISTORY_DAYS}-day analysis window.
+                            <strong style={{ color: C.white }}>{lastUploadResult.excludedHistory.tips.toLocaleString()} tips</strong> ({formatImportDate(lastUploadResult.excludedHistory.dateFrom)} – {formatImportDate(lastUploadResult.excludedHistory.dateTo)}) fall outside your Free {FREE_HISTORY_DAYS}-day analysis window. They&apos;re already saved — upgrading unlocks them instantly, with no re-upload.
                           </div>
                           <Button onClick={() => openUpgradeModal('csv_history')} style={{ marginTop: 10, padding: "8px 14px", fontSize: 12 }}>Unlock Full History →</Button>
                         </div>
@@ -4393,7 +4436,7 @@ const stopImportMessageRotation = () => {
                             {blurStat("Sessions", p.sessions.toLocaleString(), C.gold)}
                           </div>
                           <div style={{ fontSize: 12.5, color: C.text, lineHeight: 1.55 }}>
-                            Detected in this file, but not imported yet — Free is already using all {FREE_MAX_PLATFORMS} platform slots. Upgrade, then re-upload this file to bring {p.platform} in.
+                            Detected in this file. Free is already using all {FREE_MAX_PLATFORMS} platform slots, so these rows weren&apos;t stored — unlike your history, which is already saved and unlocks the moment you upgrade. Bringing {p.platform} in takes one more import of this same file after upgrading.
                           </div>
                           <Button onClick={() => openUpgradeModal('csv_platform_limit')} style={{ marginTop: 10, padding: "8px 14px", fontSize: 12 }}>Unlock Pro to analyze {p.platform} →</Button>
                         </div>
