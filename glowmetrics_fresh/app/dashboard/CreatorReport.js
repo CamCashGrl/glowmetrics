@@ -56,30 +56,56 @@ function StatCard({ icon, label, value, sub, index = 0 }) {
 }
 
 export default function CreatorReport({ analytics, tips = [], isPro = false, onUpgrade, engineInsights = null }) {
+  // "What changed" — the one dimension Creator Report lacked entirely
+  // before (a static all-time snapshot, same headline totals Overview
+  // already shows). Reads the canonical month-over-month growthPct already
+  // computed once in analytics.monthlyData (lib/analytics.js) — no new
+  // calculation, same source Overview's own momentum indicator uses, so
+  // this can't disagree with it. A full "periodic performance review"
+  // restructuring (what worked/didn't, narrative framing per period) is
+  // real, larger follow-up work — this is the bounded, safe piece of it
+  // available without that redesign.
+  const _monthly = analytics?.monthlyData || []
+  const _latestMonth = _monthly.length ? _monthly[_monthly.length - 1] : null
+  const monthGrowthPct = _latestMonth?.growthPct ?? null
+
   const totalUSD    = analytics?.totalUSD || 0
   const hourlyRate   = analytics?.estimatedHourlyRate || 0
-  const bestDay      = analytics?.bestDay || null
   // Phase 1B: reads the canonical best-time result (lib/analytics/bestTimes.js
   // — session-based, median $/hour, confidence-tiered) instead of the legacy
   // tip-level computeBestTimes() output, per the approved Best-Time Migration
   // Matrix (same underlying field the dashboard header now reads too, so
   // this page and Overview can no longer disagree on "Best Streaming Time").
+  // bestDay is derived from the SAME bestWindow as bestHour below — previously
+  // bestDay alone still read the legacy analytics.bestDay (tip-level, mean-
+  // based), which can name a different day than the canonical bestWindow
+  // (confirmed on a real account: legacy bestDay = Friday, canonical
+  // bestWindow = Wednesday) — the exact single-component, two-source
+  // contradiction this migration exists to eliminate.
   const _canonicalBestWindow = analytics?.canonicalBestTimes?.bestWindow
   const bestHour     = _canonicalBestWindow
     ? { hour: _canonicalBestWindow.localHour, avg: _canonicalBestWindow.medianUsdPerHour }
     : null
+  const bestDay      = _canonicalBestWindow
+    ? { day: _canonicalBestWindow.localDay, avg: _canonicalBestWindow.medianUsdPerHour }
+    : null
   const topSupporter = analytics?.topTippers?.[0] || null
   const platforms    = analytics?.platforms || []
-  // Headline claim defers to the same canonical value Overview uses
-  // (engineInsights.summary.best_platform) instead of re-deriving its own
-  // ranking, so the two pages can't disagree about which platform is "best."
-  // Falls back to the local sort only when engineInsights hasn't loaded yet.
-  const canonicalBestPlatform = engineInsights?.summary?.best_platform
-    ? platforms.find(p => p.platform === engineInsights.summary.best_platform)
-    : null
-  const topPlatform  = platforms.length > 1
-    ? (canonicalBestPlatform || [...platforms].sort((a, b) => b.usdPerHour - a.usdPerHour)[0])
-    : null
+  // Reads the ONE canonical answer (analytics.bestPlatformByRate), which
+  // ranks by usdPerHour — the same statistic this card displays underneath
+  // the name — and excludes the parser's "Unknown" bucket plus any platform
+  // with no measurable streamed hours.
+  //
+  // This previously deferred to engineInsights.summary.best_platform, which
+  // ranks by AVERAGE USD PER TIP (get_user_insights: AVG(usd) ... HAVING
+  // COUNT(*) >= 5). On the owner's real account that crowned "Unknown" — 13
+  // undetected-platform tips averaging $13.51 each, against Chaturbate's
+  // $0.36 across 4,835 tips — and then rendered "$0.00/hr" beneath it,
+  // because Unknown has no qualifying session hours. Two different
+  // statistics under one claim, headlined by a bucket that is not a
+  // platform at all.
+  const topPlatform = analytics?.bestPlatformByRate || null
+  const rankableCount = analytics?.rankablePlatformCount ?? 0
   const insights     = analytics?.insights || []
   const nextMoves    = analytics?.nextMoves || []
 
@@ -119,17 +145,19 @@ export default function CreatorReport({ analytics, tips = [], isPro = false, onU
 
       {/* ── STAT GRID ── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginBottom: 20 }}>
-        <StatCard index={0} icon="💰" label="Total Earnings" value={fmtUsd(totalUSD)} sub={`${tips.length} tips tracked`} />
+        <StatCard index={0} icon="💰" label="Total Earnings" value={fmtUsd(totalUSD)} sub={monthGrowthPct !== null ? `${monthGrowthPct >= 0 ? '↑' : '↓'} ${Math.abs(monthGrowthPct)}% vs last month` : `${tips.length} tips tracked`} />
         <StatCard index={1} icon="⏱️" label="Avg $/Hour" value={hourlyRate > 0 ? fmtUsd(hourlyRate) : 'Not enough data yet'} />
-        <StatCard index={2} icon="📅" label="Best Streaming Day" value={bestDay?.day || 'Not enough data yet'} sub={bestDay ? `~${fmtUsd(bestDay.avg)} avg` : null} />
-        <StatCard index={3} icon="⏰" label="Best Streaming Time" value={fmtHour(bestHour?.hour) || 'Not enough data yet'} sub={bestHour ? `~${fmtUsd(bestHour.avg)} avg per session` : null} />
+        <StatCard index={2} icon="📅" label="Best Streaming Day" value={bestDay?.day || 'Not enough data yet'} sub={_canonicalBestWindow ? `${_canonicalBestWindow.sessionCount} qualifying session${_canonicalBestWindow.sessionCount === 1 ? '' : 's'}` : null} />
+        <StatCard index={3} icon="⏰" label="Best Streaming Time" value={fmtHour(bestHour?.hour) || 'Not enough data yet'} sub={bestHour ? `${fmtUsd(bestHour.avg)}/hr median` : null} />
         <StatCard index={0} icon="👑" label="Top Supporter" value={topSupporter?.username || 'Not enough data yet'} sub={topSupporter ? `${fmtUsd(topSupporter.usd)} lifetime` : null} />
         <StatCard
           index={1}
           icon="🎯"
           label="Most Profitable Platform"
-          value={topPlatform ? displayPlatform(topPlatform.platform) : (platforms.length === 1 ? displayPlatform(platforms[0].platform) : 'Add a 2nd platform to compare')}
-          sub={topPlatform ? `${fmtUsd(topPlatform.usdPerHour)}/hr` : (platforms.length <= 1 && !isPro ? 'Creator Pro compares all your platforms' : null)}
+          value={topPlatform ? displayPlatform(topPlatform.platform) : 'Not enough data yet'}
+          sub={topPlatform
+            ? `${fmtUsd(topPlatform.usdPerHour)}/hr${rankableCount > 1 ? ` · best of ${rankableCount}` : ''}`
+            : 'Needs a platform with measurable streamed hours'}
         />
       </div>
 

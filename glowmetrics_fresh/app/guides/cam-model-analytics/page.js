@@ -1,8 +1,8 @@
 import Button from '../../../components/ui/Button'
 
 export const metadata = {
-  title: 'Cam Model Analytics: Earnings, Top Fans & Peak Hours',
-  description: 'Free cam model analytics dashboard — your real earnings per hour, top fans, peak streaming windows, and platform comparisons, all in one place.',
+  title: 'Cam Model Analytics',
+  description: 'See your cam model analytics — earnings per hour, top fans, peak streaming windows, and platform comparisons — all in one dashboard.',
   alternates: { canonical: 'https://www.camcashgrl.com/guides/cam-model-analytics' },
 }
 

@@ -1,19 +1,19 @@
 import ArticleLayout from '../../components/ArticleLayout'
 
 export const metadata = {
-  title: '8 Ways to Stay Anonymous as a Cam Model (Privacy Checklist)',
-  description: 'A practical anonymity checklist for cam models: stage names, photo/video protection, location clues, secure devices, payment privacy, and what to do if you get doxxed.',
+  title: 'How to Stay Anonymous as a Cam Model: Privacy Checklist',
+  description: 'Protect your identity as a cam model with practical steps for stage names, accounts, photos, location privacy, payments and online security.',
   alternates: { canonical: 'https://www.camcashgrl.com/blog/how-cam-models-stay-anonymous' },
   openGraph: {
-    title: '8 Ways to Stay Anonymous as a Cam Model (Privacy Checklist)',
-    description: 'A practical anonymity checklist for cam models: stage names, photo/video protection, location clues, secure devices, payment privacy, and what to do if you get doxxed.',
+    title: 'How to Stay Anonymous as a Cam Model: Privacy Checklist',
+    description: 'Protect your identity as a cam model with practical steps for stage names, accounts, photos, location privacy, payments and online security.',
     url: 'https://www.camcashgrl.com/blog/how-cam-models-stay-anonymous',
     type: 'article',
   },
   twitter: {
     card: 'summary_large_image',
-    title: '8 Ways to Stay Anonymous as a Cam Model (Privacy Checklist)',
-    description: 'A practical anonymity checklist for cam models: stage names, photo protection, location clues, secure devices, and payment privacy.',
+    title: 'How to Stay Anonymous as a Cam Model: Privacy Checklist',
+    description: 'Protect your identity as a cam model with practical steps for stage names, accounts, photos, location privacy, payments and online security.',
   },
 }
 

@@ -58,6 +58,23 @@ function tryParseDate(str){
   const d=new Date(s);if(!isNaN(d.getTime()))return d;return null
 }
 
+// A column is only safe to treat as a token/usd number if it is numeric in
+// its ENTIRETY (after stripping $, commas, whitespace) — parseFloat() alone
+// parses a leading numeric prefix and ignores the rest (parseFloat('21yeacock')
+// === 21, parseFloat('93marian') === 93), which silently misclassifies a
+// numeric-leading username as a token/usd value instead of the username. That
+// shifts every later column in the row (the real username is lost, the
+// transaction-type column — e.g. "Tips" — gets used as the username instead,
+// and tokens/usd end up swapped), collapsing every affected fan into one fake
+// bucket and inflating totals. Confirmed against a real 1912-row BongaCams
+// export: 4 numeric-leading usernames ("21yeacock", "93marian", "85hn5n",
+// "141414av2") all collapsed into a single fake "Tips" fan, undercounting
+// unique fans (315 vs the real 318) and overstating total revenue by ~$78
+// (their real token counts were misassigned into the usd field).
+function isFullyNumeric(str){
+  return /^-?\d+(\.\d+)?$/.test((str||'').replace(/[$,\s]/g,'').trim())
+}
+
 // Detects if a BongaCams tab-separated row is a paid chat session
 // Returns session_type string or null
 function detectBCPaidRow(cols){
@@ -89,11 +106,11 @@ function parseBCPaidSessions(rawText){
       // separators like BongaCams' "1 507") before parsing — parseFloat
       // otherwise stops at the first non-numeric character and silently
       // truncates e.g. "1 507" tokens down to 1.
-      const n=parseFloat(col.replace(/[$,\s]/g,''))
+      const n=isFullyNumeric(col)?parseFloat(col.replace(/[$,\s]/g,'')):NaN
       if(!isNaN(n)&&n>0){
         if(Number.isInteger(n)&&n<100000&&tokens===0)tokens=Math.round(n)
         else if(n<50000&&usd===0)usd=n
-      } else if(col.length>1&&col.length<=50&&isNaN(parseFloat(col))&&!username){
+      } else if(col.length>1&&col.length<=50&&!isFullyNumeric(col)&&!username){
         username=col
       }
     }
@@ -157,7 +174,7 @@ function parseRows(rawText,platformId){
     const rest=cols.filter((_,i)=>i!==tsIdx)
     let tokens=null,usd=null,username=null,note=''
     for(const col of rest){
-      const n=parseFloat(col.replace(/[$,]/g,''))
+      const n=isFullyNumeric(col)?parseFloat(col.replace(/[$,]/g,'')):NaN
       if(!isNaN(n)&&n>0){
         if(Number.isInteger(n)&&n>=1&&n<100000&&tokens===null)tokens=n
         else if(!Number.isInteger(n)&&n<5000&&usd===null)usd=n
@@ -168,7 +185,7 @@ function parseRows(rawText,platformId){
         // estimate. Once tokens is known and usd isn't, treat the next
         // positive number as the real payout regardless of its integer-ness.
         else if(tokens!==null&&usd===null)usd=n
-      }else if(col.length>0&&isNaN(parseFloat(col))){
+      }else if(col.length>0&&!isFullyNumeric(col)){
         if(username===null&&col.length<=50&&col.length>1)username=col
         else if(note===''&&col.length>0)note=col
       }
@@ -603,6 +620,10 @@ export default function OnboardingPage(){
   useEffect(()=>{
     if(!user)return
     track('onboarding_step_viewed',{step,platform:platformId})
+    // Named distinctly from the generic step_viewed event so the funnel's
+    // "first useful insight" step is directly queryable, per the funnel
+    // instrumentation checklist, without filtering step_viewed by 'done'.
+    if(step==='done')track('first_insight_viewed',{platform:platformId,tipsImported:importResult?.inserted??0})
   },[step,user])
 
   async function markDone(){
@@ -659,6 +680,7 @@ export default function OnboardingPage(){
   async function handleImport(previewArg){
     const p=previewArg||preview
     if(!user)return
+    track('import_started',{platform:platformId,source:'paste',rows:p?.tipsDetected??0})
     setImportError('');setUpgradeBlocked(null);setStep('loading');setLoadingMsgIdx(0);setLoadingProgress(0)
     try{
       const{data:{session}}=await supabase.auth.getSession()
@@ -725,6 +747,7 @@ export default function OnboardingPage(){
 
   async function handleCsvUpload(file){
     if(!file||!user)return
+    track('import_started',{platform:platformId,source:'csv'})
     setCsvUploading(true);setCsvError('');setStep('loading');setLoadingProgress(0)
     try{
       const{data:{session}}=await supabase.auth.getSession()
@@ -1065,7 +1088,17 @@ export default function OnboardingPage(){
                 <div>
                   <div style={{fontSize:10,fontWeight:800,color:PINK,textTransform:'uppercase',letterSpacing:'0.1em',marginBottom:4}}>Best first insight</div>
                   {preview?.bestHour?(
-                    <p style={{fontSize:13,color:'rgba(248,250,252,0.9)',lineHeight:1.6}}>Your earnings peak around <strong style={{color:PINK}}>{preview.bestHour}</strong>. That's your sweet spot — prioritize streaming then.</p>
+                    // preview.bestHour is the single hour with the highest total
+                    // token sum across the just-parsed rows (buildPreview() above)
+                    // — no minimum-sample or confidence-tier requirement, unlike
+                    // the dashboard's canonical bestWindow (session-based, median,
+                    // requires 4+ sessions before it's shown as "your best time" at
+                    // all). This preview can legitimately be one or two rows'
+                    // worth of signal. "Your sweet spot" overstated that as a
+                    // settled fact; framing it as an early read from this import
+                    // — confirmed or revised once the dashboard has full session
+                    // data — matches what this number actually is.
+                    <p style={{fontSize:13,color:'rgba(248,250,252,0.9)',lineHeight:1.6}}>This import shows an early signal around <strong style={{color:PINK}}>{preview.bestHour}</strong> — your dashboard will confirm this once it has more sessions to work with.</p>
                   ):(
                     <p style={{fontSize:12,color:'rgba(148,163,184,0.7)',lineHeight:1.6}}>Import more history to unlock your peak streaming windows.</p>
                   )}

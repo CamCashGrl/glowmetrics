@@ -6,8 +6,10 @@ import { computeRoomHealth } from '../../lib/analytics/roomHealth';
 import { computeRevenueVelocity, computeLiveComparison } from '../../lib/analytics/velocity';
 import { detectSessionPhase, PHASES, getRecoveryActions, getGoalStrategy } from '../../lib/analytics/sessionPhase';
 import { computeOpportunityScore, computeStreamHealth } from '../../lib/analytics/opportunity';
-import { detectSessions } from '../../lib/analytics/sessions';
-import { computeBestTimes } from '../../lib/analytics';
+import { detectSessions, detectMeaningfulSessions } from '../../lib/analytics/sessions';
+import { computeCanonicalBestTimes } from '../../lib/analytics/bestTimes';
+import { resolveCreatorTimezone } from '../../lib/timezone';
+import { toLocalHour } from '../../lib/analytics/localTime';
 import { tokenRate } from '../../lib/constants';
 import FeedbackWidget from '../components/FeedbackWidget';
 import EventsSync from './EventsSync';
@@ -52,11 +54,16 @@ export default function LivePage({ embedded = false } = {}) {
   const [flashTipId, setFlashTipId]   = useState(null);
   const [liveTick, setLiveTick]       = useState(0);
   const [sessions, setSessions]       = useState([]);
-  // Canonical bestHour/bestDay (same formula as the dashboard's Overview and
-  // Creator Report — lib/analytics.js computeBestTimes) computed over this
-  // page's own recent-90-day window, not injected from the dashboard's
-  // all-time analytics. The window stays intentionally different (see the
-  // fetch below); the calculation method no longer is.
+  // Canonical bestHour/bestDay — computeCanonicalBestTimes() (lib/analytics/
+  // bestTimes.js), the same session-based, median-$/hour, confidence-tiered
+  // engine Overview and Creator Report use — computed over this page's own
+  // recent-90-day window, not injected from the dashboard's all-time
+  // analytics. The window is intentionally different (see the fetch below,
+  // a "personal best from recent memory" is more actionable here than an
+  // all-time figure); the FORMULA is not — this page previously called the
+  // legacy tip-level-mean computeBestTimes() instead, which could disagree
+  // with the dashboard's canonical answer for reasons that had nothing to
+  // do with the intentional 90-day window.
   const [bestTimes, setBestTimes]     = useState(null);
 
   // ── DEMO / AUTH / EXT MODAL STATE ────────────────────────────────────
@@ -85,6 +92,15 @@ export default function LivePage({ embedded = false } = {}) {
   // (the duration itself is timezone-independent and unaffected by this).
   // Falls back to the browser's own timezone; persisted per-browser so it
   // doesn't need re-selecting every visit.
+  // CANONICAL creator timezone — profiles.timezone via resolveCreatorTimezone
+  // (lib/timezone.js). Distinct from liveTimezone below, which is only a
+  // per-browser DISPLAY preference for session clock times. Every analytical
+  // bucket on this page must use this one, so Live Mode can never name a
+  // different peak hour than the rest of the app for the same data.
+  const [creatorTz, setCreatorTz] = useState('UTC');
+  const creatorTzRef = useRef('UTC');
+  useEffect(() => { creatorTzRef.current = creatorTz; }, [creatorTz]);
+
   const [liveTimezone, setLiveTimezone] = useState(() => {
     if (typeof window === 'undefined') return 'UTC';
     return localStorage.getItem('cc_live_timezone') || Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -174,6 +190,18 @@ export default function LivePage({ embedded = false } = {}) {
       setUser(u);
       setAuthStatus('live');
 
+      // CANONICAL creator timezone (lib/timezone.js): profiles.timezone is
+      // the source of truth; the browser zone is only a fallback when it is
+      // unset. This page previously bucketed its peak-hour window with
+      // `liveTimezone` — a browser/localStorage value — so for any creator
+      // whose browser zone differs from their saved profile zone, Live Mode
+      // named a different peak hour than the Command Center, Performance and
+      // the Stream Planner all name for the same data.
+      supabase.from('profiles').select('timezone').eq('id', u.id).single()
+        .then(({ data: prof }) => {
+          setCreatorTz(resolveCreatorTimezone(prof?.timezone).timezone);
+        });
+
       // Load last 12h of tips as history
       const since = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString();
       supabase.from('live_tips').select('*').eq('user_id', u.id).gte('received_at', since)
@@ -224,7 +252,18 @@ export default function LivePage({ embedded = false } = {}) {
         .then(({ data }) => {
           if (data) {
             setSessions(detectSessions(data));
-            setBestTimes(computeBestTimes(data));
+            // Shimmed to the {bestHour:{hour,avg}} shape peakHourData below
+            // already expects — same adaptation app/dashboard/page.js and
+            // CreatorReport.js use for their own bestWindow migration, so
+            // this page's rendering code needed no changes.
+            // creatorTzRef, not liveTimezone: liveTimezone is a per-browser
+            // DISPLAY preference for session clock times, never an
+            // analytical bucket.
+            const { bestWindow } = computeCanonicalBestTimes(detectMeaningfulSessions(data), creatorTzRef.current);
+            setBestTimes({
+              bestHour: bestWindow ? { hour: bestWindow.localHour, avg: bestWindow.medianUsdPerHour } : null,
+              bestDay: bestWindow ? { day: bestWindow.localDay, avg: bestWindow.medianUsdPerHour } : null,
+            });
           }
         });
     });
@@ -623,18 +662,23 @@ export default function LivePage({ embedded = false } = {}) {
     return { target: next, remaining, minsEst, progress };
   })();
 
-  // Peak Hour Countdown — the peak hour itself comes from computeBestTimes,
-  // the same canonical calculation Overview and Creator Report use (median
-  // USD per local-hour bucket, 3+ active buckets required), so this can't
-  // disagree with what the dashboard told the user earlier. Everything
-  // below (is it happening right now, how many minutes are left) is
-  // real-time application logic specific to this page.
+  // Peak Hour Countdown — the peak hour itself comes from
+  // computeCanonicalBestTimes(), the same engine Overview and Creator
+  // Report use (session-based, median $/hour, confidence-tiered), applied
+  // to this page's own recent-90-day session window (see bestTimes above).
+  // Everything below (is it happening right now, how many minutes are left)
+  // is real-time application logic specific to this page.
   const peakHourData = (() => {
     if (!bestTimes?.bestHour) return null;
     const peakHour = parseInt(bestTimes.bestHour.hour, 10);
     const peakEnd = (peakHour + 2) % 24;
     const now = new Date();
-    const nowH = now.getHours();
+    // Creator-local, NOT the browser clock. peakHour comes from
+    // computeCanonicalBestTimes bucketed in the creator's zone, so comparing
+    // it against the browser's hour compared two different clocks — the
+    // countdown could claim "you're in your peak window" when the creator was
+    // hours away from it, or hide it entirely when they were in it.
+    const nowH = toLocalHour(now.toISOString(), creatorTz);
     const nowM = now.getMinutes();
     const inPeak = nowH === peakHour || nowH === (peakHour + 1) % 24;
     if (!inPeak) return null;
@@ -647,7 +691,8 @@ export default function LivePage({ embedded = false } = {}) {
     const hourRevenue = {};
     sessions.forEach(s => {
       if (!s.startTime || !(s.totalUSD > 0)) return;
-      const h = new Date(s.startTime).getHours();
+      // Creator-local bucket, matching peakHour's own zone.
+      const h = toLocalHour(s.startTime, creatorTz);
       hourRevenue[h] = (hourRevenue[h] || 0) + (s.totalUSD || 0);
     });
     const peakRevTotal = (hourRevenue[peakHour] || 0) + (hourRevenue[(peakHour + 1) % 24] || 0);
@@ -1086,7 +1131,11 @@ export default function LivePage({ embedded = false } = {}) {
               <div style={{ flex: '1 1 130px', borderRadius: 10, padding: '10px 14px', background: roomHealth.bg, border: `1px solid ${roomHealth.border}` }}>
                 <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 4 }}>Room Heat</div>
                 <div style={{ fontSize: 16, fontWeight: 800, color: roomHealth.color }}>{roomHealth.emoji} {roomHealth.label}</div>
-                <div style={{ fontSize: 9, color: C.muted, marginTop: 2 }}>{roomHealth.confidence}% confidence</div>
+                {/* The observation the score rests on, not a "% confidence".
+                    roomHealth.confidence is (liveOnlyCount/5)*60 +
+                    (elapsedMins/20)*40 — a hand-rolled number with nothing
+                    calibrating it, previously rendered as a percentage. */}
+                <div style={{ fontSize: 9, color: C.muted, marginTop: 2 }}>{state?.liveOnlyCount ?? 0} tip{(state?.liveOnlyCount ?? 0) === 1 ? '' : 's'} · {Math.round(state?.elapsedMins ?? 0)} min</div>
               </div>
               <div style={{ flex: '1 1 130px', borderRadius: 10, padding: '10px 14px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
                 <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 4 }}>Opportunity</div>
@@ -1213,11 +1262,11 @@ export default function LivePage({ embedded = false } = {}) {
               const def = { bg: 'linear-gradient(135deg, rgba(236,72,153,0.1), rgba(124,92,255,0.1))', border: 'rgba(168,85,247,0.3)', badge: 'rgba(236,72,153,0.2)', badgeText: C.pink, tag: '⚡ DO THIS NOW' };
               const sty = uc || def;
               return (
-                <div style={{ borderRadius: 16, padding: '26px 28px', marginBottom: 20, background: topAlert ? sty.bg : def.bg, border: `1px solid ${topAlert ? sty.border : def.border}`, boxShadow: topAlert?.level === 'critical' ? '0 0 32px rgba(248,113,113,0.12)' : 'none', animation: topAlert?.level === 'critical' ? 'cc-glow 2.5s ease-in-out infinite' : 'none', position: 'relative', overflow: 'hidden' }}>
+                <div className="cc-coach-card" style={{ borderRadius: 16, padding: '26px 28px', marginBottom: 20, background: topAlert ? sty.bg : def.bg, border: `1px solid ${topAlert ? sty.border : def.border}`, boxShadow: topAlert?.level === 'critical' ? '0 0 32px rgba(248,113,113,0.12)' : 'none', animation: topAlert?.level === 'critical' ? 'cc-glow 2.5s ease-in-out infinite' : 'none', position: 'relative', overflow: 'hidden' }}>
                   <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: 'linear-gradient(90deg, #ec4899, #a855f7, #22d3ee)', backgroundSize: '200% 100%', animation: 'cc-bar 2s ease infinite alternate' }} />
                   <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'flex-start' }}>
-                    <div style={{ flex: 1, minWidth: 260 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                    <div style={{ flex: '1 1 240px', minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
                         <div style={{ padding: '3px 10px', borderRadius: 6, background: topAlert ? sty.badge : def.badge, fontSize: 10, fontWeight: 800, color: topAlert ? sty.badgeText : def.badgeText, letterSpacing: 0.8, textTransform: 'uppercase' }}>
                           {topAlert ? sty.tag : def.tag}
                         </div>
@@ -1251,10 +1300,20 @@ export default function LivePage({ embedded = false } = {}) {
                     </div>
                     {liveActive && state && goalStrategy && (
                       <div style={{ minWidth: 170, padding: '14px 18px', borderRadius: 12, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-                        <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8 }}>Goal Push Probability</div>
-                        <div style={{ fontSize: 30, fontWeight: 900, color: goalStrategy.probability >= 70 ? C.green : goalStrategy.probability >= 40 ? C.gold : C.red, marginBottom: 6 }}>{goalStrategy.probability}%</div>
+                        {/* Goal PROGRESS — a real measured figure
+                            (totalTokens / goalTokens, computed in
+                            computeCoachingState). This card previously showed
+                            "Goal Push Probability" from getGoalStrategy(),
+                            whose values were hardcoded literals (100/85/72/
+                            25/50) with nothing deriving them — a fabricated
+                            probability rendered at 30px as if it were a
+                            measurement. The qualitative timing and suggestion
+                            it returns ARE derived from real goalProgress and
+                            paceStatus, so those are kept. */}
+                        <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8 }}>Goal Progress</div>
+                        <div style={{ fontSize: 30, fontWeight: 900, color: state.goalProgress >= 70 ? C.green : state.goalProgress >= 40 ? C.gold : C.red, marginBottom: 6 }}>{state.goalProgress}%</div>
                         <div style={{ height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.08)', overflow: 'hidden', marginBottom: 8 }}>
-                          <div style={{ height: '100%', width: `${goalStrategy.probability}%`, borderRadius: 2, background: goalStrategy.probability >= 70 ? `linear-gradient(90deg, ${C.green}, ${C.cyan})` : `linear-gradient(90deg, ${C.gold}, ${C.orange})`, transition: 'width 0.5s ease' }} />
+                          <div style={{ height: '100%', width: `${Math.min(100, state.goalProgress)}%`, borderRadius: 2, background: state.goalProgress >= 70 ? `linear-gradient(90deg, ${C.green}, ${C.cyan})` : `linear-gradient(90deg, ${C.gold}, ${C.orange})`, transition: 'width 0.5s ease' }} />
                         </div>
                         <div style={{ fontSize: 10, color: C.muted, lineHeight: 1.5 }}>{goalStrategy.suggestion}</div>
                       </div>
@@ -1265,13 +1324,13 @@ export default function LivePage({ embedded = false } = {}) {
             })()}
 
             {/* ── MAIN GRID ─────────────────────────────────────────── */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 350px', gap: 20, marginBottom: 20 }}>
+            <div className="cc-live-split" style={{ display: 'grid', gridTemplateColumns: '1fr 350px', gap: 20, marginBottom: 20 }}>
 
               {/* LEFT */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
                 {/* 4 stat cards */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(132px, 1fr))', gap: 10 }}>
                   {[
                     { label: 'Revenue',  value: `$${state?.totalRevenue?.toFixed(2) || '0.00'}`,           color: C.green,      sub: velocity.label || null,         showSparkline: true },
                     { label: 'Tips/min', value: state?.tipsPerMinute?.toFixed(2) || '0.00',                color: C.cyan,       sub: `${state?.liveOnlyCount || 0} tips live`, showSparkline: false },
@@ -1295,7 +1354,7 @@ export default function LivePage({ embedded = false } = {}) {
                 </div>
 
                 {/* Pace + Goal */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
                   <div style={{ borderRadius: 12, padding: '14px 18px', background: pace.bg, border: `1px solid ${pace.border}` }}>
                     <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 6 }}>Pace</div>
                     <div style={{ fontSize: 20, fontWeight: 800, color: pace.color }}>{pace.label}</div>
