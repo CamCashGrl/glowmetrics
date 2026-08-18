@@ -14,6 +14,7 @@ import SiteFooter from "../components/SiteFooter"
 import { PLATFORM_TOKEN_RATES, tokenRate } from "../../lib/constants"
 import { track as gtmTrack } from '../../lib/track'
 import { isProPlan } from '../../lib/plan'
+import { FREE_MAX_PLATFORMS, FREE_HISTORY_DAYS, filterFreeHistory, normalizePlatform } from '../../lib/planLimits'
 import { resolveCreatorTimezone, autoPopulateTimezoneIfMissing } from '../../lib/timezone'
 import { getDashboardReadiness, getModuleLockState, canShowHourlyRate, LockedInsightCard, DashboardProgressCard } from './DashboardPreview'
 import Button from '../../components/ui/Button'
@@ -48,9 +49,13 @@ const UPGRADE_COPY = {
     headline: "You have enough data for deeper insights",
     subhead: "Upgrade to unlock your remaining personalized recommendations for next stream.",
   },
-  post_upload_reveal: {
-    headline: "Your upload has more in it than Free can show",
-    subhead: "The rest of this import is ready — upgrade and it unlocks immediately, no re-upload needed.",
+  csv_history: {
+    headline: "Your latest month is analyzed",
+    subhead: "Free keeps the most recent 31 days. Pro keeps your full import history so you can compare longer-term earnings, sessions, fans, and trends.",
+  },
+  csv_platform_limit: {
+    headline: "You've used all 3 free platform slots",
+    subhead: "Upgrade to Pro to add more platforms and compare where you actually earn best.",
   },
 }
 
@@ -159,24 +164,12 @@ function EnvelopeHeartIcon({ size = 16, heartColor = "#FF2BAE" }) {
   )
 }
 
-// Builds the "quick preview" stats (tips / fans / earnings / top spender)
-// shown when a free-tier user's import is blocked by the platform limit —
-// same shape as onboarding's buildPreview(), minus paid-session handling,
-// since this only needs to answer "what's in the file" for a soft paywall.
-function buildImportPreview(rawText, platform) {
-  if (!rawText) return null
-  const rows = parseCSV(rawText, platform)
-  if (!rows.length) return null
-  const totalUsd = rows.reduce((sum, r) => sum + (r.usd || 0), 0)
-  const fanTotals = rows.reduce((acc, r) => { acc[r.username] = (acc[r.username] || 0) + r.tokens; return acc }, {})
-  const topSpender = Object.entries(fanTotals).sort((a, b) => b[1] - a[1])[0]
-  return {
-    tipsDetected: rows.length,
-    fansDetected: Object.keys(fanTotals).length,
-    estimatedEarnings: parseFloat(totalUsd.toFixed(2)),
-    topSpender: topSpender ? topSpender[0] : null,
-  }
-}
+// NOTE: the client-side "quick preview" that used to live here (parsing the
+// raw CSV a second time in the browser to guess tips/fans/earnings) was
+// removed — the upload API now returns real, server-computed locked-preview
+// numbers (lockedPlatformPreview / excludedHistory / fullFileSummary) from
+// the same canonical analytics pipeline the rest of the dashboard uses, so
+// there's no need for a separate, less-accurate client-side guess.
 
 // Sparkle burst — ports the same completion animation used in onboarding's
 // "First Insights" step so the platform-limit preview feels visually
@@ -2151,8 +2144,9 @@ export default function Dashboard() {
       // detection is fallback-only, used to auto-populate the profile once
       // (see autoPopulateTimezoneIfMissing) rather than being read live on
       // every load.
-      const { data: profileTzRow } = await supabase.from('profiles').select('timezone').eq('id', uid).maybeSingle()
+      const { data: profileTzRow } = await supabase.from('profiles').select('timezone, plan').eq('id', uid).maybeSingle()
       const { timezone: userTz } = resolveCreatorTimezone(profileTzRow?.timezone)
+      const loadedIsPro = isProPlan(profileTzRow)
       autoPopulateTimezoneIfMissing(supabase, uid, profileTzRow?.timezone)
       const PAGE = 1000
       // First page also asks for the exact row count, so the remaining pages
@@ -2178,11 +2172,19 @@ export default function Dashboard() {
         }
       }
       if (allData.length) {
-        setTips(allData)
+        // Free plan analytics are limited to the most recent 31 days. We do
+        // not delete older database rows; we simply keep them out of the
+        // Free dashboard/analytics view. Pro sees the full imported history.
+        const historyResult = loadedIsPro
+          ? { rows: allData, removedCount: 0 }
+          : filterFreeHistory(allData)
+
+        const visibleData = historyResult.rows
+        setTips(visibleData)
         try {
-          const result = runEngine(allData, userTz)
+          const result = runEngine(visibleData, userTz)
           setAnalytics(result)
-          lastEngineTipsFingerprintRef.current = { length: allData.length, lastId: allData[allData.length - 1]?.id ?? null }
+          lastEngineTipsFingerprintRef.current = { length: visibleData.length, lastId: visibleData[visibleData.length - 1]?.id ?? null }
         } catch (engineErr) {
           console.error('[loadData] runEngine failed:', engineErr)
         }
@@ -2231,28 +2233,40 @@ const stopImportMessageRotation = () => {
     setLockedPreview(null)
   }
 
-  // Shows a quick preview of what's in a blocked import (tips/fans/earnings/
-  // top spender) plus a soft paywall, instead of just refusing the upload —
-  // so a free-tier user sees real value before being asked to subscribe.
-  const denyWithPlatformPreview = async (file, platformLabel) => {
-    let rawText = ''
-    try { rawText = await file.text() } catch (e) {}
-    const detectedLabel = platformLabel || (rawText ? detectPlatform(rawText) : null) || 'this platform'
-    const preview = buildImportPreview(rawText, platformLabel)
+  // Shows a REAL preview of what's in a blocked import — per-locked-platform
+  // tips/earnings/sessions, plus the full-file summary — instead of a
+  // client-side guess. All numbers here come straight from the upload API's
+  // 402 response body (lockedPlatformPreview/fullFileSummary), which
+  // computed them from the actual parsed CSV server-side via the same
+  // canonical analytics engine the rest of the dashboard uses. Never
+  // re-parses the file client-side and never invents a number.
+  const denyWithPlatformPreview = (apiResult) => {
     setLastUploadResult(null)
-    setLockedPreview({ platform: detectedLabel, preview })
+    setLockedPreview({
+      lockedPlatformPreview: apiResult.lockedPlatformPreview || [],
+      fullFileSummary: apiResult.fullFileSummary || null,
+      currentPlatforms: apiResult.currentPlatforms || [],
+      maxPlatforms: apiResult.maxPlatforms || FREE_MAX_PLATFORMS,
+    })
     setImportStage('locked_preview')
-    // Only play the celebratory checkmark/sparkle when we actually found
-    // something to preview — an unparseable file isn't a "confirmation".
-    if (preview) {
+    const hasPreview = (apiResult.lockedPlatformPreview || []).some(p => p.tips > 0)
+    if (hasPreview) {
       setShowImportSparkle(true)
       setTimeout(() => setShowImportSparkle(false), 2400)
     }
-    gtmTrack('platform_limit_preview_shown', { platform: detectedLabel, hasPreview: !!preview })
+    gtmTrack('platform_limit_preview_shown', {
+      platforms: (apiResult.lockedPlatformPreview || []).map(p => p.platform).join(','),
+      hasPreview,
+    })
   }
 
   const handleCSV = async (file, forcePlatform = null) => {
     if (!file || !user) return
+    // Platform-limit and history-window decisions are made server-side (the
+    // upload API classifies the full file against the account's actual
+    // tracked platforms and returns real numbers either way) — no
+    // client-side pre-check here, so there's no chance of a stale or
+    // mis-normalized guess blocking an upload the server would have allowed.
     setImportStage('processing')
     setImportMessageIdx(0)
     setLastUploadResult(null)
@@ -2281,7 +2295,7 @@ const stopImportMessageRotation = () => {
 
       if (!res.ok || result.error) {
         if (result.code === 'platform_limit_reached') {
-          await denyWithPlatformPreview(file, forcePlatform || uploadPlatform || result.platform || null)
+          denyWithPlatformPreview(result)
         } else {
           showToast("❌ " + (result.error || 'Upload failed'))
           setLastUploadResult({ success: false, error: result.error || "We couldn't read this CSV. Please check the format or try another file." })
@@ -2305,12 +2319,22 @@ const stopImportMessageRotation = () => {
         totalUsd: result.totalUsd,
         dateFrom: result.dateFrom,
         dateTo: result.dateTo,
-        // Real numbers computed server-side from this exact file, for
-        // anything Free's 31-day window or 3-platform cap couldn't show —
-        // drives the "What You're Missing" panel below. null/[] when
-        // everything in the file was already visible.
+        historyLimited: !!result.historyLimited,
+        historyDays: result.historyDays || null,
+        historyRemovedCount: result.historyRemovedCount || 0,
+        historyWindowStart: result.historyWindowStart || null,
+        historyWindowEnd: result.historyWindowEnd || null,
+        // Section A — what's actually visible right now on the current plan.
+        freeResults: result.freeResults || null,
+        // Section B — real, non-fabricated totals for data this upload
+        // contained that Free can't show yet (older-than-31-days rows, and/or
+        // platforms beyond the Free cap). Both come straight from the
+        // upload API, computed from the real parsed file — never guessed.
         excludedHistory: result.excludedHistory || null,
-        excludedPlatforms: result.excludedPlatforms || [],
+        lockedPlatformPreview: result.lockedPlatformPreview || null,
+        fullFileSummary: result.fullFileSummary || null,
+        platformsTracked: result.platformsTracked || [],
+        freePlatformLimit: result.freePlatformLimit || null,
       })
       setImportStage('success')
 
@@ -2477,8 +2501,13 @@ const stopImportMessageRotation = () => {
     }
   })
 
-  const allPlatforms = memoOn(derivedCacheRef.current, 'allPlatforms', [tips], () => [...new Set(tips.map(t => t.platform))])
-  const freePlatformLimitReached = !isPro && allPlatforms.length > 0
+  const allPlatforms = memoOn(
+    derivedCacheRef.current,
+    'allPlatforms',
+    [tips],
+    () => [...new Set(tips.map(t => normalizePlatform(t.platform)).filter(Boolean))]
+  )
+  const freePlatformLimitReached = !isPro && allPlatforms.length >= FREE_MAX_PLATFORMS
 
   // ── Build "What's Next" alerts — smarter, personalized, prioritized
   const buildWhatsNextAlerts = () => {
@@ -5768,7 +5797,9 @@ const stopImportMessageRotation = () => {
           <div style={{ maxWidth: 600, margin: "0 auto" }}>
             <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 8 }}>📥 Import CSV</h1>
             <p style={{ fontSize: 14, color: C.muted, marginBottom: 12 }}>
-              {isPro ? "Unlimited platforms • Auto-removes duplicates" : freePlatformLimitReached ? `Free plan — tracking ${allPlatforms[0]}. Auto-removes duplicates.` : "Free plan tracks 1 platform. Auto-removes duplicates."}
+              {isPro
+                ? "Unlimited platforms • Full CSV history • Auto-removes duplicates"
+                : `Free plan — up to ${FREE_MAX_PLATFORMS} platforms • ${FREE_HISTORY_DAYS}-day history window • Auto-removes duplicates.`}
             </p>
             <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: freePlatformLimitReached ? 16 : 32 }}>
               <a href="/blog/how-to-upload-csv-to-camcash" style={{ fontSize: 13, color: C.cyan, textDecoration: "none", fontWeight: 600 }}>📹 Watch the SOP: How to upload a CSV →</a>
@@ -5778,9 +5809,9 @@ const stopImportMessageRotation = () => {
               <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", borderRadius: 12, background: "rgba(168,85,247,0.08)", border: "1px solid rgba(168,85,247,0.25)", marginBottom: 16 }}>
                 <span style={{ fontSize: 18 }}>🔒</span>
                 <div style={{ flex: 1, fontSize: 12.5, color: C.text, lineHeight: 1.5 }}>
-                  You're on the free plan (1 platform). Upgrade to Pro to add BongaCams, MyFreeCams, and more.
+                  You've used all {FREE_MAX_PLATFORMS} free platform slots. Upgrade to Pro to add more platforms and compare performance across them.
                 </div>
-                <Button onClick={() => openUpgradeModal('multi_platform')} style={{ flexShrink: 0, padding: "8px 14px", fontSize: 12, whiteSpace: "nowrap" }}>Upgrade →</Button>
+                <Button onClick={() => openUpgradeModal('csv_platform_limit')} style={{ flexShrink: 0, padding: "8px 14px", fontSize: 12, whiteSpace: "nowrap" }}>Upgrade →</Button>
               </div>
             )}
             <div style={{ ...glassCard, borderRadius: 14, padding: 32, marginBottom: 16, position: "relative", overflow: "hidden" }}>
@@ -5791,7 +5822,7 @@ const stopImportMessageRotation = () => {
                     style={{ width: "100%", padding: "10px 14px", borderRadius: 9, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: C.white, fontSize: 14, outline: "none", opacity: uploading ? 0.6 : 1 }}>
                     <option value="">Auto-detect (recommended)</option>
                     {["Chaturbate", "BongaCams", "MyFreeCams", "Stripchat", "CamSoda"].map(p => {
-                      const locked = freePlatformLimitReached && !allPlatforms.includes(p)
+                      const locked = !isPro && freePlatformLimitReached && !allPlatforms.includes(normalizePlatform(p))
                       return <option key={p} value={p} disabled={locked}>{locked ? `🔒 ${p} — requires Pro` : p}</option>
                     })}
                   </select>
@@ -5824,11 +5855,24 @@ const stopImportMessageRotation = () => {
                 </div>
               )}
 
-              {importStage === 'success' && lastUploadResult?.success && (
+              {importStage === 'success' && lastUploadResult?.success && (() => {
+                const hasExcludedHistory = !isPro && lastUploadResult.excludedHistory && lastUploadResult.excludedHistory.tips > 0
+                const hasLockedPlatforms = !isPro && (lastUploadResult.lockedPlatformPreview || []).length > 0
+                const hasAnythingLocked = hasExcludedHistory || hasLockedPlatforms
+                const blurStat = (label, value, color) => (
+                  <div key={label} style={{ padding: "10px 12px", borderRadius: 10, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)" }}>
+                    <div style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: C.muted, marginBottom: 4 }}>{label}</div>
+                    <div style={{ fontSize: 15, fontWeight: 900, color, filter: "blur(3px)", userSelect: "none" }}>{value}</div>
+                  </div>
+                )
+                return (
                 <div style={{ textAlign: "center" }}>
                   <div style={{ position: "relative", width: 56, height: 56, margin: "0 auto 14px" }}>
                     <div className="import-flash-ring" style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "radial-gradient(circle,rgba(34,211,238,0.55),rgba(236,72,153,0.35) 60%,transparent 70%)" }} />
                     <div className="import-check-badge" style={{ position: "relative", width: 56, height: 56, borderRadius: "50%", background: "linear-gradient(135deg,#10B981,#22D3EE)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, color: "#fff", boxShadow: "0 0 24px rgba(16,185,129,0.45)" }}>✓</div>
+                  </div>
+                  <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.18em", textTransform: "uppercase", color: C.green, marginBottom: 8 }}>
+                    {hasAnythingLocked ? "Section A — Your Free Results" : "Your Data Is Ready"}
                   </div>
                   <div style={{ fontSize: 16, fontWeight: 800, color: C.white, marginBottom: 8 }}>Success — your tips were imported.</div>
                   <div style={{ fontSize: 13.5, color: C.text, lineHeight: 1.6 }}>
@@ -5845,69 +5889,78 @@ const stopImportMessageRotation = () => {
                   {lastUploadResult.skipped > 0 && (
                     <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>{lastUploadResult.skipped} duplicates skipped</div>
                   )}
+
+                  {/* Section A recap — what Free can see right now, real numbers from this upload */}
+                  {!isPro && lastUploadResult.freeResults && (
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8, margin: "16px auto 0", maxWidth: 480 }}>
+                      {[
+                        { label: "Free Tips", value: lastUploadResult.freeResults.tips.toLocaleString(), color: C.cyan },
+                        { label: "Free Earnings", value: `$${lastUploadResult.freeResults.totalUsd.toFixed(2)}`, color: C.green },
+                        { label: "Free Sessions", value: lastUploadResult.freeResults.sessions.toLocaleString(), color: C.gold },
+                        { label: "Free Fans", value: lastUploadResult.freeResults.fans.toLocaleString(), color: C.pink },
+                      ].map(s => (
+                        <div key={s.label} style={{ padding: "9px 10px", borderRadius: 10, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)" }}>
+                          <div style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: C.muted, marginBottom: 4 }}>{s.label}</div>
+                          <div style={{ fontSize: 14, fontWeight: 900, color: s.color }}>{s.value}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Section B — real, blurred preview of what's locked. Never shown
+                      as "0 tips" or a bare error; every number here is real, computed
+                      server-side from this exact file, just not readable until upgrade. */}
+                  {hasAnythingLocked && (
+                    <div style={{ margin: "20px auto 0", maxWidth: 480, textAlign: "left" }}>
+                      <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.18em", textTransform: "uppercase", color: C.pink, marginBottom: 10, textAlign: "center" }}>Section B — What You're Missing</div>
+
+                      {hasExcludedHistory && (
+                        <div style={{ padding: "14px 16px", borderRadius: 12, background: "linear-gradient(135deg,rgba(124,92,255,0.10),rgba(236,72,153,0.08))", border: "1px solid rgba(124,92,255,0.24)", marginBottom: 10 }}>
+                          <div style={{ fontSize: 12, fontWeight: 900, color: C.indigo, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>You also uploaded more history</div>
+                          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginBottom: 10 }}>
+                            {blurStat("Extra Tips", lastUploadResult.excludedHistory.tips.toLocaleString(), C.white)}
+                            {blurStat("Extra Earnings", `$${lastUploadResult.excludedHistory.totalUsd.toFixed(2)}`, C.green)}
+                            {blurStat("Extra Sessions", lastUploadResult.excludedHistory.sessions.toLocaleString(), C.gold)}
+                          </div>
+                          <div style={{ fontSize: 12.5, color: C.text, lineHeight: 1.55 }}>
+                            <strong style={{ color: C.white }}>{lastUploadResult.excludedHistory.tips.toLocaleString()} tips</strong> ({formatImportDate(lastUploadResult.excludedHistory.dateFrom)} – {formatImportDate(lastUploadResult.excludedHistory.dateTo)}) fall outside your Free {FREE_HISTORY_DAYS}-day analysis window.
+                          </div>
+                          <Button onClick={() => openUpgradeModal('csv_history')} style={{ marginTop: 10, padding: "8px 14px", fontSize: 12 }}>Unlock Full History →</Button>
+                        </div>
+                      )}
+
+                      {hasLockedPlatforms && lastUploadResult.lockedPlatformPreview.map(p => (
+                        <div key={p.platform} style={{ padding: "14px 16px", borderRadius: 12, background: "linear-gradient(135deg,rgba(34,211,238,0.08),rgba(124,92,255,0.08))", border: "1px solid rgba(34,211,238,0.20)", marginBottom: 10 }}>
+                          <div style={{ fontSize: 12, fontWeight: 900, color: C.cyan, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>We found another platform: {p.platform}</div>
+                          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginBottom: 10 }}>
+                            {blurStat("Tips", p.tips.toLocaleString(), C.white)}
+                            {blurStat("Earnings", `$${p.totalUsd.toFixed(2)}`, C.green)}
+                            {blurStat("Sessions", p.sessions.toLocaleString(), C.gold)}
+                          </div>
+                          <div style={{ fontSize: 12.5, color: C.text, lineHeight: 1.55 }}>
+                            Detected in this file, but not imported yet — Free is already using all {FREE_MAX_PLATFORMS} platform slots. Upgrade, then re-upload this file to bring {p.platform} in.
+                          </div>
+                          <Button onClick={() => openUpgradeModal('csv_platform_limit')} style={{ marginTop: 10, padding: "8px 14px", fontSize: 12 }}>Unlock Pro to analyze {p.platform} →</Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {!isPro && (lastUploadResult.platformsTracked || []).length >= FREE_MAX_PLATFORMS && !hasLockedPlatforms && (
+                    <div style={{ margin: "18px auto 0", maxWidth: 480, padding: "14px 16px", borderRadius: 12, background: "linear-gradient(135deg,rgba(34,211,238,0.08),rgba(124,92,255,0.08))", border: "1px solid rgba(34,211,238,0.20)", textAlign: "left" }}>
+                      <div style={{ fontSize: 12, fontWeight: 900, color: C.cyan, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 5 }}>You've unlocked all {FREE_MAX_PLATFORMS} Free platform slots</div>
+                      <div style={{ fontSize: 13, color: C.text, lineHeight: 1.55 }}>Upgrade to Pro to add more platforms and compare your earnings, best windows, and platform ROI side by side.</div>
+                      <Button onClick={() => openUpgradeModal('csv_platform_limit')} style={{ marginTop: 10, padding: "8px 14px", fontSize: 12 }}>Compare More Platforms →</Button>
+                    </div>
+                  )}
+
                   <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 20, flexWrap: "wrap" }}>
                     <Button onClick={() => handleTabChange('overview')} style={{ padding: "12px 26px", fontSize: 14 }}>View Dashboard</Button>
                     <Button variant="secondary" onClick={resetImport} style={{ padding: "12px 22px", fontSize: 13 }}>Import another CSV</Button>
                   </div>
-
-                  {/* What You're Missing — only renders when the server actually found
-                      rows outside the Free 31-day window or beyond the 3-platform cap.
-                      Every number here comes straight from route.js's summarizeRows()
-                      on this exact file — nothing here is invented or estimated. */}
-                  {!isPro && (lastUploadResult.excludedHistory || (lastUploadResult.excludedPlatforms && lastUploadResult.excludedPlatforms.length > 0)) && (
-                    <div style={{ marginTop: 20, textAlign: "left", borderRadius: 14, border: "1px solid rgba(168,85,247,0.25)", background: "rgba(168,85,247,0.06)", padding: 18 }}>
-                      <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.14em", textTransform: "uppercase", color: C.pink, marginBottom: 10, textAlign: "center" }}>
-                        🔒 What You're Missing
-                      </div>
-
-                      {lastUploadResult.excludedHistory && (
-                        <div style={{ marginBottom: lastUploadResult.excludedPlatforms?.length ? 12 : 0 }}>
-                          <div style={{ fontSize: 13, color: C.white, fontWeight: 700, marginBottom: 6 }}>Older history in this upload</div>
-                          <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 8 }}>
-                            {[
-                              { label: "Tips", value: lastUploadResult.excludedHistory.count.toLocaleString(), color: C.cyan },
-                              { label: "Earnings", value: `$${lastUploadResult.excludedHistory.totalUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, color: C.green },
-                              { label: "Unique Fans", value: lastUploadResult.excludedHistory.uniqueFans.toLocaleString(), color: C.gold },
-                              { label: "Days Covered", value: lastUploadResult.excludedHistory.uniqueDays.toLocaleString(), color: C.blue },
-                            ].map(s => (
-                              <div key={s.label} style={{ ...glassCard, borderRadius: 10, padding: "10px 12px" }}>
-                                <div style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: C.muted, marginBottom: 4 }}>{s.label}</div>
-                                <div style={{ fontSize: 15, fontWeight: 900, color: s.color }}>{s.value}</div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {lastUploadResult.excludedPlatforms && lastUploadResult.excludedPlatforms.map(p => (
-                        <div key={p.platform} style={{ marginBottom: 12 }}>
-                          <div style={{ fontSize: 13, color: C.white, fontWeight: 700, marginBottom: 6, textTransform: "capitalize" }}>{p.platform} — detected, not yet trackable on Free</div>
-                          <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 8 }}>
-                            {[
-                              { label: "Tips", value: p.count.toLocaleString(), color: C.cyan },
-                              { label: "Earnings", value: `$${p.totalUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, color: C.green },
-                              { label: "Unique Fans", value: p.uniqueFans.toLocaleString(), color: C.gold },
-                              { label: "Days Covered", value: p.uniqueDays.toLocaleString(), color: C.blue },
-                            ].map(s => (
-                              <div key={s.label} style={{ ...glassCard, borderRadius: 10, padding: "10px 12px" }}>
-                                <div style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: C.muted, marginBottom: 4 }}>{s.label}</div>
-                                <div style={{ fontSize: 15, fontWeight: 900, color: s.color }}>{s.value}</div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-
-                      <div style={{ fontSize: 12, color: C.text, marginBottom: 12, marginTop: 4 }}>
-                        Upgrade and this unlocks immediately — no need to re-upload this file.
-                      </div>
-                      <Button onClick={() => openUpgradeModal('post_upload_reveal')} style={{ width: "100%", padding: "12px", fontSize: 13.5 }}>
-                        Unlock Full Import →
-                      </Button>
-                    </div>
-                  )}
                 </div>
-              )}
+                )
+              })()}
 
               {importStage === 'error' && lastUploadResult && (
                 <div style={{ textAlign: "center" }}>
@@ -5922,45 +5975,56 @@ const stopImportMessageRotation = () => {
                 </div>
               )}
 
-              {/* Platform-limit soft paywall — a quick preview of what's in the
-                  attempted import, so a free-tier user sees real value before
-                  being asked to subscribe, rather than a hard block. */}
+              {/* Every platform in this file is beyond the Free cap — a real,
+                  per-platform preview (not a guess) computed server-side from
+                  the actual parsed CSV, so a free-tier user sees exactly what
+                  they're missing instead of a bare rejection. */}
               {importStage === 'locked_preview' && lockedPreview && (
                 <div style={{ textAlign: "center" }}>
-                  <div style={{ position: "relative", width: 56, height: 56, margin: "0 auto 14px" }}>
-                    {lockedPreview.preview && <div className="import-flash-ring" style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "radial-gradient(circle,rgba(34,211,238,0.55),rgba(236,72,153,0.35) 60%,transparent 70%)" }} />}
-                    <div className={lockedPreview.preview ? "import-check-badge" : ""} style={{ position: "relative", width: 56, height: 56, borderRadius: "50%", background: lockedPreview.preview ? "linear-gradient(135deg,#10B981,#22D3EE)" : "rgba(255,255,255,0.06)", border: lockedPreview.preview ? "none" : "1px solid rgba(255,255,255,0.12)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, color: "#fff", boxShadow: lockedPreview.preview ? "0 0 24px rgba(16,185,129,0.45)" : "none" }}>{lockedPreview.preview ? "✓" : "📁"}</div>
+                  <div style={{ width: 56, height: 56, margin: "0 auto 14px", borderRadius: "50%", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28 }}>🔒</div>
+                  <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.18em", textTransform: "uppercase", color: C.cyan, marginBottom: 8 }}>Real Preview — Nothing Fabricated</div>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: C.white, marginBottom: 4 }}>
+                    You already track {(lockedPreview.currentPlatforms || []).join(', ') || `${lockedPreview.maxPlatforms} platforms`}
                   </div>
-                  <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.18em", textTransform: "uppercase", color: C.cyan, marginBottom: 8 }}>Quick Preview</div>
-                  <div style={{ fontSize: 16, fontWeight: 800, color: C.white, marginBottom: 16 }}>
-                    Here's what's in your {lockedPreview.platform} import
+                  <div style={{ fontSize: 13, color: C.muted, marginBottom: 16 }}>
+                    Free supports up to {lockedPreview.maxPlatforms} platforms — here's what this upload contains beyond that.
                   </div>
 
-                  {lockedPreview.preview ? (
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 10, marginBottom: 16, textAlign: "left" }}>
-                      {[
-                        { label: "Tips Imported", value: lockedPreview.preview.tipsDetected.toLocaleString(), color: C.cyan },
-                        { label: "Unique Fans", value: lockedPreview.preview.fansDetected.toLocaleString(), color: C.gold },
-                        { label: "Est. Earnings", value: `$${lockedPreview.preview.estimatedEarnings.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, color: C.green },
-                        { label: "Top Spender", value: lockedPreview.preview.topSpender || "—", color: C.pink },
-                      ].map(s => (
-                        <div key={s.label} className="stat-card" style={{ ...glassCard, borderRadius: 14, padding: "12px 14px", position: "relative", overflow: "hidden" }}>
-                          <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg,${s.color}00,${s.color}88,${s.color}00)` }} />
-                          <div style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em", color: C.muted, marginBottom: 5 }}>{s.label}</div>
-                          <div style={{ fontSize: 17, fontWeight: 900, color: s.color, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.value}</div>
-                        </div>
-                      ))}
+                  {(lockedPreview.lockedPlatformPreview || []).map(p => (
+                    <div key={p.platform} style={{ padding: "14px 16px", borderRadius: 12, background: "linear-gradient(135deg,rgba(34,211,238,0.08),rgba(124,92,255,0.08))", border: "1px solid rgba(34,211,238,0.20)", marginBottom: 12, textAlign: "left" }}>
+                      <div style={{ fontSize: 13, fontWeight: 900, color: C.cyan, marginBottom: 10 }}>{p.platform}</div>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginBottom: 8 }}>
+                        {[
+                          { label: "Tips", value: p.tips.toLocaleString(), color: C.white },
+                          { label: "Earnings", value: `$${p.totalUsd.toFixed(2)}`, color: C.green },
+                          { label: "Sessions", value: p.sessions.toLocaleString(), color: C.gold },
+                        ].map(s => (
+                          <div key={s.label} style={{ padding: "9px 10px", borderRadius: 10, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)" }}>
+                            <div style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: C.muted, marginBottom: 4 }}>{s.label}</div>
+                            <div style={{ fontSize: 14, fontWeight: 900, color: s.color, filter: "blur(2.5px)", userSelect: "none" }}>{s.value}</div>
+                          </div>
+                        ))}
+                      </div>
+                      {(formatImportDate(p.dateFrom) && formatImportDate(p.dateTo)) && (
+                        <div style={{ fontSize: 11, color: C.muted }}>{formatImportDate(p.dateFrom)} – {formatImportDate(p.dateTo)} · {p.fans.toLocaleString()} fans detected</div>
+                      )}
                     </div>
-                  ) : (
+                  ))}
+
+                  {!(lockedPreview.lockedPlatformPreview || []).length && (
                     <div style={{ fontSize: 13, color: C.muted, marginBottom: 16 }}>
-                      We couldn't read enough of this file for a preview, but here's what unlocking {lockedPreview.platform} gets you.
+                      This file didn't contain readable platform data, but upgrading still unlocks tracking beyond {lockedPreview.maxPlatforms} platforms.
                     </div>
                   )}
 
-                  {/* Soft paywall — smaller and less prominent than the preview above */}
+                  {/* Soft paywall — smaller and less prominent than the preview above.
+                      Honest about persistence: this file's rows for a platform beyond
+                      the Free cap are NOT stored yet (the account's platform limit is
+                      also enforced at the database layer, independent of this page) —
+                      so re-uploading once after subscribing is what actually saves them. */}
                   <div style={{ borderRadius: 12, border: "1px solid rgba(168,85,247,0.25)", background: "rgba(168,85,247,0.06)", padding: "12px 14px" }}>
                     <div style={{ fontSize: 12.5, color: C.text, marginBottom: 8 }}>
-                      🔒 Subscribe to view your insights for <strong style={{ color: C.white }}>{lockedPreview.platform}</strong>
+                      🔒 Subscribe, then re-upload this file to import it — Free's platform limit means it isn't stored yet.
                     </div>
                     <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
                       <Button as="a" href="/pricing" style={{ padding: "8px 16px", fontSize: 12.5 }}>Subscribe →</Button>
