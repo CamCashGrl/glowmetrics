@@ -11,6 +11,11 @@
  *   - No platform-count or history-window restriction.
  */
 
+// NOTE: explicit .js extension. lib/planLimits.js is imported directly by
+// scripts/verify-free-plan-limits.mjs under plain Node ESM, which does not
+// resolve extensionless relative specifiers the way the Next bundler does.
+import { isSupportedPlatform } from './constants.js'
+
 export const FREE_MAX_PLATFORMS = 3
 export const FREE_HISTORY_DAYS = 31
 export const FREE_HISTORY_MS = FREE_HISTORY_DAYS * 24 * 60 * 60 * 1000
@@ -22,20 +27,30 @@ export function isPaidPlan(plan) {
   return ['pro', 'unlimited'].includes(String(plan || '').toLowerCase())
 }
 
+/**
+ * Distinct SLOT-CONSUMING platforms in a set of rows.
+ *
+ * Only recognized supported platforms consume one of the Free tier's slots.
+ * The parser's 'Unknown' bucket (rows whose platform could not be detected)
+ * is an absence of a platform, not a platform — counting it spent a real slot
+ * on unattributed data. On the owner's account that was 13 tips out of 7,649
+ * occupying one of three slots.
+ */
 export function uniquePlatforms(rows = []) {
   return [...new Set(
     rows
       .map((r) => normalizePlatform(r.platform))
-      .filter(Boolean)
+      .filter((p) => p && isSupportedPlatform(p))
   )]
 }
 
 export function getFreePlatformState(existingPlatforms = [], incomingPlatform = null) {
   const existing = new Set(
-    existingPlatforms.map(normalizePlatform).filter(Boolean)
+    existingPlatforms.map(normalizePlatform).filter((p) => p && isSupportedPlatform(p))
   )
   const incoming = normalizePlatform(incomingPlatform)
-  const needsNew = Boolean(incoming && !existing.has(incoming))
+  // An unrecognized/undetected platform never needs a slot.
+  const needsNew = Boolean(incoming && isSupportedPlatform(incoming) && !existing.has(incoming))
   const nextCount = existing.size + (needsNew ? 1 : 0)
 
   return {
@@ -180,13 +195,18 @@ export function splitFreeHistory(rows = [], referenceMs = null) {
  * into the DB by the caller).
  */
 export function splitFreePlatforms(rows = [], existingPlatforms = []) {
-  const allowed = new Set(existingPlatforms.map(normalizePlatform).filter(Boolean))
+  const allowed = new Set(
+    existingPlatforms.map(normalizePlatform).filter((p) => p && isSupportedPlatform(p))
+  )
   const visible = []
   const excluded = []
 
   for (const row of rows) {
     const p = normalizePlatform(row.platform)
     if (!p) { visible.push(row); continue }
+    // Undetected/unsupported platforms never consume a slot, so their rows
+    // are never blocked by the cap.
+    if (!isSupportedPlatform(p)) { visible.push(row); continue }
     if (allowed.has(p)) { visible.push(row); continue }
     if (allowed.size < FREE_MAX_PLATFORMS) {
       allowed.add(p)

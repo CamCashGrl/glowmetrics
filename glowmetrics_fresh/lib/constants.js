@@ -64,3 +64,18 @@ export const WHALE_LIFETIME_TOKEN_THRESHOLD = 500
 // best or most profitable one. Kept here rather than as a scattered string
 // literal so every consumer excludes the same value.
 export const UNDETECTED_PLATFORM = 'Unknown'
+
+// The platforms CamCash actually supports — the canonical set, derived from
+// PLATFORM_TOKEN_RATES so it can never drift from the rate table.
+//
+// Only these consume a Free platform slot. UNDETECTED_PLATFORM ('Unknown')
+// is the parser's bucket for rows whose platform could not be identified; it
+// is an absence of a platform, so it must not spend one of the creator's
+// three slots. Their data stays usable — this is purely about slot counting.
+export const SUPPORTED_PLATFORMS = Object.keys(PLATFORM_TOKEN_RATES)
+const SUPPORTED_PLATFORMS_LOWER = new Set(SUPPORTED_PLATFORMS.map((p) => p.toLowerCase()))
+
+export function isSupportedPlatform(value) {
+  const key = String(value || '').trim().toLowerCase()
+  return key !== '' && SUPPORTED_PLATFORMS_LOWER.has(key)
+}

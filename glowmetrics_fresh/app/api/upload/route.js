@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { parseCSV, detectPlatform, aggregateRows } from '../../../lib/analytics'
 import { FREE_MAX_PLATFORMS, filterFreeHistory, isPaidPlan, normalizePlatform } from '../../../lib/planLimits'
+import { isSupportedPlatform } from '../../../lib/constants'
 
 const BATCH_SIZE = 250 // Safe batch size — never hit Supabase limits
 
@@ -140,13 +141,20 @@ export async function POST(req) {
     ]
   } catch (_) {}
 
+  // Only SUPPORTED platforms occupy a Free slot. The parser's 'Unknown'
+  // bucket is an absence of a platform, not a platform — counting it spent a
+  // real slot on unattributed rows (13 of 7,649 on the owner's own account).
   const existingPlatforms = [...new Set(
-    existingPlatformRows.map(r => normalizePlatform(r.platform)).filter(Boolean)
+    existingPlatformRows
+      .map(r => normalizePlatform(r.platform))
+      .filter(p => p && isSupportedPlatform(p))
   )]
   // First-seen order within this upload, so which platform "wins" a free
   // slot is deterministic and matches the order rows appear in the file.
   const incomingPlatformsInOrder = [...new Set(
-    rows.map(r => normalizePlatform(r.platform)).filter(Boolean)
+    rows
+      .map(r => normalizePlatform(r.platform))
+      .filter(p => p && isSupportedPlatform(p))
   )]
 
   let allowedPlatforms = existingPlatforms

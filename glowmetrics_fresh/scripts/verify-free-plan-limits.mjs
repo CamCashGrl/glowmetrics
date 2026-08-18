@@ -108,6 +108,53 @@ if (passed !== checks.length) process.exit(1)
     filterFreeHistory(withUndated).rows.some((r) => r.date_time === 'not-a-date')])
 }
 
+// ── 'Unknown' must not consume a Free platform slot ────────────────────
+// The CSV parser writes 'Unknown' for rows whose platform it cannot detect.
+// That is an absence of a platform, so it must not spend one of the three
+// Free slots — it was doing so in planLimits, the upload route, and both DB
+// guards.
+{
+  const { uniquePlatforms, getFreePlatformState, splitFreePlatforms, FREE_MAX_PLATFORMS: CAP } =
+    await import('../lib/planLimits.js')
+  const { isSupportedPlatform } = await import('../lib/constants.js')
+
+  const row = (platform) => ({ platform, date_time: new Date().toISOString(), usd: 1 })
+
+  extra.push(['Unknown is not a supported platform', !isSupportedPlatform('Unknown')])
+  extra.push(['Every rate-table platform is supported',
+    ['Chaturbate','BongaCams','MyFreeCams','Stripchat','CamSoda'].every(isSupportedPlatform)])
+
+  // 3 real + Unknown -> still 3 slots consumed.
+  const threePlusUnknown = [row('Chaturbate'), row('BongaCams'), row('MyFreeCams'), row('Unknown')]
+  extra.push(['3 real platforms + Unknown counts as 3 slots',
+    uniquePlatforms(threePlusUnknown).length === 3])
+
+  // Unknown-only -> 0 slots.
+  extra.push(['Unknown-only data consumes 0 slots', uniquePlatforms([row('Unknown')]).length === 0])
+
+  // A creator at the cap can still import Unknown rows.
+  const atCap = ['chaturbate','bongacams','myfreecams']
+  extra.push(['Unknown never needs a new slot even at the cap',
+    getFreePlatformState(atCap, 'Unknown').allowed === true &&
+    getFreePlatformState(atCap, 'Unknown').needsNewPlatform === false])
+  extra.push(['Unknown rows are never blocked by the platform split',
+    splitFreePlatforms([row('Unknown')], atCap).excluded.length === 0])
+
+  // A genuine 4th supported platform still follows the split/lock behaviour.
+  const fourth = splitFreePlatforms([row('Stripchat')], atCap)
+  extra.push(['A 4th REAL platform is still split out for the locked preview',
+    fourth.excluded.length === 1 && fourth.visible.length === 0])
+  extra.push(['A 4th real platform is refused a slot', getFreePlatformState(atCap, 'Stripchat').allowed === false])
+  extra.push(['An already-tracked platform never consumes another slot',
+    getFreePlatformState(atCap, 'BongaCams').allowed === true])
+
+  // Unknown alongside a blocked 4th: Unknown stays, Stripchat is split out.
+  const mixed = splitFreePlatforms([row('Unknown'), row('Stripchat'), row('Chaturbate')], atCap)
+  extra.push(['Unknown survives while a real 4th platform is locked',
+    mixed.visible.some(r => r.platform === 'Unknown') &&
+    mixed.excluded.every(r => r.platform === 'Stripchat')])
+}
+
 for (const [name, ok] of extra) {
   if (!ok) { console.error(`FAIL: ${name}`); extraFailed++ } else { console.log(`PASS: ${name}`) }
 }
