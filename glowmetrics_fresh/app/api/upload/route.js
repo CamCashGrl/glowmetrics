@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { parseCSV, detectPlatform } from '../../../lib/analytics'
-import { FREE_MAX_PLATFORMS, filterFreeHistory, isPaidPlan, normalizePlatform } from '../../../lib/planLimits'
+import { FREE_MAX_PLATFORMS, isPaidPlan, normalizePlatform, splitFreeHistory, splitFreePlatforms, summarizeRows } from '../../../lib/planLimits'
 
 const BATCH_SIZE = 250 // Safe batch size — never hit Supabase limits
 
@@ -81,10 +81,20 @@ export async function POST(req) {
     )
   }
 
+  // ── DETECT PLATFORM ─────────────────────────────────────────────────────
+  // Resolved up front (moved from later in the file) so every row.platform
+  // is final before the Free-plan classification below runs on it.
+  const detectedPlatform = textDetectedPlatform
+  rows.forEach(r => { if (!r.platform || r.platform === 'Unknown') r.platform = detectedPlatform })
+
   // ── FREE-PLAN IMPORT BOUNDARIES ────────────────────────────────────────
-  // Free can track up to 3 platforms. Older CSV rows are never deleted from
-  // the database; the analytics/import view simply retains the most recent
-  // 31-day window for Free.
+  // Free can track up to 3 platforms and a 31-day analytics history window.
+  // IMPORTANT: this is a classification step, not a rejection step. Every
+  // row from the uploaded file gets imported — the CSV itself is never
+  // partially or fully thrown out because parts of it fall outside what
+  // Free can currently show. Rows outside Free's boundaries are summarized
+  // (real numbers, computed from this exact file) and returned to the
+  // dashboard as a locked preview, instead of a 402 that discards them.
   let existingPlatformRows = []
   try {
     const [tipPlatforms, livePlatforms, paidPlatforms] = await Promise.all([
@@ -107,37 +117,46 @@ export async function POST(req) {
   )]
   const combinedPlatforms = [...new Set([...existingPlatforms, ...incomingPlatforms])]
 
-  if (!isPro && combinedPlatforms.length > FREE_MAX_PLATFORMS) {
-    const newPlatforms = incomingPlatforms.filter(p => !existingPlatforms.includes(p))
-    return NextResponse.json({
-      error: `Free supports up to ${FREE_MAX_PLATFORMS} platforms. Upgrade to Pro to add more platforms and compare them.`,
-      code: 'platform_limit_reached',
-      maxPlatforms: FREE_MAX_PLATFORMS,
-      currentPlatforms: existingPlatforms,
-      incomingPlatforms: newPlatforms,
-      upgradeUrl: '/pricing',
-    }, { status: 402 })
-  }
-
   const originalRowCount = rows.length
   let historyRemovedCount = 0
   let historyWindowStart = null
   let historyWindowEnd = null
+  let excludedHistory = null
+  let excludedPlatforms = []
+  let platformsTracked = combinedPlatforms
 
   if (!isPro) {
-    const historyResult = filterFreeHistory(rows)
-    rows.splice(0, rows.length, ...historyResult.rows)
-    historyRemovedCount = historyResult.removedCount
-    historyWindowStart = historyResult.windowStart
-    historyWindowEnd = historyResult.windowEnd
+    // Platform cap: classify, don't reject. Rows for platforms beyond the
+    // Free cap are pulled out (and summarized below) rather than sent to
+    // insert_tips_dedup, since that RPC enforces the same cap at the DB
+    // level — pre-filtering here avoids a batch failing there.
+    const platformSplit = splitFreePlatforms(rows, existingPlatforms)
+    platformsTracked = platformSplit.allowedPlatforms
 
-    if (!rows.length) {
-      return NextResponse.json({
-        error: 'This CSV does not contain data inside the Free plan’s 31-day history window. Upgrade to Pro to analyze the full history.',
-        code: 'history_limit_reached',
-        historyDays: 31,
-        upgradeUrl: '/pricing',
-      }, { status: 402 })
+    if (platformSplit.excluded.length) {
+      const byPlatform = new Map()
+      for (const row of platformSplit.excluded) {
+        const key = normalizePlatform(row.platform) || 'unknown'
+        if (!byPlatform.has(key)) byPlatform.set(key, [])
+        byPlatform.get(key).push(row)
+      }
+      excludedPlatforms = [...byPlatform.entries()].map(([platform, platformRows]) => ({
+        platform,
+        ...summarizeRows(platformRows),
+      }))
+    }
+
+    // History window: same principle — classify the platform-allowed rows,
+    // don't drop the file to zero just because all of it is older than 31
+    // days. `rows` becomes only the Free-visible half for insertion below;
+    // the excluded half is summarized for the locked preview.
+    const historySplit = splitFreeHistory(platformSplit.visible)
+    rows.splice(0, rows.length, ...historySplit.visible)
+    historyRemovedCount = historySplit.excluded.length
+    historyWindowStart = historySplit.windowStart
+    historyWindowEnd = historySplit.windowEnd
+    if (historySplit.excluded.length) {
+      excludedHistory = summarizeRows(historySplit.excluded)
     }
   }
 
@@ -151,10 +170,6 @@ export async function POST(req) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
   }
-
-  // ── DETECT PLATFORM ─────────────────────────────────────────────────────
-  const detectedPlatform = textDetectedPlatform
-  rows.forEach(r => { if (!r.platform || r.platform === 'Unknown') r.platform = detectedPlatform })
 
   // ── SPLIT TIPS FROM PAID CHAT / SPY-MODE SESSIONS ───────────────────────
   // Paid-chat/spy-mode rows (flagged above) never go into tips — they go to
@@ -346,8 +361,13 @@ export async function POST(req) {
     historyOriginalRows: originalRowCount,
     historyWindowStart,
     historyWindowEnd,
-    platformsTracked: combinedPlatforms,
+    platformsTracked,
     freePlatformLimit: !isPro ? FREE_MAX_PLATFORMS : null,
+    // Real, computed-from-this-file numbers for anything Free couldn't show —
+    // used by the dashboard's locked-preview UI. null/[] when everything was
+    // visible, or when the user is already Pro (nothing is excluded for Pro).
+    excludedHistory,
+    excludedPlatforms,
   }
 
   if (errors.length > 0) {
