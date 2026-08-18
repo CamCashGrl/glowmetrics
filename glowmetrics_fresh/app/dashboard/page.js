@@ -12,7 +12,7 @@ import { computeCoachingState } from "../../lib/coaching/triggers"
 import dynamic from "next/dynamic"
 import Sidebar from "./Sidebar"
 import SiteFooter from "../components/SiteFooter"
-import { PLATFORM_TOKEN_RATES, tokenRate } from "../../lib/constants"
+import { PLATFORM_TOKEN_RATES, SUPPORTED_PLATFORMS, tokenRate } from "../../lib/constants"
 import { track as gtmTrack } from '../../lib/track'
 import { isProPlan } from '../../lib/plan'
 import { FREE_MAX_PLATFORMS, FREE_HISTORY_DAYS, filterFreeHistory, normalizePlatform } from '../../lib/planLimits'
@@ -567,7 +567,6 @@ const HASHTAG_POOLS_HG = {
     BongaCams:   ['#BongaCams','#BongaLive','#BCModel','#BongaCamsLive','#BongaCamsGirl'],
     MyFreeCams:  ['#MyFreeCams','#MFC','#MFCModel','#MFCShare','#MyFreeCamsModel'],
     Stripchat:   ['#Stripchat','#StripchatLive','#StripchatModel','#StripchatGirl'],
-    CamSoda:     ['#CamSoda','#CamSodaLive','#CamSodaModel'],
     Any:         ['#CamGirl','#Webcam','#LiveStream','#AdultStream','#LiveCam'],
   },
   toy: {
@@ -652,7 +651,7 @@ function HashtagGenerator({ C, glassCard, defaultPlatform = "Chaturbate" }) {
           <div>
             <label style={lbl}>Platform</label>
             <select value={platform} onChange={e => setPlatform(e.target.value)} style={inp}>
-              {['Chaturbate','BongaCams','MyFreeCams','Stripchat','CamSoda','Any'].map(p => <option key={p}>{p}</option>)}
+              {[...SUPPORTED_PLATFORMS, 'Any'].map(p => <option key={p}>{p}</option>)}
             </select>
           </div>
           <div>
@@ -4319,7 +4318,7 @@ const stopImportMessageRotation = () => {
                   <select value={uploadPlatform} onChange={e => setUploadPlatform(e.target.value)} disabled={uploading}
                     style={{ width: "100%", padding: "10px 14px", borderRadius: 9, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: C.white, fontSize: 14, outline: "none", opacity: uploading ? 0.6 : 1 }}>
                     <option value="">Auto-detect (recommended)</option>
-                    {["Chaturbate", "BongaCams", "MyFreeCams", "Stripchat", "CamSoda"].map(p => {
+                    {SUPPORTED_PLATFORMS.map(p => {
                       const locked = !isPro && freePlatformLimitReached && !allPlatforms.includes(normalizePlatform(p))
                       return <option key={p} value={p} disabled={locked}>{locked ? `🔒 ${p} — requires Pro` : p}</option>
                     })}
@@ -4335,7 +4334,7 @@ const stopImportMessageRotation = () => {
                     <input type="file" accept=".csv,.txt" style={{ display: "none" }}
                       onChange={e => { const f = e.target.files[0]; e.target.value = ''; handleCSV(f, uploadPlatform || null) }} />
                   </Button>
-                  <p style={{ fontSize: 12, color: C.muted, marginTop: 12 }}>Supports Chaturbate, BongaCams, MyFreeCams, Stripchat, CamSoda</p>
+                  <p style={{ fontSize: 12, color: C.muted, marginTop: 12 }}>Supports {SUPPORTED_PLATFORMS.join(', ')}</p>
                 </div>
               )}
 
@@ -4974,7 +4973,7 @@ const stopImportMessageRotation = () => {
 
             <h2 style={{ fontSize: 20, fontWeight: 700, color: C.white, marginBottom: 16 }}>📖 Platform-Specific Tips</h2>
             <p style={{ fontSize: 13, color: C.muted, marginBottom: 24 }}>Where to find the earnings data on each site before you copy it</p>
-            {[{ emoji: "🟣", name: "Chaturbate", steps: ["Log into your Chaturbate broadcaster account", "Go to Stats & Data → Token Stats", "Select your date range (last 30 days, 90 days, or custom)", "Click \"Download CSV\" or \"Export\"", "Upload the CSV file to CamCash"], tip: "Chaturbate CSVs usually have \"Tip from:\" format" }, { emoji: "🔴", name: "BongaCams", steps: ["Log into your BongaCams model account", "Navigate to Statistics → Earnings History", "Select date range and filter by \"Tips\" or \"All Transactions\"", "Look for \"Export to Excel\" or \"Download CSV\" button", "Save the file and upload to CamCash"], tip: "BongaCams format: Date, Username, Type, Tokens, USD" }, { emoji: "🟠", name: "MyFreeCams (MFC)", steps: ["Log into your MFC model account at wiki.myfreecams.com", "Go to Model Admin → Token Stats", "Click \"Transaction History\" or \"Detailed Stats\"", "Select date range and click \"Export CSV\"", "Upload the exported file to CamCash"], tip: "MFC CSVs are usually very detailed with all transaction types" }, { emoji: "🟢", name: "CamSoda", steps: ["Log into your CamSoda broadcaster dashboard", "Navigate to Earnings → Transaction History", "Choose your date range (last week, month, or custom dates)", "Click \"Download\" or \"Export to CSV\"", "Save and upload to CamCash"], tip: "CamSoda exports include both tokens and USD amounts" }].map(({ emoji, name, steps, tip }) => (
+            {[{ emoji: "🟣", name: "Chaturbate", steps: ["Log into your Chaturbate broadcaster account", "Go to Stats & Data → Token Stats", "Select your date range (last 30 days, 90 days, or custom)", "Click \"Download CSV\" or \"Export\"", "Upload the CSV file to CamCash"], tip: "Chaturbate CSVs usually have \"Tip from:\" format" }, { emoji: "🔴", name: "BongaCams", steps: ["Log into your BongaCams model account", "Navigate to Statistics → Earnings History", "Select date range and filter by \"Tips\" or \"All Transactions\"", "Look for \"Export to Excel\" or \"Download CSV\" button", "Save the file and upload to CamCash"], tip: "BongaCams format: Date, Username, Type, Tokens, USD" }, { emoji: "🟠", name: "MyFreeCams (MFC)", steps: ["Log into your MFC model account at wiki.myfreecams.com", "Go to Model Admin → Token Stats", "Click \"Transaction History\" or \"Detailed Stats\"", "Select date range and click \"Export CSV\"", "Upload the exported file to CamCash"], tip: "MFC CSVs are usually very detailed with all transaction types" }].map(({ emoji, name, steps, tip }) => (
               <div key={name} className="dash-card" style={{ ...glassCard, borderRadius: 14, padding: 24, marginBottom: 20 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
                   <div style={{ fontSize: 32 }}>{emoji}</div>

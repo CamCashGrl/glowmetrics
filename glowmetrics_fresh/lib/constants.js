@@ -65,14 +65,30 @@ export const WHALE_LIFETIME_TOKEN_THRESHOLD = 500
 // literal so every consumer excludes the same value.
 export const UNDETECTED_PLATFORM = 'Unknown'
 
-// The platforms CamCash actually supports — the canonical set, derived from
-// PLATFORM_TOKEN_RATES so it can never drift from the rate table.
+// The platforms CamCash actually TRACKS — the canonical set for import,
+// analytics, and Free-plan slot counting.
+//
+// Deliberately an explicit list rather than Object.keys(PLATFORM_TOKEN_RATES).
+// Those are two different questions:
+//
+//   PLATFORM_TOKEN_RATES  "what is a token worth on this site?"  — a published
+//                         industry rate, used by the public Token Calculator
+//                         and the /guides content, which quote rates for sites
+//                         CamCash does not ingest.
+//   SUPPORTED_PLATFORMS   "can a creator import this site and have CamCash
+//                         analyse it?" — a product-scope claim.
+//
+// Deriving the second from the first silently promoted every rate-table entry
+// into a tracked platform. That is how CamSoda — whose import path is not
+// finished — became valid at the upload API and started consuming one of a
+// Free creator's three slots. Keep the calculator's rate; do not claim
+// tracking support. Add a platform here only when its import path ships.
 //
 // Only these consume a Free platform slot. UNDETECTED_PLATFORM ('Unknown')
 // is the parser's bucket for rows whose platform could not be identified; it
 // is an absence of a platform, so it must not spend one of the creator's
 // three slots. Their data stays usable — this is purely about slot counting.
-export const SUPPORTED_PLATFORMS = Object.keys(PLATFORM_TOKEN_RATES)
+export const SUPPORTED_PLATFORMS = ['Chaturbate', 'BongaCams', 'MyFreeCams', 'Stripchat']
 const SUPPORTED_PLATFORMS_LOWER = new Set(SUPPORTED_PLATFORMS.map((p) => p.toLowerCase()))
 
 export function isSupportedPlatform(value) {

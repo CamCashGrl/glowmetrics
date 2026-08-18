@@ -24,7 +24,7 @@ const TEXT   = "#f1f5f9"
 const TWO_HR_SLOTS = [0,2,4,6,8,10,12,14,16,18,20,22]
 const DAYS = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"]
 const DAY_FULL = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"]
-const PLATFORM_COLORS = { chaturbate:"#f97316", myfreecams:"#3b82f6", stripchat:"#ec4899", bongacams:"#8b5cf6", camsoda:"#10b981", other:"#64748b" }
+const PLATFORM_COLORS = { chaturbate:"#f97316", myfreecams:"#3b82f6", stripchat:"#ec4899", bongacams:"#8b5cf6", other:"#64748b" }
 const SOURCE_COLORS = [CYAN, PURPLE, PINK, AMBER, GREEN, "#ef4444", "#f97316", "#3b82f6"]
 
 // ─── Time helpers ────────────────────────────────────────────────────────────
@@ -63,7 +63,6 @@ function normPlatform(raw) {
   if (s.includes("myfreecams") || s.includes("mfc")) return "myfreecams"
   if (s.includes("stripchat")) return "stripchat"
   if (s.includes("bongacams")) return "bongacams"
-  if (s.includes("camsoda")) return "camsoda"
   return "other"
 }
 

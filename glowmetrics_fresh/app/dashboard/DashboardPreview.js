@@ -19,6 +19,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { isProPlan } from '../../lib/plan'
 import { FREE_MAX_PLATFORMS } from '../../lib/planLimits'
+import { SUPPORTED_PLATFORMS } from '../../lib/constants'
 
 // ── BRAND TOKENS ─────────────────────────────────────────────
 const C = {
@@ -476,7 +477,7 @@ export function DashboardPreview({ tips = [], analytics, userPlan = 'free', plan
   }
   const nextAction = getNextAction()
 
-  const ALL_PLATFORMS = ['Chaturbate', 'BongaCams', 'MyFreeCams', 'Stripchat', 'CamSoda']
+  const ALL_PLATFORMS = SUPPORTED_PLATFORMS
 
   return (
     <div style={{ minHeight: '100vh', background: C.bg, fontFamily: "'Inter',system-ui,sans-serif", color: C.white, boxSizing: 'border-box', position: 'relative' }}>

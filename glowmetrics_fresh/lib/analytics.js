@@ -239,7 +239,11 @@ export function detectPlatform(text) {
   if (lower.includes('bongacams') || lower.includes('bonga') || lower.includes('your payout')) return 'BongaCams'
   if (lower.includes('myfreecams') || lower.includes('mfc')) return 'MyFreeCams'
   if (lower.includes('stripchat')) return 'Stripchat'
-  if (lower.includes('camsoda')) return 'CamSoda'
+  // No CamSoda branch: its import path is not shipped (see SUPPORTED_PLATFORMS
+  // in lib/constants.js). Detecting it here would stamp rows with a platform
+  // the rest of the pipeline treats as unsupported. Letting them fall through
+  // to 'Unknown' keeps the data importable and readable via the existing
+  // undetected-platform handling instead of stranding it.
   // Structural detection — platform-unique data format when no platform name appears in the text
   if (/^\d{2}\.\d{2}\.\d{4}\s+\d{2}:\d{2}/m.test(text)) return 'BongaCams'
   if (/^\d{10,13}\t/m.test(text)) return 'MyFreeCams'

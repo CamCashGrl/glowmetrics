@@ -19,8 +19,41 @@ const paidSessionsMigration = read('supabase/migrations/20260817b_free_platform_
 const extra = []
 let extraFailed = 0
 
+const constantsSrc = read('lib/constants.js')
+const analyticsSrc = read('lib/analytics.js')
+const live = read('app/live/page.js')
+const moneyMap = read('app/dashboard/MoneyMap.js')
+
 const checks = [
   ['Free platform limit is 3', /FREE_MAX_PLATFORMS\s*=\s*3/.test(plan)],
+
+  // ── CamSoda is out of release scope ────────────────────────────────────
+  // Its import path is unfinished. It must not be tracked, offered, or
+  // counted anywhere in the product, while the public Token Calculator and
+  // the /guides content keep quoting its published token rate.
+  ['the supported set is an explicit list, not derived from the rate table',
+    !/SUPPORTED_PLATFORMS\s*=\s*Object\.keys\(PLATFORM_TOKEN_RATES\)/.test(constantsSrc)],
+  ['the CSV parser has no CamSoda detection branch',
+    !/includes\('camsoda'\)/.test(analyticsSrc)],
+  ['the upload platform selector is driven by the canonical set',
+    /SUPPORTED_PLATFORMS\.map/.test(dashboard)],
+  // The Token Calculator is a rate utility, not a tracking claim, and keeps
+  // quoting CamSoda's published rate. It is the ONLY place in the dashboard
+  // allowed to name it — pin the count so a selector, an import hint, or an
+  // export walkthrough cannot quietly reappear.
+  ['CamSoda survives in the dashboard only as the Token Calculator subtitle',
+    (dashboard.match(/camsoda/gi) || []).length === 1 &&
+    /Convert tokens to USD earnings[^<]*CamSoda/.test(dashboard)],
+  ['the CSV export walkthrough no longer tells creators to upload CamSoda data',
+    !/CamSoda broadcaster dashboard/.test(dashboard)],
+  ['the preview platform list no longer hardcodes CamSoda', !/camsoda/i.test(preview)],
+  ['the Live Mode platform selector no longer offers CamSoda', !/camsoda/i.test(live)],
+  ['MoneyMap no longer buckets or colours CamSoda', !/camsoda/i.test(moneyMap)],
+  ['the DB platform-cap filter is corrected by a follow-up migration, not an edit to the applied one',
+    fs.existsSync(path.join(root, 'supabase/migrations/20260818_drop_camsoda_from_free_platform_cap_filter.sql'))],
+  ['that follow-up migration removes camsoda from the guard filter',
+    !/camsoda'\)/.test(read('supabase/migrations/20260818_drop_camsoda_from_free_platform_cap_filter.sql')
+      .split('v_new_list')[1] || 'camsoda\')')],
   ['Free history window is 31 days', /FREE_HISTORY_DAYS\s*=\s*31/.test(plan)],
   ['Free history is filtered without deleting rows', /filterFreeHistory/.test(dashboard) && /setTips\(visibleData\)/.test(dashboard)],
   ['Upload route reads plan', /select\('plan'\)/.test(upload)],
@@ -116,13 +149,29 @@ if (passed !== checks.length) process.exit(1)
 {
   const { uniquePlatforms, getFreePlatformState, splitFreePlatforms, FREE_MAX_PLATFORMS: CAP } =
     await import('../lib/planLimits.js')
-  const { isSupportedPlatform } = await import('../lib/constants.js')
+  const { isSupportedPlatform, SUPPORTED_PLATFORMS, PLATFORM_TOKEN_RATES } =
+    await import('../lib/constants.js')
 
   const row = (platform) => ({ platform, date_time: new Date().toISOString(), usd: 1 })
 
   extra.push(['Unknown is not a supported platform', !isSupportedPlatform('Unknown')])
-  extra.push(['Every rate-table platform is supported',
-    ['Chaturbate','BongaCams','MyFreeCams','Stripchat','CamSoda'].every(isSupportedPlatform)])
+  extra.push(['Every tracked platform is supported',
+    ['Chaturbate','BongaCams','MyFreeCams','Stripchat'].every(isSupportedPlatform)])
+
+  // CamSoda carries a token rate (the public Token Calculator quotes it) but
+  // its import path is not shipped. Deriving the supported set from the rate
+  // table promoted it into a tracked platform, so it passed upload validation
+  // and spent one of a Free creator's three slots. Pin both halves: the rate
+  // stays, the tracking claim does not.
+  extra.push(['CamSoda is not a supported platform', !isSupportedPlatform('CamSoda')])
+  extra.push(['CamSoda is not supported under any casing',
+    !isSupportedPlatform('camsoda') && !isSupportedPlatform('CAMSODA') && !isSupportedPlatform(' CamSoda ')])
+  extra.push(['CamSoda consumes no Free platform slot',
+    uniquePlatforms([row('Chaturbate'), row('CamSoda')]).length === 1])
+  extra.push(['a rate-table entry is no longer automatically a tracked platform',
+    PLATFORM_TOKEN_RATES.CamSoda === 0.05 && !SUPPORTED_PLATFORMS.includes('CamSoda')])
+  extra.push(['the supported set is exactly the four shipped platforms',
+    SUPPORTED_PLATFORMS.length === 4])
 
   // 3 real + Unknown -> still 3 slots consumed.
   const threePlusUnknown = [row('Chaturbate'), row('BongaCams'), row('MyFreeCams'), row('Unknown')]
