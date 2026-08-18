@@ -14,7 +14,6 @@ import SiteFooter from "../components/SiteFooter"
 import { PLATFORM_TOKEN_RATES, tokenRate } from "../../lib/constants"
 import { track as gtmTrack } from '../../lib/track'
 import { isProPlan } from '../../lib/plan'
-import { FREE_MAX_PLATFORMS, FREE_HISTORY_DAYS, filterFreeHistory, normalizePlatform } from '../../lib/planLimits'
 import { resolveCreatorTimezone, autoPopulateTimezoneIfMissing } from '../../lib/timezone'
 import { getDashboardReadiness, getModuleLockState, canShowHourlyRate, LockedInsightCard, DashboardProgressCard } from './DashboardPreview'
 import Button from '../../components/ui/Button'
@@ -49,13 +48,9 @@ const UPGRADE_COPY = {
     headline: "You have enough data for deeper insights",
     subhead: "Upgrade to unlock your remaining personalized recommendations for next stream.",
   },
-  csv_history: {
-    headline: "Your latest month is analyzed",
-    subhead: "Free keeps the most recent 31 days. Pro keeps your full import history so you can compare longer-term earnings, sessions, fans, and trends.",
-  },
-  csv_platform_limit: {
-    headline: "You've used all 3 free platform slots",
-    subhead: "Upgrade to Pro to add more platforms and compare where you actually earn best.",
+  post_upload_reveal: {
+    headline: "Your upload has more in it than Free can show",
+    subhead: "The rest of this import is ready — upgrade and it unlocks immediately, no re-upload needed.",
   },
 }
 
@@ -2156,9 +2151,8 @@ export default function Dashboard() {
       // detection is fallback-only, used to auto-populate the profile once
       // (see autoPopulateTimezoneIfMissing) rather than being read live on
       // every load.
-      const { data: profileTzRow } = await supabase.from('profiles').select('timezone, plan').eq('id', uid).maybeSingle()
+      const { data: profileTzRow } = await supabase.from('profiles').select('timezone').eq('id', uid).maybeSingle()
       const { timezone: userTz } = resolveCreatorTimezone(profileTzRow?.timezone)
-      const loadedIsPro = isProPlan(profileTzRow)
       autoPopulateTimezoneIfMissing(supabase, uid, profileTzRow?.timezone)
       const PAGE = 1000
       // First page also asks for the exact row count, so the remaining pages
@@ -2184,19 +2178,11 @@ export default function Dashboard() {
         }
       }
       if (allData.length) {
-        // Free plan analytics are limited to the most recent 31 days. We do
-        // not delete older database rows; we simply keep them out of the
-        // Free dashboard/analytics view. Pro sees the full imported history.
-        const historyResult = loadedIsPro
-          ? { rows: allData, removedCount: 0 }
-          : filterFreeHistory(allData)
-
-        const visibleData = historyResult.rows
-        setTips(visibleData)
+        setTips(allData)
         try {
-          const result = runEngine(visibleData, userTz)
+          const result = runEngine(allData, userTz)
           setAnalytics(result)
-          lastEngineTipsFingerprintRef.current = { length: visibleData.length, lastId: visibleData[visibleData.length - 1]?.id ?? null }
+          lastEngineTipsFingerprintRef.current = { length: allData.length, lastId: allData[allData.length - 1]?.id ?? null }
         } catch (engineErr) {
           console.error('[loadData] runEngine failed:', engineErr)
         }
@@ -2267,12 +2253,6 @@ const stopImportMessageRotation = () => {
 
   const handleCSV = async (file, forcePlatform = null) => {
     if (!file || !user) return
-    // Free plan tracks a single platform — instead of a hard block, show a
-    // quick preview of the file's contents plus a soft paywall below it.
-    if (freePlatformLimitReached && forcePlatform && !allPlatforms.includes(forcePlatform)) {
-      await denyWithPlatformPreview(file, forcePlatform)
-      return
-    }
     setImportStage('processing')
     setImportMessageIdx(0)
     setLastUploadResult(null)
@@ -2325,11 +2305,12 @@ const stopImportMessageRotation = () => {
         totalUsd: result.totalUsd,
         dateFrom: result.dateFrom,
         dateTo: result.dateTo,
-        historyLimited: !!result.historyLimited,
-        historyDays: result.historyDays || null,
-        historyRemovedCount: result.historyRemovedCount || 0,
-        platformsTracked: result.platformsTracked || [],
-        freePlatformLimit: result.freePlatformLimit || null,
+        // Real numbers computed server-side from this exact file, for
+        // anything Free's 31-day window or 3-platform cap couldn't show —
+        // drives the "What You're Missing" panel below. null/[] when
+        // everything in the file was already visible.
+        excludedHistory: result.excludedHistory || null,
+        excludedPlatforms: result.excludedPlatforms || [],
       })
       setImportStage('success')
 
@@ -2496,13 +2477,8 @@ const stopImportMessageRotation = () => {
     }
   })
 
-  const allPlatforms = memoOn(
-    derivedCacheRef.current,
-    'allPlatforms',
-    [tips],
-    () => [...new Set(tips.map(t => normalizePlatform(t.platform)).filter(Boolean))]
-  )
-  const freePlatformLimitReached = !isPro && allPlatforms.length >= FREE_MAX_PLATFORMS
+  const allPlatforms = memoOn(derivedCacheRef.current, 'allPlatforms', [tips], () => [...new Set(tips.map(t => t.platform))])
+  const freePlatformLimitReached = !isPro && allPlatforms.length > 0
 
   // ── Build "What's Next" alerts — smarter, personalized, prioritized
   const buildWhatsNextAlerts = () => {
@@ -5792,9 +5768,7 @@ const stopImportMessageRotation = () => {
           <div style={{ maxWidth: 600, margin: "0 auto" }}>
             <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 8 }}>📥 Import CSV</h1>
             <p style={{ fontSize: 14, color: C.muted, marginBottom: 12 }}>
-              {isPro
-                ? "Unlimited platforms • Full CSV history • Auto-removes duplicates"
-                : `Free plan — up to ${FREE_MAX_PLATFORMS} platforms • ${FREE_HISTORY_DAYS}-day history window • Auto-removes duplicates.`}
+              {isPro ? "Unlimited platforms • Auto-removes duplicates" : freePlatformLimitReached ? `Free plan — tracking ${allPlatforms[0]}. Auto-removes duplicates.` : "Free plan tracks 1 platform. Auto-removes duplicates."}
             </p>
             <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: freePlatformLimitReached ? 16 : 32 }}>
               <a href="/blog/how-to-upload-csv-to-camcash" style={{ fontSize: 13, color: C.cyan, textDecoration: "none", fontWeight: 600 }}>📹 Watch the SOP: How to upload a CSV →</a>
@@ -5804,9 +5778,9 @@ const stopImportMessageRotation = () => {
               <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", borderRadius: 12, background: "rgba(168,85,247,0.08)", border: "1px solid rgba(168,85,247,0.25)", marginBottom: 16 }}>
                 <span style={{ fontSize: 18 }}>🔒</span>
                 <div style={{ flex: 1, fontSize: 12.5, color: C.text, lineHeight: 1.5 }}>
-                  You've used all {FREE_MAX_PLATFORMS} free platform slots. Upgrade to Pro to add more platforms and compare performance across them.
+                  You're on the free plan (1 platform). Upgrade to Pro to add BongaCams, MyFreeCams, and more.
                 </div>
-                <Button onClick={() => openUpgradeModal('csv_platform_limit')} style={{ flexShrink: 0, padding: "8px 14px", fontSize: 12, whiteSpace: "nowrap" }}>Upgrade →</Button>
+                <Button onClick={() => openUpgradeModal('multi_platform')} style={{ flexShrink: 0, padding: "8px 14px", fontSize: 12, whiteSpace: "nowrap" }}>Upgrade →</Button>
               </div>
             )}
             <div style={{ ...glassCard, borderRadius: 14, padding: 32, marginBottom: 16, position: "relative", overflow: "hidden" }}>
@@ -5817,7 +5791,7 @@ const stopImportMessageRotation = () => {
                     style={{ width: "100%", padding: "10px 14px", borderRadius: 9, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: C.white, fontSize: 14, outline: "none", opacity: uploading ? 0.6 : 1 }}>
                     <option value="">Auto-detect (recommended)</option>
                     {["Chaturbate", "BongaCams", "MyFreeCams", "Stripchat", "CamSoda"].map(p => {
-                      const locked = !isPro && freePlatformLimitReached && !allPlatforms.includes(normalizePlatform(p))
+                      const locked = freePlatformLimitReached && !allPlatforms.includes(p)
                       return <option key={p} value={p} disabled={locked}>{locked ? `🔒 ${p} — requires Pro` : p}</option>
                     })}
                   </select>
@@ -5871,30 +5845,67 @@ const stopImportMessageRotation = () => {
                   {lastUploadResult.skipped > 0 && (
                     <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>{lastUploadResult.skipped} duplicates skipped</div>
                   )}
-
-                  {!isPro && lastUploadResult.historyLimited && (
-                    <div style={{ margin: "18px auto 0", maxWidth: 480, padding: "14px 16px", borderRadius: 12, background: "linear-gradient(135deg,rgba(124,92,255,0.10),rgba(236,72,153,0.08))", border: "1px solid rgba(124,92,255,0.24)", textAlign: "left" }}>
-                      <div style={{ fontSize: 12, fontWeight: 900, color: C.indigo, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 5 }}>Your Free analysis window</div>
-                      <div style={{ fontSize: 13, color: C.text, lineHeight: 1.55 }}>
-                        CamCash analyzed the most recent <strong style={{ color: C.white }}>{FREE_HISTORY_DAYS} days</strong> from this import.
-                        {lastUploadResult.historyRemovedCount > 0 && <> <strong style={{ color: C.white }}>{lastUploadResult.historyRemovedCount.toLocaleString()}</strong> older rows were left outside the Free analytics window.</>}
-                      </div>
-                      <Button onClick={() => openUpgradeModal('csv_history')} style={{ marginTop: 10, padding: "8px 14px", fontSize: 12 }}>Unlock Full History →</Button>
-                    </div>
-                  )}
-
-                  {!isPro && (lastUploadResult.platformsTracked || []).length >= FREE_MAX_PLATFORMS && !lastUploadResult.historyLimited && (
-                    <div style={{ margin: "18px auto 0", maxWidth: 480, padding: "14px 16px", borderRadius: 12, background: "linear-gradient(135deg,rgba(34,211,238,0.08),rgba(124,92,255,0.08))", border: "1px solid rgba(34,211,238,0.20)", textAlign: "left" }}>
-                      <div style={{ fontSize: 12, fontWeight: 900, color: C.cyan, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 5 }}>You've unlocked all 3 Free platform slots</div>
-                      <div style={{ fontSize: 13, color: C.text, lineHeight: 1.55 }}>Upgrade to Pro to add more platforms and compare your earnings, best windows, and platform ROI side by side.</div>
-                      <Button onClick={() => openUpgradeModal('csv_platform_limit')} style={{ marginTop: 10, padding: "8px 14px", fontSize: 12 }}>Compare More Platforms →</Button>
-                    </div>
-                  )}
-
                   <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 20, flexWrap: "wrap" }}>
                     <Button onClick={() => handleTabChange('overview')} style={{ padding: "12px 26px", fontSize: 14 }}>View Dashboard</Button>
                     <Button variant="secondary" onClick={resetImport} style={{ padding: "12px 22px", fontSize: 13 }}>Import another CSV</Button>
                   </div>
+
+                  {/* What You're Missing — only renders when the server actually found
+                      rows outside the Free 31-day window or beyond the 3-platform cap.
+                      Every number here comes straight from route.js's summarizeRows()
+                      on this exact file — nothing here is invented or estimated. */}
+                  {!isPro && (lastUploadResult.excludedHistory || (lastUploadResult.excludedPlatforms && lastUploadResult.excludedPlatforms.length > 0)) && (
+                    <div style={{ marginTop: 20, textAlign: "left", borderRadius: 14, border: "1px solid rgba(168,85,247,0.25)", background: "rgba(168,85,247,0.06)", padding: 18 }}>
+                      <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.14em", textTransform: "uppercase", color: C.pink, marginBottom: 10, textAlign: "center" }}>
+                        🔒 What You're Missing
+                      </div>
+
+                      {lastUploadResult.excludedHistory && (
+                        <div style={{ marginBottom: lastUploadResult.excludedPlatforms?.length ? 12 : 0 }}>
+                          <div style={{ fontSize: 13, color: C.white, fontWeight: 700, marginBottom: 6 }}>Older history in this upload</div>
+                          <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 8 }}>
+                            {[
+                              { label: "Tips", value: lastUploadResult.excludedHistory.count.toLocaleString(), color: C.cyan },
+                              { label: "Earnings", value: `$${lastUploadResult.excludedHistory.totalUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, color: C.green },
+                              { label: "Unique Fans", value: lastUploadResult.excludedHistory.uniqueFans.toLocaleString(), color: C.gold },
+                              { label: "Days Covered", value: lastUploadResult.excludedHistory.uniqueDays.toLocaleString(), color: C.blue },
+                            ].map(s => (
+                              <div key={s.label} style={{ ...glassCard, borderRadius: 10, padding: "10px 12px" }}>
+                                <div style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: C.muted, marginBottom: 4 }}>{s.label}</div>
+                                <div style={{ fontSize: 15, fontWeight: 900, color: s.color }}>{s.value}</div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {lastUploadResult.excludedPlatforms && lastUploadResult.excludedPlatforms.map(p => (
+                        <div key={p.platform} style={{ marginBottom: 12 }}>
+                          <div style={{ fontSize: 13, color: C.white, fontWeight: 700, marginBottom: 6, textTransform: "capitalize" }}>{p.platform} — detected, not yet trackable on Free</div>
+                          <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 8 }}>
+                            {[
+                              { label: "Tips", value: p.count.toLocaleString(), color: C.cyan },
+                              { label: "Earnings", value: `$${p.totalUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, color: C.green },
+                              { label: "Unique Fans", value: p.uniqueFans.toLocaleString(), color: C.gold },
+                              { label: "Days Covered", value: p.uniqueDays.toLocaleString(), color: C.blue },
+                            ].map(s => (
+                              <div key={s.label} style={{ ...glassCard, borderRadius: 10, padding: "10px 12px" }}>
+                                <div style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: C.muted, marginBottom: 4 }}>{s.label}</div>
+                                <div style={{ fontSize: 15, fontWeight: 900, color: s.color }}>{s.value}</div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+
+                      <div style={{ fontSize: 12, color: C.text, marginBottom: 12, marginTop: 4 }}>
+                        Upgrade and this unlocks immediately — no need to re-upload this file.
+                      </div>
+                      <Button onClick={() => openUpgradeModal('post_upload_reveal')} style={{ width: "100%", padding: "12px", fontSize: 13.5 }}>
+                        Unlock Full Import →
+                      </Button>
+                    </div>
+                  )}
                 </div>
               )}
 
