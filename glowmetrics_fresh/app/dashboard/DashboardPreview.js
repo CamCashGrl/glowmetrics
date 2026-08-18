@@ -18,6 +18,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { isProPlan } from '../../lib/plan'
+import { FREE_MAX_PLATFORMS } from '../../lib/planLimits'
 
 // ── BRAND TOKENS ─────────────────────────────────────────────
 const C = {
@@ -137,8 +138,8 @@ export function getFeatureLockState({ feature, userPlan = 'free', planExpiresAt 
     bestStreamingTimes:    { needsData: totalSessions < 3 || totalTips < 25, requiresPro: false, dataMessage: 'Unlocks after 3+ sessions with timestamps.', proMessage: null },
     topFans:               { needsData: totalFans < 5 || totalTips < 10, requiresPro: false, dataMessage: 'Unlocks after more fan and tip activity.', proMessage: null },
     whales:                { needsData: totalFans < 10 || totalEarnings < 50, requiresPro: false, dataMessage: 'Unlocks after enough repeat fan activity.', proMessage: null },
-    platformComparison:    { needsData: isPro && platformCount < 2, requiresPro: !isPro, dataMessage: 'Import at least 2 platforms to compare earnings.', proMessage: 'Upgrade to Pro to compare earnings across platforms.' },
-    multiPlatformTracking: { needsData: false, requiresPro: !isPro, dataMessage: null, proMessage: 'Upgrade to Pro to track more than one platform.' },
+    platformComparison:    { needsData: platformCount < 2, requiresPro: false, dataMessage: 'Import at least 2 platforms to compare earnings.', proMessage: null },
+    multiPlatformTracking: { needsData: false, requiresPro: !isPro && platformCount >= FREE_MAX_PLATFORMS, dataMessage: null, proMessage: `Upgrade to Pro to track more than ${FREE_MAX_PLATFORMS} platforms.` },
     crossPlatformBestTimes:{ needsData: isPro && (platformCount < 2 || totalSessions < 3), requiresPro: !isPro, dataMessage: 'Import sessions from at least 2 platforms to unlock cross-platform timing insights.', proMessage: 'Upgrade to Pro to unlock cross-platform best times.' },
     sessionPerformance:    { needsData: totalSessions < 3, requiresPro: false, dataMessage: 'Unlocks after multiple completed sessions.', proMessage: null },
     averageHourly:         { needsData: totalSessions < 3 || totalStreamMinutes < 60, requiresPro: false, dataMessage: 'Unlocks after at least 60 minutes of tracked stream time.', proMessage: null },
@@ -172,8 +173,8 @@ export function getModuleLockState({ module, totalTips = 0, totalSessions = 0, t
     topFans:              { needsData: totalTips < 10 || totalFans < 5,               message: 'Top Fans unlock after more fan and tip activity.' },
     whales:               { needsData: totalFans < 10 || totalEarnings < 50,          message: 'Whale detection unlocks after enough repeat fan history.' },
     sessionBreakdown:     { needsData: totalSessions < 3,                             message: 'Session Breakdown unlocks after multiple completed sessions.' },
-    platformROI:          { needsData: importedPlatformCount < 2, requiresPro: !isPro && importedPlatformCount >= 1, message: !isPro ? 'Platform ROI unlocks after upgrading to Pro and importing at least 2 platforms.' : 'Import at least 2 platforms to compare earnings.' },
-    multiPlatformTracking:{ needsData: false, requiresPro: !isPro,                   message: 'Upgrade to Pro to track more than one platform.' },
+    platformROI:          { needsData: importedPlatformCount < 2, requiresPro: false, message: 'Import at least 2 platforms to compare earnings.' },
+    multiPlatformTracking:{ needsData: false, requiresPro: !isPro && importedPlatformCount >= FREE_MAX_PLATFORMS, message: `Upgrade to Pro to track more than ${FREE_MAX_PLATFORMS} platforms.` },
     fanRecovery:          { needsData: totalFans < 20 || totalEarnings < 50,          message: 'Fan Recovery unlocks after enough repeat fan history.' },
     moneyMap:             { needsData: totalTips < 50 || totalSessions < 5,           message: 'Money Map unlocks after 50+ tips and 5+ meaningful sessions.' },
     streamPlanner:        { needsData: totalTips < 25 || totalSessions < 3,           message: 'Stream Planner unlocks after 25+ tips and 3+ meaningful sessions.' },

@@ -58,6 +58,45 @@ export function getFreePlatformState(existingPlatforms = [], incomingPlatform = 
  * honestly-labeled proxy rather than inventing a new session algorithm. Any
  * UI that surfaces this should say "days," not "sessions."
  */
+/**
+ * Per-platform Free history windows.
+ *
+ * The Free rule is 31 days of history PER PLATFORM, so each platform's window
+ * is anchored to that platform's OWN most recent row — not to the newest row
+ * in the upload.
+ *
+ * This used to anchor a single global window to max(all rows). On the owner's
+ * real account that made two of three tracked platforms vanish from Free
+ * entirely: Chaturbate's last tip is 2026-07-02 and BongaCams' is 2026-03-19,
+ * so a global window of 2026-06-01..2026-07-02 excluded 2,814 tips / $754.29
+ * of legitimately-allowed BongaCams data. Free showed nothing for a platform
+ * the creator is entitled to see, which reads as "the import failed".
+ *
+ * Rows whose platform is blank share one window keyed by ''. Rows with an
+ * unparseable date are never bucketed here — callers treat them as visible
+ * rather than dropping them.
+ */
+function platformWindows(dated, referenceMs = null) {
+  const maxByPlatform = new Map()
+  for (const { row, ms } of dated) {
+    const key = normalizePlatform(row.platform)
+    const cur = maxByPlatform.get(key)
+    if (cur === undefined || ms > cur) maxByPlatform.set(key, ms)
+  }
+  const windows = new Map()
+  for (const [key, maxMs] of maxByPlatform) {
+    const endMs = Number.isFinite(referenceMs) ? referenceMs : maxMs
+    windows.set(key, { startMs: endMs - FREE_HISTORY_MS, endMs })
+  }
+  return windows
+}
+
+function inPlatformWindow(windows, row, ms) {
+  const w = windows.get(normalizePlatform(row.platform))
+  if (!w) return true
+  return ms >= w.startMs && ms <= w.endMs
+}
+
 export function summarizeRows(rows = []) {
   const dated = rows
     .map((row) => ({ row, ms: new Date(row.date_time).getTime() }))
@@ -104,22 +143,32 @@ export function splitFreeHistory(rows = [], referenceMs = null) {
     return { visible: rows.slice(), excluded: [], windowStart: null, windowEnd: null }
   }
 
-  const endMs = Number.isFinite(referenceMs) ? referenceMs : Math.max(...dated.map(({ ms }) => ms))
-  const startMs = endMs - FREE_HISTORY_MS
+  const windows = platformWindows(dated, referenceMs)
 
   const visible = dated
-    .filter(({ ms }) => ms >= startMs && ms <= endMs)
+    .filter(({ row, ms }) => inPlatformWindow(windows, row, ms))
     .map(({ row }) => row)
     .concat(undated)
   const excluded = dated
-    .filter(({ ms }) => ms < startMs || ms > endMs)
+    .filter(({ row, ms }) => !inPlatformWindow(windows, row, ms))
     .map(({ row }) => row)
+
+  // Overall span of the per-platform windows, for display only. Callers that
+  // need to name a specific platform's window read windowsByPlatform.
+  const starts = [...windows.values()].map((w) => w.startMs)
+  const ends = [...windows.values()].map((w) => w.endMs)
 
   return {
     visible,
     excluded,
-    windowStart: new Date(startMs).toISOString(),
-    windowEnd: new Date(endMs).toISOString(),
+    windowStart: starts.length ? new Date(Math.min(...starts)).toISOString() : null,
+    windowEnd: ends.length ? new Date(Math.max(...ends)).toISOString() : null,
+    windowsByPlatform: Object.fromEntries(
+      [...windows].map(([k, w]) => [k, {
+        windowStart: new Date(w.startMs).toISOString(),
+        windowEnd: new Date(w.endMs).toISOString(),
+      }])
+    ),
   }
 }
 
@@ -165,20 +214,35 @@ export function filterFreeHistory(rows = [], referenceMs = null) {
     }
   }
 
-  const endMs = Number.isFinite(referenceMs) ? referenceMs : Math.max(...dated.map(({ ms }) => ms))
-  const startMs = endMs - FREE_HISTORY_MS
+  const windows = platformWindows(dated, referenceMs)
+
+  // Undated rows are KEPT, matching splitFreeHistory(). They were previously
+  // dropped here (filtered out of `dated` and never re-added), so a row with
+  // an unparseable date silently disappeared from Free analytics instead of
+  // being shown — a different bug from the windowing one, in the same
+  // function.
+  const undated = rows.filter((row) => !Number.isFinite(new Date(row.date_time).getTime()))
 
   const kept = dated
-    .filter(({ ms }) => ms >= startMs && ms <= endMs)
+    .filter(({ row, ms }) => inPlatformWindow(windows, row, ms))
     .map(({ row }) => row)
+    .concat(undated)
 
   const removedCount = rows.length - kept.length
+  const starts = [...windows.values()].map((w) => w.startMs)
+  const ends = [...windows.values()].map((w) => w.endMs)
 
   return {
     rows: kept,
     removedCount,
-    windowStart: new Date(startMs).toISOString(),
-    windowEnd: new Date(endMs).toISOString(),
+    windowStart: starts.length ? new Date(Math.min(...starts)).toISOString() : null,
+    windowEnd: ends.length ? new Date(Math.max(...ends)).toISOString() : null,
+    windowsByPlatform: Object.fromEntries(
+      [...windows].map(([k, w]) => [k, {
+        windowStart: new Date(w.startMs).toISOString(),
+        windowEnd: new Date(w.endMs).toISOString(),
+      }])
+    ),
     truncated: removedCount > 0,
   }
 }
