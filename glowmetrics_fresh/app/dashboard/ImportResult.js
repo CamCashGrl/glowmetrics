@@ -42,9 +42,9 @@ function daySpan(from, to) {
 // Shared shell for a locked card: real content underneath, blur + a centred
 // lock over it. Deliberately NOT a full-screen paywall — the Free half of the
 // page stays completely readable.
-function LockedCard({ C, n, title, overlay, onUnlock, children, footer }) {
+function LockedCard({ C, n, title, overlay, onUnlock, children, footer, surface }) {
   return (
-    <div style={{
+    <div data-cc-surface={surface} style={{
       background: 'rgba(10,14,32,0.72)', border: '1px solid rgba(124,92,255,0.20)',
       borderRadius: 14, padding: 16, minWidth: 0, display: 'flex', flexDirection: 'column',
     }}>
@@ -71,7 +71,7 @@ function LockedCard({ C, n, title, overlay, onUnlock, children, footer }) {
       </div>
       {footer && <div style={{ fontSize: 11.5, color: C.muted, marginTop: 10, lineHeight: 1.45 }}>{footer}</div>}
       {onUnlock && (
-        <button onClick={onUnlock} style={{
+        <button onClick={onUnlock} data-cc-action={surface ? `upgrade_cta:${surface}` : undefined} style={{
           marginTop: 10, padding: '7px 12px', borderRadius: 9, fontSize: 11.5, fontWeight: 800,
           background: 'rgba(124,92,255,0.14)', border: '1px solid rgba(124,92,255,0.35)',
           color: C.white, cursor: 'pointer', alignSelf: 'flex-start',
@@ -331,7 +331,7 @@ export default function ImportResult({
               const peak = Math.max(...t.map(m => m.usd), 0) || 1
               const pts = t.map((m, i) => `${(i / Math.max(t.length - 1, 1)) * 100},${40 - (m.usd / peak) * 36}`).join(' ')
               return (
-                <LockedCard C={C} n={1} title="Long-term earnings trend"
+                <LockedCard C={C} n={1} title="Long-term earnings trend" surface="csv_locked_trend"
                   overlay="Unlock to see the full historical trend" onUnlock={onUpgrade}
                   footer={`${t.length} months of real earnings history found in this file.`}>
                   <div style={{ display: 'flex', gap: 6, minWidth: 0 }}>
@@ -362,7 +362,7 @@ export default function ImportResult({
                 — the card keeps its place in the grid but states the absence
                 instead of ranking noise behind a blur. */}
             {li && (li.bestWindows?.length > 0 ? (
-              <LockedCard C={C} n={2} title="Your strongest earning windows"
+              <LockedCard C={C} n={2} title="Your strongest earning windows" surface="csv_locked_windows"
                 overlay="Unlock to see your top earning windows" onUnlock={onUpgrade}
                 footer={`${li.bestWindows.length} window${li.bestWindows.length === 1 ? '' : 's'} with enough repeat sessions to stand up as a recommendation.`}>
                 <div style={{ display: 'grid', gridTemplateColumns: '28px 1fr auto', gap: '8px 10px', alignItems: 'center' }}>
@@ -389,7 +389,7 @@ export default function ImportResult({
 
             {/* 3 — TOP SUPPORTERS, ALL TIME (real ranks and amounts) */}
             {li?.topFans?.length > 0 && (
-              <LockedCard C={C} n={3} title="Top supporters (all time)"
+              <LockedCard C={C} n={3} title="Top supporters (all time)" surface="csv_locked_fans"
                 overlay="Unlock to see your top historical supporters" onUnlock={onUpgrade}
                 footer={`${fmtInt(li.totals.fans)} supporters found across your full history.`}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: '7px 10px', alignItems: 'center' }}>
@@ -412,7 +412,7 @@ export default function ImportResult({
               const peak = Math.max(...li.heatmap.map(c => c.usdPerHour), 0) || 1
               const byKey = new Map(li.heatmap.map(c => [`${c.day}-${c.hour}`, c.usdPerHour]))
               return (
-                <LockedCard C={C} n={4} title="Session & performance patterns"
+                <LockedCard C={C} n={4} title="Session & performance patterns" surface="csv_locked_patterns"
                   overlay="Unlock to see your full performance patterns" onUnlock={onUpgrade}
                   footer={li.session
                     ? `${fmtInt(li.session.sessions)} measured streams across your history.`

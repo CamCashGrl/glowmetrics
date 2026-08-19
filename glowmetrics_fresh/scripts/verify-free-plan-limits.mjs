@@ -19,6 +19,7 @@ const pricing = read('app/pricing/PricingClient.js')
 const importResult = read('app/dashboard/ImportResult.js')
 const upgradeCtx = read('lib/upgradeContext.js')
 const commandCenter = read('app/dashboard/CommandCenter.js')
+const conversionBand = read('app/dashboard/ConversionBand.js')
 const resultUi = dashboard + '\n' + importResult
 const migration = read('supabase/migrations/20260817_free_plan_three_platform_31_day_history.sql')
 const paidSessionsMigration = read('supabase/migrations/20260817b_free_platform_cap_counts_paid_sessions.sql')
@@ -191,7 +192,9 @@ const checks = [
   ['the upgrade helper computes no analytics of its own',
     !/aggregateRows|detectSessions|reduce\(/.test(upgradeCtx)],
   ['the modal benefit list is driven by the trigger, not hardcoded',
-    /modalBenefits\.map/.test(dashboard) && !/See ALL your top spenders/.test(dashboard)],
+    /upgradeCopy\.benefits/.test(dashboard) && !/See ALL your top spenders/.test(dashboard)],
+  ["the modal repeats the creator's own measured locked total",
+    /upgradeValueLine/.test(dashboard) && /more in your history/.test(dashboard)],
   // An invented statistic with no source behind it. Comment-stripped: the
   // code comment above the removal quotes the old line deliberately, to
   // explain why it went. Only shipped copy counts.
@@ -211,13 +214,19 @@ const checks = [
   ['a reassurance block sits after the CTA',
     /without re-uploading/.test(importResult) && /no upload quota/.test(importResult)],
 
-  // ── Command Center: one contextual card, never a generic banner ────────
-  ['Command Center offers a contextual opportunity when no window exists yet',
-    /Historical opportunity/.test(commandCenter) && /Explore Your History →/.test(commandCenter)],
-  ['that card only renders with a genuine reason',
-    /lockedHistory\?\.tips > 0 \|\| platformCount >= freeMaxPlatforms/.test(commandCenter)],
+  // ── Dashboard conversion band: one contextual card, never a generic
+  //    banner. This argument used to live inside the Command Center; it now
+  //    sits above it in ConversionBand.js, so the Command Center is back to
+  //    pure analytics rendering and the band owns the locked-value case.
+  ['the dashboard carries the conversion argument past the import screen',
+    /ConversionBand/.test(dashboard) && conversionBand.length > 0],
+  ['the band only renders with a genuine, measured reason',
+    /lockedHistory|platformCap|sparseRecent/.test(conversionBand) &&
+    /conversionContext/.test(dashboard)],
+  ['the band computes nothing locally — it reports what was measured upstream',
+    !/aggregateRows|detectSessions/.test(conversionBand)],
   ['Command Center still computes nothing locally',
-    /lockedHistory = null/.test(commandCenter) && !/aggregateRows/.test(commandCenter)],
+    !/aggregateRows/.test(commandCenter)],
 
   // ── The 31-day rule is an ANALYSIS window, never an import cap ─────────
   // Pricing said "Import up to 31 days of tip history per platform", which
@@ -421,6 +430,78 @@ if (passed !== checks.length) process.exit(1)
     /already saved/.test(dash) && /no re-upload/.test(dash)])
   extra.push(['Platform card no longer implies the whole upload must be redone',
     !/Upgrade, then re-upload this file/.test(dash)])
+}
+
+// ── Dashboard conversion layer + upgrade modal (Phases 6, 7, 13) ─────────
+// The post-import screen's argument used to end at the dashboard door. These
+// pin the three things that carry it through, and — more importantly — pin
+// the honesty rules, since a conversion surface is exactly where a fabricated
+// number would be most tempting and least visible.
+{
+  const band = read('app/dashboard/ConversionBand.js')
+
+  // The band speaks only about conditions measured from real rows.
+  extra.push(['Conversion band exists and is wired into the dashboard',
+    /export default function ConversionBand/.test(band) &&
+    /<ConversionBand/.test(dashboard) && /import ConversionBand/.test(dashboard)])
+  extra.push(['Band renders nothing for Pro', /if \(isPro \|\| !context\) return null/.test(band)])
+  extra.push(['Band shows at most ONE surface, not a banner per condition',
+    /const band = lockedHistory/.test(band) && /if \(!band\) return null/.test(band)])
+  extra.push(['Band covers the three named contexts',
+    /dashboard_locked_history/.test(band) && /dashboard_platform_cap/.test(band) &&
+    /dashboard_sparse_recent/.test(band)])
+
+  // The context is MEASURED, and measured with the canonical helpers — not
+  // re-derived with a second copy of the Free boundary or a local dollar sum.
+  extra.push(['Conversion context uses the canonical Free-history split',
+    /buildConversionContext/.test(dashboard) && /splitFreeHistory\(allRows\)/.test(dashboard)])
+  extra.push(['Locked earnings come from the canonical engine, not a local sum',
+    /runEngine\(excluded, timezone\)\?\.totalUSD/.test(dashboard)])
+  extra.push(['Slot counting reuses uniquePlatforms()',
+    /uniquePlatforms\(allRows\)/.test(dashboard)])
+  extra.push(['Band context is null for Pro, so nothing renders',
+    /if \(isPro \|\| !allRows\?\.length\) return null/.test(dashboard)])
+  extra.push(['No locked-value claim without a measured figure',
+    /if \(totalUsd > 0\)/.test(dashboard)])
+
+  // Free history filtering itself is UNCHANGED — the band is additive.
+  extra.push(['Free history filtering still runs through filterFreeHistory',
+    /filterFreeHistory\(allData\)/.test(dashboard)])
+
+  // Upgrade modal repeats the situation instead of pitching generically.
+  extra.push(['Upgrade modal leads with what we found, not a price',
+    /Unlock the insights we found in your data/.test(dashboard)])
+  extra.push(['Upgrade modal CTA is the value, not the SKU',
+    /Unlock Pro →/.test(dashboard) && !/Upgrade to Pro — \$19\.99\/mo/.test(dashboard)])
+  extra.push(['Upgrade modal shows price and cancel terms at the CTA',
+    /PRO_PRICE_MONTHLY_LABEL\} · \{PRO_PRICE_NOTE/.test(dashboard)])
+  extra.push(['Upgrade modal benefits are per-situation, not one static list',
+    /benefits: \[/.test(dashboard) && /upgradeCopy\.benefits/.test(dashboard)])
+  extra.push(['The old generic benefit list is gone',
+    !/AI fan behavior predictions/.test(dashboard)])
+  extra.push(['Every dashboard band source has its own modal copy',
+    /dashboard_locked_history: \{/.test(dashboard) &&
+    /dashboard_platform_cap: \{/.test(dashboard) &&
+    /dashboard_sparse_recent: \{/.test(dashboard)])
+  extra.push(['Modal repeats the creator\'s own measured figure when there is one',
+    /upgradeValueLine/.test(dashboard) && /We found <span[^>]*>\{upgradeValueLine\.usd\}/.test(dashboard)])
+  extra.push(['Modal still uses the existing Stripe checkout path',
+    /\/api\/stripe\/checkout/.test(dashboard) && /plan_type: 'standard_monthly'/.test(dashboard)])
+
+  // Conversion measurement seam (Phase 13) — events only, no new tables.
+  extra.push(['Result-screen impression is measurable',
+    /import_result_viewed/.test(dashboard)])
+  extra.push(['Locked-insight impressions reuse the existing pro_preview event',
+    /trackProPreviewViewed\('csv_locked_history'\)/.test(dashboard) &&
+    /pro_preview_viewed/.test(dashboard)])
+  extra.push(['The unlock itself is a distinct step from the payment',
+    /pro_unlocked/.test(dashboard) && /subscription_completed/.test(dashboard)])
+  extra.push(['Conversion surfaces carry a stable attribution hook',
+    /data-cc-surface/.test(band) && /data-cc-surface/.test(importResult) &&
+    /data-cc-action/.test(dashboard)])
+  extra.push(['No speculative tracking table was added',
+    !/from\(['"]conversion_events['"]\)/.test(dashboard) &&
+    !/create table.*funnel/i.test(dashboard)])
 }
 
 for (const [name, ok] of extra) {

@@ -12,15 +12,16 @@ import { computeCoachingState } from "../../lib/coaching/triggers"
 import dynamic from "next/dynamic"
 import Sidebar from "./Sidebar"
 import SiteFooter from "../components/SiteFooter"
-import { PLATFORM_TOKEN_RATES, SUPPORTED_PLATFORMS, tokenRate } from "../../lib/constants"
+import { PLATFORM_TOKEN_RATES, SUPPORTED_PLATFORMS, tokenRate, PRO_PRICE_MONTHLY_LABEL, PRO_PRICE_NOTE } from "../../lib/constants"
 import { track as gtmTrack } from '../../lib/track'
 import { isProPlan } from '../../lib/plan'
-import { FREE_MAX_PLATFORMS, FREE_HISTORY_DAYS, filterFreeHistory, normalizePlatform } from '../../lib/planLimits'
+import { FREE_MAX_PLATFORMS, FREE_HISTORY_DAYS, filterFreeHistory, splitFreeHistory, uniquePlatforms, normalizePlatform } from '../../lib/planLimits'
 import { resolveCreatorTimezone, autoPopulateTimezoneIfMissing } from '../../lib/timezone'
 import { resolveUpgradeContext } from '../../lib/upgradeContext'
 import CommandCenter from './CommandCenter'
 import Performance from './Performance'
 import ImportResult from './ImportResult'
+import ConversionBand from './ConversionBand'
 import Fans from './Fans'
 import { getDashboardReadiness, getModuleLockState, canShowHourlyRate, LockedInsightCard, DashboardProgressCard } from './DashboardPreview'
 import Button from '../../components/ui/Button'
@@ -34,26 +35,89 @@ import { useLiveSessionEngine } from '../live/useLiveSessionEngine'
 // user actually just did, so the headline should say that back to them
 // instead of one generic pitch for every context. Falls back to
 // UPGRADE_COPY.default for any source not listed here.
+// Behaviour-triggered upgrade copy — keyed by the `source` passed to
+// openUpgradeModal(source).
+//
+// The modal used to pair these contextual headlines with ONE static list of
+// six generic benefits and a button that led with the SKU and price. That threw
+// away the whole point of the funnel: a creator who just watched us name
+// $462.12 of their own locked earnings was answered with "AI fan behavior
+// predictions". The modal now repeats the situation that opened it —
+// headline, subhead, AND the benefits that actually apply to it.
+//
+// `benefits` are the four that matter for that trigger, most specific first.
+// Nothing here is a number: measured figures come from the creator's own data
+// at render time (see valueLine in the modal), never from this table.
 const UPGRADE_COPY = {
   default: {
-    headline: "Unlock Your Full Earning Potential",
-    subhead: "You're only seeing a preview of your data. Here's what's waiting for you inside:",
+    headline: "Unlock the insights we found in your data",
+    subhead: "You're seeing the Free slice of what you uploaded. Here's what's already saved and waiting:",
+    benefits: [
+      "Full historical analysis of everything you've imported",
+      "Broader historical trends, not just your latest month",
+      "Additional platforms beyond your Free slots",
+      "Cross-platform intelligence — where you actually earn best",
+    ],
   },
   multi_platform: {
     headline: `You're using all ${FREE_MAX_PLATFORMS} Free platform slots`,
     subhead: "Compare more platforms with Creator Pro to see exactly where you actually earn best.",
+    benefits: [
+      "Additional platforms beyond your Free slots",
+      "Cross-platform intelligence — earnings, best windows, and ROI side by side",
+      "One ranked view instead of three separate ones",
+      "Full historical analysis on every platform you add",
+    ],
   },
   whales_cutoff: {
     headline: "You've found your top fans",
     subhead: "See your full fan list — every VIP, not just the first 3 — and track them over time.",
+    benefits: [
+      "Your complete supporter list, ranked by real spend",
+      "Deeper fan insights across your full history",
+      "Repeat-spender and churn-risk tracking over time",
+      "Re-engagement scripts for the fans worth the message",
+    ],
   },
   whales_empty: {
-    headline: "Unlock Your Full Fan Insights",
+    headline: "Unlock the fan insights in your history",
     subhead: "See your highest-value fans, repeat spenders, and who's worth re-engaging.",
+    benefits: [
+      "Your highest-value supporters across all of your history",
+      "Repeat-spender patterns Free's window is too short to show",
+      "Deeper fan insights, not just this month's names",
+      "Re-engagement scripts for the fans worth the message",
+    ],
   },
   creator_report: {
     headline: "You have enough data for deeper insights",
     subhead: "Upgrade to unlock your remaining personalized recommendations for next stream.",
+    benefits: [
+      "Every ranked recommendation, not just the first few",
+      "Broader historical trends behind each one",
+      "Full historical analysis of everything you've imported",
+      "Cross-platform intelligence for where to run each window",
+    ],
+  },
+  command_center_strategy: {
+    headline: "Unlock the insights we found in your data",
+    subhead: "You found the window. Pro builds the rest of the week around it.",
+    benefits: [
+      "Every ranked earning window, not just your top one",
+      "Broader historical trends behind each window",
+      "Which platform to run in each window",
+      "Alerts when a high-value supporter goes quiet",
+    ],
+  },
+  live_mode_locked: {
+    headline: "Unlock the insights we found in your data",
+    subhead: "Live Mode reads your history to coach you while you're actually streaming.",
+    benefits: [
+      "Live coaching against your own historical patterns",
+      "Full historical analysis of everything you've imported",
+      "Broader historical trends, not just your latest month",
+      "Cross-platform intelligence across every platform you track",
+    ],
   },
   // The two locked cases persist DIFFERENTLY, and the copy has to say so.
   // History rows beyond 31 days ARE stored — Free just doesn't analyse them,
@@ -62,13 +126,118 @@ const UPGRADE_COPY = {
   // they genuinely need one more import after upgrading. Promising instant
   // unlock for both would be a lie for the second one.
   csv_history: {
-    headline: "Your latest month is analyzed",
-    subhead: "Free keeps the most recent 31 days. Those older rows are already saved — Pro reveals them instantly, with no re-upload.",
+    headline: "Unlock the insights we found in your data",
+    subhead: `Free keeps the most recent ${FREE_HISTORY_DAYS} days. Those older rows are already saved — Pro reveals them instantly, with no re-upload.`,
+    benefits: [
+      "Full historical analysis of every row you uploaded",
+      "Broader historical trends across your whole date range",
+      "Your strongest historical earning windows",
+      "Top supporters across all time, not just this month",
+    ],
   },
   csv_platform_limit: {
     headline: `You've used all ${FREE_MAX_PLATFORMS} free platform slots`,
     subhead: `Upgrade to Pro to add more platforms and compare where you actually earn best. Rows for a platform beyond your ${FREE_MAX_PLATFORMS} slots aren't stored yet, so you'll import that file once more after upgrading.`,
+    benefits: [
+      "Additional platforms beyond your Free slots",
+      "Cross-platform intelligence — earnings and ROI side by side",
+      "One ranked best-window view across every platform",
+      "Full historical analysis on each platform you add",
+    ],
   },
+  // ── Dashboard conversion layer (app/dashboard/ConversionBand.js) ──
+  // Each band opens the modal with its own source, so the modal continues
+  // the exact sentence the creator just clicked rather than resetting to a
+  // generic pitch.
+  dashboard_locked_history: {
+    headline: "Unlock the insights we found in your data",
+    subhead: "The history behind your Free window is already saved to your account. Pro analyses all of it — no re-upload.",
+    benefits: [
+      "Full historical analysis of everything you've imported",
+      "Broader historical trends, not just your latest month",
+      "Your strongest historical earning windows",
+      "Top supporters across all time",
+    ],
+  },
+  dashboard_platform_cap: {
+    headline: `You're using all ${FREE_MAX_PLATFORMS} Free platform slots`,
+    subhead: "Pro unlocks additional platform analysis and cross-platform intelligence.",
+    benefits: [
+      "Additional platforms beyond your Free slots",
+      "Cross-platform intelligence — earnings, best windows, and ROI side by side",
+      "One ranked view instead of three separate ones",
+      "Full historical analysis on every platform you add",
+    ],
+  },
+  dashboard_sparse_recent: {
+    headline: "Unlock the insights we found in your data",
+    subhead: "Your recent window is light, but your history isn't. Pro reads the whole thing to find patterns this month can't show.",
+    benefits: [
+      "Broader historical trends, not just your latest month",
+      "Full historical analysis of everything you've imported",
+      "Patterns measured across your whole date range",
+      "Top supporters across all time",
+    ],
+  },
+}
+
+// ── DASHBOARD CONVERSION CONTEXT ──────────────────────────────────────────
+// Measures the three conditions app/dashboard/ConversionBand.js is allowed to
+// speak about, from rows the dashboard has ALREADY loaded. No extra query, no
+// new analytics engine, and no formula defined here:
+//
+//   * the Free/locked boundary is splitFreeHistory() — the same canonical
+//     helper the upload route and filterFreeHistory() use, so the dashboard
+//     can never disagree with the post-import screen about what is locked;
+//   * locked earnings come from ONE aggregateRows() run (the canonical
+//     engine's totalUSD), never a local sum;
+//   * slot counting is uniquePlatforms(), which already excludes Unknown and
+//     unsupported platforms from consuming a Free slot.
+//
+// Returns null for Pro and whenever nothing measurable is true, so the band
+// renders nothing rather than inventing a reason to upsell.
+function buildConversionContext({ allRows, visibleRows, analytics, isPro, runEngine, timezone }) {
+  if (isPro || !allRows?.length) return null
+
+  const { excluded } = splitFreeHistory(allRows)
+
+  let lockedHistory = null
+  if (excluded.length) {
+    let totalUsd = 0
+    try {
+      totalUsd = runEngine(excluded, timezone)?.totalUSD ?? 0
+    } catch (e) {
+      // The engine is the only source for this figure. If it cannot produce
+      // one, claim nothing — a band with a blank dollar amount is worse than
+      // no band at all.
+      totalUsd = 0
+    }
+    const dates = excluded.map(r => new Date(r.date_time)).filter(d => !isNaN(d))
+    if (totalUsd > 0) {
+      lockedHistory = {
+        tips: excluded.length,
+        totalUsd,
+        dateFrom: dates.length ? new Date(Math.min(...dates)).toISOString() : null,
+        dateTo: dates.length ? new Date(Math.max(...dates)).toISOString() : null,
+      }
+    }
+  }
+
+  const platforms = displayPlatforms(uniquePlatforms(allRows))
+  const platformCap = platforms.length >= FREE_MAX_PLATFORMS ? { platforms } : null
+
+  // Same shape as the post-import screen's sparse rule: sparse is about
+  // ABSOLUTE recent activity, and only worth naming when there is more
+  // history behind it. A creator whose whole account is one thin month is
+  // not being held back by the plan, so nothing is shown.
+  const windowTips = visibleRows?.length ?? 0
+  const windowSessions = analytics?.meaningfulSessionCount ?? 0
+  const sparseRecent = excluded.length && (windowTips < 30 || windowSessions < 3)
+    ? { tips: windowTips, sessions: windowSessions }
+    : null
+
+  if (!lockedHistory && !platformCap && !sparseRecent) return null
+  return { lockedHistory, platformCap, sparseRecent }
 }
 
 // Platform names reach the client already normalised (normalizePlatform()
@@ -1461,7 +1630,6 @@ export default function Dashboard() {
   const uploading = importStage === 'processing'
   const [uploadPlatform, setUploadPlatform] = useState("")
   const [lastUploadResult, setLastUploadResult] = useState(null)
-  const [lockedHistory, setLockedHistory] = useState(null)
   // Platform-limit soft paywall: preview of what's in a blocked import, shown
   // instead of a hard block (see denyWithPlatformPreview / handleCSV below)
   const [lockedPreview, setLockedPreview] = useState(null)
@@ -1475,6 +1643,9 @@ export default function Dashboard() {
   const [messageTarget, setMessageTarget] = useState(null)
   const [messageIndex, setMessageIndex] = useState(0)
   const [messageCopied, setMessageCopied] = useState(false)
+  // Dashboard conversion layer (see ConversionBand.js). Measured in
+  // loadData from rows already fetched; null for Pro.
+  const [conversionContext, setConversionContext] = useState(null)
   const [showUpgradeModal, setShowUpgradeModal] = useState(false)
   const [upgradeModalSource, setUpgradeModalSource] = useState(null)
   const [fanSearchOpen, setFanSearchOpen] = useState(false)
@@ -1633,33 +1804,35 @@ export default function Dashboard() {
 
   const fmtHour = h => { if (h == null || isNaN(h)) return 'N/A'; return h === 0 ? '12 AM' : h < 12 ? h+' AM' : h === 12 ? '12 PM' : (h-12)+' PM' }
 
-  // Benefits shown in the upgrade modal, chosen by whichever CTA opened it.
-  // Falls back to a general set for sources with no specific context (e.g.
-  // 'creator_report'), so no trigger ever renders an empty list.
-  const modalBenefits = (() => {
-    const ctx = resolveUpgradeContext({
-      lockedTips: upgradeModalSource === 'csv_history' ? 1 : 0,
-      platformCount: upgradeModalSource === 'csv_platform_limit' ? FREE_MAX_PLATFORMS : 0,
-      hasBlockedPlatform: false,
-      hasDeeperInsights: upgradeModalSource === 'deeper_analysis',
-    })
-    if (ctx?.benefits?.length) return ctx.benefits
-    return [
-      { icon: '📈', text: `Your full history analysed, not just the last ${FREE_HISTORY_DAYS} days` },
-      { icon: '🐳', text: 'Every supporter ranked by lifetime value, not just your top few' },
-      { icon: '⏰', text: 'Your strongest earning windows, once enough sessions back them' },
-      { icon: '🔀', text: `Track more than ${FREE_MAX_PLATFORMS} platforms and compare them` },
-      { icon: '🗂️', text: 'Full session history with performance patterns' },
-      { icon: '⚡', text: 'History you already uploaded unlocks instantly — no re-upload' },
-    ]
-  })()
-
   const openUpgradeModal = (source) => {
     track('upgrade_click', { source })
     gtmTrack('paywall_hit', { feature: source })
     setUpgradeModalSource(source || 'default')
     setShowUpgradeModal(true)
   }
+
+  // Copy for whichever trigger opened the modal, and — where this creator has
+  // one — their own measured locked total to repeat back to them.
+  //
+  // Two sources, in order of recency: the upload they are looking at right
+  // now, then the history already stored on the account. Both are figures we
+  // ALREADY showed them (ImportResult section B, and the dashboard band), so
+  // the modal is a continuation rather than a new claim. No figure is
+  // computed here and nothing is shown when neither source has one.
+  const upgradeCopy = UPGRADE_COPY[upgradeModalSource] || UPGRADE_COPY.default
+  const upgradeValueLine = (() => {
+    if (isPro) return null
+    const fromUpload = lastUploadResult?.success ? lastUploadResult.excludedHistory : null
+    const locked = (fromUpload?.totalUsd > 0 ? fromUpload : null) || conversionContext?.lockedHistory || null
+    if (!locked || !(locked.totalUsd > 0)) return null
+    const range = locked.dateFrom && locked.dateTo
+      ? ` from ${formatImportDate(locked.dateFrom)} – ${formatImportDate(locked.dateTo)}`
+      : ''
+    return {
+      usd: `$${Number(locked.totalUsd).toFixed(2)}`,
+      detail: `${Number(locked.tips || 0).toLocaleString()} additional tips${range} — already saved to your account, unlocked the moment you upgrade. No re-upload.`,
+    }
+  })()
 
   // ── PRO PREVIEW IMPRESSION TRACKING ─────────────────────────────────────
   // One event (pro_preview_viewed) with a `feature` property, not a
@@ -1676,6 +1849,51 @@ export default function Dashboard() {
     proPreviewFiredRef.current.add(feature)
     gtmTrack('pro_preview_viewed', { feature })
   }
+
+  // ── CONVERSION-MEASUREMENT SEAM (Phase 13) ───────────────────────────────
+  // No new analytics system and no speculative table: the funnel's seven
+  // steps are expressed with the two helpers that already exist, so they can
+  // be wired to a real destination later without touching the UI again.
+  //
+  //   1. CSV upload completed .......... csv_upload_success   (upload handler)
+  //   2. result screen viewed .......... import_result_viewed (below)
+  //   3. locked insight viewed ......... pro_preview_viewed   (feature=...)
+  //   4. upgrade CTA clicked ........... upgrade_click        (openUpgradeModal)
+  //   5. checkout started .............. upgrade_checkout_clicked (modal CTA)
+  //   6. Pro activated ................. subscription_completed (checkout return)
+  //   7. locked insight unlocked ....... pro_unlocked         (after refresh)
+  //
+  // Every conversion surface additionally carries a stable `data-cc-surface`
+  // / `data-cc-action` attribute, so a click can be attributed to the exact
+  // band that produced it without re-deriving it from the DOM shape.
+  useEffect(() => {
+    if (importStage !== 'success' || !lastUploadResult?.success) return
+    gtmTrack('import_result_viewed', {
+      platform: lastUploadResult.platform || 'unknown',
+      is_pro: isPro,
+      // Whether this creator was actually shown locked value — the single
+      // dimension that separates "saw the pitch" from "saw a receipt".
+      has_locked_value: Boolean(lastUploadResult.excludedHistory?.tips > 0),
+    })
+    if (!isPro) {
+      if (lastUploadResult.excludedHistory?.tips > 0) trackProPreviewViewed('csv_locked_history')
+      if (lastUploadResult.lockedInsights?.trend?.length >= 2) trackProPreviewViewed('csv_locked_trend')
+      if (lastUploadResult.lockedInsights?.topFans?.length > 0) trackProPreviewViewed('csv_locked_fans')
+      if (lastUploadResult.lockedInsights?.heatmap?.length > 0) trackProPreviewViewed('csv_locked_patterns')
+      if (lastUploadResult.lockedPlatformPreview?.length) trackProPreviewViewed('csv_locked_platform')
+    }
+  }, [importStage, lastUploadResult, isPro])
+
+  // The dashboard band is an impression too — it is the only conversion
+  // surface a returning creator sees without re-importing anything.
+  useEffect(() => {
+    if (isPro || !conversionContext) return
+    const surface = conversionContext.lockedHistory ? 'dashboard_locked_history'
+      : conversionContext.platformCap ? 'dashboard_platform_cap'
+      : conversionContext.sparseRecent ? 'dashboard_sparse_recent'
+      : null
+    if (surface && activeTab === 'overview') trackProPreviewViewed(surface)
+  }, [conversionContext, isPro, activeTab])
 
   const redeemPromoCode = async () => {
     const code = promoCodeInput.trim()
@@ -1967,6 +2185,10 @@ export default function Dashboard() {
                 // the rows already in the database become visible without any
                 // re-upload.
                 loadData(u.id, true, { silent: true })
+                // Funnel step 7 (see the conversion-measurement seam below):
+                // the locked surfaces the creator was looking at are now
+                // actually unlocked, as distinct from the payment completing.
+                gtmTrack('pro_unlocked', { source: 'checkout_return' })
                 showToast('✨ Pro is active — your full history is unlocked')
                 return
               }
@@ -2317,25 +2539,26 @@ export default function Dashboard() {
 
         const visibleData = historyResult.rows
         setTips(visibleData)
-        // What the Free window is holding back, measured from the rows we just
-        // loaded — real counts, not an estimate. Command Center uses this to
-        // offer a contextual opportunity instead of a generic upgrade banner,
-        // and it is the reason a creator with a thin recent window still sees
-        // that their history has something in it.
+        let engineResult = null
         try {
-          const hiddenRows = loadedIsPro ? [] : allData.filter(r => !new Set(visibleData).has(r))
-          setLockedHistory(hiddenRows.length ? {
-            tips: hiddenRows.length,
-            usd: parseFloat(hiddenRows.reduce((n, r) => n + (Number(r.usd) || 0), 0).toFixed(2)),
-          } : null)
-        } catch (_) { setLockedHistory(null) }
-        try {
-          const result = runEngine(visibleData, userTz)
-          setAnalytics(result)
+          engineResult = runEngine(visibleData, userTz)
+          setAnalytics(engineResult)
           lastEngineTipsFingerprintRef.current = { length: visibleData.length, lastId: visibleData[visibleData.length - 1]?.id ?? null }
         } catch (engineErr) {
           console.error('[loadData] runEngine failed:', engineErr)
         }
+        // Conversion layer context. Free only, and derived entirely from
+        // `allData` — which is already in memory — so no extra round trip.
+        setConversionContext(buildConversionContext({
+          allRows: allData,
+          visibleRows: visibleData,
+          analytics: engineResult,
+          isPro: loadedIsPro,
+          runEngine,
+          timezone: userTz,
+        }))
+      } else {
+        setConversionContext(null)
       }
       // paid_sessions (BongaCams Private/Full-Private/Group/Spy) — separate
       // table, separate state, never merged into `tips`/`analytics`. Same
@@ -3510,6 +3733,21 @@ const stopImportMessageRotation = () => {
               onUpgrade={() => openUpgradeModal('default')}
             />
 
+            {/* ── CONVERSION LAYER ─────────────────────────────────────
+                Carries the post-import result's language into the
+                dashboard WITHOUT redesigning it: one contextual band,
+                only when a measured condition is true, nothing for Pro.
+                See app/dashboard/ConversionBand.js. */}
+            <ConversionBand
+              C={C}
+              context={conversionContext}
+              isPro={isPro}
+              freeHistoryDays={FREE_HISTORY_DAYS}
+              freeMaxPlatforms={FREE_MAX_PLATFORMS}
+              formatDate={formatImportDate}
+              onUpgrade={(source) => openUpgradeModal(source)}
+            />
+
             {/* ═══════════════════════════════════════════════════════
                 COMMAND CENTER — DISCOVER -> EXPLAIN -> OPPORTUNITY ->
                 ACTION -> MEASURE. Replaces the former sections 1-3
@@ -3520,9 +3758,6 @@ const stopImportMessageRotation = () => {
             <CommandCenter
               analytics={analytics}
               isPro={isPro}
-              lockedHistory={lockedHistory}
-              platformCount={allPlatforms.length}
-              freeMaxPlatforms={FREE_MAX_PLATFORMS}
               nowActions={(() => {
                 // Moved from the old Overview's "Make Money Right Now"
                 // section. Merges nextMoves + top realTimeAlerts, dedupes,
@@ -5370,33 +5605,62 @@ const stopImportMessageRotation = () => {
       {/* UPGRADE MODAL */}
       {showUpgradeModal && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.88)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1002, padding: 20 }}>
-          <div style={{ width: 480, background: "rgba(15,20,32,0.97)", backdropFilter: "blur(24px)", borderRadius: 24, border: "1px solid rgba(255,255,255,0.1)", boxShadow: "0 0 80px rgba(59,130,246,0.2), 0 0 160px rgba(236,72,153,0.1)", overflow: "hidden" }}>
-            <div style={{ height: 4, background: "linear-gradient(90deg, #3b82f6, #a855f7, #ec4899)" }} />
-            <div style={{ padding: 36 }}>
-              <div style={{ textAlign: "center", marginBottom: 28 }}>
-                <div style={{ fontSize: 44, marginBottom: 12 }}>🚀</div>
-                <h2 style={{ fontSize: 24, fontWeight: 800, color: C.white, marginBottom: 8 }}>{(UPGRADE_COPY[upgradeModalSource] || UPGRADE_COPY.default).headline}</h2>
-                <p style={{ fontSize: 14, color: C.muted, lineHeight: 1.6 }}>{(UPGRADE_COPY[upgradeModalSource] || UPGRADE_COPY.default).subhead}</p>
+          {/* maxWidth/maxHeight, not a redesign: the card was a hard 480px
+              with overflow hidden, so on a 390px phone it was clipped by the
+              global `html,body { overflow-x: hidden }` and the CTA could sit
+              past the fold with no way to reach it. The modal is a primary
+              conversion surface — the button has to be reachable at every
+              width. Desktop is unchanged. */}
+          <div className="cc-upgrade-modal" style={{ width: 480, maxWidth: "100%", maxHeight: "calc(100vh - 40px)", display: "flex", flexDirection: "column", background: "rgba(15,20,32,0.97)", backdropFilter: "blur(24px)", borderRadius: 24, border: "1px solid rgba(255,255,255,0.1)", boxShadow: "0 0 80px rgba(59,130,246,0.2), 0 0 160px rgba(236,72,153,0.1)", overflow: "hidden" }}>
+            <div style={{ height: 4, flexShrink: 0, background: "linear-gradient(90deg, #3b82f6, #a855f7, #ec4899)" }} />
+            <div className="cc-upgrade-modal-body" style={{ padding: 36, overflowY: "auto", minHeight: 0 }}>
+              {/* The modal repeats what the creator just saw, in three
+                  layers: the situation that opened it (headline/subhead),
+                  their OWN measured locked value where we have one, and the
+                  benefits that actually apply to that situation. The old
+                  static six-item list of generic Pro features is gone — it
+                  answered a creator who had just been shown their own locked
+                  earnings total with a feature tour. */}
+              <div style={{ textAlign: "center", marginBottom: 24 }}>
+                <div style={{ fontSize: 44, marginBottom: 12 }}>🔓</div>
+                <h2 style={{ fontSize: 24, fontWeight: 800, color: C.white, marginBottom: 8, letterSpacing: "-0.02em" }}>{upgradeCopy.headline}</h2>
+                <p style={{ fontSize: 14, color: C.text, lineHeight: 1.6 }}>{upgradeCopy.subhead}</p>
               </div>
-              {/* Benefits follow the trigger. Clicking "Compare More Platforms"
-                  used to open a list led by fan predictions, which reads as a
-                  bait-and-switch. modalBenefits falls back to the general set
-                  when a source carries no specific context. */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 28 }}>
-                {modalBenefits.map(({ icon, text }) => (
-                  <div key={text} style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 14px", background: "rgba(59,130,246,0.08)", border: "1px solid rgba(59,130,246,0.15)", borderRadius: 10 }}>
-                    <span style={{ fontSize: 18 }}>{icon}</span>
-                    <span style={{ fontSize: 13, color: C.white }}>{text}</span>
+
+              {/* Measured from this creator's own rows — the same figure the
+                  post-import screen and the dashboard band already showed
+                  them. Rendered only when there is one; never a placeholder. */}
+              {upgradeValueLine && (
+                <div data-cc-surface="upgrade_modal_value" style={{ textAlign: "center", padding: "14px 16px", borderRadius: 12, marginBottom: 22, background: "linear-gradient(135deg,rgba(16,185,129,0.13),rgba(34,211,238,0.08))", border: "1px solid rgba(16,185,129,0.30)" }}>
+                  <div style={{ fontSize: 17, fontWeight: 900, color: C.white, overflowWrap: "anywhere" }}>
+                    We found <span style={{ color: C.green }}>{upgradeValueLine.usd}</span> more in your history
+                  </div>
+                  <div style={{ fontSize: 12.5, color: C.text, marginTop: 5, lineHeight: 1.5 }}>
+                    {upgradeValueLine.detail}
+                  </div>
+                </div>
+              )}
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 9, marginBottom: 24 }}>
+                {(upgradeCopy.benefits || UPGRADE_COPY.default.benefits).map((text) => (
+                  <div key={text} style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 14px", background: "rgba(124,92,255,0.09)", border: "1px solid rgba(124,92,255,0.20)", borderRadius: 10 }}>
+                    <span style={{ fontSize: 15, color: C.green, fontWeight: 900, flexShrink: 0 }}>✓</span>
+                    <span style={{ fontSize: 13, color: C.white, lineHeight: 1.45 }}>{text}</span>
                   </div>
                 ))}
               </div>
-              {/* The "most creators miss 30-60% of their earning potential"
-                  line that used to sit here was an invented statistic with no
-                  source behind it. Replaced with a claim the product can
-                  actually keep: history already uploaded unlocks immediately. */}
-              <div style={{ textAlign: "center", padding: "12px 16px", background: "rgba(16,185,129,0.10)", border: "1px solid rgba(16,185,129,0.25)", borderRadius: 10, marginBottom: 24 }}>
-                <div style={{ fontSize: 13, color: C.green, fontWeight: 600 }}>⚡ Everything you have already uploaded unlocks instantly — no re-upload</div>
+
+              {/* Replaces the "most creators miss 30-60% of their earning
+                  potential" line that used to sit here: an invented statistic
+                  with no source behind it. This is a claim the product can
+                  actually keep — the rows are already stored, so unlocking is
+                  instant and costs the creator no re-upload. Kept as a plain
+                  line rather than a second card so it does not compete with
+                  the measured value block above it. */}
+              <div style={{ textAlign: "center", fontSize: 12.5, color: C.green, fontWeight: 600, marginBottom: 24 }}>
+                ⚡ Everything you have already uploaded unlocks instantly — no re-upload
               </div>
+
               <Button
                 disabled={earlyAccessSubmitting}
                 onClick={async () => {
@@ -5422,10 +5686,16 @@ const stopImportMessageRotation = () => {
                     setEarlyAccessSubmitting(false)
                   }
                 }}
-                style={{ width: "100%", padding: "16px", borderRadius: 14, fontSize: 16, marginBottom: 12 }}>
-                {earlyAccessSubmitting ? "Redirecting to checkout..." : "🔓 Upgrade to Pro — $19.99/mo"}
+                data-cc-action="checkout_start:upgrade_modal"
+                style={{ width: "100%", padding: "16px", borderRadius: 14, fontSize: 16, marginBottom: 10 }}>
+                {earlyAccessSubmitting ? "Redirecting to checkout..." : "Unlock Pro →"}
               </Button>
-              <div style={{ textAlign: "center", fontSize: 12, color: C.muted, marginBottom: 20 }}>Secure checkout powered by Stripe • Cancel anytime</div>
+              {/* Price sits with the button, in the same words as every other
+                  CTA in the funnel (lib/constants.js). Display only — Stripe
+                  remains the source of truth for what is actually charged,
+                  and this is the existing checkout path, not a new one. */}
+              <div style={{ textAlign: "center", fontSize: 13, color: C.white, fontWeight: 700, marginBottom: 4 }}>{PRO_PRICE_MONTHLY_LABEL} · {PRO_PRICE_NOTE}</div>
+              <div style={{ textAlign: "center", fontSize: 12, color: C.muted, marginBottom: 20 }}>Secure checkout powered by Stripe</div>
               <button onClick={() => setShowUpgradeModal(false)} style={{ width: "100%", padding: "11px", borderRadius: 10, background: "transparent", border: "1px solid rgba(255,255,255,0.1)", color: C.muted, fontSize: 13, cursor: "pointer" }}>
                 Maybe later
               </button>

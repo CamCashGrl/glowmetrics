@@ -284,3 +284,20 @@ html, body { overflow-x: hidden; max-width: 100vw; }
 @media (max-width: 560px) {
   .ir-reassure { grid-template-columns: minmax(0, 1fr) !important; }
 }
+
+/* Dashboard conversion band (app/dashboard/ConversionBand.js). The band is a
+   wrapping flex row on desktop; below the wrap point the CTA and its price
+   line take the full width instead of sitting orphaned against the left
+   edge. minWidth on the copy column is what forces the wrap, so nothing here
+   needs a fixed breakpoint for the text itself. */
+@media (max-width: 560px) {
+  .cc-band            { padding: 18px 16px !important; gap: 16px !important; }
+  .cc-band > div      { min-width: 0 !important; width: 100%; }
+  .cc-band button     { width: 100%; }
+}
+
+/* Upgrade modal: tighter padding on phones so the value line, the benefits,
+   and the CTA all fit without the card's own scroll doing the work. */
+@media (max-width: 430px) {
+  .cc-upgrade-modal-body { padding: 24px 20px !important; }
+}
