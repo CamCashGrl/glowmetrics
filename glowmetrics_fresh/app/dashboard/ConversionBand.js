@@ -26,7 +26,7 @@
 // context and no band renders.
 // ============================================================
 
-import Button from '../../components/ui/Button'
+import { UnlockButton } from './components/LockedModule'
 import { PRO_PRICE_MONTHLY_LABEL, PRO_PRICE_NOTE } from '../../lib/constants'
 
 const fmtUsd = (n) => `$${Number(n || 0).toFixed(2)}`
@@ -51,23 +51,24 @@ export default function ConversionBand({
         key: 'locked_history',
         source: 'dashboard_locked_history',
         accent: C.green,
-        glow: 'linear-gradient(115deg,rgba(16,185,129,0.11),rgba(34,211,238,0.08))',
+        glow: 'linear-gradient(115deg,rgba(16,185,129,0.11),rgba(34,211,238,0.07))',
         border: 'rgba(16,185,129,0.28)',
-        label: 'Historical value available',
-        title: 'Your history contains more insight',
+        label: 'Your unlocked potential',
+        // The creator's own measured figure leads. It was previously buried
+        // mid-sentence, where the single most persuasive number we have read
+        // as a supporting detail.
+        value: fmtUsd(lockedHistory.totalUsd),
+        title: 'additional earnings history already saved',
         body: (
           <>
-            We found additional historical patterns beyond your Free {freeHistoryDays}-day window
-            (counted per platform) —{' '}
-            <strong style={{ color: C.green }}>{fmtUsd(lockedHistory.totalUsd)}</strong> across{' '}
-            <strong style={{ color: C.cyan }}>{fmtInt(lockedHistory.tips)}</strong> tips
+            {fmtInt(lockedHistory.tips)} tips beyond your Free {freeHistoryDays}-day window
             {lockedHistory.dateFrom && lockedHistory.dateTo ? (
-              <> from {formatDate(lockedHistory.dateFrom)} – {formatDate(lockedHistory.dateTo)}</>
+              <> ({formatDate(lockedHistory.dateFrom)} – {formatDate(lockedHistory.dateTo)})</>
             ) : null}
-            . It&apos;s already saved — no re-upload needed.
+            . Already saved — no re-upload needed.
           </>
         ),
-        cta: 'See what Pro unlocks →',
+        cta: 'Unlock Full History →',
       }
     : platformCap
     ? {
@@ -108,39 +109,32 @@ export default function ConversionBand({
 
   if (!band) return null
 
+  // Compact by design. This sits above the Command Center, which is the
+  // creator's daily briefing — a second full-height hero card there would
+  // bury the product under its own upsell. One label, one number, one line,
+  // one CTA.
   return (
     <div
       className="cc-band"
       data-cc-surface={band.source}
       style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        gap: 22, flexWrap: 'wrap', padding: '20px 24px', borderRadius: 18,
-        background: band.glow, border: `1px solid ${band.border}`, marginBottom: 18,
+        borderRadius: 14, marginBottom: 18,
+        background: band.glow, border: `1px solid ${band.border}`,
       }}
     >
-      <div style={{ minWidth: 260, flex: 1 }}>
-        <div style={{
-          fontSize: 11, fontWeight: 900, letterSpacing: '0.10em', textTransform: 'uppercase',
-          color: band.accent, marginBottom: 6,
-        }}>
-          {band.label}
-        </div>
-        <div style={{ fontSize: 16.5, fontWeight: 800, color: C.white, letterSpacing: '-0.015em' }}>
-          {band.title}
-        </div>
-        <div style={{ fontSize: 13.5, color: C.text, marginTop: 7, lineHeight: 1.6, overflowWrap: 'anywhere' }}>
-          {band.body}
-        </div>
+      <div className="cc-band-copy">
+        <div className="cc-band-label" style={{ color: band.accent }}>{band.label}</div>
+        {band.value && (
+          <div className="cc-band-value" style={{ color: band.accent }}>{band.value}</div>
+        )}
+        <div className="cc-band-title" style={{ color: C.white }}>{band.title}</div>
+        <div className="cc-band-body" style={{ color: C.text }}>{band.body}</div>
       </div>
-      <div style={{ flexShrink: 0, textAlign: 'center', minWidth: 0 }}>
-        <Button
-          data-cc-action={`upgrade_cta:${band.source}`}
-          onClick={() => onUpgrade?.(band.source)}
-          style={{ padding: '13px 24px', fontSize: 14.5, borderRadius: 12, whiteSpace: 'nowrap' }}
-        >
-          {band.cta}
-        </Button>
-        <div style={{ fontSize: 11.5, color: C.muted, marginTop: 7, whiteSpace: 'nowrap' }}>
+      <div className="cc-band-action">
+        <UnlockButton surface={band.source} onClick={() => onUpgrade?.(band.source)}>
+          {band.cta.replace(/\s*\u2192\s*$/, '')}
+        </UnlockButton>
+        <div className="cc-band-price" style={{ color: C.muted }}>
           {PRO_PRICE_MONTHLY_LABEL} · {PRO_PRICE_NOTE}
         </div>
       </div>

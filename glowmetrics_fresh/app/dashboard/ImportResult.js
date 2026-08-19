@@ -2,32 +2,46 @@
 // ============================================================
 // CAMCASH — POST-IMPORT RESULT
 //
-// The screen a creator sees after a successful CSV upload. It exists to
-// answer three questions in order:
+// The screen a creator sees after a successful CSV upload, and the highest-
+// value conversion surface in the product. Four sections, in this order:
 //
-//   1. What did you just take from me?      -> the WHOLE file
-//   2. What can Free actually tell me?      -> the 31-day window, labelled
-//   3. What else did you find in there?     -> real locked previews
+//   IMPORT COMPLETE      what we took from you — the WHOLE file
+//   YOUR FREE ANALYSIS   what Free actually tells you, clearly labelled
+//   YOUR SAVED HISTORY   your own money, already stored, one tier away
+//   WHAT PRO CAN REVEAL  real previews of the real product
 //
-// Before this, the panel headlined the inserted row count and put the Free
-// window's figures directly beneath it. On a multi-year file that read
-// "1,912 tips imported" followed immediately by "13 tips", which looks like
-// a failed import even though both numbers are correct.
+// The order matters. Headlining the Free window's figures on a multi-year
+// file read "1,912 tips imported" followed by "13 tips", which looks like a
+// failed import even though both numbers are correct. Success first, then the
+// labelled Free slice, then the value — never the value before the proof.
+//
+// LOCKED STATES ARE NOT DECORATION
+// Locked cards render through app/dashboard/components/LockedModule.js, whose
+// rule is "preview the product, don't hide it". The previous treatment blurred
+// each card 4px behind a centred lock, which taught the creator nothing about
+// what they were buying. Four genuinely different states exist here and are
+// never collapsed into one component:
+//
+//   A. saved     — rows ALREADY stored. Pro analyses them, no re-upload.
+//   B. pro       — a Pro-only insight, previewed with real structure.
+//   C. no-data   — NOT a paywall. No lock, no CTA: upgrading would not
+//                  produce the number, so offering it would be a lie.
+//   D. platform  — rows NOT stored (Free platform cap). Needs a re-import
+//                  after upgrading, so "no re-upload" must never appear.
 //
 // EVERY value rendered here is measured server-side by app/api/upload/route.js
 // from the real uploaded file, via one aggregateRows() run. This component
-// computes nothing except date spans and bar heights. If the engine could not
-// support a claim, the corresponding card renders its own "needs more data"
-// state rather than inventing one — see the best-windows card.
+// computes nothing except date spans and bar heights.
 // ============================================================
 
 import Button from '../../components/ui/Button'
 import { PRO_PRICE_MONTHLY_LABEL, PRO_PRICE_NOTE } from '../../lib/constants'
 import { resolveUpgradeContext } from '../../lib/upgradeContext'
+import LockedModule, { UnlockButton, InsufficientData } from './components/LockedModule'
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 const DAY_FULL = { Mon: 'Monday', Tue: 'Tuesday', Wed: 'Wednesday', Thu: 'Thursday', Fri: 'Friday', Sat: 'Saturday', Sun: 'Sunday' }
-const HOUR_TICKS = [0, 3, 6, 9, 12, 15, 18, 21]
+const HOUR_TICKS = [0, 6, 12, 18]
 
 const fmtUsd = (n) => `$${Number(n || 0).toFixed(2)}`
 const fmtInt = (n) => Number(n || 0).toLocaleString()
@@ -39,45 +53,18 @@ function daySpan(from, to) {
   return Math.max(1, Math.round((b - a) / 86400000))
 }
 
-// Shared shell for a locked card: real content underneath, blur + a centred
-// lock over it. Deliberately NOT a full-screen paywall — the Free half of the
-// page stays completely readable.
-function LockedCard({ C, n, title, overlay, onUnlock, children, footer, surface }) {
+// Months, for "19 months of history". Rendered only from real endpoints.
+function monthSpan(from, to) {
+  const d = daySpan(from, to)
+  return d ? Math.max(1, Math.round(d / 30.44)) : null
+}
+
+function SectionLabel({ C, children, tone }) {
   return (
-    <div data-cc-surface={surface} style={{
-      background: 'rgba(10,14,32,0.72)', border: '1px solid rgba(124,92,255,0.20)',
-      borderRadius: 14, padding: 16, minWidth: 0, display: 'flex', flexDirection: 'column',
-    }}>
-      <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.white, marginBottom: 12 }}>
-        {n}. {title}
-      </div>
-      <div style={{ position: 'relative', flex: '1 1 auto', minWidth: 0 }}>
-        <div style={{ filter: 'blur(4px)', opacity: 0.75, userSelect: 'none', pointerEvents: 'none' }} aria-hidden="true">
-          {children}
-        </div>
-        <div style={{
-          position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
-          alignItems: 'center', justifyContent: 'center', gap: 8, textAlign: 'center', padding: 8,
-        }}>
-          <div style={{
-            width: 34, height: 34, borderRadius: 10, background: 'rgba(10,14,32,0.92)',
-            border: '1px solid rgba(124,92,255,0.45)', display: 'flex', alignItems: 'center',
-            justifyContent: 'center', fontSize: 16, boxShadow: '0 0 22px rgba(124,92,255,0.35)',
-          }}>🔒</div>
-          <div style={{ fontSize: 12.5, fontWeight: 700, color: C.white, maxWidth: 220, lineHeight: 1.4, textShadow: '0 2px 10px rgba(5,7,19,0.95)' }}>
-            {overlay}
-          </div>
-        </div>
-      </div>
-      {footer && <div style={{ fontSize: 11.5, color: C.muted, marginTop: 10, lineHeight: 1.45 }}>{footer}</div>}
-      {onUnlock && (
-        <button onClick={onUnlock} data-cc-action={surface ? `upgrade_cta:${surface}` : undefined} style={{
-          marginTop: 10, padding: '7px 12px', borderRadius: 9, fontSize: 11.5, fontWeight: 800,
-          background: 'rgba(124,92,255,0.14)', border: '1px solid rgba(124,92,255,0.35)',
-          color: C.white, cursor: 'pointer', alignSelf: 'flex-start',
-        }}>Unlock Full History →</button>
-      )}
-    </div>
+    <div style={{
+      fontSize: 11, fontWeight: 900, letterSpacing: '0.10em', textTransform: 'uppercase',
+      color: tone || C.muted, marginBottom: 10,
+    }}>{children}</div>
   )
 }
 
@@ -93,6 +80,7 @@ export default function ImportResult({
   const excluded = !isPro && result.excludedHistory?.tips > 0 ? result.excludedHistory : null
   const lockedPlatforms = !isPro ? (result.lockedPlatformPreview || []) : []
   const span = full ? daySpan(full.dateFrom, full.dateTo) : null
+  const histMonths = excluded ? monthSpan(excluded.dateFrom, excluded.dateTo) : null
 
   // Sparse is about ABSOLUTE recent activity, not the file's size. A creator
   // with hundreds of recent tips inside a huge file is long-tenured, not
@@ -111,10 +99,9 @@ export default function ImportResult({
     hasBlockedPlatform: lockedPlatforms.length > 0,
     hasDeeperInsights: Boolean(li && (li.trend?.length >= 2 || li.topFans?.length || li.session)),
   })
-  const primaryCta = upgradeCtx?.cta || 'Unlock Full History →'
   const fireUpgrade = () => onUpgrade?.(upgradeCtx?.source)
-  const hasLocked = Boolean(excluded || lockedPlatforms.length || atPlatformCap ||
-    (li && (li.trend?.length >= 2 || li.topFans?.length || li.session || li.heatmap?.length)))
+  const hasProPreviews = Boolean(li && (li.trend?.length >= 2 || li.topFans?.length || li.session || li.heatmap?.length))
+  const hasLocked = Boolean(excluded || lockedPlatforms.length || atPlatformCap || hasProPreviews)
 
   const card = {
     background: 'rgba(10,14,32,0.72)', border: '1px solid rgba(124,92,255,0.16)',
@@ -123,86 +110,77 @@ export default function ImportResult({
 
   return (
     <div style={{ textAlign: 'left', maxWidth: 980, margin: '0 auto' }}>
-      {/* ── SUCCESS HEADER ───────────────────────────────────────────── */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 18 }}>
+
+      {/* ══ IMPORT COMPLETE ══════════════════════════════════════════════ */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 16 }}>
         <div style={{
           flex: '0 0 auto', width: 34, height: 34, borderRadius: '50%',
           border: `2px solid ${C.green}`, display: 'flex', alignItems: 'center',
           justifyContent: 'center', color: C.green, fontSize: 17, fontWeight: 900,
-        }}>✓</div>
+        }} aria-hidden="true">✓</div>
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 12.5, fontWeight: 800, color: C.green }}>Import successful!</div>
-          <h2 style={{ fontSize: 24, fontWeight: 900, color: C.white, margin: '2px 0 4px', letterSpacing: '-0.02em' }}>
-            We analyzed your CSV
+          <h2 style={{ fontSize: 24, fontWeight: 900, color: C.white, margin: 0, letterSpacing: '-0.02em' }}>
+            Import complete
           </h2>
-          <div style={{ fontSize: 13, color: C.muted }}>Here&apos;s what we found in your data.</div>
+          <div style={{ fontSize: 13, color: C.muted, marginTop: 3 }}>Here&apos;s what we found in your data.</div>
         </div>
       </div>
 
-      {/* ── FULL FILE + STORAGE EXPLANATION ──────────────────────────── */}
-      <div className="ir-summary" style={{ ...card, display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 18, marginBottom: 16 }}>
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 17, fontWeight: 900, color: C.white, marginBottom: 8, overflowWrap: 'anywhere' }}>
-            CSV analyzed: {fmtInt(full?.tips ?? result.inserted)} tips ·{' '}
-            <span style={{ color: C.green }}>{fmtUsd(full?.totalUsd)}</span> total
-          </div>
-          <div style={{ fontSize: 13, color: C.pink, fontWeight: 700, marginBottom: 6 }}>{result.platform}</div>
+      {/* Whole-file headline metrics. The creator's first question is "did you
+          take all of it?" — answer that before any plan boundary appears. */}
+      <div style={{ ...card, marginBottom: 14 }}>
+        <div className="ir-headline" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 12, marginBottom: 12 }}>
+          {[
+            { v: fmtInt(full?.tips ?? result.inserted), l: 'tips', c: C.cyan },
+            { v: fmtUsd(full?.totalUsd), l: 'earnings', c: C.green },
+            { v: fmtInt(full?.fans), l: 'supporters', c: C.pink },
+          ].map(s => (
+            <div key={s.l} style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 'clamp(20px,5vw,28px)', fontWeight: 900, color: s.c, letterSpacing: '-0.025em', overflowWrap: 'anywhere', lineHeight: 1.1 }}>{s.v}</div>
+              <div style={{ fontSize: 11.5, color: C.muted, marginTop: 3 }}>{s.l}</div>
+            </div>
+          ))}
+        </div>
+        <div style={{ display: 'flex', gap: '4px 16px', flexWrap: 'wrap', fontSize: 12.5, color: C.muted, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.07)' }}>
           {full?.dateFrom && full?.dateTo && (
-            <div style={{ fontSize: 12.5, color: C.muted, marginBottom: 4 }}>
-              📅 {formatDate(full.dateFrom)} – {formatDate(full.dateTo)}{span ? ` (${fmtInt(span)} days)` : ''}
-            </div>
+            <span>{formatDate(full.dateFrom)} — {formatDate(full.dateTo)}{span ? ` · ${fmtInt(span)} days` : ''}</span>
           )}
-          <div style={{ fontSize: 12.5, color: C.muted }}>
-            ✓ {fmtInt(result.skipped || 0)} duplicate{(result.skipped || 0) === 1 ? '' : 's'} removed
-          </div>
-        </div>
-        {/* Storage vs analysis, stated before the Free numbers appear — so a
-            thin window can never read as data having been discarded. */}
-        <div style={{
-          minWidth: 0, borderRadius: 12, padding: 14,
-          background: 'linear-gradient(135deg,rgba(34,211,238,0.09),rgba(124,92,255,0.09))',
-          border: '1px solid rgba(34,211,238,0.22)',
-        }}>
-          <div style={{ fontSize: 13, fontWeight: 800, color: C.white, marginBottom: 6 }}>🔒 We store all of your data</div>
-          <div style={{ fontSize: 12, color: C.text, lineHeight: 1.5 }}>
-            Everything you upload is saved. Free analytics show the most recent {freeHistoryDays} days per platform.
-          </div>
+          <span style={{ color: C.pink, fontWeight: 700 }}>{result.platform}</span>
+          <span>{fmtInt(result.skipped || 0)} duplicate{(result.skipped || 0) === 1 ? '' : 's'} removed</span>
         </div>
       </div>
 
-      {/* ── A. YOUR FREE RESULTS ─────────────────────────────────────── */}
+      {/* ══ YOUR FREE ANALYSIS ═══════════════════════════════════════════ */}
       {!isPro && free && (
-        <div style={{ ...card, marginBottom: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
-            <div style={{ fontSize: 12.5, fontWeight: 900, color: C.cyan, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-              A. Your Free Results
-            </div>
-            <div style={{ fontSize: 12, color: C.muted, flex: '1 1 auto', minWidth: 0 }}>
-              Based on your most recent {freeHistoryDays} days for this platform
-            </div>
-            <div style={{ flex: '0 0 auto', fontSize: 11, fontWeight: 800, color: C.muted, padding: '4px 10px', borderRadius: 999, border: '1px solid rgba(255,255,255,0.14)' }}>
-              Free Plan
+        <div style={{ ...card, marginBottom: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap', marginBottom: 4 }}>
+            <SectionLabel C={C} tone={C.cyan}>Your Free analysis</SectionLabel>
+            <div style={{ flex: '1 1 auto' }} />
+            <div style={{ fontSize: 10.5, fontWeight: 800, color: C.muted, padding: '3px 9px', borderRadius: 999, border: '1px solid rgba(255,255,255,0.14)' }}>
+              Free plan
             </div>
           </div>
+          <div style={{ fontSize: 12.5, color: C.muted, marginBottom: 14 }}>
+            {freeHistoryDays}-day rolling analysis · per platform
+          </div>
+
           {/* A metric with no qualifying data renders as a THRESHOLD STATE, not
               as 0 or a dash. "Sessions: 0" next to 13 imported tips reads as a
-              bug; "Needs more data — requires 15+ min or $10+" reads as a bar
-              not yet cleared. The thresholds quoted are the canonical ones
-              (lib/analytics/sessions.js classifySession, lib/analytics.js
-              isHourlyRateEligible) — nothing new is defined here, and the
-              analytics themselves are untouched. */}
+              bug; "Needs more data" reads as a bar not yet cleared. The
+              thresholds quoted are the canonical ones (classifySession,
+              isHourlyRateEligible) — nothing new is defined here. */}
           <div className="ir-free-stats" style={{ display: 'grid', gridTemplateColumns: 'repeat(5,minmax(0,1fr))', gap: 10 }}>
             {[
-              { icon: '🪙', label: 'Tips', value: fmtInt(free.tips), color: C.cyan },
-              { icon: '💵', label: 'Earnings', value: fmtUsd(free.totalUsd), color: C.green },
+              { label: 'Tips', value: fmtInt(free.tips), color: C.cyan },
+              { label: 'Earnings', value: fmtUsd(free.totalUsd), color: C.green },
               {
-                icon: '📅', label: 'Sessions', color: C.gold,
+                label: 'Sessions', color: C.gold,
                 value: free.sessions > 0 ? fmtInt(free.sessions) : null,
                 need: 'Needs a session of 15+ min or $10+',
               },
-              { icon: '👥', label: 'Fans', value: fmtInt(free.fans), color: C.pink },
+              { label: 'Fans', value: fmtInt(free.fans), color: C.pink },
               {
-                icon: '⏱️', label: 'Avg $/hour', color: C.indigo,
+                label: 'Avg $/hour', color: C.indigo,
                 value: free.avgUsdPerHour != null ? fmtUsd(free.avgUsdPerHour) : null,
                 need: 'Needs a session with 2+ tips and 15+ min',
               },
@@ -213,12 +191,12 @@ export default function ImportResult({
                 border: `1px solid ${s.value == null ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.07)'}`,
               }}>
                 <div style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: C.muted, marginBottom: 6 }}>
-                  <span aria-hidden="true">{s.icon}</span> {s.label}
+                  {s.label}
                 </div>
                 {s.value != null ? (
                   <>
                     <div style={{ fontSize: 20, fontWeight: 900, color: s.color, overflowWrap: 'anywhere' }}>{s.value}</div>
-                    <div style={{ fontSize: 10.5, color: C.muted, marginTop: 3 }}>in last {freeHistoryDays} days</div>
+                    <div style={{ fontSize: 10.5, color: C.muted, marginTop: 3 }}>recent activity analyzed</div>
                   </>
                 ) : (
                   <>
@@ -234,34 +212,31 @@ export default function ImportResult({
             ))}
           </div>
 
-          {/* Sparse data is still valid data. Say that the rows are real and
-              stored, and separately that some insights need more evidence —
-              never that anything is missing or failed. */}
+          {/* Sparse data is still valid data. Say the rows are real and stored,
+              and separately that some insights need more evidence — never that
+              anything is missing or failed. */}
           {sparse && (
             <div style={{ marginTop: 12, padding: '12px 14px', borderRadius: 12, background: 'rgba(124,92,255,0.08)', border: '1px solid rgba(124,92,255,0.22)' }}>
-              <div style={{ fontSize: 13, fontWeight: 800, color: C.white, marginBottom: 4 }}>✨ Your recent activity is light</div>
               <div style={{ fontSize: 12.5, color: C.text, lineHeight: 1.55 }}>
                 Your latest {freeHistoryDays} days contain limited activity, so some recommendations need more data to be reliable.
-                We found much more activity in your older history — {fmtInt(full.tips - free.tips)} more tips, all saved.
+                We found much more in your older history — {fmtInt(full.tips - free.tips)} more tips, all saved.
               </div>
             </div>
           )}
         </div>
       )}
 
-      {/* ── C. STRONGEST PERSONALISED FINDING ─────────────────────────
-          The first "they actually read my data" moment, and it comes BEFORE
-          anything locked is mentioned. Server-side and evidence-gated: a best
-          day needs 3+ days, a top supporter needs 2+ tips. When nothing
-          clears the bar this renders nothing at all rather than dressing up
-          a single tip as an insight. */}
+      {/* The first "they actually read my data" moment, BEFORE anything locked
+          is mentioned. Server-side and evidence-gated: a best day needs 3+
+          days, a top supporter needs 2+ tips. When nothing clears the bar this
+          renders nothing rather than dressing up a single tip as an insight. */}
       {!isPro && result.freeHighlight && (
         <div style={{
-          ...card, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 14,
+          ...card, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 14,
           background: 'linear-gradient(135deg,rgba(34,211,238,0.10),rgba(16,185,129,0.07))',
           border: '1px solid rgba(34,211,238,0.26)',
         }}>
-          <div style={{ flex: '0 0 auto', fontSize: 24 }} aria-hidden="true">💡</div>
+          <div style={{ flex: '0 0 auto', fontSize: 22 }} aria-hidden="true">💡</div>
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.cyan, marginBottom: 4 }}>
               {result.freeHighlight.label}
@@ -274,137 +249,142 @@ export default function ImportResult({
         </div>
       )}
 
-      {/* ── B. WHAT CAMCASH FOUND IN YOUR HISTORY ────────────────────── */}
-      {hasLocked && (
-        <div style={{ ...card, marginBottom: 16 }}>
-          <div style={{ fontSize: 12.5, fontWeight: 900, color: C.pink, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 4 }}>
-            B. What CamCash found in your history
-          </div>
-          <div style={{ fontSize: 12.5, color: C.muted, marginBottom: 14, lineHeight: 1.5 }}>
-            These insights use{span ? ` your full ${fmtInt(span)} days of` : ' the broader history in your'} data. Upgrade to Pro to unlock the full analysis.
-          </div>
-
-          {/* The single most persuasive number on the page is the creator's own
-              locked earnings total. It used to sit in a supporting card below
-              four locked previews, where it read as a footnote. It leads the
-              section now, with its breakdown directly beneath — the previews
-              become evidence FOR this figure rather than competing with it.
-              Every value is measured from the real file. */}
-          {excluded && (
-            <div style={{
-              padding: '16px 18px', borderRadius: 14, marginBottom: 14,
-              background: 'linear-gradient(135deg,rgba(16,185,129,0.12),rgba(34,211,238,0.08))',
-              border: '1px solid rgba(16,185,129,0.30)',
-            }}>
-              <div style={{ fontSize: 20, fontWeight: 900, color: C.white, marginBottom: 5, overflowWrap: 'anywhere' }}>
-                We found <span style={{ color: C.green }}>{fmtUsd(excluded.totalUsd)}</span> more in your history
-              </div>
-              <div style={{ fontSize: 12.5, color: C.text, lineHeight: 1.55, marginBottom: 12 }}>
-                That&apos;s additional earnings in your uploaded data that Free can&apos;t fully analyze yet.
-                It&apos;s already saved — upgrading unlocks it instantly, with no re-upload.
-              </div>
-              <div className="ir-extra" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,minmax(0,1fr))', gap: 10 }}>
-                {[
-                  { v: fmtInt(excluded.tips), l: 'additional tips', c: C.cyan },
-                  { v: fmtUsd(excluded.totalUsd), l: 'additional earnings', c: C.green },
-                  { v: fmtInt(excluded.sessions), l: 'additional sessions', c: C.gold },
-                  {
-                    v: excluded.dateFrom && excluded.dateTo
-                      ? `${formatDate(excluded.dateFrom)} – ${formatDate(excluded.dateTo)}`
-                      : '—',
-                    l: 'historical range', c: C.pink, small: true,
-                  },
-                ].map(s => (
-                  <div key={s.l} style={{ minWidth: 0, padding: '9px 10px', borderRadius: 10, background: 'rgba(0,0,0,0.22)', border: '1px solid rgba(255,255,255,0.07)' }}>
-                    <div style={{ fontSize: s.small ? 11.5 : 18, fontWeight: 900, color: s.c, overflowWrap: 'anywhere', lineHeight: 1.25 }}>{s.v}</div>
-                    <div style={{ fontSize: 10.5, color: C.muted, marginTop: 3 }}>{s.l}</div>
-                  </div>
-                ))}
+      {/* ══ YOUR SAVED HISTORY — STATE A ═════════════════════════════════
+          The strongest conversion moment in the product: money the creator
+          already earned, already handed us, already stored. It carries the
+          page's ONE primary CTA and the price, so nobody has to click to
+          discover the cost. */}
+      {excluded && (
+        <div style={{ marginBottom: 14 }}>
+          <SectionLabel C={C} tone={C.green}>Your saved history</SectionLabel>
+          <LockedModule
+            C={C}
+            variant="saved"
+            surface="csv_locked_history"
+            title="Your data contains more"
+            value={fmtUsd(excluded.totalUsd)}
+            valueLabel="additional earnings already saved"
+            stats={[
+              { v: fmtInt(excluded.tips), l: 'older tips', c: C.cyan },
+              ...(histMonths ? [{ v: `${histMonths} mo`, l: 'of history', c: C.gold }] : []),
+              { v: fmtInt(excluded.sessions), l: 'sessions', c: C.indigo },
+              ...(excluded.dateFrom && excluded.dateTo
+                ? [{ v: `${formatDate(excluded.dateFrom)} – ${formatDate(excluded.dateTo)}`, l: 'range', c: C.pink }]
+                : []),
+            ]}
+            description="Your older imported history is already saved. Pro analyzes it instantly — no re-upload required."
+          >
+            <div className="ir-saved-cta" style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', marginTop: 4 }}>
+              <UnlockButton surface="csv_locked_history" size="lg" onClick={fireUpgrade}>
+                Unlock Full History
+              </UnlockButton>
+              <div style={{ fontSize: 12, color: C.muted, whiteSpace: 'nowrap' }}>
+                {PRO_PRICE_MONTHLY_LABEL} · {PRO_PRICE_NOTE}
               </div>
             </div>
-          )}
+          </LockedModule>
+        </div>
+      )}
 
+      {/* ══ WHAT PRO CAN REVEAL — STATE B (and C where evidence is thin) ══
+          Real visualisations with real numbers, faded rather than blurred out.
+          Quiet secondary CTAs: these are evidence for the primary action
+          above, not four more competing primaries. */}
+      {hasProPreviews && (
+        <div style={{ marginBottom: 14 }}>
+          <SectionLabel C={C} tone={C.indigo}>What Pro can reveal</SectionLabel>
           <div className="ir-locked-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 12 }}>
+
             {/* 1 — LONG-TERM EARNINGS TREND (real monthly totals) */}
             {li?.trend?.length >= 2 && (() => {
               const t = li.trend
               const peak = Math.max(...t.map(m => m.usd), 0) || 1
               const pts = t.map((m, i) => `${(i / Math.max(t.length - 1, 1)) * 100},${40 - (m.usd / peak) * 36}`).join(' ')
               return (
-                <LockedCard C={C} n={1} title="Long-term earnings trend" surface="csv_locked_trend"
-                  overlay="Unlock to see the full historical trend" onUnlock={onUpgrade}
-                  footer={`${t.length} months of real earnings history found in this file.`}>
-                  <div style={{ display: 'flex', gap: 6, minWidth: 0 }}>
-                    <div style={{ flex: '0 0 auto', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', fontSize: 8.5, color: C.muted, height: 96 }}>
-                      <span>{fmtUsd(peak)}</span><span>{fmtUsd(peak / 2)}</span><span>$0</span>
-                    </div>
-                    <svg viewBox="0 0 100 40" preserveAspectRatio="none" style={{ flex: '1 1 auto', height: 96, minWidth: 0 }}>
-                      <defs>
-                        <linearGradient id="irTrendFill" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#7C5CFF" stopOpacity="0.55" />
-                          <stop offset="100%" stopColor="#7C5CFF" stopOpacity="0.02" />
-                        </linearGradient>
-                      </defs>
-                      <polygon points={`0,40 ${pts} 100,40`} fill="url(#irTrendFill)" />
-                      <polyline points={pts} fill="none" stroke="#A78BFA" strokeWidth="1.1" vectorEffect="non-scaling-stroke" />
-                    </svg>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 8.5, color: C.muted, marginTop: 4 }}>
-                    <span>{t[0].month}</span><span>{t[Math.floor(t.length / 2)].month}</span><span>{t[t.length - 1].month}</span>
-                  </div>
-                </LockedCard>
+                <LockedModule C={C} variant="pro" surface="csv_locked_trend" icon="📈"
+                  title="Long-term earnings trend"
+                  description={`Pro charts every one of the ${t.length} months in this file, so you can see whether you are actually growing.`}
+                  lockedReason={`${t.length} months of real earnings history found in this file.`}
+                  ctaLabel="View with Pro" onUpgrade={onUpgrade}
+                  preview={
+                    <>
+                      <div style={{ display: 'flex', gap: 6, minWidth: 0 }}>
+                        <div style={{ flex: '0 0 auto', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', fontSize: 8.5, color: C.muted, height: 92 }}>
+                          <span>{fmtUsd(peak)}</span><span>{fmtUsd(peak / 2)}</span><span>$0</span>
+                        </div>
+                        <svg viewBox="0 0 100 40" preserveAspectRatio="none" style={{ flex: '1 1 auto', height: 92, minWidth: 0 }}>
+                          <defs>
+                            <linearGradient id="irTrendFill" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor="#7C5CFF" stopOpacity="0.55" />
+                              <stop offset="100%" stopColor="#7C5CFF" stopOpacity="0.02" />
+                            </linearGradient>
+                          </defs>
+                          <polygon points={`0,40 ${pts} 100,40`} fill="url(#irTrendFill)" />
+                          <polyline points={pts} fill="none" stroke="#A78BFA" strokeWidth="1.1" vectorEffect="non-scaling-stroke" />
+                        </svg>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 8.5, color: C.muted, marginTop: 4 }}>
+                        <span>{t[0].month}</span><span>{t[Math.floor(t.length / 2)].month}</span><span>{t[t.length - 1].month}</span>
+                      </div>
+                    </>
+                  }
+                />
               )
             })()}
 
             {/* 2 — STRONGEST EARNING WINDOWS.
                 Gated on the canonical supported/high tier rule. When nothing
                 clears it — common, and true of the file this was built against
-                — the card keeps its place in the grid but states the absence
-                instead of ranking noise behind a blur. */}
+                — this becomes STATE C, not a lock: no badge, no CTA, because
+                upgrading would not manufacture the evidence. */}
             {li && (li.bestWindows?.length > 0 ? (
-              <LockedCard C={C} n={2} title="Your strongest earning windows" surface="csv_locked_windows"
-                overlay="Unlock to see your top earning windows" onUnlock={onUpgrade}
-                footer={`${li.bestWindows.length} window${li.bestWindows.length === 1 ? '' : 's'} with enough repeat sessions to stand up as a recommendation.`}>
-                <div style={{ display: 'grid', gridTemplateColumns: '28px 1fr auto', gap: '8px 10px', alignItems: 'center' }}>
-                  {li.bestWindows.map((w, i) => (
-                    <div key={`${w.day}-${w.hour}`} style={{ display: 'contents' }}>
-                      <div style={{ fontSize: 11, fontWeight: 900, color: C.gold }}>#{i + 1}</div>
-                      <div style={{ fontSize: 11.5, color: C.text, minWidth: 0, overflowWrap: 'anywhere' }}>{w.day} {hourLabel(w.hour)}</div>
-                      <div style={{ fontSize: 12, fontWeight: 900, color: C.gold }}>{fmtUsd(w.usdPerHour)}/hr</div>
-                    </div>
-                  ))}
-                </div>
-              </LockedCard>
+              <LockedModule C={C} variant="pro" surface="csv_locked_windows" icon="⏰"
+                title="Your strongest earning windows"
+                description="Pro analyzes your historical sessions to identify your highest-value days and hours."
+                lockedReason={`${li.bestWindows.length} window${li.bestWindows.length === 1 ? '' : 's'} with enough repeat sessions to stand up as a recommendation.`}
+                ctaLabel="See My Earning Windows" onUpgrade={onUpgrade}
+                preview={
+                  <div style={{ display: 'grid', gridTemplateColumns: '28px 1fr auto', gap: '8px 10px', alignItems: 'center' }}>
+                    {li.bestWindows.map((w, i) => (
+                      <div key={`${w.day}-${w.hour}`} style={{ display: 'contents' }}>
+                        <div style={{ fontSize: 11, fontWeight: 900, color: C.gold }}>#{i + 1}</div>
+                        <div style={{ fontSize: 11.5, color: C.text, minWidth: 0, overflowWrap: 'anywhere' }}>{w.day} {hourLabel(w.hour)}</div>
+                        <div style={{ fontSize: 12, fontWeight: 900, color: C.gold }}>{fmtUsd(w.usdPerHour)}/hr</div>
+                      </div>
+                    ))}
+                  </div>
+                }
+              />
             ) : (
-              <div style={{ background: 'rgba(10,14,32,0.72)', border: '1px solid rgba(255,255,255,0.09)', borderRadius: 14, padding: 16, minWidth: 0 }}>
-                <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.white, marginBottom: 10 }}>
-                  2. Your strongest earning windows
-                </div>
-                <div style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.55 }}>
-                  Your history doesn&apos;t yet have enough repeat sessions in any single day-and-hour slot to name a reliable one.
-                  This fills in as you stream more — we won&apos;t guess a best time from a single session.
-                </div>
-              </div>
+              <InsufficientData C={C}
+                title="Your strongest earning windows"
+                message="No single day-and-hour slot in your history has enough repeat sessions yet for us to name it reliably. This fills in as you stream more."
+                threshold="Requires repeat sessions in the same weekly slot."
+              />
             ))}
 
             {/* 3 — TOP SUPPORTERS, ALL TIME (real ranks and amounts) */}
             {li?.topFans?.length > 0 && (
-              <LockedCard C={C} n={3} title="Top supporters (all time)" surface="csv_locked_fans"
-                overlay="Unlock to see your top historical supporters" onUnlock={onUpgrade}
-                footer={`${fmtInt(li.totals.fans)} supporters found across your full history.`}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: '7px 10px', alignItems: 'center' }}>
-                  <div style={{ fontSize: 9, fontWeight: 800, color: C.muted, textTransform: 'uppercase' }}>Fan</div>
-                  <div style={{ fontSize: 9, fontWeight: 800, color: C.muted, textTransform: 'uppercase' }}>Tips</div>
-                  <div style={{ fontSize: 9, fontWeight: 800, color: C.muted, textTransform: 'uppercase' }}>Spent</div>
-                  {li.topFans.map(f => (
-                    <div key={f.rank} style={{ display: 'contents' }}>
-                      <div style={{ fontSize: 11.5, color: C.text, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.username}</div>
-                      <div style={{ fontSize: 11.5, color: C.muted }}>{fmtInt(f.tips)}</div>
-                      <div style={{ fontSize: 11.5, fontWeight: 900, color: C.green }}>{fmtUsd(f.usd)}</div>
-                    </div>
-                  ))}
-                </div>
-              </LockedCard>
+              <LockedModule C={C} variant="pro" surface="csv_locked_fans" icon="🐳"
+                title="Deeper supporter intelligence"
+                description="Pro ranks every supporter across your full history by lifetime value, not just the handful in your recent window."
+                lockedReason={`${fmtInt(li.totals.fans)} supporters found across your full history.`}
+                ctaLabel="View with Pro" onUpgrade={onUpgrade}
+                preview={
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: '7px 10px', alignItems: 'center' }}>
+                    <div style={{ fontSize: 9, fontWeight: 800, color: C.muted, textTransform: 'uppercase' }}>Fan</div>
+                    <div style={{ fontSize: 9, fontWeight: 800, color: C.muted, textTransform: 'uppercase' }}>Tips</div>
+                    <div style={{ fontSize: 9, fontWeight: 800, color: C.muted, textTransform: 'uppercase' }}>Spent</div>
+                    {li.topFans.map(f => (
+                      <div key={f.rank} style={{ display: 'contents' }}>
+                        <div style={{ fontSize: 11.5, color: C.text, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.username}</div>
+                        <div style={{ fontSize: 11.5, color: C.muted }}>{fmtInt(f.tips)}</div>
+                        <div style={{ fontSize: 11.5, fontWeight: 900, color: C.green }}>{fmtUsd(f.usd)}</div>
+                      </div>
+                    ))}
+                  </div>
+                }
+              />
             )}
 
             {/* 4 — SESSION & PERFORMANCE PATTERNS (real day x hour grid) */}
@@ -412,112 +392,103 @@ export default function ImportResult({
               const peak = Math.max(...li.heatmap.map(c => c.usdPerHour), 0) || 1
               const byKey = new Map(li.heatmap.map(c => [`${c.day}-${c.hour}`, c.usdPerHour]))
               return (
-                <LockedCard C={C} n={4} title="Session & performance patterns" surface="csv_locked_patterns"
-                  overlay="Unlock to see your full performance patterns" onUnlock={onUpgrade}
-                  footer={li.session
+                <LockedModule C={C} variant="pro" surface="csv_locked_patterns" icon="🗂️"
+                  title="Session & performance patterns"
+                  description="Pro reads every measured stream in your history and shows which hours actually paid."
+                  lockedReason={li.session
                     ? `${fmtInt(li.session.sessions)} measured streams across your history.`
-                    : `${li.heatmap.length} active time slots found.`}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '26px 1fr', gap: 4, minWidth: 0 }}>
-                    {DAYS.map(d => (
-                      <div key={d} style={{ display: 'contents' }}>
-                        <div style={{ fontSize: 8.5, color: C.muted, lineHeight: '11px' }}>{d}</div>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(24,minmax(0,1fr))', gap: 1.5, minWidth: 0 }}>
-                          {Array.from({ length: 24 }, (_, h) => {
-                            const v = byKey.get(`${DAY_FULL[d]}-${h}`) || 0
-                            return <div key={h} style={{
-                              height: 11, borderRadius: 2,
-                              background: v > 0
-                                ? `rgba(${Math.round(124 + (236 - 124) * (v / peak))},${Math.round(92 - 20 * (v / peak))},${Math.round(255 - 100 * (v / peak))},${0.25 + 0.7 * (v / peak)})`
-                                : 'rgba(255,255,255,0.04)',
-                            }} />
-                          })}
-                        </div>
+                    : `${li.heatmap.length} active time slots found.`}
+                  ctaLabel="View with Pro" onUpgrade={onUpgrade}
+                  preview={
+                    <>
+                      <div style={{ display: 'grid', gridTemplateColumns: '26px 1fr', gap: 4, minWidth: 0 }}>
+                        {DAYS.map(d => (
+                          <div key={d} style={{ display: 'contents' }}>
+                            <div style={{ fontSize: 8.5, color: C.muted, lineHeight: '11px' }}>{d}</div>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(24,minmax(0,1fr))', gap: 1.5, minWidth: 0 }}>
+                              {Array.from({ length: 24 }, (_, h) => {
+                                const v = byKey.get(`${DAY_FULL[d]}-${h}`) || 0
+                                return <div key={h} style={{
+                                  height: 11, borderRadius: 2,
+                                  background: v > 0
+                                    ? `rgba(${Math.round(124 + (236 - 124) * (v / peak))},${Math.round(92 - 20 * (v / peak))},${Math.round(255 - 100 * (v / peak))},${0.25 + 0.7 * (v / peak)})`
+                                    : 'rgba(255,255,255,0.04)',
+                                }} />
+                              })}
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 8, color: C.muted, marginTop: 5, paddingLeft: 30 }}>
-                    {HOUR_TICKS.map(h => <span key={h}>{hourLabel(h)}</span>)}
-                  </div>
-                </LockedCard>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 8, color: C.muted, marginTop: 5, paddingLeft: 30 }}>
+                        {HOUR_TICKS.map(h => <span key={h}>{hourLabel(h)}</span>)}
+                      </div>
+                    </>
+                  }
+                />
               )
             })()}
           </div>
-
-          {/* The old supporting card that lived here has moved to the TOP of
-              this section — it is the strongest number on the page and was
-              being buried. Not duplicated here. */}
-
-          {/* Fourth platform — its rows were NOT stored, so it gets the
-              re-import sentence rather than the instant-unlock one. */}
-          {lockedPlatforms.map(p => (
-            <div key={p.platform} style={{ marginTop: 12, padding: '14px 16px', borderRadius: 12, background: 'rgba(245,158,11,0.07)', border: '1px solid rgba(245,158,11,0.24)' }}>
-              <div style={{ fontSize: 12.5, fontWeight: 900, color: C.gold, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
-                We found another platform: {p.platform}
-              </div>
-              <div className="ir-extra" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 10, marginBottom: 10 }}>
-                {[{ v: fmtInt(p.tips), l: 'Tips' }, { v: fmtUsd(p.totalUsd), l: 'Earnings' }, { v: fmtInt(p.sessions), l: 'Sessions' }].map(s => (
-                  <div key={s.l} style={{ padding: '9px 10px', borderRadius: 10, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', minWidth: 0 }}>
-                    <div style={{ fontSize: 9, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: C.muted, marginBottom: 4 }}>{s.l}</div>
-                    <div style={{ fontSize: 14, fontWeight: 900, color: C.white, filter: 'blur(3px)', userSelect: 'none', overflowWrap: 'anywhere' }}>{s.v}</div>
-                  </div>
-                ))}
-              </div>
-              <div style={{ fontSize: 12.5, color: C.text, lineHeight: 1.55 }}>
-                Detected in this file. Free is already using all {freeMaxPlatforms} platform slots, so these rows weren&apos;t stored — unlike your history, which is already saved and unlocks the moment you upgrade. Bringing {p.platform} in takes one more import of this same file after upgrading.
-              </div>
-              <Button onClick={onUpgrade} style={{ marginTop: 10, padding: '8px 14px', fontSize: 12 }}>Unlock Pro to analyze {p.platform} →</Button>
-            </div>
-          ))}
-          {/* At the cap with no NEW platform in this file — there is nothing
-              locked to preview, but the ceiling is still worth naming. This
-              card existed before the rewrite and is easy to lose, because it
-              only appears when lockedPlatforms is empty. */}
-          {atPlatformCap && lockedPlatforms.length === 0 && (
-            <div style={{ marginTop: 12, padding: '14px 16px', borderRadius: 12, background: 'linear-gradient(135deg,rgba(34,211,238,0.08),rgba(124,92,255,0.08))', border: '1px solid rgba(34,211,238,0.20)' }}>
-              <div style={{ fontSize: 12.5, fontWeight: 900, color: C.cyan, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 5 }}>
-                You&apos;ve used all {freeMaxPlatforms} Free platform slots
-              </div>
-              <div style={{ fontSize: 12.5, color: C.text, lineHeight: 1.55 }}>
-                Upgrade to Pro to add more platforms and compare your earnings, best windows, and platform ROI side by side.
-              </div>
-              <Button onClick={onUpgradePlatforms || onUpgrade} style={{ marginTop: 10, padding: '8px 14px', fontSize: 12 }}>Compare More Platforms →</Button>
-            </div>
-          )}
         </div>
       )}
 
-      {/* ── PRIMARY CTA ──────────────────────────────────────────────── */}
-      {!isPro && hasLocked && (
+      {/* ══ STATE D — FOURTH PLATFORM ════════════════════════════════════
+          NOT historical data. These rows were never stored, because the Free
+          platform cap was already reached. The distinction is the entire point
+          of this card: the "no re-upload" promise is TRUE of saved history and
+          FALSE here, so this copy says the opposite, explicitly. Figures are
+          shown plainly — a creator cannot want what they cannot read. */}
+      {lockedPlatforms.map(p => (
+        <div key={p.platform} style={{ marginBottom: 14 }}>
+          <LockedModule C={C} variant="platform" surface="csv_locked_platform" icon="🧩"
+            title="Another platform found"
+            value={p.platform}
+            stats={[
+              { v: fmtInt(p.tips), l: 'tips', c: C.white },
+              { v: fmtUsd(p.totalUsd), l: 'earnings', c: C.green },
+              { v: fmtInt(p.sessions), l: 'sessions', c: C.gold },
+            ]}
+            description={`Your Free plan currently analyzes up to ${freeMaxPlatforms} supported platforms. These rows weren't saved because this platform is beyond your Free limit.`}
+            footnote={`After upgrading, import this file again to analyze ${p.platform}.`}
+            ctaLabel="Upgrade to Pro"
+            onUpgrade={() => onUpgrade?.('csv_platform_limit')}
+          />
+        </div>
+      ))}
+
+      {/* At the cap with no NEW platform in this file — nothing locked to
+          preview, but the ceiling is still worth naming. Only appears when
+          lockedPlatforms is empty, which makes it easy to lose in a rewrite. */}
+      {atPlatformCap && lockedPlatforms.length === 0 && (
+        <div style={{ marginBottom: 14 }}>
+          <LockedModule C={C} variant="pro" surface="csv_platform_cap" icon="🔀"
+            title={`You've used all ${freeMaxPlatforms} Free platform slots`}
+            description="Pro adds more platforms and compares them side by side, so you can see which one is actually worth your hours."
+            ctaLabel="Compare More Platforms"
+            onUpgrade={() => (onUpgradePlatforms || onUpgrade)?.('csv_platform_limit')}
+          />
+        </div>
+      )}
+
+      {/* The page's primary CTA lives in YOUR SAVED HISTORY. This block is the
+          fallback for a creator who has locked value but NO saved history —
+          without it, such a page would end with only quiet secondary CTAs. */}
+      {!isPro && hasLocked && !excluded && (
         <div className="ir-cta" style={{
-          ...card, display: 'grid', gridTemplateColumns: '1fr auto', gap: 18, alignItems: 'center',
+          ...card, display: 'flex', gap: 18, alignItems: 'center', flexWrap: 'wrap',
           background: 'linear-gradient(135deg,rgba(124,92,255,0.14),rgba(236,72,153,0.10))',
-          border: '1px solid rgba(236,72,153,0.28)', marginBottom: 16,
+          border: '1px solid rgba(236,72,153,0.28)', marginBottom: 14,
         }}>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 18, fontWeight: 900, color: C.white, marginBottom: 5 }}>👑 Unlock your full CamCash analysis</div>
-            <div style={{ fontSize: 12.5, color: C.text, lineHeight: 1.55, marginBottom: 10 }}>
+          <div style={{ minWidth: 240, flex: 1 }}>
+            <div style={{ fontSize: 17, fontWeight: 900, color: C.white, marginBottom: 5 }}>Unlock your full CamCash analysis</div>
+            <div style={{ fontSize: 12.5, color: C.text, lineHeight: 1.55 }}>
               {upgradeCtx?.subhead
                 || 'Pro unlocks the deeper historical trends, additional platforms, and advanced insights already found in your data.'}
             </div>
-            <div className="ir-cta-feats" style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: '5px 14px' }}>
-              {['Full historical insights', 'Advanced reports', 'Longer date ranges', 'Priority support'].map(f => (
-                <div key={f} style={{ fontSize: 11.5, color: C.muted, minWidth: 0 }}>
-                  <span style={{ color: C.green }}>✓</span> {f}
-                </div>
-              ))}
-            </div>
           </div>
-          {/* Price sits WITH the button, not behind it. Making someone click
-              to discover the cost is a bigger drop-off than the cost itself.
-              Display only — Stripe still decides what is actually charged and
-              this opens the existing checkout, no new path. */}
-          <div style={{ minWidth: 0, textAlign: 'center' }}>
-            {/* One unambiguous action. The contextual wording lives in the
-                subhead above and on each card, so the page never carries
-                several competing primary CTAs. */}
-            <Button onClick={fireUpgrade} style={{ padding: '14px 26px', fontSize: 15, whiteSpace: 'nowrap' }}>
-              Unlock Pro →
-            </Button>
+          <div style={{ flexShrink: 0, textAlign: 'center' }}>
+            <UnlockButton surface="csv_primary" size="lg" onClick={fireUpgrade}>
+              {(upgradeCtx?.cta || 'Unlock Pro →').replace(/\s*→\s*$/, '')}
+            </UnlockButton>
             <div style={{ fontSize: 11.5, color: C.muted, marginTop: 7, whiteSpace: 'nowrap' }}>
               {PRO_PRICE_MONTHLY_LABEL} · {PRO_PRICE_NOTE}
             </div>
@@ -525,8 +496,7 @@ export default function ImportResult({
         </div>
       )}
 
-      {/* ── G. REASSURANCE ────────────────────────────────────────────
-          The last thing read before deciding. Every line is a promise the
+      {/* The last thing read before deciding. Every line is a promise the
           product actually keeps and that this branch verified. */}
       {!isPro && hasLocked && (
         <div className="ir-reassure" style={{
@@ -541,7 +511,7 @@ export default function ImportResult({
             'Your imported data stays on your account either way',
           ].map(t => (
             <div key={t} style={{ fontSize: 11.5, color: C.muted, minWidth: 0, lineHeight: 1.45 }}>
-              <span style={{ color: C.green }}>✓</span> {t}
+              <span style={{ color: C.green }} aria-hidden="true">✓</span> {t}
             </div>
           ))}
         </div>

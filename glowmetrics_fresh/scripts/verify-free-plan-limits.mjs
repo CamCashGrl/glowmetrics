@@ -17,6 +17,7 @@ const pricing = read('app/pricing/PricingClient.js')
 // about the result UI must see both files, or they silently pass/fail on the
 // wrong one.
 const importResult = read('app/dashboard/ImportResult.js')
+const lockedModuleSrc = read('app/dashboard/components/LockedModule.js')
 const upgradeCtx = read('lib/upgradeContext.js')
 const commandCenter = read('app/dashboard/CommandCenter.js')
 const conversionBand = read('app/dashboard/ConversionBand.js')
@@ -141,12 +142,16 @@ const checks = [
   // A multi-year upload used to headline the inserted count and then show the
   // Free window's numbers directly beneath it, with nothing between them —
   // "1,912 tips" followed by "13 tips" reads as a broken import.
+  // The whole file is reported before any plan boundary appears. Headlining
+  // the Free window on a multi-year file read "1,912 tips imported" followed
+  // by "13 tips", which looks like a failed import though both are correct.
   ['the result leads with the whole file, not the Free slice',
-    /CSV analyzed:/.test(resultUi) && /We analyzed your CSV/i.test(resultUi)],
+    /Import complete/.test(resultUi) &&
+    resultUi.indexOf('full?.tips') < resultUi.indexOf('Your Free analysis')],
   ['the headline totals come from fullFileSummary',
     /full\?\.tips \?\? result\.inserted/.test(resultUi)],
   ['Free results name their window up front',
-    /most recent \{freeHistoryDays\} days for this platform/.test(resultUi)],
+    /\{freeHistoryDays\}-day rolling analysis · per platform/.test(resultUi)],
   // Sparse data is still valid data. The notice must key off ABSOLUTE recent
   // activity — a creator with 412 recent tips out of 1,912 is long-tenured,
   // not sparse, and must not be told their activity is light.
@@ -163,16 +168,20 @@ const checks = [
     /const li = !isPro \? result\.lockedInsights : null/.test(resultUi)],
   ['locked previews exist for trend, fans and sessions',
     /Long-term earnings trend/i.test(resultUi) &&
-    /Top supporters \(all time\)/i.test(resultUi) &&
+    /Deeper supporter intelligence/i.test(resultUi) &&
     /Session & performance patterns/i.test(resultUi)],
   // Best windows reuse Stream Planner's tier gate. A window seen once is not
   // a recommendation, so when nothing qualifies the UI must say so rather
   // than rank noise behind a blur.
   ['best-window previews reuse the canonical tier gate',
     /RECOMMENDABLE_TIERS = new Set\(\['supported', 'high'\]\)/.test(upload)],
+  // When no slot clears the canonical tier gate this is an INSUFFICIENT-DATA
+  // state, not a lock: no badge, no upgrade CTA, because upgrading would not
+  // manufacture the evidence.
   ['the route withholds best windows instead of inventing them',
     /bestWindowsWithheld/.test(upload) &&
-    /doesn&apos;t yet have enough repeat sessions/.test(resultUi)],
+    /enough repeat sessions yet/.test(resultUi) &&
+    /<InsufficientData/.test(resultUi)],
   ['locked insights are derived from ONE canonical engine run',
     /a = aggregateRows\(rows, tz\)/.test(upload) &&
     !/new Date\(\)\.getTimezoneOffset/.test(upload)],
@@ -194,7 +203,9 @@ const checks = [
   ['the modal benefit list is driven by the trigger, not hardcoded',
     /upgradeCopy\.benefits/.test(dashboard) && !/See ALL your top spenders/.test(dashboard)],
   ["the modal repeats the creator's own measured locked total",
-    /upgradeValueLine/.test(dashboard) && /more in your history/.test(dashboard)],
+    /upgradeValueLine/.test(dashboard) &&
+    /upgradeValueLine\.usd/.test(dashboard) &&
+    /additional earnings already saved/.test(dashboard)],
   // An invented statistic with no source behind it. Comment-stripped: the
   // code comment above the removal quotes the old line deliberately, to
   // explain why it went. Only shipped copy counts.
@@ -483,8 +494,12 @@ if (passed !== checks.length) process.exit(1)
     /dashboard_locked_history: \{/.test(dashboard) &&
     /dashboard_platform_cap: \{/.test(dashboard) &&
     /dashboard_sparse_recent: \{/.test(dashboard)])
+  // The figure now LEADS the block at heading weight rather than sitting
+  // inside a sentence — same number, same source, stronger hierarchy.
   extra.push(['Modal repeats the creator\'s own measured figure when there is one',
-    /upgradeValueLine/.test(dashboard) && /We found <span[^>]*>\{upgradeValueLine\.usd\}/.test(dashboard)])
+    /upgradeValueLine/.test(dashboard) &&
+    /\{upgradeValueLine\.usd\}/.test(dashboard) &&
+    /additional earnings already saved/.test(dashboard)])
   extra.push(['Modal still uses the existing Stripe checkout path',
     /\/api\/stripe\/checkout/.test(dashboard) && /plan_type: 'standard_monthly'/.test(dashboard)])
 
@@ -496,8 +511,13 @@ if (passed !== checks.length) process.exit(1)
     /pro_preview_viewed/.test(dashboard)])
   extra.push(['The unlock itself is a distinct step from the payment',
     /pro_unlocked/.test(dashboard) && /subscription_completed/.test(dashboard)])
+  // The hook moved INTO the shared locked-state component: ImportResult now
+  // passes surface="..." and LockedModule renders the attribute, so every
+  // locked surface gets one by construction instead of per-card by hand.
   extra.push(['Conversion surfaces carry a stable attribution hook',
-    /data-cc-surface/.test(band) && /data-cc-surface/.test(importResult) &&
+    /data-cc-surface/.test(band) &&
+    /data-cc-surface=\{surface\}/.test(lockedModuleSrc) &&
+    /surface="csv_locked_history"/.test(importResult) &&
     /data-cc-action/.test(dashboard)])
   extra.push(['No speculative tracking table was added',
     !/from\(['"]conversion_events['"]\)/.test(dashboard) &&

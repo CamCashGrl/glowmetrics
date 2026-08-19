@@ -285,19 +285,248 @@ html, body { overflow-x: hidden; max-width: 100vw; }
   .ir-reassure { grid-template-columns: minmax(0, 1fr) !important; }
 }
 
-/* Dashboard conversion band (app/dashboard/ConversionBand.js). The band is a
-   wrapping flex row on desktop; below the wrap point the CTA and its price
-   line take the full width instead of sitting orphaned against the left
-   edge. minWidth on the copy column is what forces the wrap, so nothing here
-   needs a fixed breakpoint for the text itself. */
+/* Dashboard conversion band (app/dashboard/ConversionBand.js).
+   Compact on purpose: it sits above the Command Center, and a full-height
+   hero card there buries the daily briefing under its own upsell. One label,
+   one number, one line, one CTA — visually part of the locked-state system
+   rather than a second design language. */
+.cc-band {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 20px; flex-wrap: wrap; padding: 16px 20px;
+}
+.cc-band-copy  { min-width: 240px; flex: 1; }
+.cc-band-label {
+  font-size: 10.5px; font-weight: 900; letter-spacing: 0.10em;
+  text-transform: uppercase; margin-bottom: 4px;
+}
+.cc-band-value {
+  font-size: clamp(24px, 5vw, 30px); font-weight: 900;
+  letter-spacing: -0.03em; line-height: 1.05; overflow-wrap: anywhere;
+}
+.cc-band-title { font-size: 13px; font-weight: 700; margin-top: 3px; }
+.cc-band-body  { font-size: 12.5px; line-height: 1.55; margin-top: 6px; overflow-wrap: anywhere; }
+.cc-band-action { flex-shrink: 0; text-align: center; min-width: 0; }
+.cc-band-price  { font-size: 11.5px; margin-top: 7px; white-space: nowrap; }
+
 @media (max-width: 560px) {
-  .cc-band            { padding: 18px 16px !important; gap: 16px !important; }
-  .cc-band > div      { min-width: 0 !important; width: 100%; }
-  .cc-band button     { width: 100%; }
+  .cc-band        { padding: 16px !important; gap: 14px; }
+  .cc-band-copy   { min-width: 0; width: 100%; }
+  .cc-band-action { width: 100%; }
+  .cc-band-action .cc-unlock { width: 100%; justify-content: center; }
 }
 
 /* Upgrade modal: tighter padding on phones so the value line, the benefits,
    and the CTA all fit without the card's own scroll doing the work. */
 @media (max-width: 430px) {
   .cc-upgrade-modal-body { padding: 24px 20px !important; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   SHARED LOCKED-STATE SYSTEM  (app/dashboard/components/LockedModule.js)
+
+   Governing rule: DO NOT HIDE THE PRODUCT. PREVIEW THE PRODUCT.
+
+   The treatment this replaces was `filter: blur(4px)` across a card body
+   with an opaque centred lock. It hid the very thing being sold. Here the
+   preview keeps its real structure and real numbers, and "locked" is
+   expressed as a mask that fades the visualisation into the card's own
+   background — the same device a premium report uses for a cut-off page,
+   rather than the frosted-glass device software uses for "disabled".
+   ══════════════════════════════════════════════════════════════════════ */
+
+.cc-lock {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 18px;
+  border-radius: 16px;
+  border: 1px solid rgba(124, 92, 255, 0.22);
+  background: rgba(10, 14, 32, 0.72);
+}
+.cc-lock--compact { padding: 14px; border-radius: 14px; }
+
+.cc-lock-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.cc-lock-heading { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.cc-lock-icon { font-size: 15px; flex: 0 0 auto; }
+.cc-lock-title {
+  font-size: 13.5px; font-weight: 800; letter-spacing: -0.01em;
+  margin: 0; min-width: 0; overflow-wrap: anywhere;
+}
+
+/* Status as a word, not only a colour — greyscale and screen readers both
+   still get it (a11y: no information conveyed solely through colour). */
+.cc-lock-badge {
+  flex: 0 0 auto;
+  font-size: 9.5px; font-weight: 900; letter-spacing: 0.09em;
+  text-transform: uppercase;
+  padding: 4px 8px; border-radius: 999px;
+  border: 1px solid currentColor;
+  background: rgba(0, 0, 0, 0.25);
+  white-space: nowrap;
+}
+
+.cc-lock-value-wrap { margin: 2px 0 12px; }
+.cc-lock-value {
+  font-size: clamp(28px, 7vw, 40px);
+  font-weight: 900; line-height: 1.05; letter-spacing: -0.03em;
+  overflow-wrap: anywhere;
+}
+.cc-lock-value-label { font-size: 12.5px; margin-top: 5px; line-height: 1.4; }
+
+.cc-lock-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.cc-lock-stat {
+  min-width: 0; padding: 9px 11px; border-radius: 10px;
+  background: rgba(0, 0, 0, 0.22); border: 1px solid rgba(255, 255, 255, 0.07);
+}
+.cc-lock-stat-v { font-size: 15px; font-weight: 900; overflow-wrap: anywhere; line-height: 1.25; }
+.cc-lock-stat-l { font-size: 10.5px; margin-top: 3px; }
+
+/* The preview itself. Two devices, both gentle:
+     1. a mask fading the lower half into nothing, so the card ends in the
+        card rather than in a wall;
+     2. a very slight blur + desaturation, enough to read as "not yet live"
+        without destroying legibility of the shapes.
+   No opaque overlay, no centred lock icon, no giant blur. */
+.cc-lock-preview-wrap { position: relative; margin-bottom: 12px; min-width: 0; }
+.cc-lock-preview {
+  min-width: 0;
+  filter: blur(1.3px) saturate(0.82);
+  opacity: 0.6;
+  user-select: none;
+  pointer-events: none;
+  -webkit-mask-image: linear-gradient(180deg, #000 0%, #000 40%, rgba(0, 0, 0, 0.32) 76%, transparent 100%);
+          mask-image: linear-gradient(180deg, #000 0%, #000 40%, rgba(0, 0, 0, 0.32) 76%, transparent 100%);
+}
+.cc-lock-reason {
+  margin-top: -6px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.45;
+  position: relative;
+}
+
+.cc-lock-desc { font-size: 12.5px; line-height: 1.55; margin: 0 0 10px; }
+.cc-lock-foot { font-size: 11.5px; line-height: 1.45; margin: 0 0 10px; }
+.cc-lock-cta { margin-top: auto; padding-top: 2px; }
+
+/* ── C. INSUFFICIENT DATA ──────────────────────────────────────────────
+   No lock, no badge, no CTA. Upgrading does not create this number, so an
+   upgrade button here would be a false promise. Visually it is the quietest
+   card on the page: a state, not an obstruction. */
+.cc-nodata {
+  /* align-self so a short "not enough data yet" card does not stretch to the
+     height of the tall chart beside it in the preview grid — dead space under
+     three lines of text reads as a card that failed to load. */
+  align-self: start;
+  min-width: 0; padding: 18px; border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.015);
+}
+.cc-nodata--compact { padding: 14px; border-radius: 14px; }
+.cc-nodata-title { font-size: 13.5px; font-weight: 800; margin: 0 0 9px; letter-spacing: -0.01em; }
+.cc-nodata-chip {
+  display: inline-block; font-size: 11px; font-weight: 800;
+  padding: 4px 9px; border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.09);
+}
+.cc-nodata-msg { font-size: 12.5px; line-height: 1.55; margin: 9px 0 0; }
+.cc-nodata-threshold { font-size: 11.5px; line-height: 1.45; margin: 6px 0 0; }
+
+/* ── UNLOCK BUTTON ─────────────────────────────────────────────────────
+   Primary reuses the signature gradient from components/ui/Button.js — the
+   gradient, shadow, hover lift and shimmer are NOT redefined here, only the
+   arrow motion and the focus ring are added. Secondary is deliberately
+   restrained so per-card affordances never compete with the one primary. */
+.cc-unlock { display: inline-flex; align-items: center; gap: 8px; }
+.cc-unlock-arrow {
+  display: inline-block;
+  transition: transform 0.18s ease;
+  will-change: transform;
+}
+.cc-unlock:hover .cc-unlock-arrow { transform: translateX(3px); }
+.cc-unlock:active .cc-unlock-arrow { transform: translateX(1px); }
+
+.cc-unlock--secondary {
+  border-radius: 10px;
+  font-weight: 800;
+  color: rgba(226, 232, 240, 0.92);
+  background: rgba(124, 92, 255, 0.10);
+  border: 1px solid rgba(124, 92, 255, 0.30);
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
+}
+.cc-unlock--secondary:hover:not(:disabled) {
+  background: rgba(124, 92, 255, 0.18);
+  border-color: rgba(124, 92, 255, 0.52);
+  color: #fff;
+  transform: translateY(-1px);
+}
+.cc-unlock--secondary:active:not(:disabled) { transform: translateY(0); }
+.cc-unlock--secondary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Keyboard focus. globals.css had no focus-visible rule at all before this,
+   so gradient CTAs were keyboard-reachable but gave no visible target. */
+.cc-unlock:focus-visible,
+.lp-btn-primary:focus-visible {
+  outline: 2px solid #21E6F3;
+  outline-offset: 3px;
+  border-radius: 12px;
+}
+
+/* ── MOBILE ────────────────────────────────────────────────────────────
+   Designed states, not shrunk desktop cards: the value stays large because
+   it is the argument, the stat grid drops to two columns, and every CTA
+   goes full-width so it is never a small target at the bottom of a card. */
+@media (max-width: 560px) {
+  .cc-lock, .cc-nodata { padding: 15px; }
+  .cc-lock-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cc-lock-cta .cc-unlock { width: 100%; justify-content: center; }
+  .cc-lock-head { flex-wrap: wrap; }
+}
+@media (max-width: 390px) {
+  .cc-lock-stats { grid-template-columns: minmax(0, 1fr); }
+  .cc-lock-badge { font-size: 9px; padding: 3px 7px; }
+}
+
+/* ── REDUCED MOTION ────────────────────────────────────────────────────
+   The signature button's shimmer loops forever; honouring the OS setting is
+   required and globals.css had no such block before. Motion is removed,
+   colour and hierarchy are untouched. */
+@media (prefers-reduced-motion: reduce) {
+  .lp-btn-primary::after { animation: none; }
+  .cc-unlock-arrow,
+  .cc-unlock--secondary { transition: none; }
+  .cc-unlock:hover .cc-unlock-arrow,
+  .cc-unlock:active .cc-unlock-arrow { transform: none; }
+  .cc-unlock--secondary:hover:not(:disabled) { transform: none; }
+}
+
+/* Post-import headline metrics (tips / earnings / supporters). They stay on
+   one row down to 390px — three short numbers is the one grid that reads
+   BETTER tight than stacked, and stacking pushed the saved-history value
+   below the fold on a phone. The value font is already clamp()ed. */
+@media (max-width: 430px) {
+  .ir-headline { gap: 8px !important; }
+}
+/* The saved-history CTA and its price sit side by side on desktop; on a phone
+   the button takes the full width and the price line sits under it, so the
+   primary action is never a small target. */
+@media (max-width: 560px) {
+  .ir-saved-cta            { gap: 10px !important; }
+  .ir-saved-cta > *:first-child { width: 100%; }
+  .ir-saved-cta .cc-unlock { width: 100%; justify-content: center; }
+  .ir-cta > div            { min-width: 0 !important; width: 100%; }
+  .ir-cta .cc-unlock       { width: 100%; justify-content: center; }
 }

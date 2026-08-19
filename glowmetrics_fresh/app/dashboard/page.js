@@ -5629,13 +5629,20 @@ const stopImportMessageRotation = () => {
 
               {/* Measured from this creator's own rows — the same figure the
                   post-import screen and the dashboard band already showed
-                  them. Rendered only when there is one; never a placeholder. */}
+                  them. Rendered only when there is one; never a placeholder.
+                  The number LEADS, at the weight it carries on those other two
+                  surfaces. It was previously set inside a sentence at 17px,
+                  which made the single most persuasive fact we have read like
+                  body copy. */}
               {upgradeValueLine && (
-                <div data-cc-surface="upgrade_modal_value" style={{ textAlign: "center", padding: "14px 16px", borderRadius: 12, marginBottom: 22, background: "linear-gradient(135deg,rgba(16,185,129,0.13),rgba(34,211,238,0.08))", border: "1px solid rgba(16,185,129,0.30)" }}>
-                  <div style={{ fontSize: 17, fontWeight: 900, color: C.white, overflowWrap: "anywhere" }}>
-                    We found <span style={{ color: C.green }}>{upgradeValueLine.usd}</span> more in your history
+                <div data-cc-surface="upgrade_modal_value" style={{ textAlign: "center", padding: "16px", borderRadius: 12, marginBottom: 22, background: "linear-gradient(135deg,rgba(16,185,129,0.13),rgba(34,211,238,0.08))", border: "1px solid rgba(16,185,129,0.30)" }}>
+                  <div style={{ fontSize: "clamp(30px,9vw,40px)", fontWeight: 900, color: C.green, letterSpacing: "-0.03em", lineHeight: 1.05, overflowWrap: "anywhere" }}>
+                    {upgradeValueLine.usd}
                   </div>
-                  <div style={{ fontSize: 12.5, color: C.text, marginTop: 5, lineHeight: 1.5 }}>
+                  <div style={{ fontSize: 12.5, color: C.white, fontWeight: 700, marginTop: 5 }}>
+                    additional earnings already saved
+                  </div>
+                  <div style={{ fontSize: 12, color: C.text, marginTop: 6, lineHeight: 1.5 }}>
                     {upgradeValueLine.detail}
                   </div>
                 </div>
@@ -5650,17 +5657,11 @@ const stopImportMessageRotation = () => {
                 ))}
               </div>
 
-              {/* Replaces the "most creators miss 30-60% of their earning
-                  potential" line that used to sit here: an invented statistic
-                  with no source behind it. This is a claim the product can
-                  actually keep — the rows are already stored, so unlocking is
-                  instant and costs the creator no re-upload. Kept as a plain
-                  line rather than a second card so it does not compete with
-                  the measured value block above it. */}
-              <div style={{ textAlign: "center", fontSize: 12.5, color: C.green, fontWeight: 600, marginBottom: 24 }}>
-                ⚡ Everything you have already uploaded unlocks instantly — no re-upload
-              </div>
-
+              {/* Price before the button, not after it. Making someone click
+                  to discover the cost is a bigger drop-off than the cost.
+                  Display only — Stripe remains the source of truth for what is
+                  actually charged, and this is the existing checkout path. */}
+              <div style={{ textAlign: "center", fontSize: 13, color: C.white, fontWeight: 700, marginBottom: 10 }}>{PRO_PRICE_MONTHLY_LABEL} · {PRO_PRICE_NOTE}</div>
               <Button
                 disabled={earlyAccessSubmitting}
                 onClick={async () => {
@@ -5690,11 +5691,14 @@ const stopImportMessageRotation = () => {
                 style={{ width: "100%", padding: "16px", borderRadius: 14, fontSize: 16, marginBottom: 10 }}>
                 {earlyAccessSubmitting ? "Redirecting to checkout..." : "Unlock Pro →"}
               </Button>
-              {/* Price sits with the button, in the same words as every other
-                  CTA in the funnel (lib/constants.js). Display only — Stripe
-                  remains the source of truth for what is actually charged,
-                  and this is the existing checkout path, not a new one. */}
-              <div style={{ textAlign: "center", fontSize: 13, color: C.white, fontWeight: 700, marginBottom: 4 }}>{PRO_PRICE_MONTHLY_LABEL} · {PRO_PRICE_NOTE}</div>
+              {/* Reassurance is the last thing read before deciding. It
+                  replaces the "most creators miss 30-60% of their earning
+                  potential" line that used to sit above the CTA — an invented
+                  statistic with no source. This is a claim the product keeps:
+                  the rows are already stored, so unlocking costs no re-upload. */}
+              <div style={{ textAlign: "center", fontSize: 12.5, color: C.text, lineHeight: 1.55, marginBottom: 8 }}>
+                Everything you&apos;ve already uploaded stays saved. Historical analysis unlocks without re-upload.
+              </div>
               <div style={{ textAlign: "center", fontSize: 12, color: C.muted, marginBottom: 20 }}>Secure checkout powered by Stripe</div>
               <button onClick={() => setShowUpgradeModal(false)} style={{ width: "100%", padding: "11px", borderRadius: 10, background: "transparent", border: "1px solid rgba(255,255,255,0.1)", color: C.muted, fontSize: 13, cursor: "pointer" }}>
                 Maybe later
