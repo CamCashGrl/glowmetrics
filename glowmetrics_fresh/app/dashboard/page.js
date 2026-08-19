@@ -4313,8 +4313,24 @@ const stopImportMessageRotation = () => {
             <p style={{ fontSize: 14, color: C.muted, marginBottom: 12 }}>
               {isPro
                 ? "Unlimited platforms • Full CSV history • Auto-removes duplicates"
-                : `Free plan — up to ${FREE_MAX_PLATFORMS} platforms • ${FREE_HISTORY_DAYS}-day history window • Auto-removes duplicates.`}
+                : `Free plan — up to ${FREE_MAX_PLATFORMS} platforms • ${FREE_HISTORY_DAYS}-day history window per platform • Auto-removes duplicates`}
             </p>
+            {/* The window is per platform, and it is an ANALYSIS boundary, not
+                an import cap — every row you upload is stored. Said plainly
+                here because the locked panels below only appear after an
+                upload, so a creator deciding whether to import at all would
+                otherwise never see it. There is no upload quota anywhere in
+                the product (no counter exists in the API or the database), so
+                deleting and re-importing is always allowed. */}
+            {!isPro && (
+              <p style={{ fontSize: 12.5, color: C.muted, marginBottom: 12, lineHeight: 1.55 }}>
+                Upload as often as you like — there&apos;s no limit on the number of imports, and
+                deleting your imported data never blocks you from uploading again. Files can cover
+                any date range: everything you import is stored, and Free analytics simply focus on
+                the most recent {FREE_HISTORY_DAYS} days of each platform. Anything older stays
+                saved and unlocks with Pro — no re-upload needed.
+              </p>
+            )}
             <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: freePlatformLimitReached ? 16 : 32 }}>
               <a href="/blog/how-to-upload-csv-to-camcash" style={{ fontSize: 13, color: C.cyan, textDecoration: "none", fontWeight: 600 }}>📹 Watch the SOP: How to upload a CSV →</a>
               <a href="#csv-help" style={{ fontSize: 13, color: C.cyan, textDecoration: "none", fontWeight: 600 }}>❓ CSV help →</a>

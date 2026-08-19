@@ -247,7 +247,13 @@ function PricingSection({
 }) {
   const freeFeatures = [
     'See exactly how your platform is really performing',
-    'Import up to 31 days of tip history per platform in minutes — no manual entry',
+    // The 31-day rule is an ANALYSIS window, not an import cap. Free users
+    // can upload files covering any date range and every row is stored; Free
+    // analytics just focus on the most recent 31 days per platform. Phrasing
+    // it as "import up to 31 days" was wrong twice over — it understated what
+    // Free accepts, and it implied Pro would need the data uploaded again.
+    'Import your full CSV in minutes — any date range, no manual entry',
+    'Free analytics focus on the most recent 31 days per platform — older history stays saved',
     'Track up to 3 platforms on the Free plan',
     'Know your numbers at a glance',
     'See which streams actually went well',
@@ -261,7 +267,7 @@ function PricingSection({
 
   const standardFeatures = [
     'Know exactly which platform earns you the most',
-    'See your whole business with full historical imports',
+    'See your whole business — Pro analyses the history you already imported, with no re-upload',
     'Understand your fans on a deeper level',
     'Never lose track of another VIP',
     'See exactly which platforms deserve more of your time',

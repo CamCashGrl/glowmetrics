@@ -127,6 +127,35 @@ const checks = [
   ['the plan panel states both Free limits from the shared constants',
     /up to \{FREE_MAX_PLATFORMS\} platforms/.test(dashboard) &&
     /\{FREE_HISTORY_DAYS\}-day analysis window/.test(dashboard)],
+  // ── The 31-day rule is an ANALYSIS window, never an import cap ─────────
+  // Pricing said "Import up to 31 days of tip history per platform", which
+  // understated what Free accepts (any date range, every row stored) and
+  // implied Pro would need the same data uploaded again. Both claims are
+  // false and they undercut the whole no-re-upload promise.
+  // Comment-stripped: the code comment above the fix quotes the old string
+  // deliberately, to explain why it was wrong. Only shipped copy counts.
+  ['pricing never frames the 31-day rule as an import limit',
+    !/[Ii]mport up to 31 days/.test(pricing.replace(/^\s*\/\/.*$/gm, ''))],
+  ['pricing states the window is an analysis focus, per platform',
+    /most recent 31 days per platform/.test(pricing)],
+  ['pricing says older history stays saved', /older history stays saved/i.test(pricing)],
+  ['pricing Pro benefit does not imply re-uploading stored history',
+    !/full historical imports/.test(pricing) && /no re-upload/i.test(pricing)],
+  // Preserved, correct claims — these must survive the rewrite.
+  ['pricing still states the 3-platform Free cap', /up to 3 platforms on the Free plan/i.test(pricing)],
+  ['pricing still offers more platforms on Pro', /additional platforms/i.test(pricing)],
+  ['pricing still lists no CamSoda', !/camsoda/i.test(pricing)],
+
+  // ── Import page must state both Free limits and the absence of a quota ─
+  ['import page says the history window is PER PLATFORM',
+    /history window per platform/.test(dashboard)],
+  ['import page states there is no upload quota',
+    /no limit on the number of imports/i.test(dashboard)],
+  ['import page states deleting data does not block re-uploading',
+    /deleting your imported data never blocks you from uploading again/i.test(dashboard)],
+  ['import page states older history unlocks with Pro without re-upload',
+    /unlocks with Pro — no re-upload needed/i.test(dashboard)],
+
   // Normalised (lowercased) platform names must not reach a creator's eyes.
   ['the locked preview restores canonical platform casing for display',
     /displayPlatforms\(lockedPreview\.currentPlatforms\)/.test(dashboard) &&
