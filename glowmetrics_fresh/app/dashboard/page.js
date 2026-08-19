@@ -53,14 +53,31 @@ const UPGRADE_COPY = {
     headline: "You have enough data for deeper insights",
     subhead: "Upgrade to unlock your remaining personalized recommendations for next stream.",
   },
+  // The two locked cases persist DIFFERENTLY, and the copy has to say so.
+  // History rows beyond 31 days ARE stored — Free just doesn't analyse them,
+  // so Pro reveals them with no re-upload. Rows for a platform beyond the Free
+  // cap are NOT stored (the cap is enforced at the database layer too), so
+  // they genuinely need one more import after upgrading. Promising instant
+  // unlock for both would be a lie for the second one.
   csv_history: {
     headline: "Your latest month is analyzed",
-    subhead: "Free keeps the most recent 31 days. Pro keeps your full import history so you can compare longer-term earnings, sessions, fans, and trends.",
+    subhead: "Free keeps the most recent 31 days. Those older rows are already saved — Pro reveals them instantly, with no re-upload.",
   },
   csv_platform_limit: {
-    headline: "You've used all 3 free platform slots",
-    subhead: "Upgrade to Pro to add more platforms and compare where you actually earn best.",
+    headline: `You've used all ${FREE_MAX_PLATFORMS} free platform slots`,
+    subhead: `Upgrade to Pro to add more platforms and compare where you actually earn best. Rows for a platform beyond your ${FREE_MAX_PLATFORMS} slots aren't stored yet, so you'll import that file once more after upgrading.`,
   },
+}
+
+// Platform names reach the client already normalised (normalizePlatform()
+// lowercases so slot counting is case-insensitive), which is right for
+// comparison and wrong for display — the locked preview was rendering
+// "You already track chaturbate, bongacams, myfreecams". Map back to the
+// canonical casing for anything a creator reads.
+function displayPlatforms(list) {
+  return (list || [])
+    .map((p) => SUPPORTED_PLATFORMS.find((s) => s.toLowerCase() === String(p).toLowerCase()) || p)
+    .join(', ')
 }
 
 const TAB_LOADING = (
@@ -4481,7 +4498,7 @@ const stopImportMessageRotation = () => {
                   <div style={{ width: 56, height: 56, margin: "0 auto 14px", borderRadius: "50%", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28 }}>🔒</div>
                   <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.18em", textTransform: "uppercase", color: C.cyan, marginBottom: 8 }}>Real Preview — Nothing Fabricated</div>
                   <div style={{ fontSize: 16, fontWeight: 800, color: C.white, marginBottom: 4 }}>
-                    You already track {(lockedPreview.currentPlatforms || []).join(', ') || `${lockedPreview.maxPlatforms} platforms`}
+                    You already track {displayPlatforms(lockedPreview.currentPlatforms) || `${lockedPreview.maxPlatforms} platforms`}
                   </div>
                   <div style={{ fontSize: 13, color: C.muted, marginBottom: 16 }}>
                     Free supports up to {lockedPreview.maxPlatforms} platforms — here's what this upload contains beyond that.
@@ -4545,7 +4562,7 @@ const stopImportMessageRotation = () => {
               ) : (
                 <>
                   <p style={{ fontSize: 13, color: C.text, lineHeight: 1.65, marginBottom: 16 }}>
-                    The <strong style={{ color: C.white }}>free plan</strong> tracks <strong style={{ color: C.cyan }}>1 platform</strong> — import as much history as you want from it, no limits. A <strong style={{ color: C.white }}>subscription</strong> unlocks tracking <strong style={{ color: C.pink }}>multiple platforms at once</strong> and lets you compare which cam site pays you best by hour, day, and fan type.
+                    The <strong style={{ color: C.white }}>free plan</strong> tracks <strong style={{ color: C.cyan }}>up to {FREE_MAX_PLATFORMS} platforms</strong>, with a {FREE_HISTORY_DAYS}-day analysis window on each. Older rows stay saved, just not analysed. A <strong style={{ color: C.white }}>subscription</strong> unlocks <strong style={{ color: C.pink }}>more platforms and your full history</strong>, so you can compare which cam site pays you best by hour, day, and fan type.
                   </p>
                   <Button onClick={() => router.push('/pricing')} style={{ padding: "12px 26px", fontSize: 13 }}>
                     View Plans & Subscribe →

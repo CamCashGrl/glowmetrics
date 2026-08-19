@@ -630,7 +630,7 @@ export function DashboardPreview({ tips = [], analytics, userPlan = 'free', plan
           <SnapshotMetricCard
             label="Platforms"
             value={platformCount > 0 ? platforms.join(', ') : 'None yet'}
-            helper={isPro ? 'Pro multi-platform tracking enabled' : 'Free plan tracks 1 platform'}
+            helper={isPro ? 'Pro multi-platform tracking enabled' : `Free plan tracks up to ${FREE_MAX_PLATFORMS} platforms`}
             status={platformCount > 0 ? 'ready' : 'locked'}
           />
         </div>

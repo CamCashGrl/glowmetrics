@@ -111,6 +111,26 @@ const checks = [
   ['Dashboard no longer treats any single existing platform as the limit', /allPlatforms\.length\s*>=\s*FREE_MAX_PLATFORMS/.test(dashboard)],
   ['Preview no longer says Free is one platform',
     !/track more than one platform/.test(preview)],
+
+  // ── Stale "1 platform" copy ────────────────────────────────────────────
+  // The check above only matched one phrasing, so two other strings survived
+  // the move to a 3-platform Free tier and were caught by rendering the page:
+  // the dashboard's "YOUR PLAN" panel ("tracks 1 platform — import as much
+  // history as you want from it, no limits" — wrong on BOTH counts) and the
+  // preview's Platforms card helper. Match the number, not one sentence.
+  ['no dashboard copy still claims Free tracks 1 platform',
+    !/tracks?\s+(<[^>]+>)?\s*1 platform/.test(dashboard)],
+  ['no preview copy still claims Free tracks 1 platform',
+    !/tracks?\s+1 platform/.test(preview)],
+  ['dashboard no longer promises unlimited history on Free',
+    !/as much history as you want/.test(dashboard)],
+  ['the plan panel states both Free limits from the shared constants',
+    /up to \{FREE_MAX_PLATFORMS\} platforms/.test(dashboard) &&
+    /\{FREE_HISTORY_DAYS\}-day analysis window/.test(dashboard)],
+  // Normalised (lowercased) platform names must not reach a creator's eyes.
+  ['the locked preview restores canonical platform casing for display',
+    /displayPlatforms\(lockedPreview\.currentPlatforms\)/.test(dashboard) &&
+    /function displayPlatforms/.test(dashboard)],
   ['Preview gates multi-platform on the shared constant, not on being free at all',
     /platformCount >= FREE_MAX_PLATFORMS/.test(preview)],
   ['Preview lets Free compare platforms it is entitled to',
