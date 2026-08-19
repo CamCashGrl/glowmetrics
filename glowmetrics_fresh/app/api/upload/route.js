@@ -31,6 +31,54 @@ function summarizeRows(rows, tz) {
   }
 }
 
+// The single strongest thing Free can legitimately say about this creator,
+// drawn from the rows inside their window. It exists so the result screen has
+// a personal finding — a reason to trust the product — before it mentions
+// anything locked.
+//
+// EVIDENCE GATED. Each candidate has a minimum that must be met before it is
+// offered, and when nothing clears the bar this returns null and the UI simply
+// omits the block. A "finding" from one tip is not a finding.
+function buildFreeHighlight(rows, tz) {
+  if (!rows || rows.length < 3) return null
+  let a
+  try { a = aggregateRows(rows, tz) } catch (_) { return null }
+  if (!a) return null
+
+  // A best day needs more than one day of data to be a comparison at all.
+  const days = new Set(rows.map(r => String(r.date_time).slice(0, 10))).size
+  if (a.bestDay?.day && a.bestDay.avg > 0 && days >= 3) {
+    return {
+      kind: 'best_day',
+      label: 'Your strongest recent day',
+      value: a.bestDay.day,
+      detail: `You earn a median of $${a.bestDay.avg.toFixed(2)} on each ${a.bestDay.day} you stream.`,
+    }
+  }
+
+  // A top supporter needs to have tipped more than once, or it is just the
+  // single largest tip wearing a different name.
+  const top = (a.topTippers || [])[0]
+  if (top && top.count >= 2 && top.usd > 0) {
+    return {
+      kind: 'top_fan',
+      label: 'Your top recent supporter',
+      value: top.username,
+      detail: `${top.count} tips totalling $${top.usd.toFixed(2)} in this window.`,
+    }
+  }
+
+  if (a.totalUSD > 0 && a.uniqueFanCount > 0) {
+    return {
+      kind: 'pace',
+      label: 'Your recent pace',
+      value: `$${a.totalUSD.toFixed(2)}`,
+      detail: `from ${a.uniqueFanCount} supporter${a.uniqueFanCount === 1 ? '' : 's'} in the current window.`,
+    }
+  }
+  return null
+}
+
 // Real previews of what Pro would analyse, built from the WHOLE uploaded file.
 //
 // Every value here is read off ONE aggregateRows() run — the same canonical
@@ -519,6 +567,8 @@ export async function POST(req) {
     historyWindowEnd,
     // Section A — what Free can actually see right now.
     freeResults: !isPro ? freeResultsSummary : null,
+    // The one legitimate finding Free can offer about this creator, or null.
+    freeHighlight: !isPro ? buildFreeHighlight(freeVisibleRows, creatorTz) : null,
     // Section B — real totals for data that exists but falls outside the
     // Free history window. historyRemovedCount kept for backward
     // compatibility with UI already reading it as a row count.

@@ -76,7 +76,19 @@ check('states plainly when there is not enough history', raw.includes('Not enoug
 // 5. FREE vs PRO — one contextual upsell, not a paywall per section.
 // ══════════════════════════════════════════════════════════════════════
 check('Pro footer only renders for non-Pro', src.includes('!isPro && hasWindow'))
-check('exactly one upgrade CTA in the component', (src.match(/onUpgrade\?\./g) || []).length === 1)
+// The rule is "at most ONE upsell visible at a time", not "one in the source".
+// There are now two blocks, and they are MUTUALLY EXCLUSIVE by construction:
+// the strategy footer needs a best window, the opportunity card only renders
+// when there isn't one. A creator whose recent 31 days are thin has no window,
+// and used to see no prompt at all despite years of locked history — that gap
+// is what the second block fills. Assert the exclusivity rather than the count,
+// so the guarantee survives but is not defeated by a copy/paste third CTA.
+check('at most one upgrade CTA can render at a time',
+  (src.match(/onUpgrade\?\./g) || []).length === 2 &&
+  src.includes('!isPro && hasWindow') &&
+  src.includes('!isPro && !hasWindow'))
+check('the second CTA requires a genuine reason, not just being Free',
+  src.includes('lockedHistory?.tips > 0 || platformCount >= freeMaxPlatforms'))
 check('Free still sees the real window (not blurred out)', src.includes('fmtWindow(bestWindow.localHour)'))
 check('Free still sees real totals', src.includes('fmtUsd(totalUSD)'))
 

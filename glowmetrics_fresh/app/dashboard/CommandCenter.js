@@ -190,6 +190,12 @@ function WindowProof({ windowRate, baselineRate, sessions, tierLabel, dayLabel, 
 export default function CommandCenter({
   analytics,
   isPro = false,
+  // Real, already-measured facts about what Free is holding back. Passed in
+  // rather than computed here — this component's rule is that nothing is
+  // calculated locally.
+  lockedHistory = null,
+  platformCount = 0,
+  freeMaxPlatforms = 3,
   firstName = null,
   onPlanStream,
   onViewFans,
@@ -463,6 +469,51 @@ export default function CommandCenter({
       {/* ── PRO STRATEGY FOOTER ────────────────────────────────────────
           One contextual upsell, not a paywall on every section. Only
           rendered when there is a real, personalized thing being held back. */}
+      {/* ── CONTEXTUAL OPPORTUNITY ─────────────────────────────────────
+          The strategy footer below only appears once a best window exists.
+          A creator whose recent 31 days are thin has no window yet — and
+          used to see nothing at all here, even with years of history sitting
+          locked. This fills exactly that gap, and only that gap: it renders
+          when the footer does not, names the real blocker, and stays silent
+          when there is nothing genuine to say. Never a generic upgrade
+          banner. */}
+      {!isPro && !hasWindow && (lockedHistory?.tips > 0 || platformCount >= freeMaxPlatforms) && (
+        <div style={{
+          display: "flex", justifyContent: "space-between", alignItems: "center", gap: 20, flexWrap: "wrap",
+          padding: "20px 24px", borderRadius: 18,
+          background: "linear-gradient(115deg, rgba(34,211,238,0.09), rgba(124,92,255,0.08))",
+          border: "1px solid rgba(34,211,238,0.24)",
+        }}>
+          <div style={{ minWidth: 260, flex: 1 }}>
+            <div style={{ fontSize: 12, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase", color: C.cyan, marginBottom: 6 }}>
+              {lockedHistory?.tips > 0 ? "Historical opportunity" : "Platform opportunity"}
+            </div>
+            <div style={{ fontSize: 16.5, fontWeight: 800, color: C.white, letterSpacing: "-0.015em" }}>
+              {lockedHistory?.tips > 0
+                ? "Your history has more to reveal"
+                : `You're using all ${freeMaxPlatforms} Free platform slots`}
+            </div>
+            <div style={{ fontSize: 13.5, color: C.text, marginTop: 7, lineHeight: 1.6 }}>
+              {lockedHistory?.tips > 0 ? (
+                <>
+                  <strong style={{ color: C.white }}>{lockedHistory.tips.toLocaleString()} tips</strong>
+                  {lockedHistory.usd > 0 ? <> worth <strong style={{ color: C.green }}>{fmtUsd(lockedHistory.usd)}</strong></> : null}
+                  {" "}sit outside your Free analysis window. They&apos;re already saved — Pro analyses them with no re-upload.
+                  Your recent activity is light, so the stronger patterns are further back.
+                </>
+              ) : (
+                <>Compare more platforms with Pro to see which one is actually worth your hours.</>
+              )}
+            </div>
+          </div>
+          <BrandButton
+            onClick={() => onUpgrade?.(lockedHistory?.tips > 0 ? "csv_history" : "csv_platform_limit")}
+            style={{ padding: "13px 24px", fontSize: 15, borderRadius: 12, flexShrink: 0 }}>
+            {lockedHistory?.tips > 0 ? "Explore Your History →" : "Compare More Platforms →"}
+          </BrandButton>
+        </div>
+      )}
+
       {!isPro && hasWindow && (
         <div style={{
           display: "flex", justifyContent: "space-between", alignItems: "center", gap: 22, flexWrap: "wrap",

@@ -23,6 +23,7 @@
 
 import Button from '../../components/ui/Button'
 import { PRO_PRICE_MONTHLY_LABEL, PRO_PRICE_NOTE } from '../../lib/constants'
+import { resolveUpgradeContext } from '../../lib/upgradeContext'
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 const DAY_FULL = { Mon: 'Monday', Tue: 'Tuesday', Wed: 'Wednesday', Thu: 'Thursday', Fri: 'Friday', Sat: 'Saturday', Sun: 'Sunday' }
@@ -100,6 +101,18 @@ export default function ImportResult({
     !isPro && free && full && full.tips > free.tips && (free.tips < 30 || free.sessions < 3)
   )
   const atPlatformCap = !isPro && (result.platformsTracked || []).length >= freeMaxPlatforms
+  // One source of truth for "what is this creator missing" — the CTA label,
+  // the modal headline and the benefit list all come from here, so a click on
+  // "Compare More Platforms" cannot open a pitch about history.
+  const upgradeCtx = isPro ? null : resolveUpgradeContext({
+    lockedTips: excluded?.tips || 0,
+    lockedUsd: excluded?.totalUsd || 0,
+    platformCount: (result.platformsTracked || []).length,
+    hasBlockedPlatform: lockedPlatforms.length > 0,
+    hasDeeperInsights: Boolean(li && (li.trend?.length >= 2 || li.topFans?.length || li.session)),
+  })
+  const primaryCta = upgradeCtx?.cta || 'Unlock Full History →'
+  const fireUpgrade = () => onUpgrade?.(upgradeCtx?.source)
   const hasLocked = Boolean(excluded || lockedPlatforms.length || atPlatformCap ||
     (li && (li.trend?.length >= 2 || li.topFans?.length || li.session || li.heatmap?.length)))
 
@@ -233,6 +246,31 @@ export default function ImportResult({
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── C. STRONGEST PERSONALISED FINDING ─────────────────────────
+          The first "they actually read my data" moment, and it comes BEFORE
+          anything locked is mentioned. Server-side and evidence-gated: a best
+          day needs 3+ days, a top supporter needs 2+ tips. When nothing
+          clears the bar this renders nothing at all rather than dressing up
+          a single tip as an insight. */}
+      {!isPro && result.freeHighlight && (
+        <div style={{
+          ...card, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 14,
+          background: 'linear-gradient(135deg,rgba(34,211,238,0.10),rgba(16,185,129,0.07))',
+          border: '1px solid rgba(34,211,238,0.26)',
+        }}>
+          <div style={{ flex: '0 0 auto', fontSize: 24 }} aria-hidden="true">💡</div>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.cyan, marginBottom: 4 }}>
+              {result.freeHighlight.label}
+            </div>
+            <div style={{ fontSize: 17, fontWeight: 900, color: C.white, marginBottom: 3, overflowWrap: 'anywhere' }}>
+              {result.freeHighlight.value}
+            </div>
+            <div style={{ fontSize: 12.5, color: C.text, lineHeight: 1.5 }}>{result.freeHighlight.detail}</div>
+          </div>
         </div>
       )}
 
@@ -456,9 +494,10 @@ export default function ImportResult({
           border: '1px solid rgba(236,72,153,0.28)', marginBottom: 16,
         }}>
           <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 18, fontWeight: 900, color: C.white, marginBottom: 5 }}>👑 Unlock your full history</div>
+            <div style={{ fontSize: 18, fontWeight: 900, color: C.white, marginBottom: 5 }}>👑 Unlock your full CamCash analysis</div>
             <div style={{ fontSize: 12.5, color: C.text, lineHeight: 1.55, marginBottom: 10 }}>
-              Pro unlocks the deeper trends, longer time ranges, and advanced insights already found in your uploaded data.
+              {upgradeCtx?.subhead
+                || 'Pro unlocks the deeper historical trends, additional platforms, and advanced insights already found in your data.'}
             </div>
             <div className="ir-cta-feats" style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: '5px 14px' }}>
               {['Full historical insights', 'Advanced reports', 'Longer date ranges', 'Priority support'].map(f => (
@@ -473,13 +512,38 @@ export default function ImportResult({
               Display only — Stripe still decides what is actually charged and
               this opens the existing checkout, no new path. */}
           <div style={{ minWidth: 0, textAlign: 'center' }}>
-            <Button onClick={onUpgrade} style={{ padding: '14px 26px', fontSize: 15, whiteSpace: 'nowrap' }}>
-              Unlock Full History →
+            {/* One unambiguous action. The contextual wording lives in the
+                subhead above and on each card, so the page never carries
+                several competing primary CTAs. */}
+            <Button onClick={fireUpgrade} style={{ padding: '14px 26px', fontSize: 15, whiteSpace: 'nowrap' }}>
+              Unlock Pro →
             </Button>
             <div style={{ fontSize: 11.5, color: C.muted, marginTop: 7, whiteSpace: 'nowrap' }}>
               {PRO_PRICE_MONTHLY_LABEL} · {PRO_PRICE_NOTE}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ── G. REASSURANCE ────────────────────────────────────────────
+          The last thing read before deciding. Every line is a promise the
+          product actually keeps and that this branch verified. */}
+      {!isPro && hasLocked && (
+        <div className="ir-reassure" style={{
+          display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: '6px 18px',
+          padding: '13px 16px', borderRadius: 12, marginBottom: 16,
+          background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)',
+        }}>
+          {[
+            'History you already uploaded unlocks without re-uploading',
+            'Delete and re-import as often as you like — no upload quota',
+            `Pro adds more platforms beyond your ${freeMaxPlatforms} Free slots`,
+            'Your imported data stays on your account either way',
+          ].map(t => (
+            <div key={t} style={{ fontSize: 11.5, color: C.muted, minWidth: 0, lineHeight: 1.45 }}>
+              <span style={{ color: C.green }}>✓</span> {t}
+            </div>
+          ))}
         </div>
       )}
 

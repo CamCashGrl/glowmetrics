@@ -17,6 +17,7 @@ import { track as gtmTrack } from '../../lib/track'
 import { isProPlan } from '../../lib/plan'
 import { FREE_MAX_PLATFORMS, FREE_HISTORY_DAYS, filterFreeHistory, normalizePlatform } from '../../lib/planLimits'
 import { resolveCreatorTimezone, autoPopulateTimezoneIfMissing } from '../../lib/timezone'
+import { resolveUpgradeContext } from '../../lib/upgradeContext'
 import CommandCenter from './CommandCenter'
 import Performance from './Performance'
 import ImportResult from './ImportResult'
@@ -39,8 +40,8 @@ const UPGRADE_COPY = {
     subhead: "You're only seeing a preview of your data. Here's what's waiting for you inside:",
   },
   multi_platform: {
-    headline: "You've tracked 1 platform",
-    subhead: "Compare all your platforms with Creator Pro to see exactly where you actually earn best.",
+    headline: `You're using all ${FREE_MAX_PLATFORMS} Free platform slots`,
+    subhead: "Compare more platforms with Creator Pro to see exactly where you actually earn best.",
   },
   whales_cutoff: {
     headline: "You've found your top fans",
@@ -1460,6 +1461,7 @@ export default function Dashboard() {
   const uploading = importStage === 'processing'
   const [uploadPlatform, setUploadPlatform] = useState("")
   const [lastUploadResult, setLastUploadResult] = useState(null)
+  const [lockedHistory, setLockedHistory] = useState(null)
   // Platform-limit soft paywall: preview of what's in a blocked import, shown
   // instead of a hard block (see denyWithPlatformPreview / handleCSV below)
   const [lockedPreview, setLockedPreview] = useState(null)
@@ -1630,6 +1632,27 @@ export default function Dashboard() {
   const uploadLimit = Infinity
 
   const fmtHour = h => { if (h == null || isNaN(h)) return 'N/A'; return h === 0 ? '12 AM' : h < 12 ? h+' AM' : h === 12 ? '12 PM' : (h-12)+' PM' }
+
+  // Benefits shown in the upgrade modal, chosen by whichever CTA opened it.
+  // Falls back to a general set for sources with no specific context (e.g.
+  // 'creator_report'), so no trigger ever renders an empty list.
+  const modalBenefits = (() => {
+    const ctx = resolveUpgradeContext({
+      lockedTips: upgradeModalSource === 'csv_history' ? 1 : 0,
+      platformCount: upgradeModalSource === 'csv_platform_limit' ? FREE_MAX_PLATFORMS : 0,
+      hasBlockedPlatform: false,
+      hasDeeperInsights: upgradeModalSource === 'deeper_analysis',
+    })
+    if (ctx?.benefits?.length) return ctx.benefits
+    return [
+      { icon: '📈', text: `Your full history analysed, not just the last ${FREE_HISTORY_DAYS} days` },
+      { icon: '🐳', text: 'Every supporter ranked by lifetime value, not just your top few' },
+      { icon: '⏰', text: 'Your strongest earning windows, once enough sessions back them' },
+      { icon: '🔀', text: `Track more than ${FREE_MAX_PLATFORMS} platforms and compare them` },
+      { icon: '🗂️', text: 'Full session history with performance patterns' },
+      { icon: '⚡', text: 'History you already uploaded unlocks instantly — no re-upload' },
+    ]
+  })()
 
   const openUpgradeModal = (source) => {
     track('upgrade_click', { source })
@@ -2294,6 +2317,18 @@ export default function Dashboard() {
 
         const visibleData = historyResult.rows
         setTips(visibleData)
+        // What the Free window is holding back, measured from the rows we just
+        // loaded — real counts, not an estimate. Command Center uses this to
+        // offer a contextual opportunity instead of a generic upgrade banner,
+        // and it is the reason a creator with a thin recent window still sees
+        // that their history has something in it.
+        try {
+          const hiddenRows = loadedIsPro ? [] : allData.filter(r => !new Set(visibleData).has(r))
+          setLockedHistory(hiddenRows.length ? {
+            tips: hiddenRows.length,
+            usd: parseFloat(hiddenRows.reduce((n, r) => n + (Number(r.usd) || 0), 0).toFixed(2)),
+          } : null)
+        } catch (_) { setLockedHistory(null) }
         try {
           const result = runEngine(visibleData, userTz)
           setAnalytics(result)
@@ -2450,6 +2485,7 @@ const stopImportMessageRotation = () => {
         // the WHOLE file. This mapping is a whitelist, so a new response field
         // has to be added here or it silently never reaches the UI.
         lockedInsights: result.lockedInsights || null,
+        freeHighlight: result.freeHighlight || null,
         platformsTracked: result.platformsTracked || [],
         freePlatformLimit: result.freePlatformLimit || null,
       })
@@ -3484,6 +3520,9 @@ const stopImportMessageRotation = () => {
             <CommandCenter
               analytics={analytics}
               isPro={isPro}
+              lockedHistory={lockedHistory}
+              platformCount={allPlatforms.length}
+              freeMaxPlatforms={FREE_MAX_PLATFORMS}
               nowActions={(() => {
                 // Moved from the old Overview's "Make Money Right Now"
                 // section. Merges nextMoves + top realTimeAlerts, dedupes,
@@ -4401,7 +4440,7 @@ const stopImportMessageRotation = () => {
                   freeHistoryDays={FREE_HISTORY_DAYS}
                   freeMaxPlatforms={FREE_MAX_PLATFORMS}
                   formatDate={formatImportDate}
-                  onUpgrade={() => openUpgradeModal('csv_history')}
+                  onUpgrade={(src) => openUpgradeModal(src || 'csv_history')}
                   onUpgradePlatforms={() => openUpgradeModal('csv_platform_limit')}
                   onViewDashboard={() => handleTabChange('overview')}
                   onImportAnother={resetImport}
@@ -5339,23 +5378,24 @@ const stopImportMessageRotation = () => {
                 <h2 style={{ fontSize: 24, fontWeight: 800, color: C.white, marginBottom: 8 }}>{(UPGRADE_COPY[upgradeModalSource] || UPGRADE_COPY.default).headline}</h2>
                 <p style={{ fontSize: 14, color: C.muted, lineHeight: 1.6 }}>{(UPGRADE_COPY[upgradeModalSource] || UPGRADE_COPY.default).subhead}</p>
               </div>
+              {/* Benefits follow the trigger. Clicking "Compare More Platforms"
+                  used to open a list led by fan predictions, which reads as a
+                  bait-and-switch. modalBenefits falls back to the general set
+                  when a source carries no specific context. */}
               <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 28 }}>
-                {[
-                  { icon: "🐳", text: "See ALL your top spenders — not just the top 3" },
-                  { icon: "⏰", text: "Discover your exact highest-earning hours & days" },
-                  { icon: "💡", text: "Unlock 15+ advanced insights & strategy tips" },
-                  { icon: "📈", text: "Full session history with trend analysis" },
-                  { icon: "🤖", text: "AI fan behavior predictions & return forecasts" },
-                  { icon: "💌", text: "Unlimited re-engagement scripts & fan tracking" },
-                ].map(({ icon, text }) => (
+                {modalBenefits.map(({ icon, text }) => (
                   <div key={text} style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 14px", background: "rgba(59,130,246,0.08)", border: "1px solid rgba(59,130,246,0.15)", borderRadius: 10 }}>
                     <span style={{ fontSize: 18 }}>{icon}</span>
                     <span style={{ fontSize: 13, color: C.white }}>{text}</span>
                   </div>
                 ))}
               </div>
-              <div style={{ textAlign: "center", padding: "12px 16px", background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.25)", borderRadius: 10, marginBottom: 24 }}>
-                <div style={{ fontSize: 13, color: C.gold, fontWeight: 600 }}>💡 Most creators miss 30–60% of their earning potential without this</div>
+              {/* The "most creators miss 30-60% of their earning potential"
+                  line that used to sit here was an invented statistic with no
+                  source behind it. Replaced with a claim the product can
+                  actually keep: history already uploaded unlocks immediately. */}
+              <div style={{ textAlign: "center", padding: "12px 16px", background: "rgba(16,185,129,0.10)", border: "1px solid rgba(16,185,129,0.25)", borderRadius: 10, marginBottom: 24 }}>
+                <div style={{ fontSize: 13, color: C.green, fontWeight: 600 }}>⚡ Everything you have already uploaded unlocks instantly — no re-upload</div>
               </div>
               <Button
                 disabled={earlyAccessSubmitting}

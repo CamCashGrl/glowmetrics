@@ -17,6 +17,8 @@ const pricing = read('app/pricing/PricingClient.js')
 // about the result UI must see both files, or they silently pass/fail on the
 // wrong one.
 const importResult = read('app/dashboard/ImportResult.js')
+const upgradeCtx = read('lib/upgradeContext.js')
+const commandCenter = read('app/dashboard/CommandCenter.js')
 const resultUi = dashboard + '\n' + importResult
 const migration = read('supabase/migrations/20260817_free_plan_three_platform_31_day_history.sql')
 const paidSessionsMigration = read('supabase/migrations/20260817b_free_platform_cap_counts_paid_sessions.sql')
@@ -176,6 +178,46 @@ const checks = [
   ['the route reads creator-local time from profiles, never the browser',
     /select\('plan, timezone'\)/.test(upload) && /creatorTz/.test(upload)],
   ['locked insights are Free-only', /!isPro \? buildLockedInsights/.test(upload)],
+
+  // ── Contextual upgrade prompts ─────────────────────────────────────────
+  // Every CTA, modal headline and benefit list resolves from ONE helper, so a
+  // click on "Compare More Platforms" cannot open a pitch about history.
+  ['upgrade context is resolved in one shared module',
+    /export function resolveUpgradeContext/.test(upgradeCtx) &&
+    /resolveUpgradeContext/.test(importResult) && /resolveUpgradeContext/.test(dashboard)],
+  ['the contextual CTAs cover history, platforms and deeper analysis',
+    /Unlock Full History →/.test(upgradeCtx) && /Compare More Platforms →/.test(upgradeCtx) &&
+    /Unlock Your Deeper Analysis →/.test(upgradeCtx)],
+  ['the upgrade helper computes no analytics of its own',
+    !/aggregateRows|detectSessions|reduce\(/.test(upgradeCtx)],
+  ['the modal benefit list is driven by the trigger, not hardcoded',
+    /modalBenefits\.map/.test(dashboard) && !/See ALL your top spenders/.test(dashboard)],
+  // An invented statistic with no source behind it. Comment-stripped: the
+  // code comment above the removal quotes the old line deliberately, to
+  // explain why it went. Only shipped copy counts.
+  ['the fabricated "30-60% of earning potential" claim is gone',
+    !/30–60%|30-60%/.test(
+      dashboard.replace(/\{\/\*[\s\S]*?\*\/\}/g, '').replace(/^\s*\/\/.*$/gm, ''))],
+  ['no upgrade copy still claims Free tracks 1 platform',
+    !/tracked 1 platform/.test(dashboard)],
+
+  // ── Blueprint hierarchy on the result screen ───────────────────────────
+  ['a personalised finding is offered before anything locked',
+    /freeHighlight/.test(importResult) && /buildFreeHighlight/.test(upload)],
+  ['that finding is evidence-gated, not shown for any single tip',
+    /rows\.length < 3/.test(upload) && /days >= 3/.test(upload) && /top\.count >= 2/.test(upload)],
+  ['the primary action is one unambiguous button',
+    /Unlock Pro →/.test(importResult)],
+  ['a reassurance block sits after the CTA',
+    /without re-uploading/.test(importResult) && /no upload quota/.test(importResult)],
+
+  // ── Command Center: one contextual card, never a generic banner ────────
+  ['Command Center offers a contextual opportunity when no window exists yet',
+    /Historical opportunity/.test(commandCenter) && /Explore Your History →/.test(commandCenter)],
+  ['that card only renders with a genuine reason',
+    /lockedHistory\?\.tips > 0 \|\| platformCount >= freeMaxPlatforms/.test(commandCenter)],
+  ['Command Center still computes nothing locally',
+    /lockedHistory = null/.test(commandCenter) && !/aggregateRows/.test(commandCenter)],
 
   // ── The 31-day rule is an ANALYSIS window, never an import cap ─────────
   // Pricing said "Import up to 31 days of tip history per platform", which

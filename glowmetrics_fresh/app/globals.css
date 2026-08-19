@@ -281,3 +281,6 @@ html, body { overflow-x: hidden; max-width: 100vw; }
   .ir-extra      { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
   .ir-cta-feats  { grid-template-columns: minmax(0, 1fr) !important; }
 }
+@media (max-width: 560px) {
+  .ir-reassure { grid-template-columns: minmax(0, 1fr) !important; }
+}
