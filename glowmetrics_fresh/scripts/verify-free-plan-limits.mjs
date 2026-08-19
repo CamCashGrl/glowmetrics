@@ -16,6 +16,35 @@ const pricing = read('app/pricing/PricingClient.js')
 const migration = read('supabase/migrations/20260817_free_plan_three_platform_31_day_history.sql')
 const paidSessionsMigration = read('supabase/migrations/20260817b_free_platform_cap_counts_paid_sessions.sql')
 
+// Every migration in the repo, including any outside this app directory.
+// A same-named file at the REPO ROOT redefined both Free-tier platform guards
+// from scratch and would have reverted the Unknown exclusion, the CamSoda
+// exclusion, and the auth.uid() self-restriction on the SECURITY DEFINER
+// check function. It is neutralised; these checks stop that class of file
+// from coming back unnoticed.
+// The canonical directory legitimately contains five historical migrations
+// that built these guards up over time (20260806b is the one that ADDED the
+// auth.uid() restriction). Those are the applied record and must stay. The
+// hazard is a guard definition living OUTSIDE that directory, where it is
+// applied out of order — or by hand — against a database whose guards have
+// since moved on.
+const repoRoot = path.resolve(root, '..')
+const canonicalDir = path.join(root, 'supabase/migrations')
+const strayMigrationDirs = [path.join(repoRoot, 'supabase/migrations')]
+  .filter((d) => fs.existsSync(d) && path.resolve(d) !== path.resolve(canonicalDir))
+const guardRedefiners = strayMigrationDirs.flatMap((dir) =>
+  fs.readdirSync(dir)
+    .filter((f) => f.endsWith('.sql'))
+    .map((f) => ({ file: path.join(dir, f), sql: fs.readFileSync(path.join(dir, f), 'utf8') }))
+    // Only files that actually (re)define one of the two guards as a full body.
+    .filter(({ sql }) => /create\s+or\s+replace\s+function\s+(public\.)?(check|enforce)_free_tier_platform_limit/i
+      .test(stripSqlComments(sql)))
+)
+
+function stripSqlComments(sql) {
+  return sql.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*--.*$/gm, '')
+}
+
 const extra = []
 let extraFailed = 0
 
@@ -31,6 +60,18 @@ const checks = [
   // Its import path is unfinished. It must not be tracked, offered, or
   // counted anywhere in the product, while the public Token Calculator and
   // the /guides content keep quoting its published token rate.
+  // ── No migration may retype the Free-tier guards ───────────────────────
+  // Both guards must only ever be patched via pg_get_functiondef(), so a
+  // hand-retyped body cannot silently drop a filter or a security check.
+  ['no migration outside the canonical directory defines a Free-tier platform guard',
+    guardRedefiners.length === 0,
+    guardRedefiners.map(g => path.relative(repoRoot, g.file)).join(', ')],
+  ['the superseded root-level migration is inert',
+    !fs.existsSync(path.join(repoRoot, 'supabase/migrations/20260817_free_plan_three_platform_31_day_history.sql')) ||
+    /SUPERSEDED/.test(fs.readFileSync(path.join(repoRoot, 'supabase/migrations/20260817_free_plan_three_platform_31_day_history.sql'), 'utf8'))],
+  ['the live check function keeps its auth.uid() self-restriction',
+    /auth\.uid\(\)/.test(read('supabase/migrations/20260806b_restrict_check_free_tier_platform_limit_to_self.sql'))],
+
   ['the supported set is an explicit list, not derived from the rate table',
     !/SUPPORTED_PLATFORMS\s*=\s*Object\.keys\(PLATFORM_TOKEN_RATES\)/.test(constantsSrc)],
   ['the CSV parser has no CamSoda detection branch',

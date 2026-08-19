@@ -1,112 +1,68 @@
--- CamCash Free tier: up to 3 tracked platforms.
--- This replaces the previous 1-platform function while preserving the same
--- trigger/check entry points used by CSV uploads, Live Mode, and paid sessions.
+-- SUPERSEDED — DO NOT APPLY. This file is intentionally inert.
 --
--- History-window enforcement intentionally remains application-level: Free
--- analytics view only the most recent 31 days and older database rows are NOT
--- deleted. This avoids destructive data loss and keeps Pro upgrade reversible.
+-- Its original contents (commit d670c381, "Add platform limit enforcement for
+-- free-tier users") are preserved in git history:
+--
+--   git show d670c381:supabase/migrations/20260817_free_plan_three_platform_31_day_history.sql
+--
+-- WHY IT WAS NEUTRALISED
+-- This file lived at the REPO ROOT, while the application and every other
+-- migration live under glowmetrics_fresh/. A same-named file exists there:
+--
+--   glowmetrics_fresh/supabase/migrations/20260817_free_plan_three_platform_31_day_history.sql
+--
+-- The two are not variants of each other. This one redefined BOTH free-tier
+-- platform guards from scratch, and applying it today would silently revert
+-- three separate fixes that are live in production:
+--
+--   1. 'Unknown' would consume a Free platform slot again.
+--      Its counting subquery ends at a bare `) p;` with no
+--      `where platform in (...)` filter, so the CSV parser's
+--      undetected-platform bucket counts as a tracked platform.
+--      (Reverts 20260817c.)
+--
+--   2. CamSoda would consume a Free platform slot again.
+--      Same missing filter. (Reverts 20260818.)
+--
+--   3. check_free_tier_platform_limit would lose its self-restriction.
+--      THIS IS THE SERIOUS ONE. That function is SECURITY DEFINER. The live
+--      definition opens with:
+--
+--        if p_user_id is distinct from auth.uid() then return; end if;
+--
+--      added by 20260806b_restrict_check_free_tier_platform_limit_to_self.
+--      The version in this file has no such guard — it goes straight to the
+--      null check on p_platform. Without the guard, any authenticated caller
+--      can pass an arbitrary p_user_id and learn from whether the call raises
+--      whether that user is at the platform cap: a cross-account oracle over
+--      someone else's data. (Reverts 20260806b.)
+--
+-- Verified against production before writing this: check_free_tier_platform_limit
+-- currently HAS the auth.uid() self-restriction and BOTH functions HAVE the
+-- supported-platform filter. This file would take all of that away.
+--
+-- The root-level supabase/ directory is vestigial — it has no config.toml, no
+-- CI wiring, and nothing in the repo references it. The live migration path is
+-- glowmetrics_fresh/supabase/migrations/. Deleting this file outright would
+-- leave nothing to explain why it vanished, so it is kept and made to fail
+-- loudly instead: anyone who runs it gets a message rather than a silent
+-- production regression.
+--
+-- If the Free-tier platform guards need to change, add a new migration under
+-- glowmetrics_fresh/supabase/migrations/ that patches the LIVE definitions via
+-- pg_get_functiondef(), the way 20260817, 20260817b, 20260817c and 20260818 do.
+-- Do not retype either function body.
 
-create or replace function public.enforce_free_tier_platform_limit()
-returns trigger
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  user_plan text;
-  user_plan_expires_at timestamptz;
-  existing_platform_count int;
-  already_tracked boolean;
-begin
-  if new.platform is null or trim(new.platform) = '' then
-    return new;
-  end if;
-
-  select plan, plan_expires_at
-    into user_plan, user_plan_expires_at
-  from public.profiles
-  where id = new.user_id;
-
-  if user_plan is not null
-     and user_plan not in ('free')
-     and (user_plan_expires_at is null or user_plan_expires_at > now()) then
-    return new;
-  end if;
-
-  select count(distinct platform), bool_or(platform = lower(trim(new.platform)))
-    into existing_platform_count, already_tracked
-  from (
-    select lower(platform) as platform from public.tips where user_id = new.user_id
-    union
-    select lower(platform) as platform from public.live_tips where user_id = new.user_id
-    union
-    select lower(platform) as platform from public.paid_sessions where user_id = new.user_id
-  ) p;
-
-  if existing_platform_count >= 3 and not coalesce(already_tracked, false) then
-    raise exception 'PLATFORM_LIMIT_REACHED: Free tier tracks up to 3 platforms. Upgrade to Pro to add more platforms and compare them.'
-      using errcode = 'P0001';
-  end if;
-
-  return new;
-end;
-$$;
-
-drop trigger if exists trg_enforce_platform_limit_tips on public.tips;
-create trigger trg_enforce_platform_limit_tips
-before insert on public.tips
-for each row execute function public.enforce_free_tier_platform_limit();
-
-drop trigger if exists trg_enforce_platform_limit_live_tips on public.live_tips;
-create trigger trg_enforce_platform_limit_live_tips
-before insert on public.live_tips
-for each row execute function public.enforce_free_tier_platform_limit();
-
-drop trigger if exists trg_enforce_platform_limit_paid_sessions on public.paid_sessions;
-create trigger trg_enforce_platform_limit_paid_sessions
-before insert on public.paid_sessions
-for each row execute function public.enforce_free_tier_platform_limit();
-
-create or replace function public.check_free_tier_platform_limit(p_user_id uuid, p_platform text)
-returns void
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  user_plan text;
-  user_plan_expires_at timestamptz;
-  existing_platform_count int;
-  already_tracked boolean;
-begin
-  if p_platform is null or trim(p_platform) = '' then
-    return;
-  end if;
-
-  select plan, plan_expires_at
-    into user_plan, user_plan_expires_at
-  from public.profiles
-  where id = p_user_id;
-
-  if user_plan is not null
-     and user_plan not in ('free')
-     and (user_plan_expires_at is null or user_plan_expires_at > now()) then
-    return;
-  end if;
-
-  select count(distinct platform), bool_or(platform = lower(trim(p_platform)))
-    into existing_platform_count, already_tracked
-  from (
-    select lower(platform) as platform from public.tips where user_id = p_user_id
-    union
-    select lower(platform) as platform from public.live_tips where user_id = p_user_id
-    union
-    select lower(platform) as platform from public.paid_sessions where user_id = p_user_id
-  ) p;
-
-  if existing_platform_count >= 3 and not coalesce(already_tracked, false) then
-    raise exception 'PLATFORM_LIMIT_REACHED: Free tier tracks up to 3 platforms. Upgrade to Pro to add more platforms and compare them.'
-      using errcode = 'P0001';
-  end if;
-end;
-$$;
+DO $superseded$
+BEGIN
+  RAISE EXCEPTION USING
+    errcode = 'P0001',
+    message = 'SUPERSEDED MIGRATION — not applied.',
+    detail  = 'supabase/migrations/20260817_free_plan_three_platform_31_day_history.sql '
+              || 'would revert three live fixes: the Unknown-platform slot exclusion '
+              || '(20260817c), the CamSoda slot exclusion (20260818), and the auth.uid() '
+              || 'self-restriction on check_free_tier_platform_limit (20260806b).',
+    hint    = 'The live migration path is glowmetrics_fresh/supabase/migrations/. '
+              || 'See the comment block at the top of this file.';
+END
+$superseded$;
