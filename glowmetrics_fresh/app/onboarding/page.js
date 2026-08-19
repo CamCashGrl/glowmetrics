@@ -6,7 +6,7 @@ import { supabase } from '../../lib/supabase'
 // Token rates — single source of truth, never hardcode below this line
 import { PLATFORM_TOKEN_RATES, tokenRate } from '../../lib/constants'
 import { track } from '../../lib/track'
-import { isProPlan, hasAppAccess } from '../../lib/plan'
+import { isProPlan } from '../../lib/plan'
 import OnboardingExitSurvey from '@/components/OnboardingExitSurvey'
 
 
@@ -53,7 +53,10 @@ function tryParseDate(str){
   if(cbMatch){const[,mon,day,year,hr,min,ampm]=cbMatch;const months={jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};let h=parseInt(hr,10);if(ampm.toUpperCase()==='PM'&&h!==12)h+=12;if(ampm.toUpperCase()==='AM'&&h===12)h=0;const d=new Date(parseInt(year),months[mon.toLowerCase()],parseInt(day),h,parseInt(min));if(!isNaN(d.getTime()))return d}
   const bcMatch=s.match(/^(\d{2})\.(\d{2})\.(\d{4})\s+(\d{2}):(\d{2})$/)
   if(bcMatch){const[,day,mon,year,hr,min]=bcMatch;const d=new Date(parseInt(year),parseInt(mon)-1,parseInt(day),parseInt(hr),parseInt(min));if(!isNaN(d.getTime()))return d}
-  const mfcMatch=s.match(/^([A-Za-z]{3})\s+(\d{1,2})(?:st|nd|rd|th),\s+(\d{4})\s+(\d{1,2}):(\d{2})\s+(AM|PM)$/i)
+  // Ordinal suffix optional, matching the Chaturbate branch above — MFC
+  // renders both "Aug 1, 2026" and "Aug 1st, 2026" depending on the view,
+  // and the required-suffix version silently fell through to `new Date(s)`.
+  const mfcMatch=s.match(/^([A-Za-z]{3})\s+(\d{1,2})(?:st|nd|rd|th)?,\s+(\d{4})\s+(\d{1,2}):(\d{2})\s+(AM|PM)$/i)
   if(mfcMatch){const[,mon,day,year,hr,min,ampm]=mfcMatch;const months={jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};let h=parseInt(hr,10);if(ampm.toUpperCase()==='PM'&&h!==12)h+=12;if(ampm.toUpperCase()==='AM'&&h===12)h=0;const d=new Date(parseInt(year),months[mon.toLowerCase()],parseInt(day),h,parseInt(min));if(!isNaN(d.getTime()))return d}
   const d=new Date(s);if(!isNaN(d.getTime()))return d;return null
 }
@@ -254,6 +257,35 @@ function buildPreview(rawText,platformId,platformLabel){
 // onboarding_paste_parse_failed events (by far the dominant one), so it
 // gets the most granular checks; the columnar platforms get a simpler
 // but still specific check.
+// Structural fingerprint of a failed paste — the missing half of the failure
+// telemetry. onboarding_paste_parse_failed has fired for 8 separate users and
+// every event recorded only WHICH platform failed, never WHAT shape the text
+// was, so each failure had to be guessed at instead of fixed. (The Chaturbate
+// fix in #411 only happened because a real sample turned up separately.)
+//
+// Deliberately privacy-preserving: every digit becomes 9 and every letter
+// becomes a, so "Aug 11, 2026, 07:04 AM" -> "aaa 99, 9999, 99:99 aa" and
+// "Tip From: sexyguy99" -> "aaa aaaa: aaaaaaa99". Usernames, token amounts,
+// dollar figures and notes cannot be reconstructed from this — only the
+// layout, which is the only part we need to write a parser against.
+function fingerprintPaste(rawText){
+  const lines=rawText.split('\n').map(l=>l.trim()).filter(Boolean)
+  const shape=l=>l.replace(/[0-9]/g,'9').replace(/[A-Za-z]/g,'a').slice(0,60)
+  const counts=new Map()
+  for(const l of lines.slice(0,80)){
+    const sh=shape(l)
+    counts.set(sh,(counts.get(sh)||0)+1)
+  }
+  const top=[...counts.entries()].sort((a,b)=>b[1]-a[1]).slice(0,10)
+  return {
+    line_count:lines.length,
+    distinct_shapes:counts.size,
+    has_tabs:rawText.includes('\t'),
+    has_commas:rawText.includes(','),
+    top_shapes:top.map(([sh,n])=>`${n}x ${sh}`),
+  }
+}
+
 function diagnosePasteFailure(rawText,platformId){
   const lines=rawText.split('\n').map(l=>l.trim()).filter(Boolean)
   if(!lines.length)return 'Paste your tip history above first.'
@@ -598,8 +630,6 @@ export default function OnboardingPage(){
   const[loadingMsgIdx,setLoadingMsgIdx]=useState(0)
   const[loadingProgress,setLoadingProgress]=useState(0)
   const csvRef=useRef()
-  // '/dashboard' for users who already have access, '/start-trial' otherwise.
-  const [exitHref,setExitHref]=useState('/start-trial')
 
   const platform=PLATFORMS[platformId]
   const stepNum={platform:1,username:1,paste:2,csv:2,loading:3,live:3,step4:3,done:3}[step]||1
@@ -613,10 +643,10 @@ export default function OnboardingPage(){
       if(data?.onboarding_complete){router.replace('/dashboard');return}
       const{data:profile}=await supabase.from('profiles').select('plan, plan_expires_at').eq('id',user.id).single()
       setUserPlan(isProPlan(profile)?'pro':'free')
-      // Where onboarding hands off to. The gate sits AFTER onboarding on
-      // purpose: the user imports their history and sees what CamCash found
-      // first, then starts a card-backed trial to open the dashboard.
-      setExitHref(hasAppAccess(profile)?'/dashboard':'/start-trial')
+      // Onboarding always hands off to the dashboard. The trial is an OFFER
+      // presented once the creator has seen real value, never a gate standing
+      // between them and their own data — see /start-trial, which is reachable
+      // but never forced.
       setUser(user);setBooting(false)
     })()
   },[router])
@@ -676,7 +706,7 @@ export default function OnboardingPage(){
     if(!p||( p.tipsDetected===0&&p.paidSessionsDetected===0)){
       const reason=diagnosePasteFailure(pasteText,platformId)
       setParseError(reason)
-      track('onboarding_paste_parse_failed',{platform:platformId,reason})
+      track('onboarding_paste_parse_failed',{platform:platformId,reason,...fingerprintPaste(pasteText)})
       return
     }
     setPreview(p)
@@ -1052,7 +1082,7 @@ export default function OnboardingPage(){
                 <h1 style={{fontSize:20,fontWeight:900,color:'#fff',marginBottom:7}}>Make your dashboard smarter</h1>
                 <p style={{fontSize:13,color:'rgba(148,163,184,0.8)',lineHeight:1.6}}>Add more history or turn on live tracking so CamCash can find stronger patterns.</p>
               </div>
-              {[{icon:'📥',title:'Add more history',sub:'Improve accuracy with more tip data',onClick:()=>{setPasteText('');setStep('paste')}},{icon:'📡',title:'Set up live tracking',sub:'Track future tips automatically while you stream',onClick:()=>window.open('https://www.camcashgrl.com/extension','_blank')},{icon:'📊',title:'Go to dashboard',sub:'See what CamCash found so far',onClick:()=>router.push(exitHref)}].map(a=>(<button key={a.title} onClick={a.onClick} style={{display:'flex',alignItems:'center',gap:13,padding:'14px 15px',width:'100%',background:'rgba(255,255,255,0.03)',border:'1px solid rgba(255,255,255,0.08)',borderRadius:15,cursor:'pointer',transition:'all 0.2s',textAlign:'left',marginBottom:9}} onMouseEnter={e=>{e.currentTarget.style.borderColor='rgba(33,230,243,0.3)';e.currentTarget.style.background='rgba(33,230,243,0.04)';e.currentTarget.style.transform='translateY(-1px)'}} onMouseLeave={e=>{e.currentTarget.style.borderColor='rgba(255,255,255,0.08)';e.currentTarget.style.background='rgba(255,255,255,0.03)';e.currentTarget.style.transform=''}}><div style={{width:40,height:40,borderRadius:13,background:'rgba(33,230,243,0.08)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:19,flexShrink:0}}>{a.icon}</div><div><div style={{fontSize:13,fontWeight:700,color:'#fff',marginBottom:1}}>{a.title}</div><div style={{fontSize:11,color:'rgba(100,116,139,0.8)'}}>{a.sub}</div></div><div style={{marginLeft:'auto',color:'rgba(100,116,139,0.5)',fontSize:14}}>→</div></button>))}
+              {[{icon:'📥',title:'Add more history',sub:'Improve accuracy with more tip data',onClick:()=>{setPasteText('');setStep('paste')}},{icon:'📡',title:'Set up live tracking',sub:'Track future tips automatically while you stream',onClick:()=>window.open('https://www.camcashgrl.com/extension','_blank')},{icon:'📊',title:'Go to dashboard',sub:'See what CamCash found so far',onClick:()=>router.push('/dashboard')}].map(a=>(<button key={a.title} onClick={a.onClick} style={{display:'flex',alignItems:'center',gap:13,padding:'14px 15px',width:'100%',background:'rgba(255,255,255,0.03)',border:'1px solid rgba(255,255,255,0.08)',borderRadius:15,cursor:'pointer',transition:'all 0.2s',textAlign:'left',marginBottom:9}} onMouseEnter={e=>{e.currentTarget.style.borderColor='rgba(33,230,243,0.3)';e.currentTarget.style.background='rgba(33,230,243,0.04)';e.currentTarget.style.transform='translateY(-1px)'}} onMouseLeave={e=>{e.currentTarget.style.borderColor='rgba(255,255,255,0.08)';e.currentTarget.style.background='rgba(255,255,255,0.03)';e.currentTarget.style.transform=''}}><div style={{width:40,height:40,borderRadius:13,background:'rgba(33,230,243,0.08)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:19,flexShrink:0}}>{a.icon}</div><div><div style={{fontSize:13,fontWeight:700,color:'#fff',marginBottom:1}}>{a.title}</div><div style={{fontSize:11,color:'rgba(100,116,139,0.8)'}}>{a.sub}</div></div><div style={{marginLeft:'auto',color:'rgba(100,116,139,0.5)',fontSize:14}}>→</div></button>))}
             </div>
           )}
 
@@ -1123,7 +1153,7 @@ export default function OnboardingPage(){
                 </div>
               </div>
 
-              <OBBtn onClick={()=>router.push(exitHref)} style={{marginBottom:10}}>{exitHref==='/dashboard'?'Go to Dashboard →':'Unlock my full dashboard →'}</OBBtn>
+              <OBBtn onClick={()=>router.push('/dashboard')} style={{marginBottom:10}}>Go to Dashboard →</OBBtn>
               <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:9}}>
                 {[{label:'Add more history',onClick:()=>{setPasteText('');setStep('paste')}},{label:'Set up live tracking',onClick:()=>window.open('https://www.camcashgrl.com/extension','_blank')}].map(b=>(<OBSecBtn key={b.label} onClick={b.onClick} style={{width:'100%',height:40,fontSize:12}}>{b.label}</OBSecBtn>))}
               </div>

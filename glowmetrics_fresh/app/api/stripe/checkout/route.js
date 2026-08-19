@@ -2,8 +2,34 @@
 import { NextResponse } from 'next/server'
 import { stripe } from '../../../../lib/stripe'
 import { TRIAL_DAYS } from '../../../../lib/plan'
+import { resolvePlanType, resolvePriceId } from '../../../../lib/stripe-plans'
 import { createSupabaseRouteClient } from '../../../../lib/supabase-server'
 import { createClient } from '@supabase/supabase-js'
+
+// A checkout that fails for a configuration reason is a lost sale that
+// otherwise leaves no trace anyone looks at — the previous breakage sat
+// undetected through every signup the product has ever had. Anything that
+// stops a creator from paying now pages the owner directly.
+async function alertCheckoutBlocked(subject, text) {
+  if (!process.env.RESEND_API_KEY) return
+  try {
+    await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: 'GlowMetrics <notifications@glowmetrics.co>',
+        to: 'daphneoncam@gmail.com',
+        subject,
+        text,
+      }),
+    })
+  } catch (e) {
+    console.error('Checkout alert failed to send:', e.message)
+  }
+}
 
 export async function POST(request) {
   try {
@@ -74,24 +100,47 @@ export async function POST(request) {
       }
     }
 
-    // Resolve the correct Stripe price ID based on plan_type
-    const planType = body.plan_type || 'standard_monthly'
+    // Resolve the Stripe price. Both halves of this are deliberately
+    // forgiving of history (see lib/stripe-plans.js): the landing page
+    // forwards ?plan= straight from the URL, so plan_type can be any string
+    // ever shipped in a marketing link, and the price env vars have been
+    // named three different ways across deployments. A creator trying to pay
+    // must not lose because of either.
+    const requestedPlan = body.plan_type || 'monthly'
+    const planType = resolvePlanType(requestedPlan)
 
-    const PRICE_MAP = {
-      standard_monthly: process.env.STRIPE_MONTHLY_PRICE_ID || process.env.STRIPE_PRICE_STANDARD_MONTHLY || process.env.NEXT_PUBLIC_STRIPE_PRICE_ID,
-      standard_annual:  process.env.STRIPE_YEARLY_PRICE_ID || process.env.STRIPE_ANNUAL_PRICE_ID || process.env.STRIPE_PRICE_STANDARD_ANNUAL || process.env.NEXT_PUBLIC_STRIPE_PRICE_ANNUAL,
-    }
-
-    if (!Object.prototype.hasOwnProperty.call(PRICE_MAP, planType)) {
-      return NextResponse.json({ error: 'Invalid subscription plan selected.' }, { status: 400 })
-    }
-
-    const priceId = PRICE_MAP[planType]
-    if (!priceId || !priceId.startsWith('price_')) {
-      console.error(`Checkout: missing or invalid price for ${planType}`)
+    if (!planType) {
+      // Unknown plan strings are logged rather than silently coerced — this
+      // is how the early_adopter_monthly breakage stayed invisible.
+      console.error(`Checkout: unrecognized plan_type "${requestedPlan}" — add it to PLAN_ALIASES in lib/stripe-plans.js if it is a real plan`)
+      await alertCheckoutBlocked(
+        `🚨 CamCash checkout blocked — unknown plan "${requestedPlan}"`,
+        `${user.email} tried to subscribe via plan_type "${requestedPlan}", which no longer maps to a plan.\n\n` +
+        `This is almost always an old marketing link (?plan=...). Add the alias to PLAN_ALIASES in lib/stripe-plans.js.`
+      )
       return NextResponse.json(
-        { error: `The ${planType.includes('annual') ? 'annual' : 'monthly'} Stripe price is not configured correctly.` },
-        { status: 500 }
+        { error: 'That subscription link is out of date. Please pick a plan on the pricing page.' },
+        { status: 400 }
+      )
+    }
+
+    const { priceId, searched } = resolvePriceId(planType)
+    if (!priceId) {
+      // Names the exact env vars to set, so this is a 30-second fix next time
+      // instead of a mystery 500 that costs a sale.
+      console.error(
+        `Checkout: no Stripe price configured for "${planType}". ` +
+        `Set one of these env vars to a price_... id: ${searched.join(', ')}`
+      )
+      await alertCheckoutBlocked(
+        `🚨 CamCash checkout blocked — no ${planType} price configured`,
+        `${user.email} tried to subscribe on the ${planType} plan and could not, because no Stripe price is configured for it.\n\n` +
+        `Set ONE of these environment variables in Vercel to a price_... id:\n${searched.map(v => `  • ${v}`).join('\n')}\n\n` +
+        `They were shown a "temporarily unavailable" message and were not charged.`
+      )
+      return NextResponse.json(
+        { error: `${planType === 'annual' ? 'Annual' : 'Monthly'} billing is temporarily unavailable. Please try the other billing option or contact support — you have not been charged.` },
+        { status: 503 }
       )
     }
 

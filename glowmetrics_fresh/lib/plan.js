@@ -1,18 +1,17 @@
-// Single source of truth for "does this profile have access to CamCash" — see
+// Single source of truth for "does this profile have Pro access" — see
 // profiles.plan, profiles.plan_expires_at and profiles.trial_ends_at.
 //
-// CamCash is gated, not freemium: there is no free tier that sees a partially
-// locked dashboard. A profile either has access (paid subscription, active
-// card-backed trial, promo grant, or grandfathered legacy account) or it is
-// sent to /start-trial. `isProPlan` therefore doubles as the app-access check
-// — the two concepts are the same thing now — and is kept under its old name
-// so the ~40 existing call sites keep working.
+// CamCash is freemium: Free is a genuinely useful product (import, earnings,
+// sessions, fans, platform stats, Creator Report, Command Center) and Pro is
+// the layer that tells the creator what to DO with that data. This module
+// decides Pro access only — it is never a gate on the app itself, and nothing
+// should redirect a signed-in creator away from their own dashboard.
 //
 // plan values:
-//   'free'      -> no access; sees the trial gate
+//   'free'      -> Free tier; full core product, Pro layer locked
 //   'pro'       -> Stripe subscription, status active/trialing/past_due
 //   'unlimited' -> legacy paid tier
-//   'legacy'    -> grandfathered pre-gate account, full access, never charged
+//   'legacy'    -> grandfathered pre-trial account, Pro access, never charged
 //
 // plan_expires_at is only ever set by promo-code grants (see redeem_promo_code
 // RPC); Stripe-managed subscriptions leave it null and flip `plan` straight to
@@ -33,18 +32,18 @@ export function isProPlan(profile) {
   return true
 }
 
-// Alias that says what the check actually means at the app boundary. Use this
-// in new code; isProPlan stays for the existing feature-level call sites.
+// Retained for /start-trial, which redirects creators who already have Pro.
+// NOT an app-access gate — see the module comment.
 export const hasAppAccess = isProPlan
 
 /**
- * Display-level state, for banners and the trial countdown. Access itself is
- * decided by hasAppAccess() alone — never branch access off this.
+ * Display-level state, for banners and the trial countdown. Pro access itself
+ * is decided by isProPlan() alone — never branch access off this.
  *
- * @returns {'trialing'|'subscribed'|'legacy'|'locked'}
+ * @returns {'trialing'|'subscribed'|'legacy'|'free'}
  */
 export function getAccessState(profile) {
-  if (!hasAppAccess(profile)) return 'locked'
+  if (!isProPlan(profile)) return 'free'
   if (profile.plan === 'legacy') return 'legacy'
   if (trialDaysRemaining(profile) !== null) return 'trialing'
   return 'subscribed'

@@ -14,7 +14,7 @@ import Sidebar from "./Sidebar"
 import SiteFooter from "../components/SiteFooter"
 import { PLATFORM_TOKEN_RATES, tokenRate } from "../../lib/constants"
 import { track as gtmTrack } from '../../lib/track'
-import { isProPlan, hasAppAccess, trialDaysRemaining, getAccessState } from '../../lib/plan'
+import { isProPlan, trialDaysRemaining, getAccessState } from '../../lib/plan'
 import { resolveCreatorTimezone, autoPopulateTimezoneIfMissing } from '../../lib/timezone'
 import CommandCenter from './CommandCenter'
 import Performance from './Performance'
@@ -1941,23 +1941,7 @@ export default function Dashboard() {
         .select('plan, plan_expires_at, trial_ends_at, stripe_customer_id, timezone')
         .eq('id', user.id)
         .maybeSingle()
-        .then(({ data }) => {
-          if (data) setProfile(data)
-          // The gate. CamCash is not freemium any more: an account with no
-          // subscription, no active trial and no grandfathered access doesn't
-          // get a partially-locked dashboard, it gets the trial screen. This
-          // redirect is convenience, not security — the server-side gates
-          // (get_user_insights, the Live Mode and platform-limit RPCs) are
-          // what actually withhold the data.
-          //
-          // Deliberately skipped right after checkout (?success=true): the
-          // Stripe webhook can take a few seconds to write plan='pro', and
-          // bouncing a user who just paid back to the paywall is the worst
-          // possible first impression. The next load re-checks.
-          const justCheckedOut = typeof window !== 'undefined' &&
-            new URLSearchParams(window.location.search).get('success') === 'true'
-          if (!hasAppAccess(data) && !justCheckedOut) router.replace('/start-trial')
-        })
+        .then(({ data }) => { if (data) setProfile(data) })
       loadData(user.id)
       // Load monthly goal from DB
       supabase.from('user_goals').select('*').eq('user_id', user.id).eq('goal_type', 'monthly').maybeSingle()

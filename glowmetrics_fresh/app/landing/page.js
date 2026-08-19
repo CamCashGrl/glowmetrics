@@ -777,6 +777,12 @@ export default function LandingPage() {
 
   useEffect(() => { captureAttribution() }, [])
 
+  // Never fail silently. The previous version swallowed every error and
+  // returned false, so a creator who clicked through a ?plan= link into a
+  // broken checkout was left on the landing page with nothing happening and
+  // no way to know why — which is exactly what happened to the only user who
+  // has ever attempted to subscribe. Any failure now says so and routes to
+  // /pricing, where they can still buy.
   const goToCheckout = async (planType) => {
     try {
       const res = await fetch('/api/stripe/checkout', {
@@ -784,9 +790,16 @@ export default function LandingPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ plan_type: planType }),
       })
-      const data = await res.json()
-      if (data.url) { window.location.href = data.url; return true }
-    } catch {}
+      const data = await res.json().catch(() => ({}))
+      if (res.ok && data.url) { window.location.href = data.url; return true }
+      track('checkout_failed', { plan_type: planType, status: res.status, reason: data.error || 'no_url' })
+      setAuthError(data.error || 'We could not open checkout just now. Taking you to the pricing page.')
+      setTimeout(() => { window.location.href = '/pricing' }, 2200)
+    } catch (e) {
+      track('checkout_failed', { plan_type: planType, reason: 'network' })
+      setAuthError('We could not reach checkout. Taking you to the pricing page.')
+      setTimeout(() => { window.location.href = '/pricing' }, 2200)
+    }
     return false
   }
 
