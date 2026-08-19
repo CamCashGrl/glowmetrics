@@ -22,6 +22,7 @@
 // ============================================================
 
 import Button from '../../components/ui/Button'
+import { PRO_PRICE_MONTHLY_LABEL, PRO_PRICE_NOTE } from '../../lib/constants'
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 const DAY_FULL = { Mon: 'Monday', Tue: 'Tuesday', Wed: 'Wednesday', Thu: 'Thursday', Fri: 'Friday', Sat: 'Saturday', Sun: 'Sunday' }
@@ -170,21 +171,52 @@ export default function ImportResult({
               Free Plan
             </div>
           </div>
+          {/* A metric with no qualifying data renders as a THRESHOLD STATE, not
+              as 0 or a dash. "Sessions: 0" next to 13 imported tips reads as a
+              bug; "Needs more data — requires 15+ min or $10+" reads as a bar
+              not yet cleared. The thresholds quoted are the canonical ones
+              (lib/analytics/sessions.js classifySession, lib/analytics.js
+              isHourlyRateEligible) — nothing new is defined here, and the
+              analytics themselves are untouched. */}
           <div className="ir-free-stats" style={{ display: 'grid', gridTemplateColumns: 'repeat(5,minmax(0,1fr))', gap: 10 }}>
             {[
               { icon: '🪙', label: 'Tips', value: fmtInt(free.tips), color: C.cyan },
               { icon: '💵', label: 'Earnings', value: fmtUsd(free.totalUsd), color: C.green },
-              { icon: '📅', label: 'Sessions', value: fmtInt(free.sessions), color: C.gold },
+              {
+                icon: '📅', label: 'Sessions', color: C.gold,
+                value: free.sessions > 0 ? fmtInt(free.sessions) : null,
+                need: 'Needs a session of 15+ min or $10+',
+              },
               { icon: '👥', label: 'Fans', value: fmtInt(free.fans), color: C.pink },
-              // Null when no session qualified for a rate — never a fake $0.00.
-              { icon: '⏱️', label: 'Avg $/hour', value: free.avgUsdPerHour != null ? fmtUsd(free.avgUsdPerHour) : '—', color: C.indigo },
+              {
+                icon: '⏱️', label: 'Avg $/hour', color: C.indigo,
+                value: free.avgUsdPerHour != null ? fmtUsd(free.avgUsdPerHour) : null,
+                need: 'Needs a session with 2+ tips and 15+ min',
+              },
             ].map(s => (
-              <div key={s.label} style={{ padding: '11px 12px', borderRadius: 12, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', minWidth: 0 }}>
+              <div key={s.label} style={{
+                padding: '11px 12px', borderRadius: 12, minWidth: 0,
+                background: s.value == null ? 'rgba(255,255,255,0.015)' : 'rgba(255,255,255,0.03)',
+                border: `1px solid ${s.value == null ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.07)'}`,
+              }}>
                 <div style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: C.muted, marginBottom: 6 }}>
                   <span aria-hidden="true">{s.icon}</span> {s.label}
                 </div>
-                <div style={{ fontSize: 20, fontWeight: 900, color: s.color, overflowWrap: 'anywhere' }}>{s.value}</div>
-                <div style={{ fontSize: 10.5, color: C.muted, marginTop: 3 }}>in last {freeHistoryDays} days</div>
+                {s.value != null ? (
+                  <>
+                    <div style={{ fontSize: 20, fontWeight: 900, color: s.color, overflowWrap: 'anywhere' }}>{s.value}</div>
+                    <div style={{ fontSize: 10.5, color: C.muted, marginTop: 3 }}>in last {freeHistoryDays} days</div>
+                  </>
+                ) : (
+                  <>
+                    <div style={{
+                      display: 'inline-block', fontSize: 11, fontWeight: 800, color: C.muted,
+                      padding: '3px 8px', borderRadius: 7, background: 'rgba(255,255,255,0.05)',
+                      border: '1px solid rgba(255,255,255,0.09)',
+                    }}>Needs more data</div>
+                    <div style={{ fontSize: 10, color: C.muted, marginTop: 5, lineHeight: 1.35 }}>{s.need}</div>
+                  </>
+                )}
               </div>
             ))}
           </div>
@@ -213,6 +245,46 @@ export default function ImportResult({
           <div style={{ fontSize: 12.5, color: C.muted, marginBottom: 14, lineHeight: 1.5 }}>
             These insights use{span ? ` your full ${fmtInt(span)} days of` : ' the broader history in your'} data. Upgrade to Pro to unlock the full analysis.
           </div>
+
+          {/* The single most persuasive number on the page is the creator's own
+              locked earnings total. It used to sit in a supporting card below
+              four locked previews, where it read as a footnote. It leads the
+              section now, with its breakdown directly beneath — the previews
+              become evidence FOR this figure rather than competing with it.
+              Every value is measured from the real file. */}
+          {excluded && (
+            <div style={{
+              padding: '16px 18px', borderRadius: 14, marginBottom: 14,
+              background: 'linear-gradient(135deg,rgba(16,185,129,0.12),rgba(34,211,238,0.08))',
+              border: '1px solid rgba(16,185,129,0.30)',
+            }}>
+              <div style={{ fontSize: 20, fontWeight: 900, color: C.white, marginBottom: 5, overflowWrap: 'anywhere' }}>
+                We found <span style={{ color: C.green }}>{fmtUsd(excluded.totalUsd)}</span> more in your history
+              </div>
+              <div style={{ fontSize: 12.5, color: C.text, lineHeight: 1.55, marginBottom: 12 }}>
+                That&apos;s additional earnings in your uploaded data that Free can&apos;t fully analyze yet.
+                It&apos;s already saved — upgrading unlocks it instantly, with no re-upload.
+              </div>
+              <div className="ir-extra" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,minmax(0,1fr))', gap: 10 }}>
+                {[
+                  { v: fmtInt(excluded.tips), l: 'additional tips', c: C.cyan },
+                  { v: fmtUsd(excluded.totalUsd), l: 'additional earnings', c: C.green },
+                  { v: fmtInt(excluded.sessions), l: 'additional sessions', c: C.gold },
+                  {
+                    v: excluded.dateFrom && excluded.dateTo
+                      ? `${formatDate(excluded.dateFrom)} – ${formatDate(excluded.dateTo)}`
+                      : '—',
+                    l: 'historical range', c: C.pink, small: true,
+                  },
+                ].map(s => (
+                  <div key={s.l} style={{ minWidth: 0, padding: '9px 10px', borderRadius: 10, background: 'rgba(0,0,0,0.22)', border: '1px solid rgba(255,255,255,0.07)' }}>
+                    <div style={{ fontSize: s.small ? 11.5 : 18, fontWeight: 900, color: s.c, overflowWrap: 'anywhere', lineHeight: 1.25 }}>{s.v}</div>
+                    <div style={{ fontSize: 10.5, color: C.muted, marginTop: 3 }}>{s.l}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="ir-locked-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 12 }}>
             {/* 1 — LONG-TERM EARNINGS TREND (real monthly totals) */}
@@ -333,33 +405,9 @@ export default function ImportResult({
             })()}
           </div>
 
-          {/* Supporting proof — real totals for the history outside the window.
-              Deliberately AFTER the previews: it is evidence, not the pitch. */}
-          {excluded && (
-            <div className="ir-extra" style={{
-              marginTop: 12, padding: '14px 16px', borderRadius: 12, display: 'grid',
-              gridTemplateColumns: '1.6fr repeat(3,minmax(0,1fr))', gap: 14, alignItems: 'center',
-              background: 'linear-gradient(135deg,rgba(34,211,238,0.07),rgba(124,92,255,0.07))',
-              border: '1px solid rgba(34,211,238,0.18)',
-            }}>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 800, color: C.white, marginBottom: 3 }}>📊 You also uploaded more history</div>
-                <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.5 }}>
-                  This data falls outside your Free {freeHistoryDays}-day window. It&apos;s already saved — upgrading unlocks it instantly, with no re-upload.
-                </div>
-              </div>
-              {[
-                { v: fmtInt(excluded.tips), l: 'additional tips', c: C.cyan },
-                { v: fmtUsd(excluded.totalUsd), l: 'additional earnings', c: C.green },
-                { v: fmtInt(excluded.sessions), l: 'additional sessions', c: C.gold },
-              ].map(s => (
-                <div key={s.l} style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: 19, fontWeight: 900, color: s.c, overflowWrap: 'anywhere' }}>{s.v}</div>
-                  <div style={{ fontSize: 11, color: C.muted }}>{s.l}</div>
-                </div>
-              ))}
-            </div>
-          )}
+          {/* The old supporting card that lived here has moved to the TOP of
+              this section — it is the strongest number on the page and was
+              being buried. Not duplicated here. */}
 
           {/* Fourth platform — its rows were NOT stored, so it gets the
               re-import sentence rather than the instant-unlock one. */}
@@ -420,9 +468,18 @@ export default function ImportResult({
               ))}
             </div>
           </div>
-          <Button onClick={onUpgrade} style={{ padding: '14px 26px', fontSize: 15, whiteSpace: 'nowrap' }}>
-            Unlock Full History →
-          </Button>
+          {/* Price sits WITH the button, not behind it. Making someone click
+              to discover the cost is a bigger drop-off than the cost itself.
+              Display only — Stripe still decides what is actually charged and
+              this opens the existing checkout, no new path. */}
+          <div style={{ minWidth: 0, textAlign: 'center' }}>
+            <Button onClick={onUpgrade} style={{ padding: '14px 26px', fontSize: 15, whiteSpace: 'nowrap' }}>
+              Unlock Full History →
+            </Button>
+            <div style={{ fontSize: 11.5, color: C.muted, marginTop: 7, whiteSpace: 'nowrap' }}>
+              {PRO_PRICE_MONTHLY_LABEL} · {PRO_PRICE_NOTE}
+            </div>
+          </div>
         </div>
       )}
 

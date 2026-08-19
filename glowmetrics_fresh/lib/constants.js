@@ -65,6 +65,17 @@ export const WHALE_LIFETIME_TOKEN_THRESHOLD = 500
 // literal so every consumer excludes the same value.
 export const UNDETECTED_PLATFORM = 'Unknown'
 
+// Creator Pro's headline price, shown wherever a CTA asks for the upgrade so
+// nobody has to click through to discover it.
+//
+// This is a DISPLAY label only — Stripe remains the source of truth for what
+// is actually charged, and nothing here creates or selects a price. It lives
+// in constants so the post-import CTA does not become a fourth free-floating
+// "$19.99" literal; app/pricing/PricingClient.js still hardcodes its own and
+// should migrate here when that file is next touched.
+export const PRO_PRICE_MONTHLY_LABEL = '$19.99/mo'
+export const PRO_PRICE_NOTE = 'cancel anytime'
+
 // The platforms CamCash actually TRACKS — the canonical set for import,
 // analytics, and Free-plan slot counting.
 //
