@@ -6,10 +6,14 @@ import { resolvePlanType, resolvePriceId } from '../../../../lib/stripe-plans'
 import { createSupabaseRouteClient } from '../../../../lib/supabase-server'
 import { createClient } from '@supabase/supabase-js'
 
-// A checkout that fails for a configuration reason is a lost sale that
-// otherwise leaves no trace anyone looks at — the previous breakage sat
-// undetected through every signup the product has ever had. Anything that
-// stops a creator from paying now pages the owner directly.
+// EVERY failure exit in this route goes through failCheckout() below, so
+// there is no way to add a new one that fails silently. That mattered: the
+// route previously had five failure exits and none of them told anyone, which
+// is how a checkout that rejected the only purchase anyone ever attempted sat
+// undetected for weeks.
+//
+// At current volume every single attempt is worth an email. If attempt volume
+// ever grows enough for this to be noisy, batch it — do not drop it.
 async function alertCheckoutBlocked(subject, text) {
   if (!process.env.RESEND_API_KEY) return
   try {
@@ -31,7 +35,26 @@ async function alertCheckoutBlocked(subject, text) {
   }
 }
 
+/**
+ * Single exit for every checkout failure: logs it, emails the owner, and
+ * returns the creator-facing response. `ownerDetail` should say what to DO
+ * about it, not just what happened.
+ */
+async function failCheckout({ status, userMessage, ownerSubject, ownerDetail, email }) {
+  console.error(`Checkout failed (${status}) for ${email || 'unauthenticated user'}: ${ownerSubject}`)
+  await alertCheckoutBlocked(
+    ownerSubject,
+    `${ownerDetail}\n\n` +
+    `Who: ${email || 'not signed in'}\n` +
+    `What they saw: "${userMessage}"\n` +
+    `They were NOT charged.`
+  )
+  return NextResponse.json({ error: userMessage }, { status })
+}
+
 export async function POST(request) {
+  // Hoisted so the catch-all at the bottom can name who was affected.
+  let userEmail = null
   try {
     const body = await request.json().catch(() => ({}))
     let supabase = createSupabaseRouteClient()
@@ -62,11 +85,15 @@ export async function POST(request) {
     }
 
     if (!user) {
-      return NextResponse.json(
-        { error: 'Your login session expired. Please sign in again.' },
-        { status: 401 }
-      )
+      return await failCheckout({
+        status: 401,
+        userMessage: 'Your login session expired. Please sign in again.',
+        ownerSubject: '🚨 CamCash checkout blocked — creator was signed out',
+        ownerDetail: 'Someone clicked a subscribe button but their session was not recognized, so checkout never opened. If this repeats, the auth cookie is not surviving the trip to /api/stripe/checkout.',
+      })
     }
+
+    userEmail = user.email
 
     // Get or create customer — profiles is the single source of truth
     let customerId
@@ -95,8 +122,13 @@ export async function POST(request) {
         .eq('id', user.id)
 
       if (updateError) {
-        console.error('Checkout: failed to save stripe_customer_id', updateError.message)
-        return NextResponse.json({ error: 'Failed to set up billing profile' }, { status: 500 })
+        return await failCheckout({
+          status: 500,
+          email: userEmail,
+          userMessage: 'We could not set up your billing profile. Please try again in a moment.',
+          ownerSubject: '🚨 CamCash checkout blocked — could not save billing profile',
+          ownerDetail: `Stripe customer ${customerId} was created, but writing stripe_customer_id to profiles failed: ${updateError.message}. The Stripe customer now exists with no profile link — check RLS on profiles before retrying.`,
+        })
       }
     }
 
@@ -113,15 +145,13 @@ export async function POST(request) {
       // Unknown plan strings are logged rather than silently coerced — this
       // is how the early_adopter_monthly breakage stayed invisible.
       console.error(`Checkout: unrecognized plan_type "${requestedPlan}" — add it to PLAN_ALIASES in lib/stripe-plans.js if it is a real plan`)
-      await alertCheckoutBlocked(
-        `🚨 CamCash checkout blocked — unknown plan "${requestedPlan}"`,
-        `${user.email} tried to subscribe via plan_type "${requestedPlan}", which no longer maps to a plan.\n\n` +
-        `This is almost always an old marketing link (?plan=...). Add the alias to PLAN_ALIASES in lib/stripe-plans.js.`
-      )
-      return NextResponse.json(
-        { error: 'That subscription link is out of date. Please pick a plan on the pricing page.' },
-        { status: 400 }
-      )
+      return await failCheckout({
+        status: 400,
+        email: userEmail,
+        userMessage: 'That subscription link is out of date. Please pick a plan on the pricing page.',
+        ownerSubject: `🚨 CamCash checkout blocked — unknown plan "${requestedPlan}"`,
+        ownerDetail: `plan_type "${requestedPlan}" no longer maps to a plan. This is almost always an old marketing link (?plan=...). Add the alias to PLAN_ALIASES in lib/stripe-plans.js.`,
+      })
     }
 
     const { priceId, searched } = resolvePriceId(planType)
@@ -132,16 +162,13 @@ export async function POST(request) {
         `Checkout: no Stripe price configured for "${planType}". ` +
         `Set one of these env vars to a price_... id: ${searched.join(', ')}`
       )
-      await alertCheckoutBlocked(
-        `🚨 CamCash checkout blocked — no ${planType} price configured`,
-        `${user.email} tried to subscribe on the ${planType} plan and could not, because no Stripe price is configured for it.\n\n` +
-        `Set ONE of these environment variables in Vercel to a price_... id:\n${searched.map(v => `  • ${v}`).join('\n')}\n\n` +
-        `They were shown a "temporarily unavailable" message and were not charged.`
-      )
-      return NextResponse.json(
-        { error: `${planType === 'annual' ? 'Annual' : 'Monthly'} billing is temporarily unavailable. Please try the other billing option or contact support — you have not been charged.` },
-        { status: 503 }
-      )
+      return await failCheckout({
+        status: 503,
+        email: userEmail,
+        userMessage: `${planType === 'annual' ? 'Annual' : 'Monthly'} billing is temporarily unavailable. Please try the other billing option or contact support — you have not been charged.`,
+        ownerSubject: `🚨 CamCash checkout blocked — no ${planType} price configured`,
+        ownerDetail: `No Stripe price is configured for the ${planType} plan.\n\nSet ONE of these environment variables in Vercel to a price_... id:\n${searched.map(v => `  • ${v}`).join('\n')}`,
+      })
     }
 
     // One trial per customer, ever. Stripe does not dedupe this itself, so a
@@ -208,12 +235,25 @@ export async function POST(request) {
     })
 
     if (!session.url) {
-      return NextResponse.json({ error: 'Stripe Checkout did not return a payment URL.' }, { status: 500 })
+      return await failCheckout({
+        status: 500,
+        email: userEmail,
+        userMessage: 'We could not open the payment page. Please try again — you have not been charged.',
+        ownerSubject: '🚨 CamCash checkout blocked — Stripe returned no payment URL',
+        ownerDetail: `Stripe accepted checkout session ${session.id} but returned no url. This usually means the session was created in an unexpected state — inspect it in the Stripe dashboard.`,
+      })
     }
 
     return NextResponse.json({ url: session.url })
   } catch (error) {
-    console.error('Stripe checkout error:', error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    // The catch-all matters most: a revoked Stripe key, a deleted price, or a
+    // Stripe outage all land here, and all of them mean nobody can pay.
+    return await failCheckout({
+      status: 500,
+      email: userEmail,
+      userMessage: 'Something went wrong opening checkout. Please try again — you have not been charged.',
+      ownerSubject: '🚨 CamCash checkout blocked — unexpected error',
+      ownerDetail: `Stripe or the checkout route threw: ${error?.message || error}\n\nCommon causes: STRIPE_SECRET_KEY revoked or from the wrong mode (test vs live), the configured price_... was deleted in Stripe, or a Stripe outage.`,
+    })
   }
 }
