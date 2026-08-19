@@ -13,6 +13,11 @@ const upload = read('app/api/upload/route.js')
 const dashboard = read('app/dashboard/page.js')
 const preview = read('app/dashboard/DashboardPreview.js')
 const pricing = read('app/pricing/PricingClient.js')
+// The post-import result moved out of page.js into its own component. Checks
+// about the result UI must see both files, or they silently pass/fail on the
+// wrong one.
+const importResult = read('app/dashboard/ImportResult.js')
+const resultUi = dashboard + '\n' + importResult
 const migration = read('supabase/migrations/20260817_free_plan_three_platform_31_day_history.sql')
 const paidSessionsMigration = read('supabase/migrations/20260817b_free_platform_cap_counts_paid_sessions.sql')
 
@@ -108,8 +113,8 @@ const checks = [
     /!platformAllowedRows\.length && platformBlockedRows\.length/.test(upload)],
   ['Upload route reports history truncation', /historyRemovedCount/.test(upload) && /historyLimited/.test(upload)],
   ['Dashboard imports the same Free history helper', /filterFreeHistory/.test(dashboard)],
-  ['Dashboard exposes CSV history upgrade CTA', /csv_history/.test(dashboard) && /Unlock Full History/.test(dashboard)],
-  ['Dashboard exposes 3-platform upgrade CTA', /csv_platform_limit/.test(dashboard) && /Compare More Platforms/.test(dashboard)],
+  ['Dashboard exposes CSV history upgrade CTA', /csv_history/.test(dashboard) && /Unlock Full History/.test(resultUi)],
+  ['Dashboard exposes 3-platform upgrade CTA', /csv_platform_limit/.test(dashboard) && /Compare More Platforms/.test(resultUi)],
   ['Dashboard no longer treats any single existing platform as the limit', /allPlatforms\.length\s*>=\s*FREE_MAX_PLATFORMS/.test(dashboard)],
   ['Preview no longer says Free is one platform',
     !/track more than one platform/.test(preview)],
@@ -134,29 +139,29 @@ const checks = [
   // Free window's numbers directly beneath it, with nothing between them —
   // "1,912 tips" followed by "13 tips" reads as a broken import.
   ['the result leads with the whole file, not the Free slice',
-    /CSV Analyzed/.test(dashboard) && /we analyzed your whole file/i.test(dashboard)],
+    /CSV analyzed:/.test(resultUi) && /We analyzed your CSV/i.test(resultUi)],
   ['the headline totals come from fullFileSummary',
-    /fullSummary\?\.tips \?\? lastUploadResult\.inserted/.test(dashboard)],
+    /full\?\.tips \?\? result\.inserted/.test(resultUi)],
   ['Free results name their window up front',
-    /most recent \{FREE_HISTORY_DAYS\} days per platform/.test(dashboard)],
+    /most recent \{freeHistoryDays\} days for this platform/.test(resultUi)],
   // Sparse data is still valid data. The notice must key off ABSOLUTE recent
   // activity — a creator with 412 recent tips out of 1,912 is long-tenured,
   // not sparse, and must not be told their activity is light.
   ['the sparse notice is judged on absolute activity, not a share of the file',
-    /freeStats\.tips < 30 \|\| freeStats\.sessions < 3/.test(dashboard) &&
-    !/freeStats\.tips < fullSummary\.tips \* 0\.25/.test(dashboard)],
+    /free\.tips < 30 \|\| free\.sessions < 3/.test(resultUi) &&
+    !/\* 0\.25/.test(resultUi)],
   ['sparse copy never calls a thin window empty or failed',
-    !/no data for this period/i.test(dashboard) && !/import failed/i.test(dashboard)],
+    !/no data for this period/i.test(resultUi) && !/import failed/i.test(resultUi)],
   // The response mapping is a whitelist — a field missing from it never
   // reaches the UI, which is exactly how the previews silently vanished once.
   ['lockedInsights is whitelisted through to the UI',
     /lockedInsights: result\.lockedInsights \|\| null/.test(dashboard)],
   ['the previews read the server-computed insights, not a client recompute',
-    /const li = !isPro \? lastUploadResult\.lockedInsights : null/.test(dashboard)],
+    /const li = !isPro \? result\.lockedInsights : null/.test(resultUi)],
   ['locked previews exist for trend, fans and sessions',
-    /long-term earnings trend/i.test(dashboard) &&
-    /Historical top supporters/i.test(dashboard) &&
-    /historical session pattern/i.test(dashboard)],
+    /Long-term earnings trend/i.test(resultUi) &&
+    /Top supporters \(all time\)/i.test(resultUi) &&
+    /Session & performance patterns/i.test(resultUi)],
   // Best windows reuse Stream Planner's tier gate. A window seen once is not
   // a recommendation, so when nothing qualifies the UI must say so rather
   // than rank noise behind a blur.
@@ -164,7 +169,7 @@ const checks = [
     /RECOMMENDABLE_TIERS = new Set\(\['supported', 'high'\]\)/.test(upload)],
   ['the route withholds best windows instead of inventing them',
     /bestWindowsWithheld/.test(upload) &&
-    /doesn&apos;t yet have enough repeat sessions/.test(dashboard)],
+    /doesn&apos;t yet have enough repeat sessions/.test(resultUi)],
   ['locked insights are derived from ONE canonical engine run',
     /a = aggregateRows\(rows, tz\)/.test(upload) &&
     !/new Date\(\)\.getTimezoneOffset/.test(upload)],
@@ -342,7 +347,9 @@ if (passed !== checks.length) process.exit(1)
 // ── Delete -> re-upload, and post-checkout unlock ─────────────────────
 {
   const uploadSrc = read('app/api/upload/route.js')
-  const dash = read('app/dashboard/page.js')
+  // The post-import result lives in its own component now; assertions about
+  // its copy must see both files.
+  const dash = read('app/dashboard/page.js') + '\n' + read('app/dashboard/ImportResult.js')
 
   // No permanent upload quota: csv_uploads / csv_upload_count are an audit
   // trail, never a gate. Verified against production too — the owner's
@@ -365,8 +372,11 @@ if (passed !== checks.length) process.exit(1)
     !/from\(['"]profiles['"]\)[\s\S]{0,80}\.update\(\{[^}]*plan:/.test(dash)])
 
   // Honest unlock copy: history needs no re-upload; a blocked platform does.
+  // Assert the SUBSTANCE (already saved + no re-upload), not one sentence —
+  // the previous wording pinned "unlocks them instantly" and broke on a
+  // legitimate rewrite that still said the same thing.
   extra.push(['History card states it unlocks with no re-upload',
-    /unlocks them instantly, with no re-upload/.test(dash)])
+    /already saved/.test(dash) && /no re-upload/.test(dash)])
   extra.push(['Platform card no longer implies the whole upload must be redone',
     !/Upgrade, then re-upload this file/.test(dash)])
 }

@@ -19,6 +19,7 @@ import { FREE_MAX_PLATFORMS, FREE_HISTORY_DAYS, filterFreeHistory, normalizePlat
 import { resolveCreatorTimezone, autoPopulateTimezoneIfMissing } from '../../lib/timezone'
 import CommandCenter from './CommandCenter'
 import Performance from './Performance'
+import ImportResult from './ImportResult'
 import Fans from './Fans'
 import { getDashboardReadiness, getModuleLockState, canShowHourlyRate, LockedInsightCard, DashboardProgressCard } from './DashboardPreview'
 import Button from '../../components/ui/Button'
@@ -4312,7 +4313,10 @@ const stopImportMessageRotation = () => {
         )}
 
         {activeTab === "upload" && (
-          <div style={{ maxWidth: 600, margin: "0 auto" }}>
+          // The upload form reads best in a narrow column; the result is a
+          // report with side-by-side cards and needs the room. Widen only for
+          // the success stage rather than stretching the form to match.
+          <div style={{ maxWidth: importStage === 'success' ? 1000 : 600, margin: "0 auto" }}>
             <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 8 }}>📥 Import CSV</h1>
             <p style={{ fontSize: 14, color: C.muted, marginBottom: 12 }}>
               {isPro
@@ -4389,257 +4393,20 @@ const stopImportMessageRotation = () => {
                 </div>
               )}
 
-              {importStage === 'success' && lastUploadResult?.success && (() => {
-                const hasExcludedHistory = !isPro && lastUploadResult.excludedHistory && lastUploadResult.excludedHistory.tips > 0
-                const hasLockedPlatforms = !isPro && (lastUploadResult.lockedPlatformPreview || []).length > 0
-                const fullSummary = lastUploadResult.fullFileSummary
-                const freeStats = lastUploadResult.freeResults
-                // Real previews computed server-side from the WHOLE file.
-                const li = !isPro ? lastUploadResult.lockedInsights : null
-                const hasAnythingLocked = hasExcludedHistory || hasLockedPlatforms ||
-                  Boolean(li && (li.trend?.length >= 2 || li.topFans?.length || li.session || li.bestWindows?.length))
-                // A Free window holding a small slice of a big file is the case
-                // that read as a broken import. Name it instead of leaving the
-                // creator to infer it from two numbers that don't match.
-                // Judged on ABSOLUTE recent activity, not as a share of the
-                // file. A creator with 412 recent tips out of 1,912 is not
-                // sparse — they are simply long-tenured — and telling them
-                // their activity is "light" would be wrong. What makes a
-                // window thin is having too few tips or sessions in it to
-                // support a recommendation, whatever the file size.
-                const sparseFreeWindow = Boolean(
-                  !isPro && freeStats && fullSummary && fullSummary.tips > freeStats.tips &&
-                  (freeStats.tips < 30 || freeStats.sessions < 3)
-                )
-                const blurStat = (label, value, color) => (
-                  <div key={label} style={{ padding: "10px 12px", borderRadius: 10, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)" }}>
-                    <div style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: C.muted, marginBottom: 4 }}>{label}</div>
-                    <div style={{ fontSize: 15, fontWeight: 900, color, filter: "blur(3px)", userSelect: "none" }}>{value}</div>
-                  </div>
-                )
-                return (
-                <div style={{ textAlign: "center" }}>
-                  <div style={{ position: "relative", width: 56, height: 56, margin: "0 auto 14px" }}>
-                    <div className="import-flash-ring" style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "radial-gradient(circle,rgba(34,211,238,0.55),rgba(236,72,153,0.35) 60%,transparent 70%)" }} />
-                    <div className="import-check-badge" style={{ position: "relative", width: 56, height: 56, borderRadius: "50%", background: "linear-gradient(135deg,#10B981,#22D3EE)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, color: "#fff", boxShadow: "0 0 24px rgba(16,185,129,0.45)" }}>✓</div>
-                  </div>
-                  {/* Lead with the WHOLE file. Previously this headline showed
-                      the inserted count and the Free stats sat directly beneath
-                      it — so a multi-year upload read "1,911 tips imported"
-                      followed immediately by "1 tip", with nothing explaining
-                      the gap. The file is what the creator just handed over;
-                      the Free window is a separate, later statement. */}
-                  <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.18em", textTransform: "uppercase", color: C.green, marginBottom: 8 }}>
-                    CSV Analyzed
-                  </div>
-                  <div style={{ fontSize: 16, fontWeight: 800, color: C.white, marginBottom: 8 }}>
-                    Success — we analyzed your whole file.
-                  </div>
-                  <div style={{ fontSize: 13.5, color: C.text, lineHeight: 1.6 }}>
-                    <strong style={{ color: C.white }}>{(fullSummary?.tips ?? lastUploadResult.inserted ?? 0).toLocaleString()}</strong> tips from <strong style={{ color: C.cyan }}>{lastUploadResult.platform}</strong>
-                    {typeof fullSummary?.totalUsd === 'number' && (
-                      <> · <strong style={{ color: C.green }}>${fullSummary.totalUsd.toFixed(2)}</strong> total</>
-                    )}
-                  </div>
-                  {(formatImportDate(fullSummary?.dateFrom) && formatImportDate(fullSummary?.dateTo)) && (
-                    <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>
-                      {formatImportDate(fullSummary.dateFrom)} – {formatImportDate(fullSummary.dateTo)}
-                    </div>
-                  )}
-                  {lastUploadResult.skipped > 0 && (
-                    <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>{lastUploadResult.skipped} duplicates skipped</div>
-                  )}
-
-                  {/* YOUR FREE RESULTS — real numbers from the Free-visible
-                      window, with the window named up front so the figures
-                      never read as "that's all we imported". */}
-                  {!isPro && freeStats && (
-                    <div style={{ margin: "22px auto 0", maxWidth: 480, textAlign: "left" }}>
-                      <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.18em", textTransform: "uppercase", color: C.cyan, marginBottom: 4, textAlign: "center" }}>
-                        Your Free Results
-                      </div>
-                      <div style={{ fontSize: 12, color: C.muted, marginBottom: 10, textAlign: "center" }}>
-                        Based on your most recent {FREE_HISTORY_DAYS} days per platform.
-                      </div>
-                      <div className="import-free-stats" style={{ display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: 8 }}>
-                        {[
-                          { label: "Tips", value: freeStats.tips.toLocaleString(), color: C.cyan },
-                          { label: "Earnings", value: `$${freeStats.totalUsd.toFixed(2)}`, color: C.green },
-                          { label: "Sessions", value: freeStats.sessions.toLocaleString(), color: C.gold },
-                          { label: "Fans", value: freeStats.fans.toLocaleString(), color: C.pink },
-                        ].map(s => (
-                          <div key={s.label} style={{ padding: "9px 10px", borderRadius: 10, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", minWidth: 0 }}>
-                            <div style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: C.muted, marginBottom: 4 }}>{s.label}</div>
-                            <div style={{ fontSize: 14, fontWeight: 900, color: s.color, overflowWrap: "anywhere" }}>{s.value}</div>
-                          </div>
-                        ))}
-                      </div>
-                      {/* Sparse is not empty. The rows are real and stored; there
-                          just aren't enough of them yet to carry a recommendation.
-                          Say both halves — availability and confidence — rather
-                          than letting a thin window look like a failed import. */}
-                      {sparseFreeWindow && (
-                        <div style={{ marginTop: 10, padding: "11px 13px", borderRadius: 10, background: "rgba(245,158,11,0.07)", border: "1px solid rgba(245,158,11,0.22)", fontSize: 12.5, color: C.text, lineHeight: 1.55 }}>
-                          Your recent activity is light — {freeStats.tips.toLocaleString()} of your {fullSummary.tips.toLocaleString()} tips fall inside the current window.
-                          The rest is <strong style={{ color: C.white }}>saved and analyzed below</strong>; Free simply focuses on the last {FREE_HISTORY_DAYS} days.
-                          {freeStats.sessions < 3 && ' There isn’t enough recent activity yet to name a reliable best time.'}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Section B — real, blurred preview of what's locked. Never shown
-                      as "0 tips" or a bare error; every number here is real, computed
-                      server-side from this exact file, just not readable until upgrade. */}
-                  {hasAnythingLocked && (
-                    <div style={{ margin: "20px auto 0", maxWidth: 480, textAlign: "left" }}>
-                      <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.18em", textTransform: "uppercase", color: C.pink, marginBottom: 4, textAlign: "center" }}>We found more in your data</div>
-                      <div style={{ fontSize: 12, color: C.muted, marginBottom: 12, textAlign: "center", lineHeight: 1.5 }}>
-                        Your upload contains history and patterns Free can&apos;t fully analyze yet. Everything below was measured from the file you just imported.
-                      </div>
-
-                      {/* ── LOCKED PREVIEW 1 — long-term earnings trend ──────
-                          Real month-by-month totals from the canonical engine's
-                          monthlyData, drawn as bars and blurred. The SHAPE is
-                          legible (that a pattern exists); the values are not. */}
-                      {li?.trend?.length >= 2 && (() => {
-                        const t = li.trend
-                        const peak = Math.max(...t.map(m => m.usd), 0) || 1
-                        return (
-                          <div style={{ padding: "14px 16px", borderRadius: 12, background: "linear-gradient(135deg,rgba(34,211,238,0.08),rgba(124,92,255,0.10))", border: "1px solid rgba(34,211,238,0.22)", marginBottom: 10, position: "relative", overflow: "hidden" }}>
-                            <div style={{ fontSize: 12, fontWeight: 900, color: C.cyan, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 2 }}>Your long-term earnings trend</div>
-                            <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 10 }}>{t.length} months of history found in this file.</div>
-                            <div style={{ position: "relative" }}>
-                              <svg viewBox={`0 0 ${Math.max(t.length * 10, 40)} 40`} preserveAspectRatio="none"
-                                   style={{ width: "100%", height: 72, display: "block", filter: "blur(2.5px)", opacity: 0.85 }}
-                                   aria-hidden="true">
-                                {t.map((m, i) => {
-                                  const h = Math.max((m.usd / peak) * 34, 1.5)
-                                  return <rect key={m.month} x={i * 10 + 2} y={38 - h} width={6} height={h} rx={1.4} fill="url(#lockGrad)" />
-                                })}
-                                <defs>
-                                  <linearGradient id="lockGrad" x1="0" y1="1" x2="0" y2="0">
-                                    <stop offset="0%" stopColor="#7C5CFF" /><stop offset="100%" stopColor="#22D3EE" />
-                                  </linearGradient>
-                                </defs>
-                              </svg>
-                              <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>🔒</div>
-                            </div>
-                            <div style={{ fontSize: 12.5, color: C.text, lineHeight: 1.55, marginTop: 8 }}>
-                              See how your earnings actually moved across your full history — which months climbed, which slipped, and when.
-                            </div>
-                            <Button onClick={() => openUpgradeModal('csv_history')} style={{ marginTop: 10, padding: "8px 14px", fontSize: 12 }}>Unlock Full History →</Button>
-                          </div>
-                        )
-                      })()}
-
-                      {/* ── LOCKED PREVIEW 2 — strongest historical windows ──
-                          Gated on the SAME tier rule as Stream Planner: a window
-                          seen once is not a recommendation. When nothing clears
-                          the bar the honest answer is to say so — not to rank
-                          noise behind a blur. */}
-                      {li && (li.bestWindows?.length > 0 ? (
-                        <div style={{ padding: "14px 16px", borderRadius: 12, background: "linear-gradient(135deg,rgba(245,158,11,0.08),rgba(236,72,153,0.08))", border: "1px solid rgba(245,158,11,0.22)", marginBottom: 10 }}>
-                          <div style={{ fontSize: 12, fontWeight: 900, color: C.gold, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>Your strongest historical windows</div>
-                          {li.bestWindows.map((w, i) => (
-                            <div key={`${w.day}-${w.hour}`} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 7 }}>
-                              <div style={{ flex: "1 1 auto", height: 16, borderRadius: 4, background: "linear-gradient(90deg,#F59E0B,#EC4899)", opacity: 0.85 - i * 0.15, filter: "blur(2.5px)", minWidth: 0 }} />
-                              <div style={{ flex: "0 0 auto", fontSize: 13, fontWeight: 900, color: C.gold, filter: "blur(3px)", userSelect: "none" }}>${w.usdPerHour.toFixed(2)}/hr</div>
-                            </div>
-                          ))}
-                          <div style={{ fontSize: 12.5, color: C.text, lineHeight: 1.55, marginTop: 8 }}>
-                            {li.bestWindows.length} time {li.bestWindows.length === 1 ? 'window has' : 'windows have'} enough sessions behind {li.bestWindows.length === 1 ? 'it' : 'them'} to stand up as a recommendation.
-                          </div>
-                          <Button onClick={() => openUpgradeModal('csv_history')} style={{ marginTop: 10, padding: "8px 14px", fontSize: 12 }}>Unlock Full History →</Button>
-                        </div>
-                      ) : li.trend?.length >= 2 && (
-                        <div style={{ padding: "12px 14px", borderRadius: 12, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", marginBottom: 10, fontSize: 12.5, color: C.muted, lineHeight: 1.55 }}>
-                          <strong style={{ color: C.text }}>Best-time windows:</strong> your history doesn&apos;t yet have enough repeat sessions in any single day-and-hour slot to name a reliable one. More streaming builds this up — we won&apos;t guess one from a single session.
-                        </div>
-                      ))}
-
-                      {/* ── LOCKED PREVIEW 3 — historical top supporters ───── */}
-                      {li?.topFans?.length > 0 && (
-                        <div style={{ padding: "14px 16px", borderRadius: 12, background: "linear-gradient(135deg,rgba(236,72,153,0.08),rgba(124,92,255,0.08))", border: "1px solid rgba(236,72,153,0.22)", marginBottom: 10 }}>
-                          <div style={{ fontSize: 12, fontWeight: 900, color: C.pink, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 2 }}>Historical top supporters</div>
-                          <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 10 }}>{li.totals.fans.toLocaleString()} supporters found across your full history.</div>
-                          {li.topFans.map(f => (
-                            <div key={f.rank} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6, minWidth: 0 }}>
-                              <div style={{ flex: "0 0 auto", fontSize: 11, fontWeight: 800, color: C.muted, width: 16 }}>#{f.rank}</div>
-                              <div style={{ flex: "1 1 auto", height: 14, borderRadius: 4, background: "rgba(255,255,255,0.10)", minWidth: 0 }} />
-                              <div style={{ flex: "0 0 auto", fontSize: 12.5, fontWeight: 900, color: C.green, filter: "blur(3px)", userSelect: "none" }}>${f.usd.toFixed(2)}</div>
-                            </div>
-                          ))}
-                          <div style={{ fontSize: 12.5, color: C.text, lineHeight: 1.55, marginTop: 8 }}>
-                            Who your biggest supporters have been over your whole history — not just the last {FREE_HISTORY_DAYS} days.
-                          </div>
-                          <Button onClick={() => openUpgradeModal('csv_history')} style={{ marginTop: 10, padding: "8px 14px", fontSize: 12 }}>Unlock Full History →</Button>
-                        </div>
-                      )}
-
-                      {/* ── LOCKED PREVIEW 4 — session / performance pattern ── */}
-                      {li?.session && (
-                        <div style={{ padding: "14px 16px", borderRadius: 12, background: "linear-gradient(135deg,rgba(16,185,129,0.08),rgba(34,211,238,0.08))", border: "1px solid rgba(16,185,129,0.22)", marginBottom: 10 }}>
-                          <div style={{ fontSize: 12, fontWeight: 900, color: C.green, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Your historical session pattern</div>
-                          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 8, marginBottom: 10 }}>
-                            {blurStat("Sessions", li.session.sessions.toLocaleString(), C.white)}
-                            {blurStat("Avg / Session", `$${Number(li.session.avgSessionUsd || 0).toFixed(2)}`, C.green)}
-                            {blurStat("Median $/hr", li.session.medianUsdPerHour != null ? `$${li.session.medianUsdPerHour.toFixed(2)}` : '—', C.gold)}
-                          </div>
-                          <div style={{ fontSize: 12.5, color: C.text, lineHeight: 1.55 }}>
-                            We measured {li.session.sessions.toLocaleString()} full streams in your history — how long they ran and what each one actually returned.
-                          </div>
-                          <Button onClick={() => openUpgradeModal('csv_history')} style={{ marginTop: 10, padding: "8px 14px", fontSize: 12 }}>Unlock Full History →</Button>
-                        </div>
-                      )}
-
-                      {hasExcludedHistory && (
-                        <div style={{ padding: "14px 16px", borderRadius: 12, background: "linear-gradient(135deg,rgba(124,92,255,0.10),rgba(236,72,153,0.08))", border: "1px solid rgba(124,92,255,0.24)", marginBottom: 10 }}>
-                          <div style={{ fontSize: 12, fontWeight: 900, color: C.indigo, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>You also uploaded more history</div>
-                          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginBottom: 10 }}>
-                            {blurStat("Extra Tips", lastUploadResult.excludedHistory.tips.toLocaleString(), C.white)}
-                            {blurStat("Extra Earnings", `$${lastUploadResult.excludedHistory.totalUsd.toFixed(2)}`, C.green)}
-                            {blurStat("Extra Sessions", lastUploadResult.excludedHistory.sessions.toLocaleString(), C.gold)}
-                          </div>
-                          <div style={{ fontSize: 12.5, color: C.text, lineHeight: 1.55 }}>
-                            <strong style={{ color: C.white }}>{lastUploadResult.excludedHistory.tips.toLocaleString()} tips</strong> ({formatImportDate(lastUploadResult.excludedHistory.dateFrom)} – {formatImportDate(lastUploadResult.excludedHistory.dateTo)}) fall outside your Free {FREE_HISTORY_DAYS}-day analysis window. They&apos;re already saved — upgrading unlocks them instantly, with no re-upload.
-                          </div>
-                          <Button onClick={() => openUpgradeModal('csv_history')} style={{ marginTop: 10, padding: "8px 14px", fontSize: 12 }}>Unlock Full History →</Button>
-                        </div>
-                      )}
-
-                      {hasLockedPlatforms && lastUploadResult.lockedPlatformPreview.map(p => (
-                        <div key={p.platform} style={{ padding: "14px 16px", borderRadius: 12, background: "linear-gradient(135deg,rgba(34,211,238,0.08),rgba(124,92,255,0.08))", border: "1px solid rgba(34,211,238,0.20)", marginBottom: 10 }}>
-                          <div style={{ fontSize: 12, fontWeight: 900, color: C.cyan, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>We found another platform: {p.platform}</div>
-                          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginBottom: 10 }}>
-                            {blurStat("Tips", p.tips.toLocaleString(), C.white)}
-                            {blurStat("Earnings", `$${p.totalUsd.toFixed(2)}`, C.green)}
-                            {blurStat("Sessions", p.sessions.toLocaleString(), C.gold)}
-                          </div>
-                          <div style={{ fontSize: 12.5, color: C.text, lineHeight: 1.55 }}>
-                            Detected in this file. Free is already using all {FREE_MAX_PLATFORMS} platform slots, so these rows weren&apos;t stored — unlike your history, which is already saved and unlocks the moment you upgrade. Bringing {p.platform} in takes one more import of this same file after upgrading.
-                          </div>
-                          <Button onClick={() => openUpgradeModal('csv_platform_limit')} style={{ marginTop: 10, padding: "8px 14px", fontSize: 12 }}>Unlock Pro to analyze {p.platform} →</Button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {!isPro && (lastUploadResult.platformsTracked || []).length >= FREE_MAX_PLATFORMS && !hasLockedPlatforms && (
-                    <div style={{ margin: "18px auto 0", maxWidth: 480, padding: "14px 16px", borderRadius: 12, background: "linear-gradient(135deg,rgba(34,211,238,0.08),rgba(124,92,255,0.08))", border: "1px solid rgba(34,211,238,0.20)", textAlign: "left" }}>
-                      <div style={{ fontSize: 12, fontWeight: 900, color: C.cyan, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 5 }}>You've unlocked all {FREE_MAX_PLATFORMS} Free platform slots</div>
-                      <div style={{ fontSize: 13, color: C.text, lineHeight: 1.55 }}>Upgrade to Pro to add more platforms and compare your earnings, best windows, and platform ROI side by side.</div>
-                      <Button onClick={() => openUpgradeModal('csv_platform_limit')} style={{ marginTop: 10, padding: "8px 14px", fontSize: 12 }}>Compare More Platforms →</Button>
-                    </div>
-                  )}
-
-                  <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 20, flexWrap: "wrap" }}>
-                    <Button onClick={() => handleTabChange('overview')} style={{ padding: "12px 26px", fontSize: 14 }}>View Dashboard</Button>
-                    <Button variant="secondary" onClick={resetImport} style={{ padding: "12px 22px", fontSize: 13 }}>Import another CSV</Button>
-                  </div>
-                </div>
-                )
-              })()}
+              {importStage === 'success' && lastUploadResult?.success && (
+                <ImportResult
+                  C={C}
+                  result={lastUploadResult}
+                  isPro={isPro}
+                  freeHistoryDays={FREE_HISTORY_DAYS}
+                  freeMaxPlatforms={FREE_MAX_PLATFORMS}
+                  formatDate={formatImportDate}
+                  onUpgrade={() => openUpgradeModal('csv_history')}
+                  onUpgradePlatforms={() => openUpgradeModal('csv_platform_limit')}
+                  onViewDashboard={() => handleTabChange('overview')}
+                  onImportAnother={resetImport}
+                />
+              )}
 
               {importStage === 'error' && lastUploadResult && (
                 <div style={{ textAlign: "center" }}>

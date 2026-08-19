@@ -12,17 +12,20 @@ const BATCH_SIZE = 250 // Safe batch size — never hit Supabase limits
 // spec's "do not duplicate analytics" requirement. Only pulls the handful
 // of primitive fields the locked-preview UI needs; never invents a number
 // aggregateRows didn't itself compute.
-function summarizeRows(rows) {
+function summarizeRows(rows, tz) {
   if (!rows.length) {
-    return { tips: 0, totalUsd: 0, sessions: 0, fans: 0, dateFrom: null, dateTo: null }
+    return { tips: 0, totalUsd: 0, sessions: 0, fans: 0, avgUsdPerHour: null, dateFrom: null, dateTo: null }
   }
-  const a = aggregateRows(rows)
+  const a = aggregateRows(rows, tz)
   const dates = rows.map(r => new Date(r.date_time)).filter(d => !isNaN(d))
   return {
     tips: rows.length,
     totalUsd: a.totalUSD,
     sessions: a.meaningfulSessionCount,
     fans: a.uniqueFanCount,
+    // Null rather than 0 when no session qualifies for a rate — "$0.00/hr" is
+    // a claim, "—" is the absence of one.
+    avgUsdPerHour: a.hourlyRateSessionCount > 0 ? a.estimatedHourlyRate : null,
     dateFrom: dates.length ? new Date(Math.min(...dates)).toISOString() : null,
     dateTo: dates.length ? new Date(Math.max(...dates)).toISOString() : null,
   }
@@ -65,8 +68,17 @@ function buildLockedInsights(rows, tz) {
     }))
 
   const topFans = (a.topTippers || []).slice(0, 5).map(f => ({
-    rank: f.rank, username: f.username, usd: f.usd, tips: f.count, status: f.status,
+    rank: f.rank, username: f.username, usd: f.usd, tips: f.count,
+    status: f.status, first: f.first, last: f.last,
   }))
+
+  // Day x hour median $/hour, straight off the canonical grid — the same
+  // cells Stream Planner reads. Rendered as a heatmap so the SHAPE of when
+  // this creator earns is visible while the rates stay locked. Cells with no
+  // sessions are omitted, so an empty week renders as an empty week.
+  const heatmap = (a.canonicalBestTimes?.grid || [])
+    .filter(w => w.sessionCount > 0)
+    .map(w => ({ day: w.localDay, hour: w.localHour, usdPerHour: w.medianUsdPerHour }))
 
   const sp = a.sessionPerformance
   const session = sp && sp.rateEligibleCount > 0 ? {
@@ -78,6 +90,7 @@ function buildLockedInsights(rows, tz) {
 
   return {
     trend: trend.length >= 2 ? trend : [],
+    heatmap,
     bestWindows,
     // Distinguish "no evidence yet" from "nothing to show" so the UI can say
     // which. Sparse data is still valid data; it just cannot carry a
@@ -183,7 +196,7 @@ export async function POST(req) {
   // user the truth about what was in their CSV, even for the portion Free
   // can't show. Never recomputed piecemeal later — every "locked preview"
   // number below is a subset of this same real data.
-  const fullFileSummary = summarizeRows(rows)
+  const fullFileSummary = summarizeRows(rows, creatorTz)
 
   // ── FREE-PLAN PLATFORM BOUNDARY ─────────────────────────────────────────
   // Free can track up to FREE_MAX_PLATFORMS platforms. This used to be an
@@ -249,7 +262,7 @@ export async function POST(req) {
   // across every locked platform.
   const lockedPlatformPreview = blockedPlatforms.map(p => {
     const platRows = platformBlockedRows.filter(r => normalizePlatform(r.platform) === p)
-    return { platform: platRows[0]?.platform || p, ...summarizeRows(platRows) }
+    return { platform: platRows[0]?.platform || p, ...summarizeRows(platRows, creatorTz) }
   })
 
   if (!platformAllowedRows.length && platformBlockedRows.length) {
@@ -287,13 +300,13 @@ export async function POST(req) {
     historyWindowStart = historyResult.windowStart
     historyWindowEnd = historyResult.windowEnd
   }
-  const historyExcludedSummary = summarizeRows(historyExcludedRows)
+  const historyExcludedSummary = summarizeRows(historyExcludedRows, creatorTz)
   // Everything Free can actually see right now from this upload.
   const excludedRowSet = new Set(historyExcludedRows)
   const freeVisibleRows = isPro
     ? platformAllowedRows
     : platformAllowedRows.filter(r => !excludedRowSet.has(r))
-  const freeResultsSummary = summarizeRows(freeVisibleRows)
+  const freeResultsSummary = summarizeRows(freeVisibleRows, creatorTz)
 
   // Rows that actually go to the database — always the full allowed-platform
   // set, regardless of plan. Nothing derived above ever mutates this.

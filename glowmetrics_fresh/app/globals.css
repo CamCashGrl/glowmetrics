@@ -265,3 +265,19 @@ html, body { overflow-x: hidden; max-width: 100vw; }
 @media (max-width: 430px) {
   .import-free-stats { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
 }
+
+/* Post-import result: the reference layout is two-up on desktop and stacks
+   cleanly on tablets and phones. Every grid uses minmax(0,1fr) so a long
+   value can never widen a column past the viewport. */
+@media (max-width: 900px) {
+  .ir-summary,
+  .ir-cta        { grid-template-columns: minmax(0, 1fr) !important; }
+  .ir-locked-grid { grid-template-columns: minmax(0, 1fr) !important; }
+  .ir-free-stats { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+  .ir-extra      { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+}
+@media (max-width: 560px) {
+  .ir-free-stats { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  .ir-extra      { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  .ir-cta-feats  { grid-template-columns: minmax(0, 1fr) !important; }
+}
