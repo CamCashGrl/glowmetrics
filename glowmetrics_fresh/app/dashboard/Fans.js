@@ -1,5 +1,8 @@
 "use client"
 import { useMemo } from "react"
+import LockedModule, { UnlockButton, InsufficientData } from "./components/LockedModule"
+import LockedValue from "./components/LockedValue"
+import { PRO_PRICE_MONTHLY_LABEL, PRO_PRICE_NOTE } from "../../lib/constants"
 
 // ═══════════════════════════════════════════════════════════════════════════
 // FANS
@@ -45,15 +48,10 @@ const fmtUsd0 = (n) => `$${Math.round(Number(n || 0)).toLocaleString("en-US")}`
 const fmtHour = (h) => { const H = ((h % 24) + 24) % 24; return H === 0 ? "12 AM" : H < 12 ? `${H} AM` : H === 12 ? "12 PM" : `${H - 12} PM` }
 const fmtDays = (d) => (d == null ? "—" : d === 0 ? "today" : d === 1 ? "1 day ago" : d < 30 ? `${d} days ago` : d < 365 ? `${Math.round(d / 30)} mo ago` : `${(d / 365).toFixed(1)} yr ago`)
 
-function BrandButton({ children, onClick, style }) {
-  return (
-    <button onClick={onClick} style={{
-      background: CTA_GRADIENT, border: "none", borderRadius: 12, padding: "13px 24px",
-      fontSize: 14.5, fontWeight: 800, color: "#06101A", cursor: "pointer",
-      boxShadow: "0 0 20px rgba(34,211,238,0.22), 0 0 30px rgba(236,72,153,0.16)", ...style,
-    }}>{children}</button>
-  )
-}
+// BrandButton removed. It was a THIRD button style in the app (cyan->pink with
+// dark text), which is exactly the "another random button" problem — the
+// conversion system already has one signature CTA in components/ui/Button.js,
+// surfaced through UnlockButton. Fans now uses that.
 
 // ── PRIORITY RULES ────────────────────────────────────────────────────────
 // Each rule reads canonical fields only and supplies the row's REASON and
@@ -123,46 +121,76 @@ function FanRow({ fan, rule, ctx, onMessage, dimmed = false }) {
       display: "flex", alignItems: "flex-start", gap: 14, flexWrap: "wrap", padding: "16px 16px", borderRadius: 12,
       background: dimmed ? "rgba(255,255,255,0.02)" : C.card2,
       border: `1px solid ${dimmed ? C.border : rule.color + "33"}`,
-      filter: dimmed ? "blur(4px)" : "none", pointerEvents: dimmed ? "none" : "auto",
+      pointerEvents: dimmed ? "none" : "auto",
       userSelect: dimmed ? "none" : "auto",
     }}>
       <div style={{
         width: 42, height: 42, borderRadius: "50%", background: `linear-gradient(135deg,${rule.color},${C.indigo})`,
         display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 800,
         color: C.white, flexShrink: 0,
-      }}>{fan.username.slice(0, 1).toUpperCase()}</div>
+      }}>{dimmed ? "?" : fan.username.slice(0, 1).toUpperCase()}</div>
 
       <div style={{ flex: "1 1 210px", minWidth: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap", marginBottom: 5 }}>
-          <span style={{ fontSize: 15, fontWeight: 700, color: C.white, overflowWrap: "anywhere" }}>{fan.username}</span>
+          {/* A locked row keeps its RANK and its rule label — that is the shape
+              of the answer — and redacts the identity plus every figure. The
+              redaction is not decorative: /api/insights genuinely withholds
+              these fans' fields from Free (see verify-whale-entitlement.mjs),
+              so rendering them here would widen Free access past what the
+              server enforces. */}
+          {dimmed
+            ? <LockedValue C={C} seed={`u${rule.id}${fan.username}`} size={15} blocks={9} accent={rule.color} />
+            : <span style={{ fontSize: 15, fontWeight: 700, color: C.white, overflowWrap: "anywhere" }}>{fan.username}</span>}
           <span style={{
             fontSize: 10.5, fontWeight: 700, padding: "3px 9px", borderRadius: 20, whiteSpace: "nowrap",
             background: `${rule.color}1f`, color: rule.color, border: `1px solid ${rule.color}3d`,
           }}>{rule.label}</span>
+          {dimmed && (
+            <span style={{
+              fontSize: 9.5, fontWeight: 900, letterSpacing: "0.09em", textTransform: "uppercase",
+              padding: "3px 8px", borderRadius: 999, whiteSpace: "nowrap",
+              color: C.indigo, border: `1px solid ${C.indigo}55`, background: "rgba(0,0,0,0.25)",
+            }}>Pro</span>
+          )}
         </div>
 
         {/* WHY this fan is on the list — the point of the row. */}
         <div style={{ fontSize: 13, color: C.text, lineHeight: 1.5, marginBottom: 8, overflowWrap: "anywhere" }}>
-          {rule.reason(fan, ctx)}
+          {dimmed
+            ? <>This supporter matched <strong style={{ color: C.white }}>{rule.label.toLowerCase()}</strong> — Pro names them and why.</>
+            : rule.reason(fan, ctx)}
         </div>
 
         {/* Canonical facts, each labeled. No probability percentage. */}
         <div style={{ display: "flex", gap: 14, flexWrap: "wrap", fontSize: 11.5, color: C.muted }}>
-          <span><strong style={{ color: C.white }}>{fmtUsd0(fan.totalUSD)}</strong> lifetime</span>
-          <span><strong style={{ color: C.white }}>{fan.tipCount}</strong> tips</span>
-          {fan.tipCount >= 3 && <span>every ~<strong style={{ color: C.white }}>{Math.round(fan.avgDaysBetweenTips)}d</strong></span>}
-          {fan.peakLocalHour != null && <span>usually around <strong style={{ color: C.white }}>{fmtHour(fan.peakLocalHour)}</strong></span>}
-          <span>last seen <strong style={{ color: C.white }}>{fmtDays(fan.daysSinceLastTip)}</strong></span>
+          {dimmed ? (
+            <>
+              <span><LockedValue C={C} seed={`l${fan.username}`} size={12.5} prefix="$" blocks={4} accent={C.green} /> lifetime</span>
+              <span><LockedValue C={C} seed={`t${fan.username}`} size={12.5} blocks={3} /> tips</span>
+              <span>every ~<LockedValue C={C} seed={`f${fan.username}`} size={12.5} blocks={3} /></span>
+              <span>last seen <LockedValue C={C} seed={`s${fan.username}`} size={12.5} blocks={4} /></span>
+            </>
+          ) : (
+            <>
+              <span><strong style={{ color: C.white }}>{fmtUsd0(fan.totalUSD)}</strong> lifetime</span>
+              <span><strong style={{ color: C.white }}>{fan.tipCount}</strong> tips</span>
+              {fan.tipCount >= 3 && <span>every ~<strong style={{ color: C.white }}>{Math.round(fan.avgDaysBetweenTips)}d</strong></span>}
+              {fan.peakLocalHour != null && <span>usually around <strong style={{ color: C.white }}>{fmtHour(fan.peakLocalHour)}</strong></span>}
+              <span>last seen <strong style={{ color: C.white }}>{fmtDays(fan.daysSinceLastTip)}</strong></span>
+            </>
+          )}
         </div>
       </div>
 
-      <button
-        onClick={() => onMessage?.(fan.username)}
-        style={{
-          flexShrink: 0, padding: "9px 14px", borderRadius: 10, cursor: "pointer",
-          background: `${rule.color}1a`, border: `1px solid ${rule.color}40`,
-          color: rule.color, fontSize: 12, fontWeight: 700, whiteSpace: "nowrap",
-        }}>{rule.action}</button>
+      {!dimmed && (
+        <button
+          onClick={() => onMessage?.(fan.username)}
+          style={{
+            flexShrink: 0, padding: "9px 14px", borderRadius: 10, cursor: "pointer",
+            background: `${rule.color}1a`, border: `1px solid ${rule.color}40`,
+            color: rule.color, fontSize: 12, fontWeight: 700, whiteSpace: "nowrap",
+          }}>{rule.action}</button>
+      )}
     </div>
   )
 }
@@ -295,12 +323,58 @@ export default function Fans({
               {hiddenSummary.overdue > 0 && <>, and <strong style={{ color: C.pink }}>{hiddenSummary.overdue}</strong> {hiddenSummary.overdue === 1 ? "is" : "are"} already past their usual return window</>}
               {hiddenSummary.inBestWindow > 0 && <>, with <strong style={{ color: C.cyan }}>{hiddenSummary.inBestWindow}</strong> who {hiddenSummary.inBestWindow === 1 ? "tips" : "tip"} during your best hours</>}.
             </div>
-            <BrandButton onClick={() => onUpgrade?.("fans_priority_locked")} style={{ padding: "11px 20px", fontSize: 13.5 }}>
-              Find My Highest-Value Fans →
-            </BrandButton>
+            {/* The page's ONE primary CTA. Everything else about fan
+                intelligence is a quiet secondary, so the page never becomes a
+                column of competing upgrade buttons. */}
+            <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+              <UnlockButton surface="fans_priority_locked" onClick={() => onUpgrade?.("fans_priority_locked")}>
+                Find My Highest-Value Fans
+              </UnlockButton>
+              <span style={{ fontSize: 11.5, color: C.muted, whiteSpace: "nowrap" }}>
+                {PRO_PRICE_MONTHLY_LABEL} · {PRO_PRICE_NOTE}
+              </span>
+            </div>
           </div>
         )}
       </div>
+
+      {/* ── WHAT PRO FINDS ─────────────────────────────────────────────
+          Capabilities, not fabricated metrics. Every number quoted is a real
+          aggregate this account already produced (hiddenSummary), and the
+          bullets describe analysis the engine genuinely performs — nothing
+          here promises an insight the product cannot compute. Renders only
+          when there is something actually held back. */}
+      {hiddenSummary && (
+        <LockedModule
+          C={C}
+          variant="pro"
+          surface="fans_intelligence"
+          icon="🐳"
+          title="Fan intelligence"
+          description="CamCash doesn't just show you who tipped. Pro tells you who to act on next."
+          ctaLabel="Unlock fan intelligence"
+          onUpgrade={() => onUpgrade?.("fans_intelligence")}
+          footnote={
+            `${hiddenSummary.count} more ${hiddenSummary.count === 1 ? "supporter" : "supporters"} ranked · ` +
+            `${fmtUsd0(hiddenSummary.lifetimeUSD)} in lifetime tips` +
+            (hiddenSummary.overdue > 0 ? ` · ${hiddenSummary.overdue} past their usual return window` : "")
+          }
+        >
+          <div style={{ display: "grid", gap: 9, marginBottom: 12 }}>
+              {[
+                "Who is most likely to tip again",
+                "When each supporter usually returns",
+                "Which supporters are overdue",
+                "Who is worth re-engaging first",
+              ].map(t => (
+                <div key={t} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 12.5, color: C.text }}>
+                  <span style={{ color: C.green, fontWeight: 900, flexShrink: 0 }} aria-hidden="true">✓</span>
+                  <span style={{ minWidth: 0, overflowWrap: "anywhere" }}>{t}</span>
+              </div>
+            ))}
+          </div>
+        </LockedModule>
+      )}
 
       {/* ── BEST-WINDOW OVERLAP ────────────────────────────────────── */}
       {bestWindow && overlap?.count > 0 && (

@@ -39,6 +39,7 @@ const lockedValueRaw = read('app/dashboard/components/LockedValue.js')
 const timelineRaw = read('app/dashboard/components/HistoryTimeline.js')
 const onboardingRaw = read('app/onboarding/page.js')
 const momentRaw = read('components/conversion/UpgradeMoment.js')
+const fansRaw = read('app/dashboard/Fans.js')
 
 // Comments explain WHY a rule exists and often quote the copy they replaced,
 // so shipped-copy assertions must ignore them or they check themselves.
@@ -53,6 +54,7 @@ const lockedValue = stripComments(lockedValueRaw)
 const timeline = stripComments(timelineRaw)
 const onboarding = stripComments(onboardingRaw)
 const moment = stripComments(momentRaw)
+const fans = stripComments(fansRaw)
 const dashCode = stripComments(dashboard)
 const lmCode = stripComments(lockedModule)
 
@@ -337,6 +339,46 @@ check('plan copy is derived from the canonical limits, not retyped',
   /FREE_MAX_PLATFORMS/.test(moment) && /FREE_HISTORY_DAYS/.test(moment) &&
   !/\b3 supported platforms\b/.test(stripComments(moment)))
 
+console.log('\n── FANS: locked rows preview, never blur ─────────────────────')
+check('the full-card blur on locked fan rows is gone',
+  !/filter: dimmed \? "blur/.test(fans) && !/blur\(4px\)/.test(fans))
+check('Free fan rows keep every canonical metric readable',
+  /fmtUsd0\(fan\.totalUSD\)/.test(fans) && /\{fan\.tipCount\}/.test(fans) &&
+  /fmtDays\(fan\.daysSinceLastTip\)/.test(fans) && /rule\.reason\(fan, ctx\)/.test(fans))
+check('locked rows redact the premium values rather than the whole card',
+  /<LockedValue/.test(fans) && /dimmed \?/.test(fans))
+// The server (see verify-whale-entitlement.mjs) withholds these fans' fields
+// from Free entirely, so the UI must not render them either — redacting the
+// identity alone would widen Free access past what the API enforces.
+check('locked rows do NOT leak the hidden fans’ identity or figures',
+  (() => {
+    const i = fans.indexOf('dimmed')
+    return i > 0 && /dimmed\s*\?\s*"\?"\s*:/.test(fans)
+  })())
+check('locked rows carry a restrained PRO label, not a giant lock',
+  /Pro<\/span>/.test(fans) && !/🔒/.test(fans))
+check('locked rows expose no action button (nothing to act on yet)',
+  /\{!dimmed && \(\s*<button/.test(fans))
+check('the third bespoke button style was retired for the signature one',
+  !/function BrandButton/.test(fans) && /<UnlockButton/.test(fans))
+check('the fan opportunity section is the ONE primary CTA',
+  (fans.match(/<UnlockButton/g) || []).length === 1 &&
+  /fans_priority_locked/.test(fans))
+check('the intelligence module is a shared LockedModule with a quiet CTA',
+  /<LockedModule/.test(fans) && /surface="fans_intelligence"/.test(fans))
+check('fan intelligence quotes only real measured aggregates',
+  /hiddenSummary\.count/.test(fans) && /hiddenSummary\.lifetimeUSD/.test(fans) &&
+  /hiddenSummary\.overdue/.test(fans))
+check('no fabricated fan metric or earnings claim on the Fans page',
+  !/\d{1,3}%\s*(more|increase|boost)/i.test(fans) &&
+  !/you.?ll (make|earn)/i.test(fans))
+check('Fans routes upgrades through the shared in-app handler',
+  /onUpgrade\?\./.test(fans) && !/camcashgrl\.com/.test(fans))
+check('pricing on Fans comes from the shared constants',
+  /PRO_PRICE_MONTHLY_LABEL/.test(fans) && !/\$19\.99/.test(fans))
+check('Fans computes no analytics of its own',
+  !/aggregateRows|detectSessions|splitFreeHistory/.test(fans))
+
 console.log('\n── Mutation tests (assertions must be able to fail) ───────────')
 
 const mut = (name, mutated, predicate) => {
@@ -417,6 +459,18 @@ mut('the onboarding false-claim check catches its reintroduction',
 mut('the timeline "saved not deleted" check catches an emptied segment',
   css.replace(/\.cc-timeline-saved \{[\s\S]*?\}/, '.cc-timeline-saved { background: transparent; }'),
   src => /\.cc-timeline-saved \{[\s\S]{0,200}repeating-linear-gradient/.test(src))
+
+mut('the Fans blur check catches a reintroduced full-card blur',
+  fans.replace('pointerEvents: dimmed', 'filter: dimmed ? "blur(4px)" : "none", pointerEvents: dimmed'),
+  src => !/filter: dimmed \? "blur/.test(src) && !/blur\(4px\)/.test(src))
+
+mut('the Free-row readability check catches a redacted lifetime value',
+  fans.replace('fmtUsd0(fan.totalUSD)', 'REDACTED'),
+  src => /fmtUsd0\(fan\.totalUSD\)/.test(src) && /\{fan\.tipCount\}/.test(src))
+
+mut('the one-primary-CTA check catches a second gradient button',
+  fans + '\n<UnlockButton surface="extra">Upgrade</UnlockButton>',
+  src => (src.match(/<UnlockButton/g) || []).length === 1)
 
 mut('the shared-price check catches a hardcoded price literal',
   irCode + "\nconst price = '$19.99/mo'",

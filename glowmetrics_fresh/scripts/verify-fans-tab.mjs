@@ -135,12 +135,26 @@ check('dependency risk only renders above the low band', src.includes('dependenc
 // ══════════════════════════════════════════════════════════════════════
 // 7. FREE vs PRO.
 // ══════════════════════════════════════════════════════════════════════
-check('exactly one upgrade CTA in the component', (src.match(/onUpgrade\?\./g) || []).length === 1)
+// The rule is a CTA HIERARCHY, not a raw count: exactly one PRIMARY (the
+// signature gradient UnlockButton on the fan-opportunity section) plus at
+// most one quiet secondary inside the Fan Intelligence module. Counting
+// onUpgrade calls conflated the two and failed the moment a restrained
+// secondary was added, which is the behaviour the design actually wants.
+check('exactly one PRIMARY upgrade CTA in the component',
+  (src.match(/<UnlockButton/g) || []).length === 1)
+check('any additional upgrade affordance is a quiet secondary',
+  (src.match(/onUpgrade\?\./g) || []).length <= 2 &&
+  src.includes('<LockedModule'))
 check('the free limit is supplied by the dashboard, not redefined here', src.includes('freeFanLimit = 3'))
 check('the dashboard passes its own FREE_FAN_LIMIT', page.includes('freeFanLimit={FREE_FAN_LIMIT}'))
-check('the locked preview uses REAL fans from this account, blurred — never placeholders',
+// Still real fans from this account — but previewed, not blurred. The row
+// keeps its rank and rule label and redacts the identity and every figure,
+// matching what /api/insights withholds from Free.
+check('the locked preview uses REAL fans from this account — never placeholders',
   src.includes('hidden.slice(0, 2).map') && src.includes('dimmed'))
-check('blurred rows are not interactive', src.includes('pointerEvents: dimmed ? "none" : "auto"'))
+check('locked rows redact per-value instead of blurring the card',
+  src.includes('<LockedValue') && !/filter: dimmed \? "blur/.test(src))
+check('locked rows are not interactive', src.includes('pointerEvents: dimmed ? "none" : "auto"'))
 check('the upsell describes this account with real counts',
   src.includes('hiddenSummary.lifetimeUSD') && src.includes('hiddenSummary.overdue'))
 check('the CTA is outcome-oriented, not a generic upgrade prompt',
