@@ -28,6 +28,70 @@ function summarizeRows(rows) {
   }
 }
 
+// Real previews of what Pro would analyse, built from the WHOLE uploaded file.
+//
+// Every value here is read off ONE aggregateRows() run — the same canonical
+// engine the dashboard uses. Nothing is recomputed, estimated, or invented:
+// no opportunity dollars, no confidence percentages, no second best-time
+// algorithm. If the engine cannot support a claim, the corresponding preview
+// is omitted and the UI says so rather than filling the space.
+//
+// This exists because a Free creator's 31-day window can be legitimately thin
+// while the file behind it is rich. Analysing only the visible slice would
+// throw away the very evidence that makes the upgrade worth explaining.
+const RECOMMENDABLE_TIERS = new Set(['supported', 'high'])
+
+function buildLockedInsights(rows, tz) {
+  if (!rows || rows.length < 2) return null
+  let a
+  try { a = aggregateRows(rows, tz) } catch (_) { return null }
+  if (!a) return null
+
+  // Month-by-month earnings — the shape of a long-term trend.
+  const trend = (a.monthlyData || [])
+    .filter(m => m && m.month)
+    .map(m => ({ month: m.month, usd: m.usd, tips: m.tips, sessions: m.sessions }))
+
+  // Best windows use the SAME tier gate as Stream Planner. A window seen once
+  // is not a recommendation, so 'insufficient'/'promising' never qualify —
+  // which is why this list is often empty, and that is the honest answer.
+  const bestWindows = (a.canonicalBestTimes?.grid || [])
+    .filter(w => RECOMMENDABLE_TIERS.has(w.tier))
+    .sort((x, y) => y.medianUsdPerHour - x.medianUsdPerHour)
+    .slice(0, 3)
+    .map(w => ({
+      day: w.localDay, hour: w.localHour,
+      usdPerHour: w.medianUsdPerHour, sessionCount: w.sessionCount, tier: w.tier,
+    }))
+
+  const topFans = (a.topTippers || []).slice(0, 5).map(f => ({
+    rank: f.rank, username: f.username, usd: f.usd, tips: f.count, status: f.status,
+  }))
+
+  const sp = a.sessionPerformance
+  const session = sp && sp.rateEligibleCount > 0 ? {
+    sessions: a.meaningfulSessionCount,
+    avgSessionUsd: sp.avgMeaningfulSessionUSD,
+    avgSessionMinutes: sp.avgMeaningfulSessionMinutes,
+    medianUsdPerHour: sp.distribution?.medianUsdPerHour ?? null,
+  } : null
+
+  return {
+    trend: trend.length >= 2 ? trend : [],
+    bestWindows,
+    // Distinguish "no evidence yet" from "nothing to show" so the UI can say
+    // which. Sparse data is still valid data; it just cannot carry a
+    // recommendation.
+    bestWindowsWithheld: bestWindows.length === 0,
+    topFans,
+    session,
+    totals: {
+      usd: a.totalUSD, tips: a.totalTips,
+      fans: a.uniqueFanCount, sessions: a.meaningfulSessionCount,
+    },
+  }
+}
+
 export async function POST(req) {
   const auth = req.headers.get('Authorization')
   if (!auth) {
@@ -48,10 +112,15 @@ export async function POST(req) {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('plan')
+    // timezone comes along because the locked-insight previews below run the
+    // canonical engine, and every day/hour it reports must be creator-local.
+    // profiles.timezone is the authoritative source; the browser is never
+    // consulted here.
+    .select('plan, timezone')
     .eq('id', user.id)
     .maybeSingle()
   const isPro = isPaidPlan(profile?.plan)
+  const creatorTz = profile?.timezone || undefined
 
   const fd = await req.formData()
   const file = fd.get('file')
@@ -448,6 +517,10 @@ export async function POST(req) {
     // The complete picture, so the UI never has to guess what "everything"
     // would have looked like.
     fullFileSummary,
+    // Real previews of what Pro would analyse, derived from the WHOLE file.
+    // Free-only: a Pro creator already sees all of this unlocked, so sending
+    // it would be dead weight.
+    lockedInsights: !isPro ? buildLockedInsights(rows, creatorTz) : null,
 
     platformsTracked: allowedPlatforms,
     freePlatformLimit: !isPro ? FREE_MAX_PLATFORMS : null,

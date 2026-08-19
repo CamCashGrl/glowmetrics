@@ -97,7 +97,9 @@ const checks = [
       .split('v_new_list')[1] || 'camsoda\')')],
   ['Free history window is 31 days', /FREE_HISTORY_DAYS\s*=\s*31/.test(plan)],
   ['Free history is filtered without deleting rows', /filterFreeHistory/.test(dashboard) && /setTips\(visibleData\)/.test(dashboard)],
-  ['Upload route reads plan', /select\('plan'\)/.test(upload)],
+  // Now also selects timezone, because the locked-insight previews run the
+  // canonical engine server-side and every day/hour must be creator-local.
+  ['Upload route reads plan', /select\('plan(, timezone)?'\)/.test(upload)],
   // The 4th platform must NOT fail the upload — the conversion spec requires
   // splitting so the extra platform becomes a locked preview instead.
   ['Upload route splits rather than rejecting a 4th platform',
@@ -127,6 +129,49 @@ const checks = [
   ['the plan panel states both Free limits from the shared constants',
     /up to \{FREE_MAX_PLATFORMS\} platforms/.test(dashboard) &&
     /\{FREE_HISTORY_DAYS\}-day analysis window/.test(dashboard)],
+  // ── Post-import conversion experience ──────────────────────────────────
+  // A multi-year upload used to headline the inserted count and then show the
+  // Free window's numbers directly beneath it, with nothing between them —
+  // "1,912 tips" followed by "13 tips" reads as a broken import.
+  ['the result leads with the whole file, not the Free slice',
+    /CSV Analyzed/.test(dashboard) && /we analyzed your whole file/i.test(dashboard)],
+  ['the headline totals come from fullFileSummary',
+    /fullSummary\?\.tips \?\? lastUploadResult\.inserted/.test(dashboard)],
+  ['Free results name their window up front',
+    /most recent \{FREE_HISTORY_DAYS\} days per platform/.test(dashboard)],
+  // Sparse data is still valid data. The notice must key off ABSOLUTE recent
+  // activity — a creator with 412 recent tips out of 1,912 is long-tenured,
+  // not sparse, and must not be told their activity is light.
+  ['the sparse notice is judged on absolute activity, not a share of the file',
+    /freeStats\.tips < 30 \|\| freeStats\.sessions < 3/.test(dashboard) &&
+    !/freeStats\.tips < fullSummary\.tips \* 0\.25/.test(dashboard)],
+  ['sparse copy never calls a thin window empty or failed',
+    !/no data for this period/i.test(dashboard) && !/import failed/i.test(dashboard)],
+  // The response mapping is a whitelist — a field missing from it never
+  // reaches the UI, which is exactly how the previews silently vanished once.
+  ['lockedInsights is whitelisted through to the UI',
+    /lockedInsights: result\.lockedInsights \|\| null/.test(dashboard)],
+  ['the previews read the server-computed insights, not a client recompute',
+    /const li = !isPro \? lastUploadResult\.lockedInsights : null/.test(dashboard)],
+  ['locked previews exist for trend, fans and sessions',
+    /long-term earnings trend/i.test(dashboard) &&
+    /Historical top supporters/i.test(dashboard) &&
+    /historical session pattern/i.test(dashboard)],
+  // Best windows reuse Stream Planner's tier gate. A window seen once is not
+  // a recommendation, so when nothing qualifies the UI must say so rather
+  // than rank noise behind a blur.
+  ['best-window previews reuse the canonical tier gate',
+    /RECOMMENDABLE_TIERS = new Set\(\['supported', 'high'\]\)/.test(upload)],
+  ['the route withholds best windows instead of inventing them',
+    /bestWindowsWithheld/.test(upload) &&
+    /doesn&apos;t yet have enough repeat sessions/.test(dashboard)],
+  ['locked insights are derived from ONE canonical engine run',
+    /a = aggregateRows\(rows, tz\)/.test(upload) &&
+    !/new Date\(\)\.getTimezoneOffset/.test(upload)],
+  ['the route reads creator-local time from profiles, never the browser',
+    /select\('plan, timezone'\)/.test(upload) && /creatorTz/.test(upload)],
+  ['locked insights are Free-only', /!isPro \? buildLockedInsights/.test(upload)],
+
   // ── The 31-day rule is an ANALYSIS window, never an import cap ─────────
   // Pricing said "Import up to 31 days of tip history per platform", which
   // understated what Free accepts (any date range, every row stored) and

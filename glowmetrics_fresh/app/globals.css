@@ -259,3 +259,9 @@ html, body { overflow-x: hidden; max-width: 100vw; }
   background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.18), transparent);
   animation: lp-btn-shimmer 3s ease-in-out infinite 1.5s;
 }
+
+/* Post-import Free stat row: four columns collapse to two on narrow phones so
+   a value like "$1,234.56" never forces the card wider than the viewport. */
+@media (max-width: 430px) {
+  .import-free-stats { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+}
