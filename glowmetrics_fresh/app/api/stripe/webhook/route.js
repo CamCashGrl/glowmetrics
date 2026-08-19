@@ -86,6 +86,17 @@ async function updateProfile(supabase, userId, update) {
 // fire another `customer.subscription.updated` once it resolves either way.
 const ACTIVE_STATUSES = new Set(['active', 'trialing', 'past_due'])
 
+// profiles.trial_ends_at mirrors the Stripe subscription's trial_end so the
+// dashboard can show a countdown. Display only — access is decided by `plan`,
+// which this webhook is the sole writer of. Cleared once the subscription is
+// no longer trialing so a stale date can't keep rendering a countdown.
+function trialFields(sub) {
+  if (sub.status === 'trialing' && sub.trial_end) {
+    return { trial_ends_at: new Date(sub.trial_end * 1000).toISOString() }
+  }
+  return { trial_ends_at: null }
+}
+
 export async function POST(request) {
   const supabase = getSupabaseAdmin()
   const body = await request.text()
@@ -112,6 +123,9 @@ export async function POST(request) {
           customerId: session.customer,
         })
         if (!userId) break
+        // checkout.session.completed carries no subscription status, so this
+        // only opens access — customer.subscription.created/updated is what
+        // writes the trial window and any later downgrade.
         const update = { plan: 'pro' }
         if (session.customer) update.stripe_customer_id = session.customer
         const ok = await updateProfile(supabase, userId, update)
@@ -133,7 +147,7 @@ export async function POST(request) {
           customerId: sub.customer,
         })
         if (!userId) break
-        const update = { plan: 'pro' }
+        const update = { plan: ACTIVE_STATUSES.has(sub.status) ? 'pro' : 'free', ...trialFields(sub) }
         if (sub.customer) update.stripe_customer_id = sub.customer
         const ok = await updateProfile(supabase, userId, update)
         if (!ok) {
@@ -141,8 +155,12 @@ export async function POST(request) {
         }
         const email = await getEmailFromCustomer(sub.customer) || userId
         await sendResendNotification(
-          `💰 New CamCash Subscriber — ${email} subscribed to Pro`,
-          `${email} just subscribed to the Pro plan.`
+          sub.status === 'trialing'
+            ? `🚀 CamCash Trial Started — ${email}`
+            : `💰 New CamCash Subscriber — ${email} subscribed to Pro`,
+          sub.status === 'trialing'
+            ? `${email} started a free trial with a card on file. Converts automatically unless they cancel.`
+            : `${email} just subscribed to the Pro plan.`
         )
         break
       }
@@ -154,7 +172,7 @@ export async function POST(request) {
           customerId: sub.customer,
         })
         if (!userId) break
-        const ok = await updateProfile(supabase, userId, { plan: 'free' })
+        const ok = await updateProfile(supabase, userId, { plan: 'free', trial_ends_at: null })
         if (!ok) {
           return NextResponse.json({ error: 'Failed to update profile' }, { status: 500 })
         }
@@ -174,7 +192,7 @@ export async function POST(request) {
         })
         if (!userId) break
         const plan = ACTIVE_STATUSES.has(sub.status) ? 'pro' : 'free'
-        const ok = await updateProfile(supabase, userId, { plan })
+        const ok = await updateProfile(supabase, userId, { plan, ...trialFields(sub) })
         if (!ok) {
           return NextResponse.json({ error: 'Failed to update profile' }, { status: 500 })
         }
@@ -197,6 +215,18 @@ export async function POST(request) {
             `${email}'s subscription status changed to ${sub.status}.`
           )
         }
+        break
+      }
+
+      case 'customer.subscription.trial_will_end': {
+        // Stripe fires this three days out. Notification only — the trial is
+        // still active, so access is untouched here.
+        const sub = event.data.object
+        const email = await getEmailFromCustomer(sub.customer) || sub.customer
+        await sendResendNotification(
+          `⏳ CamCash Trial Ending — ${email}`,
+          `${email}'s free trial ends soon. They convert automatically unless they cancel first.`
+        )
         break
       }
 

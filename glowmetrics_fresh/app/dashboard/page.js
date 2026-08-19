@@ -14,7 +14,7 @@ import Sidebar from "./Sidebar"
 import SiteFooter from "../components/SiteFooter"
 import { PLATFORM_TOKEN_RATES, tokenRate } from "../../lib/constants"
 import { track as gtmTrack } from '../../lib/track'
-import { isProPlan } from '../../lib/plan'
+import { isProPlan, hasAppAccess, trialDaysRemaining, getAccessState } from '../../lib/plan'
 import { resolveCreatorTimezone, autoPopulateTimezoneIfMissing } from '../../lib/timezone'
 import CommandCenter from './CommandCenter'
 import Performance from './Performance'
@@ -1938,10 +1938,26 @@ export default function Dashboard() {
       })
       setUser(user)
       supabase.from('profiles')
-        .select('plan, plan_expires_at, stripe_customer_id, timezone')
+        .select('plan, plan_expires_at, trial_ends_at, stripe_customer_id, timezone')
         .eq('id', user.id)
         .maybeSingle()
-        .then(({ data }) => { if (data) setProfile(data) })
+        .then(({ data }) => {
+          if (data) setProfile(data)
+          // The gate. CamCash is not freemium any more: an account with no
+          // subscription, no active trial and no grandfathered access doesn't
+          // get a partially-locked dashboard, it gets the trial screen. This
+          // redirect is convenience, not security — the server-side gates
+          // (get_user_insights, the Live Mode and platform-limit RPCs) are
+          // what actually withhold the data.
+          //
+          // Deliberately skipped right after checkout (?success=true): the
+          // Stripe webhook can take a few seconds to write plan='pro', and
+          // bouncing a user who just paid back to the paywall is the worst
+          // possible first impression. The next load re-checks.
+          const justCheckedOut = typeof window !== 'undefined' &&
+            new URLSearchParams(window.location.search).get('success') === 'true'
+          if (!hasAppAccess(data) && !justCheckedOut) router.replace('/start-trial')
+        })
       loadData(user.id)
       // Load monthly goal from DB
       supabase.from('user_goals').select('*').eq('user_id', user.id).eq('goal_type', 'monthly').maybeSingle()
@@ -3199,6 +3215,38 @@ const stopImportMessageRotation = () => {
       <Sidebar activeTab={activeTab} onTabChange={(tab) => { setActiveTab(tab); if (typeof window !== "undefined") { localStorage.setItem("camcash_tab", tab); window.scrollTo({ top: 0, behavior: "instant" }); } }} user={user} onSignOut={async () => { await supabase.auth.signOut(); router.replace("/login"); }} isPro={isPro} />{/* MAIN CONTENT */}
       <div className="dash-main" style={{ marginLeft: 240, width: "calc(100% - 240px)", minWidth: 0, padding: 32, boxSizing: "border-box", overflowX: "hidden" }}>
 
+        {/* ── TRIAL COUNTDOWN ──
+            Shown only while a card-backed trial is actually running (Stripe's
+            trial_end, mirrored to profiles.trial_ends_at by the webhook). Not
+            an upsell and not a countdown to a lost feature — the user already
+            has everything; this is just honest notice of when billing starts,
+            with a link to cancel. Disappears the moment the trial converts. */}
+        {(() => {
+          const daysLeft = trialDaysRemaining(profile)
+          if (daysLeft == null) return null
+          return (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
+              padding: '12px 16px', borderRadius: 16, marginBottom: 18,
+              background: 'linear-gradient(90deg, rgba(34,211,238,0.10), rgba(236,72,153,0.10))',
+              border: '1px solid rgba(34,211,238,0.22)',
+            }}>
+              <span style={{ fontSize: 13.5, color: C.white, fontWeight: 700 }}>
+                {daysLeft === 1 ? 'Last day of your free trial' : `${daysLeft} days left in your free trial`}
+              </span>
+              <span style={{ fontSize: 12.5, color: C.text }}>
+                Your subscription starts automatically when it ends — cancel any time before then.
+              </span>
+              <button
+                onClick={() => setActiveTab('settings')}
+                style={{ marginLeft: 'auto', background: 'none', border: 'none', color: C.cyan, fontSize: 12.5, fontWeight: 700, cursor: 'pointer', textDecoration: 'underline' }}
+              >
+                Manage billing
+              </button>
+            </div>
+          )
+        })()}
+
         {/* ── STICKY COMMAND BAR ── */}
         {(() => {
           const safeAvg = (!isNaN(avgPerHour) && isFinite(avgPerHour)) ? avgPerHour : 0
@@ -4370,12 +4418,29 @@ const stopImportMessageRotation = () => {
               <div style={{ fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 12 }}>
                 Your plan
               </div>
-              {isPro ? (
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontSize: 13, fontWeight: 800, color: C.indigo }}>✦ Subscription active</span>
-                  <span style={{ fontSize: 12, color: C.text }}>— track and compare unlimited platforms</span>
-                </div>
-              ) : (
+              {isPro ? (() => {
+                // Everyone inside the dashboard has access now (gated app —
+                // see the /start-trial redirect above), so this line's job is
+                // to say WHICH kind of access, not to sell anything.
+                const state = getAccessState(profile)
+                const daysLeft = trialDaysRemaining(profile)
+                const label = state === 'trialing'
+                  ? `✦ Free trial — ${daysLeft === 1 ? 'last day' : `${daysLeft} days left`}`
+                  : state === 'legacy'
+                    ? '✦ Founding member access'
+                    : '✦ Subscription active'
+                const sub = state === 'trialing'
+                  ? '— billing starts automatically when the trial ends; cancel any time before then'
+                  : state === 'legacy'
+                    ? '— full access, on the house, for being here early'
+                    : '— track and compare unlimited platforms'
+                return (
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    <span style={{ fontSize: 13, fontWeight: 800, color: C.indigo }}>{label}</span>
+                    <span style={{ fontSize: 12, color: C.text }}>{sub}</span>
+                  </div>
+                )
+              })() : (
                 <>
                   <p style={{ fontSize: 13, color: C.text, lineHeight: 1.65, marginBottom: 16 }}>
                     The <strong style={{ color: C.white }}>free plan</strong> tracks <strong style={{ color: C.cyan }}>1 platform</strong> — import as much history as you want from it, no limits. A <strong style={{ color: C.white }}>subscription</strong> unlocks tracking <strong style={{ color: C.pink }}>multiple platforms at once</strong> and lets you compare which cam site pays you best by hour, day, and fan type.

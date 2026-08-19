@@ -1,6 +1,7 @@
 // app/api/stripe/checkout/route.js
 import { NextResponse } from 'next/server'
 import { stripe } from '../../../../lib/stripe'
+import { TRIAL_DAYS } from '../../../../lib/plan'
 import { createSupabaseRouteClient } from '../../../../lib/supabase-server'
 import { createClient } from '@supabase/supabase-js'
 
@@ -94,6 +95,25 @@ export async function POST(request) {
       )
     }
 
+    // One trial per customer, ever. Stripe does not dedupe this itself, so a
+    // user who cancels and comes back would otherwise collect a fresh free
+    // week on every checkout. Any prior subscription on the customer (in any
+    // status, including canceled) means the trial has already been used.
+    let trialEligible = true
+    try {
+      const priorSubs = await stripe.subscriptions.list({
+        customer: customerId,
+        status: 'all',
+        limit: 1,
+      })
+      trialEligible = priorSubs.data.length === 0
+    } catch (e) {
+      // Fail closed: if we can't prove the customer is new, sell them the
+      // subscription rather than risk handing out repeat trials.
+      console.error('Checkout: trial eligibility lookup failed', e.message)
+      trialEligible = false
+    }
+
     // Create checkout session
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
@@ -101,12 +121,36 @@ export async function POST(request) {
       payment_method_types: ['card'],
       line_items: [{ price: priceId, quantity: 1 }],
       success_url: `${request.headers.get('origin')}/dashboard?success=true&plan=${planType}`,
-      cancel_url: `${request.headers.get('origin')}/dashboard?canceled=true`,
+      // Back to the gate, not the dashboard: a user who abandons checkout has
+      // no access to return to.
+      cancel_url: `${request.headers.get('origin')}/start-trial?canceled=true`,
       metadata: {
         userId: user.id,
         plan_type: planType,
       },
+      // Card-backed free trial. CamCash is gated rather than freemium, so this
+      // is the only way into the product for a new account: Stripe collects
+      // and validates a payment method up front, bills nothing for
+      // TRIAL_DAYS, then charges automatically unless the user cancels.
+      //
+      // `payment_method_collection: 'always'` is what makes the card
+      // mandatory — Stripe's default for a trialing subscription is to let
+      // checkout complete with no payment method at all, which would hand out
+      // free access with nothing to convert.
+      //
+      // A subscription that somehow reaches the end of its trial with no
+      // usable payment method is canceled rather than left hanging in
+      // `past_due`, since past_due deliberately keeps access during Stripe's
+      // retry window (see the webhook's ACTIVE_STATUSES) — that window is for
+      // real customers whose card failed, not for trials that never had one.
+      payment_method_collection: 'always',
       subscription_data: {
+        ...(trialEligible ? {
+          trial_period_days: TRIAL_DAYS,
+          trial_settings: {
+            end_behavior: { missing_payment_method: 'cancel' },
+          },
+        } : {}),
         metadata: {
           userId: user.id,
           plan_type: planType,

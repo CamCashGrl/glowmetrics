@@ -76,7 +76,7 @@ export default function HomePage() {
         <p>Generate high-converting room titles based on your toy type, token goal, and vibe. Free to use without an account.</p>
         <h2>How It Works</h2>
         <p>1. Export your earnings CSV from Chaturbate, BongaCams, or MyFreeCams. 2. Upload it to CamCash — takes under 2 minutes. 3. Your full analytics dashboard is ready instantly.</p>
-        <p>No credit card required.</p>
+        <p>7-day free trial. Cancel any time.</p>
         <nav>
           <a href="/blog/cam-model-earnings">Cam Model Earnings Guide</a>
           <a href="/blog/how-to-make-more-money-on-chaturbate">How to Make More Money on Chaturbate</a>

@@ -6,6 +6,7 @@ import SiteFooter from '../components/SiteFooter'
 import Button from '../../components/ui/Button'
 import { supabase } from '../../lib/supabase'
 import { track } from '../../lib/track'
+import { TRIAL_DAYS } from '../../lib/plan'
 
 /*
  * IMPORTANT:
@@ -233,7 +234,7 @@ function TopBar({ user }) {
         >
           {user
             ? 'Back to Dashboard →'
-            : 'Create Free Account →'}
+            : 'Start my free trial →'}
         </Button>
       </div>
     </div>
@@ -245,7 +246,10 @@ function PricingSection({
   setCheckoutLoading,
   user,
 }) {
-  const freeFeatures = [
+  // The trial is not a reduced tier — it is the full product, unlocked, for
+  // TRIAL_DAYS. This list is the "what you get on day one" proof, so it leads
+  // with the things a new creator sees first.
+  const trialFeatures = [
     'See exactly how your platform is really performing',
     'Import your tip history in minutes — no manual entry',
     'Know your numbers at a glance',
@@ -299,7 +303,7 @@ function PricingSection({
               color: C.white,
             }}
           >
-            Free forever.{' '}
+            {TRIAL_DAYS} days free.{' '}
             <span
               style={{
                 background: C.gradientPrimary,
@@ -308,7 +312,7 @@ function PricingSection({
                 backgroundClip: 'text',
               }}
             >
-              Creator Pro when you're ready.
+              Then $19.99/month.
             </span>
           </h1>
           <p
@@ -320,7 +324,7 @@ function PricingSection({
               lineHeight: 1.6,
             }}
           >
-            Start with a real, working analytics dashboard — not a trial. Upgrade when you want to know exactly where, when, and who to focus on to earn more.
+            Try the whole thing — every insight, no locked cards — free for {TRIAL_DAYS} days. Add a card to start, cancel any time before it ends and you&apos;re never charged.
           </p>
         </div>
 
@@ -333,7 +337,7 @@ function PricingSection({
             alignItems: 'stretch',
           }}
         >
-          {/* FREE PLAN */}
+          {/* FREE TRIAL */}
           <article
             style={{
               background: C.card,
@@ -355,7 +359,7 @@ function PricingSection({
                 margin: '0 0 12px',
               }}
             >
-              Free
+              Free trial
             </p>
 
             <div style={{ marginBottom: 8 }}>
@@ -377,7 +381,7 @@ function PricingSection({
                   marginLeft: 4,
                 }}
               >
-                /forever
+                /for {TRIAL_DAYS} days
               </span>
             </div>
 
@@ -389,9 +393,10 @@ function PricingSection({
                 margin: '0 0 24px',
               }}
             >
-              Perfect for creators getting started — real
-              insights from your real data, no credit card
-              required.
+              The complete dashboard, unlocked, on your own
+              real data. Card required to start — nothing is
+              charged until day {TRIAL_DAYS + 1}, and cancelling
+              before then costs you nothing.
             </p>
 
             <div
@@ -400,7 +405,7 @@ function PricingSection({
                 marginBottom: 26,
               }}
             >
-              {freeFeatures.map((feature) => (
+              {trialFeatures.map((feature) => (
                 <CheckLine
                   key={feature}
                   color={C.cyan}
@@ -412,7 +417,7 @@ function PricingSection({
 
             <Button
               as="a"
-              href={user ? '/dashboard' : '/landing'}
+              href={user ? '/start-trial' : '/landing'}
               variant="secondary"
               style={{
                 display: 'block',
@@ -423,8 +428,8 @@ function PricingSection({
               }}
             >
               {user
-                ? 'Continue to Dashboard →'
-                : 'Start Free →'}
+                ? `Start my ${TRIAL_DAYS}-day free trial →`
+                : 'Create my account →'}
             </Button>
           </article>
 
@@ -595,10 +600,10 @@ function PricingSection({
 
 function PromiseSection() {
   const promises = [
-    'The free plan will always exist and remain genuinely useful',
-    'Core live tracking and basic coaching stay free',
-    'Creator Pro unlocks full history, deeper insights, and multi-platform tracking',
-    'No surprise feature locks after launch',
+    `Your ${TRIAL_DAYS}-day trial is the full product — nothing is locked or held back`,
+    'Cancel any time before the trial ends and you are never charged',
+    'We email you before the trial converts — no silent first charge',
+    'Your imported history stays yours, and stays private, whether you subscribe or not',
     '30 days notice before material pricing or plan changes',
     'Built by cam models, for cam models',
   ]
@@ -667,12 +672,20 @@ function PromiseSection() {
 
 const FAQ_ITEMS = [
   {
-    q: 'Will the free plan always be available?',
-    a: 'Yes. The free plan will always exist and remain genuinely useful. It includes one tracked platform, CSV uploads, basic earnings and session analytics, live tip detection, real-time alerts, top-three fan insights, and limited recent tip history.',
+    q: 'Do I need a credit card to try CamCash?',
+    a: `Yes. CamCash starts with a ${TRIAL_DAYS}-day free trial, and a card is required to begin it. Nothing is charged during the trial, and cancelling before it ends costs you nothing.`,
   },
   {
-    q: 'How many platforms can I track for free?',
-    a: 'The free plan supports one cam platform. Creator Pro unlocks tracking across every supported platform and adds cross-platform comparisons.',
+    q: 'What do I get during the trial?',
+    a: 'Everything. The trial is the complete Creator Pro product on your own imported data — all platforms, full history, fan insights, best-time analysis, Live Mode, and every report. Nothing is locked or previewed.',
+  },
+  {
+    q: 'What happens when the trial ends?',
+    a: `Your subscription starts automatically at $19.99 per month unless you cancel first. We email you before that happens, and you can cancel in one click from Account & Billing at any point during the trial.`,
+  },
+  {
+    q: 'What happens to my data if I cancel?',
+    a: 'It stays safe. Your imported tip history is kept on your account, and resubscribing restores your dashboard exactly as you left it.',
   },
   {
     q: 'What does Creator Pro include?',
@@ -834,7 +847,7 @@ function FinalCTA({ user }) {
           letterSpacing: '-1px',
         }}
       >
-        Start free. Grow forever.
+        Try it free for {TRIAL_DAYS} days.
       </h2>
 
       <p
@@ -846,9 +859,9 @@ function FinalCTA({ user }) {
           lineHeight: 1.6,
         }}
       >
-        Create a free account or return to your
-        dashboard. No credit card is required for the
-        Free plan.
+        Import your history, see what CamCash finds, and
+        keep the whole dashboard for {TRIAL_DAYS} days.
+        Cancel before it ends and you are never charged.
       </p>
 
       <div
@@ -869,7 +882,7 @@ function FinalCTA({ user }) {
         >
           {user
             ? 'Go to Dashboard →'
-            : 'Create Free Account →'}
+            : 'Start my free trial →'}
         </Button>
 
         <Button
@@ -896,8 +909,8 @@ function FinalCTA({ user }) {
           margin: 0,
         }}
       >
-        Free plan always available · No credit card
-        required · Four platforms supported
+        {TRIAL_DAYS}-day free trial · Cancel any time ·
+        Four platforms supported
       </p>
     </section>
   )

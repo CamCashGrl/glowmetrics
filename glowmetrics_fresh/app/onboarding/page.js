@@ -6,7 +6,7 @@ import { supabase } from '../../lib/supabase'
 // Token rates — single source of truth, never hardcode below this line
 import { PLATFORM_TOKEN_RATES, tokenRate } from '../../lib/constants'
 import { track } from '../../lib/track'
-import { isProPlan } from '../../lib/plan'
+import { isProPlan, hasAppAccess } from '../../lib/plan'
 import OnboardingExitSurvey from '@/components/OnboardingExitSurvey'
 
 
@@ -379,7 +379,7 @@ function ProUpsellModal({platform,onSkip}){
           </div>
         </div>
         <div style={{background:'rgba(33,230,243,0.06)',border:'1px solid rgba(33,230,243,0.15)',borderRadius:10,padding:'10px 14px',marginBottom:14,fontSize:12,color:'rgba(148,163,184,0.8)',textAlign:'center'}}>
-          ✅ <span style={{color:'#fff'}}>Free tier always exists</span> — your current platform stays free forever.
+          ✅ <span style={{color:'#fff'}}>Nothing is locked during your trial</span> — every platform and every insight is included for 7 days.
         </div>
         <div style={{textAlign:'center'}}><button onClick={onSkip} style={{background:'none',border:'none',fontSize:12,color:'rgba(100,116,139,0.7)',cursor:'pointer',textDecoration:'underline'}}>Skip for now — continue with one platform</button></div>
       </div>
@@ -598,6 +598,8 @@ export default function OnboardingPage(){
   const[loadingMsgIdx,setLoadingMsgIdx]=useState(0)
   const[loadingProgress,setLoadingProgress]=useState(0)
   const csvRef=useRef()
+  // '/dashboard' for users who already have access, '/start-trial' otherwise.
+  const [exitHref,setExitHref]=useState('/start-trial')
 
   const platform=PLATFORMS[platformId]
   const stepNum={platform:1,username:1,paste:2,csv:2,loading:3,live:3,step4:3,done:3}[step]||1
@@ -611,6 +613,10 @@ export default function OnboardingPage(){
       if(data?.onboarding_complete){router.replace('/dashboard');return}
       const{data:profile}=await supabase.from('profiles').select('plan, plan_expires_at').eq('id',user.id).single()
       setUserPlan(isProPlan(profile)?'pro':'free')
+      // Where onboarding hands off to. The gate sits AFTER onboarding on
+      // purpose: the user imports their history and sees what CamCash found
+      // first, then starts a card-backed trial to open the dashboard.
+      setExitHref(hasAppAccess(profile)?'/dashboard':'/start-trial')
       setUser(user);setBooting(false)
     })()
   },[router])
@@ -1046,7 +1052,7 @@ export default function OnboardingPage(){
                 <h1 style={{fontSize:20,fontWeight:900,color:'#fff',marginBottom:7}}>Make your dashboard smarter</h1>
                 <p style={{fontSize:13,color:'rgba(148,163,184,0.8)',lineHeight:1.6}}>Add more history or turn on live tracking so CamCash can find stronger patterns.</p>
               </div>
-              {[{icon:'📥',title:'Add more history',sub:'Improve accuracy with more tip data',onClick:()=>{setPasteText('');setStep('paste')}},{icon:'📡',title:'Set up live tracking',sub:'Track future tips automatically while you stream',onClick:()=>window.open('https://www.camcashgrl.com/extension','_blank')},{icon:'📊',title:'Go to dashboard',sub:'See what CamCash found so far',onClick:()=>router.push('/dashboard')}].map(a=>(<button key={a.title} onClick={a.onClick} style={{display:'flex',alignItems:'center',gap:13,padding:'14px 15px',width:'100%',background:'rgba(255,255,255,0.03)',border:'1px solid rgba(255,255,255,0.08)',borderRadius:15,cursor:'pointer',transition:'all 0.2s',textAlign:'left',marginBottom:9}} onMouseEnter={e=>{e.currentTarget.style.borderColor='rgba(33,230,243,0.3)';e.currentTarget.style.background='rgba(33,230,243,0.04)';e.currentTarget.style.transform='translateY(-1px)'}} onMouseLeave={e=>{e.currentTarget.style.borderColor='rgba(255,255,255,0.08)';e.currentTarget.style.background='rgba(255,255,255,0.03)';e.currentTarget.style.transform=''}}><div style={{width:40,height:40,borderRadius:13,background:'rgba(33,230,243,0.08)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:19,flexShrink:0}}>{a.icon}</div><div><div style={{fontSize:13,fontWeight:700,color:'#fff',marginBottom:1}}>{a.title}</div><div style={{fontSize:11,color:'rgba(100,116,139,0.8)'}}>{a.sub}</div></div><div style={{marginLeft:'auto',color:'rgba(100,116,139,0.5)',fontSize:14}}>→</div></button>))}
+              {[{icon:'📥',title:'Add more history',sub:'Improve accuracy with more tip data',onClick:()=>{setPasteText('');setStep('paste')}},{icon:'📡',title:'Set up live tracking',sub:'Track future tips automatically while you stream',onClick:()=>window.open('https://www.camcashgrl.com/extension','_blank')},{icon:'📊',title:'Go to dashboard',sub:'See what CamCash found so far',onClick:()=>router.push(exitHref)}].map(a=>(<button key={a.title} onClick={a.onClick} style={{display:'flex',alignItems:'center',gap:13,padding:'14px 15px',width:'100%',background:'rgba(255,255,255,0.03)',border:'1px solid rgba(255,255,255,0.08)',borderRadius:15,cursor:'pointer',transition:'all 0.2s',textAlign:'left',marginBottom:9}} onMouseEnter={e=>{e.currentTarget.style.borderColor='rgba(33,230,243,0.3)';e.currentTarget.style.background='rgba(33,230,243,0.04)';e.currentTarget.style.transform='translateY(-1px)'}} onMouseLeave={e=>{e.currentTarget.style.borderColor='rgba(255,255,255,0.08)';e.currentTarget.style.background='rgba(255,255,255,0.03)';e.currentTarget.style.transform=''}}><div style={{width:40,height:40,borderRadius:13,background:'rgba(33,230,243,0.08)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:19,flexShrink:0}}>{a.icon}</div><div><div style={{fontSize:13,fontWeight:700,color:'#fff',marginBottom:1}}>{a.title}</div><div style={{fontSize:11,color:'rgba(100,116,139,0.8)'}}>{a.sub}</div></div><div style={{marginLeft:'auto',color:'rgba(100,116,139,0.5)',fontSize:14}}>→</div></button>))}
             </div>
           )}
 
@@ -1117,7 +1123,7 @@ export default function OnboardingPage(){
                 </div>
               </div>
 
-              <OBBtn onClick={()=>router.push('/dashboard')} style={{marginBottom:10}}>Go to Dashboard →</OBBtn>
+              <OBBtn onClick={()=>router.push(exitHref)} style={{marginBottom:10}}>{exitHref==='/dashboard'?'Go to Dashboard →':'Unlock my full dashboard →'}</OBBtn>
               <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:9}}>
                 {[{label:'Add more history',onClick:()=>{setPasteText('');setStep('paste')}},{label:'Set up live tracking',onClick:()=>window.open('https://www.camcashgrl.com/extension','_blank')}].map(b=>(<OBSecBtn key={b.label} onClick={b.onClick} style={{width:'100%',height:40,fontSize:12}}>{b.label}</OBSecBtn>))}
               </div>
