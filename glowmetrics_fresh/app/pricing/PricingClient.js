@@ -306,7 +306,7 @@ function PricingSection({
               color: C.white,
             }}
           >
-            Free forever.{' '}
+            Start free.{' '}
             <span
               style={{
                 background: C.gradientPrimary,

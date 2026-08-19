@@ -147,7 +147,7 @@ export default function ExtensionPage() {
 
           {/* Trust indicators */}
           <div style={{ display: 'flex', gap: '16px', justifyContent: 'center', flexWrap: 'wrap', marginBottom: '28px' }}>
-            {['Free forever', 'No passwords stored', '17 KB', 'Chrome only'].map(t => (
+            {['Free to start', 'No passwords stored', '17 KB', 'Chrome only'].map(t => (
               <span key={t} style={{ fontSize: '12px', color: C.muted, display: 'flex', alignItems: 'center', gap: '5px' }}>
                 <span style={{ color: C.green, fontWeight: '700' }}>✓</span> {t}
               </span>
@@ -338,7 +338,7 @@ export default function ExtensionPage() {
               { icon: '🔒', title: 'No Passwords Stored',   desc: 'We never touch your platform login.' },
               { icon: '👑', title: 'Creator-Focused',       desc: 'Built for cam models — nothing else.' },
               { icon: '🛡️', title: 'Privacy-Safe',          desc: 'Your data stays yours. No selling.' },
-              { icon: '🆓', title: 'Free Forever',          desc: 'Live coaching + tip feed, always free.' },
+              { icon: '🆓', title: 'Free to start',         desc: 'Live coaching + tip feed in the free tier.' },
             ].map(t => (
               <div key={t.title}>
                 <div style={{ fontSize: '26px', marginBottom: '8px' }}>{t.icon}</div>
@@ -359,7 +359,7 @@ export default function ExtensionPage() {
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '20px' }}>
             <div style={{ padding: '26px', borderRadius: '16px', background: 'rgba(16,185,129,0.05)', border: '1px solid rgba(16,185,129,0.2)' }}>
-              <div style={{ fontSize: '13px', fontWeight: '800', color: C.green, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '14px' }}>🆓 Free, forever</div>
+              <div style={{ fontSize: '13px', fontWeight: '800', color: C.green, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '14px' }}>🆓 Free to start</div>
               {[
                 'Live tip feed while you stream',
                 'Real-time AI coaching (whale alerts, dead-air prompts, streak tips)',

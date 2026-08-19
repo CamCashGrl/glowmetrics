@@ -6,12 +6,15 @@
 //
 //     DO NOT HIDE THE PRODUCT. PREVIEW THE PRODUCT.
 //
-// The locked cards this replaces put a 4px blur and a centred lock icon over
-// the whole card body. That reads as disabled software — the creator learns
-// nothing about what they would be buying, only that they are being blocked.
-// Here the visualisation keeps its real structure and real numbers; the lock
-// is expressed as a soft fade toward the card's own background plus a small
-// badge, so the card looks like a premium preview rather than a censored one.
+// Two earlier treatments both hid the wrong half. First a blur(4px) over the
+// whole card body; then a gradient mask over the whole preview. Either way the
+// creator learned nothing about what they would be buying.
+//
+// The preview is now FULLY LEGIBLE. Their own labels, dates and categories are
+// real and readable, because that is what persuades — a row reading
+// "Tuesday · 7 PM – 10 PM · ████/hr" works precisely because the first two
+// columns are their real life. Only the premium figure is withheld, per value,
+// by LockedValue. The lock is a small PRO badge, not a wall.
 //
 // FOUR STATES, NOT ONE COMPONENT
 // These are genuinely different situations and must never be collapsed:
@@ -94,7 +97,7 @@ export default function LockedModule({
   title,
   description,
   icon,
-  preview,                  // real visualisation; faded, never fully hidden
+  preview,                  // real visualisation, fully legible; mask VALUES not the container
   lockedReason,             // short line under the preview
   value,                    // the creator's own measured figure
   valueLabel,
@@ -149,13 +152,14 @@ export default function LockedModule({
         </div>
       )}
 
-      {/* THE PREVIEW. Structure and real data stay legible; the fade is a mask
-          toward the card background, not an opaque overlay. aria-hidden
-          because it is decorative evidence — the description carries the
-          meaning for assistive tech. */}
+      {/* THE PREVIEW. Fully legible: the creator's own labels, dates and
+          categories are real and are the reason the preview persuades. Only
+          the premium figures inside it are masked, by LockedValue. Not
+          aria-hidden any more — there is real information here now, and each
+          masked value carries its own "unlocked with Pro" label. */}
       {preview && (
         <div className="cc-lock-preview-wrap">
-          <div className="cc-lock-preview" aria-hidden="true">{preview}</div>
+          <div className="cc-lock-preview">{preview}</div>
           {lockedReason && (
             <div className="cc-lock-reason" style={{ color: C.text }}>{lockedReason}</div>
           )}

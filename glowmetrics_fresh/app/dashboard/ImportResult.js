@@ -38,6 +38,8 @@ import Button from '../../components/ui/Button'
 import { PRO_PRICE_MONTHLY_LABEL, PRO_PRICE_NOTE } from '../../lib/constants'
 import { resolveUpgradeContext } from '../../lib/upgradeContext'
 import LockedModule, { UnlockButton, InsufficientData } from './components/LockedModule'
+import LockedValue, { LockedBar } from './components/LockedValue'
+import HistoryTimeline from './components/HistoryTimeline'
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 const DAY_FULL = { Mon: 'Monday', Tue: 'Tuesday', Wed: 'Wednesday', Thu: 'Thursday', Fri: 'Friday', Sat: 'Saturday', Sun: 'Sunday' }
@@ -120,9 +122,9 @@ export default function ImportResult({
         }} aria-hidden="true">✓</div>
         <div style={{ minWidth: 0 }}>
           <h2 style={{ fontSize: 24, fontWeight: 900, color: C.white, margin: 0, letterSpacing: '-0.02em' }}>
-            Import complete
+            CSV imported successfully
           </h2>
-          <div style={{ fontSize: 13, color: C.muted, marginTop: 3 }}>Here&apos;s what we found in your data.</div>
+          <div style={{ fontSize: 13, color: C.muted, marginTop: 3 }}>Your data is saved and ready to analyze.</div>
         </div>
       </div>
 
@@ -145,7 +147,11 @@ export default function ImportResult({
           {full?.dateFrom && full?.dateTo && (
             <span>{formatDate(full.dateFrom)} — {formatDate(full.dateTo)}{span ? ` · ${fmtInt(span)} days` : ''}</span>
           )}
-          <span style={{ color: C.pink, fontWeight: 700 }}>{result.platform}</span>
+          <span style={{ color: C.cyan, fontWeight: 700 }}>
+            {(result.platformsTracked || []).length > 1
+              ? (result.platformsTracked || []).join(', ')
+              : result.platform}
+          </span>
           <span>{fmtInt(result.skipped || 0)} duplicate{(result.skipped || 0) === 1 ? '' : 's'} removed</span>
         </div>
       </div>
@@ -154,14 +160,14 @@ export default function ImportResult({
       {!isPro && free && (
         <div style={{ ...card, marginBottom: 14 }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap', marginBottom: 4 }}>
-            <SectionLabel C={C} tone={C.cyan}>Your Free analysis</SectionLabel>
+            <SectionLabel C={C} tone={C.cyan}>Your Free snapshot</SectionLabel>
             <div style={{ flex: '1 1 auto' }} />
             <div style={{ fontSize: 10.5, fontWeight: 800, color: C.muted, padding: '3px 9px', borderRadius: 999, border: '1px solid rgba(255,255,255,0.14)' }}>
               Free plan
             </div>
           </div>
           <div style={{ fontSize: 12.5, color: C.muted, marginBottom: 14 }}>
-            {freeHistoryDays}-day rolling analysis · per platform
+            Free analyzes the most recent {freeHistoryDays} days of activity for each platform.
           </div>
 
           {/* A metric with no qualifying data renders as a THRESHOLD STATE, not
@@ -204,7 +210,7 @@ export default function ImportResult({
                       display: 'inline-block', fontSize: 11, fontWeight: 800, color: C.muted,
                       padding: '3px 8px', borderRadius: 7, background: 'rgba(255,255,255,0.05)',
                       border: '1px solid rgba(255,255,255,0.09)',
-                    }}>Needs more data</div>
+                    }}>Not enough qualifying activity yet</div>
                     <div style={{ fontSize: 10, color: C.muted, marginTop: 5, lineHeight: 1.35 }}>{s.need}</div>
                   </>
                 )}
@@ -254,35 +260,27 @@ export default function ImportResult({
           already earned, already handed us, already stored. It carries the
           page's ONE primary CTA and the price, so nobody has to click to
           discover the cost. */}
-      {excluded && (
+      {excluded && full?.dateFrom && full?.dateTo && (
         <div style={{ marginBottom: 14 }}>
-          <SectionLabel C={C} tone={C.green}>Your saved history</SectionLabel>
-          <LockedModule
+          <HistoryTimeline
             C={C}
-            variant="saved"
-            surface="csv_locked_history"
-            title="Your data contains more"
-            value={fmtUsd(excluded.totalUsd)}
-            valueLabel="additional earnings already saved"
+            dateFrom={full.dateFrom}
+            dateTo={full.dateTo}
+            freeHistoryDays={freeHistoryDays}
+            lockedUsd={excluded.totalUsd}
+            lockedTips={excluded.tips}
+            priceLabel={`${PRO_PRICE_MONTHLY_LABEL} · ${PRO_PRICE_NOTE}`}
             stats={[
-              { v: fmtInt(excluded.tips), l: 'older tips', c: C.cyan },
-              ...(histMonths ? [{ v: `${histMonths} mo`, l: 'of history', c: C.gold }] : []),
-              { v: fmtInt(excluded.sessions), l: 'sessions', c: C.indigo },
+              { v: fmtInt(excluded.tips), l: 'older tips' },
+              ...(histMonths ? [{ v: `${histMonths} months`, l: 'of history' }] : []),
+              { v: fmtInt(excluded.sessions), l: 'sessions' },
               ...(excluded.dateFrom && excluded.dateTo
-                ? [{ v: `${formatDate(excluded.dateFrom)} – ${formatDate(excluded.dateTo)}`, l: 'range', c: C.pink }]
+                ? [{ v: `${formatDate(excluded.dateFrom)} – ${formatDate(excluded.dateTo)}`, l: 'older range' }]
                 : []),
             ]}
-            description="Your older imported history is already saved. Pro analyzes it instantly — no re-upload required."
-          >
-            <div className="ir-saved-cta" style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', marginTop: 4 }}>
-              <UnlockButton surface="csv_locked_history" size="lg" onClick={fireUpgrade}>
-                Unlock Full History
-              </UnlockButton>
-              <div style={{ fontSize: 12, color: C.muted, whiteSpace: 'nowrap' }}>
-                {PRO_PRICE_MONTHLY_LABEL} · {PRO_PRICE_NOTE}
-              </div>
-            </div>
-          </LockedModule>
+            formatDate={formatDate}
+            onUpgrade={() => fireUpgrade()}
+          />
         </div>
       )}
 
@@ -292,7 +290,7 @@ export default function ImportResult({
           above, not four more competing primaries. */}
       {hasProPreviews && (
         <div style={{ marginBottom: 14 }}>
-          <SectionLabel C={C} tone={C.indigo}>What Pro can reveal</SectionLabel>
+          <SectionLabel C={C} tone={C.indigo}>See what your full history can tell you</SectionLabel>
           <div className="ir-locked-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 12 }}>
 
             {/* 1 — LONG-TERM EARNINGS TREND (real monthly totals) */}
@@ -309,8 +307,13 @@ export default function ImportResult({
                   preview={
                     <>
                       <div style={{ display: 'flex', gap: 6, minWidth: 0 }}>
-                        <div style={{ flex: '0 0 auto', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', fontSize: 8.5, color: C.muted, height: 92 }}>
-                          <span>{fmtUsd(peak)}</span><span>{fmtUsd(peak / 2)}</span><span>$0</span>
+                        {/* The curve's SHAPE is the creator's real trajectory and
+                            stays fully visible; only the scale is withheld, so the
+                            chart reads as "your growth, magnitude locked". */}
+                        <div style={{ flex: '0 0 auto', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: 92 }}>
+                          <LockedValue C={C} seed="peak" size={9} prefix="$" blocks={3} />
+                          <LockedValue C={C} seed="mid" size={9} prefix="$" blocks={3} />
+                          <span style={{ fontSize: 8.5, color: C.muted }}>$0</span>
                         </div>
                         <svg viewBox="0 0 100 40" preserveAspectRatio="none" style={{ flex: '1 1 auto', height: 92, minWidth: 0 }}>
                           <defs>
@@ -342,14 +345,16 @@ export default function ImportResult({
                 title="Your strongest earning windows"
                 description="Pro analyzes your historical sessions to identify your highest-value days and hours."
                 lockedReason={`${li.bestWindows.length} window${li.bestWindows.length === 1 ? '' : 's'} with enough repeat sessions to stand up as a recommendation.`}
-                ctaLabel="See My Earning Windows" onUpgrade={onUpgrade}
+                ctaLabel="See my earning windows" onUpgrade={onUpgrade}
                 preview={
                   <div style={{ display: 'grid', gridTemplateColumns: '28px 1fr auto', gap: '8px 10px', alignItems: 'center' }}>
+                    {/* Their real day and hour, perfectly legible. Only the rate is
+                        withheld. This is the whole design in one row. */}
                     {li.bestWindows.map((w, i) => (
                       <div key={`${w.day}-${w.hour}`} style={{ display: 'contents' }}>
                         <div style={{ fontSize: 11, fontWeight: 900, color: C.gold }}>#{i + 1}</div>
-                        <div style={{ fontSize: 11.5, color: C.text, minWidth: 0, overflowWrap: 'anywhere' }}>{w.day} {hourLabel(w.hour)}</div>
-                        <div style={{ fontSize: 12, fontWeight: 900, color: C.gold }}>{fmtUsd(w.usdPerHour)}/hr</div>
+                        <div style={{ fontSize: 12, color: C.white, fontWeight: 600, minWidth: 0, overflowWrap: 'anywhere' }}>{w.day} {hourLabel(w.hour)}</div>
+                        <LockedValue C={C} seed={`${w.day}${w.hour}`} size={12} prefix="$" suffix="/hr" accent={C.gold} />
                       </div>
                     ))}
                   </div>
@@ -369,7 +374,7 @@ export default function ImportResult({
                 title="Deeper supporter intelligence"
                 description="Pro ranks every supporter across your full history by lifetime value, not just the handful in your recent window."
                 lockedReason={`${fmtInt(li.totals.fans)} supporters found across your full history.`}
-                ctaLabel="View with Pro" onUpgrade={onUpgrade}
+                ctaLabel="See supporter insights" onUpgrade={onUpgrade}
                 preview={
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: '7px 10px', alignItems: 'center' }}>
                     <div style={{ fontSize: 9, fontWeight: 800, color: C.muted, textTransform: 'uppercase' }}>Fan</div>
@@ -377,9 +382,9 @@ export default function ImportResult({
                     <div style={{ fontSize: 9, fontWeight: 800, color: C.muted, textTransform: 'uppercase' }}>Spent</div>
                     {li.topFans.map(f => (
                       <div key={f.rank} style={{ display: 'contents' }}>
-                        <div style={{ fontSize: 11.5, color: C.text, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.username}</div>
-                        <div style={{ fontSize: 11.5, color: C.muted }}>{fmtInt(f.tips)}</div>
-                        <div style={{ fontSize: 11.5, fontWeight: 900, color: C.green }}>{fmtUsd(f.usd)}</div>
+                        <div style={{ fontSize: 11.5, color: C.white, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.username}</div>
+                        <div style={{ fontSize: 11.5, color: C.text }}>{fmtInt(f.tips)}</div>
+                        <LockedValue C={C} seed={f.username} size={11.5} prefix="$" accent={C.green} />
                       </div>
                     ))}
                   </div>
@@ -395,10 +400,11 @@ export default function ImportResult({
                 <LockedModule C={C} variant="pro" surface="csv_locked_patterns" icon="🗂️"
                   title="Session & performance patterns"
                   description="Pro reads every measured stream in your history and shows which hours actually paid."
+                  ctaLabel="See my performance patterns"
                   lockedReason={li.session
                     ? `${fmtInt(li.session.sessions)} measured streams across your history.`
                     : `${li.heatmap.length} active time slots found.`}
-                  ctaLabel="View with Pro" onUpgrade={onUpgrade}
+                  onUpgrade={onUpgrade}
                   preview={
                     <>
                       <div style={{ display: 'grid', gridTemplateColumns: '26px 1fr', gap: 4, minWidth: 0 }}>

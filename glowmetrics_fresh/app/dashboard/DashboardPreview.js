@@ -553,7 +553,7 @@ export function DashboardPreview({ tips = [], analytics, userPlan = 'free', plan
           </div>
           {!isPro && (
             <div style={{ marginTop: 12, fontSize: 11, color: C.muted, padding: '8px 12px', borderRadius: 10, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
-              Your free plan includes 1 active platform. Pro unlocks multi-platform tracking and comparisons. You can keep tracking 1 platform for free forever.
+              Your free plan includes {FREE_MAX_PLATFORMS} active platforms with a {FREE_HISTORY_DAYS}-day analysis window each. Pro analyzes your full imported history and adds more platforms to compare side by side.
             </div>
           )}
         </div>

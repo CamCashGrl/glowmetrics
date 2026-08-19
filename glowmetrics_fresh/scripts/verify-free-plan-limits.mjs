@@ -21,7 +21,7 @@ const lockedModuleSrc = read('app/dashboard/components/LockedModule.js')
 const upgradeCtx = read('lib/upgradeContext.js')
 const commandCenter = read('app/dashboard/CommandCenter.js')
 const conversionBand = read('app/dashboard/ConversionBand.js')
-const resultUi = dashboard + '\n' + importResult
+const resultUi = dashboard + '\n' + importResult + read('app/dashboard/components/HistoryTimeline.js') + read('app/dashboard/components/LockedValue.js')
 const migration = read('supabase/migrations/20260817_free_plan_three_platform_31_day_history.sql')
 const paidSessionsMigration = read('supabase/migrations/20260817b_free_platform_cap_counts_paid_sessions.sql')
 
@@ -117,7 +117,7 @@ const checks = [
     /!platformAllowedRows\.length && platformBlockedRows\.length/.test(upload)],
   ['Upload route reports history truncation', /historyRemovedCount/.test(upload) && /historyLimited/.test(upload)],
   ['Dashboard imports the same Free history helper', /filterFreeHistory/.test(dashboard)],
-  ['Dashboard exposes CSV history upgrade CTA', /csv_history/.test(dashboard) && /Unlock Full History/.test(resultUi)],
+  ['Dashboard exposes CSV history upgrade CTA', /csv_history/.test(dashboard) && /csv_locked_history/.test(resultUi) && /Unlock Pro/.test(resultUi)],
   ['Dashboard exposes 3-platform upgrade CTA', /csv_platform_limit/.test(dashboard) && /Compare More Platforms/.test(resultUi)],
   ['Dashboard no longer treats any single existing platform as the limit', /allPlatforms\.length\s*>=\s*FREE_MAX_PLATFORMS/.test(dashboard)],
   ['Preview no longer says Free is one platform',
@@ -146,12 +146,12 @@ const checks = [
   // the Free window on a multi-year file read "1,912 tips imported" followed
   // by "13 tips", which looks like a failed import though both are correct.
   ['the result leads with the whole file, not the Free slice',
-    /Import complete/.test(resultUi) &&
-    resultUi.indexOf('full?.tips') < resultUi.indexOf('Your Free analysis')],
+    /CSV imported successfully/.test(resultUi) &&
+    resultUi.indexOf('full?.tips') < resultUi.indexOf('Your Free snapshot')],
   ['the headline totals come from fullFileSummary',
     /full\?\.tips \?\? result\.inserted/.test(resultUi)],
   ['Free results name their window up front',
-    /\{freeHistoryDays\}-day rolling analysis · per platform/.test(resultUi)],
+    /Free analyzes the most recent \{freeHistoryDays\} days of activity for each platform/.test(resultUi)],
   // Sparse data is still valid data. The notice must key off ABSOLUTE recent
   // activity — a creator with 412 recent tips out of 1,912 is long-tenured,
   // not sparse, and must not be told their activity is light.
@@ -517,7 +517,8 @@ if (passed !== checks.length) process.exit(1)
   extra.push(['Conversion surfaces carry a stable attribution hook',
     /data-cc-surface/.test(band) &&
     /data-cc-surface=\{surface\}/.test(lockedModuleSrc) &&
-    /surface="csv_locked_history"/.test(importResult) &&
+    /surface = 'csv_locked_history'/.test(read('app/dashboard/components/HistoryTimeline.js')) &&
+    /surface="csv_locked_trend"/.test(importResult) &&
     /data-cc-action/.test(dashboard)])
   extra.push(['No speculative tracking table was added',
     !/from\(['"]conversion_events['"]\)/.test(dashboard) &&

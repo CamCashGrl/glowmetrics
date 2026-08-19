@@ -35,6 +35,10 @@ const importResult = read('app/dashboard/ImportResult.js')
 const band = read('app/dashboard/ConversionBand.js')
 const dashboard = read('app/dashboard/page.js')
 const css = read('app/globals.css')
+const lockedValueRaw = read('app/dashboard/components/LockedValue.js')
+const timelineRaw = read('app/dashboard/components/HistoryTimeline.js')
+const onboardingRaw = read('app/onboarding/page.js')
+const momentRaw = read('components/conversion/UpgradeMoment.js')
 
 // Comments explain WHY a rule exists and often quote the copy they replaced,
 // so shipped-copy assertions must ignore them or they check themselves.
@@ -43,6 +47,12 @@ const stripComments = src => src
   .replace(/^\s*\/\/.*$/gm, '')
 
 const irCode = stripComments(importResult)
+// Banned-copy checks must read SHIPPED text only. Several of these comments
+// deliberately quote the claim they removed, to explain why it went.
+const lockedValue = stripComments(lockedValueRaw)
+const timeline = stripComments(timelineRaw)
+const onboarding = stripComments(onboardingRaw)
+const moment = stripComments(momentRaw)
 const dashCode = stripComments(dashboard)
 const lmCode = stripComments(lockedModule)
 
@@ -84,24 +94,27 @@ check('the button surfaces loading/disabled through the shared Button',
 console.log('\n── 2. Preview the product, do not hide it ────────────────────')
 check('the old full-card 4px blur treatment is gone',
   !/blur\(4px\)/.test(importResult))
-check('the locked preview fades with a mask instead of an opaque overlay',
-  /mask-image: linear-gradient/.test(css) && /\.cc-lock-preview\b/.test(css))
-check('any residual blur is slight, not a wall',
-  /filter: blur\(1\.3px\)/.test(css))
+// Superseded: the container is no longer masked OR blurred at all. The
+// replacement assertions live under "Selective masking" below.
+check('the preview container exists and is unstyled by any hiding rule',
+  /\.cc-lock-preview\b/.test(css))
 check('real previews are still passed real engine data',
   /preview=\{/.test(irCode) && /li\.trend/.test(irCode) && /li\.heatmap/.test(irCode) && /li\.topFans/.test(irCode))
 check('fourth-platform figures are shown plainly, never blurred',
   !/filter: 'blur\(3px\)'/.test(importResult))
 
 console.log('\n── 1./4A. SAVED HISTORY — already stored, no re-upload ───────')
-check('the saved-history lock says the data is already saved',
-  /already saved/i.test(irCode))
-check('the saved-history lock promises no re-upload',
-  /no re-upload required/i.test(irCode))
-check('it is rendered through the saved variant, not the generic one',
-  /variant="saved"/.test(irCode))
+// This state now renders as the HistoryTimeline rather than a stat-card
+// module: one picture that shows the whole span AND that none of it was
+// deleted. The properties under test are unchanged.
+check('the saved-history state says the data is already saved',
+  /already imported/i.test(timeline) || /Already saved/.test(timeline))
+check('the saved-history state promises no re-upload',
+  /no re-upload required/i.test(timeline))
+check('it is rendered through the timeline, driven by measured values',
+  /<HistoryTimeline/.test(irCode) && /lockedUsd=\{excluded\.totalUsd\}/.test(irCode))
 check('it leads with the creator’s own measured locked total',
-  /value=\{fmtUsd\(excluded\.totalUsd\)\}/.test(irCode))
+  /\{fmtUsd\(lockedUsd\)\}/.test(timeline))
 check('the saved-history badge states the status as text, not colour alone',
   /badge: 'ALREADY SAVED'/.test(lockedModule))
 
@@ -139,27 +152,27 @@ check('it renders no lock badge or lock icon',
 check('it states the real threshold rather than a broken-looking metric',
   /threshold=/.test(irCode) && /Not enough activity yet/.test(lockedModule))
 check('the Free metric row keeps its threshold states',
-  /Needs more data/.test(irCode) && /Needs a session with 2\+ tips and 15\+ min/.test(irCode))
+  /Not enough qualifying activity yet/.test(irCode) && /Needs a session with 2\+ tips and 15\+ min/.test(irCode))
 
 console.log('\n── 5./7. Import hierarchy: Free analysis vs saved history ─────')
-check('the success state leads',
-  /Import complete/.test(irCode))
+check('the success state leads and reads as completion, not an alert',
+  /CSV imported successfully/.test(irCode) && /Your data is saved and ready to analyze/.test(irCode))
 check('whole-file totals are shown before any plan boundary',
   /full\?\.tips/.test(irCode) && /full\?\.totalUsd/.test(irCode) && /full\?\.fans/.test(irCode))
 check('the Free analysis section is labelled as its own section',
-  /Your Free analysis/.test(irCode))
-check('the Free window is named as rolling and per-platform',
-  /rolling analysis · per platform/.test(irCode))
+  /Your Free snapshot/.test(irCode))
+check('the Free window rule is stated explicitly',
+  /Free analyzes the most recent \{freeHistoryDays\} days of activity for each platform/.test(irCode))
 check('saved history is a SEPARATE section from the Free analysis',
-  /Your saved history/.test(irCode) &&
-  irCode.indexOf('Your Free analysis') < irCode.indexOf('Your saved history'))
+  /<HistoryTimeline/.test(irCode) &&
+  irCode.indexOf('Your Free snapshot') < irCode.indexOf('<HistoryTimeline'))
 check('the Pro preview section follows the personal value',
-  /What Pro can reveal/.test(irCode) &&
-  irCode.indexOf('Your saved history') < irCode.indexOf('What Pro can reveal'))
+  /See what your full history can tell you/.test(irCode) &&
+  irCode.indexOf('<HistoryTimeline') < irCode.indexOf('See what your full history can tell you'))
 
 console.log('\n── 8. The creator’s actual locked value ────────────────────')
 check('the import screen renders the measured locked dollar value',
-  /fmtUsd\(excluded\.totalUsd\)/.test(irCode))
+  /lockedUsd=\{excluded\.totalUsd\}/.test(irCode) && /\{fmtUsd\(lockedUsd\)\}/.test(timeline))
 check('the dashboard band leads with the same measured value',
   /value: fmtUsd\(lockedHistory\.totalUsd\)/.test(band))
 check('the upgrade modal repeats that value at heading weight',
@@ -227,8 +240,11 @@ check('keyboard focus is visible on the gradient CTA',
 check('lock state is exposed to assistive tech, not just drawn',
   /aria-label=\{V\.aria\(title\)\}/.test(lockedModule) &&
   /aria-label=\{`\$\{title\} — not enough data yet`\}/.test(lockedModule))
-check('decorative previews are hidden from screen readers',
-  /className="cc-lock-preview" aria-hidden="true"/.test(lockedModule))
+// Superseded: the preview now carries REAL information (the creator's own
+// labels), so hiding it from assistive tech would be wrong. Each masked
+// value carries its own label instead — asserted under "Selective masking".
+check('masked values are individually labelled instead',
+  /unlocked with Pro/.test(lockedValue))
 check('CTAs are semantic buttons',
   /<button\s+type="button"/.test(lockedModule))
 
@@ -239,6 +255,88 @@ check('CTAs are semantic buttons',
 // reports safety it never checked. Each mutation below breaks exactly one
 // protected property and asserts the matching check flips to failing.
 // ══════════════════════════════════════════════════════════════════════
+console.log('\n── Selective masking: mask VALUES, never the container ───────')
+check('a per-value masking primitive exists',
+  /export default function LockedValue/.test(lockedValueRaw))
+check('the container is no longer blurred or masked at all',
+  /\.cc-lock-preview \{ min-width: 0; \}/.test(css) &&
+  !/\.cc-lock-preview \{[^}]*filter: blur/.test(css) &&
+  !/\.cc-lock-preview \{[^}]*mask-image/.test(css))
+check('the preview is no longer hidden from screen readers',
+  !/className="cc-lock-preview" aria-hidden/.test(lockedModule))
+check('earning windows show the real day and hour but mask the rate',
+  /\{w\.day\} \{hourLabel\(w\.hour\)\}/.test(irCode) &&
+  /<LockedValue[^>]*suffix="\/hr"/.test(irCode) &&
+  !/fmtUsd\(w\.usdPerHour\)/.test(irCode))
+check('top supporters show real names and tip counts but mask spend',
+  /\{f\.username\}/.test(irCode) && /fmtInt\(f\.tips\)/.test(irCode) &&
+  !/fmtUsd\(f\.usd\)/.test(irCode))
+check('masked widths are deterministic, not Math.random (hydration safety)',
+  !/Math\.random/.test(lockedValue) && /function widthFor/.test(lockedValueRaw))
+check('each masked value is labelled for assistive tech',
+  /aria-label=\{`\$\{prefix \|\| ''\}hidden value/.test(lockedValue))
+check('the reason line no longer overlaps the now-legible preview',
+  !/\.cc-lock-reason \{[^}]*margin-top: -/.test(css))
+
+console.log('\n── History timeline: the data is SAVED, not deleted ──────────')
+check('a timeline component exists and is used by the import result',
+  /export default function HistoryTimeline/.test(timelineRaw) && /<HistoryTimeline/.test(irCode))
+check('the saved segment is drawn solid, never as an empty void',
+  /\.cc-timeline-saved \{[\s\S]{0,200}repeating-linear-gradient/.test(css))
+check('both segments are labelled in words, not colour alone',
+  /Already saved/.test(timeline) && /Free analytics window/.test(timeline))
+check('it states no re-upload is required',
+  /no re-upload required/.test(timeline))
+check('it computes geometry only — never analytics',
+  !/aggregateRows|detectSessions|splitFreeHistory/.test(timeline))
+check('the bar carries a text description for screen readers',
+  /role="img"/.test(timeline) && /aria-label=\{`\$\{fmtInt\(totalDays\)\} days imported and saved/.test(timeline))
+
+console.log('\n── Personalised CTA: strongest truthful signal ───────────────')
+// The dollar figure is the HEADLINE of this card, two lines above the
+// button. Repeating it inside the button made the page read as if the amount
+// were a product being sold rather than the creator's own data, so the CTA is
+// the plain "Unlock Pro" and the number does the persuading.
+check('the primary CTA is one unambiguous action',
+  /<UnlockButton[\s\S]{0,180}Unlock Pro/.test(timeline))
+check('the price sits with the primary CTA, not behind a click',
+  /cc-timeline-price/.test(timeline) && /priceLabel/.test(timeline))
+check('the measured figure leads the card at heading weight',
+  /cc-timeline-amount/.test(timeline) && /\{fmtUsd\(lockedUsd\)\}/.test(timeline) &&
+  /already saved in your imported history/.test(timeline))
+check('supporting stats sit under the value, not beside it',
+  /cc-timeline-stats/.test(timeline) && /stats\?\.length > 0/.test(timeline))
+check('a short reassurance follows the CTA',
+  /Your existing uploads stay saved/.test(timeline))
+
+console.log('\n── Onboarding is part of the same conversion system ──────────')
+check('onboarding imports the shared components, not a second system',
+  /from '\.\.\/\.\.\/components\/conversion\/UpgradeMoment'/.test(onboarding))
+check('onboarding no longer discards the measured locked history',
+  /excludedHistory:json\.excludedHistory\|\|null/.test(onboarding))
+check('the upgrade moment renders after the import, using real figures',
+  /<UpgradeMoment/.test(onboarding) && /locked=\{importResult\.excludedHistory\}/.test(onboarding))
+check('it renders nothing when there is no locked value',
+  /if \(!\(tips > 0\)\) return null/.test(moment))
+check('it offers a real "continue with Free" path, not a forced gate',
+  /Continue with Free/.test(moment) && /onContinueFree/.test(onboarding))
+check('the false "multi-platform is a Pro feature" claim is gone',
+  !/Multi-platform tracking is a Pro feature/.test(onboarding))
+check('the platform limit is described as a count, from the shared constant',
+  /Free tracks up to \{FREE_MAX_PLATFORMS\} platforms/.test(onboarding))
+check('the unverified annual price is gone and pricing is shared',
+  !/\$99\/year/.test(onboarding) && /PRO_PRICE_MONTHLY_LABEL/.test(onboarding))
+check('the "save history forever" claim is gone (Free stores history too)',
+  !/Save history forever/.test(onboarding))
+check('the upsell routes to the in-app upgrade path, not an external page',
+  !/camcashgrl\.com\/pricing/.test(onboarding))
+check('the plan comparison describes Free accurately and generously',
+  /supported platforms/.test(moment) && /never deleted/.test(moment) &&
+  /Full CSV imports/.test(moment))
+check('plan copy is derived from the canonical limits, not retyped',
+  /FREE_MAX_PLATFORMS/.test(moment) && /FREE_HISTORY_DAYS/.test(moment) &&
+  !/\b3 supported platforms\b/.test(stripComments(moment)))
+
 console.log('\n── Mutation tests (assertions must be able to fail) ───────────')
 
 const mut = (name, mutated, predicate) => {
@@ -303,6 +401,22 @@ mut('the hierarchy check catches Free analysis being moved below saved history',
   irCode.replace('Your Free analysis', 'ZZZ Free analysis'),
   src => /Your Free analysis/.test(src) &&
     src.indexOf('Your Free analysis') < src.indexOf('Your saved history'))
+
+mut('the selective-masking check catches a re-blurred container',
+  css.replace('.cc-lock-preview { min-width: 0; }', '.cc-lock-preview { min-width: 0; filter: blur(4px); }'),
+  src => /\.cc-lock-preview \{ min-width: 0; \}/.test(src))
+
+mut('the earning-window check catches the rate being un-masked',
+  irCode.replace('suffix="/hr"', 'x="/hr"') + '\n{fmtUsd(w.usdPerHour)}',
+  src => /<LockedValue[^>]*suffix="\/hr"/.test(src) && !/fmtUsd\(w\.usdPerHour\)/.test(src))
+
+mut('the onboarding false-claim check catches its reintroduction',
+  onboarding + '\nMulti-platform tracking is a Pro feature.',
+  src => !/Multi-platform tracking is a Pro feature/.test(src))
+
+mut('the timeline "saved not deleted" check catches an emptied segment',
+  css.replace(/\.cc-timeline-saved \{[\s\S]*?\}/, '.cc-timeline-saved { background: transparent; }'),
+  src => /\.cc-timeline-saved \{[\s\S]{0,200}repeating-linear-gradient/.test(src))
 
 mut('the shared-price check catches a hardcoded price literal',
   irCode + "\nconst price = '$19.99/mo'",

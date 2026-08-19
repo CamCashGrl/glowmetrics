@@ -886,7 +886,7 @@ export default function LandingPage() {
   ]
 
   const faqs = [
-    { q: "Is CamCash free to use?", a: "Yes. The free tier is free forever — install the extension and create an account with no credit card. Premium analytics are optional and unlock deeper insights." },
+    { q: "Is CamCash free to use?", a: "Yes. You can start free with no credit card — the free tier tracks up to 3 platforms with a 31-day analysis window per platform. Creator Pro analyzes your full imported history and unlocks the deeper insights." },
     { q: "What file formats do you support?", a: "CSV exports from Chaturbate, BongaCams, and MyFreeCams, plus automatic tip capture through the Chrome extension." },
     { q: "Is my data safe and private?", a: "Yes. Your data is encrypted, never shared, and never sold." },
   ]
@@ -940,7 +940,7 @@ export default function LandingPage() {
               color: T.cyanSoft, marginBottom: 22,
             }}>
               <span style={{ width: 6, height: 6, borderRadius: "50%", background: T.cyan, boxShadow: "0 0 8px rgba(22,244,255,0.8)" }} />
-              Free forever tier
+              Analyze your full earnings history
             </div>
 
             <h1 style={{ fontSize: "clamp(36px,4vw,56px)", color: "white", fontWeight: 900, lineHeight: 1.08, marginBottom: 20, letterSpacing: -1.5 }}>
@@ -1016,7 +1016,7 @@ export default function LandingPage() {
               ["Built for", "Chaturbate, BongaCams & MyFreeCams"],
               ["What it does", "Finds peak earning hours, ranks top tippers with churn-risk alerts, compares platform payouts, and generates fan re-engagement messages & room titles"],
               ["How you use it", "Install the free Chrome extension or upload a CSV export — no manual data entry"],
-              ["Price", "Free: up to 3 platforms with a 31-day history window. Pro adds more platforms and full-history comparison for $19.99/mo or $99/yr"],
+              ["Price", "Free: up to 3 platforms with a 31-day analysis window each. Creator Pro analyzes your full imported history, adds more platforms, and unlocks cross-platform comparison."],
               ["Your data", "Encrypted, private, never sold"],
             ].map(([term, desc]) => (
               <div key={term}>
@@ -1097,7 +1097,7 @@ export default function LandingPage() {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))", gap: 20 }}>
           {[
             { num: "1", accent: T.cyan, icon: "🧩", title: "Download Extension", body: "Auto-detect tips instantly. Works without an account. Use immediately.", link: ["/extension", "Download free →"] },
-            { num: "2", accent: T.purple, icon: "📊", title: "Create Free Account", body: "Save your analytics, track growth, unlock AI intelligence. Free forever.", link: null, note: "Free forever + Premium optional" },
+            { num: "2", accent: T.purple, icon: "📊", title: "Create Free Account", body: "Save your analytics, track growth, unlock AI intelligence.", link: null, note: "Start free — upgrade when you want your full history" },
             { num: "3", accent: T.pink, icon: "🚀", title: "Upgrade When You're Ready", body: "Creator Pro unlocks every platform, fan, and insight for $19.99/month.", link: ["/pricing", "See Creator Pro →"] },
           ].map(({ num, accent, icon, title, body, link, note }) => (
             <div key={title} style={{ background: `${accent}0d`, border: `1px solid ${accent}30`, borderRadius: 18, padding: "28px 24px", textAlign: "center", position: "relative" }}>

@@ -400,21 +400,24 @@ html, body { overflow-x: hidden; max-width: 100vw; }
         without destroying legibility of the shapes.
    No opaque overlay, no centred lock icon, no giant blur. */
 .cc-lock-preview-wrap { position: relative; margin-bottom: 12px; min-width: 0; }
-.cc-lock-preview {
-  min-width: 0;
-  filter: blur(1.3px) saturate(0.82);
-  opacity: 0.6;
-  user-select: none;
-  pointer-events: none;
-  -webkit-mask-image: linear-gradient(180deg, #000 0%, #000 40%, rgba(0, 0, 0, 0.32) 76%, transparent 100%);
-          mask-image: linear-gradient(180deg, #000 0%, #000 40%, rgba(0, 0, 0, 0.32) 76%, transparent 100%);
-}
+/* NO blur, NO mask, NO opacity on the preview as a whole. This is the third
+   and final generation of this rule and the other two were both wrong:
+   blur(4px) over the card, then a gradient mask over the preview. Both hid
+   the half that sells — the structure and the creator's own labels. A row
+   reading "Tuesday · 7 PM – 10 PM · ████/hr" is persuasive precisely because
+   the first two columns are their real life, perfectly legible. Masking is
+   now applied per-value by LockedValue, never to the container. */
+.cc-lock-preview { min-width: 0; }
+/* No negative margin. It existed to tuck this line under a preview that faded
+   to nothing at its bottom edge; now that the preview is fully legible, a
+   negative margin overlaps real text. It sits below the preview, separated. */
 .cc-lock-reason {
-  margin-top: -6px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
   line-height: 1.45;
-  position: relative;
 }
 
 .cc-lock-desc { font-size: 12.5px; line-height: 1.55; margin: 0 0 10px; }
@@ -529,4 +532,172 @@ html, body { overflow-x: hidden; max-width: 100vw; }
   .ir-saved-cta .cc-unlock { width: 100%; justify-content: center; }
   .ir-cta > div            { min-width: 0 !important; width: 100%; }
   .ir-cta .cc-unlock       { width: 100%; justify-content: center; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   HISTORY TIMELINE  (app/dashboard/components/HistoryTimeline.js)
+
+   The bar has to say two things at once: how much history exists, and that
+   none of it was thrown away. So the SAVED segment is solid and full-colour
+   — real, stored data — and the Free window is a bright cap at the recent
+   end. Drawing the saved part as a void would say "deleted", which is both
+   wrong and the single worst thing this screen could imply.
+   ══════════════════════════════════════════════════════════════════════ */
+
+.cc-timeline {
+  padding: 20px; border-radius: 18px; min-width: 0;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.08), rgba(34, 211, 238, 0.05));
+  border: 1px solid rgba(16, 185, 129, 0.26);
+}
+.cc-timeline-head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap; margin-bottom: 16px;
+}
+.cc-timeline-label {
+  font-size: 10.5px; font-weight: 900; letter-spacing: 0.10em;
+  text-transform: uppercase; margin-bottom: 4px;
+}
+.cc-timeline-title { font-size: 15px; font-weight: 800; margin: 0; letter-spacing: -0.015em; overflow-wrap: anywhere; }
+.cc-timeline-span { font-size: 12px; flex-shrink: 0; }
+
+.cc-timeline-track {
+  position: relative; display: flex; height: 34px; border-radius: 8px;
+  overflow: hidden; background: rgba(255, 255, 255, 0.04); margin-bottom: 8px;
+}
+.cc-timeline-saved {
+  height: 100%; min-width: 0;
+  background: repeating-linear-gradient(115deg, rgba(16,185,129,0.55) 0 9px, rgba(16,185,129,0.38) 9px 18px);
+}
+.cc-timeline-free {
+  height: 100%; min-width: 0;
+  background: linear-gradient(180deg, rgba(34,211,238,0.85), rgba(34,211,238,0.55));
+  box-shadow: -1px 0 0 1px rgba(34, 211, 238, 0.9);
+}
+.cc-timeline-tick {
+  position: absolute; top: 0; bottom: 0; border-left: 1px solid rgba(255, 255, 255, 0.18);
+  padding-left: 4px; display: flex; align-items: flex-end; pointer-events: none;
+}
+.cc-timeline-tick span { font-size: 9px; font-weight: 700; padding-bottom: 3px; }
+
+.cc-timeline-legend { display: grid; gap: 6px; margin-bottom: 16px; }
+.cc-timeline-leg { display: flex; align-items: flex-start; gap: 8px; font-size: 12px; line-height: 1.5; }
+.cc-timeline-swatch { flex: 0 0 auto; width: 13px; height: 13px; border-radius: 4px; margin-top: 2px; }
+.cc-timeline-swatch--saved { background: repeating-linear-gradient(115deg, rgba(16,185,129,0.55) 0 5px, rgba(16,185,129,0.38) 5px 10px); }
+.cc-timeline-swatch--free  { background: linear-gradient(180deg, rgba(34,211,238,0.85), rgba(34,211,238,0.55)); }
+
+.cc-timeline-value { margin-bottom: 16px; }
+.cc-timeline-amount { font-size: clamp(30px, 8vw, 42px); font-weight: 900; letter-spacing: -0.03em; line-height: 1.03; overflow-wrap: anywhere; }
+.cc-timeline-amount-label { font-size: 13.5px; font-weight: 700; margin-top: 3px; }
+.cc-timeline-amount-sub { font-size: 12px; margin-top: 5px; line-height: 1.45; }
+
+@media (max-width: 560px) {
+  .cc-timeline { padding: 16px; }
+  .cc-timeline-track { height: 30px; }
+  .cc-timeline-cta .cc-unlock { width: 100%; justify-content: center; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   ONBOARDING CONVERSION  (components/conversion/UpgradeMoment.js)
+   The post-import moment and the plan comparison. Same visual language as
+   the dashboard's locked-state system — one system, not a second one grown
+   inside onboarding.
+   ══════════════════════════════════════════════════════════════════════ */
+
+.cc-moment {
+  text-align: left; padding: 22px; border-radius: 18px; margin: 18px 0;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.11), rgba(34, 211, 238, 0.06));
+  border: 1px solid rgba(16, 185, 129, 0.30);
+}
+.cc-moment-eyebrow {
+  font-size: 10.5px; font-weight: 900; letter-spacing: 0.10em;
+  text-transform: uppercase; color: #10b981; margin-bottom: 8px;
+}
+.cc-moment-amount {
+  font-size: clamp(32px, 9vw, 44px); font-weight: 900; color: #10b981;
+  letter-spacing: -0.03em; line-height: 1.02; overflow-wrap: anywhere;
+}
+.cc-moment-label { font-size: 13.5px; font-weight: 700; color: #F8FAFC; margin-top: 4px; }
+.cc-moment-body { font-size: 12.5px; color: rgba(203, 213, 225, 0.9); line-height: 1.6; margin: 10px 0 16px; }
+.cc-moment-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.cc-moment-secondary {
+  padding: 10px 16px; border-radius: 10px; font-size: 13px; font-weight: 700;
+  background: transparent; border: 1px solid rgba(255, 255, 255, 0.14);
+  color: rgba(203, 213, 225, 0.85); cursor: pointer; transition: all 0.18s;
+}
+.cc-moment-secondary:hover { border-color: rgba(255, 255, 255, 0.3); color: #fff; }
+.cc-moment-price { font-size: 11.5px; color: rgba(148, 163, 184, 0.85); margin-top: 10px; }
+
+.cc-plans { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.cc-plan {
+  display: flex; flex-direction: column; min-width: 0;
+  padding: 20px; border-radius: 18px;
+  background: rgba(255, 255, 255, 0.025); border: 1px solid rgba(255, 255, 255, 0.09);
+}
+/* Pro is stronger, not louder: one accent border and a small badge. No
+   oversized gradient panel — Free must not read as a punishment. */
+.cc-plan--pro {
+  position: relative;
+  background: linear-gradient(180deg, rgba(124, 92, 255, 0.10), rgba(34, 211, 238, 0.05));
+  border-color: rgba(124, 92, 255, 0.42);
+}
+.cc-plan-badge {
+  position: absolute; top: -9px; left: 20px;
+  font-size: 9.5px; font-weight: 900; letter-spacing: 0.09em; text-transform: uppercase;
+  padding: 3px 9px; border-radius: 999px; color: #fff;
+  background: linear-gradient(90deg, #21E6F3, #6C5CFF);
+}
+.cc-plan-name { font-size: 12px; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(148, 163, 184, 0.95); }
+.cc-plan-name--pro { color: #a78bfa; }
+.cc-plan-price { font-size: 30px; font-weight: 900; color: #fff; letter-spacing: -0.03em; margin: 6px 0 14px; }
+.cc-plan-price span { font-size: 13px; font-weight: 700; color: rgba(148, 163, 184, 0.85); letter-spacing: 0; }
+.cc-plan-list { list-style: none; margin: 0 0 16px; padding: 0; display: grid; gap: 7px; }
+.cc-plan-list li { display: flex; gap: 8px; font-size: 12.5px; color: rgba(203, 213, 225, 0.92); line-height: 1.45; }
+.cc-plan-list li span { color: #10b981; font-weight: 900; flex: 0 0 auto; }
+.cc-plan-btn {
+  margin-top: auto; width: 100%; padding: 12px; border-radius: 11px; cursor: pointer;
+  font-size: 13.5px; font-weight: 800; transition: all 0.18s;
+  background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.14); color: #e2e8f0;
+}
+.cc-plan-btn--free:hover { border-color: rgba(33, 230, 243, 0.45); color: #fff; }
+.cc-plan-note { font-size: 11px; color: rgba(148, 163, 184, 0.8); text-align: center; margin-top: 8px; }
+
+@media (max-width: 560px) {
+  .cc-plans { grid-template-columns: minmax(0, 1fr); }
+  .cc-moment { padding: 18px; }
+  .cc-moment-actions { gap: 10px; }
+  .cc-moment-actions .cc-unlock, .cc-moment-secondary { width: 100%; justify-content: center; }
+}
+
+/* Timeline supporting detail (spec §4 hierarchy: large value -> medium label
+   -> small stats). The stats sit UNDER the value, never beside it, so nothing
+   competes with the figure that is doing the persuading. */
+.cc-timeline-range { font-size: 12px; margin-top: 4px; }
+.cc-timeline-stats {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+  gap: 8px; margin-bottom: 14px;
+}
+.cc-timeline-stat {
+  min-width: 0; padding: 9px 11px; border-radius: 10px;
+  background: rgba(0, 0, 0, 0.22); border: 1px solid rgba(255, 255, 255, 0.07);
+}
+.cc-timeline-stat-v { font-size: 14px; font-weight: 900; overflow-wrap: anywhere; line-height: 1.25; }
+.cc-timeline-stat-l { font-size: 10.5px; margin-top: 3px; }
+.cc-timeline-explain { font-size: 13px; line-height: 1.6; margin: 0 0 16px; }
+.cc-timeline-cta { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.cc-timeline-price { font-size: 12px; white-space: nowrap; }
+.cc-timeline-reassure { font-size: 11.5px; line-height: 1.5; margin: 12px 0 0; }
+@media (max-width: 560px) {
+  .cc-timeline-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cc-timeline-cta { gap: 10px; }
+  .cc-timeline-cta .cc-unlock { width: 100%; justify-content: center; }
+}
+@media (max-width: 390px) {
+  .cc-timeline-stats { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Onboarding platform-limit upsell: the shared PlanComparison inside a modal.
+   Two columns need room, so the card is wider than the old single-plan panel
+   and scrolls internally rather than pushing its CTA past the fold. */
+@media (max-width: 560px) {
+  .cc-onb-upsell { padding: 20px 16px !important; }
 }

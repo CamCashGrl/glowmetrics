@@ -105,7 +105,7 @@ const CAMCASH_QUICK_POINTS = [
   'Upload a CSV — see results instantly',
   'Know your top tippers & best hours',
   'Compare Chaturbate, BongaCams, MyFreeCams & more',
-  'Free forever · Pro from $19.99/mo',
+  'Start free · Pro from $19.99/mo',
 ]
 
 const CAMCASH_SCREENSHOTS = [
