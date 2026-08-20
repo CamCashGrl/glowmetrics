@@ -21,6 +21,7 @@ export default function sitemap() {
     { url: `${base}/tools/cam-model-name-generator`, priority: 0.7, changeFrequency: 'monthly' },
     { url: `${base}/tools/profile-studio`,           priority: 0.7, changeFrequency: 'monthly' },
     { url: `${base}/contact`,                        priority: 0.6, changeFrequency: 'monthly' },
+    { url: `${base}/feature-request`,                 priority: 0.5, changeFrequency: 'monthly' },
     { url: `${base}/privacy`,                        priority: 0.5, changeFrequency: 'yearly' },
     { url: `${base}/terms`,                          priority: 0.5, changeFrequency: 'yearly' },
   ].map(page => ({
