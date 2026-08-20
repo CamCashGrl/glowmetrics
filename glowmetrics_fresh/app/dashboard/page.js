@@ -14,7 +14,7 @@ import Sidebar from "./Sidebar"
 import SiteFooter from "../components/SiteFooter"
 import { PLATFORM_TOKEN_RATES, tokenRate } from "../../lib/constants"
 import { track as gtmTrack } from '../../lib/track'
-import { isProPlan, trialDaysRemaining, getAccessState } from '../../lib/plan'
+import { isProPlan, trialDaysRemaining, getAccessState, TRIAL_DAYS } from '../../lib/plan'
 import { resolveCreatorTimezone, autoPopulateTimezoneIfMissing } from '../../lib/timezone'
 import CommandCenter from './CommandCenter'
 import Performance from './Performance'
@@ -1613,6 +1613,13 @@ export default function Dashboard() {
 
   const isBetaUser = true
   const isPro = isProPlan(profile)
+  // Whether to SAY "free trial" in upgrade copy. The real eligibility check is
+  // server-side in the checkout route (any prior subscription disqualifies);
+  // this only decides wording, and is deliberately conservative — a creator
+  // who has never been a Stripe customer cannot have used a trial, while
+  // anyone with a customer id might have, so they are offered the plain
+  // upgrade. Worst case we under-promise and Stripe still grants the trial.
+  const trialEligible = !isPro && !profile?.stripe_customer_id
   const uploadLimit = Infinity
 
   const fmtHour = h => { if (h == null || isNaN(h)) return 'N/A'; return h === 0 ? '12 AM' : h < 12 ? h+' AM' : h === 12 ? '12 PM' : (h-12)+' PM' }
@@ -3196,7 +3203,7 @@ const stopImportMessageRotation = () => {
       </div>
 
       {/* SIDEBAR — desktop only, hidden on mobile via CSS */}
-      <Sidebar activeTab={activeTab} onTabChange={(tab) => { setActiveTab(tab); if (typeof window !== "undefined") { localStorage.setItem("camcash_tab", tab); window.scrollTo({ top: 0, behavior: "instant" }); } }} user={user} onSignOut={async () => { await supabase.auth.signOut(); router.replace("/login"); }} isPro={isPro} />{/* MAIN CONTENT */}
+      <Sidebar activeTab={activeTab} onTabChange={(tab) => { setActiveTab(tab); if (typeof window !== "undefined") { localStorage.setItem("camcash_tab", tab); window.scrollTo({ top: 0, behavior: "instant" }); } }} user={user} onSignOut={async () => { await supabase.auth.signOut(); router.replace("/login"); }} isPro={isPro} trialEligible={trialEligible} />{/* MAIN CONTENT */}
       <div className="dash-main" style={{ marginLeft: 240, width: "calc(100% - 240px)", minWidth: 0, padding: 32, boxSizing: "border-box", overflowX: "hidden" }}>
 
         {/* ── TRIAL COUNTDOWN ──
@@ -3588,7 +3595,7 @@ const stopImportMessageRotation = () => {
             <div style={{ maxWidth: 640, margin: '0 auto', padding: '32px 0' }}>
               <div style={{ textAlign: 'center', marginBottom: 24 }}>
                 <div style={{ fontSize: 40, marginBottom: 10 }}>🔴</div>
-                <div style={{ fontSize: 20, fontWeight: 800, color: C.white, marginBottom: 8 }}>Live Mode is a Pro feature</div>
+                <div style={{ fontSize: 20, fontWeight: 800, color: C.white, marginBottom: 8 }}>While you&apos;re live, CamCash can watch your pace for you</div>
                 <div style={{ fontSize: 13, color: C.muted, maxWidth: 440, margin: '0 auto', lineHeight: 1.6 }}>{bestWindowLine}</div>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 24 }}>
@@ -3607,7 +3614,7 @@ const stopImportMessageRotation = () => {
               </div>
               <div style={{ textAlign: 'center' }}>
                 <button onClick={() => openUpgradeModal('live_mode_locked')} style={{ padding: '12px 28px', borderRadius: 10, border: 'none', cursor: 'pointer', fontWeight: 800, fontSize: 13, color: '#06101A', background: 'linear-gradient(135deg,#22D3EE,#EC4899)', animation: 'upgradeGlow 2.2s ease-in-out infinite' }}>
-                  Turn On Live Coaching →
+                  {trialEligible ? "Start My 7-Day Pro Trial →" : "Turn On Live Coaching →"}
                 </button>
               </div>
             </div>
@@ -5287,9 +5294,15 @@ const stopImportMessageRotation = () => {
                   </div>
                 ))}
               </div>
-              <div style={{ textAlign: "center", padding: "12px 16px", background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.25)", borderRadius: 10, marginBottom: 24 }}>
-                <div style={{ fontSize: 13, color: C.gold, fontWeight: 600 }}>💡 Most creators miss 30–60% of their earning potential without this</div>
-              </div>
+              {/* Was: "Most creators miss 30-60% of their earning potential
+                  without this" — an invented statistic about creators we have
+                  never measured. Replaced with a claim that is true and
+                  checkable: what is actually being offered. */}
+              {trialEligible && (
+                <div style={{ textAlign: "center", padding: "12px 16px", background: "rgba(34,211,238,0.08)", border: "1px solid rgba(34,211,238,0.25)", borderRadius: 10, marginBottom: 24 }}>
+                  <div style={{ fontSize: 13, color: C.cyan, fontWeight: 600 }}>Free for 7 days — every Pro feature, on your own data</div>
+                </div>
+              )}
               <Button
                 disabled={earlyAccessSubmitting}
                 onClick={async () => {
@@ -5316,9 +5329,15 @@ const stopImportMessageRotation = () => {
                   }
                 }}
                 style={{ width: "100%", padding: "16px", borderRadius: 14, fontSize: 16, marginBottom: 12 }}>
-                {earlyAccessSubmitting ? "Redirecting to checkout..." : "🔓 Upgrade to Pro — $19.99/mo"}
+                {earlyAccessSubmitting
+                  ? "Redirecting to checkout..."
+                  : trialEligible ? "Start my 7-day free trial →" : "🔓 Upgrade to Pro — $19.99/mo"}
               </Button>
-              <div style={{ textAlign: "center", fontSize: 12, color: C.muted, marginBottom: 20 }}>Secure checkout powered by Stripe • Cancel anytime</div>
+              <div style={{ textAlign: "center", fontSize: 12, color: C.muted, marginBottom: 20 }}>
+                {trialEligible
+                  ? `Card required to start. $19.99/mo begins after ${TRIAL_DAYS} days — cancel any time before then and you pay nothing.`
+                  : "Secure checkout powered by Stripe • Cancel anytime"}
+              </div>
               <button onClick={() => setShowUpgradeModal(false)} style={{ width: "100%", padding: "11px", borderRadius: 10, background: "transparent", border: "1px solid rgba(255,255,255,0.1)", color: C.muted, fontSize: 13, cursor: "pointer" }}>
                 Maybe later
               </button>

@@ -112,7 +112,7 @@ const PRIORITY_RULES = [
   },
 ]
 
-function FanRow({ fan, rule, ctx, onMessage, dimmed = false }) {
+function FanRow({ fan, rule, ctx, onMessage }) {
   return (
     // flexWrap + a flex-basis on the text column, so the action button drops
     // to its own line on narrow screens instead of squeezing the text. Without
@@ -121,10 +121,8 @@ function FanRow({ fan, rule, ctx, onMessage, dimmed = false }) {
     // single letters, ~7700px tall for the page.
     <div style={{
       display: "flex", alignItems: "flex-start", gap: 14, flexWrap: "wrap", padding: "16px 16px", borderRadius: 12,
-      background: dimmed ? "rgba(255,255,255,0.02)" : C.card2,
-      border: `1px solid ${dimmed ? C.border : rule.color + "33"}`,
-      filter: dimmed ? "blur(4px)" : "none", pointerEvents: dimmed ? "none" : "auto",
-      userSelect: dimmed ? "none" : "auto",
+      background: C.card2,
+      border: `1px solid ${rule.color}33`,
     }}>
       <div style={{
         width: 42, height: 42, borderRadius: "50%", background: `linear-gradient(135deg,${rule.color},${C.indigo})`,
@@ -273,11 +271,12 @@ export default function Fans({
               <FanRow key={fan.username} fan={fan} rule={rule} ctx={ctx} onMessage={onMessageFan} />
             ))}
 
-            {/* Free preview: real rows from this account, blurred. Never
-                fabricated placeholder fans. */}
-            {hidden.slice(0, 2).map(({ fan, rule }) => (
-              <FanRow key={`locked-${fan.username}`} fan={fan} rule={rule} ctx={ctx} dimmed />
-            ))}
+            {/* The two blurred "locked" fan rows that used to sit here are
+                gone. The summary card immediately below already states what
+                is being held back using this account's REAL numbers — how
+                many fans, their combined lifetime tips, how many are overdue
+                — which is strictly more informative than a blurred row and
+                does not ask the creator to squint at their own data. */}
           </div>
         )}
 

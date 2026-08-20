@@ -569,8 +569,16 @@ function PlanTab({ tips, windows, whales, prefs, savePrefs, isPro=true, timezone
                 {row.off ? (
                   <span style={{ color:MUTED, fontSize:12, gridColumn:"2/7" }}>Day off</span>
                 ) : !isPro && !row.isToday ? (
-                  <span style={{ color:MUTED, fontSize:12, gridColumn:"2/7", filter:"blur(3px)", userSelect:"none" }}>
-                    {row.window ? `${localHr(row.window.utcHour)}–${localHr(row.window.utcHour + 2)} on ${row.window.topPlatform || "your top platform"} · ${fmt$(row.window.avgUsdPerHr)}/hr` : "No matching window yet"}
+                  // Was a blurred copy of the real recommendation (hour,
+                  // platform, $/hr). Blurring tells the creator nothing except
+                  // that something is being kept from them. This states
+                  // truthfully whether their history produced a window for
+                  // this day — a real, checkable signal — while the hour,
+                  // platform and rate stay Pro.
+                  <span style={{ color:MUTED, fontSize:12, gridColumn:"2/7" }}>
+                    {row.window
+                      ? `🔒 CamCash found a window for ${row.dayName} — hour, platform and $/hr with Pro`
+                      : "No matching window yet"}
                   </span>
                 ) : row.window ? (
                   <>
