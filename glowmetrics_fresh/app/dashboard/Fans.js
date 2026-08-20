@@ -110,7 +110,7 @@ const PRIORITY_RULES = [
   },
 ]
 
-function FanRow({ fan, rule, ctx, onMessage, dimmed = false }) {
+function FanRow({ fan, rule, ctx, onMessage, onViewFan, onAddNote, hasNote = false, dimmed = false }) {
   return (
     // flexWrap + a flex-basis on the text column, so the action button drops
     // to its own line on narrow screens instead of squeezing the text. Without
@@ -182,14 +182,36 @@ function FanRow({ fan, rule, ctx, onMessage, dimmed = false }) {
         </div>
       </div>
 
+      {/* Creator tools. The rule's own action stays primary; profile and note
+          are quiet secondaries beside it, so the row gains two capabilities
+          without gaining two more loud buttons. Locked rows get none of this —
+          there is nothing to act on until the fan is unlocked. */}
       {!dimmed && (
-        <button
-          onClick={() => onMessage?.(fan.username)}
-          style={{
-            flexShrink: 0, padding: "9px 14px", borderRadius: 10, cursor: "pointer",
-            background: `${rule.color}1a`, border: `1px solid ${rule.color}40`,
-            color: rule.color, fontSize: 12, fontWeight: 700, whiteSpace: "nowrap",
-          }}>{rule.action}</button>
+        <div className="fan-row-actions">
+          <button
+            onClick={() => onMessage?.(fan.username)}
+            style={{
+              padding: "9px 14px", borderRadius: 10, cursor: "pointer",
+              background: `${rule.color}1a`, border: `1px solid ${rule.color}40`,
+              color: rule.color, fontSize: 12, fontWeight: 700, whiteSpace: "nowrap",
+            }}>{rule.action}</button>
+          {onViewFan && (
+            <button
+              onClick={() => onViewFan(fan.username)}
+              title={`View ${fan.username}'s profile`}
+              aria-label={`View ${fan.username}'s profile`}
+              className="fan-row-tool">View profile</button>
+          )}
+          {onAddNote && (
+            <button
+              onClick={() => onAddNote(fan.username)}
+              title={hasNote ? `Edit your note on ${fan.username}` : `Add a note on ${fan.username}`}
+              aria-label={hasNote ? `Edit your note on ${fan.username}` : `Add a note on ${fan.username}`}
+              className={`fan-row-tool${hasNote ? " fan-row-tool--set" : ""}`}>
+              {hasNote ? "Edit note" : "Add note"}
+            </button>
+          )}
+        </div>
       )}
     </div>
   )
@@ -200,6 +222,12 @@ export default function Fans({
   isPro = false,
   freeFanLimit = 3,
   onMessageFan,
+  // Existing handlers from app/dashboard/page.js — viewFanProfile() and
+  // setNoteTarget(). Passed in rather than reimplemented: there is exactly one
+  // profile drawer and one notes system, and this is it.
+  onViewFan,
+  onAddNote,
+  notedFans,
   onUpgrade,
   onPlanStream,
 }) {
@@ -298,7 +326,9 @@ export default function Fans({
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 11 }}>
             {visible.map(({ fan, rule }) => (
-              <FanRow key={fan.username} fan={fan} rule={rule} ctx={ctx} onMessage={onMessageFan} />
+              <FanRow key={fan.username} fan={fan} rule={rule} ctx={ctx}
+                onMessage={onMessageFan} onViewFan={onViewFan} onAddNote={onAddNote}
+                hasNote={Boolean(notedFans?.has?.(fan.username.toLowerCase()))} />
             ))}
 
             {/* Free preview: real rows from this account, blurred. Never
@@ -431,9 +461,17 @@ export default function Fans({
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {(isPro ? whales : whales.slice(0, freeFanLimit)).map((f, i) => (
-              <div key={f.username} style={{
+              <div key={f.username}
+                onClick={onViewFan ? () => onViewFan(f.username) : undefined}
+                role={onViewFan ? "button" : undefined}
+                tabIndex={onViewFan ? 0 : undefined}
+                onKeyDown={onViewFan ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onViewFan(f.username) } } : undefined}
+                title={onViewFan ? `View ${f.username}'s profile` : undefined}
+                className={onViewFan ? "fan-list-row" : undefined}
+                style={{
                 display: "flex", alignItems: "center", gap: 12, padding: "11px 14px", borderRadius: 10,
                 background: "rgba(255,255,255,0.03)", border: `1px solid ${C.border}`,
+                cursor: onViewFan ? "pointer" : "default",
               }}>
                 <span style={{ fontSize: 11.5, color: C.muted, width: 22, flexShrink: 0 }}>#{i + 1}</span>
                 <span style={{ fontSize: 13.5, fontWeight: 700, color: C.white, flex: 1, minWidth: 0, overflowWrap: "anywhere" }}>{f.username}</span>

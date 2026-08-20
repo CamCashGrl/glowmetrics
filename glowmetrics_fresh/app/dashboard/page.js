@@ -1,5 +1,5 @@
 "use client"
-import React, { useState, useEffect, useCallback, useRef } from "react"
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
 import { parseCSV, detectPlatform, aggregateRows as runEngine, toLocalDow, toLocalHour } from "../../lib/analytics"
@@ -2771,6 +2771,13 @@ const stopImportMessageRotation = () => {
   // existing Top Fans list and now also by Private Sessions. If the fan has
   // no tip history at all (private-only fan), builds a safe minimal
   // whale-shaped object instead of crashing the tip-centric modal.
+  // Which fans already carry a note, so a row can say "Edit note" instead of
+  // "Add note". Read straight off the existing tipperNotes state that
+  // saveTipperNote() already maintains — no new query, no new table.
+  const notedUsernames = useMemo(() => new Set(
+    Object.entries(tipperNotes || {}).filter(([, v]) => v?.note).map(([k]) => k)
+  ), [tipperNotes])
+
   const viewFanProfile = (username, platform) => {
     if (!username) return
     const uname = username.toLowerCase()
@@ -3895,6 +3902,14 @@ const stopImportMessageRotation = () => {
             Performance.js. Free/Pro gating uses the same FREE_FAN_LIMIT
             this tab already enforced.
         ═══════════════════════════════════════════════════════ */}
+        {/* Restores two creator tools the Phase 4 Fans rebuild orphaned.
+            Both were still fully alive — viewFanProfile(), the profile drawer,
+            noteTarget/saveTipperNote() and the tipper_notes table — but the
+            ONLY surviving entry point was the Private Sessions tab, so from the
+            Fans tab a creator could neither open a profile nor reach a note
+            they had already written. No new state and no second notes or
+            profile system: these are the existing handlers, passed back to the
+            rows that lost them. */}
         {activeTab === "whales" && (
           <Fans
             analytics={analytics}
@@ -3904,6 +3919,12 @@ const stopImportMessageRotation = () => {
               const w = whales.find(wh => wh.username === username)
               if (w) { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }
             }}
+            onViewFan={(username) => {
+              const w = whales.find(wh => wh.username === username)
+              viewFanProfile(username, w?.platform)
+            }}
+            onAddNote={(username) => setNoteTarget(username)}
+            notedFans={notedUsernames}
             onUpgrade={(src) => openUpgradeModal(src)}
             onPlanStream={() => handleTabChange('planner')}
           />

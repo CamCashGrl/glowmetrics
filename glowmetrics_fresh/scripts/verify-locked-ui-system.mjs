@@ -357,8 +357,12 @@ check('locked rows do NOT leak the hidden fans’ identity or figures',
   })())
 check('locked rows carry a restrained PRO label, not a giant lock',
   /Pro<\/span>/.test(fans) && !/🔒/.test(fans))
-check('locked rows expose no action button (nothing to act on yet)',
-  /\{!dimmed && \(\s*<button/.test(fans))
+// The property is "a locked row offers nothing to act on", not "the markup is
+// a bare <button>". The restored creator tools (View profile / Add note) wrap
+// the row's actions in .fan-row-actions, still behind the same !dimmed gate.
+check('locked rows expose no action buttons (nothing to act on yet)',
+  /\{!dimmed && \(\s*<div className="fan-row-actions">/.test(fans) &&
+  !/dimmed\s*&&\s*\(\s*<div className="fan-row-actions">/.test(fans.replace('!dimmed', 'XX')))
 check('the third bespoke button style was retired for the signature one',
   !/function BrandButton/.test(fans) && /<UnlockButton/.test(fans))
 check('the fan opportunity section is the ONE primary CTA',

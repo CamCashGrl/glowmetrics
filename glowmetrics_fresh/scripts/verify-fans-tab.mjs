@@ -37,6 +37,7 @@ const raw = readFileSync(new URL('../app/dashboard/Fans.js', import.meta.url), '
 const strip = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1')
 const src = strip(raw)
 const pageRaw = readFileSync(new URL('../app/dashboard/page.js', import.meta.url), 'utf8')
+const css = readFileSync(new URL('../app/globals.css', import.meta.url), 'utf8')
 const page = strip(pageRaw)
 const engine = strip(readFileSync(new URL('../lib/analytics.js', import.meta.url), 'utf8'))
 
@@ -131,6 +132,45 @@ check('no-signal state explains the 3-tip requirement rather than showing an emp
 check('the best-window card is gated on a real window AND real overlap',
   src.includes('bestWindow && overlap?.count > 0'))
 check('dependency risk only renders above the low band', src.includes('dependencyRisk.level !== "low"'))
+
+// ══════════════════════════════════════════════════════════════════════
+// 6b. RESTORED CREATOR TOOLS — notes and profile.
+//
+// The Phase 4 Fans rebuild dropped the per-fan action buttons. The features
+// themselves never died: viewFanProfile(), the profile drawer,
+// noteTarget/saveTipperNote() and the tipper_notes table were all still live —
+// but their ONLY surviving entry point was the Private Sessions tab, so from
+// the Fans tab a creator could not open a profile or reach a note they had
+// already written. Notes saved before the rebuild became unreachable.
+//
+// These checks exist so that cannot silently happen again.
+// ══════════════════════════════════════════════════════════════════════
+check('fan rows expose a note action', /Add note/.test(src) && /onAddNote/.test(src))
+check('fan rows expose a profile action', /View profile/.test(src) && /onViewFan/.test(src))
+check('the note action reaches the EXISTING note flow, not a new one',
+  /onAddNote=\{\(username\) => setNoteTarget\(username\)\}/.test(page))
+check('the profile action reaches the EXISTING profile drawer',
+  /viewFanProfile\(username, w\?\.platform\)/.test(page))
+check('the existing note state and handler remain connected',
+  /const \[noteTarget, setNoteTarget\]/.test(page) &&
+  /const saveTipperNote = async/.test(page) &&
+  /from\('tipper_notes'\)/.test(page))
+check('NO duplicate notes implementation was created',
+  !/tipper_notes/.test(src) && !/saveTipperNote/.test(src) &&
+  (page.match(/const saveTipperNote/g) || []).length === 1)
+check('NO duplicate profile implementation was created',
+  !/setSelectedWhale/.test(src) &&
+  (page.match(/const viewFanProfile/g) || []).length === 1)
+check('a fan who already has a note is distinguishable',
+  /Edit note/.test(src) && /hasNote/.test(src) && /notedFans/.test(src))
+check('the noted-fan set is derived from existing state, not re-fetched',
+  /notedUsernames = useMemo/.test(page) && /Object\.entries\(tipperNotes/.test(page))
+check('locked rows expose no creator tools',
+  /\{!dimmed && \(\s*<div className="fan-row-actions">/.test(src))
+check('the component still works when the handlers are not supplied',
+  /onViewFan && \(/.test(src) && /onAddNote && \(/.test(src))
+check('tools are restrained, not a third loud button',
+  /className="fan-row-tool/.test(src) && /\.fan-row-tool \{/.test(css))
 
 // ══════════════════════════════════════════════════════════════════════
 // 7. FREE vs PRO.
