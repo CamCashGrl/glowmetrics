@@ -138,9 +138,18 @@ check('dependency risk only renders above the low band', src.includes('dependenc
 check('exactly one upgrade CTA in the component', (src.match(/onUpgrade\?\./g) || []).length === 1)
 check('the free limit is supplied by the dashboard, not redefined here', src.includes('freeFanLimit = 3'))
 check('the dashboard passes its own FREE_FAN_LIMIT', page.includes('freeFanLimit={FREE_FAN_LIMIT}'))
-check('the locked preview uses REAL fans from this account, blurred — never placeholders',
-  src.includes('hidden.slice(0, 2).map') && src.includes('dimmed'))
-check('blurred rows are not interactive', src.includes('pointerEvents: dimmed ? "none" : "auto"'))
+// The locked preview used to render two real fan rows under filter: blur(4px).
+// That was removed deliberately: a blur communicates only "something is hidden"
+// and asks the creator to squint at their own data, while the summary card
+// directly below already states what is withheld using this account's real
+// counts and dollar figures. These assertions now pin the ABSENCE of the blur,
+// so it cannot come back by accident, and pin the summary as the thing that
+// carries the value.
+check('no blurred fan rows — the value is stated, never obscured',
+  !src.includes('blur(4px)') && !src.includes('dimmed'))
+check('nothing renders a partial locked fan row', !src.includes('hidden.slice(0, 2).map'))
+check('the hidden set is still computed, to power the real-numbers summary',
+  src.includes('const hidden = isPro ? [] : prioritised.slice(freeFanLimit)'))
 check('the upsell describes this account with real counts',
   src.includes('hiddenSummary.lifetimeUSD') && src.includes('hiddenSummary.overdue'))
 check('the CTA is outcome-oriented, not a generic upgrade prompt',
