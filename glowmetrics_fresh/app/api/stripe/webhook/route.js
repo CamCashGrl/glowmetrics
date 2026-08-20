@@ -97,6 +97,29 @@ function trialFields(sub) {
   return { trial_ends_at: null }
 }
 
+// Granting Pro from Stripe must also clear plan_expires_at.
+//
+// plan_expires_at is set only by promo-code grants (redeem_promo_code), and
+// isProPlan() treats a past value as "not Pro" regardless of `plan`. A
+// creator who redeemed a promo and then subscribed kept the promo's expiry,
+// so their paid access silently lapsed on the promo date while Stripe went
+// on charging them. That is not hypothetical: it had already happened to the
+// only paying subscriber this product has, whose access was due to expire
+// 2026-08-27 against an active $19.99/mo subscription started 2026-07-26.
+//
+// A live Stripe subscription is authoritative and not time-limited, which is
+// the invariant lib/plan.js documents: "Stripe-managed subscriptions leave it
+// null." So every Pro grant that originates from Stripe writes NULL here.
+//
+// Tradeoff, deliberate: if someone holds an unexpired promo, subscribes, and
+// later cancels, the promo remainder is not restored — the date is gone. That
+// is rarer, and far less costly, than a paying customer losing access. The
+// downgrade paths below intentionally do NOT touch plan_expires_at, so a
+// promo grant on a non-subscriber is left alone.
+function proGrantFields(sub) {
+  return { plan: 'pro', plan_expires_at: null, ...(sub ? trialFields(sub) : {}) }
+}
+
 export async function POST(request) {
   const supabase = getSupabaseAdmin()
   const body = await request.text()
@@ -126,7 +149,7 @@ export async function POST(request) {
         // checkout.session.completed carries no subscription status, so this
         // only opens access — customer.subscription.created/updated is what
         // writes the trial window and any later downgrade.
-        const update = { plan: 'pro' }
+        const update = { plan: 'pro', plan_expires_at: null }
         if (session.customer) update.stripe_customer_id = session.customer
         const ok = await updateProfile(supabase, userId, update)
         if (!ok) {
@@ -147,7 +170,9 @@ export async function POST(request) {
           customerId: sub.customer,
         })
         if (!userId) break
-        const update = { plan: ACTIVE_STATUSES.has(sub.status) ? 'pro' : 'free', ...trialFields(sub) }
+        const update = ACTIVE_STATUSES.has(sub.status)
+          ? proGrantFields(sub)
+          : { plan: 'free', ...trialFields(sub) }
         if (sub.customer) update.stripe_customer_id = sub.customer
         const ok = await updateProfile(supabase, userId, update)
         if (!ok) {
@@ -192,7 +217,11 @@ export async function POST(request) {
         })
         if (!userId) break
         const plan = ACTIVE_STATUSES.has(sub.status) ? 'pro' : 'free'
-        const ok = await updateProfile(supabase, userId, { plan, ...trialFields(sub) })
+        const ok = await updateProfile(
+          supabase,
+          userId,
+          plan === 'pro' ? proGrantFields(sub) : { plan: 'free', ...trialFields(sub) }
+        )
         if (!ok) {
           return NextResponse.json({ error: 'Failed to update profile' }, { status: 500 })
         }
