@@ -44,21 +44,40 @@ const PLAN_ALIASES = {
 
 // Env var names to try, in order, per canonical plan. First one holding a
 // valid `price_...` wins.
+//
+// ORDER MATTERS AND IS DELIBERATE. These are ranked by how specific and how
+// current the name is, NOT alphabetically or by history. The rule: a name that
+// unambiguously describes the plan comes first; a name known to be stale comes
+// last.
+//
+// STRIPE_PRICE_EARLY_ADOPTER_* is last on purpose. There is no early-adopter
+// product or price in Stripe — the name is a leftover from an earlier phase
+// that survives in a local env file, where it points at a $9.99 "Beta
+// Discount" price rather than the $19.99 list price. An earlier version of
+// this file ranked it FIRST, which would have quietly halved the monthly
+// price for anyone whose environment still defined it. Production never set
+// it, so nothing was charged wrong, but the ordering was a live footgun.
+//
+// The lesson generalizes: the variable NAME tells you nothing about which
+// price is inside it. That is why /api/stripe/health now reports the resolved
+// price's real amount, interval and nickname straight from Stripe, instead of
+// only reporting that some value was found.
 const PRICE_ENV_CANDIDATES = {
   monthly: [
-    'STRIPE_PRICE_EARLY_ADOPTER_MONTHLY',
     'STRIPE_MONTHLY_PRICE_ID',
     'STRIPE_PRICE_STANDARD_MONTHLY',
     'STRIPE_PRICE_MONTHLY',
+    'NEXT_PUBLIC_STRIPE_PRICE_MONTHLY',
     'NEXT_PUBLIC_STRIPE_PRICE_ID',
+    'STRIPE_PRICE_EARLY_ADOPTER_MONTHLY',
   ],
   annual: [
-    'STRIPE_PRICE_EARLY_ADOPTER_ANNUAL',
     'STRIPE_YEARLY_PRICE_ID',
     'STRIPE_ANNUAL_PRICE_ID',
     'STRIPE_PRICE_STANDARD_ANNUAL',
     'STRIPE_PRICE_ANNUAL',
     'NEXT_PUBLIC_STRIPE_PRICE_ANNUAL',
+    'STRIPE_PRICE_EARLY_ADOPTER_ANNUAL',
   ],
 }
 
