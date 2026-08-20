@@ -28,10 +28,19 @@ async function startCheckout(planType, setLoading) {
       data: { session },
     } = await supabase.auth.getSession()
 
+    // A signed-out visitor on /pricing is the highest-intent traffic the site
+    // gets: they read the plans and clicked Subscribe. This used to alert
+    // "Your login session could not be found. Please sign in again, then
+    // return to pricing." — addressed to someone who has never had an
+    // account, offering no link and no next step. It was also completely
+    // untracked, so the number of people it turned away is unknowable.
+    //
+    // Now: record the intent, then carry the chosen plan to signup. The
+    // landing page reads ?plan= and resumes checkout automatically once the
+    // account exists.
     if (!session?.access_token) {
-      alert(
-        'Your login session could not be found. Please sign in again, then return to pricing.'
-      )
+      track('checkout_intent_signed_out', { plan_type: planType, source: 'pricing_page' })
+      window.location.assign(`/?plan=${encodeURIComponent(planType)}`)
       return
     }
 

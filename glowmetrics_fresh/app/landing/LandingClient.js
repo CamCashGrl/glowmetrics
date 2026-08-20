@@ -771,7 +771,16 @@ export default function LandingClient() {
 
   useEffect(() => {
     const plan = new URLSearchParams(window.location.search).get('plan')
-    if (plan) { setPendingPlan(plan); setIsSignUp(true) }
+    if (plan) {
+      // Signed-out purchase intent. Previously this arrival was completely
+      // silent: the visitor was shown a signup form and, if they left without
+      // completing it, no record survived that they had tried to buy at all.
+      // captureAttribution() does not fill the gap either — it stores
+      // window.location.pathname, so ?plan= is discarded before it is saved.
+      track('checkout_intent_signed_out', { plan_type: plan, source: 'landing_plan_link' })
+      setPendingPlan(plan)
+      setIsSignUp(true)
+    }
   }, [])
 
   useEffect(() => {
