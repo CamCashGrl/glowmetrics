@@ -1613,13 +1613,22 @@ export default function Dashboard() {
 
   const isBetaUser = true
   const isPro = isProPlan(profile)
-  // Whether to SAY "free trial" in upgrade copy. The real eligibility check is
-  // server-side in the checkout route (any prior subscription disqualifies);
-  // this only decides wording, and is deliberately conservative — a creator
-  // who has never been a Stripe customer cannot have used a trial, while
-  // anyone with a customer id might have, so they are offered the plain
-  // upgrade. Worst case we under-promise and Stripe still grants the trial.
-  const trialEligible = !isPro && !profile?.stripe_customer_id
+  // Whether to SAY "free trial" in upgrade copy.
+  //
+  // This used to also require !profile?.stripe_customer_id, on the reasoning
+  // that anyone who had been a Stripe customer might already have used a
+  // trial. That was wrong twice over. A stripe_customer_id is created when
+  // checkout OPENS, so abandoning checkout — or having a card declined —
+  // permanently downgraded the creator's copy to the plain price, which is
+  // exactly backwards: someone who just tried to pay and failed is the person
+  // most worth offering a trial to. It also silently hid this copy from the
+  // owner's own test account, making the feature look unshipped.
+  //
+  // It is moot now regardless: the 7-day trial lives on the Stripe PRICE
+  // (recurring.trial_period_days), so every subscription created from it
+  // trials, whatever the customer's history. Promising a trial to any non-Pro
+  // creator is therefore accurate, not optimistic.
+  const trialEligible = !isPro
   const uploadLimit = Infinity
 
   const fmtHour = h => { if (h == null || isNaN(h)) return 'N/A'; return h === 0 ? '12 AM' : h < 12 ? h+' AM' : h === 12 ? '12 PM' : (h-12)+' PM' }
