@@ -222,5 +222,29 @@ check('Overview renders no second stack of glass cards after the Command Center'
     /fabrications presented next to a real, measured peak-hour chip/.test(raw))
 }
 
+
+// ══════════════════════════════════════════════════════════════════════
+// LOADING GATE vs HOOK ORDER.
+//
+// Browser QA caught the dashboard rendering completely blank: React threw
+// "Rendered more hooks than during the previous render". The `if (loading)`
+// early return sat ABOVE four hooks (notedUsernames and Task D's
+// streamReport / liveReportsBySessionKey / openStreamReport), so the first
+// render returned before them and the second ran four more. Any hook added
+// below that gate reintroduces it, and no unit test would notice — the page
+// just goes white.
+{
+  const gate = src.indexOf('if (loading) {')
+  check('the loading gate still exists', gate > -1)
+  const hookRe = /\b(useState|useMemo|useEffect|useCallback|useRef)\s*\(/g
+  let m, last = -1, lastName = ''
+  while ((m = hookRe.exec(src)) !== null) { last = m.index; lastName = m[1] }
+  check('every hook is declared ABOVE the loading gate',
+    gate > -1 && last < gate,
+    `last hook ${lastName}() at ${last}, gate at ${gate} — a hook below the gate makes the first (loading) render call fewer hooks than the second, and React blanks the page`)
+  check('the ordering requirement is documented at the gate',
+    /MUST STAY BELOW EVERY HOOK/.test(raw))
+}
+
 console.log(`\n${pass} passed, ${fail} failed`)
 if (fail > 0) process.exit(1)

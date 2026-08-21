@@ -2835,18 +2835,6 @@ const stopImportMessageRotation = () => {
     catch (err) { showToast("❌ " + err.message) }
   }
 
-  if (loading) {
-    return (
-      <div style={{ minHeight: "100vh", background: "#05070f", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ textAlign: "center" }}>
-          <div style={{ width: 40, height: 40, border: "2px solid #1e2d45", borderTop: "2px solid #22D3EE", borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto 16px" }} />
-          <div style={{ color: C.muted, fontSize: 14 }}>Loading...</div>
-          <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-        </div>
-      </div>
-    )
-  }
-
   const sessions = analytics?.sessions || []
   const whales = analytics?.whales || []
 
@@ -2995,6 +2983,33 @@ const stopImportMessageRotation = () => {
     setSeenReportId(streamReport.id)
     try { localStorage.setItem('camcash_seen_stream_report', streamReport.id) } catch (_) {}
   }, [streamReport])
+
+  // ── LOADING GATE — MUST STAY BELOW EVERY HOOK ────────────────────────
+  // This early return used to sit ~150 lines higher, directly above
+  // `const sessions = analytics?.sessions`. That was safe only while no hook
+  // followed it. Task D's stream-report hooks (streamReport,
+  // liveReportsBySessionKey, openStreamReport) and notedUsernames are all
+  // declared below that point because they read `whales`/`creatorTz`, which
+  // are themselves declared there — so the first render (loading = true)
+  // returned before running them and the second (loading = false) ran four
+  // MORE hooks, which is the React invariant violation
+  // "Rendered more hooks than during the previous render". React then threw
+  // and the whole dashboard rendered blank.
+  //
+  // Every derivation between the old position and here is null-safe
+  // (analytics?.x || []), so running it during load costs nothing. Any new
+  // hook must go ABOVE this gate, never below it.
+  if (loading) {
+    return (
+      <div style={{ minHeight: "100vh", background: "#05070f", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ width: 40, height: 40, border: "2px solid #1e2d45", borderTop: "2px solid #22D3EE", borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto 16px" }} />
+          <div style={{ color: C.muted, fontSize: 14 }}>Loading...</div>
+          <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+        </div>
+      </div>
+    )
+  }
 
   // Build platformTimes from INDIVIDUAL TIPS (not session start time)
   // so hour/day reflects when money actually came in, not when the session
@@ -3817,7 +3832,7 @@ const stopImportMessageRotation = () => {
                   </div>
                 </div>
 
-                <button className="cmdbar-golive cmdbar-wake-btn" onClick={() => { setActiveTab('live'); if (typeof window !== 'undefined') { localStorage.setItem('camcash_tab', 'live'); window.scrollTo({ top: 0, behavior: 'instant' }); } }} style={{ padding: '10px 22px', borderRadius: 12, background: 'linear-gradient(135deg,#10B981,#22D3EE)', border: 'none', color: '#fff', fontWeight: 800, fontSize: 13, cursor: 'pointer', whiteSpace: 'nowrap', boxShadow: '0 0 16px rgba(16,185,129,0.25)', letterSpacing: 0.3, flexShrink: 0 }}>
+                <button className="cmdbar-golive cmdbar-wake-btn" onClick={() => { setActiveTab('live'); if (typeof window !== 'undefined') { localStorage.setItem('camcash_tab', 'live'); window.scrollTo({ top: 0, behavior: 'instant' }); } }} style={{ padding: '10px 22px', minHeight: 44, borderRadius: 12, background: 'linear-gradient(135deg,#10B981,#22D3EE)', border: 'none', color: '#fff', fontWeight: 800, fontSize: 13, cursor: 'pointer', whiteSpace: 'nowrap', boxShadow: '0 0 16px rgba(16,185,129,0.25)', letterSpacing: 0.3, flexShrink: 0 }}>
                   ⚡ Go Live
                 </button>
               </div>

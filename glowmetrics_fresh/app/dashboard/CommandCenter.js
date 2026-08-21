@@ -94,7 +94,11 @@ function GhostButton({ children, onClick }) {
   return (
     <button onClick={onClick} style={{
       background: "transparent", border: `1px solid ${C.border}`, borderRadius: 9,
-      padding: "9px 15px", fontSize: 13, fontWeight: 600, color: C.text, cursor: "pointer", whiteSpace: "nowrap",
+      // minHeight 44 matches the touch target the primary CTAs in this file
+      // already meet; 9px padding on a 13px font renders ~40px, which fails
+      // it on a phone.
+      padding: "9px 15px", minHeight: 44, fontSize: 13, fontWeight: 600, color: C.text,
+      cursor: "pointer", whiteSpace: "nowrap",
     }}>{children}</button>
   )
 }

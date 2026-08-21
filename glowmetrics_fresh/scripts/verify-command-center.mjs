@@ -217,8 +217,13 @@ check('the Plan-My-Stream CTA survived the swap',
   /<Button onClick=\{onPlanStream\}/.test(src))
 check('the single contextual upsell survived the swap',
   /<Button onClick=\{\(\) => onUpgrade\?\.\("command_center_strategy"\)\}/.test(src))
-check('both CTAs meet the 44px touch target',
-  (src.match(/minHeight: 44/g) || []).length === 2)
+// Three, not two, since QA measured the ghost CTAs ("See all fans \u2192",
+// "View full performance \u2192") at ~40px on a phone: 9px padding on a 13px
+// font. GhostButton now carries the same target as the two primary Buttons.
+check('both primary CTAs meet the 44px touch target',
+  (src.match(/minHeight: 44/g) || []).length === 3)
+check('the ghost CTAs meet it too, not just the primary pair',
+  /padding: "9px 15px", minHeight: 44,/.test(src))
 check('still exactly ONE upsell — no paywall was added to other sections',
   (src.match(/onUpgrade\?\./g) || []).length === 1)
 check('that upsell is still gated on a real measured window',
