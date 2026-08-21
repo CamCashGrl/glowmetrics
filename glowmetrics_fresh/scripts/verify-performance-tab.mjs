@@ -178,5 +178,68 @@ check('Performance does not repeat the Command Center\'s recommendation language
   !src.includes('Your next best move') && !src.includes('Go live'))
 check('the Command Center still owns the recommendation', cc.includes('Your next best move'))
 
+// ══════════════════════════════════════════════════════════════════════
+// SINGLE-PLATFORM STATE
+//
+// A creator with one platform used to get the heading "Platform performance"
+// above exactly one card — a comparison of one thing. The data was correct and
+// the grid already collapsed to one column; the FRAMING was the defect, and it
+// made the product read as a multi-platform dashboard the creator was seeing a
+// stripped-down version of.
+// ══════════════════════════════════════════════════════════════════════
+check('one platform gets its own section, not a comparison',
+  src.includes('platforms.length === 1 ? (') && src.includes('<SinglePlatformPerformance'))
+check('the section is named from the creator\'s real platform, never hard-coded',
+  /Your \{p\.platform\} performance/.test(src) &&
+  !/Your Chaturbate performance/.test(src))
+// Scoped to the single-platform COMPONENT BODY. An earlier version of this
+// check sliced between the ternary and the comparison branch, which contains
+// only the JSX call — so it passed no matter what the component rendered.
+check('one platform never renders the comparison heading',
+  (() => {
+    const i = src.indexOf('function SinglePlatformPerformance')
+    const j = src.indexOf('export default function Performance')
+    return i > 0 && j > i && !src.slice(i, j).includes('Platform performance')
+  })())
+check('the comparison branch is still reached for 2+ platforms',
+  src.includes('Platform performance') && src.includes('platformEfficiencyGap'))
+check('zero platforms keeps the existing empty state',
+  src.includes('Import your tip history to see how your platforms compare.'))
+check('low data shows a threshold state, never a chart',
+  /still learning your pattern/.test(src) && /MIN_TREND_SESSIONS/.test(src))
+check('the low-data threshold is a named constant, not a magic number',
+  /const MIN_TREND_SESSIONS = \d/.test(src))
+check('momentum requires a real prior month AND a measurable delta',
+  /momentum && platDelta != null && Math\.abs\(platDelta\) >= 1/.test(src))
+check('momentum does not restate the percentage "What changed" already shows',
+  (() => {
+    const i = src.indexOf('perf-solo-row-k')
+    const blk = src.slice(i, i + 1200)
+    return !/Math\.abs\(momentum\.pct\)/.test(blk)
+  })())
+check('an earning window is only named when the canonical tier backs it',
+  /p\.bestWindowConfidence !== "low"/.test(src))
+check('the single-platform section computes nothing of its own',
+  (() => {
+    const i = src.indexOf('function SinglePlatformPerformance')
+    const blk = src.slice(i, src.indexOf('export default function Performance'))
+    return i > 0 && !/aggregateRows|\.reduce\(|detectSessions/.test(blk)
+  })())
+check('no new paywall was added to this page',
+  (src.match(/isPro/g) || []).length <= 3 &&
+  !/SinglePlatformPerformance[\s\S]{0,3000}isPro/.test(src))
+check('no fabricated numbers or urgency on this page',
+  !/\d{1,3}%\s*(more|increase|boost)\b/i.test(src) &&
+  !/limited time|act now|expires/i.test(src))
+// ── Button consolidation ──────────────────────────────────────────────
+check('the bespoke local BrandButton is gone',
+  !/function BrandButton/.test(src))
+check('the page uses the shared signature UnlockButton',
+  /import \{ UnlockButton \}/.test(src) && /<UnlockButton/.test(src))
+check('the gradient that remains is for bars, not a second button style',
+  /const BAR_GRADIENT/.test(src) && !/CTA_GRADIENT/.test(src))
+check('the existing conversion CTA is intact',
+  /performance_strategy/.test(src) && /Build My Strategy/.test(src))
+
 console.log(`\n${pass} passed, ${fail} failed`)
 if (fail > 0) process.exit(1)

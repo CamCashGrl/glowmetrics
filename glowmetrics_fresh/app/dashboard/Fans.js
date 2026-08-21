@@ -431,10 +431,28 @@ export default function Fans({
         </div>
       )}
 
-      {/* ── DEPENDENCY RISK ────────────────────────────────────────── */}
-      {dependencyRisk && dependencyRisk.level !== "low" && (
-        <div style={card({ border: `1px solid ${dependencyRisk.level === "high" ? "rgba(248,113,113,0.3)" : "rgba(245,158,11,0.3)"}` })}>
-          <div style={{ ...sectionLabel, marginBottom: 12 }}>Concentration risk</div>
+      {/* ── FAN CONCENTRATION ──────────────────────────────────────────
+          Shown at EVERY level, including 'low'.
+          
+          This card used to render only when dependencyRisk.level !== "low",
+          so a creator with a healthily spread fan base never learned their
+          concentration at all — the information arrived only once it had
+          become a problem. "Your top 3 generate 28% of your tips" is worth
+          knowing when it is 28%, not just when it is 80%.
+          
+          Nothing about the metric changed: analytics.dependencyRisk already
+          computes top1Pct/top3Pct/top5Pct and already writes a distinct
+          low-level message ("Your revenue is spread across your fan base…").
+          That message was simply never rendered. This is presentation only —
+          no second dependency formula, no new threshold.
+          
+          The heading and border follow the canonical level, so a healthy
+          creator reads a neutral fact rather than an alarm. */}
+      {dependencyRisk && (
+        <div style={card({ border: `1px solid ${dependencyRisk.level === "high" ? "rgba(248,113,113,0.3)" : dependencyRisk.level === "medium" ? "rgba(245,158,11,0.3)" : C.border}` })}>
+          <div style={{ ...sectionLabel, marginBottom: 12 }}>
+            {dependencyRisk.level === "low" ? "Fan concentration" : "Concentration risk"}
+          </div>
           <div style={{ fontSize: 13.5, color: C.text, lineHeight: 1.6, marginBottom: 14 }}>{dependencyRisk.message}</div>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             {[

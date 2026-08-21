@@ -54,7 +54,11 @@ function region(startMarker, endMarkers) {
   }
   return src.slice(i, end)
 }
-const OVERVIEW = region('{activeTab === "overview" && (', ['{activeTab === "platforms"'])
+// The overview tab is now two sibling blocks: the post-stream report takes
+// the tab over when opened, and everything else renders when it is not. The
+// second block is the Overview proper — CommandCenter, ConversionBand and
+// the checklist all live there — so that is the region these checks slice.
+const OVERVIEW = region('{activeTab === "overview" && !viewingReport && (', ['{activeTab === "platforms"'])
 const PLATFORMS = region('{activeTab === "platforms" && (', ['{activeTab === "whales"'])
 const FANS = region('{activeTab === "whales" && (', ['{activeTab === "live"'])
 
@@ -194,6 +198,28 @@ check('Overview renders no second stack of glass cards after the Command Center'
     fans.includes('avgDaysBetweenTips') && fans.includes('daysSinceLastTip'))
   check('the peak hour comes from the canonical field, not a re-bucketing in the page',
     fans.includes('peakLocalHour') && !src.includes('hourCounts[h] = (hourCounts[h] || 0) + 1'))
+}
+
+
+// ══════════════════════════════════════════════════════════════════════
+// FABRICATED STAT CHIPS — Title Generator.
+//
+// Two static chips sat beside the real, measured peak-hour chip:
+// "3,000+ titles generated" (nothing in this codebase counts generations)
+// and "~30% more tips rotating titles" (an uplift figure with no
+// measurement behind it — titles are never A/B'd and tips are never
+// attributed to a title). Both are gone; the measured chip stays.
+{
+  const i = src.indexOf('const chips = []')
+  const block = src.slice(i, i + 700)
+  check('the invented generation-count chip is gone',
+    i > -1 && !/titles generated/.test(src))
+  check('the invented tip-uplift chip is gone',
+    !/more tips rotating titles/.test(src) && !/30%/.test(block))
+  check('the measured peak-hour chip survives — the honest one was not thrown out',
+    /chips\.push\(\{ label: `\ud83d\udd34 Peak NOW/.test(block))
+  check('the removal is explained in place rather than silently dropped',
+    /fabrications presented next to a real, measured peak-hour chip/.test(raw))
 }
 
 console.log(`\n${pass} passed, ${fail} failed`)

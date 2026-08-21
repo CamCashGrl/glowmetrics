@@ -22,6 +22,9 @@ import CommandCenter from './CommandCenter'
 import Performance from './Performance'
 import ImportResult from './ImportResult'
 import ConversionBand from './ConversionBand'
+import StreamReport, { StreamReportBanner } from './StreamReport'
+import Sessions from './Sessions'
+import { buildStreamReport } from '../../lib/liveSession/streamReport'
 import Fans from './Fans'
 import { getDashboardReadiness, getModuleLockState, canShowHourlyRate, LockedInsightCard, DashboardProgressCard } from './DashboardPreview'
 import Button from '../../components/ui/Button'
@@ -1195,13 +1198,17 @@ function TitleGenerator({ C, glassCard, analytics, tips, sessions, whales, timez
     setCopied(i); setTimeout(() => setCopied(null), 1800)
   }
 
-  // Stats chips — peak timing (data) + static stats
+  // Stats chips — peak timing ONLY, and only when it is derived from this
+  // creator's own data. Two static chips used to sit here: "3,000+ titles
+  // generated" (a product-usage number nothing in this codebase counts) and
+  // "~30% more tips rotating titles" (an uplift figure with no measurement
+  // behind it — we do not A/B titles, and tips are not attributed to a title).
+  // Both were fabrications presented next to a real, measured peak-hour chip,
+  // which is what made them dangerous: the true chip lent them credibility.
   const ctx0 = buildCtx()
   const chips = []
   if (ctx0.isPeakNow && ctx0.bestHourLabel)     chips.push({ label: `🔴 Peak NOW (${ctx0.bestHourLabel})`, color: C.orange })
   else if (ctx0.peakSoon && ctx0.bestHourLabel) chips.push({ label: `⏳ Peak in ${ctx0.hoursUntilPeak}h (${ctx0.bestHourLabel})`, color: C.gold })
-  chips.push({ label: `✍️ 3,000+ titles generated`, color: C.cyan })
-  chips.push({ label: `📈 ~30% more tips rotating titles`, color: C.green })
 
   const optStyle = { background: "#1a1f2e", color: "#f0f2f6" }
   const inp = {
@@ -1726,6 +1733,77 @@ export default function Dashboard() {
       })
   }, [activeTab, replayLoaded, user])
 
+  // ── POST-STREAM REPORT ────────────────────────────────────────────────
+  // The Command Center had no way of learning that a Live Mode stream ended
+  // — the replay list above only loads when the creator opens the Live Mode
+  // Sessions tab. This loads the most recent ended session, and subscribes
+  // to live_sessions so a stream ending mid-visit surfaces without a manual
+  // refresh, using the same postgres_changes pattern the live_tips channels
+  // already use. No polling: realtime already answers this.
+  //
+  // SEEN STATE: live_sessions has no viewed_at/seen column, and this does
+  // not warrant a migration. The session id is the report's identity, and
+  // the last id the creator opened is remembered per browser under the
+  // existing camcash_* localStorage convention. Consequences that fall out
+  // of keying on the id: re-rendering or refreshing cannot manufacture a
+  // second report for the same stream, and an already-opened report stops
+  // being NEW permanently rather than resurfacing.
+  const [latestEndedSession, setLatestEndedSession] = useState(null)
+  const [sessionTipsForReport, setSessionTipsForReport] = useState([])
+  const [reportCoachingEvents, setReportCoachingEvents] = useState([])
+  const [seenReportId, setSeenReportId] = useState(null)
+  const [reportHydrated, setReportHydrated] = useState(false)
+  const [viewingReport, setViewingReport] = useState(false)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try { setSeenReportId(localStorage.getItem('camcash_seen_stream_report') || null) } catch (_) {}
+    setReportHydrated(true)
+  }, [])
+
+  const REPORT_SESSION_COLUMNS =
+    'id, status, stream_platform, started_at, ended_at, paused_at, total_paused_seconds, ' +
+    'session_earnings_usd, session_tokens, tip_count, unique_tipper_count, largest_tip_usd, ' +
+    'coaching_goal_tokens, session_resolution_type, is_inaccurate'
+
+  const loadLatestEndedSession = useCallback(async (userId) => {
+    const { data } = await supabase
+      .from('live_sessions')
+      .select(REPORT_SESSION_COLUMNS)
+      .eq('user_id', userId)
+      .eq('status', 'ended')
+      .order('ended_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (!data?.id) return
+    setLatestEndedSession(data)
+    // The two joins the report needs, both keyed on this session id.
+    const [{ data: tipRows }, { data: eventRows }] = await Promise.all([
+      supabase.from('live_tips').select('username, usd, tokens, received_at').eq('live_session_id', data.id),
+      supabase.from('coaching_events').select('id, type, priority, title, message, action_status, shown_at').eq('session_id', data.id),
+    ])
+    setSessionTipsForReport(tipRows || [])
+    setReportCoachingEvents(eventRows || [])
+  }, [])
+
+  useEffect(() => {
+    if (!user?.id) return
+    loadLatestEndedSession(user.id)
+    const channel = supabase
+      .channel(`live_sessions_report_${user.id}`)
+      .on('postgres_changes', {
+        event: 'UPDATE', schema: 'public', table: 'live_sessions',
+        filter: `user_id=eq.${user.id}`,
+      }, (payload) => {
+        // Only a transition INTO 'ended' is a completed stream. An active or
+        // starting session, a pause, or a heartbeat update is not a report.
+        if (payload.new?.status !== 'ended') return
+        loadLatestEndedSession(user.id)
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [user?.id, loadLatestEndedSession])
+
   const loadReplayCoachingEvents = (sessionId) => {
     if (replayCoachingEvents[sessionId]) return
     setReplayCoachingLoading(sessionId)
@@ -1751,6 +1829,11 @@ export default function Dashboard() {
   const [feedbackSent, setFeedbackSent] = useState(false)
   const [feedbackSubmitting, setFeedbackSubmitting] = useState(false)
   const [tipPage, setTipPage] = useState(0)
+  // D9 — Sessions pagination. Reset to the first page whenever the
+  // meaningful-only filter changes, so the creator never lands on a page
+  // that no longer exists under the new filter.
+  const [sessionPage, setSessionPage] = useState(0)
+  useEffect(() => { setSessionPage(0) }, [meaningfulOnly])
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [tokenRates, setTokenRates] = useState({ ...PLATFORM_TOKEN_RATES })
@@ -2766,6 +2849,7 @@ const stopImportMessageRotation = () => {
 
   const sessions = analytics?.sessions || []
   const whales = analytics?.whales || []
+
   // Opens the Whale Profile Modal for a fan, matched by fanKey (platform +
   // normalized username, never merged across platforms) -- reused by the
   // existing Top Fans list and now also by Private Sessions. If the fan has
@@ -2845,6 +2929,72 @@ const stopImportMessageRotation = () => {
   // basis. Defined here (rather than lower down, where it used to live as
   // _momTz) because platformTimes below is the first analytical consumer.
   const creatorTz = resolveCreatorTimezone(profile?.timezone).timezone
+
+  // Built here, not beside the loader above, because it reads `whales` and
+  // `creatorTz` — both declared further down the component than the loader is. buildStreamReport() is the
+  // canonical derivation (lib/liveSession/streamReport.js) — this page does
+  // not compute any report figure itself.
+  const streamReport = useMemo(
+    () => buildStreamReport({
+      session: latestEndedSession,
+      coachingEvents: reportCoachingEvents,
+      sessionTips: sessionTipsForReport,
+      whales,
+      // The Stream Planner's windows ARE this grid — matchPlannedWindow()
+      // looks the session's start day+hour up in it rather than re-deriving
+      // a schedule or inventing one.
+      canonicalBestTimes: analytics?.canonicalBestTimes || null,
+      creatorTz,
+    }),
+    [latestEndedSession, reportCoachingEvents, sessionTipsForReport, whales,
+     analytics?.canonicalBestTimes, creatorTz]
+  )
+  // Unseen until the creator opens THIS session's report. Gated on hydration
+  // so the badge never flashes before localStorage has been read.
+  const streamReportIsNew = !!streamReport && reportHydrated && seenReportId !== streamReport.id
+
+  // ── LIVE MODE ↔ DETECTED SESSION JOIN ────────────────────────────────
+  // The Sessions tab lists sessions DETECTED from tip timestamps
+  // (analytics.meaningfulSessions), which are a different object from the
+  // live_sessions rows Live Mode writes. They are not linked by any column:
+  // a detected session has no session id, only a platform and a time span.
+  //
+  // So the join is by overlap — same platform, and the live session's active
+  // span intersects the detected span. That is exactly what "these are the
+  // same stream" means here, and it is the only link the schema supports. A
+  // detected session with no overlapping live_sessions row is not missing
+  // data; it simply was not streamed through Live Mode, which the UI states
+  // as its own distinct case rather than as an empty section.
+  const liveReportsBySessionKey = useMemo(() => {
+    const out = {}
+    if (!latestEndedSession || !streamReport) return out
+    const ls = latestEndedSession
+    const lsStart = new Date(ls.started_at).getTime()
+    const lsEnd = new Date(ls.ended_at || ls.started_at).getTime()
+    if (!Number.isFinite(lsStart) || !Number.isFinite(lsEnd)) return out
+    const detected = (meaningfulOnly
+      ? (analytics?.meaningfulSessions || sessions)
+      : (analytics?.allValidSessions || sessions)) || []
+    for (const d of detected) {
+      if (ls.stream_platform && d.platform &&
+          String(d.platform).toLowerCase() !== String(ls.stream_platform).toLowerCase()) continue
+      const dStart = new Date(d.startTime).getTime()
+      const dEnd = new Date(d.endTime).getTime()
+      if (!Number.isFinite(dStart) || !Number.isFinite(dEnd)) continue
+      if (dStart <= lsEnd && dEnd >= lsStart) {
+        out[`${d.platform}-${dStart}`] = streamReport
+      }
+    }
+    return out
+  }, [latestEndedSession, streamReport, analytics?.meaningfulSessions,
+      analytics?.allValidSessions, sessions, meaningfulOnly])
+
+  const openStreamReport = useCallback(() => {
+    if (!streamReport) return
+    setViewingReport(true)
+    setSeenReportId(streamReport.id)
+    try { localStorage.setItem('camcash_seen_stream_report', streamReport.id) } catch (_) {}
+  }, [streamReport])
 
   // Build platformTimes from INDIVIDUAL TIPS (not session start time)
   // so hour/day reflects when money actually came in, not when the session
@@ -3729,8 +3879,38 @@ const stopImportMessageRotation = () => {
           />
         )}
 
-        {activeTab === "overview" && (
+        {/* The full report takes over the Command Center tab rather than
+            opening a modal or claiming a new sidebar entry — it is a reading
+            surface, and the creator returns to the same place they left. */}
+        {activeTab === "overview" && viewingReport && streamReport && (
           <div style={{ animation: "fadeUp 0.3s ease" }}>
+            <StreamReport
+              report={streamReport}
+              onClose={() => setViewingReport(false)}
+              onViewFan={(username) => {
+                const w = whales.find(wh => wh.username.toLowerCase() === String(username).toLowerCase())
+                viewFanProfile(username, w?.platform)
+              }}
+            />
+          </div>
+        )}
+
+        {activeTab === "overview" && !viewingReport && (
+          <div style={{ animation: "fadeUp 0.3s ease" }}>
+
+            {/* Sits above the Command Center: a finished stream is the most
+                recent thing that happened, and it is the reason the creator
+                opened the dashboard. Renders nothing when no ended session
+                exists. */}
+            {streamReport && (
+              <div style={{ marginBottom: 18 }}>
+                <StreamReportBanner
+                  report={streamReport}
+                  isNew={streamReportIsNew}
+                  onOpen={openStreamReport}
+                />
+              </div>
+            )}
 
             <OnboardingChecklist
               tips={tips}
@@ -4080,399 +4260,21 @@ const stopImportMessageRotation = () => {
           )
         })()}
 
-        {activeTab === "sessions" && (() => {
-          const displaySessions = meaningfulOnly
-            ? (analytics?.meaningfulSessions || sessions)
-            : (analytics?.allValidSessions   || sessions)
-
-          // ── SESSION BREAKDOWN ENGINE ────────────────────────────────
-          // Pure logic — runs on each session's tips array
-          const getSessionBreakdown = (s) => {
-            const rawTips = s.tips || []
-            if (rawTips.length === 0) return null
-
-            const sorted = [...rawTips].sort((a, b) =>
-              new Date(a.dateRaw || a.date_time) - new Date(b.dateRaw || b.date_time)
-            )
-
-            const startMs = new Date(s.startTime).getTime()
-            const endMs   = new Date(s.endTime).getTime()
-            const durationMins = Math.max(s.durationMinutes || 1, 1)
-
-            // ── TIMELINE BUCKETS (5-min intervals) ──────────────────
-            const bucketCount = Math.max(Math.ceil(durationMins / 5), 1)
-            const buckets = Array.from({ length: bucketCount }, (_, i) => ({
-              label: `${i * 5}m`,
-              usd: 0,
-              count: 0,
-            }))
-            sorted.forEach(t => {
-              const tMs = new Date(t.dateRaw || t.date_time).getTime()
-              const minOffset = (tMs - startMs) / 60000
-              const idx = Math.min(Math.floor(minOffset / 5), bucketCount - 1)
-              if (idx >= 0 && idx < buckets.length) {
-                buckets[idx].usd += parseFloat(t.usd) || 0
-                buckets[idx].count += 1
-              }
-            })
-
-            // ── PEAK BUCKET ─────────────────────────────────────────
-            const peakBucket = [...buckets].sort((a, b) => b.usd - a.usd)[0]
-            const peakBucketIdx = buckets.indexOf(peakBucket)
-            const peakMinute = peakBucketIdx * 5
-            const peakTime = new Date(startMs + peakMinute * 60000)
-
-            // ── FIRST HALF vs SECOND HALF ────────────────────────────
-            const half = Math.floor(buckets.length / 2)
-            const firstHalfUSD = buckets.slice(0, half).reduce((s, b) => s + b.usd, 0)
-            const secondHalfUSD = buckets.slice(half).reduce((s, b) => s + b.usd, 0)
-            const firstHalfPct = s.totalUSD > 0 ? Math.round((firstHalfUSD / s.totalUSD) * 100) : 0
-
-            // ── TOP TIPPERS ─────────────────────────────────────────
-            const tipperMap = {}
-            sorted.forEach(t => {
-              const u = t.username || "unknown"
-              tipperMap[u] = (tipperMap[u] || 0) + (parseFloat(t.usd) || 0)
-            })
-            const topTippers = Object.entries(tipperMap)
-              .sort((a, b) => b[1] - a[1])
-              .slice(0, 3)
-              .map(([username, usd]) => ({
-                username,
-                usd: parseFloat(usd.toFixed(2)),
-                pct: s.totalUSD > 0 ? Math.round((usd / s.totalUSD) * 100) : 0,
-              }))
-
-            // ── SPIKES (bucket > 2x avg) ─────────────────────────────
-            const avgBucketUSD = s.totalUSD / buckets.length
-            const spikes = buckets
-              .map((b, i) => ({ ...b, idx: i }))
-              .filter(b => b.usd >= avgBucketUSD * 2 && b.usd > 0)
-              .map(b => ({
-                minute: b.idx * 5,
-                usd: parseFloat(b.usd.toFixed(2)),
-                time: new Date(startMs + b.idx * 5 * 60000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-              }))
-
-            // ── PERFORMANCE vs historical avg ────────────────────────
-            const allAvg = displaySessions.length > 0
-              ? displaySessions.reduce((s, x) => s + x.totalUSD, 0) / displaySessions.length
-              : 0
-            const performance = s.totalUSD >= allAvg * 1.3
-              ? "high"
-              : s.totalUSD <= allAvg * 0.6
-              ? "low"
-              : "average"
-
-            // ── REVENUE PER MINUTE ───────────────────────────────────
-            const revenuePerMin = parseFloat((s.totalUSD / durationMins).toFixed(3))
-
-            // ── INSIGHTS ────────────────────────────────────────────
-            const insights = []
-            if (firstHalfPct >= 60)
-              insights.push(`You earned ${firstHalfPct}% of your revenue in the first half of the stream`)
-            if (firstHalfPct <= 35 && durationMins > 20)
-              insights.push(`Your stream warmed up slowly — earnings picked up in the second half`)
-            if (topTippers[0] && topTippers[0].pct >= 40)
-              insights.push(`${topTippers[0].username} drove ${topTippers[0].pct}% of this session's revenue`)
-            if (spikes.length > 0)
-              insights.push(`Your biggest spike was at ${spikes[0].time} — $${spikes[0].usd} in 5 minutes`)
-            if (s.uniqueFans === 1)
-              insights.push(`Only one fan tipped this session — great loyalty, but audience diversity helps`)
-            if (s.uniqueFans >= 5)
-              insights.push(`${s.uniqueFans} different fans tipped — strong audience engagement`)
-            if (durationMins < 20 && s.totalUSD > 0)
-              insights.push(`Short session (${Math.round(durationMins)} min) with solid earnings — your hook is working`)
-            if (performance === "high")
-              insights.push(`This was one of your top sessions — $${s.totalUSD} vs $${allAvg.toFixed(0)} avg`)
-            if (performance === "low")
-              insights.push(`Below your average session ($${allAvg.toFixed(0)}) — see recommendations below`)
-
-            // ── RECOMMENDATIONS ─────────────────────────────────────
-            const recommendations = []
-            if (firstHalfPct >= 60)
-              recommendations.push("Your best earnings happen early — open with high energy and a strong tip goal right away")
-            if (firstHalfPct <= 35)
-              recommendations.push("Slow start detected — open with a countdown goal or shoutout to get early tipping momentum")
-            if (topTippers[0] && topTippers[0].pct >= 50)
-              recommendations.push(`Retain ${topTippers[0].username} — they drove half your session. Give them public recognition next time`)
-            if (s.uniqueFans <= 2 && s.tipCount > 10)
-              recommendations.push("Diversify your audience — most tips came from 1–2 fans. Engage lurkers with low-barrier goals")
-            if (durationMins < 30 && s.totalUSD > 0)
-              // "could 2x your earnings" removed — that multiplier was hardcoded,
-              // not derived from this creator's short-vs-long session history or
-              // any calculation in the codebase, while reading as her own data.
-              recommendations.push(`You earned $${s.totalUSD} in ${Math.round(durationMins)} min — short sessions give tipping momentum less time to build. Try extending to 45–60 min`)
-            if (spikes.length >= 2)
-              recommendations.push("Multiple spike moments detected — identify what triggered them and recreate it intentionally")
-            if (revenuePerMin > 0 && revenuePerMin < 0.10)
-              recommendations.push("Low revenue per minute — try setting a token goal every 15 min to maintain tipping momentum")
-            if (performance === "high")
-              recommendations.push("Replicate this stream: same time, same platform, similar energy — your data supports it")
-            if (recommendations.length === 0)
-              recommendations.push("Keep streaming consistently — more data helps us give you sharper recommendations")
-
-            return {
-              buckets, peakTime, peakBucket, firstHalfPct,
-              topTippers, spikes, performance, revenuePerMin,
-              insights, recommendations,
-            }
-          }
-
-          // ── PERFORMANCE BADGE CONFIG ────────────────────────────────
-          const PERF = {
-            high:    { label: "🔥 High Performing", color: "#10B981", bg: "rgba(16,185,129,0.1)",  border: "rgba(16,185,129,0.3)" },
-            average: { label: "📊 Average",          color: "#F59E0B", bg: "rgba(245,158,11,0.1)", border: "rgba(245,158,11,0.25)" },
-            low:     { label: "📉 Underperforming",  color: "#F87171", bg: "rgba(248,113,113,0.1)", border: "rgba(248,113,113,0.25)" },
-          }
-
-          const avgSession = displaySessions.length ? displaySessions.reduce((s,x) => s+x.totalUSD,0)/displaySessions.length : 0
-
-          return (
-            <div>
-              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 24 }}>
-                <div>
-                  <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 4 }}>🎥 Session Breakdown</h1>
-                  <p style={{ fontSize: 13, color: C.muted }}>What happened in each stream and how to earn more next time</p>
-                </div>
-                <div style={{ display:'flex', alignItems:'center', gap:8, padding:'6px 12px', borderRadius:20, background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.08)', flexShrink:0 }}>
-                  <label style={{ display:'flex', alignItems:'center', gap:6, cursor:'pointer', fontSize:12, color:C.muted }}>
-                    <input type="checkbox" checked={meaningfulOnly} onChange={e => setMeaningfulOnly(e.target.checked)} style={{ accentColor: C.cyan }} />
-                    Meaningful sessions only
-                  </label>
-                  {(analytics?.lowSignalSessionCount > 0) && (
-                    <span style={{ fontSize:11, color:C.muted }}>({analytics.lowSignalSessionCount} low-signal hidden)</span>
-                  )}
-                </div>
-              </div>
-
-              {/* OVERVIEW STATS BAR */}
-              {displaySessions.length > 0 && (
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 28 }}>
-                  {[
-                    { label: "Total Sessions", value: displaySessions.length, color: C.cyan },
-                    { label: "Avg Earnings", value: `$${avgSession.toFixed(2)}`, color: C.green },
-                    { label: "Best Session", value: `$${Math.max(...displaySessions.map(s => s.totalUSD)).toFixed(2)}`, color: C.gold },
-                    { label: "Total Earned", value: `$${displaySessions.reduce((s,x) => s+x.totalUSD,0).toFixed(2)}`, color: C.pink },
-                  ].map(({ label, value, color }) => (
-                    <div key={label} style={{ ...glassCard, borderRadius: 12, padding: "16px 18px" }}>
-                      <div style={{ fontSize: 11, color: C.muted, marginBottom: 4, textTransform: "uppercase" }}>{label}</div>
-                      <div style={{ fontSize: 22, fontWeight: 800, color }}>{value}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* SESSION CARDS */}
-              {displaySessions.length === 0 && (
-                <div style={{ ...glassCard, borderRadius: 14, padding: 40, textAlign: "center" }}>
-                  <div style={{ fontSize: 40, marginBottom: 12 }}>🎥</div>
-                  <div style={{ fontSize: 16, fontWeight: 700, color: C.white }}>{sessions.length > 0 ? 'No meaningful sessions match this filter' : 'No sessions yet'}</div>
-                  <div style={{ fontSize: 13, color: C.muted, marginTop: 6 }}>{sessions.length > 0 ? 'Try unchecking "Meaningful sessions only" to see all sessions' : 'Import your CSV data to see session breakdowns'}</div>
-                  {sessions.length > 0 && meaningfulOnly && <button onClick={() => setMeaningfulOnly(false)} style={{ marginTop:12, padding:'7px 18px', borderRadius:8, background:'rgba(34,211,238,0.12)', border:'1px solid rgba(34,211,238,0.3)', color:C.cyan, fontSize:12, cursor:'pointer' }}>Show all sessions</button>}
-                </div>
-              )}
-
-              {displaySessions.map((s, si) => {
-                const bd = getSessionBreakdown(s)
-                if (!bd) return null
-                const perf = PERF[bd.performance]
-                const maxBucketUSD = Math.max(...bd.buckets.map(b => b.usd), 0.01)
-                const fmt = dt => new Date(dt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-
-                return (
-                  <div key={si} style={{ ...glassCard, borderRadius: 16, marginBottom: 24, overflow: "hidden" }}>
-
-                    {/* SESSION HEADER */}
-                    <div style={{ padding: "20px 24px", borderBottom: "1px solid rgba(255,255,255,0.07)", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
-                      <div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
-                          <span style={{ fontSize: 16, fontWeight: 800, color: C.white }}>
-                            {new Date(s.startTime).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
-                          </span>
-                          <span style={{ fontSize: 13, color: C.muted }}>{fmt(s.startTime)} → {fmt(s.endTime)}</span>
-                          <span style={{ fontSize: 12, color: C.muted }}>• {s.platform}</span>
-                        </div>
-                        <span style={{ padding: "3px 10px", borderRadius: 20, background: perf.bg, border: `1px solid ${perf.border}`, fontSize: 11, fontWeight: 700, color: perf.color }}>{perf.label}</span>
-                      </div>
-                      <div style={{ textAlign: "right" }}>
-                        <div style={{ fontSize: 28, fontWeight: 900, color: C.green }}>${s.totalUSD.toFixed(2)}</div>
-                        <div style={{ fontSize: 12, color: C.muted }}>{Math.round(s.durationMinutes)} min • ${bd.revenuePerMin.toFixed(2)}/min</div>
-                      </div>
-                    </div>
-
-                    <div style={{ padding: 24 }}>
-
-                      {/* REVENUE GAP — vs last 5 sessions */}
-                      {(() => {
-                        const recentSessions = displaySessions.filter(x => x.id !== s.id && !x.durationUnknown)
-                        const comparable = recentSessions.filter(x => x.platform === s.platform).slice(-5)
-                        const base = comparable.length >= 3 ? comparable : recentSessions.slice(-5)
-                        if (base.length < 2 || s.durationUnknown) return null
-                        const expected = base.reduce((a, x) => a + x.totalUSD, 0) / base.length
-                        const gap = expected - s.totalUSD
-                        const gapPct = expected > 0 ? Math.round((gap / expected) * 100) : 0
-                        if (Math.abs(gapPct) < 10) return null
-                        const isUnder = gap > 0
-                        const color = isUnder ? C.red : C.green
-                        const bg    = isUnder ? "rgba(248,113,113,0.06)" : "rgba(16,185,129,0.06)"
-                        const bdr   = isUnder ? "rgba(248,113,113,0.25)" : "rgba(16,185,129,0.25)"
-                        return (
-                          <div style={{ padding: "10px 14px", borderRadius: 10, background: bg, border: `1px solid ${bdr}`, marginBottom: 14, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                            <span style={{ fontSize: 13, color, fontWeight: 600 }}>
-                              {isUnder ? `⚠️ $${gap.toFixed(0)} below your avg session ($${expected.toFixed(0)}) — ${gapPct}% shortfall` : `✅ $${Math.abs(gap).toFixed(0)} above your avg session — top ${Math.abs(gapPct)}% performance`}
-                            </span>
-                          </div>
-                        )
-                      })()}
-
-                      {/* CORE METRICS */}
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 10, marginBottom: 16 }}>
-                        {[
-                          { label: "Tips",        value: s.tipCount,                    color: C.cyan  },
-                          { label: "Unique Fans", value: s.uniqueFans,                  color: C.pink  },
-                          { label: "Avg Tip",     value: `$${s.avgTipSize}`,            color: C.gold  },
-                          { label: "$/Hour",      value: s.usdPerHour !== null ? `$${s.usdPerHour}` : "—",  color: C.green },
-                          { label: "$/Min",       value: s.usdPerMinute !== null ? `$${s.usdPerMinute}` : "—", color: C.cyan },
-                        ].map(({ label, value, color }) => (
-                          <div key={label} style={{ padding: "12px 14px", background: "rgba(255,255,255,0.04)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.06)" }}>
-                            <div style={{ fontSize: 10, color: C.muted, marginBottom: 4, textTransform: "uppercase" }}>{label}</div>
-                            <div style={{ fontSize: 18, fontWeight: 800, color }}>{value}</div>
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* VELOCITY + CONCENTRATION ROW */}
-                      {(s.velocityTrend !== 'unknown' || s.topContributorPct >= 40) && (
-                        <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
-                          {s.velocityTrend !== 'unknown' && (() => {
-                            const vConfig = {
-                              growing: { icon: "📈", label: "Momentum building", color: C.green, bg: "rgba(16,185,129,0.08)", border: "rgba(16,185,129,0.25)" },
-                              dying:   { icon: "📉", label: "Earnings slowing", color: C.red,   bg: "rgba(248,113,113,0.08)", border: "rgba(248,113,113,0.25)" },
-                              steady:  { icon: "➡️", label: "Steady pace",       color: C.muted, bg: "rgba(255,255,255,0.04)", border: "rgba(255,255,255,0.1)" },
-                            }
-                            const v = vConfig[s.velocityTrend]
-                            const pctChange = s.firstHalfUPM && s.secondHalfUPM
-                              ? Math.round(Math.abs((s.secondHalfUPM - s.firstHalfUPM) / s.firstHalfUPM) * 100)
-                              : null
-                            return (
-                              <div style={{ flex: 1, minWidth: 180, padding: "10px 14px", borderRadius: 10, background: v.bg, border: `1px solid ${v.border}`, display: "flex", alignItems: "center", gap: 8 }}>
-                                <span style={{ fontSize: 16 }}>{v.icon}</span>
-                                <div>
-                                  <div style={{ fontSize: 12, fontWeight: 700, color: v.color }}>{v.label}</div>
-                                  {pctChange !== null && (
-                                    <div style={{ fontSize: 11, color: C.muted }}>
-                                      {s.velocityTrend === 'growing' ? `+${pctChange}%` : s.velocityTrend === 'dying' ? `-${pctChange}%` : '~0%'} vs first half
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            )
-                          })()}
-                          {s.topContributorPct >= 40 && (
-                            <div style={{ flex: 1, minWidth: 200, padding: "10px 14px", borderRadius: 10, background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.25)", display: "flex", alignItems: "center", gap: 8 }}>
-                              <span style={{ fontSize: 16 }}>⚠️</span>
-                              <div>
-                                <div style={{ fontSize: 12, fontWeight: 700, color: C.gold }}>{s.topContributorPct}% from one fan</div>
-                                <div style={{ fontSize: 11, color: C.muted }}>{s.topContributor} drove most of this session</div>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      {/* TIMELINE CHART */}
-                      {bd.buckets.length > 1 && (
-                        <div style={{ marginBottom: 24 }}>
-                          <div style={{ fontSize: 12, fontWeight: 600, color: C.muted, marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>⏱ Earnings Timeline (5-min buckets)</div>
-                          <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 64, padding: "0 0 4px" }}>
-                            {bd.buckets.map((b, bi) => {
-                              const heightPct = maxBucketUSD > 0 ? (b.usd / maxBucketUSD) : 0
-                              const isPeak = bi === bd.buckets.indexOf(bd.peakBucket)
-                              const barColor = isPeak ? C.gold : b.usd > 0 ? C.cyan : "rgba(255,255,255,0.06)"
-                              return (
-                                <div key={bi} title={`${b.label}: $${b.usd.toFixed(2)}`} style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "flex-end", height: "100%" }}>
-                                  <div style={{ width: "100%", height: `${Math.max(heightPct * 100, b.usd > 0 ? 4 : 2)}%`, background: barColor, borderRadius: "3px 3px 0 0", transition: "height 0.3s", minHeight: b.usd > 0 ? 4 : 2 }} />
-                                </div>
-                              )
-                            })}
-                          </div>
-                          <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
-                            <span style={{ fontSize: 9, color: C.muted }}>{fmt(s.startTime)}</span>
-                            {bd.spikes.length > 0 && <span style={{ fontSize: 9, color: C.gold }}>🔥 Peak at {bd.spikes[0].time}</span>}
-                            <span style={{ fontSize: 9, color: C.muted }}>{fmt(s.endTime)}</span>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* FIRST HALF vs SECOND HALF */}
-                      <div style={{ marginBottom: 24 }}>
-                        <div style={{ fontSize: 12, fontWeight: 600, color: C.muted, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 }}>📊 Session Pacing</div>
-                        <div style={{ display: "flex", height: 28, borderRadius: 8, overflow: "hidden", border: "1px solid rgba(255,255,255,0.08)" }}>
-                          <div style={{ width: `${bd.firstHalfPct}%`, background: "linear-gradient(90deg, #22D3EE, #60A5FA)", display: "flex", alignItems: "center", justifyContent: "center", transition: "width 0.4s" }}>
-                            {bd.firstHalfPct >= 20 && <span style={{ fontSize: 10, fontWeight: 800, color: "#fff" }}>First half {bd.firstHalfPct}%</span>}
-                          </div>
-                          <div style={{ flex: 1, background: "rgba(255,255,255,0.06)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                            {100 - bd.firstHalfPct >= 20 && <span style={{ fontSize: 10, color: C.muted }}>Second half {100 - bd.firstHalfPct}%</span>}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* TOP TIPPERS */}
-                      {bd.topTippers.length > 0 && (
-                        <div style={{ marginBottom: 24 }}>
-                          <div style={{ fontSize: 12, fontWeight: 600, color: C.muted, marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>🏆 Top Contributors</div>
-                          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                            {bd.topTippers.map((t, ti) => (
-                              <div key={ti} style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                                <span style={{ fontSize: 14, flexShrink: 0 }}>{["🥇","🥈","🥉"][ti]}</span>
-                                <span style={{ fontSize: 13, color: C.white, fontWeight: 600, minWidth: 100 }}>{t.username}</span>
-                                <div style={{ flex: 1, height: 6, borderRadius: 3, background: "rgba(255,255,255,0.06)", overflow: "hidden" }}>
-                                  <div style={{ height: "100%", width: `${t.pct}%`, background: ti === 0 ? `linear-gradient(90deg, ${C.gold}, ${C.orange})` : ti === 1 ? C.cyan : C.muted, borderRadius: 3 }} />
-                                </div>
-                                <span style={{ fontSize: 12, color: C.green, fontWeight: 700, flexShrink: 0 }}>${t.usd}</span>
-                                <span style={{ fontSize: 11, color: C.muted, flexShrink: 0 }}>{t.pct}%</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* INSIGHTS + RECOMMENDATIONS side by side */}
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-                        {/* INSIGHTS */}
-                        <div style={{ padding: "14px 16px", background: "rgba(34,211,238,0.06)", border: "1px solid rgba(34,211,238,0.2)", borderRadius: 12 }}>
-                          <div style={{ fontSize: 12, fontWeight: 700, color: C.cyan, marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>💡 What Happened</div>
-                          <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-                            {bd.insights.map((ins, ii) => (
-                              <div key={ii} style={{ fontSize: 12, color: C.text, lineHeight: 1.5, display: "flex", gap: 6 }}>
-                                <span style={{ color: C.cyan, flexShrink: 0 }}>→</span>
-                                <span>{ins}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                        {/* RECOMMENDATIONS */}
-                        <div style={{ padding: "14px 16px", background: "rgba(236,72,153,0.06)", border: "1px solid rgba(236,72,153,0.2)", borderRadius: 12 }}>
-                          <div style={{ fontSize: 12, fontWeight: 700, color: C.pink, marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>🚀 Do This Next Time</div>
-                          <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-                            {bd.recommendations.map((rec, ri) => (
-                              <div key={ri} style={{ fontSize: 12, color: C.text, lineHeight: 1.5, display: "flex", gap: 6 }}>
-                                <span style={{ color: C.pink, flexShrink: 0 }}>•</span>
-                                <span>{rec}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )
-        })()}
+        {activeTab === "sessions" && (
+          <Sessions
+            allSessions={meaningfulOnly
+              ? (analytics?.meaningfulSessions || sessions)
+              : (analytics?.allValidSessions || sessions)}
+            rawSessionCount={sessions.length}
+            lowSignalCount={analytics?.lowSignalSessionCount || 0}
+            meaningfulOnly={meaningfulOnly}
+            onToggleMeaningful={setMeaningfulOnly}
+            page={sessionPage}
+            onPageChange={setSessionPage}
+            liveSessionsById={liveReportsBySessionKey}
+            onOpenReport={() => { setViewingReport(true); handleTabChange('overview') }}
+          />
+        )}
 
         {activeTab === "data" && (
           <div>
@@ -5284,29 +5086,90 @@ const stopImportMessageRotation = () => {
       {/* WHALE PROFILE MODAL */}
       {selectedWhale && (() => {
         const w = selectedWhale
-        const whaleTips = tips.filter(t => t.username === w.username && t.platform === w.platform)
+        // CANONICAL fan tip rows. identifyWhales() (lib/analytics.js) keys a
+        // fan on `username.toLowerCase()` with NO platform in the key, so a
+        // fan is ONE global identity and w.totalUSD / w.tipCount / w.tips all
+        // span every platform and every casing. `w.platform` is only a label
+        // taken from the fan's FIRST tip row — it is not a partition.
+        //
+        // This used to re-derive the rows with
+        //   tips.filter(t => t.username === w.username && t.platform === w.platform)
+        // which disagreed with that model twice over: case-sensitively (the
+        // engine lowercases) and by platform (the engine does not partition).
+        // For a fan tipping as "DaveTipper" on Chaturbate and "davetipper" on
+        // BongaCams, the drawer header read $110 from w.totalUSD while the tip
+        // list, biggest tip, best day and cadence beneath it covered only $35.
+        //
+        // The engine already returns the rows it aggregated, so use them
+        // rather than reconstructing a second identity. The fallback covers
+        // the synthetic fan viewFanProfile() builds when a lookup misses, and
+        // matches the engine's identity exactly: lowercased username, no
+        // platform clause.
+        const whaleTips = Array.isArray(w.tips) && w.tips.length
+          ? w.tips
+          : tips.filter(t => (t.username || '').toLowerCase() === (w.username || '').toLowerCase())
         const sortedTips = [...whaleTips].sort((a, b) => new Date(b.date_time) - new Date(a.date_time))
         const firstTip = whaleTips.length ? whaleTips.reduce((a, b) => new Date(a.date_time) < new Date(b.date_time) ? a : b) : null
-        // A fan reached from Private Sessions may have no free-chat tip
-        // history at all (paid-only) -- w.lastTipDate is null in that case,
-        // guarded below rather than assumed to exist.
-        const daysSinceLastTip = w.lastTipDate ? Math.floor((Date.now() - new Date(w.lastTipDate)) / 86400000) : null
+        // Tip cadence is measured from this fan's OWN tip rows, never from
+        // w.lastTipDate.
+        //
+        // viewFanProfile() builds a synthetic fan with `lastTipDate: null`
+        // whenever the username+platform pair is absent from `whales` — which
+        // happens for real fans, because identifyWhales() keys a fan to the
+        // platform of their FIRST tip, so opening a multi-platform fan from
+        // Private Sessions (which passes the paid session's platform) misses.
+        // That fan can still have plenty of tip rows. The cadence used to read
+        // `new Date(w.lastTipDate)`, and new Date(null) is the epoch rather
+        // than an invalid date, so the span was measured from 1970 and the
+        // drawer rendered "Every ~-10328 days".
+        //
+        // Timestamps are filtered to valid ones and sorted, so out-of-order
+        // rows and null/unparseable dates cannot produce a negative or
+        // epoch-anchored interval. Below two valid timestamps there is no
+        // interval to measure and the value is null — the callers render
+        // "Not enough data yet" rather than the hardcoded `: 7` this used to
+        // fall back to, which was a fabricated cadence.
+        const validTipTimes = whaleTips
+          .map(t => { const raw = t.dateRaw || t.date_time; return raw ? new Date(raw).getTime() : NaN })
+          .filter(ms => Number.isFinite(ms))
+          .sort((a, b) => a - b)
+        const lastValidTipMs = validTipTimes.length ? validTipTimes[validTipTimes.length - 1] : null
+        // Prefer the canonical analytics value; fall back to this fan's own
+        // rows only when it is missing or unparseable, so the cadence and the
+        // return estimate can never disagree about whether data exists.
+        const canonicalLastTipMs = w.lastTipDate ? new Date(w.lastTipDate).getTime() : NaN
+        const resolvedLastTipMs = Number.isFinite(canonicalLastTipMs) ? canonicalLastTipMs : lastValidTipMs
+        const daysSinceLastTip = resolvedLastTipMs !== null ? Math.floor((Date.now() - resolvedLastTipMs) / 86400000) : null
         const tierColor = TIER_COLORS[w.tier] || C.cyan
         const tierIcon = w.tier === 'Whale' ? '💎' : w.tier === 'Shark' ? '🦈' : w.tier === 'Regular' ? '⭐' : '💤'
-        const avgDaysBetweenTips = whaleTips.length > 1 ? Math.floor((new Date(w.lastTipDate) - new Date(firstTip?.date_time)) / 86400000 / (whaleTips.length - 1)) : 7
-        const likelyReturnDays = daysSinceLastTip !== null ? Math.max(0, avgDaysBetweenTips - daysSinceLastTip) : null
+        const avgDaysBetweenTips = validTipTimes.length > 1
+          ? Math.floor((validTipTimes[validTipTimes.length - 1] - validTipTimes[0]) / 86400000 / (validTipTimes.length - 1))
+          : null
+        const likelyReturnDays = (avgDaysBetweenTips !== null && daysSinceLastTip !== null)
+          ? Math.max(0, avgDaysBetweenTips - daysSinceLastTip)
+          : null
         // Reuse the shared churn-risk formula (w.churnRisk) from analytics.js —
         // same fix as the card grid — instead of a second local calculation.
         const churnRisk = w.churnRisk?.level && w.churnRisk.level !== "Unknown" ? w.churnRisk.level : null
         const churnColor = churnRisk === "Critical" || churnRisk === "High" ? C.red : churnRisk === "Medium" ? C.orange : C.green
-        // Relationship score — identical formula to the Top Fans card grid,
-        // computed here too so the modal's "REL" badge always agrees with it.
-        const relScore = Math.min(100, Math.round((w.tipCount * 3) + (w.totalUSD / 10) + (daysSinceLastTip !== null && daysSinceLastTip < 7 ? 20 : daysSinceLastTip !== null && daysSinceLastTip < 30 ? 10 : 0)))
-        const relColor = relScore >= 70 ? C.green : relScore >= 40 ? C.gold : C.red
-        const valueLabel = w.isTopSpender || w.spendPercentile >= 95 ? "Ultra high value"
-          : relScore >= 70 ? "High value supporter"
-          : relScore >= 40 ? "Growing relationship"
-          : "New supporter"
+        // REMOVED: relScore / relColor / valueLabel — a "relationship score"
+        // of Math.min(100, tipCount*3 + totalUSD/10 + a 20/10/0 recency bonus),
+        // rendered as a bare number in a coloured circle with no label, no
+        // unit and no explanation. The multipliers were arbitrary literals and
+        // nothing in the analytics engine produces or documents this value, so
+        // it was the same class of invention as the "Engagement score" removed
+        // from this drawer earlier — read as authoritative because it sat
+        // beside a real percentile.
+        //
+        // Its comment claimed the formula mirrored the Top Fans card grid "so
+        // the modal's REL badge always agrees with it". That grid was removed
+        // in the Phase 4 Fans rebuild, so there was nothing left to agree with
+        // and this was the only surviving copy.
+        //
+        // Nothing replaces it: the two canonical classifications it competed
+        // with are ALREADY on screen — w.tier (Whale/Shark/Regular/Dormant,
+        // from identifyWhales' percentileRank) as a badge just above, and
+        // w.spendPercentile as "Top N% of supporters" on this very row.
         const topSpenderPct = typeof w.spendPercentile === "number" ? Math.max(1, 100 - w.spendPercentile) : null
         // A short, data-grounded read on the fan — built only from values the
         // shared analytics engine already computed (churn risk / tip
@@ -5360,12 +5223,8 @@ const stopImportMessageRotation = () => {
                     </div>
                     {topSpenderPct !== null && (
                       <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 7 }}>
-                        <div style={{ width: 26, height: 26, borderRadius: "50%", background: `${relColor}18`, border: `2px solid ${relColor}55`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                          <div style={{ fontSize: 9, fontWeight: 800, color: relColor, lineHeight: 1 }}>{relScore}</div>
-                        </div>
                         <div style={{ fontSize: 11, color: C.text, lineHeight: 1.3 }}>
                           <span style={{ color: C.white, fontWeight: 700 }}>Top {topSpenderPct}%</span> of supporters
-                          <div style={{ fontSize: 10 }}>{valueLabel}</div>
                         </div>
                       </div>
                     )}
@@ -5395,7 +5254,14 @@ const stopImportMessageRotation = () => {
                         {[
                           { icon: "📅", label: "First tip", value: firstTip ? new Date(firstTip.date_time).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : "Not enough data yet" },
                           { icon: "📅", label: "Last tip", value: w.lastTipDate ? new Date(w.lastTipDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : "Not enough data yet", sub: daysSinceLastTip !== null ? `${daysSinceLastTip.toLocaleString()} days ago` : null },
-                          { icon: "🕐", label: "Avg days between tips", value: whaleTips.length > 1 ? `Every ~${avgDaysBetweenTips} days` : "Not enough data yet" },
+                          // Gated on the measured interval, not on the row
+                          // count — rows with unparseable dates cannot be
+                          // counted toward an interval they did not contribute
+                          // to. A fan whose tips all land inside one day has a
+                          // real interval under a day; floor() would print
+                          // "Every ~0 days", so that case is stated in words
+                          // rather than rounded into a number.
+                          { icon: "🕐", label: "Avg days between tips", value: avgDaysBetweenTips === null ? "Not enough data yet" : avgDaysBetweenTips < 1 ? "Less than a day" : `Every ~${avgDaysBetweenTips} days` },
                           { icon: "⚠️", label: "Churn risk", value: churnRisk || "Not enough data yet", color: churnColor },
                         ].map(({ icon, label, value, sub, color }) => (
                           <div key={label} style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
@@ -5537,11 +5403,29 @@ const stopImportMessageRotation = () => {
                     </div>
                   </div>
                 )}
+                {/* Tip cadence. This section was "🤖 AI Predictions" and carried
+                    three values that were not measurements at all: a "predicted
+                    next tip size" that was avgTipSize * 1.1, an "engagement
+                    score" out of 100 from a hand-rolled formula with nothing
+                    calibrating it, and a "30-day revenue forecast" that was the
+                    lifetime monthly average * 1.05. The 1.1 and 1.05 were
+                    arbitrary literals; rendering them under an "AI" heading
+                    presented invention as evidence. Only the return estimate
+                    survives, because it is the one figure derived from this
+                    fan's own observed tip spacing.
+
+                    likelyReturnDays is null whenever there is no measured
+                    interval or no known last tip, so this row and the "Avg days
+                    between tips" row above it are gated on the same evidence
+                    and cannot disagree about whether cadence data exists. The
+                    `: 7` fallback that used to stand in for a missing interval
+                    was a fabricated cadence and is gone; see the derivation of
+                    validTipTimes above. */}
                 {whaleTips.length > 0 && (
                   <div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: C.text, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>🤖 AI Predictions</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: C.text, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>Tip Cadence</div>
                     <div style={{ padding: 16, background: "rgba(255,255,255,0.04)", borderRadius: 12, border: "1px solid rgba(255,255,255,0.07)", display: "flex", flexDirection: "column", gap: 10 }}>
-                      {[{ label: "📅 Likely to tip again in", value: likelyReturnDays === 0 ? "Overdue!" : `~${likelyReturnDays} days`, color: C.cyan }, { label: "💸 Predicted next tip size", value: `$${(w.avgTipSize * 1.1).toFixed(2)}`, color: C.gold }, { label: "🎯 Engagement score", value: `${Math.min(99, Math.round((w.tipCount / 10) * 20 + (w.totalUSD / 100) * 10))} / 100`, color: C.pink }, { label: "📈 30-day revenue forecast", value: `$${((w.totalUSD / Math.max(1, Math.floor((Date.now() - new Date(firstTip?.date_time)) / 2592000000))) * 1.05).toFixed(2)}`, color: C.green }].map(({ label, value, color }) => (
+                      {[{ label: "📅 Likely to tip again in", value: likelyReturnDays !== null ? (likelyReturnDays === 0 ? "Overdue!" : `~${likelyReturnDays} days`) : "Not enough data yet", color: C.cyan }].map(({ label, value, color }) => (
                         <div key={label} style={{ display: "flex", justifyContent: "space-between", padding: "10px 14px", background: "rgba(255,255,255,0.04)", borderRadius: 8 }}>
                           <div style={{ fontSize: 13, color: C.text }}>{label}</div>
                           <div style={{ fontSize: 13, fontWeight: 700, color }}>{value}</div>
