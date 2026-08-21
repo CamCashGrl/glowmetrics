@@ -8,9 +8,6 @@ import { PLATFORM_TOKEN_RATES, tokenRate } from '../../lib/constants'
 import { track } from '../../lib/track'
 import { isProPlan } from '../../lib/plan'
 import OnboardingExitSurvey from '@/components/OnboardingExitSurvey'
-import { UpgradeMoment, PlanComparison } from '../../components/conversion/UpgradeMoment'
-import { PRO_PRICE_MONTHLY_LABEL, PRO_PRICE_NOTE } from '../../lib/constants'
-import { FREE_MAX_PLATFORMS, FREE_HISTORY_DAYS } from '../../lib/planLimits'
 
 
 const PLATFORMS = {
@@ -56,7 +53,10 @@ function tryParseDate(str){
   if(cbMatch){const[,mon,day,year,hr,min,ampm]=cbMatch;const months={jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};let h=parseInt(hr,10);if(ampm.toUpperCase()==='PM'&&h!==12)h+=12;if(ampm.toUpperCase()==='AM'&&h===12)h=0;const d=new Date(parseInt(year),months[mon.toLowerCase()],parseInt(day),h,parseInt(min));if(!isNaN(d.getTime()))return d}
   const bcMatch=s.match(/^(\d{2})\.(\d{2})\.(\d{4})\s+(\d{2}):(\d{2})$/)
   if(bcMatch){const[,day,mon,year,hr,min]=bcMatch;const d=new Date(parseInt(year),parseInt(mon)-1,parseInt(day),parseInt(hr),parseInt(min));if(!isNaN(d.getTime()))return d}
-  const mfcMatch=s.match(/^([A-Za-z]{3})\s+(\d{1,2})(?:st|nd|rd|th),\s+(\d{4})\s+(\d{1,2}):(\d{2})\s+(AM|PM)$/i)
+  // Ordinal suffix optional, matching the Chaturbate branch above — MFC
+  // renders both "Aug 1, 2026" and "Aug 1st, 2026" depending on the view,
+  // and the required-suffix version silently fell through to `new Date(s)`.
+  const mfcMatch=s.match(/^([A-Za-z]{3})\s+(\d{1,2})(?:st|nd|rd|th)?,\s+(\d{4})\s+(\d{1,2}):(\d{2})\s+(AM|PM)$/i)
   if(mfcMatch){const[,mon,day,year,hr,min,ampm]=mfcMatch;const months={jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};let h=parseInt(hr,10);if(ampm.toUpperCase()==='PM'&&h!==12)h+=12;if(ampm.toUpperCase()==='AM'&&h===12)h=0;const d=new Date(parseInt(year),months[mon.toLowerCase()],parseInt(day),h,parseInt(min));if(!isNaN(d.getTime()))return d}
   const d=new Date(s);if(!isNaN(d.getTime()))return d;return null
 }
@@ -257,6 +257,35 @@ function buildPreview(rawText,platformId,platformLabel){
 // onboarding_paste_parse_failed events (by far the dominant one), so it
 // gets the most granular checks; the columnar platforms get a simpler
 // but still specific check.
+// Structural fingerprint of a failed paste — the missing half of the failure
+// telemetry. onboarding_paste_parse_failed has fired for 8 separate users and
+// every event recorded only WHICH platform failed, never WHAT shape the text
+// was, so each failure had to be guessed at instead of fixed. (The Chaturbate
+// fix in #411 only happened because a real sample turned up separately.)
+//
+// Deliberately privacy-preserving: every digit becomes 9 and every letter
+// becomes a, so "Aug 11, 2026, 07:04 AM" -> "aaa 99, 9999, 99:99 aa" and
+// "Tip From: sexyguy99" -> "aaa aaaa: aaaaaaa99". Usernames, token amounts,
+// dollar figures and notes cannot be reconstructed from this — only the
+// layout, which is the only part we need to write a parser against.
+function fingerprintPaste(rawText){
+  const lines=rawText.split('\n').map(l=>l.trim()).filter(Boolean)
+  const shape=l=>l.replace(/[0-9]/g,'9').replace(/[A-Za-z]/g,'a').slice(0,60)
+  const counts=new Map()
+  for(const l of lines.slice(0,80)){
+    const sh=shape(l)
+    counts.set(sh,(counts.get(sh)||0)+1)
+  }
+  const top=[...counts.entries()].sort((a,b)=>b[1]-a[1]).slice(0,10)
+  return {
+    line_count:lines.length,
+    distinct_shapes:counts.size,
+    has_tabs:rawText.includes('\t'),
+    has_commas:rawText.includes(','),
+    top_shapes:top.map(([sh,n])=>`${n}x ${sh}`),
+  }
+}
+
 function diagnosePasteFailure(rawText,platformId){
   const lines=rawText.split('\n').map(l=>l.trim()).filter(Boolean)
   if(!lines.length)return 'Paste your tip history above first.'
@@ -364,39 +393,27 @@ function CountUp({to,prefix='',suffix='',duration=1000,decimals=0}){
 
 // ── Pro Upsell Modal ───────────────────────────────────────────
 function ProUpsellModal({platform,onSkip}){
-  // Replaces a bespoke upsell that had drifted away from the truth: it said
-  // "Multi-platform tracking is a Pro feature" (false — Free tracks
-  // FREE_MAX_PLATFORMS), then contradicted itself by offering to continue with
-  // three; it hardcoded an annual price ($99/yr) that is not in
-  // lib/constants.js — an annual plan_type does exist in the Stripe checkout
-  // route, but the AMOUNT here was a literal that could drift silently, so it
-  // is dropped rather than guessed; it claimed "Save history forever" as a Pro
-  // perk when Free stores history too; and its CTA opened an external
-  // marketing page instead of the in-app upgrade path.
-  //
-  // It now renders the SHARED PlanComparison, so onboarding and the dashboard
-  // describe the plans with one set of words derived from the canonical
-  // limits, and its CTA uses the same signature button as the post-import
-  // conversion screen. The limit being hit is a COUNT, not a capability.
   return(
-    <div style={{position:'fixed',inset:0,zIndex:9998,background:'rgba(3,5,15,0.92)',backdropFilter:'blur(12px)',display:'flex',alignItems:'center',justifyContent:'center',padding:20,overflowY:'auto'}}>
-      <div className="cc-onb-upsell" style={{width:'100%',maxWidth:720,background:'linear-gradient(180deg,rgba(12,15,35,0.98),rgba(6,8,20,0.99))',borderRadius:24,boxShadow:'0 0 60px rgba(33,230,243,0.15)',border:'1px solid rgba(255,255,255,0.08)',padding:28,maxHeight:'calc(100vh - 40px)',overflowY:'auto'}}>
-        <div style={{textAlign:'center',marginBottom:18}}>
-          <div style={{fontSize:11,fontWeight:900,letterSpacing:'0.1em',textTransform:'uppercase',color:'#a78bfa',marginBottom:8}}>Add another platform</div>
-          <h2 style={{fontSize:20,fontWeight:900,color:'#fff',marginBottom:6}}>You&apos;re adding {platform.label}</h2>
-          <p style={{fontSize:13,color:'rgba(148,163,184,0.85)',lineHeight:1.6}}>Free tracks up to {FREE_MAX_PLATFORMS} platforms with a {FREE_HISTORY_DAYS}-day analysis window each. Pro adds more, and compares them side by side so you can see where your time actually pays best.</p>
+    <div style={{position:'fixed',inset:0,zIndex:9998,background:'rgba(3,5,15,0.92)',backdropFilter:'blur(12px)',display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
+      <div style={{width:'100%',maxWidth:430,background:'linear-gradient(180deg,rgba(12,15,35,0.98),rgba(6,8,20,0.99))',borderRadius:24,boxShadow:'0 0 60px rgba(33,230,243,0.15),0 0 120px rgba(255,47,174,0.1)',border:'1px solid rgba(255,255,255,0.08)',padding:28}}>
+        <div style={{textAlign:'center',marginBottom:16}}>
+          <div style={{fontSize:11,fontWeight:900,letterSpacing:'0.1em',textTransform:'uppercase',color:'#a78bfa',marginBottom:8}}>Unlock All Platforms</div>
+          <h2 style={{fontSize:20,fontWeight:900,color:'#fff',marginBottom:6}}>You're adding {platform.label}</h2>
+          <p style={{fontSize:13,color:'rgba(148,163,184,0.8)',lineHeight:1.6}}>Multi-platform tracking is a Pro feature. Upgrade to sync all platforms and see your full earnings picture.</p>
         </div>
-
-        <PlanComparison
-          compact
-          onChooseFree={onSkip}
-          onChoosePro={()=>{try{track('upgrade_click',{source:'onboarding_platform_limit'})}catch(e){};window.location.assign('/dashboard?upgrade=platforms')}}
-        />
-
-        <div style={{background:'rgba(33,230,243,0.06)',border:'1px solid rgba(33,230,243,0.15)',borderRadius:10,padding:'10px 14px',margin:'16px 0 14px',fontSize:12,color:'rgba(148,163,184,0.85)',textAlign:'center'}}>
-          <span style={{color:'#fff'}}>Nothing is deleted either way</span> — your {FREE_MAX_PLATFORMS} platform slots and everything you have already imported stay on your account.
+        <div style={{marginBottom:16}}>
+          <div style={{background:'rgba(167,139,250,0.08)',border:'1.5px solid rgba(167,139,250,0.4)',borderRadius:14,padding:16,position:'relative'}}>
+            <div style={{fontSize:11,color:'#a78bfa',fontWeight:700,marginBottom:6,textTransform:'uppercase'}}>Creator Pro</div>
+            <div style={{fontSize:24,fontWeight:900,color:'#fff'}}>$19.99</div>
+            <div style={{fontSize:11,color:'rgba(148,163,184,0.7)',marginBottom:12}}>/month · or $99/year</div>
+            {['All platforms','Save history forever','AI pattern learning','Fan behavior analysis'].map(f=>(<div key={f} style={{display:'flex',gap:6,alignItems:'center',fontSize:12,color:'rgba(203,213,225,0.9)',marginBottom:4}}><span style={{color:'#a78bfa'}}>✓</span>{f}</div>))}
+            <button onClick={()=>window.open('https://www.camcashgrl.com/pricing','_blank')} style={{width:'100%',marginTop:12,padding:'10px',borderRadius:10,border:'none',cursor:'pointer',background:'linear-gradient(135deg,#a78bfa,#7c3aed)',color:'#fff',fontSize:13,fontWeight:700}}>Upgrade to Pro →</button>
+          </div>
         </div>
-        <div style={{textAlign:'center'}}><button onClick={onSkip} style={{background:'none',border:'none',fontSize:12,color:'rgba(100,116,139,0.8)',cursor:'pointer',textDecoration:'underline'}}>Skip for now — continue with up to {FREE_MAX_PLATFORMS} platforms</button></div>
+        <div style={{background:'rgba(33,230,243,0.06)',border:'1px solid rgba(33,230,243,0.15)',borderRadius:10,padding:'10px 14px',marginBottom:14,fontSize:12,color:'rgba(148,163,184,0.8)',textAlign:'center'}}>
+          ✅ <span style={{color:'#fff'}}>Nothing is locked during your trial</span> — every platform and every insight is included for 7 days.
+        </div>
+        <div style={{textAlign:'center'}}><button onClick={onSkip} style={{background:'none',border:'none',fontSize:12,color:'rgba(100,116,139,0.7)',cursor:'pointer',textDecoration:'underline'}}>Skip for now — continue with one platform</button></div>
       </div>
     </div>
   )
@@ -626,6 +643,10 @@ export default function OnboardingPage(){
       if(data?.onboarding_complete){router.replace('/dashboard');return}
       const{data:profile}=await supabase.from('profiles').select('plan, plan_expires_at').eq('id',user.id).single()
       setUserPlan(isProPlan(profile)?'pro':'free')
+      // Onboarding always hands off to the dashboard. The trial is an OFFER
+      // presented once the creator has seen real value, never a gate standing
+      // between them and their own data — see /start-trial, which is reachable
+      // but never forced.
       setUser(user);setBooting(false)
     })()
   },[router])
@@ -685,7 +706,7 @@ export default function OnboardingPage(){
     if(!p||( p.tipsDetected===0&&p.paidSessionsDetected===0)){
       const reason=diagnosePasteFailure(pasteText,platformId)
       setParseError(reason)
-      track('onboarding_paste_parse_failed',{platform:platformId,reason})
+      track('onboarding_paste_parse_failed',{platform:platformId,reason,...fingerprintPaste(pasteText)})
       return
     }
     setPreview(p)
@@ -747,7 +768,7 @@ export default function OnboardingPage(){
       }
       await markDone()
       const inserted=json.inserted??p?.tipsDetected??0
-      setImportResult({inserted,skipped:json.skipped??0,paidInserted:p?.paidSessionsDetected??0,excludedHistory:json.excludedHistory||null})
+      setImportResult({inserted,skipped:json.skipped??0,paidInserted:p?.paidSessionsDetected??0})
       setImportedPlatforms(prev=>prev.includes(platformId)?prev:[...prev,platformId])
       track('onboarding_import_completed',{platform:platformId,inserted,skipped:json.skipped??0})
       if(isFirstImport){track('onboarding_completed',{platform:platformId});setIsFirstImport(false);setShowSparkle(true);setTimeout(()=>setShowSparkle(false),4000);setStep('live')}
@@ -777,7 +798,7 @@ export default function OnboardingPage(){
       if(!res.ok||json.error)throw new Error(json.error||'Upload failed')
       await markDone()
       const inserted=json.inserted??preview?.tipsDetected??0
-      setImportResult({inserted,skipped:json.skipped??0,excludedHistory:json.excludedHistory||null})
+      setImportResult({inserted,skipped:json.skipped??0})
       setImportedPlatforms(prev=>prev.includes(platformId)?prev:[...prev,platformId])
       track('onboarding_import_completed',{platform:platformId,inserted,skipped:json.skipped??0,source:'csv'})
       if(isFirstImport){track('onboarding_completed',{platform:platformId,source:'csv'});setIsFirstImport(false);setShowSparkle(true);setTimeout(()=>setShowSparkle(false),4000);setStep('live')}
@@ -948,7 +969,7 @@ export default function OnboardingPage(){
                 <div style={{marginBottom:10,padding:'12px 14px',borderRadius:12,background:'rgba(167,139,250,0.08)',border:'1px solid rgba(167,139,250,0.35)'}}>
                   <div style={{fontSize:12,fontWeight:800,color:'#a78bfa',marginBottom:4}}>🔒 Upgrade to add {platform.label}</div>
                   <div style={{fontSize:12,color:'rgba(203,213,225,0.85)',lineHeight:1.5,marginBottom:9}}>{upgradeBlocked.message}</div>
-                  <button onClick={()=>{try{track('upgrade_click',{source:'onboarding_platform_limit_blocked'})}catch(e){};window.location.assign('/dashboard?upgrade=platforms')}} style={{padding:'8px 16px',borderRadius:9,border:'none',cursor:'pointer',background:'linear-gradient(135deg,#a78bfa,#7c3aed)',color:'#fff',fontSize:12,fontWeight:700}}>See upgrade options →</button>
+                  <button onClick={()=>window.open('https://www.camcashgrl.com/pricing','_blank')} style={{padding:'8px 16px',borderRadius:9,border:'none',cursor:'pointer',background:'linear-gradient(135deg,#a78bfa,#7c3aed)',color:'#fff',fontSize:12,fontWeight:700}}>See upgrade options →</button>
                 </div>
               )}
               {importError&&<div style={{marginBottom:10,padding:'9px 12px',borderRadius:11,background:'rgba(248,113,113,0.07)',border:'1px solid rgba(248,113,113,0.22)',fontSize:12,color:'#f87171'}}>⚠️ {importError}</div>}
@@ -1087,22 +1108,6 @@ export default function OnboardingPage(){
                   </div>
                 </div>))}
               </div>
-
-              {/* ── POST-IMPORT UPGRADE MOMENT ────────────────────────────
-                  Placed here, after the creator has seen their OWN numbers,
-                  rather than as a plan gate before the import. The same ask
-                  made ten seconds earlier is asking them to value a product
-                  they have not experienced; made here it is "$462.12 of your
-                  earnings history is already saved". Renders nothing at all
-                  when the upload contained no locked value — silence is
-                  correct when we have no argument. Figures come from the
-                  upload route, which the onboarding flow was previously
-                  discarding. */}
-              <UpgradeMoment
-                locked={importResult.excludedHistory}
-                onUpgrade={()=>{track('upgrade_click',{source:'onboarding_locked_history'});router.push('/dashboard?upgrade=history')}}
-                onContinueFree={()=>{track('onboarding_continue_free',{});router.push('/dashboard')}}
-              />
 
               {/* Paid sessions callout on done screen */}
               {importResult.paidInserted>0&&(

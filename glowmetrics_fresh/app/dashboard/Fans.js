@@ -1,7 +1,6 @@
 "use client"
 import { useMemo } from "react"
-import LockedModule, { UnlockButton, InsufficientData } from "./components/LockedModule"
-import LockedValue from "./components/LockedValue"
+import { UnlockButton, InsufficientData } from "./components/LockedModule"
 import { PRO_PRICE_MONTHLY_LABEL, PRO_PRICE_NOTE } from "../../lib/constants"
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -110,7 +109,7 @@ const PRIORITY_RULES = [
   },
 ]
 
-function FanRow({ fan, rule, ctx, onMessage, onViewFan, onAddNote, hasNote = false, dimmed = false }) {
+function FanRow({ fan, rule, ctx, onMessage, onViewFan, onAddNote, hasNote = false }) {
   return (
     // flexWrap + a flex-basis on the text column, so the action button drops
     // to its own line on narrow screens instead of squeezing the text. Without
@@ -119,58 +118,31 @@ function FanRow({ fan, rule, ctx, onMessage, onViewFan, onAddNote, hasNote = fal
     // single letters, ~7700px tall for the page.
     <div style={{
       display: "flex", alignItems: "flex-start", gap: 14, flexWrap: "wrap", padding: "16px 16px", borderRadius: 12,
-      background: dimmed ? "rgba(255,255,255,0.02)" : C.card2,
-      border: `1px solid ${dimmed ? C.border : rule.color + "33"}`,
-      pointerEvents: dimmed ? "none" : "auto",
-      userSelect: dimmed ? "none" : "auto",
+      background: C.card2,
+      border: `1px solid ${rule.color}33`,
     }}>
       <div style={{
         width: 42, height: 42, borderRadius: "50%", background: `linear-gradient(135deg,${rule.color},${C.indigo})`,
         display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 800,
         color: C.white, flexShrink: 0,
-      }}>{dimmed ? "?" : fan.username.slice(0, 1).toUpperCase()}</div>
+      }}>{fan.username.slice(0, 1).toUpperCase()}</div>
 
       <div style={{ flex: "1 1 210px", minWidth: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap", marginBottom: 5 }}>
-          {/* A locked row keeps its RANK and its rule label — that is the shape
-              of the answer — and redacts the identity plus every figure. The
-              redaction is not decorative: /api/insights genuinely withholds
-              these fans' fields from Free (see verify-whale-entitlement.mjs),
-              so rendering them here would widen Free access past what the
-              server enforces. */}
-          {dimmed
-            ? <LockedValue C={C} seed={`u${rule.id}${fan.username}`} size={15} blocks={9} accent={rule.color} />
-            : <span style={{ fontSize: 15, fontWeight: 700, color: C.white, overflowWrap: "anywhere" }}>{fan.username}</span>}
+          <span style={{ fontSize: 15, fontWeight: 700, color: C.white, overflowWrap: "anywhere" }}>{fan.username}</span>
           <span style={{
             fontSize: 10.5, fontWeight: 700, padding: "3px 9px", borderRadius: 20, whiteSpace: "nowrap",
             background: `${rule.color}1f`, color: rule.color, border: `1px solid ${rule.color}3d`,
           }}>{rule.label}</span>
-          {dimmed && (
-            <span style={{
-              fontSize: 9.5, fontWeight: 900, letterSpacing: "0.09em", textTransform: "uppercase",
-              padding: "3px 8px", borderRadius: 999, whiteSpace: "nowrap",
-              color: C.indigo, border: `1px solid ${C.indigo}55`, background: "rgba(0,0,0,0.25)",
-            }}>Pro</span>
-          )}
         </div>
 
         {/* WHY this fan is on the list — the point of the row. */}
         <div style={{ fontSize: 13, color: C.text, lineHeight: 1.5, marginBottom: 8, overflowWrap: "anywhere" }}>
-          {dimmed
-            ? <>This supporter matched <strong style={{ color: C.white }}>{rule.label.toLowerCase()}</strong> — Pro names them and why.</>
-            : rule.reason(fan, ctx)}
+          {rule.reason(fan, ctx)}
         </div>
 
         {/* Canonical facts, each labeled. No probability percentage. */}
         <div style={{ display: "flex", gap: 14, flexWrap: "wrap", fontSize: 11.5, color: C.muted }}>
-          {dimmed ? (
-            <>
-              <span><LockedValue C={C} seed={`l${fan.username}`} size={12.5} prefix="$" blocks={4} accent={C.green} /> lifetime</span>
-              <span><LockedValue C={C} seed={`t${fan.username}`} size={12.5} blocks={3} /> tips</span>
-              <span>every ~<LockedValue C={C} seed={`f${fan.username}`} size={12.5} blocks={3} /></span>
-              <span>last seen <LockedValue C={C} seed={`s${fan.username}`} size={12.5} blocks={4} /></span>
-            </>
-          ) : (
             <>
               <span><strong style={{ color: C.white }}>{fmtUsd0(fan.totalUSD)}</strong> lifetime</span>
               <span><strong style={{ color: C.white }}>{fan.tipCount}</strong> tips</span>
@@ -178,7 +150,6 @@ function FanRow({ fan, rule, ctx, onMessage, onViewFan, onAddNote, hasNote = fal
               {fan.peakLocalHour != null && <span>usually around <strong style={{ color: C.white }}>{fmtHour(fan.peakLocalHour)}</strong></span>}
               <span>last seen <strong style={{ color: C.white }}>{fmtDays(fan.daysSinceLastTip)}</strong></span>
             </>
-          )}
         </div>
       </div>
 
@@ -186,8 +157,7 @@ function FanRow({ fan, rule, ctx, onMessage, onViewFan, onAddNote, hasNote = fal
           are quiet secondaries beside it, so the row gains two capabilities
           without gaining two more loud buttons. Locked rows get none of this —
           there is nothing to act on until the fan is unlocked. */}
-      {!dimmed && (
-        <div className="fan-row-actions">
+      <div className="fan-row-actions">
           <button
             onClick={() => onMessage?.(fan.username)}
             style={{
@@ -212,7 +182,6 @@ function FanRow({ fan, rule, ctx, onMessage, onViewFan, onAddNote, hasNote = fal
             </button>
           )}
         </div>
-      )}
     </div>
   )
 }
@@ -330,12 +299,6 @@ export default function Fans({
                 onMessage={onMessageFan} onViewFan={onViewFan} onAddNote={onAddNote}
                 hasNote={Boolean(notedFans?.has?.(fan.username.toLowerCase()))} />
             ))}
-
-            {/* Free preview: real rows from this account, blurred. Never
-                fabricated placeholder fans. */}
-            {hidden.slice(0, 2).map(({ fan, rule }) => (
-              <FanRow key={`locked-${fan.username}`} fan={fan} rule={rule} ctx={ctx} dimmed />
-            ))}
           </div>
         )}
 
@@ -368,43 +331,12 @@ export default function Fans({
         )}
       </div>
 
-      {/* ── WHAT PRO FINDS ─────────────────────────────────────────────
-          Capabilities, not fabricated metrics. Every number quoted is a real
-          aggregate this account already produced (hiddenSummary), and the
-          bullets describe analysis the engine genuinely performs — nothing
-          here promises an insight the product cannot compute. Renders only
-          when there is something actually held back. */}
-      {hiddenSummary && (
-        <LockedModule
-          C={C}
-          variant="pro"
-          surface="fans_intelligence"
-          icon="🐳"
-          title="Fan intelligence"
-          description="CamCash doesn't just show you who tipped. Pro tells you who to act on next."
-          ctaLabel="Unlock fan intelligence"
-          onUpgrade={() => onUpgrade?.("fans_intelligence")}
-          footnote={
-            `${hiddenSummary.count} more ${hiddenSummary.count === 1 ? "supporter" : "supporters"} ranked · ` +
-            `${fmtUsd0(hiddenSummary.lifetimeUSD)} in lifetime tips` +
-            (hiddenSummary.overdue > 0 ? ` · ${hiddenSummary.overdue} past their usual return window` : "")
-          }
-        >
-          <div style={{ display: "grid", gap: 9, marginBottom: 12 }}>
-              {[
-                "Who is most likely to tip again",
-                "When each supporter usually returns",
-                "Which supporters are overdue",
-                "Who is worth re-engaging first",
-              ].map(t => (
-                <div key={t} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 12.5, color: C.text }}>
-                  <span style={{ color: C.green, fontWeight: 900, flexShrink: 0 }} aria-hidden="true">✓</span>
-                  <span style={{ minWidth: 0, overflowWrap: "anywhere" }}>{t}</span>
-              </div>
-            ))}
-          </div>
-        </LockedModule>
-      )}
+      {/* A second "Fan intelligence" LockedModule used to sit here, gated on
+          the same hiddenSummary as the summary card above it. Two upsells on
+          one screen is the "column of competing upgrade buttons" the card's
+          own comment says this page must not become, and main removed the
+          locked-preview design these paired with. The summary card keeps the
+          single CTA, stated in this account's real numbers. */}
 
       {/* ── BEST-WINDOW OVERLAP ────────────────────────────────────── */}
       {bestWindow && overlap?.count > 0 && (

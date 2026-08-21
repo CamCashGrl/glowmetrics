@@ -14,7 +14,7 @@ import Sidebar from "./Sidebar"
 import SiteFooter from "../components/SiteFooter"
 import { PLATFORM_TOKEN_RATES, SUPPORTED_PLATFORMS, tokenRate, PRO_PRICE_MONTHLY_LABEL, PRO_PRICE_NOTE } from "../../lib/constants"
 import { track as gtmTrack } from '../../lib/track'
-import { isProPlan } from '../../lib/plan'
+import { isProPlan, trialDaysRemaining, getAccessState, TRIAL_DAYS } from '../../lib/plan'
 import { FREE_MAX_PLATFORMS, FREE_HISTORY_DAYS, filterFreeHistory, splitFreeHistory, uniquePlatforms, normalizePlatform } from '../../lib/planLimits'
 import { resolveCreatorTimezone, autoPopulateTimezoneIfMissing } from '../../lib/timezone'
 import { resolveUpgradeContext } from '../../lib/upgradeContext'
@@ -1883,6 +1883,22 @@ export default function Dashboard() {
 
   const isBetaUser = true
   const isPro = isProPlan(profile)
+  // Whether to SAY "free trial" in upgrade copy.
+  //
+  // This used to also require !profile?.stripe_customer_id, on the reasoning
+  // that anyone who had been a Stripe customer might already have used a
+  // trial. That was wrong twice over. A stripe_customer_id is created when
+  // checkout OPENS, so abandoning checkout — or having a card declined —
+  // permanently downgraded the creator's copy to the plain price, which is
+  // exactly backwards: someone who just tried to pay and failed is the person
+  // most worth offering a trial to. It also silently hid this copy from the
+  // owner's own test account, making the feature look unshipped.
+  //
+  // It is moot now regardless: the 7-day trial lives on the Stripe PRICE
+  // (recurring.trial_period_days), so every subscription created from it
+  // trials, whatever the customer's history. Promising a trial to any non-Pro
+  // creator is therefore accurate, not optimistic.
+  const trialEligible = !isPro
   const uploadLimit = Infinity
 
   const fmtHour = h => { if (h == null || isNaN(h)) return 'N/A'; return h === 0 ? '12 AM' : h < 12 ? h+' AM' : h === 12 ? '12 PM' : (h-12)+' PM' }
@@ -2323,7 +2339,7 @@ export default function Dashboard() {
       })
       setUser(user)
       supabase.from('profiles')
-        .select('plan, plan_expires_at, stripe_customer_id, timezone')
+        .select('plan, plan_expires_at, trial_ends_at, stripe_customer_id, timezone')
         .eq('id', user.id)
         .maybeSingle()
         .then(({ data }) => { if (data) setProfile(data) })
@@ -3724,8 +3740,40 @@ const stopImportMessageRotation = () => {
       </div>
 
       {/* SIDEBAR — desktop only, hidden on mobile via CSS */}
-      <Sidebar activeTab={activeTab} onTabChange={(tab) => { setActiveTab(tab); if (typeof window !== "undefined") { localStorage.setItem("camcash_tab", tab); window.scrollTo({ top: 0, behavior: "instant" }); } }} user={user} onSignOut={async () => { await supabase.auth.signOut(); router.replace("/login"); }} isPro={isPro} />{/* MAIN CONTENT */}
+      <Sidebar activeTab={activeTab} onTabChange={(tab) => { setActiveTab(tab); if (typeof window !== "undefined") { localStorage.setItem("camcash_tab", tab); window.scrollTo({ top: 0, behavior: "instant" }); } }} user={user} onSignOut={async () => { await supabase.auth.signOut(); router.replace("/login"); }} isPro={isPro} trialEligible={trialEligible} />{/* MAIN CONTENT */}
       <div className="dash-main" style={{ marginLeft: 240, width: "calc(100% - 240px)", minWidth: 0, padding: 32, boxSizing: "border-box", overflowX: "hidden" }}>
+
+        {/* ── TRIAL COUNTDOWN ──
+            Shown only while a card-backed trial is actually running (Stripe's
+            trial_end, mirrored to profiles.trial_ends_at by the webhook). Not
+            an upsell and not a countdown to a lost feature — the user already
+            has everything; this is just honest notice of when billing starts,
+            with a link to cancel. Disappears the moment the trial converts. */}
+        {(() => {
+          const daysLeft = trialDaysRemaining(profile)
+          if (daysLeft == null) return null
+          return (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
+              padding: '12px 16px', borderRadius: 16, marginBottom: 18,
+              background: 'linear-gradient(90deg, rgba(34,211,238,0.10), rgba(236,72,153,0.10))',
+              border: '1px solid rgba(34,211,238,0.22)',
+            }}>
+              <span style={{ fontSize: 13.5, color: C.white, fontWeight: 700 }}>
+                {daysLeft === 1 ? 'Last day of your free trial' : `${daysLeft} days left in your free trial`}
+              </span>
+              <span style={{ fontSize: 12.5, color: C.text }}>
+                Your subscription starts automatically when it ends — cancel any time before then.
+              </span>
+              <button
+                onClick={() => setActiveTab('settings')}
+                style={{ marginLeft: 'auto', background: 'none', border: 'none', color: C.cyan, fontSize: 12.5, fontWeight: 700, cursor: 'pointer', textDecoration: 'underline' }}
+              >
+                Manage billing
+              </button>
+            </div>
+          )
+        })()}
 
         {/* ── STICKY COMMAND BAR ── */}
         {(() => {
@@ -4143,7 +4191,7 @@ const stopImportMessageRotation = () => {
             <div style={{ maxWidth: 640, margin: '0 auto', padding: '32px 0' }}>
               <div style={{ textAlign: 'center', marginBottom: 24 }}>
                 <div style={{ fontSize: 40, marginBottom: 10 }}>🔴</div>
-                <div style={{ fontSize: 20, fontWeight: 800, color: C.white, marginBottom: 8 }}>Live Mode is a Pro feature</div>
+                <div style={{ fontSize: 20, fontWeight: 800, color: C.white, marginBottom: 8 }}>While you&apos;re live, CamCash can watch your pace for you</div>
                 <div style={{ fontSize: 13, color: C.muted, maxWidth: 440, margin: '0 auto', lineHeight: 1.6 }}>{bestWindowLine}</div>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 24 }}>
@@ -4162,7 +4210,7 @@ const stopImportMessageRotation = () => {
               </div>
               <div style={{ textAlign: 'center' }}>
                 <button onClick={() => openUpgradeModal('live_mode_locked')} style={{ padding: '12px 28px', borderRadius: 10, border: 'none', cursor: 'pointer', fontWeight: 800, fontSize: 13, color: '#06101A', background: 'linear-gradient(135deg,#22D3EE,#EC4899)', animation: 'upgradeGlow 2.2s ease-in-out infinite' }}>
-                  Turn On Live Coaching →
+                  {trialEligible ? "Start My 7-Day Pro Trial →" : "Turn On Live Coaching →"}
                 </button>
               </div>
             </div>
@@ -4598,12 +4646,29 @@ const stopImportMessageRotation = () => {
               <div style={{ fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 12 }}>
                 Your plan
               </div>
-              {isPro ? (
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontSize: 13, fontWeight: 800, color: C.indigo }}>✦ Subscription active</span>
-                  <span style={{ fontSize: 12, color: C.text }}>— track and compare unlimited platforms</span>
-                </div>
-              ) : (
+              {isPro ? (() => {
+                // Everyone inside the dashboard has access now (gated app —
+                // see the /start-trial redirect above), so this line's job is
+                // to say WHICH kind of access, not to sell anything.
+                const state = getAccessState(profile)
+                const daysLeft = trialDaysRemaining(profile)
+                const label = state === 'trialing'
+                  ? `✦ Free trial — ${daysLeft === 1 ? 'last day' : `${daysLeft} days left`}`
+                  : state === 'legacy'
+                    ? '✦ Founding member access'
+                    : '✦ Subscription active'
+                const sub = state === 'trialing'
+                  ? '— billing starts automatically when the trial ends; cancel any time before then'
+                  : state === 'legacy'
+                    ? '— full access, on the house, for being here early'
+                    : '— track and compare unlimited platforms'
+                return (
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    <span style={{ fontSize: 13, fontWeight: 800, color: C.indigo }}>{label}</span>
+                    <span style={{ fontSize: 12, color: C.text }}>{sub}</span>
+                  </div>
+                )
+              })() : (
                 <>
                   <p style={{ fontSize: 13, color: C.text, lineHeight: 1.65, marginBottom: 16 }}>
                     The <strong style={{ color: C.white }}>free plan</strong> tracks <strong style={{ color: C.cyan }}>up to {FREE_MAX_PLATFORMS} platforms</strong>, with a {FREE_HISTORY_DAYS}-day analysis window on each. Older rows stay saved, just not analysed. A <strong style={{ color: C.white }}>subscription</strong> unlocks <strong style={{ color: C.pink }}>more platforms and your full history</strong>, so you can compare which cam site pays you best by hour, day, and fan type.
@@ -5576,12 +5641,15 @@ const stopImportMessageRotation = () => {
                   </div>
                 ))}
               </div>
-
-              {/* Price before the button, not after it. Making someone click
-                  to discover the cost is a bigger drop-off than the cost.
-                  Display only — Stripe remains the source of truth for what is
-                  actually charged, and this is the existing checkout path. */}
-              <div style={{ textAlign: "center", fontSize: 13, color: C.white, fontWeight: 700, marginBottom: 10 }}>{PRO_PRICE_MONTHLY_LABEL} · {PRO_PRICE_NOTE}</div>
+              {/* Was: "Most creators miss 30-60% of their earning potential
+                  without this" — an invented statistic about creators we have
+                  never measured. Replaced with a claim that is true and
+                  checkable: what is actually being offered. */}
+              {trialEligible && (
+                <div style={{ textAlign: "center", padding: "12px 16px", background: "rgba(34,211,238,0.08)", border: "1px solid rgba(34,211,238,0.25)", borderRadius: 10, marginBottom: 24 }}>
+                  <div style={{ fontSize: 13, color: C.cyan, fontWeight: 600 }}>Free for 7 days — every Pro feature, on your own data</div>
+                </div>
+              )}
               <Button
                 disabled={earlyAccessSubmitting}
                 onClick={async () => {
@@ -5607,19 +5675,16 @@ const stopImportMessageRotation = () => {
                     setEarlyAccessSubmitting(false)
                   }
                 }}
-                data-cc-action="checkout_start:upgrade_modal"
-                style={{ width: "100%", padding: "16px", borderRadius: 14, fontSize: 16, marginBottom: 10 }}>
-                {earlyAccessSubmitting ? "Redirecting to checkout..." : "Unlock Pro →"}
+                style={{ width: "100%", padding: "16px", borderRadius: 14, fontSize: 16, marginBottom: 12 }}>
+                {earlyAccessSubmitting
+                  ? "Redirecting to checkout..."
+                  : trialEligible ? "Start my 7-day free trial →" : "🔓 Upgrade to Pro — $19.99/mo"}
               </Button>
-              {/* Reassurance is the last thing read before deciding. It
-                  replaces the "most creators miss 30-60% of their earning
-                  potential" line that used to sit above the CTA — an invented
-                  statistic with no source. This is a claim the product keeps:
-                  the rows are already stored, so unlocking costs no re-upload. */}
-              <div style={{ textAlign: "center", fontSize: 12.5, color: C.text, lineHeight: 1.55, marginBottom: 8 }}>
-                Everything you&apos;ve already uploaded stays saved. Historical analysis unlocks without re-upload.
+              <div style={{ textAlign: "center", fontSize: 12, color: C.muted, marginBottom: 20 }}>
+                {trialEligible
+                  ? `Card required to start. $19.99/mo begins after ${TRIAL_DAYS} days — cancel any time before then and you pay nothing.`
+                  : "Secure checkout powered by Stripe • Cancel anytime"}
               </div>
-              <div style={{ textAlign: "center", fontSize: 12, color: C.muted, marginBottom: 20 }}>Secure checkout powered by Stripe</div>
               <button onClick={() => setShowUpgradeModal(false)} style={{ width: "100%", padding: "11px", borderRadius: 10, background: "transparent", border: "1px solid rgba(255,255,255,0.1)", color: C.muted, fontSize: 13, cursor: "pointer" }}>
                 Maybe later
               </button>

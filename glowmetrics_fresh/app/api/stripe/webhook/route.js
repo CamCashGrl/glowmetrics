@@ -86,6 +86,40 @@ async function updateProfile(supabase, userId, update) {
 // fire another `customer.subscription.updated` once it resolves either way.
 const ACTIVE_STATUSES = new Set(['active', 'trialing', 'past_due'])
 
+// profiles.trial_ends_at mirrors the Stripe subscription's trial_end so the
+// dashboard can show a countdown. Display only — access is decided by `plan`,
+// which this webhook is the sole writer of. Cleared once the subscription is
+// no longer trialing so a stale date can't keep rendering a countdown.
+function trialFields(sub) {
+  if (sub.status === 'trialing' && sub.trial_end) {
+    return { trial_ends_at: new Date(sub.trial_end * 1000).toISOString() }
+  }
+  return { trial_ends_at: null }
+}
+
+// Granting Pro from Stripe must also clear plan_expires_at.
+//
+// plan_expires_at is set only by promo-code grants (redeem_promo_code), and
+// isProPlan() treats a past value as "not Pro" regardless of `plan`. A
+// creator who redeemed a promo and then subscribed kept the promo's expiry,
+// so their paid access silently lapsed on the promo date while Stripe went
+// on charging them. That is not hypothetical: it had already happened to the
+// only paying subscriber this product has, whose access was due to expire
+// 2026-08-27 against an active $19.99/mo subscription started 2026-07-26.
+//
+// A live Stripe subscription is authoritative and not time-limited, which is
+// the invariant lib/plan.js documents: "Stripe-managed subscriptions leave it
+// null." So every Pro grant that originates from Stripe writes NULL here.
+//
+// Tradeoff, deliberate: if someone holds an unexpired promo, subscribes, and
+// later cancels, the promo remainder is not restored — the date is gone. That
+// is rarer, and far less costly, than a paying customer losing access. The
+// downgrade paths below intentionally do NOT touch plan_expires_at, so a
+// promo grant on a non-subscriber is left alone.
+function proGrantFields(sub) {
+  return { plan: 'pro', plan_expires_at: null, ...(sub ? trialFields(sub) : {}) }
+}
+
 export async function POST(request) {
   const supabase = getSupabaseAdmin()
   const body = await request.text()
@@ -112,7 +146,10 @@ export async function POST(request) {
           customerId: session.customer,
         })
         if (!userId) break
-        const update = { plan: 'pro' }
+        // checkout.session.completed carries no subscription status, so this
+        // only opens access — customer.subscription.created/updated is what
+        // writes the trial window and any later downgrade.
+        const update = { plan: 'pro', plan_expires_at: null }
         if (session.customer) update.stripe_customer_id = session.customer
         const ok = await updateProfile(supabase, userId, update)
         if (!ok) {
@@ -133,7 +170,9 @@ export async function POST(request) {
           customerId: sub.customer,
         })
         if (!userId) break
-        const update = { plan: 'pro' }
+        const update = ACTIVE_STATUSES.has(sub.status)
+          ? proGrantFields(sub)
+          : { plan: 'free', ...trialFields(sub) }
         if (sub.customer) update.stripe_customer_id = sub.customer
         const ok = await updateProfile(supabase, userId, update)
         if (!ok) {
@@ -141,8 +180,12 @@ export async function POST(request) {
         }
         const email = await getEmailFromCustomer(sub.customer) || userId
         await sendResendNotification(
-          `💰 New CamCash Subscriber — ${email} subscribed to Pro`,
-          `${email} just subscribed to the Pro plan.`
+          sub.status === 'trialing'
+            ? `🚀 CamCash Trial Started — ${email}`
+            : `💰 New CamCash Subscriber — ${email} subscribed to Pro`,
+          sub.status === 'trialing'
+            ? `${email} started a free trial with a card on file. Converts automatically unless they cancel.`
+            : `${email} just subscribed to the Pro plan.`
         )
         break
       }
@@ -154,7 +197,7 @@ export async function POST(request) {
           customerId: sub.customer,
         })
         if (!userId) break
-        const ok = await updateProfile(supabase, userId, { plan: 'free' })
+        const ok = await updateProfile(supabase, userId, { plan: 'free', trial_ends_at: null })
         if (!ok) {
           return NextResponse.json({ error: 'Failed to update profile' }, { status: 500 })
         }
@@ -174,7 +217,11 @@ export async function POST(request) {
         })
         if (!userId) break
         const plan = ACTIVE_STATUSES.has(sub.status) ? 'pro' : 'free'
-        const ok = await updateProfile(supabase, userId, { plan })
+        const ok = await updateProfile(
+          supabase,
+          userId,
+          plan === 'pro' ? proGrantFields(sub) : { plan: 'free', ...trialFields(sub) }
+        )
         if (!ok) {
           return NextResponse.json({ error: 'Failed to update profile' }, { status: 500 })
         }
@@ -197,6 +244,18 @@ export async function POST(request) {
             `${email}'s subscription status changed to ${sub.status}.`
           )
         }
+        break
+      }
+
+      case 'customer.subscription.trial_will_end': {
+        // Stripe fires this three days out. Notification only — the trial is
+        // still active, so access is untouched here.
+        const sub = event.data.object
+        const email = await getEmailFromCustomer(sub.customer) || sub.customer
+        await sendResendNotification(
+          `⏳ CamCash Trial Ending — ${email}`,
+          `${email}'s free trial ends soon. They convert automatically unless they cancel first.`
+        )
         break
       }
 

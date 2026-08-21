@@ -55,6 +55,23 @@ function StatCard({ icon, label, value, sub, index = 0 }) {
   )
 }
 
+// What a locked recommendation is about, without giving away the advice.
+// Keyed off the icon generateInsights()/nextMoves already assigns, so this
+// stays in step with the engine without needing a new field on each move.
+const LOCKED_MOVE_LABELS = {
+  '⏰': 'A timing change for your next stream',
+  '📅': 'A scheduling change for the week ahead',
+  '🐳': 'An action on one of your highest-value fans',
+  '👑': 'An action on one of your highest-value fans',
+  '📉': 'A drop in your recent numbers worth addressing',
+  '📈': 'A trend in your recent numbers worth acting on',
+  '🎯': 'A platform-level change to where you stream',
+  '💰': 'A change to how you earn per hour streamed',
+}
+function lockedMoveLabel(move) {
+  return LOCKED_MOVE_LABELS[move?.icon] || 'Another recommendation from your history'
+}
+
 export default function CreatorReport({ analytics, tips = [], isPro = false, onUpgrade, engineInsights = null }) {
   // "What changed" — the one dimension Creator Report lacked entirely
   // before (a static all-time snapshot, same headline totals Overview
@@ -178,6 +195,13 @@ export default function CreatorReport({ analytics, tips = [], isPro = false, onU
       </div>
 
       {/* ── RECOMMENDED ACTIONS ── */}
+      {/* Locked moves used to render their real text under filter: blur(3px).
+          A blur communicates "there is something here" and nothing else — the
+          creator cannot tell whether the thing behind it is worth $19.99, and
+          squinting at obscured text they generated reads as a taunt. Each
+          locked row now states what the recommendation is ABOUT, derived from
+          the move's own icon, while the advice itself stays Pro. Same amount
+          withheld, but the value is legible. */}
       <div style={{ borderRadius: 18, padding: '18px 20px', background: 'rgba(12,16,34,0.78)', border: '1px solid rgba(255,255,255,0.09)' }}>
         <div style={{ fontSize: 13, fontWeight: 800, color: C.white, marginBottom: 12 }}>🎯 Recommended For Your Next Stream</div>
         {nextMoves.length === 0 && (
@@ -188,10 +212,12 @@ export default function CreatorReport({ analytics, tips = [], isPro = false, onU
             const locked = !isPro && i > 0
             return (
               <div key={i} style={{ display: 'flex', gap: 12, alignItems: 'flex-start', padding: '10px 12px', borderRadius: 10, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', position: 'relative' }}>
-                <span style={{ fontSize: 16 }}>{locked ? '🔒' : move.icon}</span>
+                <span style={{ fontSize: 16 }}>{move.icon}</span>
                 <div style={{ flex: 1 }}>
                   {locked ? (
-                    <div style={{ fontSize: 13, color: C.muted, filter: 'blur(3px)', userSelect: 'none' }}>{move.text}</div>
+                    <div style={{ fontSize: 13, color: C.text, lineHeight: 1.6 }}>
+                      {lockedMoveLabel(move)} <span style={{ color: C.muted }}>— included with Pro</span>
+                    </div>
                   ) : (
                     <div style={{ fontSize: 13, color: C.white, lineHeight: 1.6 }}>{move.text}</div>
                   )}
@@ -205,7 +231,7 @@ export default function CreatorReport({ analytics, tips = [], isPro = false, onU
             <button
               onClick={() => { track('creator_report_upgrade_click', { source: 'recommended_actions' }); onUpgrade?.() }}
               style={{ padding: '10px 22px', borderRadius: 10, border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, color: '#06101A', background: `linear-gradient(90deg, ${C.cyan}, ${C.purple}, ${C.pink})` }}>
-              Unlock all {nextMoves.length} recommended actions — Upgrade to Pro
+              Unlock all {nextMoves.length} recommended actions
             </button>
           </div>
         )}
