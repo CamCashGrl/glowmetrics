@@ -7,6 +7,7 @@ import { supabase } from '../../lib/supabase'
 import { PLATFORM_TOKEN_RATES, tokenRate } from '../../lib/constants'
 import { track } from '../../lib/track'
 import { isProPlan } from '../../lib/plan'
+import { FREE_MAX_PLATFORMS } from '../../lib/planLimits'
 import OnboardingExitSurvey from '@/components/OnboardingExitSurvey'
 
 
@@ -393,21 +394,22 @@ function CountUp({to,prefix='',suffix='',duration=1000,decimals=0}){
 
 // ── Pro Upsell Modal ───────────────────────────────────────────
 function ProUpsellModal({platform,onSkip}){
+  const router=useRouter()
   return(
     <div style={{position:'fixed',inset:0,zIndex:9998,background:'rgba(3,5,15,0.92)',backdropFilter:'blur(12px)',display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
       <div style={{width:'100%',maxWidth:430,background:'linear-gradient(180deg,rgba(12,15,35,0.98),rgba(6,8,20,0.99))',borderRadius:24,boxShadow:'0 0 60px rgba(33,230,243,0.15),0 0 120px rgba(255,47,174,0.1)',border:'1px solid rgba(255,255,255,0.08)',padding:28}}>
         <div style={{textAlign:'center',marginBottom:16}}>
           <div style={{fontSize:11,fontWeight:900,letterSpacing:'0.1em',textTransform:'uppercase',color:'#a78bfa',marginBottom:8}}>Unlock All Platforms</div>
           <h2 style={{fontSize:20,fontWeight:900,color:'#fff',marginBottom:6}}>You're adding {platform.label}</h2>
-          <p style={{fontSize:13,color:'rgba(148,163,184,0.8)',lineHeight:1.6}}>Multi-platform tracking is a Pro feature. Upgrade to sync all platforms and see your full earnings picture.</p>
+          <p style={{fontSize:13,color:'rgba(148,163,184,0.8)',lineHeight:1.6}}>Free tracks up to {FREE_MAX_PLATFORMS} platforms. Upgrade to sync more and see your full earnings picture.</p>
         </div>
         <div style={{marginBottom:16}}>
           <div style={{background:'rgba(167,139,250,0.08)',border:'1.5px solid rgba(167,139,250,0.4)',borderRadius:14,padding:16,position:'relative'}}>
             <div style={{fontSize:11,color:'#a78bfa',fontWeight:700,marginBottom:6,textTransform:'uppercase'}}>Creator Pro</div>
             <div style={{fontSize:24,fontWeight:900,color:'#fff'}}>$19.99</div>
             <div style={{fontSize:11,color:'rgba(148,163,184,0.7)',marginBottom:12}}>/month · or $99/year</div>
-            {['All platforms','Save history forever','AI pattern learning','Fan behavior analysis'].map(f=>(<div key={f} style={{display:'flex',gap:6,alignItems:'center',fontSize:12,color:'rgba(203,213,225,0.9)',marginBottom:4}}><span style={{color:'#a78bfa'}}>✓</span>{f}</div>))}
-            <button onClick={()=>window.open('https://www.camcashgrl.com/pricing','_blank')} style={{width:'100%',marginTop:12,padding:'10px',borderRadius:10,border:'none',cursor:'pointer',background:'linear-gradient(135deg,#a78bfa,#7c3aed)',color:'#fff',fontSize:13,fontWeight:700}}>Upgrade to Pro →</button>
+            {['All platforms','Full history analysed','AI pattern learning','Fan behavior analysis'].map(f=>(<div key={f} style={{display:'flex',gap:6,alignItems:'center',fontSize:12,color:'rgba(203,213,225,0.9)',marginBottom:4}}><span style={{color:'#a78bfa'}}>✓</span>{f}</div>))}
+            <button onClick={()=>router.push('/pricing')} style={{width:'100%',marginTop:12,padding:'10px',borderRadius:10,border:'none',cursor:'pointer',background:'linear-gradient(135deg,#a78bfa,#7c3aed)',color:'#fff',fontSize:13,fontWeight:700}}>Upgrade to Pro →</button>
           </div>
         </div>
         <div style={{background:'rgba(33,230,243,0.06)',border:'1px solid rgba(33,230,243,0.15)',borderRadius:10,padding:'10px 14px',marginBottom:14,fontSize:12,color:'rgba(148,163,184,0.8)',textAlign:'center'}}>
@@ -969,7 +971,7 @@ export default function OnboardingPage(){
                 <div style={{marginBottom:10,padding:'12px 14px',borderRadius:12,background:'rgba(167,139,250,0.08)',border:'1px solid rgba(167,139,250,0.35)'}}>
                   <div style={{fontSize:12,fontWeight:800,color:'#a78bfa',marginBottom:4}}>🔒 Upgrade to add {platform.label}</div>
                   <div style={{fontSize:12,color:'rgba(203,213,225,0.85)',lineHeight:1.5,marginBottom:9}}>{upgradeBlocked.message}</div>
-                  <button onClick={()=>window.open('https://www.camcashgrl.com/pricing','_blank')} style={{padding:'8px 16px',borderRadius:9,border:'none',cursor:'pointer',background:'linear-gradient(135deg,#a78bfa,#7c3aed)',color:'#fff',fontSize:12,fontWeight:700}}>See upgrade options →</button>
+                  <button onClick={()=>router.push('/pricing')} style={{padding:'8px 16px',borderRadius:9,border:'none',cursor:'pointer',background:'linear-gradient(135deg,#a78bfa,#7c3aed)',color:'#fff',fontSize:12,fontWeight:700}}>See upgrade options →</button>
                 </div>
               )}
               {importError&&<div style={{marginBottom:10,padding:'9px 12px',borderRadius:11,background:'rgba(248,113,113,0.07)',border:'1px solid rgba(248,113,113,0.22)',fontSize:12,color:'#f87171'}}>⚠️ {importError}</div>}

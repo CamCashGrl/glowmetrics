@@ -38,6 +38,8 @@ const css = read('app/globals.css')
 const lockedValueRaw = read('app/dashboard/components/LockedValue.js')
 const timelineRaw = read('app/dashboard/components/HistoryTimeline.js')
 const onboardingRaw = read('app/onboarding/page.js')
+const pricingRaw = read('app/pricing/PricingClient.js')
+const constantsRaw = read('lib/constants.js')
 const momentRaw = read('components/conversion/UpgradeMoment.js')
 const fansRaw = read('app/dashboard/Fans.js')
 
@@ -312,26 +314,41 @@ check('a short reassurance follows the CTA',
   /Your existing uploads stay saved/.test(timeline))
 
 console.log('\n── Onboarding is part of the same conversion system ──────────')
-check('onboarding imports the shared components, not a second system',
-  /from '\.\.\/\.\.\/components\/conversion\/UpgradeMoment'/.test(onboarding))
-check('onboarding no longer discards the measured locked history',
-  /excludedHistory:json\.excludedHistory\|\|null/.test(onboarding))
-check('the upgrade moment renders after the import, using real figures',
-  /<UpgradeMoment/.test(onboarding) && /locked=\{importResult\.excludedHistory\}/.test(onboarding))
+// The post-import UpgradeMoment was a freemium-era surface: it sold Pro by
+// showing what Free had locked. Main replaced that model with a card-backed
+// 7-day trial in which nothing is locked at all, so onboarding no longer
+// renders it. These assertions now pin the TRIAL messaging that took its
+// place, and that onboarding still hands off to the dashboard rather than
+// gating on payment.
+check('onboarding states the trial unlocks everything, for 7 days',
+  /Nothing is locked during your trial/.test(onboarding) &&
+  /every platform and every insight is included for 7 days/.test(onboarding))
+check('onboarding never gates the handoff on payment — the trial is an offer',
+  /The trial is an OFFER/.test(onboardingRaw) &&
+  /router\.replace\('\/dashboard'\)|router\.push\('\/dashboard'\)/.test(onboarding))
+check('onboarding does not resurrect the freemium locked-history moment',
+  !/<UpgradeMoment/.test(onboarding))
 check('it renders nothing when there is no locked value',
   /if \(!\(tips > 0\)\) return null/.test(moment))
-check('it offers a real "continue with Free" path, not a forced gate',
-  /Continue with Free/.test(moment) && /onContinueFree/.test(onboarding))
+check('the creator can always skip the upsell and keep going',
+  /onSkip/.test(onboarding) && /Skip for now/.test(onboarding))
 check('the false "multi-platform is a Pro feature" claim is gone',
   !/Multi-platform tracking is a Pro feature/.test(onboarding))
 check('the platform limit is described as a count, from the shared constant',
-  /Free tracks up to \{FREE_MAX_PLATFORMS\} platforms/.test(onboarding))
-check('the unverified annual price is gone and pricing is shared',
-  !/\$99\/year/.test(onboarding) && /PRO_PRICE_MONTHLY_LABEL/.test(onboarding))
+  /Free tracks up to \{FREE_MAX_PLATFORMS\} platforms/.test(onboarding) &&
+  /from '\.\.\/\.\.\/lib\/planLimits'/.test(onboarding))
+// Was: "the unverified annual price is gone". $99/year is now canonical —
+// main's pricing page quotes it — so the risk is no longer that the number is
+// invented, it is that the two surfaces drift apart. Pin them to each other.
+check('the annual price quoted in onboarding matches the pricing page',
+  /\$99\/year/.test(onboarding) && /\$99 per year|\$99\/year/.test(pricingRaw))
+check('the monthly price quoted in onboarding matches the canonical constant',
+  /\$19\.99/.test(onboarding) && /PRO_PRICE_MONTHLY_LABEL = '\$19\.99\/mo'/.test(constantsRaw))
 check('the "save history forever" claim is gone (Free stores history too)',
-  !/Save history forever/.test(onboarding))
+  !/Save history forever/.test(onboarding) && /Full history analysed/.test(onboarding))
 check('the upsell routes to the in-app upgrade path, not an external page',
-  !/camcashgrl\.com\/pricing/.test(onboarding))
+  !/camcashgrl\.com\/pricing/.test(onboarding) &&
+  (onboarding.match(/router\.push\('\/pricing'\)/g) || []).length === 2)
 check('the plan comparison describes Free accurately and generously',
   /supported platforms/.test(moment) && /never deleted/.test(moment) &&
   /Full CSV imports/.test(moment))
@@ -345,31 +362,41 @@ check('the full-card blur on locked fan rows is gone',
 check('Free fan rows keep every canonical metric readable',
   /fmtUsd0\(fan\.totalUSD\)/.test(fans) && /\{fan\.tipCount\}/.test(fans) &&
   /fmtDays\(fan\.daysSinceLastTip\)/.test(fans) && /rule\.reason\(fan, ctx\)/.test(fans))
-check('locked rows redact the premium values rather than the whole card',
-  /<LockedValue/.test(fans) && /dimmed \?/.test(fans))
-// The server (see verify-whale-entitlement.mjs) withholds these fans' fields
-// from Free entirely, so the UI must not render them either — redacting the
-// identity alone would widen Free access past what the API enforces.
-check('locked rows do NOT leak the hidden fans’ identity or figures',
-  (() => {
-    const i = fans.indexOf('dimmed')
-    return i > 0 && /dimmed\s*\?\s*"\?"\s*:/.test(fans)
-  })())
-check('locked rows carry a restrained PRO label, not a giant lock',
-  /Pro<\/span>/.test(fans) && !/🔒/.test(fans))
-// The property is "a locked row offers nothing to act on", not "the markup is
-// a bare <button>". The restored creator tools (View profile / Add note) wrap
-// the row's actions in .fan-row-actions, still behind the same !dimmed gate.
-check('locked rows expose no action buttons (nothing to act on yet)',
-  /\{!dimmed && \(\s*<div className="fan-row-actions">/.test(fans) &&
-  !/dimmed\s*&&\s*\(\s*<div className="fan-row-actions">/.test(fans.replace('!dimmed', 'XX')))
+// ── THE LOCKED FAN ROW IS GONE, DELIBERATELY ────────────────────────────
+// These four assertions described the freemium locked-preview row: real fans
+// rendered `dimmed`, identity and figures replaced by <LockedValue> blocks, a
+// restrained PRO pill, no action buttons. Main removed that whole design for
+// the card-backed trial, in which nothing is previewed because nothing is
+// locked. The assertions are INVERTED rather than deleted — they now pin the
+// absence of the design so it cannot creep back, and pin that the withheld
+// fans are still counted so the one conversion surface keeps quoting real
+// numbers.
+check('no fan row is rendered in a locked/dimmed state',
+  !/dimmed/.test(fans))
+check('no redacted <LockedValue> placeholders stand in for real fan figures',
+  !/<LockedValue/.test(fans))
+check('the withheld fans are still counted, to power the real-numbers summary',
+  /const hidden = isPro \? \[\] : prioritised\.slice\(freeFanLimit\)/.test(fans) &&
+  /hiddenSummary/.test(fans))
+check('every rendered fan row is a real, actionable row',
+  /<div className="fan-row-actions">/.test(fans) &&
+  // The call site, not the prop name: a prop name survives any mutation that
+  // only breaks the wiring, so matching /onViewFan/ alone proves nothing.
+  /onViewFan=\{onViewFan\} onAddNote=\{onAddNote\}/.test(fans) &&
+  /hasNote=\{Boolean\(notedFans\?\.has\?\./.test(fans))
 check('the third bespoke button style was retired for the signature one',
   !/function BrandButton/.test(fans) && /<UnlockButton/.test(fans))
 check('the fan opportunity section is the ONE primary CTA',
   (fans.match(/<UnlockButton/g) || []).length === 1 &&
   /fans_priority_locked/.test(fans))
-check('the intelligence module is a shared LockedModule with a quiet CTA',
-  /<LockedModule/.test(fans) && /surface="fans_intelligence"/.test(fans))
+// Two upsells used to sit on this page — the summary card and a second
+// "Fan intelligence" LockedModule gated on the same hiddenSummary. The card's
+// own comment already called that the "column of competing upgrade buttons"
+// the page must not become, so the merge kept exactly one.
+check('exactly one Fan Intelligence conversion surface remains',
+  (fans.match(/onUpgrade\?\./g) || []).length === 1 &&
+  /surface="fans_priority_locked"/.test(fans) &&
+  !/<LockedModule/.test(fans))
 check('fan intelligence quotes only real measured aggregates',
   /hiddenSummary\.count/.test(fans) && /hiddenSummary\.lifetimeUSD/.test(fans) &&
   /hiddenSummary\.overdue/.test(fans))
@@ -464,9 +491,23 @@ mut('the timeline "saved not deleted" check catches an emptied segment',
   css.replace(/\.cc-timeline-saved \{[\s\S]*?\}/, '.cc-timeline-saved { background: transparent; }'),
   src => /\.cc-timeline-saved \{[\s\S]{0,200}repeating-linear-gradient/.test(src))
 
+// The old mutation edited 'pointerEvents: dimmed', a string the locked-row
+// design took with it — so it silently became a no-op that proved nothing.
+// Mutate what the CURRENT assertions actually read instead: a blurred row,
+// and a reintroduced dimmed row.
 mut('the Fans blur check catches a reintroduced full-card blur',
-  fans.replace('pointerEvents: dimmed', 'filter: dimmed ? "blur(4px)" : "none", pointerEvents: dimmed'),
-  src => !/filter: dimmed \? "blur/.test(src) && !/blur\(4px\)/.test(src))
+  fans.replace('background: C.card2,', 'background: C.card2, filter: "blur(4px)",'),
+  src => !/blur\(4px\)/.test(src))
+
+mut('the "no locked/dimmed row" check catches the design creeping back',
+  fans.replace('function FanRow({ fan, rule, ctx, onMessage,',
+               'function FanRow({ fan, rule, ctx, dimmed = false, onMessage,'),
+  src => !/dimmed/.test(src))
+
+mut('the single-conversion-surface check catches a second upsell',
+  fans.replace('onUpgrade?.("fans_priority_locked")',
+               'onUpgrade?.("fans_priority_locked"); onUpgrade?.("fans_intelligence")'),
+  src => (src.match(/onUpgrade\?\./g) || []).length === 1)
 
 mut('the Free-row readability check catches a redacted lifetime value',
   fans.replace('fmtUsd0(fan.totalUSD)', 'REDACTED'),

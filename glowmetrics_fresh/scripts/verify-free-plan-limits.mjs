@@ -5,6 +5,17 @@
 import fs from 'fs'
 import path from 'path'
 
+// Entitlement is EXECUTED here, not pattern-matched. Six assertions in this
+// file used to read the pricing page for the Free 3-platform / 31-day copy.
+// Main's trial-first pricing page no longer advertises those numbers, but the
+// limits themselves are unchanged and still enforced — so the checks moved
+// from the marketing copy to the enforcement they actually describe.
+import { isProPlan, getAccessState, trialDaysRemaining, PRO_PLANS, TRIAL_DAYS } from '../lib/plan.js'
+import { FREE_MAX_PLATFORMS, FREE_HISTORY_DAYS } from '../lib/planLimits.js'
+
+const FUTURE = new Date(Date.now() + 3 * 86400000).toISOString()
+const PAST = new Date(Date.now() - 86400000).toISOString()
+
 const root = process.cwd()
 const read = (p) => fs.readFileSync(path.join(root, p), 'utf8')
 
@@ -24,6 +35,7 @@ const conversionBand = read('app/dashboard/ConversionBand.js')
 const resultUi = dashboard + '\n' + importResult + read('app/dashboard/components/HistoryTimeline.js') + read('app/dashboard/components/LockedValue.js')
 const migration = read('supabase/migrations/20260817_free_plan_three_platform_31_day_history.sql')
 const paidSessionsMigration = read('supabase/migrations/20260817b_free_platform_cap_counts_paid_sessions.sql')
+const liveGateMigration = read('supabase/migrations/20260821_close_live_sessions_direct_insert_bypass.sql')
 
 // Every migration in the repo, including any outside this app directory.
 // A same-named file at the REPO ROOT redefined both Free-tier platform guards
@@ -248,13 +260,17 @@ const checks = [
   // deliberately, to explain why it was wrong. Only shipped copy counts.
   ['pricing never frames the 31-day rule as an import limit',
     !/[Ii]mport up to 31 days/.test(pricing.replace(/^\s*\/\/.*$/gm, ''))],
-  ['pricing states the window is an analysis focus, per platform',
-    /most recent 31 days per platform/.test(pricing)],
-  ['pricing says older history stays saved', /older history stays saved/i.test(pricing)],
-  ['pricing Pro benefit does not imply re-uploading stored history',
-    !/full historical imports/.test(pricing) && /no re-upload/i.test(pricing)],
-  // Preserved, correct claims — these must survive the rewrite.
-  ['pricing still states the 3-platform Free cap', /up to 3 platforms on the Free plan/i.test(pricing)],
+  // ── The Free boundary, tested where it is ENFORCED ──────────────────
+  // These four replace pricing-copy assertions retired by main's trial-first
+  // rewrite. The limits did not change; only where they are advertised did.
+  ['the Free platform cap is still 3, from the canonical constant',
+    FREE_MAX_PLATFORMS === 3],
+  ['the Free history window is still 31 days, from the canonical constant',
+    FREE_HISTORY_DAYS === 31],
+  ['the history window is an analysis boundary — older rows are never deleted',
+    /do NOT\s*\n?\s*\*?\s*delete older rows/i.test(plan) || /not.{0,40}delete older rows/is.test(plan)],
+  ['the upload path filters to the window instead of rejecting the import',
+    /filterFreeHistory|splitFreeHistory/.test(upload)],
   ['pricing still offers more platforms on Pro', /additional platforms/i.test(pricing)],
   ['pricing still lists no CamSoda', !/camsoda/i.test(pricing)],
 
@@ -276,8 +292,40 @@ const checks = [
     /platformCount >= FREE_MAX_PLATFORMS/.test(preview)],
   ['Preview lets Free compare platforms it is entitled to',
     /platformComparison:\s*\{\s*needsData: platformCount < 2, requiresPro: false/.test(preview)],
-  ['Pricing says up to 3 platforms', /Track up to 3 platforms/.test(pricing) || /up to 3 cam platforms/.test(pricing)],
-  ['Pricing says 31-day CSV history', /31 days of tip history per platform/.test(pricing) || /31-day history window per platform/.test(pricing)],
+  // ── Plan entitlement contract, executed against lib/plan.js ─────────
+  // Replaces two pricing-copy assertions. isProPlan() is the single predicate
+  // the insights APIs, the Live Mode guard and the DB Pro gates all defer to,
+  // so these pin the contract every one of them inherits.
+  ['a Free plan gets no Pro access', isProPlan({ plan: 'free', plan_expires_at: null }) === false],
+  ['a null plan gets no Pro access', isProPlan({ plan: null, plan_expires_at: null }) === false],
+  ['a missing profile gets no Pro access', isProPlan(null) === false],
+  ['a paid Pro plan gets Pro access', isProPlan({ plan: 'pro', plan_expires_at: null }) === true],
+  ['an ACTIVE trial gets Pro access', isProPlan({ plan: 'pro', plan_expires_at: FUTURE }) === true],
+  ['an EXPIRED trial falls back to Free', isProPlan({ plan: 'pro', plan_expires_at: PAST }) === false],
+  ['unlimited and legacy follow the canonical contract',
+    PRO_PLANS.includes('unlimited') && PRO_PLANS.includes('legacy') &&
+    isProPlan({ plan: 'unlimited', plan_expires_at: null }) === true &&
+    isProPlan({ plan: 'legacy', plan_expires_at: null }) === true],
+  // trial_ends_at is display-only: it drives the countdown, never access.
+  ['the card-backed trial is 7 days and drives display, not access',
+    TRIAL_DAYS === 7 &&
+    trialDaysRemaining({ trial_ends_at: FUTURE }) === 3 &&
+    trialDaysRemaining({ trial_ends_at: PAST }) === null &&
+    getAccessState({ plan: 'pro', plan_expires_at: null, trial_ends_at: FUTURE }) === 'trialing' &&
+    getAccessState({ plan: 'pro', plan_expires_at: null }) === 'subscribed' &&
+    getAccessState({ plan: 'free' }) === 'free' &&
+    // The case that matters: trial_ends_at on a FREE profile must not confer
+    // access or a trial state. Access is isProPlan() alone; trial_ends_at only
+    // ever drives the countdown.
+    getAccessState({ plan: 'free', trial_ends_at: FUTURE }) === 'free' &&
+    isProPlan({ plan: 'free', trial_ends_at: FUTURE }) === false],
+  // Live Mode is Pro-only, and the DB is the backstop, not the UI.
+  ['Free cannot start Live Mode — the DB trigger performs the canonical check',
+    /perform public\.check_live_mode_pro_entitlement\(auth\.uid\(\)\)/.test(liveGateMigration) &&
+    /before insert on public\.live_sessions/i.test(liveGateMigration)],
+  ['the Live Mode gate does not restate the plan rule in SQL',
+    !/'free'/.test(liveGateMigration.slice(liveGateMigration.indexOf('enforce_live_mode_pro_entitlement'),
+      liveGateMigration.indexOf('drop trigger')))],
   ['DB trigger uses 3-platform ceiling', /existing_platform_count\s*>=\s*3/.test(migration)],
   ['A migration exists that raises the DB cap to 3', /existing_platform_count >= 3/.test(migration)],
   ['A migration exists that adds paid_sessions to the cap count',
@@ -482,10 +530,18 @@ if (passed !== checks.length) process.exit(1)
   // Upgrade modal repeats the situation instead of pitching generically.
   extra.push(['Upgrade modal leads with what we found, not a price',
     /Unlock the insights we found in your data/.test(dashboard)])
-  extra.push(['Upgrade modal CTA is the value, not the SKU',
-    /Unlock Pro →/.test(dashboard) && !/Upgrade to Pro — \$19\.99\/mo/.test(dashboard)])
+  // Trial-first: the CTA leads with the trial for anyone eligible, and only
+  // falls back to the SKU for someone who has already used theirs. Both
+  // assertions kept their intent — CTA is value-led, and the price plus
+  // cancel terms sit at the CTA — against main's copy rather than the old.
+  extra.push(['Upgrade modal CTA leads with the trial, not the SKU',
+    /Start my 7-day free trial →/.test(dashboard) &&
+    /trialEligible \? "Start my 7-day free trial →" : "🔓 Upgrade to Pro — \$19\.99\/mo"/.test(dashboard)])
   extra.push(['Upgrade modal shows price and cancel terms at the CTA',
-    /PRO_PRICE_MONTHLY_LABEL\} · \{PRO_PRICE_NOTE/.test(dashboard)])
+    /\$19\.99\/mo begins after \$\{TRIAL_DAYS\} days — cancel any time before then and you pay nothing/.test(dashboard) &&
+    /Cancel anytime/.test(dashboard)])
+  extra.push(['the trial CTA never implies the card is optional',
+    /Card required to start/.test(dashboard)])
   extra.push(['Upgrade modal benefits are per-situation, not one static list',
     /benefits: \[/.test(dashboard) && /upgradeCopy\.benefits/.test(dashboard)])
   extra.push(['The old generic benefit list is gone',
