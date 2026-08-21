@@ -151,13 +151,12 @@ check('the Pro state explains what Free keeps, not just what it loses',
 // to explain why it went, and that quotation is not a rendered claim.
 check('the signed-out card no longer claims the product is free during beta',
   !/free during beta/i.test(live) && !/completely free/i.test(live))
-check('the AI coach is not offered as a free-signup feature',
-  !/'AI coach with 6 strategy modes'/.test(live))
-check('the AI coach is labelled Creator Pro where it is still listed',
-  /AI coach with 6 strategy modes — Creator Pro/.test(live))
-check('the signed-out card still says what a free account genuinely gives',
-  /Free account, no card required/.test(live) &&
-  /Historical session breakdowns/.test(live))
+// The AI coach is advertised on the signed-out card by explicit product
+// decision. What must NOT come back is the pricing claim beside it.
+check('the AI coach is still advertised',
+  /'AI coach with 6 strategy modes'/.test(live))
+check('the decision to keep it is recorded, not incidental',
+  /kept by explicit product decision/.test(liveRaw))
 check('Live Mode is named as Pro in the signed-out copy, not silently omitted',
   /Live Mode[^<]*is part of Creator Pro/.test(live))
 

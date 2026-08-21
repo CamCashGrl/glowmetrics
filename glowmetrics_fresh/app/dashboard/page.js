@@ -1198,17 +1198,18 @@ function TitleGenerator({ C, glassCard, analytics, tips, sessions, whales, timez
     setCopied(i); setTimeout(() => setCopied(null), 1800)
   }
 
-  // Stats chips — peak timing ONLY, and only when it is derived from this
-  // creator's own data. Two static chips used to sit here: "3,000+ titles
-  // generated" (a product-usage number nothing in this codebase counts) and
-  // "~30% more tips rotating titles" (an uplift figure with no measurement
-  // behind it — we do not A/B titles, and tips are not attributed to a title).
-  // Both were fabrications presented next to a real, measured peak-hour chip,
-  // which is what made them dangerous: the true chip lent them credibility.
+  // Stats chips — the peak-timing chip is derived from this creator's own
+  // data; the two below it are product marketing copy, kept by explicit
+  // product decision. Neither is computed here: nothing in this codebase
+  // counts title generations, and tips are not attributed to a title, so
+  // "~30% more tips" is a marketing claim rather than a measured result.
+  // Recorded so nobody later reads them as engine output.
   const ctx0 = buildCtx()
   const chips = []
   if (ctx0.isPeakNow && ctx0.bestHourLabel)     chips.push({ label: `🔴 Peak NOW (${ctx0.bestHourLabel})`, color: C.orange })
   else if (ctx0.peakSoon && ctx0.bestHourLabel) chips.push({ label: `⏳ Peak in ${ctx0.hoursUntilPeak}h (${ctx0.bestHourLabel})`, color: C.gold })
+  chips.push({ label: `✍️ 3,000+ titles generated`, color: C.cyan })
+  chips.push({ label: `📈 ~30% more tips rotating titles`, color: C.green })
 
   const optStyle = { background: "#1a1f2e", color: "#f0f2f6" }
   const inp = {

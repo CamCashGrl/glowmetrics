@@ -202,24 +202,24 @@ check('Overview renders no second stack of glass cards after the Command Center'
 
 
 // ══════════════════════════════════════════════════════════════════════
-// FABRICATED STAT CHIPS — Title Generator.
+// ROOM TITLE CHIPS — marketing copy, kept by explicit product decision.
 //
-// Two static chips sat beside the real, measured peak-hour chip:
-// "3,000+ titles generated" (nothing in this codebase counts generations)
-// and "~30% more tips rotating titles" (an uplift figure with no
-// measurement behind it — titles are never A/B'd and tips are never
-// attributed to a title). Both are gone; the measured chip stays.
+// "3,000+ titles generated" and "~30% more tips rotating titles" sit beside
+// the measured peak-hour chip. Neither is computed: nothing counts title
+// generations, and tips are never attributed to a title. They were removed
+// as fabrications and then restored on request. These checks pin only that
+// the MEASURED chip is still real and still present, so the marketing pair
+// can never quietly replace it with a computed-looking number.
 {
   const i = src.indexOf('const chips = []')
-  const block = src.slice(i, i + 700)
-  check('the invented generation-count chip is gone',
-    i > -1 && !/titles generated/.test(src))
-  check('the invented tip-uplift chip is gone',
-    !/more tips rotating titles/.test(src) && !/30%/.test(block))
-  check('the measured peak-hour chip survives — the honest one was not thrown out',
-    /chips\.push\(\{ label: `\ud83d\udd34 Peak NOW/.test(block))
-  check('the removal is explained in place rather than silently dropped',
-    /fabrications presented next to a real, measured peak-hour chip/.test(raw))
+  const block = src.slice(i, i + 900)
+  check('the measured peak-hour chip is still derived from the creator\'s data',
+    /chips\.push\(\{ label: `\ud83d\udd34 Peak NOW \(\$\{ctx0\.bestHourLabel\}\)`/.test(block))
+  check('the marketing chips are static literals, never computed values',
+    /label: `\u270d\ufe0f 3,000\+ titles generated`/.test(block) &&
+    /label: `\ud83d\udcc8 ~30% more tips rotating titles`/.test(block))
+  check('their nature is recorded in place, so they are not read as engine output',
+    /marketing claim rather than a measured result/.test(raw))
 }
 
 

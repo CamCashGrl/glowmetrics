@@ -1780,14 +1780,13 @@ export default function LivePage({ embedded = false } = {}) {
             <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.65, marginBottom: 16 }}>
               Create a free account to unlock your earnings history, session breakdowns and top-tipper reports. Live Mode — the real-time AI coach on this page — is part of Creator Pro.
             </div>
-            {/* These bullets previously read "100% free during beta" and promised
-                "AI coach with 6 strategy modes" on a free signup. Live Mode is a
-                Pro feature (lib/liveSession/entitlement.js) and the product is
-                priced at /pricing, so both lines promised something signup does
-                not deliver. Free keeps everything it actually keeps; the coach
-                is labelled as Pro rather than quietly dropped. */}
+            {/* The AI coach claim is kept by explicit product decision. The
+                "100% free during beta" line is NOT restored: the product is
+                now behind a card-backed trial (lib/plan.js TRIAL_DAYS) with a
+                $19.99/mo subscription after it, so that line would be plainly
+                false to a visitor deciding whether to sign up. */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
-              {['Historical session breakdowns', 'Top tipper + whale tracking', 'Earnings by day / hour / platform', 'Free account, no card required', 'AI coach with 6 strategy modes — Creator Pro'].map(f => (
+              {['Historical session breakdowns', 'Top tipper + whale tracking', 'Earnings by day / hour / platform', 'AI coach with 6 strategy modes'].map(f => (
                 <div key={f} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                   <span style={{ color: C.pink, fontSize: 12 }}>✓</span>
                   <span style={{ fontSize: 12, color: C.muted }}>{f}</span>
