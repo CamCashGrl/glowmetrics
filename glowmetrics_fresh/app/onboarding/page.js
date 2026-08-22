@@ -422,7 +422,7 @@ function ProUpsellModal({platform,onSkip}){
 }
 
 // ── Live Mode Demo ─────────────────────────────────────────────
-function LiveModeDemo({onInstall,onSkip}){
+function LiveModeDemo({onContinue}){
   const PROMPTS=[{icon:'🐋',title:'Greet Returning Fan',body:'whaleking99 just entered. He tipped $180 last stream. Say hi by name.',impact:'+$40 avg when acknowledged'},{icon:'💡',title:'Mention Your Tip Menu',body:'22 active viewers, no tip in 7 min. Mention your toy or wheel menu.',impact:'+34% tip rate after prompt'},{icon:'🎯',title:'Refresh the Room Goal',body:'Tips slowed down. Try a smaller, faster goal to restart momentum.',impact:'Recovers dead zones in ~4 min'}]
   const[idx,setIdx]=useState(0)
   useEffect(()=>{const t=setInterval(()=>setIdx(i=>(i+1)%PROMPTS.length),3500);return()=>clearInterval(t)},[])
@@ -446,8 +446,12 @@ function LiveModeDemo({onInstall,onSkip}){
         </div>
         <div style={{display:'flex',justifyContent:'center',gap:5,marginTop:10}}>{PROMPTS.map((_,i)=>(<div key={i} onClick={()=>setIdx(i)} style={{width:i===idx?16:5,height:5,borderRadius:3,background:i===idx?'#21E6F3':'rgba(255,255,255,0.15)',transition:'all 0.3s',cursor:'pointer'}}/>))}</div>
       </div>
-      <OBBtn onClick={onInstall} style={{marginBottom:10}}>Install Live Tracker — it's free →</OBBtn>
-      <div style={{textAlign:'center'}}><button onClick={onSkip} style={{background:'none',border:'none',fontSize:12,color:'rgba(33,230,243,0.7)',cursor:'pointer'}}>Skip — go to dashboard first</button></div>
+      {/* Was "Install Live Tracker — it's free →", which sent every creator,
+          Free included, to install an extension that only does anything through
+          Live Mode — a Pro feature the database refuses to start for them. The
+          preview above still sells Live Mode; the extension itself is now
+          offered in the Creator Pro flow, once the creator actually has it. */}
+      <OBBtn onClick={onContinue} style={{marginBottom:10}}>Continue to my dashboard →</OBBtn>
     </div>
   )
 }
@@ -1070,10 +1074,7 @@ export default function OnboardingPage(){
 
           {/* ══ LIVE MODE ══ */}
           {step==='live'&&(
-            <LiveModeDemo
-              onInstall={()=>{window.open('https://www.camcashgrl.com/extension','_blank');setStep('done')}}
-              onSkip={()=>setStep('done')}
-            />
+            <LiveModeDemo onContinue={()=>setStep('done')} />
           )}
 
           {/* ══ STEP4 ══ */}
@@ -1084,7 +1085,7 @@ export default function OnboardingPage(){
                 <h1 style={{fontSize:20,fontWeight:900,color:'#fff',marginBottom:7}}>Make your dashboard smarter</h1>
                 <p style={{fontSize:13,color:'rgba(148,163,184,0.8)',lineHeight:1.6}}>Add more history or turn on live tracking so CamCash can find stronger patterns.</p>
               </div>
-              {[{icon:'📥',title:'Add more history',sub:'Improve accuracy with more tip data',onClick:()=>{setPasteText('');setStep('paste')}},{icon:'📡',title:'Set up live tracking',sub:'Track future tips automatically while you stream',onClick:()=>window.open('https://www.camcashgrl.com/extension','_blank')},{icon:'📊',title:'Go to dashboard',sub:'See what CamCash found so far',onClick:()=>router.push('/dashboard')}].map(a=>(<button key={a.title} onClick={a.onClick} style={{display:'flex',alignItems:'center',gap:13,padding:'14px 15px',width:'100%',background:'rgba(255,255,255,0.03)',border:'1px solid rgba(255,255,255,0.08)',borderRadius:15,cursor:'pointer',transition:'all 0.2s',textAlign:'left',marginBottom:9}} onMouseEnter={e=>{e.currentTarget.style.borderColor='rgba(33,230,243,0.3)';e.currentTarget.style.background='rgba(33,230,243,0.04)';e.currentTarget.style.transform='translateY(-1px)'}} onMouseLeave={e=>{e.currentTarget.style.borderColor='rgba(255,255,255,0.08)';e.currentTarget.style.background='rgba(255,255,255,0.03)';e.currentTarget.style.transform=''}}><div style={{width:40,height:40,borderRadius:13,background:'rgba(33,230,243,0.08)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:19,flexShrink:0}}>{a.icon}</div><div><div style={{fontSize:13,fontWeight:700,color:'#fff',marginBottom:1}}>{a.title}</div><div style={{fontSize:11,color:'rgba(100,116,139,0.8)'}}>{a.sub}</div></div><div style={{marginLeft:'auto',color:'rgba(100,116,139,0.5)',fontSize:14}}>→</div></button>))}
+              {[{icon:'📥',title:'Add more history',sub:'Improve accuracy with more tip data',onClick:()=>{setPasteText('');setStep('paste')}},{icon:'📊',title:'Go to dashboard',sub:'See what CamCash found so far',onClick:()=>router.push('/dashboard')}].map(a=>(<button key={a.title} onClick={a.onClick} style={{display:'flex',alignItems:'center',gap:13,padding:'14px 15px',width:'100%',background:'rgba(255,255,255,0.03)',border:'1px solid rgba(255,255,255,0.08)',borderRadius:15,cursor:'pointer',transition:'all 0.2s',textAlign:'left',marginBottom:9}} onMouseEnter={e=>{e.currentTarget.style.borderColor='rgba(33,230,243,0.3)';e.currentTarget.style.background='rgba(33,230,243,0.04)';e.currentTarget.style.transform='translateY(-1px)'}} onMouseLeave={e=>{e.currentTarget.style.borderColor='rgba(255,255,255,0.08)';e.currentTarget.style.background='rgba(255,255,255,0.03)';e.currentTarget.style.transform=''}}><div style={{width:40,height:40,borderRadius:13,background:'rgba(33,230,243,0.08)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:19,flexShrink:0}}>{a.icon}</div><div><div style={{fontSize:13,fontWeight:700,color:'#fff',marginBottom:1}}>{a.title}</div><div style={{fontSize:11,color:'rgba(100,116,139,0.8)'}}>{a.sub}</div></div><div style={{marginLeft:'auto',color:'rgba(100,116,139,0.5)',fontSize:14}}>→</div></button>))}
             </div>
           )}
 
@@ -1157,7 +1158,7 @@ export default function OnboardingPage(){
 
               <OBBtn onClick={()=>router.push('/dashboard')} style={{marginBottom:10}}>Go to Dashboard →</OBBtn>
               <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:9}}>
-                {[{label:'Add more history',onClick:()=>{setPasteText('');setStep('paste')}},{label:'Set up live tracking',onClick:()=>window.open('https://www.camcashgrl.com/extension','_blank')}].map(b=>(<OBSecBtn key={b.label} onClick={b.onClick} style={{width:'100%',height:40,fontSize:12}}>{b.label}</OBSecBtn>))}
+                {[{label:'Add more history',onClick:()=>{setPasteText('');setStep('paste')}}].map(b=>(<OBSecBtn key={b.label} onClick={b.onClick} style={{width:'100%',height:40,fontSize:12}}>{b.label}</OBSecBtn>))}
               </div>
             </div>
           )}

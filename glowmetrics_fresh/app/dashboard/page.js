@@ -15,6 +15,7 @@ import SiteFooter from "../components/SiteFooter"
 import { PLATFORM_TOKEN_RATES, SUPPORTED_PLATFORMS, tokenRate, PRO_PRICE_MONTHLY_LABEL, PRO_PRICE_NOTE } from "../../lib/constants"
 import { track as gtmTrack } from '../../lib/track'
 import { isProPlan, trialDaysRemaining, getAccessState, TRIAL_DAYS } from '../../lib/plan'
+import ExtensionOffer, { isExtensionOfferDismissed } from './ExtensionOffer'
 import { FREE_MAX_PLATFORMS, FREE_HISTORY_DAYS, filterFreeHistory, splitFreeHistory, uniquePlatforms, normalizePlatform } from '../../lib/planLimits'
 import { resolveCreatorTimezone, autoPopulateTimezoneIfMissing } from '../../lib/timezone'
 import { resolveUpgradeContext } from '../../lib/upgradeContext'
@@ -1749,6 +1750,10 @@ export default function Dashboard() {
   // of keying on the id: re-rendering or refreshing cannot manufacture a
   // second report for the same stream, and an already-opened report stops
   // being NEW permanently rather than resurfacing.
+  // Raised only after the Stripe return handler has OBSERVED isProPlan()
+  // true — never on checkout completing, which can land before the
+  // webhook has flipped the plan.
+  const [showExtensionOffer, setShowExtensionOffer] = useState(false)
   const [latestEndedSession, setLatestEndedSession] = useState(null)
   const [sessionTipsForReport, setSessionTipsForReport] = useState([])
   const [reportCoachingEvents, setReportCoachingEvents] = useState([])
@@ -2290,6 +2295,10 @@ export default function Dashboard() {
                 // actually unlocked, as distinct from the payment completing.
                 gtmTrack('pro_unlocked', { source: 'checkout_return' })
                 showToast('✨ Pro is active — your full history is unlocked')
+                // The extension offer belongs HERE and nowhere earlier: this
+                // is the first instant the creator actually has Live Mode.
+                // Suppressed once dismissed, so it never becomes a nag.
+                if (!isExtensionOfferDismissed()) setShowExtensionOffer(true)
                 return
               }
             }
@@ -3744,6 +3753,14 @@ const stopImportMessageRotation = () => {
       <Sidebar activeTab={activeTab} onTabChange={(tab) => { setActiveTab(tab); if (typeof window !== "undefined") { localStorage.setItem("camcash_tab", tab); window.scrollTo({ top: 0, behavior: "instant" }); } }} user={user} onSignOut={async () => { await supabase.auth.signOut(); router.replace("/login"); }} isPro={isPro} trialEligible={trialEligible} />{/* MAIN CONTENT */}
       <div className="dash-main" style={{ marginLeft: 240, width: "calc(100% - 240px)", minWidth: 0, padding: 32, boxSizing: "border-box", overflowX: "hidden" }}>
 
+        {/* Post-checkout only. isPro is passed through so the component's own
+            guard agrees with this one — a Free creator must never be pitched
+            an extension whose only purpose is Live Mode. */}
+        {showExtensionOffer && (
+          <ExtensionOffer C={C} isPro={isPro} variant="success"
+            onDismiss={() => setShowExtensionOffer(false)} />
+        )}
+
         {/* ── TRIAL COUNTDOWN ──
             Shown only while a card-backed trial is actually running (Stripe's
             trial_end, mirrored to profiles.trial_ends_at by the webhook). Not
@@ -4172,6 +4189,13 @@ const stopImportMessageRotation = () => {
             onUpgrade={(src) => openUpgradeModal(src)}
             onPlanStream={() => handleTabChange('planner')}
           />
+        )}
+
+        {/* Highest-intent placement: the creator is on the Live Mode tab, about
+            to stream. Dismissible, rendered ABOVE the engine and never in place
+            of it — Live Mode stays fully usable without the extension. */}
+        {activeTab === "live" && isPro && !showExtensionOffer && !isExtensionOfferDismissed() && (
+          <ExtensionOffer C={C} isPro={isPro} variant="reminder" />
         )}
 
         {activeTab === "live" && (isPro ? <LiveEnginePage embedded /> : (() => {
