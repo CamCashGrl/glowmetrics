@@ -64,3 +64,45 @@ export const WHALE_LIFETIME_TOKEN_THRESHOLD = 500
 // best or most profitable one. Kept here rather than as a scattered string
 // literal so every consumer excludes the same value.
 export const UNDETECTED_PLATFORM = 'Unknown'
+
+// Creator Pro's headline price, shown wherever a CTA asks for the upgrade so
+// nobody has to click through to discover it.
+//
+// This is a DISPLAY label only — Stripe remains the source of truth for what
+// is actually charged, and nothing here creates or selects a price. It lives
+// in constants so the post-import CTA does not become a fourth free-floating
+// "$19.99" literal; app/pricing/PricingClient.js still hardcodes its own and
+// should migrate here when that file is next touched.
+export const PRO_PRICE_MONTHLY_LABEL = '$19.99/mo'
+export const PRO_PRICE_NOTE = 'cancel anytime'
+
+// The platforms CamCash actually TRACKS — the canonical set for import,
+// analytics, and Free-plan slot counting.
+//
+// Deliberately an explicit list rather than Object.keys(PLATFORM_TOKEN_RATES).
+// Those are two different questions:
+//
+//   PLATFORM_TOKEN_RATES  "what is a token worth on this site?"  — a published
+//                         industry rate, used by the public Token Calculator
+//                         and the /guides content, which quote rates for sites
+//                         CamCash does not ingest.
+//   SUPPORTED_PLATFORMS   "can a creator import this site and have CamCash
+//                         analyse it?" — a product-scope claim.
+//
+// Deriving the second from the first silently promoted every rate-table entry
+// into a tracked platform. That is how CamSoda — whose import path is not
+// finished — became valid at the upload API and started consuming one of a
+// Free creator's three slots. Keep the calculator's rate; do not claim
+// tracking support. Add a platform here only when its import path ships.
+//
+// Only these consume a Free platform slot. UNDETECTED_PLATFORM ('Unknown')
+// is the parser's bucket for rows whose platform could not be identified; it
+// is an absence of a platform, so it must not spend one of the creator's
+// three slots. Their data stays usable — this is purely about slot counting.
+export const SUPPORTED_PLATFORMS = ['Chaturbate', 'BongaCams', 'MyFreeCams', 'Stripchat']
+const SUPPORTED_PLATFORMS_LOWER = new Set(SUPPORTED_PLATFORMS.map((p) => p.toLowerCase()))
+
+export function isSupportedPlatform(value) {
+  const key = String(value || '').trim().toLowerCase()
+  return key !== '' && SUPPORTED_PLATFORMS_LOWER.has(key)
+}

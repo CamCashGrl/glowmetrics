@@ -54,7 +54,11 @@ function region(startMarker, endMarkers) {
   }
   return src.slice(i, end)
 }
-const OVERVIEW = region('{activeTab === "overview" && (', ['{activeTab === "platforms"'])
+// The overview tab is now two sibling blocks: the post-stream report takes
+// the tab over when opened, and everything else renders when it is not. The
+// second block is the Overview proper — CommandCenter, ConversionBand and
+// the checklist all live there — so that is the region these checks slice.
+const OVERVIEW = region('{activeTab === "overview" && !viewingReport && (', ['{activeTab === "platforms"'])
 const PLATFORMS = region('{activeTab === "platforms" && (', ['{activeTab === "whales"'])
 const FANS = region('{activeTab === "whales" && (', ['{activeTab === "live"'])
 
@@ -194,6 +198,52 @@ check('Overview renders no second stack of glass cards after the Command Center'
     fans.includes('avgDaysBetweenTips') && fans.includes('daysSinceLastTip'))
   check('the peak hour comes from the canonical field, not a re-bucketing in the page',
     fans.includes('peakLocalHour') && !src.includes('hourCounts[h] = (hourCounts[h] || 0) + 1'))
+}
+
+
+// ══════════════════════════════════════════════════════════════════════
+// ROOM TITLE CHIPS — marketing copy, kept by explicit product decision.
+//
+// "3,000+ titles generated" and "~30% more tips rotating titles" sit beside
+// the measured peak-hour chip. Neither is computed: nothing counts title
+// generations, and tips are never attributed to a title. They were removed
+// as fabrications and then restored on request. These checks pin only that
+// the MEASURED chip is still real and still present, so the marketing pair
+// can never quietly replace it with a computed-looking number.
+{
+  const i = src.indexOf('const chips = []')
+  const block = src.slice(i, i + 900)
+  check('the measured peak-hour chip is still derived from the creator\'s data',
+    /chips\.push\(\{ label: `\ud83d\udd34 Peak NOW \(\$\{ctx0\.bestHourLabel\}\)`/.test(block))
+  check('the marketing chips are static literals, never computed values',
+    /label: `\u270d\ufe0f 3,000\+ titles generated`/.test(block) &&
+    /label: `\ud83d\udcc8 ~30% more tips rotating titles`/.test(block))
+  check('their nature is recorded in place, so they are not read as engine output',
+    /marketing claim rather than a measured result/.test(raw))
+}
+
+
+// ══════════════════════════════════════════════════════════════════════
+// LOADING GATE vs HOOK ORDER.
+//
+// Browser QA caught the dashboard rendering completely blank: React threw
+// "Rendered more hooks than during the previous render". The `if (loading)`
+// early return sat ABOVE four hooks (notedUsernames and Task D's
+// streamReport / liveReportsBySessionKey / openStreamReport), so the first
+// render returned before them and the second ran four more. Any hook added
+// below that gate reintroduces it, and no unit test would notice — the page
+// just goes white.
+{
+  const gate = src.indexOf('if (loading) {')
+  check('the loading gate still exists', gate > -1)
+  const hookRe = /\b(useState|useMemo|useEffect|useCallback|useRef)\s*\(/g
+  let m, last = -1, lastName = ''
+  while ((m = hookRe.exec(src)) !== null) { last = m.index; lastName = m[1] }
+  check('every hook is declared ABOVE the loading gate',
+    gate > -1 && last < gate,
+    `last hook ${lastName}() at ${last}, gate at ${gate} — a hook below the gate makes the first (loading) render call fewer hooks than the second, and React blanks the page`)
+  check('the ordering requirement is documented at the gate',
+    /MUST STAY BELOW EVERY HOOK/.test(raw))
 }
 
 console.log(`\n${pass} passed, ${fail} failed`)

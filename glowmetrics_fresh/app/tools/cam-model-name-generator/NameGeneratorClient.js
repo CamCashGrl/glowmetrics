@@ -854,7 +854,7 @@ export default function NameGeneratorClient() {
             <Button as="a" href="/demo" variant="secondary" style={{ padding: '14px 32px', fontSize: 15 }}>See How It Works →</Button>
           </div>
           <div style={{ display: 'flex', gap: 6, justifyContent: 'center', flexWrap: 'wrap' }}>
-            {['Top Tippers','Peak Hours','Platform Comparison','AI Live Coaching','Free Forever'].map(t => (
+            {['Top Tippers','Peak Hours','Platform Comparison','AI Live Coaching','Full History'].map(t => (
               <span key={t} style={{ fontSize: 12, padding: '4px 10px', borderRadius: 20, background: 'rgba(255,255,255,0.04)', border: `1px solid ${C.border}`, color: C.muted }}>✓ {t}</span>
             ))}
           </div>

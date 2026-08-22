@@ -10,7 +10,8 @@ import { detectSessions, detectMeaningfulSessions } from '../../lib/analytics/se
 import { computeCanonicalBestTimes } from '../../lib/analytics/bestTimes';
 import { resolveCreatorTimezone } from '../../lib/timezone';
 import { toLocalHour } from '../../lib/analytics/localTime';
-import { tokenRate } from '../../lib/constants';
+import { SUPPORTED_PLATFORMS, tokenRate } from '../../lib/constants';
+import { isProPlan } from '../../lib/plan';
 import FeedbackWidget from '../components/FeedbackWidget';
 import EventsSync from './EventsSync';
 import Button from '../../components/ui/Button';
@@ -65,6 +66,18 @@ export default function LivePage({ embedded = false } = {}) {
   // with the dashboard's canonical answer for reasons that had nothing to
   // do with the intentional 90-day window.
   const [bestTimes, setBestTimes]     = useState(null);
+
+  // ── LIVE MODE ENTITLEMENT ───────────────────────────────────────────
+  // Live Mode is Pro. The server is the real gate (see
+  // lib/liveSession/entitlement.js — the start-session API refuses a Free
+  // caller with 402), but this page must not present a working-looking
+  // product to someone who cannot use it: a Free creator navigating
+  // directly to /live previously got the full status bar, platform picker
+  // and a Start Stream button that would simply fail.
+  //
+  // null = still resolving, so nothing renders as either state until the
+  // plan is known and Pro users never see an upgrade flash.
+  const [liveIsPro, setLiveIsPro] = useState(null);
 
   // ── DEMO / AUTH / EXT MODAL STATE ────────────────────────────────────
   const [demoTips, setDemoTips]           = useState([]);
@@ -197,9 +210,12 @@ export default function LivePage({ embedded = false } = {}) {
       // whose browser zone differs from their saved profile zone, Live Mode
       // named a different peak hour than the Command Center, Performance and
       // the Stream Planner all name for the same data.
-      supabase.from('profiles').select('timezone').eq('id', u.id).single()
+      supabase.from('profiles').select('timezone, plan, plan_expires_at').eq('id', u.id).single()
         .then(({ data: prof }) => {
           setCreatorTz(resolveCreatorTimezone(prof?.timezone).timezone);
+          // isProPlan honours plan_expires_at, so the promo-code trial
+          // unlocks Live Mode and stops unlocking it when it lapses.
+          setLiveIsPro(isProPlan(prof));
         });
 
       // Load last 12h of tips as history
@@ -599,6 +615,52 @@ export default function LivePage({ embedded = false } = {}) {
 
   // ── CONNECTING / UNAUTHENTICATED SCREENS ─────────────────────────────
 
+  // ── FREE: Pro state, not a broken page ──────────────────────────────
+  // Rendered only for a signed-in creator whose plan has resolved to
+  // non-Pro. An unauthenticated visitor still sees the existing demo/marketing
+  // page (they have no plan to check), and `liveIsPro === null` means the
+  // lookup has not returned yet, so a Pro creator never sees this flash.
+  //
+  // This mirrors the dashboard's Live Mode locked state rather than being a
+  // second design: the same four capabilities, the same canonical Button, and
+  // an upgrade destination that is the existing /pricing page — no second
+  // plan UI, no second pricing system.
+  if (user && liveIsPro === false) return (
+    <div style={{ minHeight: '100vh', background: C.bg, color: C.white, fontFamily: 'system-ui', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+      <div style={{ maxWidth: 640, width: '100%' }}>
+        <div style={{ textAlign: 'center', marginBottom: 26 }}>
+          <div style={{ fontSize: 40, marginBottom: 10 }}>🔴</div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: C.white, marginBottom: 10 }}>Live Mode is a Creator Pro feature</div>
+          <div style={{ fontSize: 13.5, color: C.muted, maxWidth: 460, margin: '0 auto', lineHeight: 1.65 }}>
+            Real-time coaching while you stream, then a post-stream report that lands in your dashboard. Your imported history and analytics stay exactly as they are on Free.
+          </div>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 12, marginBottom: 26 }}>
+          {[
+            { icon: '⚡', label: 'Real-time revenue pace', desc: 'See how tonight compares to your own average as tips arrive.' },
+            { icon: '🐳', label: 'Whale alerts', desc: 'Know the moment a top supporter joins your room.' },
+            { icon: '🧭', label: 'Room-health coaching', desc: 'Prompts when pace or engagement starts slipping.' },
+            { icon: '📄', label: 'Post-stream report', desc: 'What happened, which prompts you followed, and what changed.' },
+          ].map((f, i) => (
+            <div key={i} style={{ padding: '14px 16px', borderRadius: 12, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
+              <div style={{ fontSize: 18, marginBottom: 6 }}>{f.icon}</div>
+              <div style={{ fontSize: 12.5, fontWeight: 700, color: C.white, marginBottom: 3 }}>{f.label}</div>
+              <div style={{ fontSize: 11.5, color: C.muted, lineHeight: 1.45 }}>{f.desc}</div>
+            </div>
+          ))}
+        </div>
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+          <Button as="a" href="/pricing" style={{ minHeight: 44, padding: '13px 26px', fontSize: 14 }}>
+            Upgrade to Pro
+          </Button>
+          <Button as="a" href="/dashboard" variant="secondary" style={{ minHeight: 44, padding: '13px 26px', fontSize: 14 }}>
+            Back to dashboard
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+
   if (authStatus === 'connecting') return (
     <div style={{ minHeight: '100vh', background: C.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.muted, fontFamily: 'system-ui', gap: 10 }}>
       <style>{`@keyframes cc-pulse { 0%,100%{opacity:1;} 50%{opacity:0.35;} }`}</style>
@@ -897,9 +959,17 @@ export default function LivePage({ embedded = false } = {}) {
               Sign Out
             </button>
           ) : (
-            <button onClick={() => { setAuthMode('signin'); setShowAuthModal(true); }} style={{ padding: '7px 14px', background: 'linear-gradient(135deg, #10B981, #22D3EE)', border: 'none', borderRadius: 8, color: '#fff', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
+            /* Canonical signature Button (components/ui/Button.js) — this was
+               a hand-rolled green/cyan gradient imitating a CTA while the real
+               component was already imported two lines above for "Get
+               Extension". Same handler, same label, same size. The green
+               "Start Stream" controls are deliberately NOT converted: green is
+               this product's go-live action colour, shared with the
+               dashboard's "⚡ Go Live". */
+            <Button onClick={() => { setAuthMode('signin'); setShowAuthModal(true); }}
+              style={{ padding: '7px 14px', fontSize: 12 }}>
               Sign In
-            </button>
+            </Button>
           )}
         </div>
       </div>
@@ -964,7 +1034,7 @@ export default function LivePage({ embedded = false } = {}) {
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             <select value={livePlatform} onChange={e => setLivePlatform(e.target.value)} style={{ ...inp2, width: 'auto', padding: '5px 10px', fontSize: 12 }}>
-              {['Chaturbate','BongaCams','MyFreeCams','CamSoda','Stripchat'].map(p => <option key={p} value={p}>{p}</option>)}
+              {SUPPORTED_PLATFORMS.map(p => <option key={p} value={p}>{p}</option>)}
             </select>
             <input type="number" value={liveGoalTokens || ''} onChange={e => {
               const next = Math.max(0, Number(e.target.value) || 0);
@@ -1708,10 +1778,15 @@ export default function LivePage({ embedded = false } = {}) {
             <div style={{ fontSize: 28, marginBottom: 10 }}>📊</div>
             <div style={{ fontSize: 16, fontWeight: 800, color: C.white, marginBottom: 6 }}>Full Dashboard Access</div>
             <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.65, marginBottom: 16 }}>
-              CamCash is completely free during beta. Create an account to unlock your full earnings history, session breakdowns, top tipper reports, and the complete AI command center.
+              Create a free account to unlock your earnings history, session breakdowns and top-tipper reports. Live Mode — the real-time AI coach on this page — is part of Creator Pro.
             </div>
+            {/* The AI coach claim is kept by explicit product decision. The
+                "100% free during beta" line is NOT restored: the product is
+                now behind a card-backed trial (lib/plan.js TRIAL_DAYS) with a
+                $19.99/mo subscription after it, so that line would be plainly
+                false to a visitor deciding whether to sign up. */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
-              {['Historical session breakdowns', 'Top tipper + whale tracking', 'Earnings by day / hour / platform', 'AI coach with 6 strategy modes', '100% free during beta'].map(f => (
+              {['Historical session breakdowns', 'Top tipper + whale tracking', 'Earnings by day / hour / platform', 'AI coach with 6 strategy modes'].map(f => (
                 <div key={f} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                   <span style={{ color: C.pink, fontSize: 12 }}>✓</span>
                   <span style={{ fontSize: 12, color: C.muted }}>{f}</span>

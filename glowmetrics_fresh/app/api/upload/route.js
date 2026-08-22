@@ -1,8 +1,157 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { parseCSV, detectPlatform } from '../../../lib/analytics'
+import { parseCSV, detectPlatform, aggregateRows } from '../../../lib/analytics'
+import { FREE_MAX_PLATFORMS, filterFreeHistory, isPaidPlan, normalizePlatform } from '../../../lib/planLimits'
+import { isSupportedPlatform } from '../../../lib/constants'
 
 const BATCH_SIZE = 250 // Safe batch size — never hit Supabase limits
+
+// Real, non-fabricated summary stats for a subset of rows — reuses the
+// canonical aggregateRows() pipeline (lib/analytics.js) instead of a second
+// earnings/session/fan-count implementation, per the conversion-boundary
+// spec's "do not duplicate analytics" requirement. Only pulls the handful
+// of primitive fields the locked-preview UI needs; never invents a number
+// aggregateRows didn't itself compute.
+function summarizeRows(rows, tz) {
+  if (!rows.length) {
+    return { tips: 0, totalUsd: 0, sessions: 0, fans: 0, avgUsdPerHour: null, dateFrom: null, dateTo: null }
+  }
+  const a = aggregateRows(rows, tz)
+  const dates = rows.map(r => new Date(r.date_time)).filter(d => !isNaN(d))
+  return {
+    tips: rows.length,
+    totalUsd: a.totalUSD,
+    sessions: a.meaningfulSessionCount,
+    fans: a.uniqueFanCount,
+    // Null rather than 0 when no session qualifies for a rate — "$0.00/hr" is
+    // a claim, "—" is the absence of one.
+    avgUsdPerHour: a.hourlyRateSessionCount > 0 ? a.estimatedHourlyRate : null,
+    dateFrom: dates.length ? new Date(Math.min(...dates)).toISOString() : null,
+    dateTo: dates.length ? new Date(Math.max(...dates)).toISOString() : null,
+  }
+}
+
+// The single strongest thing Free can legitimately say about this creator,
+// drawn from the rows inside their window. It exists so the result screen has
+// a personal finding — a reason to trust the product — before it mentions
+// anything locked.
+//
+// EVIDENCE GATED. Each candidate has a minimum that must be met before it is
+// offered, and when nothing clears the bar this returns null and the UI simply
+// omits the block. A "finding" from one tip is not a finding.
+function buildFreeHighlight(rows, tz) {
+  if (!rows || rows.length < 3) return null
+  let a
+  try { a = aggregateRows(rows, tz) } catch (_) { return null }
+  if (!a) return null
+
+  // A best day needs more than one day of data to be a comparison at all.
+  const days = new Set(rows.map(r => String(r.date_time).slice(0, 10))).size
+  if (a.bestDay?.day && a.bestDay.avg > 0 && days >= 3) {
+    return {
+      kind: 'best_day',
+      label: 'Your strongest recent day',
+      value: a.bestDay.day,
+      detail: `You earn a median of $${a.bestDay.avg.toFixed(2)} on each ${a.bestDay.day} you stream.`,
+    }
+  }
+
+  // A top supporter needs to have tipped more than once, or it is just the
+  // single largest tip wearing a different name.
+  const top = (a.topTippers || [])[0]
+  if (top && top.count >= 2 && top.usd > 0) {
+    return {
+      kind: 'top_fan',
+      label: 'Your top recent supporter',
+      value: top.username,
+      detail: `${top.count} tips totalling $${top.usd.toFixed(2)} in this window.`,
+    }
+  }
+
+  if (a.totalUSD > 0 && a.uniqueFanCount > 0) {
+    return {
+      kind: 'pace',
+      label: 'Your recent pace',
+      value: `$${a.totalUSD.toFixed(2)}`,
+      detail: `from ${a.uniqueFanCount} supporter${a.uniqueFanCount === 1 ? '' : 's'} in the current window.`,
+    }
+  }
+  return null
+}
+
+// Real previews of what Pro would analyse, built from the WHOLE uploaded file.
+//
+// Every value here is read off ONE aggregateRows() run — the same canonical
+// engine the dashboard uses. Nothing is recomputed, estimated, or invented:
+// no opportunity dollars, no confidence percentages, no second best-time
+// algorithm. If the engine cannot support a claim, the corresponding preview
+// is omitted and the UI says so rather than filling the space.
+//
+// This exists because a Free creator's 31-day window can be legitimately thin
+// while the file behind it is rich. Analysing only the visible slice would
+// throw away the very evidence that makes the upgrade worth explaining.
+const RECOMMENDABLE_TIERS = new Set(['supported', 'high'])
+
+function buildLockedInsights(rows, tz) {
+  if (!rows || rows.length < 2) return null
+  let a
+  try { a = aggregateRows(rows, tz) } catch (_) { return null }
+  if (!a) return null
+
+  // Month-by-month earnings — the shape of a long-term trend.
+  const trend = (a.monthlyData || [])
+    .filter(m => m && m.month)
+    .map(m => ({ month: m.month, usd: m.usd, tips: m.tips, sessions: m.sessions }))
+
+  // Best windows use the SAME tier gate as Stream Planner. A window seen once
+  // is not a recommendation, so 'insufficient'/'promising' never qualify —
+  // which is why this list is often empty, and that is the honest answer.
+  const bestWindows = (a.canonicalBestTimes?.grid || [])
+    .filter(w => RECOMMENDABLE_TIERS.has(w.tier))
+    .sort((x, y) => y.medianUsdPerHour - x.medianUsdPerHour)
+    .slice(0, 3)
+    .map(w => ({
+      day: w.localDay, hour: w.localHour,
+      usdPerHour: w.medianUsdPerHour, sessionCount: w.sessionCount, tier: w.tier,
+    }))
+
+  const topFans = (a.topTippers || []).slice(0, 5).map(f => ({
+    rank: f.rank, username: f.username, usd: f.usd, tips: f.count,
+    status: f.status, first: f.first, last: f.last,
+  }))
+
+  // Day x hour median $/hour, straight off the canonical grid — the same
+  // cells Stream Planner reads. Rendered as a heatmap so the SHAPE of when
+  // this creator earns is visible while the rates stay locked. Cells with no
+  // sessions are omitted, so an empty week renders as an empty week.
+  const heatmap = (a.canonicalBestTimes?.grid || [])
+    .filter(w => w.sessionCount > 0)
+    .map(w => ({ day: w.localDay, hour: w.localHour, usdPerHour: w.medianUsdPerHour }))
+
+  const sp = a.sessionPerformance
+  const session = sp && sp.rateEligibleCount > 0 ? {
+    sessions: a.meaningfulSessionCount,
+    avgSessionUsd: sp.avgMeaningfulSessionUSD,
+    avgSessionMinutes: sp.avgMeaningfulSessionMinutes,
+    medianUsdPerHour: sp.distribution?.medianUsdPerHour ?? null,
+  } : null
+
+  return {
+    trend: trend.length >= 2 ? trend : [],
+    heatmap,
+    bestWindows,
+    // Distinguish "no evidence yet" from "nothing to show" so the UI can say
+    // which. Sparse data is still valid data; it just cannot carry a
+    // recommendation.
+    bestWindowsWithheld: bestWindows.length === 0,
+    topFans,
+    session,
+    totals: {
+      usd: a.totalUSD, tips: a.totalTips,
+      fans: a.uniqueFanCount, sessions: a.meaningfulSessionCount,
+    },
+  }
+}
 
 export async function POST(req) {
   const auth = req.headers.get('Authorization')
@@ -22,6 +171,18 @@ export async function POST(req) {
     return NextResponse.json({ error: 'Invalid session' }, { status: 401 })
   }
 
+  const { data: profile } = await supabase
+    .from('profiles')
+    // timezone comes along because the locked-insight previews below run the
+    // canonical engine, and every day/hour it reports must be creator-local.
+    // profiles.timezone is the authoritative source; the browser is never
+    // consulted here.
+    .select('plan, timezone')
+    .eq('id', user.id)
+    .maybeSingle()
+  const isPro = isPaidPlan(profile?.plan)
+  const creatorTz = profile?.timezone || undefined
+
   const fd = await req.formData()
   const file = fd.get('file')
   const replace = fd.get('replace') === 'true'
@@ -38,6 +199,11 @@ export async function POST(req) {
   // onboarding paste flow, which sends parsed rows rather than raw text).
   const explicitPlatform = (fd.get('platform') || '').toString().trim()
   const textDetectedPlatform = explicitPlatform || detectPlatform(raw)
+  // Declared immediately — everything below (row mapping, platform-set
+  // computation) depends on this, and a `const` referenced before this line
+  // executes throws (temporal dead zone), which previously crashed every
+  // upload where per-row platform detection came back empty.
+  const detectedPlatform = textDetectedPlatform || 'Unknown'
   const parsed = parseCSV(raw)
 
   const rows = parsed.map((row) => {
@@ -47,7 +213,7 @@ export async function POST(req) {
     return {
       user_id:   user.id,
       date_time: row.dateRaw || row.date_time || null,
-      platform:  row.platform && row.platform !== 'Unknown' ? row.platform : textDetectedPlatform,
+      platform:  row.platform && row.platform !== 'Unknown' ? row.platform : detectedPlatform,
       username:  row.username  || 'Unknown',
       tip_type:  row.tip_type  || 'Tip',
       tip_note:  row.tip_note  || row.note || row.message || '',
@@ -73,6 +239,127 @@ export async function POST(req) {
     )
   }
 
+  // ── FULL-FILE ANALYSIS (before any Free-plan boundary is applied) ──────
+  // Computed on the complete parsed file so the response can always tell the
+  // user the truth about what was in their CSV, even for the portion Free
+  // can't show. Never recomputed piecemeal later — every "locked preview"
+  // number below is a subset of this same real data.
+  const fullFileSummary = summarizeRows(rows, creatorTz)
+
+  // ── FREE-PLAN PLATFORM BOUNDARY ─────────────────────────────────────────
+  // Free can track up to FREE_MAX_PLATFORMS platforms. This used to be an
+  // all-or-nothing gate that rejected the entire CSV the moment a 4th
+  // platform showed up. Now: platforms the account already has stay
+  // allowed; new platforms fill any remaining free slots; anything beyond
+  // that is still not inserted for Free (the insert_tips_dedup /
+  // insert_paid_sessions_dedup RPCs enforce this same cap independently on
+  // their own, so rows for a genuinely blocked platform would be rejected
+  // at the database layer even if this route tried to insert them) — but
+  // instead of silently discarding it, we compute a real preview of what's
+  // in it so the user can see exactly what upgrading would unlock.
+  let existingPlatformRows = []
+  try {
+    const [tipPlatforms, livePlatforms, paidPlatforms] = await Promise.all([
+      supabase.from('tips').select('platform').eq('user_id', user.id),
+      supabase.from('live_tips').select('platform').eq('user_id', user.id),
+      supabase.from('paid_sessions').select('platform').eq('user_id', user.id),
+    ])
+    existingPlatformRows = [
+      ...(tipPlatforms.data || []),
+      ...(livePlatforms.data || []),
+      ...(paidPlatforms.data || []),
+    ]
+  } catch (_) {}
+
+  // Only SUPPORTED platforms occupy a Free slot. The parser's 'Unknown'
+  // bucket is an absence of a platform, not a platform — counting it spent a
+  // real slot on unattributed rows (13 of 7,649 on the owner's own account).
+  const existingPlatforms = [...new Set(
+    existingPlatformRows
+      .map(r => normalizePlatform(r.platform))
+      .filter(p => p && isSupportedPlatform(p))
+  )]
+  // First-seen order within this upload, so which platform "wins" a free
+  // slot is deterministic and matches the order rows appear in the file.
+  const incomingPlatformsInOrder = [...new Set(
+    rows
+      .map(r => normalizePlatform(r.platform))
+      .filter(p => p && isSupportedPlatform(p))
+  )]
+
+  let allowedPlatforms = existingPlatforms
+  let blockedPlatforms = []
+  if (!isPro) {
+    const slotsLeft = () => Math.max(0, FREE_MAX_PLATFORMS - allowedPlatforms.length)
+    const newlyAllowed = []
+    incomingPlatformsInOrder.forEach(p => {
+      if (allowedPlatforms.includes(p) || newlyAllowed.includes(p)) return
+      if (slotsLeft() - newlyAllowed.length > 0) newlyAllowed.push(p)
+      else blockedPlatforms.push(p)
+    })
+    allowedPlatforms = [...allowedPlatforms, ...newlyAllowed]
+  } else {
+    allowedPlatforms = [...new Set([...existingPlatforms, ...incomingPlatformsInOrder])]
+  }
+
+  const platformAllowedRows = rows.filter(r => !blockedPlatforms.includes(normalizePlatform(r.platform)))
+  const platformBlockedRows = rows.filter(r => blockedPlatforms.includes(normalizePlatform(r.platform)))
+
+  // Real per-platform preview of what's blocked — grouped so the UI can
+  // show "Stripchat: 312 tips, $428.17, 9 sessions" instead of one lump sum
+  // across every locked platform.
+  const lockedPlatformPreview = blockedPlatforms.map(p => {
+    const platRows = platformBlockedRows.filter(r => normalizePlatform(r.platform) === p)
+    return { platform: platRows[0]?.platform || p, ...summarizeRows(platRows, creatorTz) }
+  })
+
+  if (!platformAllowedRows.length && platformBlockedRows.length) {
+    // Every row in this file belongs to a platform beyond the Free cap.
+    // Nothing to insert, but the user still gets a real preview instead of
+    // a bare rejection.
+    return NextResponse.json({
+      error: `Free supports up to ${FREE_MAX_PLATFORMS} platforms. Upgrade to Pro to add ${blockedPlatforms.length > 1 ? 'these platforms' : 'this platform'} and compare them.`,
+      code: 'platform_limit_reached',
+      maxPlatforms: FREE_MAX_PLATFORMS,
+      currentPlatforms: existingPlatforms,
+      lockedPlatformPreview,
+      fullFileSummary,
+      upgradeUrl: '/pricing',
+    }, { status: 402 })
+  }
+
+  // ── FREE-PLAN HISTORY BOUNDARY ──────────────────────────────────────────
+  // IMPORTANT: this no longer removes rows before insertion. The 31-day
+  // window is a Free *analytics/presentation* boundary (enforced client-side
+  // in app/dashboard/page.js, same as it already was) — not a reason to
+  // throw away source data. Every allowed-platform row gets inserted; we
+  // only use filterFreeHistory() here to calculate what falls outside the
+  // Free-visible window, for the response.
+  let historyExcludedRows = []
+  let historyWindowStart = null
+  let historyWindowEnd = null
+  if (!isPro) {
+    const historyResult = filterFreeHistory(platformAllowedRows)
+    // filterFreeHistory() returns the same row objects it was given (not
+    // copies), so reference equality correctly identifies which original
+    // rows survived the window filter.
+    const keptRows = new Set(historyResult.rows)
+    historyExcludedRows = platformAllowedRows.filter(r => !keptRows.has(r))
+    historyWindowStart = historyResult.windowStart
+    historyWindowEnd = historyResult.windowEnd
+  }
+  const historyExcludedSummary = summarizeRows(historyExcludedRows, creatorTz)
+  // Everything Free can actually see right now from this upload.
+  const excludedRowSet = new Set(historyExcludedRows)
+  const freeVisibleRows = isPro
+    ? platformAllowedRows
+    : platformAllowedRows.filter(r => !excludedRowSet.has(r))
+  const freeResultsSummary = summarizeRows(freeVisibleRows, creatorTz)
+
+  // Rows that actually go to the database — always the full allowed-platform
+  // set, regardless of plan. Nothing derived above ever mutates this.
+  const rowsToInsert = platformAllowedRows
+
   // ── OPTIONAL FULL REPLACE ──────────────────────────────────────────────
   if (replace) {
     const { error } = await supabase
@@ -84,10 +371,6 @@ export async function POST(req) {
     }
   }
 
-  // ── DETECT PLATFORM ─────────────────────────────────────────────────────
-  const detectedPlatform = textDetectedPlatform
-  rows.forEach(r => { if (!r.platform || r.platform === 'Unknown') r.platform = detectedPlatform })
-
   // ── SPLIT TIPS FROM PAID CHAT / SPY-MODE SESSIONS ───────────────────────
   // Paid-chat/spy-mode rows (flagged above) never go into tips — they go to
   // paid_sessions via insert_paid_sessions_dedup, same as the onboarding
@@ -95,8 +378,8 @@ export async function POST(req) {
   // here (rather than filtering in lib/analytics.js) lets parseCSV() keep
   // returning one flat array, which app/dashboard/page.js's own parseCSV
   // caller still relies on.
-  const tipRows = rows.filter(r => !r.is_paid_session)
-  const paidSessionRows = rows.filter(r => r.is_paid_session)
+  const tipRows = rowsToInsert.filter(r => !r.is_paid_session)
+  const paidSessionRows = rowsToInsert.filter(r => r.is_paid_session)
 
   // ── ASSIGN DEDUP SEQUENCE ACROSS THE WHOLE FILE ─────────────────────────
   // Two rows can legitimately share the same (user, username, tokens, usd,
@@ -185,13 +468,16 @@ export async function POST(req) {
       console.error(`[UPLOAD] Batch ${batchNum}/${totalBatches} error:`, message)
 
       if (message?.includes('PLATFORM_LIMIT_REACHED')) {
-        // Log the attempt — including any rows earlier batches in this same
-        // request already inserted — before returning. Without this, a
-        // correctly-rejected upload leaves zero trace in csv_uploads,
-        // indistinguishable from a request that never ran at all.
+        // The database-level RPC enforces the same platform cap
+        // independently of the pre-check above (e.g. a platform this route
+        // considered "allowed" based on a stale existingPlatforms read can
+        // still be rejected here under concurrent uploads). Log the
+        // attempt — including any rows earlier batches in this same request
+        // already inserted — before returning, so a correctly-rejected
+        // upload leaves a trace in csv_uploads instead of vanishing.
         await logCsvUpload('blocked')
         return NextResponse.json({
-          error: `You're on the free plan, which tracks one platform. Upgrade to add ${detectedPlatform} alongside your existing platform data.`,
+          error: `You're on the free plan, which tracks up to ${FREE_MAX_PLATFORMS} platforms. Upgrade to add more platforms and compare them.`,
           code: 'platform_limit_reached',
           upgradeUrl: '/pricing',
         }, { status: 402 })
@@ -242,7 +528,7 @@ export async function POST(req) {
         // the paid-session half, same as onboarding's two independent
         // requests would behave if the paid-sessions call failed on its own.
         return NextResponse.json({
-          error: `You're on the free plan, which tracks one platform. Upgrade to add ${detectedPlatform} alongside your existing platform data.`,
+          error: `You're on the free plan, which tracks up to ${FREE_MAX_PLATFORMS} platforms. Upgrade to add more platforms and compare them.`,
           code: 'platform_limit_reached',
           upgradeUrl: '/pricing',
         }, { status: 402 })
@@ -272,6 +558,35 @@ export async function POST(req) {
     dateTo:    summaryDateTo ? summaryDateTo.toISOString() : null,
     paidSessionsInserted: paidInserted,
     paidSessionsSkipped:  paidSkipped,
+
+    // ── Free-plan conversion boundary data — all real, derived from this
+    // upload, never fabricated. See summarizeRows()/aggregateRows() above.
+    historyLimited: !isPro,
+    historyDays: !isPro ? 31 : null,
+    historyWindowStart,
+    historyWindowEnd,
+    // Section A — what Free can actually see right now.
+    freeResults: !isPro ? freeResultsSummary : null,
+    // The one legitimate finding Free can offer about this creator, or null.
+    freeHighlight: !isPro ? buildFreeHighlight(freeVisibleRows, creatorTz) : null,
+    // Section B — real totals for data that exists but falls outside the
+    // Free history window. historyRemovedCount kept for backward
+    // compatibility with UI already reading it as a row count.
+    historyRemovedCount: historyExcludedRows.length,
+    excludedHistory: !isPro && historyExcludedRows.length ? historyExcludedSummary : null,
+    // Section B (continued) — real per-platform totals for platforms this
+    // upload contained that Free can't add right now.
+    lockedPlatformPreview: !isPro && lockedPlatformPreview.length ? lockedPlatformPreview : null,
+    // The complete picture, so the UI never has to guess what "everything"
+    // would have looked like.
+    fullFileSummary,
+    // Real previews of what Pro would analyse, derived from the WHOLE file.
+    // Free-only: a Pro creator already sees all of this unlocked, so sending
+    // it would be dead weight.
+    lockedInsights: !isPro ? buildLockedInsights(rows, creatorTz) : null,
+
+    platformsTracked: allowedPlatforms,
+    freePlatformLimit: !isPro ? FREE_MAX_PLATFORMS : null,
   }
 
   if (errors.length > 0) {

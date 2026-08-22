@@ -3,6 +3,7 @@ import { useMemo } from "react"
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine,
 } from "recharts"
+import { UnlockButton } from './components/LockedModule'
 
 // ═══════════════════════════════════════════════════════════════════════════
 // PERFORMANCE
@@ -35,7 +36,12 @@ const C = {
 const glassCard = {
   background: "rgba(15,20,32,0.75)", border: "1px solid rgba(255,255,255,0.08)", backdropFilter: "blur(20px)",
 }
-const CTA_GRADIENT = "linear-gradient(90deg,#22D3EE 0%,#7C5CFF 48%,#EC4899 100%)"
+// The local BrandButton is gone: this file was defining a THIRD button style
+// in the app. The conversion system has one signature CTA
+// (components/ui/Button.js, surfaced as UnlockButton), and this page now uses
+// it like every other upgrade surface. The gradient itself stays, renamed for
+// what it actually still does here — fill comparison bars, not buttons.
+const BAR_GRADIENT = "linear-gradient(90deg,#22D3EE 0%,#7C5CFF 48%,#EC4899 100%)"
 const card = (extra = {}) => ({ ...glassCard, borderRadius: 16, padding: 22, ...extra })
 // C.text, not C.muted — at 12px uppercase on the glass card, #475569 rendered
 // too dim to read comfortably in the first rendered pass. These are the
@@ -53,15 +59,6 @@ const DAY_ORDER = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Frid
 
 const TIER_COPY = { high: "Strong pattern", supported: "Supported pattern", promising: "Early signal" }
 
-function BrandButton({ children, onClick, style }) {
-  return (
-    <button onClick={onClick} style={{
-      background: CTA_GRADIENT, border: "none", borderRadius: 12, padding: "13px 24px",
-      fontSize: 14.5, fontWeight: 800, color: "#06101A", cursor: "pointer",
-      boxShadow: "0 0 20px rgba(34,211,238,0.22), 0 0 30px rgba(236,72,153,0.16)", ...style,
-    }}>{children}</button>
-  )
-}
 
 function SnapshotStat({ value, label, accent = C.white }) {
   return (
@@ -89,7 +86,7 @@ function CompareBars({ title, a, b }) {
             <span style={{ fontSize: 17, fontWeight: 800, color: i === 0 ? C.cyan : C.text }}>{row.display}</span>
           </div>
           <div style={{ height: 12, borderRadius: 6, background: "rgba(255,255,255,0.05)", overflow: "hidden" }}>
-            <div style={{ width: `${Math.max((row.value / max) * 100, 3)}%`, height: "100%", borderRadius: 6, background: i === 0 ? CTA_GRADIENT : "rgba(148,163,184,0.35)" }} />
+            <div style={{ width: `${Math.max((row.value / max) * 100, 3)}%`, height: "100%", borderRadius: 6, background: i === 0 ? BAR_GRADIENT : "rgba(148,163,184,0.35)" }} />
           </div>
           {row.sub && <div style={{ fontSize: 11.5, color: C.muted, marginTop: 6 }}>{row.sub}</div>}
         </div>
@@ -142,6 +139,139 @@ function HourlyRateTrend({ monthlyData }) {
           </LineChart>
         </ResponsiveContainer>
       </div>
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SINGLE-PLATFORM PERFORMANCE
+//
+// The one-platform answer to "how am I doing?", replacing a comparison of one
+// thing. Named for the creator's ACTUAL platform, read from the data — never
+// hard-coded, so it says "Your BongaCams performance" for a BongaCams creator.
+//
+// Progressive by data volume, because a premium product should not render the
+// same layout for 1 session and 200:
+//
+//   sessions < MIN_TREND_SESSIONS  KPI row + an honest "still learning" note.
+//                                  No chart, no momentum, no recommendation —
+//                                  there is nothing yet that would be true.
+//   sessions >= MIN_TREND_SESSIONS KPI row + momentum + opportunity, each
+//                                  independently gated on its own evidence.
+//
+// Computes nothing. Every value is passed in from the frozen analytics layer
+// exactly as the multi-platform branch reads it, and nothing here is gated by
+// plan — this section adds no paywall.
+// ═══════════════════════════════════════════════════════════════════════════
+
+// The canonical bar for "we can say something about your trend". Matches the
+// threshold the session-distribution split already uses, so the page does not
+// invent a second idea of what "enough sessions" means.
+const MIN_TREND_SESSIONS = 3
+
+function SinglePlatformPerformance({ p, sp, delta, curMonth }) {
+  const learning = (p.sessions || 0) < MIN_TREND_SESSIONS
+
+  // Momentum needs a real month-over-month comparison. curMonth.prevMonth is
+  // the engine's own "was there a previous active month" signal.
+  const momentum = !learning && curMonth?.prevMonth != null && curMonth?.growthPct != null
+    ? { pct: curMonth.growthPct, up: curMonth.growthPct >= 0 }
+    : null
+
+  // The platform's own measured delta, when the engine produced one for it.
+  const platDelta = delta?.platforms?.find(x => x.platform === p.platform)?.deltaUSD
+
+  // An earning window is only named once the canonical tier says it is backed
+  // by repeat sessions. "low" confidence is not a recommendation.
+  const window = !learning && p.bestLocalDay != null && p.bestLocalHour != null
+    && p.bestWindowConfidence && p.bestWindowConfidence !== "low"
+    ? { day: p.bestLocalDay, hour: p.bestLocalHour }
+    : null
+
+  return (
+    <div style={card()}>
+      <div style={{ ...sectionLabel, marginBottom: 4 }}>Your {p.platform} performance</div>
+      <div style={{ fontSize: 12.5, color: C.muted, marginBottom: 16 }}>
+        Everything below is measured on {p.platform}, the platform you stream on.
+      </div>
+
+      {/* KPI row — the creator's real numbers, at the top, unconditionally.
+          These exist from the very first import, so there is no state in which
+          this page has nothing to say. */}
+      <div className="perf-solo-kpis">
+        {[
+          { v: fmtUsd(p.totalUSD), l: "earned in qualifying sessions", c: C.green },
+          { v: `${fmtUsd(p.usdPerHour)}/hr`, l: "your hourly rate", c: C.cyan },
+          { v: String(p.sessions ?? 0), l: (p.sessions === 1 ? "session" : "sessions"), c: C.white },
+          { v: fmtHours(p.hours), l: "streamed", c: C.white },
+        ].map(k => (
+          <div key={k.l} className="perf-solo-kpi">
+            <div className="perf-solo-kpi-v" style={{ color: k.c }}>{k.v}</div>
+            <div className="perf-solo-kpi-l" style={{ color: C.muted }}>{k.l}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* B — LOW DATA. A compact, honest note instead of a stretched chart or
+          a recommendation the history cannot support. It states the real
+          threshold rather than saying "no data". */}
+      {learning ? (
+        <div className="perf-solo-learning">
+          <div style={{ fontSize: 13.5, fontWeight: 800, color: C.white, marginBottom: 5 }}>
+            We&apos;re still learning your pattern
+          </div>
+          <div style={{ fontSize: 12.5, color: C.text, lineHeight: 1.6 }}>
+            {p.sessions === 0
+              ? `Once you have ${MIN_TREND_SESSIONS} qualifying sessions on ${p.platform}, this section starts showing your trend and your strongest earning window.`
+              : `${p.sessions} qualifying session${p.sessions === 1 ? "" : "s"} so far. At ${MIN_TREND_SESSIONS} we can start showing your trend and your strongest earning window — the numbers above are already real and counted.`}
+          </div>
+        </div>
+      ) : (
+        <div className="perf-solo-rows">
+          {/* MOMENTUM — the DOLLAR movement on this platform. Deliberately not
+              the percentage: "What changed" two sections up already states
+              "Earnings increased 12% vs your last active month", and repeating
+              it here is exactly the restating-the-same-fact duplication the
+              redesign stripped out of Overview. This adds the figure that
+              section does not carry. Rendered only when a real prior month and
+              a measurable delta both exist. */}
+          {momentum && platDelta != null && Math.abs(platDelta) >= 1 && (
+            <div className="perf-solo-row">
+              <div className="perf-solo-row-k" style={{ color: C.muted }}>Momentum</div>
+              <div className="perf-solo-row-v" style={{ color: C.white }}>
+                <strong style={{ color: momentum.up ? C.green : C.red }}>
+                  {platDelta >= 0 ? "+" : "−"}{fmtUsd(Math.abs(platDelta))}
+                </strong> on {p.platform} since your last active month
+              </div>
+            </div>
+          )}
+
+          {/* EFFICIENCY — one line, not a second copy of the Session
+              performance section directly above. That section already draws
+              the full strong-vs-weak comparison; repeating it here would be
+              exactly the duplication the redesign removed elsewhere. */}
+          {sp?.avgMeaningfulSessionUSD != null && (
+            <div className="perf-solo-row">
+              <div className="perf-solo-row-k" style={{ color: C.muted }}>Efficiency</div>
+              <div className="perf-solo-row-v" style={{ color: C.white }}>
+                <strong style={{ color: C.cyan }}>{fmtUsd(sp.avgMeaningfulSessionUSD)}</strong> per session
+                {sp.avgMeaningfulSessionMinutes != null && <> over about <strong>{sp.avgMeaningfulSessionMinutes}m</strong></>}
+              </div>
+            </div>
+          )}
+
+          {/* OPPORTUNITY — a named window only when the canonical confidence
+              tier backs it. Never a guess from a single good night. */}
+          {window && (
+            <div className="perf-solo-row">
+              <div className="perf-solo-row-k" style={{ color: C.muted }}>Opportunity</div>
+              <div className="perf-solo-row-v" style={{ color: C.white }}>
+                Your strongest window is <strong style={{ color: C.gold }}>{window.day}s {fmtHour(window.hour)}</strong>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -380,7 +510,30 @@ export default function Performance({
         )}
       </div>
 
-      {/* ── 7. PLATFORM PERFORMANCE ────────────────────────────────── */}
+      {/* ── 7. PLATFORM PERFORMANCE ────────────────────────────────
+          Two genuinely different questions, so two different sections:
+
+            1 platform   "How am I doing on the platform I actually use?"
+            2+ platforms "Which platform is worth my time?"
+
+          The old version asked the second question always, so a creator with
+          one platform got the heading "Platform performance" above a single
+          card — a comparison of one thing. The data was right and the grid
+          already collapsed to one column; the FRAMING was the defect, and it
+          made the product read as a multi-platform dashboard the creator was
+          seeing a stripped-down version of.
+
+          Nothing here is gated. Everything below is already computed by the
+          frozen analytics layer and already visible to Free; this task adds no
+          paywall. ──────────────────────────────────────────────────────── */}
+      {platforms.length === 1 ? (
+        <SinglePlatformPerformance
+          p={platforms[0]}
+          sp={sp}
+          delta={delta}
+          curMonth={curMonth}
+        />
+      ) : (
       <div style={card()}>
         <div style={{ ...sectionLabel, marginBottom: 14 }}>Platform performance</div>
         {platforms.length === 0 ? (
@@ -422,6 +575,7 @@ export default function Performance({
           </>
         )}
       </div>
+      )}
 
       {/* ── 8. DAY / TIME ANALYSIS ─────────────────────────────────── */}
       <div style={card()}>
@@ -468,7 +622,7 @@ export default function Performance({
                 <div key={d.day} style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   <div style={{ width: 38, fontSize: 11.5, color: C.text, flexShrink: 0 }}>{DAY_ABBR[d.day]}</div>
                   <div style={{ flex: 1, height: 8, borderRadius: 4, background: "rgba(255,255,255,0.05)", overflow: "hidden" }}>
-                    <div style={{ width: `${Math.max((d.totalUsd / maxDayUsd) * 100, 3)}%`, height: "100%", borderRadius: 4, background: d.day === bestWindow?.localDay ? CTA_GRADIENT : "rgba(148,163,184,0.35)" }} />
+                    <div style={{ width: `${Math.max((d.totalUsd / maxDayUsd) * 100, 3)}%`, height: "100%", borderRadius: 4, background: d.day === bestWindow?.localDay ? BAR_GRADIENT : "rgba(148,163,184,0.35)" }} />
                   </div>
                   <div style={{ width: 60, fontSize: 11.5, color: C.muted, textAlign: "right", flexShrink: 0 }}>{fmtUsd0(d.totalUsd)}</div>
                 </div>
@@ -523,7 +677,7 @@ export default function Performance({
               Pro connects your best windows, platform performance, high-value fan timing, and a forecast into one personalized weekly schedule — not just more exact numbers.
             </div>
           </div>
-          <BrandButton onClick={() => onUpgrade?.("performance_strategy")}>Build My Strategy →</BrandButton>
+          <UnlockButton surface="performance_strategy" onClick={() => onUpgrade?.("performance_strategy")}>Build My Strategy</UnlockButton>
         </div>
       )}
     </div>

@@ -119,7 +119,8 @@ check('the suggestion branches on real measured state',
 check('the page resolves the canonical creator timezone',
   live.includes("import { resolveCreatorTimezone } from '../../lib/timezone'") &&
   live.includes('resolveCreatorTimezone(prof?.timezone).timezone'))
-check('it reads profiles.timezone to do so', live.includes("from('profiles').select('timezone')"))
+check('it reads profiles.timezone to do so',
+  /from\('profiles'\)\.select\('timezone[^']*'\)/.test(live))
 check('the peak-hour grid is bucketed in the creator zone, not the display zone',
   live.includes('computeCanonicalBestTimes(detectMeaningfulSessions(data), creatorTzRef.current)'))
 check('the "are we in the peak window" check uses the creator zone',

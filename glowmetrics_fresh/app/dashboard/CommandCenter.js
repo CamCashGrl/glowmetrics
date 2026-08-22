@@ -1,5 +1,6 @@
 "use client"
 import { useMemo } from "react"
+import Button from "../../components/ui/Button"
 
 // ═══════════════════════════════════════════════════════════════════════════
 // COMMAND CENTER
@@ -88,37 +89,24 @@ const label = {
   textTransform: "uppercase", color: C.muted,
 }
 
-function BrandButton({ children, onClick, style }) {
-  return (
-    <button
-      onClick={onClick}
-      style={{
-        background: CTA_GRADIENT, border: "none", borderRadius: 10,
-        padding: "11px 20px", fontSize: 14, fontWeight: 700, color: C.white,
-        cursor: "pointer", whiteSpace: "nowrap",
-        boxShadow: "0 4px 18px rgba(124,92,255,0.30)",
-        transition: "transform 0.15s, box-shadow 0.15s",
-        ...style,
-      }}
-      onMouseEnter={(e) => { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.boxShadow = "0 6px 24px rgba(124,92,255,0.45)" }}
-      onMouseLeave={(e) => { e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = "0 4px 18px rgba(124,92,255,0.30)" }}
-    >{children}</button>
-  )
-}
 
 function GhostButton({ children, onClick }) {
   return (
     <button onClick={onClick} style={{
       background: "transparent", border: `1px solid ${C.border}`, borderRadius: 9,
-      padding: "9px 15px", fontSize: 13, fontWeight: 600, color: C.text, cursor: "pointer", whiteSpace: "nowrap",
+      // minHeight 44 matches the touch target the primary CTAs in this file
+      // already meet; 9px padding on a 13px font renders ~40px, which fails
+      // it on a phone.
+      padding: "9px 15px", minHeight: 44, fontSize: 13, fontWeight: 600, color: C.text,
+      cursor: "pointer", whiteSpace: "nowrap",
     }}>{children}</button>
   )
 }
 
 // One measured fact. Never a claim without a number behind it.
-function Chip({ icon, title, value, sub, accent = C.pink }) {
+function EvidenceItem({ icon, title, value, sub, accent = C.pink }) {
   return (
-    <div style={card({ padding: "18px 20px", display: "flex", gap: 13, alignItems: "flex-start", minWidth: 0 })}>
+    <div className="cc-evidence-item" style={{ display: "flex", gap: 13, alignItems: "flex-start", minWidth: 0 }}>
       <div style={{ fontSize: 19, flexShrink: 0, marginTop: 1 }}>{icon}</div>
       <div style={{ minWidth: 0 }}>
         <div style={{ fontSize: 12.5, color: C.muted, fontWeight: 600 }}>{title}</div>
@@ -134,7 +122,15 @@ function Chip({ icon, title, value, sub, accent = C.pink }) {
 function Stat({ value, label: l, delta, accent = C.white }) {
   return (
     <div style={card({ padding: "18px 16px" })}>
-      <div style={{ fontSize: 26, fontWeight: 800, color: accent, letterSpacing: "-0.02em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{value}</div>
+      {/* A four-figure earner could not read their own total: at fontSize 26
+          with whiteSpace:nowrap + textOverflow:ellipsis inside a
+          minmax(132px,1fr) track, "$1,240.50" rendered as "$1,240…" at EVERY
+          width including 1280. Clipping the headline number on the card called
+          "Your money story" is the one thing this card must never do, so the
+          type scales down to fit instead of truncating. nowrap is kept: left
+          to wrap, "$1,240.50" broke across two lines mid-number, which reads
+          worse than either truncating or shrinking. */}
+      <div style={{ fontSize: "clamp(16px, 1.55vw, 26px)", fontWeight: 800, color: accent, letterSpacing: "-0.02em", whiteSpace: "nowrap", lineHeight: 1.15 }}>{value}</div>
       <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 5, flexWrap: "wrap" }}>
         <span style={{ fontSize: 13, color: C.muted }}>{l}</span>
         {delta != null && (
@@ -183,6 +179,86 @@ function WindowProof({ windowRate, baselineRate, sessions, tierLabel, dayLabel, 
       <div style={{ ...label, fontSize: 12, marginBottom: 16 }}>Why this window</div>
       <Bar v={windowRate} gradient title={`${dayLabel}s ${hourLabel}`} sub={`${sessions} qualifying session${sessions === 1 ? "" : "s"} · ${tierLabel}`} />
       <Bar v={baselineRate} title="Your typical hour" sub="median across every qualifying session" />
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// LEARNING PANEL — the low-data half of the hero
+//
+// Replaces a blank half-card. Everything here is a real count already in the
+// frozen layer; nothing is invented and no percentage is fabricated.
+//
+// The progress figure is objectively meaningful rather than decorative: the
+// canonical tier rule (lib/analytics/bestTimes.js) needs SESSIONS_FOR_WINDOW
+// sessions in the SAME weekly day-and-hour slot before a bucket reaches
+// 'supported' and can become a bestWindow. When an earlySignal exists we know
+// exactly how many that slot already has, so "2 of 4" is a fact, not a
+// motivational bar. When there is no earlySignal yet, no slot has repeated at
+// all, so we show what IS known and state the rule instead of inventing a
+// denominator.
+// ═══════════════════════════════════════════════════════════════════════════
+
+// From the canonical tier table: 2–3 = promising, 4–5 = supported, 6+ = high,
+// and bestWindow is drawn from supported/high only.
+const SESSIONS_FOR_WINDOW = 4
+
+// The same bar returningSoon already filters on (w.tipCount >= 3). Named so
+// the empty-state copy and the filter cannot drift apart.
+const MIN_TIPS_FOR_TIMING = 3
+
+function LearningPanel({ earlySignal, sessionCount, platformCount, streamHours }) {
+  const have = earlySignal?.sessionCount ?? 0
+  const need = Math.max(0, SESSIONS_FOR_WINDOW - have)
+  const pct = Math.min(100, Math.round((have / SESSIONS_FOR_WINDOW) * 100))
+
+  return (
+    <div className="cc-learn" style={{ flex: "1 1 340px", minWidth: 280 }}>
+      <div style={{ ...label, color: C.muted, marginBottom: 14 }}>What CamCash is learning</div>
+
+      {earlySignal ? (
+        <>
+          {/* A real slot with a real count against a real threshold. */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 15, fontWeight: 700, color: C.white }}>
+              {earlySignal.localDay}s {fmtWindow(earlySignal.localHour)}
+            </span>
+            <span style={{ fontSize: 14, color: C.cyan, fontWeight: 800, whiteSpace: "nowrap" }}>
+              {have} of {SESSIONS_FOR_WINDOW} sessions
+            </span>
+          </div>
+          <div style={{ height: 10, borderRadius: 5, background: "rgba(255,255,255,0.06)", overflow: "hidden", margin: "10px 0 12px" }}
+            role="img" aria-label={`${have} of ${SESSIONS_FOR_WINDOW} sessions needed to confirm this window`}>
+            <div style={{ width: `${pct}%`, height: "100%", borderRadius: 5, background: "linear-gradient(90deg,#22D3EE,#7C5CFF)" }} />
+          </div>
+          <div style={{ fontSize: 13, color: C.text, lineHeight: 1.6 }}>
+            {need === 1
+              ? <>One more stream in this window confirms it as your best earning time.</>
+              : <><strong style={{ color: C.white }}>{need} more streams</strong> in this window confirm it as your best earning time.</>}
+          </div>
+        </>
+      ) : (
+        <>
+          {/* No slot has repeated yet, so there is no denominator to show.
+              State what is already counted, then the rule. */}
+          <div className="cc-learn-stats">
+            {[
+              { v: sessionCount.toLocaleString(), l: sessionCount === 1 ? "session logged" : "sessions logged" },
+              { v: fmtHours(streamHours), l: "streamed" },
+              { v: String(platformCount), l: platformCount === 1 ? "platform" : "platforms" },
+            ].map(x => (
+              <div key={x.l} className="cc-learn-stat">
+                <div className="cc-learn-stat-v" style={{ color: C.white }}>{x.v}</div>
+                <div className="cc-learn-stat-l" style={{ color: C.muted }}>{x.l}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{ fontSize: 13, color: C.text, lineHeight: 1.6, marginTop: 14 }}>
+            A best window needs <strong style={{ color: C.white }}>{SESSIONS_FOR_WINDOW} streams in the same day and hour</strong>.
+            Streaming on a repeating schedule is what makes it appear.
+          </div>
+        </>
+      )}
     </div>
   )
 }
@@ -237,7 +313,7 @@ export default function CommandCenter({
   // fans with >=3 tips (enough history for churnRisk to be meaningful).
   const returningSoon = useMemo(
     () => whales
-      .filter(w => w.tipCount >= 3 && (w.expectedNextTip === "Overdue" || w.expectedNextTip === "Tomorrow" || /^In [1-3] days?$/.test(w.expectedNextTip || "")))
+      .filter(w => w.tipCount >= MIN_TIPS_FOR_TIMING && (w.expectedNextTip === "Overdue" || w.expectedNextTip === "Tomorrow" || /^In [1-3] days?$/.test(w.expectedNextTip || "")))
       .sort((a, b) => b.totalUSD - a.totalUSD).slice(0, 3),
     [whales]
   )
@@ -320,13 +396,21 @@ export default function CommandCenter({
             )}
 
             <div style={{ marginTop: 26 }}>
-              <BrandButton onClick={onPlanStream} style={{ padding: "15px 28px", fontSize: 16, borderRadius: 12 }}>{hasWindow ? "Plan My Stream" : "Open Stream Planner"}</BrandButton>
+              <Button onClick={onPlanStream} style={{ minHeight: 44, padding: "15px 28px", fontSize: 16, borderRadius: 12 }}>{hasWindow ? "Plan My Stream" : "Open Stream Planner"}</Button>
             </div>
           </div>
 
           {/* RIGHT: opportunity + the chart that proves it. The reference
               puts the earnings-per-hour distribution here; leaving this half
-              empty was the single largest visual defect in the first pass. */}
+              empty was the single largest visual defect in the first pass.
+
+              That fix only ever covered the WINDOW state. Below the threshold
+              the whole right column was gated off, so the same 38px-padded
+              hero rendered ~50% blank — for a brand-new creator, which is
+              exactly the moment that decides whether they come back. The
+              learning panel below fills it with real counts, never a
+              placeholder. */}
+          {!hasWindow && <LearningPanel earlySignal={earlySignal} sessionCount={sessionCount} platformCount={platforms.length} streamHours={streamHours} />}
           {hasWindow && (
             <div style={{ flex: "1 1 340px", minWidth: 280 }}>
               {topGap && (
@@ -355,18 +439,49 @@ export default function CommandCenter({
         </div>
       </div>
 
-      {/* ── EVIDENCE CHIPS ─────────────────────────────────────────── */}
+      {/* ── EVIDENCE ───────────────────────────────────────────────
+          Every item here must answer a DIFFERENT question from the hero.
+
+          Two of the four chips did not. "Best window" restated the hour, day
+          and tier the hero headline already gives, and "Sample behind it"
+          restated the session count and tier the hero states as "based on 6
+          qualifying sessions". Rendered, the page said Saturday 4x, 9:00 PM
+          4x and "Strong pattern" 4x — repetition is what makes a dashboard
+          read as a template rather than a product.
+
+          Both are gone. The two survivors each add something the hero does
+          not: WHO is active in the window, and HOW that platform performs.
+          No replacement chips were invented — every other field on this
+          component is already shown by the hero, the money story or the fans
+          card, and a third chip restating one of those would recreate the
+          problem this change removes.
+
+          With two items an auto-fit card grid stretched each one to ~545px at
+          1280, which looks like a layout that lost its other cards. They are
+          one strip instead: a single surface, divided, that reads as
+          deliberate at two items and still works at three. */}
       {hasWindow && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(158px, 1fr))", gap: 11 }}>
-          <Chip icon="🕐" title="Best window" value={fmtWindow(bestWindow.localHour)} sub={`${bestWindow.localDay}s · ${TIER_COPY[bestWindow.tier] || "Pattern"}`} />
-          <Chip icon="👥" title={overlap?.count ? "Fans active in it" : "Fan overlap"}
-                value={overlap?.count ? `${overlap.count} high-value fan${overlap.count === 1 ? "" : "s"}` : "None yet"}
-                sub={overlap?.count ? `${fmtUsd0(overlap.totalUSD)} lifetime combined` : "No repeat fans in this window"}
-                accent={overlap?.count ? C.indigo : C.muted} />
+        <div className="cc-evidence" style={card({ padding: 0 })}>
+          <EvidenceItem
+            icon="👥"
+            title={overlap?.count ? "Fans active in it" : "Fan overlap"}
+            value={overlap?.count ? `${overlap.count} high-value fan${overlap.count === 1 ? "" : "s"}` : "None yet"}
+            sub={overlap?.count ? `${fmtUsd0(overlap.totalUSD)} lifetime combined` : "No repeat fans in this window"}
+            accent={overlap?.count ? C.indigo : C.muted}
+          />
           {topPlatform && (
-            <Chip icon="📈" title={`${topPlatform.platform} is #1`} value={`${fmtUsd(topPlatform.usdPerHour)}/hr`} sub={`${topPlatform.sessions} sessions · ${fmtHours(topPlatform.hours || 0)}`} accent={C.cyan} />
+            <EvidenceItem
+              icon="📈"
+              /* "#1" is a ranking, and a ranking of one is not a fact. With a
+                 single platform this states the platform and its rate; the
+                 comparison claim appears only when there is something to
+                 compare it against. */
+              title={platforms.length > 1 ? `${topPlatform.platform} is #1` : topPlatform.platform}
+              value={`${fmtUsd(topPlatform.usdPerHour)}/hr`}
+              sub={`${topPlatform.sessions} session${topPlatform.sessions === 1 ? "" : "s"} · ${fmtHours(topPlatform.hours || 0)}`}
+              accent={C.cyan}
+            />
           )}
-          <Chip icon="📊" title="Sample behind it" value={`${bestWindow.sessionCount} session${bestWindow.sessionCount === 1 ? "" : "s"}`} sub={TIER_COPY[bestWindow.tier] || "Pattern"} accent={C.gold} />
         </div>
       )}
 
@@ -411,6 +526,11 @@ export default function CommandCenter({
 
       {/* ── FANS + PERFORMANCE ─────────────────────────────────────── */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(290px, 1fr))", gap: 14, alignItems: "start" }}>
+        {/* No supporters on file at all: there is no fact to state and no
+            action to offer that the hero has not already given, so the card is
+            not rendered. auto-fit then gives the money story the full width
+            rather than leaving a gap where this card would have been. */}
+        {whales.length > 0 && (
         <div style={card({ padding: 20 })}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
             <div style={{ fontSize: 16, fontWeight: 800, color: C.white }}>Who deserves your attention</div>
@@ -437,12 +557,24 @@ export default function CommandCenter({
               ))}
             </div>
           ) : (
-            <div style={{ fontSize: 13.5, color: C.muted, lineHeight: 1.65 }}>
-              No supporters are inside their typical return window right now. This fills in as your fans build a repeat pattern — it needs at least 3 tips from someone before it will make a call.
+            /* A section has to earn its space. This used to be a full card
+               whose entire content was a paragraph explaining it had nothing
+               to say — an apology, rendered at the same weight as the sections
+               that do have something. With supporters on file there IS a real
+               fact here (how many are tracked, and the rule that has not been
+               met yet), so it states that compactly. With NO supporters at all
+               the whole section is hidden by the caller below. */
+            <div style={{ fontSize: 13.5, color: C.text, lineHeight: 1.6 }}>
+              <strong style={{ color: C.white }}>{whales.length}</strong> supporter{whales.length === 1 ? "" : "s"} tracked
+              {" — "}none are inside their return window right now.
+              <div style={{ fontSize: 12.5, color: C.muted, marginTop: 6 }}>
+                Timing calls need {MIN_TIPS_FOR_TIMING}+ tips from the same supporter.
+              </div>
             </div>
           )}
           <div style={{ marginTop: 14 }}><GhostButton onClick={onViewFans}>See all fans →</GhostButton></div>
         </div>
+        )}
 
         <div style={card({ padding: 20 })}>
           <div style={{ fontSize: 16, fontWeight: 800, color: C.white, marginBottom: 14 }}>Your money story</div>
@@ -492,7 +624,7 @@ export default function CommandCenter({
               ))}
             </div>
           </div>
-          <BrandButton onClick={() => onUpgrade?.("command_center_strategy")} style={{ padding: "14px 26px", fontSize: 15.5, borderRadius: 12, flexShrink: 0 }}>Build My Strategy →</BrandButton>
+          <Button onClick={() => onUpgrade?.("command_center_strategy")} style={{ minHeight: 44, padding: "14px 26px", fontSize: 15.5, borderRadius: 12, flexShrink: 0 }}>Build My Strategy →</Button>
         </div>
       )}
     </div>

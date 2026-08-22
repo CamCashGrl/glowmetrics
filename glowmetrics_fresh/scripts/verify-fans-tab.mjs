@@ -130,7 +130,15 @@ check('no-signal state explains the 3-tip requirement rather than showing an emp
   raw.includes('at least 3 tips from someone before their return pattern means anything'))
 check('the best-window card is gated on a real window AND real overlap',
   src.includes('bestWindow && overlap?.count > 0'))
-check('dependency risk only renders above the low band', src.includes('dependencyRisk.level !== "low"'))
+// Renders at EVERY level now, low included — an explicit product decision:
+// a healthy concentration is itself worth stating, and hiding the card until
+// risk appears means the creator only ever sees it as bad news. The card
+// changes its label ("Fan concentration" vs "Concentration risk") and border
+// instead of disappearing. Pinning the label switch is what stops the card
+// from silently becoming an always-red alarm.
+check('fan concentration renders at every level, including low',
+  src.includes('dependencyRisk.level === "low" ? "Fan concentration" : "Concentration risk"') &&
+  !src.includes('dependencyRisk.level !== "low"'))
 
 // ══════════════════════════════════════════════════════════════════════
 // 7. FREE vs PRO.

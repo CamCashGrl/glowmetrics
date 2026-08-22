@@ -16,6 +16,8 @@ const PLATFORM_DISPLAY_NAMES = Object.fromEntries(
 )
 const displayPlatform = (p) => (p && PLATFORM_DISPLAY_NAMES[p.toLowerCase()]) || p
 
+import { assessReadiness, nextUnlock, unlockCopy, isBaseline } from '../../lib/readiness'
+
 const C = {
   cyan: '#22D3EE', pink: '#EC4899', gold: '#F59E0B', green: '#10B981',
   white: '#F1F5F9', muted: '#94A3B8', dim: '#5A6270', purple: '#a855f7', red: '#f87171',
@@ -141,22 +143,107 @@ export default function CreatorReport({ analytics, tips = [], isPro = false, onU
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  if (!hasEnoughData) {
+  // ── SNAPSHOT + READINESS ──────────────────────────────────────────────
+  // This block replaces a hard `if (!hasEnoughData) return <warming up/>`
+  // wall that fired below 10 tips OR 2 sessions. A creator who had just
+  // finished their first import — the moment they are deciding whether this
+  // product is worth anything — was told to come back later.
+  //
+  // Every number here is a real count off the canonical analytics object.
+  // Nothing is inferred, and no pattern is claimed at baseline.
+  const sessionCount = analytics?.meaningfulSessionCount || 0
+  const fanCount = analytics?.uniqueFanCount ?? 0
+  const tipCount = tips.length
+  const whaleCount = (analytics?.whales || []).length
+  const platformCount = platforms.length
+  const readiness = assessReadiness({ tips: tipCount, sessions: sessionCount })
+  const readyItems = readiness.filter(r => r.ready)
+  const pendingItems = readiness.filter(r => !r.ready)
+  const next = nextUnlock(readiness)
+  const baseline = isBaseline({ tips: tipCount, sessions: sessionCount })
+
+  const snapshot = [
+    { label: fanCount === 1 ? 'fan' : 'fans', value: fanCount },
+    { label: sessionCount === 1 ? 'session' : 'sessions', value: sessionCount },
+    { label: tipCount === 1 ? 'tip' : 'tips', value: tipCount },
+    { label: platformCount === 1 ? 'platform' : 'platforms', value: platformCount },
+  ]
+
+  // ── PRO TEASER ────────────────────────────────────────────────────────
+  // Counts what CamCash has ALREADY computed from this creator's data, so the
+  // teaser is a real statement about their account rather than a generic
+  // pitch. It deliberately renders no locked VALUE — no blurred number, no
+  // redacted placeholder, nothing in the DOM to read out. The claim is "we
+  // found things", not "here is what we found, squint at it".
+  const readyCount = readiness.filter(r => r.ready).length
+  const ProTeaser = () => {
+    if (isPro || readyCount === 0) return null
     return (
-      <div style={{ borderRadius: 22, padding: '48px 32px', textAlign: 'center', background: 'rgba(12,16,34,0.78)', border: '1px solid rgba(255,255,255,0.09)' }}>
-        <div style={{ fontSize: 40, marginBottom: 12 }}>🧾</div>
-        <div style={{ fontSize: 18, fontWeight: 800, color: C.white, marginBottom: 8 }}>Your Creator Report is warming up</div>
-        <div style={{ fontSize: 13, color: C.muted, maxWidth: 420, margin: '0 auto' }}>
-          Import a bit more tip history — at least 10 tips across 2+ sessions — and CamCash will build a full report of your earnings, best times, and next moves.
+      <div data-testid="pro-teaser" style={{ borderRadius: 16, border: '1px solid rgba(124,92,255,0.26)', background: 'linear-gradient(115deg, rgba(124,92,255,0.10), rgba(236,72,153,0.07))', padding: '16px 18px', marginBottom: 14 }}>
+        <div style={{ fontSize: 14, fontWeight: 800, color: C.white, marginBottom: 6 }}>
+          CamCash has already worked out {readyCount} {readyCount === 1 ? 'thing' : 'things'} from your data
         </div>
+        <div style={{ fontSize: 12.5, color: C.text, lineHeight: 1.6, marginBottom: 12 }}>
+          Your account has enough history for these to be calculated. Creator Pro
+          unlocks the full recommendations and the deeper history behind them.
+        </div>
+        <button onClick={() => { track('pro_teaser_clicked', { surface: 'creator_report', readyCount }); onUpgrade?.('creator_report_teaser') }}
+          style={{ minHeight: 44, padding: '11px 18px', borderRadius: 11, cursor: 'pointer', background: 'rgba(124,92,255,0.16)', border: '1px solid rgba(124,92,255,0.4)', color: C.white, fontSize: 13, fontWeight: 700 }}>
+          See what CamCash found →
+        </button>
       </div>
     )
   }
+
+  const Readiness = () => (
+    <div style={{ borderRadius: 16, border: `1px solid ${C.border}`, background: 'rgba(255,255,255,0.02)', padding: '16px 18px', marginBottom: 14 }}>
+      <div style={{ fontSize: 13, fontWeight: 800, color: C.white, marginBottom: 10 }}>What CamCash is learning</div>
+      <div style={{ display: 'grid', gap: 8 }}>
+        {readiness.map(r => (
+          <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12.5 }}>
+            <span aria-hidden="true" style={{ color: r.ready ? C.green : C.muted, fontWeight: 900, flexShrink: 0 }}>{r.ready ? '✓' : '○'}</span>
+            <span style={{ color: r.ready ? C.white : C.text, minWidth: 0, flex: 1 }}>{r.label}</span>
+            {/* Progress is stated as the creator's REAL counts, never as an
+                invented percentage or confidence score. */}
+            <span style={{ color: C.muted, fontSize: 11.5, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
+              {r.ready ? 'Ready' : `${r.have} / ${r.need} ${r.metric}`}
+            </span>
+          </div>
+        ))}
+      </div>
+      {next && (
+        <div style={{ marginTop: 12, fontSize: 12, color: C.text, lineHeight: 1.55 }}>
+          {unlockCopy(next)} More data makes this smarter.
+        </div>
+      )}
+    </div>
+  )
 
   return (
     <div>
       <div style={{ marginBottom: 20 }}>
         <div style={{ fontSize: 22, fontWeight: 800, color: C.white, marginBottom: 4 }}>🧾 Your Creator Report</div>
+        {/* The snapshot, in the creator's own numbers. Personalised sentence
+            rather than another KPI grid — the dashboard already owns those. */}
+        <div style={{ fontSize: 13.5, color: C.text, lineHeight: 1.65, marginTop: 6, marginBottom: 4 }}>
+          CamCash is tracking{' '}
+          {snapshot.map((s2, i) => (
+            <span key={s2.label}>
+              <strong style={{ color: C.white }}>{s2.value}</strong> {s2.label}
+              {i < snapshot.length - 2 ? ', ' : i === snapshot.length - 2 ? ' and ' : ''}
+            </span>
+          ))}
+          {whaleCount > 0 && <>, including <strong style={{ color: C.white }}>{whaleCount}</strong> {whaleCount === 1 ? 'whale' : 'whales'}</>}.
+        </div>
+        {/* One session is not a pattern, and the report says so rather than
+            dressing a single stream up as a trend. */}
+        {baseline && (
+          <div style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.6, marginBottom: 4 }}>
+            This is your baseline. As you add sessions, CamCash can tell one-off
+            results apart from patterns — we&apos;re still learning your best
+            streaming window.
+          </div>
+        )}
         <div style={{ fontSize: 13, color: C.muted }}>Built from your imported tip history — here's what your numbers actually say.</div>
       </div>
 
@@ -203,6 +290,8 @@ export default function CreatorReport({ analytics, tips = [], isPro = false, onU
           the move's own icon, while the advice itself stays Pro. Same amount
           withheld, but the value is legible. */}
       <div style={{ borderRadius: 18, padding: '18px 20px', background: 'rgba(12,16,34,0.78)', border: '1px solid rgba(255,255,255,0.09)' }}>
+        <Readiness />
+        <ProTeaser />
         <div style={{ fontSize: 13, fontWeight: 800, color: C.white, marginBottom: 12 }}>🎯 Recommended For Your Next Stream</div>
         {nextMoves.length === 0 && (
           <div style={{ fontSize: 13, color: C.muted }}>Not enough data yet to build recommendations — import more history.</div>

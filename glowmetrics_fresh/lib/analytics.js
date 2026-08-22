@@ -158,6 +158,11 @@ export function parseCSV(text, platform = null) {
 
   if (!platform) platform = detectPlatform(text)
 
+  // Decide day-first vs month-first for this file BEFORE any row is read —
+  // including the Chaturbate multi-line branch below, which also normalises
+  // dates. See SLASH_DATE_RE for why this cannot be decided per row.
+  SLASH_DATE_DAY_FIRST = inferSlashDateOrientation(text)
+
   // Raw multi-line Chaturbate paste (not a proper CSV) — needs block-based stitching
   // instead of the line-by-line parsers below, which mangle date/"Tip From:"/tokens
   // onto separate rows.
@@ -239,19 +244,89 @@ export function detectPlatform(text) {
   if (lower.includes('bongacams') || lower.includes('bonga') || lower.includes('your payout')) return 'BongaCams'
   if (lower.includes('myfreecams') || lower.includes('mfc')) return 'MyFreeCams'
   if (lower.includes('stripchat')) return 'Stripchat'
-  if (lower.includes('camsoda')) return 'CamSoda'
+  // No CamSoda branch: its import path is not shipped (see SUPPORTED_PLATFORMS
+  // in lib/constants.js). Detecting it here would stamp rows with a platform
+  // the rest of the pipeline treats as unsupported. Letting them fall through
+  // to 'Unknown' keeps the data importable and readable via the existing
+  // undetected-platform handling instead of stranding it.
   // Structural detection — platform-unique data format when no platform name appears in the text
   if (/^\d{2}\.\d{2}\.\d{4}\s+\d{2}:\d{2}/m.test(text)) return 'BongaCams'
   if (/^\d{10,13}\t/m.test(text)) return 'MyFreeCams'
   return 'Unknown'
 }
 
+// Slash dates with a 1-2 digit first component ("5/1/26", "05/07/2024") are
+// AMBIGUOUS: nothing in the value says whether 5 is the day or the month.
+// Before this, they fell through to new Date(), which always reads them as US
+// month-first. A real BongaCams export mixed "DD.MM.YYYY" rows with "D/M/YY"
+// rows — both day-first — and 32% of the file silently had day and month
+// swapped. One row, "5/1/26" (5 January 2026), became 1 May 2026: four months
+// past the creator's newest real tip. Since the Free window anchors on each
+// platform's newest row, it landed on an empty future range and the creator
+// saw "1 tip · $7.16" after importing 1,912 rows.
+const SLASH_DATE_RE = /^(\d{1,2})\/(\d{1,2})\/(\d{4}|\d{2})(?:[\s,]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/
+
+// Orientation is a property of the FILE, not of any single row, so it is
+// inferred once per parse. Module-level rather than threaded through five
+// call sites: parseCSV is synchronous, so one file's orientation can never be
+// observed by another parse mid-run.
+let SLASH_DATE_DAY_FIRST = true
+
+export function inferSlashDateOrientation(text) {
+  let sawDayFirst = false
+  let sawMonthFirst = false
+  for (const line of String(text || '').split('\n')) {
+    const m = line.trim().match(SLASH_DATE_RE)
+    if (!m) continue
+    if (+m[1] > 12) sawDayFirst = true   // first component can only be a day
+    if (+m[2] > 12) sawMonthFirst = true // second component can only be a day
+  }
+  // Unambiguous evidence wins.
+  if (sawDayFirst && !sawMonthFirst) return true
+  if (sawMonthFirst && !sawDayFirst) return false
+  // Otherwise every slash row is ambiguous (or the file contradicts itself).
+  // Fall back to day-first: the platforms CamCash imports are non-US and their
+  // other date format in the same files, DD.MM.YYYY, is itself day-first.
+  return true
+}
+
 function normalizeDate(raw) {
   if (!raw) return null
   const euro = raw.match(/^(\d{2})\.(\d{2})\.(\d{4})(?:\s+(\d{2}:\d{2}))?/)
   if (euro) return `${euro[2]}/${euro[1]}/${euro[3]}${euro[4] ? ' ' + euro[4] : ''}`
-  const slash = raw.match(/^(\d{4})\/(\d{2})\/(\d{2})(.*)/)
-  if (slash) return `${slash[1]}-${slash[2]}-${slash[3]}${slash[4]}`
+  const iso = raw.match(/^(\d{4})\/(\d{2})\/(\d{2})(.*)/)
+  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}${iso[4]}`
+  // normalizeDate() is applied TWICE to the same value — once by the
+  // per-platform parser and again by normalizeTip() — so it must be
+  // idempotent. The old slash branch only matched YYYY/MM/DD, so its own
+  // MM/DD/YYYY output fell straight through and nobody noticed. An
+  // ambiguous-slash branch that re-reads that output would swap day and
+  // month back on the second pass, and would turn the euro branch's
+  // "06/14/2024" into month 14 — dropping every dot-format row.
+  //
+  // Canonical output is always zero-padded 2/2/4. Raw ambiguous dates worth
+  // reinterpreting have a 2-digit year or an unpadded component, so requiring
+  // one of those both fixes the real exports and leaves our own output alone.
+  //
+  // KNOWN LIMIT: a raw date already written "05/07/2024" is byte-identical to
+  // canonical output, so it cannot be reinterpreted here and still parses
+  // US-style. That is exactly the previous behaviour — not a regression — and
+  // fixing it needs single-pass normalisation, not a smarter regex.
+  const alreadyNormalized = /^\d{2}\/\d{2}\/\d{4}/.test(raw)
+  const sl = alreadyNormalized ? null : raw.match(SLASH_DATE_RE)
+  if (sl) {
+    const [, p1, p2, yRaw, hh, mm, ss] = sl
+    const day = SLASH_DATE_DAY_FIRST ? +p1 : +p2
+    const month = SLASH_DATE_DAY_FIRST ? +p2 : +p1
+    // A 2-digit year is this century unless it would be absurdly future.
+    let year = +yRaw
+    if (yRaw.length === 2) year += year >= 70 ? 1900 : 2000
+    const pad = (n) => String(n).padStart(2, '0')
+    const time = hh ? ` ${pad(hh)}:${mm}${ss ? ':' + ss : ''}` : ''
+    // Emitted MM/DD/YYYY to match the euro branch above, so both feed the same
+    // downstream new Date() the same way.
+    return `${pad(month)}/${pad(day)}/${year}${time}`
+  }
   return raw.replace('T', ' ').replace('Z', '')
 }
 

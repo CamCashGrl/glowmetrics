@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server'
 import { getLiveSessionCaller } from '../../../../../lib/liveSession/auth'
 import { shapeLiveSession, sanitizedErrorResponse } from '../../../../../lib/liveSession/shape'
 import { corsHeaders } from '../../../../../lib/liveSession/cors'
+import { resolveLiveModeAccess, LIVE_MODE_PRO_REQUIRED } from '../../../../../lib/liveSession/entitlement'
 
 const UNRESOLVED_STATUSES = ['starting', 'live', 'inactive_warning', 'ending']
 
@@ -16,6 +17,16 @@ export async function POST(req) {
   // 1. Authenticate.
   const { supabase, user } = await getLiveSessionCaller(req)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: cors })
+
+  // 1b. ENTITLEMENT. Live Mode is Pro, and this is where that is decided —
+  // not by hiding the dashboard tab, which /live bypassed entirely. Checked
+  // before the lookup so a Free caller cannot even learn whether a session
+  // exists. A promo-trial plan passes here and stops passing when it expires.
+  const { allowed } = await resolveLiveModeAccess(supabase, user)
+  if (!allowed) {
+    return NextResponse.json(LIVE_MODE_PRO_REQUIRED.body,
+      { status: LIVE_MODE_PRO_REQUIRED.status, headers: cors })
+  }
 
   // 2. Look for an existing unresolved live_sessions row owned by this user.
   const { data: existing, error: lookupError } = await supabase
@@ -38,8 +49,8 @@ export async function POST(req) {
     return NextResponse.json({ session: shapeLiveSession(existing) }, { headers: cors })
   }
 
-  // 4. No existing session — create one. There is exactly one Live Engine;
-  // every authenticated account can start it, no flag, no allow-list.
+  // 4. No existing session — create one. There is exactly one Live Engine,
+  // and by this point the caller has been confirmed Pro at step 1b.
   let platform = null
   try {
     const body = await req.json()

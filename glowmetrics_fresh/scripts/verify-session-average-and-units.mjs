@@ -117,8 +117,11 @@ const avg = (arr) => arr.length ? arr.reduce((s, x) => s + (x.totalUSD || 0), 0)
   check('hardcoded "could 2x your earnings" claim removed', !dashboard.includes('could 2x your earnings'))
   // The surrounding advice should survive — the fix removes the invented
   // number, not the actionable recommendation.
+  // The breakdown engine moved out of page.js into lib/sessions/breakdown.js
+  // during the Sessions redesign (D8). Same text, new home — read it there.
   check('short-session recommendation still present (advice kept, number dropped)',
-    dashboard.includes('Try extending to 45–60 min'))
+    readFileSync(new URL('../lib/sessions/breakdown.js', import.meta.url), 'utf8')
+      .includes('Try extending to 45\u201360 min'))
 }
 
 // ══════════════════════════════════════════════════════════════════════

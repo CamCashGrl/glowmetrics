@@ -1,5 +1,7 @@
 "use client"
 import { useMemo } from "react"
+import { UnlockButton, InsufficientData } from "./components/LockedModule"
+import { PRO_PRICE_MONTHLY_LABEL, PRO_PRICE_NOTE } from "../../lib/constants"
 
 // ═══════════════════════════════════════════════════════════════════════════
 // FANS
@@ -45,15 +47,10 @@ const fmtUsd0 = (n) => `$${Math.round(Number(n || 0)).toLocaleString("en-US")}`
 const fmtHour = (h) => { const H = ((h % 24) + 24) % 24; return H === 0 ? "12 AM" : H < 12 ? `${H} AM` : H === 12 ? "12 PM" : `${H - 12} PM` }
 const fmtDays = (d) => (d == null ? "—" : d === 0 ? "today" : d === 1 ? "1 day ago" : d < 30 ? `${d} days ago` : d < 365 ? `${Math.round(d / 30)} mo ago` : `${(d / 365).toFixed(1)} yr ago`)
 
-function BrandButton({ children, onClick, style }) {
-  return (
-    <button onClick={onClick} style={{
-      background: CTA_GRADIENT, border: "none", borderRadius: 12, padding: "13px 24px",
-      fontSize: 14.5, fontWeight: 800, color: "#06101A", cursor: "pointer",
-      boxShadow: "0 0 20px rgba(34,211,238,0.22), 0 0 30px rgba(236,72,153,0.16)", ...style,
-    }}>{children}</button>
-  )
-}
+// BrandButton removed. It was a THIRD button style in the app (cyan->pink with
+// dark text), which is exactly the "another random button" problem — the
+// conversion system already has one signature CTA in components/ui/Button.js,
+// surfaced through UnlockButton. Fans now uses that.
 
 // ── PRIORITY RULES ────────────────────────────────────────────────────────
 // Each rule reads canonical fields only and supplies the row's REASON and
@@ -112,7 +109,7 @@ const PRIORITY_RULES = [
   },
 ]
 
-function FanRow({ fan, rule, ctx, onMessage }) {
+function FanRow({ fan, rule, ctx, onMessage, onViewFan, onAddNote, hasNote = false }) {
   return (
     // flexWrap + a flex-basis on the text column, so the action button drops
     // to its own line on narrow screens instead of squeezing the text. Without
@@ -146,21 +143,45 @@ function FanRow({ fan, rule, ctx, onMessage }) {
 
         {/* Canonical facts, each labeled. No probability percentage. */}
         <div style={{ display: "flex", gap: 14, flexWrap: "wrap", fontSize: 11.5, color: C.muted }}>
-          <span><strong style={{ color: C.white }}>{fmtUsd0(fan.totalUSD)}</strong> lifetime</span>
-          <span><strong style={{ color: C.white }}>{fan.tipCount}</strong> tips</span>
-          {fan.tipCount >= 3 && <span>every ~<strong style={{ color: C.white }}>{Math.round(fan.avgDaysBetweenTips)}d</strong></span>}
-          {fan.peakLocalHour != null && <span>usually around <strong style={{ color: C.white }}>{fmtHour(fan.peakLocalHour)}</strong></span>}
-          <span>last seen <strong style={{ color: C.white }}>{fmtDays(fan.daysSinceLastTip)}</strong></span>
+            <>
+              <span><strong style={{ color: C.white }}>{fmtUsd0(fan.totalUSD)}</strong> lifetime</span>
+              <span><strong style={{ color: C.white }}>{fan.tipCount}</strong> tips</span>
+              {fan.tipCount >= 3 && <span>every ~<strong style={{ color: C.white }}>{Math.round(fan.avgDaysBetweenTips)}d</strong></span>}
+              {fan.peakLocalHour != null && <span>usually around <strong style={{ color: C.white }}>{fmtHour(fan.peakLocalHour)}</strong></span>}
+              <span>last seen <strong style={{ color: C.white }}>{fmtDays(fan.daysSinceLastTip)}</strong></span>
+            </>
         </div>
       </div>
 
-      <button
-        onClick={() => onMessage?.(fan.username)}
-        style={{
-          flexShrink: 0, padding: "9px 14px", borderRadius: 10, cursor: "pointer",
-          background: `${rule.color}1a`, border: `1px solid ${rule.color}40`,
-          color: rule.color, fontSize: 12, fontWeight: 700, whiteSpace: "nowrap",
-        }}>{rule.action}</button>
+      {/* Creator tools. The rule's own action stays primary; profile and note
+          are quiet secondaries beside it, so the row gains two capabilities
+          without gaining two more loud buttons. Locked rows get none of this —
+          there is nothing to act on until the fan is unlocked. */}
+      <div className="fan-row-actions">
+          <button
+            onClick={() => onMessage?.(fan.username)}
+            style={{
+              padding: "9px 14px", borderRadius: 10, cursor: "pointer",
+              background: `${rule.color}1a`, border: `1px solid ${rule.color}40`,
+              color: rule.color, fontSize: 12, fontWeight: 700, whiteSpace: "nowrap",
+            }}>{rule.action}</button>
+          {onViewFan && (
+            <button
+              onClick={() => onViewFan(fan.username)}
+              title={`View ${fan.username}'s profile`}
+              aria-label={`View ${fan.username}'s profile`}
+              className="fan-row-tool">View profile</button>
+          )}
+          {onAddNote && (
+            <button
+              onClick={() => onAddNote(fan.username)}
+              title={hasNote ? `Edit your note on ${fan.username}` : `Add a note on ${fan.username}`}
+              aria-label={hasNote ? `Edit your note on ${fan.username}` : `Add a note on ${fan.username}`}
+              className={`fan-row-tool${hasNote ? " fan-row-tool--set" : ""}`}>
+              {hasNote ? "Edit note" : "Add note"}
+            </button>
+          )}
+        </div>
     </div>
   )
 }
@@ -170,6 +191,12 @@ export default function Fans({
   isPro = false,
   freeFanLimit = 3,
   onMessageFan,
+  // Existing handlers from app/dashboard/page.js — viewFanProfile() and
+  // setNoteTarget(). Passed in rather than reimplemented: there is exactly one
+  // profile drawer and one notes system, and this is it.
+  onViewFan,
+  onAddNote,
+  notedFans,
   onUpgrade,
   onPlanStream,
 }) {
@@ -268,15 +295,10 @@ export default function Fans({
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 11 }}>
             {visible.map(({ fan, rule }) => (
-              <FanRow key={fan.username} fan={fan} rule={rule} ctx={ctx} onMessage={onMessageFan} />
+              <FanRow key={fan.username} fan={fan} rule={rule} ctx={ctx}
+                onMessage={onMessageFan} onViewFan={onViewFan} onAddNote={onAddNote}
+                hasNote={Boolean(notedFans?.has?.(fan.username.toLowerCase()))} />
             ))}
-
-            {/* The two blurred "locked" fan rows that used to sit here are
-                gone. The summary card immediately below already states what
-                is being held back using this account's REAL numbers — how
-                many fans, their combined lifetime tips, how many are overdue
-                — which is strictly more informative than a blurred row and
-                does not ask the creator to squint at their own data. */}
           </div>
         )}
 
@@ -294,12 +316,27 @@ export default function Fans({
               {hiddenSummary.overdue > 0 && <>, and <strong style={{ color: C.pink }}>{hiddenSummary.overdue}</strong> {hiddenSummary.overdue === 1 ? "is" : "are"} already past their usual return window</>}
               {hiddenSummary.inBestWindow > 0 && <>, with <strong style={{ color: C.cyan }}>{hiddenSummary.inBestWindow}</strong> who {hiddenSummary.inBestWindow === 1 ? "tips" : "tip"} during your best hours</>}.
             </div>
-            <BrandButton onClick={() => onUpgrade?.("fans_priority_locked")} style={{ padding: "11px 20px", fontSize: 13.5 }}>
-              Find My Highest-Value Fans →
-            </BrandButton>
+            {/* The page's ONE primary CTA. Everything else about fan
+                intelligence is a quiet secondary, so the page never becomes a
+                column of competing upgrade buttons. */}
+            <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+              <UnlockButton surface="fans_priority_locked" onClick={() => onUpgrade?.("fans_priority_locked")}>
+                Find My Highest-Value Fans
+              </UnlockButton>
+              <span style={{ fontSize: 11.5, color: C.muted, whiteSpace: "nowrap" }}>
+                {PRO_PRICE_MONTHLY_LABEL} · {PRO_PRICE_NOTE}
+              </span>
+            </div>
           </div>
         )}
       </div>
+
+      {/* A second "Fan intelligence" LockedModule used to sit here, gated on
+          the same hiddenSummary as the summary card above it. Two upsells on
+          one screen is the "column of competing upgrade buttons" the card's
+          own comment says this page must not become, and main removed the
+          locked-preview design these paired with. The summary card keeps the
+          single CTA, stated in this account's real numbers. */}
 
       {/* ── BEST-WINDOW OVERLAP ────────────────────────────────────── */}
       {bestWindow && overlap?.count > 0 && (
@@ -326,10 +363,28 @@ export default function Fans({
         </div>
       )}
 
-      {/* ── DEPENDENCY RISK ────────────────────────────────────────── */}
-      {dependencyRisk && dependencyRisk.level !== "low" && (
-        <div style={card({ border: `1px solid ${dependencyRisk.level === "high" ? "rgba(248,113,113,0.3)" : "rgba(245,158,11,0.3)"}` })}>
-          <div style={{ ...sectionLabel, marginBottom: 12 }}>Concentration risk</div>
+      {/* ── FAN CONCENTRATION ──────────────────────────────────────────
+          Shown at EVERY level, including 'low'.
+          
+          This card used to render only when dependencyRisk.level !== "low",
+          so a creator with a healthily spread fan base never learned their
+          concentration at all — the information arrived only once it had
+          become a problem. "Your top 3 generate 28% of your tips" is worth
+          knowing when it is 28%, not just when it is 80%.
+          
+          Nothing about the metric changed: analytics.dependencyRisk already
+          computes top1Pct/top3Pct/top5Pct and already writes a distinct
+          low-level message ("Your revenue is spread across your fan base…").
+          That message was simply never rendered. This is presentation only —
+          no second dependency formula, no new threshold.
+          
+          The heading and border follow the canonical level, so a healthy
+          creator reads a neutral fact rather than an alarm. */}
+      {dependencyRisk && (
+        <div style={card({ border: `1px solid ${dependencyRisk.level === "high" ? "rgba(248,113,113,0.3)" : dependencyRisk.level === "medium" ? "rgba(245,158,11,0.3)" : C.border}` })}>
+          <div style={{ ...sectionLabel, marginBottom: 12 }}>
+            {dependencyRisk.level === "low" ? "Fan concentration" : "Concentration risk"}
+          </div>
           <div style={{ fontSize: 13.5, color: C.text, lineHeight: 1.6, marginBottom: 14 }}>{dependencyRisk.message}</div>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             {[
@@ -356,9 +411,17 @@ export default function Fans({
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {(isPro ? whales : whales.slice(0, freeFanLimit)).map((f, i) => (
-              <div key={f.username} style={{
+              <div key={f.username}
+                onClick={onViewFan ? () => onViewFan(f.username) : undefined}
+                role={onViewFan ? "button" : undefined}
+                tabIndex={onViewFan ? 0 : undefined}
+                onKeyDown={onViewFan ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onViewFan(f.username) } } : undefined}
+                title={onViewFan ? `View ${f.username}'s profile` : undefined}
+                className={onViewFan ? "fan-list-row" : undefined}
+                style={{
                 display: "flex", alignItems: "center", gap: 12, padding: "11px 14px", borderRadius: 10,
                 background: "rgba(255,255,255,0.03)", border: `1px solid ${C.border}`,
+                cursor: onViewFan ? "pointer" : "default",
               }}>
                 <span style={{ fontSize: 11.5, color: C.muted, width: 22, flexShrink: 0 }}>#{i + 1}</span>
                 <span style={{ fontSize: 13.5, fontWeight: 700, color: C.white, flex: 1, minWidth: 0, overflowWrap: "anywhere" }}>{f.username}</span>

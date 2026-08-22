@@ -1,5 +1,5 @@
 "use client"
-import React, { useState, useEffect, useCallback, useRef } from "react"
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
 import { parseCSV, detectPlatform, aggregateRows as runEngine, toLocalDow, toLocalHour } from "../../lib/analytics"
@@ -12,12 +12,20 @@ import { computeCoachingState } from "../../lib/coaching/triggers"
 import dynamic from "next/dynamic"
 import Sidebar from "./Sidebar"
 import SiteFooter from "../components/SiteFooter"
-import { PLATFORM_TOKEN_RATES, tokenRate } from "../../lib/constants"
+import { PLATFORM_TOKEN_RATES, SUPPORTED_PLATFORMS, tokenRate, PRO_PRICE_MONTHLY_LABEL, PRO_PRICE_NOTE } from "../../lib/constants"
 import { track as gtmTrack } from '../../lib/track'
 import { isProPlan, trialDaysRemaining, getAccessState, TRIAL_DAYS } from '../../lib/plan'
+import ExtensionOffer, { isExtensionOfferDismissed } from './ExtensionOffer'
+import { FREE_MAX_PLATFORMS, FREE_HISTORY_DAYS, filterFreeHistory, splitFreeHistory, uniquePlatforms, normalizePlatform } from '../../lib/planLimits'
 import { resolveCreatorTimezone, autoPopulateTimezoneIfMissing } from '../../lib/timezone'
+import { resolveUpgradeContext } from '../../lib/upgradeContext'
 import CommandCenter from './CommandCenter'
 import Performance from './Performance'
+import ImportResult from './ImportResult'
+import ConversionBand from './ConversionBand'
+import StreamReport, { StreamReportBanner } from './StreamReport'
+import Sessions from './Sessions'
+import { buildStreamReport } from '../../lib/liveSession/streamReport'
 import Fans from './Fans'
 import { getDashboardReadiness, getModuleLockState, canShowHourlyRate, LockedInsightCard, DashboardProgressCard } from './DashboardPreview'
 import Button from '../../components/ui/Button'
@@ -31,27 +39,220 @@ import { useLiveSessionEngine } from '../live/useLiveSessionEngine'
 // user actually just did, so the headline should say that back to them
 // instead of one generic pitch for every context. Falls back to
 // UPGRADE_COPY.default for any source not listed here.
+// Behaviour-triggered upgrade copy — keyed by the `source` passed to
+// openUpgradeModal(source).
+//
+// The modal used to pair these contextual headlines with ONE static list of
+// six generic benefits and a button that led with the SKU and price. That threw
+// away the whole point of the funnel: a creator who just watched us name
+// $462.12 of their own locked earnings was answered with "AI fan behavior
+// predictions". The modal now repeats the situation that opened it —
+// headline, subhead, AND the benefits that actually apply to it.
+//
+// `benefits` are the four that matter for that trigger, most specific first.
+// Nothing here is a number: measured figures come from the creator's own data
+// at render time (see valueLine in the modal), never from this table.
 const UPGRADE_COPY = {
   default: {
-    headline: "Unlock Your Full Earning Potential",
-    subhead: "You're only seeing a preview of your data. Here's what's waiting for you inside:",
+    headline: "Unlock the insights we found in your data",
+    subhead: "You're seeing the Free slice of what you uploaded. Here's what's already saved and waiting:",
+    benefits: [
+      "Full historical analysis of everything you've imported",
+      "Broader historical trends, not just your latest month",
+      "Additional platforms beyond your Free slots",
+      "Cross-platform intelligence — where you actually earn best",
+    ],
   },
   multi_platform: {
-    headline: "You've tracked 1 platform",
-    subhead: "Compare all your platforms with Creator Pro to see exactly where you actually earn best.",
+    headline: `You're using all ${FREE_MAX_PLATFORMS} Free platform slots`,
+    subhead: "Compare more platforms with Creator Pro to see exactly where you actually earn best.",
+    benefits: [
+      "Additional platforms beyond your Free slots",
+      "Cross-platform intelligence — earnings, best windows, and ROI side by side",
+      "One ranked view instead of three separate ones",
+      "Full historical analysis on every platform you add",
+    ],
   },
   whales_cutoff: {
     headline: "You've found your top fans",
     subhead: "See your full fan list — every VIP, not just the first 3 — and track them over time.",
+    benefits: [
+      "Your complete supporter list, ranked by real spend",
+      "Deeper fan insights across your full history",
+      "Repeat-spender and churn-risk tracking over time",
+      "Re-engagement scripts for the fans worth the message",
+    ],
   },
   whales_empty: {
-    headline: "Unlock Your Full Fan Insights",
+    headline: "Unlock the fan insights in your history",
     subhead: "See your highest-value fans, repeat spenders, and who's worth re-engaging.",
+    benefits: [
+      "Your highest-value supporters across all of your history",
+      "Repeat-spender patterns Free's window is too short to show",
+      "Deeper fan insights, not just this month's names",
+      "Re-engagement scripts for the fans worth the message",
+    ],
   },
   creator_report: {
     headline: "You have enough data for deeper insights",
     subhead: "Upgrade to unlock your remaining personalized recommendations for next stream.",
+    benefits: [
+      "Every ranked recommendation, not just the first few",
+      "Broader historical trends behind each one",
+      "Full historical analysis of everything you've imported",
+      "Cross-platform intelligence for where to run each window",
+    ],
   },
+  command_center_strategy: {
+    headline: "Unlock the insights we found in your data",
+    subhead: "You found the window. Pro builds the rest of the week around it.",
+    benefits: [
+      "Every ranked earning window, not just your top one",
+      "Broader historical trends behind each window",
+      "Which platform to run in each window",
+      "Alerts when a high-value supporter goes quiet",
+    ],
+  },
+  live_mode_locked: {
+    headline: "Unlock the insights we found in your data",
+    subhead: "Live Mode reads your history to coach you while you're actually streaming.",
+    benefits: [
+      "Live coaching against your own historical patterns",
+      "Full historical analysis of everything you've imported",
+      "Broader historical trends, not just your latest month",
+      "Cross-platform intelligence across every platform you track",
+    ],
+  },
+  // The two locked cases persist DIFFERENTLY, and the copy has to say so.
+  // History rows beyond 31 days ARE stored — Free just doesn't analyse them,
+  // so Pro reveals them with no re-upload. Rows for a platform beyond the Free
+  // cap are NOT stored (the cap is enforced at the database layer too), so
+  // they genuinely need one more import after upgrading. Promising instant
+  // unlock for both would be a lie for the second one.
+  csv_history: {
+    headline: "Unlock the insights we found in your data",
+    subhead: `Free keeps the most recent ${FREE_HISTORY_DAYS} days. Those older rows are already saved — Pro reveals them instantly, with no re-upload.`,
+    benefits: [
+      "Full historical analysis of every row you uploaded",
+      "Broader historical trends across your whole date range",
+      "Your strongest historical earning windows",
+      "Top supporters across all time, not just this month",
+    ],
+  },
+  csv_platform_limit: {
+    headline: `You've used all ${FREE_MAX_PLATFORMS} free platform slots`,
+    subhead: `Upgrade to Pro to add more platforms and compare where you actually earn best. Rows for a platform beyond your ${FREE_MAX_PLATFORMS} slots aren't stored yet, so you'll import that file once more after upgrading.`,
+    benefits: [
+      "Additional platforms beyond your Free slots",
+      "Cross-platform intelligence — earnings and ROI side by side",
+      "One ranked best-window view across every platform",
+      "Full historical analysis on each platform you add",
+    ],
+  },
+  // ── Dashboard conversion layer (app/dashboard/ConversionBand.js) ──
+  // Each band opens the modal with its own source, so the modal continues
+  // the exact sentence the creator just clicked rather than resetting to a
+  // generic pitch.
+  dashboard_locked_history: {
+    headline: "Unlock the insights we found in your data",
+    subhead: "The history behind your Free window is already saved to your account. Pro analyses all of it — no re-upload.",
+    benefits: [
+      "Full historical analysis of everything you've imported",
+      "Broader historical trends, not just your latest month",
+      "Your strongest historical earning windows",
+      "Top supporters across all time",
+    ],
+  },
+  dashboard_platform_cap: {
+    headline: `You're using all ${FREE_MAX_PLATFORMS} Free platform slots`,
+    subhead: "Pro unlocks additional platform analysis and cross-platform intelligence.",
+    benefits: [
+      "Additional platforms beyond your Free slots",
+      "Cross-platform intelligence — earnings, best windows, and ROI side by side",
+      "One ranked view instead of three separate ones",
+      "Full historical analysis on every platform you add",
+    ],
+  },
+  dashboard_sparse_recent: {
+    headline: "Unlock the insights we found in your data",
+    subhead: "Your recent window is light, but your history isn't. Pro reads the whole thing to find patterns this month can't show.",
+    benefits: [
+      "Broader historical trends, not just your latest month",
+      "Full historical analysis of everything you've imported",
+      "Patterns measured across your whole date range",
+      "Top supporters across all time",
+    ],
+  },
+}
+
+// ── DASHBOARD CONVERSION CONTEXT ──────────────────────────────────────────
+// Measures the three conditions app/dashboard/ConversionBand.js is allowed to
+// speak about, from rows the dashboard has ALREADY loaded. No extra query, no
+// new analytics engine, and no formula defined here:
+//
+//   * the Free/locked boundary is splitFreeHistory() — the same canonical
+//     helper the upload route and filterFreeHistory() use, so the dashboard
+//     can never disagree with the post-import screen about what is locked;
+//   * locked earnings come from ONE aggregateRows() run (the canonical
+//     engine's totalUSD), never a local sum;
+//   * slot counting is uniquePlatforms(), which already excludes Unknown and
+//     unsupported platforms from consuming a Free slot.
+//
+// Returns null for Pro and whenever nothing measurable is true, so the band
+// renders nothing rather than inventing a reason to upsell.
+function buildConversionContext({ allRows, visibleRows, analytics, isPro, runEngine, timezone }) {
+  if (isPro || !allRows?.length) return null
+
+  const { excluded } = splitFreeHistory(allRows)
+
+  let lockedHistory = null
+  if (excluded.length) {
+    let totalUsd = 0
+    try {
+      totalUsd = runEngine(excluded, timezone)?.totalUSD ?? 0
+    } catch (e) {
+      // The engine is the only source for this figure. If it cannot produce
+      // one, claim nothing — a band with a blank dollar amount is worse than
+      // no band at all.
+      totalUsd = 0
+    }
+    const dates = excluded.map(r => new Date(r.date_time)).filter(d => !isNaN(d))
+    if (totalUsd > 0) {
+      lockedHistory = {
+        tips: excluded.length,
+        totalUsd,
+        dateFrom: dates.length ? new Date(Math.min(...dates)).toISOString() : null,
+        dateTo: dates.length ? new Date(Math.max(...dates)).toISOString() : null,
+      }
+    }
+  }
+
+  const platforms = displayPlatforms(uniquePlatforms(allRows))
+  const platformCap = platforms.length >= FREE_MAX_PLATFORMS ? { platforms } : null
+
+  // Same shape as the post-import screen's sparse rule: sparse is about
+  // ABSOLUTE recent activity, and only worth naming when there is more
+  // history behind it. A creator whose whole account is one thin month is
+  // not being held back by the plan, so nothing is shown.
+  const windowTips = visibleRows?.length ?? 0
+  const windowSessions = analytics?.meaningfulSessionCount ?? 0
+  const sparseRecent = excluded.length && (windowTips < 30 || windowSessions < 3)
+    ? { tips: windowTips, sessions: windowSessions }
+    : null
+
+  if (!lockedHistory && !platformCap && !sparseRecent) return null
+  return { lockedHistory, platformCap, sparseRecent }
+}
+
+// Platform names reach the client already normalised (normalizePlatform()
+// lowercases so slot counting is case-insensitive), which is right for
+// comparison and wrong for display — the locked preview was rendering
+// "You already track chaturbate, bongacams, myfreecams". Map back to the
+// canonical casing for anything a creator reads.
+function displayPlatforms(list) {
+  return (list || [])
+    .map((p) => SUPPORTED_PLATFORMS.find((s) => s.toLowerCase() === String(p).toLowerCase()) || p)
+    .join(', ')
 }
 
 const TAB_LOADING = (
@@ -159,24 +360,12 @@ function EnvelopeHeartIcon({ size = 16, heartColor = "#FF2BAE" }) {
   )
 }
 
-// Builds the "quick preview" stats (tips / fans / earnings / top spender)
-// shown when a free-tier user's import is blocked by the platform limit —
-// same shape as onboarding's buildPreview(), minus paid-session handling,
-// since this only needs to answer "what's in the file" for a soft paywall.
-function buildImportPreview(rawText, platform) {
-  if (!rawText) return null
-  const rows = parseCSV(rawText, platform)
-  if (!rows.length) return null
-  const totalUsd = rows.reduce((sum, r) => sum + (r.usd || 0), 0)
-  const fanTotals = rows.reduce((acc, r) => { acc[r.username] = (acc[r.username] || 0) + r.tokens; return acc }, {})
-  const topSpender = Object.entries(fanTotals).sort((a, b) => b[1] - a[1])[0]
-  return {
-    tipsDetected: rows.length,
-    fansDetected: Object.keys(fanTotals).length,
-    estimatedEarnings: parseFloat(totalUsd.toFixed(2)),
-    topSpender: topSpender ? topSpender[0] : null,
-  }
-}
+// NOTE: the client-side "quick preview" that used to live here (parsing the
+// raw CSV a second time in the browser to guess tips/fans/earnings) was
+// removed — the upload API now returns real, server-computed locked-preview
+// numbers (lockedPlatformPreview / excludedHistory / fullFileSummary) from
+// the same canonical analytics pipeline the rest of the dashboard uses, so
+// there's no need for a separate, less-accurate client-side guess.
 
 // Sparkle burst — ports the same completion animation used in onboarding's
 // "First Insights" step so the platform-limit preview feels visually
@@ -570,7 +759,6 @@ const HASHTAG_POOLS_HG = {
     BongaCams:   ['#BongaCams','#BongaLive','#BCModel','#BongaCamsLive','#BongaCamsGirl'],
     MyFreeCams:  ['#MyFreeCams','#MFC','#MFCModel','#MFCShare','#MyFreeCamsModel'],
     Stripchat:   ['#Stripchat','#StripchatLive','#StripchatModel','#StripchatGirl'],
-    CamSoda:     ['#CamSoda','#CamSodaLive','#CamSodaModel'],
     Any:         ['#CamGirl','#Webcam','#LiveStream','#AdultStream','#LiveCam'],
   },
   toy: {
@@ -655,7 +843,7 @@ function HashtagGenerator({ C, glassCard, defaultPlatform = "Chaturbate" }) {
           <div>
             <label style={lbl}>Platform</label>
             <select value={platform} onChange={e => setPlatform(e.target.value)} style={inp}>
-              {['Chaturbate','BongaCams','MyFreeCams','Stripchat','CamSoda','Any'].map(p => <option key={p}>{p}</option>)}
+              {[...SUPPORTED_PLATFORMS, 'Any'].map(p => <option key={p}>{p}</option>)}
             </select>
           </div>
           <div>
@@ -1011,7 +1199,12 @@ function TitleGenerator({ C, glassCard, analytics, tips, sessions, whales, timez
     setCopied(i); setTimeout(() => setCopied(null), 1800)
   }
 
-  // Stats chips — peak timing (data) + static stats
+  // Stats chips — the peak-timing chip is derived from this creator's own
+  // data; the two below it are product marketing copy, kept by explicit
+  // product decision. Neither is computed here: nothing in this codebase
+  // counts title generations, and tips are not attributed to a title, so
+  // "~30% more tips" is a marketing claim rather than a measured result.
+  // Recorded so nobody later reads them as engine output.
   const ctx0 = buildCtx()
   const chips = []
   if (ctx0.isPeakNow && ctx0.bestHourLabel)     chips.push({ label: `🔴 Peak NOW (${ctx0.bestHourLabel})`, color: C.orange })
@@ -1459,6 +1652,9 @@ export default function Dashboard() {
   const [messageTarget, setMessageTarget] = useState(null)
   const [messageIndex, setMessageIndex] = useState(0)
   const [messageCopied, setMessageCopied] = useState(false)
+  // Dashboard conversion layer (see ConversionBand.js). Measured in
+  // loadData from rows already fetched; null for Pro.
+  const [conversionContext, setConversionContext] = useState(null)
   const [showUpgradeModal, setShowUpgradeModal] = useState(false)
   const [upgradeModalSource, setUpgradeModalSource] = useState(null)
   const [fanSearchOpen, setFanSearchOpen] = useState(false)
@@ -1539,6 +1735,81 @@ export default function Dashboard() {
       })
   }, [activeTab, replayLoaded, user])
 
+  // ── POST-STREAM REPORT ────────────────────────────────────────────────
+  // The Command Center had no way of learning that a Live Mode stream ended
+  // — the replay list above only loads when the creator opens the Live Mode
+  // Sessions tab. This loads the most recent ended session, and subscribes
+  // to live_sessions so a stream ending mid-visit surfaces without a manual
+  // refresh, using the same postgres_changes pattern the live_tips channels
+  // already use. No polling: realtime already answers this.
+  //
+  // SEEN STATE: live_sessions has no viewed_at/seen column, and this does
+  // not warrant a migration. The session id is the report's identity, and
+  // the last id the creator opened is remembered per browser under the
+  // existing camcash_* localStorage convention. Consequences that fall out
+  // of keying on the id: re-rendering or refreshing cannot manufacture a
+  // second report for the same stream, and an already-opened report stops
+  // being NEW permanently rather than resurfacing.
+  // Raised only after the Stripe return handler has OBSERVED isProPlan()
+  // true — never on checkout completing, which can land before the
+  // webhook has flipped the plan.
+  const [showExtensionOffer, setShowExtensionOffer] = useState(false)
+  const [latestEndedSession, setLatestEndedSession] = useState(null)
+  const [sessionTipsForReport, setSessionTipsForReport] = useState([])
+  const [reportCoachingEvents, setReportCoachingEvents] = useState([])
+  const [seenReportId, setSeenReportId] = useState(null)
+  const [reportHydrated, setReportHydrated] = useState(false)
+  const [viewingReport, setViewingReport] = useState(false)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try { setSeenReportId(localStorage.getItem('camcash_seen_stream_report') || null) } catch (_) {}
+    setReportHydrated(true)
+  }, [])
+
+  const REPORT_SESSION_COLUMNS =
+    'id, status, stream_platform, started_at, ended_at, paused_at, total_paused_seconds, ' +
+    'session_earnings_usd, session_tokens, tip_count, unique_tipper_count, largest_tip_usd, ' +
+    'coaching_goal_tokens, session_resolution_type, is_inaccurate'
+
+  const loadLatestEndedSession = useCallback(async (userId) => {
+    const { data } = await supabase
+      .from('live_sessions')
+      .select(REPORT_SESSION_COLUMNS)
+      .eq('user_id', userId)
+      .eq('status', 'ended')
+      .order('ended_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (!data?.id) return
+    setLatestEndedSession(data)
+    // The two joins the report needs, both keyed on this session id.
+    const [{ data: tipRows }, { data: eventRows }] = await Promise.all([
+      supabase.from('live_tips').select('username, usd, tokens, received_at').eq('live_session_id', data.id),
+      supabase.from('coaching_events').select('id, type, priority, title, message, action_status, shown_at').eq('session_id', data.id),
+    ])
+    setSessionTipsForReport(tipRows || [])
+    setReportCoachingEvents(eventRows || [])
+  }, [])
+
+  useEffect(() => {
+    if (!user?.id) return
+    loadLatestEndedSession(user.id)
+    const channel = supabase
+      .channel(`live_sessions_report_${user.id}`)
+      .on('postgres_changes', {
+        event: 'UPDATE', schema: 'public', table: 'live_sessions',
+        filter: `user_id=eq.${user.id}`,
+      }, (payload) => {
+        // Only a transition INTO 'ended' is a completed stream. An active or
+        // starting session, a pause, or a heartbeat update is not a report.
+        if (payload.new?.status !== 'ended') return
+        loadLatestEndedSession(user.id)
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [user?.id, loadLatestEndedSession])
+
   const loadReplayCoachingEvents = (sessionId) => {
     if (replayCoachingEvents[sessionId]) return
     setReplayCoachingLoading(sessionId)
@@ -1564,6 +1835,11 @@ export default function Dashboard() {
   const [feedbackSent, setFeedbackSent] = useState(false)
   const [feedbackSubmitting, setFeedbackSubmitting] = useState(false)
   const [tipPage, setTipPage] = useState(0)
+  // D9 — Sessions pagination. Reset to the first page whenever the
+  // meaningful-only filter changes, so the creator never lands on a page
+  // that no longer exists under the new filter.
+  const [sessionPage, setSessionPage] = useState(0)
+  useEffect(() => { setSessionPage(0) }, [meaningfulOnly])
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [tokenRates, setTokenRates] = useState({ ...PLATFORM_TOKEN_RATES })
@@ -1640,6 +1916,29 @@ export default function Dashboard() {
     setShowUpgradeModal(true)
   }
 
+  // Copy for whichever trigger opened the modal, and — where this creator has
+  // one — their own measured locked total to repeat back to them.
+  //
+  // Two sources, in order of recency: the upload they are looking at right
+  // now, then the history already stored on the account. Both are figures we
+  // ALREADY showed them (ImportResult section B, and the dashboard band), so
+  // the modal is a continuation rather than a new claim. No figure is
+  // computed here and nothing is shown when neither source has one.
+  const upgradeCopy = UPGRADE_COPY[upgradeModalSource] || UPGRADE_COPY.default
+  const upgradeValueLine = (() => {
+    if (isPro) return null
+    const fromUpload = lastUploadResult?.success ? lastUploadResult.excludedHistory : null
+    const locked = (fromUpload?.totalUsd > 0 ? fromUpload : null) || conversionContext?.lockedHistory || null
+    if (!locked || !(locked.totalUsd > 0)) return null
+    const range = locked.dateFrom && locked.dateTo
+      ? ` from ${formatImportDate(locked.dateFrom)} – ${formatImportDate(locked.dateTo)}`
+      : ''
+    return {
+      usd: `$${Number(locked.totalUsd).toFixed(2)}`,
+      detail: `${Number(locked.tips || 0).toLocaleString()} additional tips${range} — already saved to your account, unlocked the moment you upgrade. No re-upload.`,
+    }
+  })()
+
   // ── PRO PREVIEW IMPRESSION TRACKING ─────────────────────────────────────
   // One event (pro_preview_viewed) with a `feature` property, not a
   // separate event per locked surface — so "which Pro value proposition
@@ -1655,6 +1954,51 @@ export default function Dashboard() {
     proPreviewFiredRef.current.add(feature)
     gtmTrack('pro_preview_viewed', { feature })
   }
+
+  // ── CONVERSION-MEASUREMENT SEAM (Phase 13) ───────────────────────────────
+  // No new analytics system and no speculative table: the funnel's seven
+  // steps are expressed with the two helpers that already exist, so they can
+  // be wired to a real destination later without touching the UI again.
+  //
+  //   1. CSV upload completed .......... csv_upload_success   (upload handler)
+  //   2. result screen viewed .......... import_result_viewed (below)
+  //   3. locked insight viewed ......... pro_preview_viewed   (feature=...)
+  //   4. upgrade CTA clicked ........... upgrade_click        (openUpgradeModal)
+  //   5. checkout started .............. upgrade_checkout_clicked (modal CTA)
+  //   6. Pro activated ................. subscription_completed (checkout return)
+  //   7. locked insight unlocked ....... pro_unlocked         (after refresh)
+  //
+  // Every conversion surface additionally carries a stable `data-cc-surface`
+  // / `data-cc-action` attribute, so a click can be attributed to the exact
+  // band that produced it without re-deriving it from the DOM shape.
+  useEffect(() => {
+    if (importStage !== 'success' || !lastUploadResult?.success) return
+    gtmTrack('import_result_viewed', {
+      platform: lastUploadResult.platform || 'unknown',
+      is_pro: isPro,
+      // Whether this creator was actually shown locked value — the single
+      // dimension that separates "saw the pitch" from "saw a receipt".
+      has_locked_value: Boolean(lastUploadResult.excludedHistory?.tips > 0),
+    })
+    if (!isPro) {
+      if (lastUploadResult.excludedHistory?.tips > 0) trackProPreviewViewed('csv_locked_history')
+      if (lastUploadResult.lockedInsights?.trend?.length >= 2) trackProPreviewViewed('csv_locked_trend')
+      if (lastUploadResult.lockedInsights?.topFans?.length > 0) trackProPreviewViewed('csv_locked_fans')
+      if (lastUploadResult.lockedInsights?.heatmap?.length > 0) trackProPreviewViewed('csv_locked_patterns')
+      if (lastUploadResult.lockedPlatformPreview?.length) trackProPreviewViewed('csv_locked_platform')
+    }
+  }, [importStage, lastUploadResult, isPro])
+
+  // The dashboard band is an impression too — it is the only conversion
+  // surface a returning creator sees without re-importing anything.
+  useEffect(() => {
+    if (isPro || !conversionContext) return
+    const surface = conversionContext.lockedHistory ? 'dashboard_locked_history'
+      : conversionContext.platformCap ? 'dashboard_platform_cap'
+      : conversionContext.sparseRecent ? 'dashboard_sparse_recent'
+      : null
+    if (surface && activeTab === 'overview') trackProPreviewViewed(surface)
+  }, [conversionContext, isPro, activeTab])
 
   const redeemPromoCode = async () => {
     const code = promoCodeInput.trim()
@@ -1912,6 +2256,57 @@ export default function Dashboard() {
       if (params.get('success') === 'true') {
         gtmTrack('subscription_completed', { plan_type: params.get('plan') || null })
         window.history.replaceState({}, '', window.location.pathname)
+
+        // ── POST-CHECKOUT ENTITLEMENT REFRESH ───────────────────────────
+        // Previously this fired the funnel event and stopped. The client
+        // kept the `profile` it loaded at mount (plan: 'free'), so a creator
+        // returning from a SUCCESSFUL checkout still saw every locked card
+        // locked and every blurred preview blurred until they manually
+        // reloaded — the exact "did my payment work?" moment the conversion
+        // flow exists to avoid.
+        //
+        // profiles.plan is flipped by the Stripe webhook, which can land
+        // slightly after the browser redirect, so a single read can race it.
+        // Poll briefly and stop as soon as the plan is paid. Read-only: this
+        // never writes an entitlement client-side, it only observes the one
+        // the webhook already set.
+        let cancelled = false
+        const refreshEntitlement = async () => {
+          const { data: { user: u } } = await supabase.auth.getUser()
+          if (!u || cancelled) return
+          for (let attempt = 0; attempt < 6 && !cancelled; attempt++) {
+            const { data } = await supabase
+              .from('profiles')
+              .select('plan, plan_expires_at, stripe_customer_id, timezone')
+              .eq('id', u.id)
+              .maybeSingle()
+            if (data) {
+              setProfile(data)
+              // isProPlan() is the single entitlement predicate (lib/plan.js)
+              // — never re-implement the plan test here.
+              if (isProPlan(data)) {
+                // Re-run the loader so Pro sees the FULL history immediately:
+                // loadData() applies filterFreeHistory() only for non-Pro, so
+                // the rows already in the database become visible without any
+                // re-upload.
+                loadData(u.id, true, { silent: true })
+                // Funnel step 7 (see the conversion-measurement seam below):
+                // the locked surfaces the creator was looking at are now
+                // actually unlocked, as distinct from the payment completing.
+                gtmTrack('pro_unlocked', { source: 'checkout_return' })
+                showToast('✨ Pro is active — your full history is unlocked')
+                // The extension offer belongs HERE and nowhere earlier: this
+                // is the first instant the creator actually has Live Mode.
+                // Suppressed once dismissed, so it never becomes a nag.
+                if (!isExtensionOfferDismissed()) setShowExtensionOffer(true)
+                return
+              }
+            }
+            await new Promise(r => setTimeout(r, 1500))
+          }
+        }
+        refreshEntitlement()
+        return () => { cancelled = true }
       } else if (params.get('canceled') === 'true') {
         gtmTrack('checkout_canceled', {})
         window.history.replaceState({}, '', window.location.pathname)
@@ -2216,8 +2611,9 @@ export default function Dashboard() {
       // detection is fallback-only, used to auto-populate the profile once
       // (see autoPopulateTimezoneIfMissing) rather than being read live on
       // every load.
-      const { data: profileTzRow } = await supabase.from('profiles').select('timezone').eq('id', uid).maybeSingle()
+      const { data: profileTzRow } = await supabase.from('profiles').select('timezone, plan').eq('id', uid).maybeSingle()
       const { timezone: userTz } = resolveCreatorTimezone(profileTzRow?.timezone)
+      const loadedIsPro = isProPlan(profileTzRow)
       autoPopulateTimezoneIfMissing(supabase, uid, profileTzRow?.timezone)
       const PAGE = 1000
       // First page also asks for the exact row count, so the remaining pages
@@ -2243,14 +2639,35 @@ export default function Dashboard() {
         }
       }
       if (allData.length) {
-        setTips(allData)
+        // Free plan analytics are limited to the most recent 31 days. We do
+        // not delete older database rows; we simply keep them out of the
+        // Free dashboard/analytics view. Pro sees the full imported history.
+        const historyResult = loadedIsPro
+          ? { rows: allData, removedCount: 0 }
+          : filterFreeHistory(allData)
+
+        const visibleData = historyResult.rows
+        setTips(visibleData)
+        let engineResult = null
         try {
-          const result = runEngine(allData, userTz)
-          setAnalytics(result)
-          lastEngineTipsFingerprintRef.current = { length: allData.length, lastId: allData[allData.length - 1]?.id ?? null }
+          engineResult = runEngine(visibleData, userTz)
+          setAnalytics(engineResult)
+          lastEngineTipsFingerprintRef.current = { length: visibleData.length, lastId: visibleData[visibleData.length - 1]?.id ?? null }
         } catch (engineErr) {
           console.error('[loadData] runEngine failed:', engineErr)
         }
+        // Conversion layer context. Free only, and derived entirely from
+        // `allData` — which is already in memory — so no extra round trip.
+        setConversionContext(buildConversionContext({
+          allRows: allData,
+          visibleRows: visibleData,
+          analytics: engineResult,
+          isPro: loadedIsPro,
+          runEngine,
+          timezone: userTz,
+        }))
+      } else {
+        setConversionContext(null)
       }
       // paid_sessions (BongaCams Private/Full-Private/Group/Spy) — separate
       // table, separate state, never merged into `tips`/`analytics`. Same
@@ -2296,34 +2713,40 @@ const stopImportMessageRotation = () => {
     setLockedPreview(null)
   }
 
-  // Shows a quick preview of what's in a blocked import (tips/fans/earnings/
-  // top spender) plus a soft paywall, instead of just refusing the upload —
-  // so a free-tier user sees real value before being asked to subscribe.
-  const denyWithPlatformPreview = async (file, platformLabel) => {
-    let rawText = ''
-    try { rawText = await file.text() } catch (e) {}
-    const detectedLabel = platformLabel || (rawText ? detectPlatform(rawText) : null) || 'this platform'
-    const preview = buildImportPreview(rawText, platformLabel)
+  // Shows a REAL preview of what's in a blocked import — per-locked-platform
+  // tips/earnings/sessions, plus the full-file summary — instead of a
+  // client-side guess. All numbers here come straight from the upload API's
+  // 402 response body (lockedPlatformPreview/fullFileSummary), which
+  // computed them from the actual parsed CSV server-side via the same
+  // canonical analytics engine the rest of the dashboard uses. Never
+  // re-parses the file client-side and never invents a number.
+  const denyWithPlatformPreview = (apiResult) => {
     setLastUploadResult(null)
-    setLockedPreview({ platform: detectedLabel, preview })
+    setLockedPreview({
+      lockedPlatformPreview: apiResult.lockedPlatformPreview || [],
+      fullFileSummary: apiResult.fullFileSummary || null,
+      currentPlatforms: apiResult.currentPlatforms || [],
+      maxPlatforms: apiResult.maxPlatforms || FREE_MAX_PLATFORMS,
+    })
     setImportStage('locked_preview')
-    // Only play the celebratory checkmark/sparkle when we actually found
-    // something to preview — an unparseable file isn't a "confirmation".
-    if (preview) {
+    const hasPreview = (apiResult.lockedPlatformPreview || []).some(p => p.tips > 0)
+    if (hasPreview) {
       setShowImportSparkle(true)
       setTimeout(() => setShowImportSparkle(false), 2400)
     }
-    gtmTrack('platform_limit_preview_shown', { platform: detectedLabel, hasPreview: !!preview })
+    gtmTrack('platform_limit_preview_shown', {
+      platforms: (apiResult.lockedPlatformPreview || []).map(p => p.platform).join(','),
+      hasPreview,
+    })
   }
 
   const handleCSV = async (file, forcePlatform = null) => {
     if (!file || !user) return
-    // Free plan tracks a single platform — instead of a hard block, show a
-    // quick preview of the file's contents plus a soft paywall below it.
-    if (freePlatformLimitReached && forcePlatform && !allPlatforms.includes(forcePlatform)) {
-      await denyWithPlatformPreview(file, forcePlatform)
-      return
-    }
+    // Platform-limit and history-window decisions are made server-side (the
+    // upload API classifies the full file against the account's actual
+    // tracked platforms and returns real numbers either way) — no
+    // client-side pre-check here, so there's no chance of a stale or
+    // mis-normalized guess blocking an upload the server would have allowed.
     setImportStage('processing')
     setImportMessageIdx(0)
     setLastUploadResult(null)
@@ -2352,7 +2775,7 @@ const stopImportMessageRotation = () => {
 
       if (!res.ok || result.error) {
         if (result.code === 'platform_limit_reached') {
-          await denyWithPlatformPreview(file, forcePlatform || uploadPlatform || result.platform || null)
+          denyWithPlatformPreview(result)
         } else {
           showToast("❌ " + (result.error || 'Upload failed'))
           setLastUploadResult({ success: false, error: result.error || "We couldn't read this CSV. Please check the format or try another file." })
@@ -2376,6 +2799,27 @@ const stopImportMessageRotation = () => {
         totalUsd: result.totalUsd,
         dateFrom: result.dateFrom,
         dateTo: result.dateTo,
+        historyLimited: !!result.historyLimited,
+        historyDays: result.historyDays || null,
+        historyRemovedCount: result.historyRemovedCount || 0,
+        historyWindowStart: result.historyWindowStart || null,
+        historyWindowEnd: result.historyWindowEnd || null,
+        // Section A — what's actually visible right now on the current plan.
+        freeResults: result.freeResults || null,
+        // Section B — real, non-fabricated totals for data this upload
+        // contained that Free can't show yet (older-than-31-days rows, and/or
+        // platforms beyond the Free cap). Both come straight from the
+        // upload API, computed from the real parsed file — never guessed.
+        excludedHistory: result.excludedHistory || null,
+        lockedPlatformPreview: result.lockedPlatformPreview || null,
+        fullFileSummary: result.fullFileSummary || null,
+        // Real previews of what Pro would analyse, measured server-side from
+        // the WHOLE file. This mapping is a whitelist, so a new response field
+        // has to be added here or it silently never reaches the UI.
+        lockedInsights: result.lockedInsights || null,
+        freeHighlight: result.freeHighlight || null,
+        platformsTracked: result.platformsTracked || [],
+        freePlatformLimit: result.freePlatformLimit || null,
       })
       setImportStage('success')
 
@@ -2417,25 +2861,21 @@ const stopImportMessageRotation = () => {
     catch (err) { showToast("❌ " + err.message) }
   }
 
-  if (loading) {
-    return (
-      <div style={{ minHeight: "100vh", background: "#05070f", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ textAlign: "center" }}>
-          <div style={{ width: 40, height: 40, border: "2px solid #1e2d45", borderTop: "2px solid #22D3EE", borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto 16px" }} />
-          <div style={{ color: C.muted, fontSize: 14 }}>Loading...</div>
-          <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-        </div>
-      </div>
-    )
-  }
-
   const sessions = analytics?.sessions || []
   const whales = analytics?.whales || []
+
   // Opens the Whale Profile Modal for a fan, matched by fanKey (platform +
   // normalized username, never merged across platforms) -- reused by the
   // existing Top Fans list and now also by Private Sessions. If the fan has
   // no tip history at all (private-only fan), builds a safe minimal
   // whale-shaped object instead of crashing the tip-centric modal.
+  // Which fans already carry a note, so a row can say "Edit note" instead of
+  // "Add note". Read straight off the existing tipperNotes state that
+  // saveTipperNote() already maintains — no new query, no new table.
+  const notedUsernames = useMemo(() => new Set(
+    Object.entries(tipperNotes || {}).filter(([, v]) => v?.note).map(([k]) => k)
+  ), [tipperNotes])
+
   const viewFanProfile = (username, platform) => {
     if (!username) return
     const uname = username.toLowerCase()
@@ -2504,6 +2944,99 @@ const stopImportMessageRotation = () => {
   // _momTz) because platformTimes below is the first analytical consumer.
   const creatorTz = resolveCreatorTimezone(profile?.timezone).timezone
 
+  // Built here, not beside the loader above, because it reads `whales` and
+  // `creatorTz` — both declared further down the component than the loader is. buildStreamReport() is the
+  // canonical derivation (lib/liveSession/streamReport.js) — this page does
+  // not compute any report figure itself.
+  const streamReport = useMemo(
+    () => buildStreamReport({
+      session: latestEndedSession,
+      coachingEvents: reportCoachingEvents,
+      sessionTips: sessionTipsForReport,
+      whales,
+      // The Stream Planner's windows ARE this grid — matchPlannedWindow()
+      // looks the session's start day+hour up in it rather than re-deriving
+      // a schedule or inventing one.
+      canonicalBestTimes: analytics?.canonicalBestTimes || null,
+      creatorTz,
+    }),
+    [latestEndedSession, reportCoachingEvents, sessionTipsForReport, whales,
+     analytics?.canonicalBestTimes, creatorTz]
+  )
+  // Unseen until the creator opens THIS session's report. Gated on hydration
+  // so the badge never flashes before localStorage has been read.
+  const streamReportIsNew = !!streamReport && reportHydrated && seenReportId !== streamReport.id
+
+  // ── LIVE MODE ↔ DETECTED SESSION JOIN ────────────────────────────────
+  // The Sessions tab lists sessions DETECTED from tip timestamps
+  // (analytics.meaningfulSessions), which are a different object from the
+  // live_sessions rows Live Mode writes. They are not linked by any column:
+  // a detected session has no session id, only a platform and a time span.
+  //
+  // So the join is by overlap — same platform, and the live session's active
+  // span intersects the detected span. That is exactly what "these are the
+  // same stream" means here, and it is the only link the schema supports. A
+  // detected session with no overlapping live_sessions row is not missing
+  // data; it simply was not streamed through Live Mode, which the UI states
+  // as its own distinct case rather than as an empty section.
+  const liveReportsBySessionKey = useMemo(() => {
+    const out = {}
+    if (!latestEndedSession || !streamReport) return out
+    const ls = latestEndedSession
+    const lsStart = new Date(ls.started_at).getTime()
+    const lsEnd = new Date(ls.ended_at || ls.started_at).getTime()
+    if (!Number.isFinite(lsStart) || !Number.isFinite(lsEnd)) return out
+    const detected = (meaningfulOnly
+      ? (analytics?.meaningfulSessions || sessions)
+      : (analytics?.allValidSessions || sessions)) || []
+    for (const d of detected) {
+      if (ls.stream_platform && d.platform &&
+          String(d.platform).toLowerCase() !== String(ls.stream_platform).toLowerCase()) continue
+      const dStart = new Date(d.startTime).getTime()
+      const dEnd = new Date(d.endTime).getTime()
+      if (!Number.isFinite(dStart) || !Number.isFinite(dEnd)) continue
+      if (dStart <= lsEnd && dEnd >= lsStart) {
+        out[`${d.platform}-${dStart}`] = streamReport
+      }
+    }
+    return out
+  }, [latestEndedSession, streamReport, analytics?.meaningfulSessions,
+      analytics?.allValidSessions, sessions, meaningfulOnly])
+
+  const openStreamReport = useCallback(() => {
+    if (!streamReport) return
+    setViewingReport(true)
+    setSeenReportId(streamReport.id)
+    try { localStorage.setItem('camcash_seen_stream_report', streamReport.id) } catch (_) {}
+  }, [streamReport])
+
+  // ── LOADING GATE — MUST STAY BELOW EVERY HOOK ────────────────────────
+  // This early return used to sit ~150 lines higher, directly above
+  // `const sessions = analytics?.sessions`. That was safe only while no hook
+  // followed it. Task D's stream-report hooks (streamReport,
+  // liveReportsBySessionKey, openStreamReport) and notedUsernames are all
+  // declared below that point because they read `whales`/`creatorTz`, which
+  // are themselves declared there — so the first render (loading = true)
+  // returned before running them and the second (loading = false) ran four
+  // MORE hooks, which is the React invariant violation
+  // "Rendered more hooks than during the previous render". React then threw
+  // and the whole dashboard rendered blank.
+  //
+  // Every derivation between the old position and here is null-safe
+  // (analytics?.x || []), so running it during load costs nothing. Any new
+  // hook must go ABOVE this gate, never below it.
+  if (loading) {
+    return (
+      <div style={{ minHeight: "100vh", background: "#05070f", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ width: 40, height: 40, border: "2px solid #1e2d45", borderTop: "2px solid #22D3EE", borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto 16px" }} />
+          <div style={{ color: C.muted, fontSize: 14 }}>Loading...</div>
+          <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+        </div>
+      </div>
+    )
+  }
+
   // Build platformTimes from INDIVIDUAL TIPS (not session start time)
   // so hour/day reflects when money actually came in, not when the session
   // started.
@@ -2556,8 +3089,13 @@ const stopImportMessageRotation = () => {
   // top fans from <day>" button) was itself removed in the Phase 3
   // Performance rebuild, so it could never match anything again.
 
-  const allPlatforms = memoOn(derivedCacheRef.current, 'allPlatforms', [tips], () => [...new Set(tips.map(t => t.platform))])
-  const freePlatformLimitReached = !isPro && allPlatforms.length > 0
+  const allPlatforms = memoOn(
+    derivedCacheRef.current,
+    'allPlatforms',
+    [tips],
+    () => [...new Set(tips.map(t => normalizePlatform(t.platform)).filter(Boolean))]
+  )
+  const freePlatformLimitReached = !isPro && allPlatforms.length >= FREE_MAX_PLATFORMS
 
   // ── Build "What's Next" alerts — smarter, personalized, prioritized
   const buildDailyBrief = () => {
@@ -3215,6 +3753,14 @@ const stopImportMessageRotation = () => {
       <Sidebar activeTab={activeTab} onTabChange={(tab) => { setActiveTab(tab); if (typeof window !== "undefined") { localStorage.setItem("camcash_tab", tab); window.scrollTo({ top: 0, behavior: "instant" }); } }} user={user} onSignOut={async () => { await supabase.auth.signOut(); router.replace("/login"); }} isPro={isPro} trialEligible={trialEligible} />{/* MAIN CONTENT */}
       <div className="dash-main" style={{ marginLeft: 240, width: "calc(100% - 240px)", minWidth: 0, padding: 32, boxSizing: "border-box", overflowX: "hidden" }}>
 
+        {/* Post-checkout only. isPro is passed through so the component's own
+            guard agrees with this one — a Free creator must never be pitched
+            an extension whose only purpose is Live Mode. */}
+        {showExtensionOffer && (
+          <ExtensionOffer C={C} isPro={isPro} variant="success"
+            onDismiss={() => setShowExtensionOffer(false)} />
+        )}
+
         {/* ── TRIAL COUNTDOWN ──
             Shown only while a card-backed trial is actually running (Stripe's
             trial_end, mirrored to profiles.trial_ends_at by the webhook). Not
@@ -3352,7 +3898,7 @@ const stopImportMessageRotation = () => {
                   </div>
                 </div>
 
-                <button className="cmdbar-golive cmdbar-wake-btn" onClick={() => { setActiveTab('live'); if (typeof window !== 'undefined') { localStorage.setItem('camcash_tab', 'live'); window.scrollTo({ top: 0, behavior: 'instant' }); } }} style={{ padding: '10px 22px', borderRadius: 12, background: 'linear-gradient(135deg,#10B981,#22D3EE)', border: 'none', color: '#fff', fontWeight: 800, fontSize: 13, cursor: 'pointer', whiteSpace: 'nowrap', boxShadow: '0 0 16px rgba(16,185,129,0.25)', letterSpacing: 0.3, flexShrink: 0 }}>
+                <button className="cmdbar-golive cmdbar-wake-btn" onClick={() => { setActiveTab('live'); if (typeof window !== 'undefined') { localStorage.setItem('camcash_tab', 'live'); window.scrollTo({ top: 0, behavior: 'instant' }); } }} style={{ padding: '10px 22px', minHeight: 44, borderRadius: 12, background: 'linear-gradient(135deg,#10B981,#22D3EE)', border: 'none', color: '#fff', fontWeight: 800, fontSize: 13, cursor: 'pointer', whiteSpace: 'nowrap', boxShadow: '0 0 16px rgba(16,185,129,0.25)', letterSpacing: 0.3, flexShrink: 0 }}>
                   ⚡ Go Live
                 </button>
               </div>
@@ -3414,8 +3960,38 @@ const stopImportMessageRotation = () => {
           />
         )}
 
-        {activeTab === "overview" && (
+        {/* The full report takes over the Command Center tab rather than
+            opening a modal or claiming a new sidebar entry — it is a reading
+            surface, and the creator returns to the same place they left. */}
+        {activeTab === "overview" && viewingReport && streamReport && (
           <div style={{ animation: "fadeUp 0.3s ease" }}>
+            <StreamReport
+              report={streamReport}
+              onClose={() => setViewingReport(false)}
+              onViewFan={(username) => {
+                const w = whales.find(wh => wh.username.toLowerCase() === String(username).toLowerCase())
+                viewFanProfile(username, w?.platform)
+              }}
+            />
+          </div>
+        )}
+
+        {activeTab === "overview" && !viewingReport && (
+          <div style={{ animation: "fadeUp 0.3s ease" }}>
+
+            {/* Sits above the Command Center: a finished stream is the most
+                recent thing that happened, and it is the reason the creator
+                opened the dashboard. Renders nothing when no ended session
+                exists. */}
+            {streamReport && (
+              <div style={{ marginBottom: 18 }}>
+                <StreamReportBanner
+                  report={streamReport}
+                  isNew={streamReportIsNew}
+                  onOpen={openStreamReport}
+                />
+              </div>
+            )}
 
             <OnboardingChecklist
               tips={tips}
@@ -3423,6 +3999,21 @@ const stopImportMessageRotation = () => {
               visitedTabs={visitedTabs}
               onNavigate={handleTabChange}
               onUpgrade={() => openUpgradeModal('default')}
+            />
+
+            {/* ── CONVERSION LAYER ─────────────────────────────────────
+                Carries the post-import result's language into the
+                dashboard WITHOUT redesigning it: one contextual band,
+                only when a measured condition is true, nothing for Pro.
+                See app/dashboard/ConversionBand.js. */}
+            <ConversionBand
+              C={C}
+              context={conversionContext}
+              isPro={isPro}
+              freeHistoryDays={FREE_HISTORY_DAYS}
+              freeMaxPlatforms={FREE_MAX_PLATFORMS}
+              formatDate={formatImportDate}
+              onUpgrade={(source) => openUpgradeModal(source)}
             />
 
             {/* ═══════════════════════════════════════════════════════
@@ -3572,6 +4163,14 @@ const stopImportMessageRotation = () => {
             Performance.js. Free/Pro gating uses the same FREE_FAN_LIMIT
             this tab already enforced.
         ═══════════════════════════════════════════════════════ */}
+        {/* Restores two creator tools the Phase 4 Fans rebuild orphaned.
+            Both were still fully alive — viewFanProfile(), the profile drawer,
+            noteTarget/saveTipperNote() and the tipper_notes table — but the
+            ONLY surviving entry point was the Private Sessions tab, so from the
+            Fans tab a creator could neither open a profile nor reach a note
+            they had already written. No new state and no second notes or
+            profile system: these are the existing handlers, passed back to the
+            rows that lost them. */}
         {activeTab === "whales" && (
           <Fans
             analytics={analytics}
@@ -3581,9 +4180,22 @@ const stopImportMessageRotation = () => {
               const w = whales.find(wh => wh.username === username)
               if (w) { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }
             }}
+            onViewFan={(username) => {
+              const w = whales.find(wh => wh.username === username)
+              viewFanProfile(username, w?.platform)
+            }}
+            onAddNote={(username) => setNoteTarget(username)}
+            notedFans={notedUsernames}
             onUpgrade={(src) => openUpgradeModal(src)}
             onPlanStream={() => handleTabChange('planner')}
           />
+        )}
+
+        {/* Highest-intent placement: the creator is on the Live Mode tab, about
+            to stream. Dismissible, rendered ABOVE the engine and never in place
+            of it — Live Mode stays fully usable without the extension. */}
+        {activeTab === "live" && isPro && !showExtensionOffer && !isExtensionOfferDismissed() && (
+          <ExtensionOffer C={C} isPro={isPro} variant="reminder" />
         )}
 
         {activeTab === "live" && (isPro ? <LiveEnginePage embedded /> : (() => {
@@ -3736,399 +4348,21 @@ const stopImportMessageRotation = () => {
           )
         })()}
 
-        {activeTab === "sessions" && (() => {
-          const displaySessions = meaningfulOnly
-            ? (analytics?.meaningfulSessions || sessions)
-            : (analytics?.allValidSessions   || sessions)
-
-          // ── SESSION BREAKDOWN ENGINE ────────────────────────────────
-          // Pure logic — runs on each session's tips array
-          const getSessionBreakdown = (s) => {
-            const rawTips = s.tips || []
-            if (rawTips.length === 0) return null
-
-            const sorted = [...rawTips].sort((a, b) =>
-              new Date(a.dateRaw || a.date_time) - new Date(b.dateRaw || b.date_time)
-            )
-
-            const startMs = new Date(s.startTime).getTime()
-            const endMs   = new Date(s.endTime).getTime()
-            const durationMins = Math.max(s.durationMinutes || 1, 1)
-
-            // ── TIMELINE BUCKETS (5-min intervals) ──────────────────
-            const bucketCount = Math.max(Math.ceil(durationMins / 5), 1)
-            const buckets = Array.from({ length: bucketCount }, (_, i) => ({
-              label: `${i * 5}m`,
-              usd: 0,
-              count: 0,
-            }))
-            sorted.forEach(t => {
-              const tMs = new Date(t.dateRaw || t.date_time).getTime()
-              const minOffset = (tMs - startMs) / 60000
-              const idx = Math.min(Math.floor(minOffset / 5), bucketCount - 1)
-              if (idx >= 0 && idx < buckets.length) {
-                buckets[idx].usd += parseFloat(t.usd) || 0
-                buckets[idx].count += 1
-              }
-            })
-
-            // ── PEAK BUCKET ─────────────────────────────────────────
-            const peakBucket = [...buckets].sort((a, b) => b.usd - a.usd)[0]
-            const peakBucketIdx = buckets.indexOf(peakBucket)
-            const peakMinute = peakBucketIdx * 5
-            const peakTime = new Date(startMs + peakMinute * 60000)
-
-            // ── FIRST HALF vs SECOND HALF ────────────────────────────
-            const half = Math.floor(buckets.length / 2)
-            const firstHalfUSD = buckets.slice(0, half).reduce((s, b) => s + b.usd, 0)
-            const secondHalfUSD = buckets.slice(half).reduce((s, b) => s + b.usd, 0)
-            const firstHalfPct = s.totalUSD > 0 ? Math.round((firstHalfUSD / s.totalUSD) * 100) : 0
-
-            // ── TOP TIPPERS ─────────────────────────────────────────
-            const tipperMap = {}
-            sorted.forEach(t => {
-              const u = t.username || "unknown"
-              tipperMap[u] = (tipperMap[u] || 0) + (parseFloat(t.usd) || 0)
-            })
-            const topTippers = Object.entries(tipperMap)
-              .sort((a, b) => b[1] - a[1])
-              .slice(0, 3)
-              .map(([username, usd]) => ({
-                username,
-                usd: parseFloat(usd.toFixed(2)),
-                pct: s.totalUSD > 0 ? Math.round((usd / s.totalUSD) * 100) : 0,
-              }))
-
-            // ── SPIKES (bucket > 2x avg) ─────────────────────────────
-            const avgBucketUSD = s.totalUSD / buckets.length
-            const spikes = buckets
-              .map((b, i) => ({ ...b, idx: i }))
-              .filter(b => b.usd >= avgBucketUSD * 2 && b.usd > 0)
-              .map(b => ({
-                minute: b.idx * 5,
-                usd: parseFloat(b.usd.toFixed(2)),
-                time: new Date(startMs + b.idx * 5 * 60000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-              }))
-
-            // ── PERFORMANCE vs historical avg ────────────────────────
-            const allAvg = displaySessions.length > 0
-              ? displaySessions.reduce((s, x) => s + x.totalUSD, 0) / displaySessions.length
-              : 0
-            const performance = s.totalUSD >= allAvg * 1.3
-              ? "high"
-              : s.totalUSD <= allAvg * 0.6
-              ? "low"
-              : "average"
-
-            // ── REVENUE PER MINUTE ───────────────────────────────────
-            const revenuePerMin = parseFloat((s.totalUSD / durationMins).toFixed(3))
-
-            // ── INSIGHTS ────────────────────────────────────────────
-            const insights = []
-            if (firstHalfPct >= 60)
-              insights.push(`You earned ${firstHalfPct}% of your revenue in the first half of the stream`)
-            if (firstHalfPct <= 35 && durationMins > 20)
-              insights.push(`Your stream warmed up slowly — earnings picked up in the second half`)
-            if (topTippers[0] && topTippers[0].pct >= 40)
-              insights.push(`${topTippers[0].username} drove ${topTippers[0].pct}% of this session's revenue`)
-            if (spikes.length > 0)
-              insights.push(`Your biggest spike was at ${spikes[0].time} — $${spikes[0].usd} in 5 minutes`)
-            if (s.uniqueFans === 1)
-              insights.push(`Only one fan tipped this session — great loyalty, but audience diversity helps`)
-            if (s.uniqueFans >= 5)
-              insights.push(`${s.uniqueFans} different fans tipped — strong audience engagement`)
-            if (durationMins < 20 && s.totalUSD > 0)
-              insights.push(`Short session (${Math.round(durationMins)} min) with solid earnings — your hook is working`)
-            if (performance === "high")
-              insights.push(`This was one of your top sessions — $${s.totalUSD} vs $${allAvg.toFixed(0)} avg`)
-            if (performance === "low")
-              insights.push(`Below your average session ($${allAvg.toFixed(0)}) — see recommendations below`)
-
-            // ── RECOMMENDATIONS ─────────────────────────────────────
-            const recommendations = []
-            if (firstHalfPct >= 60)
-              recommendations.push("Your best earnings happen early — open with high energy and a strong tip goal right away")
-            if (firstHalfPct <= 35)
-              recommendations.push("Slow start detected — open with a countdown goal or shoutout to get early tipping momentum")
-            if (topTippers[0] && topTippers[0].pct >= 50)
-              recommendations.push(`Retain ${topTippers[0].username} — they drove half your session. Give them public recognition next time`)
-            if (s.uniqueFans <= 2 && s.tipCount > 10)
-              recommendations.push("Diversify your audience — most tips came from 1–2 fans. Engage lurkers with low-barrier goals")
-            if (durationMins < 30 && s.totalUSD > 0)
-              // "could 2x your earnings" removed — that multiplier was hardcoded,
-              // not derived from this creator's short-vs-long session history or
-              // any calculation in the codebase, while reading as her own data.
-              recommendations.push(`You earned $${s.totalUSD} in ${Math.round(durationMins)} min — short sessions give tipping momentum less time to build. Try extending to 45–60 min`)
-            if (spikes.length >= 2)
-              recommendations.push("Multiple spike moments detected — identify what triggered them and recreate it intentionally")
-            if (revenuePerMin > 0 && revenuePerMin < 0.10)
-              recommendations.push("Low revenue per minute — try setting a token goal every 15 min to maintain tipping momentum")
-            if (performance === "high")
-              recommendations.push("Replicate this stream: same time, same platform, similar energy — your data supports it")
-            if (recommendations.length === 0)
-              recommendations.push("Keep streaming consistently — more data helps us give you sharper recommendations")
-
-            return {
-              buckets, peakTime, peakBucket, firstHalfPct,
-              topTippers, spikes, performance, revenuePerMin,
-              insights, recommendations,
-            }
-          }
-
-          // ── PERFORMANCE BADGE CONFIG ────────────────────────────────
-          const PERF = {
-            high:    { label: "🔥 High Performing", color: "#10B981", bg: "rgba(16,185,129,0.1)",  border: "rgba(16,185,129,0.3)" },
-            average: { label: "📊 Average",          color: "#F59E0B", bg: "rgba(245,158,11,0.1)", border: "rgba(245,158,11,0.25)" },
-            low:     { label: "📉 Underperforming",  color: "#F87171", bg: "rgba(248,113,113,0.1)", border: "rgba(248,113,113,0.25)" },
-          }
-
-          const avgSession = displaySessions.length ? displaySessions.reduce((s,x) => s+x.totalUSD,0)/displaySessions.length : 0
-
-          return (
-            <div>
-              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 24 }}>
-                <div>
-                  <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 4 }}>🎥 Session Breakdown</h1>
-                  <p style={{ fontSize: 13, color: C.muted }}>What happened in each stream and how to earn more next time</p>
-                </div>
-                <div style={{ display:'flex', alignItems:'center', gap:8, padding:'6px 12px', borderRadius:20, background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.08)', flexShrink:0 }}>
-                  <label style={{ display:'flex', alignItems:'center', gap:6, cursor:'pointer', fontSize:12, color:C.muted }}>
-                    <input type="checkbox" checked={meaningfulOnly} onChange={e => setMeaningfulOnly(e.target.checked)} style={{ accentColor: C.cyan }} />
-                    Meaningful sessions only
-                  </label>
-                  {(analytics?.lowSignalSessionCount > 0) && (
-                    <span style={{ fontSize:11, color:C.muted }}>({analytics.lowSignalSessionCount} low-signal hidden)</span>
-                  )}
-                </div>
-              </div>
-
-              {/* OVERVIEW STATS BAR */}
-              {displaySessions.length > 0 && (
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 28 }}>
-                  {[
-                    { label: "Total Sessions", value: displaySessions.length, color: C.cyan },
-                    { label: "Avg Earnings", value: `$${avgSession.toFixed(2)}`, color: C.green },
-                    { label: "Best Session", value: `$${Math.max(...displaySessions.map(s => s.totalUSD)).toFixed(2)}`, color: C.gold },
-                    { label: "Total Earned", value: `$${displaySessions.reduce((s,x) => s+x.totalUSD,0).toFixed(2)}`, color: C.pink },
-                  ].map(({ label, value, color }) => (
-                    <div key={label} style={{ ...glassCard, borderRadius: 12, padding: "16px 18px" }}>
-                      <div style={{ fontSize: 11, color: C.muted, marginBottom: 4, textTransform: "uppercase" }}>{label}</div>
-                      <div style={{ fontSize: 22, fontWeight: 800, color }}>{value}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* SESSION CARDS */}
-              {displaySessions.length === 0 && (
-                <div style={{ ...glassCard, borderRadius: 14, padding: 40, textAlign: "center" }}>
-                  <div style={{ fontSize: 40, marginBottom: 12 }}>🎥</div>
-                  <div style={{ fontSize: 16, fontWeight: 700, color: C.white }}>{sessions.length > 0 ? 'No meaningful sessions match this filter' : 'No sessions yet'}</div>
-                  <div style={{ fontSize: 13, color: C.muted, marginTop: 6 }}>{sessions.length > 0 ? 'Try unchecking "Meaningful sessions only" to see all sessions' : 'Import your CSV data to see session breakdowns'}</div>
-                  {sessions.length > 0 && meaningfulOnly && <button onClick={() => setMeaningfulOnly(false)} style={{ marginTop:12, padding:'7px 18px', borderRadius:8, background:'rgba(34,211,238,0.12)', border:'1px solid rgba(34,211,238,0.3)', color:C.cyan, fontSize:12, cursor:'pointer' }}>Show all sessions</button>}
-                </div>
-              )}
-
-              {displaySessions.map((s, si) => {
-                const bd = getSessionBreakdown(s)
-                if (!bd) return null
-                const perf = PERF[bd.performance]
-                const maxBucketUSD = Math.max(...bd.buckets.map(b => b.usd), 0.01)
-                const fmt = dt => new Date(dt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-
-                return (
-                  <div key={si} style={{ ...glassCard, borderRadius: 16, marginBottom: 24, overflow: "hidden" }}>
-
-                    {/* SESSION HEADER */}
-                    <div style={{ padding: "20px 24px", borderBottom: "1px solid rgba(255,255,255,0.07)", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
-                      <div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
-                          <span style={{ fontSize: 16, fontWeight: 800, color: C.white }}>
-                            {new Date(s.startTime).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
-                          </span>
-                          <span style={{ fontSize: 13, color: C.muted }}>{fmt(s.startTime)} → {fmt(s.endTime)}</span>
-                          <span style={{ fontSize: 12, color: C.muted }}>• {s.platform}</span>
-                        </div>
-                        <span style={{ padding: "3px 10px", borderRadius: 20, background: perf.bg, border: `1px solid ${perf.border}`, fontSize: 11, fontWeight: 700, color: perf.color }}>{perf.label}</span>
-                      </div>
-                      <div style={{ textAlign: "right" }}>
-                        <div style={{ fontSize: 28, fontWeight: 900, color: C.green }}>${s.totalUSD.toFixed(2)}</div>
-                        <div style={{ fontSize: 12, color: C.muted }}>{Math.round(s.durationMinutes)} min • ${bd.revenuePerMin.toFixed(2)}/min</div>
-                      </div>
-                    </div>
-
-                    <div style={{ padding: 24 }}>
-
-                      {/* REVENUE GAP — vs last 5 sessions */}
-                      {(() => {
-                        const recentSessions = displaySessions.filter(x => x.id !== s.id && !x.durationUnknown)
-                        const comparable = recentSessions.filter(x => x.platform === s.platform).slice(-5)
-                        const base = comparable.length >= 3 ? comparable : recentSessions.slice(-5)
-                        if (base.length < 2 || s.durationUnknown) return null
-                        const expected = base.reduce((a, x) => a + x.totalUSD, 0) / base.length
-                        const gap = expected - s.totalUSD
-                        const gapPct = expected > 0 ? Math.round((gap / expected) * 100) : 0
-                        if (Math.abs(gapPct) < 10) return null
-                        const isUnder = gap > 0
-                        const color = isUnder ? C.red : C.green
-                        const bg    = isUnder ? "rgba(248,113,113,0.06)" : "rgba(16,185,129,0.06)"
-                        const bdr   = isUnder ? "rgba(248,113,113,0.25)" : "rgba(16,185,129,0.25)"
-                        return (
-                          <div style={{ padding: "10px 14px", borderRadius: 10, background: bg, border: `1px solid ${bdr}`, marginBottom: 14, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                            <span style={{ fontSize: 13, color, fontWeight: 600 }}>
-                              {isUnder ? `⚠️ $${gap.toFixed(0)} below your avg session ($${expected.toFixed(0)}) — ${gapPct}% shortfall` : `✅ $${Math.abs(gap).toFixed(0)} above your avg session — top ${Math.abs(gapPct)}% performance`}
-                            </span>
-                          </div>
-                        )
-                      })()}
-
-                      {/* CORE METRICS */}
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 10, marginBottom: 16 }}>
-                        {[
-                          { label: "Tips",        value: s.tipCount,                    color: C.cyan  },
-                          { label: "Unique Fans", value: s.uniqueFans,                  color: C.pink  },
-                          { label: "Avg Tip",     value: `$${s.avgTipSize}`,            color: C.gold  },
-                          { label: "$/Hour",      value: s.usdPerHour !== null ? `$${s.usdPerHour}` : "—",  color: C.green },
-                          { label: "$/Min",       value: s.usdPerMinute !== null ? `$${s.usdPerMinute}` : "—", color: C.cyan },
-                        ].map(({ label, value, color }) => (
-                          <div key={label} style={{ padding: "12px 14px", background: "rgba(255,255,255,0.04)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.06)" }}>
-                            <div style={{ fontSize: 10, color: C.muted, marginBottom: 4, textTransform: "uppercase" }}>{label}</div>
-                            <div style={{ fontSize: 18, fontWeight: 800, color }}>{value}</div>
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* VELOCITY + CONCENTRATION ROW */}
-                      {(s.velocityTrend !== 'unknown' || s.topContributorPct >= 40) && (
-                        <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
-                          {s.velocityTrend !== 'unknown' && (() => {
-                            const vConfig = {
-                              growing: { icon: "📈", label: "Momentum building", color: C.green, bg: "rgba(16,185,129,0.08)", border: "rgba(16,185,129,0.25)" },
-                              dying:   { icon: "📉", label: "Earnings slowing", color: C.red,   bg: "rgba(248,113,113,0.08)", border: "rgba(248,113,113,0.25)" },
-                              steady:  { icon: "➡️", label: "Steady pace",       color: C.muted, bg: "rgba(255,255,255,0.04)", border: "rgba(255,255,255,0.1)" },
-                            }
-                            const v = vConfig[s.velocityTrend]
-                            const pctChange = s.firstHalfUPM && s.secondHalfUPM
-                              ? Math.round(Math.abs((s.secondHalfUPM - s.firstHalfUPM) / s.firstHalfUPM) * 100)
-                              : null
-                            return (
-                              <div style={{ flex: 1, minWidth: 180, padding: "10px 14px", borderRadius: 10, background: v.bg, border: `1px solid ${v.border}`, display: "flex", alignItems: "center", gap: 8 }}>
-                                <span style={{ fontSize: 16 }}>{v.icon}</span>
-                                <div>
-                                  <div style={{ fontSize: 12, fontWeight: 700, color: v.color }}>{v.label}</div>
-                                  {pctChange !== null && (
-                                    <div style={{ fontSize: 11, color: C.muted }}>
-                                      {s.velocityTrend === 'growing' ? `+${pctChange}%` : s.velocityTrend === 'dying' ? `-${pctChange}%` : '~0%'} vs first half
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            )
-                          })()}
-                          {s.topContributorPct >= 40 && (
-                            <div style={{ flex: 1, minWidth: 200, padding: "10px 14px", borderRadius: 10, background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.25)", display: "flex", alignItems: "center", gap: 8 }}>
-                              <span style={{ fontSize: 16 }}>⚠️</span>
-                              <div>
-                                <div style={{ fontSize: 12, fontWeight: 700, color: C.gold }}>{s.topContributorPct}% from one fan</div>
-                                <div style={{ fontSize: 11, color: C.muted }}>{s.topContributor} drove most of this session</div>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      {/* TIMELINE CHART */}
-                      {bd.buckets.length > 1 && (
-                        <div style={{ marginBottom: 24 }}>
-                          <div style={{ fontSize: 12, fontWeight: 600, color: C.muted, marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>⏱ Earnings Timeline (5-min buckets)</div>
-                          <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 64, padding: "0 0 4px" }}>
-                            {bd.buckets.map((b, bi) => {
-                              const heightPct = maxBucketUSD > 0 ? (b.usd / maxBucketUSD) : 0
-                              const isPeak = bi === bd.buckets.indexOf(bd.peakBucket)
-                              const barColor = isPeak ? C.gold : b.usd > 0 ? C.cyan : "rgba(255,255,255,0.06)"
-                              return (
-                                <div key={bi} title={`${b.label}: $${b.usd.toFixed(2)}`} style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "flex-end", height: "100%" }}>
-                                  <div style={{ width: "100%", height: `${Math.max(heightPct * 100, b.usd > 0 ? 4 : 2)}%`, background: barColor, borderRadius: "3px 3px 0 0", transition: "height 0.3s", minHeight: b.usd > 0 ? 4 : 2 }} />
-                                </div>
-                              )
-                            })}
-                          </div>
-                          <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
-                            <span style={{ fontSize: 9, color: C.muted }}>{fmt(s.startTime)}</span>
-                            {bd.spikes.length > 0 && <span style={{ fontSize: 9, color: C.gold }}>🔥 Peak at {bd.spikes[0].time}</span>}
-                            <span style={{ fontSize: 9, color: C.muted }}>{fmt(s.endTime)}</span>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* FIRST HALF vs SECOND HALF */}
-                      <div style={{ marginBottom: 24 }}>
-                        <div style={{ fontSize: 12, fontWeight: 600, color: C.muted, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 }}>📊 Session Pacing</div>
-                        <div style={{ display: "flex", height: 28, borderRadius: 8, overflow: "hidden", border: "1px solid rgba(255,255,255,0.08)" }}>
-                          <div style={{ width: `${bd.firstHalfPct}%`, background: "linear-gradient(90deg, #22D3EE, #60A5FA)", display: "flex", alignItems: "center", justifyContent: "center", transition: "width 0.4s" }}>
-                            {bd.firstHalfPct >= 20 && <span style={{ fontSize: 10, fontWeight: 800, color: "#fff" }}>First half {bd.firstHalfPct}%</span>}
-                          </div>
-                          <div style={{ flex: 1, background: "rgba(255,255,255,0.06)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                            {100 - bd.firstHalfPct >= 20 && <span style={{ fontSize: 10, color: C.muted }}>Second half {100 - bd.firstHalfPct}%</span>}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* TOP TIPPERS */}
-                      {bd.topTippers.length > 0 && (
-                        <div style={{ marginBottom: 24 }}>
-                          <div style={{ fontSize: 12, fontWeight: 600, color: C.muted, marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>🏆 Top Contributors</div>
-                          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                            {bd.topTippers.map((t, ti) => (
-                              <div key={ti} style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                                <span style={{ fontSize: 14, flexShrink: 0 }}>{["🥇","🥈","🥉"][ti]}</span>
-                                <span style={{ fontSize: 13, color: C.white, fontWeight: 600, minWidth: 100 }}>{t.username}</span>
-                                <div style={{ flex: 1, height: 6, borderRadius: 3, background: "rgba(255,255,255,0.06)", overflow: "hidden" }}>
-                                  <div style={{ height: "100%", width: `${t.pct}%`, background: ti === 0 ? `linear-gradient(90deg, ${C.gold}, ${C.orange})` : ti === 1 ? C.cyan : C.muted, borderRadius: 3 }} />
-                                </div>
-                                <span style={{ fontSize: 12, color: C.green, fontWeight: 700, flexShrink: 0 }}>${t.usd}</span>
-                                <span style={{ fontSize: 11, color: C.muted, flexShrink: 0 }}>{t.pct}%</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* INSIGHTS + RECOMMENDATIONS side by side */}
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-                        {/* INSIGHTS */}
-                        <div style={{ padding: "14px 16px", background: "rgba(34,211,238,0.06)", border: "1px solid rgba(34,211,238,0.2)", borderRadius: 12 }}>
-                          <div style={{ fontSize: 12, fontWeight: 700, color: C.cyan, marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>💡 What Happened</div>
-                          <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-                            {bd.insights.map((ins, ii) => (
-                              <div key={ii} style={{ fontSize: 12, color: C.text, lineHeight: 1.5, display: "flex", gap: 6 }}>
-                                <span style={{ color: C.cyan, flexShrink: 0 }}>→</span>
-                                <span>{ins}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                        {/* RECOMMENDATIONS */}
-                        <div style={{ padding: "14px 16px", background: "rgba(236,72,153,0.06)", border: "1px solid rgba(236,72,153,0.2)", borderRadius: 12 }}>
-                          <div style={{ fontSize: 12, fontWeight: 700, color: C.pink, marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>🚀 Do This Next Time</div>
-                          <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-                            {bd.recommendations.map((rec, ri) => (
-                              <div key={ri} style={{ fontSize: 12, color: C.text, lineHeight: 1.5, display: "flex", gap: 6 }}>
-                                <span style={{ color: C.pink, flexShrink: 0 }}>•</span>
-                                <span>{rec}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )
-        })()}
+        {activeTab === "sessions" && (
+          <Sessions
+            allSessions={meaningfulOnly
+              ? (analytics?.meaningfulSessions || sessions)
+              : (analytics?.allValidSessions || sessions)}
+            rawSessionCount={sessions.length}
+            lowSignalCount={analytics?.lowSignalSessionCount || 0}
+            meaningfulOnly={meaningfulOnly}
+            onToggleMeaningful={setMeaningfulOnly}
+            page={sessionPage}
+            onPageChange={setSessionPage}
+            liveSessionsById={liveReportsBySessionKey}
+            onOpenReport={() => { setViewingReport(true); handleTabChange('overview') }}
+          />
+        )}
 
         {activeTab === "data" && (
           <div>
@@ -4264,11 +4498,32 @@ const stopImportMessageRotation = () => {
         )}
 
         {activeTab === "upload" && (
-          <div style={{ maxWidth: 600, margin: "0 auto" }}>
+          // The upload form reads best in a narrow column; the result is a
+          // report with side-by-side cards and needs the room. Widen only for
+          // the success stage rather than stretching the form to match.
+          <div style={{ maxWidth: importStage === 'success' ? 1000 : 600, margin: "0 auto" }}>
             <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 8 }}>📥 Import CSV</h1>
             <p style={{ fontSize: 14, color: C.muted, marginBottom: 12 }}>
-              {isPro ? "Unlimited platforms • Auto-removes duplicates" : freePlatformLimitReached ? `Free plan — tracking ${allPlatforms[0]}. Auto-removes duplicates.` : "Free plan tracks 1 platform. Auto-removes duplicates."}
+              {isPro
+                ? "Unlimited platforms • Full CSV history • Auto-removes duplicates"
+                : `Free plan — up to ${FREE_MAX_PLATFORMS} platforms • ${FREE_HISTORY_DAYS}-day history window per platform • Auto-removes duplicates`}
             </p>
+            {/* The window is per platform, and it is an ANALYSIS boundary, not
+                an import cap — every row you upload is stored. Said plainly
+                here because the locked panels below only appear after an
+                upload, so a creator deciding whether to import at all would
+                otherwise never see it. There is no upload quota anywhere in
+                the product (no counter exists in the API or the database), so
+                deleting and re-importing is always allowed. */}
+            {!isPro && (
+              <p style={{ fontSize: 12.5, color: C.muted, marginBottom: 12, lineHeight: 1.55 }}>
+                Upload as often as you like — there&apos;s no limit on the number of imports, and
+                deleting your imported data never blocks you from uploading again. Files can cover
+                any date range: everything you import is stored, and Free analytics simply focus on
+                the most recent {FREE_HISTORY_DAYS} days of each platform. Anything older stays
+                saved and unlocks with Pro — no re-upload needed.
+              </p>
+            )}
             <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: freePlatformLimitReached ? 16 : 32 }}>
               <a href="/blog/how-to-upload-csv-to-camcash" style={{ fontSize: 13, color: C.cyan, textDecoration: "none", fontWeight: 600 }}>📹 Watch the SOP: How to upload a CSV →</a>
               <a href="#csv-help" style={{ fontSize: 13, color: C.cyan, textDecoration: "none", fontWeight: 600 }}>❓ CSV help →</a>
@@ -4277,9 +4532,9 @@ const stopImportMessageRotation = () => {
               <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", borderRadius: 12, background: "rgba(168,85,247,0.08)", border: "1px solid rgba(168,85,247,0.25)", marginBottom: 16 }}>
                 <span style={{ fontSize: 18 }}>🔒</span>
                 <div style={{ flex: 1, fontSize: 12.5, color: C.text, lineHeight: 1.5 }}>
-                  You're on the free plan (1 platform). Upgrade to Pro to add BongaCams, MyFreeCams, and more.
+                  You've used all {FREE_MAX_PLATFORMS} free platform slots. Upgrade to Pro to add more platforms and compare performance across them.
                 </div>
-                <Button onClick={() => openUpgradeModal('multi_platform')} style={{ flexShrink: 0, padding: "8px 14px", fontSize: 12, whiteSpace: "nowrap" }}>Upgrade →</Button>
+                <Button onClick={() => openUpgradeModal('csv_platform_limit')} style={{ flexShrink: 0, padding: "8px 14px", fontSize: 12, whiteSpace: "nowrap" }}>Upgrade →</Button>
               </div>
             )}
             <div style={{ ...glassCard, borderRadius: 14, padding: 32, marginBottom: 16, position: "relative", overflow: "hidden" }}>
@@ -4289,8 +4544,8 @@ const stopImportMessageRotation = () => {
                   <select value={uploadPlatform} onChange={e => setUploadPlatform(e.target.value)} disabled={uploading}
                     style={{ width: "100%", padding: "10px 14px", borderRadius: 9, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: C.white, fontSize: 14, outline: "none", opacity: uploading ? 0.6 : 1 }}>
                     <option value="">Auto-detect (recommended)</option>
-                    {["Chaturbate", "BongaCams", "MyFreeCams", "Stripchat", "CamSoda"].map(p => {
-                      const locked = freePlatformLimitReached && !allPlatforms.includes(p)
+                    {SUPPORTED_PLATFORMS.map(p => {
+                      const locked = !isPro && freePlatformLimitReached && !allPlatforms.includes(normalizePlatform(p))
                       return <option key={p} value={p} disabled={locked}>{locked ? `🔒 ${p} — requires Pro` : p}</option>
                     })}
                   </select>
@@ -4305,7 +4560,7 @@ const stopImportMessageRotation = () => {
                     <input type="file" accept=".csv,.txt" style={{ display: "none" }}
                       onChange={e => { const f = e.target.files[0]; e.target.value = ''; handleCSV(f, uploadPlatform || null) }} />
                   </Button>
-                  <p style={{ fontSize: 12, color: C.muted, marginTop: 12 }}>Supports Chaturbate, BongaCams, MyFreeCams, Stripchat, CamSoda</p>
+                  <p style={{ fontSize: 12, color: C.muted, marginTop: 12 }}>Supports {SUPPORTED_PLATFORMS.join(', ')}</p>
                 </div>
               )}
 
@@ -4324,31 +4579,18 @@ const stopImportMessageRotation = () => {
               )}
 
               {importStage === 'success' && lastUploadResult?.success && (
-                <div style={{ textAlign: "center" }}>
-                  <div style={{ position: "relative", width: 56, height: 56, margin: "0 auto 14px" }}>
-                    <div className="import-flash-ring" style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "radial-gradient(circle,rgba(34,211,238,0.55),rgba(236,72,153,0.35) 60%,transparent 70%)" }} />
-                    <div className="import-check-badge" style={{ position: "relative", width: 56, height: 56, borderRadius: "50%", background: "linear-gradient(135deg,#10B981,#22D3EE)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, color: "#fff", boxShadow: "0 0 24px rgba(16,185,129,0.45)" }}>✓</div>
-                  </div>
-                  <div style={{ fontSize: 16, fontWeight: 800, color: C.white, marginBottom: 8 }}>Success — your tips were imported.</div>
-                  <div style={{ fontSize: 13.5, color: C.text, lineHeight: 1.6 }}>
-                    Imported <strong style={{ color: C.white }}>{(lastUploadResult.inserted || 0).toLocaleString()}</strong> tips from <strong style={{ color: C.cyan }}>{lastUploadResult.platform}</strong>
-                    {typeof lastUploadResult.totalUsd === 'number' && (
-                      <> — <strong style={{ color: C.green }}>${lastUploadResult.totalUsd.toFixed(2)}</strong> tracked</>
-                    )}
-                  </div>
-                  {(formatImportDate(lastUploadResult.dateFrom) && formatImportDate(lastUploadResult.dateTo)) && (
-                    <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>
-                      {formatImportDate(lastUploadResult.dateFrom)} – {formatImportDate(lastUploadResult.dateTo)}
-                    </div>
-                  )}
-                  {lastUploadResult.skipped > 0 && (
-                    <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>{lastUploadResult.skipped} duplicates skipped</div>
-                  )}
-                  <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 20, flexWrap: "wrap" }}>
-                    <Button onClick={() => handleTabChange('overview')} style={{ padding: "12px 26px", fontSize: 14 }}>View Dashboard</Button>
-                    <Button variant="secondary" onClick={resetImport} style={{ padding: "12px 22px", fontSize: 13 }}>Import another CSV</Button>
-                  </div>
-                </div>
+                <ImportResult
+                  C={C}
+                  result={lastUploadResult}
+                  isPro={isPro}
+                  freeHistoryDays={FREE_HISTORY_DAYS}
+                  freeMaxPlatforms={FREE_MAX_PLATFORMS}
+                  formatDate={formatImportDate}
+                  onUpgrade={(src) => openUpgradeModal(src || 'csv_history')}
+                  onUpgradePlatforms={() => openUpgradeModal('csv_platform_limit')}
+                  onViewDashboard={() => handleTabChange('overview')}
+                  onImportAnother={resetImport}
+                />
               )}
 
               {importStage === 'error' && lastUploadResult && (
@@ -4364,45 +4606,56 @@ const stopImportMessageRotation = () => {
                 </div>
               )}
 
-              {/* Platform-limit soft paywall — a quick preview of what's in the
-                  attempted import, so a free-tier user sees real value before
-                  being asked to subscribe, rather than a hard block. */}
+              {/* Every platform in this file is beyond the Free cap — a real,
+                  per-platform preview (not a guess) computed server-side from
+                  the actual parsed CSV, so a free-tier user sees exactly what
+                  they're missing instead of a bare rejection. */}
               {importStage === 'locked_preview' && lockedPreview && (
                 <div style={{ textAlign: "center" }}>
-                  <div style={{ position: "relative", width: 56, height: 56, margin: "0 auto 14px" }}>
-                    {lockedPreview.preview && <div className="import-flash-ring" style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "radial-gradient(circle,rgba(34,211,238,0.55),rgba(236,72,153,0.35) 60%,transparent 70%)" }} />}
-                    <div className={lockedPreview.preview ? "import-check-badge" : ""} style={{ position: "relative", width: 56, height: 56, borderRadius: "50%", background: lockedPreview.preview ? "linear-gradient(135deg,#10B981,#22D3EE)" : "rgba(255,255,255,0.06)", border: lockedPreview.preview ? "none" : "1px solid rgba(255,255,255,0.12)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, color: "#fff", boxShadow: lockedPreview.preview ? "0 0 24px rgba(16,185,129,0.45)" : "none" }}>{lockedPreview.preview ? "✓" : "📁"}</div>
+                  <div style={{ width: 56, height: 56, margin: "0 auto 14px", borderRadius: "50%", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28 }}>🔒</div>
+                  <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.18em", textTransform: "uppercase", color: C.cyan, marginBottom: 8 }}>Real Preview — Nothing Fabricated</div>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: C.white, marginBottom: 4 }}>
+                    You already track {displayPlatforms(lockedPreview.currentPlatforms) || `${lockedPreview.maxPlatforms} platforms`}
                   </div>
-                  <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.18em", textTransform: "uppercase", color: C.cyan, marginBottom: 8 }}>Quick Preview</div>
-                  <div style={{ fontSize: 16, fontWeight: 800, color: C.white, marginBottom: 16 }}>
-                    Here's what's in your {lockedPreview.platform} import
+                  <div style={{ fontSize: 13, color: C.muted, marginBottom: 16 }}>
+                    Free supports up to {lockedPreview.maxPlatforms} platforms — here's what this upload contains beyond that.
                   </div>
 
-                  {lockedPreview.preview ? (
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 10, marginBottom: 16, textAlign: "left" }}>
-                      {[
-                        { label: "Tips Imported", value: lockedPreview.preview.tipsDetected.toLocaleString(), color: C.cyan },
-                        { label: "Unique Fans", value: lockedPreview.preview.fansDetected.toLocaleString(), color: C.gold },
-                        { label: "Est. Earnings", value: `$${lockedPreview.preview.estimatedEarnings.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, color: C.green },
-                        { label: "Top Spender", value: lockedPreview.preview.topSpender || "—", color: C.pink },
-                      ].map(s => (
-                        <div key={s.label} className="stat-card" style={{ ...glassCard, borderRadius: 14, padding: "12px 14px", position: "relative", overflow: "hidden" }}>
-                          <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg,${s.color}00,${s.color}88,${s.color}00)` }} />
-                          <div style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em", color: C.muted, marginBottom: 5 }}>{s.label}</div>
-                          <div style={{ fontSize: 17, fontWeight: 900, color: s.color, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.value}</div>
-                        </div>
-                      ))}
+                  {(lockedPreview.lockedPlatformPreview || []).map(p => (
+                    <div key={p.platform} style={{ padding: "14px 16px", borderRadius: 12, background: "linear-gradient(135deg,rgba(34,211,238,0.08),rgba(124,92,255,0.08))", border: "1px solid rgba(34,211,238,0.20)", marginBottom: 12, textAlign: "left" }}>
+                      <div style={{ fontSize: 13, fontWeight: 900, color: C.cyan, marginBottom: 10 }}>{p.platform}</div>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginBottom: 8 }}>
+                        {[
+                          { label: "Tips", value: p.tips.toLocaleString(), color: C.white },
+                          { label: "Earnings", value: `$${p.totalUsd.toFixed(2)}`, color: C.green },
+                          { label: "Sessions", value: p.sessions.toLocaleString(), color: C.gold },
+                        ].map(s => (
+                          <div key={s.label} style={{ padding: "9px 10px", borderRadius: 10, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)" }}>
+                            <div style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: C.muted, marginBottom: 4 }}>{s.label}</div>
+                            <div style={{ fontSize: 14, fontWeight: 900, color: s.color, filter: "blur(2.5px)", userSelect: "none" }}>{s.value}</div>
+                          </div>
+                        ))}
+                      </div>
+                      {(formatImportDate(p.dateFrom) && formatImportDate(p.dateTo)) && (
+                        <div style={{ fontSize: 11, color: C.muted }}>{formatImportDate(p.dateFrom)} – {formatImportDate(p.dateTo)} · {p.fans.toLocaleString()} fans detected</div>
+                      )}
                     </div>
-                  ) : (
+                  ))}
+
+                  {!(lockedPreview.lockedPlatformPreview || []).length && (
                     <div style={{ fontSize: 13, color: C.muted, marginBottom: 16 }}>
-                      We couldn't read enough of this file for a preview, but here's what unlocking {lockedPreview.platform} gets you.
+                      This file didn't contain readable platform data, but upgrading still unlocks tracking beyond {lockedPreview.maxPlatforms} platforms.
                     </div>
                   )}
 
-                  {/* Soft paywall — smaller and less prominent than the preview above */}
+                  {/* Soft paywall — smaller and less prominent than the preview above.
+                      Honest about persistence: this file's rows for a platform beyond
+                      the Free cap are NOT stored yet (the account's platform limit is
+                      also enforced at the database layer, independent of this page) —
+                      so re-uploading once after subscribing is what actually saves them. */}
                   <div style={{ borderRadius: 12, border: "1px solid rgba(168,85,247,0.25)", background: "rgba(168,85,247,0.06)", padding: "12px 14px" }}>
                     <div style={{ fontSize: 12.5, color: C.text, marginBottom: 8 }}>
-                      🔒 Subscribe to view your insights for <strong style={{ color: C.white }}>{lockedPreview.platform}</strong>
+                      🔒 Subscribe, then re-upload this file to import it — Free's platform limit means it isn't stored yet.
                     </div>
                     <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
                       <Button as="a" href="/pricing" style={{ padding: "8px 16px", fontSize: 12.5 }}>Subscribe →</Button>
@@ -4443,7 +4696,7 @@ const stopImportMessageRotation = () => {
               })() : (
                 <>
                   <p style={{ fontSize: 13, color: C.text, lineHeight: 1.65, marginBottom: 16 }}>
-                    The <strong style={{ color: C.white }}>free plan</strong> tracks <strong style={{ color: C.cyan }}>1 platform</strong> — import as much history as you want from it, no limits. A <strong style={{ color: C.white }}>subscription</strong> unlocks tracking <strong style={{ color: C.pink }}>multiple platforms at once</strong> and lets you compare which cam site pays you best by hour, day, and fan type.
+                    The <strong style={{ color: C.white }}>free plan</strong> tracks <strong style={{ color: C.cyan }}>up to {FREE_MAX_PLATFORMS} platforms</strong>, with a {FREE_HISTORY_DAYS}-day analysis window on each. Older rows stay saved, just not analysed. A <strong style={{ color: C.white }}>subscription</strong> unlocks <strong style={{ color: C.pink }}>more platforms and your full history</strong>, so you can compare which cam site pays you best by hour, day, and fan type.
                   </p>
                   <Button onClick={() => router.push('/pricing')} style={{ padding: "12px 26px", fontSize: 13 }}>
                     View Plans & Subscribe →
@@ -4871,7 +5124,7 @@ const stopImportMessageRotation = () => {
 
             <h2 style={{ fontSize: 20, fontWeight: 700, color: C.white, marginBottom: 16 }}>📖 Platform-Specific Tips</h2>
             <p style={{ fontSize: 13, color: C.muted, marginBottom: 24 }}>Where to find the earnings data on each site before you copy it</p>
-            {[{ emoji: "🟣", name: "Chaturbate", steps: ["Log into your Chaturbate broadcaster account", "Go to Stats & Data → Token Stats", "Select your date range (last 30 days, 90 days, or custom)", "Click \"Download CSV\" or \"Export\"", "Upload the CSV file to CamCash"], tip: "Chaturbate CSVs usually have \"Tip from:\" format" }, { emoji: "🔴", name: "BongaCams", steps: ["Log into your BongaCams model account", "Navigate to Statistics → Earnings History", "Select date range and filter by \"Tips\" or \"All Transactions\"", "Look for \"Export to Excel\" or \"Download CSV\" button", "Save the file and upload to CamCash"], tip: "BongaCams format: Date, Username, Type, Tokens, USD" }, { emoji: "🟠", name: "MyFreeCams (MFC)", steps: ["Log into your MFC model account at wiki.myfreecams.com", "Go to Model Admin → Token Stats", "Click \"Transaction History\" or \"Detailed Stats\"", "Select date range and click \"Export CSV\"", "Upload the exported file to CamCash"], tip: "MFC CSVs are usually very detailed with all transaction types" }, { emoji: "🟢", name: "CamSoda", steps: ["Log into your CamSoda broadcaster dashboard", "Navigate to Earnings → Transaction History", "Choose your date range (last week, month, or custom dates)", "Click \"Download\" or \"Export to CSV\"", "Save and upload to CamCash"], tip: "CamSoda exports include both tokens and USD amounts" }].map(({ emoji, name, steps, tip }) => (
+            {[{ emoji: "🟣", name: "Chaturbate", steps: ["Log into your Chaturbate broadcaster account", "Go to Stats & Data → Token Stats", "Select your date range (last 30 days, 90 days, or custom)", "Click \"Download CSV\" or \"Export\"", "Upload the CSV file to CamCash"], tip: "Chaturbate CSVs usually have \"Tip from:\" format" }, { emoji: "🔴", name: "BongaCams", steps: ["Log into your BongaCams model account", "Navigate to Statistics → Earnings History", "Select date range and filter by \"Tips\" or \"All Transactions\"", "Look for \"Export to Excel\" or \"Download CSV\" button", "Save the file and upload to CamCash"], tip: "BongaCams format: Date, Username, Type, Tokens, USD" }, { emoji: "🟠", name: "MyFreeCams (MFC)", steps: ["Log into your MFC model account at wiki.myfreecams.com", "Go to Model Admin → Token Stats", "Click \"Transaction History\" or \"Detailed Stats\"", "Select date range and click \"Export CSV\"", "Upload the exported file to CamCash"], tip: "MFC CSVs are usually very detailed with all transaction types" }].map(({ emoji, name, steps, tip }) => (
               <div key={name} className="dash-card" style={{ ...glassCard, borderRadius: 14, padding: 24, marginBottom: 20 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
                   <div style={{ fontSize: 32 }}>{emoji}</div>
@@ -4938,29 +5191,90 @@ const stopImportMessageRotation = () => {
       {/* WHALE PROFILE MODAL */}
       {selectedWhale && (() => {
         const w = selectedWhale
-        const whaleTips = tips.filter(t => t.username === w.username && t.platform === w.platform)
+        // CANONICAL fan tip rows. identifyWhales() (lib/analytics.js) keys a
+        // fan on `username.toLowerCase()` with NO platform in the key, so a
+        // fan is ONE global identity and w.totalUSD / w.tipCount / w.tips all
+        // span every platform and every casing. `w.platform` is only a label
+        // taken from the fan's FIRST tip row — it is not a partition.
+        //
+        // This used to re-derive the rows with
+        //   tips.filter(t => t.username === w.username && t.platform === w.platform)
+        // which disagreed with that model twice over: case-sensitively (the
+        // engine lowercases) and by platform (the engine does not partition).
+        // For a fan tipping as "DaveTipper" on Chaturbate and "davetipper" on
+        // BongaCams, the drawer header read $110 from w.totalUSD while the tip
+        // list, biggest tip, best day and cadence beneath it covered only $35.
+        //
+        // The engine already returns the rows it aggregated, so use them
+        // rather than reconstructing a second identity. The fallback covers
+        // the synthetic fan viewFanProfile() builds when a lookup misses, and
+        // matches the engine's identity exactly: lowercased username, no
+        // platform clause.
+        const whaleTips = Array.isArray(w.tips) && w.tips.length
+          ? w.tips
+          : tips.filter(t => (t.username || '').toLowerCase() === (w.username || '').toLowerCase())
         const sortedTips = [...whaleTips].sort((a, b) => new Date(b.date_time) - new Date(a.date_time))
         const firstTip = whaleTips.length ? whaleTips.reduce((a, b) => new Date(a.date_time) < new Date(b.date_time) ? a : b) : null
-        // A fan reached from Private Sessions may have no free-chat tip
-        // history at all (paid-only) -- w.lastTipDate is null in that case,
-        // guarded below rather than assumed to exist.
-        const daysSinceLastTip = w.lastTipDate ? Math.floor((Date.now() - new Date(w.lastTipDate)) / 86400000) : null
+        // Tip cadence is measured from this fan's OWN tip rows, never from
+        // w.lastTipDate.
+        //
+        // viewFanProfile() builds a synthetic fan with `lastTipDate: null`
+        // whenever the username+platform pair is absent from `whales` — which
+        // happens for real fans, because identifyWhales() keys a fan to the
+        // platform of their FIRST tip, so opening a multi-platform fan from
+        // Private Sessions (which passes the paid session's platform) misses.
+        // That fan can still have plenty of tip rows. The cadence used to read
+        // `new Date(w.lastTipDate)`, and new Date(null) is the epoch rather
+        // than an invalid date, so the span was measured from 1970 and the
+        // drawer rendered "Every ~-10328 days".
+        //
+        // Timestamps are filtered to valid ones and sorted, so out-of-order
+        // rows and null/unparseable dates cannot produce a negative or
+        // epoch-anchored interval. Below two valid timestamps there is no
+        // interval to measure and the value is null — the callers render
+        // "Not enough data yet" rather than the hardcoded `: 7` this used to
+        // fall back to, which was a fabricated cadence.
+        const validTipTimes = whaleTips
+          .map(t => { const raw = t.dateRaw || t.date_time; return raw ? new Date(raw).getTime() : NaN })
+          .filter(ms => Number.isFinite(ms))
+          .sort((a, b) => a - b)
+        const lastValidTipMs = validTipTimes.length ? validTipTimes[validTipTimes.length - 1] : null
+        // Prefer the canonical analytics value; fall back to this fan's own
+        // rows only when it is missing or unparseable, so the cadence and the
+        // return estimate can never disagree about whether data exists.
+        const canonicalLastTipMs = w.lastTipDate ? new Date(w.lastTipDate).getTime() : NaN
+        const resolvedLastTipMs = Number.isFinite(canonicalLastTipMs) ? canonicalLastTipMs : lastValidTipMs
+        const daysSinceLastTip = resolvedLastTipMs !== null ? Math.floor((Date.now() - resolvedLastTipMs) / 86400000) : null
         const tierColor = TIER_COLORS[w.tier] || C.cyan
         const tierIcon = w.tier === 'Whale' ? '💎' : w.tier === 'Shark' ? '🦈' : w.tier === 'Regular' ? '⭐' : '💤'
-        const avgDaysBetweenTips = whaleTips.length > 1 ? Math.floor((new Date(w.lastTipDate) - new Date(firstTip?.date_time)) / 86400000 / (whaleTips.length - 1)) : 7
-        const likelyReturnDays = daysSinceLastTip !== null ? Math.max(0, avgDaysBetweenTips - daysSinceLastTip) : null
+        const avgDaysBetweenTips = validTipTimes.length > 1
+          ? Math.floor((validTipTimes[validTipTimes.length - 1] - validTipTimes[0]) / 86400000 / (validTipTimes.length - 1))
+          : null
+        const likelyReturnDays = (avgDaysBetweenTips !== null && daysSinceLastTip !== null)
+          ? Math.max(0, avgDaysBetweenTips - daysSinceLastTip)
+          : null
         // Reuse the shared churn-risk formula (w.churnRisk) from analytics.js —
         // same fix as the card grid — instead of a second local calculation.
         const churnRisk = w.churnRisk?.level && w.churnRisk.level !== "Unknown" ? w.churnRisk.level : null
         const churnColor = churnRisk === "Critical" || churnRisk === "High" ? C.red : churnRisk === "Medium" ? C.orange : C.green
-        // Relationship score — identical formula to the Top Fans card grid,
-        // computed here too so the modal's "REL" badge always agrees with it.
-        const relScore = Math.min(100, Math.round((w.tipCount * 3) + (w.totalUSD / 10) + (daysSinceLastTip !== null && daysSinceLastTip < 7 ? 20 : daysSinceLastTip !== null && daysSinceLastTip < 30 ? 10 : 0)))
-        const relColor = relScore >= 70 ? C.green : relScore >= 40 ? C.gold : C.red
-        const valueLabel = w.isTopSpender || w.spendPercentile >= 95 ? "Ultra high value"
-          : relScore >= 70 ? "High value supporter"
-          : relScore >= 40 ? "Growing relationship"
-          : "New supporter"
+        // REMOVED: relScore / relColor / valueLabel — a "relationship score"
+        // of Math.min(100, tipCount*3 + totalUSD/10 + a 20/10/0 recency bonus),
+        // rendered as a bare number in a coloured circle with no label, no
+        // unit and no explanation. The multipliers were arbitrary literals and
+        // nothing in the analytics engine produces or documents this value, so
+        // it was the same class of invention as the "Engagement score" removed
+        // from this drawer earlier — read as authoritative because it sat
+        // beside a real percentile.
+        //
+        // Its comment claimed the formula mirrored the Top Fans card grid "so
+        // the modal's REL badge always agrees with it". That grid was removed
+        // in the Phase 4 Fans rebuild, so there was nothing left to agree with
+        // and this was the only surviving copy.
+        //
+        // Nothing replaces it: the two canonical classifications it competed
+        // with are ALREADY on screen — w.tier (Whale/Shark/Regular/Dormant,
+        // from identifyWhales' percentileRank) as a badge just above, and
+        // w.spendPercentile as "Top N% of supporters" on this very row.
         const topSpenderPct = typeof w.spendPercentile === "number" ? Math.max(1, 100 - w.spendPercentile) : null
         // A short, data-grounded read on the fan — built only from values the
         // shared analytics engine already computed (churn risk / tip
@@ -5014,12 +5328,8 @@ const stopImportMessageRotation = () => {
                     </div>
                     {topSpenderPct !== null && (
                       <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 7 }}>
-                        <div style={{ width: 26, height: 26, borderRadius: "50%", background: `${relColor}18`, border: `2px solid ${relColor}55`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                          <div style={{ fontSize: 9, fontWeight: 800, color: relColor, lineHeight: 1 }}>{relScore}</div>
-                        </div>
                         <div style={{ fontSize: 11, color: C.text, lineHeight: 1.3 }}>
                           <span style={{ color: C.white, fontWeight: 700 }}>Top {topSpenderPct}%</span> of supporters
-                          <div style={{ fontSize: 10 }}>{valueLabel}</div>
                         </div>
                       </div>
                     )}
@@ -5049,7 +5359,14 @@ const stopImportMessageRotation = () => {
                         {[
                           { icon: "📅", label: "First tip", value: firstTip ? new Date(firstTip.date_time).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : "Not enough data yet" },
                           { icon: "📅", label: "Last tip", value: w.lastTipDate ? new Date(w.lastTipDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : "Not enough data yet", sub: daysSinceLastTip !== null ? `${daysSinceLastTip.toLocaleString()} days ago` : null },
-                          { icon: "🕐", label: "Avg days between tips", value: whaleTips.length > 1 ? `Every ~${avgDaysBetweenTips} days` : "Not enough data yet" },
+                          // Gated on the measured interval, not on the row
+                          // count — rows with unparseable dates cannot be
+                          // counted toward an interval they did not contribute
+                          // to. A fan whose tips all land inside one day has a
+                          // real interval under a day; floor() would print
+                          // "Every ~0 days", so that case is stated in words
+                          // rather than rounded into a number.
+                          { icon: "🕐", label: "Avg days between tips", value: avgDaysBetweenTips === null ? "Not enough data yet" : avgDaysBetweenTips < 1 ? "Less than a day" : `Every ~${avgDaysBetweenTips} days` },
                           { icon: "⚠️", label: "Churn risk", value: churnRisk || "Not enough data yet", color: churnColor },
                         ].map(({ icon, label, value, sub, color }) => (
                           <div key={label} style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
@@ -5191,11 +5508,29 @@ const stopImportMessageRotation = () => {
                     </div>
                   </div>
                 )}
+                {/* Tip cadence. This section was "🤖 AI Predictions" and carried
+                    three values that were not measurements at all: a "predicted
+                    next tip size" that was avgTipSize * 1.1, an "engagement
+                    score" out of 100 from a hand-rolled formula with nothing
+                    calibrating it, and a "30-day revenue forecast" that was the
+                    lifetime monthly average * 1.05. The 1.1 and 1.05 were
+                    arbitrary literals; rendering them under an "AI" heading
+                    presented invention as evidence. Only the return estimate
+                    survives, because it is the one figure derived from this
+                    fan's own observed tip spacing.
+
+                    likelyReturnDays is null whenever there is no measured
+                    interval or no known last tip, so this row and the "Avg days
+                    between tips" row above it are gated on the same evidence
+                    and cannot disagree about whether cadence data exists. The
+                    `: 7` fallback that used to stand in for a missing interval
+                    was a fabricated cadence and is gone; see the derivation of
+                    validTipTimes above. */}
                 {whaleTips.length > 0 && (
                   <div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: C.text, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>🤖 AI Predictions</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: C.text, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>Tip Cadence</div>
                     <div style={{ padding: 16, background: "rgba(255,255,255,0.04)", borderRadius: 12, border: "1px solid rgba(255,255,255,0.07)", display: "flex", flexDirection: "column", gap: 10 }}>
-                      {[{ label: "📅 Likely to tip again in", value: likelyReturnDays === 0 ? "Overdue!" : `~${likelyReturnDays} days`, color: C.cyan }, { label: "💸 Predicted next tip size", value: `$${(w.avgTipSize * 1.1).toFixed(2)}`, color: C.gold }, { label: "🎯 Engagement score", value: `${Math.min(99, Math.round((w.tipCount / 10) * 20 + (w.totalUSD / 100) * 10))} / 100`, color: C.pink }, { label: "📈 30-day revenue forecast", value: `$${((w.totalUSD / Math.max(1, Math.floor((Date.now() - new Date(firstTip?.date_time)) / 2592000000))) * 1.05).toFixed(2)}`, color: C.green }].map(({ label, value, color }) => (
+                      {[{ label: "📅 Likely to tip again in", value: likelyReturnDays !== null ? (likelyReturnDays === 0 ? "Overdue!" : `~${likelyReturnDays} days`) : "Not enough data yet", color: C.cyan }].map(({ label, value, color }) => (
                         <div key={label} style={{ display: "flex", justifyContent: "space-between", padding: "10px 14px", background: "rgba(255,255,255,0.04)", borderRadius: 8 }}>
                           <div style={{ fontSize: 13, color: C.text }}>{label}</div>
                           <div style={{ fontSize: 13, fontWeight: 700, color }}>{value}</div>
@@ -5280,26 +5615,54 @@ const stopImportMessageRotation = () => {
       {/* UPGRADE MODAL */}
       {showUpgradeModal && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.88)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1002, padding: 20 }}>
-          <div style={{ width: 480, background: "rgba(15,20,32,0.97)", backdropFilter: "blur(24px)", borderRadius: 24, border: "1px solid rgba(255,255,255,0.1)", boxShadow: "0 0 80px rgba(59,130,246,0.2), 0 0 160px rgba(236,72,153,0.1)", overflow: "hidden" }}>
-            <div style={{ height: 4, background: "linear-gradient(90deg, #3b82f6, #a855f7, #ec4899)" }} />
-            <div style={{ padding: 36 }}>
-              <div style={{ textAlign: "center", marginBottom: 28 }}>
-                <div style={{ fontSize: 44, marginBottom: 12 }}>🚀</div>
-                <h2 style={{ fontSize: 24, fontWeight: 800, color: C.white, marginBottom: 8 }}>{(UPGRADE_COPY[upgradeModalSource] || UPGRADE_COPY.default).headline}</h2>
-                <p style={{ fontSize: 14, color: C.muted, lineHeight: 1.6 }}>{(UPGRADE_COPY[upgradeModalSource] || UPGRADE_COPY.default).subhead}</p>
+          {/* maxWidth/maxHeight, not a redesign: the card was a hard 480px
+              with overflow hidden, so on a 390px phone it was clipped by the
+              global `html,body { overflow-x: hidden }` and the CTA could sit
+              past the fold with no way to reach it. The modal is a primary
+              conversion surface — the button has to be reachable at every
+              width. Desktop is unchanged. */}
+          <div className="cc-upgrade-modal" style={{ width: 480, maxWidth: "100%", maxHeight: "calc(100vh - 40px)", display: "flex", flexDirection: "column", background: "rgba(15,20,32,0.97)", backdropFilter: "blur(24px)", borderRadius: 24, border: "1px solid rgba(255,255,255,0.1)", boxShadow: "0 0 80px rgba(59,130,246,0.2), 0 0 160px rgba(236,72,153,0.1)", overflow: "hidden" }}>
+            <div style={{ height: 4, flexShrink: 0, background: "linear-gradient(90deg, #3b82f6, #a855f7, #ec4899)" }} />
+            <div className="cc-upgrade-modal-body" style={{ padding: 36, overflowY: "auto", minHeight: 0 }}>
+              {/* The modal repeats what the creator just saw, in three
+                  layers: the situation that opened it (headline/subhead),
+                  their OWN measured locked value where we have one, and the
+                  benefits that actually apply to that situation. The old
+                  static six-item list of generic Pro features is gone — it
+                  answered a creator who had just been shown their own locked
+                  earnings total with a feature tour. */}
+              <div style={{ textAlign: "center", marginBottom: 24 }}>
+                <div style={{ fontSize: 44, marginBottom: 12 }}>🔓</div>
+                <h2 style={{ fontSize: 24, fontWeight: 800, color: C.white, marginBottom: 8, letterSpacing: "-0.02em" }}>{upgradeCopy.headline}</h2>
+                <p style={{ fontSize: 14, color: C.text, lineHeight: 1.6 }}>{upgradeCopy.subhead}</p>
               </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 28 }}>
-                {[
-                  { icon: "🐳", text: "See ALL your top spenders — not just the top 3" },
-                  { icon: "⏰", text: "Discover your exact highest-earning hours & days" },
-                  { icon: "💡", text: "Unlock 15+ advanced insights & strategy tips" },
-                  { icon: "📈", text: "Full session history with trend analysis" },
-                  { icon: "🤖", text: "AI fan behavior predictions & return forecasts" },
-                  { icon: "💌", text: "Unlimited re-engagement scripts & fan tracking" },
-                ].map(({ icon, text }) => (
-                  <div key={text} style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 14px", background: "rgba(59,130,246,0.08)", border: "1px solid rgba(59,130,246,0.15)", borderRadius: 10 }}>
-                    <span style={{ fontSize: 18 }}>{icon}</span>
-                    <span style={{ fontSize: 13, color: C.white }}>{text}</span>
+
+              {/* Measured from this creator's own rows — the same figure the
+                  post-import screen and the dashboard band already showed
+                  them. Rendered only when there is one; never a placeholder.
+                  The number LEADS, at the weight it carries on those other two
+                  surfaces. It was previously set inside a sentence at 17px,
+                  which made the single most persuasive fact we have read like
+                  body copy. */}
+              {upgradeValueLine && (
+                <div data-cc-surface="upgrade_modal_value" style={{ textAlign: "center", padding: "16px", borderRadius: 12, marginBottom: 22, background: "linear-gradient(135deg,rgba(16,185,129,0.13),rgba(34,211,238,0.08))", border: "1px solid rgba(16,185,129,0.30)" }}>
+                  <div style={{ fontSize: "clamp(30px,9vw,40px)", fontWeight: 900, color: C.green, letterSpacing: "-0.03em", lineHeight: 1.05, overflowWrap: "anywhere" }}>
+                    {upgradeValueLine.usd}
+                  </div>
+                  <div style={{ fontSize: 12.5, color: C.white, fontWeight: 700, marginTop: 5 }}>
+                    additional earnings already saved
+                  </div>
+                  <div style={{ fontSize: 12, color: C.text, marginTop: 6, lineHeight: 1.5 }}>
+                    {upgradeValueLine.detail}
+                  </div>
+                </div>
+              )}
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 9, marginBottom: 24 }}>
+                {(upgradeCopy.benefits || UPGRADE_COPY.default.benefits).map((text) => (
+                  <div key={text} style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 14px", background: "rgba(124,92,255,0.09)", border: "1px solid rgba(124,92,255,0.20)", borderRadius: 10 }}>
+                    <span style={{ fontSize: 15, color: C.green, fontWeight: 900, flexShrink: 0 }}>✓</span>
+                    <span style={{ fontSize: 13, color: C.white, lineHeight: 1.45 }}>{text}</span>
                   </div>
                 ))}
               </div>
