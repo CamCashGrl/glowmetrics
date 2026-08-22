@@ -39,9 +39,12 @@ check('onboarding carries no extension CTA at all',
   !/Set up live tracking/.test(onb))
 check('the Live Mode preview survives — the demo still sells the feature',
   /function LiveModeDemo/.test(onb) && /Live Mode Preview/.test(onb))
-check('the preview step continues to the dashboard instead of installing',
-  /function LiveModeDemo\(\{onContinue\}\)/.test(onb) &&
-  /<LiveModeDemo onContinue=\{\(\)=>setStep\('done'\)\} \/>/.test(onb))
+// The preview now advances to the final completion card rather than the
+// dashboard directly — see verify-onboarding-flow.mjs for the full sequence.
+// What matters here is unchanged: it advances without installing anything.
+check('the preview step advances without installing',
+  /function LiveModeDemo\(\{onContinue,isPro=false\}\)/.test(onb) &&
+  /<LiveModeDemo onContinue=\{\(\)=>\{celebrate\(\);setStep\('done'\)\}\}/.test(onb))
 check('onboarding can complete without any install — the step just advances',
   !/onInstall/.test(onb))
 // The rest of onboarding must be untouched by this change.
