@@ -169,6 +169,32 @@ export default function CreatorReport({ analytics, tips = [], isPro = false, onU
     { label: platformCount === 1 ? 'platform' : 'platforms', value: platformCount },
   ]
 
+  // ── PRO TEASER ────────────────────────────────────────────────────────
+  // Counts what CamCash has ALREADY computed from this creator's data, so the
+  // teaser is a real statement about their account rather than a generic
+  // pitch. It deliberately renders no locked VALUE — no blurred number, no
+  // redacted placeholder, nothing in the DOM to read out. The claim is "we
+  // found things", not "here is what we found, squint at it".
+  const readyCount = readiness.filter(r => r.ready).length
+  const ProTeaser = () => {
+    if (isPro || readyCount === 0) return null
+    return (
+      <div data-testid="pro-teaser" style={{ borderRadius: 16, border: '1px solid rgba(124,92,255,0.26)', background: 'linear-gradient(115deg, rgba(124,92,255,0.10), rgba(236,72,153,0.07))', padding: '16px 18px', marginBottom: 14 }}>
+        <div style={{ fontSize: 14, fontWeight: 800, color: C.white, marginBottom: 6 }}>
+          CamCash has already worked out {readyCount} {readyCount === 1 ? 'thing' : 'things'} from your data
+        </div>
+        <div style={{ fontSize: 12.5, color: C.text, lineHeight: 1.6, marginBottom: 12 }}>
+          Your account has enough history for these to be calculated. Creator Pro
+          unlocks the full recommendations and the deeper history behind them.
+        </div>
+        <button onClick={() => { track('pro_teaser_clicked', { surface: 'creator_report', readyCount }); onUpgrade?.('creator_report_teaser') }}
+          style={{ minHeight: 44, padding: '11px 18px', borderRadius: 11, cursor: 'pointer', background: 'rgba(124,92,255,0.16)', border: '1px solid rgba(124,92,255,0.4)', color: C.white, fontSize: 13, fontWeight: 700 }}>
+          See what CamCash found →
+        </button>
+      </div>
+    )
+  }
+
   const Readiness = () => (
     <div style={{ borderRadius: 16, border: `1px solid ${C.border}`, background: 'rgba(255,255,255,0.02)', padding: '16px 18px', marginBottom: 14 }}>
       <div style={{ fontSize: 13, fontWeight: 800, color: C.white, marginBottom: 10 }}>What CamCash is learning</div>
@@ -265,6 +291,7 @@ export default function CreatorReport({ analytics, tips = [], isPro = false, onU
           withheld, but the value is legible. */}
       <div style={{ borderRadius: 18, padding: '18px 20px', background: 'rgba(12,16,34,0.78)', border: '1px solid rgba(255,255,255,0.09)' }}>
         <Readiness />
+        <ProTeaser />
         <div style={{ fontSize: 13, fontWeight: 800, color: C.white, marginBottom: 12 }}>🎯 Recommended For Your Next Stream</div>
         {nextMoves.length === 0 && (
           <div style={{ fontSize: 13, color: C.muted }}>Not enough data yet to build recommendations — import more history.</div>

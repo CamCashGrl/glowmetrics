@@ -27,6 +27,7 @@ const report = strip(reportRaw)
 // view; structural assertions keep the raw-ish `report`.
 const copy = report.replace(/\s+/g, ' ')
 const dash = strip(read('../app/dashboard/page.js'))
+const sidebar = strip(read('../app/dashboard/Sidebar.js'))
 
 const at = (tips, sessions) => assessReadiness({ tips, sessions })
 const ready = (r, id) => r.find(x => x.id === id).ready
@@ -135,6 +136,57 @@ check('the Room Titles claims are untouched',
   /3,000\+ titles generated/.test(dash) && /~30% more tips rotating titles/.test(dash))
 check('the AI coach claim is untouched',
   /AI coach with 6 strategy modes/.test(strip(read('../app/live/page.js'))))
+
+// ══════════════════════════════════════════════════════════════════════
+// 8. THE PRO TEASER — VALUE WITHOUT THE ANSWER.
+// ══════════════════════════════════════════════════════════════════════
+check('a Free creator is told what CamCash already worked out',
+  /data-testid="pro-teaser"/.test(report) &&
+  /has already worked out \{readyCount\}/.test(report))
+check('the count is real — it is what the readiness model says is ready',
+  /const readyCount = readiness\.filter\(r => r\.ready\)\.length/.test(report))
+check('the teaser never renders for Pro, or with nothing to tease',
+  /if \(isPro \|\| readyCount === 0\) return null/.test(report))
+// The whole point: communicate value, never leak the locked answer.
+// Scoped to the teaser, and to CONTENT blurring specifically: `backdropFilter:
+// blur(20px)` is the card material every surface uses, not a redacted value.
+check('no locked VALUE is placed in the DOM — no blur, no redacted placeholder',
+  (() => {
+    const i = report.indexOf('const ProTeaser = ')
+    const block = report.slice(i, report.indexOf('  const Readiness =', i))
+    return i > -1 && !/<LockedValue/.test(block) &&
+      !/(^|[^k])filter: *[`'"]?blur/.test(block) && !/textShadow/.test(block)
+  })())
+check('one restrained CTA, not a column of upgrade buttons',
+  (report.match(/See what CamCash found →/g) || []).length === 1)
+check('the teaser CTA meets the 44px touch target',
+  /minHeight: 44, padding: '11px 18px'/.test(report))
+check('clicking it is tracked as its own funnel step',
+  /track\('pro_teaser_clicked', \{ surface: 'creator_report'/.test(report))
+
+// ══════════════════════════════════════════════════════════════════════
+// 9. SESSIONS ARE ONE GROUPED DROPDOWN, NOT FOUR FLAT TABS.
+// ══════════════════════════════════════════════════════════════════════
+check('the session tabs are nested under one parent',
+  /id: "sessions", icon: "\ud83c\udfa5", label: "Sessions", children: \[/.test(sidebar))
+check('all three session records are children of it',
+  /id: "sessions",      icon: "\ud83c\udfa5", label: "Free Chat"/.test(sidebar) &&
+  /id: "live-sessions", icon: "\ud83d\udccb", label: "Live Mode"/.test(sidebar) &&
+  /id: "private",       icon: "\ud83d\udc8e", label: "Private"/.test(sidebar))
+check('Live Mode stays a peer — it is the engine, not a past record',
+  /\{ id: "live",     icon: "\ud83d\udd34", label: "Live Mode" \},/.test(sidebar))
+check('the group renders through its own disclosure, not renderItem',
+  /renderGroupItem\(id, icon, label, children\)/.test(sidebar) &&
+  /const renderGroupItem = /.test(sidebar))
+// Deep-linking to a child must not land on a collapsed rail.
+check('the dropdown opens when one of its children is the active tab',
+  /const activeChild = childIds\.includes\(activeTab\)/.test(sidebar) &&
+  /const open = openGroups\[id\] \?\? activeChild/.test(sidebar))
+check('the disclosure is togglable and reports its state to assistive tech',
+  /setOpenGroups\(g => \(\{ \.\.\.g, \[id\]: !open \}\)\)/.test(sidebar) &&
+  /aria-expanded=\{open\}/.test(sidebar))
+check('no session tab was dropped in the regrouping',
+  ['sessions', 'live-sessions', 'private', 'live'].every(id => sidebar.includes(`id: "${id}"`)))
 
 console.log(`\n${pass} passed, ${fail} failed`)
 if (fail > 0) process.exit(1)

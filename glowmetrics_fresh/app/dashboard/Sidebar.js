@@ -23,11 +23,18 @@ const NAV = [
   },
   {
     group: "SESSIONS",
+    // The four session entries used to sit flat in the rail, which made the
+    // group read as four unrelated tabs. They are one subject — a stream you
+    // ran — split by how it was recorded, so they collapse under one
+    // "Sessions" parent. Live Mode stays a peer: it is the live engine, not a
+    // record of a past stream.
     items: [
-      { id: "sessions", icon: "🎥", label: "Free Chat Sessions" },
       { id: "live",     icon: "🔴", label: "Live Mode" },
-      { id: "live-sessions", icon: "📋", label: "Live Mode Sessions" },
-      { id: "private",  icon: "💎", label: "Private Sessions" },
+      { id: "sessions", icon: "🎥", label: "Sessions", children: [
+        { id: "sessions",      icon: "🎥", label: "Free Chat" },
+        { id: "live-sessions", icon: "📋", label: "Live Mode" },
+        { id: "private",       icon: "💎", label: "Private" },
+      ] },
     ]
   },
   {
@@ -61,6 +68,46 @@ const NAV = [
 export default function Sidebar({ activeTab, onTabChange, user, onSignOut, isPro = false, trialEligible = false }) {
   const [hoveredId, setHoveredId] = useState(null)
   const [mobileOpen, setMobileOpen] = useState(false)
+  // Per-group disclosure state; undefined means "follow the active tab".
+  const [openGroups, setOpenGroups] = useState({})
+
+  // One parent row for a set of sibling tabs. Open when any child is the
+  // active tab, so deep-linking straight to Private Sessions never lands the
+  // creator on a collapsed rail with no visible indication of where they are.
+  const renderGroupItem = (id, icon, label, children) => {
+    const childIds = children.map(c => c.id)
+    const activeChild = childIds.includes(activeTab)
+    const open = openGroups[id] ?? activeChild
+    const isHovered = hoveredId === id
+    return (
+      <div key={id}>
+        <button
+          onClick={() => setOpenGroups(g => ({ ...g, [id]: !open }))}
+          onMouseEnter={() => setHoveredId(id)}
+          onMouseLeave={() => setHoveredId(null)}
+          aria-expanded={open}
+          style={{
+            width: "100%", display: "flex", alignItems: "center", gap: 10,
+            padding: "8px 12px", borderRadius: 10, border: "none", cursor: "pointer",
+            boxSizing: "border-box",
+            background: activeChild
+              ? "linear-gradient(135deg,rgba(34,211,238,0.10),rgba(124,92,255,0.06))"
+              : isHovered ? "rgba(255,255,255,0.05)" : "transparent",
+            borderLeft: activeChild ? "2px solid rgba(34,211,238,0.5)" : "2px solid transparent",
+            transition: "all 0.15s", marginBottom: 2,
+          }}>
+          <span style={{ fontSize: 14, width: 18, textAlign: "center", flexShrink: 0 }}>{icon}</span>
+          <span style={{ fontSize: 13, fontWeight: activeChild ? 700 : 600, color: activeChild ? C.white : "#aab4c6", flex: 1, textAlign: "left" }}>{label}</span>
+          <span aria-hidden="true" style={{ fontSize: 10, color: "#6b7488", transform: open ? "rotate(90deg)" : "none", transition: "transform 0.15s" }}>›</span>
+        </button>
+        {open && (
+          <div style={{ marginLeft: 14, paddingLeft: 8, borderLeft: "1px solid rgba(255,255,255,0.07)", marginBottom: 4 }}>
+            {children.map(c => renderItem(c.id, c.icon, c.label))}
+          </div>
+        )}
+      </div>
+    )
+  }
 
   const renderItem = (id, icon, label, href) => {
     const isActive  = !href && activeTab === id
@@ -116,7 +163,10 @@ export default function Sidebar({ activeTab, onTabChange, user, onSignOut, isPro
                 {group.group}
               </div>
             )}
-            {group.items.map(({ id, icon, label, href }) => renderItem(id, icon, label, href))}
+            {group.items.map(({ id, icon, label, href, children }) =>
+              children
+                ? renderGroupItem(id, icon, label, children)
+                : renderItem(id, icon, label, href))}
           </div>
         ))}
       </div>
