@@ -1,29 +1,22 @@
 export default function sitemap() {
   const base = 'https://www.camcashgrl.com'
-  const today = '2026-07-25'
+  const today = '2026-08-23'
 
   const staticPages = [
-    { url: base,                                     priority: 1.0, changeFrequency: 'weekly' },
-    { url: `${base}/pricing`,                        priority: 0.9, changeFrequency: 'monthly' },
-    { url: `${base}/blog`,                           priority: 0.9, changeFrequency: 'weekly' },
-    { url: `${base}/landing`,                        priority: 0.8, changeFrequency: 'monthly' },
-    { url: `${base}/extension`,                      priority: 0.8, changeFrequency: 'monthly' },
-    { url: `${base}/affiliates`,                     priority: 0.7, changeFrequency: 'monthly' },
-    // /analytics removed — it's not public marketing content, it's an
-    // internal onboarding-funnel/drop-off monitoring dashboard (see
-    // app/analytics/page.js's FunnelPage). Listing it here was actively
-    // telling Google to index an internal ops tool. Also added to
-    // robots.js's disallow list. It currently has no authentication at
-    // all — flagged separately as a real access-control gap, not silently
-    // "fixed" with new auth code here.
-    { url: `${base}/tools`,                          priority: 0.7, changeFrequency: 'monthly' },
+    { url: base,                                      priority: 1.0, changeFrequency: 'weekly' },
+    { url: `${base}/pricing`,                         priority: 0.9, changeFrequency: 'monthly' },
+    { url: `${base}/blog`,                            priority: 0.9, changeFrequency: 'weekly' },
+    { url: `${base}/landing`,                         priority: 0.8, changeFrequency: 'monthly' },
+    { url: `${base}/extension`,                       priority: 0.8, changeFrequency: 'monthly' },
+    { url: `${base}/affiliates`,                      priority: 0.7, changeFrequency: 'monthly' },
+    { url: `${base}/tools`,                           priority: 0.7, changeFrequency: 'monthly' },
     { url: `${base}/free-vip-tracker`,                priority: 0.8, changeFrequency: 'monthly' },
     { url: `${base}/tools/cam-model-name-generator`, priority: 0.7, changeFrequency: 'monthly' },
-    { url: `${base}/tools/profile-studio`,           priority: 0.7, changeFrequency: 'monthly' },
-    { url: `${base}/contact`,                        priority: 0.6, changeFrequency: 'monthly' },
+    { url: `${base}/tools/profile-studio`,            priority: 0.7, changeFrequency: 'monthly' },
+    { url: `${base}/contact`,                         priority: 0.6, changeFrequency: 'monthly' },
     { url: `${base}/feature-request`,                 priority: 0.5, changeFrequency: 'monthly' },
-    { url: `${base}/privacy`,                        priority: 0.5, changeFrequency: 'yearly' },
-    { url: `${base}/terms`,                          priority: 0.5, changeFrequency: 'yearly' },
+    { url: `${base}/privacy`,                         priority: 0.5, changeFrequency: 'yearly' },
+    { url: `${base}/terms`,                           priority: 0.5, changeFrequency: 'yearly' },
   ].map(page => ({
     ...page,
     lastModified: today,
@@ -35,9 +28,9 @@ export default function sitemap() {
     'best-cam-sites-for-beginners',
     'best-cam-sites-for-models',
 
-    // New BongaCams articles
+    // BongaCams articles
     'bongacams-payout-guide',
-    'bongacams-camscore-exsplained',
+    'bongacams-camscore-explained',
 
     'cam-model-boundaries-toxic-chat',
     'cam-model-earnings',
@@ -52,7 +45,7 @@ export default function sitemap() {
     'cam-model-token-to-dollar-ratio-explained',
     'camcash-vs-camdash-vs-cb-cam-insights',
 
-    // New creator-product articles
+    // Creator-product articles
     'cam-room-dice-games',
     'what-to-do-when-cam-room-is-slow',
     'cam-session-scripts-for-models',
@@ -86,18 +79,7 @@ export default function sitemap() {
     'how-to-upload-csv-to-camcash',
     'is-camming-legal',
 
-    // Existing and new coaching content
     'live-ai-coaching-cam-models',
-    // 'live-mode-coaching-for-cam-models' removed — no static page exists
-    // for this slug and blog_posts (Supabase) is empty, so the dynamic
-    // [slug] fallback also has nothing for it. This sitemap entry was a
-    // guaranteed 404 for Google. Re-add only once real content exists at
-    // this URL.
-
-    // New MyFreeCams articles
-    // 'myfreecams-camscore-explained' and 'mfc-share-guide-for-models'
-    // removed for the same reason — no static page, no matching row in the
-    // (empty) blog_posts table. Guaranteed 404s, not indexable content.
 
     'revenue-per-hour-cam-model',
     'viral-cam-room-titles',
@@ -119,12 +101,6 @@ export default function sitemap() {
     'cam-model-top-tippers',
     'chaturbate-best-hours',
     'chaturbate-earnings-tracker',
-    // 'chaturbate-room-title-generator' and 'chaturbate-token-calculator'
-    // deliberately NOT included — next.config.mjs 301-redirects both to
-    // their cam-model-* equivalents above (a Search Console-driven fix,
-    // per that file's own comments). A sitemap should list only the final
-    // canonical destination, never a URL that immediately redirects; their
-    // page.js files exist but are unreachable (the redirect fires first).
     'chaturbate-token-tracker',
     'how-to-increase-cam-tips',
     'myfreecams-analytics',
