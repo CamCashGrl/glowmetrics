@@ -155,9 +155,25 @@ export default function AdminPage() {
   }, [])
 
   useEffect(() => {
-    if (!document.cookie.includes("gm_admin=")) { router.replace("/admin/login"); return }
-    load()
-    loadPromoCodes()
+    // The gm_admin cookie is HttpOnly and unreadable from JS, so auth is
+    // confirmed server-side. load() also redirects on a 401 from /api/admin/stats,
+    // which is the real gate — this probe just avoids a flash of the loading state.
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await fetch("/api/auth/admin")
+        const d = await res.json()
+        if (cancelled) return
+        if (!d.authenticated) { router.replace("/admin/login"); return }
+      } catch {
+        if (cancelled) return
+        router.replace("/admin/login")
+        return
+      }
+      load()
+      loadPromoCodes()
+    })()
+    return () => { cancelled = true }
   }, [load, loadPromoCodes])
 
   const createPromoCode = async () => {
@@ -202,8 +218,9 @@ export default function AdminPage() {
     } catch {}
   }
 
-  const logout = () => {
-    document.cookie = "gm_admin=;path=/;max-age=0"
+  const logout = async () => {
+    // HttpOnly cookie — only the server can clear it.
+    try { await fetch("/api/auth/admin", { method: "DELETE" }) } catch {}
     router.replace("/admin/login")
   }
 

@@ -2,10 +2,24 @@ import crypto from 'crypto'
 
 const SESSION_MS = 24 * 3600 * 1000
 
+export const ADMIN_COOKIE = 'gm_admin'
+export const ADMIN_SESSION_MS = SESSION_MS
+
 function getSecret() {
   const secret = process.env.ADMIN_SECRET
   if (!secret) throw new Error('ADMIN_SECRET is not configured')
   return secret
+}
+
+// True only when all three admin env vars are present. The login route calls
+// this first so a missing-config deploy reports itself instead of throwing a
+// 500 out of signAdminToken() and surfacing as a generic "something went wrong".
+export function isAdminConfigured() {
+  return Boolean(
+    process.env.ADMIN_SECRET &&
+    process.env.ADMIN_EMAIL &&
+    process.env.ADMIN_PASSWORD
+  )
 }
 
 function sign(payload) {
