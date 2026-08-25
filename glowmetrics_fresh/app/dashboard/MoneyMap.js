@@ -5,9 +5,6 @@ import {
   PieChart, Pie, Cell, Label,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from "recharts"
-import { WHALE_LIFETIME_TOKEN_THRESHOLD } from "../../lib/constants"
-import { toLocalHour, toLocalDow, toLocalDateStr } from "../../lib/analytics/localTime"
-import { detectSessions } from "../../lib/analytics/sessions"
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const BG     = "#0a0e1a"
@@ -28,28 +25,22 @@ const PLATFORM_COLORS = { chaturbate:"#f97316", myfreecams:"#3b82f6", stripchat:
 const SOURCE_COLORS = [CYAN, PURPLE, PINK, AMBER, GREEN, "#ef4444", "#f97316", "#3b82f6"]
 
 // ─── Time helpers ────────────────────────────────────────────────────────────
-// All of these take the creator's resolved timezone (profiles.timezone, via
-// lib/timezone.js) and delegate to the shared primitives in
-// lib/analytics/localTime.js — the same ones the canonical analytics engine
-// and Stream Planner use. Previously localHour/localDay read the BROWSER's
-// zone and utcYMD/utcMonthKey used raw UTC, so every heatmap cell, active-day
-// count and monthly bucket in this file could disagree with the rest of the
-// app (and with itself: browser-local hours bucketed against UTC day keys).
-function localHour(date, tz) { return toLocalHour(date, tz) }
-function localDay(date, tz)  { return toLocalDow(date, tz) }
-function utcYMD(date, tz)    { return toLocalDateStr(date, tz) }
-function utcMonthKey(date, tz) { return toLocalDateStr(date, tz).slice(0, 7) }
-function localHourDecFromDate(date, tz) {
-  const parts = new Intl.DateTimeFormat("en-US",{timeZone:tz,hour:"numeric",minute:"2-digit",hour12:false}).formatToParts(new Date(date))
-  const h = parseInt(parts.find(p=>p.type==="hour")?.value??"0") % 24
-  const m = parseInt(parts.find(p=>p.type==="minute")?.value??"0")
-  return h + m/60
-}
+function localHour(date) { return new Date(date).getHours() }
+function localDay(date)  { return new Date(date).getDay() }
+function utcYMD(date)   { const d = new Date(date); return `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,"0")}-${String(d.getUTCDate()).padStart(2,"0")}` }
+function utcMonthKey(date) { const d = new Date(date); return `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,"0")}` }
+
 function fmtHour(localH) {
   return new Date(2000,0,1,localH).toLocaleTimeString([],{hour:"numeric",hour12:true})
 }
 function fmtDayName(localDayIdx) {
   return new Date(2024,0,7+localDayIdx).toLocaleDateString("en-US",{weekday:"long"})
+}
+function localHourDecFromDate(date) {
+  const parts = new Intl.DateTimeFormat("en-US",{hour:"numeric",minute:"2-digit",hour12:false}).formatToParts(date)
+  const h = parseInt(parts.find(p=>p.type==="hour")?.value??"0") % 24
+  const m = parseInt(parts.find(p=>p.type==="minute")?.value??"0")
+  return h + m/60
 }
 function fmtUsd(n) { return `$${Number(n||0).toFixed(2)}` }
 function fmtDur(mins) {
@@ -68,32 +59,45 @@ function normPlatform(raw) {
 }
 
 // ─── Pure data functions ──────────────────────────────────────────────────────
-// Adapts the canonical detectSessions() (lib/analytics/sessions.js) to the
-// {start, end, usd, tokens, tipsCount, tippers, durationMins, localHourStart,
-// platform} shape this file's charts already expect.
-//
-// This file previously had its own grouping: a 4-hour gap with NO platform
-// boundary, versus the canonical 3-hour gap where a platform change starts a
-// new session. On the real 1912-row regression CSV that produced 158 sessions
-// here against 168 everywhere else — a 6% discrepancy in a user-facing session
-// count, with no reason for the two to differ. Session-count/duration figures
-// on the Money Map now match the Overview, Creator Report and Stream Planner.
-function groupIntoSessions(tips, tz) {
+function groupIntoSessions(tips) {
   if (!tips?.length) return []
-  return detectSessions(tips).map(s => ({
-    start: new Date(s.startTime),
-    end: new Date(s.endTime),
-    tokens: s.totalTokens,
-    usd: s.totalUSD,
-    tipsCount: s.tipCount,
-    tippers: s.uniqueFans,
-    platform: normPlatform(s.platform),
-    durationMins: s.durationMinutes || 5,
-    localHourStart: localHourDecFromDate(s.startTime, tz),
+  const sorted = [...tips].sort((a,b)=>new Date(a.date_time)-new Date(b.date_time))
+  const GAP = 4*60*60*1000
+  const sessions = []
+  let cur = null
+  for (const t of sorted) {
+    const ts = new Date(t.date_time).getTime()
+    if (!cur || ts - cur.lastTs > GAP) {
+      if (cur) sessions.push(cur)
+      const d = new Date(t.date_time)
+      cur = {
+        start: d,
+        end: d,
+        lastTs: ts,
+        tokens: 0,
+        usd: 0,
+        tipsCount: 0,
+        tippers: new Set(),
+        platform: normPlatform(t.platform),
+      }
+    }
+    cur.tokens   += Number(t.tokens||0)
+    cur.usd      += Number(t.usd||0)
+    cur.tipsCount++
+    if (t.username) cur.tippers.add(t.username)
+    cur.end    = new Date(t.date_time)
+    cur.lastTs = ts
+  }
+  if (cur) sessions.push(cur)
+  return sessions.map(s => ({
+    ...s,
+    tippers: s.tippers.size,
+    durationMins: (s.end - s.start) / 60000 || 5,
+    localHourStart: localHourDecFromDate(s.start),
   }))
 }
 
-function platformEfficiency(tips, tz) {
+function platformEfficiency(tips) {
   const map = {}
   for (const t of tips) {
     const p = normPlatform(t.platform)
@@ -101,7 +105,7 @@ function platformEfficiency(tips, tz) {
     map[p].tokens += Number(t.tokens||0)
     map[p].usd    += Number(t.usd||0)
     map[p].count++
-    map[p].days.add(utcYMD(t.date_time, tz))
+    map[p].days.add(utcYMD(t.date_time))
   }
   return Object.values(map).map(p => ({
     ...p,
@@ -112,14 +116,14 @@ function platformEfficiency(tips, tz) {
   })).sort((a,b)=>b.usd-a.usd)
 }
 
-function windowStats(tips, tz) {
+function windowStats(tips) {
   const grid = {}
   for (let d=0;d<7;d++) for (const slot of TWO_HR_SLOTS) {
     grid[`${d}_${slot}`] = { day:d, slot, tokens:0, usd:0, count:0, sessions:0 }
   }
   for (const t of tips) {
-    const d = localDay(t.date_time, tz)
-    const h = localHour(t.date_time, tz)
+    const d = localDay(t.date_time)
+    const h = localHour(t.date_time)
     const slot = Math.floor(h/2)*2
     const key = `${d}_${slot}`
     if (grid[key]) {
@@ -144,19 +148,19 @@ function detectWhales(tips) {
     if (t.platform) map[u].platforms.add(normPlatform(t.platform))
   }
   return Object.values(map)
-    .map(w=>({...w, platforms:w.platforms.size, isWhale:w.tokens>=WHALE_LIFETIME_TOKEN_THRESHOLD}))
+    .map(w=>({...w, platforms:w.platforms.size, isWhale:w.tokens>=500}))
     .sort((a,b)=>b.usd-a.usd)
 }
 
-function monthlyTotals(tips, tz) {
+function monthlyTotals(tips) {
   const map = {}
   for (const t of tips) {
-    const mk = utcMonthKey(t.date_time, tz)
+    const mk = utcMonthKey(t.date_time)
     if (!map[mk]) map[mk] = { month:mk, usd:0, tokens:0, count:0, activeDays:new Set() }
     map[mk].usd    += Number(t.usd||0)
     map[mk].tokens += Number(t.tokens||0)
     map[mk].count++
-    map[mk].activeDays.add(utcYMD(t.date_time, tz))
+    map[mk].activeDays.add(utcYMD(t.date_time))
   }
   return Object.values(map)
     .map(m=>({...m, activeDays:m.activeDays.size}))
@@ -164,10 +168,10 @@ function monthlyTotals(tips, tz) {
     .slice(-12)
 }
 
-function weeklyEfficiency(sessions, tz) {
+function weeklyEfficiency(sessions) {
   const map = {}
   for (const s of sessions) {
-    const wk = utcYMD(s.start, tz).slice(0,7)
+    const wk = utcYMD(s.start).slice(0,7)
     if (!map[wk]) map[wk] = { week:wk, usd:0, hours:0, sessions:0 }
     map[wk].usd     += s.usd
     map[wk].hours   += s.durationMins/60
@@ -244,14 +248,11 @@ const CTIP = ({ active, payload }) => {
 }
 
 // ─── TAB: Money Map ───────────────────────────────────────────────────────────
-function MoneyMapTab({ tips, isPro=true, tz }) {
+function MoneyMapTab({ tips }) {
   const [platform, setPlatform] = useState("all")
   const [metric, setMetric]     = useState("usd")
-  const [range, setRange]       = useState(isPro ? "all" : "30d")
+  const [range, setRange]       = useState("all")
   const [selected, setSelected] = useState(null)
-  const RANGE_OPTIONS = isPro
-    ? [["all","All Time"],["90d","90 Days"],["30d","30 Days"],["7d","7 Days"]]
-    : [["30d","30 Days"],["7d","7 Days"]]
 
   const platforms = useMemo(()=>{
     const s = new Set(tips.map(t=>normPlatform(t.platform)))
@@ -269,7 +270,7 @@ function MoneyMapTab({ tips, isPro=true, tz }) {
     return arr
   },[tips,platform,range])
 
-  const grid = useMemo(()=>windowStats(filtered, tz),[filtered, tz])
+  const grid = useMemo(()=>windowStats(filtered),[filtered])
 
   const maxVal = useMemo(()=>{
     return Math.max(...Object.values(grid).map(c=>c[metric]||0),1)
@@ -309,18 +310,13 @@ function MoneyMapTab({ tips, isPro=true, tz }) {
           }}>{l}</button>
         ))}
         <span style={{color:SLATE,fontSize:"12px",fontWeight:"600",marginLeft:"8px"}}>Range:</span>
-        {RANGE_OPTIONS.map(([v,l])=>(
+        {[["all","All Time"],["90d","90 Days"],["30d","30 Days"],["7d","7 Days"]].map(([v,l])=>(
           <button key={v} onClick={()=>setRange(v)} style={{
             padding:"4px 12px",borderRadius:"20px",border:`1px solid ${range===v?CYAN:BORDER}`,
             background:range===v?"rgba(34,211,238,0.1)":"transparent",
             color:range===v?CYAN:SLATE,fontSize:"12px",cursor:"pointer",fontWeight:"600"
           }}>{l}</button>
         ))}
-        {!isPro && (
-          <a href="/pricing" style={{marginLeft:"4px",fontSize:"11px",color:PURPLE,fontWeight:"600",textDecoration:"none"}}>
-            ✦ Pro unlocks 90-day &amp; all-time history
-          </a>
-        )}
       </div>
 
       <div style={{display:"flex",gap:"16px",flexWrap:"wrap"}}>
@@ -335,14 +331,14 @@ function MoneyMapTab({ tips, isPro=true, tz }) {
               ))}
               {/* Day rows */}
               {DAYS.map((day,di)=>[
-                <div key={`day-${di}`} style={{position:"sticky",left:0,background:BG,zIndex:2,color:SLATE,fontSize:"11px",fontWeight:"600",height:"32px",display:"flex",alignItems:"center",paddingRight:"8px"}}>{day}</div>,
+                <div key={`day-${di}`} style={{position:"sticky",left:0,background:BG,zIndex:2,color:SLATE,fontSize:"11px",fontWeight:"600",display:"flex",alignItems:"center",paddingRight:"8px"}}>{day}</div>,
                 ...TWO_HR_SLOTS.map(slot=>{
                   const key=`${di}_${slot}`
                   const cell=grid[key]
                   const val=cell?.[metric]||0
                   const isSelected=selected?.day===di&&selected?.slot===slot
                   return (
-                    <div key={`cell-${di}-${slot}`}
+                    <div key={slot}
                       onClick={()=>setSelected(isSelected?null:{day:di,slot})}
                       title={`${day} ${fmtHour(slot)}: ${metric==="usd"?fmtUsd(val):Math.round(val)}`}
                       style={{
@@ -405,14 +401,14 @@ function MoneyMapTab({ tips, isPro=true, tz }) {
 }
 
 // ─── TAB: Sessions ────────────────────────────────────────────────────────────
-function SessionsTab({ sessions, tz }) {
+function SessionsTab({ sessions }) {
   const recent = useMemo(()=>[...sessions].sort((a,b)=>b.start-a.start).slice(0,10),[sessions])
 
   // Weekly calendar: last 7 distinct UTC days with sessions
   const calDays = useMemo(()=>{
     const dayMap = {}
     for (const s of sessions) {
-      const dk = utcYMD(s.start, tz)
+      const dk = utcYMD(s.start)
       if (!dayMap[dk]) dayMap[dk] = { date:s.start, key:dk, sessions:[] }
       dayMap[dk].sessions.push(s)
     }
@@ -513,14 +509,14 @@ function SessionsTab({ sessions, tz }) {
 }
 
 // ─── TAB: Platforms ───────────────────────────────────────────────────────────
-function PlatformsTab({ tips, sessions, tz }) {
-  const platforms = useMemo(()=>platformEfficiency(tips, tz),[tips, tz])
+function PlatformsTab({ tips, sessions }) {
+  const platforms = useMemo(()=>platformEfficiency(tips),[tips])
 
   // Multistream: sessions with 2+ platforms in same day
   const multiDays = useMemo(()=>{
     const byDay = {}
     for (const s of sessions) {
-      const dk = utcYMD(s.start, tz)
+      const dk = utcYMD(s.start)
       if (!byDay[dk]) byDay[dk] = { date:dk, platforms:new Set(), usd:0, hours:0 }
       byDay[dk].platforms.add(s.platform)
       byDay[dk].usd   += s.usd
@@ -537,7 +533,7 @@ function PlatformsTab({ tips, sessions, tz }) {
   const platformDayData = useMemo(()=>{
     const map = {}
     for (const t of tips) {
-      const dk = utcYMD(t.date_time, tz).slice(5)
+      const dk = utcYMD(t.date_time).slice(5)
       const p  = normPlatform(t.platform)
       if (!map[dk]) map[dk] = { date:dk }
       map[dk][p] = (map[dk][p]||0) + Number(t.usd||0)
@@ -618,9 +614,9 @@ function PlatformsTab({ tips, sessions, tz }) {
 }
 
 // ─── TAB: Trends ─────────────────────────────────────────────────────────────
-function TrendsTab({ tips, sessions, tz }) {
-  const monthly   = useMemo(()=>monthlyTotals(tips, tz),[tips, tz])
-  const weekly    = useMemo(()=>weeklyEfficiency(sessions, tz),[sessions, tz])
+function TrendsTab({ tips, sessions }) {
+  const monthly   = useMemo(()=>monthlyTotals(tips),[tips])
+  const weekly    = useMemo(()=>weeklyEfficiency(sessions),[sessions])
   const bySource  = useMemo(()=>earningsBySource(tips),[tips])
   const totalUsd  = useMemo(()=>tips.reduce((s,t)=>s+Number(t.usd||0),0),[tips])
 
@@ -712,25 +708,11 @@ function TrendsTab({ tips, sessions, tz }) {
   )
 }
 
-// Sessions/Platforms/Trends stay Pro-only — the Money Map tab itself (a real
-// heatmap, just capped to the last 30 days) is free's "somewhat useful"
-// slice, per product direction: free should never be a dead end, just less.
-function LockedTabPanel({ label }) {
-  return (
-    <div style={{textAlign:"center",padding:"60px 24px",background:CARD,border:`1px solid ${BORDER}`,borderRadius:"16px"}}>
-      <div style={{fontSize:"32px",marginBottom:"12px"}}>🔒</div>
-      <div style={{color:TEXT,fontSize:"16px",fontWeight:"700",marginBottom:"8px"}}>{label} is a Creator Pro feature</div>
-      <div style={{color:SLATE,fontSize:"13px",marginBottom:"20px"}}>Your Money Map heatmap is free — upgrade to unlock session breakdowns, platform comparisons, and trend analysis.</div>
-      <a href="/pricing" style={{display:"inline-flex",alignItems:"center",background:"linear-gradient(135deg,#22d3ee,#a855f7)",color:"#0a0e1a",fontWeight:"800",padding:"10px 24px",borderRadius:"10px",textDecoration:"none",fontSize:"14px"}}>Upgrade to Pro</a>
-    </div>
-  )
-}
-
 // ─── Inner content (all hooks here) ──────────────────────────────────────────
-function MoneyMapContent({ tips, isPro=true, tz }) {
+function MoneyMapContent({ tips }) {
   const [tab, setTab] = useState("map")
 
-  const sessions = useMemo(()=>groupIntoSessions(tips, tz),[tips, tz])
+  const sessions = useMemo(()=>groupIntoSessions(tips),[tips])
 
   const totalUsd    = useMemo(()=>tips.reduce((s,t)=>s+Number(t.usd||0),0),[tips])
   const totalTokens = useMemo(()=>tips.reduce((s,t)=>s+Number(t.tokens||0),0),[tips])
@@ -742,9 +724,9 @@ function MoneyMapContent({ tips, isPro=true, tz }) {
 
   const TABS = [
     {id:"map",     label:"💰 Money Map"},
-    {id:"sessions",label: isPro ? "📅 Sessions" : "🔒 Sessions"},
-    {id:"platforms",label: isPro ? "🏆 Platforms" : "🔒 Platforms"},
-    {id:"trends",  label: isPro ? "📈 Trends" : "🔒 Trends"},
+    {id:"sessions",label:"📅 Sessions"},
+    {id:"platforms",label:"🏆 Platforms"},
+    {id:"trends",  label:"📈 Trends"},
   ]
 
   return (
@@ -759,16 +741,31 @@ function MoneyMapContent({ tips, isPro=true, tz }) {
 
       <TabBar tabs={TABS} active={tab} onSelect={setTab}/>
 
-      {tab==="map" && <MoneyMapTab tips={tips} isPro={isPro} tz={tz}/>}
-      {tab==="sessions"  && (!isPro ? <LockedTabPanel label="Session Breakdowns"/>   : <SessionsTab sessions={sessions} tz={tz}/>)}
-      {tab==="platforms" && (!isPro ? <LockedTabPanel label="Platform Comparison"/>  : <PlatformsTab tips={tips} sessions={sessions} tz={tz}/>)}
-      {tab==="trends"    && (!isPro ? <LockedTabPanel label="Trend Analysis"/>       : <TrendsTab tips={tips} sessions={sessions} tz={tz}/>)}
+      {tab==="map"       && <MoneyMapTab tips={tips}/>}
+      {tab==="sessions"  && <SessionsTab sessions={sessions}/>}
+      {tab==="platforms" && <PlatformsTab tips={tips} sessions={sessions}/>}
+      {tab==="trends"    && <TrendsTab tips={tips} sessions={sessions}/>}
     </div>
   )
 }
 
 // ─── Exported component ───────────────────────────────────────────────────────
-export default function MoneyMap({ tips = [], isPro = false, timezone = 'UTC' }) {
+export default function MoneyMap({ tips = [], isPro = false }) {
+  if (!isPro) {
+    return (
+      <div style={{width:"100%",padding:"32px 24px",boxSizing:"border-box"}}>
+        <div style={{background:"rgba(15,20,32,0.75)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:"16px",padding:"48px 40px",width:"100%",boxSizing:"border-box"}}>
+          <h2 style={{color:"#f1f5f9",fontSize:"22px",fontWeight:"700",marginBottom:"10px",marginTop:0}}>Money Map</h2>
+          <p style={{color:"#94a3b8",fontSize:"14px",marginBottom:"32px"}}>Visualize your earnings with heatmaps, session breakdowns, platform comparisons, and trend analysis.</p>
+          <div style={{display:"flex",gap:"12px",flexWrap:"wrap"}}>
+            <a href="/live/demo" style={{display:"inline-flex",alignItems:"center",gap:"8px",background:"rgba(34,211,238,0.12)",border:"1px solid rgba(34,211,238,0.3)",color:"#22d3ee",fontWeight:"600",padding:"10px 24px",borderRadius:"10px",textDecoration:"none",fontSize:"14px"}}>▶ Watch Demo</a>
+            <a href="/pricing" style={{display:"inline-flex",alignItems:"center",background:"linear-gradient(135deg,#22d3ee,#a855f7)",color:"#0a0e1a",fontWeight:"800",padding:"10px 24px",borderRadius:"10px",textDecoration:"none",fontSize:"14px"}}>Upgrade to Pro</a>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   if (tips.length < 20) {
     return (
       <div style={{textAlign:"center",padding:"60px 24px"}}>
@@ -780,5 +777,5 @@ export default function MoneyMap({ tips = [], isPro = false, timezone = 'UTC' })
     )
   }
 
-  return <MoneyMapContent tips={tips} isPro={isPro} tz={timezone}/>
+  return <MoneyMapContent tips={tips}/>
 }
