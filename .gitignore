@@ -1,0 +1,13 @@
+# Secrets never belong in this repository.
+#
+# Production config lives in the Vercel dashboard (Settings -> Environment
+# Variables). Local development uses glowmetrics_fresh/.env.local, which is
+# ignored by glowmetrics_fresh/.gitignore.
+#
+# The un-dotted "env.local" at the repo root was committed by mistake and is
+# ignored here so it cannot happen again. Nothing reads it: Next.js loads env
+# files from the project root (glowmetrics_fresh/), not from here.
+env.local
+.env
+.env.local
+.env.*.local
