@@ -30,7 +30,8 @@ export default function sitemap() {
 
     // BongaCams articles
     'bongacams-payout-guide',
-    'bongacams-camscore-explained',
+    'bongacams-camscore-exsplained',
+    'bonga-cams-queen-of-queens',
 
     'cam-model-boundaries-toxic-chat',
     'cam-model-earnings',
@@ -56,6 +57,7 @@ export default function sitemap() {
     'chaturbate-best-month-real-numbers',
     'chaturbate-first-30-days-real-earnings',
     'chaturbate-payout-explained',
+    'free-myfreecams-earnings-tracker',
     'freemium-vs-premium-cam-model',
     'girlfriend-experience-gfe-cam-modeling-strategy',
     'how-cam-models-stay-anonymous',
