@@ -1,4 +1,4 @@
-import ArticleLayout from "@/components/ArticleLayout";
+import ArticleLayout from "@/app/components/ArticleLayout";
 
 export const metadata = {
   title: "Free MyFreeCams Earnings Tracker for Cam Models | Download PDF",
