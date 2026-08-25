@@ -62,7 +62,13 @@ function AdminPreviewInner() {
   const iframeRef = useRef(null)
 
   useEffect(() => {
-    if (!document.cookie.includes("gm_admin=")) { router.replace("/admin/login"); return }
+    // gm_admin is HttpOnly — ask the server instead of reading document.cookie.
+    let cancelled = false
+    fetch("/api/auth/admin")
+      .then(r => r.json())
+      .then(d => { if (!cancelled && !d.authenticated) router.replace("/admin/login") })
+      .catch(() => { if (!cancelled) router.replace("/admin/login") })
+    return () => { cancelled = true }
   }, [])
 
   useEffect(() => {

@@ -25,7 +25,7 @@ export default function AdminLoginPage() {
         setError(data.error || "Invalid credentials")
         return
       }
-      document.cookie = `gm_admin=${data.token};path=/;max-age=86400;SameSite=Strict`
+      // The session cookie is set HttpOnly by the API route — nothing to store here.
       router.replace("/admin")
     } catch {
       setError("Something went wrong. Try again.")
