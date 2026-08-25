@@ -215,6 +215,16 @@ export default function FreeMyFreeCamsEarningsTrackerPage() {
           </p>
         </header>
 
+        <div style={{ margin: '28px auto 8px', maxWidth: '620px', borderRadius: '12px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.07)' }}>
+          <img
+            src="/blog-images/mfc-mini-tracker-cover.png"
+            alt="Free MyFreeCams Mini Tracker PDF cover for cam models by Pretty Profitz"
+            width={1055}
+            height={1491}
+            style={{ width: '100%', height: 'auto', display: 'block' }}
+          />
+        </div>
+
         <section style={s.cta}>
           <div style={s.ctaTitle}>
             Download the Free MyFreeCams Tracker
