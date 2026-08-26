@@ -1066,7 +1066,21 @@ export function aggregateRows(tips, tz = null) {
         return {
           count: sorted.length,
           totalUSD: parseFloat(sorted.reduce((sum, f) => sum + (f.totalUSD || 0), 0).toFixed(2)),
-          fans: sorted.slice(0, 3).map(f => ({ username: f.username, totalUSD: f.totalUSD, tipCount: f.tipCount })),
+          // How many of the overlapping fans are Top Supporters. This READS the
+          // isTopSupporter flag identifyWhales() already set (top 20% by value
+          // AND >= 3 tips AND >= 10 fans in the base) — it is a count of an
+          // existing classification, not a new rule and not a new threshold.
+          topSupporterCount: sorted.filter(f => f.isTopSupporter).length,
+          // The volume actually earned in this window, kept beside the count so
+          // a surface can state rate and volume separately. A window can hold
+          // the best $/hr and still be a small share of total earnings; the two
+          // must never be collapsed into one impressive-sounding sentence.
+          windowUSD: parseFloat((w.totalUsd || 0).toFixed(2)),
+          windowSessionCount: w.sessionCount || 0,
+          fans: sorted.slice(0, 3).map(f => ({
+            username: f.username, totalUSD: f.totalUSD, tipCount: f.tipCount,
+            isTopSupporter: !!f.isTopSupporter,
+          })),
           // Lowercased usernames of EVERY overlapping fan (not just the top 3
           // shown in `fans`), so a per-fan surface can ask "is this fan one of
           // them?" without re-running the day+hour match itself. Membership

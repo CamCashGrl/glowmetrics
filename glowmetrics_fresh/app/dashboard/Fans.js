@@ -1,6 +1,7 @@
 "use client"
 import { useMemo, useState } from "react"
 import ConfidenceBadge from "./ConfidenceBadge"
+import WindowFanOverlap from "./WindowFanOverlap"
 
 // ═══════════════════════════════════════════════════════════════════════════
 // FANS
@@ -332,32 +333,33 @@ export default function Fans({
         )}
       </div>
 
-      {/* ── BEST-WINDOW OVERLAP ────────────────────────────────────── */}
+      {/* ── BEST-WINDOW OVERLAP (2C-3) ─────────────────────────────
+          Replaced the local restatement of the same figures with the shared
+          discovery block, so the Command Center and the Fans tab can no longer
+          describe the same overlap differently. The old copy called every
+          overlapping fan one of the creator's "highest-value supporters",
+          which conflated the 3-tip repeat-fan filter with the Top Supporter
+          classification — two different things. The shared block reports them
+          separately, from the canonical counts. */}
+      {/* Gated on real overlap, unchanged from before 2C-3: the Command Center
+          already states the zero-overlap case, and a second "nobody yet" card
+          on this tab would be noise rather than information. */}
       {bestWindow && overlap?.count > 0 && (
-        <div style={card()}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
-            <div style={sectionLabel}>Who shows up in your best window</div>
-            <ConfidenceBadge intelligence={intelligence} insight="fan_behaviour" />
-          </div>
-          <div style={{ fontSize: 13.5, color: C.text, lineHeight: 1.6, marginBottom: 14 }}>
-            <strong style={{ color: C.white }}>{overlap.count}</strong> of your highest-value supporters tip during{" "}
-            <strong style={{ color: C.cyan }}>{bestWindow.localDay}s {fmtHour(bestWindow.localHour)}</strong> — {fmtUsd0(overlap.totalUSD)} in combined lifetime value.
-          </div>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
-            {(overlap.fans || []).map(f => (
-              <span key={f.username} style={{
-                fontSize: 12, padding: "6px 12px", borderRadius: 20,
-                background: "rgba(34,211,238,0.1)", border: "1px solid rgba(34,211,238,0.25)", color: C.cyan,
-                overflowWrap: "anywhere",
-              }}>{f.username} · {fmtUsd0(f.totalUSD)}</span>
-            ))}
-          </div>
-          <button onClick={onPlanStream} style={{
-            padding: "10px 16px", borderRadius: 10, cursor: "pointer",
-            background: "rgba(255,255,255,0.04)", border: `1px solid ${C.border}`,
-            color: C.white, fontSize: 12.5, fontWeight: 700,
-          }}>Plan a stream in this window →</button>
-        </div>
+        <WindowFanOverlap
+          analytics={analytics}
+          intelligence={intelligence}
+          isPro={isPro}
+          // Already on the Fans tab, so there is no "open these fans in Fans"
+          // action here — the Pro detail is the chips themselves.
+          onUpgrade={onUpgrade}
+        />
+      )}
+      {bestWindow && overlap?.count > 0 && onPlanStream && (
+        <button onClick={onPlanStream} style={{
+          padding: "10px 16px", borderRadius: 10, cursor: "pointer",
+          background: "rgba(255,255,255,0.04)", border: `1px solid ${C.border}`,
+          color: C.white, fontSize: 12.5, fontWeight: 700, alignSelf: "flex-start",
+        }}>Plan a stream in this window →</button>
       )}
 
       {/* ── DEPENDENCY RISK ────────────────────────────────────────── */}

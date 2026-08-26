@@ -1,6 +1,7 @@
 "use client"
 import { useMemo } from "react"
 import ConfidenceBadge from "./ConfidenceBadge"
+import WindowFanOverlap from "./WindowFanOverlap"
 
 // ═══════════════════════════════════════════════════════════════════════════
 // COMMAND CENTER
@@ -384,6 +385,22 @@ export default function CommandCenter({
           )}
           <Chip icon="📊" title="Sample behind it" value={`${bestWindow.sessionCount} session${bestWindow.sessionCount === 1 ? "" : "s"}`} badge={<ConfidenceBadge intelligence={intelligence} insight="peak_window" />} accent={C.gold} />
         </div>
+      )}
+
+      {/* ── DISCOVERY -> FAN INTELLIGENCE (2C-3) ────────────────────
+          Connects the peak window above to the fans actually observed in it.
+          Reads analytics.bestWindowFanOverlap only; states observations, never
+          predictions. Free sees the whole discovery and both counts; Pro opens
+          the fan-level detail the fan analytics layer already produces. */}
+      {hasWindow && (
+        <WindowFanOverlap
+          analytics={analytics}
+          intelligence={intelligence}
+          isPro={isPro}
+          onViewFans={onViewFans}
+          onUpgrade={onUpgrade}
+          compact
+        />
       )}
 
       {/* ── RIGHT NOW ──────────────────────────────────────────────

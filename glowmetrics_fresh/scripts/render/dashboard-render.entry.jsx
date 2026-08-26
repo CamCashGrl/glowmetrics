@@ -7,24 +7,31 @@ import StreamPlanner from '../../app/dashboard/StreamPlanner'
 import AnalyticsCharts from '../../app/dashboard/AnalyticsCharts'
 import CreatorReport from '../../app/dashboard/CreatorReport'
 import ConfidenceBadge from '../../app/dashboard/ConfidenceBadge'
+import WindowFanOverlap from '../../app/dashboard/WindowFanOverlap'
 import { aggregateRows } from '../../lib/analytics'
 import { computeIntelligence } from '../../lib/intelligence/readiness'
 
 // ── Fixture: a synthetic account rich enough that every insight is graded,
 // built from the same aggregateRows() the product uses. No stored data read.
 const DAYS = ['2026-01-07','2026-01-14','2026-01-21','2026-01-28','2026-02-04','2026-02-11','2026-02-18','2026-03-04']
+// Each platform streams in its OWN hour block. detectSessions() sorts every
+// tip by time and starts a new session on any platform change, so two
+// platforms sharing the same minutes would shred into one-tip sessions and the
+// fixture would grade nothing.
+const PLATFORM_HOURS = { Chaturbate: 20, BongaCams: 14 }
 const tips = []
 let n = 0
 for (const d of DAYS) {
-  for (const plat of ['Chaturbate', 'BongaCams']) {
+  for (const [plat, baseHour] of Object.entries(PLATFORM_HOURS)) {
     for (let t = 0; t < 9; t++) {
-      const hour = 20 + Math.floor(t / 5)
+      const minutes = t * 12
+      const hour = baseHour + Math.floor(minutes / 60)
       tips.push({
         username: `fan${(n % 24) + 1}`,
         platform: plat,
         tokens: 30 + (n % 7) * 10,
         usd: 1.5 + (n % 7) * 0.5,
-        date_time: `${d}T${String(hour).padStart(2,'0')}:${String((t * 7) % 60).padStart(2,'0')}:00Z`,
+        date_time: `${d}T${String(hour).padStart(2,'0')}:${String(minutes % 60).padStart(2,'0')}:00Z`,
       })
       n++
     }
@@ -112,6 +119,28 @@ for (const name of ['CommandCenter', 'Performance', 'CreatorReport']) {
 const RETIRED_WORDS = ['Strong pattern', 'Supported pattern', 'Building Pattern', 'Pattern emerging']
 for (const name of Object.keys(markup)) {
   check(`${name} prints no retired vocabulary`, RETIRED_WORDS.some(w => markup[name].includes(w)), false)
+}
+
+console.log('\nF. Discovery -> fan intelligence (2C-3) mounts in every plan/overlap state')
+render('WindowFanOverlap (free, real data)',  <WindowFanOverlap analytics={analytics} intelligence={intelligence} isPro={false} onUpgrade={() => {}} />)
+render('WindowFanOverlap (pro, real data)',   <WindowFanOverlap analytics={analytics} intelligence={intelligence} isPro onViewFans={() => {}} />)
+render('WindowFanOverlap (intelligence=null)',<WindowFanOverlap analytics={analytics} intelligence={null} isPro={false} onUpgrade={() => {}} />)
+render('WindowFanOverlap (empty account)',    <WindowFanOverlap analytics={emptyAnalytics} intelligence={emptyIntel} />)
+check('no peak window renders literally nothing',
+  renderToStaticMarkup(<WindowFanOverlap analytics={emptyAnalytics} intelligence={emptyIntel} />), '')
+
+const freeHtml = renderToStaticMarkup(<WindowFanOverlap analytics={analytics} intelligence={intelligence} isPro={false} onUpgrade={() => {}} />)
+const proHtml  = renderToStaticMarkup(<WindowFanOverlap analytics={analytics} intelligence={intelligence} isPro onViewFans={() => {}} />)
+check('free sees the window',            /strongest streaming window/i.test(freeHtml), true)
+check('free sees the fan question',      freeHtml.includes('Who shows up during it?'), true)
+check('free sees a repeat-fan count',    /repeat fans? ha[sv]e? tipped|No repeat fan/.test(freeHtml), true)
+check('free sees the Top Supporter line', /Top Supporters/.test(freeHtml), true)
+check('free is never shown a lock',      /locked|🔒/i.test(freeHtml), false)
+check('pro sees no upgrade CTA',         proHtml.includes('Unlock fan detail with Pro'), false)
+check('free and pro see the SAME discovery text',
+  freeHtml.includes('Highest median rate') && proHtml.includes('Highest median rate'), true)
+for (const bad of ['likely to tip', 'usually online', 'prefers this time', 'will make you']) {
+  check(`rendered output never says "${bad}"`, (freeHtml + proHtml).toLowerCase().includes(bad), false)
 }
 
 console.log(`\n  ${pass} passed, ${fail} failed`)
