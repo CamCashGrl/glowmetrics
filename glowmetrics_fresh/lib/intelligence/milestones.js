@@ -192,7 +192,9 @@ export function toDashboardEvent(userId, milestone) {
     user_id: userId,
     event_type: EVENT_TYPE.MILESTONE,
     source: 'intelligence',
-    priority: milestone.proCta ? 'high' : 'normal',
+    // dashboard_events constrains priority to critical|high|medium|low —
+    // verified against the deployed CHECK constraint, not assumed.
+    priority: milestone.proCta ? 'high' : 'medium',
     status: 'new',
     fingerprint: `milestone:${milestone.id}`,
     title: `${milestone.emoji} ${milestone.name}`,
@@ -219,7 +221,7 @@ export function toConfidenceEvent(userId, change) {
     user_id: userId,
     event_type: EVENT_TYPE.CONFIDENCE_UP,
     source: 'intelligence',
-    priority: 'normal',
+    priority: 'low',
     status: 'new',
     fingerprint: `confidence:${change.id}:${change.from}->${change.to}`,
     title: `📈 ${change.label} confidence increased`,

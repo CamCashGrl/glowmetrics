@@ -20,6 +20,7 @@ import { resolveCreatorTimezone } from '../../../lib/timezone'
 import { aggregateRows } from '../../../lib/analytics'
 import { computeMissedRevenue } from '../../../lib/analytics/missedRevenue'
 import { redact } from '../../../lib/entitlement'
+import { loadUserTips } from '../../../lib/serverTips'
 
 export async function GET() {
   const supabase = createSupabaseRouteClient()
@@ -38,23 +39,9 @@ export async function GET() {
   // always the server-derived auth user, never a client-supplied id, so
   // this route has no IDOR surface analogous to the one fixed in
   // get_user_insights (see supabase/migrations/20260814_restrict_get_user_insights_to_self.sql).
-  const PAGE = 1000
-  let tips = []
-  const { data: firstPage, count } = await supabase
-    .from('tips').select('*', { count: 'exact' }).eq('user_id', user.id)
-    .order('date_time', { ascending: true }).range(0, PAGE - 1)
-  if (firstPage) {
-    tips = firstPage
-    const total = count ?? firstPage.length
-    if (total > PAGE) {
-      const ranges = []
-      for (let from = PAGE; from < total; from += PAGE) ranges.push(from)
-      const pages = await Promise.all(ranges.map(from =>
-        supabase.from('tips').select('*').eq('user_id', user.id).order('date_time', { ascending: true }).range(from, from + PAGE - 1)
-      ))
-      for (const { data } of pages) if (data?.length) tips = tips.concat(data)
-    }
-  }
+  // Paging/ordering moved verbatim to lib/serverTips.js so the intelligence
+  // route reuses the same loader rather than carrying a second copy.
+  const tips = await loadUserTips(supabase, user.id)
 
   if (!tips.length) {
     return NextResponse.json({
