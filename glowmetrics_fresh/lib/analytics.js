@@ -466,6 +466,17 @@ function parseHeaderless(lines, platform) {
 // tz: creator's resolved timezone (lib/timezone.js). Optional so existing
 // callers keep working; defaults to UTC, which is what the hour bucketing
 // below did unconditionally before.
+// TOP SUPPORTER — the canonical relative fan classification.
+//
+// None of these three numbers is new. The percentile band is identifyWhales'
+// own existing Shark boundary (0.20); the tip floor is calcChurnRisk's
+// existing "below 3 tips a fan's behaviour is Unknown" rule; the audience
+// floor is canShowWhales' existing 10-fan requirement. They are named here so
+// one definition serves every surface.
+export const TOP_SUPPORTER_PERCENTILE = 0.20
+export const TOP_SUPPORTER_MIN_TIPS = 3
+export const TOP_SUPPORTER_MIN_FANS = 10
+
 export function identifyWhales(tips, tz = 'UTC') {
   const fanMap = {}
   tips.forEach(t => {
@@ -533,7 +544,34 @@ export function identifyWhales(tips, tz = 'UTC') {
       // hourCounts, same toLocalHour, computed once here.
       peakLocalHour: mostActiveHour ? parseInt(mostActiveHour[0]) : null,
       peakHourTipCount: mostActiveHour ? mostActiveHour[1] : 0,
-      tipNotes: f.tipNotes, tips: f.tips, isTopSpender: percentileRank <= 0.05, spendPercentile
+      tipNotes: f.tipNotes, tips: f.tips,
+      // RAW percentile facts. isTopSpender is "top 5% of this creator's fans
+      // by lifetime value" and nothing more — it does NOT require repeat
+      // behaviour or a meaningful audience size, so it must not be used as a
+      // UI badge on its own. Kept because existing consumers read it and it
+      // is a true statement about rank.
+      isTopSpender: percentileRank <= 0.05, spendPercentile,
+      percentileRank: parseFloat(percentileRank.toFixed(4)),
+      // TOP SUPPORTER — the canonical product classification.
+      //   top 20% by lifetime value
+      //   AND >= 3 tips        (calcChurnRisk's existing floor: below this a
+      //                         fan's behaviour is not readable at all)
+      //   AND >= 10 unique fans in the base (canShowWhales' existing floor:
+      //                         below this "top 20%" is one or two people)
+      // The repeat requirement is what stops a single-tip stranger being
+      // presented as an important supporter. Measured on the owner's account,
+      // three of the top seven "whales" were one-tip fans who never returned.
+      isTopSupporter:
+        totalFans >= TOP_SUPPORTER_MIN_FANS &&
+        f.tipCount >= TOP_SUPPORTER_MIN_TIPS &&
+        percentileRank <= TOP_SUPPORTER_PERCENTILE,
+      // Why a fan is NOT a top supporter, so the UI can be specific instead
+      // of silently omitting them.
+      topSupporterBlockedBy:
+        totalFans < TOP_SUPPORTER_MIN_FANS ? 'audience_too_small'
+          : percentileRank > TOP_SUPPORTER_PERCENTILE ? 'outside_top_20'
+          : f.tipCount < TOP_SUPPORTER_MIN_TIPS ? 'not_enough_tips'
+          : null
     }
   }).sort((a, b) => b.totalUSD - a.totalUSD)
 }
@@ -1063,15 +1101,45 @@ export function aggregateRows(tips, tz = null) {
     platformBestWindow[p] = bestWindow
   })
 
-  const platforms = Object.values(platformMap).map(p => ({
-    ...p,
-    usdPerHour:    p.hours > 0 ? parseFloat((p.totalUSD    / p.hours).toFixed(2)) : 0,
-    tokensPerHour: p.hours > 0 ? Math.round( p.totalTokens / p.hours)             : 0,
-    avgTipSize:    p.tips  > 0 ? parseFloat((p.totalUSD    / p.tips).toFixed(2))  : 0,
-    bestLocalDay:  platformBestWindow[p.platform]?.localDay ?? null,
-    bestLocalHour: platformBestWindow[p.platform]?.localHour ?? null,
-    bestWindowConfidence: platformBestWindow[p.platform]?.tier ?? null,
-  }))
+  // Per-platform MEDIAN session $/hour, alongside the existing mean.
+  //
+  // Every time-bucket surface already ranks by median precisely so one
+  // exceptional night cannot carry a recommendation (see
+  // computeCanonicalBestTimes). Platform ranking was the one place still
+  // using a mean, which made it the one place a single session could crown a
+  // platform. Measured on the owner's account: Chaturbate's mean was
+  // $23.16/hr against a median of $7.82/hr, because ONE 92-minute session
+  // ($77.55) was 88% of that platform's entire revenue.
+  //
+  // The mean is KEPT as usdPerHour — existing consumers read it and it is a
+  // true figure (total earned / total hours). The median is added beside it
+  // and is what ranking now uses.
+  const platformSessionRates = {}
+  meaningfulSessions.forEach(s => {
+    if (s.usdPerHour == null) return
+    ;(platformSessionRates[s.platform] ||= []).push(s.usdPerHour)
+  })
+
+  const platforms = Object.values(platformMap).map(p => {
+    // Per-platform sample confidence, from the SAME function that already
+    // answers "how much do we trust this sample" account-wide. No new
+    // threshold: calculateConfidence()'s existing session/hour bands are
+    // simply scoped to one platform.
+    const confidence = calculateConfidence(p.sessions, p.hours)
+    const rates = platformSessionRates[p.platform] || []
+    return {
+      ...p,
+      usdPerHour:    p.hours > 0 ? parseFloat((p.totalUSD    / p.hours).toFixed(2)) : 0,
+      medianUsdPerHour: rates.length ? parseFloat(calcMedian(rates).toFixed(2)) : 0,
+      tokensPerHour: p.hours > 0 ? Math.round( p.totalTokens / p.hours)             : 0,
+      avgTipSize:    p.tips  > 0 ? parseFloat((p.totalUSD    / p.tips).toFixed(2))  : 0,
+      confidenceLevel: confidence.level,
+      confidenceLabel: confidence.label,
+      bestLocalDay:  platformBestWindow[p.platform]?.localDay ?? null,
+      bestLocalHour: platformBestWindow[p.platform]?.localHour ?? null,
+      bestWindowConfidence: platformBestWindow[p.platform]?.tier ?? null,
+    }
+  })
 
   // ── BEST PLATFORM — ONE canonical answer ────────────────────────────
   // "Unknown" is the CSV parser's undetected-platform bucket (see
@@ -1089,11 +1157,30 @@ export function aggregateRows(tips, tz = null) {
   // underneath the claim — and platforms with no measurable streamed hours
   // are excluded, because "most profitable per hour" is meaningless without
   // a denominator.
+  // A platform may only be presented as the creator's BEST once its own
+  // sample is trustworthy. Previously the only filters were "not Unknown"
+  // and "rate > 0", so a platform with a single lucky session outranked one
+  // with a hundred: on the owner's account Chaturbate (4 sessions, 3.8
+  // hours) was crowned over BongaCams (99 sessions, 126.6 hours).
+  //
+  // The gate is calculateConfidence()'s existing Medium band ("Likely
+  // pattern") — the same bands used account-wide, scoped per platform. No
+  // new threshold is introduced.
+  //
+  // Platforms below Medium are NOT hidden: they keep their figures and their
+  // confidence label, they simply cannot be called "best". With fewer than
+  // two rankable platforms the comparison stays DEVELOPING via the existing
+  // capForComparison rule in lib/intelligence/readiness.js.
+  const RANKABLE_CONFIDENCE = new Set(['Medium', 'High'])
   const rankablePlatforms = platforms.filter(
-    p => p.platform !== UNDETECTED_PLATFORM && p.usdPerHour > 0
+    p => p.platform !== UNDETECTED_PLATFORM &&
+         p.medianUsdPerHour > 0 &&
+         RANKABLE_CONFIDENCE.has(p.confidenceLevel)
   )
+  // Ranked by MEDIAN session $/hour — outlier-resistant, and the same
+  // statistic every other ranked surface uses.
   const bestPlatformByRate = rankablePlatforms.length
-    ? [...rankablePlatforms].sort((a, b) => b.usdPerHour - a.usdPerHour)[0]
+    ? [...rankablePlatforms].sort((a, b) => b.medianUsdPerHour - a.medianUsdPerHour)[0]
     : null
 
   const topTippers = whales.map((w, i) => ({

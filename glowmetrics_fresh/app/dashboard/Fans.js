@@ -1,5 +1,5 @@
 "use client"
-import { useMemo } from "react"
+import { useMemo, useState } from "react"
 
 // ═══════════════════════════════════════════════════════════════════════════
 // FANS
@@ -38,6 +38,10 @@ const glassCard = {
 }
 const CTA_GRADIENT = "linear-gradient(90deg,#22D3EE 0%,#7C5CFF 48%,#EC4899 100%)"
 const card = (extra = {}) => ({ ...glassCard, borderRadius: 16, padding: 22, ...extra })
+// How many roster rows render before "Show more". A rendering budget, not a
+// plan limit — every fan is present in the list for free users and Pro alike.
+const ROSTER_PAGE_SIZE = 25
+
 const sectionLabel = { fontSize: 12, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: C.text }
 
 const fmtUsd = (n) => `$${Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -220,6 +224,24 @@ export default function Fans({
 
   const hasAnyFans = whales.length > 0
 
+  // ── FULL ROSTER (free) ────────────────────────────────────────────
+  // Ranked once by lifetime value so #1 is stable regardless of the search
+  // term, then filtered. isTopSupporter is read from the canonical fan
+  // fields (identifyWhales) — never recomputed here.
+  const [fanQuery, setFanQuery] = useState("")
+  const [rosterPage, setRosterPage] = useState(1)
+  const ranked = useMemo(
+    () => [...whales]
+      .sort((a, b) => (b.totalUSD || 0) - (a.totalUSD || 0))
+      .map((f, i) => ({ ...f, rank: i + 1 })),
+    [whales]
+  )
+  const roster = useMemo(() => {
+    const q = fanQuery.trim().toLowerCase()
+    return q ? ranked.filter(f => f.username.toLowerCase().includes(q)) : ranked
+  }, [ranked, fanQuery])
+  const visibleRosterCount = rosterPage * ROSTER_PAGE_SIZE
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
 
@@ -347,26 +369,84 @@ export default function Fans({
         </div>
       )}
 
-      {/* ── ALL SUPPORTERS ─────────────────────────────────────────── */}
+      {/* ── ALL SUPPORTERS — the full roster, free ──────────────────
+          Every fan the creator has, searchable, with the observed facts
+          about each: platform, first and last interaction, tip count,
+          lifetime value. These are all recorded events, not predictions —
+          which is why they carry no confidence state and are not gated.
+
+          What stays Pro is the INTELLIGENCE above (cadence, churn, timing,
+          re-engagement), not the creator's ability to see her own fans.
+          Approved 2026-08-26. */}
       {hasAnyFans && (
         <div style={card()}>
-          <div style={{ ...sectionLabel, marginBottom: 6 }}>All supporters</div>
-          <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 14 }}>
-            Ranked by lifetime tips{!isPro && whales.length > freeFanLimit ? ` · showing your top ${freeFanLimit}` : ""}
+          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 6 }}>
+            <div style={sectionLabel}>All supporters</div>
+            <div style={{ fontSize: 11.5, color: C.muted }}>
+              {roster.length === whales.length
+                ? `${whales.length.toLocaleString()} total`
+                : `${roster.length.toLocaleString()} of ${whales.length.toLocaleString()}`}
+            </div>
           </div>
+          <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 12 }}>
+            Ranked by lifetime tips · everything here is observed history
+          </div>
+
+          <input
+            value={fanQuery}
+            onChange={(e) => setFanQuery(e.target.value)}
+            placeholder="Search supporters by name…"
+            aria-label="Search supporters by name"
+            style={{
+              width: "100%", padding: "10px 13px", marginBottom: 12,
+              background: "rgba(5,9,24,0.72)", border: `1px solid ${C.border}`,
+              borderRadius: 10, color: C.white, fontSize: 13, outline: "none",
+            }}
+          />
+
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {(isPro ? whales : whales.slice(0, freeFanLimit)).map((f, i) => (
-              <div key={f.username} style={{
+            {roster.slice(0, visibleRosterCount).map((f) => (
+              <div key={`${f.platform}:${f.username}`} style={{
                 display: "flex", alignItems: "center", gap: 12, padding: "11px 14px", borderRadius: 10,
-                background: "rgba(255,255,255,0.03)", border: `1px solid ${C.border}`,
+                background: "rgba(255,255,255,0.03)", border: `1px solid ${C.border}`, flexWrap: "wrap",
               }}>
-                <span style={{ fontSize: 11.5, color: C.muted, width: 22, flexShrink: 0 }}>#{i + 1}</span>
-                <span style={{ fontSize: 13.5, fontWeight: 700, color: C.white, flex: 1, minWidth: 0, overflowWrap: "anywhere" }}>{f.username}</span>
+                <span style={{ fontSize: 11.5, color: C.muted, width: 26, flexShrink: 0 }}>#{f.rank}</span>
+                <span style={{ fontSize: 13.5, fontWeight: 700, color: C.white, flex: 1, minWidth: 120, overflowWrap: "anywhere" }}>
+                  {f.username}
+                  {f.isTopSupporter && (
+                    <span style={{
+                      marginLeft: 8, fontSize: 9.5, fontWeight: 800, letterSpacing: "0.06em",
+                      textTransform: "uppercase", color: C.gold, padding: "2px 7px", borderRadius: 99,
+                      background: "rgba(245,158,11,0.10)", border: "1px solid rgba(245,158,11,0.28)",
+                      whiteSpace: "nowrap",
+                    }}>Top Supporter</span>
+                  )}
+                </span>
+                {f.platform && <span style={{ fontSize: 11, color: C.muted, whiteSpace: "nowrap" }}>{f.platform}</span>}
                 <span style={{ fontSize: 11.5, color: C.muted, whiteSpace: "nowrap" }}>{f.tipCount} tips</span>
+                <span style={{ fontSize: 11.5, color: C.muted, whiteSpace: "nowrap" }}>last {fmtDays(f.daysSinceLastTip)}</span>
                 <span style={{ fontSize: 13.5, fontWeight: 700, color: C.green, whiteSpace: "nowrap" }}>{fmtUsd(f.totalUSD)}</span>
               </div>
             ))}
+            {roster.length === 0 && (
+              <div style={{ fontSize: 12.5, color: C.muted, padding: "10px 2px" }}>
+                No supporter matches “{fanQuery}”.
+              </div>
+            )}
           </div>
+
+          {roster.length > visibleRosterCount && (
+            <button
+              onClick={() => setRosterPage((n) => n + 1)}
+              style={{
+                marginTop: 12, width: "100%", padding: "10px", borderRadius: 10,
+                background: "rgba(255,255,255,0.04)", border: `1px solid ${C.border}`,
+                color: C.text, fontSize: 12.5, fontWeight: 700, cursor: "pointer",
+              }}
+            >
+              Show {Math.min(ROSTER_PAGE_SIZE, roster.length - visibleRosterCount)} more
+            </button>
+          )}
         </div>
       )}
     </div>
