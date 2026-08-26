@@ -455,7 +455,12 @@ export function computeIntelligence({ analytics, profile = null, now = new Date(
           (x.weight * (1 - (STATE_CREDIT[out[x.id]?.state] ?? 0)))
         )
         .slice(0, 3)
-        .map(d => ({ id: d.id, label: d.label, ...out[d.id].nextMilestone })),
+        // insightLabel is the INSIGHT's name ("Peak earning window");
+        // label/remaining/unit come from nextMilestone and describe the ACTION
+        // ("2 more sessions in this window"). Kept under distinct keys because
+        // spreading nextMilestone over a `label` key silently clobbered the
+        // insight name, leaving callers unable to say what the evidence is for.
+        .map(d => ({ id: d.id, insightLabel: d.label, ...out[d.id].nextMilestone })),
     },
     gates: Object.fromEntries(INSIGHTS.map(d => [d.id, d.gate])),
     computedAt: now.toISOString(),

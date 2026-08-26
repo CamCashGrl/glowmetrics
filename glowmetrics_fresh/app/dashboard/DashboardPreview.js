@@ -18,6 +18,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { isProPlan } from '../../lib/plan'
+import { FREE_MAX_PLATFORMS } from '../../lib/planLimits'
 
 // ── BRAND TOKENS ─────────────────────────────────────────────
 const C = {
@@ -126,7 +127,9 @@ export function getPlanAccess(userPlan = 'free', trackedPlatformCount = 0, planE
     canTrackMultiplePlatforms: isPro,
     canComparePlatforms: isPro,
     canUseCrossPlatformInsights: isPro,
-    freePlatformLimitReached: !isPro && trackedPlatformCount >= 1,
+    // Matches what the database enforces (enforce_free_tier_platform_limit):
+    // free tracks up to FREE_MAX_PLATFORMS, not one.
+    freePlatformLimitReached: !isPro && trackedPlatformCount >= FREE_MAX_PLATFORMS,
   }
 }
 
@@ -138,7 +141,7 @@ export function getFeatureLockState({ feature, userPlan = 'free', planExpiresAt 
     topFans:               { needsData: totalFans < 5 || totalTips < 10, requiresPro: false, dataMessage: 'Unlocks after more fan and tip activity.', proMessage: null },
     whales:                { needsData: totalFans < 10 || totalEarnings < 50, requiresPro: false, dataMessage: 'Unlocks after enough repeat fan activity.', proMessage: null },
     platformComparison:    { needsData: isPro && platformCount < 2, requiresPro: !isPro, dataMessage: 'Import at least 2 platforms to compare earnings.', proMessage: 'Upgrade to Pro to compare earnings across platforms.' },
-    multiPlatformTracking: { needsData: false, requiresPro: !isPro, dataMessage: null, proMessage: 'Upgrade to Pro to track more than one platform.' },
+    multiPlatformTracking: { needsData: false, requiresPro: !isPro && platformCount >= FREE_MAX_PLATFORMS, dataMessage: null, proMessage: `Free tracks up to ${FREE_MAX_PLATFORMS} platforms. Upgrade to Pro to add more.` },
     crossPlatformBestTimes:{ needsData: isPro && (platformCount < 2 || totalSessions < 3), requiresPro: !isPro, dataMessage: 'Import sessions from at least 2 platforms to unlock cross-platform timing insights.', proMessage: 'Upgrade to Pro to unlock cross-platform best times.' },
     sessionPerformance:    { needsData: totalSessions < 3, requiresPro: false, dataMessage: 'Unlocks after multiple completed sessions.', proMessage: null },
     averageHourly:         { needsData: totalSessions < 3 || totalStreamMinutes < 60, requiresPro: false, dataMessage: 'Unlocks after at least 60 minutes of tracked stream time.', proMessage: null },
@@ -173,7 +176,7 @@ export function getModuleLockState({ module, totalTips = 0, totalSessions = 0, t
     whales:               { needsData: totalFans < 10 || totalEarnings < 50,          message: 'Whale detection unlocks after enough repeat fan history.' },
     sessionBreakdown:     { needsData: totalSessions < 3,                             message: 'Session Breakdown unlocks after multiple completed sessions.' },
     platformROI:          { needsData: importedPlatformCount < 2, requiresPro: !isPro && importedPlatformCount >= 1, message: !isPro ? 'Platform ROI unlocks after upgrading to Pro and importing at least 2 platforms.' : 'Import at least 2 platforms to compare earnings.' },
-    multiPlatformTracking:{ needsData: false, requiresPro: !isPro,                   message: 'Upgrade to Pro to track more than one platform.' },
+    multiPlatformTracking:{ needsData: false, requiresPro: !isPro && importedPlatformCount >= FREE_MAX_PLATFORMS, message: `Free tracks up to ${FREE_MAX_PLATFORMS} platforms. Upgrade to Pro to add more.` },
     fanRecovery:          { needsData: totalFans < 20 || totalEarnings < 50,          message: 'Fan Recovery unlocks after enough repeat fan history.' },
     moneyMap:             { needsData: totalTips < 50 || totalSessions < 5,           message: 'Money Map unlocks after 50+ tips and 5+ meaningful sessions.' },
     streamPlanner:        { needsData: totalTips < 25 || totalSessions < 3,           message: 'Stream Planner unlocks after 25+ tips and 3+ meaningful sessions.' },
@@ -529,11 +532,11 @@ export function DashboardPreview({ tips = [], analytics, userPlan = 'free', plan
               ) : platformCount === 0 ? (
                 <>
                   <div style={{ fontSize: 13, fontWeight: 800, color: C.white, marginBottom: 4 }}>Free plan</div>
-                  <div style={{ fontSize: 12, color: C.text, lineHeight: 1.6 }}>Track 1 platform for free. Choose your first platform to start building your dashboard.</div>
+                  <div style={{ fontSize: 12, color: C.text, lineHeight: 1.6 }}>Track up to {FREE_MAX_PLATFORMS} platforms for free. Choose your first platform to start building your dashboard.</div>
                 </>
               ) : (
                 <>
-                  <div style={{ fontSize: 13, fontWeight: 800, color: C.white, marginBottom: 4 }}>Free plan · 1 platform active</div>
+                  <div style={{ fontSize: 13, fontWeight: 800, color: C.white, marginBottom: 4 }}>Free plan · {platformCount} of {FREE_MAX_PLATFORMS} platforms active</div>
                   <div style={{ fontSize: 12, color: C.text, lineHeight: 1.6 }}>You're tracking <strong style={{ color: C.cyan }}>{platforms[0]}</strong> for free. Upgrade to Pro when you're ready to track more platforms and compare where you earn best.</div>
                 </>
               )}
@@ -551,7 +554,7 @@ export function DashboardPreview({ tips = [], analytics, userPlan = 'free', plan
           </div>
           {!isPro && (
             <div style={{ marginTop: 12, fontSize: 11, color: C.muted, padding: '8px 12px', borderRadius: 10, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
-              Your free plan includes 1 active platform. Pro unlocks multi-platform tracking and comparisons. You can keep tracking 1 platform for free forever.
+              Your free plan includes up to {FREE_MAX_PLATFORMS} active platforms. Pro unlocks unlimited platforms and the full cross-platform comparison. Your free platforms stay free forever.
             </div>
           )}
         </div>
@@ -628,7 +631,7 @@ export function DashboardPreview({ tips = [], analytics, userPlan = 'free', plan
           <SnapshotMetricCard
             label="Platforms"
             value={platformCount > 0 ? platforms.join(', ') : 'None yet'}
-            helper={isPro ? 'Pro multi-platform tracking enabled' : 'Free plan tracks 1 platform'}
+            helper={isPro ? 'Pro multi-platform tracking enabled' : `Free plan tracks up to ${FREE_MAX_PLATFORMS} platforms`}
             status={platformCount > 0 ? 'ready' : 'locked'}
           />
         </div>
@@ -719,7 +722,7 @@ export function DashboardPreview({ tips = [], analytics, userPlan = 'free', plan
           <TopAccent color="rgba(124,92,255,0.4)" />
           {platformCount === 0 ? (
             <>
-              <div style={{ fontSize: 14, fontWeight: 800, color: C.white, marginBottom: 6 }}>Choose 1 platform to track for free</div>
+              <div style={{ fontSize: 14, fontWeight: 800, color: C.white, marginBottom: 6 }}>Choose up to {FREE_MAX_PLATFORMS} platforms to track for free</div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: 10, marginTop: 14 }}>
                 {ALL_PLATFORMS.map(p => (
                   <button key={p} onClick={onAddHistory} style={{ padding: '10px 14px', borderRadius: 12, border: '1px solid rgba(34,211,238,0.25)', background: 'rgba(34,211,238,0.05)', color: C.white, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>

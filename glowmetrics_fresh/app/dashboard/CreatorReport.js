@@ -3,6 +3,7 @@
 import { useEffect } from "react"
 import { track as gtmTrack } from "../../lib/track"
 import { PLATFORM_TOKEN_RATES } from "../../lib/constants"
+import { resolveCurrentMonthGrowth } from "../../lib/analytics"
 
 /*
   CREATOR REPORT
@@ -64,6 +65,29 @@ const C = {
   card2: "rgba(15,20,32,0.72)",
   border: "rgba(255,255,255,0.09)",
 }
+
+// ------------------------------------------------------------
+// CONFIDENCE VOCABULARY
+//
+// The only place this component spells a confidence word. Values are the
+// canonical INSIGHT_STATE ladder from lib/intelligence/states.js — this map
+// is presentation only and introduces no new state, threshold or ordering.
+// ------------------------------------------------------------
+
+const STATE_LABEL = {
+  NOT_AVAILABLE: "Not available yet",
+  CALIBRATING: "Calibrating",
+  EARLY_SIGNAL: "Early Signal",
+  DEVELOPING: "Building Pattern",
+  SUPPORTED: "Supported Pattern",
+  HIGH_CONFIDENCE: "High Confidence",
+  ESTABLISHED: "Established",
+}
+
+// States at which a finding may be stated as fact rather than hedged. Mirrors
+// CLAIMABLE_FLOOR (SUPPORTED) — below this the copy must never say "best",
+// "peak" or "your strongest".
+const CLAIMABLE = new Set(["SUPPORTED", "HIGH_CONFIDENCE", "ESTABLISHED"])
 
 // ------------------------------------------------------------
 // FORMATTERS
@@ -309,68 +333,63 @@ function ProButton({
 // ------------------------------------------------------------
 
 function CalibrationCard({
-  tipsCount,
-  sessionCount,
-  platformCount,
+  calibration,
+  reportState,
   isPro,
   onImport,
-  hasBestWindow,
-  hourlyRateUnlocked,
+  nextEvidence,
 }) {
   /*
-    These are product-progress milestones, not analytics formulas.
+    READS ONLY. The local four-boolean percentage that used to live here was a
+    checklist, not readiness — it disagreed with getDashboardReadiness(),
+    getUnlockProgress() and getModuleLockState(), which is exactly the
+    four-competing-systems problem. Everything below now comes from
+    computeIntelligence() (lib/intelligence/readiness.js), the one canonical
+    source, so the Creator Report, the dashboard and future surfaces cannot
+    drift apart.
 
-    The hourly-rate milestone mirrors the existing dashboard's actual
-    eligibility messaging: 3 eligible sessions + 60 tracked minutes.
+    `calibration.pct` is evidence-weighted: each insight contributes its weight
+    in proportion to how far up the confidence ladder it has actually climbed.
+    It is not "percent of a checklist ticked".
   */
 
-  const tipReady = tipsCount >= 10
-  const sessionReady = sessionCount >= 2
-  const timingReady = Boolean(hasBestWindow)
-  const hourlyReady = Boolean(hourlyRateUnlocked)
+  const pct = calibration?.pct ?? 0
+  const ev = calibration?.evidence || {}
+  const established = calibration?.establishedCount ?? 0
+  const building = calibration?.buildingCount ?? 0
 
-  const milestones = [
-    {
-      label: "Earnings",
-      ready: tipsCount > 0,
-    },
-    {
-      label: "Session patterns",
-      ready: sessionReady,
-    },
-    {
-      label: "Timing patterns",
-      ready: timingReady,
-    },
-    {
-      label: "$/hour confidence",
-      ready: hourlyReady,
-    },
-  ]
+  // The label comes from the ladder, never from the percentage.
+  const stateLabel = STATE_LABEL[reportState] || "Calibrating"
 
-  const completed = milestones.filter(m => m.ready).length
-
-  const calibration = Math.round(
-    (completed / milestones.length) * 100
-  )
-
-  let headline = "Your Creator Report is warming up"
+  let headline = "Your report is calibrating"
   let subhead =
-    "CamCash is learning your earning patterns. Keep importing history and the report will become more precise."
+    "CamCash is collecting evidence from your history. Nothing is being claimed yet."
 
-  if (completed >= 4) {
-    headline = "🔥 Creator Report is fully calibrated"
+  if (established >= 8) {
+    headline = "🔥 Your report is fully calibrated"
     subhead =
-      "You have enough history for CamCash to surface your strongest patterns. Pro can take those patterns deeper."
-  } else if (completed >= 3) {
+      "CamCash has enough evidence to state your strongest patterns with confidence. Pro turns them into a plan."
+  } else if (established >= 5) {
     headline = "📈 Your report just got smarter"
     subhead =
-      "CamCash has enough history to identify several meaningful patterns in your streams."
-  } else if (completed >= 2) {
+      "Several patterns in your history now have enough evidence behind them to rely on."
+  } else if (established >= 2) {
     headline = "🔮 Your report is finding patterns"
     subhead =
-      "You've given CamCash enough history to start identifying repeatable behavior."
+      "You have given CamCash enough history to start identifying repeatable behaviour."
+  } else if (building > 0) {
+    headline = "🌱 CamCash is learning your patterns"
+    subhead =
+      "Early signals are showing up. More sessions will turn them into reliable patterns."
   }
+
+  // Countable evidence, straight from the engine — never a synthetic score.
+  const evidenceChips = [
+    { label: "sessions analysed", value: ev.sessionsAnalyzed },
+    { label: "windows compared", value: ev.windowsCompared },
+    { label: "fans identified", value: ev.fansIdentified },
+    { label: "hours tracked", value: ev.streamedHours },
+  ].filter((chip) => Number(chip.value) > 0)
 
   return (
     <div
@@ -441,10 +460,10 @@ function CalibrationCard({
               marginTop: 2,
               fontSize: 24,
               fontWeight: 950,
-              color: calibration >= 75 ? C.green : C.cyan,
+              color: pct >= 75 ? C.green : C.cyan,
             }}
           >
-            {calibration}%
+            {pct}%
           </div>
         </div>
       </div>
@@ -460,7 +479,7 @@ function CalibrationCard({
       >
         <div
           style={{
-            width: `${Math.max(calibration, 7)}%`,
+            width: `${Math.max(pct, 7)}%`,
             height: "100%",
             borderRadius: 99,
             background:
@@ -472,48 +491,46 @@ function CalibrationCard({
 
       <div
         style={{
-          display: "grid",
-          gridTemplateColumns:
-            "repeat(auto-fit,minmax(145px,1fr))",
+          display: "flex",
+          flexWrap: "wrap",
           gap: 8,
           marginTop: 13,
         }}
       >
-        {milestones.map((milestone) => (
-          <div
-            key={milestone.label}
+        <span
+          style={{
+            padding: "5px 11px",
+            borderRadius: 99,
+            fontSize: 10,
+            fontWeight: 800,
+            letterSpacing: "0.05em",
+            textTransform: "uppercase",
+            color: C.cyan,
+            background: "rgba(34,211,238,0.09)",
+            border: "1px solid rgba(34,211,238,0.22)",
+          }}
+        >
+          {stateLabel}
+        </span>
+
+        {evidenceChips.map((chip) => (
+          <span
+            key={chip.label}
             style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              padding: "7px 9px",
-              borderRadius: 9,
-              background: milestone.ready
-                ? "rgba(16,185,129,0.07)"
-                : "rgba(255,255,255,0.025)",
-              border: `1px solid ${
-                milestone.ready
-                  ? "rgba(16,185,129,0.18)"
-                  : "rgba(255,255,255,0.06)"
-              }`,
+              padding: "5px 11px",
+              borderRadius: 99,
+              fontSize: 10.5,
+              fontWeight: 600,
+              color: C.muted,
+              background: "rgba(255,255,255,0.03)",
+              border: "1px solid rgba(255,255,255,0.07)",
             }}
           >
-            <span style={{ fontSize: 12 }}>
-              {milestone.ready ? "✓" : "○"}
-            </span>
-
-            <span
-              style={{
-                fontSize: 10,
-                fontWeight: 700,
-                color: milestone.ready
-                  ? C.green
-                  : C.muted,
-              }}
-            >
-              {milestone.label}
-            </span>
-          </div>
+            <strong style={{ color: C.white, fontWeight: 800 }}>
+              {chip.value}
+            </strong>{" "}
+            {chip.label}
+          </span>
         ))}
       </div>
 
@@ -537,9 +554,9 @@ function CalibrationCard({
               color: C.muted,
             }}
           >
-            {tipReady
-              ? "Your basic report is active. Keep importing to improve pattern confidence."
-              : `Import ${Math.max(1, 10 - tipsCount)} more tip${10 - tipsCount === 1 ? "" : "s"} to unlock more basic report signals.`}
+            {nextEvidence
+              ? `Next: ${nextEvidence.label} to strengthen ${nextEvidence.insightLabel.toLowerCase()}.`
+              : "Keep importing history and CamCash keeps sharpening these patterns."}
           </div>
 
           <button
@@ -558,6 +575,232 @@ function CalibrationCard({
             Import More History
           </button>
         </div>
+      )}
+    </div>
+  )
+}
+
+// ------------------------------------------------------------
+// PEAK WINDOW — the report's headline discovery
+//
+// Three states, all decided by the intelligence layer:
+//   claimable      -> a real finding, stated plainly, then the Pro CTA
+//   early signal   -> the engine's own canonicalBestTimes.earlySignal,
+//                     labelled as provisional and never called a peak
+//   neither        -> calibrating, with the exact evidence still required
+//
+// No threshold, confidence or window is computed here.
+// ------------------------------------------------------------
+
+function PeakWindowCard({
+  claimable,
+  window: win,
+  earlySignal,
+  state,
+  evidence,
+  platformLabel,
+  isPro,
+  onUpgrade,
+  onImport,
+}) {
+  const shown = claimable ? win : earlySignal
+  const hourLabel = shown
+    ? `${fmtHour(shown.localHour)}–${fmtHour((shown.localHour + 2) % 24)}`
+    : null
+
+  const accent = claimable ? C.gold : C.cyan
+  const bg = claimable
+    ? "linear-gradient(135deg,rgba(245,158,11,0.10),rgba(236,72,153,0.06))"
+    : "linear-gradient(135deg,rgba(34,211,238,0.07),rgba(168,85,247,0.05))"
+
+  return (
+    <div
+      style={{
+        position: "relative",
+        overflow: "hidden",
+        marginBottom: 18,
+        borderRadius: 20,
+        padding: "20px 22px",
+        background: bg,
+        border: `1px solid ${claimable ? "rgba(245,158,11,0.28)" : "rgba(34,211,238,0.18)"}`,
+      }}
+    >
+      <div
+        style={{
+          fontSize: 10.5,
+          fontWeight: 900,
+          letterSpacing: "0.09em",
+          textTransform: "uppercase",
+          color: accent,
+          marginBottom: 9,
+        }}
+      >
+        {claimable
+          ? "🔥 We found your peak streaming window"
+          : shown
+            ? "🌱 Your strongest window so far"
+            : "⏳ Finding your peak window"}
+      </div>
+
+      {shown ? (
+        <>
+          <div
+            style={{
+              fontSize: 24,
+              fontWeight: 950,
+              color: C.white,
+              lineHeight: 1.2,
+              marginBottom: 3,
+            }}
+          >
+            {shown.localDay} · {hourLabel}
+          </div>
+
+          {platformLabel && (
+            <div style={{ fontSize: 12.5, color: C.muted, marginBottom: 10 }}>
+              {platformLabel}
+            </div>
+          )}
+
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "4px 11px",
+              borderRadius: 99,
+              fontSize: 10,
+              fontWeight: 800,
+              letterSpacing: "0.05em",
+              textTransform: "uppercase",
+              color: accent,
+              background: claimable
+                ? "rgba(245,158,11,0.10)"
+                : "rgba(34,211,238,0.09)",
+              border: `1px solid ${claimable ? "rgba(245,158,11,0.26)" : "rgba(34,211,238,0.22)"}`,
+              marginBottom: 11,
+            }}
+          >
+            Confidence: {STATE_LABEL[state] || "Calibrating"}
+          </div>
+
+          <div
+            style={{
+              fontSize: 12.5,
+              lineHeight: 1.6,
+              color: C.muted,
+              maxWidth: 620,
+            }}
+          >
+            {claimable
+              ? evidence?.explanation ||
+                "Your history shows this window consistently outperforms your other comparable sessions."
+              : "Still building confidence — this is your strongest window so far, not yet a confirmed pattern."}
+          </div>
+
+          {!claimable && evidence?.nextMilestone?.label && (
+            <div
+              style={{
+                marginTop: 9,
+                fontSize: 11.5,
+                color: C.cyan,
+                fontWeight: 700,
+              }}
+            >
+              {evidence.nextMilestone.label} to confirm it.
+            </div>
+          )}
+        </>
+      ) : (
+        <div
+          style={{
+            fontSize: 12.5,
+            lineHeight: 1.6,
+            color: C.muted,
+            maxWidth: 620,
+          }}
+        >
+          {evidence?.explanation ||
+            "CamCash needs a few more qualifying sessions before it can identify a reliable earning window."}
+          {evidence?.nextMilestone?.label && (
+            <span style={{ color: C.cyan, fontWeight: 700 }}>
+              {" "}
+              {evidence.nextMilestone.label}.
+            </span>
+          )}
+        </div>
+      )}
+
+      {claimable && !isPro && (
+        <div
+          style={{
+            marginTop: 15,
+            paddingTop: 14,
+            borderTop: "1px solid rgba(255,255,255,0.08)",
+          }}
+        >
+          <div
+            style={{
+              fontSize: 13,
+              fontWeight: 800,
+              color: C.white,
+              marginBottom: 8,
+            }}
+          >
+            Want CamCash to turn this into your personalized streaming plan?
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: "5px 16px",
+              marginBottom: 13,
+            }}
+          >
+            {[
+              "A weekly schedule built around your own windows",
+              "Which platform to prioritise, and when",
+              "The windows worth testing next",
+            ].map((line) => (
+              <div
+                key={line}
+                style={{
+                  fontSize: 11.5,
+                  color: C.muted,
+                  display: "flex",
+                  gap: 6,
+                }}
+              >
+                <span style={{ color: C.green }}>✓</span>
+                {line}
+              </div>
+            ))}
+          </div>
+
+          <ProButton onClick={onUpgrade}>
+            Unlock My Personalized Plan
+          </ProButton>
+        </div>
+      )}
+
+      {!claimable && (
+        <button
+          onClick={onImport}
+          style={{
+            marginTop: 14,
+            border: "1px solid rgba(34,211,238,0.2)",
+            borderRadius: 9,
+            padding: "8px 13px",
+            cursor: "pointer",
+            fontSize: 11,
+            fontWeight: 800,
+            color: C.cyan,
+            background: "rgba(34,211,238,0.07)",
+          }}
+        >
+          Import More History
+        </button>
       )}
     </div>
   )
@@ -1154,6 +1397,11 @@ export default function CreatorReport({
   isPro = false,
   onUpgrade,
   engineInsights = null,
+  // The canonical readiness object (computeIntelligence()), passed in by
+  // page.js from the same analytics this component already reads. This
+  // component never computes confidence, progress or thresholds itself.
+  intelligence = null,
+  timezone = "UTC",
 }) {
   const safeAnalytics = analytics || {}
 
@@ -1199,19 +1447,26 @@ export default function CreatorReport({
   const hourlyRateTotalMinutes =
     safeAnalytics.hourlyRateTotalMinutes || 0
 
-  // Existing dashboard uses these fields to determine whether
-  // hourly rate is actually eligible.
-  const hourlyRateUnlocked =
-    hourlyRateSessionCount >= 3 &&
-    hourlyRateTotalMinutes >= 60
+  // ── CANONICAL INTELLIGENCE ────────────────────────────────
+  // Every confidence state below is read, never derived. The local
+  // `hourlyRateUnlocked` rule that used to sit here duplicated
+  // canShowHourlyRate() / getModuleLockState('avgHourlyRate'); it now comes
+  // from the one intelligence layer instead.
+  const insightStates = intelligence?.insights || {}
+  const stateOf = (id) => insightStates[id]?.state || "NOT_AVAILABLE"
+  const evidenceOf = (id) => insightStates[id] || null
+  const isClaimable = (id) => CLAIMABLE.has(stateOf(id))
 
-  const latestMonth =
-    monthlyData.length
-      ? monthlyData[monthlyData.length - 1]
-      : null
+  const hourlyRateUnlocked = isClaimable("hourly_rate")
 
-  const monthGrowthPct =
-    latestMonth?.growthPct ?? null
+  // monthlyData only holds months that HAVE data, so its last entry is NOT
+  // necessarily the current calendar month. Reading it directly meant a
+  // creator with no tips yet this month saw LAST month's growth labelled as
+  // this month's. resolveCurrentMonthGrowth() (lib/analytics.js) is the same
+  // answer the dashboard uses, so the two surfaces cannot disagree.
+  const growth = resolveCurrentMonthGrowth(monthlyData, timezone)
+  const monthGrowthPct = growth.growthPct
+  const growthStatus = growth.status
 
   const topSupporter =
     topTippers[0] || null
@@ -1246,8 +1501,35 @@ export default function CreatorReport({
   const hasEnoughSessions =
     meaningfulSessionCount >= 2
 
-  const hasBestWindow =
-    Boolean(canonicalBestWindow)
+  // ── PEAK WINDOW: three honest states, decided by the engine ──────────
+  // SUPPORTED+  -> a real finding, may be called a peak window
+  // below that  -> canonicalBestTimes.earlySignal, the engine's own
+  //                "strongest window so far, not yet reliable" answer.
+  //                Surfacing it is what makes the low-data report feel like a
+  //                system warming up rather than an empty page — and it needs
+  //                no new analytic, only rendering.
+  // neither     -> calibrating, with the exact remaining requirement
+  const peakWindowState = stateOf("peak_window")
+  const peakWindowEvidence = evidenceOf("peak_window")
+  const peakWindowIsClaimable = isClaimable("peak_window")
+
+  const hasBestWindow = Boolean(canonicalBestWindow) && peakWindowIsClaimable
+
+  const earlySignalWindow =
+    !peakWindowIsClaimable
+      ? safeAnalytics.canonicalBestTimes?.earlySignal || canonicalBestWindow || null
+      : null
+
+  // The overall label for the report header — the peak window is the report's
+  // headline insight, so its state is the report's state, with the account's
+  // own calibration as the floor.
+  const overallReportState =
+    (intelligence?.calibration?.establishedCount ?? 0) >= 5 && peakWindowIsClaimable
+      ? "HIGH_CONFIDENCE"
+      : peakWindowState
+
+  // "What would most improve confidence next", ranked by the engine.
+  const nextEvidence = intelligence?.calibration?.nextBestEvidence?.[0] || null
 
   const hasRichData =
     tipCount >= 100 &&
@@ -1266,11 +1548,15 @@ export default function CreatorReport({
   // INSIGHT STATES
   // ----------------------------------------------------------
 
+  // Presence of a value is not permission to call it a finding. Both cards
+  // now require their insight to be at SUPPORTED or above; below that they
+  // show the calibrating copy, which is what stops the report claiming a
+  // "best day" from a single lucky night.
   const bestDayReady =
-    Boolean(canonicalBestWindow?.localDay)
+    Boolean(canonicalBestWindow?.localDay) && isClaimable("peak_day")
 
   const bestTimeReady =
-    Boolean(canonicalBestWindow?.localHour != null)
+    Boolean(canonicalBestWindow?.localHour != null) && peakWindowIsClaimable
 
   const bestDayText =
     bestDayReady
@@ -1515,13 +1801,29 @@ export default function CreatorReport({
       ====================================================== */}
 
       <CalibrationCard
-        tipsCount={tipCount}
-        sessionCount={meaningfulSessionCount}
-        platformCount={platformCount}
+        calibration={intelligence?.calibration}
+        reportState={overallReportState}
         isPro={isPro}
         onImport={handleImport}
-        hasBestWindow={hasBestWindow}
-        hourlyRateUnlocked={hourlyRateUnlocked}
+        nextEvidence={nextEvidence}
+      />
+
+      <PeakWindowCard
+        claimable={peakWindowIsClaimable}
+        window={canonicalBestWindow}
+        earlySignal={earlySignalWindow}
+        state={peakWindowState}
+        evidence={peakWindowEvidence}
+        platformLabel={
+          (peakWindowIsClaimable ? canonicalBestWindow : earlySignalWindow)?.topPlatform
+            ? displayPlatform(
+                (peakWindowIsClaimable ? canonicalBestWindow : earlySignalWindow).topPlatform
+              )
+            : null
+        }
+        isPro={isPro}
+        onUpgrade={onUpgrade}
+        onImport={handleImport}
       />
 
       {/* ======================================================
@@ -1543,9 +1845,11 @@ export default function CreatorReport({
           label="Total Earnings"
           value={fmtUsd(totalUSD)}
           sub={
-            monthGrowthPct !== null
-              ? `${monthGrowthPct >= 0 ? "↑" : "↓"} ${Math.abs(monthGrowthPct)}% vs last month`
-              : `${fmtNumber(tipCount)} tips tracked`
+            growthStatus === "current" && monthGrowthPct !== null
+              ? `${monthGrowthPct >= 0 ? "↑" : "↓"} ${Math.abs(monthGrowthPct)}% this month vs last`
+              : growthStatus === "no_current_month"
+                ? "No earnings recorded yet this month"
+                : `${fmtNumber(tipCount)} tips tracked`
           }
         />
 
@@ -1710,7 +2014,9 @@ export default function CreatorReport({
           >
             {bestDayReady
               ? `Your strongest day so far is ${canonicalBestWindow.localDay}.`
-              : "More variance is needed before CamCash can confidently isolate your strongest day."}
+              : evidenceOf("peak_day")?.nextMilestone?.label
+                ? `${evidenceOf("peak_day").nextMilestone.label} before CamCash can isolate your strongest day.`
+                : "More variance is needed before CamCash can confidently isolate your strongest day."}
           </InsightState>
 
           <InsightState
@@ -1725,7 +2031,9 @@ export default function CreatorReport({
           >
             {bestTimeReady
               ? `Your strongest window currently centers around ${fmtHour(canonicalBestWindow.localHour)}.`
-              : "CamCash is still collecting enough session history to identify a reliable timing pattern."}
+              : peakWindowEvidence?.nextMilestone?.label
+                ? `${peakWindowEvidence.nextMilestone.label} before this window can be confirmed.`
+                : "CamCash is still collecting enough session history to identify a reliable timing pattern."}
           </InsightState>
 
           <InsightState

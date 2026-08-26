@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '../../lib/supabase'
 // Token rates — single source of truth, never hardcode below this line
 import { PLATFORM_TOKEN_RATES, tokenRate } from '../../lib/constants'
+import { FREE_MAX_PLATFORMS } from '../../lib/planLimits'
 import { track } from '../../lib/track'
 import { isProPlan } from '../../lib/plan'
 import OnboardingExitSurvey from '@/components/OnboardingExitSurvey'
@@ -399,7 +400,7 @@ function ProUpsellModal({platform,onSkip}){
         <div style={{textAlign:'center',marginBottom:16}}>
           <div style={{fontSize:11,fontWeight:900,letterSpacing:'0.1em',textTransform:'uppercase',color:'#a78bfa',marginBottom:8}}>Unlock All Platforms</div>
           <h2 style={{fontSize:20,fontWeight:900,color:'#fff',marginBottom:6}}>You're adding {platform.label}</h2>
-          <p style={{fontSize:13,color:'rgba(148,163,184,0.8)',lineHeight:1.6}}>Multi-platform tracking is a Pro feature. Upgrade to sync all platforms and see your full earnings picture.</p>
+          <p style={{fontSize:13,color:'rgba(148,163,184,0.8)',lineHeight:1.6}}>Your free plan already tracks {FREE_MAX_PLATFORMS} platforms. Upgrade to add every platform you work and see your full earnings picture.</p>
         </div>
         <div style={{marginBottom:16}}>
           <div style={{background:'rgba(167,139,250,0.08)',border:'1.5px solid rgba(167,139,250,0.4)',borderRadius:14,padding:16,position:'relative'}}>
@@ -413,7 +414,7 @@ function ProUpsellModal({platform,onSkip}){
         <div style={{background:'rgba(33,230,243,0.06)',border:'1px solid rgba(33,230,243,0.15)',borderRadius:10,padding:'10px 14px',marginBottom:14,fontSize:12,color:'rgba(148,163,184,0.8)',textAlign:'center'}}>
           ✅ <span style={{color:'#fff'}}>Nothing is locked during your trial</span> — every platform and every insight is included for 7 days.
         </div>
-        <div style={{textAlign:'center'}}><button onClick={onSkip} style={{background:'none',border:'none',fontSize:12,color:'rgba(100,116,139,0.7)',cursor:'pointer',textDecoration:'underline'}}>Skip for now — continue with one platform</button></div>
+        <div style={{textAlign:'center'}}><button onClick={onSkip} style={{background:'none',border:'none',fontSize:12,color:'rgba(100,116,139,0.7)',cursor:'pointer',textDecoration:'underline'}}>Skip for now — keep my current platforms</button></div>
       </div>
     </div>
   )
@@ -668,7 +669,7 @@ export default function OnboardingPage(){
   }
 
   function selectPlatform(id){
-    if(userPlan!=='pro'&&importedPlatforms.length>0&&!importedPlatforms.includes(id)){setPendingPlatform(id);setShowUpsell(true);return}
+    if(userPlan!=='pro'&&importedPlatforms.length>=FREE_MAX_PLATFORMS&&!importedPlatforms.includes(id)){setPendingPlatform(id);setShowUpsell(true);return}
     setPlatformId(id)
     if(id==='chaturbate')setStep('username');else setStep('paste')
   }

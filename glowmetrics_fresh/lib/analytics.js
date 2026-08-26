@@ -844,6 +844,80 @@ export function computeBestTimes(tips, tz = null) {
   return { bestDay, worstDay, bestHour, earlySignalHour }
 }
 
+/**
+ * CURRENT-MONTH GROWTH — the single source of truth for "how am I doing
+ * this month vs last month".
+ *
+ * monthlyData only contains months that actually HAVE tip data, so the last
+ * entry in the array is NOT necessarily the current calendar month. A creator
+ * who has not tipped yet this month would otherwise see last month's revenue
+ * and growth figure presented as this month's performance.
+ *
+ * Extracted verbatim from app/dashboard/page.js's month-over-month block
+ * (which already solved this) so Creator Report reads the same answer instead
+ * of re-deriving it and disagreeing with the dashboard.
+ *
+ * @param {Array} monthlyData - aggregateRows().monthlyData, ascending by month
+ * @param {string} tz - the creator's resolved timezone (lib/timezone.js)
+ * @param {Date} [now] - injectable for tests
+ * @returns {{
+ *   status: 'current'|'no_current_month'|'insufficient_data',
+ *   monthKey: string|null, thisMonth: object|null, prevMonth: object|null,
+ *   growthPct: number|null, thisRevenue: number, prevRevenue: number,
+ *   lastMonthWithData: object|null
+ * }}
+ *   status 'current'            -> there IS current-month data; growthPct is
+ *                                  this month's, safe to label as such
+ *   status 'no_current_month'   -> months exist but none is the current one;
+ *                                  growthPct is null. NEVER present
+ *                                  lastMonthWithData as current performance —
+ *                                  it is exposed only so the UI can say
+ *                                  "no earnings recorded yet this month".
+ *   status 'insufficient_data'  -> fewer than 2 months to compare at all
+ */
+export function resolveCurrentMonthGrowth(monthlyData = [], tz = 'UTC', now = new Date()) {
+  const months = Array.isArray(monthlyData) ? monthlyData : []
+  const lastMonthWithData = months.length ? months[months.length - 1] : null
+
+  let monthKey = null
+  try {
+    monthKey = new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(now).slice(0, 7)
+  } catch { monthKey = null }
+
+  const idx = monthKey ? months.findIndex(m => m.month === monthKey) : -1
+  const thisMonth = idx >= 0 ? months[idx] : null
+  const prevMonth = idx > 0 ? months[idx - 1] : null
+
+  if (!thisMonth) {
+    return {
+      status: months.length ? 'no_current_month' : 'insufficient_data',
+      monthKey, thisMonth: null, prevMonth: null,
+      growthPct: null, thisRevenue: 0, prevRevenue: 0,
+      lastMonthWithData,
+    }
+  }
+
+  // A first month of data has nothing to compare against — growthPct on that
+  // entry is not a comparison, so it must not be shown as one.
+  if (!prevMonth) {
+    return {
+      status: 'insufficient_data',
+      monthKey, thisMonth, prevMonth: null,
+      growthPct: null, thisRevenue: thisMonth.usd ?? 0, prevRevenue: 0,
+      lastMonthWithData,
+    }
+  }
+
+  return {
+    status: 'current',
+    monthKey, thisMonth, prevMonth,
+    growthPct: thisMonth.growthPct ?? null,
+    thisRevenue: thisMonth.usd ?? 0,
+    prevRevenue: prevMonth.usd ?? 0,
+    lastMonthWithData,
+  }
+}
+
 export function aggregateRows(tips, tz = null) {
   const userTz = tz || (typeof Intl !== 'undefined'
     ? Intl.DateTimeFormat().resolvedOptions().timeZone

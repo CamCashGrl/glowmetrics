@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
-import { parseCSV, detectPlatform, aggregateRows as runEngine, toLocalDow, toLocalHour } from "../../lib/analytics"
+import { parseCSV, detectPlatform, aggregateRows as runEngine, toLocalDow, toLocalHour, resolveCurrentMonthGrowth } from "../../lib/analytics"
 import { toLocalDateStr } from "../../lib/analytics/localTime"
 import { computeRoomHealth, ROOM_STATES, MOMENTUM_DIRECTIONS } from "../../lib/analytics/roomHealth"
 import { computeRevenueVelocity, computeLiveComparison } from "../../lib/analytics/velocity"
@@ -13,6 +13,8 @@ import dynamic from "next/dynamic"
 import Sidebar from "./Sidebar"
 import SiteFooter from "../components/SiteFooter"
 import { PLATFORM_TOKEN_RATES, tokenRate, normalizeRowPlatforms } from "../../lib/constants"
+import { FREE_MAX_PLATFORMS } from "../../lib/planLimits"
+import { computeIntelligence } from "../../lib/intelligence/readiness"
 import { track as gtmTrack } from '../../lib/track'
 import { isProPlan, trialDaysRemaining, getAccessState, TRIAL_DAYS } from '../../lib/plan'
 import { resolveCreatorTimezone, autoPopulateTimezoneIfMissing } from '../../lib/timezone'
@@ -37,8 +39,8 @@ const UPGRADE_COPY = {
     subhead: "You're only seeing a preview of your data. Here's what's waiting for you inside:",
   },
   multi_platform: {
-    headline: "You've tracked 1 platform",
-    subhead: "Compare all your platforms with Creator Pro to see exactly where you actually earn best.",
+    headline: "You've reached your free platforms",
+    subhead: "Free tracks up to 3 platforms. Creator Pro adds the rest, plus the cross-platform comparison that shows where you actually earn best.",
   },
   whales_cutoff: {
     headline: "You've found your top fans",
@@ -2566,7 +2568,11 @@ const stopImportMessageRotation = () => {
   // Performance rebuild, so it could never match anything again.
 
   const allPlatforms = memoOn(derivedCacheRef.current, 'allPlatforms', [tips], () => [...new Set(tips.map(t => t.platform))])
-  const freePlatformLimitReached = !isPro && allPlatforms.length > 0
+  // The free tier tracks up to FREE_MAX_PLATFORMS (3) — this is what the
+  // database actually enforces (enforce_free_tier_platform_limit). The gate
+  // here previously fired at the SECOND platform, contradicting the DB and
+  // blocking imports the backend would have accepted.
+  const freePlatformLimitReached = !isPro && allPlatforms.length >= FREE_MAX_PLATFORMS
 
   // ── Build "What's Next" alerts — smarter, personalized, prioritized
   const buildDailyBrief = () => {
@@ -2962,18 +2968,27 @@ const stopImportMessageRotation = () => {
   // hasn't tipped yet this month would otherwise see last month's revenue
   // mislabeled as "this month"). Match the real current-month key instead,
   // via the same resolved-timezone contract lib/timezone.js defines.
+  // This block's logic now lives in resolveCurrentMonthGrowth()
+  // (lib/analytics.js) so Creator Report reads the same answer rather than
+  // re-deriving it. Behaviour is unchanged — the function is this code,
+  // moved, with the states named.
   const _momMonthly = analytics?.monthlyData || []
   const _momTz = creatorTz // single resolved source, hoisted above platformTimes
-  const _momCurrentKey = (() => {
-    try { return new Intl.DateTimeFormat('en-CA', { timeZone: _momTz }).format(new Date()).slice(0, 7) }
-    catch { return null }
-  })()
-  const _momThisIdx = _momCurrentKey ? _momMonthly.findIndex(m => m.month === _momCurrentKey) : -1
-  const _momThisMonth = _momThisIdx >= 0 ? _momMonthly[_momThisIdx] : null
-  const _momPrevMonth = _momThisIdx > 0 ? _momMonthly[_momThisIdx - 1] : null
-  const _momThisRev = _momThisMonth?.usd ?? 0
-  const _momPrevRev = _momPrevMonth?.usd ?? 0
-  const growthPct = _momThisMonth?.growthPct ?? null
+  const _momGrowth = resolveCurrentMonthGrowth(_momMonthly, _momTz)
+  const _momThisMonth = _momGrowth.thisMonth
+  const _momPrevMonth = _momGrowth.prevMonth
+  const _momThisRev = _momGrowth.thisRevenue
+  const _momPrevRev = _momGrowth.prevRevenue
+  const growthPct = _momGrowth.growthPct
+
+  // ── CANONICAL INTELLIGENCE ────────────────────────────────────────────
+  // One readiness object, computed from the analytics already in hand, shared
+  // by every surface that needs a confidence state. computeIntelligence()
+  // performs no aggregation of its own — it only reads fields aggregateRows()
+  // already produced, so this is not a second analytics path.
+  const intelligence = memoOn(derivedCacheRef.current, 'intelligence', [analytics], () =>
+    analytics ? computeIntelligence({ analytics, profile }) : null
+  )
 
   // ── DASHBOARD READINESS — always renders real dashboard, module-level locking ─
   const {
@@ -3409,7 +3424,7 @@ const stopImportMessageRotation = () => {
 
         {activeTab === "report" && (
           <div style={{ animation: "fadeUp 0.3s ease" }}>
-            <CreatorReport analytics={analytics} tips={tips} isPro={isPro} onUpgrade={() => openUpgradeModal('creator_report')} engineInsights={engineInsights} />
+            <CreatorReport analytics={analytics} tips={tips} isPro={isPro} onUpgrade={() => openUpgradeModal('creator_report')} engineInsights={engineInsights} intelligence={intelligence} timezone={creatorTz} />
           </div>
         )}
 
@@ -4276,7 +4291,7 @@ const stopImportMessageRotation = () => {
           <div style={{ maxWidth: 600, margin: "0 auto" }}>
             <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 8 }}>📥 Import CSV</h1>
             <p style={{ fontSize: 14, color: C.muted, marginBottom: 12 }}>
-              {isPro ? "Unlimited platforms • Auto-removes duplicates" : freePlatformLimitReached ? `Free plan — tracking ${allPlatforms[0]}. Auto-removes duplicates.` : "Free plan tracks 1 platform. Auto-removes duplicates."}
+              {isPro ? "Unlimited platforms • Auto-removes duplicates" : freePlatformLimitReached ? `Free plan — tracking ${allPlatforms.length} of ${FREE_MAX_PLATFORMS} platforms. Auto-removes duplicates.` : `Free plan tracks up to ${FREE_MAX_PLATFORMS} platforms. Auto-removes duplicates.`}
             </p>
             <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: freePlatformLimitReached ? 16 : 32 }}>
               <a href="/blog/how-to-upload-csv-to-camcash" style={{ fontSize: 13, color: C.cyan, textDecoration: "none", fontWeight: 600 }}>📹 Watch the SOP: How to upload a CSV →</a>
@@ -4286,7 +4301,7 @@ const stopImportMessageRotation = () => {
               <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", borderRadius: 12, background: "rgba(168,85,247,0.08)", border: "1px solid rgba(168,85,247,0.25)", marginBottom: 16 }}>
                 <span style={{ fontSize: 18 }}>🔒</span>
                 <div style={{ flex: 1, fontSize: 12.5, color: C.text, lineHeight: 1.5 }}>
-                  You're on the free plan (1 platform). Upgrade to Pro to add BongaCams, MyFreeCams, and more.
+                  You're tracking all 3 platforms your free plan includes. Upgrade to Pro to add more.
                 </div>
                 <Button onClick={() => openUpgradeModal('multi_platform')} style={{ flexShrink: 0, padding: "8px 14px", fontSize: 12, whiteSpace: "nowrap" }}>Upgrade →</Button>
               </div>
@@ -4452,7 +4467,7 @@ const stopImportMessageRotation = () => {
               })() : (
                 <>
                   <p style={{ fontSize: 13, color: C.text, lineHeight: 1.65, marginBottom: 16 }}>
-                    The <strong style={{ color: C.white }}>free plan</strong> tracks <strong style={{ color: C.cyan }}>1 platform</strong> — import as much history as you want from it, no limits. A <strong style={{ color: C.white }}>subscription</strong> unlocks tracking <strong style={{ color: C.pink }}>multiple platforms at once</strong> and lets you compare which cam site pays you best by hour, day, and fan type.
+                    The <strong style={{ color: C.white }}>free plan</strong> tracks up to <strong style={{ color: C.cyan }}>{FREE_MAX_PLATFORMS} platforms</strong> — import as much history as you want, no limits. A <strong style={{ color: C.white }}>subscription</strong> unlocks <strong style={{ color: C.pink }}>unlimited platforms</strong> and the cross-platform analysis that shows which cam site pays you best by hour, day, and fan type.
                   </p>
                   <Button onClick={() => router.push('/pricing')} style={{ padding: "12px 26px", fontSize: 13 }}>
                     View Plans & Subscribe →
