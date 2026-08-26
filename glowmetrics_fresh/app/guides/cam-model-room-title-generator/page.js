@@ -1,4 +1,5 @@
 import TitleGeneratorClient from './TitleGeneratorClient'
+import ShopCrossLinks from '../../components/ShopCrossLinks'
 
 export const metadata = {
   title: 'Free Cam Room Title Generator + Hashtag Generator (2026)',
@@ -555,6 +556,7 @@ export default function TitleGeneratorPage() {
 
         </div>
       </div>
+      <ShopCrossLinks path="/guides/cam-model-room-title-generator" />
     </>
   )
 }

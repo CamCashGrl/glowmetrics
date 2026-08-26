@@ -1,4 +1,5 @@
 import FreeVipTrackerClient from './FreeVipTrackerClient'
+import ShopCrossLinks from '../components/ShopCrossLinks'
 
 export const metadata = {
   title: 'Free VIP Client Tracker | Printable PDF + Canva Template | CamCashGrl',
@@ -159,6 +160,12 @@ export default function FreeVipTrackerPage() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(softwareApplicationSchema) }}
       />
       <FreeVipTrackerClient />
+      <div style={{ padding: "0 24px 72px" }}>
+        <ShopCrossLinks
+          path="/free-vip-tracker"
+          heading="Printable VIP trackers from the Pretty Profitz shop"
+        />
+      </div>
     </>
   )
 }

@@ -1,4 +1,5 @@
 import Button from '../../../components/ui/Button'
+import ShopCrossLinks from '../../components/ShopCrossLinks'
 
 export const metadata = {
   title: 'Cam Model Analytics',
@@ -24,6 +25,7 @@ export default function CamModelAnalytics() {
           Open My Analytics Dashboard →
         </a>
       </div>
+      <ShopCrossLinks path="/guides/cam-model-analytics" />
     </div>
   )
 }

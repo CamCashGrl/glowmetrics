@@ -1,3 +1,5 @@
+import { PRODUCTS } from '../lib/shop-products'
+
 export default function sitemap() {
   const base = 'https://www.camcashgrl.com'
   const today = '2026-08-23'
@@ -11,6 +13,8 @@ export default function sitemap() {
     { url: `${base}/affiliates`,                      priority: 0.7, changeFrequency: 'monthly' },
     { url: `${base}/tools`,                           priority: 0.7, changeFrequency: 'monthly' },
     { url: `${base}/free-vip-tracker`,                priority: 0.8, changeFrequency: 'monthly' },
+    { url: `${base}/shop`,                            priority: 0.8, changeFrequency: 'weekly' },
+    { url: `${base}/guides`,                          priority: 0.7, changeFrequency: 'weekly' },
     { url: `${base}/tools/cam-model-name-generator`, priority: 0.7, changeFrequency: 'monthly' },
     { url: `${base}/tools/profile-studio`,            priority: 0.7, changeFrequency: 'monthly' },
     { url: `${base}/contact`,                         priority: 0.6, changeFrequency: 'monthly' },
@@ -103,6 +107,8 @@ export default function sitemap() {
     'cam-model-top-tippers',
     'chaturbate-best-hours',
     'chaturbate-earnings-tracker',
+    'chaturbate-room-title-generator',
+    'chaturbate-token-calculator',
     'chaturbate-token-tracker',
     'how-to-increase-cam-tips',
     'myfreecams-analytics',
@@ -122,5 +128,12 @@ export default function sitemap() {
     priority: 0.7,
   }))
 
-  return [...staticPages, ...blogPages, ...guidePages]
+  const shopPages = PRODUCTS.map(product => ({
+    url: `${base}/shop/${product.slug}`,
+    lastModified: today,
+    changeFrequency: 'monthly',
+    priority: 0.7,
+  }))
+
+  return [...staticPages, ...blogPages, ...guidePages, ...shopPages]
 }

@@ -1,4 +1,5 @@
 import Button from '../../../components/ui/Button'
+import ShopCrossLinks from '../../components/ShopCrossLinks'
 
 export const metadata = {
   title: 'Cam Model Session Breakdown',
@@ -24,6 +25,7 @@ export default function CamModelSessionBreakdown() {
           See My Session Breakdown →
         </a>
       </div>
+      <ShopCrossLinks path="/guides/cam-model-session-breakdown" />
     </div>
   )
 }

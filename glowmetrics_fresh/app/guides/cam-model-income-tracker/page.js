@@ -1,5 +1,6 @@
 import Image from 'next/image'
 import ArticleLayout from '../../components/ArticleLayout'
+import ShopCrossLinks from '../../components/ShopCrossLinks'
 
 export const metadata = {
   title: 'Free Cam Model Income Tracker: Earnings, Hours & Tips',
@@ -357,6 +358,7 @@ export default function CamModelIncomeTracker() {
           <a href="/blog/cam-model-earnings" style={s.relLink}>→ Cam model earnings: the complete guide</a>
         </div>
       </div>
+      <ShopCrossLinks path="/guides/cam-model-income-tracker" />
     </ArticleLayout>
   )
 }

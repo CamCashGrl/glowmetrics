@@ -1,4 +1,5 @@
 import ArticleLayout from '../../components/ArticleLayout'
+import ShopCrossLinks from '../../components/ShopCrossLinks'
 
 export const metadata = {
   title: 'Chaturbate Token Tracker: Track Tips, Tokens & Chaturbate Stats',
@@ -134,6 +135,7 @@ export default function ChaturbateTokenTracker() {
           <a href="/blog/cam-model-earnings" style={s.relLink}>→ Cam model earnings: the complete guide</a>
         </div>
       </div>
+      <ShopCrossLinks path="/guides/chaturbate-token-tracker" />
     </ArticleLayout>
   )
 }

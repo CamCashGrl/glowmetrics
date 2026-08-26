@@ -1,5 +1,6 @@
 import TokenCalculatorClient from '../cam-model-token-calculator/TokenCalculatorClient'
 import Button from '../../../components/ui/Button'
+import ShopCrossLinks from '../../components/ShopCrossLinks'
 
 export const metadata = {
   title: 'Chaturbate Token Calculator — Convert Tokens to USD Instantly | CamCash',
@@ -302,6 +303,7 @@ export default function ChaturbateTokenCalculatorPage() {
           <p style={{ fontSize: 12, color: S.muted }}>© 2026 CamCash — Built for cam models who want to grow</p>
         </footer>
       </div>
+      <ShopCrossLinks path="/guides/chaturbate-token-calculator" />
     </>
   )
 }
