@@ -1,4 +1,5 @@
 import Button from '../../../components/ui/Button'
+import ShopCrossLinks from '../../components/ShopCrossLinks'
 
 export const metadata = {
   title: 'Cam Model Top Tipper Tracker',
@@ -24,6 +25,7 @@ export default function CamModelTopTippers() {
           See My Top Tippers →
         </a>
       </div>
+      <ShopCrossLinks path="/guides/cam-model-top-tippers" />
     </div>
   )
 }

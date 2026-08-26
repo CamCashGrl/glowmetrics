@@ -1,3 +1,5 @@
+import { PRODUCTS } from '../lib/shop-products'
+
 export default function sitemap() {
   const base = 'https://www.camcashgrl.com'
   const today = '2026-08-23'
@@ -11,6 +13,8 @@ export default function sitemap() {
     { url: `${base}/affiliates`,                      priority: 0.7, changeFrequency: 'monthly' },
     { url: `${base}/tools`,                           priority: 0.7, changeFrequency: 'monthly' },
     { url: `${base}/free-vip-tracker`,                priority: 0.8, changeFrequency: 'monthly' },
+    { url: `${base}/shop`,                            priority: 0.8, changeFrequency: 'weekly' },
+    { url: `${base}/guides`,                          priority: 0.7, changeFrequency: 'weekly' },
     { url: `${base}/tools/cam-model-name-generator`, priority: 0.7, changeFrequency: 'monthly' },
     { url: `${base}/tools/profile-studio`,            priority: 0.7, changeFrequency: 'monthly' },
     { url: `${base}/contact`,                         priority: 0.6, changeFrequency: 'monthly' },
@@ -89,6 +93,17 @@ export default function sitemap() {
     'why-cam-model-data-prevents-overspending',
     'why-cam-streams-arent-making-money',
     'why-youre-not-making-money-on-chaturbate',
+    // New narrow-intent posts, August 2026
+    'how-long-does-chaturbate-new-tag-last',
+    'how-to-establish-yourself-on-bongacams',
+    'how-to-get-started-on-myfreecams-as-a-model',
+    'how-to-set-up-chat-bots-on-bongacams',
+    'how-to-set-up-chat-bots-on-chaturbate',
+    'how-to-set-up-split-streaming-on-multiple-cam-sites',
+    'how-to-structure-a-4-hour-cam-show',
+    'off-site-shows-for-cam-models',
+    'onlyfans-for-cam-models-after-streaming',
+    'snap-shows-for-cam-models',
   ]
 
   const guideSlugs = [
@@ -122,5 +137,12 @@ export default function sitemap() {
     priority: 0.7,
   }))
 
-  return [...staticPages, ...blogPages, ...guidePages]
+  const shopPages = PRODUCTS.map(product => ({
+    url: `${base}/shop/${product.slug}`,
+    lastModified: today,
+    changeFrequency: 'monthly',
+    priority: 0.7,
+  }))
+
+  return [...staticPages, ...blogPages, ...guidePages, ...shopPages]
 }

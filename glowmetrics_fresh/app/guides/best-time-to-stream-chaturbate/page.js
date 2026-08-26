@@ -1,6 +1,7 @@
 // app/guides/best-time-to-stream-chaturbate/page.js
 import { PeakHourCalculator, RevPerHourCalculator } from './BestTimeClient'
 import Button from '../../../components/ui/Button'
+import ShopCrossLinks from '../../components/ShopCrossLinks'
 
 export const metadata = {
   title: 'Best Time to Stream on Chaturbate in 2026 — Peak Hours',
@@ -1008,6 +1009,7 @@ export default function BestTimeToStreamPage() {
           <p style={{ fontSize: 12, color: '#475569' }}>© 2026 CamCash — Built for cam models who want to grow</p>
         </footer>
       </div>
+      <ShopCrossLinks path="/guides/best-time-to-stream-chaturbate" />
     </>
   )
 }

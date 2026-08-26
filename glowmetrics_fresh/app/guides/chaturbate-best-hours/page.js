@@ -1,4 +1,5 @@
 import ArticleLayout from '../../components/ArticleLayout'
+import ShopCrossLinks from '../../components/ShopCrossLinks'
 
 export const metadata = {
   title: 'Best Hours to Stream on Chaturbate: Find Your Highest-Earning Time',
@@ -341,6 +342,7 @@ export default function ChaturbateBestHours() {
           <a href="/blog/why-cam-income-is-inconsistent" style={s.relLink}>→ Why cam income is inconsistent</a>
         </div>
       </div>
+      <ShopCrossLinks path="/guides/chaturbate-best-hours" />
     </ArticleLayout>
   )
 }

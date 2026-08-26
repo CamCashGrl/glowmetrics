@@ -1,4 +1,5 @@
 import TitleGeneratorClient from '../cam-model-room-title-generator/TitleGeneratorClient'
+import ShopCrossLinks from '../../components/ShopCrossLinks'
 
 export const metadata = {
   title: 'Chaturbate Room Title Generator — Get More Tips With the Right Title | CamCash',
@@ -281,6 +282,7 @@ export default function ChaturbateRoomTitleGeneratorPage() {
           <p style={{ fontSize: 12, color: S.muted }}>© 2026 CamCash — Built for cam models who want to grow</p>
         </footer>
       </div>
+      <ShopCrossLinks path="/guides/chaturbate-room-title-generator" />
     </>
   )
 }

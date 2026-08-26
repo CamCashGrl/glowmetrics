@@ -624,6 +624,65 @@ export default function BongaCamsQueenOfQueensPage() {
         forecasting.
       </p>
 
+      <h2 style={s.h2}>Was It Worth It? Reviewing the Week Afterwards</h2>
+
+      <p style={s.p}>
+        Preparation gets most of the attention, but the decision that actually
+        compounds is the one you make <em>after</em> the contest: do you enter
+        the next one? That question is impossible to answer from memory,
+        because a contest week feels more productive than a normal week almost
+        regardless of what it earned. Longer hours and a busier room create the
+        impression of a good week even when the hourly rate fell.
+      </p>
+
+      <p style={s.p}>
+        The only way to settle it is to compare contest week against a normal
+        week using the same measures on both sides:
+      </p>
+
+      <ul style={s.ul}>
+        <li style={s.li}>
+          <strong style={{ color: '#f1f5f9' }}>Total hours streamed.</strong>{' '}
+          Contest weeks almost always cost more hours than they feel like they
+          did. Count them before you compare anything else.
+        </li>
+
+        <li style={s.li}>
+          <strong style={{ color: '#f1f5f9' }}>Earnings per hour, not total earnings.</strong>{' '}
+          Total earnings will usually be higher during a contest simply because
+          you streamed more. If your hourly rate dropped, the contest bought
+          you volume at a discount — which may still be worth it, but you
+          should know that is the trade you made.
+        </li>
+
+        <li style={s.li}>
+          <strong style={{ color: '#f1f5f9' }}>New regulars who stayed.</strong>{' '}
+          This is the number that decides whether a contest was an investment
+          or just a busy week. Count the supporters who first appeared during
+          contest week and then tipped again in the two or three weeks after
+          it. Contest traffic that never returns is worth far less than the
+          raw totals suggest.
+        </li>
+
+        <li style={s.li}>
+          <strong style={{ color: '#f1f5f9' }}>The week after.</strong>{' '}
+          A contest that leaves you too depleted to stream normally afterwards
+          has borrowed earnings from the following week rather than adding
+          them. Compare the seven days after the contest against a typical
+          week too.
+        </li>
+      </ul>
+
+      <p style={s.p}>
+        Run that comparison once and you will have a real answer for next time,
+        specific to you rather than to whoever is posting screenshots. Some
+        models find contests reliably profitable; others find the same hours
+        earn more spent on a normal schedule with their existing regulars.
+        Both outcomes are common, and neither is predictable in advance — which
+        is exactly why it is worth measuring once instead of re-deciding on
+        instinct every month.
+      </p>
+
       <h2 style={s.h2}>Frequently Asked Questions</h2>
 
       <div style={s.faq}>

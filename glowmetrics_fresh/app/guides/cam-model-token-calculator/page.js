@@ -1,6 +1,7 @@
 import Image from 'next/image'
 import TokenCalculatorClient from './TokenCalculatorClient'
 import Button from '../../../components/ui/Button'
+import ShopCrossLinks from '../../components/ShopCrossLinks'
 
 export const metadata = {
   title: 'Chaturbate, MFC & Stripchat Token Calculator: Convert Tokens to USD',
@@ -742,6 +743,7 @@ export default function TokenCalculatorPage() {
           <p style={{ fontSize: 12, color: S.muted }}>© 2026 CamCash — Built for cam models who want to grow</p>
         </footer>
       </div>
+      <ShopCrossLinks path="/guides/cam-model-token-calculator" />
     </>
   )
 }

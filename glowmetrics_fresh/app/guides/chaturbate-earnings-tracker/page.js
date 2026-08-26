@@ -4,6 +4,7 @@ import Image from 'next/image'
 import Button from '../../../components/ui/Button'
 
 import ChaturbateCalculator from './ChaturbateCalculator'
+import ShopCrossLinks from '../../components/ShopCrossLinks'
 
 export const metadata = {
   title: "Chaturbate Earnings Tracker: Track Tips, Tokens, Fans & Hours",
@@ -730,6 +731,8 @@ export default function ChaturbateEarningsTrackerPage() {
           </div>
 
         </article>
+
+      <ShopCrossLinks path="/guides/chaturbate-earnings-tracker" />
 
         {/* FOOTER */}
         <footer style={{ borderTop: "1px solid rgba(255,255,255,0.06)", padding: "32px 40px", textAlign: "center" }}>
