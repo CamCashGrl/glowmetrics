@@ -50,17 +50,37 @@ export default function ConfidenceBadge({
   const tone = TONE[badge.tone] || TONE.muted
   const subtle = badge.emphasis === BADGE_EMPHASIS.SUBTLE
   const medium = badge.emphasis === BADGE_EMPHASIS.MEDIUM
+  const weak = badge.emphasis === BADGE_EMPHASIS.STRONG
+
+  // WHAT EVIDENCE IS MISSING.
+  //
+  // A weak state that only says "Calibrating" tells a creator she is behind
+  // without telling her what would move her forward, which is the opposite of
+  // the conversion goal. The missing evidence is already computed canonically
+  // as the insight's nextMilestone ("2 more sessions in this window") — this
+  // reads it, never derives it, and never quotes a threshold by hand.
+  //
+  // Only weak states carry it. A SUPPORTED finding needs no apology, and a
+  // HIGH_CONFIDENCE one certainly does not.
+  const missing = evidence
+    ?? (weak && insight ? (intelligence?.insights?.[insight]?.nextMilestone?.label || null) : null)
 
   const chip = {
-    display: 'inline-flex', alignItems: 'center', gap: 5,
-    borderRadius: 100, whiteSpace: 'nowrap', lineHeight: 1.3,
+    display: 'inline-flex', alignItems: 'baseline', gap: 5,
+    borderRadius: missing ? 10 : 100,
+    whiteSpace: missing ? 'normal' : 'nowrap',
+    lineHeight: 1.35,
     fontWeight: subtle ? 600 : 700,
     fontSize: subtle ? 10.5 : 11,
     letterSpacing: subtle ? '0.02em' : '0.01em',
-    padding: subtle ? '1px 0' : '2px 9px',
+    padding: subtle ? '1px 0' : missing ? '4px 10px' : '2px 9px',
     color: subtle ? '#8D93AA' : tone.fg,
+    // Weak evidence is filled so it reads as a real state, not a decoration.
+    // SUPPORTED is an outline: present and legible, but it does not shout over
+    // the finding it is qualifying. Strong states carry no chrome at all.
     background: subtle ? 'transparent' : medium ? 'transparent' : tone.bg,
     border: subtle ? 'none' : `1px solid ${tone.border}`,
+    maxWidth: '100%',
     ...style,
   }
 
@@ -68,9 +88,9 @@ export default function ConfidenceBadge({
     <span style={chip} title={badge.blurb}>
       {showEmoji && !subtle && <span aria-hidden="true">{badge.emoji}</span>}
       <span>{badge.label}</span>
-      {evidence && (
-        <span style={{ fontWeight: 500, color: '#8D93AA', fontSize: subtle ? 10.5 : 10.5 }}>
-          · {evidence}
+      {missing && (
+        <span style={{ fontWeight: 500, color: '#8D93AA', fontSize: 10.5 }}>
+          · needs {missing}
         </span>
       )}
     </span>

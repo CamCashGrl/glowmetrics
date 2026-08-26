@@ -133,6 +133,17 @@ check('unclaimable states are the emphasised ones',
 check('claimable-and-strong states are near-silent',
   [S.HIGH_CONFIDENCE, S.ESTABLISHED].every(s => badgeFor(s).emphasis === 'subtle'), true)
 
+console.log('\n4b. Weak evidence states say WHAT IS MISSING; strong ones do not')
+const BADGE = BADGE_SRC
+check('the missing-evidence line is read from the canonical nextMilestone',
+  /nextMilestone\?\.label/.test(BADGE), true)
+check('only weak states carry it', /weak && insight \?/.test(BADGE), true)
+check('it is never derived locally', /nextMilestone[\s\S]{0,80}(Math\.|[<>]=)/.test(BADGE), false)
+check('weak chips are filled so they read as a state, not decoration',
+  /background: subtle \? 'transparent' : medium \? 'transparent' : tone\.bg/.test(BADGE), true)
+check('the missing-evidence line can wrap rather than clipping',
+  /whiteSpace: missing \? 'normal' : 'nowrap'/.test(BADGE), true)
+
 console.log('\n5. Null / loading intelligence renders no badge')
 check('null intelligence',        badgeForInsight(null, 'peak_window'), null)
 check('undefined intelligence',   badgeForInsight(undefined, 'peak_window'), null)
@@ -142,6 +153,8 @@ check('unknown state string',     badgeFor('MAYBE'), null)
 check('NOT_AVAILABLE renders nothing rather than a fake empty state', badgeFor(S.NOT_AVAILABLE), null)
 check('component returns null when there is no badge',
   /if \(!badge\) return null/.test(BADGE_SRC), true)
+check('the missing-evidence read is fully optional-chained (cannot throw on null)',
+  /intelligence\?\.insights\?\.\[insight\]\?\.nextMilestone\?\.label/.test(BADGE_SRC), true)
 
 console.log('\n6. The layer adds no analytics, thresholds or numbers')
 check('badge component imports no analytics module', /lib\/analytics/.test(BADGE_SRC), false)

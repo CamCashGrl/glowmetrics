@@ -27,3 +27,6 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .vercel
+
+# transient bundle written by scripts/verify-dashboard-render.mjs
+/.dashboard-render-check.cjs
