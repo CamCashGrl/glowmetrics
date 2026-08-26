@@ -93,6 +93,17 @@ export default function sitemap() {
     'why-cam-model-data-prevents-overspending',
     'why-cam-streams-arent-making-money',
     'why-youre-not-making-money-on-chaturbate',
+    // New narrow-intent posts, August 2026
+    'how-long-does-chaturbate-new-tag-last',
+    'how-to-establish-yourself-on-bongacams',
+    'how-to-get-started-on-myfreecams-as-a-model',
+    'how-to-set-up-chat-bots-on-bongacams',
+    'how-to-set-up-chat-bots-on-chaturbate',
+    'how-to-set-up-split-streaming-on-multiple-cam-sites',
+    'how-to-structure-a-4-hour-cam-show',
+    'off-site-shows-for-cam-models',
+    'onlyfans-for-cam-models-after-streaming',
+    'snap-shows-for-cam-models',
   ]
 
   const guideSlugs = [
@@ -110,17 +121,6 @@ export default function sitemap() {
     'chaturbate-token-tracker',
     'how-to-increase-cam-tips',
     'myfreecams-analytics',
-    // New narrow-intent posts, August 2026
-    'how-long-does-chaturbate-new-tag-last',
-    'how-to-establish-yourself-on-bongacams',
-    'how-to-get-started-on-myfreecams-as-a-model',
-    'how-to-set-up-chat-bots-on-bongacams',
-    'how-to-set-up-chat-bots-on-chaturbate',
-    'how-to-set-up-split-streaming-on-multiple-cam-sites',
-    'how-to-structure-a-4-hour-cam-show',
-    'off-site-shows-for-cam-models',
-    'onlyfans-for-cam-models-after-streaming',
-    'snap-shows-for-cam-models',
   ]
 
   const blogPages = blogSlugs.map(slug => ({
