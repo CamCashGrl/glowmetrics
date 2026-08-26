@@ -9,6 +9,7 @@ import CreatorReport from '../../app/dashboard/CreatorReport'
 import ConfidenceBadge from '../../app/dashboard/ConfidenceBadge'
 import WindowFanOverlap from '../../app/dashboard/WindowFanOverlap'
 import ContextualUpgradeModal from '../../app/dashboard/ContextualUpgradeModal'
+import PeakWindowPlan from '../../app/dashboard/PeakWindowPlan'
 import { buildUpgradeContext, UPGRADE_SOURCE, UPGRADE_CONTEXT_KEYS } from '../../lib/upgradeContexts'
 import { aggregateRows } from '../../lib/analytics'
 import { computeIntelligence } from '../../lib/intelligence/readiness'
@@ -191,6 +192,61 @@ check('the plan switch exposes its state', /aria-checked="true"/.test(freeModal)
 for (const bad of ['likely to tip', 'usually online', 'guarantee', 'make more money', 'maximize your income']) {
   check(`rendered upgrade never says "${bad}"`, (freeModal + proModal + noDisc).toLowerCase().includes(bad), false)
 }
+
+console.log('\nH. Discovery -> personalized plan (2C-5)')
+const intelState = intelligence?.insights?.peak_window?.state
+console.log(`  · fixture peak_window state: ${intelState}`)
+render('plan card (free, real data)', <PeakWindowPlan analytics={analytics} intelligence={intelligence} isPro={false} onUpgrade={() => {}} onImport={() => {}} />)
+render('plan card (pro, real data)',  <PeakWindowPlan analytics={analytics} intelligence={intelligence} isPro onOpenPlanner={() => {}} />)
+render('plan card (intelligence=null)', <PeakWindowPlan analytics={analytics} intelligence={null} />)
+render('plan card (empty account)',   <PeakWindowPlan analytics={emptyAnalytics} intelligence={emptyIntel} onImport={() => {}} />)
+check('no measured window renders nothing',
+  renderToStaticMarkup(<PeakWindowPlan analytics={emptyAnalytics} intelligence={emptyIntel} />), '')
+check('loading intelligence renders nothing',
+  renderToStaticMarkup(<PeakWindowPlan analytics={analytics} intelligence={null} />), '')
+
+// Synthetic ladder states, so every branch is exercised regardless of what the
+// fixture account happens to grade at.
+const mkIntel = (state, extra = {}) => ({ insights: { peak_window: { state, comparedAlternatives: 20, ...extra } } })
+const freePlan = renderToStaticMarkup(
+  <PeakWindowPlan analytics={analytics} intelligence={mkIntel('SUPPORTED')} isPro={false} onUpgrade={() => {}} />)
+const proPlan = renderToStaticMarkup(
+  <PeakWindowPlan analytics={analytics} intelligence={mkIntel('HIGH_CONFIDENCE')} isPro onOpenPlanner={() => {}} />)
+const weakPlan = renderToStaticMarkup(
+  <PeakWindowPlan analytics={analytics} intelligence={mkIntel('EARLY_SIGNAL', { explanation: 'Two sessions so far.', nextMilestone: { label: '2 more sessions in this window' } })} isPro={false} onUpgrade={() => {}} onImport={() => {}} />)
+
+check('SUPPORTED shows the discovery',       /strongest streaming window/i.test(freePlan), true)
+check('SUPPORTED offers the free plan CTA',  freePlan.includes('Turn this pattern into a weekly plan'), true)
+check('SUPPORTED states it is observed, not promised',
+  freePlan.includes('not a promise about what a future stream will earn'), true)
+check('Pro is offered the planner instead',  proPlan.includes('Open my weekly plan'), true)
+check('Pro is not asked to upgrade',         proPlan.includes('Turn this pattern into a weekly plan'), false)
+check('EARLY_SIGNAL shows the evidence state', weakPlan.includes('Finding your strongest window'), true)
+check('EARLY_SIGNAL names the missing evidence', weakPlan.includes('2 more sessions in this window'), true)
+check('EARLY_SIGNAL offers no upgrade',      weakPlan.includes('Turn this pattern into a weekly plan'), false)
+check('EARLY_SIGNAL offers no planner',      weakPlan.includes('Open my weekly plan'), false)
+check('EARLY_SIGNAL does not claim a strongest window',
+  weakPlan.includes('strongest observed'), false)
+for (const bad of ['will make', 'guaranteed', 'projected', 'expected to make', '7-day', '30-day']) {
+  check(`rendered plan never says "${bad}"`, (freePlan + proPlan + weakPlan).toLowerCase().includes(bad), false)
+}
+// The one future-tense phrase is inside the disclaimer that denies it.
+check('the only "will earn" is the denial',
+  (freePlan.match(/will earn/g) || []).length === 1 &&
+  freePlan.includes('not a promise about what a future stream will earn'), true)
+
+const plannerCtx = buildUpgradeContext(UPGRADE_SOURCE.STREAM_PLANNER, { analytics })
+check('the planner context carries the identified window',
+  /You've identified .* as your strongest observed window\./.test(plannerCtx.discovery[0] || ''), true)
+check('its CTA is the outcome', plannerCtx.primaryCta, 'Build My Weekly Plan')
+check('it is keyed to peak_window', plannerCtx.insightId, 'peak_window')
+const plannerModal = renderToStaticMarkup(
+  <ContextualUpgradeModal open onClose={() => {}} context={plannerCtx} />)
+check('the modal preserves the window context',
+  /strongest observed window/.test(plannerModal), true)
+check('the modal renders the plan CTA', plannerModal.includes('Build My Weekly Plan'), true)
+check('no window means no planner discovery to sell',
+  buildUpgradeContext(UPGRADE_SOURCE.STREAM_PLANNER, { analytics: emptyAnalytics }).hasDiscovery, false)
 
 console.log(`\n  ${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

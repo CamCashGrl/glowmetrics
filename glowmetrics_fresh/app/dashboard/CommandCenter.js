@@ -2,6 +2,7 @@
 import { useMemo } from "react"
 import ConfidenceBadge from "./ConfidenceBadge"
 import WindowFanOverlap from "./WindowFanOverlap"
+import PeakWindowPlan from "./PeakWindowPlan"
 
 // ═══════════════════════════════════════════════════════════════════════════
 // COMMAND CENTER
@@ -386,6 +387,20 @@ export default function CommandCenter({
           <Chip icon="📊" title="Sample behind it" value={`${bestWindow.sessionCount} session${bestWindow.sessionCount === 1 ? "" : "s"}`} badge={<ConfidenceBadge intelligence={intelligence} insight="peak_window" />} accent={C.gold} />
         </div>
       )}
+
+      {/* ── DISCOVERY -> PERSONALIZED PLAN (2C-5) ───────────────────
+          The window is already the hero above; this is the action it earns.
+          Rendered only when the canonical peak_window state supports it — the
+          component itself decides, and shows the evidence-building state
+          instead when it does not. */}
+      <PeakWindowPlan
+        analytics={analytics}
+        intelligence={intelligence}
+        isPro={isPro}
+        onOpenPlanner={onPlanStream}
+        onUpgrade={onUpgrade}
+        compact
+      />
 
       {/* ── DISCOVERY -> FAN INTELLIGENCE (2C-3) ────────────────────
           Connects the peak window above to the fans actually observed in it.

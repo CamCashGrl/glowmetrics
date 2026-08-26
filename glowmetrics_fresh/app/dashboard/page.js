@@ -17,6 +17,7 @@ import { FREE_MAX_PLATFORMS } from "../../lib/planLimits"
 import { computeIntelligence } from "../../lib/intelligence/readiness"
 import { track as gtmTrack } from '../../lib/track'
 import ContextualUpgradeModal from './ContextualUpgradeModal'
+import PeakWindowPlan from './PeakWindowPlan'
 import { buildUpgradeContext } from '../../lib/upgradeContexts'
 import { isProPlan, trialDaysRemaining, getAccessState, TRIAL_DAYS } from '../../lib/plan'
 import { resolveCreatorTimezone, autoPopulateTimezoneIfMissing } from '../../lib/timezone'
@@ -5009,9 +5010,27 @@ const stopImportMessageRotation = () => {
           />
         )}
         {activeTab === 'planner' && (
-          _plannerLock.locked
-            ? <div style={{ padding: '32px 0' }}><LockedInsightCard title="Stream Planner" description="Plan your schedule around your best earning windows." lockType="needs_data" requirement={_plannerLock.message} ctaLabel="Upload More Data" ctaAction={() => handleTabChange('upload')} /></div>
-            : <StreamPlanner tips={tips} isPro={isPro} timezone={_momTz} analytics={analytics} onUpgrade={(src) => openUpgradeModal(src)} />
+          /* 2C-5: the discovery leads, the planner follows. When peak_window is
+             claimable the creator sees what CamCash found and the action it
+             earns; below that floor she sees the evidence-building state and is
+             NOT asked to upgrade, because there is no reliable plan to sell yet.
+             _plannerLock is unchanged — it is the same canonical gate 2C-1 wired,
+             and it decides whether the planner itself mounts. */
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <PeakWindowPlan
+              analytics={analytics}
+              intelligence={intelligence}
+              isPro={isPro}
+              onOpenPlanner={_plannerLock.locked ? undefined : () => {
+                document.getElementById('stream-planner')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+              }}
+              onUpgrade={(src) => openUpgradeModal(src)}
+              onImport={() => handleTabChange('upload')}
+            />
+            {_plannerLock.locked
+              ? <LockedInsightCard title="Stream Planner" description="Plan your schedule around your best earning windows." lockType="needs_data" requirement={_plannerLock.message} ctaLabel="Upload More Data" ctaAction={() => handleTabChange('upload')} />
+              : <div id="stream-planner"><StreamPlanner tips={tips} isPro={isPro} timezone={_momTz} analytics={analytics} onUpgrade={(src) => openUpgradeModal(src)} /></div>}
+          </div>
         )}
         {activeTab === 'moneymap' && (
           _moneyMapLock.locked

@@ -77,11 +77,13 @@ const CONTEXTS = {
     primaryCta: 'Add the platform with Pro',
   },
   [UPGRADE_SOURCE.STREAM_PLANNER]: {
-    insightId: 'plan_readiness',
-    eyebrow: 'CamCash has enough windows to build a plan',
+    // 2C-5: keyed to peak_window, because that is the discovery the creator
+    // was looking at when she clicked. The ask preserves it.
+    insightId: 'peak_window',
+    eyebrow: 'Turn your strongest window into a weekly plan',
     fallbackHeadline: 'Your weekly streaming plan',
-    unlock: 'With Pro, see your full seven-day plan and every day and time block worth testing, not just tonight.',
-    primaryCta: 'See the full weekly plan',
+    unlock: 'With Pro, turn your recorded performance history into a personalized weekly streaming plan — every day and time block that has performed best, not just tonight.',
+    primaryCta: 'Build My Weekly Plan',
   },
   [UPGRADE_SOURCE.MONEY_MAP]: {
     insightId: 'money_map',
@@ -185,7 +187,8 @@ function discoveryFor(source, { analytics, trackedPlatformCount } = {}) {
     }
     case UPGRADE_SOURCE.STREAM_PLANNER: {
       if (!bestWindow) return []
-      return [`${windowLabel} is already established enough to plan around.`]
+      // Observed, past tense. Never a claim about a future stream.
+      return [`You've identified ${windowLabel} as your strongest observed window.`]
     }
     default:
       return []
