@@ -22,12 +22,21 @@ const NAV = [
     items: [{ id: "whales", icon: "👑", label: "Top Fans" }]
   },
   {
+    // ONE Sessions destination. Free-chat history, private/paid sessions and
+    // Live Mode session history used to be three separate sidebar entries, so
+    // a creator hunting for "my sessions" had to guess which one she meant —
+    // and "Live Mode Sessions" opened an empty screen for anyone who had never
+    // used Live Mode. They are now sub-tabs inside one page. Live Mode itself
+    // stays its own entry below: it is a tool you go and use, not history.
     group: "SESSIONS",
     items: [
-      { id: "sessions", icon: "🎥", label: "Free Chat Sessions" },
-      { id: "live",     icon: "🔴", label: "Live Mode" },
-      { id: "live-sessions", icon: "📋", label: "Live Mode Sessions" },
-      { id: "private",  icon: "💎", label: "Private Sessions" },
+      { id: "sessions", icon: "🎥", label: "Sessions" },
+    ]
+  },
+  {
+    group: "LIVE",
+    items: [
+      { id: "live", icon: "🔴", label: "Live Mode" },
     ]
   },
   {

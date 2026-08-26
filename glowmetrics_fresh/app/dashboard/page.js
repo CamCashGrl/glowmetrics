@@ -18,6 +18,7 @@ import { computeIntelligence } from "../../lib/intelligence/readiness"
 import { track as gtmTrack } from '../../lib/track'
 import ContextualUpgradeModal from './ContextualUpgradeModal'
 import PeakWindowPlan from './PeakWindowPlan'
+import { SessionsNav, SessionsOverview, LiveSessionsEmpty } from './SessionsHome'
 import { buildUpgradeContext } from '../../lib/upgradeContexts'
 import { atLeast, CLAIMABLE_FLOOR } from '../../lib/intelligence/states'
 import { isProPlan, trialDaysRemaining, getAccessState, TRIAL_DAYS } from '../../lib/plan'
@@ -42,6 +43,14 @@ import { useLiveSessionEngine } from '../live/useLiveSessionEngine'
 // catalogue that carries the actual discovery (its real numbers) into the ask,
 // instead of a headline pair plus a fixed six-bullet feature list shown
 // regardless of what the creator had just found.
+
+// Legacy session tab ids -> the sub-tab they now open inside `sessions`.
+// Kept so existing deep links and saved tabs keep working after the merge.
+const SESSION_TAB_ALIASES = {
+  sessions: 'history',
+  'live-sessions': 'live',
+  private: 'private',
+}
 
 const TAB_LOADING = (
   <div style={{ padding: "80px 0", textAlign: "center" }}>
@@ -1449,6 +1458,12 @@ export default function Dashboard() {
   const [toast, setToast] = useState("")
   const [uploadCount, setUploadCount] = useState(0)
   const [meaningfulOnly, setMeaningfulOnly] = useState(true)
+  // ── SESSIONS: one destination, four views ────────────────────────────────
+  // The three former sidebar entries are now sub-tabs. Their old activeTab ids
+  // still work as deep links (localStorage, the extension, anything already
+  // pointing at them) — SESSION_TAB_ALIASES maps each onto this destination
+  // plus the right sub-tab, so nothing that used to navigate here breaks.
+  const [sessionsSubTab, setSessionsSubTab] = useState('overview')
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [selectedWhale, setSelectedWhale] = useState(null)
   const [messageTarget, setMessageTarget] = useState(null)
@@ -1518,7 +1533,7 @@ export default function Dashboard() {
   const [replayCoachingLoading, setReplayCoachingLoading] = useState(null)
 
   useEffect(() => {
-    if (activeTab !== 'live-sessions' || replayLoaded || !user) return
+    if (!(activeTab === 'sessions' && sessionsSubTab === 'live') || replayLoaded || !user) return
     setReplayLoading(true)
     supabase
       .from('live_sessions')
@@ -1532,7 +1547,7 @@ export default function Dashboard() {
         setReplayLoading(false)
         setReplayLoaded(true)
       })
-  }, [activeTab, replayLoaded, user])
+  }, [activeTab, sessionsSubTab, replayLoaded, user])
 
   const loadReplayCoachingEvents = (sessionId) => {
     if (replayCoachingEvents[sessionId]) return
@@ -1725,8 +1740,11 @@ export default function Dashboard() {
   }
 
   // Tab persistence
-  const handleTabChange = (tab) => {
-    gtmTrack('tab_switched', { tab_name: tab })
+  const handleTabChange = (rawTab) => {
+    const alias = SESSION_TAB_ALIASES[rawTab]
+    const tab = alias ? 'sessions' : rawTab
+    if (alias) setSessionsSubTab(alias)
+    gtmTrack('tab_switched', { tab_name: tab, sessions_view: alias || undefined })
     // Live Mode is the one tab that's ENTIRELY a locked Pro preview for
     // free users (see the isPro gate a few hundred lines below) — this is
     // the funnel's "Pro preview viewed" step for that surface specifically,
@@ -1815,7 +1833,7 @@ export default function Dashboard() {
   //   4. Historical events get _isHistory:true so computeState() excludes
   //      them from timing/pace calculations (only uses them for totals)
   useEffect(() => {
-    if (activeTab !== 'live-sessions' || !user) return
+    if (!(activeTab === 'sessions' && sessionsSubTab === 'live') || !user) return
     if (liveTipsChannelRef.current) return // singleton guard
 
     isHydratingHistory.current = true
@@ -1939,7 +1957,11 @@ export default function Dashboard() {
     // Restore saved tab
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('camcash_tab')
-      if (saved) setActiveTab(saved)
+      if (saved) {
+        const alias = SESSION_TAB_ALIASES[saved]
+        if (alias) { setActiveTab('sessions'); setSessionsSubTab(alias) }
+        else setActiveTab(saved)
+      }
     }
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) { router.replace("/login"); return }
@@ -2093,8 +2115,8 @@ export default function Dashboard() {
           // Flash animation: highlight the new tip row for 2.5s
           setFlashTipId(normalized._id)
           setTimeout(() => setFlashTipId(null), 2500)
-          // Switch to Live Mode tab automatically if user is on another tab
-          setActiveTab('live-sessions')
+          // Jump to the live session view automatically if she is elsewhere.
+          setActiveTab('sessions'); setSessionsSubTab('live')
         })
         .subscribe()
       liveTipsChannelRef.current = liveTipsChannel
@@ -2161,7 +2183,7 @@ export default function Dashboard() {
 
   // ── LIVE MODE: load existing tips when tab is activated ───────────────────
   useEffect(() => {
-    if (activeTab !== 'live-sessions' || !user) return
+    if (!(activeTab === 'sessions' && sessionsSubTab === 'live') || !user) return
     let cancelled = false
 
     const loadRecentLiveTips = async () => {
@@ -2194,7 +2216,7 @@ export default function Dashboard() {
 
     loadRecentLiveTips()
     return () => { cancelled = true }
-  }, [activeTab, user])
+  }, [activeTab, sessionsSubTab, user])
 
   // ── LIVE TICKER: 1-second interval drives time-based re-renders ─────────────
   // Drives the command bar's momentum widget (visible on every tab), which
@@ -3713,7 +3735,32 @@ const stopImportMessageRotation = () => {
           )
         })())}
 
-        {activeTab === "live-sessions" && (() => {
+        {/* ── SESSIONS: one destination ─────────────────────────────
+            The bar below switches between four views that already existed.
+            No session is detected, recomputed or moved here — each view still
+            renders from its own block, unchanged. */}
+        {activeTab === "sessions" && (
+          <SessionsNav
+            active={sessionsSubTab}
+            onChange={(v) => { setSessionsSubTab(v); window.scrollTo({ top: 0, behavior: 'instant' }) }}
+            counts={{
+              history: analytics?.meaningfulSessionCount || 0,
+              private: paidSessions.length,
+              live: replaySessions.length,
+            }}
+          />
+        )}
+
+        {activeTab === "sessions" && sessionsSubTab === "overview" && (
+          <SessionsOverview
+            analytics={analytics}
+            privateCount={paidSessions.length}
+            liveCount={replaySessions.length}
+            onChange={setSessionsSubTab}
+          />
+        )}
+
+        {activeTab === "sessions" && sessionsSubTab === "live" && (() => {
           const fmtSessionDuration = (secs) => {
             const s = Math.max(0, Math.floor(secs || 0))
             const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60)
@@ -3741,12 +3788,10 @@ const stopImportMessageRotation = () => {
                 </div>
               )}
 
+              {/* Never used Live Mode: an intentional, complete section
+                  rather than a blank screen that reads as broken. */}
               {!replayLoading && replaySessions.length === 0 && (
-                <div style={{ ...glassCard, borderRadius: 16, padding: 40, textAlign: 'center' }}>
-                  <div style={{ fontSize: 40, marginBottom: 10 }}>📼</div>
-                  <div style={{ fontSize: 15, fontWeight: 700, color: C.white, marginBottom: 6 }}>No completed sessions yet</div>
-                  <div style={{ fontSize: 13, color: C.muted }}>Once you end a Live Mode session, it'll show up here with what happened and what coaching fired during it.</div>
-                </div>
+                <LiveSessionsEmpty onTryLiveMode={() => handleTabChange('live')} />
               )}
 
               {!replayLoading && replaySessions.map((s) => {
@@ -3819,7 +3864,7 @@ const stopImportMessageRotation = () => {
           )
         })()}
 
-        {activeTab === "sessions" && (() => {
+        {activeTab === "sessions" && sessionsSubTab === "history" && (() => {
           const displaySessions = meaningfulOnly
             ? (analytics?.meaningfulSessions || sessions)
             : (analytics?.allValidSessions   || sessions)
@@ -5014,7 +5059,7 @@ const stopImportMessageRotation = () => {
         )}
 
         {activeTab === 'analytics' && <AnalyticsCharts analytics={analytics} intelligence={intelligence} />}
-        {activeTab === 'private' && (
+        {activeTab === 'sessions' && sessionsSubTab === 'private' && (
           <PrivateSessions
             paidSessions={paidSessions}
             tipsTotalUSD={analytics?.totalUSD ?? null}
