@@ -8,6 +8,8 @@ import AnalyticsCharts from '../../app/dashboard/AnalyticsCharts'
 import CreatorReport from '../../app/dashboard/CreatorReport'
 import ConfidenceBadge from '../../app/dashboard/ConfidenceBadge'
 import WindowFanOverlap from '../../app/dashboard/WindowFanOverlap'
+import ContextualUpgradeModal from '../../app/dashboard/ContextualUpgradeModal'
+import { buildUpgradeContext, UPGRADE_SOURCE, UPGRADE_CONTEXT_KEYS } from '../../lib/upgradeContexts'
 import { aggregateRows } from '../../lib/analytics'
 import { computeIntelligence } from '../../lib/intelligence/readiness'
 
@@ -141,6 +143,53 @@ check('free and pro see the SAME discovery text',
   freeHtml.includes('Highest median rate') && proHtml.includes('Highest median rate'), true)
 for (const bad of ['likely to tip', 'usually online', 'prefers this time', 'will make you']) {
   check(`rendered output never says "${bad}"`, (freeHtml + proHtml).toLowerCase().includes(bad), false)
+}
+
+console.log('\nG. Contextual upgrade (2C-4) renders in every state')
+const fanCtx = buildUpgradeContext(UPGRADE_SOURCE.WINDOW_FAN_OVERLAP, { analytics })
+const peakCtx = buildUpgradeContext(UPGRADE_SOURCE.PEAK_WINDOW, { analytics })
+const emptyCtx = buildUpgradeContext(UPGRADE_SOURCE.WINDOW_FAN_OVERLAP, { analytics: emptyAnalytics })
+const bogusCtx = buildUpgradeContext('a_source_that_does_not_exist', { analytics })
+
+render('modal (free, fan discovery)', <ContextualUpgradeModal open onClose={() => {}} context={fanCtx} />)
+render('modal (free, peak window)',   <ContextualUpgradeModal open onClose={() => {}} context={peakCtx} />)
+render('modal (already Pro)',         <ContextualUpgradeModal open onClose={() => {}} context={fanCtx} isPro onProAction={() => {}} />)
+render('modal (no discovery)',        <ContextualUpgradeModal open onClose={() => {}} context={emptyCtx} />)
+check('closed modal renders nothing',  renderToStaticMarkup(<ContextualUpgradeModal open={false} onClose={() => {}} context={fanCtx} />), '')
+check('missing context renders nothing', renderToStaticMarkup(<ContextualUpgradeModal open onClose={() => {}} context={null} />), '')
+
+const freeModal = renderToStaticMarkup(<ContextualUpgradeModal open onClose={() => {}} context={fanCtx} trialEligible />)
+const proModal  = renderToStaticMarkup(<ContextualUpgradeModal open onClose={() => {}} context={fanCtx} isPro onProAction={() => {}} />)
+const noDisc    = renderToStaticMarkup(<ContextualUpgradeModal open onClose={() => {}} context={emptyCtx} />)
+
+check('every catalogue key builds a usable context',
+  UPGRADE_CONTEXT_KEYS.every(k => {
+    const c = buildUpgradeContext(k, { analytics })
+    return !!c.headline && !!c.unlock && !!c.primaryCta
+  }), true)
+check('an unknown source falls back safely', bogusCtx.source, 'default')
+check('an unknown source claims no discovery', bogusCtx.hasDiscovery, false)
+
+check('the discovery reaches the rendered modal',
+  freeModal.includes('repeat fans have tipped during your strongest window'), true)
+check('the Top Supporter count reaches it too',
+  freeModal.includes('among your Top Supporters'), true)
+check('the contextual CTA is rendered, not a generic one',
+  freeModal.includes('See these fans with Pro'), true)
+check('free sees both billing options', freeModal.includes('Monthly') && freeModal.includes('Annual'), true)
+check('free is offered the full comparison as secondary', freeModal.includes('See full plan comparison'), true)
+check('an already-Pro creator is not sold to', proModal.includes('See full plan comparison'), false)
+check('an already-Pro creator sees no billing options', proModal.includes('Annual'), false)
+check('an already-Pro creator is told the plan is active', proModal.includes('Creator Pro is active'), true)
+check('no discovery means no invented one', noDisc.includes('repeat fan'), false)
+check('no discovery still explains the feature honestly', noDisc.includes('Creator Pro'), true)
+
+check('dialog semantics are present', /role="dialog"/.test(freeModal) && /aria-modal="true"/.test(freeModal), true)
+check('the dialog is labelled by its heading', /aria-labelledby="contextual-upgrade-title"/.test(freeModal), true)
+check('the close control is labelled', /aria-label="Close"/.test(freeModal), true)
+check('the plan switch exposes its state', /aria-checked="true"/.test(freeModal), true)
+for (const bad of ['likely to tip', 'usually online', 'guarantee', 'make more money', 'maximize your income']) {
+  check(`rendered upgrade never says "${bad}"`, (freeModal + proModal + noDisc).toLowerCase().includes(bad), false)
 }
 
 console.log(`\n  ${pass} passed, ${fail} failed`)

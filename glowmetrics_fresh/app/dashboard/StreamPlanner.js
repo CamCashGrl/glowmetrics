@@ -616,9 +616,9 @@ function PlanTab({ tips, windows, whales, prefs, savePrefs, isPro=true, timezone
         </div>
         {!isPro && (
           <div style={{ marginTop:12, textAlign:"center" }}>
-            <a href="/pricing" style={{ fontSize:12, color:PURPLE, fontWeight:600, textDecoration:"none" }}>
-              ✦ Upgrade to Pro to see your full 7-day plan, not just tonight
-            </a>
+            <button onClick={() => onUpgrade?.('stream_planner')} style={{ fontSize:12, color:PURPLE, fontWeight:600, background:"none", border:"none", cursor:"pointer", padding:0 }}>
+              ✦ See your full 7-day plan, not just tonight
+            </button>
           </div>
         )}
       </div>
@@ -631,7 +631,7 @@ function PlanTab({ tips, windows, whales, prefs, savePrefs, isPro=true, timezone
           <div style={{ fontSize:26, marginBottom:8 }}>🔒</div>
           <div style={{ color:TEXT, fontSize:14, fontWeight:700, marginBottom:6 }}>Untested Opportunities &amp; the full Opportunity Grid are Creator Pro features</div>
           <div style={{ color:MUTED, fontSize:12, marginBottom:16 }}>See every day/time block worth testing, not just tonight's window.</div>
-          <Button as="a" href="/pricing" style={{ padding:"9px 22px", fontSize:13 }}>Upgrade to Pro</Button>
+          <Button onClick={() => onUpgrade?.('stream_planner')} style={{ padding:"9px 22px", fontSize:13 }}>See the full weekly plan</Button>
         </div>
       ) : hidden.length > 0 && (
         <div style={cardS()}>
@@ -1037,13 +1037,13 @@ const TABS = [{ id:"plan", label:"Plan" }, { id:"whales", label:"Whales" }, { id
 
 // Whales/Progress stay Pro-only — free's "somewhat useful" slice on this
 // tool is Tonight's Brief + today's row in the Plan tab (see PlanTab).
-function LockedPlannerTab({ title, body }) {
+function LockedPlannerTab({ title, body, onUpgrade }) {
   return (
     <div style={{ ...cardS(), textAlign:"center", padding:"48px 32px" }}>
       <div style={{ fontSize:32, marginBottom:12 }}>🔒</div>
       <div style={{ color:PRIMARY, fontSize:16, fontWeight:700, marginBottom:8 }}>{title} is a Creator Pro feature</div>
       <div style={{ color:TEXT, fontSize:13, lineHeight:1.6, marginBottom:20 }}>{body}</div>
-      <Button as="a" href="/pricing" style={{ padding:"10px 24px", fontSize:14 }}>Upgrade to Pro</Button>
+      <Button onClick={() => onUpgrade?.('stream_planner')} style={{ padding:"10px 24px", fontSize:14 }}>See the full weekly plan</Button>
     </div>
   )
 }
@@ -1083,8 +1083,8 @@ function StreamPlannerContent({ tips, isPro=true, timezone='UTC', analytics=null
       </div>
 
       {tab === "plan"     && <PlanTab tips={tips} windows={windows} whales={whales} prefs={prefs} savePrefs={savePrefs} isPro={isPro} timezone={timezone} />}
-      {tab === "whales"   && (isPro ? <WhalesTab tips={tips} whales={whales} timezone={timezone} /> : <LockedPlannerTab title="Whale Windows" body="See exactly when your top fans historically show up, so you can be live when they are." />)}
-      {tab === "progress" && (isPro ? <ProgressTab tips={tips} windows={windows} prefs={prefs} timezone={timezone} analytics={analytics} /> : <LockedPlannerTab title="Plan Progress" body="Track how closely you're sticking to your recommended schedule over time." />)}
+      {tab === "whales"   && (isPro ? <WhalesTab tips={tips} whales={whales} timezone={timezone} /> : <LockedPlannerTab title="Whale Windows" body="See exactly when your top fans historically show up, so you can be live when they are." onUpgrade={onUpgrade} />)}
+      {tab === "progress" && (isPro ? <ProgressTab tips={tips} windows={windows} prefs={prefs} timezone={timezone} analytics={analytics} /> : <LockedPlannerTab title="Plan Progress" body="Track how closely you're sticking to your recommended schedule over time." onUpgrade={onUpgrade} />)}
     </div>
   )
 }
@@ -1092,7 +1092,7 @@ function StreamPlannerContent({ tips, isPro=true, timezone='UTC', analytics=null
 // ═══════════════════════════════════════════════════════════════════════════════
 // ROOT EXPORT
 // ═══════════════════════════════════════════════════════════════════════════════
-export default function StreamPlanner({ tips = [], isPro = false, timezone = 'UTC', analytics = null }) {
+export default function StreamPlanner({ tips = [], isPro = false, timezone = 'UTC', analytics = null, onUpgrade }) {
   if (tips.length < 20) {
     return (
       <div style={{ background:BG, minHeight:"100%", display:"flex", alignItems:"center", justifyContent:"center", padding:24 }}>

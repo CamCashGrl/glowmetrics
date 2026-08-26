@@ -250,7 +250,7 @@ const CTIP = ({ active, payload }) => {
 }
 
 // ─── TAB: Money Map ───────────────────────────────────────────────────────────
-function MoneyMapTab({ tips, isPro=true, tz }) {
+function MoneyMapTab({ tips, isPro=true, tz, onUpgrade }) {
   const [platform, setPlatform] = useState("all")
   const [metric, setMetric]     = useState("usd")
   const [range, setRange]       = useState(isPro ? "all" : "30d")
@@ -323,9 +323,9 @@ function MoneyMapTab({ tips, isPro=true, tz }) {
           }}>{l}</button>
         ))}
         {!isPro && (
-          <a href="/pricing" style={{marginLeft:"4px",fontSize:"11px",color:PURPLE,fontWeight:"600",textDecoration:"none"}}>
-            ✦ Pro unlocks 90-day &amp; all-time history
-          </a>
+          <button onClick={() => onUpgrade?.('money_map')} style={{marginLeft:"4px",fontSize:"11px",color:PURPLE,fontWeight:"600",background:"none",border:"none",cursor:"pointer",padding:0}}>
+            ✦ Open 90-day &amp; all-time history
+          </button>
         )}
       </div>
 
@@ -721,19 +721,19 @@ function TrendsTab({ tips, sessions, tz }) {
 // Sessions/Platforms/Trends stay Pro-only — the Money Map tab itself (a real
 // heatmap, just capped to the last 30 days) is free's "somewhat useful"
 // slice, per product direction: free should never be a dead end, just less.
-function LockedTabPanel({ label }) {
+function LockedTabPanel({ label, onUpgrade }) {
   return (
     <div style={{textAlign:"center",padding:"60px 24px",background:CARD,border:`1px solid ${BORDER}`,borderRadius:"16px"}}>
       <div style={{fontSize:"32px",marginBottom:"12px"}}>🔒</div>
       <div style={{color:TEXT,fontSize:"16px",fontWeight:"700",marginBottom:"8px"}}>{label} is a Creator Pro feature</div>
       <div style={{color:SLATE,fontSize:"13px",marginBottom:"20px"}}>Your Money Map heatmap is free — upgrade to unlock session breakdowns, platform comparisons, and trend analysis.</div>
-      <a href="/pricing" style={{display:"inline-flex",alignItems:"center",background:"linear-gradient(135deg,#22d3ee,#a855f7)",color:"#0a0e1a",fontWeight:"800",padding:"10px 24px",borderRadius:"10px",textDecoration:"none",fontSize:"14px"}}>Upgrade to Pro</a>
+      <button onClick={() => onUpgrade?.('money_map')} style={{display:"inline-flex",alignItems:"center",background:"linear-gradient(135deg,#22d3ee,#a855f7)",color:"#0a0e1a",fontWeight:"800",padding:"10px 24px",borderRadius:"10px",border:"none",cursor:"pointer",fontSize:"14px"}}>Open the full history</button>
     </div>
   )
 }
 
 // ─── Inner content (all hooks here) ──────────────────────────────────────────
-function MoneyMapContent({ tips, isPro=true, tz }) {
+function MoneyMapContent({ tips, isPro=true, tz, onUpgrade }) {
   const [tab, setTab] = useState("map")
 
   const sessions = useMemo(()=>groupIntoSessions(tips, tz),[tips, tz])
@@ -765,16 +765,16 @@ function MoneyMapContent({ tips, isPro=true, tz }) {
 
       <TabBar tabs={TABS} active={tab} onSelect={setTab}/>
 
-      {tab==="map" && <MoneyMapTab tips={tips} isPro={isPro} tz={tz}/>}
-      {tab==="sessions"  && (!isPro ? <LockedTabPanel label="Session Breakdowns"/>   : <SessionsTab sessions={sessions} tz={tz}/>)}
-      {tab==="platforms" && (!isPro ? <LockedTabPanel label="Platform Comparison"/>  : <PlatformsTab tips={tips} sessions={sessions} tz={tz}/>)}
-      {tab==="trends"    && (!isPro ? <LockedTabPanel label="Trend Analysis"/>       : <TrendsTab tips={tips} sessions={sessions} tz={tz}/>)}
+      {tab==="map" && <MoneyMapTab tips={tips} isPro={isPro} tz={tz} onUpgrade={onUpgrade}/>}
+      {tab==="sessions"  && (!isPro ? <LockedTabPanel label="Session Breakdowns" onUpgrade={onUpgrade}/>   : <SessionsTab sessions={sessions} tz={tz}/>)}
+      {tab==="platforms" && (!isPro ? <LockedTabPanel label="Platform Comparison" onUpgrade={onUpgrade}/>  : <PlatformsTab tips={tips} sessions={sessions} tz={tz}/>)}
+      {tab==="trends"    && (!isPro ? <LockedTabPanel label="Trend Analysis" onUpgrade={onUpgrade}/>       : <TrendsTab tips={tips} sessions={sessions} tz={tz}/>)}
     </div>
   )
 }
 
 // ─── Exported component ───────────────────────────────────────────────────────
-export default function MoneyMap({ tips = [], isPro = false, timezone = 'UTC' }) {
+export default function MoneyMap({ tips = [], isPro = false, timezone = 'UTC', onUpgrade }) {
   if (tips.length < 20) {
     return (
       <div style={{textAlign:"center",padding:"60px 24px"}}>
@@ -786,5 +786,5 @@ export default function MoneyMap({ tips = [], isPro = false, timezone = 'UTC' })
     )
   }
 
-  return <MoneyMapContent tips={tips} isPro={isPro} tz={timezone}/>
+  return <MoneyMapContent tips={tips} isPro={isPro} tz={timezone} onUpgrade={onUpgrade}/>
 }

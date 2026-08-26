@@ -190,19 +190,32 @@ export async function POST(request) {
       trialEligible = false
     }
 
+    // 2C-4: which in-dashboard discovery sent her here, if any. Slug-shaped
+    // values only — this is echoed straight back into a redirect URL, so it is
+    // whitelisted by shape rather than trusted. Absent for the landing page and
+    // /start-trial, which keep their existing return behaviour exactly.
+    const rawSource = typeof body.upgrade_source === 'string' ? body.upgrade_source : ''
+    const upgradeSource = /^[a-z0-9_]{1,40}$/.test(rawSource) ? rawSource : null
+    const origin = request.headers.get('origin')
+    const ctxParam = upgradeSource ? `&ctx=${upgradeSource}` : ''
+
     // Create checkout session
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       mode: 'subscription',
       payment_method_types: ['card'],
       line_items: [{ price: priceId, quantity: 1 }],
-      success_url: `${request.headers.get('origin')}/dashboard?success=true&plan=${planType}`,
-      // Back to the gate, not the dashboard: a user who abandons checkout has
-      // no access to return to.
-      cancel_url: `${request.headers.get('origin')}/start-trial?canceled=true`,
+      success_url: `${origin}/dashboard?success=true&plan=${planType}${ctxParam}`,
+      // A creator who started from inside the dashboard already has access, so
+      // cancelling returns her there, to the discovery she was looking at.
+      // Everyone else still lands on the gate: they have nothing to return to.
+      cancel_url: upgradeSource
+        ? `${origin}/dashboard?canceled=true&ctx=${upgradeSource}`
+        : `${origin}/start-trial?canceled=true`,
       metadata: {
         userId: user.id,
         plan_type: planType,
+        ...(upgradeSource ? { upgrade_source: upgradeSource } : {}),
       },
       // Card-backed free trial. CamCash is gated rather than freemium, so this
       // is the only way into the product for a new account: Stripe collects

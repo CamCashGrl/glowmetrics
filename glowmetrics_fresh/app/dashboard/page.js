@@ -16,6 +16,8 @@ import { PLATFORM_TOKEN_RATES, tokenRate, normalizeRowPlatforms } from "../../li
 import { FREE_MAX_PLATFORMS } from "../../lib/planLimits"
 import { computeIntelligence } from "../../lib/intelligence/readiness"
 import { track as gtmTrack } from '../../lib/track'
+import ContextualUpgradeModal from './ContextualUpgradeModal'
+import { buildUpgradeContext } from '../../lib/upgradeContexts'
 import { isProPlan, trialDaysRemaining, getAccessState, TRIAL_DAYS } from '../../lib/plan'
 import { resolveCreatorTimezone, autoPopulateTimezoneIfMissing } from '../../lib/timezone'
 import CommandCenter from './CommandCenter'
@@ -32,33 +34,12 @@ import { useLiveSessionEngine } from '../live/useLiveSessionEngine'
 // openUpgradeModal(source). Each trigger fires because of something the
 // user actually just did, so the headline should say that back to them
 // instead of one generic pitch for every context. Falls back to
-// UPGRADE_COPY.default for any source not listed here.
-const UPGRADE_COPY = {
-  default: {
-    headline: "Unlock Your Full Earning Potential",
-    subhead: "You're only seeing a preview of your data. Here's what's waiting for you inside:",
-  },
-  import_discovery: {
-    headline: "Turn this discovery into a plan",
-    subhead: "CamCash found a real pattern in the history you just imported. Pro turns it into a weekly schedule, platform priorities and the windows worth testing next.",
-  },
-  multi_platform: {
-    headline: "You've reached your free platforms",
-    subhead: "Free tracks up to 3 platforms. Creator Pro adds the rest, plus the cross-platform comparison that shows where you actually earn best.",
-  },
-  whales_cutoff: {
-    headline: "You've found your top fans",
-    subhead: "See your full fan list — every VIP, not just the first 3 — and track them over time.",
-  },
-  whales_empty: {
-    headline: "Unlock Your Full Fan Insights",
-    subhead: "See your highest-value fans, repeat spenders, and who's worth re-engaging.",
-  },
-  creator_report: {
-    headline: "You have enough data for deeper insights",
-    subhead: "Upgrade to unlock your remaining personalized recommendations for next stream.",
-  },
-}
+// lib/upgradeContexts.js's DEFAULT for any source not listed there.
+// 2C-4: UPGRADE_COPY is retired. Every in-dashboard upgrade now goes through
+// ContextualUpgradeModal, whose copy comes from lib/upgradeContexts.js — one
+// catalogue that carries the actual discovery (its real numbers) into the ask,
+// instead of a headline pair plus a fixed six-bullet feature list shown
+// regardless of what the creator had just found.
 
 const TAB_LOADING = (
   <div style={{ padding: "80px 0", textAlign: "center" }}>
@@ -1569,7 +1550,6 @@ export default function Dashboard() {
   const [liveTick, setLiveTick] = useState(0)
   const [minuteTick, setMinuteTick] = useState(0) // increments every 60s to refresh time-based alerts
   const [betaCount, setBetaCount] = useState(null)
-  const [earlyAccessSubmitting, setEarlyAccessSubmitting] = useState(false)
   const [showFeedback, setShowFeedback] = useState(false)
   const [feedbackType, setFeedbackType] = useState('feature')
   const [feedbackText, setFeedbackText] = useState('')
@@ -1645,10 +1625,14 @@ export default function Dashboard() {
 
   const fmtHour = h => { if (h == null || isNaN(h)) return 'N/A'; return h === 0 ? '12 AM' : h < 12 ? h+' AM' : h === 12 ? '12 PM' : (h-12)+' PM' }
 
+  // Signature unchanged, so every existing call site still works. The
+  // difference is what it opens: the context is BUILT from the live analytics
+  // at click time, so the discovery that caused the click survives into the ask.
   const openUpgradeModal = (source) => {
-    track('upgrade_click', { source })
-    gtmTrack('paywall_hit', { feature: source })
-    setUpgradeModalSource(source || 'default')
+    const key = source || 'default'
+    track('upgrade_click', { source: key })
+    gtmTrack('paywall_hit', { feature: key })
+    setUpgradeModalSource(key)
     setShowUpgradeModal(true)
   }
 
@@ -1922,10 +1906,28 @@ export default function Dashboard() {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search)
       if (params.get('success') === 'true') {
-        gtmTrack('subscription_completed', { plan_type: params.get('plan') || null })
+        const src = params.get('ctx') || null
+        gtmTrack('subscription_completed', { plan_type: params.get('plan') || null, feature_name: src })
+        gtmTrack('contextual_upgrade_completed', { plan_type: params.get('plan') || null, feature_name: src })
+        // 2C-4: land her back on the discovery she converted for, rather than
+        // making her find it again. The modal never reopens on return — she
+        // already bought — and the params are stripped so a refresh cannot
+        // replay any of this.
+        const tab = {
+          window_fan_overlap: 'whales', whales_cutoff: 'whales',
+          peak_window: 'planner', stream_planner: 'planner', import_discovery: 'planner',
+          platform_comparison: 'platforms', multi_platform: 'platforms',
+          money_map: 'moneymap', creator_report: 'report', live_mode_locked: 'live',
+        }[src]
+        if (tab) { setActiveTab(tab); try { localStorage.setItem('camcash_tab', tab) } catch {} }
+        setShowUpgradeModal(false)
+        showToast("You're on Creator Pro — your full data is unlocked.")
         window.history.replaceState({}, '', window.location.pathname)
       } else if (params.get('canceled') === 'true') {
-        gtmTrack('checkout_canceled', {})
+        // Clean return: no success state, and the modal stays closed rather
+        // than reopening the same ask the creator just declined.
+        gtmTrack('checkout_canceled', { feature_name: params.get('ctx') || null })
+        setShowUpgradeModal(false)
         window.history.replaceState({}, '', window.location.pathname)
       }
     }
@@ -3286,7 +3288,7 @@ const stopImportMessageRotation = () => {
       </div>
 
       {/* SIDEBAR — desktop only, hidden on mobile via CSS */}
-      <Sidebar activeTab={activeTab} onTabChange={(tab) => { setActiveTab(tab); if (typeof window !== "undefined") { localStorage.setItem("camcash_tab", tab); window.scrollTo({ top: 0, behavior: "instant" }); } }} user={user} onSignOut={async () => { await supabase.auth.signOut(); router.replace("/login"); }} isPro={isPro} trialEligible={trialEligible} />{/* MAIN CONTENT */}
+      <Sidebar activeTab={activeTab} onTabChange={(tab) => { setActiveTab(tab); if (typeof window !== "undefined") { localStorage.setItem("camcash_tab", tab); window.scrollTo({ top: 0, behavior: "instant" }); } }} user={user} onSignOut={async () => { await supabase.auth.signOut(); router.replace("/login"); }} isPro={isPro} trialEligible={trialEligible} onUpgrade={(src) => openUpgradeModal(src)} />{/* MAIN CONTENT */}
       <div className="dash-main" style={{ marginLeft: 240, width: "calc(100% - 240px)", minWidth: 0, padding: 32, boxSizing: "border-box", overflowX: "hidden" }}>
 
         {/* ── TRIAL COUNTDOWN ──
@@ -4503,7 +4505,7 @@ const stopImportMessageRotation = () => {
                       🔒 Subscribe to view your insights for <strong style={{ color: C.white }}>{lockedPreview.platform}</strong>
                     </div>
                     <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
-                      <Button as="a" href="/pricing" style={{ padding: "8px 16px", fontSize: 12.5 }}>Subscribe →</Button>
+                      <Button onClick={() => openUpgradeModal('multi_platform')} style={{ padding: "8px 16px", fontSize: 12.5 }}>Add this platform with Pro →</Button>
                       <Button variant="secondary" onClick={resetImport} style={{ padding: "8px 16px", fontSize: 12.5 }}>Not now</Button>
                     </div>
                   </div>
@@ -4543,8 +4545,8 @@ const stopImportMessageRotation = () => {
                   <p style={{ fontSize: 13, color: C.text, lineHeight: 1.65, marginBottom: 16 }}>
                     The <strong style={{ color: C.white }}>free plan</strong> tracks up to <strong style={{ color: C.cyan }}>{FREE_MAX_PLATFORMS} platforms</strong> — import as much history as you want, no limits. A <strong style={{ color: C.white }}>subscription</strong> unlocks <strong style={{ color: C.pink }}>unlimited platforms</strong> and the cross-platform analysis that shows which cam site pays you best by hour, day, and fan type.
                   </p>
-                  <Button onClick={() => router.push('/pricing')} style={{ padding: "12px 26px", fontSize: 13 }}>
-                    View Plans & Subscribe →
+                  <Button onClick={() => openUpgradeModal('multi_platform')} style={{ padding: "12px 26px", fontSize: 13 }}>
+                    Add another platform with Pro →
                   </Button>
 
                   <div style={{ marginTop: 18 }}>
@@ -5009,12 +5011,12 @@ const stopImportMessageRotation = () => {
         {activeTab === 'planner' && (
           _plannerLock.locked
             ? <div style={{ padding: '32px 0' }}><LockedInsightCard title="Stream Planner" description="Plan your schedule around your best earning windows." lockType="needs_data" requirement={_plannerLock.message} ctaLabel="Upload More Data" ctaAction={() => handleTabChange('upload')} /></div>
-            : <StreamPlanner tips={tips} isPro={isPro} timezone={_momTz} analytics={analytics} />
+            : <StreamPlanner tips={tips} isPro={isPro} timezone={_momTz} analytics={analytics} onUpgrade={(src) => openUpgradeModal(src)} />
         )}
         {activeTab === 'moneymap' && (
           _moneyMapLock.locked
             ? <div style={{ padding: '32px 0' }}><LockedInsightCard title="Money Map" description="See where and when your money comes from across sessions and platforms." lockType="needs_data" requirement={_moneyMapLock.message} ctaLabel="Upload More Data" ctaAction={() => handleTabChange('upload')} /></div>
-            : <MoneyMap tips={tips} isPro={isPro} timezone={creatorTz} />
+            : <MoneyMap tips={tips} isPro={isPro} timezone={creatorTz} onUpgrade={(src) => openUpgradeModal(src)} />
         )}
       </div>
 
@@ -5375,83 +5377,37 @@ const stopImportMessageRotation = () => {
         )
       })()}
 
-      {/* UPGRADE MODAL */}
-      {showUpgradeModal && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.88)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1002, padding: 20 }}>
-          <div style={{ width: 480, background: "rgba(15,20,32,0.97)", backdropFilter: "blur(24px)", borderRadius: 24, border: "1px solid rgba(255,255,255,0.1)", boxShadow: "0 0 80px rgba(59,130,246,0.2), 0 0 160px rgba(236,72,153,0.1)", overflow: "hidden" }}>
-            <div style={{ height: 4, background: "linear-gradient(90deg, #3b82f6, #a855f7, #ec4899)" }} />
-            <div style={{ padding: 36 }}>
-              <div style={{ textAlign: "center", marginBottom: 28 }}>
-                <div style={{ fontSize: 44, marginBottom: 12 }}>🚀</div>
-                <h2 style={{ fontSize: 24, fontWeight: 800, color: C.white, marginBottom: 8 }}>{(UPGRADE_COPY[upgradeModalSource] || UPGRADE_COPY.default).headline}</h2>
-                <p style={{ fontSize: 14, color: C.muted, lineHeight: 1.6 }}>{(UPGRADE_COPY[upgradeModalSource] || UPGRADE_COPY.default).subhead}</p>
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 28 }}>
-                {[
-                  { icon: "🐳", text: "See ALL your top spenders — not just the top 3" },
-                  { icon: "⏰", text: "Discover your exact highest-earning hours & days" },
-                  { icon: "💡", text: "Unlock 15+ advanced insights & strategy tips" },
-                  { icon: "📈", text: "Full session history with trend analysis" },
-                  { icon: "🤖", text: "AI fan behavior predictions & return forecasts" },
-                  { icon: "💌", text: "Unlimited re-engagement scripts & fan tracking" },
-                ].map(({ icon, text }) => (
-                  <div key={text} style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 14px", background: "rgba(59,130,246,0.08)", border: "1px solid rgba(59,130,246,0.15)", borderRadius: 10 }}>
-                    <span style={{ fontSize: 18 }}>{icon}</span>
-                    <span style={{ fontSize: 13, color: C.white }}>{text}</span>
-                  </div>
-                ))}
-              </div>
-              {/* Was: "Most creators miss 30-60% of their earning potential
-                  without this" — an invented statistic about creators we have
-                  never measured. Replaced with a claim that is true and
-                  checkable: what is actually being offered. */}
-              {trialEligible && (
-                <div style={{ textAlign: "center", padding: "12px 16px", background: "rgba(34,211,238,0.08)", border: "1px solid rgba(34,211,238,0.25)", borderRadius: 10, marginBottom: 24 }}>
-                  <div style={{ fontSize: 13, color: C.cyan, fontWeight: 600 }}>Free for 7 days — every Pro feature, on your own data</div>
-                </div>
-              )}
-              <Button
-                disabled={earlyAccessSubmitting}
-                onClick={async () => {
-                  setEarlyAccessSubmitting(true)
-                  track('upgrade_checkout_clicked', { source: 'upgrade_modal' })
-                  try {
-                    const { data: { session } } = await supabase.auth.getSession()
-                    if (!session?.access_token) {
-                      showToast("Please sign in again, then retry upgrading.")
-                      return
-                    }
-                    const res = await fetch('/api/stripe/checkout', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-                      credentials: 'include',
-                      body: JSON.stringify({ plan_type: 'standard_monthly' }),
-                    })
-                    const data = await res.json().catch(() => ({}))
-                    if (!res.ok || !data.url) throw new Error(data.error || 'Unable to start checkout.')
-                    window.location.assign(data.url)
-                  } catch (e) {
-                    showToast(e?.message || "Something went wrong starting checkout. Please try again.")
-                    setEarlyAccessSubmitting(false)
-                  }
-                }}
-                style={{ width: "100%", padding: "16px", borderRadius: 14, fontSize: 16, marginBottom: 12 }}>
-                {earlyAccessSubmitting
-                  ? "Redirecting to checkout..."
-                  : trialEligible ? "Start my 7-day free trial →" : "🔓 Upgrade to Pro — $19.99/mo"}
-              </Button>
-              <div style={{ textAlign: "center", fontSize: 12, color: C.muted, marginBottom: 20 }}>
-                {trialEligible
-                  ? `Card required to start. $19.99/mo begins after ${TRIAL_DAYS} days — cancel any time before then and you pay nothing.`
-                  : "Secure checkout powered by Stripe • Cancel anytime"}
-              </div>
-              <button onClick={() => setShowUpgradeModal(false)} style={{ width: "100%", padding: "11px", borderRadius: 10, background: "transparent", border: "1px solid rgba(255,255,255,0.1)", color: C.muted, fontSize: 13, cursor: "pointer" }}>
-                Maybe later
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* ── CONTEXTUAL UPGRADE (2C-4) ────────────────────────────────
+          One modal for every in-dashboard upgrade action. The context is built
+          from the live analytics at open time, so the discovery that caused
+          the click is what the creator is asked about. The old modal is gone:
+          it showed the same six bullets whatever the trigger, one of which
+          ("AI fan behavior predictions & return forecasts") sold a capability
+          the engine does not have. */}
+      <ContextualUpgradeModal
+        open={showUpgradeModal}
+        onClose={() => setShowUpgradeModal(false)}
+        context={buildUpgradeContext(upgradeModalSource, {
+          analytics,
+          trackedPlatformCount: [...new Set(tips.map(t => t.platform).filter(p => p && p !== 'Unknown'))].length,
+        })}
+        isPro={isPro}
+        trialEligible={trialEligible}
+        getAccessToken={async () => {
+          const { data: { session } } = await supabase.auth.getSession()
+          return session?.access_token || null
+        }}
+        onProAction={(source) => {
+          // Already subscribed: take the deeper action instead of selling it.
+          const tab = {
+            window_fan_overlap: 'whales', whales_cutoff: 'whales',
+            peak_window: 'planner', stream_planner: 'planner', import_discovery: 'planner',
+            platform_comparison: 'platforms', multi_platform: 'platforms',
+            money_map: 'moneymap', creator_report: 'report', live_mode_locked: 'live',
+          }[source]
+          if (tab) handleTabChange(tab)
+        }}
+      />
 
       {/* FLOATING FEEDBACK BUTTON — collapsed to a small icon in a safe gutter so it
           never sits over a fan card's actions or the bottom of the page content */}
