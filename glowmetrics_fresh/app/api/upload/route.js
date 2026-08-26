@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { parseCSV, detectPlatform } from '../../../lib/analytics'
+import { canonicalPlatform } from '../../../lib/constants'
+
+// canonicalPlatform() maps empty input to 'Unknown', but an absent form field
+// must stay falsy here so the `|| detectPlatform(raw)` fallback below still
+// fires. This keeps that fallback intact while canonicalizing a real value.
+const canonicalPlatformName = (value) => (value ? canonicalPlatform(value) : '')
 
 const BATCH_SIZE = 250 // Safe batch size — never hit Supabase limits
 
@@ -36,7 +42,12 @@ export async function POST(req) {
   // detection is a fallback for callers that don't pass one, and can't find
   // any platform keywords in a clean, already-normalized CSV (e.g. the
   // onboarding paste flow, which sends parsed rows rather than raw text).
-  const explicitPlatform = (fd.get('platform') || '').toString().trim()
+  // canonicalPlatform() here closes the one ingestion path parseCSV() does not
+  // cover: this value comes straight from the client form field, so a caller
+  // sending a short code or a lowercase id ('bc', 'chaturbate') would write a
+  // non-canonical platform name to `tips` and re-create the alias problem
+  // canonicalPlatform() exists to prevent.
+  const explicitPlatform = canonicalPlatformName((fd.get('platform') || '').toString().trim())
   const textDetectedPlatform = explicitPlatform || detectPlatform(raw)
   const parsed = parseCSV(raw)
 

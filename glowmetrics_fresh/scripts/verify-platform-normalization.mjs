@@ -148,5 +148,29 @@ console.log('\nNON-MUTATION')
   check('unchanged input returns the same array reference', normalizeRowPlatforms(clean) === clean, true)
 }
 
+console.log('\nINGESTION BOUNDARY — the client-supplied platform field')
+{
+  // /api/upload writes fd.get('platform') straight to tips.platform when the
+  // caller supplies one, bypassing parseCSV(). An empty field must stay falsy
+  // so the detectPlatform(raw) fallback still fires.
+  const canonicalPlatformName = (v) => (v ? canonicalPlatform(v) : '')
+  check("a client sending 'bc' now writes BongaCams", canonicalPlatformName('bc'), 'BongaCams')
+  check("a client sending 'chaturbate' now writes Chaturbate", canonicalPlatformName('chaturbate'), 'Chaturbate')
+  check('an absent field stays falsy so text detection still runs', canonicalPlatformName(''), '')
+}
+
+console.log('\nDISPLAY — platform colour lookup survives canonical names')
+{
+  const PLATFORM_COLORS = { chaturbate: '#f97316', myfreecams: '#3b82f6', stripchat: '#ec4899', bongacams: '#8b5cf6', camsoda: '#10b981', other: '#64748b' }
+  const SLATE = '#64748b'
+  const platformColorFor = (p) => PLATFORM_COLORS[String(p || '').toLowerCase()] || SLATE
+  // Before the case-insensitive lookup, canonical title-case names missed the
+  // lowercase keys and every platform rendered grey.
+  check('canonical name finds its colour', platformColorFor('Chaturbate'), '#f97316')
+  check('BongaCams finds its colour', platformColorFor('BongaCams'), '#8b5cf6')
+  check('an old lowercase spelling still resolves', platformColorFor('chaturbate'), '#f97316')
+  check('an unknown platform falls back to slate', platformColorFor('SomeNewSite'), SLATE)
+}
+
 console.log(`\n${pass} passed, ${fail} failed`)
 if (fail > 0) process.exit(1)
