@@ -152,8 +152,15 @@ check('the hidden set is still computed, to power the real-numbers summary',
   src.includes('const hidden = isPro ? [] : prioritised.slice(freeFanLimit)'))
 check('the upsell describes this account with real counts',
   src.includes('hiddenSummary.lifetimeUSD') && src.includes('hiddenSummary.overdue'))
+// 2C-7: "Find My Highest-Value Fans" implied a value tier the engine does not
+// assert on this card, and its source was missing from the upgrade catalogue,
+// so the contextual modal fell back to the generic default. Both fixed; the
+// guard's intent — an outcome-oriented CTA, never a bare upgrade prompt — is
+// unchanged.
 check('the CTA is outcome-oriented, not a generic upgrade prompt',
-  raw.includes('Find My Highest-Value Fans') && !raw.includes('>Upgrade to Pro<'))
+  raw.includes('Follow these fans with Pro') && !raw.includes('>Upgrade to Pro<'))
+check('the CTA routes to a real catalogue context',
+  raw.includes('onUpgrade?.("whales_cutoff")'))
 check('the Pro-preview impression event still fires', page.includes("trackProPreviewViewed('whale_intelligence')"))
 check('the impression condition matches what Fans.js actually renders',
   page.includes("whales.length > FREE_FAN_LIMIT"))

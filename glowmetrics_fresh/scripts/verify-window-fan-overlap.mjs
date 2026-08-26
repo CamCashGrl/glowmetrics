@@ -152,8 +152,11 @@ check('only two branches read the plan at all (Pro detail, free CTA)',
   (OVERLAP_SRC.match(/isPro &&/g) || []).length, 2)
 check('there is no "locked" framing anywhere',
   /(🔒|locked|Locked)/.test(OVERLAP_SRC), false)
+// 2C-7 renamed the button from "Unlock fan detail with Pro" (feature framing)
+// to the outcome. The ordering guarantee is unchanged: the discovery sentence
+// still comes before the button.
 check('the free CTA names the discovery before it names Pro',
-  OVERLAP_SRC.indexOf('See which fans are behind the pattern') < OVERLAP_SRC.indexOf('Unlock fan detail with Pro'), true)
+  OVERLAP_SRC.indexOf('See which fans are behind the pattern') < OVERLAP_SRC.indexOf('See these fans with Pro'), true)
 check('the CTA only promises what the fan layer already produces',
   /tip cadence, last seen, and re-engagement timing/.test(OVERLAP_SRC), true)
 

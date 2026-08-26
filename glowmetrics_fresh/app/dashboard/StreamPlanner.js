@@ -629,7 +629,7 @@ function PlanTab({ tips, windows, whales, prefs, savePrefs, isPro=true, timezone
       {!isPro ? (
         <div style={{ ...cardS(), textAlign:"center", padding:"32px 24px" }}>
           <div style={{ fontSize:26, marginBottom:8 }}>🔒</div>
-          <div style={{ color:TEXT, fontSize:14, fontWeight:700, marginBottom:6 }}>Untested Opportunities &amp; the full Opportunity Grid are Creator Pro features</div>
+          <div style={{ color:TEXT, fontSize:14, fontWeight:700, marginBottom:6 }}>See every day and time block worth testing</div>
           <div style={{ color:MUTED, fontSize:12, marginBottom:16 }}>See every day/time block worth testing, not just tonight's window.</div>
           <Button onClick={() => onUpgrade?.('stream_planner')} style={{ padding:"9px 22px", fontSize:13 }}>See the full weekly plan</Button>
         </div>
@@ -1041,7 +1041,7 @@ function LockedPlannerTab({ title, body, onUpgrade }) {
   return (
     <div style={{ ...cardS(), textAlign:"center", padding:"48px 32px" }}>
       <div style={{ fontSize:32, marginBottom:12 }}>🔒</div>
-      <div style={{ color:PRIMARY, fontSize:16, fontWeight:700, marginBottom:8 }}>{title} is a Creator Pro feature</div>
+      <div style={{ color:PRIMARY, fontSize:16, fontWeight:700, marginBottom:8 }}>{title}</div>
       <div style={{ color:TEXT, fontSize:13, lineHeight:1.6, marginBottom:20 }}>{body}</div>
       <Button onClick={() => onUpgrade?.('stream_planner')} style={{ padding:"10px 24px", fontSize:14 }}>See the full weekly plan</Button>
     </div>

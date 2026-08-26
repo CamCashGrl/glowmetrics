@@ -29,9 +29,8 @@ function fmtDate(iso) {
   } catch (_) { return null }
 }
 
-export default function Settings({ user, profile, isPro, supabase, onTimezoneSaved }) {
+export default function Settings({ user, profile, isPro, supabase, onTimezoneSaved, onUpgrade }) {
   const [portalLoading, setPortalLoading] = useState(false)
-  const [checkoutLoading, setCheckoutLoading] = useState(false)
   const [error, setError] = useState(null)
   const [editingTz, setEditingTz] = useState(false)
   const [tzSaving, setTzSaving] = useState(false)
@@ -84,27 +83,12 @@ export default function Settings({ user, profile, isPro, supabase, onTimezoneSav
     }
   }
 
-  const startCheckout = async () => {
-    setError(null)
-    setCheckoutLoading(true)
-    gtmTrack('upgrade_checkout_clicked', { source: 'settings' })
-    try {
-      const { data: { session } } = await supabase.auth.getSession()
-      const res = await fetch('/api/stripe/checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token || ''}` },
-        credentials: 'include',
-        body: JSON.stringify({ plan_type: 'standard_monthly' }),
-      })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok || !data.url) throw new Error(data.error || 'Unable to start checkout.')
-      gtmTrack('checkout_started', { source: 'settings', plan_type: 'standard_monthly' })
-      window.location.assign(data.url)
-    } catch (e) {
-      setError(e?.message || 'Something went wrong starting checkout. Please try again.')
-      setCheckoutLoading(false)
-    }
-  }
+  // 2C-7: the local checkout that used to live here is retired. It was a
+  // second implementation of the same POST /api/stripe/checkout call the
+  // shared ContextualUpgradeModal already owns, and its button hardcoded
+  // "$19.99/mo" in the label — a price string that would silently go stale the
+  // day the real Stripe price changed. Billing management (the portal, below)
+  // stays here; the purchase itself goes through the one shared path.
 
   return (
     <div style={{ animation: 'fadeUp 0.3s ease', maxWidth: 640 }}>
@@ -142,8 +126,8 @@ export default function Settings({ user, profile, isPro, supabase, onTimezoneSav
               </div>
             )
           ) : (
-            <button onClick={startCheckout} disabled={checkoutLoading} style={{ padding: '10px 22px', borderRadius: 10, border: 'none', cursor: checkoutLoading ? 'default' : 'pointer', fontWeight: 700, fontSize: 13, color: '#06101A', background: `linear-gradient(90deg, ${C.cyan}, ${C.purple}, ${C.pink})`, opacity: checkoutLoading ? 0.7 : 1 }}>
-              {checkoutLoading ? 'Redirecting…' : 'Upgrade to Pro — $19.99/mo'}
+            <button onClick={() => onUpgrade?.('default')} style={{ padding: '10px 22px', borderRadius: 10, border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, color: '#06101A', background: `linear-gradient(90deg, ${C.cyan}, ${C.purple}, ${C.pink})` }}>
+              Upgrade to Creator Pro
             </button>
           )}
         </div>

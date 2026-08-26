@@ -175,7 +175,7 @@ export default function WindowFanOverlap({
               padding: '9px 18px', borderRadius: 100, border: 'none', cursor: 'pointer',
               background: GRADIENT, color: '#06101A', fontSize: 12.5, fontWeight: 800,
             }}>
-              Unlock fan detail with Pro
+              See these fans with Pro →
             </button>
           </div>
         )}

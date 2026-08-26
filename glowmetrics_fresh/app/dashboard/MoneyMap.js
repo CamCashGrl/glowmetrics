@@ -725,7 +725,7 @@ function LockedTabPanel({ label, onUpgrade }) {
   return (
     <div style={{textAlign:"center",padding:"60px 24px",background:CARD,border:`1px solid ${BORDER}`,borderRadius:"16px"}}>
       <div style={{fontSize:"32px",marginBottom:"12px"}}>🔒</div>
-      <div style={{color:TEXT,fontSize:"16px",fontWeight:"700",marginBottom:"8px"}}>{label} is a Creator Pro feature</div>
+      <div style={{color:TEXT,fontSize:"16px",fontWeight:"700",marginBottom:"8px"}}>{label}</div>
       <div style={{color:SLATE,fontSize:"13px",marginBottom:"20px"}}>Your Money Map heatmap is free — upgrade to unlock session breakdowns, platform comparisons, and trend analysis.</div>
       <button onClick={() => onUpgrade?.('money_map')} style={{display:"inline-flex",alignItems:"center",background:"linear-gradient(135deg,#22d3ee,#a855f7)",color:"#0a0e1a",fontWeight:"800",padding:"10px 24px",borderRadius:"10px",border:"none",cursor:"pointer",fontSize:"14px"}}>Open the full history</button>
     </div>

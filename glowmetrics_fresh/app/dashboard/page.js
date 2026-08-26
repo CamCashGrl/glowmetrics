@@ -19,6 +19,7 @@ import { track as gtmTrack } from '../../lib/track'
 import ContextualUpgradeModal from './ContextualUpgradeModal'
 import PeakWindowPlan from './PeakWindowPlan'
 import { buildUpgradeContext } from '../../lib/upgradeContexts'
+import { atLeast, CLAIMABLE_FLOOR } from '../../lib/intelligence/states'
 import { isProPlan, trialDaysRemaining, getAccessState, TRIAL_DAYS } from '../../lib/plan'
 import { resolveCreatorTimezone, autoPopulateTimezoneIfMissing } from '../../lib/timezone'
 import CommandCenter from './CommandCenter'
@@ -105,7 +106,7 @@ const IMPORT_MESSAGES = [
   "Finding your peak stream hours…",
   "Analyzing your fans…",
   "Calculating your earnings…",
-  "Gathering AI insights…",
+  "Comparing your streaming windows…",
   "Creating your personalized streaming schedule…",
   "Updating your dashboard…",
 ]
@@ -3485,6 +3486,7 @@ const stopImportMessageRotation = () => {
         {activeTab === "settings" && (
           <Settings
             user={user} profile={profile} isPro={isPro} supabase={supabase}
+            onUpgrade={(src) => openUpgradeModal(src)}
             onTimezoneSaved={(tz) => {
               setProfile(p => ({ ...(p || {}), timezone: tz }))
               loadData(user.id, true, { silent: true })
@@ -4360,7 +4362,7 @@ const stopImportMessageRotation = () => {
                 <div style={{ flex: 1, fontSize: 12.5, color: C.text, lineHeight: 1.5 }}>
                   You're tracking all 3 platforms your free plan includes. Upgrade to Pro to add more.
                 </div>
-                <Button onClick={() => openUpgradeModal('multi_platform')} style={{ flexShrink: 0, padding: "8px 14px", fontSize: 12, whiteSpace: "nowrap" }}>Upgrade →</Button>
+                <Button onClick={() => openUpgradeModal('multi_platform')} style={{ flexShrink: 0, padding: "8px 14px", fontSize: 12, whiteSpace: "nowrap" }}>Add a platform →</Button>
               </div>
             )}
             <div style={{ ...glassCard, borderRadius: 14, padding: 32, marginBottom: 16, position: "relative", overflow: "hidden" }}>
@@ -4588,19 +4590,31 @@ const stopImportMessageRotation = () => {
                 Some insights unlock as you upload more data
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 8 }}>
+                {/* 2C-7: this list used to quote the counter thresholds 2C-1
+                    retired (25+ tips, 10+ fans, 8+ sessions...), which no
+                    longer govern anything, alongside "Whale detection" and
+                    "Earnings forecasting" — one unsupported tier and one held
+                    capability. It now reads the canonical insights directly:
+                    each row is an insight that is not yet claimable, with the
+                    intelligence layer's OWN next-milestone sentence. No
+                    threshold is written here. */}
                 {[
-                  ["Peak earning hours", "25+ tips & 3+ sessions"],
-                  ["Average $/hour", "3+ sessions & 60+ tracked minutes"],
-                  ["Top fans", "10+ tips & 5+ fans"],
-                  ["Whale detection", "10+ fans & $50+ earned"],
-                  ["Session breakdown", "3+ sessions"],
-                  ["Fan re-engagement", "20+ fans & $50+ earned"],
-                  ["Earnings forecasting", "8+ sessions & $50+ earned"],
-                  ["Platform comparison", isPro ? "2+ platforms imported" : "Subscription + 2+ platforms"],
-                ].map(([label, req]) => (
+                  ['peak_window', 'Peak earning window'],
+                  ['hourly_rate', 'Average $/hour'],
+                  ['top_supporters', 'Top supporters'],
+                  ['session_length', 'Session breakdown'],
+                  ['churn_risk', 'Fan re-engagement'],
+                  ['cross_platform', 'Platform comparison'],
+                ]
+                  .map(([id, label]) => [label, intelligence?.insights?.[id]])
+                  // Claimability is the canonical ladder comparison, not the
+                  // per-insight `claimable` flag, which only some entries set.
+                  .filter(([, e]) => e && !atLeast(e.state, CLAIMABLE_FLOOR) && e.nextMilestone?.label)
+                  .map(([label, e]) => [label, e.nextMilestone.label])
+                  .map(([label, req]) => (
                   <div key={label} style={{ fontSize: 12, padding: "8px 10px", borderRadius: 8, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
                     <div style={{ color: C.white, fontWeight: 600, marginBottom: 2 }}>{label}</div>
-                    <div style={{ color: C.muted, fontSize: 11 }}>Unlocks at {req}</div>
+                    <div style={{ color: C.muted, fontSize: 11 }}>Needs {req}</div>
                   </div>
                 ))}
               </div>
@@ -5087,7 +5101,9 @@ const stopImportMessageRotation = () => {
         const fanInsight = churnRisk === "Critical" || churnRisk === "High"
           ? "This fan's tipping has slowed — a quick message could bring them back."
           : w.tipProbability?.level === "High"
-          ? "This fan is highly engaged and likely to tip again soon."
+          // 2C-7: was "likely to tip again soon" — a prediction the engine does
+          // not calibrate. States the observed cadence instead.
+          ? "This fan tips on a short, regular cadence in your recorded history."
           : w.tipCount >= 5 && (churnRisk === "Low" || churnRisk === "Medium")
           ? "This fan is highly engaged and tips consistently. Keep the momentum going!"
           : null
@@ -5310,16 +5326,36 @@ const stopImportMessageRotation = () => {
                     </div>
                   </div>
                 )}
-                {whaleTips.length > 0 && (
+                {/* 2C-7: the "🤖 AI Predictions" block that sat here is retired.
+                    All four of its figures were fabricated: "predicted next tip
+                    size" was avgTipSize x 1.1, the "engagement score /100" was
+                    an invented weighting of tip count and lifetime value, and
+                    the "30-day revenue forecast" was lifetime value per month
+                    x 1.05. Nothing in the engine calibrates any of them, and
+                    "likely to tip again in ~N days" restated the observed
+                    cadence as a prediction about the fan.
+
+                    Replaced with the same cadence, stated as what it is: an
+                    observation about recorded tips. Both numbers below already
+                    appear elsewhere in this profile and are computed once. */}
+                {whaleTips.length > 1 && (
                   <div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: C.text, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>🤖 AI Predictions</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: C.text, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>Observed tipping pattern</div>
                     <div style={{ padding: 16, background: "rgba(255,255,255,0.04)", borderRadius: 12, border: "1px solid rgba(255,255,255,0.07)", display: "flex", flexDirection: "column", gap: 10 }}>
-                      {[{ label: "📅 Likely to tip again in", value: likelyReturnDays === 0 ? "Overdue!" : `~${likelyReturnDays} days`, color: C.cyan }, { label: "💸 Predicted next tip size", value: `$${(w.avgTipSize * 1.1).toFixed(2)}`, color: C.gold }, { label: "🎯 Engagement score", value: `${Math.min(99, Math.round((w.tipCount / 10) * 20 + (w.totalUSD / 100) * 10))} / 100`, color: C.pink }, { label: "📈 30-day revenue forecast", value: `$${((w.totalUSD / Math.max(1, Math.floor((Date.now() - new Date(firstTip?.date_time)) / 2592000000))) * 1.05).toFixed(2)}`, color: C.green }].map(({ label, value, color }) => (
+                      {[
+                        { label: "Tips recorded", value: `${w.tipCount}`, color: C.cyan },
+                        { label: "Typical gap between tips", value: `~${avgDaysBetweenTips} days`, color: C.cyan },
+                        { label: "Last tip", value: daysSinceLastTip === null ? "—" : daysSinceLastTip === 0 ? "Today" : `${daysSinceLastTip} days ago`, color: daysSinceLastTip !== null && daysSinceLastTip > avgDaysBetweenTips ? C.gold : C.text },
+                        { label: "Average tip size", value: `$${(w.avgTipSize || 0).toFixed(2)}`, color: C.text },
+                      ].map(({ label, value, color }) => (
                         <div key={label} style={{ display: "flex", justifyContent: "space-between", padding: "10px 14px", background: "rgba(255,255,255,0.04)", borderRadius: 8 }}>
                           <div style={{ fontSize: 13, color: C.text }}>{label}</div>
                           <div style={{ fontSize: 13, fontWeight: 700, color }}>{value}</div>
                         </div>
                       ))}
+                    </div>
+                    <div style={{ fontSize: 11, color: C.muted, marginTop: 8, lineHeight: 1.55 }}>
+                      Counted from tips this fan has already sent. CamCash does not predict whether or when they will tip again.
                     </div>
                   </div>
                 )}

@@ -283,7 +283,10 @@ export default function CommandCenter({
         <div>
           <div style={{ fontSize: 27, fontWeight: 800, color: C.white, letterSpacing: "-0.025em" }}>👋 {greeting}</div>
           <div style={{ fontSize: 15, color: C.muted, marginTop: 6 }}>
-            {hasWindow ? "Here's how to make more money today." : "Here's what your data says so far."}
+            {/* 2C-7: was "Here's how to make more money today." — an income promise
+                the product cannot make. The dashboard reports what the recorded
+                history shows; it does not guarantee an outcome. */}
+            {hasWindow ? "Here's what your recorded history points to." : "Here's what your data says so far."}
           </div>
         </div>
       </div>
@@ -532,7 +535,10 @@ export default function CommandCenter({
                 `Every ranked window for the week, not just the top one`,
                 topGap ? `Which platform to run in each window — ${topGap.platform} is only your biggest gap today` : `Which platform to run in each window`,
                 overlap?.count ? `Alerts when your ${overlap.count} high-value fan${overlap.count === 1 ? "" : "s"} in this window go quiet` : `Alerts when a high-value supporter goes quiet`,
-                `A forecast you can hold next week's schedule against`,
+                // 2C-7: was "A forecast you can hold next week's schedule
+                // against". No forecast ships, and none is calibrated. Replaced
+                // with what Pro actually does on this data today.
+                `The same evidence and confidence behind every window, not just this one`,
               ].map((line, i) => (
                 <div key={i} style={{ display: "flex", gap: 9, alignItems: "flex-start", fontSize: 13.5, color: C.text, lineHeight: 1.5 }}>
                   <span style={{ color: C.indigo, fontWeight: 800, flexShrink: 0 }}>→</span>

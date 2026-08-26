@@ -326,8 +326,15 @@ export default function Fans({
               {hiddenSummary.overdue > 0 && <>, and <strong style={{ color: C.pink }}>{hiddenSummary.overdue}</strong> {hiddenSummary.overdue === 1 ? "is" : "are"} already past their usual return window</>}
               {hiddenSummary.inBestWindow > 0 && <>, with <strong style={{ color: C.cyan }}>{hiddenSummary.inBestWindow}</strong> who {hiddenSummary.inBestWindow === 1 ? "tips" : "tip"} during your best hours</>}.
             </div>
-            <BrandButton onClick={() => onUpgrade?.("fans_priority_locked")} style={{ padding: "11px 20px", fontSize: 13.5 }}>
-              Find My Highest-Value Fans →
+            {/* 2C-7: was source "fans_priority_locked", which is not in the
+                upgrade catalogue and therefore fell back to the generic
+                default context — losing the very discovery stated above it.
+                Routed to whales_cutoff, whose context is built from the
+                creator's real Top Supporter count. The label also dropped
+                "Highest-Value", which implied a value tier the engine does not
+                assert here. */}
+            <BrandButton onClick={() => onUpgrade?.("whales_cutoff")} style={{ padding: "11px 20px", fontSize: 13.5 }}>
+              Follow these fans with Pro →
             </BrandButton>
           </div>
         )}
