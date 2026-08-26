@@ -38,6 +38,10 @@ const UPGRADE_COPY = {
     headline: "Unlock Your Full Earning Potential",
     subhead: "You're only seeing a preview of your data. Here's what's waiting for you inside:",
   },
+  import_discovery: {
+    headline: "Turn this discovery into a plan",
+    subhead: "CamCash found a real pattern in the history you just imported. Pro turns it into a weekly schedule, platform priorities and the windows worth testing next.",
+  },
   multi_platform: {
     headline: "You've reached your free platforms",
     subhead: "Free tracks up to 3 platforms. Creator Pro adds the rest, plus the cross-platform comparison that shows where you actually earn best.",
@@ -62,6 +66,7 @@ const TAB_LOADING = (
   </div>
 )
 const CreatorReport = dynamic(() => import('./CreatorReport'), { ssr: false, loading: () => TAB_LOADING })
+const ImportSuccess = dynamic(() => import('./ImportSuccess'), { ssr: false })
 const Settings = dynamic(() => import('./Settings'), { ssr: false, loading: () => TAB_LOADING })
 const OnboardingChecklist = dynamic(() => import('./OnboardingChecklist'), { ssr: false })
 const AnalyticsCharts = dynamic(() => import('./AnalyticsCharts'), { ssr: false, loading: () => TAB_LOADING })
@@ -1443,6 +1448,11 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   // Import flow: idle -> processing -> success | error
   const [importStage, setImportStage] = useState('idle')
+  // The canonical intelligence diff returned by POST /api/intelligence after a
+  // successful import — what that upload actually taught CamCash. Never
+  // computed here; see the POST in handleCSV().
+  const [importIntel, setImportIntel] = useState(null)
+  const [importIntelPending, setImportIntelPending] = useState(false)
   const [importMessageIdx, setImportMessageIdx] = useState(0)
   const importMessageTimerRef = useRef(null)
   const uploading = importStage === 'processing'
@@ -2338,6 +2348,7 @@ const stopImportMessageRotation = () => {
     setImportStage('processing')
     setImportMessageIdx(0)
     setLastUploadResult(null)
+    setImportIntel(null)
     gtmTrack('csv_upload_started', { platform: forcePlatform || uploadPlatform || 'unknown' })
 
     stopImportMessageRotation()
@@ -2406,6 +2417,44 @@ const stopImportMessageRotation = () => {
       // Force reload after upload — bypass cache so new tips appear immediately
       try { sessionStorage.removeItem(`camcash_tips_${user.id}`) } catch(e) {}
       await loadData(user.id, true, { silent: true })
+
+      // ── WHAT DID THIS IMPORT ACTUALLY TEACH CAMCASH? ──────────────────
+      // POST /api/intelligence re-runs the canonical engine on the freshly
+      // stored tips, diffs it against the snapshot taken the last time the
+      // creator was shown their report, writes any milestone rows to
+      // dashboard_events, and records the new baseline.
+      //
+      // This is the ONLY place the import success state gets its numbers —
+      // there is no second progress calculation in the importer. A failure
+      // here leaves the plain success state intact rather than blocking it,
+      // because the import itself already succeeded.
+      setImportIntelPending(true)
+      try {
+        const { data: { session: intelSession } } = await supabase.auth.getSession()
+        const intelRes = await fetch('/api/intelligence', {
+          method: 'POST',
+          headers: intelSession ? { Authorization: `Bearer ${intelSession.access_token}` } : {},
+        })
+        if (intelRes.ok) {
+          const intel = await intelRes.json()
+          setImportIntel(intel)
+          const improved = intel?.changed?.improved || []
+          const unlocked = improved.filter(c => c.isDiscovery ?? c.newlyClaimable)
+          gtmTrack('import_produced_evidence', {
+            improved_count: improved.length,
+            unlocked_count: unlocked.length,
+            calibration_before: intel?.changed?.pctBefore ?? null,
+            calibration_after: intel?.calibration?.pct ?? null,
+          })
+          for (const u of unlocked) {
+            track('milestone_reached', { insight: u.id, from: u.from, to: u.to })
+          }
+        }
+      } catch (e) {
+        // Non-fatal: the import succeeded, only the "what changed" read failed.
+      } finally {
+        setImportIntelPending(false)
+      }
 
     } catch (err) {
       showToast("❌ " + err.message)
@@ -4368,9 +4417,29 @@ const stopImportMessageRotation = () => {
                   {lastUploadResult.skipped > 0 && (
                     <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>{lastUploadResult.skipped} duplicates skipped</div>
                   )}
-                  <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 20, flexWrap: "wrap" }}>
-                    <Button onClick={() => handleTabChange('overview')} style={{ padding: "12px 26px", fontSize: 14 }}>View Dashboard</Button>
-                    <Button variant="secondary" onClick={resetImport} style={{ padding: "12px 22px", fontSize: 13 }}>Import another CSV</Button>
+
+                  {/* ── WHAT CAMCASH LEARNED ──────────────────────────────
+                      Reads the canonical intelligence diff returned by
+                      POST /api/intelligence. Renders nothing invented: if the
+                      import moved no measurable evidence, it says so. The
+                      action row lives inside it (Creator Report / Dashboard /
+                      Import more), replacing the two buttons that were here. */}
+                  <div style={{ marginTop: 22, textAlign: "left" }}>
+                    <ImportSuccess
+                      result={lastUploadResult}
+                      changed={importIntel?.changed || null}
+                      calibration={importIntel?.calibration || intelligence?.calibration || null}
+                      insights={importIntel?.insights || intelligence?.insights || null}
+                      bestWindow={analytics?.canonicalBestTimes?.bestWindow || null}
+                      earlySignal={analytics?.canonicalBestTimes?.earlySignal || null}
+                      nextMilestone={importIntel?.nextMilestone || null}
+                      isPro={isPro}
+                      pending={importIntelPending}
+                      onViewReport={() => { gtmTrack('creator_report_opened_after_import', {}); handleTabChange('report') }}
+                      onViewDashboard={() => handleTabChange('overview')}
+                      onImportMore={resetImport}
+                      onUpgrade={() => openUpgradeModal('import_discovery')}
+                    />
                   </div>
                 </div>
               )}

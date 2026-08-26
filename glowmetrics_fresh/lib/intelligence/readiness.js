@@ -21,7 +21,7 @@
 
 import {
   INSIGHT_STATE, rank, atLeast, fromConfidenceTier, fromAccountConfidence,
-  promoteIfEstablished, capForComparison, CLAIMABLE_FLOOR,
+  promoteIfEstablished, capForComparison, CLAIMABLE_FLOOR, EVIDENCE_KIND,
 } from './states'
 import { INSIGHTS, INSIGHT_BY_ID, TOTAL_WEIGHT, GATE } from './insights'
 import { calculateConfidence } from '../analytics'
@@ -488,7 +488,22 @@ function sessionSpanDays(sessions) {
 export function snapshot(intelligence) {
   const out = {}
   for (const [id, e] of Object.entries(intelligence?.insights || {})) out[id] = e.state
-  return { states: out, pct: intelligence?.calibration?.pct ?? 0 }
+  const ev = intelligence?.calibration?.evidence || {}
+  return {
+    states: out,
+    pct: intelligence?.calibration?.pct ?? 0,
+    // The countable evidence behind the states, so the next import can report
+    // what it actually ADDED ("+14 sessions analysed") rather than estimating.
+    // Same figures the Creator Report header shows — not a second measurement.
+    evidence: {
+      sessionsAnalyzed: ev.sessionsAnalyzed ?? 0,
+      tipsAnalyzed: ev.tipsAnalyzed ?? 0,
+      fansIdentified: ev.fansIdentified ?? 0,
+      windowsCompared: ev.windowsCompared ?? 0,
+      platformsQualifying: ev.platformsQualifying ?? 0,
+      streamedHours: ev.streamedHours ?? 0,
+    },
+  }
 }
 
 /**
@@ -502,19 +517,47 @@ export function diffSnapshots(prev, next) {
   for (const [id, state] of Object.entries(after)) {
     const was = before[id] || INSIGHT_STATE.NOT_AVAILABLE
     if (rank(state) > rank(was)) {
+      const def = INSIGHT_BY_ID[id]
+      const newlyClaimable = atLeast(state, CLAIMABLE_FLOOR) && !atLeast(was, CLAIMABLE_FLOOR)
       improved.push({
         id,
-        label: INSIGHT_BY_ID[id]?.label || id,
+        label: def?.label || id,
+        kind: def?.kind || null,
         from: was,
         to: state,
-        newlyClaimable: atLeast(state, CLAIMABLE_FLOOR) && !atLeast(was, CLAIMABLE_FLOOR),
+        newlyClaimable,
+        // A DISCOVERY is a pattern or prediction crossing the claimable floor —
+        // something CamCash now knows that it did not before. A FACT crossing
+        // the same floor is bookkeeping ("sessions detected"), not a finding,
+        // and must never trigger the "New insight unlocked" moment. Without
+        // this, importing any file at all would celebrate.
+        isDiscovery: newlyClaimable && def?.kind !== EVIDENCE_KIND.FACT,
       })
     }
   }
+  // Evidence deltas. Only reported when BOTH snapshots carry the counter —
+  // a baseline written before evidence was stored cannot be differenced, and
+  // an estimate would be worse than saying nothing. Only positive deltas are
+  // returned: an import adds data, it never removes it, so a negative here
+  // would mean something else changed and must not be presented as a gain.
+  const evBefore = prev?.evidence || null
+  const evAfter = next?.evidence || null
+  const evidenceDelta = {}
+  if (evBefore && evAfter) {
+    for (const key of Object.keys(evAfter)) {
+      if (typeof evBefore[key] !== 'number' || typeof evAfter[key] !== 'number') continue
+      const delta = parseFloat((evAfter[key] - evBefore[key]).toFixed(1))
+      if (delta > 0) evidenceDelta[key] = { before: evBefore[key], after: evAfter[key], delta }
+    }
+  }
+
   return {
     improved,
     pctBefore: prev?.pct ?? 0,
     pctAfter: next?.pct ?? 0,
     pctDelta: (next?.pct ?? 0) - (prev?.pct ?? 0),
+    evidenceDelta,
+    /** True when the import moved nothing measurable — say so honestly. */
+    isQuiet: improved.length === 0 && Object.keys(evidenceDelta).length === 0,
   }
 }

@@ -84,7 +84,39 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { payload } = await build(supabase, user)
-  return NextResponse.json(payload)
+
+  // The sticky insight: the highest-priority undismissed discovery this
+  // creator has not yet acted on. Read from the EXISTING dashboard_events
+  // table — no new notification store. One at a time, never a feed.
+  const { data: sticky } = await supabase
+    .from('dashboard_events')
+    .select('id, event_type, priority, title, message, metadata, created_at')
+    .eq('user_id', user.id)
+    .eq('source', 'intelligence')
+    .is('dismissed_at', null)
+    .in('status', ['new', 'seen'])
+    // Priority is ordered semantically in pickSticky() below — an alphabetical
+    // SQL sort would put 'high' after 'critical' but 'low' before 'medium'.
+    .order('created_at', { ascending: false })
+    .limit(10)
+
+  return NextResponse.json({
+    ...payload,
+    stickyInsight: pickSticky(sticky || []),
+  })
+}
+
+// Priority order is semantic, not alphabetical, so it is applied here rather
+// than in the query. Matches the dashboard_events CHECK constraint's values.
+const PRIORITY_RANK = { critical: 0, high: 1, medium: 2, low: 3 }
+
+function pickSticky(rows) {
+  if (!rows.length) return null
+  const sorted = [...rows].sort((a, b) =>
+    (PRIORITY_RANK[a.priority] ?? 9) - (PRIORITY_RANK[b.priority] ?? 9) ||
+    new Date(b.created_at) - new Date(a.created_at)
+  )
+  return sorted[0]
 }
 
 export async function POST() {
