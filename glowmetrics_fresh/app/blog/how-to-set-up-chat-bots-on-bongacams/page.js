@@ -1,88 +1,207 @@
 import ArticleLayout from '../../components/ArticleLayout'
+import { s, articleSchema, articleMeta } from '../../../lib/blog-article-styles'
 
-export const metadata = {
-  title: "How to Set Up Chat Bots on BongaCams: What Models Should Automate",
-  description: "A practical BongaCams bot guide: what to automate, how to test it, and how to keep important fan interactions personal.",
-  alternates: { canonical: 'https://www.camcashgrl.com/blog/how-to-set-up-chat-bots-on-bongacams' },
-  openGraph: { title: "How to Set Up Chat Bots on BongaCams: What Models Should Automate | CamCash", description: "A practical BongaCams bot guide: what to automate, how to test it, and how to keep important fan interactions personal.", url: 'https://www.camcashgrl.com/blog/how-to-set-up-chat-bots-on-bongacams', type: 'article', images: [{ url: 'https://www.camcashgrl.com/og-image.png', width: 1200, height: 630 }] },
-  twitter: { card: 'summary_large_image', title: "How to Set Up Chat Bots on BongaCams: What Models Should Automate | CamCash", description: "A practical BongaCams bot guide: what to automate, how to test it, and how to keep important fan interactions personal." },
-}
+const SLUG = 'how-to-set-up-chat-bots-on-bongacams'
+const TITLE = 'How to Set Up Chat Bots on BongaCams: Tip Menu & Countdown Goals'
+const DESC = 'BongaCams runs automation as built-in chatbots rather than third-party apps. How the Tip Menu and Countdown chatbots are configured, and how they differ from Chaturbate’s system.'
 
-const schema = {
-  '@context':'https://schema.org','@type':'Article',
-  headline:"How to Set Up Chat Bots on BongaCams: What Models Should Automate | CamCash",description:"A practical BongaCams bot guide: what to automate, how to test it, and how to keep important fan interactions personal.",
-  url:'https://www.camcashgrl.com/blog/how-to-set-up-chat-bots-on-bongacams',
-  datePublished:'2026-08-25',dateModified:'2026-08-25',
-  author:{'@type':'Organization',name:'CamCash',url:'https://www.camcashgrl.com'},
-  publisher:{'@type':'Organization',name:'CamCash',url:'https://www.camcashgrl.com'},
-  mainEntityOfPage:{'@type':'WebPage','@id':'https://www.camcashgrl.com/blog/how-to-set-up-chat-bots-on-bongacams'}
-}
-const faqSchema={'@context':'https://schema.org','@type':'FAQPage',mainEntity:[
-    { '@type': 'Question', name: "Can BongaCams models use chat bots?", acceptedAnswer: { '@type': 'Answer', text: "Tool availability and rules can change. Check current BongaCams creator tools and terms before using a bot." } },
-    { '@type': 'Question', name: "What should I automate first?", acceptedAnswer: { '@type': 'Answer', text: "Start with repetitive, non-personal room information if the current platform tools support it." } }
-  ]}
+const FAQS = [
+  {
+    q: 'Do I need to install anything to use BongaCams chatbots?',
+    a: 'No. BongaCams provides its chatbots as built-in platform features configured from your model account. There is nothing to install and no third-party directory to browse, which is the main structural difference from Chaturbate.',
+  },
+  {
+    q: 'How many goals can the Countdown chatbot run?',
+    a: 'BongaCams has documented the Countdown chatbot as supporting several goals queued at once, which then run one after another once the bot is started — reported as up to five. Confirm the current number in your own chatbot settings, since platform features change.',
+  },
+  {
+    q: 'Can I stop the tip menu message from repeating automatically?',
+    a: 'Yes. BongaCams added the ability to disable automatic resending of the Tip Menu auto-message, so you can display a menu without it reposting on a timer. This is worth using in quiet rooms, where a repeating menu is more noticeable than in a busy one.',
+  },
+  {
+    q: 'How is this different from setting up bots on Chaturbate?',
+    a: 'Chaturbate gives you a directory of third-party apps and bots you start and configure, with limits on how many can run. BongaCams provides specific first-party chatbots with their own settings instead. There is less variety on BongaCams but also less that can break, since nothing depends on an outside developer maintaining their bot.',
+  },
+]
 
-const s={
-h1:{fontSize:'29px',fontWeight:800,color:'#f1f5f9',lineHeight:1.2,marginBottom:14},
-intro:{fontSize:16,lineHeight:1.75,color:'#cbd5e1',marginBottom:32,paddingLeft:14,borderLeft:'3px solid #22d3ee'},
-h2:{fontSize:21,fontWeight:700,color:'#e2e8f0',marginBottom:10,marginTop:40},
-h3:{fontSize:17,fontWeight:700,color:'#e2e8f0',marginBottom:8,marginTop:28},
-p:{fontSize:15,lineHeight:1.75,color:'#94a3b8',marginBottom:14},
-ul:{paddingLeft:20,marginBottom:16},ol:{paddingLeft:20,marginBottom:16},
-li:{fontSize:15,lineHeight:1.7,color:'#94a3b8',marginBottom:6},
-meta:{fontSize:12,color:'#475569',marginBottom:28,display:'flex',gap:16,flexWrap:'wrap'},
-link:{color:'#67e8f9',textDecoration:'none'},
-note:{padding:'12px 16px',borderRadius:8,background:'rgba(34,211,238,.06)',border:'1px solid rgba(34,211,238,.15)',marginBottom:16},
-cta:{background:'linear-gradient(135deg,rgba(34,211,238,.1),rgba(124,92,255,.08))',border:'1px solid rgba(34,211,238,.22)',borderRadius:14,padding:'30px 24px',margin:'42px 0 32px',textAlign:'center'},
-faq:{marginTop:48,paddingTop:32,borderTop:'1px solid rgba(255,255,255,.06)'},
-faqItem:{marginBottom:24,paddingBottom:24,borderBottom:'1px solid rgba(255,255,255,.04)'},
-faqQ:{fontSize:15,fontWeight:600,color:'#c7d2fe',marginBottom:8},
-faqA:{fontSize:14,color:'#94a3b8',lineHeight:1.75}
-}
+export const metadata = articleMeta({ title: TITLE, description: DESC, slug: SLUG })
+const schema = articleSchema({ title: TITLE, description: DESC, slug: SLUG, faqs: FAQS })
 
 export default function Page() {
- return <ArticleLayout schema={[schema,faqSchema]} breadcrumb={[{label:'Blog',href:'/blog'},{label:"How to Set Up Chat Bots on BongaCams: What Models Should Automate"}]}>
-  <div style={s.meta}><span>CamCash</span><span>Updated August 2026</span><span>2 min read</span></div>
-  <h1 style={s.h1}>How to Set Up Chat Bots on BongaCams: What Models Should Automate</h1>
-  <p style={s.intro}>Automation can help BongaCams models repeat room information without constantly typing the same thing. Because app availability and platform rules can change, use current creator tools and verify compatibility before connecting anything.</p>
+  return (
+    <ArticleLayout>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }} />
 
-  <h2 style={s.h2}>The Practical Starting Point</h2>
-  <p style={s.p}>A bot should handle repetition, not relationships. If a regular returns or a high-value supporter contributes, personal recognition is still more valuable than an automated reply.</p>
-  <h2 style={s.h2}>What to Do First</h2>
-  <ul style={s.ul}><li style={s.li}>Start with the repetitive problem you want to solve.</li><li style={s.li}>Check current BongaCams creator tools and rules.</li><li style={s.li}>Test one automation at a time.</li><li style={s.li}>Watch message frequency and room clutter.</li><li style={s.li}>Keep personal fan interaction manual.</li></ul>
-  <h2 style={s.h2}>What the Numbers Should Tell You</h2>
-  <p style={s.p}>Keep a manual fallback so your room can operate if a bot fails or becomes unavailable.</p>
-  <div style={s.note}><p style={{...s.p,marginBottom:0}}><strong style={{color:'#e2e8f0'}}>CamCash takeaway:</strong> Track the time you spend and the money it produces. The useful question is not simply “did I make money?” but “was this use of my time worth repeating?”</p></div>
+      <div style={s.meta}><span>CamCash</span><span>Updated August 2026</span><span>6 min read</span></div>
 
-  <div style={s.cta}>
-    <h2 style={{...s.h2,marginTop:0}}>See What Your Own Data Says</h2>
-    <p style={{...s.p,marginBottom:18}}>Import your tip history into CamCash to track earnings, sessions, fans, and patterns without doing the math by hand.</p>
-    <a href="/landing" style={{display:'inline-block',padding:'13px 30px',borderRadius:9,background:'linear-gradient(135deg,#22d3ee,#7c5cff)',color:'#fff',fontWeight:700,textDecoration:'none'}}>Start Tracking My Earnings →</a>
-  </div>
+      <h1 style={s.h1}>How to Set Up Chat Bots on BongaCams: Tip Menu &amp; Countdown Goals</h1>
 
-  <div style={s.faq}>
-    <h2 style={{...s.h2,marginTop:0}}>FAQ</h2>
-            <div style={{...s.faqItem}}>
-          <div style={{...s.faqQ}}>Can BongaCams models use chat bots?</div>
-          <p style={{...s.faqA,marginBottom:0}}>Tool availability and rules can change. Check current BongaCams creator tools and terms before using a bot.</p>
-        </div>
-        <div style={{...s.faqItem}}>
-          <div style={{...s.faqQ}}>What should I automate first?</div>
-          <p style={{...s.faqA,marginBottom:0}}>Start with repetitive, non-personal room information if the current platform tools support it.</p>
-        </div>
-  </div>
+      <p style={s.intro}>
+        BongaCams handles automation differently from most platforms. Instead of a
+        directory of third-party apps, it ships specific <strong style={s.strong}>built-in
+        chatbots</strong> that you configure from your own model account. There is
+        nothing to install, no stream key involved, and no outside developer whose
+        abandoned code can break your room.
+      </p>
 
-  <div style={s.cta}>
-    <h2 style={{...s.h2,marginTop:0}}>Turn Your Tip History Into Useful Numbers</h2>
-    <p style={{...s.p,marginBottom:18}}>CamCash helps creators see real earnings, $/hour, sessions, top fans, and earning patterns from imported data.</p>
-    <a href="/landing" style={{display:'inline-block',padding:'13px 30px',borderRadius:9,background:'linear-gradient(135deg,#22d3ee,#7c5cff)',color:'#fff',fontWeight:700,textDecoration:'none'}}>Calculate My Earnings Free →</a>
-  </div>
+      <div style={s.note}>
+        BongaCams updates these tools periodically and the available settings change
+        with them. The behaviour described here reflects what the platform has
+        publicly documented; treat your own chatbot settings panel as the current
+        source of truth, and do not assume a feature exists because it is described here.
+      </div>
 
-  <div style={{marginTop:36,paddingTop:24,borderTop:'1px solid rgba(255,255,255,.06)'}}>
-    <div style={{fontSize:11,color:'#475569',fontWeight:600,textTransform:'uppercase',letterSpacing:'.08em',marginBottom:10}}>Related reading</div>
-    <div style={{display:'flex',flexDirection:'column',gap:6}}><a href="/blog/how-to-establish-yourself-on-bongacams" style={s.link}>→ How to establish yourself on BongaCams</a>
-          <a href="/blog/bongacams-camscore-exsplained" style={s.link}>→ BongaCams CamScore explained</a>
-          <a href="/guides/bongacams-analytics" style={s.link}>→ BongaCams analytics</a></div>
-  </div>
- </ArticleLayout>
+      <h2 style={s.h2}>The two chatbots that matter</h2>
+
+      <p style={s.p}>
+        Most of what a BongaCams room needs automated is covered by two tools, and
+        they solve genuinely different problems.
+      </p>
+
+      <h3 style={s.h3}>The Tip Menu chatbot</h3>
+
+      <p style={s.p}>
+        This displays your priced menu in chat. Its useful characteristics, based on
+        what BongaCams has documented:
+      </p>
+
+      <ul style={s.ul}>
+        <li style={s.li}><strong style={s.strong}>A large number of services.</strong> The menu supports far more entries than most models need &mdash; documented at up to 50, and notably not gated behind an earnings tier. That means the constraint on your menu is editorial, not technical.</li>
+        <li style={s.li}><strong style={s.strong}>Optional automatic resending.</strong> The auto-message can be set to repeat, or that repetition can be switched off entirely. This is the setting most worth thinking about, and it is covered below.</li>
+        <li style={s.li}><strong style={s.strong}>Visual customisation.</strong> Fonts, colours and text sizes can be adjusted, so the menu can be made readable rather than a wall of identical text.</li>
+      </ul>
+
+      <h3 style={s.h3}>The Countdown chatbot</h3>
+
+      <p style={s.p}>
+        This runs goals. You enter a goal name and a token amount in the chatbot
+        settings, and the bot tracks progress toward it in chat. Its distinguishing
+        feature is queuing: you can set several goals at once &mdash; reported as up to
+        five &mdash; and they run in sequence, each starting when the previous one
+        completes.
+      </p>
+
+      <p style={s.p}>
+        That sequencing is the part worth planning around. A queue of five goals is a
+        session structure, not just a single target, and setting it up thoughtlessly
+        produces a room that lurches from one arbitrary number to the next.
+      </p>
+
+      <h2 style={s.h2}>Configuring a goal queue that makes sense</h2>
+
+      <div style={s.step}>
+        <span style={s.stepNum}>STEP 1</span>
+        <p style={{ ...s.p, marginBottom: 0 }}>
+          <strong style={s.strong}>Set the first goal low enough to actually complete.</strong>{' '}
+          A queue only works if the first goal falls. A room that watches a counter sit
+          at 4% for an hour stops believing any of the goals are real. The opening goal
+          should be reachable on an ordinary night, not an ambitious one.
+        </p>
+      </div>
+
+      <div style={s.step}>
+        <span style={s.stepNum}>STEP 2</span>
+        <p style={{ ...s.p, marginBottom: 0 }}>
+          <strong style={s.strong}>Escalate gradually, not sharply.</strong> Each goal in
+          the queue should feel like a step up from the last. A jump from a small opening
+          goal straight to a very large one reads as the real target having been the big
+          one all along, which undermines the first.
+        </p>
+      </div>
+
+      <div style={s.step}>
+        <span style={s.stepNum}>STEP 3</span>
+        <p style={{ ...s.p, marginBottom: 0 }}>
+          <strong style={s.strong}>Name goals concretely.</strong> The goal name is
+          visible and it is doing the selling. Something specific gives people a reason
+          to tip now; a vague name gives them a number with nothing attached to it.
+        </p>
+      </div>
+
+      <div style={s.step}>
+        <span style={s.stepNum}>STEP 4</span>
+        <p style={{ ...s.p, marginBottom: 0 }}>
+          <strong style={s.strong}>Do not queue more goals than your session length supports.</strong>{' '}
+          Five queued goals across a two-hour stream means the later ones exist only as
+          decoration. Queue what a realistic session can actually reach.
+        </p>
+      </div>
+
+      <h2 style={s.h2}>The auto-resend setting is the one to think about</h2>
+
+      <p style={s.p}>
+        Automatic resending exists because viewers arrive continuously and a menu posted
+        once is invisible to everyone who came later. That reasoning is sound in a busy
+        room, and much weaker in a quiet one.
+      </p>
+
+      <p style={s.p}>
+        In a room with steady turnover, repetition mostly reaches new people. In a room
+        with six regulars watching for an hour, the same repetition is the same six
+        people reading your menu for the eighth time &mdash; which reads as a bot talking
+        to an empty room, and makes a quiet room feel quieter.
+      </p>
+
+      <p style={s.p}>
+        A reasonable default is to leave resending on during peak hours and turn it off
+        when the room is small enough that you can post the menu manually when someone
+        new appears. The setting exists precisely because one behaviour does not suit
+        both situations.
+      </p>
+
+      <h2 style={s.h2}>How this compares to Chaturbate</h2>
+
+      <p style={s.p}>
+        If you also stream on Chaturbate, the mental model does not transfer, and
+        expecting it to is the usual source of confusion.
+      </p>
+
+      <div style={s.tableWrap}>
+        <table style={s.table}>
+          <thead>
+            <tr><th style={s.th}></th><th style={s.th}>BongaCams</th><th style={s.th}>Chaturbate</th></tr>
+          </thead>
+          <tbody>
+            <tr><td style={s.td}><strong style={s.strong}>Source</strong></td><td style={s.td}>First-party platform features</td><td style={s.td}>Directory of third-party apps and bots</td></tr>
+            <tr><td style={s.td}><strong style={s.strong}>Variety</strong></td><td style={s.td}>Limited to what the platform provides</td><td style={s.td}>Wide &mdash; many authors, many tools</td></tr>
+            <tr><td style={s.td}><strong style={s.strong}>Breakage risk</strong></td><td style={s.td}>Low &mdash; maintained by the platform</td><td style={s.td}>Real &mdash; abandoned bots stop working</td></tr>
+            <tr><td style={s.td}><strong style={s.strong}>Goal handling</strong></td><td style={s.td}>Queued sequence in one chatbot</td><td style={s.td}>Depends on the app you chose</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p style={s.p}>
+        The practical upshot: on BongaCams you are configuring a smaller set of tools
+        well, rather than choosing between many. Less to evaluate, less to go wrong,
+        and less flexibility if what you want falls outside what the platform offers.
+      </p>
+
+      <div style={s.cta}>
+        <div style={s.ctaTitle}>Which goal sizes actually complete?</div>
+        <p style={s.ctaText}>
+          Goal queues work when the numbers match what your room really does. CamCash
+          tracks your BongaCams tips and sessions so you can set targets from your own
+          history rather than guessing.
+        </p>
+        <a href="/landing" style={s.ctaBtn}>Track My BongaCams Earnings &rarr;</a>
+      </div>
+
+      <div style={s.faq}>
+        <h2 style={{ ...s.h2, marginTop: 0 }}>Frequently asked questions</h2>
+        {FAQS.map(f => (
+          <div key={f.q} style={s.faqItem}>
+            <div style={s.faqQ}>{f.q}</div>
+            <p style={{ ...s.faqA, marginBottom: 0 }}>{f.a}</p>
+          </div>
+        ))}
+      </div>
+
+      <div style={s.related}>
+        <div style={s.relatedTitle}>Related reading</div>
+        <p style={{ ...s.p, marginBottom: 6 }}><a href="/blog/bongacams-camscore-exsplained" style={s.link}>&rarr; BongaCams CamScore explained</a></p>
+        <p style={{ ...s.p, marginBottom: 6 }}><a href="/blog/how-to-establish-yourself-on-bongacams" style={s.link}>&rarr; Establishing yourself on BongaCams</a></p>
+        <p style={{ ...s.p, marginBottom: 0 }}><a href="/guides/bongacams-analytics" style={s.link}>&rarr; BongaCams analytics</a></p>
+      </div>
+    </ArticleLayout>
+  )
 }
