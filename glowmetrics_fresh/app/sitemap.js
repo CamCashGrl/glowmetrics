@@ -104,6 +104,12 @@ export default function sitemap() {
     'off-site-shows-for-cam-models',
     'onlyfans-for-cam-models-after-streaming',
     'snap-shows-for-cam-models',
+    // Active-model OBS / RTMP batch, August 2026
+    'how-to-use-myfreecams-with-obs',
+    'chaturbate-obs-stream-key-setup',
+    'what-is-rtmp-for-cam-models',
+    'obs-dropped-frames-cam-streaming',
+    'what-upload-speed-do-you-need-for-camming',
   ]
 
   const guideSlugs = [
