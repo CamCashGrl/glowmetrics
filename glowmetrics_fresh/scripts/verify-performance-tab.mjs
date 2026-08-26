@@ -159,12 +159,22 @@ check('the gap disclosure states the comparison is between ACTIVE months',
 // ══════════════════════════════════════════════════════════════════════
 // 7. FREE vs PRO — evidence stays free; one contextual strategy CTA.
 // ══════════════════════════════════════════════════════════════════════
+// 2C-6 moved the conversion on this tab. The generic "Build My Strategy"
+// footer is gone: it was a second undifferentiated upsell beneath the
+// contextual platform discovery, and it sold "a forecast" that is held and
+// unshipped. The guard's intent — exactly one, outcome-oriented, evidence-
+// gated CTA on this tab — is unchanged and now checked against that block.
+const read = (rel) => readFileSync(new URL('../' + rel, import.meta.url), 'utf8')
 check('exactly one upgrade CTA in the component', (src.match(/onUpgrade\?\./g) || []).length === 1)
-check('the Pro footer only renders for non-Pro', src.includes('!isPro &&'))
-check('the Pro footer is gated on there being something real to build on',
-  src.includes('!isPro && (bestWindow || platforms.length > 0)'))
+check('the conversion is the contextual platform discovery', src.includes('<PlatformOpportunity'))
+check('it is gated on the plan', src.includes('isPro={isPro}'))
+check('it is gated on there being a real comparison behind it',
+  read('app/dashboard/PlatformOpportunity.jsx').includes('if (rankable.length < 2)'))
 check('the CTA is outcome-oriented, not a generic upgrade prompt',
-  raw.includes('Build My Strategy') && !raw.includes('>Upgrade to Pro<'))
+  read('app/dashboard/PlatformOpportunity.jsx').includes('Compare my platforms →')
+  && !raw.includes('>Upgrade to Pro<'))
+check('the retired footer no longer promises a forecast',
+  !src.includes('and a forecast into one personalized weekly schedule'))
 check('no chart or section is hidden behind the paywall (Free sees the evidence)',
   !/isPro\s*\?[\s\S]{0,120}(blur|locked|🔒)/i.test(src))
 

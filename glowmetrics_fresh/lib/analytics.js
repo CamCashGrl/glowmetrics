@@ -975,7 +975,7 @@ export function aggregateRows(tips, tz = null) {
       platformVelocity: {}, missedRevenue: { today_missed: null, cumulative_by_platform: {}, recent_streak_missed: null },
       returningVsNew: null, topFanDependency: null,
       dependencyRisk: null, sessionPerformance: null, latestPlatformDelta: null,
-      bestPlatformByRate: null, rankablePlatformCount: 0,
+      bestPlatformByRate: null, rankablePlatformCount: 0, rankablePlatforms: [],
       canonicalBestTimes: { grid: [], bestWindow: null, earlySignal: null }, bestWindowFanOverlap: null
     }
   }
@@ -1693,6 +1693,12 @@ export function aggregateRows(tips, tz = null) {
     // key with a misleading pointer.
     meaningfulSessions, allValidSessions, sessionPerformance, latestPlatformDelta,
     bestPlatformByRate, rankablePlatformCount: rankablePlatforms.length,
+    // 2C-6: the rankable set itself, highest median rate first. This is the
+    // SAME array bestPlatformByRate is picked from — exported so a surface can
+    // show the comparison without re-implementing the RANKABLE_CONFIDENCE gate
+    // in the UI and risking a second, drifting definition of "rankable".
+    // No new rule, no new threshold, no new figure.
+    rankablePlatforms: [...rankablePlatforms].sort((a, b) => b.medianUsdPerHour - a.medianUsdPerHour),
     meaningfulSessionCount: meaningfulSessions.length,
     lowSignalSessionCount: allValidSessions.length - meaningfulSessions.length,
     momentum,

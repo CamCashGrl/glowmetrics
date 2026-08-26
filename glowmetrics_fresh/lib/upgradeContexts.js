@@ -64,10 +64,10 @@ const CONTEXTS = {
   },
   [UPGRADE_SOURCE.PLATFORM_COMPARISON]: {
     insightId: 'cross_platform',
-    eyebrow: 'Your platform data shows a meaningful performance difference',
+    eyebrow: 'Your platforms are showing different patterns',
     fallbackHeadline: 'How your platforms compare',
-    unlock: 'With Pro, compare the platforms behind this difference by hour, day and fan type, using the same median rates the rest of your dashboard reads.',
-    primaryCta: 'Compare the platforms behind this',
+    unlock: 'With Pro, compare your platform performance in more detail and see how platform and streaming time interact across your recorded history.',
+    primaryCta: 'Compare My Platforms',
   },
   [UPGRADE_SOURCE.MULTI_PLATFORM]: {
     insightId: 'cross_platform',
@@ -163,12 +163,14 @@ function discoveryFor(source, { analytics, trackedPlatformCount } = {}) {
       ]
     }
     case UPGRADE_SOURCE.PLATFORM_COMPARISON: {
-      // Only states a difference when the engine actually ranked one platform
-      // above another at a confidence it is willing to claim.
-      const best = analytics?.bestPlatformByRate
-      const platforms = (analytics?.platforms || []).filter(p => p.medianUsdPerHour > 0)
-      if (!best || platforms.length < 2) return []
-      return [`${best.platform} currently shows your highest median rate at $${best.medianUsdPerHour}/hr across ${platforms.length} platforms with measurable sessions.`]
+      // 2C-6: reads the canonical rankable set — the same array
+      // bestPlatformByRate is chosen from, already gated on each platform's own
+      // confidence. Fewer than two means there is no comparison to preserve, so
+      // none is claimed.
+      const rankable = analytics?.rankablePlatforms || []
+      if (rankable.length < 2) return []
+      const [lead, runnerUp] = rankable
+      return [`Your recorded sessions show a stronger observed hourly rate on ${lead.platform} than ${runnerUp.platform}.`]
     }
     case UPGRADE_SOURCE.MULTI_PLATFORM: {
       const n = trackedPlatformCount || (analytics?.platforms || []).length

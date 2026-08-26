@@ -10,6 +10,7 @@ import ConfidenceBadge from '../../app/dashboard/ConfidenceBadge'
 import WindowFanOverlap from '../../app/dashboard/WindowFanOverlap'
 import ContextualUpgradeModal from '../../app/dashboard/ContextualUpgradeModal'
 import PeakWindowPlan from '../../app/dashboard/PeakWindowPlan'
+import PlatformOpportunity from '../../app/dashboard/PlatformOpportunity'
 import { buildUpgradeContext, UPGRADE_SOURCE, UPGRADE_CONTEXT_KEYS } from '../../lib/upgradeContexts'
 import { aggregateRows } from '../../lib/analytics'
 import { computeIntelligence } from '../../lib/intelligence/readiness'
@@ -247,6 +248,76 @@ check('the modal preserves the window context',
 check('the modal renders the plan CTA', plannerModal.includes('Build My Weekly Plan'), true)
 check('no window means no planner discovery to sell',
   buildUpgradeContext(UPGRADE_SOURCE.STREAM_PLANNER, { analytics: emptyAnalytics }).hasDiscovery, false)
+
+console.log('\nI. Cross-platform opportunity (2C-6)')
+console.log(`  · fixture rankable platforms: ${(analytics.rankablePlatforms || []).map(p => `${p.platform} $${p.medianUsdPerHour}/hr (${p.confidenceLabel})`).join(', ') || 'none'}`)
+render('platform card (free, real data)', <PlatformOpportunity analytics={analytics} intelligence={intelligence} isPro={false} onUpgrade={() => {}} onImport={() => {}} />)
+render('platform card (pro, real data)',  <PlatformOpportunity analytics={analytics} intelligence={intelligence} isPro onComparePlatforms={() => {}} />)
+render('platform card (intelligence=null)', <PlatformOpportunity analytics={analytics} intelligence={null} />)
+check('no platforms renders nothing',
+  renderToStaticMarkup(<PlatformOpportunity analytics={emptyAnalytics} intelligence={emptyIntel} />), '')
+
+// Synthetic analytics so every branch is exercised regardless of the fixture.
+const mkA = (rankablePlatforms, platforms = rankablePlatforms) => ({ rankablePlatforms, platforms })
+const P = (platform, sessions, hours, medianUsdPerHour, totalUSD, confidenceLabel) =>
+  ({ platform, sessions, hours, medianUsdPerHour, totalUSD, confidenceLabel })
+const twoRankable = mkA([P('BongaCams', 99, 126.6, 3.89, 700, 'Strong pattern'), P('Stripchat', 12, 25, 2.10, 200, 'Likely pattern')])
+const oneRankable = mkA([P('BongaCams', 99, 126.6, 3.89, 700, 'Strong pattern')],
+                        [P('BongaCams', 99, 126.6, 3.89, 700, 'Strong pattern'), P('Chaturbate', 4, 3.8, 23.16, 90, 'Early signal')])
+const noneRankable = mkA([], [P('Chaturbate', 4, 3.8, 23.16, 90, 'Early signal')])
+const xpWeakIntel = { insights: { cross_platform: { state: 'EARLY_SIGNAL', explanation: 'Only one platform has enough sessions to measure so far.', nextMilestone: { label: '1 more platform with 3+ sessions' } } } }
+const xpStrongIntel = { insights: { cross_platform: { state: 'SUPPORTED' } } }
+
+const cmpFree = renderToStaticMarkup(<PlatformOpportunity analytics={twoRankable} intelligence={xpStrongIntel} isPro={false} onUpgrade={() => {}} />)
+const cmpPro  = renderToStaticMarkup(<PlatformOpportunity analytics={twoRankable} intelligence={xpStrongIntel} isPro onComparePlatforms={() => {}} />)
+const oneHtml = renderToStaticMarkup(<PlatformOpportunity analytics={oneRankable} intelligence={xpWeakIntel} isPro={false} onUpgrade={() => {}} onImport={() => {}} />)
+const noneHtml= renderToStaticMarkup(<PlatformOpportunity analytics={noneRankable} intelligence={xpWeakIntel} isPro={false} onUpgrade={() => {}} />)
+
+check('two rankable -> the comparison is shown', /performing differently/.test(cmpFree), true)
+check('both platforms are named', cmpFree.includes('BongaCams') && cmpFree.includes('Stripchat'), true)
+// react-dom/server inserts <!-- --> separators between adjacent text and
+// expression nodes, so "$3.89/hr" arrives as "$<!-- -->3.89<!-- -->/hr".
+// Stripped here; the browser renders the plain string.
+const plain = (h) => h.replace(/<!-- -->/g, '')
+// 2.10 is a JS number, so it renders as "2.1" — the fixture value, not a
+// formatting bug. Asserted as rendered.
+check('both rates are shown',
+  plain(cmpFree).includes('$3.89/hr') && plain(cmpFree).includes('$2.1/hr'), true)
+check('sessions, hours and earnings are shown too',
+  /99 sessions/.test(cmpFree) && /127h streamed/.test(cmpFree) && /\$700 earned/.test(cmpFree), true)
+check('each platform keeps its own confidence label',
+  cmpFree.includes('Strong pattern') && cmpFree.includes('Likely pattern'), true)
+check('the finding is stated as an observation',
+  /show a stronger observed hourly rate on/.test(cmpFree), true)
+check('free is offered the comparison CTA', cmpFree.includes('Compare my platforms'), true)
+check('pro is offered it too, without the upsell line',
+  cmpPro.includes('Compare my platforms') && !cmpPro.includes('Pro compares your platform'), true)
+
+check('one rankable -> no comparison is claimed', /performing differently/.test(oneHtml), false)
+check('one rankable -> the measured platform is still shown', oneHtml.includes('BongaCams'), true)
+check('one rankable -> the weak platform is NOT crowned', oneHtml.includes('Chaturbate'), false)
+check('one rankable -> no upgrade CTA', oneHtml.includes('Compare my platforms'), false)
+check('one rankable -> names the missing evidence', oneHtml.includes('1 more platform with 3+ sessions'), true)
+check('one rankable -> refuses to name a stronger platform',
+  oneHtml.includes('will not name one as stronger'), true)
+check('zero rankable -> still shows the evidence state, not a lock',
+  /Comparing your platforms/.test(noneHtml) && !/Compare my platforms/.test(noneHtml), true)
+
+for (const bad of ['you will make', 'guaranteed', 'projected', 'best platform', 'switch to', 'abandon']) {
+  check(`rendered platform card never says "${bad}"`,
+    (cmpFree + cmpPro + oneHtml + noneHtml).toLowerCase().includes(bad), false)
+}
+
+const platCtx = buildUpgradeContext(UPGRADE_SOURCE.PLATFORM_COMPARISON, { analytics: twoRankable })
+check('the platform context states the observed difference',
+  platCtx.discovery[0], 'Your recorded sessions show a stronger observed hourly rate on BongaCams than Stripchat.')
+check('its CTA is the outcome', platCtx.primaryCta, 'Compare My Platforms')
+check('one rankable platform yields no platform discovery',
+  buildUpgradeContext(UPGRADE_SOURCE.PLATFORM_COMPARISON, { analytics: oneRankable }).hasDiscovery, false)
+const platModal = renderToStaticMarkup(<ContextualUpgradeModal open onClose={() => {}} context={platCtx} />)
+check('the modal preserves the platform discovery',
+  /stronger observed hourly rate on BongaCams than Stripchat/.test(platModal), true)
+check('the modal renders the platform CTA', platModal.includes('Compare My Platforms'), true)
 
 console.log(`\n  ${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

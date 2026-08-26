@@ -1,6 +1,7 @@
 "use client"
 import { useMemo } from "react"
 import ConfidenceBadge from "./ConfidenceBadge"
+import PlatformOpportunity from "./PlatformOpportunity"
 import { fromConfidenceTier } from "../../lib/intelligence/states"
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine,
@@ -392,8 +393,25 @@ export default function Performance({
         )}
       </div>
 
+      {/* ── 6b. CROSS-PLATFORM OPPORTUNITY (2C-6) ──────────────────
+          The comparison the platform-confidence gate makes safe to state, plus
+          the action it earns. Reads analytics.rankablePlatforms — the same set
+          bestPlatformByRate comes from — so this can never disagree with the
+          per-platform cards below it. Renders the evidence-building state
+          instead when fewer than two platforms are rankable, and sells nothing
+          in that case. */}
+      <PlatformOpportunity
+        analytics={analytics}
+        intelligence={intelligence}
+        isPro={isPro}
+        onComparePlatforms={() => {
+          document.getElementById('platform-performance')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        }}
+        onUpgrade={(src) => onUpgrade?.(src)}
+      />
+
       {/* ── 7. PLATFORM PERFORMANCE ────────────────────────────────── */}
-      <div style={card()}>
+      <div style={card()} id="platform-performance">
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 14 }}><div style={sectionLabel}>Platform performance</div><ConfidenceBadge intelligence={intelligence} insight="platform_profitability" /></div>
         {platforms.length === 0 ? (
           <div style={{ fontSize: 13, color: C.muted }}>Import your tip history to see how your platforms compare.</div>
@@ -535,22 +553,13 @@ export default function Performance({
       )}
 
       {/* ── 10. PRO STRATEGY ───────────────────────────────────────── */}
-      {!isPro && (bestWindow || platforms.length > 0) && (
-        <div style={{
-          display: "flex", justifyContent: "space-between", alignItems: "center", gap: 20, flexWrap: "wrap",
-          padding: "20px 24px", borderRadius: 16,
-          background: "linear-gradient(115deg, rgba(124,92,255,0.10), rgba(236,72,153,0.08))",
-          border: "1px solid rgba(124,92,255,0.26)",
-        }}>
-          <div style={{ minWidth: 260, flex: 1 }}>
-            <div style={{ fontSize: 15.5, fontWeight: 800, color: C.white }}>Want to turn this history into a strategy?</div>
-            <div style={{ fontSize: 12.5, color: C.text, marginTop: 6, lineHeight: 1.6 }}>
-              Pro connects your best windows, platform performance, high-value fan timing, and a forecast into one personalized weekly schedule — not just more exact numbers.
-            </div>
-          </div>
-          <BrandButton onClick={() => onUpgrade?.("performance_strategy")}>Build My Strategy →</BrandButton>
-        </div>
-      )}
+      {/* 2C-6: the generic "Build My Strategy" CTA that used to sit here is
+          retired. Two things were wrong with it on this tab. It was a second,
+          undifferentiated upsell beneath the contextual platform conversion
+          above — the exact CTA proliferation verify-performance-tab.mjs guards
+          against — and it sold "a forecast", which is held and unshipped. The
+          platform discovery at the top of this tab now carries the conversion,
+          keyed to what the creator's own data actually shows. */}
     </div>
   )
 }
