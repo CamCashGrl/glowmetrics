@@ -3509,6 +3509,7 @@ const stopImportMessageRotation = () => {
             ═══════════════════════════════════════════════════════ */}
             <CommandCenter
               analytics={analytics}
+              intelligence={intelligence}
               isPro={isPro}
               nowActions={(() => {
                 // Moved from the old Overview's "Make Money Right Now"
@@ -3620,6 +3621,7 @@ const stopImportMessageRotation = () => {
         {activeTab === "platforms" && (
           <Performance
             analytics={analytics}
+            intelligence={intelligence}
             isPro={isPro}
             onUpgrade={(src) => openUpgradeModal(src)}
             earningsTrend={tips.length > 0 ? (
@@ -3650,6 +3652,7 @@ const stopImportMessageRotation = () => {
         {activeTab === "whales" && (
           <Fans
             analytics={analytics}
+            intelligence={intelligence}
             isPro={isPro}
             freeFanLimit={FREE_FAN_LIMIT}
             onMessageFan={(username) => {
@@ -4993,7 +4996,7 @@ const stopImportMessageRotation = () => {
           </div>
         )}
 
-        {activeTab === 'analytics' && <AnalyticsCharts analytics={analytics} />}
+        {activeTab === 'analytics' && <AnalyticsCharts analytics={analytics} intelligence={intelligence} />}
         {activeTab === 'private' && (
           <PrivateSessions
             paidSessions={paidSessions}

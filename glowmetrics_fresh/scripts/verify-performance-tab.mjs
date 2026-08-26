@@ -73,7 +73,15 @@ check('the day-of-week view sums canonical totals/counts, it does not re-rank by
   src.includes('map[g.localDay].totalUsd += g.totalUsd') && !/byDay[\s\S]{0,200}usdPerHour/.test(src))
 check('falls back to the canonical earlySignal rather than promoting a weak bucket',
   src.includes('analytics?.canonicalBestTimes?.earlySignal'))
-check('confidence wording is driven by the canonical tier', src.includes('TIER_COPY[bestWindow.tier]'))
+// 2C-2: the local TIER_COPY table is retired. The window's confidence word now
+// comes from the ONE canonical ladder via <ConfidenceBadge> — the account-level
+// peak_window state for the section heading, and fromConfidenceTier() for each
+// platform's own bucket tier. Same guarantee, one vocabulary instead of four.
+check('confidence wording comes from the canonical intelligence state',
+  /<ConfidenceBadge[^>]*insight="peak_window"/.test(src))
+check('per-platform tiers are mapped onto the canonical ladder',
+  src.includes('fromConfidenceTier(p.bestWindowConfidence)'))
+check('no local confidence vocabulary remains', !src.includes('TIER_COPY'))
 check('does not claim a tier the engine calls insufficient', !src.includes('insufficient:'))
 
 // A chart that visually contradicts the headline is the exact defect the

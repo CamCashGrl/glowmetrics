@@ -1,5 +1,7 @@
 "use client"
 import React, { useState, useMemo, useEffect, useCallback } from "react"
+import ConfidenceBadge from "./ConfidenceBadge"
+import { fromConfidenceTier, badgeFor } from "../../lib/intelligence/states"
 import Button from "../../components/ui/Button"
 import {
   ResponsiveContainer, LineChart, Line,
@@ -293,17 +295,27 @@ const DEFAULT_PREFS = {
 // wording the Command Center and Performance use. The planner previously had
 // its own high/medium/low vocabulary on its own thresholds, so one bucket
 // could be "Medium" here and "Early signal" there.
-const CONF = {
-  high:         { bg: "rgba(34,211,238,0.1)", color: CYAN,   label: "Strong pattern" },
-  supported:    { bg: "rgba(168,85,247,0.1)", color: PURPLE, label: "Supported pattern" },
-  promising:    { bg: "rgba(245,158,11,0.1)", color: GOLD,   label: "Early signal" },
-  insufficient: { bg: "rgba(99,102,241,0.1)", color: INDIGO, label: "Not enough data" },
-  untested:     { bg: "rgba(99,102,241,0.1)", color: INDIGO, label: "Untested" },
-}
-
+// 2C-2: the local four-label vocabulary is retired. A row's `confidence` is a
+// canonical bucket tier (lib/analytics/bestTimes.js), and fromConfidenceTier()
+// is the canonical mapper onto the intelligence ladder — so the word this badge
+// prints is now the SAME word the Creator Report, the Command Center and
+// Performance print for the same strength of evidence.
+//
+// "untested" is the one value that is not a confidence tier at all: it means
+// the creator has never streamed that window, so there is no evidence to grade.
+// It keeps a plain neutral chip rather than being forced onto the ladder.
 function ConfBadge({ level }) {
-  const c = CONF[level] || CONF.insufficient
-  return <span style={{ display:"inline-block", padding:"2px 8px", borderRadius:5, background:c.bg, color:c.color, fontSize:11, fontWeight:600, whiteSpace:"nowrap" }}>{c.label}</span>
+  // A row's `confidence` is a canonical bucket tier, so fromConfidenceTier()
+  // is the mapper. Anything it cannot place — "untested" (never streamed),
+  // "insufficient" (streamed too few times), or an unrecognised value —
+  // degrades to this neutral chip. It never falls through to nothing, and it
+  // can never degrade upward into a confident word.
+  const state = level && level !== "untested" ? fromConfidenceTier(level) : null
+  const badge = state ? badgeFor(state) : null
+  if (!badge) {
+    return <span style={{ display:"inline-block", padding:"2px 8px", borderRadius:5, background:"rgba(99,102,241,0.1)", color:INDIGO, fontSize:11, fontWeight:600, whiteSpace:"nowrap" }}>{level === "untested" ? "Untested" : "Not enough data"}</span>
+  }
+  return <ConfidenceBadge state={state} showEmoji={false} />
 }
 
 function PlatChip({ name, i = 0 }) {

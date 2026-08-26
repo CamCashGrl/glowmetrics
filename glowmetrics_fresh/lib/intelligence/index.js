@@ -37,6 +37,9 @@ export {
   fromAccountConfidence,
   promoteIfEstablished,
   capForComparison,
+  BADGE_EMPHASIS,
+  badgeFor,
+  badgeForInsight,
 } from './states'
 
 export {

@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect } from "react"
+import { badgeFor } from "../../lib/intelligence/states"
 import { track as gtmTrack } from "../../lib/track"
 import { PLATFORM_TOKEN_RATES } from "../../lib/constants"
 import { resolveCurrentMonthGrowth } from "../../lib/analytics"
@@ -74,14 +75,22 @@ const C = {
 // is presentation only and introduces no new state, threshold or ordering.
 // ------------------------------------------------------------
 
-const STATE_LABEL = {
-  NOT_AVAILABLE: "Not available yet",
-  CALIBRATING: "Calibrating",
-  EARLY_SIGNAL: "Early Signal",
-  DEVELOPING: "Building Pattern",
-  SUPPORTED: "Supported Pattern",
-  HIGH_CONFIDENCE: "High Confidence",
-  ESTABLISHED: "Established",
+// 2C-2: the local confidence-word table is gone. Every confidence word now
+// comes from STATE_META via badgeFor() (lib/intelligence/states.js), so the
+// Creator Report, the Command Center, Performance and the Stream Planner can
+// no longer describe the same state with four different words.
+const stateWord = (state) => badgeFor(state)?.label || null
+
+// The report's three existing bands (computed unchanged below from tip and
+// session counts) expressed in the canonical vocabulary. A PRESENTATION map
+// only — it creates no threshold and moves no band boundary. Before 2C-2 the
+// calibration pill looked the band up in the seven-state table, and because a
+// band is "warming"/"developing"/"rich" rather than an INSIGHT_STATE, the
+// lookup always missed and every account saw "Calibrating".
+const REPORT_BAND_STATE = {
+  warming: "CALIBRATING",
+  developing: "DEVELOPING",
+  rich: "SUPPORTED",
 }
 
 // States at which a finding may be stated as fact rather than hedged. Mirrors
@@ -359,7 +368,7 @@ function CalibrationCard({
   const building = calibration?.buildingCount ?? 0
 
   // The label comes from the ladder, never from the percentage.
-  const stateLabel = STATE_LABEL[reportState] || "Calibrating"
+  const stateLabel = stateWord(REPORT_BAND_STATE[reportState]) || "Calibrating"
 
   let headline = "Your report is calibrating"
   let subhead =
@@ -681,7 +690,7 @@ function PeakWindowCard({
               marginBottom: 11,
             }}
           >
-            Confidence: {STATE_LABEL[state] || "Calibrating"}
+            Confidence: {stateWord(state) || "Calibrating"}
           </div>
 
           <div

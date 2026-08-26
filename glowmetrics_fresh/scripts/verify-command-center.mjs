@@ -51,8 +51,15 @@ for (const field of [
 // ══════════════════════════════════════════════════════════════════════
 check('no hardcoded percentage claims in copy', !/\+\d{1,3}%\s*(more|higher|better)/.test(src))
 check('no hardcoded "Nx" multiplier claims in copy', !/>\s*\d+x\s*</.test(src))
-check('confidence wording is driven by the canonical tier', src.includes('TIER_COPY[bestWindow.tier]'))
-check('tier map covers exactly the canonical tiers', ['high', 'supported', 'promising'].every(t => new RegExp(`\\b${t}:`).test(src)))
+// 2C-2: the local TIER_COPY table is retired. Confidence wording now comes
+// from the ONE canonical ladder via <ConfidenceBadge>, which reads
+// computeIntelligence()'s peak_window state — a stronger version of the same
+// guarantee this check has always been for (the word beside a claim is never
+// invented locally).
+check('confidence wording comes from the canonical intelligence state',
+  /<ConfidenceBadge[^>]*insight="peak_window"/.test(src))
+check('no local confidence vocabulary remains', !src.includes('TIER_COPY'))
+check('the badge is fed the canonical intelligence object', src.includes('intelligence={intelligence}'))
 check('does not claim a tier the engine calls insufficient', !src.includes('insufficient:'))
 
 // ══════════════════════════════════════════════════════════════════════

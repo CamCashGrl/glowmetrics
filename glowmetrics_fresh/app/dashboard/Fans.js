@@ -1,5 +1,6 @@
 "use client"
 import { useMemo, useState } from "react"
+import ConfidenceBadge from "./ConfidenceBadge"
 
 // ═══════════════════════════════════════════════════════════════════════════
 // FANS
@@ -171,6 +172,11 @@ function FanRow({ fan, rule, ctx, onMessage }) {
 
 export default function Fans({
   analytics,
+  // computeIntelligence() output. Used ONLY by the intelligence sections
+  // below. The full supporter roster stays unbadged: those rows are recorded
+  // events, not inferences, and a confidence word on a recorded tip would be
+  // meaningless (see the roster comment further down).
+  intelligence = null,
   isPro = false,
   freeFanLimit = 3,
   onMessageFan,
@@ -277,7 +283,10 @@ export default function Fans({
 
       {/* ── PRIORITY FANS ──────────────────────────────────────────── */}
       <div style={card()}>
-        <div style={{ ...sectionLabel, marginBottom: 14 }}>Priority fans</div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
+          <div style={sectionLabel}>Priority fans</div>
+          <ConfidenceBadge intelligence={intelligence} insight="churn_risk" />
+        </div>
 
         {!hasAnyFans ? (
           <div style={{ fontSize: 13.5, color: C.muted, lineHeight: 1.6 }}>
@@ -326,7 +335,10 @@ export default function Fans({
       {/* ── BEST-WINDOW OVERLAP ────────────────────────────────────── */}
       {bestWindow && overlap?.count > 0 && (
         <div style={card()}>
-          <div style={{ ...sectionLabel, marginBottom: 12 }}>Who shows up in your best window</div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
+            <div style={sectionLabel}>Who shows up in your best window</div>
+            <ConfidenceBadge intelligence={intelligence} insight="fan_behaviour" />
+          </div>
           <div style={{ fontSize: 13.5, color: C.text, lineHeight: 1.6, marginBottom: 14 }}>
             <strong style={{ color: C.white }}>{overlap.count}</strong> of your highest-value supporters tip during{" "}
             <strong style={{ color: C.cyan }}>{bestWindow.localDay}s {fmtHour(bestWindow.localHour)}</strong> — {fmtUsd0(overlap.totalUSD)} in combined lifetime value.
@@ -351,7 +363,10 @@ export default function Fans({
       {/* ── DEPENDENCY RISK ────────────────────────────────────────── */}
       {dependencyRisk && dependencyRisk.level !== "low" && (
         <div style={card({ border: `1px solid ${dependencyRisk.level === "high" ? "rgba(248,113,113,0.3)" : "rgba(245,158,11,0.3)"}` })}>
-          <div style={{ ...sectionLabel, marginBottom: 12 }}>Concentration risk</div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
+            <div style={sectionLabel}>Concentration risk</div>
+            <ConfidenceBadge intelligence={intelligence} insight="dependency_risk" />
+          </div>
           <div style={{ fontSize: 13.5, color: C.text, lineHeight: 1.6, marginBottom: 14 }}>{dependencyRisk.message}</div>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             {[
