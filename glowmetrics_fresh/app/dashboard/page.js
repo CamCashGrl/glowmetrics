@@ -2527,10 +2527,10 @@ const stopImportMessageRotation = () => {
   // Gate display on the same eligible sessions/minutes the number itself is
   // built from — never on the broader meaningfulSessionCount/totalStreamMinutes,
   // which include sessions this rate calc deliberately excludes.
-  const hourlyRateUnlocked = canShowHourlyRate({
-    sessionCount: hourlyRateSessionCount,
-    totalStreamMinutes: hourlyRateTotalMinutes,
-  })
+  // 2C-1: the gate is now the canonical `hourly_rate` insight (lib/intelligence),
+  // not a local counter comparison. The eligible-session/minute figures below are
+  // still what the SUBTEXT reports, so the number and its explanation still agree.
+  const hourlyRateUnlocked = canShowHourlyRate({ analytics })
   const formatDuration = (mins) => {
     const m = Math.round(mins || 0)
     const h = Math.floor(m / 60)
@@ -3042,7 +3042,7 @@ const stopImportMessageRotation = () => {
   // ── DASHBOARD READINESS — always renders real dashboard, module-level locking ─
   const {
     dashboardReadiness, _isLowData, _plannerLock, _moneyMapLock,
-  } = memoOn(derivedCacheRef.current, 'readiness', [tips, analytics, isPro], () => {
+  } = memoOn(derivedCacheRef.current, 'readiness', [tips, analytics, isPro, intelligence], () => {
     const drDates      = tips.map(t => new Date(t.date_time || t.dateRaw)).filter(d => !isNaN(d)).sort((a, b) => a - b)
     const drRangeDays  = drDates.length >= 2 ? Math.round((drDates[drDates.length - 1] - drDates[0]) / 86400000) : 0
     const drStreamDays = new Set(drDates.map(d => d.toDateString())).size
@@ -3054,9 +3054,10 @@ const stopImportMessageRotation = () => {
       totalEarnings: analytics?.totalUSD || 0,
       dateRangeDays: drRangeDays,
       streamDays:    drStreamDays,
+      intelligence,
     })
     const isLowData  = readiness !== 'ready'
-    const modLockArgs = { totalTips: tips.length, totalSessions: analytics?.meaningfulSessionCount || 0, totalFans: analytics?.uniqueFanCount ?? 0, totalEarnings: analytics?.totalUSD || 0, totalStreamMinutes: analytics?.totalStreamMinutes || 0, importedPlatformCount: drPlatCount, isPro, liveModeSessions: 0 }
+    const modLockArgs = { totalTips: tips.length, totalSessions: analytics?.meaningfulSessionCount || 0, totalFans: analytics?.uniqueFanCount ?? 0, totalEarnings: analytics?.totalUSD || 0, totalStreamMinutes: analytics?.totalStreamMinutes || 0, importedPlatformCount: drPlatCount, isPro, liveModeSessions: 0, intelligence }
     const plannerLock  = getModuleLockState({ module: 'streamPlanner',  ...modLockArgs })
     const moneyMapLock = getModuleLockState({ module: 'moneyMap',       ...modLockArgs })
     return { dashboardReadiness: readiness, _isLowData: isLowData, _plannerLock: plannerLock, _moneyMapLock: moneyMapLock }
@@ -3467,6 +3468,7 @@ const stopImportMessageRotation = () => {
             totalFans={analytics?.uniqueFanCount ?? 0}
             totalEarnings={analytics?.totalUSD || 0}
             readiness={dashboardReadiness}
+            intelligence={intelligence}
             onImport={() => handleTabChange('upload')}
           />
         )}

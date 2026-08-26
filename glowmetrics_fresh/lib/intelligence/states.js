@@ -9,10 +9,10 @@
 //   getModuleLockState()     (DashboardPreview.js)  needs_data / requires_pro
 //   CalibrationCard          (CreatorReport.js)     private 4-boolean percentage
 //
-// PHASE 1 IS ADDITIVE. Nothing above is changed, removed, or re-pointed by
-// this module existing. Those four remain the operative systems until a later
-// phase migrates each surface deliberately, one at a time, with before/after
-// verification. This file only establishes the destination.
+// PHASE 2C-1 UPDATE: the three DashboardPreview.js systems above have been
+// retired. They survive only as thin compatibility wrappers over this ladder
+// (see lib/intelligence/locks.js), so they no longer hold thresholds of their
+// own. CreatorReport's CalibrationCard was re-pointed in 2B-1.
 //
 // THIS MODULE INVENTS NO THRESHOLDS. Every state below is derived from a
 // threshold that already exists in the codebase:
