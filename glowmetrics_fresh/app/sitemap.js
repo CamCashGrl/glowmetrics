@@ -107,8 +107,6 @@ export default function sitemap() {
     'cam-model-top-tippers',
     'chaturbate-best-hours',
     'chaturbate-earnings-tracker',
-    'chaturbate-room-title-generator',
-    'chaturbate-token-calculator',
     'chaturbate-token-tracker',
     'how-to-increase-cam-tips',
     'myfreecams-analytics',
