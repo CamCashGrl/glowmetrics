@@ -1,150 +1,180 @@
 import ArticleLayout from '../../components/ArticleLayout'
+import { s, articleSchema, articleMeta } from '../../../lib/blog-article-styles'
 
-const schema = {
-  '@context': 'https://schema.org',
-  '@type': 'Article',
-  headline: 'How to Use MyFreeCams With OBS: External Broadcasting Setup',
-  description: 'A practical MyFreeCams OBS setup guide covering the ModelWeb connection, Stream Key, OBS settings, camera, audio, preview, and common setup mistakes.',
-  url: 'https://www.camcashgrl.com/blog/how-to-use-myfreecams-with-obs',
-  datePublished: '2026-08-26',
-  dateModified: '2026-08-26',
-  author: { '@type': 'Organization', name: 'CamCashGrl', url: 'https://www.camcashgrl.com' },
-  publisher: { '@type': 'Organization', name: 'CamCashGrl', url: 'https://www.camcashgrl.com' },
-  mainEntityOfPage: { '@type': 'WebPage', '@id': 'https://www.camcashgrl.com/blog/how-to-use-myfreecams-with-obs' },
-}
+const SLUG = 'how-touse-myfreecams-with-obs'
+const TITLE = 'How to Use MyFreeCams With OBS: External Broadcasting Setup'
+const DESC = 'Connect OBS to MyFreeCams step by step: where the MFC Stream Key lives in ModelWeb, what to put in OBS Settings → Stream, and the starting encoder settings MFC recommends.'
 
-const faqSchema = {
-  '@context': 'https://schema.org',
-  '@type': 'FAQPage',
-  mainEntity: [
-    { '@type': 'Question', name: 'Do I need to be logged into MFC ModelWeb when using OBS?', acceptedAnswer: { '@type': 'Answer', text: 'Yes. MyFreeCams says models must be logged into ModelWeb to broadcast even when using an external broadcaster such as OBS.' } },
-    { '@type': 'Question', name: 'Where do I find my MFC Stream Key?', acceptedAnswer: { '@type': 'Answer', text: 'In ModelWeb, open Options → External Broadcaster → Stream Key & URL, then click Stream Key to copy it.' } },
-    { '@type': 'Question', name: 'What OBS settings should I start with for MFC?', acceptedAnswer: { '@type': 'Answer', text: 'MFC currently recommends starting with x264, 3000 kbps at 1280×720, 30 FPS, and 160 kbps audio.' } }
-  ],
-}
-
-export const metadata = {
-  title: 'How to Use MyFreeCams With OBS: External Broadcasting Setup',
-  description: 'A practical MyFreeCams OBS setup guide covering the ModelWeb connection, Stream Key, OBS settings, camera, audio, preview, and common setup mistakes.',
-  alternates: { canonical: 'https://www.camcashgrl.com/blog/how-to-use-myfreecams-with-obs' },
-  openGraph: {
-    title: 'How to Use MyFreeCams With OBS: External Broadcasting Setup',
-    description: DESCRIPTION,
-    url: CANONICAL,
-    type: 'article',
-    images: [{ url: 'https://www.camcashgrl.com/og-image.png', width: 1200, height: 630 }],
+const FAQS = [
+  {
+    q: 'Do I still need to be logged into ModelWeb if I broadcast with OBS?',
+    a: 'Yes. MyFreeCams says models must remain logged into ModelWeb to broadcast even when an external broadcaster such as OBS is producing and sending the video. OBS handles the encoding; ModelWeb still handles your model account and the room itself.',
   },
-  twitter: {
-    card: 'summary_large_image',
-    title: 'How to Use MyFreeCams With OBS: External Broadcasting Setup',
-    description: DESCRIPTION,
+  {
+    q: 'Where is the MyFreeCams Stream Key?',
+    a: 'In ModelWeb, open Options → External Broadcaster → Stream Key & URL, then click the Stream Key to copy it. That is the path MFC documents for OBS setup.',
   },
-}
+  {
+    q: 'What OBS settings should I start with on MFC?',
+    a: 'MFC currently recommends starting with the software x264 encoder at 3000 kbps, 1280x720 resolution, 30 FPS and 160 kbps audio. Get a stable broadcast on those before experimenting with a hardware encoder or a higher resolution.',
+  },
+  {
+    q: 'My OBS connection worked last week and now it fails. What changed?',
+    a: 'Check whether your MFC password changed. MFC ties the Stream Key to your model-account password and regenerates the key automatically when the password changes, which silently invalidates the key stored in OBS. Copy the current key from ModelWeb before troubleshooting anything else.',
+  },
+]
 
-const s = {
-  p: { fontSize: '15px', lineHeight: 1.8, color: '#94a3b8', margin: '0 0 20px' },
-  h2: { fontSize: '24px', lineHeight: 1.25, color: '#f1f5f9', fontWeight: 800, margin: '38px 0 16px' },
-  h3: { fontSize: '18px', lineHeight: 1.3, color: '#e2e8f0', fontWeight: 800, margin: '28px 0 12px' },
-  ul: { color: '#94a3b8', paddingLeft: 22, lineHeight: 1.8, marginBottom: 22 },
-  li: { marginBottom: 8 },
-  box: { background: 'rgba(22,244,255,0.05)', border: '1px solid rgba(22,244,255,0.14)', borderRadius: 16, padding: '20px 22px', margin: '24px 0' },
-  cta: { background: 'linear-gradient(135deg, rgba(22,244,255,0.10), rgba(124,92,255,0.10))', border: '1px solid rgba(124,92,255,0.22)', borderRadius: 18, padding: '24px', margin: '34px 0' },
-  link: { color: '#16F4FF', textDecoration: 'none', fontWeight: 700 },
-}
+export const metadata = articleMeta({ title: TITLE, description: DESC, slug: SLUG })
+const schema = articleSchema({ title: TITLE, description: DESC, slug: SLUG, faqs: FAQS })
 
 export default function Page() {
   return (
     <ArticleLayout
       schema={schema}
-      breadcrumb={[{ label: 'Blog', href: '/blog' }, { label: 'How to Use MyFreeCams With OBS: External Broadcasting Setup' }]}
+      breadcrumb={[{ label: 'Blog', href: '/blog' }, { label: TITLE }]}
     >
-      <div style={{ fontSize: '12px', color: '#64748b', marginBottom: 28 }}>
-        Active-model technical guide · August 2026
+      <div style={s.meta}><span>CamCash</span><span>Updated August 2026</span><span>6 min read</span></div>
+
+      <h1 style={s.h1}>How to Use MyFreeCams With OBS: External Broadcasting Setup</h1>
+
+      <p style={s.intro}>
+        MyFreeCams supports external broadcasting over RTMP, and OBS is one of the
+        broadcaster applications it documents. The setup is short once you know where
+        the Stream Key lives &mdash; it is inside ModelWeb, not in your account settings,
+        which is where most models look first.
+      </p>
+
+      <div style={s.answer}>
+        <strong style={s.strong}>Quick answer:</strong> Log into MFC ModelWeb, open
+        <strong style={s.strong}> Options &rarr; External Broadcaster &rarr; Stream Key &amp; URL</strong>,
+        copy the Stream Key, then open <strong style={s.strong}>OBS &rarr; Settings &rarr; Stream</strong> and
+        select MyFreeCams as the service. You still stay logged into ModelWeb while OBS sends the video.
       </div>
 
-      <h1 style={{ fontSize: 29, fontWeight: 800, color: '#f1f5f9', lineHeight: 1.2, marginBottom: 24 }}>
-        How to Use MyFreeCams With OBS: External Broadcasting Setup
-      </h1>
+      <h2 style={s.h2}>What you need</h2>
+      <ul style={s.ul}>
+        <li style={s.li}>A MyFreeCams model account.</li>
+        <li style={s.li}>OBS Studio installed on your computer.</li>
+        <li style={s.li}>A webcam and a microphone.</li>
+        <li style={s.li}>An internet connection that can sustain your chosen bitrate.</li>
+        <li style={s.li}>Your <em>current</em> MFC Stream Key.</li>
+      </ul>
 
-      
-<p style={s.p}>MyFreeCams currently supports external broadcasting with OBS and other RTMP broadcaster apps. The setup is straightforward once you know where the MFC Stream Key lives and how ModelWeb and OBS work together.</p>
+      <h2 style={s.h2}>Step by step</h2>
 
-<div style={s.box}>
-  <strong style={{color:'#f1f5f9'}}>Quick answer:</strong>
-  <span style={{color:'#94a3b8'}}> Log into MFC ModelWeb, open Options → External Broadcaster → Stream Key &amp; URL, copy the Stream Key, then open OBS → Settings → Stream and select MyFreeCams. MFC says you still need to stay logged into ModelWeb while using OBS.</span>
-</div>
+      <div style={s.step}>
+        <span style={s.stepNum}>STEP 1</span>
+        <p style={{ ...s.p, marginBottom: 0 }}>
+          <strong style={s.strong}>Open MFC ModelWeb and log in.</strong> MFC states that
+          models must remain logged into ModelWeb even when an external broadcaster is
+          sending the video. Closing ModelWeb because &ldquo;OBS is doing the work now&rdquo; is a
+          common first mistake.
+        </p>
+      </div>
 
-<h2 style={s.h2}>What you need</h2>
-<ul style={s.ul}>
-  <li style={s.li}>A MyFreeCams model account.</li>
-  <li style={s.li}>OBS Studio installed on your computer.</li>
-  <li style={s.li}>A webcam and microphone.</li>
-  <li style={s.li}>A reliable internet connection.</li>
-  <li style={s.li}>Your current MFC Stream Key.</li>
-</ul>
+      <div style={s.step}>
+        <span style={s.stepNum}>STEP 2</span>
+        <p style={{ ...s.p, marginBottom: 0 }}>
+          <strong style={s.strong}>Find the Stream Key.</strong> Inside ModelWeb, click
+          <strong style={s.strong}> Options</strong> in the lower-left area, select
+          <strong style={s.strong}> External Broadcaster</strong>, then open
+          <strong style={s.strong}> Stream Key &amp; URL</strong>. Click the Stream Key to copy it.
+          Treat it like a credential &mdash; not in screenshots, not in public posts, not in a
+          shared troubleshooting thread.
+        </p>
+      </div>
 
-<h2 style={s.h2}>Step 1: Open MFC ModelWeb</h2>
-<p style={s.p}>Open MyFreeCams ModelWeb and log in with your model account. MFC states that models must remain logged into ModelWeb even when an external broadcaster such as OBS is sending the video.</p>
+      <div style={s.step}>
+        <span style={s.stepNum}>STEP 3</span>
+        <p style={{ ...s.p, marginBottom: 0 }}>
+          <strong style={s.strong}>Connect OBS.</strong> Open
+          <strong style={s.strong}> Settings &rarr; Stream</strong>, expand the Service selector,
+          choose <strong style={s.strong}>MyFreeCams</strong>, and paste the Stream Key into the
+          Stream Key field. MFC says not to change the server unless you are actually
+          troubleshooting a connection problem.
+        </p>
+      </div>
 
-<h2 style={s.h2}>Step 2: Find the MFC Stream Key</h2>
-<p style={s.p}>Inside ModelWeb, click <strong>Options</strong> in the lower-left area, select <strong>External Broadcaster</strong>, then open <strong>Stream Key &amp; URL</strong>. Click the Stream Key to copy it.</p>
+      <div style={s.step}>
+        <span style={s.stepNum}>STEP 4</span>
+        <p style={{ ...s.p, marginBottom: 0 }}>
+          <strong style={s.strong}>Use MFC&rsquo;s starting settings.</strong> For a first setup MFC
+          currently recommends the software (x264) encoder, 3000 kbps at 1280&times;720, 30 FPS
+          and 160 kbps audio, with 6 Mbps upload as a minimum and 12+ Mbps recommended.
+          Get that working before changing anything.
+        </p>
+      </div>
 
-<p style={s.p}>Treat the key like a credential. Do not put it in screenshots, public posts, or shared troubleshooting threads.</p>
+      <div style={s.step}>
+        <span style={s.stepNum}>STEP 5</span>
+        <p style={{ ...s.p, marginBottom: 0 }}>
+          <strong style={s.strong}>Add your camera and microphone.</strong> Add the webcam as a
+          <strong style={s.strong}> Video Capture Device</strong>, then explicitly pick the microphone
+          you want in OBS rather than letting it default to whichever input the system prefers.
+        </p>
+      </div>
 
-<h2 style={s.h2}>Step 3: Connect OBS</h2>
-<p style={s.p}>Open OBS and select <strong>Settings → Stream</strong>. MFC's current OBS documentation says to expand the Service selector, choose <strong>MyFreeCams</strong>, and paste your MFC Stream Key into the Stream Key field. MFC says not to change the server unless you are experiencing a connection problem.</p>
+      <div style={s.step}>
+        <span style={s.stepNum}>STEP 6</span>
+        <p style={{ ...s.p, marginBottom: 0 }}>
+          <strong style={s.strong}>Test before you depend on it.</strong> Check the camera preview,
+          microphone level, audio/video sync and the OBS statistics panel before a busy show.
+          If the connection fails, change one thing at a time.
+        </p>
+      </div>
 
-<h2 style={s.h2}>Step 4: Use MFC's starting OBS settings</h2>
-<p style={s.p}>For a first OBS setup, MFC currently recommends the Software (x264) encoder, 3000 kbps at 1280×720, 30 FPS, and 160 kbps audio. MFC also lists 6 Mbps upload as a minimum and 12+ Mbps as recommended.</p>
+      <h2 style={s.h2}>Why bother with OBS at all?</h2>
+      <p style={s.p}>
+        MFC&rsquo;s external RTMP path gives you scenes, transitions, overlays, effects and audio
+        tools that the browser broadcaster does not. That is genuinely useful if you run a
+        structured show &mdash; a goal graphic, a second camera angle, a scene you switch to
+        between sets.
+      </p>
+      <p style={s.p}>
+        It is not automatically better. If your browser broadcast is stable and you do not
+        need scene control, adding OBS mostly adds things that can break mid-show.
+      </p>
 
-<p style={s.p}>Start with the platform's recommended configuration before experimenting with higher resolution or frame rates.</p>
+      <h2 style={s.h2}>If your OBS connection suddenly stops working</h2>
+      <p style={s.p}>
+        Check your MFC password first. MFC links the Stream Key to your model-account password
+        and regenerates the key automatically when the password changes &mdash; so a password
+        change you made days ago is the usual reason a previously working OBS setup starts
+        failing. Copy the current Stream Key from ModelWeb again before going any deeper.
+      </p>
 
-<h2 style={s.h2}>Step 5: Add your webcam and microphone</h2>
-<p style={s.p}>In OBS, add your webcam as a <strong>Video Capture Device</strong>. Then choose the microphone you actually want to use in OBS rather than assuming the built-in microphone is the best option.</p>
-
-<h2 style={s.h2}>Step 6: Test before you depend on it</h2>
-<p style={s.p}>Check the camera preview, microphone levels, stream stability, and OBS statistics before starting a busy show. If the connection fails, change one thing at a time rather than changing every OBS setting simultaneously.</p>
-
-<h2 style={s.h2}>Why use OBS on MFC?</h2>
-<p style={s.p}>MFC says its external RTMP broadcaster path provides mixing tools, transitions, overlays, effects, and audio tools, and identifies OBS as one of its supported external broadcasters.</p>
-
-<h2 style={s.h2}>If your OBS connection suddenly stops working</h2>
-<p style={s.p}>Check your MFC password first. MFC says the Stream Key is linked to the model account password and is automatically regenerated when the password changes. Copy the current Stream Key from ModelWeb again before troubleshooting deeper.</p>
-
-<h2 style={s.h2}>Related guides</h2>
-<p style={s.p}><a href="/blog/how-to-set-up-split-streaming-on-multiple-cam-sites" style={s.link}>How to set up split streaming on multiple cam sites</a> covers the next step if you are building a multi-platform setup. For personal performance data, see the <a href="/guides/cam-model-analytics" style={s.link}>cam model analytics guide</a>.</p>
-
+      <div style={s.note}>
+        Platform interfaces, recommended bitrates and broadcaster requirements change. Check
+        MFC&rsquo;s current ModelWeb and OBS documentation before relying on any specific figure
+        here.
+      </div>
 
       <div style={s.cta}>
-        <div style={{ fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#16F4FF', marginBottom: 8 }}>
-          CamCashGrl
-        </div>
-        <div style={{ fontSize: 22, fontWeight: 800, color: '#fff', marginBottom: 8 }}>
-          Turn your own stream history into useful evidence.
-        </div>
-        <p style={{ ...s.p, marginBottom: 16 }}>
-          Track earnings, sessions, fans, platforms, and your personal peak streaming patterns from your own data.
+        <div style={s.ctaTitle}>Did the OBS switch actually change your numbers?</div>
+        <p style={s.ctaText}>
+          A better-looking stream is only worth the setup time if it shows up in your results.
+          CamCash turns your own tip history into session, hourly and platform comparisons, so
+          you can put the weeks before and after a setup change side by side.
         </p>
-        <a href="/landing" style={{ display: 'inline-flex', padding: '12px 20px', borderRadius: 12, background: 'linear-gradient(90deg, #16F4FF, #7C5CFF, #FF2BAE)', color: '#fff', textDecoration: 'none', fontWeight: 800 }}>
-          Analyze My Earnings Free →
-        </a>
+        <a href="/landing" style={s.ctaBtn}>Analyze My Earnings Free &rarr;</a>
       </div>
 
-      <section style={{ marginTop: 38 }}>
-        <h2 style={s.h2}>Frequently Asked Questions</h2>
-        <div style={ marginBottom: 18 }>
-  <div style={{ fontWeight: 800, color: '#e2e8f0', marginBottom: 7 }}>Do I need to be logged into MFC ModelWeb when using OBS?</div>
-  <p style={...s.p, marginBottom: 0}>Yes. MyFreeCams says models must be logged into ModelWeb to broadcast even when using an external broadcaster such as OBS.</p>
-</div>
-<div style={ marginBottom: 18 }>
-  <div style={{ fontWeight: 800, color: '#e2e8f0', marginBottom: 7 }}>Where do I find my MFC Stream Key?</div>
-  <p style={...s.p, marginBottom: 0}>In ModelWeb, open Options → External Broadcaster → Stream Key & URL, then click Stream Key to copy it.</p>
-</div>
-<div style={ marginBottom: 18 }>
-  <div style={{ fontWeight: 800, color: '#e2e8f0', marginBottom: 7 }}>What OBS settings should I start with for MFC?</div>
-  <p style={...s.p, marginBottom: 0}>MFC currently recommends starting with x264, 3000 kbps at 1280×720, 30 FPS, and 160 kbps audio.</p>
-</div>
-      </section>
+      <div style={s.faq}>
+        <h2 style={{ ...s.h2, marginTop: 0 }}>Frequently asked questions</h2>
+        {FAQS.map(f => (
+          <div key={f.q} style={s.faqItem}>
+            <div style={s.faqQ}>{f.q}</div>
+            <p style={{ ...s.faqA, marginBottom: 0 }}>{f.a}</p>
+          </div>
+        ))}
+      </div>
+
+      <div style={s.related}>
+        <div style={s.relatedTitle}>Related reading</div>
+        <p style={{ ...s.p, marginBottom: 6 }}><a href="/blog/how-to-find-myfreecams-stream-key" style={s.link}>&rarr; Where to find your MyFreeCams stream key</a></p>
+        <p style={{ ...s.p, marginBottom: 6 }}><a href="/blog/how-to-set-up-split-streaming-on-multiple-cam-sites" style={s.link}>&rarr; How to set up split streaming on multiple cam sites</a></p>
+        <p style={{ ...s.p, marginBottom: 0 }}><a href="/guides/cam-model-analytics" style={s.link}>&rarr; Cam model analytics guide</a></p>
+      </div>
     </ArticleLayout>
   )
 }
