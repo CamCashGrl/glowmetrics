@@ -59,14 +59,30 @@ async function startCheckout(planType, setLoading) {
     const data = await response.json().catch(() => ({}))
 
     if (!response.ok) {
-      throw new Error(
-        data.error || 'Unable to start Stripe Checkout.'
+      // status separates a stale plan alias (400) from an unconfigured price
+      // (503) from Stripe being down (500) without opening the server logs.
+      track('checkout_failed', {
+        plan_type: planType,
+        source: 'pricing_page',
+        reason: 'checkout_api_error',
+        status: response.status,
+      })
+      throw Object.assign(
+        new Error(data.error || 'Unable to start Stripe Checkout.'),
+        { trackedAsCheckoutFailure: true }
       )
     }
 
     if (!data.url) {
-      throw new Error(
-        'Stripe Checkout did not return a payment URL.'
+      track('checkout_failed', {
+        plan_type: planType,
+        source: 'pricing_page',
+        reason: 'no_checkout_url',
+        status: response.status,
+      })
+      throw Object.assign(
+        new Error('Stripe Checkout did not return a payment URL.'),
+        { trackedAsCheckoutFailure: true }
       )
     }
 
@@ -74,9 +90,19 @@ async function startCheckout(planType, setLoading) {
     // click) — the funnel step between "upgrade CTA clicked" and Stripe's
     // own hosted checkout, completing signup->import->first-insight->
     // pro-preview->upgrade-click->checkout-started->subscription tracking.
-    track('checkout_started', { plan_type: planType })
+    track('checkout_started', { plan_type: planType, source: 'pricing_page' })
     window.location.assign(data.url)
   } catch (error) {
+    // A network failure never reached either branch above, so it needs its
+    // own event — otherwise a click that died before the request landed
+    // looks identical to one that was never made.
+    if (!error?.trackedAsCheckoutFailure) {
+      track('checkout_failed', {
+        plan_type: planType,
+        source: 'pricing_page',
+        reason: 'network_error',
+      })
+    }
     alert(
       error?.message ||
         'Something went wrong while opening Stripe Checkout. Please try again.'
@@ -428,6 +454,13 @@ function PricingSection({
               as="a"
               href={user ? '/start-trial' : '/landing'}
               variant="secondary"
+              onClick={() =>
+                track('pricing_cta_clicked', {
+                  cta: 'start_trial',
+                  destination: user ? '/start-trial' : '/landing',
+                  signed_in: !!user,
+                })
+              }
               style={{
                 display: 'block',
                 width: '100%',
@@ -557,12 +590,16 @@ function PricingSection({
             >
               <Button
                 type="button"
-                onClick={() =>
+                onClick={() => {
+                  track('pricing_cta_clicked', {
+                    plan_type: 'standard_monthly',
+                    cta: 'choose_monthly',
+                  })
                   startCheckout(
                     'standard_monthly',
                     setCheckoutLoading
                   )
-                }
+                }}
                 disabled={checkoutLoading !== null}
                 style={{
                   display: 'block',
@@ -580,12 +617,16 @@ function PricingSection({
               <Button
                 type="button"
                 variant="secondary"
-                onClick={() =>
+                onClick={() => {
+                  track('pricing_cta_clicked', {
+                    plan_type: 'standard_annual',
+                    cta: 'choose_annual',
+                  })
                   startCheckout(
                     'standard_annual',
                     setCheckoutLoading
                   )
-                }
+                }}
                 disabled={checkoutLoading !== null}
                 style={{
                   display: 'block',
@@ -991,6 +1032,17 @@ export default function PricingClient() {
     useState(null)
 
   const [user, setUser] = useState(null)
+
+  // /pricing had no view event at all, so every conversion number measured
+  // here had no denominator: two checkout events existed in analytics_events
+  // and there was no way to know whether that was 2 of 3 visitors or 2 of
+  // 300. Fired on mount rather than after the auth check below, so a visitor
+  // who bounces before the session resolves is still counted. /api/track
+  // attaches user_id from the request cookie, so signed-in status is
+  // recorded without waiting on the client.
+  useEffect(() => {
+    track('pricing_page_viewed', {})
+  }, [])
 
   useEffect(() => {
     let mounted = true

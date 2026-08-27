@@ -1,6 +1,8 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
+import { track } from "../../lib/track";
 import { PRODUCTS } from "../../lib/shop-products";
 import { SHOP_SEO, SHOP_FAQS } from "../../lib/shop-seo";
 
@@ -32,6 +34,13 @@ function ProductCard({ product }) {
   return (
     <Link
       href={`/shop/${product.slug}`}
+      onClick={() =>
+        track("shop_product_clicked", {
+          slug: product.slug,
+          product: product.shortTitle,
+          price: product.price,
+        })
+      }
       style={{
         display: "flex",
         flexDirection: "column",
@@ -131,6 +140,13 @@ function ProductCard({ product }) {
 }
 
 export default function ShopClient() {
+  // The shop had no instrumentation at all, so the whole funnel —
+  // shop view -> product click -> Etsy click-out — was invisible, and
+  // there was no way to tell which listings actually pull traffic.
+  useEffect(() => {
+    track("shop_viewed", { product_count: PRODUCTS.length });
+  }, []);
+
   return (
     <div
       style={{

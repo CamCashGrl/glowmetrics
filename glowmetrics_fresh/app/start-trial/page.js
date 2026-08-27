@@ -51,17 +51,38 @@ function StartTrialInner() {
       if (!active) return
       if (hasAppAccess(profile)) { router.replace('/dashboard'); return }
       setChecking(false)
+      // Fires only once the gate is actually shown to someone who does not
+      // already have access, so it is a true denominator for the trial
+      // funnel: gate_viewed -> checkout_clicked -> checkout_started ->
+      // (Stripe) -> trial_started. Without it, a click count has nothing to
+      // divide by.
+      track('trial_gate_viewed', { canceled })
+      // Stripe's cancel_url returns here with ?canceled=true. That return was
+      // previously invisible — an abandoned checkout looked identical to one
+      // that never opened.
+      if (canceled) track('trial_checkout_abandoned', {})
     })
     return () => { active = false }
-  }, [router])
+  }, [router, canceled])
+
+  // Every exit from startTrial() emits exactly one terminal event, so a click
+  // can never vanish: either trial_checkout_started (we handed them to Stripe)
+  // or trial_checkout_failed with a reason. The page previously tracked only
+  // the success path, which is why two recorded checkout starts had no
+  // matching outcome anywhere in analytics_events.
+  const failCheckout = (planType, reason, message, extra = {}) => {
+    track('trial_checkout_failed', { plan_type: planType, reason, ...extra })
+    setError(message)
+  }
 
   const startTrial = async (planType) => {
     setLoading(planType)
     setError(null)
+    track('trial_checkout_clicked', { plan_type: planType })
     try {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session?.access_token) {
-        setError('Your login session expired. Please sign in again.')
+        failCheckout(planType, 'session_expired', 'Your login session expired. Please sign in again.')
         return
       }
       const res = await fetch('/api/stripe/checkout', {
@@ -75,13 +96,22 @@ function StartTrialInner() {
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok || !data.url) {
-        setError(data.error || 'Could not open secure checkout. Please try again.')
+        // status is the single most useful field here: the checkout route
+        // returns a distinct one per failure mode (401 signed out, 400 bad
+        // plan, 503 no price configured, 500 Stripe down), so this reason is
+        // enough to tell a broken deploy from a stale marketing link.
+        failCheckout(
+          planType,
+          res.ok ? 'no_checkout_url' : 'checkout_api_error',
+          data.error || 'Could not open secure checkout. Please try again.',
+          { status: res.status }
+        )
         return
       }
       track('trial_checkout_started', { plan_type: planType })
       window.location.assign(data.url)
     } catch (e) {
-      setError('Something went wrong opening checkout. Please try again.')
+      failCheckout(planType, 'network_error', 'Something went wrong opening checkout. Please try again.')
     } finally {
       setLoading(null)
     }
