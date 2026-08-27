@@ -6,6 +6,7 @@ import { buildReportDiscoveries, buildReportFacts, buildReportActions } from "..
 import {
   ReportHeader, ReportDiscovery, ReportActions, ReportPro, ReportEmpty, SectionTitle,
 } from "./ReportNarrative"
+import PlatformDataCards from "./PlatformDataCards"
 import { track as gtmTrack } from "../../lib/track"
 import { PLATFORM_TOKEN_RATES } from "../../lib/constants"
 import { resolveCurrentMonthGrowth } from "../../lib/analytics"
@@ -945,6 +946,9 @@ export default function CreatorReport({
   intelligence = null,
   timezone = "UTC",
   firstName = null,
+  // Stated preference (profiles.primary_pro_platform) — marks her main
+  // platform in the per-platform cards. Never used to rank anything.
+  primaryPlatform = null,
 }) {
   const safeAnalytics = analytics || {}
 
@@ -1279,6 +1283,12 @@ export default function CreatorReport({
       ) : (
         <ReportEmpty facts={reportFacts} nextEvidence={nextEvidence} onImport={handleImport} />
       )}
+
+      {/* WHAT CAMCASH HAD TO WORK WITH — one card per platform she streams
+          on, so a thin conclusion and a well-evidenced one no longer look
+          identical. Canonical fields only; see PlatformDataCards.jsx. */}
+      <SectionTitle>Your platforms</SectionTitle>
+      <PlatformDataCards analytics={safeAnalytics} primaryPlatform={primaryPlatform} />
 
       <ReportActions
         actions={reportActions}

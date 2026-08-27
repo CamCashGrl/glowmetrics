@@ -2019,7 +2019,7 @@ export default function Dashboard() {
       })
       setUser(user)
       supabase.from('profiles')
-        .select('plan, plan_expires_at, trial_ends_at, stripe_customer_id, timezone')
+        .select('plan, plan_expires_at, trial_ends_at, stripe_customer_id, timezone, primary_pro_platform, display_name')
         .eq('id', user.id)
         .maybeSingle()
         .then(({ data }) => { if (data) setProfile(data) })
@@ -3550,7 +3550,7 @@ const stopImportMessageRotation = () => {
 
         {activeTab === "report" && (
           <div style={{ animation: "fadeUp 0.3s ease" }}>
-            <CreatorReport analytics={analytics} tips={tips} isPro={isPro} onUpgrade={(src) => openUpgradeModal(src || 'creator_report')} engineInsights={engineInsights} intelligence={intelligence} timezone={creatorTz} firstName={profile?.display_name || null} />
+            <CreatorReport analytics={analytics} tips={tips} isPro={isPro} onUpgrade={(src) => openUpgradeModal(src || 'creator_report')} engineInsights={engineInsights} intelligence={intelligence} timezone={creatorTz} firstName={profile?.display_name || null} primaryPlatform={profile?.primary_pro_platform || null} />
           </div>
         )}
 

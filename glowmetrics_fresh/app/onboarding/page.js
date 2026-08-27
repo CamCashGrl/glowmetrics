@@ -614,6 +614,19 @@ export default function OnboardingPage(){
 
   const[step,setStep]=useState('platform')
   const[platformId,setPlatformId]=useState('chaturbate')
+  // ── PLATFORM ROSTER ──────────────────────────────────────────────────────
+  // Onboarding used to ask for ONE platform, which is not how a creator
+  // works: she streams on several and thinks of one of them as her main. She
+  // now names all of them up front and marks the primary, so CamCash knows
+  // the shape of her business before the first import rather than inferring
+  // it from whichever file she happened to paste first.
+  //
+  // `selectedPlatforms` drives the import queue below — the primary is
+  // imported first, then the rest are offered in turn. It is selection state,
+  // not a claim about her data: a platform is only ever counted as measured
+  // once its tips actually land.
+  const[selectedPlatforms,setSelectedPlatforms]=useState(['chaturbate'])
+  const[primaryPlatform,setPrimaryPlatform]=useState('chaturbate')
   const[cbUsername,setCbUsername]=useState('')
   const[cbUsernameError,setCbUsernameError]=useState('')
   const[pasteText,setPasteText]=useState('')
@@ -696,6 +709,30 @@ export default function OnboardingPage(){
     if(userPlan!=='pro'&&importedPlatforms.length>=FREE_MAX_PLATFORMS&&!importedPlatforms.includes(id)){setPendingPlatform(id);setShowUpsell(true);return}
     setPlatformId(id)
     if(id==='chaturbate')setStep('username');else setStep('paste')
+  }
+
+  // Toggle a platform in the roster. The primary can never be left dangling:
+  // removing it promotes whichever platform remains first.
+  function togglePlatform(id){
+    setSelectedPlatforms(prev=>{
+      const next=prev.includes(id)?prev.filter(p=>p!==id):[...prev,id]
+      if(!next.length)return prev            // never allow an empty roster
+      if(!next.includes(primaryPlatform))setPrimaryPlatform(next[0])
+      return next
+    })
+  }
+
+  // Confirmed roster → persist the primary, then start with it. Storing it
+  // uses the existing profiles.primary_pro_platform column and its
+  // normalizing trigger; no new column and no new platform naming rule.
+  async function confirmPlatformRoster(){
+    const primary=selectedPlatforms.includes(primaryPlatform)?primaryPlatform:selectedPlatforms[0]
+    track('onboarding_platforms_selected',{count:selectedPlatforms.length,primary,platforms:selectedPlatforms.join(',')})
+    if(user){
+      try{await supabase.from('profiles').upsert({id:user.id,primary_pro_platform:PLATFORMS[primary]?.label||primary},{onConflict:'id'})}
+      catch{/* selection still proceeds — this is a preference, not a gate */}
+    }
+    selectPlatform(primary)
   }
 
   async function handleUsernameSubmit(){
@@ -898,23 +935,33 @@ export default function OnboardingPage(){
               <div style={EYE}>Step 1 of 3</div>
               <div style={{textAlign:'center',marginBottom:16}}>
                 <h1 style={{fontSize:23,fontWeight:900,color:'#F8FAFC',letterSpacing:'-0.025em',lineHeight:1.15,marginBottom:7}}>Start tracking your streams</h1>
-                <p style={{fontSize:13,color:'rgba(166,168,189,0.88)',lineHeight:1.7,maxWidth:360,margin:'0 auto'}}>Choose your platform so CamCash can import your tip history and build your first insights.</p>
+                <p style={{fontSize:13,color:'rgba(166,168,189,0.88)',lineHeight:1.7,maxWidth:400,margin:'0 auto'}}>Select every platform you stream on, then tell CamCash which one is your main. You will import them one at a time, starting with your primary.</p>
               </div>
-              <div style={{marginBottom:22}}>
-                <div style={{fontSize:10,fontWeight:700,color:'rgba(166,168,189,0.6)',marginBottom:9,letterSpacing:'0.08em',textTransform:'uppercase'}}>Your platform</div>
+
+              {/* ── PLATFORM ROSTER CARD ──────────────────────────────────
+                  A solid, high-contrast panel rather than a translucent wash,
+                  so the selected tiles read as selected. Multi-select: a
+                  creator names her whole business here, not one site. */}
+              <div style={{
+                background:'#121826',border:'1px solid #1e2d45',borderRadius:18,padding:'18px 16px 16px',marginBottom:18,
+                boxShadow:'inset 0 1px 0 rgba(255,255,255,0.05),0 10px 30px rgba(0,0,0,0.5)',
+              }}>
+                <div style={{fontSize:10,fontWeight:800,color:'rgba(166,168,189,0.75)',marginBottom:11,letterSpacing:'0.12em',textTransform:'uppercase'}}>Platforms you stream on</div>
                 <div className="ob-plat-row" style={{display:'flex',gap:9}}>
                   {Object.entries(PLATFORMS).map(([key,p])=>{
-                    const sel=platformId===key
+                    const sel=selectedPlatforms.includes(key)
                     return(
-                      <button key={key} onClick={()=>setPlatformId(key)} style={{
+                      <button key={key} onClick={()=>togglePlatform(key)}
+                        aria-pressed={sel}
+                        style={{
                         flex:1,padding:'12px 8px',borderRadius:14,textAlign:'center',
-                        background:sel?'rgba(33,230,243,0.09)':'rgba(255,255,255,0.03)',
-                        border:sel?`1.5px solid rgba(33,230,243,0.85)`:'1px solid rgba(255,255,255,0.09)',
+                        background:sel?'rgba(33,230,243,0.11)':'#161e2e',
+                        border:sel?'1.5px solid rgba(33,230,243,0.85)':'1px solid #2a3f5f',
                         boxShadow:sel?'0 0 22px rgba(33,230,243,0.22),inset 0 1px 0 rgba(255,255,255,0.08)':'none',
                         cursor:'pointer',transition:'all 0.22s',position:'relative',
                       }}
-                      onMouseEnter={e=>{if(!sel){e.currentTarget.style.borderColor='rgba(33,230,243,0.45)';e.currentTarget.style.background='rgba(33,230,243,0.05)'}}}
-                      onMouseLeave={e=>{if(!sel){e.currentTarget.style.borderColor='rgba(255,255,255,0.09)';e.currentTarget.style.background='rgba(255,255,255,0.03)'}}}
+                      onMouseEnter={e=>{if(!sel){e.currentTarget.style.borderColor='rgba(33,230,243,0.45)'}}}
+                      onMouseLeave={e=>{if(!sel){e.currentTarget.style.borderColor='#2a3f5f'}}}
                       >
                         {sel&&<div style={{position:'absolute',top:9,right:9,width:18,height:18,borderRadius:'50%',background:CYAN,display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,fontWeight:900,color:'#04101b',boxShadow:'0 0 14px rgba(33,230,243,0.6)'}}>✓</div>}
                         <div style={{width:44,height:44,borderRadius:14,display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,fontWeight:900,margin:'0 auto 10px',...p.iconStyle}}>{p.short}</div>
@@ -923,8 +970,37 @@ export default function OnboardingPage(){
                     )
                   })}
                 </div>
+
+                {/* PRIMARY — only meaningful once there is something to choose
+                    between, so it appears when a second platform is added. */}
+                {selectedPlatforms.length>1&&(
+                  <div style={{marginTop:16,paddingTop:14,borderTop:'1px solid #1e2d45',animation:'fadeUp 0.25s ease both'}}>
+                    <div style={{fontSize:10,fontWeight:800,color:'rgba(166,168,189,0.75)',marginBottom:9,letterSpacing:'0.12em',textTransform:'uppercase'}}>Your primary platform</div>
+                    <div style={{display:'flex',gap:7,flexWrap:'wrap'}}>
+                      {selectedPlatforms.map(key=>{
+                        const p=PLATFORMS[key];const on=primaryPlatform===key
+                        return(
+                          <button key={key} onClick={()=>setPrimaryPlatform(key)} aria-pressed={on} style={{
+                            padding:'7px 14px',borderRadius:100,cursor:'pointer',fontSize:12,fontWeight:800,
+                            background:on?'rgba(255,59,110,0.14)':'#161e2e',
+                            border:on?'1.5px solid rgba(255,59,110,0.75)':'1px solid #2a3f5f',
+                            color:on?'#fff':'rgba(255,255,255,0.55)',transition:'all 0.2s',
+                          }}>{on?'★ ':''}{p.label}</button>
+                        )
+                      })}
+                    </div>
+                    <div style={{fontSize:11.5,color:'rgba(166,168,189,0.7)',marginTop:10,lineHeight:1.6}}>
+                      Your primary is the platform CamCash leads with — it is imported first and anchors your comparisons.
+                    </div>
+                  </div>
+                )}
               </div>
-              <OBBtn onClick={()=>selectPlatform(platformId)} style={{marginBottom:10}}>Continue with {platform.label} →</OBBtn>
+
+              <OBBtn onClick={confirmPlatformRoster} style={{marginBottom:10}}>
+                {selectedPlatforms.length>1
+                  ?`Start with ${PLATFORMS[primaryPlatform]?.label||''} — ${selectedPlatforms.length} platforms →`
+                  :`Continue with ${PLATFORMS[selectedPlatforms[0]]?.label||''} →`}
+              </OBBtn>
             </div>
           )}
 
@@ -1090,6 +1166,36 @@ export default function OnboardingPage(){
               <div style={{textAlign:'center',marginTop:10,fontSize:10,color:'rgba(100,116,139,0.45)'}}>⚡ Almost there! Crunching the good stuff…</div>
             </div>
           )}
+
+          {/* ══ REMAINING PLATFORMS ═══════════════════════════════════════
+              The roster she named at step 1 is only worth asking for if
+              CamCash acts on it. After an import lands, whatever she selected
+              and has not yet imported is offered here, one at a time. It is a
+              prompt, never a block — Continue always leads onward. */}
+          {(step==='live'||step==='done')&&(()=>{
+            const remaining=selectedPlatforms.filter(p=>!importedPlatforms.includes(p))
+            if(!remaining.length)return null
+            const nextId=remaining[0];const nextP=PLATFORMS[nextId]
+            return(
+              <div style={{
+                background:'#121826',border:'1px solid #2a3f5f',borderRadius:16,padding:'14px 16px',marginBottom:14,
+                display:'flex',alignItems:'center',gap:12,flexWrap:'wrap',
+                boxShadow:'inset 0 1px 0 rgba(255,255,255,0.05)',
+              }}>
+                <div style={{width:36,height:36,borderRadius:12,display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,fontWeight:900,flexShrink:0,...nextP.iconStyle}}>{nextP.short}</div>
+                <div style={{flex:'1 1 180px',minWidth:0}}>
+                  <div style={{fontSize:13,fontWeight:800,color:'#fff'}}>{nextP.label} is still waiting</div>
+                  <div style={{fontSize:11.5,color:'rgba(166,168,189,0.75)',marginTop:2}}>
+                    You told CamCash you stream there. Import it and your comparisons cover {importedPlatforms.length+1} platforms.
+                  </div>
+                </div>
+                <button onClick={()=>selectPlatform(nextId)} style={{
+                  flexShrink:0,padding:'9px 16px',borderRadius:100,cursor:'pointer',fontSize:12,fontWeight:800,
+                  background:'linear-gradient(90deg,#16F4FF,#7C5CFF,#FF2BAE)',border:'none',color:'#06101A',
+                }}>Import {nextP.label} →</button>
+              </div>
+            )
+          })()}
 
           {/* ══ LIVE MODE ══ */}
           {step==='live'&&(
