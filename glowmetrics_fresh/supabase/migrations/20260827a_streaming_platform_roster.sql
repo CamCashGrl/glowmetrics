@@ -32,6 +32,7 @@ DECLARE
   raw       text;
   canon     text;
   collected text[] := '{}';
+  known     text[];
 BEGIN
   IF NEW.streaming_platforms IS NULL THEN
     RETURN NEW;
@@ -42,11 +43,24 @@ BEGIN
     RETURN NEW;
   END IF;
 
+  -- canonical_platform() returns an UNRECOGNISED value unchanged, on purpose:
+  -- for tip data, dropping a platform name it does not know would lose real
+  -- earnings. The roster is the opposite case — it is chosen from a fixed list
+  -- in onboarding, so an unrecognised string is bad input and would render a
+  -- phantom platform card. The accepted set is DERIVED from that function
+  -- rather than restated, so the two can never disagree.
+  known := ARRAY[
+    public.canonical_platform('cb'),
+    public.canonical_platform('bc'),
+    public.canonical_platform('mfc'),
+    public.canonical_platform('sc'),
+    public.canonical_platform('cs')
+  ];
+
   FOREACH raw IN ARRAY NEW.streaming_platforms LOOP
     CONTINUE WHEN raw IS NULL OR btrim(raw) = '';
     canon := public.canonical_platform(raw);
-    -- 'Unknown' is the parser's undetected bucket, not a site she streams on.
-    CONTINUE WHEN canon = 'Unknown';
+    CONTINUE WHEN NOT (canon = ANY (known));   -- unrecognised: not a roster entry
     IF NOT (canon = ANY (collected)) THEN
       collected := array_append(collected, canon);
     END IF;
