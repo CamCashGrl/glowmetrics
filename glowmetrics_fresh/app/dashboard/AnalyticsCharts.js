@@ -4,7 +4,7 @@ import ConfidenceBadge from "./ConfidenceBadge"
 
 // ─── Design tokens (matches the rest of the dashboard) ───────────────────────
 const BG     = "#0a0e1a"
-const CARD   = "rgba(255,255,255,0.03)"
+const CARD   = "rgba(15,20,32,0.75)"   // the dashboard's authentic card fill
 const BORDER = "rgba(255,255,255,0.08)"
 const TEXT   = "#94A3B8"
 const WHITE  = "#F1F5F9"
@@ -28,6 +28,9 @@ const card = (extra = {}) => ({
   border: `1px solid ${BORDER}`,
   borderRadius: 12,
   padding: "20px 24px",
+  // The dashboard's authentic card treatment. Without the bloom a card sits
+  // flat on the page; every other surface carries it.
+  backdropFilter: "blur(20px)", boxShadow: "0 0 40px rgba(59,130,246,0.15), 0 0 80px rgba(236,72,153,0.08)",
   ...extra,
 })
 

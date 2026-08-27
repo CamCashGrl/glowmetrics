@@ -11,7 +11,7 @@ import { detectSessions } from "../../lib/analytics/sessions"
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const BG     = "#0a0e1a"
-const CARD   = "rgba(255,255,255,0.03)"
+const CARD   = "rgba(15,20,32,0.75)"   // the dashboard's authentic card fill
 const BORDER = "rgba(255,255,255,0.08)"
 const CYAN   = "#22d3ee"
 const PURPLE = "#a855f7"

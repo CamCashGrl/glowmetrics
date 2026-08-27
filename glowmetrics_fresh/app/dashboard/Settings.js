@@ -98,7 +98,7 @@ export default function Settings({ user, profile, isPro, supabase, onTimezoneSav
       </div>
 
       {/* Plan status */}
-      <div style={{ borderRadius: 18, padding: '20px 22px', marginBottom: 16, background: isPro ? 'linear-gradient(135deg,rgba(34,211,238,0.1),rgba(168,85,247,0.08))' : 'rgba(12,16,34,0.78)', border: `1px solid ${isPro ? 'rgba(34,211,238,0.3)' : 'rgba(255,255,255,0.09)'}` }}>
+      <div style={{ borderRadius: 18, padding: '20px 22px', marginBottom: 16, background: isPro ? 'linear-gradient(135deg,rgba(34,211,238,0.1),rgba(168,85,247,0.08))' : 'rgba(12,16,34,0.78)', border: `1px solid ${isPro ? 'rgba(34,211,238,0.3)' : 'rgba(255,255,255,0.09)'}` , backdropFilter: 'blur(20px)', boxShadow: '0 0 40px rgba(59,130,246,0.15), 0 0 80px rgba(236,72,153,0.08)' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
           <div>
             <div style={{ fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Current Plan</div>
@@ -142,7 +142,7 @@ export default function Settings({ user, profile, isPro, supabase, onTimezoneSav
       </div>
 
       {/* Account info */}
-      <div style={{ borderRadius: 18, padding: '20px 22px', background: 'rgba(12,16,34,0.78)', border: '1px solid rgba(255,255,255,0.09)' }}>
+      <div style={{ borderRadius: 18, padding: '20px 22px', background: 'rgba(12,16,34,0.78)', border: '1px solid rgba(255,255,255,0.09)' , backdropFilter: 'blur(20px)', boxShadow: '0 0 40px rgba(59,130,246,0.15), 0 0 80px rgba(236,72,153,0.08)' }}>
         <div style={{ fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>Account</div>
         <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
           <span style={{ fontSize: 13, color: C.muted }}>Email</span>

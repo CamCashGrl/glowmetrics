@@ -18,7 +18,7 @@ import { toLocalDow, toLocalHour, toLocalDateStr } from "../../lib/analytics/loc
 // DESIGN TOKENS
 // ═══════════════════════════════════════════════════════════════════════════════
 const BG      = "#0a0e1a"
-const CARD    = "rgba(255,255,255,0.03)"
+const CARD    = "rgba(15,20,32,0.75)"   // the dashboard's authentic card fill
 const BORDER  = "rgba(255,255,255,0.08)"
 const PRIMARY = "#f1f5f9"
 const TEXT    = "#94a3b8"
@@ -38,7 +38,8 @@ const UTC_DAYS    = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday"
 const MONTHS      = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
 const PREFS_KEY   = "cc_planner_prefs"
 
-const cardS = (x = {}) => ({ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 14, padding: 20, ...x })
+const cardS = (x = {}) => ({ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 14, padding: 20,
+  backdropFilter: "blur(20px)", boxShadow: "0 0 40px rgba(59,130,246,0.15), 0 0 80px rgba(236,72,153,0.08)", ...x })
 const fmt$  = (v) => `$${Number(v).toFixed(2)}`
 const fmtK  = (v) => v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(Math.round(v))
 const TIP_S = { background: "#0f1726", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "8px 12px", color: PRIMARY, fontSize: 12 }
