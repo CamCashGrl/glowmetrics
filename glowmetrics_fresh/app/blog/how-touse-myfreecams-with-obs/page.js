@@ -1,16 +1,19 @@
 import ArticleLayout from '../../components/ArticleLayout'
 
+const DESCRIPTION = 'A practical MyFreeCams OBS setup guide covering the ModelWeb connection, Stream Key, OBS settings, camera, audio, preview, and common setup mistakes.'
+const CANONICAL = 'https://www.camcashgrl.com/blog/how-touse-myfreecams-with-obs'
+
 const schema = {
   '@context': 'https://schema.org',
   '@type': 'Article',
   headline: 'How to Use MyFreeCams With OBS: External Broadcasting Setup',
   description: 'A practical MyFreeCams OBS setup guide covering the ModelWeb connection, Stream Key, OBS settings, camera, audio, preview, and common setup mistakes.',
-  url: 'https://www.camcashgrl.com/blog/how-to-use-myfreecams-with-obs',
+  url: 'https://www.camcashgrl.com/blog/how-touse-myfreecams-with-obs',
   datePublished: '2026-08-26',
   dateModified: '2026-08-26',
   author: { '@type': 'Organization', name: 'CamCashGrl', url: 'https://www.camcashgrl.com' },
   publisher: { '@type': 'Organization', name: 'CamCashGrl', url: 'https://www.camcashgrl.com' },
-  mainEntityOfPage: { '@type': 'WebPage', '@id': 'https://www.camcashgrl.com/blog/how-to-use-myfreecams-with-obs' },
+  mainEntityOfPage: { '@type': 'WebPage', '@id': 'https://www.camcashgrl.com/blog/how-touse-myfreecams-with-obs' },
 }
 
 const faqSchema = {
@@ -26,7 +29,7 @@ const faqSchema = {
 export const metadata = {
   title: 'How to Use MyFreeCams With OBS: External Broadcasting Setup',
   description: 'A practical MyFreeCams OBS setup guide covering the ModelWeb connection, Stream Key, OBS settings, camera, audio, preview, and common setup mistakes.',
-  alternates: { canonical: 'https://www.camcashgrl.com/blog/how-to-use-myfreecams-with-obs' },
+  alternates: { canonical: 'https://www.camcashgrl.com/blog/how-touse-myfreecams-with-obs' },
   openGraph: {
     title: 'How to Use MyFreeCams With OBS: External Broadcasting Setup',
     description: DESCRIPTION,
@@ -132,17 +135,17 @@ export default function Page() {
 
       <section style={{ marginTop: 38 }}>
         <h2 style={s.h2}>Frequently Asked Questions</h2>
-        <div style={ marginBottom: 18 }>
+        <div style={{ marginBottom: 18 }}>
   <div style={{ fontWeight: 800, color: '#e2e8f0', marginBottom: 7 }}>Do I need to be logged into MFC ModelWeb when using OBS?</div>
-  <p style={...s.p, marginBottom: 0}>Yes. MyFreeCams says models must be logged into ModelWeb to broadcast even when using an external broadcaster such as OBS.</p>
+  <p style={{ ...s.p, marginBottom: 0 }}>Yes. MyFreeCams says models must be logged into ModelWeb to broadcast even when using an external broadcaster such as OBS.</p>
 </div>
-<div style={ marginBottom: 18 }>
+<div style={{ marginBottom: 18 }}>
   <div style={{ fontWeight: 800, color: '#e2e8f0', marginBottom: 7 }}>Where do I find my MFC Stream Key?</div>
-  <p style={...s.p, marginBottom: 0}>In ModelWeb, open Options → External Broadcaster → Stream Key & URL, then click Stream Key to copy it.</p>
+  <p style={{ ...s.p, marginBottom: 0 }}>In ModelWeb, open Options → External Broadcaster → Stream Key & URL, then click Stream Key to copy it.</p>
 </div>
-<div style={ marginBottom: 18 }>
+<div style={{ marginBottom: 18 }}>
   <div style={{ fontWeight: 800, color: '#e2e8f0', marginBottom: 7 }}>What OBS settings should I start with for MFC?</div>
-  <p style={...s.p, marginBottom: 0}>MFC currently recommends starting with x264, 3000 kbps at 1280×720, 30 FPS, and 160 kbps audio.</p>
+  <p style={{ ...s.p, marginBottom: 0 }}>MFC currently recommends starting with x264, 3000 kbps at 1280×720, 30 FPS, and 160 kbps audio.</p>
 </div>
       </section>
     </ArticleLayout>

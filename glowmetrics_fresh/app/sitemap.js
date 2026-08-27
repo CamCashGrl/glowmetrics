@@ -104,6 +104,18 @@ export default function sitemap() {
     'off-site-shows-for-cam-models',
     'onlyfans-for-cam-models-after-streaming',
     'snap-shows-for-cam-models',
+
+    // Active-model technical/troubleshooting posts, August 2026
+    'can-one-webcam-stream-to-multiple-cam-sites',
+    'do-you-need-two-computers-to-multistream-cam-sites',
+    'how-to-connect-lovense-to-multiple-cam-sites',
+    'how-to-handle-a-private-show-while-multistreaming',
+    'how-to-manage-multiple-cam-chats-while-multistreaming',
+    'how-to-set-up-private-and-brb-scenes-in-obs',
+    'lovense-not-syncing-with-obs-or-cam-site',
+    'obs-vs-lovense-stream-master-cam-models',
+    'what-is-obs-virtual-camera-for-cam-models',
+    'why-is-my-camera-black-on-chaturbate-obs',
   ]
 
   const guideSlugs = [

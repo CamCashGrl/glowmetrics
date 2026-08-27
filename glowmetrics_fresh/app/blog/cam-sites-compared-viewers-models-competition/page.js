@@ -1,5 +1,8 @@
 import ArticleLayout from '../../components/ArticleLayout'
 
+const DESCRIPTION = 'A practical cam-site comparison for models covering audience size, model competition, viewer-to-model dynamics, payouts, discoverability, and platform differences.'
+const CANONICAL = 'https://www.camcashgrl.com/blog/cam-sites-compared-viewers-models-competition'
+
 const schema = {
   '@context': 'https://schema.org',
   '@type': 'Article',
@@ -131,17 +134,17 @@ export default function Page() {
 
       <section style={{ marginTop: 38 }}>
         <h2 style={s.h2}>Frequently Asked Questions</h2>
-        <div style={ marginBottom: 18 }>
+        <div style={{ marginBottom: 18 }}>
   <div style={{ fontWeight: 800, color: '#e2e8f0', marginBottom: 7 }}>Which cam site has the most viewers?</div>
-  <p style={...s.p, marginBottom: 0}>There is no permanent answer because audience populations change by date, time, region, and platform. A useful comparison should use dated observations rather than one timeless ranking.</p>
+  <p style={{ ...s.p, marginBottom: 0 }}>There is no permanent answer because audience populations change by date, time, region, and platform. A useful comparison should use dated observations rather than one timeless ranking.</p>
 </div>
-<div style={ marginBottom: 18 }>
+<div style={{ marginBottom: 18 }}>
   <div style={{ fontWeight: 800, color: '#e2e8f0', marginBottom: 7 }}>Does more viewer traffic mean less competition?</div>
-  <p style={...s.p, marginBottom: 0}>Not necessarily. A site can have more viewers and also have many more models competing for those viewers.</p>
+  <p style={{ ...s.p, marginBottom: 0 }}>Not necessarily. A site can have more viewers and also have many more models competing for those viewers.</p>
 </div>
-<div style={ marginBottom: 18 }>
+<div style={{ marginBottom: 18 }}>
   <div style={{ fontWeight: 800, color: '#e2e8f0', marginBottom: 7 }}>What should I compare besides viewer count?</div>
-  <p style={...s.p, marginBottom: 0}>Compare model competition, discoverability, payout economics, show format, platform rules, and your own repeated earnings per hour.</p>
+  <p style={{ ...s.p, marginBottom: 0 }}>Compare model competition, discoverability, payout economics, show format, platform rules, and your own repeated earnings per hour.</p>
 </div>
       </section>
     </ArticleLayout>
